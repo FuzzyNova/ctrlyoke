@@ -8,6 +8,13 @@
 > trust, retained-integration, and provider-sidecar architecture. It also closes
 > lifecycle contradictions around lease storage/removal, pause/resume, no-change
 > runs, setup recovery, nested-step schema validation, and backend-enforced undo.
+>
+> **Revision note (2026-08-11):** Added the missing authoring UX. The earlier
+> revision specified run status and management actions but never said where a user
+> configures worktree in the first place. This pass adds the Workflow Properties
+> drawer controls, the settings schema and settings-UI placement, and reverses the
+> unjustified "no global default" rule in favor of `defaults.worktree` with an
+> authored-vs-inherited origin guard.
 
 ---
 
@@ -849,9 +856,10 @@ so `worktree` validates at the root and is explicitly rejected on every nested
 Supported forms:
 
 ```yaml
-worktree: false                 # explicit no-worktree
+worktree: false                 # explicit no-worktree (overrides the settings default)
 worktree: true                  # managed shorthand
 worktree: ui-work               # named shorthand
+# omitting `worktree` entirely inherits `defaults.worktree` from settings
 
 worktree:
   mode: managed
@@ -892,7 +900,12 @@ Rules:
 
 - `true` means `{ mode: "managed" }`.
 - A string means `{ mode: "named", branch: value }`.
-- `false` or omission means ordinary execution.
+- `false` means ordinary execution, explicitly, and overrides any configured
+  default.
+- **Omission means "inherit `defaults.worktree` from settings."** It is not a
+  synonym for `false`. `PromptFileParser` must therefore not normalize an absent
+  `worktree` to `false` at parse time; absence has to survive into resolution so
+  the settings tier can supply a value. See _Settings Defaults_ below.
 - `merge` and `keep` are not legal in named mode.
 - `branch` is required in named object mode and illegal in managed mode.
 - The default base is the source checkout's exact `HEAD` commit.
@@ -916,10 +929,6 @@ The validated branch string is never used as a filesystem-relative path.
 There are no reserved string names; a quoted branch named `auto` is simply a
 named branch.
 
-Do not add a global `worktree.enabled` or default-on setting. Worktree behavior
-must be explicit in the workflow. The only initial global setting is the
-user-scope worktree root.
-
 Expose schema forms only when their behavior is implemented. For example,
 `merge` must not validate before the merge engine exists.
 
@@ -931,6 +940,137 @@ Dry-run/preview must never create a branch, worktree, ownership record, or lease
 It performs read-only semantic validation and reports the configured mode, base,
 eligibility result, and planned root (an exact managed branch/path is unavailable
 until a real `RunRef` is allocated).
+
+---
+
+## Settings Defaults and Resolution
+
+Worktree has a global default tier. An earlier revision of this plan forbade one
+("worktree behavior must be explicit in the workflow") but never gave a reason,
+and the prohibition is wrong for the common case: a user who wants a managed
+worktree for every run should not re-select it on every new workflow. That is
+what defaults are for.
+
+The default tier is real but narrow. Worktree resolves across exactly two tiers:
+
+```text
+workflow-authored value  →  settings default  →  no worktree
+```
+
+There is **no prompt/step tier**. Step-level worktree overrides stay forbidden by
+the schema, so worktree does not use `PropertyResolver.resolve()`'s
+prompt > workflow > settings chain. Resolution is a dedicated two-tier helper.
+
+### Settings shape
+
+Two distinct settings groups, because they answer different questions:
+
+`defaults.worktree` — a workflow default, mirrors the rest of `defaults.*`,
+writable at user and workspace scope:
+
+```jsonc
+"defaults": {
+  "worktree": {
+    "mode": "none" | "managed" | "named",  // default "none"
+    "branch": "ui-work",                   // named mode only
+    "base": "main",
+    "setup": "npm ci",
+    "keep": false,
+    "merge": false
+  }
+}
+```
+
+`worktrees` — machine/repository configuration, **user scope only**, unchanged
+from the earlier revision in intent:
+
+```jsonc
+"worktrees": {
+  "root": "~/.ctrlyoke/worktrees"   // absolute or ~-prefixed
+}
+```
+
+`worktrees.root` stays user-scope-only for the reason already established under
+_Placement guards_: workspace-scope configuration must not be able to redirect
+checkout creation to an arbitrary external directory. Schema validation alone
+cannot express that; the settings write path must reject a workspace-scope write
+to `worktrees.root`, and the settings UI must render the row scope-locked with an
+explanation rather than silently discarding the value.
+
+`defaults.worktree.mode` uses the string `"none"` rather than `false`, because a
+settings enum with a `SettingSource` badge and a reset affordance reads better as
+a three-value dropdown than as a tri-state boolean. Resolution maps `"none"` to
+"no worktree."
+
+### Resolving an inherited mode is not the same as an authored one
+
+This is the guard rail that makes a global default safe to carry between
+workspaces, and it must be implemented, not assumed.
+
+Worktree preflight **hard-fails** on an ineligible workspace — no Git repository,
+more than one repository, or a named root outside the sole repository (see
+_Workspace Eligibility_). A user-scope `mode: managed` follows the user into every
+workspace they open, including ineligible ones, where it would fail every single
+workflow at preflight until the user found and cleared the setting.
+
+Therefore preflight distinguishes the value's origin:
+
+| Origin of the resolved mode           | Ineligible workspace behavior                              |
+| ------------------------------------- | ---------------------------------------------------------- |
+| Authored in the workflow definition   | Hard failure with the eligibility reason (unchanged)       |
+| Inherited from `defaults.worktree`    | Degrade to ordinary execution, record and surface a notice |
+
+The degrade is recorded on the run — not merely logged — so the status readout
+can state that the configured default did not apply and why. An explicit authored
+value never degrades: the user asked for isolation by name and silently not
+providing it would be worse than failing.
+
+`ExecutionWorkspace` construction therefore needs the resolved worktree config
+plus its origin (`"authored" | "default"`), not just the config.
+
+### Named mode as a default is sharp, and the UI must say so
+
+`mode: managed` is safe to default on: every run gets its own directory and
+branch, so N concurrent workflows coexist. `mode: named` is not equivalent — every
+workflow in the workspace targets one directory, and worktree runs take an
+`exclusive-worktree` lease, so the second concurrent workflow fails immediately on
+lease conflict. A workspace-wide named default effectively serializes all
+execution in that workspace.
+
+Named is still permitted as a default, but both the settings row and the drawer
+must carry an explicit warning when the resolved mode is named — in the drawer
+only when the value was inherited, since an authored named workflow is a
+deliberate choice the user is already looking at.
+
+### `merge` and `keep` defaults
+
+`merge: true` is the only worktree option that writes to the user's live checkout.
+It is settable as a default for consistency, and it fails safe already: the merge
+engine requires the source checkout to still be on the captured target branch and
+to be clean, takes an exclusive lease on it, and aborts cleanly on conflict. The
+settings row must nevertheless state plainly that it merges into the working
+checkout after every run. As with the schema form, the `merge` default must not be
+exposed before the merge engine exists.
+
+`keep` interacts with undo and deserves its own note in the UI. Settled Decision
+\#9 means a managed run whose directory is removed has no filesystem undo, because
+content restore is ctrlyoke's only undo mechanism. With a managed default on, that
+is now true of every run rather than only opted-in ones. The drawer must say so at
+the point of choosing — a description on the Keep control — not only after the run
+lands.
+
+### Threading
+
+- `schemas/settings-schema.json` gains `defaults.worktree` and top-level
+  `worktrees`, both `additionalProperties: false`.
+- `CtrlYokeSettings.ts` and `CtrlYokeConfigService` carry both groups; the
+  config service enforces the user-only scope rule for `worktrees.root`.
+- `FullGlobalSettings` / `WebviewMessageTypes` expose them with the usual
+  `sources` entries so `SettingInputRow` can render scope badges and resets for
+  `defaults.worktree.*` and `worktrees.root`.
+- The webview `GlobalSettings` store type gains `worktree`, and the settings
+  store gains `getEffectiveWorktree()` alongside the existing
+  `getEffectiveExecutionMode()` family.
 
 ---
 
@@ -1141,9 +1281,11 @@ Adding the schema/type is not enough. Keep all workflow-property paths aligned:
 - Dashboard workflow-property constants and payload normalization, if the
   property is editable there
 
-Worktree resolution is workflow-level plus explicit runtime defaults only. It
-does not use the prompt > workflow > settings `PropertyResolver.resolve()` path
-because step-level worktree overrides are forbidden.
+Worktree resolution is workflow-level plus the settings default tier only. It does
+not use `PropertyResolver.resolve()`'s prompt > workflow > settings path, because
+step-level worktree overrides are forbidden; it uses the dedicated two-tier helper
+described under _Settings Defaults and Resolution_, which also carries the
+authored-vs-inherited origin.
 
 Introduce a typed `WORKFLOW_PROPERTY_KEYS` source for workflow-only authored
 properties rather than adding another hand-copied list. Preserve `worktree`
@@ -1219,6 +1361,197 @@ checkout.
 ---
 
 ## Dashboard and CLI UX
+
+### Workflow Properties drawer — authoring controls
+
+Worktree is a **workflow-level** property, so it belongs in
+`WorkflowPropertiesPanel.tsx` and must **not** appear in the per-prompt
+`PropertiesDrawer`. The schema forbids `worktree` on `steps[]`, `finalStep`, and
+prompt `_runtime`; the prompt drawer omitting it is the UI half of that same rule.
+
+Placement is the **Harness page** (`DRAWER_PAGES.HARNESS`), directly after the
+Additional Args / Execution Mode row. That page is already the "how and where this
+runs" page, and worktree is the sibling of Execution Mode: one decides process
+shape, the other decides working directory.
+
+Layout, using the existing `DrawerRow` / `FormField` / `AnimatedSection`
+primitives already used on that page:
+
+```text
+┌─────────────────┬─────────────────┐
+│ Additional Args │ Execution Mode  │   (existing row 3)
+├─────────────────┼─────────────────┤
+│ Worktree [None▾]│ —               │   mode = none: single control, no growth
+└─────────────────┴─────────────────┘
+
+  ▼ mode = Managed
+┌─────────────────┬─────────────────┐
+│ Worktree [Mngd▾]│ Base   [main   ]│
+├─────────────────┴─────────────────┤
+│ Setup  [npm ci                   ]│
+│ ☐ Keep directory   ☐ Merge on done│
+└───────────────────────────────────┘
+
+  ▼ mode = Named
+┌─────────────────┬─────────────────┐
+│ Worktree [Nmd ▾]│ Branch [ui-work]│
+├─────────────────┼─────────────────┤
+│ Base    [main  ]│ Setup  [npm ci ]│
+└─────────────────┴─────────────────┘
+```
+
+Rules:
+
+- The mode dropdown is `CustomSelect` with **None / Managed / Named**, sourced
+  from a `WORKTREE_MODE_OPTIONS` constant in `DashboardConstants.ts` beside
+  `EXECUTION_MODE_OPTIONS`. The literal mode strings are flow-control values and
+  must be constants, not inline strings.
+- Every dependent control lives inside an `AnimatedSection` keyed off the resolved
+  mode, matching how the Validation page reveals pre/end-condition fields. When
+  mode is None the page costs one extra row and nothing else.
+- `branch` is required in named mode. Empty branch is a validation error surfaced
+  through the existing `FieldDiagnostic` / `fieldValidationBorderClass` path, not
+  a silent save. Coarse `git check-ref-format` character rules can be checked in
+  the webview for immediate feedback; the authoritative check stays server-side.
+- `keep` and `merge` render only in managed mode, because the schema makes them
+  illegal in named mode.
+- `merge` must not be rendered before the merge engine exists (Phase 4), matching
+  the schema-exposure rule.
+- The Keep control's description states that removing the directory ends
+  filesystem undo for that run.
+- When the resolved mode came from settings rather than the workflow, show the
+  inherited-value treatment the page already uses — the control reads the
+  effective value and `SetAsDefaultButton` stays hidden until it diverges.
+- A named mode inherited from settings shows the concurrency warning described
+  under _Settings Defaults_.
+- The whole block inherits the existing CLI-managed read-only treatment; the
+  panel body already disables pointer events when `managedBy === RUNNER_IDS.CLI`,
+  so no extra handling is needed.
+
+Wiring follows the established handler shape exactly — an optimistic
+`updateWorkflowProperty("worktree", value)`, `syncWorkflowPropertiesForUndo()`,
+then `postWorkflowDefinitionMutation(vscode, { type: UPDATE_WORKFLOW_PROPERTY, … })`.
+Changing the mode dropdown is a multi-field edit (mode plus the sub-options it
+seeds or clears) and must go through `postWorkflowPropertiesUpdate()` so it lands
+as one undo entry, the same way `handleHarnessChange` batches model and
+additional-args.
+
+Three existing behaviors need explicit worktree cases, and all three are easy to
+miss:
+
+- `isDifferentFromGlobal()` needs a deep-comparison branch for `worktree`,
+  normalizing `false` / `"none"` / absent to one canonical form, in the same
+  manner as the existing `mcpServers` and `toolPermissions` branches. Without it
+  the Set as Default button appears on unchanged workflows.
+- `handleResetAllToDefault()` must include `worktree` in its updates object, and
+  reset any local mode state it keeps, alongside the existing session-id and
+  condition resets.
+- Selecting a mode seeds the sub-option fields from `defaults.worktree` — picking
+  Managed should present the configured base/setup/keep, not blanks — mirroring
+  how `handleHarnessChange` seeds model and additional args from the harness
+  defaults.
+
+### No tab badge for worktree
+
+Worktree must **not** badge the Harness tab, and `useDrawerTabOverrides` must not
+gain a `harness` entry for it.
+
+Navigation tabs have two independent channels, and worktree belongs to neither:
+
+- **The primary icon — its glyph and its color — carries state.**
+  `permissionModeIconOverride` swaps both for `dangerouslyAllowAll` (a
+  `workspace-untrusted` glyph in `text-error-fg`); the other four helpers
+  (`getHooksTabOverride`, `getMcpTabOverride`, `getValidationTabOverride`,
+  `getContextTabOverride`) recolor only.
+- **The overlay badge carries diagnostics — errors and warnings only.** The one
+  badge in `useDrawerTabOverrides` comes from `getPermissionTabOverride`'s
+  `hasCompatibilityWarning`.
+
+"Worktree is enabled" is state, so it has no claim on the badge slot. This
+convention is recorded in `HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md` under _Tab
+warning badges_; this plan follows it rather than restating it.
+
+The Harness tab has no state channel at all, which is the deeper reason worktree
+cannot indicate there. Its primary icon is a brand logo, and neither half of the
+state channel is usable: swapping the glyph would destroy the identity the tab
+exists to show, and `HarnessIcon` renders an `<img>` with a base64 data URI, so
+`TabIconOverride.color` is a silent no-op against it. That leaves only the badge
+slot, which is reserved for diagnostics.
+
+Two consequences:
+
+- **Do not add badge rendering to the `HarnessIcon` branch of
+  `SegmentedTabBar.tsx`.** The badge overlay currently exists only in the
+  `codicon` branch. With no state badge and no modeled harness-level diagnostic,
+  that slot would have zero consumers, and the compatibility plan explicitly
+  forbids building badge plumbing before a domain is enabled to feed it. If
+  harness availability later becomes a modeled error, the slot gets added then, by
+  that plan.
+- **The Harness tab must never receive `codicon`, `color`, `activeColor`, or
+  `hoverColor` overrides.** `SegmentedTabBar` resolves
+  `override?.codicon ?? tab.codicon`, so supplying `codicon` for the Harness tab
+  would take the codicon branch and replace the brand logo with a generic glyph.
+  Only `badgeCodicon`/`badgeColor` are ever legitimate there.
+
+Worktree state is surfaced in the status components below instead, which is where
+it belongs and where it is more legible than a 13px overlay.
+
+### Settings UI
+
+Two placements, matching the two settings groups:
+
+**`defaults.worktree` → `DefaultsHarnessPage.tsx`,** as a third bordered block
+after Execution Defaults, using `SettingInputRow` with `path` values
+(`defaults.worktree.mode`, `.branch`, `.base`, `.setup`, `.keep`, `.merge`) so
+each row gets its scope badge and reset button. This keeps the existing 1:1
+mirror between `defaults.*` settings pages and drawer pages: worktree sits on the
+Harness page in both, so a user finds the default where they found the control.
+Sub-option rows follow the same progressive disclosure as the drawer.
+
+**`worktrees.root` → a new top-level Worktrees section.** It is machine
+configuration, not a workflow default, so it does not belong in the
+`defaults.*` mirror. Add `{ id: "worktrees", label: "Worktrees", icon:
+"codicon-source-control" }` to `ALL_TABS` in `GlobalSettingsDrawer.tsx` and a
+`WorktreesSection.tsx` beside `ExecutionSection.tsx`. It holds:
+
+- `worktrees.root`, rendered scope-locked to user scope with an explanation when
+  the workspace scope is active, per the placement guard.
+- The resolved effective root, shown read-only, since resolution has three tiers
+  and a user needs to see which one won.
+- Later, the Manage Worktrees list — ownership, lease state, branch state, age,
+  and the safe remove/prune/branch-cleanup actions. That is Phase 4 and this
+  section is where it lands, which is the other reason it is its own section
+  rather than a row on a defaults page.
+
+### Run status and actions
+
+Status information belongs in the status surfaces, not in navigation chrome. Two
+components own it:
+
+**`components/workflow/WorkflowStatus.tsx`** — the split button's "what is this
+workflow doing right now" row. It already carries exactly this class of
+indicator: a `CLI` pill when `managedBy === RUNNER_IDS.CLI`, a terminal codicon
+gated on `!isNarrow && currentWorkflowHasActiveTerminal` with an explanatory
+`title`, and the `ExecutionStateBadge`. Worktree adds one more indicator in that
+group — a `source-control` codicon whose `title` names the mode and branch, on the
+same `!isNarrow` gate so the narrow layout stays uncluttered. Use an icon, not a
+text pill: a managed branch name is far too long for the split button, and the
+`CLI` pill works only because it is three characters.
+
+**`components/output/RunSummaryBanner.tsx`** — the per-run identity strip, and the
+right home for branch/path/landing detail. Its left span already reads
+`Run N · <date> · <ExecutionStateBadge>`; worktree extends that with the branch
+name and, on completion, the landing outcome. `RunBannerData` gains the worktree
+projection (mode, branch, directory state, landing/merge outcome) sourced from the
+persisted `_runtime.worktree` block, so a historical run renders its own recorded
+worktree state rather than the currently bound instance's. **View Diff** and
+**Open Worktree in New Window** are banner actions, next to the existing Back to
+Live / pin controls; Open Worktree renders only while `directoryState` is
+`present`.
+
+The completion strings below are banner content. The `WorkflowStatus` indicator
+stays a single icon regardless of outcome — it answers "is this workflow using a
+worktree," and the banner answers "what happened to it."
 
 Running:
 
@@ -1386,7 +1719,10 @@ The exact diff may evolve, but the implementation must cover these areas.
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | Workflow contracts        | `src/types/CtrlYokeTypes.ts`, `src/types/WorkflowContextTypes.ts`                                                                              |
 | Shared constants/messages | `DashboardConstants.ts`, `WebviewMessageTypes.ts`, output/status contracts                                                                     |
-| Config                    | `CtrlYokeSettings.ts`, `ConfigurationUtils.ts`, `schemas/settings-schema.json`, config/settings UI; user-scope `worktrees.root`, no `.enabled` |
+| Config                    | `CtrlYokeSettings.ts`, `ConfigurationUtils.ts`, `CtrlYokeConfigService.ts`, `schemas/settings-schema.json`: `defaults.worktree` (all scopes) + user-scope-only `worktrees.root` |
+| Settings UI               | `DefaultsHarnessPage.tsx` (worktree defaults block), new `WorktreesSection.tsx` + `ALL_TABS` entry in `GlobalSettingsDrawer.tsx`, `settings/index.ts` |
+| Drawer UI                 | `WorkflowPropertiesPanel.tsx` Harness page controls, `isDifferentFromGlobal`/`handleResetAllToDefault` worktree cases, `WORKTREE_MODE_OPTIONS` in `DashboardConstants.ts`. **No** `useDrawerTabOverrides.ts` or `SegmentedTabBar.tsx` change — worktree does not badge a tab |
+| Status UI                 | `WorkflowStatus.tsx` worktree indicator, `RunSummaryBanner.tsx` branch/landing detail and View Diff / Open Worktree actions, `RunBannerData` worktree projection |
 | Schema/parser             | `schemas/workflow-schema.json`, generated `workflow-schema.yaml`, `PromptFileParser.ts`, `PromptFileLoader.ts`                                 |
 | Runtime persistence       | `WorkingFileManager.ts`, queue access seam, `WorkflowInstance.ts`                                                                              |
 | Execution roots           | `IntegrationFactory.ts`, `HarnessIntegration.ts`, `CliIntegration.ts`, execution preview, transport/runner/prompt/MCP helpers                  |
@@ -1433,6 +1769,21 @@ live branch values.
 - Parser and loader preserve every shorthand/object form.
 - Promotion/re-run keeps the definition and starts fresh runtime metadata.
 - Ordinary runtime writes preserve `_runtime.worktree`.
+- An absent `worktree` survives parsing as absent and is never normalized to
+  `false`, so the settings default can apply.
+
+### Settings defaults
+
+- Omission inherits `defaults.worktree`; `worktree: false` overrides a configured
+  default and runs ordinarily.
+- An authored worktree value in an ineligible workspace hard-fails.
+- An inherited worktree value in an ineligible workspace degrades to ordinary
+  execution and records the notice on the run.
+- A workspace-scope write to `worktrees.root` is rejected rather than silently
+  applied or discarded.
+- Sub-option defaults (`base`, `setup`, `keep`, `merge`) apply to both managed and
+  named workflows; `keep`/`merge` remain illegal on an authored named workflow.
+- The `merge` default is not exposed before the merge engine exists.
 
 ### Leases
 
@@ -1516,6 +1867,29 @@ live branch values.
   state-side workflow/template discovery does not grant harness access to the
   source checkout.
 
+### Authoring UI
+
+- The worktree block renders on the Harness page and is absent from the
+  per-prompt `PropertiesDrawer`.
+- Mode None renders one control and no dependent fields.
+- Managed reveals base/setup/keep/merge; named reveals branch/base/setup and
+  never keep/merge.
+- Selecting a mode seeds sub-options from `defaults.worktree`.
+- A mode change lands as a single undo entry, not one per seeded field.
+- `isDifferentFromGlobal("worktree")` treats absent, `false`, and `"none"` as
+  equivalent, so Set as Default stays hidden on an unchanged workflow.
+- Reset-all restores `worktree` from settings along with the other properties.
+- An empty named branch is a surfaced field diagnostic, not a silent save.
+- No drawer tab gains a worktree badge or icon override; `useDrawerTabOverrides`
+  returns no `harness` entry.
+- `WorkflowStatus` shows a worktree indicator whose title names the mode and
+  branch, on the same `!isNarrow` gate as the terminal indicator.
+- `RunSummaryBanner` renders the branch and landing outcome from the run's own
+  persisted worktree projection, so a historical run shows its recorded state
+  rather than the currently bound instance's.
+- Open Worktree renders only while `directoryState` is `present`.
+- CLI-managed workflows render the block read-only.
+
 ### Security
 
 - Branch traversal strings fail semantic validation.
@@ -1555,6 +1929,19 @@ schema.
 12. Implement `ExecutionRootLeaseManager` shared/exclusive leases in central
     common-directory storage.
 13. Add named worktree schema forms, parser, loader, editor support, and runtime persistence.
+    - Parser keeps an absent `worktree` absent rather than normalizing it to `false`.
+    - Add `defaults.worktree` and user-scope-only `worktrees.root` to
+      `schemas/settings-schema.json`, `CtrlYokeSettings`, the config service
+      (including the workspace-scope rejection for `worktrees.root`), and
+      `FullGlobalSettings`.
+    - Implement two-tier resolution with origin tracking, and the
+      inherited-value degrade on an ineligible workspace.
+    - Add the Harness-page drawer block (None/Named, no managed fields yet),
+      `WORKTREE_MODE_OPTIONS`, the `isDifferentFromGlobal`/reset-all cases, the
+      `DefaultsHarnessPage` worktree defaults block, and the new Worktrees
+      settings section holding `worktrees.root`. No tab-badge work.
+    - Add the `WorkflowStatus` worktree indicator and the `RunSummaryBanner`
+      worktree projection.
 14. Implement named discovery/create/setup plus explicit failed-setup retry.
 15. Add runtime trusted-root registration.
 16. Route snapshots, hosted repo attribution, and backend-resolved undo through the execution
@@ -1569,6 +1956,9 @@ directory.
 
 18. Implement ownership records, branch-tip validation, and idempotent create/recovery.
 19. Add managed shorthand/object schema and editor support without `merge`.
+    - Extend the drawer mode dropdown to Managed and reveal base/setup/keep,
+      including the Keep control's undo consequence, and extend
+      `defaults.worktree` support on `DefaultsHarnessPage` to the same fields.
 20. Seed `.ctrlyoke/.gitignore` into the worktree, then run setup before execution.
 21. Implement terminal-settlement cleanup, strict provider cleanup, auto-commit,
     no-change handling, landing, `keep`, and
@@ -1576,7 +1966,8 @@ directory.
 22. Prevent retained integrations/sidecars from outliving any worktree-targeted
     terminal run.
 23. Persist status and enrich run summaries/global/session status.
-24. Add View Diff and conditional Open Worktree actions.
+24. Add View Diff and conditional Open Worktree actions to `RunSummaryBanner`,
+    and extend the banner's landing/merge outcome display.
 25. Implement read-only activation recovery and warnings.
 26. Enforce landed-run undo behavior in the backend coordinator and protocol.
 
@@ -1586,8 +1977,11 @@ completion/failure/cancellation path, and crash leftovers are discoverable.
 ### Phase 4 — Merge and management UX
 
 27. Implement one guarded merge engine with source-checkout exclusive leasing.
-28. Expose declarative `merge` and the dashboard Merge action together.
-29. Implement Manage Worktrees with safe remove/prune/branch cleanup.
+28. Expose declarative `merge` and the dashboard Merge action together, plus the
+    drawer Merge control and the `defaults.worktree.merge` settings row with its
+    live-checkout warning.
+29. Implement Manage Worktrees with safe remove/prune/branch cleanup inside the
+    Worktrees settings section.
 30. Show cached ahead/behind data for named branches.
 
 ### Phase 5 — Deferred expansion
@@ -1623,8 +2017,13 @@ completion/failure/cancellation path, and crash leftovers are discoverable.
    one undo mechanism — filesystem content restore — so there is no git-based
    fallback to degrade to. Diff and attribution display remain; temporary
    recreation is deferred. The coordinator, not just the UI, must enforce this.
-10. **Worktree mode is explicit per workflow.** There is no global enable or
-    default-on setting.
+10. **Worktree has a settings default tier, guarded by origin.** `defaults.worktree`
+    may set mode (including `named`) and every sub-option. Omitting `worktree`
+    from a workflow inherits it; `worktree: false` explicitly opts out. An
+    ineligible workspace hard-fails an _authored_ worktree value and silently
+    degrades an _inherited_ one to ordinary execution with a recorded notice, so a
+    user-scope default can travel between workspaces safely. `worktrees.root`
+    remains user-scope only.
 11. **Workflow/template discovery remains state-side; scripts and
     workspace-scoped agents/skills resolve from the execution checkout.** This
     prevents skill paths and harness directory grants from exposing the source
@@ -1640,6 +2039,12 @@ completion/failure/cancellation path, and crash leftovers are discoverable.
     agree.
 15. **Managed no-change runs delete their empty owned branch only when the
     directory is also removed.** `keep: true` preserves the attached branch.
+16. **Worktree never badges a navigation tab.** Tab badges are reserved for
+    errors and warnings; the primary icon's glyph and color carry state. Worktree
+    is state, and it surfaces in `WorkflowStatus` and `RunSummaryBanner`, which
+    are the status surfaces. The Harness tab in particular has no usable state
+    channel — its brand `<img>` ignores color overrides and its glyph is its
+    identity — so no `SegmentedTabBar` badge slot is added for it.
 
 ---
 
@@ -1691,6 +2096,26 @@ removal. It does not exist. `UndoRedoCoordinator` performs every undo through
 based on `GIT_HEAD`. Removing a managed directory therefore ends undo for that run
 outright, leaving diff and attribution display. Reverting a landed branch is an
 ordinary user Git operation, not a ctrlyoke feature.
+
+### No global default-on setting → `defaults.worktree` with an origin guard
+
+An earlier revision forbade any global worktree default, asserting that "worktree
+behavior must be explicit in the workflow" without ever stating why. No rationale
+appeared anywhere in the plan, and the rule fails the ordinary case: a user who
+wants a managed worktree for every run should not re-select it on each new
+workflow, and "always None" is itself a default — just an unhelpful one.
+
+The real risks were never the existence of a default; they were three unspecified
+consequences of having one, each now specified rather than avoided:
+
+- Omission and `false` had to stop being synonyms, so absence can reach the
+  settings tier.
+- A user-scope default follows the user into workspaces where worktree preflight
+  hard-fails, which is why an inherited mode degrades and an authored mode does
+  not.
+- `named` as a workspace-wide default serializes execution through one exclusive
+  lease. It is permitted, but warned about at both the settings row and the
+  drawer.
 
 ### Branch prefix as ownership → durable Git-admin ownership records
 

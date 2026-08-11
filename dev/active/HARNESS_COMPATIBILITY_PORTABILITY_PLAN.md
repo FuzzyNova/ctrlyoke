@@ -972,6 +972,36 @@ contract, remove usage from this phase and from the registry.
 
 #### Tab warning badges
 
+**The governing rule — two channels, not one.** A navigation tab's **primary
+icon, meaning both its glyph and its color, carries state**; its **overlay badge
+carries diagnostics, and diagnostics only**. `permissionModeIconOverride()`
+changes both halves of the primary icon for `dangerouslyAllowAll` (a
+`workspace-untrusted` glyph in `text-error-fg`), and that is correct — a risky
+mode is still state, and the icon is where state belongs. The badge is reserved
+for errors and warnings so that a badge always means "something needs attention."
+Do not add a badge to indicate that a feature is merely configured or enabled;
+that is what the icon channel is for, and a state badge would compete with a
+diagnostic for the single slot each tab has.
+
+Note one pre-existing exception: `getPermissionModeBadge()` returns a shield
+badge for permission mode on the Command tab of `DryRunModal`. It lives in a
+modal's internal tab bar rather than the drawer navigation, and it encodes risk
+level rather than plain configuration. Do not cite it as precedent for state
+badges on drawer tabs.
+
+A tab whose primary icon is a brand image has **no state channel at all** and
+therefore takes neither treatment. The Harness tab renders `HarnessIcon`, an
+`<img>` with a base64 data URI: `TabIconOverride.color` is a silent no-op against
+it, and swapping its glyph would destroy the identity the tab exists to display.
+Two rules follow. First, the Harness tab may only ever receive
+`badgeCodicon`/`badgeColor`; supplying `codicon` would make `SegmentedTabBar`'s
+`override?.codicon ?? tab.codicon` resolution take the codicon branch and replace
+the brand logo with a generic glyph. Second, the badge overlay currently renders
+only inside that codicon branch, so the `HarnessIcon` branch has no badge slot —
+and per the dead-plumbing rule at the end of this section, none should be added
+until a harness-level capability domain actually produces a diagnostic to show
+there.
+
 The Permissions tab already overlays a diagnostic-driven warning badge on its
 existing icon: `getPermissionTabOverride()` in
 [`tabBadgeUtils.ts`](../../src/ui/webview-react/components/shared/tabBadgeUtils.ts)
@@ -1004,7 +1034,14 @@ Do not replace a tab's base icon/color to signal a compatibility warning; add
 the badge overlay on top, consistent with the Permissions tab precedent. Do
 not build the diagnostics parameter for a tab before that tab's capability
 domain is actually enabled — until then there is no diagnostic data to badge,
-and the parameter would be dead plumbing.
+and the parameter would be dead plumbing. The same restraint applies to badge
+rendering itself: do not add a badge slot to a tab that has no diagnostic
+consumer yet.
+
+This section is the single source for tab-indicator conventions. Other plans
+that add drawer-tab state should follow it rather than restating it; see
+`dev/backlog/WORKTREE_SUPPORT_PLAN.md`, where worktree state is deliberately
+routed to `WorkflowStatus` and `RunSummaryBanner` instead of a tab badge.
 
 ## Acceptance Criteria
 
