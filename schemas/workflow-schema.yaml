@@ -259,6 +259,11 @@ definitions:
         oneOf:
           - type: string
             pattern: ^[a-zA-Z0-9-_]+$
+          - type: string
+            const: ''
+            description: >-
+              Empty string means no agent — the form the dashboard's "None" selection serializes to.
+              Distinct from null, which explicitly disables an inherited agent.
           - type: 'null'
         description: >-
           Portable ctrlyoke prompt attachment. Specify ONLY the agent name without file extensions
