@@ -12,11 +12,15 @@ reviewed top to bottom below; no unmet criteria were identified.
 `HARNESS_USAGE_TRACKING_PLAN.md` shipped its usage cards into
 `HarnessesSection.tsx`, which is rendered by `DefaultsHarnessPage.tsx` — the
 **Workflow Defaults → Harness** page. That page exists to set defaults (default
-harness, per-harness model, per-harness extra args). It now also carries:
+harness, per-harness model, per-harness extra args). Before this plan shipped, it
+also carried:
 
-- a `UsageCard` per harness (`components/settings/stats/UsageCard.tsx`)
-- a "Refresh harness usage" button (`components/settings/stats/StatsUsageSection.tsx`)
-- a mount-time `REQUEST_HARNESS_USAGE` postMessage (`components/settings/stats/StatsUsageSection.tsx`)
+- a `UsageCard` per harness, defined inline in `HarnessesSection.tsx`
+- a "Refresh harness usage" button
+- a mount-time `REQUEST_HARNESS_USAGE` postMessage
+
+(All three now live under `components/settings/stats/` — see
+[Phase 1](#phase-1--move-the-existing-usage-ui).)
 
 Six usage cards interleaved with six model/args editors is the wrong density for
 a settings form, and it puts read-only telemetry inside a page whose every other
