@@ -566,9 +566,9 @@ Phase 1 is independently shippable and is the fix for the stated problem.
 
 ### Phase 3 — Harness share
 
-- [ ] Add `HARNESS_CHART_COLORS` to `DashboardConstants.ts`.
-- [ ] Build `HarnessShareBar` + ranked rows + the steps/tokens metric toggle.
-- [ ] Collapse zero-usage harnesses into the muted "Unused" line.
+- [x] Add `HARNESS_CHART_COLORS` to `DashboardConstants.ts`.
+- [x] Build `HarnessShareBar` + ranked rows + the steps/tokens metric toggle.
+- [x] Collapse zero-usage harnesses into the muted "Unused" line.
 
 ### Phase 4 — Export
 

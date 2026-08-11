@@ -603,6 +603,12 @@ export const HARNESS_IDS = {
   ANTIGRAVITY_CLI: "antigravity-cli",
 } as const;
 
+/** Metrics available in the workspace harness-share breakdown. */
+export const HARNESS_SHARE_METRICS = {
+  AI_STEPS: "ai-steps",
+  TOKENS: "tokens",
+} as const;
+
 // ============================================================================
 // TOKEN USAGE - Provenance and aggregate coverage
 // ============================================================================
@@ -898,6 +904,16 @@ export const HARNESS_INFO = {
     shortName: "Antigravity",
   },
 } as const;
+
+/** Theme-aware colors for the workspace harness-share bar. */
+export const HARNESS_CHART_COLORS: Record<HarnessId, string> = {
+  [HARNESS_IDS.COPILOT_CLI]: "var(--vscode-charts-blue, #59a4f9)",
+  [HARNESS_IDS.CLAUDE_CLI]: "var(--vscode-charts-green, #89d185)",
+  [HARNESS_IDS.CODEX_CLI]: "var(--vscode-charts-purple, #b180d7)",
+  [HARNESS_IDS.OPENCODE_CLI]: "var(--vscode-charts-red, #f14c4c)",
+  [HARNESS_IDS.QWEN_CLI]: "var(--vscode-charts-yellow, #cca700)",
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: "var(--vscode-charts-orange, #d18616)",
+};
 
 // ============================================================================
 // HOOK EVENT - Logical hook event names and metadata
@@ -1883,6 +1899,8 @@ export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
 export type FinalStepPhase =
   (typeof FINAL_STEP_PHASES)[keyof typeof FINAL_STEP_PHASES];
 export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
+export type HarnessShareMetric =
+  (typeof HARNESS_SHARE_METRICS)[keyof typeof HARNESS_SHARE_METRICS];
 export type TokenTotalConfidence =
   (typeof TOKEN_TOTAL_CONFIDENCE)[keyof typeof TOKEN_TOTAL_CONFIDENCE];
 export type WorkflowTokenCoverage =
