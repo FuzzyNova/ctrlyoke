@@ -1,6 +1,7 @@
 # Stats & Usage Page Plan
 
-**Status:** Not started — plan only
+**Status:** Queued for implementation — plan reviewed and staged as 7 steps
+(phase 1 → phase 4). Update the phase checkboxes as steps land.
 **Related:** `dev/implemented/HARNESS_USAGE_TRACKING_PLAN.md`,
 `dev/implemented/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`
 
@@ -109,7 +110,11 @@ delay a transition. Extend that method to feed both stores from the one manifest
 read it already performs; rename it to `feedUsageStores`. Do not add a second
 terminal-transition hook.
 
-Per-run contribution recorded:
+**Per-run contribution — an in-flight shape, never a persisted array.** The
+type below is what the feed site computes for one run and what the bounded
+in-memory cache holds. It is deliberately **not** persisted as a per-run list;
+persisting one would reintroduce the O(runs) always-read document that rules 1–3
+below exist to prevent. Read those three rules before implementing this type.
 
 ```typescript
 interface LifetimeRunContribution {
@@ -176,6 +181,42 @@ rules:
    on the rare revision path; the common path (a brand-new run finishing,
    landing outside the interval) stays an O(1) add.
 
+The persisted document, stated explicitly so it is not inferred from the prose
+above — note there is no run-keyed collection anywhere in it:
+
+```typescript
+interface LifetimeUsageStoreData {
+  schemaVersion: typeof LIFETIME_USAGE_SCHEMA_VERSION;
+  updatedAt: number;
+  /** Grand totals, maintained incrementally. */
+  totals: LifetimeHarnessContribution;
+  byHarness: Partial<Record<HarnessId, LifetimeHarnessContribution>>;
+  outcomes: Record<RunOutcomeBucket, number>;
+  runCount: number;
+  totalActiveExecutionMs: number;
+  wallClockDurationRunCount: number;
+  skippedRunCount: number;
+  /** One entry per lineage — the only collection, sized by lineage count. */
+  lineages: Record<
+    WorkflowKey,
+    {
+      /** This lineage's subtotal; re-derivable from its manifests on revision. */
+      subtotal: LifetimeHarnessContribution;
+      byHarness: Partial<Record<HarnessId, LifetimeHarnessContribution>>;
+      runCount: number;
+      outcomes: Record<RunOutcomeBucket, number>;
+      activeExecutionMs: number;
+      wallClockDurationRunCount: number;
+      /** Contiguous counted interval. A run inside it is already counted. */
+      countedFrom: RunRef;
+      countedThrough: RunRef;
+      /** mtime optimization only — never a correctness input. */
+      dirMtimeMs?: number;
+    }
+  >;
+}
+```
+
 **A bounded recent-contribution cache is an optimization, never the mechanism.**
 Repaired terminal transitions can refire for the newest run several times in a
 row, and each would otherwise rescan its lineage. Keep the last N runs'
@@ -207,6 +248,16 @@ workflow list.
 Every run that finished before this ships is absent from the store. Yes — the
 backfill scrapes `.ctrlyoke/.runs`, reading each run's `manifest.json` (never its
 `events.jsonl`) and folding `tokenTotals` + lifecycle fields into the totals.
+
+**The existing config gate covers both stores** (decided). `feedObservedHarnessUsage`
+early-returns on `ConfigurationUtils.shouldPersistObservedHarnessUsage()`
+(`ConfigurationUtils.ts:756`); after the rename to `feedUsageStores` that one
+gate governs the lifetime store too. A user who has turned off usage persistence
+has opted out of usage persistence — adding a second independent setting for the
+same concern is scope creep and gives the page a state where lifetime totals
+advance while observed usage does not. When the gate is off, the Stats page
+shows its existing empty/partial state; the backfill still works on demand,
+since it reads manifests rather than writing accumulated telemetry.
 
 **What it does:**
 
@@ -358,9 +409,19 @@ line rather than rendering five empty rows.
 
 **Colors** — add `HARNESS_CHART_COLORS: Record<HarnessId, string>` to
 `DashboardConstants.ts`, built from `--vscode-charts-*` with hex fallbacks,
-following the existing precedent in `utils/atomicReferences.ts:253-257`
-(blue / green / purple / red / yellow, plus orange for the sixth). Theme-aware
-and consistent with the rest of the app; do not invent a palette.
+following the existing `CHART_ACCENT_COLORS` precedent in
+`utils/atomicReferences.ts` (blue / green / purple / red / yellow, plus orange
+for the sixth). Theme-aware and consistent with the rest of the app; do not
+invent a palette.
+
+Note the deliberate constraint documented on `CHART_ACCENT_COLORS`: those five
+are "the only saturated, mutually-distinct accent colors verified present in
+every sampled VS Code theme." Six harnesses need a sixth color, so
+`--vscode-charts-orange` is used **with a hex fallback**
+(`var(--vscode-charts-orange, #d18616)`) — the fallback is what makes adding it
+safe in themes that omit the variable, and it is why this does not contradict
+that comment. Do not widen `CHART_ACCENT_COLORS` itself; `HARNESS_CHART_COLORS`
+is a separate harness-keyed map.
 
 **Accessibility** — the bar is `aria-hidden`; the rows are the accessible
 source of truth and carry the real numbers as text. Each bar segment gets a
@@ -582,6 +643,15 @@ Resolved August 11, 2026:
    added inside existing lineages. mtime is an optimization layered over the
    counted-interval index, which remains the correctness mechanism. See
    [Backfill](#backfill-for-pre-existing-runs).
+5. **`shouldPersistObservedHarnessUsage` gates the lifetime store too.** One
+   setting for one concern; a second toggle would allow lifetime totals to
+   advance while observed usage is frozen. See
+   [Backfill](#backfill-for-pre-existing-runs).
+6. **`LifetimeRunContribution` is an in-flight shape, not a persisted one.** The
+   persisted document is keyed by lineage and contains no run-keyed collection —
+   the explicit `LifetimeUsageStoreData` shape is given under
+   [Lifetime totals](#lifetime-totals--new-store-required). Persisting per-run
+   records is the specific bug this design exists to avoid.
 
 ## Open Questions
 
