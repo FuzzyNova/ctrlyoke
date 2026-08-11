@@ -29,6 +29,8 @@ export interface ExecutionPlanBuilderDeps {
   readonly provider: ICliProvider;
   readonly getWorkspaceRoot: () => string | undefined;
   readonly getWorkspaceRoots: () => readonly string[];
+  readonly getApprovedExternalRoots?: () => readonly string[];
+  readonly getStateRoot?: () => string;
   readonly getExtensionPath: () => string;
   readonly getExecutionMode: () => "interactive" | "headless";
   readonly getEnabledHookNotificationEvents: () => import("../../../types/CtrlYokeTypes").HookEvent[];
@@ -58,12 +60,14 @@ type ProviderWorkflowContext = {
   filePath?: string;
   resolvedProperties?: ResolvedProperties;
   workingFilePath?: string;
+  stateRoot?: string;
 };
 
 function asProviderWorkflowContext(
-  workflowContext: WorkflowContext | undefined
+  workflowContext: WorkflowContext | undefined,
+  stateRoot: string | undefined
 ): ProviderWorkflowContext | undefined {
-  return workflowContext;
+  return workflowContext ? { ...workflowContext, stateRoot } : undefined;
 }
 
 function emptyPreparation(): CliProviderPreparation {
@@ -83,7 +87,11 @@ export class ExecutionPlanBuilder {
         this.deps.getExecutionMode()) === "interactive";
     const workspaceRoot = this.deps.getWorkspaceRoot();
     const extensionPath = this.deps.getExtensionPath();
-    const workflowContext = asProviderWorkflowContext(session.workflowContext);
+    const workflowContext = asProviderWorkflowContext(
+      session.workflowContext,
+      this.deps.getStateRoot?.()
+    );
+    const approvedExternalRoots = this.deps.getApprovedExternalRoots?.() ?? [];
 
     const providerPreparation = this.deps.provider.planCliArgs
       ? await this.deps.provider.planCliArgs(
@@ -93,7 +101,8 @@ export class ExecutionPlanBuilder {
           workspaceRoot,
           session.resolvedSessionId,
           workflowContext,
-          this.deps.getWorkspaceRoots()
+          this.deps.getWorkspaceRoots(),
+          approvedExternalRoots
         )
       : {
           cliArgs: await this.deps.provider.buildCliArgs(
@@ -103,7 +112,8 @@ export class ExecutionPlanBuilder {
             workspaceRoot,
             session.resolvedSessionId,
             workflowContext,
-            this.deps.getWorkspaceRoots()
+            this.deps.getWorkspaceRoots(),
+            approvedExternalRoots
           ),
           mutations: [],
           diagnostics: [],

@@ -42,6 +42,8 @@ export interface McpConfigOptions {
   serverPath: string;
   /** Workspace root directory */
   workspaceRoot: string;
+  /** Root exported as CTRLYOKE_WORKSPACE; defaults to workspaceRoot. */
+  stateRoot?: string;
   /** Additional server configuration fields */
   serverConfig?: McpHarnessServerConfig;
   /** Config format */
@@ -231,11 +233,15 @@ export class CliMcpConfigGenerator {
     workspaceRoot: string,
     serverConfig?: McpHarnessServerConfig,
     workingFilePath?: string,
-    additionalEnv?: Record<string, string>
+    additionalEnv?: Record<string, string>,
+    stateRoot?: string
   ): string {
     // Normalize paths (forward slashes work on Windows and Unix)
     const normalizedServerPath = serverPath.replace(/\\/g, "/");
-    const normalizedWorkspaceRoot = workspaceRoot.replace(/\\/g, "/");
+    const normalizedWorkspaceRoot = (stateRoot ?? workspaceRoot).replace(
+      /\\/g,
+      "/"
+    );
 
     const env: Record<string, string> = {
       CTRLYOKE_WORKSPACE: normalizedWorkspaceRoot,
@@ -290,7 +296,8 @@ export class CliMcpConfigGenerator {
     serverConfig?: McpHarnessServerConfig,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    userServerConfig?: McpUserServerHarnessConfig
+    userServerConfig?: McpUserServerHarnessConfig,
+    stateRoot?: string
   ): string {
     // Parse the base config with the ctrlyoke server
     const baseConfig = JSON.parse(
@@ -299,7 +306,8 @@ export class CliMcpConfigGenerator {
         workspaceRoot,
         serverConfig,
         workingFilePath,
-        additionalEnv
+        additionalEnv,
+        stateRoot
       )
     );
 
@@ -392,11 +400,15 @@ export class CliMcpConfigGenerator {
     serverPath: string,
     workspaceRoot: string,
     workingFilePath?: string,
-    additionalEnv?: Record<string, string>
+    additionalEnv?: Record<string, string>,
+    stateRoot?: string
   ): string {
     // Normalize paths (forward slashes)
     const escapedServerPath = serverPath.replace(/\\/g, "/");
-    const escapedWorkspaceRoot = workspaceRoot.replace(/\\/g, "/");
+    const escapedWorkspaceRoot = (stateRoot ?? workspaceRoot).replace(
+      /\\/g,
+      "/"
+    );
 
     const env: Record<string, string> = {
       CTRLYOKE_WORKSPACE: escapedWorkspaceRoot,

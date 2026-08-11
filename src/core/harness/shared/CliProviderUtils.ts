@@ -230,7 +230,8 @@ export class CliProviderUtils {
    */
   static getWorkspaceDirs(
     workspaceRoot: string,
-    workspaceRoots: readonly string[] = []
+    workspaceRoots: readonly string[] = [],
+    approvedExternalRoots?: readonly string[]
   ): string[] {
     const workspaceDirs: string[] = [];
     const directoryKeys = new Set<string>();
@@ -253,6 +254,7 @@ export class CliProviderUtils {
     const workspaceIdentity =
       ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
     const effectiveExternalRoots =
+      approvedExternalRoots ??
       ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
         workspaceIdentity
       );
@@ -283,6 +285,7 @@ export class CliProviderUtils {
           filePath?: string;
           resolvedProperties?: ResolvedProperties;
           workingFilePath?: string;
+          stateRoot?: string;
         }
       | undefined,
     workspaceRoot: string | undefined,
@@ -292,7 +295,8 @@ export class CliProviderUtils {
       workspaceRoot: string,
       workingFilePath?: string,
       additionalEnv?: Record<string, string>,
-      userServers?: McpServerConfig[]
+      userServers?: McpServerConfig[],
+      stateRoot?: string
     ) => Promise<string[] | null>
   ): Promise<string[]> {
     const preparation = await CliProviderUtils.planMcpConfigBlock(
@@ -304,7 +308,8 @@ export class CliProviderUtils {
         resolvedWorkspaceRoot,
         workingFilePath,
         additionalEnv,
-        userServers
+        userServers,
+        stateRoot
       ) => ({
         cliArgs:
           (await getMcpConfigArgs(
@@ -312,7 +317,8 @@ export class CliProviderUtils {
             resolvedWorkspaceRoot,
             workingFilePath,
             additionalEnv,
-            userServers
+            userServers,
+            stateRoot
           )) ?? [],
         mutations: [],
         diagnostics: [],
@@ -335,6 +341,7 @@ export class CliProviderUtils {
           filePath?: string;
           resolvedProperties?: ResolvedProperties;
           workingFilePath?: string;
+          stateRoot?: string;
         }
       | undefined,
     workspaceRoot: string | undefined,
@@ -344,7 +351,8 @@ export class CliProviderUtils {
       workspaceRoot: string,
       workingFilePath?: string,
       additionalEnv?: Record<string, string>,
-      userServers?: McpServerConfig[]
+      userServers?: McpServerConfig[],
+      stateRoot?: string
     ) => Promise<CliProviderPreparation>
   ): Promise<CliProviderPreparation> {
     if (!workflowContext || !workspaceRoot) {
@@ -393,7 +401,8 @@ export class CliProviderUtils {
       workspaceRoot,
       workflowContext.workingFilePath,
       additionalEnv,
-      userServers.length > 0 ? userServers : undefined
+      userServers.length > 0 ? userServers : undefined,
+      workflowContext.stateRoot
     );
   }
 
@@ -436,7 +445,8 @@ export class CliProviderUtils {
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[],
-    options?: SettingsJsonMcpEntryOptions
+    options?: SettingsJsonMcpEntryOptions,
+    stateRoot?: string
   ): Record<string, unknown> {
     // Defaults reproduce Qwen semantics; Antigravity overrides the
     // remote-URL key (serverUrl) and drops the type/trust fields its schema
@@ -450,7 +460,10 @@ export class CliProviderUtils {
     // ctrlyoke server (when included in mcpServers list)
     if (mcpServerPath) {
       const normalizedServerPath = mcpServerPath.replace(/\\/g, "/");
-      const normalizedWorkspace = workspaceRoot.replace(/\\/g, "/");
+      const normalizedWorkspace = (stateRoot ?? workspaceRoot).replace(
+        /\\/g,
+        "/"
+      );
 
       const env: Record<string, string> = {
         CTRLYOKE_WORKSPACE: normalizedWorkspace,

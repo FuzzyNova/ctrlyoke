@@ -1,3 +1,4 @@
+import * as path from "path";
 import type { PriorContext, PromptFile, WorkflowStep } from "./CtrlYokeTypes";
 import type { ResolvedProperties } from "../utils/PropertyResolver";
 import type { PriorContextItem } from "../core/HarnessIntegration";
@@ -32,6 +33,32 @@ export interface ExecutionWorkspace {
 
   /** External roots approved against stateRoot's trust identity. */
   readonly approvedExternalRoots: readonly string[];
+}
+
+/** Stable identity used to decide whether a retained integration may be reused. */
+export function getExecutionWorkspaceIdentity(
+  workspace: ExecutionWorkspace
+): string {
+  const normalize = (value: string): string => {
+    const resolved = path.resolve(value);
+    return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  };
+  return JSON.stringify({
+    stateRoot: normalize(workspace.stateRoot),
+    executionRoot: normalize(workspace.executionRoot),
+    sourceCheckoutRoot: workspace.sourceCheckoutRoot
+      ? normalize(workspace.sourceCheckoutRoot)
+      : undefined,
+    executionCheckoutRoot: workspace.executionCheckoutRoot
+      ? normalize(workspace.executionCheckoutRoot)
+      : undefined,
+    workspaceRoots: workspace.workspaceRoots.map(normalize),
+    namedWorkspaceRoots: workspace.namedWorkspaceRoots.map((root) => ({
+      name: root.name,
+      fsPath: normalize(root.fsPath),
+    })),
+    approvedExternalRoots: workspace.approvedExternalRoots.map(normalize),
+  });
 }
 
 /** Narrow working-file persistence contract exposed to harnesses. */
@@ -81,4 +108,6 @@ export interface WorkflowContext {
    *  when sessionId is the "finalStep" sentinel on any prompt (queue or finalStep phase).
    *  Note: only applies when finalStep is an AI prompt step (not a ScriptStep). */
   finalStepSessionId?: string;
+  /** State root exported to MCP by an execution integration. */
+  stateRoot?: string;
 }

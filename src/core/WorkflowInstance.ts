@@ -72,7 +72,10 @@ import {
   createNoWorktreeExecutionWorkspace,
   PlatformAdapter,
 } from "../platform/PlatformAdapter";
-import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
+import {
+  getExecutionWorkspaceIdentity,
+  type ExecutionWorkspace,
+} from "../types/WorkflowContextTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 
@@ -166,6 +169,16 @@ export class WorkflowInstance {
   activeIntegration?: HarnessIntegration;
   /** Immutable state/execution roots captured when this instance is created. */
   private readonly executionWorkspace: ExecutionWorkspace;
+  private readonly executionWorkspaceIdentity: string;
+
+  private canReuseExecutionIntegration(
+    integration: HarnessIntegration
+  ): boolean {
+    const identity = integration.getExecutionWorkspaceIdentity();
+    return (
+      identity === undefined || identity === this.executionWorkspaceIdentity
+    );
+  }
   private readonly endConditionEvaluator: EndConditionEvaluator;
   private readonly endConditionHandler: EndConditionHandler;
 
@@ -407,6 +420,8 @@ export class WorkflowInstance {
     const executionWorkspace: ExecutionWorkspace =
       createNoWorktreeExecutionWorkspace(this.platform, resolvedWorkspacePath);
     this.executionWorkspace = executionWorkspace;
+    this.executionWorkspaceIdentity =
+      getExecutionWorkspaceIdentity(executionWorkspace);
     this.outputHistoryManager = new OutputHistoryManager(resolvedWorkspacePath);
     this.outputHistoryManager.setTokenTotalsChangedHandler(
       async (_historyFilePath, tokenTotals) => {
@@ -3393,13 +3408,19 @@ export class WorkflowInstance {
     const live = this.liveInjectIntegrations.get(harness);
     if (live) {
       this.liveInjectIntegrations.delete(harness);
-      live.resetForNewRun();
-      live.setSourceDefinitionPath(this.sourceDefinitionPath);
-      this.executionIntegrations.set(harness, live);
-      Log.info(
-        `[inst:${this.id.slice(0, 8)}] ♻️ Reusing live inject integration (harness=${harness}) from previous run`
-      );
-      return live;
+      if (!this.canReuseExecutionIntegration(live)) {
+        void this.cleanupRetainedIntegrationArtifacts(harness, live);
+        live.closeTerminalGracefully();
+        live.dispose();
+      } else {
+        live.resetForNewRun();
+        live.setSourceDefinitionPath(this.sourceDefinitionPath);
+        this.executionIntegrations.set(harness, live);
+        Log.info(
+          `[inst:${this.id.slice(0, 8)}] ♻️ Reusing live inject integration (harness=${harness}) from previous run`
+        );
+        return live;
+      }
     }
 
     const cached = this.executionIntegrations.get(harness);
@@ -3411,7 +3432,10 @@ export class WorkflowInstance {
     if (harnessOverride) {
       Log.info(`🔀 Using harness override: ${harnessOverride}`);
     }
-    const integration = this.integrationFactory.createForExecution(harness);
+    const integration = this.integrationFactory.createForExecution(
+      harness,
+      this.executionWorkspace
+    );
     integration.setWorkflowName(this.workflowName || undefined);
     integration.setSourceDefinitionPath(this.sourceDefinitionPath);
     integration.onStreamingEvents((events) =>
@@ -3539,6 +3563,16 @@ export class WorkflowInstance {
         harness,
         liveIntegration,
       ] of this.liveInjectIntegrations.entries()) {
+        if (!this.canReuseExecutionIntegration(liveIntegration)) {
+          this.liveInjectIntegrations.delete(harness);
+          await this.cleanupRetainedIntegrationArtifacts(
+            harness,
+            liveIntegration
+          );
+          liveIntegration.closeTerminalGracefully();
+          liveIntegration.dispose();
+          continue;
+        }
         liveIntegration.resetForNewRun();
         this.executionIntegrations.set(harness, liveIntegration);
         Log.info(
@@ -3630,7 +3664,8 @@ export class WorkflowInstance {
             this.retainedIntegrationArtifactContexts.set(harnessKey, {
               integration: execIntegration,
               workingFilePath,
-              workspaceRoot,
+              workspaceRoot:
+                execIntegration.getExecutionRoot() ?? workspaceRoot,
             });
           } else {
             await this.cleanupRetainedIntegrationArtifacts(
@@ -3656,7 +3691,7 @@ export class WorkflowInstance {
             harnessKey,
             execIntegration,
             workingFilePath,
-            workspaceRoot
+            execIntegration.getExecutionRoot() ?? workspaceRoot
           );
           // Normal path: terminal closed or inject mode not active — dispose now
           // and save so the next run can close any VS Code terminal tab left open.

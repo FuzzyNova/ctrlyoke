@@ -1,6 +1,9 @@
 import * as fs from "fs";
 import * as path from "path";
-import { PlatformAdapter } from "../../platform/PlatformAdapter";
+import {
+  createNoWorktreeExecutionWorkspace,
+  PlatformAdapter,
+} from "../../platform/PlatformAdapter";
 import type { VsCodeAdapter } from "../../platform/VsCodeAdapter";
 import {
   resolveEffectiveAbsoluteReferences,
@@ -13,7 +16,11 @@ import {
   UniversalCliOutput,
 } from "../../types/CliOutputTypes";
 import { PromptStep } from "../../types/CtrlYokeTypes";
-import { WorkflowContext } from "../../types/WorkflowContextTypes";
+import {
+  WorkflowContext,
+  type ExecutionWorkspace,
+  getExecutionWorkspaceIdentity,
+} from "../../types/WorkflowContextTypes";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { CliProcessManager } from "../../utils/CliProcessManager";
@@ -118,6 +125,9 @@ export class CliIntegration extends HarnessIntegration {
   /** Platform adapter (VS Code or standalone CLI) */
   private readonly platform: PlatformAdapter;
 
+  /** Immutable roots captured for this execution integration. */
+  private readonly executionWorkspace: ExecutionWorkspace;
+
   /** Delegates rawTextOutput from provider config (used by WorkflowExecutor for streaming CliOutput) */
   override get rawTextOutput(): boolean {
     return this.provider.config.rawTextOutput ?? false;
@@ -188,7 +198,10 @@ export class CliIntegration extends HarnessIntegration {
     private readonly userFeedbackSink?: UserFeedbackSink,
     private readonly onProviderUsageUpdate?: (
       quota: HarnessQuotaSnapshot
-    ) => void
+    ) => void,
+    executionWorkspace: ExecutionWorkspace = createNoWorktreeExecutionWorkspace(
+      platform
+    )
   ) {
     // Pass ExtensionContext to base class if available (VS Code context) for subscription management
     const vsCtx =
@@ -198,13 +211,14 @@ export class CliIntegration extends HarnessIntegration {
     super(vsCtx, registerWithContext);
     this.platform = platform;
     this.provider = cliProvider;
+    this.executionWorkspace = executionWorkspace;
     this.processManager = new CliProcessManager(
-      this.getWorkspaceRoot() || "",
+      this.getExecutionRoot() || "",
       (msg) => Log.debug(msg)
     );
     // Propagate workspace root to the log parser for session log discovery.
     // For example, ClaudeLogParser uses this to locate ~/.claude/projects/<workspace>.
-    const workspaceRoot = this.getWorkspaceRoot();
+    const workspaceRoot = this.getExecutionRoot();
     const logParser = this.provider.logParser;
     if (workspaceRoot && logParser?.setWorkspaceRoot) {
       logParser.setWorkspaceRoot(workspaceRoot);
@@ -261,7 +275,30 @@ export class CliIntegration extends HarnessIntegration {
    * The platform adapter knows the true workspace root in both VS Code and CLI contexts.
    */
   protected override getWorkspaceRoot(): string | undefined {
-    return this.platform.getWorkspaceRoot() || undefined;
+    return this.getStateRoot() || undefined;
+  }
+
+  /** Root containing ctrlyoke state, workflow files, and MCP state identity. */
+  public getStateRoot(): string {
+    return this.executionWorkspace.stateRoot;
+  }
+
+  /** Root used for harness cwd, temp files, hooks, and workspace-local config. */
+  public getExecutionRoot(): string {
+    return this.executionWorkspace.executionRoot;
+  }
+
+  /** Immutable execution-workspace contract used to construct this integration. */
+  public getExecutionWorkspace(): ExecutionWorkspace {
+    return this.executionWorkspace;
+  }
+
+  override getExecutionWorkspaceIdentity(): string {
+    return getExecutionWorkspaceIdentity(this.executionWorkspace);
+  }
+
+  protected override getExecutionWorkspaceRoot(): string | undefined {
+    return this.getExecutionRoot() || undefined;
   }
 
   /**
@@ -270,6 +307,20 @@ export class CliIntegration extends HarnessIntegration {
    */
   protected override getWorkspaceRoots(): string[] {
     return this.platform.getWorkspaceRoots();
+  }
+
+  protected override getExecutionWorkspaceRoots(): string[] {
+    return [...this.executionWorkspace.workspaceRoots];
+  }
+
+  protected override getExecutionNamedWorkspaceRoots(): ResolverWorkspaceFolder[] {
+    return this.executionWorkspace.namedWorkspaceRoots.map((root) => ({
+      ...root,
+    }));
+  }
+
+  protected override getApprovedExternalRoots(): string[] {
+    return [...this.executionWorkspace.approvedExternalRoots];
   }
 
   /**
@@ -290,7 +341,7 @@ export class CliIntegration extends HarnessIntegration {
   private getEffectiveAbsolute(): boolean {
     return resolveEffectiveAbsoluteReferences(
       ConfigurationUtils.shouldUseAbsolutePathReferences(),
-      this.getWorkspaceRoots().length > 1
+      this.getExecutionWorkspaceRoots().length > 1
     );
   }
 
@@ -364,7 +415,7 @@ export class CliIntegration extends HarnessIntegration {
    * Uses the provider's formatFileReference() override for harness-specific prefix.
    */
   private formatDirectFileRef(absolutePath: string): string {
-    const workspaceRoot = this.getWorkspaceRoot() ?? "";
+    const workspaceRoot = this.getExecutionRoot();
     const refPath = this.getEffectiveAbsolute()
       ? absolutePath
       : path.relative(workspaceRoot, absolutePath);
@@ -684,7 +735,7 @@ export class CliIntegration extends HarnessIntegration {
     return new CliInteractiveStartupCoordinator({
       logParser: this.provider.logParser!,
       notificationMonitor: this.provider.notificationMonitor,
-      getWorkspaceRoot: () => this.getWorkspaceRoot(),
+      getWorkspaceRoot: () => this.getExecutionRoot(),
       getAbortState: () => this.getInteractiveAbortState(),
       markProcessExitDuringStage: (stage, exitCode) =>
         this.failureTracker.markProcessExitDuringStage(stage, exitCode),
@@ -716,7 +767,9 @@ export class CliIntegration extends HarnessIntegration {
     this.lastExecutionSnapshot = undefined;
     return new CliExecutionSession({
       prompt,
-      workflowContext,
+      workflowContext: workflowContext
+        ? { ...workflowContext, stateRoot: this.getStateRoot() }
+        : undefined,
       resolvedProperties,
       resolvedSessionId,
     });
@@ -734,7 +787,7 @@ export class CliIntegration extends HarnessIntegration {
       isInjectablePrompt: (promptText) => this.isInjectablePrompt(promptText),
       buildPriorContextXmlFromItems: (items) =>
         this.buildPriorContextXmlFromItems(items),
-      getWorkspaceRoot: () => this.getWorkspaceRoot(),
+      getWorkspaceRoot: () => this.getExecutionRoot(),
       getTempFileSplitConfig: () => this.getTempFileSplitConfig(),
       formatDirectFileRef: (absolutePath) =>
         this.formatDirectFileRef(absolutePath),
@@ -770,7 +823,7 @@ export class CliIntegration extends HarnessIntegration {
       provider: this.provider,
       processManager: this.processManager,
       runtimeState: {
-        getWorkspaceRoot: () => this.getWorkspaceRoot(),
+        getWorkspaceRoot: () => this.getExecutionRoot(),
         getWorkflowName: () => this.workflowName,
         isCancelling: () => this.isCancelling,
       },
@@ -789,8 +842,10 @@ export class CliIntegration extends HarnessIntegration {
 
     const executionPlanBuilder = new ExecutionPlanBuilder({
       provider: this.provider,
-      getWorkspaceRoot: () => this.getWorkspaceRoot(),
-      getWorkspaceRoots: () => this.getWorkspaceRoots(),
+      getWorkspaceRoot: () => this.getExecutionRoot(),
+      getWorkspaceRoots: () => this.getExecutionWorkspaceRoots(),
+      getApprovedExternalRoots: () => this.getApprovedExternalRoots(),
+      getStateRoot: () => this.getStateRoot(),
       getExtensionPath: () => this.platform.getExtensionPath(),
       getExecutionMode: () => this.getExecutionMode(),
       getEnabledHookNotificationEvents: () =>
@@ -809,8 +864,8 @@ export class CliIntegration extends HarnessIntegration {
           this.cleanupTempFiles(tempFilePaths),
       },
       runtimeState: {
-        getWorkspaceRoot: () => this.getWorkspaceRoot(),
-        getWorkspaceRoots: () => this.getWorkspaceRoots(),
+        getWorkspaceRoot: () => this.getExecutionRoot(),
+        getWorkspaceRoots: () => this.getExecutionWorkspaceRoots(),
         getExtensionPath: () => this.platform.getExtensionPath(),
         isVsCodeContext: () => this.isVsCodeContext(),
         isCancelling: () => this.isCancelling,
@@ -879,7 +934,7 @@ export class CliIntegration extends HarnessIntegration {
   ): Promise<boolean> {
     const mode = this.sessionExecutionMode(session);
     const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
-    const workspaceRoot = this.getWorkspaceRoot();
+    const workspaceRoot = this.getExecutionRoot();
 
     // Inject mode: write directly into the running TUI instead of killing and
     // restarting with --resume. Works for sequential follow-up prompts within a

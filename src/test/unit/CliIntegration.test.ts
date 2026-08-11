@@ -24,6 +24,7 @@ import { configService } from "../../config/CtrlYokeConfigService";
 import type { InteractiveInjectContext } from "../../core/harness/shared/CliExecutionRunner";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
+import type { ExecutionWorkspace } from "../../types/WorkflowContextTypes";
 
 class MockVsCodePlatform
   implements PlatformAdapter, Pick<VsCodeAdapter, "getExtensionContext">
@@ -691,6 +692,53 @@ suite("CliIntegration", () => {
       primaryRoot,
       secondaryRoot,
     ]);
+  });
+
+  test("routes execution calls through execution roots while preserving state root access", async () => {
+    const stateRoot = path.join(os.tmpdir(), "ctrlyoke-state-root");
+    const executionRoot = path.join(os.tmpdir(), "ctrlyoke-execution-root");
+    const executionWorkspace: ExecutionWorkspace = {
+      stateRoot,
+      executionRoot,
+      workspaceRoots: [executionRoot],
+      namedWorkspaceRoots: [{ name: "root", fsPath: executionRoot }],
+      approvedExternalRoots: [],
+    };
+    let receivedRoot: string | undefined;
+    let receivedRoots: readonly string[] | undefined;
+
+    const integration = new CliIntegration(
+      createProvider({
+        buildCliArgs: async (
+          _prompt,
+          _isInteractive,
+          _extensionPath,
+          workspaceRoot,
+          _sessionId,
+          _workflowContext,
+          workspaceRoots
+        ) => {
+          receivedRoot = workspaceRoot;
+          receivedRoots = workspaceRoots;
+          return ["--base"];
+        },
+      }),
+      new MockVsCodePlatform(),
+      false,
+      undefined,
+      undefined,
+      executionWorkspace
+    );
+    (integration as any).executionRunner.executeHeadless = async () => true;
+
+    assert.strictEqual(integration.getStateRoot(), stateRoot);
+    assert.strictEqual(integration.getExecutionRoot(), executionRoot);
+    assert.strictEqual(
+      await integration.sendPrompt({ prompt: "route this" }),
+      true
+    );
+    assert.strictEqual(receivedRoot, executionRoot);
+    assert.deepStrictEqual(receivedRoots, [executionRoot]);
   });
 
   test("should keep categorized CLI wrapper prompts on one line", () => {

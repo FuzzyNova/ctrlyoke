@@ -163,8 +163,10 @@ export class QwenCliProvider implements ICliProvider {
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
+      stateRoot?: string;
     },
-    _workspaceRoots?: readonly string[]
+    _workspaceRoots?: readonly string[],
+    _approvedExternalRoots?: readonly string[]
   ): Promise<CliProviderPreparation> {
     const args: string[] = [];
 
@@ -184,7 +186,8 @@ export class QwenCliProvider implements ICliProvider {
           wsRoot,
           workingFile,
           additionalEnv,
-          userServers
+          userServers,
+          workflowContext?.stateRoot
         )
     );
     if (
@@ -659,14 +662,16 @@ export class QwenCliProvider implements ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[]
+    userServers?: McpServerConfig[],
+    stateRoot?: string
   ): Promise<string[] | null> {
     const preparation = await this.planMcpConfigArgs(
       mcpServerPath,
       workspaceRoot,
       workingFilePath,
       additionalEnv,
-      userServers
+      userServers,
+      stateRoot
     );
     await applyPreparedMutations(preparation.mutations);
     return preparation.cliArgs.length > 0 ? preparation.cliArgs : null;
@@ -677,7 +682,8 @@ export class QwenCliProvider implements ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[]
+    userServers?: McpServerConfig[],
+    stateRoot?: string
   ): Promise<CliProviderPreparation> {
     if (!mcpServerPath && (!userServers || userServers.length === 0)) {
       return { cliArgs: [], mutations: [], diagnostics: [] };
@@ -688,7 +694,9 @@ export class QwenCliProvider implements ICliProvider {
       workspaceRoot,
       workingFilePath,
       additionalEnv,
-      userServers
+      userServers,
+      undefined,
+      stateRoot
     );
 
     return {

@@ -1,4 +1,6 @@
 import * as assert from "assert";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
 import { CliMcpConfigGenerator } from "../../core/harness/shared/CliMcpConfigGenerator";
 
@@ -148,6 +150,44 @@ suite("CliMcpConfigGenerator", () => {
         "other_value"
       );
     });
+
+    test("separates execution config placement from state-root MCP variables", () => {
+      const executionRoot = path.join(os.tmpdir(), "execution-root");
+      const stateRoot = path.join(os.tmpdir(), "state-root");
+      const workingFile = path.join(stateRoot, "workflow.ctrlyoke.json");
+      const config = JSON.parse(
+        CliMcpConfigGenerator.generateJsonConfig(
+          "server.js",
+          executionRoot,
+          undefined,
+          workingFile,
+          undefined,
+          stateRoot
+        )
+      );
+
+      assert.strictEqual(
+        CliMcpConfigGenerator.getConfigFilePath(
+          workingFile,
+          executionRoot,
+          "mcp-config"
+        ),
+        path.join(
+          executionRoot,
+          ".ctrlyoke",
+          "temp",
+          "mcp-config-workflow.json"
+        )
+      );
+      assert.strictEqual(
+        config.mcpServers.ctrlyoke.env.CTRLYOKE_WORKSPACE,
+        stateRoot.replace(/\\/g, "/")
+      );
+      assert.strictEqual(
+        config.mcpServers.ctrlyoke.env.CTRLYOKE_WORKING_FILE,
+        workingFile.replace(/\\/g, "/")
+      );
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -253,6 +293,28 @@ suite("CliMcpConfigGenerator", () => {
         { MY_VAR: "my_value" }
       );
       assert.ok(toml.includes("MY_VAR='my_value'"));
+    });
+
+    test("uses the state root for exported MCP variables", () => {
+      const executionRoot = path.join(os.tmpdir(), "execution-root");
+      const stateRoot = path.join(os.tmpdir(), "state-root");
+      const toml = CliMcpConfigGenerator.generateInlineTomlConfig(
+        "ctrlyoke",
+        path.join(executionRoot, "server.js"),
+        executionRoot,
+        path.join(stateRoot, "workflow.json"),
+        undefined,
+        stateRoot
+      );
+
+      const normalizedStateRoot = stateRoot.replace(/\\/g, "/");
+      const normalizedWorkingFile = path
+        .join(stateRoot, "workflow.json")
+        .replace(/\\/g, "/");
+      assert.ok(toml.includes(`CTRLYOKE_WORKSPACE='${normalizedStateRoot}'`));
+      assert.ok(
+        toml.includes(`CTRLYOKE_WORKING_FILE='${normalizedWorkingFile}'`)
+      );
     });
   });
 });

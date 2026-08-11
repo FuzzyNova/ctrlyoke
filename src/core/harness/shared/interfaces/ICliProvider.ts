@@ -211,8 +211,10 @@ export interface ICliProvider {
       promptIndex: number;
       allPrompts: WorkflowStep[];
       filePath?: string;
+      stateRoot?: string;
     },
-    workspaceRoots?: readonly string[]
+    workspaceRoots?: readonly string[],
+    approvedExternalRoots?: readonly string[]
   ): Promise<string[]>;
 
   /**
@@ -231,8 +233,10 @@ export interface ICliProvider {
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
+      stateRoot?: string;
     },
-    workspaceRoots?: readonly string[]
+    workspaceRoots?: readonly string[],
+    approvedExternalRoots?: readonly string[]
   ): Promise<CliProviderPreparation>;
 
   /**
@@ -284,7 +288,8 @@ export interface ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[]
+    userServers?: McpServerConfig[],
+    stateRoot?: string
   ): Promise<string[] | null>;
 
   /** Plan MCP arguments and deferred mutations without touching the filesystem. */
@@ -293,7 +298,8 @@ export interface ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[]
+    userServers?: McpServerConfig[],
+    stateRoot?: string
   ): Promise<CliProviderPreparation>;
 
   /**

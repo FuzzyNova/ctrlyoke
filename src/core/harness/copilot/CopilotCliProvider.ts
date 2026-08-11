@@ -153,8 +153,10 @@ export class CopilotCliProvider implements ICliProvider {
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
+      stateRoot?: string;
     },
-    workspaceRoots?: readonly string[]
+    workspaceRoots?: readonly string[],
+    approvedExternalRoots?: readonly string[]
   ): Promise<string[]> {
     const preparation = await this.planCliArgs(
       prompt,
@@ -163,7 +165,8 @@ export class CopilotCliProvider implements ICliProvider {
       workspaceRoot,
       sessionId,
       workflowContext,
-      workspaceRoots
+      workspaceRoots,
+      approvedExternalRoots
     );
     await applyPreparedMutations(preparation.mutations);
     return preparation.cliArgs;
@@ -181,8 +184,10 @@ export class CopilotCliProvider implements ICliProvider {
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
+      stateRoot?: string;
     },
-    workspaceRoots?: readonly string[]
+    workspaceRoots?: readonly string[],
+    approvedExternalRoots?: readonly string[]
   ): Promise<CliProviderPreparation> {
     // Generate a fresh per-invocation OTel export path (or clear it) every prompt.
     // Must run unconditionally — the parser/provider instances are reused across
@@ -217,7 +222,8 @@ export class CopilotCliProvider implements ICliProvider {
           wsRoot,
           workingFile,
           additionalEnv,
-          userServers
+          userServers,
+          workflowContext?.stateRoot
         )
     );
     if (
@@ -274,7 +280,8 @@ export class CopilotCliProvider implements ICliProvider {
     if (workspaceRoot) {
       const workspaceDirs = CliProviderUtils.getWorkspaceDirs(
         workspaceRoot,
-        workspaceRoots
+        workspaceRoots,
+        approvedExternalRoots
       );
       workspaceDirs.forEach((dir) => {
         args.push("--add-dir", dir);
@@ -860,14 +867,16 @@ export class CopilotCliProvider implements ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[]
+    userServers?: McpServerConfig[],
+    stateRoot?: string
   ): Promise<string[] | null> {
     const preparation = await this.planMcpConfigArgs(
       mcpServerPath,
       workspaceRoot,
       workingFilePath,
       additionalEnv,
-      userServers
+      userServers,
+      stateRoot
     );
     await applyPreparedMutations(preparation.mutations);
     return preparation.cliArgs.length > 0 ? preparation.cliArgs : null;
@@ -878,7 +887,8 @@ export class CopilotCliProvider implements ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[]
+    userServers?: McpServerConfig[],
+    stateRoot?: string
   ): Promise<CliProviderPreparation> {
     try {
       // Generate MCP config JSON using shared utility
@@ -898,7 +908,8 @@ export class CopilotCliProvider implements ICliProvider {
           { type: "local", tools: ["*"] },
           workingFilePath,
           additionalEnv,
-          copilotUserServerConfig
+          copilotUserServerConfig,
+          stateRoot
         );
       } else if (mcpServerPath) {
         configJson = CliMcpConfigGenerator.generateJsonConfig(
@@ -906,7 +917,8 @@ export class CopilotCliProvider implements ICliProvider {
           workspaceRoot,
           { type: "local", tools: ["*"] },
           workingFilePath,
-          additionalEnv
+          additionalEnv,
+          stateRoot
         );
       } else if (userServers && userServers.length > 0) {
         configJson = CliMcpConfigGenerator.generateUserServersOnlyConfig(

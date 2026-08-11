@@ -1,4 +1,7 @@
-import { PlatformAdapter } from "../platform/PlatformAdapter";
+import {
+  createNoWorktreeExecutionWorkspace,
+  PlatformAdapter,
+} from "../platform/PlatformAdapter";
 import { HARNESS_IDS, type HarnessId } from "../types/DashboardConstants";
 import { HarnessIntegration } from "./HarnessIntegration";
 import { CliIntegration } from "./harness/CliIntegration";
@@ -11,6 +14,7 @@ import { AntigravityCliProvider } from "./harness/antigravity/AntigravityCliProv
 import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
 import type { UserFeedbackSink } from "./UserFeedbackSink";
 import type { HarnessQuotaSnapshot } from "../types/UsageTypes";
+import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 
 /**
  * IntegrationFactory
@@ -63,96 +67,124 @@ export class IntegrationFactory {
   }
 
   /** Create a new Copilot CLI integration */
-  createCopilotCli(registerWithContext: boolean = true): CliIntegration {
+  createCopilotCli(
+    registerWithContext: boolean = true,
+    executionWorkspace?: ExecutionWorkspace
+  ): CliIntegration {
     const provider = new CopilotCliProvider();
     return new CliIntegration(
       provider,
       this.platform,
       registerWithContext,
       this.userFeedbackSink,
-      this.onProviderUsageUpdate
+      this.onProviderUsageUpdate,
+      executionWorkspace
     );
   }
 
   /** Create a new Claude Code CLI integration */
-  createClaudeCli(registerWithContext: boolean = true): CliIntegration {
+  createClaudeCli(
+    registerWithContext: boolean = true,
+    executionWorkspace?: ExecutionWorkspace
+  ): CliIntegration {
     const provider = new ClaudeCliProvider();
     return new CliIntegration(
       provider,
       this.platform,
       registerWithContext,
       this.userFeedbackSink,
-      this.onProviderUsageUpdate
+      this.onProviderUsageUpdate,
+      executionWorkspace
     );
   }
 
   /** Create a new Codex CLI integration */
-  createCodexCli(registerWithContext: boolean = true): CliIntegration {
+  createCodexCli(
+    registerWithContext: boolean = true,
+    executionWorkspace?: ExecutionWorkspace
+  ): CliIntegration {
     const provider = new CodexCliProvider(this.onProviderUsageUpdate);
     return new CliIntegration(
       provider,
       this.platform,
       registerWithContext,
       this.userFeedbackSink,
-      this.onProviderUsageUpdate
+      this.onProviderUsageUpdate,
+      executionWorkspace
     );
   }
 
   /** Create a new OpenCode CLI integration */
-  createOpenCodeCli(registerWithContext: boolean = true): CliIntegration {
+  createOpenCodeCli(
+    registerWithContext: boolean = true,
+    executionWorkspace?: ExecutionWorkspace
+  ): CliIntegration {
     const provider = new OpenCodeCliProvider();
     return new CliIntegration(
       provider,
       this.platform,
       registerWithContext,
       this.userFeedbackSink,
-      this.onProviderUsageUpdate
+      this.onProviderUsageUpdate,
+      executionWorkspace
     );
   }
 
   /** Create a new Qwen Code CLI integration */
-  createQwenCli(registerWithContext: boolean = true): CliIntegration {
+  createQwenCli(
+    registerWithContext: boolean = true,
+    executionWorkspace?: ExecutionWorkspace
+  ): CliIntegration {
     const provider = new QwenCliProvider();
     return new CliIntegration(
       provider,
       this.platform,
       registerWithContext,
       this.userFeedbackSink,
-      this.onProviderUsageUpdate
+      this.onProviderUsageUpdate,
+      executionWorkspace
     );
   }
 
   /** Create a new Antigravity CLI integration */
-  createAntigravityCli(registerWithContext: boolean = true): CliIntegration {
+  createAntigravityCli(
+    registerWithContext: boolean = true,
+    executionWorkspace?: ExecutionWorkspace
+  ): CliIntegration {
     const provider = new AntigravityCliProvider();
     return new CliIntegration(
       provider,
       this.platform,
       registerWithContext,
       this.userFeedbackSink,
-      this.onProviderUsageUpdate
+      this.onProviderUsageUpdate,
+      executionWorkspace
     );
   }
 
   /** Create a new integration for the given harness (CLI harnesses only) */
   createForHarness(
     harness: HarnessId,
-    registerWithContext: boolean = true
+    registerWithContext: boolean = true,
+    executionWorkspace?: ExecutionWorkspace
   ): CliIntegration {
     switch (harness) {
       case HARNESS_IDS.CLAUDE_CLI:
-        return this.createClaudeCli(registerWithContext);
+        return this.createClaudeCli(registerWithContext, executionWorkspace);
       case HARNESS_IDS.CODEX_CLI:
-        return this.createCodexCli(registerWithContext);
+        return this.createCodexCli(registerWithContext, executionWorkspace);
       case HARNESS_IDS.OPENCODE_CLI:
-        return this.createOpenCodeCli(registerWithContext);
+        return this.createOpenCodeCli(registerWithContext, executionWorkspace);
       case HARNESS_IDS.QWEN_CLI:
-        return this.createQwenCli(registerWithContext);
+        return this.createQwenCli(registerWithContext, executionWorkspace);
       case HARNESS_IDS.ANTIGRAVITY_CLI:
-        return this.createAntigravityCli(registerWithContext);
+        return this.createAntigravityCli(
+          registerWithContext,
+          executionWorkspace
+        );
       case HARNESS_IDS.COPILOT_CLI:
       default:
-        return this.createCopilotCli(registerWithContext);
+        return this.createCopilotCli(registerWithContext, executionWorkspace);
     }
   }
 
@@ -168,8 +200,17 @@ export class IntegrationFactory {
    *   confirmed the harness is available, so the PATH/version check is redundant.
    * - Must be disposed by the caller (WorkflowInstance.startWorkflowExecution finally block).
    */
-  createForExecution(harness: HarnessId): HarnessIntegration {
-    const integration = this.createForHarness(harness, false);
+  createForExecution(
+    harness: HarnessId,
+    executionWorkspace: ExecutionWorkspace = createNoWorktreeExecutionWorkspace(
+      this.platform
+    )
+  ): HarnessIntegration {
+    const integration = this.createForHarness(
+      harness,
+      false,
+      executionWorkspace
+    );
     integration.markAsReady();
     return integration;
   }

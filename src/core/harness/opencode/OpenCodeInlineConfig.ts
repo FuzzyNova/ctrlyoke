@@ -182,6 +182,7 @@ export interface OpenCodeInlineConfigBuildOptions {
   workingFilePath?: string;
   additionalEnv?: Record<string, string>;
   userServers?: McpServerConfig[];
+  stateRoot?: string;
 }
 
 /**
@@ -195,7 +196,8 @@ export function buildOpenCodeMcpEntries(
   workspaceRoot: string | undefined,
   workingFilePath?: string,
   additionalEnv?: Record<string, string>,
-  userServers: McpServerConfig[] = []
+  userServers: McpServerConfig[] = [],
+  stateRoot?: string
 ): OpenCodeMcpEntries {
   if (mcpServerPath && !workspaceRoot) {
     throw new Error(
@@ -207,7 +209,7 @@ export function buildOpenCodeMcpEntries(
 
   if (mcpServerPath && workspaceRoot) {
     const workspaceValue = sanitizeMcpString(
-      workspaceRoot.replace(/\\/g, "/"),
+      (stateRoot ?? workspaceRoot).replace(/\\/g, "/"),
       "ctrlyoke MCP workspace"
     );
     const workingFileValue = workingFilePath

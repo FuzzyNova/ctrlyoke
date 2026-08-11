@@ -121,7 +121,8 @@ export class OpenCodeCliProvider implements ICliProvider {
       options.workspaceRoot,
       options.workingFilePath,
       options.additionalEnv,
-      options.userServers
+      options.userServers,
+      options.stateRoot
     );
     const pluginPath = path.resolve(
       options.extensionPath,
@@ -210,8 +211,10 @@ export class OpenCodeCliProvider implements ICliProvider {
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
+      stateRoot?: string;
     },
-    _workspaceRoots?: readonly string[]
+    _workspaceRoots?: readonly string[],
+    _approvedExternalRoots?: readonly string[]
   ): Promise<CliProviderPreparation> {
     // The integration is reused across prompts in one workflow. Reset before
     // optional MCP or permission preparation so a later prompt cannot inherit
@@ -238,7 +241,8 @@ export class OpenCodeCliProvider implements ICliProvider {
           wsRoot,
           workingFile,
           additionalEnv,
-          userServers
+          userServers,
+          workflowContext?.stateRoot
         )
     );
     if (
@@ -411,7 +415,8 @@ export class OpenCodeCliProvider implements ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[]
+    userServers?: McpServerConfig[],
+    stateRoot?: string
   ): Promise<string[] | null> {
     const hasMcp =
       !!mcpServerPath || (userServers !== undefined && userServers.length > 0);
@@ -420,7 +425,8 @@ export class OpenCodeCliProvider implements ICliProvider {
       workspaceRoot,
       workingFilePath,
       additionalEnv,
-      userServers
+      userServers,
+      stateRoot
     );
     await applyPreparedMutations(preparation.mutations);
     return hasMcp ? preparation.cliArgs : null;
@@ -431,7 +437,8 @@ export class OpenCodeCliProvider implements ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[]
+    userServers?: McpServerConfig[],
+    _stateRoot?: string
   ): Promise<CliProviderPreparation> {
     const hasUserServers = userServers && userServers.length > 0;
     if (!mcpServerPath && !hasUserServers) {
@@ -453,7 +460,8 @@ export class OpenCodeCliProvider implements ICliProvider {
       workspaceRoot,
       workingFilePath,
       additionalEnv,
-      userServers
+      userServers,
+      _stateRoot
     );
     return {
       cliArgs: [],

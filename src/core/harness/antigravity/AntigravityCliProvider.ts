@@ -148,8 +148,10 @@ export class AntigravityCliProvider implements ICliProvider {
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
+      stateRoot?: string;
     },
-    workspaceRoots?: readonly string[]
+    workspaceRoots?: readonly string[],
+    approvedExternalRoots?: readonly string[]
   ): Promise<string[]> {
     const preparation = await this.planCliArgs(
       prompt,
@@ -158,7 +160,8 @@ export class AntigravityCliProvider implements ICliProvider {
       workspaceRoot,
       sessionId,
       workflowContext,
-      workspaceRoots
+      workspaceRoots,
+      approvedExternalRoots
     );
     await applyPreparedMutations(preparation.mutations);
     return preparation.cliArgs;
@@ -176,8 +179,10 @@ export class AntigravityCliProvider implements ICliProvider {
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
+      stateRoot?: string;
     },
-    workspaceRoots?: readonly string[]
+    workspaceRoots?: readonly string[],
+    approvedExternalRoots?: readonly string[]
   ): Promise<CliProviderPreparation> {
     const statusLineToken = randomUUID();
 
@@ -199,7 +204,8 @@ export class AntigravityCliProvider implements ICliProvider {
           wsRoot,
           workingFile,
           additionalEnv,
-          userServers
+          userServers,
+          workflowContext?.stateRoot
         )
     );
     if (
@@ -223,7 +229,8 @@ export class AntigravityCliProvider implements ICliProvider {
     if (workspaceRoot) {
       const workspaceDirs = CliProviderUtils.getWorkspaceDirs(
         workspaceRoot,
-        workspaceRoots
+        workspaceRoots,
+        approvedExternalRoots
       );
       workspaceDirs.forEach((dir) => args.push("--add-dir", dir));
     }
@@ -674,14 +681,16 @@ export class AntigravityCliProvider implements ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[]
+    userServers?: McpServerConfig[],
+    stateRoot?: string
   ): Promise<string[] | null> {
     const preparation = await this.planMcpConfigArgs(
       mcpServerPath,
       workspaceRoot,
       workingFilePath,
       additionalEnv,
-      userServers
+      userServers,
+      stateRoot
     );
     await applyPreparedMutations(preparation.mutations);
     return preparation.mutations.length > 0 ? preparation.cliArgs : null;
@@ -692,7 +701,8 @@ export class AntigravityCliProvider implements ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[]
+    userServers?: McpServerConfig[],
+    stateRoot?: string
   ): Promise<CliProviderPreparation> {
     if (!mcpServerPath && (!userServers || userServers.length === 0)) {
       return { cliArgs: [], mutations: [], diagnostics: [] };
@@ -711,7 +721,8 @@ export class AntigravityCliProvider implements ICliProvider {
           remoteUrlKey: "serverUrl",
           includeRemoteType: false,
           includeTrust: false,
-        }
+        },
+        stateRoot
       );
 
       const workflowKey = workingFilePath ?? workspaceRoot;

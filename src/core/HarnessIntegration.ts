@@ -342,6 +342,16 @@ export abstract class HarnessIntegration {
     return false;
   }
 
+  /** Identity of the execution workspace this integration is bound to. */
+  getExecutionWorkspaceIdentity(): string | undefined {
+    return this.getExecutionWorkspaceRoot();
+  }
+
+  /** Public execution-root view for lifecycle cleanup and diagnostics. */
+  getExecutionRoot(): string | undefined {
+    return this.getExecutionWorkspaceRoot();
+  }
+
   /**
    * Clean up workflow-scoped artifacts created during execution (e.g. MCP config files).
    *
@@ -450,7 +460,7 @@ export abstract class HarnessIntegration {
   ): Promise<PromptSections> {
     const rawPromptText = prompt.prompt.trim();
     let userPromptText = rawPromptText;
-    const workspaceRoot = this.getWorkspaceRoot();
+    const workspaceRoot = this.getExecutionWorkspaceRoot();
 
     // Expand context into direct file refs + excerpt blocks (split, not merged)
     let splitContext: SplitContext = { directFileRefs: [], excerptBlocks: "" };
@@ -458,15 +468,15 @@ export abstract class HarnessIntegration {
       try {
         const effectiveAbsolute = resolveEffectiveAbsoluteReferences(
           ConfigurationUtils.shouldUseAbsolutePathReferences(),
-          this.getWorkspaceRoots().length > 1
+          this.getExecutionWorkspaceRoots().length > 1
         );
         const expander = new ContextExpander(
           workspaceRoot,
           [
-            ...this.getWorkspaceRoots(),
-            ...this.getEffectiveApprovedExternalFileRoots(),
+            ...this.getExecutionWorkspaceRoots(),
+            ...this.getApprovedExternalRoots(),
           ],
-          this.getNamedWorkspaceRoots(),
+          this.getExecutionNamedWorkspaceRoots(),
           effectiveAbsolute,
           this.getSourceDefinitionDir()
         );
@@ -641,7 +651,7 @@ export abstract class HarnessIntegration {
       );
       return;
     }
-    const workspaceRoot = this.getWorkspaceRoot();
+    const workspaceRoot = this.getExecutionWorkspaceRoot();
     if (!workspaceRoot) {
       return;
     }
@@ -750,6 +760,11 @@ export abstract class HarnessIntegration {
     return undefined;
   }
 
+  /** Explicit execution root; getWorkspaceRoot retains its state-root meaning. */
+  protected getExecutionWorkspaceRoot(): string | undefined {
+    return this.getWorkspaceRoot();
+  }
+
   /**
    * Get every directory that should be trusted as "inside the workspace" for
    * path-containment checks (e.g. `@file` prompt references). Defaults to
@@ -758,6 +773,12 @@ export abstract class HarnessIntegration {
    */
   protected getWorkspaceRoots(): string[] {
     const root = this.getWorkspaceRoot();
+    return root ? [root] : [];
+  }
+
+  /** Workspace roots visible to the harness process and prompt resolver. */
+  protected getExecutionWorkspaceRoots(): string[] {
+    const root = this.getExecutionWorkspaceRoot();
     return root ? [root] : [];
   }
 
@@ -770,6 +791,14 @@ export abstract class HarnessIntegration {
     return [];
   }
 
+  protected getExecutionNamedWorkspaceRoots(): ResolverWorkspaceFolder[] {
+    return this.getNamedWorkspaceRoots();
+  }
+
+  protected getApprovedExternalRoots(): string[] {
+    return this.getEffectiveApprovedExternalFileRoots();
+  }
+
   /**
    * Return the trusted directory containing the authored workflow definition.
    * The run working copy is intentionally never used as this source.
@@ -779,8 +808,8 @@ export abstract class HarnessIntegration {
       this.sourceDefinitionPath,
       Array.from(
         new Set([
-          ...this.getWorkspaceRoots(),
-          ...this.getEffectiveApprovedExternalFileRoots(),
+          ...this.getExecutionWorkspaceRoots(),
+          ...this.getApprovedExternalRoots(),
         ])
       )
     );
