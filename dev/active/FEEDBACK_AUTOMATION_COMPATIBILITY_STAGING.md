@@ -18,6 +18,25 @@ do not restate their content here.
 for forward-looking work. That document's queue is fully complete and it is
 retained as the record of how the 0.1.0 permission gate was sequenced.
 
+**Re-verified against `src/` on 2026-08-11.** Stage E (client-scoped routing)
+is complete — `WebviewClientContext` is threaded through
+`WorkflowMutationCoordinator`, `WorkflowStepHandlers`, `UndoRedoCoordinator`,
+and the terminal handlers, and a two-tab isolation test exists
+(`CoreFeedbackMigration.test.ts`). It landed across commits `6b1e8040`
+(2026-07-24), `aad4be61` (2026-08-02), and `effbc9be` (2026-08-06) — all
+before this document's last grooming pass — but was never marked done in the
+queue below; that is corrected here. **Stages D, F, and G remain genuinely
+unstarted.** The next unblocked step is **Stage D** (CLI validation): it is
+small, self-contained, and depends on nothing else outstanding. Stage G's
+dry-run leg is still the only item in either plan with a real unbuilt
+dependency — [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md)
+remains **Proposed**, with no `SecretStore`, no `${secret:...}` interpolation,
+and no central redaction pipeline in `src/` (only a narrow, explicitly-labeled
+stand-in at `src/types/PreviewRedactor.ts` scoped to dry-run preview). Stage
+G's other work — capability domains, tab badges, generated docs, the Codex
+investigation — does not need it and can proceed independently. See "What
+remains" near the end of this document for the full breakdown.
+
 ---
 
 ## The framing this settles
@@ -239,11 +258,20 @@ pre-condition skip, and parse-error verification against the built CLI.
 
 The largest single chunk across all three plans. Split by seam, below.
 
-### Stage D — Compatibility Phase 2, CLI validation only
+### Stage D — Compatibility Phase 2, CLI validation only — NOT STARTED
 
 `ctrlyoke validate --harness` / `--all-installed-harnesses --json`. Small,
 because the registry and analyzer already exist and this is projection work over
 them.
+
+**Confirmed not started (2026-08-11).** `src/cli.ts`'s `validate <file>` only
+runs `PromptFileParser` for syntactic validity — no `--harness` or
+`--all-installed-harnesses` option, no `--json` mode, and `CompatibilityAnalyzer`
+is never imported anywhere under `src/cli.ts` or `src/cli/`.
+`HarnessCapabilityRegistry` is already used in `cli.ts` (`createCliCapabilityRegistry()`),
+but only inside the `--dry-run` preview path for one selected harness — not by
+`validate`. This is the cleanest next step: no missing dependency, and it
+reuses step 9's JSON envelope convention plus the existing registry wiring.
 
 **The other two legs of Phase 2 were cut on 2026-08-02**, leaving CLI validation
 as the whole stage:
@@ -269,23 +297,70 @@ as the whole stage:
   `.ctrlyoke/capabilities.json` keeps its existing availability/model data and
   its existence-validation role in `mcp-server.ts:485`.
 
-### Stage E — Browser feedback Phase 3
+### Stage E — Browser feedback Phase 3 — DONE
 
 Client-scoped routing. **Identical work to decoupling plan Phase 5 item 1** —
 execute once, and update both plans when it lands.
 
-### Stage F — Browser feedback Phase 4
+**Confirmed complete (2026-08-11).** `WebviewClientContext` is threaded per-message
+through `WebviewMessageRouter` into all four target modules — every public
+method on `WorkflowMutationCoordinator` and `WorkflowStepHandlers` takes `ctx:
+WebviewClientContext` and replies only via `ctx.postMessage`/`ctx.emit`;
+`TerminalMessageHandlers` is scoped the same way; `UndoRedoCoordinator` takes
+an explicit `postMessage`/`clientId` per call, with `WebviewMessageRouter`
+passing the single initiating client rather than broadcasting. Commit
+`aad4be61` removed the last broadcast/native-modal fallbacks from exactly
+these four files. `DashboardBroadcastHub` still broadcasts, correctly, for
+genuine shared/background events (workflow-registry add/dismiss/summary) —
+that is the plan's own carve-out, not a leftover gap. A representative
+two-tab isolation test exists at `CoreFeedbackMigration.test.ts:25-45`
+(`browser:1` receives a scoped failure, `browser:2` receives nothing).
+**Outstanding nit, not a blocker:** that test covers the shared
+`WebviewClientContext` scoping generically; there is no dedicated per-module
+two-tab test for the terminal or undo/redo paths specifically. Worth a small
+follow-up if item 4's acceptance bar is read as per-module coverage.
+
+**The decoupling plan's Phase 5 item 1 status was not checked as part of this
+pass** (out of scope for this document) — `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`
+Stage 6 describes this as the same edit set and should be updated to reflect
+that it has landed, per this document's own "update both plans when it lands"
+rule above.
+
+### Stage F — Browser feedback Phase 4 — NOT STARTED
 
 Interactive choices: the 6 surviving action-bearing sites and the
 `USER_INTERACTION_REQUEST` correlation contract.
 
-### Stage G — Compatibility Phase 3, and the deferred remainder
+**Confirmed not started (2026-08-11).** `MESSAGE_TYPES.USER_INTERACTION_REQUEST`
+does not exist anywhere in `src/`. All 6 sites still call
+`vscode.window.show*Message(...)` directly with action-button strings, exactly
+matching the plan's own file/count reconciliation: `TemplateImporter.ts:200`
+(overwrite), `TemplateImporter.ts:243` (post-import),
+`WorkflowCommandHandler.ts:99` (post-script-create),
+`WorkflowCommandHandler.ts:148` (retry harness automation),
+`WorkflowOrchestrator.ts:1325` (post-workspace-init), `WorkflowSerializer.ts:1335`
+(clear-all-workflows).
+
+### Stage G — Compatibility Phase 3, and the deferred remainder — NOT STARTED
 
 Capability domains (hooks, MCP per-server tool filtering, images, usage),
 generated compatibility docs, the Codex partial-support investigation,
 Compatibility Phase 2's dry-run leg now that `DRY_RUN_PREVIEW_PLAN.md` is
 implemented, and a
 re-evaluation of the portability report against a multi-domain registry.
+
+**Confirmed not started (2026-08-11), and guarded rather than merely unused.**
+`CAPABILITY_DOMAINS` in `DashboardConstants.ts` declares `permissions`,
+`promptInputs`, `hooks`, `mcp`, and `usage` at the type level, but
+`HarnessCapabilityRegistry` defaults to `[CAPABILITY_DOMAINS.PERMISSIONS]`
+(`HarnessCapabilityRegistry.ts:63-65`) and `deserializeSnapshot` throws if
+`enabledDomains` is anything else (`HarnessCapabilityRegistry.ts:155-162`);
+`getEffectiveCapabilityState` also returns `undefined` for any non-permissions
+domain even if present. The other four domains are structurally rejected at
+runtime, not just absent from data — enabling one is real registry-assembly
+work, not a config flip. The dry-run leg specifically still needs
+`SECRETS_AND_REDACTION_PLAN.md` (Proposed, unstarted); the rest of Stage G does
+not.
 
 **`mcp.injection` was deleted from Phase 3 on 2026-08-02.** Every harness
 attaches MCP servers, so it is a uniform product feature, and the plan's own rule
@@ -323,10 +398,10 @@ may be swapped as a block.
 | 13  | C.4   | **DONE** — AST-verified triage of all 63 reusable direct sites: 1 policy deletion, 7 duplicate deletions, 8 noise deletions, 39 scoped replies, 8 broadcast/interaction-held sites; no migration |
 | 14  | C.5   | **DONE** — Executed the triage for the core/orchestration group (32 sites in 4 files); retained five interaction holds for Phase 4 and recorded 23 client-scope fallbacks for Stage E            |
 | 15  | C.6   | **DONE** — Executed the triage for the ui/utils group (31 sites in 8 files); reusable direct-message baseline is now 6, with the six Phase 4 interaction holds remaining                         |
-| 16  | D     | `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                                                                     |
-| 17  | E     | Client-scoped routing (= decoupling Phase 5 item 1); two-tab isolation tests                                                                                                                     |
-| 18  | F     | `USER_INTERACTION_REQUEST` contract; migrate the 6 surviving action-bearing sites; headless fallbacks                                                                                            |
-| 19  | G.x   | Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration                                                                                                          |
+| 16  | D     | **TODO — next up.** `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                                                |
+| 17  | E     | **DONE** — `WebviewClientContext` threaded through `WorkflowMutationCoordinator`, `WorkflowStepHandlers`, `UndoRedoCoordinator`, and terminal handlers (landed 2026-07-24 to 2026-08-06); two-tab isolation test in `CoreFeedbackMigration.test.ts` |
+| 18  | F     | **TODO.** `USER_INTERACTION_REQUEST` contract; migrate the 6 surviving action-bearing sites; headless fallbacks                                                                                  |
+| 19  | G.x   | **TODO.** Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration (dry-run sub-leg blocked on `SECRETS_AND_REDACTION_PLAN.md`)                                   |
 
 **Stage B was reordered on 2026-08-02 from the plan's section numbering.** The
 plan lists the builder first, but `CliJsonResultBuilder` consumes the projection
@@ -443,7 +518,7 @@ The last surviving `showChoice()` — a "don't show again" harness warning at
 neither execution-blocking nor policy-contradicting, so it migrates normally:
 feedback plus a persisted suppression flag.
 
-### Browser feedback Phase 3 — client-scoped routing (Stage E)
+### Browser feedback Phase 3 — client-scoped routing (Stage E) — DONE
 
 Threads `WebviewClientContext` (or a scoped feedback callback) into the router
 delegates that currently emit process-global messages —
@@ -452,6 +527,11 @@ terminal handlers — so a failure caused by one browser tab returns to that tab
 instead of every connected client, while genuine background events stay on the
 broadcast path. This is the same edit set as decoupling plan Phase 5 item 1; do
 it once and update both plans.
+
+**Landed 2026-07-24 through 2026-08-06** (commits `6b1e8040`, `aad4be61`,
+`effbc9be`), confirmed against `src/` on 2026-08-11. The decoupling plan's own
+Phase 5 item 1 status still needs updating to match — this document was
+corrected first.
 
 ### Browser feedback Phase 4 — interactive choices (Stage F)
 
@@ -512,16 +592,61 @@ just because the products share history and directories.
 
 ---
 
+## What remains before this document can move to `dev/implemented/`
+
+Re-verified against `src/` on 2026-08-11, not read from the plans.
+
+| Stage | Scope | Status |
+| ----- | ----- | ------ |
+| A     | Guards, baselines, three bug fixes | **Done** |
+| B     | Automation API `--json` v1 | **Done** |
+| C     | Browser feedback Phases 2 and 2.5 | **Done** |
+| D     | CLI `validate --harness` / `--all-installed-harnesses --json` | **Not started** — no dependency, smallest remaining chunk |
+| E     | Client-scoped routing | **Done** (confirmed complete this pass; previously unmarked) |
+| F     | Interactive choices / `USER_INTERACTION_REQUEST` | **Not started** |
+| G     | Compatibility Phase 3 domains + docs + Codex investigation + dry-run leg | **Not started**; dry-run sub-leg additionally blocked on the Secrets plan |
+
+Three items stand between this document and being fully closed out:
+
+1. **Stage D** — self-contained, no blockers. Recommended next: it is the
+   smallest remaining piece and reuses conventions (JSON envelope, registry
+   access) that already exist in `cli.ts`.
+2. **Stage F** — self-contained, no blockers. The 6 target sites and their
+   file/line locations are already enumerated above and were re-confirmed
+   unchanged.
+3. **Stage G** — the largest remaining piece, and the only one with an actual
+   dependency chain: its dry-run leg needs
+   [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md),
+   which is still **Proposed** with none of its Phase 1 (`SecretStore`) or
+   Phase 2 (redaction pipeline) built. Everything else in Stage G — enabling
+   the `hooks`/`mcp`/`promptInputs`/`usage` domains, tab badges, generated
+   compatibility docs, the Codex partial-support investigation — has no such
+   dependency and can proceed without the Secrets plan.
+
+**Recommendation:** do D and F next, in either order — both are small,
+independent, and fully unblocked. Then start G's non-dry-run work
+(capability domains one at a time, per the plan's own completeness-test
+discipline) without waiting on the Secrets plan; only pick up the Secrets
+plan itself when Stage G's dry-run leg is the piece actually being worked, since
+it is a real plan of its own (`SecretStore`, redaction pipeline, authoring
+diagnostics) rather than a quick unblock. Once D, F, and G are done, this
+document's queue is complete and it can move to `dev/implemented/` — record
+that decision explicitly at that time rather than inferring it from an empty
+queue.
+
 ## What would change this recommendation
 
 - `DRY_RUN_PREVIEW_PLAN.md` is shipped; taking on `SECRETS_AND_REDACTION_PLAN.md` —
   that pulls Compatibility Phase 2's dry-run leg out of Stage G and back beside
   Stage D.
-- Pulling [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)
+- ~~Pulling [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)
   forward — its Phase 5 needs the `PlatformAdapter` UI methods gone, which would
-  promote Stage C.3 ahead of everything else in Stage C.
+  promote Stage C.3 ahead of everything else in Stage C.~~ Moot: Stage C.3
+  already deleted the five `PlatformAdapter` UI methods, so this dependency is
+  satisfied regardless of standalone-server sequencing.
 - Evidence that Codex or Antigravity has a usable granular-policy mechanism —
   that moves the investigation out of Stage G and enlarges the registry work.
-- A decision to work the decoupling plan directly — Stages A, C.3, and E are all
-  stages of it, and it would become the owning sequence rather than a
-  cross-reference.
+- A decision to work the decoupling plan directly — Stages A, C.3, and E (all
+  now complete) were stages of it; a fresh decision to work that plan directly
+  would still make it the owning sequence for D/F/G's remaining decoupling
+  overlap rather than a cross-reference.

@@ -149,13 +149,13 @@ files themselves.
 | `src/core/WorkflowOrchestrator.ts`                 | messages ×7, quick pick ×1, watcher ×1                                                                      | Inject platform, feedback, watcher, status, and host actions once.                                             |
 | `src/ui/McpManagerService.ts`                      | native messages ×8                                                                                          | Return typed results or emit scoped feedback.                                                                  |
 | `src/ui/PromptEditorSupportService.ts`             | roots ×5, documents ×2, editor ×1, error ×1                                                                 | Inject workspace context and document host; use workspace-viewer HTTP path in browsers.                        |
-| `src/ui/TerminalMessageHandlers.ts`                | `showWarningMessage` ×2                                                                                     | Emit client-scoped typed failure/feedback.                                                                     |
-| `src/ui/UndoRedoCoordinator.ts`                    | native messages ×5                                                                                          | Emit typed undo/redo results to the initiating client.                                                         |
+| `src/ui/TerminalMessageHandlers.ts`                | `showWarningMessage` ×2 — **resolved 2026-08-06**                                                           | Emit client-scoped typed failure/feedback.                                                                     |
+| `src/ui/UndoRedoCoordinator.ts`                    | native messages ×5 — **resolved 2026-08-06**                                                                | Emit typed undo/redo results to the initiating client.                                                         |
 | `src/ui/WebviewMessageRouter.ts`                   | roots ×2 and temporary-document/editor calls ×2                                                             | Make the router host-neutral and inject domain-specific host actions.                                          |
 | `src/ui/WebviewSettingsSync.ts`                    | roots ×2 and `showOpenDialog` ×1                                                                            | Inject workspace context; keep browser selection in `FileBrowserModal`, native selection behind a host action. |
-| `src/ui/WorkflowMutationCoordinator.ts`            | `showErrorMessage` ×1                                                                                       | Use its existing client-scoped failure contract exclusively.                                                   |
+| `src/ui/WorkflowMutationCoordinator.ts`            | `showErrorMessage` ×1 — **resolved 2026-08-02**                                                             | Use its existing client-scoped failure contract exclusively.                                                   |
 | `src/ui/WorkflowSerializer.ts`                     | roots ×11, errors ×5, information ×2, warning ×1, open dialogs ×2, save dialog ×1, document/editor ×2       | Inject workspace/state/file services; move native dialogs/opening to host actions.                             |
-| `src/ui/WorkflowStepHandlers.ts`                   | `showErrorMessage` ×5                                                                                       | Emit scoped typed operation results.                                                                           |
+| `src/ui/WorkflowStepHandlers.ts`                   | `showErrorMessage` ×5 — **resolved 2026-08-02**                                                             | Emit scoped typed operation results.                                                                           |
 | `src/utils/AttachmentBuilders.ts`                  | `workspace.fs` ×2                                                                                           | Use Node filesystem primitives behind neutral helpers.                                                         |
 | `src/utils/DiscoveryUtils.ts`                      | `workspaceFolders` ×1                                                                                       | Accept explicit root/named-root inputs.                                                                        |
 | `src/utils/FileSystemUtils.ts`                     | `textDocuments` ×1, `showWarningMessage` ×1                                                                 | Split VS Code dirty-document handling from neutral JSON/file helpers.                                          |
@@ -320,7 +320,7 @@ Where a per-plan phase number disagrees with a stage here, this table wins.
 |     3 | Watcher factory                          | This plan, Phase 2                            | All five sites use the port; create/change/delete/dispose contract tests pass on both impls          |
 |     4 | Feedback port + adapter migration        | Feedback Phases 2 and 2.5                     | Adapter-UI counter is 0; no run can block on an unanswerable prompt                                  |
 |     5 | Command UI / domain split                | This plan, Phase 3                            | Domain ops callable headlessly; VS Code pickers confined to command facades                          |
-|     6 | Reusable router + client-scoped feedback | This plan Phase 4 **∪** Feedback Phase 3      | One router serves both transports; two-tab test proves no cross-client leakage                       |
+|     6 | Reusable router + client-scoped feedback | This plan Phase 4 **∪** Feedback Phase 3      | One router serves both transports; two-tab test proves no cross-client leakage — **partially done:** the Feedback Phase 3 half (client-scoped feedback / Phase 5 item 1 below) landed 2026-07-24 to 2026-08-06 with a passing two-tab test; the Phase 4 half ("one router serves both transports") has not — `WebviewMessageRouter` is still constructed only by `CtrlYokeWebviewProvider.ts`, not reused by a standalone WebSocket server (confirmed 2026-08-11) |
 |     7 | Shared UI services                       | This plan, Phase 5                            | Serializer/settings/editor-support take injected roots and services                                  |
 |     8 | Utilities, completions, `Log`            | This plan, Phase 6                            | `Log` writes through injected sinks; discovery takes explicit roots                                  |
 |     9 | Interactive choices                      | Feedback Phase 4                              | Every interaction has a defined headless fallback and disconnect behavior                            |
@@ -437,8 +437,29 @@ callback; host actions are the missing seam.
 
 Migrate in dependency order:
 
-1. `WorkflowMutationCoordinator`, `WorkflowStepHandlers`,
-   `UndoRedoCoordinator`, and terminal handlers to typed/scoped results.
+1. **DONE 2026-07-24 to 2026-08-06 (commits `6b1e8040`, `aad4be61`,
+   `effbc9be`), confirmed against `src/` on 2026-08-11.**
+   `WorkflowMutationCoordinator`, `WorkflowStepHandlers`,
+   `UndoRedoCoordinator`, and terminal handlers to typed/scoped results. Every
+   public method on `WorkflowMutationCoordinator` and `WorkflowStepHandlers`
+   takes `ctx: WebviewClientContext` and replies only through
+   `ctx.postMessage`/`ctx.emit`; `TerminalMessageHandlers` is scoped the same
+   way; `UndoRedoCoordinator` takes an explicit `postMessage`/`clientId` per
+   call, with `WebviewMessageRouter` passing only the initiating client, not a
+   broadcast. `aad4be61` removed the last direct `show*Message` calls from
+   exactly these four files (see the now-resolved rows in the inventory table
+   above). A two-tab isolation test exists at
+   `CoreFeedbackMigration.test.ts:25-45` (one client receives the scoped
+   failure, the other receives nothing) — this is a representative test for
+   the shared `WebviewClientContext` scoping, not a dedicated per-file test
+   for the terminal/undo-redo paths specifically. This was also
+   [`BROWSER_USER_FEEDBACK_PLAN.md`](../active/BROWSER_USER_FEEDBACK_PLAN.md)
+   Phase 3 (the same edit set, done once per the Stage 6 merge note above) —
+   **Stage 6 in the canonical table above is not fully done from this alone**:
+   its "one router serves both transports" half is Phase 4, and
+   `WebviewMessageRouter` is still constructed only by
+   `CtrlYokeWebviewProvider.ts` — no standalone WebSocket server reuses it yet
+   (confirmed 2026-08-11: zero non-test/non-VS Code construction sites).
 2. `McpManagerService` and `HarnessFileMessageService` to returned result types
    and host actions.
 3. `WorkflowSerializer` to explicit workspace root, state store, filesystem,
