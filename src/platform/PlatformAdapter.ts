@@ -98,7 +98,8 @@ export interface PlatformAdapter {
  */
 export function createNoWorktreeExecutionWorkspace(
   platform: PlatformAdapter,
-  stateRoot = platform.getWorkspaceRoot()
+  stateRoot = platform.getWorkspaceRoot(),
+  worktree?: ExecutionWorkspace["worktree"]
 ): ExecutionWorkspace {
   return {
     stateRoot,
@@ -110,5 +111,6 @@ export function createNoWorktreeExecutionWorkspace(
     approvedExternalRoots: [
       ...(platform.getApprovedExternalFileRoots?.(stateRoot) ?? []),
     ],
+    ...(worktree ? { worktree } : {}),
   };
 }

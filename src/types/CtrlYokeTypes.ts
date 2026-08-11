@@ -21,6 +21,7 @@ import {
   type AttemptCostSource,
   type AttemptCostUnavailableReason,
   type WorkflowTokenCoverage,
+  WORKTREE_MODES,
 } from "./DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 export type {
@@ -137,11 +138,28 @@ export type WorktreeConfig =
   | false
   | string
   | {
-      mode: "named";
+      mode: typeof WORKTREE_MODES.NAMED;
       branch: string;
       base?: string;
       setup?: string;
     };
+
+/** Settings-tier worktree default. Managed mode is valid here before authored
+ * managed-worktree syntax is exposed by the workflow schema. */
+export interface WorktreeDefaultConfig {
+  mode: import("./DashboardConstants").WorktreeMode;
+  branch?: string;
+  base?: string;
+  setup?: string;
+  keep?: boolean;
+}
+
+/** Worktree settings plus the tier that supplied the value for one run. */
+export interface WorktreeResolution {
+  /** Absent means the resolved mode is `none`. */
+  config?: WorktreeDefaultConfig;
+  origin: "authored" | "default";
+}
 
 /**
  * Shared execution properties for prompts, workflows, and runtime metadata.

@@ -15,6 +15,7 @@ import {
   VSCODE_COMMANDS,
   PROMPT_PROPERTIES,
   WORKFLOW_PROPERTY_KEYS,
+  WORKTREE_MODES,
   type HarnessId,
   type HarnessStatusString,
   type SettingWriteScope,
@@ -40,6 +41,8 @@ import {
 import {
   McpServerConfig,
   ToolPermissionsOverride,
+  WorktreeConfig,
+  WorktreeDefaultConfig,
 } from "../types/CtrlYokeTypes";
 import { readJsonFile } from "../utils/FileSystemUtils";
 import {
@@ -622,6 +625,15 @@ export class WebviewSettingsSync {
           deniedTools: override?.deniedTools ?? [],
         }
       );
+    } else if (property === PROMPT_PROPERTIES.WORKTREE) {
+      const authored = value as WorktreeConfig;
+      const defaultValue: WorktreeDefaultConfig =
+        authored === false
+          ? { mode: WORKTREE_MODES.NONE }
+          : typeof authored === "string"
+            ? { mode: WORKTREE_MODES.NAMED, branch: authored }
+            : authored;
+      await ConfigurationUtils.setDefaultWorktree(defaultValue);
     } else {
       await ConfigurationUtils.updateSetting(property, value);
     }
@@ -808,6 +820,10 @@ export class WebviewSettingsSync {
       priorContext: ConfigurationUtils.getPriorContext(),
       defaultEndCondition: ConfigurationUtils.getDefaultEndCondition() ?? null,
       defaultPreCondition: ConfigurationUtils.getDefaultPreCondition() ?? null,
+      worktree: ConfigurationUtils.getDefaultWorktree(),
+      worktrees: {
+        root: ConfigurationUtils.getWorktreeRoot() ?? "",
+      },
       workspaceRoot,
       settingSources: configService.getLeafSources(),
     };

@@ -1931,8 +1931,9 @@ schema.
 13. Add named worktree schema forms, parser, loader, editor support, and runtime persistence.
     - Authored-definition support for the named forms is implemented: root-only
       schema validation, typed parsing/property persistence, and definition
-      revision snapshots. Settings defaults, named-worktree resolution, and the
-      editor/runtime surfaces remain part of the subsequent Phase 2 work.
+      revision snapshots. Settings defaults and origin-guarded selection are
+      implemented; named-worktree lifecycle and the remaining editor/runtime
+      surfaces remain part of the subsequent Phase 2 work.
     - Runtime persistence is implemented: `WorkingFileManager` owns an atomic
       typed worktree-runtime patch seam, ordinary runtime projections preserve
       `_runtime.worktree`, and promotion/re-run seed fresh runtime metadata.
@@ -1940,9 +1941,9 @@ schema.
     - Add `defaults.worktree` and user-scope-only `worktrees.root` to
       `schemas/settings-schema.json`, `CtrlYokeSettings`, the config service
       (including the workspace-scope rejection for `worktrees.root`), and
-      `FullGlobalSettings`.
+      `FullGlobalSettings`. **Implemented.**
     - Implement two-tier resolution with origin tracking, and the
-      inherited-value degrade on an ineligible workspace.
+      inherited-value degrade on an ineligible workspace. **Implemented.**
     - Add the Harness-page drawer block (None/Named, no managed fields yet),
       `WORKTREE_MODE_OPTIONS`, the `isDifferentFromGlobal`/reset-all cases, the
       `DefaultsHarnessPage` worktree defaults block, and the new Worktrees

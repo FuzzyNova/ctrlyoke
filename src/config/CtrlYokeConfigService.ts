@@ -21,6 +21,12 @@ export interface ConfigBackend {
   set<T>(path: string, value: T): Promise<void>;
 }
 
+const WORKTREES_PATH = "worktrees";
+
+function isWorkspaceForbiddenWorktreePath(path: string): boolean {
+  return path === WORKTREES_PATH || path.startsWith(`${WORKTREES_PATH}.`);
+}
+
 /** Deep merge: source properties override target; objects are merged recursively, arrays/primitives are replaced */
 function deepMerge<T extends Record<string, unknown>>(
   target: T,
@@ -89,6 +95,12 @@ export class CtrlYokeConfigService {
     key: K
   ): CtrlYokeGlobalSettings[K] {
     return this.getAll()[key];
+  }
+
+  /** Return the configured user-scope worktree root, if one is set. */
+  getConfiguredWorktreeRoot(): string | undefined {
+    const root = this.get("worktrees").root.trim();
+    return root || undefined;
   }
 
   /**
@@ -163,6 +175,14 @@ export class CtrlYokeConfigService {
     value: unknown,
     scope: SettingWriteScope
   ): Promise<void> {
+    if (
+      scope === SETTING_SCOPES.WORKSPACE &&
+      isWorkspaceForbiddenWorktreePath(path)
+    ) {
+      throw new Error(
+        "The worktrees.root setting is user-scope only and cannot be written at workspace scope."
+      );
+    }
     const backend =
       scope === SETTING_SCOPES.WORKSPACE
         ? this.workspaceBackend

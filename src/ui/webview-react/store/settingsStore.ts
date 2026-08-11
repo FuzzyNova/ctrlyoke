@@ -16,6 +16,7 @@ import {
   PERMISSION_MODES,
   TERMINAL_CURSOR_STYLES,
   TERMINAL_MOBILE_CONTROL_BAR,
+  WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
 import type {
   CommitMessageGenerationRecord,
@@ -29,7 +30,10 @@ import type {
   ErrorBehavior,
   WorktreeConfig,
 } from "@root/types/CtrlYokeTypes";
-import { DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT } from "@root/types/CtrlYokeSettings";
+import {
+  DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT,
+  type WorktreeDefaultConfig,
+} from "@root/types/CtrlYokeSettings";
 
 /**
  * Model option for dropdowns
@@ -118,6 +122,7 @@ export interface GlobalSettings {
   defaultErrorBehavior: ErrorBehavior | null;
   defaultEndCondition: EndCondition | null;
   defaultPreCondition: PreCondition | null;
+  worktree?: WorktreeDefaultConfig;
   terminal?: TerminalSettings;
   /** Per-leaf-path source map: "workspace" if a workspace file owns the setting, "user" if a user file does, absent if at default */
   settingSources: Record<string, string>;
@@ -298,6 +303,7 @@ interface SettingsActions {
   getEffectiveHarness: () => HarnessId;
   getEffectiveModel: () => string;
   getEffectiveExecutionMode: () => ExecutionMode;
+  getEffectiveWorktree: () => WorktreeDefaultConfig | false;
   getEffectiveAgent: () => string;
   getEffectiveResumeSession: () => boolean;
   getEffectiveMcpServers: () => (string | object)[] | null;
@@ -347,6 +353,7 @@ const initialGlobalSettings: GlobalSettings = {
   defaultErrorBehavior: null,
   defaultEndCondition: null,
   defaultPreCondition: null,
+  worktree: { mode: WORKTREE_MODES.NONE },
   terminal: {
     fontSize: 14,
     lineHeight: 1.2,
@@ -600,6 +607,26 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     getEffectiveExecutionMode: () => {
       const { workflowProperties, globalSettings } = get();
       return workflowProperties.executionMode ?? globalSettings.executionMode;
+    },
+
+    getEffectiveWorktree: () => {
+      const { workflowProperties, globalSettings } = get();
+      const authored = workflowProperties.worktree;
+      if (authored === false) {
+        return false;
+      }
+      if (authored === undefined) {
+        const defaultWorktree = globalSettings.worktree ?? {
+          mode: WORKTREE_MODES.NONE,
+        };
+        return defaultWorktree.mode === WORKTREE_MODES.NONE
+          ? false
+          : { ...defaultWorktree };
+      }
+      if (typeof authored === "string") {
+        return { mode: WORKTREE_MODES.NAMED, branch: authored };
+      }
+      return { ...authored };
     },
 
     getEffectiveAgent: () => {

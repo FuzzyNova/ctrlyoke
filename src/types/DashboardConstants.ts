@@ -1540,6 +1540,18 @@ export const EXECUTION_PHASES = {
 } as const;
 
 // ============================================================================
+// WORKTREE MODES
+// ============================================================================
+export const WORKTREE_MODES = {
+  NONE: "none",
+  MANAGED: "managed",
+  NAMED: "named",
+} as const;
+
+export type WorktreeMode =
+  (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES];
+
+// ============================================================================
 // PROMPT PROPERTY NAMES - Single source of truth for PromptStep properties
 // Used by dashboard.js to access prompt properties consistently
 // ============================================================================

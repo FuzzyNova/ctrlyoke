@@ -1149,6 +1149,8 @@ export interface GlobalSettingsUpdatedMessage {
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     hideGitIgnoredFiles?: boolean;
+    worktree?: CtrlYokeGlobalSettings["defaults"]["worktree"];
+    worktrees?: CtrlYokeGlobalSettings["worktrees"];
     terminal?: TerminalSettings;
   };
 }

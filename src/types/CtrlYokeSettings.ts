@@ -10,6 +10,7 @@ import {
   type BrowserNotificationMode,
   type HookEvent,
   type ExecutionMode,
+  WORKTREE_MODES,
 } from "./DashboardConstants";
 import {
   ICON_BG_COLOR_DEFAULT,
@@ -21,7 +22,10 @@ import type {
   McpServerConfig,
   PreCondition,
   UserHookConfig,
+  WorktreeDefaultConfig,
 } from "./CtrlYokeTypes";
+
+export type { WorktreeDefaultConfig } from "./CtrlYokeTypes";
 
 /** User-supplied per-million-token pricing for a harness/model pair. */
 export interface ModelPricingOverride {
@@ -67,6 +71,13 @@ export interface CtrlYokeGlobalSettings {
     endCondition?: EndCondition | null;
     /** Default pre-condition applied to all new workflows. null/undefined = disabled. */
     preCondition?: PreCondition | null;
+    /** Default worktree behavior for workflows that omit a root worktree value. */
+    worktree: WorktreeDefaultConfig;
+  };
+
+  /** User-only machine/repository placement configuration. */
+  worktrees: {
+    root: string;
   };
 
   // Permissions (harness-specific advanced settings)
@@ -319,6 +330,12 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     },
     endCondition: null,
     preCondition: null,
+    worktree: {
+      mode: WORKTREE_MODES.NONE,
+    },
+  },
+  worktrees: {
+    root: "",
   },
   permissions: {
     codexSandboxMode: "workspace-write",

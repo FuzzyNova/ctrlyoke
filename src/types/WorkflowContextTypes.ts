@@ -1,5 +1,10 @@
 import * as path from "path";
-import type { PriorContext, PromptFile, WorkflowStep } from "./CtrlYokeTypes";
+import type {
+  PriorContext,
+  PromptFile,
+  WorkflowStep,
+  WorktreeResolution,
+} from "./CtrlYokeTypes";
 import type { ResolvedProperties } from "../utils/PropertyResolver";
 import type { PriorContextItem } from "../core/HarnessIntegration";
 import type { CompatibilityDiagnostic } from "./CompatibilityTypes";
@@ -33,6 +38,9 @@ export interface ExecutionWorkspace {
 
   /** External roots approved against stateRoot's trust identity. */
   readonly approvedExternalRoots: readonly string[];
+
+  /** Worktree selection and its authored/default origin for this execution. */
+  readonly worktree?: WorktreeResolution;
 }
 
 /** Stable identity used to decide whether a retained integration may be reused. */

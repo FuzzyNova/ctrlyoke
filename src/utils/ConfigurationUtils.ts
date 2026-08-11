@@ -5,6 +5,7 @@ import {
   McpServerConfig,
   PreCondition,
   UserHookConfig,
+  WorktreeDefaultConfig,
 } from "../types/CtrlYokeTypes";
 import type {
   CtrlYokeGlobalSettings,
@@ -40,6 +41,7 @@ export const CONFIG_KEYS = {
   // Top-level section keys (used with configService.get())
   GENERAL: "general",
   DEFAULTS: "defaults",
+  WORKTREES: "worktrees",
   PERMISSIONS: "permissions",
   EXECUTION: "execution",
   QUEUE: "queue",
@@ -61,6 +63,8 @@ export const CONFIG_KEYS = {
   DEFAULTS_PRIOR_CONTEXT: "defaults.priorContext",
   DEFAULTS_END_CONDITION: "defaults.endCondition",
   DEFAULTS_PRE_CONDITION: "defaults.preCondition",
+  DEFAULTS_WORKTREE: "defaults.worktree",
+  WORKTREES_ROOT: "worktrees.root",
   DEFAULTS_ERROR_BEHAVIOR: "defaults.errorBehavior",
   DEFAULTS_TOOL_PERMISSIONS: "defaults.toolPermissions",
   DEFAULTS_TOOL_PERMISSIONS_MODE: "defaults.toolPermissions.mode",
@@ -584,6 +588,16 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.DEFAULTS).executionMode;
   },
 
+  /** Get the workflow worktree default without applying workflow overrides. */
+  getDefaultWorktree(): CtrlYokeGlobalSettings["defaults"]["worktree"] {
+    return configService.get(CONFIG_KEYS.DEFAULTS).worktree;
+  },
+
+  /** Get the user-only checkout placement root, or undefined when unset. */
+  getWorktreeRoot(): string | undefined {
+    return configService.getConfiguredWorktreeRoot();
+  },
+
   /**
    * Returns true when inject mode is enabled.
    * Keeps the TUI alive and writes follow-up prompts directly into the PTY,
@@ -1039,6 +1053,15 @@ export const ConfigurationUtils = {
     await configService.set(
       CONFIG_KEYS.DEFAULTS_HOOKS,
       hooks,
+      CONFIG_SCOPE.USER
+    );
+  },
+
+  /** Set the settings-tier worktree default. */
+  async setDefaultWorktree(worktree: WorktreeDefaultConfig): Promise<void> {
+    await configService.set(
+      CONFIG_KEYS.DEFAULTS_WORKTREE,
+      worktree,
       CONFIG_SCOPE.USER
     );
   },

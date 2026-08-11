@@ -1128,6 +1128,7 @@ suite("WebviewSettingsSync", () => {
       "toolPermissions",
       "endCondition",
       "preCondition",
+      "worktree",
     ]);
 
     async function captureSetAsDefaultWrite(
@@ -1303,6 +1304,12 @@ suite("WebviewSettingsSync", () => {
           value: preCondition,
           expectedKey: CONFIG_KEYS.DEFAULTS_PRE_CONDITION,
           expectedValue: preCondition,
+        },
+        {
+          property: PROMPT_PROPERTIES.WORKTREE,
+          value: "feature/default",
+          expectedKey: CONFIG_KEYS.DEFAULTS_WORKTREE,
+          expectedValue: { mode: "named", branch: "feature/default" },
         },
       ];
 

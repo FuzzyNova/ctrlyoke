@@ -4,6 +4,7 @@ import { HARNESS_IDS, HARNESS_STATUS_STRINGS } from "@/types/messages";
 import {
   PERMISSION_MODES,
   EXECUTION_MODES,
+  WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
 import type { GlobalSettings, WorkflowProperties } from "@store/settingsStore";
 
@@ -200,6 +201,41 @@ describe("updateGlobalSetting", () => {
     useSettingsStore.getState().updateGlobalSetting("model", "gpt-5");
     expect(useSettingsStore.getState().globalSettings.model).toBe("gpt-5");
     expect(useSettingsStore.getState().globalSettings.harness).toBe(before);
+  });
+});
+
+describe("getEffectiveWorktree", () => {
+  it("inherits the global default and maps none to ordinary execution", () => {
+    useSettingsStore.getState().updateGlobalSetting("worktree", {
+      mode: WORKTREE_MODES.NAMED,
+      branch: "feature/default",
+    });
+    expect(useSettingsStore.getState().getEffectiveWorktree()).toEqual({
+      mode: WORKTREE_MODES.NAMED,
+      branch: "feature/default",
+    });
+
+    useSettingsStore.getState().updateGlobalSetting("worktree", {
+      mode: WORKTREE_MODES.NONE,
+    });
+    expect(useSettingsStore.getState().getEffectiveWorktree()).toBe(false);
+  });
+
+  it("lets authored false and shorthand branch values override the default", () => {
+    useSettingsStore.getState().updateGlobalSetting("worktree", {
+      mode: WORKTREE_MODES.MANAGED,
+      base: "main",
+    });
+    useSettingsStore.getState().setWorkflowProperties({ worktree: false });
+    expect(useSettingsStore.getState().getEffectiveWorktree()).toBe(false);
+
+    useSettingsStore
+      .getState()
+      .setWorkflowProperties({ worktree: "feature/authored" });
+    expect(useSettingsStore.getState().getEffectiveWorktree()).toEqual({
+      mode: WORKTREE_MODES.NAMED,
+      branch: "feature/authored",
+    });
   });
 });
 

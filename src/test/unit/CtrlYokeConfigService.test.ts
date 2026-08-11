@@ -242,6 +242,22 @@ suite("CtrlYokeConfigService", () => {
     });
   });
 
+  test("rejects workspace-scope worktree root writes before touching the backend", async () => {
+    let wrote = false;
+    service.setWorkspaceBackend({
+      getAll: () => ({}),
+      set: async () => {
+        wrote = true;
+      },
+    });
+
+    await assert.rejects(
+      service.set("worktrees.root", "C:\\outside", "workspace"),
+      /user-scope only/
+    );
+    assert.strictEqual(wrote, false);
+  });
+
   test("subscribe listener is called after notify()", () => {
     let called = 0;
     const unsubscribe = service.subscribe(() => {

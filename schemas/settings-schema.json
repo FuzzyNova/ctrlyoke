@@ -287,6 +287,61 @@
               "description": "Disabled (default). New workflows have no pre-condition."
             }
           ]
+        },
+        "worktree": {
+          "type": "object",
+          "description": "Default worktree behavior for workflows that omit a root worktree value. An inherited value degrades to ordinary execution when the workspace is not eligible.",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["none", "managed", "named"],
+              "default": "none",
+              "description": "Default worktree mode for new workflows."
+            },
+            "branch": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Default branch for named worktree mode."
+            },
+            "base": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Default Git ref used when creating a worktree."
+            },
+            "setup": {
+              "type": "string",
+              "description": "Default setup command run after creating a worktree."
+            },
+            "keep": {
+              "type": "boolean",
+              "description": "Keep managed worktrees after execution so their filesystem changes remain available for undo."
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "required": ["mode"],
+                "properties": {
+                  "mode": { "const": "named" }
+                }
+              },
+              "then": {
+                "required": ["branch"]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "worktrees": {
+      "type": "object",
+      "description": "User-only worktree checkout placement configuration.",
+      "additionalProperties": false,
+      "properties": {
+        "root": {
+          "type": "string",
+          "description": "Absolute or ~-prefixed directory where ctrlyoke creates worktrees."
         }
       }
     },

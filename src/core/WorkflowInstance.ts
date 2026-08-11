@@ -68,6 +68,7 @@ import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { PropertyResolver } from "../utils/PropertyResolver";
+import { resolveWorktreeForWorkspace, type WorkspaceWorktreeResolution } from "../utils/WorktreeResolution";
 import { isCli } from "../utils/RuntimeMode";
 import {
   createNoWorktreeExecutionWorkspace,
@@ -175,6 +176,10 @@ export class WorkflowInstance {
   /** Immutable state/execution roots captured when this instance is created. */
   private readonly executionWorkspace: ExecutionWorkspace;
   private readonly executionWorkspaceIdentity: string;
+  /** Worktree selection resolved for the current run, including its origin. */
+  private worktreeResolution: WorkspaceWorktreeResolution = {
+    origin: "default",
+  };
 
   private canReuseExecutionIntegration(
     integration: HarnessIntegration
@@ -500,6 +505,11 @@ export class WorkflowInstance {
   /** Exposes the injected feedback port to the future caller migrations. */
   getUserFeedbackSink(): UserFeedbackSink | undefined {
     return this.userFeedbackSink;
+  }
+
+  /** Resolved worktree selection for the current execution attempt. */
+  getWorktreeResolution(): WorkspaceWorktreeResolution {
+    return this.worktreeResolution;
   }
 
   private async analyzeWorkflowCompatibility(
@@ -1414,6 +1424,7 @@ export class WorkflowInstance {
     // this: on a later run's failed start that still holds the *previous*,
     // legitimately completed run.
     let promotedRunRef: RunRef | undefined;
+    let worktreeNotice: string | undefined;
 
     // A genuinely fresh run (not a step continuation, append, or idle-rewind
     // resume) starts a new compatibility-reporting window so this run's
@@ -1426,6 +1437,13 @@ export class WorkflowInstance {
 
     try {
       Log.info(`ctrlyoke: Executing loaded prompt file: ${filePath}`);
+
+      this.worktreeResolution = await resolveWorktreeForWorkspace(
+        this.promptQueue.getWorkflowFile().worktree,
+        ConfigurationUtils.getDefaultWorktree(),
+        this.platform.getNamedWorkspaceRoots()
+      );
+      worktreeNotice = this.worktreeResolution.notice;
 
       // Compatibility is authoritative at execution time. Resolve only the
       // consumers that exist in the current queue/definition so a workflow
@@ -1795,6 +1813,27 @@ export class WorkflowInstance {
       // later — so the warning silently never appears live, only resurfacing
       // once the run ends and history is reloaded from disk.
       this.reportCompatibilityDiagnostics(compatibilityDiagnostics);
+
+      if (worktreeNotice && historyFilePath) {
+        const timestampMs = Date.now();
+        const stepIndex = currentQueueState.currentIndex;
+        this.dashboardSink?.updateStatusMessage(
+          stepIndex,
+          worktreeNotice,
+          STATUS_MESSAGE_SEVERITY.WARNING,
+          this.id,
+          timestampMs
+        );
+        await this.outputHistoryManager.appendStatusMessage(
+          historyFilePath,
+          { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+          {
+            message: worktreeNotice,
+            severity: STATUS_MESSAGE_SEVERITY.WARNING,
+            timestamp: timestampMs,
+          }
+        );
+      }
 
       if (totalSteps > 0) {
         const currentIndex = currentQueueState.currentIndex;

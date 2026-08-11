@@ -12,6 +12,7 @@ import {
 import { withFileLock } from "./FileLockUtils";
 import { discoverRepos } from "./WorkspaceRepoDiscovery";
 import { isPathWithinDirectory } from "./PathSecurity";
+import { ConfigurationUtils } from "./ConfigurationUtils";
 
 export interface WorkspaceEligibility {
   eligible: boolean;
@@ -221,6 +222,18 @@ export async function resolveWorktreeRoot(
     discoveredWorktrees: options.discoveredWorktrees,
   });
   return { root: path.resolve(fallback), tier: "fallback" };
+}
+
+/** Resolve a worktree root using the user-scope settings value. */
+export async function resolveConfiguredWorktreeRoot(
+  sourceCheckoutRoot: string,
+  options: Omit<WorktreeRootResolutionOptions, "sourceCheckoutRoot" | "explicitRoot"> = {}
+): Promise<WorktreeRootResolution> {
+  return resolveWorktreeRoot({
+    ...options,
+    sourceCheckoutRoot,
+    explicitRoot: ConfigurationUtils.getWorktreeRoot(),
+  });
 }
 
 export interface WorktreePlacementOptions {
