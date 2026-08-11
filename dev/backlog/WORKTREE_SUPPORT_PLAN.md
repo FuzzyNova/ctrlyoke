@@ -1942,7 +1942,12 @@ schema.
       settings section holding `worktrees.root`. No tab-badge work.
     - Add the `WorkflowStatus` worktree indicator and the `RunSummaryBanner`
       worktree projection.
-14. Implement named discovery/create/setup plus explicit failed-setup retry.
+14. Implement named discovery/create/setup plus explicit failed-setup retry. Seed
+    `.ctrlyoke/.gitignore` via `WorkspaceInitializer.initializeIfNeeded(executionRoot)`
+    at the single create/attach site here, before the first setup or harness write.
+    Named mode never auto-commits, so seeding is not yet load-bearing, but the call
+    site is shared with managed mode and belongs with the code that creates the
+    directory.
 15. Add runtime trusted-root registration.
 16. Route snapshots, hosted repo attribution, and backend-resolved undo through the execution
     workspace.
@@ -1959,7 +1964,9 @@ directory.
     - Extend the drawer mode dropdown to Managed and reveal base/setup/keep,
       including the Keep control's undo consequence, and extend
       `defaults.worktree` support on `DefaultsHarnessPage` to the same fields.
-20. Seed `.ctrlyoke/.gitignore` into the worktree, then run setup before execution.
+20. Confirm the Phase 2 `.ctrlyoke/.gitignore` seeding also covers managed creation,
+    then run setup before execution. The seeding becomes load-bearing here, because
+    managed auto-commit is what would otherwise sweep runtime files into the branch.
 21. Implement terminal-settlement cleanup, strict provider cleanup, auto-commit,
     no-change handling, landing, `keep`, and
     removal failure handling.
