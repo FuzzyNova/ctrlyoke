@@ -68,6 +68,13 @@ export {
 } from "./outputUtils";
 export { generateMarkdownExport } from "./markdownExport";
 export {
+  buildWorkspaceStatsExport,
+  WORKSPACE_STATS_EXPORT_SCHEMA_VERSION,
+  type WorkspaceStatsExport,
+  type WorkspaceStatsExportOptions,
+  type WorkspaceStatsExportPayload,
+} from "./workspaceStatsExport";
+export {
   findOutputMatches,
   getOutputRowSearchSegments,
   highlightText,

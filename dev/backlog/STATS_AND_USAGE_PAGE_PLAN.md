@@ -1,7 +1,7 @@
 # Stats & Usage Page Plan
 
-**Status:** Queued for implementation — plan reviewed and staged as 7 steps
-(phase 1 → phase 4). Update the phase checkboxes as steps land.
+**Status:** Implemented — phases 1 → 4 are complete. Acceptance criteria were
+reviewed top to bottom below; no unmet criteria were identified.
 **Related:** `dev/implemented/HARNESS_USAGE_TRACKING_PLAN.md`,
 `dev/implemented/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`
 
@@ -572,48 +572,48 @@ Phase 1 is independently shippable and is the fix for the stated problem.
 
 ### Phase 4 — Export
 
-- [ ] `workspaceStatsExport.ts` producing Markdown + versioned JSON.
-- [ ] Split button wiring with the standalone/VS Code dual-host branch.
-- [ ] Privacy test asserting no identifier ever reaches either payload.
+- [x] `workspaceStatsExport.ts` producing Markdown + versioned JSON.
+- [x] Split button wiring with the standalone/VS Code dual-host branch.
+- [x] Privacy test asserting no identifier ever reaches either payload.
 
 ---
 
 ## Acceptance Criteria
 
-- `DefaultsHarnessPage` / `HarnessesSection` render no usage data and send no
+- [x] `DefaultsHarnessPage` / `HarnessesSection` render no usage data and send no
   usage messages; every usage surface in the drawer lives on the Stats page.
-- Lifetime totals derive only from persisted `WorkflowTokenTotals`; nothing on
+- [x] Lifetime totals derive only from persisted `WorkflowTokenTotals`; nothing on
   this page reparses `events.jsonl`, OTel spans, or provider transcripts.
-- Repeated terminal notifications and same-run continuations replace one durable
+- [x] Repeated terminal notifications and same-run continuations replace one durable
   run contribution rather than double-counting — same guarantee the observed
   store already makes.
-- Workflow count includes draft-only lineages; run count does not.
-- Duration is pause-aware where available, and the page discloses how many runs
+- [x] Workflow count includes draft-only lineages; run count does not.
+- [x] Duration is pause-aware where available, and the page discloses how many runs
   fall back to wall clock rather than blending the two silently.
-- **No run is ever excluded from the totals for being old or for exceeding a
+- [x] **No run is ever excluded from the totals for being old or for exceeding a
   count threshold**, and **no run ever becomes unrevisable.** Appending to,
   continuing, or editing a run of any age updates the totals correctly, with no
   double-counting. Regression test: count a run, advance the clock past any
   cache/window horizon, evict the recent-contribution cache, continue that run,
   and assert the totals reflect the new value rather than the sum of both.
-- The always-read stats document and the per-lineage index are O(lineages), not
+- [x] The always-read stats document and the per-lineage index are O(lineages), not
   O(runs): totals for a workspace with millions of runs load without parsing a
   per-run ledger.
-- Backfill is bounded in concurrency and memory, resumable across interruption
+- [x] Backfill is bounded in concurrency and memory, resumable across interruption
   via mid-scan checkpoints, idempotent, and reports progress; unreadable
   manifests are counted and disclosed, never silently dropped.
-- Freshness gating never determines correctness: with every directory mtime
+- [x] Freshness gating never determines correctness: with every directory mtime
   stale or unavailable, the counted-interval check still counts every run.
-- A full rebuild reproduces the same totals as incremental accumulation.
-- The share bar is never the only encoding of a value; the rows carry the
+- [x] A full rebuild reproduces the same totals as incremental accumulation.
+- [x] The share bar is never the only encoding of a value; the rows carry the
   numbers as text and the bar is `aria-hidden`.
-- Zero-usage harnesses never render as an empty row or a zero-width segment.
-- Export payloads contain no workflow name, workflow key, run ref, file path, or
+- [x] Zero-usage harnesses never render as an empty row or a zero-width segment.
+- [x] Export payloads contain no workflow name, workflow key, run ref, file path, or
   account identifier, and carry the scope + estimate disclaimers.
-- `ui.hideCost` suppresses cost on the page and in every export format.
-- Stats collection, backfill, refresh failures, and malformed store files are
+- [x] `ui.hideCost` suppresses cost on the page and in every export format.
+- [x] Stats collection, backfill, refresh failures, and malformed store files are
   all non-blocking for workflow execution.
-- Opening the settings drawer is no slower than before; stats load on tab
+- [x] Opening the settings drawer is no slower than before; stats load on tab
   activation.
 
 ---

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   HARNESS_IDS,
   HARNESS_INFO,
@@ -10,11 +10,18 @@ import type {
   HarnessShareMetric,
 } from "@root/types/DashboardConstants";
 import type { WorkspaceStatsSnapshot } from "@root/types/UsageTypes";
-import { HarnessIcon } from "@components/shared";
-import { ScopeToggle } from "@components/shared";
+import {
+  HarnessIcon,
+  ScopeToggle,
+  SplitButton,
+  type SplitButtonOption,
+} from "@components/shared";
 import { sendMessage } from "@hooks/useMessageHandler";
+import { getVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useHarnessUsageStore } from "@store/harnessUsageStore";
 import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
+import { WebviewLog } from "@utils/logger";
+import { buildWorkspaceStatsExport } from "@utils/workspaceStatsExport";
 import { UsageCard } from "./UsageCard";
 import { StatTileGrid } from "./StatTileGrid";
 import {
@@ -46,6 +53,89 @@ export function StatsUsageSection({ hideCost, isNarrow = false }: Props) {
     (state) => state.snapshotsByHarness
   );
 
+  const getExport = useCallback(
+    () =>
+      snapshot
+        ? buildWorkspaceStatsExport(snapshot, {
+            generatedAt: Date.now(),
+            hideCost,
+          })
+        : undefined,
+    [hideCost, snapshot]
+  );
+
+  const downloadExport = useCallback(
+    (content: string, fileName: string, mimeType: string) => {
+      if (isStandalone) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = fileName;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        return;
+      }
+
+      getVsCodeApi().postMessage({
+        type: MESSAGE_TYPES.EXPORT_OUTPUT,
+        content,
+        fileName,
+      });
+    },
+    []
+  );
+
+  const copySummary = useCallback(() => {
+    const exportData = getExport();
+    if (!exportData || !navigator.clipboard) {
+      WebviewLog.warn("Workspace stats export is unavailable");
+      return;
+    }
+
+    void navigator.clipboard.writeText(exportData.markdown).catch((error) => {
+      WebviewLog.error("Failed to copy workspace stats export", error);
+    });
+  }, [getExport]);
+
+  const downloadMarkdown = useCallback(() => {
+    const exportData = getExport();
+    if (!exportData) return;
+    downloadExport(
+      exportData.markdown,
+      "ctrlyoke-workspace-stats.md",
+      "text/markdown"
+    );
+  }, [downloadExport, getExport]);
+
+  const downloadJson = useCallback(() => {
+    const exportData = getExport();
+    if (!exportData) return;
+    downloadExport(
+      JSON.stringify(exportData.json, null, 2),
+      "ctrlyoke-workspace-stats.json",
+      "application/json"
+    );
+  }, [downloadExport, getExport]);
+
+  const exportOptions: SplitButtonOption[] = [
+    {
+      label: "Copy summary (Markdown)",
+      value: "copy-summary",
+      onClick: copySummary,
+    },
+    {
+      label: "Download Markdown",
+      value: "download-markdown",
+      onClick: downloadMarkdown,
+    },
+    {
+      label: "Download JSON",
+      value: "download-json",
+      onClick: downloadJson,
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -57,13 +147,16 @@ export function StatsUsageSection({ hideCost, isNarrow = false }: Props) {
             This workspace only
           </p>
         </div>
-        <button
-          type="button"
-          className="text-xs text-link-fg hover:underline shrink-0"
-          onClick={() => sendMessage(MESSAGE_TYPES.REFRESH_WORKSPACE_STATS)}
-        >
-          Refresh
-        </button>
+        <SplitButton
+          mainLabel="Refresh"
+          mainAction={() => sendMessage(MESSAGE_TYPES.REFRESH_WORKSPACE_STATS)}
+          options={exportOptions}
+          variant="secondary"
+          mainTitle="Refresh workspace statistics"
+          dropdownTitle="Export workspace statistics"
+          dropdownAriaLabel="Export workspace statistics"
+          dropdownDisabled={!snapshot}
+        />
       </div>
       {snapshot && (
         <StatTileGrid
