@@ -6,6 +6,8 @@ import { execFileSync } from "child_process";
 import { suite, test, setup, teardown } from "mocha";
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
+import { LifetimeUsageStore } from "../../core/harness/shared/usage/LifetimeUsageStore";
+import { ObservedHarnessUsageStore } from "../../core/harness/shared/usage/ObservedHarnessUsageStore";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { HistorySearchService } from "../../core/orchestration/HistorySearchService";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
@@ -167,7 +169,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     const restartedManager = new OutputHistoryManager(tempWorkspace);
     const recovered = await restartedManager.hydrateTokenTotals(filePath);
     assert.strictEqual(recovered?.total, 30);
-    assert.strictEqual((await restartedManager.hydrateTokenTotals(filePath))?.total, 30);
+    assert.strictEqual(
+      (await restartedManager.hydrateTokenTotals(filePath))?.total,
+      30
+    );
     const [summary] = await manager.getRunSummaries(workflowKey);
     assert.strictEqual(summary?.tokenTotals?.total, 30);
     assert.strictEqual(summary?.tokenTotals?.isFinal, false);
@@ -195,14 +200,20 @@ suite("OutputHistoryManager timeline-backed storage", () => {
         startedAt: 1,
         definitionRevision: 1,
         steps: [{ prompt: "prompt" }],
-        _runtime: { currentIndex: 1, executionState: EXECUTION_STATES.COMPLETED, tokenTotals },
+        _runtime: {
+          currentIndex: 1,
+          executionState: EXECUTION_STATES.COMPLETED,
+          tokenTotals,
+        },
       }),
       "utf8"
     );
     await manager.finalizeRun(filePath, EXECUTION_STATES.COMPLETED, 1);
-    const recorderForTest = (manager as unknown as {
-      timelineRecorder: { streamEvents: () => AsyncGenerator<never> };
-    }).timelineRecorder;
+    const recorderForTest = (
+      manager as unknown as {
+        timelineRecorder: { streamEvents: () => AsyncGenerator<never> };
+      }
+    ).timelineRecorder;
     recorderForTest.streamEvents = async function* () {
       throw new Error("workflow-list must not scan events.jsonl");
     };
@@ -2088,5 +2099,97 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
       loaded?.changedFiles[0]?.beforeContent,
       "original content"
     );
+  });
+});
+
+suite("OutputHistoryManager usage store feed", () => {
+  let tempWorkspace: string;
+  let manager: OutputHistoryManager;
+
+  setup(async () => {
+    tempWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-usage-feed-"));
+    manager = new OutputHistoryManager(tempWorkspace);
+  });
+
+  teardown(async () => {
+    await manager.flushPendingIndexRefresh();
+    await fs.rm(tempWorkspace, { recursive: true, force: true });
+  });
+
+  test("feeds both stores from one manifest read and marks wall-clock fallback", async () => {
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-usage-feed",
+      { startedAt: 1000 }
+    );
+    const managerInternals = manager as unknown as {
+      timelineRecorder: TimelineRecorder;
+      feedUsageStores: (historyFilePath: string) => void;
+      pendingObservedUsageFeed: Promise<void>;
+    };
+    const today = new Date();
+    const localDay = `${today.getFullYear()}-${String(
+      today.getMonth() + 1
+    ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    await managerInternals.timelineRecorder.updateManifest(
+      filePath,
+      (manifest) => ({
+        ...manifest,
+        completedAt: 2500,
+        lastUpdatedAt: Date.now(),
+        executionState: EXECUTION_STATES.COMPLETED,
+        stepCount: 1,
+        tokenTotals: {
+          total: 12,
+          coverage: "complete",
+          reportedAttemptCount: 1,
+          attemptCount: 1,
+          isFinal: true,
+          byHarness: {
+            [HARNESS_IDS.CLAUDE_CLI]: {
+              input: 10,
+              output: 2,
+              total: 12,
+              coverage: "complete",
+              reportedAttemptCount: 1,
+              attemptCount: 1,
+            },
+          },
+          byLocalDay: {
+            [localDay]: {
+              [HARNESS_IDS.CLAUDE_CLI]: {
+                input: 10,
+                output: 2,
+                total: 12,
+                coverage: "complete",
+                reportedAttemptCount: 1,
+                attemptCount: 1,
+              },
+            },
+          },
+        },
+      })
+    );
+
+    let manifestReads = 0;
+    const originalReadManifest =
+      managerInternals.timelineRecorder.readManifest.bind(
+        managerInternals.timelineRecorder
+      );
+    managerInternals.timelineRecorder.readManifest = async (manifestPath) => {
+      manifestReads++;
+      return originalReadManifest(manifestPath);
+    };
+    managerInternals.feedUsageStores(filePath);
+    await managerInternals.pendingObservedUsageFeed;
+
+    assert.strictEqual(manifestReads, 1);
+    const lifetime = await new LifetimeUsageStore(tempWorkspace).read();
+    const observed = await new ObservedHarnessUsageStore(tempWorkspace).read();
+    assert.strictEqual(lifetime.totals.total, 12);
+    assert.strictEqual(lifetime.wallClockDurationRunCount, 1);
+    assert.strictEqual(lifetime.totalActiveExecutionMs, 1500);
+    assert.ok(Object.keys(observed.runs).length > 0);
   });
 });

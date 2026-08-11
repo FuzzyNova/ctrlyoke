@@ -63,6 +63,8 @@ export interface LifetimeUsageStoreData {
       countedFrom: RunRef;
       countedThrough: RunRef;
       dirMtimeMs?: number;
+      /** False only while a checkpointed backfill still has work to resume. */
+      backfillComplete?: boolean;
     }
   >;
 }
@@ -77,6 +79,14 @@ interface ScannedLineage {
   lineage?: LineageData;
   contributions: LifetimeRunContribution[];
   skippedRunCount: number;
+}
+
+export interface LifetimeBackfillBatch {
+  workflowKey: WorkflowKey;
+  runRefs: readonly RunRef[];
+  contributions: readonly LifetimeRunContribution[];
+  skippedRunCount: number;
+  dirMtimeMs?: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -521,6 +531,12 @@ function validateStore(value: unknown): LifetimeUsageStoreData {
     ) {
       throw new Error(LIFETIME_USAGE_ERROR_CODES.MALFORMED_DATA);
     }
+    if (
+      lineage.backfillComplete !== undefined &&
+      typeof lineage.backfillComplete !== "boolean"
+    ) {
+      throw new Error(LIFETIME_USAGE_ERROR_CODES.MALFORMED_DATA);
+    }
     for (const bucket of OUTCOME_BUCKETS) {
       if (!requiredNumeric(lineage.outcomes[bucket])) {
         throw new Error(LIFETIME_USAGE_ERROR_CODES.MALFORMED_DATA);
@@ -548,6 +564,26 @@ function createLineage(
     wallClockDurationRunCount: contribution.durationIsWallClock ? 1 : 0,
     countedFrom: contribution.runRef,
     countedThrough: contribution.runRef,
+    backfillComplete: true,
+    ...(dirMtimeMs !== undefined ? { dirMtimeMs } : {}),
+  };
+}
+
+function createEmptyLineage(
+  countedFrom: RunRef,
+  countedThrough: RunRef,
+  dirMtimeMs?: number
+): LineageData {
+  return {
+    subtotal: emptyContribution(),
+    byHarness: {},
+    runCount: 0,
+    outcomes: emptyOutcomes(),
+    activeExecutionMs: 0,
+    wallClockDurationRunCount: 0,
+    countedFrom,
+    countedThrough,
+    backfillComplete: false,
     ...(dirMtimeMs !== undefined ? { dirMtimeMs } : {}),
   };
 }
@@ -606,8 +642,8 @@ export class LifetimeUsageStore {
   }
 
   async read(now: number = Date.now()): Promise<LifetimeUsageStoreData> {
+    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
     return withFileLock(this.filePath, async () => {
-      await fs.mkdir(path.dirname(this.filePath), { recursive: true });
       const data = await this.readOrReset(now);
       data.updatedAt = now;
       await this.writeAtomic(data);
@@ -693,6 +729,111 @@ export class LifetimeUsageStore {
       wrapped.cause = error;
       throw wrapped;
     }
+  }
+
+  /**
+   * Apply one bounded backfill batch and checkpoint its interval. The caller
+   * supplies every run ref in the batch, including unreadable manifests, so an
+   * interrupted scan can resume from the persisted interval without retaining
+   * per-run state.
+   */
+  async applyBackfillBatch(
+    batch: LifetimeBackfillBatch,
+    now: number = Date.now()
+  ): Promise<void> {
+    if (batch.runRefs.length === 0) {
+      await this.updateLineageDirectoryMtime(
+        batch.workflowKey,
+        batch.dirMtimeMs,
+        now
+      );
+      return;
+    }
+    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
+    const contributions = new Map(
+      batch.contributions.map((contribution) => [
+        contribution.runRef,
+        normalizeContribution(contribution),
+      ])
+    );
+    try {
+      await withFileLock(this.filePath, async () => {
+        const data = await this.readOrReset(now);
+        let lineage = data.lineages[batch.workflowKey];
+        for (const runRef of batch.runRefs) {
+          if (
+            lineage &&
+            runRef >= lineage.countedFrom &&
+            runRef <= lineage.countedThrough
+          ) {
+            continue;
+          }
+
+          const contribution = contributions.get(runRef);
+          if (!lineage) {
+            lineage = contribution
+              ? createLineage(contribution, batch.dirMtimeMs)
+              : createEmptyLineage(runRef, runRef, batch.dirMtimeMs);
+            data.lineages[batch.workflowKey] = lineage;
+            if (contribution) addRunToStore(data, contribution, 1);
+            else data.skippedRunCount++;
+            continue;
+          }
+
+          if (contribution) {
+            applyRunToLineage(lineage, contribution, 1);
+            addRunToStore(data, contribution, 1);
+          } else {
+            data.skippedRunCount++;
+          }
+          lineage.countedFrom =
+            runRef < lineage.countedFrom ? runRef : lineage.countedFrom;
+          lineage.countedThrough =
+            runRef > lineage.countedThrough ? runRef : lineage.countedThrough;
+        }
+
+        lineage = data.lineages[batch.workflowKey];
+        if (lineage) {
+          lineage.backfillComplete = false;
+          if (batch.dirMtimeMs === undefined) delete lineage.dirMtimeMs;
+          else lineage.dirMtimeMs = batch.dirMtimeMs;
+        }
+        data.updatedAt = now;
+        await this.writeAtomic(data);
+      });
+    } catch (error) {
+      const wrapped = new Error(LIFETIME_USAGE_ERROR_CODES.WRITE_FAILED);
+      wrapped.cause = error;
+      throw wrapped;
+    }
+  }
+
+  /** Checkpoint a lineage mtime even when its current interval is complete. */
+  private async updateLineageDirectoryMtime(
+    workflowKey: WorkflowKey,
+    dirMtimeMs: number | undefined,
+    now: number
+  ): Promise<void> {
+    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
+    await withFileLock(this.filePath, async () => {
+      const data = await this.readOrReset(now);
+      const lineage = data.lineages[workflowKey];
+      if (!lineage) return;
+      lineage.backfillComplete = true;
+      if (dirMtimeMs === undefined) delete lineage.dirMtimeMs;
+      else lineage.dirMtimeMs = dirMtimeMs;
+      data.updatedAt = now;
+      await this.writeAtomic(data);
+    });
+  }
+
+  /** Mark a lineage complete after its final batch has been checkpointed. */
+  async markLineageBackfillComplete(
+    workflowKey: WorkflowKey,
+    dirMtimeMs: number | undefined,
+    now: number = Date.now()
+  ): Promise<void> {
+    await this.updateLineageDirectoryMtime(workflowKey, dirMtimeMs, now);
   }
 
   /** Discard the rollup and derive it from every persisted run manifest. */

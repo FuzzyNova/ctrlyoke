@@ -31,6 +31,10 @@ import { RunOutputResolver } from "./RunOutputResolver";
 import { WorkflowTokenTotalsReducer } from "./WorkflowTokenTotalsReducer";
 import { ObservedHarnessUsageStore } from "../harness/shared/usage/ObservedHarnessUsageStore";
 import {
+  LifetimeUsageStore,
+  contributionFromManifest,
+} from "../harness/shared/usage/LifetimeUsageStore";
+import {
   TIMELINE_EVENT_TYPES,
   TIMELINE_ATTEMPT_KINDS,
   TIMELINE_ATTEMPT_START_REASONS,
@@ -131,6 +135,7 @@ export class OutputHistoryManager {
   private readonly historySearchIndexService = new HistorySearchIndexService();
   private readonly lineageRepository = new WorkflowLineageRepository();
   private readonly observedHarnessUsageStore: ObservedHarnessUsageStore;
+  private readonly lifetimeUsageStore: LifetimeUsageStore;
   /** Coalesces token-cadence streaming deltas before they hit events.jsonl. */
   private readonly streamingBuffer = new StreamingHistoryBuffer(
     (historyFilePath, flush) => this.writeStreamingFlush(historyFilePath, flush)
@@ -154,6 +159,7 @@ export class OutputHistoryManager {
     this.observedHarnessUsageStore = new ObservedHarnessUsageStore(
       _workspaceFolderPath
     );
+    this.lifetimeUsageStore = new LifetimeUsageStore(_workspaceFolderPath);
   }
 
   /** Project reducer snapshots into the owning queue/working file. */
@@ -684,7 +690,7 @@ export class OutputHistoryManager {
         })
       );
       if (isTerminalExecutionState(transition.current.status)) {
-        this.feedObservedHarnessUsage(historyFilePath);
+        this.feedUsageStores(historyFilePath);
       }
       this.refreshSearchIndex();
     } catch (error) {
@@ -769,7 +775,7 @@ export class OutputHistoryManager {
           lastUpdatedAt: completedAt,
         })
       );
-      this.feedObservedHarnessUsage(historyFilePath);
+      this.feedUsageStores(historyFilePath);
       this.refreshSearchIndex();
     } catch (error) {
       Log.warn("Failed to finalize history run:", error);
@@ -1495,7 +1501,7 @@ export class OutputHistoryManager {
    * the run manifest. This is deliberately fire-and-forget: usage persistence
    * must never delay or fail a workflow terminal transition.
    */
-  private feedObservedHarnessUsage(historyFilePath: string): void {
+  private feedUsageStores(historyFilePath: string): void {
     if (!ConfigurationUtils.shouldPersistObservedHarnessUsage()) return;
     const address = WorkflowPaths.parseRunArtifactPath(
       this._workspaceFolderPath,
@@ -1508,15 +1514,26 @@ export class OutputHistoryManager {
       .then(async () => {
         const manifest =
           await this.timelineRecorder.readManifest(historyFilePath);
-        await this.observedHarnessUsageStore.upsertRunContribution(
+        const lifetimeContribution = contributionFromManifest(
           address.workflowKey,
           address.runRef,
-          manifest.tokenTotals,
-          manifest.lastUpdatedAt
+          manifest
         );
+        await Promise.all([
+          this.observedHarnessUsageStore.upsertRunContribution(
+            address.workflowKey,
+            address.runRef,
+            manifest.tokenTotals,
+            manifest.lastUpdatedAt
+          ),
+          this.lifetimeUsageStore.upsertRunContribution(
+            lifetimeContribution,
+            manifest.lastUpdatedAt
+          ),
+        ]);
       })
       .catch((error) => {
-        Log.warn("Failed to persist observed harness usage rollup:", error);
+        Log.warn("Failed to persist usage rollups:", error);
       });
   }
 

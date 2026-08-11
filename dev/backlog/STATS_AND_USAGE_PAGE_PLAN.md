@@ -556,9 +556,9 @@ Phase 1 is independently shippable and is the fix for the stated problem.
       contribution cache, corruption recovery, full rebuild.
 - [x] Regression test: continuing a run older than any cache horizon updates the
       totals without double-counting.
-- [ ] Extend `OutputHistoryManager.feedObservedHarnessUsage` → `feedUsageStores`
+- [x] Extend `OutputHistoryManager.feedObservedHarnessUsage` → `feedUsageStores`
       to feed both stores from its single manifest read.
-- [ ] Add `WorkspaceStatsService` + the bounded-concurrency backfill scanner
+- [x] Add `WorkspaceStatsService` + the bounded-concurrency backfill scanner
       with per-lineage mtime gating and mid-scan checkpointing.
 - [ ] Add messages, router handlers, command registration, `workspaceStatsStore`.
 - [ ] Render the headline tile grid, including backfill progress and the
