@@ -2,6 +2,37 @@ import type { PriorContext, PromptFile, WorkflowStep } from "./CtrlYokeTypes";
 import type { ResolvedProperties } from "../utils/PropertyResolver";
 import type { PriorContextItem } from "../core/HarnessIntegration";
 import type { CompatibilityDiagnostic } from "./CompatibilityTypes";
+import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
+
+/**
+ * Immutable roots used by one workflow execution.
+ *
+ * The state and execution roots are identical until worktree support supplies
+ * a separate checkout. Keeping both roots in the contract now prevents later
+ * callers from adding an ad-hoc cwd override.
+ */
+export interface ExecutionWorkspace {
+  /** Where ctrlyoke stores .ctrlyoke/.runs, history, queue state, and locks. */
+  readonly stateRoot: string;
+
+  /** The cwd used by the harness, scripts, conditions, and temp prompt files. */
+  readonly executionRoot: string;
+
+  /** Canonical Git toplevel from which a linked checkout is created. */
+  readonly sourceCheckoutRoot?: string;
+
+  /** Canonical Git toplevel of the checkout in which execution occurs. */
+  readonly executionCheckoutRoot?: string;
+
+  /** Trusted project roots as seen by execution, with repo-owned roots remapped. */
+  readonly workspaceRoots: readonly string[];
+
+  /** Name/path pairs used by multi-root references and snapshots, also remapped. */
+  readonly namedWorkspaceRoots: readonly ResolverWorkspaceFolder[];
+
+  /** External roots approved against stateRoot's trust identity. */
+  readonly approvedExternalRoots: readonly string[];
+}
 
 /** Narrow working-file persistence contract exposed to harnesses. */
 export interface WorkflowWorkingFilePersistence {

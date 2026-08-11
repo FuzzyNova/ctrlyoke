@@ -11,6 +11,7 @@ import { PromptQueue } from "../../core/PromptQueue";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import { CopilotToolPermissionMapper } from "../../core/harness/copilot/CopilotToolPermissionMapper";
 import { MockPlatform } from "../helpers/mockHarness";
+import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
 import {
   EXECUTION_MODES,
   HARNESS_IDS,
@@ -66,6 +67,7 @@ function createExecutionContext(
   captureEvents?: (stepIndex: number, events: any[]) => void
 ): WorkflowExecutionContext {
   return {
+    executionWorkspace: createNoWorktreeExecutionWorkspace(new MockPlatform()),
     workspaceFolderPath: process.cwd(),
     currentPromptFilePath: "mixed-mode.ctrlyoke.yaml",
     shouldShowCliCommand: false,

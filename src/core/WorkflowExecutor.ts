@@ -15,7 +15,10 @@ import {
   type WorkflowAttemptTarget,
   type PreConditionAction,
 } from "../types/CtrlYokeTypes";
-import { WorkflowContext } from "../types/WorkflowContextTypes";
+import {
+  WorkflowContext,
+  type ExecutionWorkspace,
+} from "../types/WorkflowContextTypes";
 import {
   EXECUTION_MODES,
   STEP_STATUS,
@@ -77,6 +80,8 @@ import {
 } from "./orchestration/ScriptExecutionReporter";
 
 export interface WorkflowExecutionContext {
+  /** Immutable state/execution roots for this workflow run. */
+  executionWorkspace: ExecutionWorkspace;
   /** Whether this host can provide a PTY for interactive execution. */
   hostCanProvidePty?: boolean;
   workspaceFolderPath: string | undefined;

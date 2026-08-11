@@ -68,7 +68,11 @@ import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { PropertyResolver } from "../utils/PropertyResolver";
 import { isCli } from "../utils/RuntimeMode";
-import { PlatformAdapter } from "../platform/PlatformAdapter";
+import {
+  createNoWorktreeExecutionWorkspace,
+  PlatformAdapter,
+} from "../platform/PlatformAdapter";
+import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 
@@ -160,6 +164,8 @@ export class WorkflowInstance {
   private readonly workflowRuntime: WorkflowStateMachine;
   /** Currently-executing integration (set for the duration of startWorkflowExecution) */
   activeIntegration?: HarnessIntegration;
+  /** Immutable state/execution roots captured when this instance is created. */
+  private readonly executionWorkspace: ExecutionWorkspace;
   private readonly endConditionEvaluator: EndConditionEvaluator;
   private readonly endConditionHandler: EndConditionHandler;
 
@@ -398,6 +404,9 @@ export class WorkflowInstance {
 
     const resolvedWorkspacePath =
       workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    const executionWorkspace: ExecutionWorkspace =
+      createNoWorktreeExecutionWorkspace(this.platform, resolvedWorkspacePath);
+    this.executionWorkspace = executionWorkspace;
     this.outputHistoryManager = new OutputHistoryManager(resolvedWorkspacePath);
     this.outputHistoryManager.setTokenTotalsChangedHandler(
       async (_historyFilePath, tokenTotals) => {
@@ -3105,6 +3114,7 @@ export class WorkflowInstance {
   ): WorkflowExecutionContext {
     const self = this;
     return {
+      executionWorkspace: this.executionWorkspace,
       workspaceFolderPath: this.workspaceFolderPath,
       hostCanProvidePty: this.hostCanProvidePty,
       namedWorkspaceRoots: this.platform.getNamedWorkspaceRoots(),

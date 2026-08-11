@@ -26,6 +26,7 @@ import {
   CONDITION_ACTIONS,
 } from "../../types/DashboardConstants";
 import { CliEvent } from "../../types/WebviewMessageTypes";
+import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
 import { Log } from "../../utils/Log";
 import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
 
@@ -33,6 +34,7 @@ function makeContext(
   integration: MockHarnessIntegration
 ): WorkflowExecutionContext {
   return {
+    executionWorkspace: createNoWorktreeExecutionWorkspace(new MockPlatform()),
     workspaceFolderPath: process.cwd(),
     currentPromptFilePath: "workflow.ctrlyoke.yaml",
     shouldShowCliCommand: false,

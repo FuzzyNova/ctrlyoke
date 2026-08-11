@@ -25,9 +25,11 @@ export class VsCodeAdapter implements PlatformAdapter {
     return getVsCodeTrustedWorkspaceRoots();
   }
 
-  getApprovedExternalFileRoots(): string[] {
+  getApprovedExternalFileRoots(stateRoot?: string): string[] {
     return ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
-      ExternalRootsTrustStore.canonicalizeRoot(this.getWorkspaceRoot())
+      ExternalRootsTrustStore.canonicalizeRoot(
+        stateRoot ?? this.getWorkspaceRoot()
+      )
     );
   }
 

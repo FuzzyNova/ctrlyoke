@@ -13,6 +13,7 @@ import {
   STEP_TYPES,
 } from "../../types/DashboardConstants";
 import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
+import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
 
 type ComparisonCase = {
   name: string;
@@ -91,6 +92,7 @@ function makeContext(
 ): WorkflowExecutionContext {
   const integration = new MockHarnessIntegration(undefined, false);
   const context: WorkflowExecutionContext = {
+    executionWorkspace: createNoWorktreeExecutionWorkspace(new MockPlatform()),
     workspaceFolderPath: process.cwd(),
     currentPromptFilePath: "workflow.ctrlyoke.yaml",
     shouldShowCliCommand: false,

@@ -1,4 +1,5 @@
 import type { ResolverWorkspaceFolder } from "./WorkspaceRootResolver";
+import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 
 /**
  * Abstraction layer for platform-specific APIs.
@@ -42,7 +43,7 @@ export interface PlatformAdapter {
    * Optional so lightweight test doubles and headless callers can preserve
    * the historical no-policy behavior when they have no trust context.
    */
-  getApprovedExternalFileRoots?(): string[];
+  getApprovedExternalFileRoots?(stateRoot?: string): string[];
 
   /**
    * Every open workspace folder as a name/path pair, for folder-name-prefixed
@@ -85,4 +86,29 @@ export interface PlatformAdapter {
    * (CLI interactive path).
    */
   isVsCode?(): boolean;
+}
+
+/**
+ * Construct the execution workspace for ordinary, non-worktree execution.
+ *
+ * The approved external roots are resolved once using the state root's trust
+ * identity and then carried with the execution workspace. Future worktree
+ * construction belongs in a separate path; this helper is the sole builder
+ * for the no-worktree shape.
+ */
+export function createNoWorktreeExecutionWorkspace(
+  platform: PlatformAdapter,
+  stateRoot = platform.getWorkspaceRoot()
+): ExecutionWorkspace {
+  return {
+    stateRoot,
+    executionRoot: stateRoot,
+    workspaceRoots: [...platform.getWorkspaceRoots()],
+    namedWorkspaceRoots: platform
+      .getNamedWorkspaceRoots()
+      .map((root) => ({ ...root })),
+    approvedExternalRoots: [
+      ...(platform.getApprovedExternalFileRoots?.(stateRoot) ?? []),
+    ],
+  };
 }
