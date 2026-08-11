@@ -93,6 +93,8 @@ export interface ExecutionPreviewServiceOptions {
   readonly workspaceRoots?: readonly string[];
   readonly approvedExternalRoots?: readonly string[];
   readonly namedWorkspaceRoots?: readonly ResolverWorkspaceFolder[];
+  /** Reject workflow-relative refs when the authored definition is outside the source checkout. */
+  readonly allowWorkflowRelativeReferences?: boolean;
   readonly extensionPath: string;
   readonly hostCanProvidePty: boolean;
   readonly cwd?: string;
@@ -113,6 +115,8 @@ export interface ExecutionPreviewRequest {
   readonly sourcePath?: string;
   /** Authored source definition used as the semantic base for prompt-file refs. */
   readonly sourceDefinitionPath?: string;
+  /** Execution-side semantic definition path; persistence continues to use the field above. */
+  readonly executionSourceDefinitionPath?: string;
   readonly workingFilePath?: string;
   readonly definitionRevision?: number | string;
   /** Higher-precedence variables, such as CLI --var values. */
@@ -145,6 +149,8 @@ export class ExecutionPreviewService {
         ? options.workspaceRoots
         : undefined,
       approvedExternalRoots: options.approvedExternalRoots,
+      allowWorkflowRelativeReferences:
+        options.allowWorkflowRelativeReferences,
     });
   }
 
@@ -168,16 +174,24 @@ export class ExecutionPreviewService {
       ...(request.variables ?? {}),
     };
     const workflow = request.workflow;
+    const semanticSourceDefinitionPath =
+      "executionSourceDefinitionPath" in request
+        ? request.executionSourceDefinitionPath
+        : request.sourceDefinitionPath;
     const preparedSteps = await Promise.all(
       workflow.steps?.map((step) =>
-        this.substituteStep(step, variables, request.sourceDefinitionPath)
+        this.substituteStep(
+          step,
+          variables,
+          semanticSourceDefinitionPath
+        )
       ) ?? []
     );
     const preparedFinalStep = workflow.finalStep
       ? await this.substituteStep(
           workflow.finalStep,
           variables,
-          request.sourceDefinitionPath
+          semanticSourceDefinitionPath
         )
       : undefined;
     const allPreparedSteps = [

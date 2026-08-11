@@ -3135,7 +3135,7 @@ export class WorkflowInstance {
       executionWorkspace: this.executionWorkspace,
       workspaceFolderPath: this.workspaceFolderPath,
       hostCanProvidePty: this.hostCanProvidePty,
-      namedWorkspaceRoots: this.platform.getNamedWorkspaceRoots(),
+      namedWorkspaceRoots: this.executionWorkspace.namedWorkspaceRoots,
       currentPromptFilePath: this.currentPromptFile?.filePath,
       sourceDefinitionPath: this.sourceDefinitionPath,
       // Use a getter so dashboardProvider is evaluated lazily each time

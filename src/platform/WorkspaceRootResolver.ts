@@ -1,5 +1,9 @@
 import * as path from "path";
-import { isPathWithinAnyDirectory } from "../utils/PathSecurity";
+import {
+  isPathWithinAnyDirectory,
+  isPathWithinDirectory,
+} from "../utils/PathSecurity";
+import { pathsEqual } from "../utils/PathCasing";
 
 /**
  * A workspace folder reduced to the fields the resolver needs.
@@ -152,6 +156,60 @@ export interface ReferencePathResolution {
   base: ReferencePathBase;
 }
 
+export interface ExecutionDefinitionPathMapping {
+  /** The definition path as seen from the execution checkout, when mappable. */
+  executionPath?: string;
+  /** Whether `./` and `../` references may use the definition directory. */
+  allowWorkflowRelativeReferences: boolean;
+}
+
+/**
+ * Map a persisted, state-side workflow definition into an execution checkout
+ * without touching the filesystem. Untracked authored definitions are still
+ * mappable because containment is lexical, not existence-based.
+ *
+ * With no distinct checkout pair this is the identity mapping. A definition
+ * outside the source checkout has no safe execution-side directory, so its
+ * workflow-relative references are deliberately disabled.
+ */
+export function mapSourceDefinitionPathToExecution(
+  sourceDefinitionPath: string | undefined,
+  sourceCheckoutRoot: string | undefined,
+  executionCheckoutRoot: string | undefined
+): ExecutionDefinitionPathMapping {
+  if (!sourceDefinitionPath) {
+    return { allowWorkflowRelativeReferences: true };
+  }
+
+  if (
+    !sourceCheckoutRoot ||
+    !executionCheckoutRoot ||
+    pathsEqual(
+      path.resolve(sourceCheckoutRoot),
+      path.resolve(executionCheckoutRoot)
+    )
+  ) {
+    return {
+      executionPath: sourceDefinitionPath,
+      allowWorkflowRelativeReferences: true,
+    };
+  }
+
+  const sourcePath = path.resolve(sourceDefinitionPath);
+  const sourceRoot = path.resolve(sourceCheckoutRoot);
+  if (!isPathWithinDirectory(sourcePath, sourceRoot)) {
+    return { allowWorkflowRelativeReferences: false };
+  }
+
+  return {
+    executionPath: path.resolve(
+      executionCheckoutRoot,
+      path.relative(sourceRoot, sourcePath)
+    ),
+    allowWorkflowRelativeReferences: true,
+  };
+}
+
 /**
  * Resolve a reference path against exactly one lexical base without touching
  * the filesystem. A leading `./` or `../` requires a known workflow-file
@@ -180,7 +238,11 @@ export function resolveReferencePath(
     };
   }
 
-  return resolveWorkspaceOrNamedPath(normalized, options.primaryRoot, options.namedRoots);
+  return resolveWorkspaceOrNamedPath(
+    normalized,
+    options.primaryRoot,
+    options.namedRoots
+  );
 }
 
 function resolveWorkspaceOrNamedPath(

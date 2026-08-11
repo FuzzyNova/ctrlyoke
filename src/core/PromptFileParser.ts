@@ -198,8 +198,9 @@ export class PromptFileParser {
       workspaceRoot: this.platform?.getWorkspaceRoot(),
       namedRoots: this.platform?.getNamedWorkspaceRoots() ?? [],
       trustedRoots: trustedRoots?.length ? trustedRoots : undefined,
-      approvedExternalRoots:
-        this.platform?.getApprovedExternalFileRoots?.(),
+      approvedExternalRoots: this.platform?.getApprovedExternalFileRoots?.(
+        this.platform?.getWorkspaceRoot()
+      ),
     });
 
     await resolver.validatePromptReference(promptValue, promptFilePath);

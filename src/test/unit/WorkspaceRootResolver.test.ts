@@ -9,6 +9,7 @@ import {
   resolveNamedRelativePath,
   resolveReferencePath,
   resolveEffectiveAbsoluteReferences,
+  mapSourceDefinitionPathToExecution,
   type ResolverWorkspaceFolder,
 } from "../../platform/WorkspaceRootResolver";
 
@@ -323,7 +324,10 @@ suite("WorkspaceRootResolver Tests", () => {
               namedRoots: [],
               sourceDefinitionDir: workflow,
             }),
-            { absolutePath: path.join(workspace, "src/index.ts"), base: "workspace" }
+            {
+              absolutePath: path.join(workspace, "src/index.ts"),
+              base: "workspace",
+            }
           );
           assert.deepStrictEqual(
             resolveReferencePath("./src/index.ts", {
@@ -331,7 +335,10 @@ suite("WorkspaceRootResolver Tests", () => {
               namedRoots: [],
               sourceDefinitionDir: workflow,
             }),
-            { absolutePath: path.join(workflow, "src/index.ts"), base: "workflow" }
+            {
+              absolutePath: path.join(workflow, "src/index.ts"),
+              base: "workflow",
+            }
           );
           await fs.rm(workspace, { recursive: true, force: true });
         }
@@ -368,6 +375,50 @@ suite("WorkspaceRootResolver Tests", () => {
 
     test("single-root falls back to the user setting (on)", () => {
       assert.strictEqual(resolveEffectiveAbsoluteReferences(true, false), true);
+    });
+  });
+
+  suite("mapSourceDefinitionPathToExecution", () => {
+    const sourceCheckout = path.resolve("/repo");
+    const executionCheckout = path.resolve("/repo.worktrees/run");
+
+    test("maps an authored path lexically, even when it is untracked", () => {
+      const result = mapSourceDefinitionPathToExecution(
+        path.join(sourceCheckout, "workflows", "draft.yaml"),
+        sourceCheckout,
+        executionCheckout
+      );
+
+      assert.deepStrictEqual(result, {
+        executionPath: path.join(executionCheckout, "workflows", "draft.yaml"),
+        allowWorkflowRelativeReferences: true,
+      });
+    });
+
+    test("keeps no-worktree definitions byte-identical", () => {
+      const sourceDefinition = path.join("/state", "workflow.yaml");
+      assert.deepStrictEqual(
+        mapSourceDefinitionPathToExecution(
+          sourceDefinition,
+          undefined,
+          undefined
+        ),
+        {
+          executionPath: sourceDefinition,
+          allowWorkflowRelativeReferences: true,
+        }
+      );
+    });
+
+    test("rejects workflow-relative references for an outside definition", () => {
+      assert.deepStrictEqual(
+        mapSourceDefinitionPathToExecution(
+          path.resolve("/state/workflow.yaml"),
+          sourceCheckout,
+          executionCheckout
+        ),
+        { allowWorkflowRelativeReferences: false }
+      );
     });
   });
 });

@@ -478,7 +478,8 @@ export abstract class HarnessIntegration {
           ],
           this.getExecutionNamedWorkspaceRoots(),
           effectiveAbsolute,
-          this.getSourceDefinitionDir()
+          this.getSourceDefinitionDir(),
+          this.allowsWorkflowRelativeReferences()
         );
         splitContext = await expander.expandContextSplit(rawPromptText);
         // Rewrite folder-name-prefixed refs to their resolved form inline,
@@ -799,13 +800,23 @@ export abstract class HarnessIntegration {
     return this.getEffectiveApprovedExternalFileRoots();
   }
 
+  /** Semantic definition path used by execution-side reference expansion. */
+  protected getExecutionSourceDefinitionPath(): string | undefined {
+    return this.sourceDefinitionPath;
+  }
+
+  /** Whether workflow-relative refs have a safe execution-side base. */
+  protected allowsWorkflowRelativeReferences(): boolean {
+    return true;
+  }
+
   /**
    * Return the trusted directory containing the authored workflow definition.
    * The run working copy is intentionally never used as this source.
    */
   protected getSourceDefinitionDir(): string | undefined {
     return getTrustedSourceDefinitionDir(
-      this.sourceDefinitionPath,
+      this.getExecutionSourceDefinitionPath(),
       Array.from(
         new Set([
           ...this.getExecutionWorkspaceRoots(),

@@ -397,4 +397,69 @@ suite("WorkspaceSnapshotService — multi-root", function () {
     assert.strictEqual(result.failedFiles.length, 1);
     assert.match(result.failedFiles[0]?.error ?? "", /traversal/i);
   });
+
+  test("discovers and persists the execution checkout for remapped named roots", async () => {
+    const sourceRoot = await createRepo();
+    await fs.mkdir(path.join(sourceRoot, "packages", "app"), {
+      recursive: true,
+    });
+    await fs.writeFile(
+      path.join(sourceRoot, "packages", "app", "tracked.txt"),
+      "base\n",
+      "utf8"
+    );
+    git(sourceRoot, "add", "packages/app/tracked.txt");
+    git(sourceRoot, "commit", "-m", "add app");
+
+    const executionRoot = path.join(
+      path.dirname(sourceRoot),
+      `${path.basename(sourceRoot)}-worktree`
+    );
+    tempDirs.unshift(executionRoot);
+    git(sourceRoot, "worktree", "add", "--detach", executionRoot);
+
+    const docsRoot = path.join(sourceRoot, "packages", "docs");
+    await fs.mkdir(docsRoot, { recursive: true });
+    await fs.writeFile(path.join(docsRoot, "tracked.txt"), "docs\n", "utf8");
+    git(sourceRoot, "add", "packages/docs/tracked.txt");
+    git(sourceRoot, "commit", "-m", "add docs");
+
+    // Both named roots are inside the same source repository. The roots passed
+    // here are execution-side paths, so discovery and persisted repo metadata
+    // must identify the linked checkout rather than sourceRoot.
+    const namedRoots = [
+      { name: "app", fsPath: path.join(executionRoot, "packages", "app") },
+      { name: "docs", fsPath: path.join(executionRoot, "packages", "docs") },
+    ];
+    const state = await snapshotService.captureWorkspaceState(
+      executionRoot,
+      SNAPSHOT_STRATEGIES.GIT,
+      namedRoots
+    );
+
+    await fs.writeFile(
+      path.join(executionRoot, "packages", "app", "tracked.txt"),
+      "execution edit\n",
+      "utf8"
+    );
+    const after = await snapshotService.captureWorkspaceState(
+      executionRoot,
+      SNAPSHOT_STRATEGIES.GIT,
+      namedRoots
+    );
+    const changes = await snapshotService.computeSnapshotChanges(
+      state,
+      after,
+      executionRoot
+    );
+    const repos = snapshotService.snapshotRepoInfos(after);
+
+    assert.ok(repos);
+    assert.ok(repos.every((repo) => repo.root === executionRoot));
+    const appChange = changes.find(
+      (change) => change.path === "app/tracked.txt"
+    );
+    assert.ok(appChange);
+    assert.strictEqual(appChange.repo, "app");
+  });
 });

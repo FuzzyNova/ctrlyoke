@@ -1723,20 +1723,20 @@ The exact diff may evolve, but the implementation must cover these areas.
 | Settings UI               | `DefaultsHarnessPage.tsx` (worktree defaults block), new `WorktreesSection.tsx` + `ALL_TABS` entry in `GlobalSettingsDrawer.tsx`, `settings/index.ts` |
 | Drawer UI                 | `WorkflowPropertiesPanel.tsx` Harness page controls, `isDifferentFromGlobal`/`handleResetAllToDefault` worktree cases, `WORKTREE_MODE_OPTIONS` in `DashboardConstants.ts`. **No** `useDrawerTabOverrides.ts` or `SegmentedTabBar.tsx` change — worktree does not badge a tab |
 | Status UI                 | `WorkflowStatus.tsx` worktree indicator, `RunSummaryBanner.tsx` branch/landing detail and View Diff / Open Worktree actions, `RunBannerData` worktree projection |
-| Schema/parser             | `schemas/workflow-schema.json`, generated `workflow-schema.yaml`, `PromptFileParser.ts`, `PromptFileLoader.ts`                                 |
-| Runtime persistence       | `WorkingFileManager.ts`, queue access seam, `WorkflowInstance.ts`                                                                              |
-| Execution roots           | `IntegrationFactory.ts`, `HarnessIntegration.ts`, `CliIntegration.ts`, execution preview, transport/runner/prompt/MCP helpers                  |
-| Assets                    | `AgentDiscovery.ts`, `SkillDiscovery.ts`, expanders, and linked-worktree Git-root discovery                                                    |
-| Scripts/conditions/setup  | `WorkflowExecutor.ts`, `EndConditionEvaluator.ts`, extracted shared script process runner                                                      |
-| Git/worktrees             | `GitUtils.ts`, new `WorktreeManager.ts`, ownership record helper                                                                               |
-| Worktree scaffolding      | `WorkspaceInitializer.ts` — seed `.ctrlyoke/.gitignore` into a new worktree before first write                                                 |
-| Concurrency               | new `ExecutionRootLeaseManager.ts`; extract shared lease primitives from `WorkflowLockManager`                                                 |
-| Snapshots/repos           | `WorkspaceSnapshotService.ts`, `WorkspaceRepoDiscovery.ts`, `UndoRedoCoordinator.ts` (execution-workspace guard)                               |
-| Runtime file trust        | new session registry plus file-access callers; do not persist into `ExternalRootsTrustStore`                                                   |
-| Recovery/status           | `WorkspaceSessionManager.ts`, run summaries/cache, activation recovery, `mcp-server.ts`                                                        |
-| UI actions                | router/sink/message handler/store plus workflow status/steps components                                                                        |
-| VS Code commands          | Open Worktree, View Diff, Merge, Manage Worktrees                                                                                              |
-| Tests                     | focused Git, manager, lease, persistence, lifecycle, snapshot/undo, UI, and provider-routing tests                                             |
+| Schema/parser             | `schemas/workflow-schema.json`, generated `workflow-schema.yaml`, `PromptFileParser.ts`, `PromptFileLoader.ts`                                                                                                                                                               |
+| Runtime persistence       | `WorkingFileManager.ts`, queue access seam, `WorkflowInstance.ts`                                                                                                                                                                                                            |
+| Execution roots           | `IntegrationFactory.ts`, `HarnessIntegration.ts`, `CliIntegration.ts`, execution preview, transport/runner/prompt/MCP helpers                                                                                                                                                |
+| Assets                    | `AgentDiscovery.ts`, `SkillDiscovery.ts`, expanders, and linked-worktree Git-root discovery                                                                                                                                                                                  |
+| Scripts/conditions/setup  | `WorkflowExecutor.ts`, `EndConditionEvaluator.ts`, extracted shared script process runner                                                                                                                                                                                    |
+| Git/worktrees             | `GitUtils.ts`, new `WorktreeManager.ts`, ownership record helper                                                                                                                                                                                                             |
+| Worktree scaffolding      | `WorkspaceInitializer.ts` — seed `.ctrlyoke/.gitignore` into a new worktree before first write                                                                                                                                                                               |
+| Concurrency               | new `ExecutionRootLeaseManager.ts`; extract shared lease primitives from `WorkflowLockManager`                                                                                                                                                                               |
+| Snapshots/repos           | `WorkspaceSnapshotService.ts`, `WorkspaceRepoDiscovery.ts`, `UndoRedoCoordinator.ts` (execution-workspace guard)                                                                                                                                                             |
+| Runtime file trust        | new session registry plus file-access callers; do not persist into `ExternalRootsTrustStore`                                                                                                                                                                                 |
+| Recovery/status           | `WorkspaceSessionManager.ts`, run summaries/cache, activation recovery, `mcp-server.ts`                                                                                                                                                                                      |
+| UI actions                | router/sink/message handler/store plus workflow status/steps components                                                                                                                                                                                                      |
+| VS Code commands          | Open Worktree, View Diff, Merge, Manage Worktrees                                                                                                                                                                                                                            |
+| Tests                     | focused Git, manager, lease, persistence, lifecycle, snapshot/undo, UI, and provider-routing tests                                                                                                                                                                           |
 
 Dynamic completion of discovered branch names is optional ergonomics and should
 not be claimed as a schema capability. Static schema completion covers the
@@ -1902,7 +1902,7 @@ live branch values.
 
 ## Implementation Order
 
-### Phase 1 — Typed execution-workspace split
+### Phase 1 — Typed execution-workspace split — **Complete**
 
 1. Introduce `ExecutionWorkspace`.
 2. Preserve byte-equivalent/no-op behavior when no worktree is active.
@@ -1915,8 +1915,8 @@ live branch values.
    reusable script process runner needed by setup. **Implemented.**
 7. Parameterize workspace agent/skill discovery by execution root, including
    linked-worktree `findGitRoot()` behavior. **Implemented.**
-8. Make snapshots accept execution-scoped primary and named roots.
-9. Add definition-path mapping, mapping/no-op, preview, and provider-sidecar tests.
+8. Make snapshots accept execution-scoped primary and named roots. **Implemented.**
+9. Add definition-path mapping, mapping/no-op, preview, and provider-sidecar tests. **Implemented.**
 
 This phase changes vocabulary and dependency boundaries but exposes no worktree
 schema.

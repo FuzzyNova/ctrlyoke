@@ -71,6 +71,8 @@ import {
 } from "../types/OutputHistoryTypes";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
+import { mapSourceDefinitionPathToExecution } from "../platform/WorkspaceRootResolver";
+import { pathsEqual } from "../utils/PathCasing";
 import { summarizeCompactionEvents } from "../utils/TokenUsage";
 import { calculateAttemptCost } from "../utils/ModelPricing";
 import {
@@ -1258,20 +1260,23 @@ export class WorkflowExecutor {
     strategy: "git" | "filesystem",
     context: WorkflowExecutionContext
   ): Promise<void> {
-    if (!context.snapshotService || !context.workspaceFolderPath) {
+    if (!context.snapshotService) {
       return;
     }
 
+    const executionRoot = context.executionWorkspace.executionRoot;
+    const namedRoots = context.executionWorkspace.namedWorkspaceRoots;
+
     const afterState = await context.snapshotService.captureWorkspaceState(
-      context.workspaceFolderPath,
+      executionRoot,
       strategy,
-      context.namedWorkspaceRoots
+      namedRoots
     );
 
     const changedFiles = await context.snapshotService.computeSnapshotChanges(
       beforeState,
       afterState,
-      context.workspaceFolderPath
+      executionRoot
     );
 
     let snapshot: WorkspaceSnapshot = {
@@ -1284,7 +1289,7 @@ export class WorkflowExecutor {
 
     snapshot = await context.snapshotService.enrichSnapshotBeforeContent(
       snapshot,
-      context.workspaceFolderPath
+      executionRoot
     );
 
     context.onSnapshotCaptured?.(target, snapshot);
@@ -1328,10 +1333,10 @@ export class WorkflowExecutor {
   private async selectSnapshotStrategy(
     context: WorkflowExecutionContext
   ): Promise<"git" | "filesystem" | undefined> {
-    if (context.snapshotService && context.workspaceFolderPath) {
+    if (context.snapshotService) {
       try {
         return await context.snapshotService.selectStrategy(
-          context.workspaceFolderPath
+          context.executionWorkspace.executionRoot
         );
       } catch {
         // ignore — snapshots unavailable
@@ -1369,16 +1374,12 @@ export class WorkflowExecutor {
     snapshotStrategy: "git" | "filesystem" | undefined
   ): Promise<boolean> {
     let beforeState: RawWorkspaceState | undefined;
-    if (
-      context.snapshotService &&
-      context.workspaceFolderPath &&
-      snapshotStrategy
-    ) {
+    if (context.snapshotService && snapshotStrategy) {
       try {
         beforeState = await context.snapshotService.captureWorkspaceState(
-          context.workspaceFolderPath,
+          context.executionWorkspace.executionRoot,
           snapshotStrategy,
-          context.namedWorkspaceRoots
+          context.executionWorkspace.namedWorkspaceRoots
         );
       } catch {
         // ignore
@@ -1391,12 +1392,7 @@ export class WorkflowExecutor {
       context
     );
 
-    if (
-      beforeState &&
-      context.snapshotService &&
-      context.workspaceFolderPath &&
-      snapshotStrategy
-    ) {
+    if (beforeState && context.snapshotService && snapshotStrategy) {
       try {
         await this.captureAndEmitSnapshot(
           target,
@@ -2451,7 +2447,9 @@ export class WorkflowExecutor {
         ),
       };
       if (!effectiveRetryPrompt.prompt.trim()) {
-        throw new Error("Retry prompt is empty after resolving its prompt file");
+        throw new Error(
+          "Retry prompt is empty after resolving its prompt file"
+        );
       }
 
       if (context.historyFilePath && context.outputHistoryManager) {
@@ -2533,24 +2531,40 @@ export class WorkflowExecutor {
       promptText,
       variables ?? {}
     );
-    const trustedRoots = Array.from(
-      new Set([
-        context.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
-        ...this.platform.getWorkspaceRoots(),
-      ])
+    const executionWorkspace = context.executionWorkspace;
+    const usesLegacyNoWorktreeContext =
+      !executionWorkspace.sourceCheckoutRoot &&
+      !executionWorkspace.executionCheckoutRoot &&
+      context.workspaceFolderPath !== undefined &&
+      !pathsEqual(
+        path.resolve(context.workspaceFolderPath),
+        path.resolve(executionWorkspace.executionRoot)
+      );
+    const executionRoot = usesLegacyNoWorktreeContext
+      ? context.workspaceFolderPath!
+      : executionWorkspace.executionRoot;
+    const workspaceRoots = usesLegacyNoWorktreeContext
+      ? [executionRoot]
+      : executionWorkspace.workspaceRoots;
+    const namedRoots = usesLegacyNoWorktreeContext
+      ? (context.namedWorkspaceRoots ?? this.platform.getNamedWorkspaceRoots())
+      : executionWorkspace.namedWorkspaceRoots;
+    const definitionPath = mapSourceDefinitionPathToExecution(
+      context.sourceDefinitionPath,
+      executionWorkspace.sourceCheckoutRoot,
+      executionWorkspace.executionCheckoutRoot
     );
     const resolver = new PromptFileResolver({
-      workspaceRoot:
-        context.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
-      namedRoots:
-        context.namedWorkspaceRoots ?? this.platform.getNamedWorkspaceRoots(),
-      trustedRoots: trustedRoots.length ? trustedRoots : undefined,
-      approvedExternalRoots:
-        this.platform.getApprovedExternalFileRoots?.(),
+      workspaceRoot: executionRoot,
+      namedRoots,
+      trustedRoots: workspaceRoots,
+      approvedExternalRoots: executionWorkspace.approvedExternalRoots,
+      allowWorkflowRelativeReferences:
+        definitionPath.allowWorkflowRelativeReferences,
     });
     return resolver.resolvePromptValue(
       substituted,
-      context.sourceDefinitionPath
+      definitionPath.executionPath
     );
   }
 

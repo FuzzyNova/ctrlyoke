@@ -16,6 +16,8 @@ export interface PromptFileResolverOptions {
   /** Workspace and external roots used to authorize candidates before reads. */
   trustedRoots?: readonly string[];
   approvedExternalRoots?: readonly string[];
+  /** Disable workflow-relative refs when the authored definition is unmappable. */
+  allowWorkflowRelativeReferences?: boolean;
 }
 
 export type PromptFilePathResolution =
@@ -84,12 +86,15 @@ export class PromptFileResolver {
   private readonly namedRoots: readonly ResolverWorkspaceFolder[];
   private readonly trustedRoots?: readonly string[];
   private readonly approvedExternalRoots?: readonly string[];
+  private readonly allowWorkflowRelativeReferences: boolean;
 
   constructor(options: PromptFileResolverOptions = {}) {
     this.workspaceRoot = options.workspaceRoot;
     this.namedRoots = options.namedRoots ?? [];
     this.trustedRoots = options.trustedRoots;
     this.approvedExternalRoots = options.approvedExternalRoots;
+    this.allowWorkflowRelativeReferences =
+      options.allowWorkflowRelativeReferences ?? true;
   }
 
   /** Shared heuristic used by all standalone prompt-file callers. */
@@ -240,6 +245,13 @@ export class PromptFileResolver {
     }
 
     const candidates: string[] = [];
+    const normalizedPath = trimmedPath.replace(/\\/g, "/");
+    if (
+      !this.allowWorkflowRelativeReferences &&
+      (normalizedPath.startsWith("./") || normalizedPath.startsWith("../"))
+    ) {
+      return candidates;
+    }
     const sourceDefinitionDir = getTrustedSourceDefinitionDir(
       sourceDefinitionPath,
       this.trustedRoots
@@ -249,9 +261,7 @@ export class PromptFileResolver {
     // source-dir-only would break completion-inserted references whose target
     // is not a sibling of the workflow file.
     if (sourceDefinitionDir) {
-      candidates.push(
-        path.resolve(sourceDefinitionDir, trimmedPath)
-      );
+      candidates.push(path.resolve(sourceDefinitionDir, trimmedPath));
     }
 
     if (this.workspaceRoot) {
@@ -259,7 +269,7 @@ export class PromptFileResolver {
       // semantics. Strip only the mandatory `./` marker in this wrapper so
       // it can still name a workspace-relative or named-root prompt; the
       // shared resolver must keep `./` workflow-relative for inline refs.
-      const normalizedWorkspacePath = trimmedPath.replace(/\\/g, "/");
+      const normalizedWorkspacePath = normalizedPath;
       const workspacePath = normalizedWorkspacePath.replace(/^\.\//, "");
       candidates.push(
         workspacePath.startsWith("../")

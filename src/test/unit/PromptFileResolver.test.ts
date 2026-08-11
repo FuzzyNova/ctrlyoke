@@ -66,7 +66,10 @@ suite("PromptFileResolver", () => {
     const result = await new PromptFileResolver({
       workspaceRoot,
       namedRoots: [namedRoots[0]],
-    }).resolve("./workspace.prompt.md", path.join(sourceDirectory, "missing.json"));
+    }).resolve(
+      "./workspace.prompt.md",
+      path.join(sourceDirectory, "missing.json")
+    );
 
     assert.strictEqual(result.status, "resolved");
     assert.strictEqual(result.path, promptFile);
@@ -227,5 +230,23 @@ suite("PromptFileResolver", () => {
     } finally {
       await fs.rm(outsideDirectory, { recursive: true, force: true });
     }
+  });
+
+  test("fails closed for workflow-relative refs with an outside definition", async () => {
+    const promptFile = path.join(workspaceRoot, "prompt.md");
+    await fs.writeFile(promptFile, "execution content", "utf8");
+    const resolver = new PromptFileResolver({
+      workspaceRoot,
+      trustedRoots: [workspaceRoot],
+      allowWorkflowRelativeReferences: false,
+    });
+
+    const resolution = await resolver.resolve(
+      "./prompt.md",
+      path.join(path.dirname(workspaceRoot), "outside", "workflow.yaml")
+    );
+
+    assert.strictEqual(resolution.status, "missing");
+    assert.deepStrictEqual(resolution.candidates, []);
   });
 });

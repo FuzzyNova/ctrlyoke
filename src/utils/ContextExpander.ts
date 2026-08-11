@@ -81,6 +81,7 @@ export class ContextExpander {
   // Workflow-relative inline references use this directory as their only
   // resolution base. It is discarded when it is outside the trusted roots.
   private sourceDefinitionDir?: string;
+  private allowWorkflowRelativeReferences: boolean;
   // Track attachment IDs to prevent duplicates
   private attachmentIds = new Set<string>();
 
@@ -89,7 +90,8 @@ export class ContextExpander {
     additionalTrustedRoots: string[] = [],
     namedRoots: ResolverWorkspaceFolder[] = [],
     effectiveAbsolute: boolean = false,
-    sourceDefinitionDir?: string
+    sourceDefinitionDir?: string,
+    allowWorkflowRelativeReferences: boolean = true
   ) {
     this.workspaceRoot = workspaceRoot;
     this.trustedRoots = Array.from(
@@ -101,6 +103,7 @@ export class ContextExpander {
     );
     this.namedRoots = namedRoots;
     this.effectiveAbsolute = effectiveAbsolute;
+    this.allowWorkflowRelativeReferences = allowWorkflowRelativeReferences;
     const resolvedSourceDefinitionDir = sourceDefinitionDir
       ? path.resolve(sourceDefinitionDir)
       : undefined;
@@ -770,6 +773,16 @@ ${content}
   private resolveReference(relativePath: string): ReferencePathResolution {
     if (!this.workspaceRoot) {
       throw new Error("No workspace folder open");
+    }
+
+    const normalizedPath = relativePath.replace(/\\/g, "/");
+    if (
+      !this.allowWorkflowRelativeReferences &&
+      (normalizedPath.startsWith("./") || normalizedPath.startsWith("../"))
+    ) {
+      throw new Error(
+        `Workflow-relative reference "${relativePath}" cannot be mapped into the execution checkout`
+      );
     }
 
     const resolution = resolveReferencePath(relativePath, {

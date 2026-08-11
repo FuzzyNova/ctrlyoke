@@ -589,16 +589,16 @@ export class WorkspaceSnapshotService {
   }
 
   async captureWorkspaceState(
-    workspacePath: string,
+    executionRoot: string,
     strategy: SnapshotStrategy,
-    namedRoots?: readonly ResolverWorkspaceFolder[]
+    executionNamedRoots?: readonly ResolverWorkspaceFolder[]
   ): Promise<RawWorkspaceState> {
     const capturedAt = Date.now();
 
-    // Single-root (0/1 named roots): one segment against `workspacePath` with no
+    // Single-root (0/1 named roots): one segment against `executionRoot` with no
     // prefix/pathspec — byte-identical to the pre-multi-root implementation.
-    if (!namedRoots || namedRoots.length <= 1) {
-      const seg = await this.captureSegment(workspacePath, strategy, "");
+    if (!executionNamedRoots || executionNamedRoots.length <= 1) {
+      const seg = await this.captureSegment(executionRoot, strategy, "");
       return {
         capturedAt,
         strategy,
@@ -606,7 +606,7 @@ export class WorkspaceSnapshotService {
         segments: [
           {
             prefix: "",
-            root: workspacePath,
+            root: executionRoot,
             pathspec: "",
             strategy,
             git: seg.git,
@@ -616,8 +616,8 @@ export class WorkspaceSnapshotService {
       };
     }
 
-    const segments = await this.captureMultiRootSegments(namedRoots);
-    const primary = this.primarySegment(segments, workspacePath);
+    const segments = await this.captureMultiRootSegments(executionNamedRoots);
+    const primary = this.primarySegment(segments, executionRoot);
     return {
       capturedAt,
       strategy: primary?.strategy ?? strategy,

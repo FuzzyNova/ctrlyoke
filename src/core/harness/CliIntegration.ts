@@ -6,6 +6,7 @@ import {
 } from "../../platform/PlatformAdapter";
 import type { VsCodeAdapter } from "../../platform/VsCodeAdapter";
 import {
+  mapSourceDefinitionPathToExecution,
   resolveEffectiveAbsoluteReferences,
   type ResolverWorkspaceFolder,
 } from "../../platform/WorkspaceRootResolver";
@@ -321,6 +322,22 @@ export class CliIntegration extends HarnessIntegration {
 
   protected override getApprovedExternalRoots(): string[] {
     return [...this.executionWorkspace.approvedExternalRoots];
+  }
+
+  protected override getExecutionSourceDefinitionPath(): string | undefined {
+    return mapSourceDefinitionPathToExecution(
+      this.sourceDefinitionPath,
+      this.executionWorkspace.sourceCheckoutRoot,
+      this.executionWorkspace.executionCheckoutRoot
+    ).executionPath;
+  }
+
+  protected override allowsWorkflowRelativeReferences(): boolean {
+    return mapSourceDefinitionPathToExecution(
+      this.sourceDefinitionPath,
+      this.executionWorkspace.sourceCheckoutRoot,
+      this.executionWorkspace.executionCheckoutRoot
+    ).allowWorkflowRelativeReferences;
   }
 
   /**

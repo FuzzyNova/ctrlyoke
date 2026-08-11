@@ -459,4 +459,22 @@ suite("ExecutionPreviewService", () => {
     assert.strictEqual(cleanup.scope, PREVIEW_MUTATION_SCOPES.RUN_LOCAL);
     assert.strictEqual(cleanup.warning, undefined);
   });
+
+  test("never applies planned mutations during preview", async () => {
+    let applied = false;
+    const mutation: PreparedMutation = {
+      path: path.join(os.tmpdir(), "ctrlyoke-preview-must-not-exist.json"),
+      description: "preview-only mutation",
+      apply: async () => {
+        applied = true;
+      },
+    };
+
+    const preview = await createService(undefined, [mutation]).build({
+      workflow: { steps: [{ prompt: "read-only preview" }] },
+    });
+
+    assert.strictEqual(applied, false);
+    assert.strictEqual(preview.steps[0]?.workspaceMutations.length, 1);
+  });
 });

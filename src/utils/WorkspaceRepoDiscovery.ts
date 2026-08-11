@@ -51,7 +51,7 @@ async function gitToplevel(dir: string): Promise<string | null> {
  * file belongs to.
  */
 export async function discoverRepos(
-  roots: readonly ResolverWorkspaceFolder[]
+  executionRoots: readonly ResolverWorkspaceFolder[]
 ): Promise<WorkspaceRepo[]> {
   const seen = new Map<string, WorkspaceRepo>();
 
@@ -60,10 +60,10 @@ export async function discoverRepos(
   // `seen` afterward in the original root order so de-duplication (first root
   // wins for a shared toplevel) stays deterministic.
   const toplevels = await Promise.all(
-    roots.map((root) => gitToplevel(root.fsPath))
+    executionRoots.map((root) => gitToplevel(root.fsPath))
   );
 
-  roots.forEach((root, i) => {
+  executionRoots.forEach((root, i) => {
     const top = toplevels[i];
     if (!top) return;
 
@@ -133,11 +133,11 @@ export function findRepoForPath(
  * resolves an ambiguous prefix.
  */
 export function mapRootPrefixesToRepos(
-  namedRoots: readonly ResolverWorkspaceFolder[],
+  executionNamedRoots: readonly ResolverWorkspaceFolder[],
   repos: readonly WorkspaceRepo[]
 ): Record<string, string> {
   const map: Record<string, string> = {};
-  for (const root of namedRoots) {
+  for (const root of executionNamedRoots) {
     if (root.name in map) continue;
     const repo = findRepoForPath(root.fsPath, repos);
     if (repo) {
