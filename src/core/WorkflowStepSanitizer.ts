@@ -17,6 +17,7 @@ import type {
   ToolPermissionsOverride,
   UserHookConfig,
   WorkingFile,
+  WorktreeConfig,
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
 import type { WorkflowDefinitionSnapshot } from "../types/WorkflowTimelineTypes";
@@ -52,11 +53,13 @@ export function buildDefinitionSnapshot(
   workflowName: string,
   steps: WorkflowStep[],
   rewindBoundary?: number,
-  finalStep?: WorkflowStep
+  finalStep?: WorkflowStep,
+  worktree?: WorktreeConfig
 ): WorkflowDefinitionSnapshot {
   return {
     workflowName,
     steps: stripStepRuntime(steps),
+    ...(worktree !== undefined ? { worktree } : {}),
     ...(finalStep ? { finalStep: stripStepRuntime([finalStep])[0] } : {}),
     ...(rewindBoundary !== undefined ? { rewindBoundary } : {}),
   };

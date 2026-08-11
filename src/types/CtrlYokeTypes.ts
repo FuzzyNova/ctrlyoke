@@ -128,6 +128,21 @@ export interface ErrorBehavior {
 }
 
 /**
+ * Workflow-level worktree authoring supported by the current phase.
+ * Managed worktrees and merge/keep options are intentionally deferred until
+ * their runtime behavior exists.
+ */
+export type WorktreeConfig =
+  | false
+  | string
+  | {
+      mode: "named";
+      branch: string;
+      base?: string;
+      setup?: string;
+    };
+
+/**
  * Shared execution properties for prompts, workflows, and runtime metadata.
  * Using this interface ensures consistency across all levels of the execution hierarchy.
  *
@@ -267,6 +282,8 @@ export const EXECUTION_PROPERTY_KEYS = [
 ] as const satisfies readonly (keyof ExecutionProperties)[];
 
 export interface PromptFile extends ExecutionProperties {
+  /** Named-worktree selection authored at the workflow root. */
+  worktree?: WorktreeConfig;
   prompt?: string;
   steps?: WorkflowStep[];
   finalStep?: WorkflowStep;

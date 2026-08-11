@@ -11,6 +11,7 @@ import type {
   RunRef,
   WorkflowStep,
   WorkflowTokenTotals,
+  WorktreeConfig,
 } from "./CtrlYokeTypes";
 import type {
   OutputExecutionTarget,
@@ -235,6 +236,8 @@ export interface WorkflowRuntimeTransitionPayload {
 export interface WorkflowDefinitionSnapshot {
   workflowName: string;
   steps: WorkflowStep[];
+  /** Workflow-level worktree definition that produced this revision. */
+  worktree?: WorktreeConfig;
   /** The final-step definition that belongs to this revision, if configured. */
   finalStep?: WorkflowStep;
   /** Present for the mutable suffix revision created by a same-run rewind. */

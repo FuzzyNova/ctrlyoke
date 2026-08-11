@@ -195,8 +195,13 @@ suite("WorktreeUtils", function () {
     assert.ok(!name.includes("/"));
     assert.ok(name.length <= 53);
     await validateWorktreeBranchName("feature/safe");
+    await validateWorktreeBranchName("auto");
     await assert.rejects(
       validateWorktreeBranchName("../escape"),
+      /Invalid branch name/
+    );
+    await assert.rejects(
+      validateWorktreeBranchName(""),
       /Invalid branch name/
     );
     await assert.rejects(

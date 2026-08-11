@@ -24,7 +24,11 @@ import type {
   PreCondition,
   TerminalSettings,
 } from "@root/types/WebviewMessageTypes";
-import type { EndCondition, ErrorBehavior } from "@root/types/CtrlYokeTypes";
+import type {
+  EndCondition,
+  ErrorBehavior,
+  WorktreeConfig,
+} from "@root/types/CtrlYokeTypes";
 import { DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT } from "@root/types/CtrlYokeSettings";
 
 /**
@@ -151,6 +155,7 @@ export interface WorkflowProperties {
     allowedTools?: string[];
     deniedTools?: string[];
   } | null;
+  worktree?: WorktreeConfig;
 }
 
 /**

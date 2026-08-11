@@ -3859,7 +3859,8 @@ export class WorkflowInstance {
         state.workflowName ?? "",
         state.steps,
         undefined,
-        this.promptQueue.getWorkflowFile().finalStep
+        this.promptQueue.getWorkflowFile().finalStep,
+        this.promptQueue.getWorkflowFile().worktree
       ),
     };
   }

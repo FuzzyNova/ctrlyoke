@@ -16,7 +16,10 @@ import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
-import { STEP_TYPES } from "../types/DashboardConstants";
+import {
+  STEP_TYPES,
+  WORKFLOW_PROPERTY_KEYS,
+} from "../types/DashboardConstants";
 import { PromptFileResolver } from "./PromptFileResolver";
 
 export class PromptFileParser {
@@ -262,9 +265,11 @@ export class PromptFileParser {
       parsed.type === STEP_TYPES.SCRIPT &&
       typeof parsed.script === "string"
     ) {
-      return {
+      const promptFile: PromptFile = {
         steps: [this.buildScriptStep(parsed)],
       };
+      this.copyWorkflowLevelProperties(parsed, promptFile);
+      return promptFile;
     }
 
     // Handle single prompt format
@@ -339,7 +344,12 @@ export class PromptFileParser {
     parsed: any,
     promptFile: PromptFile
   ): void {
-    this.copyExecutionProperties(parsed, promptFile);
+    for (const key of WORKFLOW_PROPERTY_KEYS) {
+      const value = parsed[key];
+      if (value !== undefined) {
+        Object.assign(promptFile, { [key]: value });
+      }
+    }
     if (parsed.vars !== undefined) promptFile.vars = parsed.vars;
   }
 

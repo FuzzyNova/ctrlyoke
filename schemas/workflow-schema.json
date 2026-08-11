@@ -70,13 +70,16 @@
   "oneOf": [
     {
       "title": "Single Step",
-      "$ref": "#/definitions/workflowStep"
+      "$ref": "#/definitions/singleStepRoot"
     },
     {
       "title": "Multiple Steps (or Working File)",
       "allOf": [
         {
           "$ref": "#/definitions/executionProperties"
+        },
+        {
+          "$ref": "#/definitions/workflowOnlyProperties"
         },
         {
           "properties": {
@@ -200,6 +203,126 @@
           "description": "Render a text variable as a multiline input."
         }
       },
+      "additionalProperties": false
+    },
+    "worktreeConfig": {
+      "oneOf": [
+        {
+          "type": "boolean",
+          "const": false,
+          "description": "Explicitly run this workflow in the ordinary workspace."
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "description": "Named-worktree branch shorthand. The value must be a valid local Git branch name."
+        },
+        {
+          "type": "object",
+          "description": "Named worktree configuration.",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "const": "named"
+            },
+            "branch": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Local Git branch name for the named worktree."
+            },
+            "base": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Optional Git ref resolved to a commit when the worktree is created."
+            },
+            "setup": {
+              "type": "string",
+              "description": "Optional setup command run after a new named worktree is created."
+            }
+          },
+          "required": ["mode", "branch"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "workflowOnlyProperties": {
+      "type": "object",
+      "description": "Properties authored only at the workflow root.",
+      "properties": {
+        "worktree": {
+          "$ref": "#/definitions/worktreeConfig"
+        }
+      }
+    },
+    "singleStepRoot": {
+      "oneOf": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/definitions/promptStep"
+            },
+            {
+              "$ref": "#/definitions/workflowOnlyProperties"
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/definitions/rootScriptStep"
+            },
+            {
+              "$ref": "#/definitions/workflowOnlyProperties"
+            }
+          ]
+        }
+      ]
+    },
+    "rootScriptStep": {
+      "type": "object",
+      "description": "A top-level script workflow with workflow-only properties.",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/scriptStep/properties/type"
+        },
+        "name": {
+          "$ref": "#/definitions/scriptStep/properties/name"
+        },
+        "enabled": {
+          "$ref": "#/definitions/scriptStep/properties/enabled"
+        },
+        "executionMode": {
+          "$ref": "#/definitions/scriptStep/properties/executionMode"
+        },
+        "script": {
+          "$ref": "#/definitions/scriptStep/properties/script"
+        },
+        "compareSource": {
+          "$ref": "#/definitions/scriptStep/properties/compareSource"
+        },
+        "returns": {
+          "$ref": "#/definitions/scriptStep/properties/returns"
+        },
+        "timeout": {
+          "$ref": "#/definitions/scriptStep/properties/timeout"
+        },
+        "errorBehavior": {
+          "$ref": "#/definitions/scriptStep/properties/errorBehavior"
+        },
+        "onPass": {
+          "$ref": "#/definitions/scriptStep/properties/onPass"
+        },
+        "onFail": {
+          "$ref": "#/definitions/scriptStep/properties/onFail"
+        },
+        "_runtime": {
+          "$ref": "#/definitions/scriptStep/properties/_runtime"
+        },
+        "worktree": {
+          "$ref": "#/definitions/worktreeConfig"
+        }
+      },
+      "required": ["type", "script"],
       "additionalProperties": false
     },
     "workflowRunAddress": {
@@ -492,12 +615,22 @@
       }
     },
     "workflowStep": {
-      "oneOf": [
+      "allOf": [
         {
-          "$ref": "#/definitions/promptStep"
+          "oneOf": [
+            {
+              "$ref": "#/definitions/promptStep"
+            },
+            {
+              "$ref": "#/definitions/scriptStep"
+            }
+          ]
         },
         {
-          "$ref": "#/definitions/scriptStep"
+          "not": {
+            "type": "object",
+            "required": ["worktree"]
+          }
         }
       ]
     },
@@ -735,6 +868,12 @@
       "allOf": [
         {
           "$ref": "#/definitions/executionProperties"
+        },
+        {
+          "not": {
+            "type": "object",
+            "required": ["worktree"]
+          }
         },
         {
           "properties": {

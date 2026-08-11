@@ -1929,6 +1929,10 @@ schema.
 12. Implement `ExecutionRootLeaseManager` shared/exclusive leases in central
     common-directory storage. **Implemented.**
 13. Add named worktree schema forms, parser, loader, editor support, and runtime persistence.
+    - Authored-definition support for the named forms is implemented: root-only
+      schema validation, typed parsing/property persistence, and definition
+      revision snapshots. Settings defaults, named-worktree resolution, and the
+      editor/runtime surfaces remain part of the subsequent Phase 2 work.
     - Parser keeps an absent `worktree` absent rather than normalizing it to `false`.
     - Add `defaults.worktree` and user-scope-only `worktrees.root` to
       `schemas/settings-schema.json`, `CtrlYokeSettings`, the config service

@@ -6,23 +6,17 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
   PromptFile,
   EXECUTION_STATES,
-  EXECUTION_PROPERTY_KEYS,
 } from "../../types/CtrlYokeTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import { normalizeAgentSelection } from "../WorkflowStepSanitizer";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import { USER_FEEDBACK_SEVERITY } from "../../types/DashboardConstants";
 import {
+  WORKFLOW_PROPERTY_KEYS,
   STATUS_MESSAGE_SEVERITY,
 } from "../../types/DashboardConstants";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import { findMissingWorkflowAssetDirectories } from "../../utils/WorkflowAssetWarnings";
-
-const WORKFLOW_PROPERTY_KEYS = [
-  ...EXECUTION_PROPERTY_KEYS,
-  "vars",
-  "finalStep",
-] satisfies (keyof PromptFile)[];
 
 /**
  * PromptFileLoader
@@ -443,6 +437,13 @@ export class PromptFileLoader {
     const updates: Record<string, unknown> = {};
 
     for (const key of WORKFLOW_PROPERTY_KEYS) {
+      const value = promptFile[key];
+      if (value !== undefined) {
+        updates[key] = value;
+      }
+    }
+
+    for (const key of ["vars", "finalStep"] as const) {
       const value = promptFile[key];
       if (value !== undefined) {
         updates[key] = value;

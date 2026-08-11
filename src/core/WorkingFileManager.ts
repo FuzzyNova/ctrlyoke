@@ -490,7 +490,8 @@ export class WorkingFileManager {
         workingFile.workflowName ?? descriptor.workflowName,
         workingFile.steps ?? [],
         undefined,
-        workingFile.finalStep
+        workingFile.finalStep,
+        workingFile.worktree
       )
     );
     await WorkingFileManager.finalizeAllocatedRun(
@@ -634,7 +635,8 @@ export class WorkingFileManager {
         workingFile.workflowName ?? descriptor.workflowName,
         workingFile.steps ?? [],
         undefined,
-        workingFile.finalStep
+        workingFile.finalStep,
+        workingFile.worktree
       )
     );
     await WorkingFileManager.finalizeAllocatedRun(

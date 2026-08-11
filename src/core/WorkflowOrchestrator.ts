@@ -4319,7 +4319,8 @@ export class WorkflowOrchestrator {
           workingFile.workflowName ?? "",
           workingFile.steps ?? [],
           workingFile._runtime?.pendingRewind?.fromStepIndex,
-          workingFile.finalStep
+          workingFile.finalStep,
+          workingFile.worktree
         ),
       }
     );

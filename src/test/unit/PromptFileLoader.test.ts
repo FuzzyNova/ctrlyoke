@@ -12,7 +12,11 @@ import {
   PERMISSION_MODES,
 } from "../../types/DashboardConstants";
 import type { UserFeedback } from "../../core/UserFeedbackSink";
-import { WorkflowStep, isScriptStep } from "../../types/CtrlYokeTypes";
+import {
+  PromptFile,
+  WorkflowStep,
+  isScriptStep,
+} from "../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { analyzeWorkflowBundle } from "../../utils/WorkflowBundleAnalyzer";
@@ -54,6 +58,45 @@ suite("PromptFileLoader Tests", () => {
           message: "ctrlyoke: Failed to parse prompt file",
         },
       ]);
+    });
+  });
+
+  suite("workflow worktree property propagation", () => {
+    test("preserves each supported form in the working file", async () => {
+      const workspaceRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-worktree-loader-")
+      );
+      tempDirs.push(workspaceRoot);
+
+      const forms: PromptFile[] = [
+        { steps: [{ prompt: "prompt" }], worktree: false },
+        { steps: [{ prompt: "prompt" }], worktree: "feature/short" },
+        {
+          steps: [{ type: "script", script: "npm test" }],
+          worktree: {
+            mode: "named",
+            branch: "feature/object",
+            base: "HEAD",
+            setup: "npm ci",
+          },
+        },
+      ];
+
+      for (const [index, form] of forms.entries()) {
+        const queue = new PromptQueue();
+        const loader = new PromptFileLoader(new PromptFileParser(), queue);
+        const workingFilePath = await loader.loadFromMemory(
+          form,
+          `worktree-${index}`,
+          workspaceRoot
+        );
+
+        if (!workingFilePath) {
+          throw new Error("working file should be created");
+        }
+        const workingFile = await queue.readWorkingFile(workingFilePath);
+        assert.deepStrictEqual(workingFile.worktree, form.worktree);
+      }
     });
   });
 
