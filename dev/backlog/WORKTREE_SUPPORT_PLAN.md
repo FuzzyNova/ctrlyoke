@@ -1923,9 +1923,9 @@ schema.
 
 ### Phase 2 — Named worktrees and execution leases
 
-10. Consolidate Git identity helpers and implement NUL-delimited porcelain parsing.
+10. Consolidate Git identity helpers and implement NUL-delimited porcelain parsing. **Implemented.**
 11. Implement strict workspace eligibility, safe root resolution, and the
-    common-directory worktree-mutation lock.
+    common-directory worktree-mutation lock. **Implemented.**
 12. Implement `ExecutionRootLeaseManager` shared/exclusive leases in central
     common-directory storage.
 13. Add named worktree schema forms, parser, loader, editor support, and runtime persistence.

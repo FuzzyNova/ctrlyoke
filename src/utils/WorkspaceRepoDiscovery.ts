@@ -1,13 +1,9 @@
 import * as fs from "fs";
 import * as path from "path";
-import { execFile } from "child_process";
-import { promisify } from "util";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import type { WorkspaceRepo } from "../types/HostedWorkspaceViewerTypes";
 import { isPathWithinDirectory } from "./PathSecurity";
-
-const execFileAsync = promisify(execFile);
-const GIT_TIMEOUT_MS = 10_000;
+import { repoToplevel } from "./GitUtils";
 
 /**
  * Case-fold a path for identity comparison on case-insensitive filesystems
@@ -17,21 +13,6 @@ const GIT_TIMEOUT_MS = 10_000;
 function pathKey(p: string): string {
   const normalized = path.resolve(p);
   return process.platform === "win32" ? normalized.toLowerCase() : normalized;
-}
-
-/** Returns the git toplevel (realpath, as git reports it) for a directory, or null when it isn't in a repo. */
-async function gitToplevel(dir: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync(
-      "git",
-      ["-C", dir, "rev-parse", "--show-toplevel"],
-      { timeout: GIT_TIMEOUT_MS }
-    );
-    const top = stdout.trim();
-    return top ? path.normalize(top) : null;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -60,7 +41,7 @@ export async function discoverRepos(
   // `seen` afterward in the original root order so de-duplication (first root
   // wins for a shared toplevel) stays deterministic.
   const toplevels = await Promise.all(
-    executionRoots.map((root) => gitToplevel(root.fsPath))
+    executionRoots.map((root) => repoToplevel(root.fsPath))
   );
 
   executionRoots.forEach((root, i) => {

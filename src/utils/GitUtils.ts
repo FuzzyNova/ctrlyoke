@@ -1,9 +1,43 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
+import * as fs from "fs/promises";
+import type { ExecFileOptions } from "child_process";
 
-const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
+const GIT_MAX_BUFFER = 50 * 1024 * 1024;
+const execFilePromisified = promisify(execFile);
+
+/**
+ * Run git without involving a shell. The shared limits are intentional: Git
+ * output is often path-sized and must be bounded even when a repository has a
+ * very large number of worktrees or files.
+ */
+const execFileAsync = async (
+  file: string,
+  args: readonly string[],
+  options: ExecFileOptions = {}
+): Promise<{ stdout: string; stderr: string }> => {
+  const result = await execFilePromisified(file, args, {
+    timeout: GIT_TIMEOUT_MS,
+    maxBuffer: GIT_MAX_BUFFER,
+    ...options,
+  });
+  return {
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  };
+};
+
+export const GIT_COMMAND_TIMEOUT_MS = GIT_TIMEOUT_MS;
+export const GIT_COMMAND_MAX_BUFFER = GIT_MAX_BUFFER;
+
+async function execGit(
+  args: readonly string[],
+  options: ExecFileOptions = {}
+): Promise<{ stdout: string; stderr: string }> {
+  return execFileAsync("git", args, options);
+}
 
 export interface CommitInfo {
   hash: string; // full 40-char SHA
@@ -60,11 +94,9 @@ export async function getRecentCommits(
   }
   // Explicit ref must come after all options so git treats it as a revision.
   if (ref && ref.trim()) {
-    args.push(ref.trim());
+    args.push("--end-of-options", ref.trim());
   }
-  const { stdout } = await execFileAsync("git", args, {
-    timeout: GIT_TIMEOUT_MS,
-  });
+  const { stdout } = await execGit(args);
 
   return stdout
     .trim()
@@ -111,18 +143,15 @@ export async function getCommitInfo(
   workspaceRoot: string,
   hash: string
 ): Promise<CommitDetailInfo> {
-  const { stdout } = await execFileAsync(
-    "git",
-    [
-      "-C",
-      workspaceRoot,
-      "show",
-      "-s",
-      `--format=%H%x00%h%x00%s%x00%b%x00%an%x00%ae%x00%aI%x00%ar`,
-      hash,
-    ],
-    { timeout: GIT_TIMEOUT_MS }
-  );
+  const { stdout } = await execGit([
+    "-C",
+    workspaceRoot,
+    "show",
+    "-s",
+    `--format=%H%x00%h%x00%s%x00%b%x00%an%x00%ae%x00%aI%x00%ar`,
+    "--end-of-options",
+    hash,
+  ]);
 
   const parts = stdout.split("\0");
   const [
@@ -155,11 +184,15 @@ export async function getCommitDiff(
   workspaceRoot: string,
   hash: string
 ): Promise<string> {
-  const { stdout } = await execFileAsync(
-    "git",
-    ["-C", workspaceRoot, "show", "--stat", "-p", hash],
-    { timeout: GIT_TIMEOUT_MS }
-  );
+  const { stdout } = await execFileAsync("git", [
+    "-C",
+    workspaceRoot,
+    "show",
+    "--stat",
+    "-p",
+    "--end-of-options",
+    hash,
+  ]);
   return stdout;
 }
 
@@ -353,11 +386,14 @@ export async function gitRefExists(
     }
 
     if (/^[0-9a-f]{7,40}$/i.test(gitRef)) {
-      await execFileAsync(
-        "git",
-        ["-C", workspaceRoot, "cat-file", "-e", `${gitRef}^{commit}`],
-        { timeout: GIT_TIMEOUT_MS }
-      );
+      await execFileAsync("git", [
+        "-C",
+        workspaceRoot,
+        "cat-file",
+        "-e",
+        "--end-of-options",
+        `${gitRef}^{commit}`,
+      ]);
       return { exists: true };
     }
   } catch {
@@ -431,4 +467,331 @@ export async function getIgnoredEntryNames(
   } catch {
     return null;
   }
+}
+
+export interface GitWorktreeEntry {
+  worktreePath: string;
+  headCommit: string;
+  branchName?: string;
+  detached: boolean;
+  bare: boolean;
+  lockedReason?: string;
+  prunableReason?: string;
+}
+
+/** Return Git's repository toplevel, or null when dir is not in a repository. */
+export async function repoToplevel(dir: string): Promise<string | null> {
+  try {
+    const { stdout } = await execGit([
+      "-C",
+      dir,
+      "rev-parse",
+      "--show-toplevel",
+    ]);
+    const result = stdout.trim();
+    return result ? path.normalize(result) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Return the absolute administrative Git directory for the checkout. */
+export async function absoluteGitDir(dir: string): Promise<string | null> {
+  try {
+    const { stdout } = await execGit([
+      "-C",
+      dir,
+      "rev-parse",
+      "--absolute-git-dir",
+    ]);
+    const result = stdout.trim();
+    return result ? path.normalize(result) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Return the shared Git administrative directory. Git may print this as a
+ * path relative to the command cwd, so resolve it before normalization.
+ */
+export async function gitCommonDir(dir: string): Promise<string | null> {
+  try {
+    const { stdout } = await execGit([
+      "-C",
+      dir,
+      "rev-parse",
+      "--git-common-dir",
+    ]);
+    const result = stdout.trim();
+    if (!result) return null;
+    const resolved = path.isAbsolute(result) ? result : path.resolve(dir, result);
+    try {
+      return path.normalize(await fs.realpath(resolved));
+    } catch {
+      return path.normalize(resolved);
+    }
+  } catch {
+    return null;
+  }
+}
+
+/** Resolve a path in Git's administrative directory without using a shell. */
+export async function gitPath(
+  dir: string,
+  relativePath: string
+): Promise<string | null> {
+  if (
+    !relativePath ||
+    path.isAbsolute(relativePath) ||
+    relativePath.startsWith("-") ||
+    relativePath.includes("\0")
+  ) {
+    return null;
+  }
+  try {
+    const { stdout } = await execGit([
+      "-C",
+      dir,
+      "rev-parse",
+      "--git-path",
+      relativePath,
+    ]);
+    const result = stdout.trim();
+    if (!result) return null;
+    return path.normalize(
+      path.isAbsolute(result) ? result : path.resolve(dir, result)
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse `git worktree list --porcelain -z`. Each field is NUL-delimited and
+ * records end in an empty NUL field; no line-oriented parsing is involved.
+ */
+export function parseGitWorktreePorcelain(output: string): GitWorktreeEntry[] {
+  const entries: GitWorktreeEntry[] = [];
+  let fields: string[] = [];
+
+  const consume = (record: readonly string[]): void => {
+    if (record.length === 0) return;
+    let worktreePath: string | undefined;
+    let headCommit = "";
+    let branchName: string | undefined;
+    let detached = false;
+    let bare = false;
+    let lockedReason: string | undefined;
+    let prunableReason: string | undefined;
+
+    for (const field of record) {
+      if (field.startsWith("worktree ")) {
+        worktreePath = field.slice("worktree ".length);
+      } else if (field.startsWith("HEAD ")) {
+        headCommit = field.slice("HEAD ".length);
+      } else if (field.startsWith("branch ")) {
+        const ref = field.slice("branch ".length);
+        branchName = ref.startsWith("refs/heads/")
+          ? ref.slice("refs/heads/".length)
+          : ref;
+      } else if (field === "detached") {
+        detached = true;
+      } else if (field === "bare") {
+        bare = true;
+      } else if (field === "locked" || field.startsWith("locked ")) {
+        lockedReason = field.slice("locked".length).trim() || undefined;
+      } else if (field === "prunable" || field.startsWith("prunable ")) {
+        prunableReason = field.slice("prunable".length).trim() || undefined;
+      }
+    }
+
+    if (worktreePath && headCommit) {
+      entries.push({
+        worktreePath: path.normalize(worktreePath),
+        headCommit,
+        branchName,
+        detached,
+        bare,
+        lockedReason,
+        prunableReason,
+      });
+    }
+  };
+
+  for (const field of output.split("\0")) {
+    if (field === "") {
+      consume(fields);
+      fields = [];
+    } else {
+      fields.push(field);
+    }
+  }
+  consume(fields);
+  return entries;
+}
+
+export async function listWorktrees(
+  repoRoot: string
+): Promise<GitWorktreeEntry[]> {
+  const { stdout } = await execGit([
+    "-C",
+    repoRoot,
+    "worktree",
+    "list",
+    "--porcelain",
+    "-z",
+  ]);
+  return parseGitWorktreePorcelain(stdout);
+}
+
+export class GitWorktreeBranchCheckoutError extends Error {
+  public readonly branchName: string;
+  public readonly existingWorktreePath: string;
+
+  public constructor(branchName: string, existingWorktreePath: string) {
+    super(
+      `Branch "${branchName}" is already checked out at "${existingWorktreePath}".`
+    );
+    this.name = "GitWorktreeBranchCheckoutError";
+    this.branchName = branchName;
+    this.existingWorktreePath = existingWorktreePath;
+  }
+}
+
+export interface AddWorktreeOptions {
+  branchName?: string;
+  baseRef?: string;
+  createBranch?: boolean;
+  detached?: boolean;
+}
+
+function normalizeBranchName(branchName: string): string {
+  return branchName.startsWith("refs/heads/")
+    ? branchName.slice("refs/heads/".length)
+    : branchName;
+}
+
+/** Validate a local branch name using Git's own ref rules. */
+export async function validateBranchName(branchName: string): Promise<void> {
+  if (
+    !branchName ||
+    branchName.startsWith("-") ||
+    branchName.includes("\0") ||
+    branchName.includes("\\")
+  ) {
+    throw new Error(`Invalid branch name: ${branchName}`);
+  }
+  try {
+    await execGit(["check-ref-format", "--branch", branchName]);
+  } catch {
+    throw new Error(`Invalid branch name: ${branchName}`);
+  }
+}
+
+/** Add a worktree, surfacing an existing branch checkout before Git can emit a raw error. */
+export async function addWorktree(
+  repoRoot: string,
+  worktreePath: string,
+  options: AddWorktreeOptions = {}
+): Promise<void> {
+  const branchName = options.branchName
+    ? normalizeBranchName(options.branchName)
+    : undefined;
+  if (branchName) {
+    await validateBranchName(branchName);
+    const existing = (await listWorktrees(repoRoot)).find(
+      (entry) => entry.branchName === branchName
+    );
+    if (existing) {
+      throw new GitWorktreeBranchCheckoutError(
+        branchName,
+        existing.worktreePath
+      );
+    }
+  }
+
+  const args = ["-C", repoRoot, "worktree", "add"];
+  if (options.createBranch) {
+    if (!branchName) throw new Error("A branch is required when creating one.");
+    args.push("-b", branchName);
+  }
+  if (options.detached) args.push("--detach");
+  args.push("--", worktreePath);
+  if (options.baseRef) {
+    args.push(await resolveCommit(repoRoot, options.baseRef));
+  } else if (branchName && !options.createBranch) {
+    args.push(branchName);
+  }
+  await execGit(args);
+}
+
+export async function removeWorktree(
+  repoRoot: string,
+  worktreePath: string,
+  force = false
+): Promise<void> {
+  const args = ["-C", repoRoot, "worktree", "remove"];
+  if (force) args.push("--force");
+  args.push("--", worktreePath);
+  await execGit(args);
+}
+
+export async function pruneWorktrees(repoRoot: string): Promise<void> {
+  await execGit(["-C", repoRoot, "worktree", "prune"]);
+}
+
+export async function currentBranch(dir: string): Promise<string | null> {
+  try {
+    const { stdout } = await execGit([
+      "-C",
+      dir,
+      "symbolic-ref",
+      "--quiet",
+      "--short",
+      "HEAD",
+    ]);
+    const branch = stdout.trim();
+    return branch || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function resolveCommit(dir: string, ref: string): Promise<string> {
+  if (!ref || ref.includes("\0")) throw new Error("Invalid Git ref.");
+  const { stdout } = await execGit([
+    "-C",
+    dir,
+    "rev-parse",
+    "--verify",
+    "--end-of-options",
+    `${ref}^{commit}`,
+  ]);
+  const commit = stdout.trim();
+  if (!commit) throw new Error(`Git ref does not resolve to a commit: ${ref}`);
+  return commit;
+}
+
+export async function hasUncommittedChanges(dir: string): Promise<boolean> {
+  const { stdout } = await execGit([
+    "-C",
+    dir,
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+    "-z",
+  ]);
+  return stdout.length > 0;
+}
+
+/** Stage and commit all changes. Returns false when there is nothing to commit. */
+export async function commitAll(
+  dir: string,
+  message: string
+): Promise<boolean> {
+  if (!(await hasUncommittedChanges(dir))) return false;
+  await execGit(["-C", dir, "add", "--all", "--", "."]);
+  await execGit(["-C", dir, "commit", `--message=${message}`, "--"]);
+  return true;
 }

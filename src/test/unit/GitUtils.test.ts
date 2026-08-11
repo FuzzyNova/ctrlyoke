@@ -4,7 +4,21 @@ import * as os from "os";
 import * as path from "path";
 import { execFileSync } from "child_process";
 import { suite, test, setup, teardown } from "mocha";
-import { gitRefExists } from "../../utils/GitUtils";
+import {
+  gitRefExists,
+  parseGitWorktreePorcelain,
+  listWorktrees,
+  currentBranch,
+  resolveCommit,
+  hasUncommittedChanges,
+  commitAll,
+  addWorktree,
+  removeWorktree,
+  GitWorktreeBranchCheckoutError,
+  absoluteGitDir,
+  gitCommonDir,
+  gitPath,
+} from "../../utils/GitUtils";
 
 suite("GitUtils.gitRefExists", function () {
   // Setup shells out to real git (init/config/commit) via execFileSync.
@@ -124,5 +138,122 @@ suite("GitUtils.gitRefExists", function () {
       exists: false,
       message: "git context not found",
     });
+  });
+});
+
+suite("GitUtils worktree plumbing", function () {
+  this.timeout(10_000);
+
+  let workspaceRoot: string;
+
+  function runGit(args: string[]): string {
+    return execFileSync("git", args, {
+      cwd: workspaceRoot,
+      encoding: "utf8",
+      stdio: "pipe",
+    }).trim();
+  }
+
+  setup(async () => {
+    workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "fp-worktree-git-")
+    );
+    runGit(["init"]);
+    runGit(["config", "user.name", "ctrlyoke Tests"]);
+    runGit(["config", "user.email", "ctrlyoke-tests@example.com"]);
+    await fs.writeFile(path.join(workspaceRoot, "tracked.txt"), "base\n");
+    runGit(["add", "tracked.txt"]);
+    runGit(["commit", "-m", "Initial commit"]);
+  });
+
+  teardown(async () => {
+    await fs.rm(workspaceRoot, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 50,
+    });
+  });
+
+  test("parses NUL-delimited records without damaging awkward paths", () => {
+    const output =
+      "worktree C:/repo/space path/line\nname\0" +
+      "HEAD abc123\0branch refs/heads/feature/odd\0\0" +
+      "worktree /repo/detached\0HEAD def456\0detached\0locked held by user\0" +
+      "prunable missing\0\0";
+
+    assert.deepStrictEqual(parseGitWorktreePorcelain(output), [
+      {
+        worktreePath: path.normalize("C:/repo/space path/line\nname"),
+        headCommit: "abc123",
+        branchName: "feature/odd",
+        detached: false,
+        bare: false,
+        lockedReason: undefined,
+        prunableReason: undefined,
+      },
+      {
+        worktreePath: path.normalize("/repo/detached"),
+        headCommit: "def456",
+        branchName: undefined,
+        detached: true,
+        bare: false,
+        lockedReason: "held by user",
+        prunableReason: "missing",
+      },
+    ]);
+  });
+
+  test("lists the repository worktree and exposes branch identity", async () => {
+    const entries = await listWorktrees(workspaceRoot);
+    assert.strictEqual(entries.length, 1);
+    assert.ok(entries[0].branchName);
+    assert.strictEqual(
+      await currentBranch(workspaceRoot),
+      entries[0].branchName
+    );
+    assert.strictEqual((await resolveCommit(workspaceRoot, "HEAD")).length, 40);
+    assert.ok((await absoluteGitDir(workspaceRoot))?.endsWith(".git"));
+    assert.ok((await gitCommonDir(workspaceRoot))?.endsWith(".git"));
+    assert.ok(
+      (await gitPath(workspaceRoot, "HEAD"))?.endsWith(
+        ".git" + path.sep + "HEAD"
+      )
+    );
+  });
+
+  test("detects and commits changes through argv-only Git calls", async () => {
+    assert.strictEqual(await hasUncommittedChanges(workspaceRoot), false);
+    await fs.writeFile(path.join(workspaceRoot, "tracked.txt"), "changed\n");
+    assert.strictEqual(await hasUncommittedChanges(workspaceRoot), true);
+    assert.strictEqual(
+      await commitAll(workspaceRoot, "safe message; no shell"),
+      true
+    );
+    assert.strictEqual(await hasUncommittedChanges(workspaceRoot), false);
+  });
+
+  test("reports the existing checkout when a branch is already attached", async () => {
+    const attached = path.join(
+      path.dirname(workspaceRoot),
+      "attached-worktree"
+    );
+    await addWorktree(workspaceRoot, attached, {
+      branchName: "secondary",
+      createBranch: true,
+    });
+    await assert.rejects(
+      addWorktree(
+        workspaceRoot,
+        path.join(path.dirname(workspaceRoot), "duplicate"),
+        {
+          branchName: "secondary",
+        }
+      ),
+      (error: unknown) =>
+        error instanceof GitWorktreeBranchCheckoutError &&
+        error.existingWorktreePath === path.normalize(attached)
+    );
+    await removeWorktree(workspaceRoot, attached);
   });
 });
