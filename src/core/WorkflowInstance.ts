@@ -34,6 +34,7 @@ import {
   type WorkflowKey,
 } from "../types/CtrlYokeTypes";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
+import { HEARTBEAT_INTERVAL_MS } from "../utils/LockSafetyPrimitives";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { pathsEqual } from "../utils/PathCasing";
 import {
@@ -78,6 +79,10 @@ import {
 } from "../types/WorkflowContextTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
+import {
+  ExecutionRootLeaseManager,
+  type ExecutionLeaseHandle,
+} from "./orchestration/ExecutionRootLeaseManager";
 
 // Import orchestration classes
 import { PromptFileLoader } from "./orchestration/PromptFileLoader";
@@ -205,6 +210,8 @@ export class WorkflowInstance {
   private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
   /** Ownership token for the currently-held runner lock, if any (see WorkflowLockManager). */
   private currentLockOwnerToken: string | undefined;
+  /** Shared lease for the execution root used by this run. */
+  private executionLease: ExecutionLeaseHandle | undefined;
   /** The RunRef this instance is currently executing, if any. Distinct from any client's viewed run. */
   private executionRunRef: RunRef | undefined;
   private executionSettledPromise: Promise<void> = Promise.resolve();
@@ -3534,19 +3541,38 @@ export class WorkflowInstance {
         );
         throw err;
       }
-      // Heartbeat every 5 seconds
-      this.heartbeatInterval = setInterval(() => {
-        if (this.currentLockOwnerToken) {
-          WorkflowLockManager.updateHeartbeat(
-            lockWorkspaceRoot,
-            workflowKey,
-            this.currentLockOwnerToken
-          ).catch(() => {});
-        }
-      }, 5_000);
     }
 
     try {
+      if (workingFilePath && workflowKey && runRef && lockWorkspaceRoot) {
+        this.executionLease = await ExecutionRootLeaseManager.acquireLease({
+          mode: "shared-native",
+          pid: process.pid,
+          runner: isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE,
+          instanceId: this.id,
+          stateRoot: this.executionWorkspace.stateRoot,
+          executionRoot: this.executionWorkspace.executionRoot,
+          workflowKey,
+          runRef,
+        });
+      }
+
+      // Runner and execution leases share one heartbeat cadence. The lease is
+      // acquired after the lineage lock and released before it, preserving the
+      // global coordination order.
+      if (this.currentLockOwnerToken || this.executionLease) {
+        this.heartbeatInterval = setInterval(() => {
+          if (this.currentLockOwnerToken) {
+            WorkflowLockManager.updateHeartbeat(
+              lockWorkspaceRoot!,
+              workflowKey!,
+              this.currentLockOwnerToken
+            ).catch(() => {});
+          }
+          this.executionLease?.updateHeartbeat().catch(() => {});
+        }, HEARTBEAT_INTERVAL_MS);
+      }
+
       // Re-insert all live integrations saved from the previous run (inject mode with PTY
       // still alive) into executionIntegrations so createIntegrationForMode finds and returns
       // the correct one. This keeps each PTY connection and lastInteractiveContext intact,
@@ -3615,10 +3641,22 @@ export class WorkflowInstance {
 
       this.activeIntegration = undefined;
     } finally {
-      // Stop heartbeat and release the process lock
+      // Stop heartbeat and release persistent locks in reverse acquisition order.
       if (this.heartbeatInterval !== undefined) {
         clearInterval(this.heartbeatInterval);
         this.heartbeatInterval = undefined;
+      }
+      if (this.executionLease) {
+        const lease = this.executionLease;
+        this.executionLease = undefined;
+        await lease
+          .release()
+          .catch((err) =>
+            Log.warn(
+              `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to release execution lease:`,
+              err
+            )
+          );
       }
       if (workflowKey && lockWorkspaceRoot && this.currentLockOwnerToken) {
         const ownerToken = this.currentLockOwnerToken;

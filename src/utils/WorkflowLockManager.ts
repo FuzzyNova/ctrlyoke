@@ -1,5 +1,4 @@
 import * as fs from "fs";
-import * as crypto from "crypto";
 import * as path from "path";
 import {
   WorkflowRunnerLock,
@@ -16,17 +15,17 @@ import {
 import type { LockStatus } from "../types/DashboardConstants";
 import { Log } from "./Log";
 import * as WorkflowPaths from "./WorkflowPaths";
-import {
-  inspectWorkflowLock,
-  isProcessAlive as isPidAlive,
-  readWorkflowLock,
-} from "./WorkflowLockInspector";
+import { inspectWorkflowLock, readWorkflowLock } from "./WorkflowLockInspector";
 import { withFileLock } from "./FileLockUtils";
+import { generateOwnerToken, isOwnerStale } from "./LockSafetyPrimitives";
+
+export {
+  HEARTBEAT_INTERVAL_MS,
+  STALE_HEARTBEAT_MS,
+} from "./LockSafetyPrimitives";
 
 export type { LockStatus };
 
-/** Heartbeat staleness threshold in milliseconds (30 seconds) */
-const STALE_HEARTBEAT_MS = 30_000;
 const ACQUIRE_TIMEOUT_MS = 5_000;
 const ACQUIRE_RETRY_DELAY_MS = 50;
 
@@ -53,7 +52,7 @@ export class WorkflowLockManager {
 
   /** Generates a fresh per-acquire ownership token. */
   static generateOwnerToken(): string {
-    return crypto.randomUUID();
+    return generateOwnerToken();
   }
 
   /**
@@ -97,9 +96,7 @@ export class WorkflowLockManager {
             workflowKey
           );
           const stale =
-            !existing ||
-            !isPidAlive(existing.pid) ||
-            Date.now() - existing.lastHeartbeat > STALE_HEARTBEAT_MS;
+            !existing || isOwnerStale(existing.pid, existing.lastHeartbeat);
 
           if (stale) {
             await fs.promises.unlink(lockPath).catch((unlinkError) => {

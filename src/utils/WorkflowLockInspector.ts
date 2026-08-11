@@ -6,9 +6,9 @@ import {
   type LockStatus,
 } from "../types/DashboardConstants";
 import * as WorkflowPaths from "./WorkflowPaths";
+import { isOwnerStale } from "./LockSafetyPrimitives";
 
 /** Shared, Node-only runner-lock reader for CLI and MCP process boundaries. */
-const WORKFLOW_LOCK_STALE_HEARTBEAT_MS = 30_000;
 
 export async function readWorkflowLock(
   workspaceRoot: string,
@@ -32,10 +32,7 @@ export async function inspectWorkflowLock(
   const lock = await readWorkflowLock(workspaceRoot, workflowKey);
   if (!lock) return LOCK_STATUS.NONE;
 
-  if (
-    !isProcessAlive(lock.pid) ||
-    Date.now() - lock.lastHeartbeat > WORKFLOW_LOCK_STALE_HEARTBEAT_MS
-  ) {
+  if (isOwnerStale(lock.pid, lock.lastHeartbeat)) {
     return LOCK_STATUS.STALE;
   }
 
@@ -44,11 +41,4 @@ export async function inspectWorkflowLock(
     : LOCK_STATUS.ACTIVE_VSCODE;
 }
 
-export function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "EPERM";
-  }
-}
+export { isProcessAlive } from "./LockSafetyPrimitives";
