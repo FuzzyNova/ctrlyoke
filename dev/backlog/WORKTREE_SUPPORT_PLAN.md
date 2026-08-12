@@ -2061,9 +2061,12 @@ when the targeted directory has an incompatible lease.
     explicit reconciliation remains separate from activation.
 26. Enforce landed-run undo behavior in the backend coordinator and protocol.
     **Implemented.** The coordinator reuses the recorded execution-workspace
-    validation and refuses filesystem undo for settled managed runs with a
-    branch-preservation explanation; snapshot diffs and repository attribution
-    remain available, while the webview suppresses the unavailable controls.
+    validation and refuses filesystem undo for managed runs whose directory has
+    been removed, with a branch-preservation explanation; snapshot diffs and
+    repository attribution remain available, while the webview suppresses the
+    unavailable controls. The refusal keys on directory removal, not on
+    settlement, so a `keep: true` managed run keeps working undo — matching
+    Settled Decision 9 and the `keep`/undo note under _Settings Defaults_.
 
 Exit criterion: managed runs cannot lose uncommitted work on any ordinary
 completion/failure/cancellation path, and crash leftovers are discoverable.

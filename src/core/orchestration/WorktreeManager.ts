@@ -626,7 +626,7 @@ export class WorktreeManager {
           const landedRecord: ManagedWorktreeOwnershipRecord = {
             ...record,
             lifecycleState: "settled",
-            directoryState: keep ? "present" : "present",
+            directoryState: "present",
             branchState: "present",
             lastVerifiedBranchTip: finalTip,
             finalBranchTip: finalTip,
@@ -635,7 +635,7 @@ export class WorktreeManager {
           await this.persistRuntime({
             lifecycleState: "settled",
             landingOutcome: "landed",
-            directoryState: keep ? "present" : "present",
+            directoryState: "present",
             branchState: "present",
             finalBranchTip: finalTip,
             ...(changedFileCount !== undefined ? { changedFileCount } : {}),
@@ -766,15 +766,19 @@ export class WorktreeManager {
         );
         return { mergeOutcome: "merge-commit" };
       } catch (error) {
-        const conflictFiles = await this.mergeOperations.getUnmergedPaths(
-          info.sourceCheckoutRoot
-        ).catch(() => []);
+        const conflictFiles = await this.mergeOperations
+          .getUnmergedPaths(info.sourceCheckoutRoot)
+          .catch(() => []);
         const mergeInProgress = await hasGitOperationInProgress(
           info.sourceCheckoutRoot
         );
-        const failureMessage = error instanceof Error ? error.message : String(error);
+        const failureMessage =
+          error instanceof Error ? error.message : String(error);
         if (!mergeInProgress && conflictFiles.length === 0) {
-          return { mergeOutcome: "blocked", message: `Merge blocked: ${failureMessage}` };
+          return {
+            mergeOutcome: "blocked",
+            message: `Merge blocked: ${failureMessage}`,
+          };
         }
 
         try {
@@ -783,8 +787,7 @@ export class WorktreeManager {
           return {
             mergeOutcome: "abort-failed",
             conflictFiles,
-            message:
-              `Merge conflict abort failed: ${abortError instanceof Error ? abortError.message : String(abortError)}`,
+            message: `Merge conflict abort failed: ${abortError instanceof Error ? abortError.message : String(abortError)}`,
           };
         }
 
@@ -941,9 +944,7 @@ export class WorktreeManager {
         branchState: "present",
         branchName: info.branchName,
         ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
-        ...(mergeResult
-          ? { mergeOutcome: mergeResult.mergeOutcome }
-          : {}),
+        ...(mergeResult ? { mergeOutcome: mergeResult.mergeOutcome } : {}),
         ...(autoCommitted ? { autoCommitted: true } : {}),
         ...(changedFileCount !== undefined ? { changedFileCount } : {}),
         ...(mergeResult?.conflictFiles
@@ -1016,9 +1017,7 @@ export class WorktreeManager {
       branchState,
       branchName: info.branchName,
       ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
-      ...(mergeResult
-        ? { mergeOutcome: mergeResult.mergeOutcome }
-        : {}),
+      ...(mergeResult ? { mergeOutcome: mergeResult.mergeOutcome } : {}),
       ...(autoCommitted ? { autoCommitted: true } : {}),
       ...(changedFileCount !== undefined ? { changedFileCount } : {}),
       ...(mergeResult?.conflictFiles
@@ -1518,7 +1517,9 @@ export class WorktreeManager {
           ? { directoryState: record.directoryState }
           : {}),
         branchState,
-        ...(createdAt !== undefined ? { createdAt, ageMs: now - createdAt } : {}),
+        ...(createdAt !== undefined
+          ? { createdAt, ageMs: now - createdAt }
+          : {}),
         inUse,
         leaseOwners,
         stale: Boolean(entry.prunableReason),
@@ -1580,7 +1581,8 @@ export class WorktreeManager {
     const sourceRoot = await this.requireRepositoryRoot(sourceCheckoutRoot);
     const entries = await listGitWorktrees(sourceRoot);
     for (const entry of entries) {
-      if (!entry.branchName || pathsEqual(entry.worktreePath, sourceRoot)) continue;
+      if (!entry.branchName || pathsEqual(entry.worktreePath, sourceRoot))
+        continue;
       const label = await getBranchUpstream(sourceRoot, entry.branchName);
       if (!label) continue;
       try {
@@ -1619,7 +1621,9 @@ export class WorktreeManager {
           options.confirmed)) &&
       options.confirmed !== true
     ) {
-      throw new Error("This destructive worktree action requires confirmation.");
+      throw new Error(
+        "This destructive worktree action requires confirmation."
+      );
     }
     if (options.action === WORKTREE_MANAGEMENT_ACTIONS.PRUNE) {
       await pruneWorktrees(sourceRoot);
@@ -1639,11 +1643,15 @@ export class WorktreeManager {
             pathsEqual(candidate.worktreePath, options.worktreePath))
       );
       if (!record) {
-        throw new Error("Only a valid ctrlyoke ownership record can be changed.");
+        throw new Error(
+          "Only a valid ctrlyoke ownership record can be changed."
+        );
       }
       if (options.action === WORKTREE_MANAGEMENT_ACTIONS.REPAIR) {
         if (!pathsEqual(record.worktreePath, options.worktreePath ?? "")) {
-          throw new Error("Targeted repair must name the recorded worktree path.");
+          throw new Error(
+            "Targeted repair must name the recorded worktree path."
+          );
         }
         await repairWorktree(sourceRoot, record.worktreePath);
         return;
@@ -1670,7 +1678,10 @@ export class WorktreeManager {
         options.action === WORKTREE_MANAGEMENT_ACTIONS.REMOVE ||
         options.action === WORKTREE_MANAGEMENT_ACTIONS.FORCE_REMOVE
       ) {
-        if (!entry) throw new Error("The worktree admin entry is stale; repair it first.");
+        if (!entry)
+          throw new Error(
+            "The worktree admin entry is stale; repair it first."
+          );
         await removeWorktree(
           sourceRoot,
           record.worktreePath,
@@ -1701,7 +1712,9 @@ export class WorktreeManager {
           `refs/heads/${record.branchName}`
         );
         if (currentTip !== record.lastVerifiedBranchTip) {
-          throw new Error("The branch tip changed outside ctrlyoke; refusing cleanup.");
+          throw new Error(
+            "The branch tip changed outside ctrlyoke; refusing cleanup."
+          );
         }
         const eligible = await this.getBranchCleanupEligibility(
           sourceRoot,
@@ -2501,7 +2514,10 @@ export class WorktreeManager {
         `refs/heads/${record.branchName}`
       );
     } catch {
-      return { eligible: false, reason: "The recorded branch no longer exists." };
+      return {
+        eligible: false,
+        reason: "The recorded branch no longer exists.",
+      };
     }
     if (currentTip !== record.lastVerifiedBranchTip) {
       return {

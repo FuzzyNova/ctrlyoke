@@ -91,16 +91,19 @@ describe("RunSummaryBanner", () => {
     ["merge-commit", "✓ merged (merge commit)"],
     ["conflict", "⚠ merge conflict — branch preserved"],
     ["blocked", "⚠ merge blocked — source branch changed or checkout is dirty"],
-  ] as const)("renders the persisted %s merge outcome", (mergeOutcome, text) => {
-    renderBanner({
-      worktree: {
-        ...worktree,
-        mode: "managed",
-        mergeOutcome,
-      },
-    });
-    expect(screen.getByText(text, { exact: false })).toBeInTheDocument();
-  });
+  ] as const)(
+    "renders the persisted %s merge outcome",
+    (mergeOutcome, text) => {
+      renderBanner({
+        worktree: {
+          ...worktree,
+          mode: "managed",
+          mergeOutcome,
+        },
+      });
+      expect(screen.getByText(text, { exact: false })).toBeInTheDocument();
+    }
+  );
 
   it("sends Merge for a present landed managed run", () => {
     const address = {
@@ -218,7 +221,7 @@ describe("RunSummaryBanner", () => {
     );
   });
 
-  it("disables filesystem undo for settled managed runs while retaining diff actions", () => {
+  it("disables filesystem undo only once a managed directory is gone", () => {
     expect(isManagedWorktreeUndoUnavailable(worktree)).toBe(false);
     expect(
       isManagedWorktreeUndoUnavailable({
@@ -228,5 +231,14 @@ describe("RunSummaryBanner", () => {
         directoryState: "removed",
       })
     ).toBe(true);
+    // `keep: true` settles with the checkout still present, so undo survives.
+    expect(
+      isManagedWorktreeUndoUnavailable({
+        ...worktree,
+        mode: "managed",
+        lifecycleState: "settled",
+        directoryState: "present",
+      })
+    ).toBe(false);
   });
 });

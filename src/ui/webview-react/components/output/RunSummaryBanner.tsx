@@ -79,15 +79,15 @@ function formatWorktreeOutcome(
   }
 }
 
-/** Settled managed runs cannot restore files into a checkout that no longer owns them. */
+/**
+ * Managed runs lose filesystem undo when their directory goes away, not when they
+ * settle — a `keep: true` run settles with its checkout still present and stays
+ * undoable. Mirrors the backend guard in `UndoRedoCoordinator`.
+ */
 export function isManagedWorktreeUndoUnavailable(
   worktree: WorktreeRunProjection | undefined
 ): boolean {
-  return (
-    worktree?.mode === "managed" &&
-    (worktree.lifecycleState === "settled" ||
-      worktree.directoryState !== "present")
-  );
+  return worktree?.mode === "managed" && worktree.directoryState !== "present";
 }
 
 function formatDirectoryState(worktree: WorktreeRunProjection): string {

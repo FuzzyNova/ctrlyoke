@@ -261,16 +261,21 @@ export class UndoRedoCoordinator {
   private async validateRecordedWorktree(
     recorded: WorkingFileWorktreeRuntime
   ): Promise<UndoExecutionWorkspace> {
-    if (recorded.mode === "managed" && recorded.lifecycleState === "settled") {
+    // Settlement alone does not end undo — losing the directory does. A managed
+    // run with `keep: true` settles with its checkout still present, and content
+    // restore keeps working there (Settled Decision 9 disables undo on directory
+    // *removal*). Keying this on `lifecycleState === "settled"` would silently
+    // take undo away from the users who asked to keep the directory.
+    const directoryGone = recorded.directoryState !== "present";
+    if (recorded.mode === "managed" && directoryGone) {
       throw new Error(
-        "the managed worktree landed as a branch; filesystem undo is unavailable for the settled run (Git can show the recorded diff but cannot apply this undo)"
+        "the managed worktree landed as a branch; filesystem undo is unavailable once its directory is removed (Git can show the recorded diff but cannot apply this undo)"
       );
     }
     if (
-      recorded.directoryState !== "present" ||
+      directoryGone ||
       recorded.lifecycleState === "orphaned" ||
-      recorded.lifecycleState === "blocked" ||
-      recorded.lifecycleState === "settled"
+      recorded.lifecycleState === "blocked"
     ) {
       throw new Error("the recorded worktree is no longer an active checkout");
     }
