@@ -43,6 +43,7 @@ import {
   isPathWithinDirectory,
   isPathWithinAnyDirectory,
 } from "../utils/PathSecurity";
+import { runtimeTrustedRootRegistry } from "../utils/RuntimeTrustedRootRegistry";
 import {
   getRecentCommits,
   getWorkingTreeDiff,
@@ -191,9 +192,12 @@ export class HostedWorkspaceViewerService {
   }
 
   private get trustedRoots(): string[] {
-    return this.isMultiRoot
-      ? this.namedRoots.map((root) => path.resolve(root.fsPath))
-      : [path.resolve(this.workspaceRoot)];
+    return [
+      ...(this.isMultiRoot
+        ? this.namedRoots.map((root) => path.resolve(root.fsPath))
+        : [path.resolve(this.workspaceRoot)]),
+      ...runtimeTrustedRootRegistry.getRoots(),
+    ];
   }
 
   private get primaryRootName(): string {

@@ -20,6 +20,7 @@ import { isPathWithinDirectory } from "../../utils/PathSecurity";
 import { pathsEqual } from "../../utils/PathCasing";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { WorkspaceInitializer } from "./WorkspaceInitializer";
+import { ScriptProcessRunner } from "./ScriptProcessRunner";
 import {
   ExecutionRootLeaseManager,
   type ExecutionLeaseHandle,
@@ -33,6 +34,11 @@ import type {
   WorktreeResolution,
   WorkingFileWorktreeRuntimePatch,
 } from "../../types/CtrlYokeTypes";
+import { VarSubstitutor } from "../../utils/VarSubstitutor";
+import {
+  runtimeTrustedRootRegistry,
+  type RuntimeTrustedRootHandle,
+} from "../../utils/RuntimeTrustedRootRegistry";
 
 export type WorktreeMode = "managed" | "named";
 export type WorktreeManagerMode = WorktreeMode;
@@ -57,6 +63,9 @@ export interface WorktreeInfo {
   dirty: boolean;
   /** The exclusive lease held for the lifetime of this resolved run. */
   lease: ExecutionLeaseHandle;
+  /** Process-session trust held while this worktree remains discoverable. */
+  runtimeTrust: RuntimeTrustedRootHandle;
+  setupOutcome?: "pending" | "running" | "succeeded" | "failed";
 }
 
 export interface WorktreeManagerOptions {
@@ -92,6 +101,24 @@ export interface ResolveNamedWorktreeOptions {
   instanceId?: string;
   /** Authored/default selection to retain on the execution workspace. */
   worktree?: WorktreeResolution;
+  /** Setup is automatically attempted only for a newly created checkout. */
+  setup?: string;
+  /** Workflow vars are exported as CTRLYOKE_VAR_* by the shared runner. */
+  vars?: Record<string, string>;
+  /** Explicit user action to retry a pending/running/failed setup. */
+  retrySetup?: boolean;
+  /** Setup outcome restored from the addressed working file. */
+  existingSetupOutcome?: "pending" | "running" | "succeeded" | "failed";
+}
+
+export class WorktreeSetupError extends Error {
+  readonly worktreePath: string;
+
+  constructor(worktreePath: string, cause: unknown) {
+    super(`Worktree setup failed in ${worktreePath}: ${cause}`);
+    this.name = "WorktreeSetupError";
+    this.worktreePath = worktreePath;
+  }
 }
 
 interface ResolvedRepositoryInputs {
@@ -286,6 +313,15 @@ export class WorktreeManager {
     if (!worktreePath) {
       throw new Error(`Named worktree "${branchName}" could not be resolved.`);
     }
+    if (
+      options.existingSetupOutcome &&
+      options.existingSetupOutcome !== "succeeded" &&
+      !options.retrySetup
+    ) {
+      throw new Error(
+        `Named worktree setup is ${options.existingSetupOutcome}; use Retry Setup to run it explicitly.`
+      );
+    }
     const executionCheckoutRoot = worktreePath;
     await WorkspaceInitializer.initializeIfNeeded(executionCheckoutRoot);
     const dirty = await hasUncommittedChanges(executionCheckoutRoot);
@@ -326,6 +362,60 @@ export class WorktreeManager {
       instanceId: options.instanceId ?? crypto.randomUUID(),
     });
 
+    let runtimeTrust: RuntimeTrustedRootHandle;
+    try {
+      runtimeTrust = await runtimeTrustedRootRegistry.register({
+        rootPath: executionCheckoutRoot,
+        repositoryRoot: sourceCheckoutRoot,
+        ownerToken: options.instanceId,
+      });
+    } catch (error) {
+      await lease.release();
+      throw error;
+    }
+
+    const shouldRunSetup =
+      Boolean(options.setup?.trim()) &&
+      (origin === "created" || options.retrySetup === true);
+    let setupOutcome: WorktreeInfo["setupOutcome"];
+    if (shouldRunSetup) {
+      setupOutcome = "pending";
+      await this.persistRuntime({
+        lifecycleState: "provisioning",
+        directoryState: "present",
+        branchState: "present",
+        setupOutcome,
+        updatedAt: this.now(),
+      });
+      try {
+        setupOutcome = "running";
+        await this.persistRuntime({
+          lifecycleState: "provisioning",
+          directoryState: "present",
+          branchState: "present",
+          setupOutcome,
+          updatedAt: this.now(),
+        });
+        await this.runSetup(executionCheckoutRoot, options.setup!, options.vars);
+        setupOutcome = "succeeded";
+      } catch (error) {
+        setupOutcome = "failed";
+        await this.persistRuntime({
+          lifecycleState: "blocked",
+          directoryState: "present",
+          branchState: "present",
+          setupOutcome,
+          dirty: await hasUncommittedChanges(executionCheckoutRoot).catch(
+            () => undefined
+          ),
+          updatedAt: this.now(),
+        });
+        runtimeTrust.release();
+        await lease.release();
+        throw new WorktreeSetupError(executionCheckoutRoot, error);
+      }
+    }
+
     const info: WorktreeInfo = {
       mode: "named",
       origin,
@@ -340,6 +430,8 @@ export class WorktreeManager {
       executionWorkspace,
       dirty,
       lease,
+      runtimeTrust,
+      setupOutcome,
     };
 
     await this.persistRuntime({
@@ -354,13 +446,55 @@ export class WorktreeManager {
       branchState: "present",
       baseCommit,
       dirty,
+      ...(setupOutcome ? { setupOutcome } : {}),
     });
     return info;
+  }
+
+  /** Explicit user action for a previously blocked or interrupted setup. */
+  public async retrySetup(
+    options: ResolveNamedWorktreeOptions
+  ): Promise<WorktreeInfo> {
+    if (!options.setup?.trim()) {
+      throw new Error("Retry Setup requires a configured setup command.");
+    }
+    return this.resolveNamedWorktree({ ...options, retrySetup: true });
   }
 
   /** Release the lease held by a resolved worktree. No Git cleanup is performed. */
   public async releaseWorktree(info: WorktreeInfo): Promise<void> {
     await info.lease.release();
+  }
+
+  /** Release process-session trust after the run/session is no longer loaded. */
+  public releaseRuntimeTrust(info: WorktreeInfo): void {
+    info.runtimeTrust.release();
+  }
+
+  private async runSetup(
+    executionRoot: string,
+    setup: string,
+    vars?: Record<string, string>
+  ): Promise<void> {
+    const command = VarSubstitutor.substitute(setup, vars ?? {});
+    const runner = new ScriptProcessRunner(executionRoot);
+    try {
+      const result = await runner.run({
+        cwd: executionRoot,
+        timeout: ConfigurationUtils.getScriptTimeoutMs(),
+        argv: [command],
+        vars,
+        viaShell: true,
+      });
+      if (!result.success) {
+        throw new Error(
+          result.error ||
+            `Setup exited with code ${result.exitCode ?? "unknown"}`
+        );
+      }
+    } finally {
+      runner.dispose();
+    }
   }
 
   private async requireRepositoryRoot(sourceCheckoutRoot: string): Promise<string> {

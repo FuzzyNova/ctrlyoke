@@ -1950,18 +1950,20 @@ schema.
       settings section holding `worktrees.root`. No tab-badge work.
     - Add the `WorkflowStatus` worktree indicator and the `RunSummaryBanner`
       worktree projection.
-14. Implement named discovery/create/setup plus explicit failed-setup retry. **Resolution
-    half implemented.** Named discovery/create/attach, source-checkout rejection,
-    execution-root remapping, trust-overlap preflight, exclusive lease acquisition,
-    dirty-state reporting, runtime provisioning/ready persistence, and
-    `.ctrlyoke/.gitignore` seeding are implemented in `WorktreeManager`. Setup,
-    explicit failed-setup retry, and the remaining execution integration stay
-    pending for the next step. Seed `.ctrlyoke/.gitignore` via
-    `WorkspaceInitializer.initializeIfNeeded(executionRoot)` at the single
-    create/attach site here, before the first setup or harness write. Named mode
-    never auto-commits, so seeding is not yet load-bearing, but the call site is
-    shared with managed mode and belongs with the code that creates the directory.
-15. Add runtime trusted-root registration.
+14. Implement named discovery/create/setup plus explicit failed-setup retry. **Named
+    setup and execution integration implemented.** Named discovery/create/attach,
+    source-checkout rejection, execution-root remapping, trust-overlap preflight,
+    exclusive lease acquisition, dirty-state reporting, runtime provisioning/ready
+    persistence, `.ctrlyoke/.gitignore` seeding, shared-runner setup, persisted
+    at-most-once outcomes, explicit retry, blocked-state recovery, and terminal
+    integration disposal are implemented in `WorktreeManager`/`WorkflowInstance`.
+    Managed lifecycle creation/finalization remains Phase 3 work. Seed
+    `.ctrlyoke/.gitignore` via `WorkspaceInitializer.initializeIfNeeded(executionRoot)`
+    at the single create/attach site before the first setup or harness write.
+15. Add runtime trusted-root registration. **Implemented.** The process-session
+    owner-token/ref-counted registry validates Git identity, is used by backend/UI
+    file-access roots, and is deliberately excluded from harness `--add-dir`
+    assembly and `ExternalRootsTrustStore`.
 16. Route snapshots, hosted repo attribution, and backend-resolved undo through the execution
     workspace.
 17. Verify all providers, including Claude/Qwen session logs and strict terminal cleanup.

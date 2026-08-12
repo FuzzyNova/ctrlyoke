@@ -28,7 +28,6 @@ import {
   WorkflowAttemptTransition,
   WorkflowRuntimeTransition,
   WorkflowSummary,
-  WorkflowRunnerLock,
   DynamicQueueConfig,
   type RunRef,
   type WorkflowKey,
@@ -84,6 +83,10 @@ import {
   ExecutionRootLeaseManager,
   type ExecutionLeaseHandle,
 } from "./orchestration/ExecutionRootLeaseManager";
+import {
+  WorktreeManager,
+  type WorktreeInfo,
+} from "./orchestration/WorktreeManager";
 
 // Import orchestration classes
 import { PromptFileLoader } from "./orchestration/PromptFileLoader";
@@ -169,13 +172,14 @@ export class WorkflowInstance {
   // ─────────────────────────────────────────────────────────────────────────
   readonly promptFileParser: PromptFileParser;
   readonly promptQueue: PromptQueue;
-  readonly workflowExecutor: WorkflowExecutor;
+  workflowExecutor: WorkflowExecutor;
   private readonly workflowRuntime: WorkflowStateMachine;
   /** Currently-executing integration (set for the duration of startWorkflowExecution) */
   activeIntegration?: HarnessIntegration;
   /** Immutable state/execution roots captured when this instance is created. */
-  private readonly executionWorkspace: ExecutionWorkspace;
-  private readonly executionWorkspaceIdentity: string;
+  private executionWorkspace: ExecutionWorkspace;
+  private readonly defaultExecutionWorkspace: ExecutionWorkspace;
+  private executionWorkspaceIdentity: string;
   /** Worktree selection resolved for the current run, including its origin. */
   private worktreeResolution: WorkspaceWorktreeResolution = {
     origin: "default",
@@ -189,8 +193,10 @@ export class WorkflowInstance {
       identity === undefined || identity === this.executionWorkspaceIdentity
     );
   }
-  private readonly endConditionEvaluator: EndConditionEvaluator;
-  private readonly endConditionHandler: EndConditionHandler;
+  private endConditionEvaluator: EndConditionEvaluator;
+  private endConditionHandler: EndConditionHandler;
+  private readonly worktreeManager: WorktreeManager;
+  private activeWorktree: WorktreeInfo | undefined;
 
   /** Reference to the loaded source prompt file */
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
@@ -426,12 +432,17 @@ export class WorkflowInstance {
     );
     this.workflowRuntime = new WorkflowStateMachine();
     this.promptQueue = new PromptQueue(this.workflowRuntime);
+    this.worktreeManager = new WorktreeManager({
+      updateWorktreeRuntime: (patch) =>
+        this.promptQueue.updateWorktreeRuntime(patch),
+    });
 
     const resolvedWorkspacePath =
       workspaceFolderPath ?? this.platform.getWorkspaceRoot();
     const executionWorkspace: ExecutionWorkspace =
       createNoWorktreeExecutionWorkspace(this.platform, resolvedWorkspacePath);
     this.executionWorkspace = executionWorkspace;
+    this.defaultExecutionWorkspace = executionWorkspace;
     this.executionWorkspaceIdentity =
       getExecutionWorkspaceIdentity(executionWorkspace);
     this.outputHistoryManager = new OutputHistoryManager(resolvedWorkspacePath);
@@ -510,6 +521,23 @@ export class WorkflowInstance {
   /** Resolved worktree selection for the current execution attempt. */
   getWorktreeResolution(): WorkspaceWorktreeResolution {
     return this.worktreeResolution;
+  }
+
+  /** Explicit Retry Setup action; automatic execution never sets this flag. */
+  async retryWorktreeSetup(): Promise<void> {
+    if (!this.worktreeResolution.config?.setup?.trim()) {
+      throw new Error("No worktree setup command is configured.");
+    }
+    await this.ensureRunnerLock(this.promptQueue.getState().workingFilePath);
+    try {
+      await this.prepareExecutionWorktree(true);
+      if (this.activeWorktree) {
+        await this.worktreeManager.releaseWorktree(this.activeWorktree);
+        this.executionLease = undefined;
+      }
+    } finally {
+      await this.releaseRunnerLock();
+    }
   }
 
   private async analyzeWorkflowCompatibility(
@@ -752,6 +780,10 @@ export class WorkflowInstance {
       integration.dispose();
     }
     this.liveInjectIntegrations.clear();
+    if (this.activeWorktree) {
+      this.worktreeManager.releaseRuntimeTrust(this.activeWorktree);
+      this.activeWorktree = undefined;
+    }
   }
 
   /**
@@ -795,17 +827,23 @@ export class WorkflowInstance {
    */
   async shutdown(): Promise<void> {
     const status = this.workflowRuntime.status;
+    const preservePausedWorktree =
+      Boolean(this.executionWorkspace.worktree) &&
+      (status === EXECUTION_STATES.PAUSED ||
+        status === EXECUTION_STATES.PAUSING);
     if (
       status === EXECUTION_STATES.RUNNING ||
       status === EXECUTION_STATES.PAUSING ||
       status === EXECUTION_STATES.PAUSED
     ) {
-      await this.stop().catch((error) =>
-        Log.warn(
-          `[inst:${this.id.slice(0, 8)}] Failed to request stop during shutdown:`,
-          error
-        )
-      );
+      if (!preservePausedWorktree) {
+        await this.stop().catch((error) =>
+          Log.warn(
+            `[inst:${this.id.slice(0, 8)}] Failed to request stop during shutdown:`,
+            error
+          )
+        );
+      }
     }
 
     await this.flushDurableState();
@@ -1555,9 +1593,6 @@ export class WorkflowInstance {
         await this.closeRetainedTerminalsForFreshRun();
       }
 
-      // Create the execution integration only after passing pre-flight checks.
-      const integration = this.createIntegrationForMode(modeOverride);
-
       if (!continueFromCurrent && !isAppendContinuation) {
         if (isRestartFromBeginning) {
           Log.debug(
@@ -1734,6 +1769,15 @@ export class WorkflowInstance {
         );
       }
 
+      // The runner lock must precede any worktree discovery or mutation. The
+      // same lock is reused by startWorkflowExecution below.
+      await this.ensureRunnerLock(workingFilePath);
+      await this.prepareExecutionWorktree();
+
+      // Create the execution integration only after the execution workspace
+      // has been remapped to the resolved worktree.
+      const integration = this.createIntegrationForMode(modeOverride);
+
       if (this.dashboardSink && totalSteps > 0) {
         if (continueFromCurrent || isIdleContinuation) {
           const currentIndex = currentQueueState.currentIndex;
@@ -1857,6 +1901,14 @@ export class WorkflowInstance {
       this.promptQueue.finalizeFailedInFlightPrompt();
       this.workflowRuntime.fail();
       await this.promptQueue.commitRuntimeTransition();
+      // Setup can fail before startWorkflowExecution enters its finally block;
+      // release the lineage lock here so the blocked worktree can be retried
+      // explicitly by the user.
+      if (!this.startPending) {
+        await this.releaseRunnerLock().catch((lockError) =>
+          Log.warn("Failed to release runner lock after setup failure:", lockError)
+        );
+      }
       // Finalize the history run if it was initialized before the error occurred
       // (errors thrown between initializeRun and startWorkflowExecution; the latter
       // has its own finally block that handles finalization for errors within execution).
@@ -3508,6 +3560,128 @@ export class WorkflowInstance {
     return integration;
   }
 
+  private async configureExecutionWorkspace(
+    executionWorkspace: ExecutionWorkspace
+  ): Promise<void> {
+    const identity = getExecutionWorkspaceIdentity(executionWorkspace);
+    if (identity === this.executionWorkspaceIdentity) return;
+
+    this.endConditionEvaluator.dispose();
+    this.executionWorkspace = executionWorkspace;
+    this.executionWorkspaceIdentity = identity;
+    this.endConditionEvaluator = new EndConditionEvaluator(
+      this.platform,
+      executionWorkspace
+    );
+    this.endConditionHandler = new EndConditionHandler(
+      this.endConditionEvaluator,
+      this.promptQueue,
+      () => this.dashboardSink,
+      this.userFeedbackSink
+    );
+    this.workflowExecutor = new WorkflowExecutor(
+      this.promptQueue,
+      this.endConditionHandler,
+      this.endConditionEvaluator,
+      this.platform,
+      this.userFeedbackSink
+    );
+  }
+
+  private async prepareExecutionWorktree(retrySetup = false): Promise<void> {
+    const config = this.worktreeResolution.config;
+    if (!config) {
+      await this.configureExecutionWorkspace(this.defaultExecutionWorkspace);
+      return;
+    }
+    if (config.mode !== "named" || !config.branch) {
+      throw new Error("Managed worktree execution is not available yet.");
+    }
+
+    if (this.activeWorktree && this.executionLease) {
+      await this.configureExecutionWorkspace(
+        this.activeWorktree.executionWorkspace
+      );
+      return;
+    }
+
+    const state = this.promptQueue.getState();
+    const sourceCheckoutRoot =
+      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    if (!sourceCheckoutRoot || !state.workflowKey || !state.runRef) {
+      throw new Error(
+        "Named worktree execution requires a promoted workflow run and Git workspace."
+      );
+    }
+
+    const existingSetupOutcome = this.promptQueue.getState().workingFilePath
+      ? (await this.promptQueue.readWorkingFile(
+          this.promptQueue.getState().workingFilePath!
+        ))._runtime?.worktree?.setupOutcome
+      : undefined;
+
+    const info = await this.worktreeManager.resolveNamedWorktree({
+      sourceCheckoutRoot,
+      branchName: config.branch,
+      base: config.base,
+      stateRoot: this.executionWorkspace.stateRoot,
+      workspaceRoots: this.platform.getWorkspaceRoots(),
+      namedWorkspaceRoots: this.platform.getNamedWorkspaceRoots(),
+      approvedExternalRoots: this.executionWorkspace.approvedExternalRoots,
+      workflowKey: state.workflowKey,
+      runRef: state.runRef,
+      runner: isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE,
+      instanceId: this.id,
+      worktree: this.worktreeResolution,
+      setup: config.setup,
+      vars: this.promptQueue.getWorkflowFile().vars,
+      existingSetupOutcome,
+      retrySetup,
+    });
+    if (this.activeWorktree) {
+      this.worktreeManager.releaseRuntimeTrust(this.activeWorktree);
+    }
+    this.activeWorktree = info;
+    this.executionLease = info.lease;
+    await this.configureExecutionWorkspace(info.executionWorkspace);
+  }
+
+  private async ensureRunnerLock(workingFilePath?: string): Promise<void> {
+    if (this.currentLockOwnerToken) return;
+    const state = this.promptQueue.getState();
+    const lockWorkspaceRoot =
+      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    if (!workingFilePath || !state.workflowKey || !state.runRef || !lockWorkspaceRoot) {
+      return;
+    }
+    const ownerToken = WorkflowLockManager.generateOwnerToken();
+    await WorkflowLockManager.acquireLock(lockWorkspaceRoot, state.workflowKey, {
+      workflowKey: state.workflowKey,
+      runRef: state.runRef,
+      runner: isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE,
+      pid: process.pid,
+      ownerToken,
+      instanceId: this.id,
+      startedAt: Date.now(),
+      lastHeartbeat: Date.now(),
+    });
+    this.currentLockOwnerToken = ownerToken;
+  }
+
+  private async releaseRunnerLock(): Promise<void> {
+    const state = this.promptQueue.getState();
+    const lockWorkspaceRoot =
+      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    const ownerToken = this.currentLockOwnerToken;
+    if (!lockWorkspaceRoot || !state.workflowKey || !ownerToken) return;
+    this.currentLockOwnerToken = undefined;
+    await WorkflowLockManager.releaseLock(
+      lockWorkspaceRoot,
+      state.workflowKey,
+      ownerToken
+    );
+  }
+
   private async startWorkflowExecution(
     integration?: HarnessIntegration,
     historyFilePath = this.resolveHistoryFilePath(),
@@ -3539,51 +3713,21 @@ export class WorkflowInstance {
     }
     this.lastRunIntegrations = [];
 
-    // Acquire process lock so the runner can be identified and stale-lock
-    // detection works correctly on next startup.
-    // In CLI mode the CLI process is the runner — write "cli" rather than
-    // "vscode" so the VS Code extension detects the lock and registers a
-    // CliWatchSession.  Use isCli() rather than checking dashboardSink so a
-    // future TUI dashboard implementation doesn't accidentally flip the value.
     const workflowKey = this.promptQueue.getState().workflowKey;
     const runRef = this.promptQueue.getState().runRef;
     this.executionRunRef = runRef;
     const lockWorkspaceRoot =
       this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
-    if (workingFilePath && workflowKey && runRef && lockWorkspaceRoot) {
-      const runner = isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE;
-      const ownerToken = WorkflowLockManager.generateOwnerToken();
-      const lock: WorkflowRunnerLock = {
-        workflowKey,
-        runRef,
-        runner,
-        pid: process.pid,
-        ownerToken,
-        instanceId: this.id,
-        startedAt: Date.now(),
-        lastHeartbeat: Date.now(),
-      };
-      Log.debug(
-        `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: acquiring ${runner} lock for "${workflowKey}"`
-      );
-      try {
-        await WorkflowLockManager.acquireLock(
-          lockWorkspaceRoot,
-          workflowKey,
-          lock
-        );
-        this.currentLockOwnerToken = ownerToken;
-      } catch (err) {
-        Log.warn(
-          `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to acquire lock:`,
-          err
-        );
-        throw err;
-      }
-    }
 
     try {
-      if (workingFilePath && workflowKey && runRef && lockWorkspaceRoot) {
+      await this.ensureRunnerLock(workingFilePath);
+      if (
+        workingFilePath &&
+        workflowKey &&
+        runRef &&
+        lockWorkspaceRoot &&
+        !this.executionLease
+      ) {
         this.executionLease = await ExecutionRootLeaseManager.acquireLease({
           mode: "shared-native",
           pid: process.pid,
@@ -3680,38 +3824,15 @@ export class WorkflowInstance {
 
       this.activeIntegration = undefined;
     } finally {
-      // Stop heartbeat and release persistent locks in reverse acquisition order.
-      if (this.heartbeatInterval !== undefined) {
-        clearInterval(this.heartbeatInterval);
-        this.heartbeatInterval = undefined;
-      }
-      if (this.executionLease) {
-        const lease = this.executionLease;
-        this.executionLease = undefined;
-        await lease
-          .release()
-          .catch((err) =>
-            Log.warn(
-              `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to release execution lease:`,
-              err
-            )
-          );
-      }
-      if (workflowKey && lockWorkspaceRoot && this.currentLockOwnerToken) {
-        const ownerToken = this.currentLockOwnerToken;
-        this.currentLockOwnerToken = undefined;
-        await WorkflowLockManager.releaseLock(
-          lockWorkspaceRoot,
-          workflowKey,
-          ownerToken
-        ).catch((err) =>
-          Log.warn(
-            `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to release lock:`,
-            err
-          )
-        );
-      }
+      const paused =
+        this.workflowRuntime.status === EXECUTION_STATES.PAUSED ||
+        this.workflowRuntime.status === EXECUTION_STATES.PAUSING;
+      const preserveWorktreeReservation =
+        paused && Boolean(this.executionWorkspace.worktree);
 
+      // Pause is not terminal for a worktree run. Keep the runner lock, the
+      // exclusive lease, and their heartbeat until the loaded instance resumes
+      // or the process dies and stale-lock recovery takes over.
       // Dispose all execution integrations created for this run, unless they have
       // a live PTY with inject context — those are saved to liveInjectIntegrations
       // so the next run can reuse them without re-spawning.
@@ -3726,8 +3847,10 @@ export class WorkflowInstance {
         execIntegration,
       ] of this.executionIntegrations.entries()) {
         const retainIntegration =
-          execIntegration.canReuseForInject() ||
-          execIntegration.shouldPersistForSessionActivity();
+          preserveWorktreeReservation ||
+          (!this.executionWorkspace.worktree &&
+            (execIntegration.canReuseForInject() ||
+              execIntegration.shouldPersistForSessionActivity()));
         if (retainIntegration) {
           // Either the PTY is still alive with inject context set (CLI), or the
           // integration wants to stay alive for its own post-completion session
@@ -3780,6 +3903,46 @@ export class WorkflowInstance {
         }
       }
       this.executionIntegrations.clear();
+
+      // A worktree lease is released only after every process, watcher,
+      // sidecar, and workspace artifact owned by the run is gone. Otherwise a
+      // retained integration could still mutate a directory after its lease
+      // was handed to another run.
+      if (!preserveWorktreeReservation && this.heartbeatInterval !== undefined) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = undefined;
+      }
+      if (!preserveWorktreeReservation && this.executionLease) {
+        const lease = this.executionLease;
+        this.executionLease = undefined;
+        await lease
+          .release()
+          .catch((err) =>
+            Log.warn(
+              `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to release execution lease:`,
+              err
+            )
+          );
+      }
+      if (
+        !preserveWorktreeReservation &&
+        workflowKey &&
+        lockWorkspaceRoot &&
+        this.currentLockOwnerToken
+      ) {
+        const ownerToken = this.currentLockOwnerToken;
+        this.currentLockOwnerToken = undefined;
+        await WorkflowLockManager.releaseLock(
+          lockWorkspaceRoot,
+          workflowKey,
+          ownerToken
+        ).catch((err) =>
+          Log.warn(
+            `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to release lock:`,
+            err
+          )
+        );
+      }
 
       await this.pendingRuntimeTransitionHistoryWrite;
 

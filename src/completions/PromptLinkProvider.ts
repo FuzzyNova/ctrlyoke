@@ -18,6 +18,7 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import type { FileOpenTarget } from "../ui/ExternalFileTrustPrompt";
 import { PromptFileResolver } from "../core/PromptFileResolver";
+import { runtimeTrustedRootRegistry } from "../utils/RuntimeTrustedRootRegistry";
 
 /**
  * Provides clickable links for ctrlyoke context references
@@ -83,7 +84,10 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     }
 
     const namedRoots = getVsCodeNamedWorkspaceRoots();
-    const trustedRoots = getVsCodeTrustedWorkspaceRoots();
+    const trustedRoots = [
+      ...getVsCodeTrustedWorkspaceRoots(),
+      ...runtimeTrustedRootRegistry.getRoots(),
+    ];
     const sourceDefinitionDir = getTrustedSourceDefinitionDir(
       document.fileName,
       trustedRoots

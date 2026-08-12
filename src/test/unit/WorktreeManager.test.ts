@@ -248,4 +248,67 @@ suite("WorktreeManager", function () {
       /overlaps the source checkout/
     );
   });
+
+  test("runs setup once for a newly created worktree", async () => {
+    const { parent, repository } = await makeRepository("setup-once");
+    const setup = `node -e "require('fs').writeFileSync('setup-marker.txt', process.env.CTRLYOKE_VAR_MESSAGE)"`;
+    const updates: string[] = [];
+    const info = await resolve(manager(parent, updates), repository, "feature/setup", {
+      setup,
+      vars: { message: "created" },
+    });
+    assert.strictEqual(info.setupOutcome, "succeeded");
+    assert.strictEqual(
+      await fs.readFile(path.join(info.worktreePath, "setup-marker.txt"), "utf8"),
+      "created"
+    );
+    await info.lease.release();
+    assert.deepStrictEqual(
+      updates.filter((value) => value.startsWith("provisioning")),
+      ["provisioning:false", "provisioning:false", "provisioning:false"]
+    );
+  });
+
+  test("blocks failed setup, leaves the directory, and releases its lease", async () => {
+    const { parent, repository } = await makeRepository("setup-failed");
+    const updates: string[] = [];
+    const setup = `node -e "process.exit(7)"`;
+    await assert.rejects(
+      resolve(manager(parent, updates), repository, "feature/setup-failed", {
+        setup,
+      }),
+      /Worktree setup failed/
+    );
+    const worktrees = await fs.readdir(path.join(parent, "worktrees"));
+    assert.strictEqual(worktrees.length, 1);
+    assert.ok(updates.some((value) => value.startsWith("blocked")));
+  });
+
+  test("does not retry a failed setup unless explicitly requested", async () => {
+    const { parent, repository } = await makeRepository("setup-retry");
+    const setup = `node -e "require('fs').writeFileSync('retry-marker.txt', 'ok')"`;
+    const first = await resolve(manager(parent), repository, "feature/retry", {
+      setup: `node -e "process.exit(7)"`,
+    }).catch(() => undefined);
+    assert.strictEqual(first, undefined);
+
+    await assert.rejects(
+      resolve(manager(parent), repository, "feature/retry", {
+        setup,
+        existingSetupOutcome: "failed",
+      }),
+      /use Retry Setup/
+    );
+    const retried = await resolve(
+      manager(parent),
+      repository,
+      "feature/retry",
+      { setup, existingSetupOutcome: "failed", retrySetup: true }
+    );
+    assert.strictEqual(
+      await fs.readFile(path.join(retried.worktreePath, "retry-marker.txt"), "utf8"),
+      "ok"
+    );
+    await retried.lease.release();
+  });
 });

@@ -38,6 +38,7 @@ import {
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
+import { runtimeTrustedRootRegistry } from "../utils/RuntimeTrustedRootRegistry";
 import { Log } from "../utils/Log";
 import {
   getFileCompletions,
@@ -84,6 +85,13 @@ export class PromptEditorSupportService {
       absolutePath: string
     ) => string | undefined
   ) {}
+
+  private getTrustedWorkspaceRoots(): string[] {
+    return [
+      ...getVsCodeTrustedWorkspaceRoots(),
+      ...runtimeTrustedRootRegistry.getRoots(),
+    ];
+  }
 
   async handleCompletionRequest(
     ctx: WebviewClientContext,
@@ -191,7 +199,7 @@ export class PromptEditorSupportService {
       ? getVsCodeWorkspaceRoot()
       : null;
     const trustedRoots = workspaceRoot
-      ? getVsCodeTrustedWorkspaceRoots()
+      ? this.getTrustedWorkspaceRoots()
       : undefined;
     const workspaceIdentity = workspaceRoot
       ? ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot)
@@ -285,7 +293,7 @@ export class PromptEditorSupportService {
       const resolver = new PromptFileResolver({
         workspaceRoot,
         namedRoots: getVsCodeNamedWorkspaceRoots(),
-        trustedRoots: getVsCodeTrustedWorkspaceRoots(),
+        trustedRoots: this.getTrustedWorkspaceRoots(),
         approvedExternalRoots:
           ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
             ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot)
@@ -297,7 +305,7 @@ export class PromptEditorSupportService {
       }
 
       const resolvedPath = await fs.promises.realpath(resolution.path);
-      const trustedRoots = getVsCodeTrustedWorkspaceRoots();
+      const trustedRoots = this.getTrustedWorkspaceRoots();
       const workspaceIdentity =
         ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
       const approvedExternalRoots =
@@ -454,7 +462,7 @@ export class PromptEditorSupportService {
         return fail("Missing image path");
       }
 
-      const trustedRoots = getVsCodeTrustedWorkspaceRoots();
+      const trustedRoots = this.getTrustedWorkspaceRoots();
       const sourceDefinitionDir = await this.getViewSourceDefinitionDir(
         ctx,
         trustedRoots
@@ -525,7 +533,7 @@ export class PromptEditorSupportService {
     const namedRoots = getVsCodeNamedWorkspaceRoots();
     const sourceDefinitionDir = await this.getViewSourceDefinitionDir(
       ctx,
-      workspaceRoot ? getVsCodeTrustedWorkspaceRoots() : undefined
+      workspaceRoot ? this.getTrustedWorkspaceRoots() : undefined
     );
 
     const results = await Promise.all(
@@ -790,7 +798,7 @@ export class PromptEditorSupportService {
         return;
       }
       const workspaceRoot = getVsCodeWorkspaceRoot();
-      const trustedRoots = getVsCodeTrustedWorkspaceRoots();
+      const trustedRoots = this.getTrustedWorkspaceRoots();
       const namedRoots = getVsCodeNamedWorkspaceRoots();
       const sourceDefinitionDir = await this.getViewSourceDefinitionDir(
         ctx,
@@ -948,7 +956,7 @@ export class PromptEditorSupportService {
     const workspaceIdentity =
       ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
     const trustedRoots = [
-      ...getVsCodeTrustedWorkspaceRoots(),
+      ...this.getTrustedWorkspaceRoots(),
       ...ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
         workspaceIdentity
       ),
