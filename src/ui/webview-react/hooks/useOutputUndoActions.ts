@@ -24,6 +24,7 @@ import type {
   WorkflowRunMetadata,
 } from "@root/types/OutputHistoryTypes";
 import { FINAL_STEP_PHASES } from "@/types/messages";
+import type { WorkflowRunAddress } from "@root/types/CtrlYokeTypes";
 import { useUiStore } from "@store/uiStore";
 
 type OutputHistoryView = {
@@ -70,13 +71,22 @@ export function useOutputUndoActions({
   uniqueStepTargets,
   workspaceSnapshots,
 }: UseOutputUndoActionsInput) {
-  const runAddress = useUiStore((state) =>
-    state.displayedViewAddress?.kind === "run"
-      ? {
-          workflowKey: state.displayedViewAddress.workflowKey,
-          runRef: state.displayedViewAddress.runRef,
-        }
-      : null
+  // Select the stored address reference itself — a selector that builds a fresh
+  // object returns a new snapshot on every read, which makes zustand's
+  // useSyncExternalStore re-render forever ("Maximum update depth exceeded").
+  // Derive the run-only shape in a memo instead.
+  const displayedViewAddress = useUiStore(
+    (state) => state.displayedViewAddress
+  );
+  const runAddress = useMemo<WorkflowRunAddress | null>(
+    () =>
+      displayedViewAddress?.kind === "run"
+        ? {
+            workflowKey: displayedViewAddress.workflowKey,
+            runRef: displayedViewAddress.runRef,
+          }
+        : null,
+    [displayedViewAddress]
   );
   const [minimapDialogState, setMinimapDialogState] =
     useState<MinimapDialogState | null>(null);

@@ -40,6 +40,11 @@ const PRIMARY_KEYS: Shortcut[] = [
   { label: "Enter", sequence: "\r" },
 ];
 
+// Shared empty fallback: a fresh `[]` inside a selector is a new snapshot on
+// every read, which loops `useSyncExternalStore` (React #185) for as long as
+// neither settings source carries the list.
+const EMPTY_SHORTCUTS: Shortcut[] = [];
+
 function decodeEscapeSequence(input: string): string {
   return input.replace(
     /\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|n|r|t|e|0|\\)/g,
@@ -89,7 +94,7 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
     (s) =>
       s.fullGlobalSettings?.settings.terminal.mobileCustomShortcuts ??
       s.globalSettings.terminal?.mobileCustomShortcuts ??
-      []
+      EMPTY_SHORTCUTS
   );
   const globalSettingsOpen = useUiStore((s) => s.globalSettingsOpen);
   const toggleGlobalSettings = useUiStore((s) => s.toggleGlobalSettings);

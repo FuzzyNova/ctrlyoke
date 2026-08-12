@@ -4,6 +4,7 @@ import prettierConfig from "eslint-config-prettier";
 import reactHooks from "eslint-plugin-react-hooks";
 import jsxA11y from "eslint-plugin-jsx-a11y";
 import tailwindcss from "eslint-plugin-tailwindcss";
+import ctrlyoke from "./scripts/eslint-rules/index.mjs";
 import { resolve } from "path";
 import { fileURLToPath } from "url";
 
@@ -101,6 +102,15 @@ export default [
           includeRoles: ["alert", "dialog"],
         },
       ],
+    },
+  },
+  // Local rules. Scoped to webview-react: zustand stores live only there, and an
+  // allocating selector there is a crash (React #185), not a style preference.
+  {
+    files: ["src/ui/webview-react/**/*.{ts,tsx}"],
+    plugins: { ctrlyoke },
+    rules: {
+      "ctrlyoke/stable-store-selector": "error",
     },
   },
   // Tailwind CSS linting for webview-react files.
