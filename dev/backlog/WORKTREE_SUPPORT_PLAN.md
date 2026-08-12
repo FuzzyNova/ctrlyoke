@@ -1,7 +1,7 @@
 # Git Worktree Support for Workflows
 
-> **Status:** Implementation-ready — deferred features are explicitly separated
-> from the first-release contract.
+> **Status:** Implemented — Phases 1–4 are complete and shipped. Phase 5 remains
+> deferred and is explicitly separated from the first-release contract.
 >
 > **Revision note (2026-08-10):** Re-audited against `main` at `b0ce5555`. This pass
 > incorporates the current run-lineage, definition-revision, snapshot, external-root
@@ -1020,10 +1020,10 @@ workflow at preflight until the user found and cleared the setting.
 
 Therefore preflight distinguishes the value's origin:
 
-| Origin of the resolved mode           | Ineligible workspace behavior                              |
-| ------------------------------------- | ---------------------------------------------------------- |
-| Authored in the workflow definition   | Hard failure with the eligibility reason (unchanged)       |
-| Inherited from `defaults.worktree`    | Degrade to ordinary execution, record and surface a notice |
+| Origin of the resolved mode         | Ineligible workspace behavior                              |
+| ----------------------------------- | ---------------------------------------------------------- |
+| Authored in the workflow definition | Hard failure with the eligibility reason (unchanged)       |
+| Inherited from `defaults.worktree`  | Degrade to ordinary execution, record and surface a notice |
 
 The degrade is recorded on the run — not merely logged — so the status readout
 can state that the configured default did not apply and why. An explicit authored
@@ -1720,14 +1720,14 @@ path-routing coverage belongs in unit/integration tests.
 
 The exact diff may evolve, but the implementation must cover these areas.
 
-| Area                      | Files / responsibility                                                                                                                         |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Workflow contracts        | `src/types/CtrlYokeTypes.ts`, `src/types/WorkflowContextTypes.ts`                                                                              |
-| Shared constants/messages | `DashboardConstants.ts`, `WebviewMessageTypes.ts`, output/status contracts                                                                     |
-| Config                    | `CtrlYokeSettings.ts`, `ConfigurationUtils.ts`, `CtrlYokeConfigService.ts`, `schemas/settings-schema.json`: `defaults.worktree` (all scopes) + user-scope-only `worktrees.root` |
-| Settings UI               | `DefaultsHarnessPage.tsx` (worktree defaults block), new `WorktreesSection.tsx` + `ALL_TABS` entry in `GlobalSettingsDrawer.tsx`, `settings/index.ts` |
+| Area                      | Files / responsibility                                                                                                                                                                                                                                                       |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workflow contracts        | `src/types/CtrlYokeTypes.ts`, `src/types/WorkflowContextTypes.ts`                                                                                                                                                                                                            |
+| Shared constants/messages | `DashboardConstants.ts`, `WebviewMessageTypes.ts`, output/status contracts                                                                                                                                                                                                   |
+| Config                    | `CtrlYokeSettings.ts`, `ConfigurationUtils.ts`, `CtrlYokeConfigService.ts`, `schemas/settings-schema.json`: `defaults.worktree` (all scopes) + user-scope-only `worktrees.root`                                                                                              |
+| Settings UI               | `DefaultsHarnessPage.tsx` (worktree defaults block), new `WorktreesSection.tsx` + `ALL_TABS` entry in `GlobalSettingsDrawer.tsx`, `settings/index.ts`                                                                                                                        |
 | Drawer UI                 | `WorkflowPropertiesPanel.tsx` Harness page controls, `isDifferentFromGlobal`/`handleResetAllToDefault` worktree cases, `WORKTREE_MODE_OPTIONS` in `DashboardConstants.ts`. **No** `useDrawerTabOverrides.ts` or `SegmentedTabBar.tsx` change — worktree does not badge a tab |
-| Status UI                 | `WorkflowStatus.tsx` worktree indicator, `RunSummaryBanner.tsx` branch/landing detail and View Diff / Open Worktree actions, `RunBannerData` worktree projection |
+| Status UI                 | `WorkflowStatus.tsx` worktree indicator, `RunSummaryBanner.tsx` branch/landing detail and View Diff / Open Worktree actions, `RunBannerData` worktree projection                                                                                                             |
 | Schema/parser             | `schemas/workflow-schema.json`, generated `workflow-schema.yaml`, `PromptFileParser.ts`, `PromptFileLoader.ts`                                                                                                                                                               |
 | Runtime persistence       | `WorkingFileManager.ts`, queue access seam, `WorkflowInstance.ts`                                                                                                                                                                                                            |
 | Execution roots           | `IntegrationFactory.ts`, `HarnessIntegration.ts`, `CliIntegration.ts`, execution preview, transport/runner/prompt/MCP helpers                                                                                                                                                |
@@ -1967,8 +1967,8 @@ schema.
     - Authored-definition support for the named forms is implemented: root-only
       schema validation, typed parsing/property persistence, and definition
       revision snapshots. Settings defaults and origin-guarded selection are
-    implemented; named-worktree lifecycle and the remaining runtime surfaces
-    are implemented below.
+      implemented; named-worktree lifecycle and the remaining runtime surfaces
+      are implemented below.
     - Runtime persistence is implemented: `WorkingFileManager` owns an atomic
       typed worktree-runtime patch seam, ordinary runtime projections preserve
       `_runtime.worktree`, and promotion/re-run seed fresh runtime metadata.
@@ -2017,7 +2017,7 @@ directory. **Confirmed:** shared-native lease tests cover parallel native
 coexistence, and named-worktree tests cover safe execution plus blocking only
 when the targeted directory has an incompatible lease.
 
-### Phase 3 — Managed branch landing
+### Phase 3 — Managed branch landing — **Complete**
 
 18. Implement ownership records, branch-tip validation, and idempotent create/recovery. **Implemented.** Durable branch-hash records are atomically published under the common-directory mutation lock; managed creation captures the promoted run identity/base, uses the Phase 2 bounded naming helpers and initializer, and recovery distinguishes landed, no-change, and orphaned branches without treating naming prefixes as authority. Read-only discovery exposes stale managed checkouts for recovery.
 19. Add managed shorthand/object schema and editor support without `merge`.
@@ -2029,11 +2029,11 @@ when the targeted directory has an incompatible lease.
       parser normalization, resolution, workflow properties, defaults, status,
       and focused tests cover the managed fields.
 20. Confirm the Phase 2 `.ctrlyoke/.gitignore` seeding also covers managed creation,
-      then run setup before execution. The seeding becomes load-bearing here, because
-      managed auto-commit is what would otherwise sweep runtime files into the branch.
-      **Implemented.** Managed creation initializes `.ctrlyoke/.gitignore` before
-      setup, and newly created managed worktrees run setup before being returned
-      for execution; focused manager coverage verifies both behaviors.
+    then run setup before execution. The seeding becomes load-bearing here, because
+    managed auto-commit is what would otherwise sweep runtime files into the branch.
+    **Implemented.** Managed creation initializes `.ctrlyoke/.gitignore` before
+    setup, and newly created managed worktrees run setup before being returned
+    for execution; focused manager coverage verifies both behaviors.
 21. Implement terminal-settlement cleanup, strict provider cleanup, auto-commit,
     no-change handling, landing, `keep`, and
     removal failure handling. **Implemented.** Managed settlement guards
