@@ -4,7 +4,10 @@ import * as os from "os";
 import * as path from "path";
 import { execFileSync } from "child_process";
 import { suite, teardown, test } from "mocha";
-import { WorktreeManager } from "../../core/orchestration/WorktreeManager";
+import {
+  WorktreeManager,
+  type WorktreeMergeOperations,
+} from "../../core/orchestration/WorktreeManager";
 import { ExecutionRootLeaseManager } from "../../core/orchestration/ExecutionRootLeaseManager";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 
@@ -61,9 +64,14 @@ suite("WorktreeManager", function () {
     };
   }
 
-  function manager(parent: string, updates: string[] = []): WorktreeManager {
+  function manager(
+    parent: string,
+    updates: string[] = [],
+    mergeOperations?: Partial<WorktreeMergeOperations>
+  ): WorktreeManager {
     return new WorktreeManager({
       worktreeRoot: path.join(parent, "worktrees"),
+      mergeOperations,
       updateWorktreeRuntime: async (patch) => {
         updates.push(
           `${patch.lifecycleState ?? "unknown"}:${patch.dirty ?? false}`
@@ -660,6 +668,177 @@ suite("WorktreeManager", function () {
       }).trim(),
       "ctrlyoke: land managed workflow changes"
     );
+  });
+
+  test("blocks merge when the source checkout changed branches", async () => {
+    const { parent, repository } = await makeRepository("merge-target-branch");
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await fs.writeFile(path.join(info.worktreePath, "managed.txt"), "managed\n");
+    execFileSync("git", ["-C", repository, "checkout", "-b", "other"], {
+      stdio: "ignore",
+    });
+
+    const result = await instance.completeManagedRun(info, { merge: true });
+
+    assert.strictEqual(result.landingOutcome, "landed");
+    assert.strictEqual(result.mergeOutcome, "blocked");
+    assert.match(result.message ?? "", /expected/);
+    assert.strictEqual(result.branchState, "present");
+  });
+
+  test("blocks merge when the source checkout is dirty without copying it", async () => {
+    const { parent, repository } = await makeRepository("merge-dirty-source");
+    await fs.writeFile(path.join(repository, "source-only.txt"), "source\n");
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    assert.strictEqual(info.sourceCheckoutDirty, true);
+    await fs.writeFile(path.join(info.worktreePath, "managed.txt"), "managed\n");
+
+    const result = await instance.completeManagedRun(info, { merge: true });
+
+    assert.strictEqual(result.landingOutcome, "landed");
+    assert.strictEqual(result.mergeOutcome, "blocked");
+    assert.match(result.message ?? "", /working tree or index is dirty/);
+    assert.strictEqual(
+      await fs.readFile(path.join(repository, "source-only.txt"), "utf8"),
+      "source\n"
+    );
+  });
+
+  test("fast-forwards the captured source branch", async () => {
+    const { parent, repository } = await makeRepository("merge-fast-forward");
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await fs.writeFile(path.join(info.worktreePath, "managed.txt"), "managed\n");
+
+    const result = await instance.completeManagedRun(info, { merge: true });
+
+    assert.strictEqual(result.mergeOutcome, "fast-forward");
+    assert.strictEqual(
+      (await fs.readFile(path.join(repository, "managed.txt"), "utf8")).replaceAll(
+        "\r\n",
+        "\n"
+      ),
+      "managed\n"
+    );
+  });
+
+  test("creates a merge commit when the captured source branch diverged", async () => {
+    const { parent, repository } = await makeRepository("merge-commit");
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await fs.writeFile(path.join(info.worktreePath, "managed.txt"), "managed\n");
+    await fs.writeFile(path.join(repository, "source.txt"), "source\n");
+    execFileSync("git", ["-C", repository, "add", "source.txt"]);
+    execFileSync("git", ["-C", repository, "commit", "-m", "source change"], {
+      stdio: "ignore",
+    });
+
+    const result = await instance.completeManagedRun(info, { merge: true });
+
+    assert.strictEqual(result.mergeOutcome, "merge-commit");
+    assert.strictEqual(
+      execFileSync("git", ["-C", repository, "show", "-s", "--format=%P", "HEAD"], {
+        encoding: "utf8",
+      }).trim().split(/\s+/).length,
+      2
+    );
+  });
+
+  test("captures conflict paths before aborting and preserves the managed branch", async () => {
+    const { parent, repository } = await makeRepository("merge-conflict");
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await fs.writeFile(path.join(info.worktreePath, "README.md"), "managed\n");
+    await fs.writeFile(path.join(repository, "README.md"), "source\n");
+    execFileSync("git", ["-C", repository, "add", "README.md"]);
+    execFileSync("git", ["-C", repository, "commit", "-m", "source conflict"], {
+      stdio: "ignore",
+    });
+
+    const result = await instance.completeManagedRun(info, { merge: true });
+
+    assert.strictEqual(result.mergeOutcome, "conflict");
+    assert.deepStrictEqual(result.conflictFiles, ["README.md"]);
+    assert.strictEqual(
+      execFileSync("git", ["-C", repository, "status", "--porcelain"], {
+        encoding: "utf8",
+      }).trim(),
+      ""
+    );
+    assert.strictEqual(
+      execFileSync("git", ["-C", repository, "rev-parse", "--verify", "HEAD"], {
+        encoding: "utf8",
+      }).trim().length,
+      40
+    );
+    assert.strictEqual(
+      await instance.isManagedBranchOwned(repository, info.branchName),
+      true
+    );
+  });
+
+  test("reports abort-failed distinctly when conflict recovery cannot abort", async () => {
+    const { parent, repository } = await makeRepository("merge-abort-failed");
+    const instance = manager(parent, [], {
+      abort: async () => {
+        throw new Error("simulated abort failure");
+      },
+    });
+    const info = await ensureManaged(instance, repository);
+    await fs.writeFile(path.join(info.worktreePath, "README.md"), "managed\n");
+    await fs.writeFile(path.join(repository, "README.md"), "source\n");
+    execFileSync("git", ["-C", repository, "add", "README.md"]);
+    execFileSync("git", ["-C", repository, "commit", "-m", "source conflict"], {
+      stdio: "ignore",
+    });
+
+    const result = await instance.completeManagedRun(info, { merge: true });
+
+    assert.strictEqual(result.mergeOutcome, "abort-failed");
+    assert.deepStrictEqual(result.conflictFiles, ["README.md"]);
+    assert.match(result.message ?? "", /simulated abort failure/);
+  });
+
+  test("fails merge immediately with source lease owner details", async () => {
+    const { parent, repository } = await makeRepository("merge-lease-conflict");
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await fs.writeFile(path.join(info.worktreePath, "managed.txt"), "managed\n");
+    const sourceLease = await ExecutionRootLeaseManager.acquire({
+      mode: "exclusive-worktree",
+      stateRoot: repository,
+      executionRoot: repository,
+      workflowKey: "source-owner" as WorkflowKey,
+      runRef: "source-run" as RunRef,
+      runner: "vscode",
+      instanceId: "source-owner-instance",
+    });
+
+    try {
+      const result = await instance.completeManagedRun(info, { merge: true });
+      assert.strictEqual(result.mergeOutcome, "blocked");
+      assert.match(result.message ?? "", /source-owner/);
+      assert.match(result.message ?? "", /source-owner-instance/);
+    } finally {
+      await sourceLease.release();
+    }
+  });
+
+  test("refuses merge for a managed worktree captured from a detached source checkout", async () => {
+    const { parent, repository } = await makeRepository("merge-detached-source");
+    execFileSync("git", ["-C", repository, "checkout", "--detach"], {
+      stdio: "ignore",
+    });
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await fs.writeFile(path.join(info.worktreePath, "managed.txt"), "managed\n");
+
+    const result = await instance.completeManagedRun(info, { merge: true });
+
+    assert.strictEqual(result.mergeOutcome, "blocked");
+    assert.match(result.message ?? "", /detached/);
   });
 
   test("keeps a landed managed directory when keep is true", async () => {

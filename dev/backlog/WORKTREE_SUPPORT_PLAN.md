@@ -2039,6 +2039,14 @@ leftovers without pruning user-owned entries.
 ### Phase 4 — Merge and management UX
 
 27. Implement one guarded merge engine with source-checkout exclusive leasing.
+    **Implemented.** `WorktreeManager.mergeManagedWorktree` is the shared
+    guarded engine used by managed finalization: it auto-commits before landing,
+    persists landing before merging, rechecks the captured target branch and
+    source cleanliness before and after the exclusive source-checkout lease,
+    handles fast-forward/divergent merges, captures conflict paths before abort,
+    and persists distinct conflict/abort-failed outcomes. Source-checkout
+    dirtiness captured at creation is surfaced in the persisted run projection;
+    declarative and dashboard exposure remain deferred to step 28.
 28. Expose declarative `merge` and the dashboard Merge action together, plus the
     drawer Merge control and the `defaults.worktree.merge` settings row with its
     live-checkout warning.

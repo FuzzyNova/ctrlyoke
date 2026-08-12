@@ -427,6 +427,8 @@ export interface WorkingFileWorktreeRuntime {
   changedFileCount?: number;
   /** Whether the named checkout had uncommitted changes at run start. */
   dirty?: boolean;
+  /** Whether source checkout changes existed when the managed worktree was created. */
+  sourceCheckoutDirty?: boolean;
   targetBranch?: string;
   lifecycleOwner: "ctrlyoke" | "user";
   lifecycleState:
@@ -448,6 +450,7 @@ export interface WorkingFileWorktreeRuntime {
   branchState: "present" | "deleted" | "missing";
   finalBranchTip?: string;
   conflictFiles?: string[];
+  message?: string;
   updatedAt: number;
 }
 
@@ -458,6 +461,7 @@ export type WorktreeRunProjection = Pick<
   | "branchName"
   | "worktreePath"
   | "sourceCheckoutRoot"
+  | "sourceCheckoutDirty"
   | "directoryState"
   | "landingOutcome"
   | "mergeOutcome"
@@ -479,6 +483,9 @@ export function projectWorktreeRuntime(
     branchName: worktree.branchName,
     worktreePath: worktree.worktreePath,
     sourceCheckoutRoot: worktree.sourceCheckoutRoot,
+    ...(worktree.sourceCheckoutDirty !== undefined
+      ? { sourceCheckoutDirty: worktree.sourceCheckoutDirty }
+      : {}),
     baseCommit: worktree.baseCommit,
     lifecycleState: worktree.lifecycleState,
     directoryState: worktree.directoryState,

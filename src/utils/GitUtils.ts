@@ -860,6 +860,40 @@ export async function hasUncommittedChanges(dir: string): Promise<boolean> {
   return stdout.length > 0;
 }
 
+/** Merge a ref into the current branch only when Git can fast-forward it. */
+export async function mergeFastForward(
+  dir: string,
+  ref: string
+): Promise<void> {
+  await execGit(["-C", dir, "merge", "--ff-only", "--", ref]);
+}
+
+/** Merge a ref non-interactively, creating a merge commit when necessary. */
+export async function mergeNoFastForward(
+  dir: string,
+  ref: string
+): Promise<void> {
+  await execGit(["-C", dir, "merge", "--no-ff", "--no-edit", "--", ref]);
+}
+
+/** Return all unmerged paths using Git's NUL-delimited name output. */
+export async function getUnmergedPaths(dir: string): Promise<string[]> {
+  const { stdout } = await execGit([
+    "-C",
+    dir,
+    "diff",
+    "--name-only",
+    "--diff-filter=U",
+    "-z",
+  ]);
+  return stdout.split("\0").filter(Boolean);
+}
+
+/** Abort an in-progress merge without invoking a shell or editor. */
+export async function abortMerge(dir: string): Promise<void> {
+  await execGit(["-C", dir, "merge", "--abort"]);
+}
+
 /** Stage and commit all changes. Returns false when there is nothing to commit. */
 export async function commitAll(
   dir: string,

@@ -3,15 +3,19 @@ import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import {
   addWorktree,
+  abortMerge,
   commitAll,
   currentBranch,
   getDiffFilesBetweenRefs,
+  getUnmergedPaths,
   deleteLocalBranch,
   gitCommonDir,
   getGitTrackedAndUntrackedFiles,
   hasGitOperationInProgress,
   hasUncommittedChanges,
   listWorktrees as listGitWorktrees,
+  mergeFastForward,
+  mergeNoFastForward,
   removeWorktree,
   repoToplevel,
   resolveCommit,
@@ -109,6 +113,8 @@ export interface WorktreeInfo {
   executionWorkspace: ExecutionWorkspace;
   /** Existing named worktrees are allowed to be dirty; this is informational. */
   dirty: boolean;
+  /** Captured at managed-worktree creation; source changes are not copied. */
+  sourceCheckoutDirty?: boolean;
   /** The exclusive lease held for the lifetime of this resolved run. */
   lease?: ExecutionLeaseHandle;
   /** Process-session trust held while this worktree remains discoverable. */
@@ -133,6 +139,15 @@ export interface WorktreeManagerOptions {
   updateWorktreeRuntime?: (
     patch: WorkingFileWorktreeRuntimePatch
   ) => Promise<void>;
+  /** Injectable Git seam for merge recovery tests and future adapters. */
+  mergeOperations?: Partial<WorktreeMergeOperations>;
+}
+
+export interface WorktreeMergeOperations {
+  fastForward: (dir: string, ref: string) => Promise<void>;
+  noFastForward: (dir: string, ref: string) => Promise<void>;
+  getUnmergedPaths: (dir: string) => Promise<string[]>;
+  abort: (dir: string) => Promise<void>;
 }
 
 /** One Git-discovered checkout plus read-only ctrlyoke lease/ownership state. */
@@ -152,9 +167,22 @@ export interface WorktreeActivationDiscovery {
 
 export interface CompleteManagedRunOptions {
   keep?: boolean;
+  /** Internal seam for the shared merge engine; not yet exposed to authoring/UI. */
+  merge?: boolean;
   /** The integration cleanup barrier must pass before Git is touched. */
   artifactsClean?: boolean;
   cleanupMessage?: string;
+}
+
+export type WorktreeMergeOutcome = Exclude<
+  NonNullable<WorktreeCompletionResult["mergeOutcome"]>,
+  undefined
+>;
+
+export interface WorktreeMergeResult {
+  mergeOutcome: WorktreeMergeOutcome;
+  conflictFiles?: string[];
+  message?: string;
 }
 
 export interface ResolveNamedWorktreeOptions {
@@ -280,10 +308,18 @@ function dedupePaths(paths: readonly string[]): string[] {
 export class WorktreeManager {
   private readonly leaseManager: ExecutionRootLeaseManager;
   private readonly now: () => number;
+  private readonly mergeOperations: WorktreeMergeOperations;
 
   public constructor(private readonly options: WorktreeManagerOptions = {}) {
     this.leaseManager = options.leaseManager ?? new ExecutionRootLeaseManager();
     this.now = options.now ?? Date.now;
+    this.mergeOperations = {
+      fastForward: mergeFastForward,
+      noFastForward: mergeNoFastForward,
+      getUnmergedPaths,
+      abort: abortMerge,
+      ...options.mergeOperations,
+    };
   }
 
   /** Resolve the configured/sibling/fallback placement root for a repository. */
@@ -409,21 +445,27 @@ export class WorktreeManager {
     const keep = options.keep === true;
     const blocked = async (
       message: string,
-      branchState: WorktreeCompletionResult["branchState"] = "present"
+      branchState: WorktreeCompletionResult["branchState"] = "present",
+      mergeOutcome?: WorktreeMergeOutcome,
+      conflictFiles?: string[]
     ): Promise<WorktreeCompletionResult> => {
       await this.persistManagedSettlement(info, {
         lifecycleState: "blocked",
         landingOutcome: "blocked",
         directoryState: "present",
         branchState,
+        ...(mergeOutcome ? { mergeOutcome } : {}),
+        ...(conflictFiles ? { conflictFiles } : {}),
         message,
       });
       return {
         landingOutcome: "blocked",
+        ...(mergeOutcome ? { mergeOutcome } : {}),
         directoryOutcome: "kept",
         branchState,
         branchName: info.branchName,
         ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
+        ...(conflictFiles ? { conflictFiles } : {}),
         message,
       };
     };
@@ -480,7 +522,15 @@ export class WorktreeManager {
           }
 
           const changed = await hasUncommittedChanges(info.worktreePath);
-          if (identity.headCommit === record.baseCommit && !changed) {
+          if (changed) {
+            await commitAll(
+              info.worktreePath,
+              "ctrlyoke: land managed workflow changes"
+            );
+          }
+
+          const committedHead = await resolveCommit(info.worktreePath, "HEAD");
+          if (committedHead === record.baseCommit) {
             return this.completeManagedNoChange(
               repositoryRoot,
               recordPath,
@@ -496,17 +546,6 @@ export class WorktreeManager {
             );
           }
 
-          const committed = await commitAll(
-            info.worktreePath,
-            "ctrlyoke: land managed workflow changes"
-          );
-          if (!committed) {
-            return blocked(
-              "Managed worktree commit found no changes to commit."
-            );
-          }
-
-          const committedHead = await resolveCommit(info.worktreePath, "HEAD");
           let changedFileCount: number | undefined;
           try {
             changedFileCount = (
@@ -546,15 +585,36 @@ export class WorktreeManager {
             updatedAt: this.now(),
           });
 
+          const mergeResult = options.merge
+            ? await this.mergeManagedWorktree(info)
+            : undefined;
+          if (mergeResult) {
+            await this.persistRuntime({
+              mergeOutcome: mergeResult.mergeOutcome,
+              ...(mergeResult.conflictFiles
+                ? { conflictFiles: mergeResult.conflictFiles }
+                : {}),
+              ...(mergeResult.message ? { message: mergeResult.message } : {}),
+              updatedAt: this.now(),
+            });
+          }
+
           if (keep) {
             return {
               landingOutcome: "landed",
+              ...(mergeResult
+                ? { mergeOutcome: mergeResult.mergeOutcome }
+                : {}),
               directoryOutcome: "kept",
               branchState: "present",
               branchName: info.branchName,
               ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
               autoCommitted: true,
               ...(changedFileCount !== undefined ? { changedFileCount } : {}),
+              ...(mergeResult?.conflictFiles
+                ? { conflictFiles: mergeResult.conflictFiles }
+                : {}),
+              ...(mergeResult?.message ? { message: mergeResult.message } : {}),
             };
           }
 
@@ -564,7 +624,8 @@ export class WorktreeManager {
             landedRecord,
             info,
             true,
-            changedFileCount
+            changedFileCount,
+            mergeResult
           );
         }
       );
@@ -572,6 +633,120 @@ export class WorktreeManager {
       return blocked(error instanceof Error ? error.message : String(error));
     } finally {
       await info.lease?.release().catch(() => undefined);
+    }
+  }
+
+  /**
+   * Merge the managed branch into the source checkout captured at creation.
+   * This is deliberately independent of worktree removal so the dashboard can
+   * reuse the same guarded operation once merge actions are exposed.
+   */
+  public async mergeManagedWorktree(
+    info: WorktreeInfo
+  ): Promise<WorktreeMergeResult> {
+    const guard = async (): Promise<string | undefined> => {
+      if (!info.targetBranch) {
+        return "Merge is unavailable because the source checkout was detached when the worktree was created.";
+      }
+      const checkedOutBranch = await currentBranch(info.sourceCheckoutRoot);
+      if (checkedOutBranch !== info.targetBranch) {
+        return `Merge blocked: source checkout is on "${checkedOutBranch ?? "detached HEAD"}", expected "${info.targetBranch}".`;
+      }
+      if (await hasGitOperationInProgress(info.sourceCheckoutRoot)) {
+        return "Merge blocked: a Git operation is already in progress in the source checkout.";
+      }
+      if (await hasUncommittedChanges(info.sourceCheckoutRoot)) {
+        return "Merge blocked: the source checkout working tree or index is dirty.";
+      }
+      return undefined;
+    };
+
+    const initialGuardFailure = await guard();
+    if (initialGuardFailure) {
+      return { mergeOutcome: "blocked", message: initialGuardFailure };
+    }
+
+    let sourceLease: ExecutionLeaseHandle | undefined;
+    try {
+      sourceLease = await this.leaseManager.acquire({
+        mode: "exclusive-worktree",
+        stateRoot: info.lease?.stateRoot ?? info.executionWorkspace.stateRoot,
+        executionRoot: info.sourceCheckoutRoot,
+        workflowKey: info.workflowKey,
+        runRef: info.runRef,
+        runner: info.lease?.runner ?? "vscode",
+        instanceId: info.lease?.instanceId ?? crypto.randomUUID(),
+      });
+    } catch (error) {
+      return {
+        mergeOutcome: "blocked",
+        message: `Merge blocked: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+
+    try {
+      const postLeaseGuardFailure = await guard();
+      if (postLeaseGuardFailure) {
+        return { mergeOutcome: "blocked", message: postLeaseGuardFailure };
+      }
+
+      const managedBranchRef = `refs/heads/${info.branchName}`;
+      try {
+        await this.mergeOperations.fastForward(
+          info.sourceCheckoutRoot,
+          managedBranchRef
+        );
+        return { mergeOutcome: "fast-forward" };
+      } catch {
+        // A fast-forward refusal is the expected signal for a divergent
+        // source branch. The guarded non-ff attempt below handles that case.
+      }
+
+      try {
+        await this.mergeOperations.noFastForward(
+          info.sourceCheckoutRoot,
+          managedBranchRef
+        );
+        return { mergeOutcome: "merge-commit" };
+      } catch (error) {
+        const conflictFiles = await this.mergeOperations.getUnmergedPaths(
+          info.sourceCheckoutRoot
+        ).catch(() => []);
+        const mergeInProgress = await hasGitOperationInProgress(
+          info.sourceCheckoutRoot
+        );
+        const failureMessage = error instanceof Error ? error.message : String(error);
+        if (!mergeInProgress && conflictFiles.length === 0) {
+          return { mergeOutcome: "blocked", message: `Merge blocked: ${failureMessage}` };
+        }
+
+        try {
+          await this.mergeOperations.abort(info.sourceCheckoutRoot);
+        } catch (abortError) {
+          return {
+            mergeOutcome: "abort-failed",
+            conflictFiles,
+            message:
+              `Merge conflict abort failed: ${abortError instanceof Error ? abortError.message : String(abortError)}`,
+          };
+        }
+
+        const abortRestoredCleanState =
+          !(await hasGitOperationInProgress(info.sourceCheckoutRoot)) &&
+          !(await hasUncommittedChanges(info.sourceCheckoutRoot));
+        if (!abortRestoredCleanState) {
+          return {
+            mergeOutcome: "abort-failed",
+            conflictFiles,
+            message:
+              "Merge conflict abort did not restore a clean, non-merging source checkout.",
+          };
+        }
+
+        return { mergeOutcome: "conflict", conflictFiles };
+      }
+    } finally {
+      await sourceLease.release().catch(() => undefined);
     }
   }
 
@@ -672,7 +847,8 @@ export class WorktreeManager {
     record: ManagedWorktreeOwnershipRecord,
     info: WorktreeInfo,
     autoCommitted: boolean,
-    changedFileCount?: number
+    changedFileCount?: number,
+    mergeResult?: WorktreeMergeResult
   ): Promise<WorktreeCompletionResult> {
     try {
       await removeWorktree(repositoryRoot, info.worktreePath);
@@ -692,6 +868,11 @@ export class WorktreeManager {
           record.recoveryOutcome === "no-changes" ? "no-changes" : "landed",
         directoryState: "remove-failed",
         branchState: "present",
+        ...(mergeResult ? { mergeOutcome: mergeResult.mergeOutcome } : {}),
+        ...(mergeResult?.conflictFiles
+          ? { conflictFiles: mergeResult.conflictFiles }
+          : {}),
+        ...(mergeResult?.message ? { message: mergeResult.message } : {}),
         finalBranchTip: record.finalBranchTip,
         ...(changedFileCount !== undefined ? { changedFileCount } : {}),
         updatedAt: this.now(),
@@ -703,8 +884,15 @@ export class WorktreeManager {
         branchState: "present",
         branchName: info.branchName,
         ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
+        ...(mergeResult
+          ? { mergeOutcome: mergeResult.mergeOutcome }
+          : {}),
         ...(autoCommitted ? { autoCommitted: true } : {}),
         ...(changedFileCount !== undefined ? { changedFileCount } : {}),
+        ...(mergeResult?.conflictFiles
+          ? { conflictFiles: mergeResult.conflictFiles }
+          : {}),
+        ...(mergeResult?.message ? { message: mergeResult.message } : {}),
         message,
       };
     }
@@ -746,6 +934,11 @@ export class WorktreeManager {
       landingOutcome,
       directoryState: "removed",
       branchState,
+      ...(mergeResult ? { mergeOutcome: mergeResult.mergeOutcome } : {}),
+      ...(mergeResult?.conflictFiles
+        ? { conflictFiles: mergeResult.conflictFiles }
+        : {}),
+      ...(mergeResult?.message ? { message: mergeResult.message } : {}),
       finalBranchTip: record.finalBranchTip,
       ...(changedFileCount !== undefined ? { changedFileCount } : {}),
       updatedAt: this.now(),
@@ -766,8 +959,15 @@ export class WorktreeManager {
       branchState,
       branchName: info.branchName,
       ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
+      ...(mergeResult
+        ? { mergeOutcome: mergeResult.mergeOutcome }
+        : {}),
       ...(autoCommitted ? { autoCommitted: true } : {}),
       ...(changedFileCount !== undefined ? { changedFileCount } : {}),
+      ...(mergeResult?.conflictFiles
+        ? { conflictFiles: mergeResult.conflictFiles }
+        : {}),
+      ...(mergeResult?.message ? { message: mergeResult.message } : {}),
       ...(message ? { message } : {}),
     };
   }
@@ -863,6 +1063,9 @@ export class WorktreeManager {
         options.targetBranch?.trim() ??
         (await currentBranch(sourceCheckoutRoot)) ??
         undefined;
+      const sourceCheckoutDirty = existingRecord
+        ? undefined
+        : await hasUncommittedChanges(sourceCheckoutRoot);
       const root = await this.resolveWorktreeRoot(sourceCheckoutRoot);
       const worktreePath =
         existingRecord?.worktreePath ??
@@ -975,6 +1178,7 @@ export class WorktreeManager {
         repositoryInputs,
         origin,
         options,
+        sourceCheckoutDirty,
       });
     });
   }
@@ -1701,6 +1905,7 @@ export class WorktreeManager {
     repositoryInputs: ResolvedRepositoryInputs;
     origin: WorktreeOrigin;
     options: EnsureManagedWorktreeOptions;
+    sourceCheckoutDirty?: boolean;
   }): Promise<ActiveWorktreeInfo> {
     const executionWorkspace = this.buildExecutionWorkspace(
       args.repositoryInputs,
@@ -1780,6 +1985,9 @@ export class WorktreeManager {
       worktreePath: args.record.worktreePath,
       sourceCheckoutRoot: args.record.sourceCheckoutRoot,
       baseCommit: args.record.baseCommit,
+      ...(args.sourceCheckoutDirty !== undefined
+        ? { sourceCheckoutDirty: args.sourceCheckoutDirty }
+        : {}),
       targetBranch: args.record.targetBranch,
       workflowKey: args.record.workflowKey,
       runRef: args.record.runRef,
@@ -1804,6 +2012,9 @@ export class WorktreeManager {
       sourceCheckoutRoot: args.record.sourceCheckoutRoot,
       namedWorkspaceRoots: [...executionWorkspace.namedWorkspaceRoots],
       baseCommit: args.record.baseCommit,
+      ...(args.sourceCheckoutDirty !== undefined
+        ? { sourceCheckoutDirty: args.sourceCheckoutDirty }
+        : {}),
       ...(args.record.targetBranch
         ? { targetBranch: args.record.targetBranch }
         : {}),
