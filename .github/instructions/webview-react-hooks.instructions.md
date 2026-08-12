@@ -22,5 +22,6 @@ Hooks are the integration layer between the React tree and the runtime: extensio
 
 <specializedHooks>
 - Output hooks (`useOutput*`) are a pipeline: row projection/modeling -> virtualization/scroll seek -> find/navigation/minimap -> export/undo helpers. Keep heavy output math in hooks/utilities, not JSX render paths.
+- **The virtualizer's `estimateSize` must stay O(1) per row.** TanStack rebuilds its whole measurements array whenever any single row reports a size, calling `estimateSize` for every index from the lowest changed one to `count` — so on a 6,000-row workflow one measured row costs thousands of estimates, at least once per commit. `estimateOutputRowHeight` is not cheap (a Bash row re-sanitizes its event's full output to size a preview of a few hundred chars: ~190ms for one 4,800-row pass on a desktop, seconds on a phone), so it memoizes on the row object and `buildOutputRows` publishes rows already warm. Anything else added to that path needs the same treatment — the symptom is 600-2500ms React commits for a pane holding under a dozen rows, which reads as scroll jank rather than as an estimation cost.
 - Layout hooks and drawer-tab override hooks exist to keep `App.tsx` and editor components from duplicating breakpoint-specific logic. Extend those helpers rather than adding more inline branching.
 </specializedHooks>

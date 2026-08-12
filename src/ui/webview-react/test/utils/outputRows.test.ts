@@ -1709,6 +1709,97 @@ describe("outputRows", () => {
     });
   });
 
+  // The virtualizer re-estimates every row from the lowest changed index to the
+  // end of the list each time one row reports a size, so on a large workflow
+  // these estimates run thousands of times per commit. They must be served from
+  // the per-row memo rather than recomputed.
+  describe("row height estimate memoization", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const makeRow = (text: string) => ({
+      key: "memo-probe",
+      rowKind: "plain-response" as const,
+      target,
+      text,
+      rawTextOutput: true,
+      animated: false,
+      estimateSize: 0,
+    });
+
+    const shortText = "one line";
+    const tallText = Array.from(
+      { length: 200 },
+      (_value, index) => `line ${index} of output`
+    ).join("\n");
+
+    // `buildOutputRows` never mutates a row, so mutating one here is purely a
+    // probe: a changed field that the estimate ignores proves the answer came
+    // from the memo, and the same field being honoured under a different
+    // geometry proves the memo revalidated rather than went permanently stale.
+    it("serves repeat estimates for one row object from the memo", () => {
+      const row = makeRow(shortText);
+      const first = estimateOutputRowHeight(row, 13, 760);
+
+      row.text = tallText;
+      expect(estimateOutputRowHeight(row, 13, 760)).toBe(first);
+      expect(estimateOutputRowHeight(row, 13, 320)).toBeGreaterThan(first);
+    });
+
+    it("keys the memo on row identity, not row key", () => {
+      const original = makeRow(shortText);
+      const short = estimateOutputRowHeight(original, 13, 760);
+      const rebuilt = { ...original, text: tallText };
+      expect(estimateOutputRowHeight(rebuilt, 13, 760)).toBeGreaterThan(short);
+    });
+
+    it("publishes rows already warm for the geometry they were built with", () => {
+      const { rows } = buildOutputRows({
+        allMessages: [
+          {
+            type: "cli",
+            target,
+            timestamp: 1000,
+            attemptIndex: 0,
+            runIndex: 0,
+            data: {
+              prompt: "Explain",
+              response: tallText,
+              elapsed: 1,
+              isStreaming: false,
+            },
+          },
+        ],
+        steps,
+        finalStep: null,
+        streamingChunks: {},
+        finalStepStreamingChunks: {},
+        isExecutionActive: false,
+        allowUndoActions: false,
+        isViewingHistory: false,
+        historyOutputs: null,
+        workspaceSnapshots: {},
+        finalStepWorkspaceSnapshots: {},
+        undoRecords: {},
+        diffCollapseState: new Map(),
+        diffExpansionState: new Map(),
+        toolCallExpansionState: new Map(),
+        defaultDiffCollapsed: false,
+        outputFontSize: 13,
+        outputContentWidth: 760,
+      });
+
+      const responseRow = rows.find((row) => row.rowKind === "plain-response");
+      expect(responseRow).toBeDefined();
+      if (!responseRow || responseRow.rowKind !== "plain-response") return;
+
+      // Same probe: a published row that still had to compute would pick the
+      // emptied text up and come back shorter than its own `estimateSize`.
+      responseRow.text = "";
+      expect(estimateOutputRowHeight(responseRow, 13, 760)).toBe(
+        responseRow.estimateSize
+      );
+    });
+  });
+
   // Script output has no structured events, so it used to collapse into one
   // unbounded plain-response row that the virtualizer could not page and that
   // re-laid-out in full on every append.

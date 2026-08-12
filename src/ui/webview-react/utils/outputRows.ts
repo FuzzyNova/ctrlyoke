@@ -1358,19 +1358,64 @@ function estimateToolCallStructuredEventHeight(
   );
 }
 
+interface RowHeightEstimateCacheEntry {
+  contentWidth: number | undefined;
+  fontSize: number;
+  height: number;
+}
+
+/**
+ * Memo for `estimateOutputRowHeight`, keyed on the row object.
+ *
+ * The virtualizer rebuilds its entire measurements array every time a single
+ * row reports a size, calling `estimateSize` for every row from the lowest
+ * changed index to the end of the list — so on a 6,000-row workflow one
+ * measured row costs thousands of estimates, several times per commit. Those
+ * estimates are not cheap: a Bash row re-sanitizes its event's whole output
+ * (tens of KB is normal) to size a preview of a few hundred characters. Profiled
+ * cold, a single pass over 4,800 rows costs ~190ms on a desktop, which is what
+ * put 600-2500ms React commits in the phone logs for panes holding only 3-13
+ * mounted rows.
+ *
+ * Keying on the row object rather than `row.key` is what makes a stale hit
+ * impossible: `buildOutputRows` constructs rows fresh and never mutates one, so
+ * a row whose content or expansion state changed is necessarily a different
+ * object. Geometry is the only estimate input that lives outside the row, so it
+ * is stored alongside and revalidated — compared field-wise rather than through
+ * a composite key so a full pass allocates nothing.
+ */
+const rowHeightEstimateCache = new WeakMap<
+  OutputRenderRow,
+  RowHeightEstimateCacheEntry
+>();
+
 export function estimateOutputRowHeight(
   row: OutputRenderRow,
   outputFontSize = 13,
   outputContentWidth?: number
 ): number {
+  const cached = rowHeightEstimateCache.get(row);
+  if (
+    cached !== undefined &&
+    cached.fontSize === outputFontSize &&
+    cached.contentWidth === outputContentWidth
+  ) {
+    return cached.height;
+  }
+
   // Rows at a CLI group's edges get extra padding from OutputRow's wrapper.
   // Only rows that carry the flags are wrapped, so this is safe to add
   // unconditionally — and it is the whole story behind the persistent bias on
   // `stats` (always a group's last row) and `cli-header` (always its first).
-  return (
+  const height =
     estimateOutputRowContentHeight(row, outputFontSize, outputContentWidth) +
-    outputRowGroupPadding(row)
-  );
+    outputRowGroupPadding(row);
+  rowHeightEstimateCache.set(row, {
+    contentWidth: outputContentWidth,
+    fontSize: outputFontSize,
+    height,
+  });
+  return height;
 }
 
 function estimateOutputRowContentHeight(
@@ -1997,14 +2042,19 @@ export function buildOutputRows(
   }
 
   return {
-    rows: rows.map((row) => ({
-      ...row,
-      estimateSize: estimateOutputRowHeight(
-        row,
+    // Estimate against the published copy, not the draft it was spread from:
+    // `estimateOutputRowHeight` memoizes on the row object, and the virtualizer
+    // only ever sees the copy. Estimating the draft would leave every published
+    // row cold and cost the first `estimateSize` sweep a second full pass.
+    rows: rows.map((row) => {
+      const publishedRow = { ...row };
+      publishedRow.estimateSize = estimateOutputRowHeight(
+        publishedRow,
         input.outputFontSize,
         input.outputContentWidth
-      ),
-    })),
+      );
+      return publishedRow;
+    }),
     uniqueStepTargets: [...uniqueTargets.values()],
     stepOutputsMap,
     lastCliIndexPerStep,
