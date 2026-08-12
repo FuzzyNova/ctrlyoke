@@ -9,6 +9,7 @@ import {
   EXECUTION_MODES,
   HARNESS_IDS,
   PERMISSION_MODES,
+  WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
 
 const postMessage = vi.fn();
@@ -222,5 +223,149 @@ describe("WorkflowPropertiesPanel execution mode", () => {
     expect(
       screen.getByTitle("Set this as the default for new workflows")
     ).toBeInTheDocument();
+  });
+});
+
+describe("WorkflowPropertiesPanel worktree authoring", () => {
+  beforeEach(() => {
+    resetStores();
+    postMessage.mockClear();
+    (
+      window.vscodeApi as unknown as { postMessage: typeof postMessage }
+    ).postMessage = postMessage;
+  });
+
+  afterEach(cleanup);
+
+  function chooseWorktreeMode(label: string): void {
+    fireEvent.click(screen.getByLabelText("Worktree"));
+    fireEvent.click(screen.getByRole("button", { name: label }));
+  }
+
+  it("renders None as one control and keeps the prompt drawer free of worktree", async () => {
+    render(<WorkflowPropertiesPanel />);
+
+    expect(screen.getByLabelText("Worktree")).toHaveTextContent("None");
+    expect(screen.queryByLabelText("Worktree branch")).not.toBeInTheDocument();
+  });
+
+  it("reveals only Named fields and seeds them from the settings default", () => {
+    useSettingsStore.getState().updateGlobalSetting("worktree", {
+      mode: WORKTREE_MODES.NAMED,
+      branch: "ui-work",
+      base: "main",
+      setup: "npm ci",
+    });
+
+    render(<WorkflowPropertiesPanel />);
+    chooseWorktreeMode("Named");
+
+    expect(screen.getByLabelText("Worktree branch")).toHaveValue("ui-work");
+    expect(screen.getByLabelText("Worktree base")).toHaveValue("main");
+    expect(screen.getByLabelText("Worktree setup")).toHaveValue("npm ci");
+    expect(screen.queryByText(/Keep directory/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Merge on done/i)).not.toBeInTheDocument();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "updateWorkflowProperties",
+        properties: {
+          worktree: {
+            mode: WORKTREE_MODES.NAMED,
+            branch: "ui-work",
+            base: "main",
+            setup: "npm ci",
+          },
+        },
+      })
+    );
+  });
+
+  it("surfaces an empty named branch as a field diagnostic", () => {
+    useSettingsStore.getState().updateWorkflowProperty("worktree", {
+      mode: WORKTREE_MODES.NAMED,
+      branch: "",
+    });
+
+    render(<WorkflowPropertiesPanel />);
+
+    expect(
+      screen.getByText("Branch is required for named worktree mode.")
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Worktree branch")).toHaveClass(
+      "border-input-error-border"
+    );
+  });
+
+  it("records a mode change and its seeded fields as one undo entry", () => {
+    useSettingsStore.getState().updateGlobalSetting("worktree", {
+      mode: WORKTREE_MODES.NAMED,
+      branch: "ui-work",
+      base: "main",
+      setup: "npm ci",
+    });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "workflow.ctrlyoke.yaml",
+      workflowName: "Workflow",
+      steps: [],
+    });
+
+    render(<WorkflowPropertiesPanel />);
+    chooseWorktreeMode("Named");
+
+    expect(useWorkflowStore.temporal.getState().pastStates).toHaveLength(1);
+  });
+
+  it("treats absent, false, and none as the same default", () => {
+    useSettingsStore.getState().updateGlobalSetting("worktree", {
+      mode: WORKTREE_MODES.NONE,
+    });
+    useSettingsStore.getState().updateWorkflowProperty("worktree", false);
+    render(<WorkflowPropertiesPanel />);
+
+    const worktreeField =
+      screen.getByLabelText("Worktree").parentElement?.parentElement;
+    expect(
+      worktreeField?.querySelector(
+        '[title="Set this as the default for new workflows"]'
+      )
+    ).toBeNull();
+  });
+
+  it("normalizes the legacy none sentinel for default comparison", () => {
+    useSettingsStore.getState().updateGlobalSetting("worktree", {
+      mode: WORKTREE_MODES.NONE,
+    });
+    useSettingsStore
+      .getState()
+      .updateWorkflowProperty("worktree", "none" as never);
+    render(<WorkflowPropertiesPanel />);
+
+    const worktreeField =
+      screen.getByLabelText("Worktree").parentElement?.parentElement;
+    expect(
+      worktreeField?.querySelector(
+        '[title="Set this as the default for new workflows"]'
+      )
+    ).toBeNull();
+  });
+
+  it("resets worktree together with the other workflow properties", () => {
+    useSettingsStore.getState().updateGlobalSetting("worktree", {
+      mode: WORKTREE_MODES.NAMED,
+      branch: "default-branch",
+    });
+    useSettingsStore.getState().updateWorkflowProperty("worktree", false);
+    render(<WorkflowPropertiesPanel />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Reset all to defaults" })
+    );
+
+    expect(useSettingsStore.getState().workflowProperties.worktree).toEqual({
+      mode: WORKTREE_MODES.NAMED,
+      branch: "default-branch",
+      base: undefined,
+      setup: undefined,
+    });
   });
 });

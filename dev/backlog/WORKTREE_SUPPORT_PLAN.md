@@ -1947,7 +1947,9 @@ schema.
     - Add the Harness-page drawer block (None/Named, no managed fields yet),
       `WORKTREE_MODE_OPTIONS`, the `isDifferentFromGlobal`/reset-all cases, the
       `DefaultsHarnessPage` worktree defaults block, and the new Worktrees
-      settings section holding `worktrees.root`. No tab-badge work.
+      settings section holding `worktrees.root`. No tab-badge work. **Implemented.**
+      The authoring matrix is covered by focused webview tests; managed and
+      merge controls remain deferred to Phases 3 and 4.
     - Add the `WorkflowStatus` worktree indicator and the `RunSummaryBanner`
       worktree projection.
 14. Implement named discovery/create/setup plus explicit failed-setup retry. **Named

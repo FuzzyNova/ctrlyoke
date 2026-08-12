@@ -1050,6 +1050,17 @@ export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
 // ============================================================================
 // EXECUTION MODES - Execution environment for CLI commands
 // ============================================================================
+// ============================================================================
+// WORKTREE MODES - Workflow execution checkout selection
+// ============================================================================
+export const WORKTREE_MODES = {
+  NONE: "none",
+  MANAGED: "managed",
+  NAMED: "named",
+} as const;
+
+export type WorktreeMode = (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES];
+
 export const EXECUTION_MODES = {
   INTERACTIVE: "interactive",
   HEADLESS: "headless",
@@ -1061,6 +1072,11 @@ export type ExecutionMode =
 export const EXECUTION_MODE_OPTIONS = [
   { value: EXECUTION_MODES.INTERACTIVE, label: "Interactive" },
   { value: EXECUTION_MODES.HEADLESS, label: "Headless" },
+];
+
+export const WORKTREE_MODE_OPTIONS = [
+  { value: WORKTREE_MODES.NONE, label: "None" },
+  { value: WORKTREE_MODES.NAMED, label: "Named" },
 ];
 
 export const EXECUTION_MODE_HELP_TEXT =
@@ -1538,18 +1554,6 @@ export const EXECUTION_PHASES = {
   PRE_CONDITION: "preCondition",
   END_CONDITION: "endCondition",
 } as const;
-
-// ============================================================================
-// WORKTREE MODES
-// ============================================================================
-export const WORKTREE_MODES = {
-  NONE: "none",
-  MANAGED: "managed",
-  NAMED: "named",
-} as const;
-
-export type WorktreeMode =
-  (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES];
 
 // ============================================================================
 // PROMPT PROPERTY NAMES - Single source of truth for PromptStep properties

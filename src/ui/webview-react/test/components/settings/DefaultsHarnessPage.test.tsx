@@ -5,6 +5,7 @@ import { DefaultsHarnessPage } from "@components/settings/defaults/DefaultsHarne
 import { SETTING_SCOPES } from "@/types/messages";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import { WORKTREE_MODES } from "@root/types/DashboardConstants";
 
 function createSettings(
   sources: Record<string, "user" | "workspace" | "default"> = {}
@@ -39,6 +40,31 @@ describe("DefaultsHarnessPage execution defaults", () => {
     await user.click(screen.getByRole("button", { name: "Headless" }));
 
     expect(onUpdate).toHaveBeenCalledWith("defaults.executionMode", "headless");
+  });
+
+  it("renders progressive Named worktree defaults with scoped paths", () => {
+    const onUpdate = vi.fn();
+    const settings = createSettings();
+    settings.settings.defaults.worktree = {
+      mode: WORKTREE_MODES.NAMED,
+      branch: "settings-branch",
+      base: "main",
+      setup: "npm ci",
+    };
+
+    render(
+      <DefaultsHarnessPage
+        settings={settings}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={onUpdate}
+        onReset={() => {}}
+      />
+    );
+
+    expect(screen.getByText("Worktree Defaults")).toBeInTheDocument();
+    expect(screen.getByLabelText("Branch")).toHaveValue("settings-branch");
+    expect(screen.getByLabelText("Base")).toHaveValue("main");
+    expect(screen.getByLabelText("Setup")).toHaveValue("npm ci");
   });
 
   it("shows the active-scope reset affordance", async () => {

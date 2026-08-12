@@ -14,6 +14,7 @@ import {
   WorkflowDefaultsSection,
   AdvancedPermissionsSection,
   ExecutionSection,
+  WorktreesSection,
   TerminalSection,
   QueueSection,
   ServerSection,
@@ -32,6 +33,7 @@ const ALL_TABS = [
   { id: "workflow", label: "Workflow Defaults", icon: "codicon-globe" },
   { id: "permissions", label: "Advanced Permissions", icon: "codicon-shield" },
   { id: "execution", label: "Execution", icon: "codicon-play" },
+  { id: "worktrees", label: "Worktrees", icon: "codicon-source-control" },
   { id: "notifications", label: "Notifications", icon: "codicon-bell" },
   { id: "terminal", label: "Terminal", icon: "codicon-terminal" },
   { id: "queue", label: "Queue", icon: "codicon-list-ordered" },
@@ -221,6 +223,9 @@ export function GlobalSettingsDrawer() {
               )}
               {fullSettings && effectiveActiveTab === "execution" && (
                 <ExecutionSection settings={fullSettings} {...sectionProps} />
+              )}
+              {fullSettings && effectiveActiveTab === "worktrees" && (
+                <WorktreesSection settings={fullSettings} {...sectionProps} />
               )}
               {fullSettings && effectiveActiveTab === "notifications" && (
                 <NotificationsSection

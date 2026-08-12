@@ -50,6 +50,7 @@ describe("drawer permission tab override callers", () => {
     expect(result.current.permissions).toEqual(
       getPermissionTabOverride(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
     );
+    expect(result.current).not.toHaveProperty("harness");
   });
 
   it("preserves the shape swap in the settings drawer caller", () => {

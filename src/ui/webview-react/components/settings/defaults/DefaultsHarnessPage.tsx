@@ -3,13 +3,19 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
-import { EXECUTION_MODE_OPTIONS } from "@root/types/DashboardConstants";
+import {
+  EXECUTION_MODE_OPTIONS,
+  WORKTREE_MODE_OPTIONS,
+  WORKTREE_MODES,
+} from "@root/types/DashboardConstants";
 import { useSettingsStore } from "@store/settingsStore";
 import { agentWarning, skillsWarning } from "@utils/dropdownValidation";
 import { CustomSelect } from "../../shared/CustomSelect";
 import { toAgentSelectOption } from "../../shared/agentSelectOptions";
 import { MultiCheckboxDropdown } from "../../shared/MultiCheckboxDropdown";
 import { SettingInputRow } from "../../shared/SettingInputRow";
+import { FieldDiagnostic } from "../../shared/FieldDiagnostic";
+import { fieldValidationBorderClass } from "@utils/fieldValidation";
 import { HarnessesSection } from "../HarnessesSection";
 
 interface Props {
@@ -32,6 +38,15 @@ export function DefaultsHarnessPage({
   const rowProps = { sources, onReset, activeScope };
   const agentWarn = agentWarning(wf.agent, availableAgents);
   const skillsWarn = skillsWarning(wf.skills, availableSkills);
+  const worktreeBranchDiagnostics =
+    wf.worktree.mode === WORKTREE_MODES.NAMED && !wf.worktree.branch?.trim()
+      ? [
+          {
+            severity: "error" as const,
+            message: "Branch is required for named worktree mode.",
+          },
+        ]
+      : [];
 
   return (
     <div className="space-y-4">
@@ -59,6 +74,86 @@ export function DefaultsHarnessPage({
             options={EXECUTION_MODE_OPTIONS}
           />
         </SettingInputRow>
+      </div>
+      <div className="border-t border-panel-border pt-4 space-y-3">
+        <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
+          Worktree Defaults
+        </h3>
+        <SettingInputRow
+          label="Worktree mode"
+          description="Default checkout selection for workflows that do not set a worktree."
+          id="defaults-worktree-mode"
+          path="defaults.worktree.mode"
+          {...rowProps}
+        >
+          <CustomSelect
+            id="defaults-worktree-mode"
+            value={wf.worktree.mode}
+            onChange={(v) => onUpdate("defaults.worktree.mode", v)}
+            options={WORKTREE_MODE_OPTIONS}
+          />
+        </SettingInputRow>
+        {wf.worktree.mode === WORKTREE_MODES.NAMED && (
+          <>
+            <SettingInputRow
+              label="Branch"
+              description="Required local Git branch for the named default."
+              id="defaults-worktree-branch"
+              path="defaults.worktree.branch"
+              {...rowProps}
+            >
+              <input
+                id="defaults-worktree-branch"
+                type="text"
+                value={wf.worktree.branch ?? ""}
+                onChange={(event) =>
+                  onUpdate("defaults.worktree.branch", event.target.value)
+                }
+                className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono h-7`}
+              />
+              <FieldDiagnostic
+                id="defaults-worktree-branch-diagnostic"
+                diagnostics={worktreeBranchDiagnostics}
+              />
+            </SettingInputRow>
+            <SettingInputRow
+              label="Base"
+              description="Optional Git ref used as the starting point for a new branch."
+              id="defaults-worktree-base"
+              path="defaults.worktree.base"
+              {...rowProps}
+            >
+              <input
+                id="defaults-worktree-base"
+                type="text"
+                value={wf.worktree.base ?? ""}
+                onChange={(event) =>
+                  onUpdate("defaults.worktree.base", event.target.value)
+                }
+                placeholder="Default branch"
+                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
+              />
+            </SettingInputRow>
+            <SettingInputRow
+              label="Setup"
+              description="Optional command run after creating a named worktree."
+              id="defaults-worktree-setup"
+              path="defaults.worktree.setup"
+              {...rowProps}
+            >
+              <input
+                id="defaults-worktree-setup"
+                type="text"
+                value={wf.worktree.setup ?? ""}
+                onChange={(event) =>
+                  onUpdate("defaults.worktree.setup", event.target.value)
+                }
+                placeholder="e.g. npm ci"
+                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
+              />
+            </SettingInputRow>
+          </>
+        )}
       </div>
       <div className="border-t border-panel-border pt-4 space-y-3">
         <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">

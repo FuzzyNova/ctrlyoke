@@ -70,6 +70,7 @@ describe("PropertiesDrawer execution mode", () => {
     expect(
       screen.getByRole("button", { name: "Execution Mode" })
     ).toHaveTextContent("Inherit (Headless)");
+    expect(screen.queryByText("Worktree")).not.toBeInTheDocument();
 
     chooseExecutionMode("Interactive");
     expect(useEditorStore.getState().properties.executionMode).toBe(
