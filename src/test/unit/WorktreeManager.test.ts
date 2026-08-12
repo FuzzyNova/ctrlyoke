@@ -76,6 +76,22 @@ suite("WorktreeManager", function () {
     });
   }
 
+  async function ensureManaged(
+    instance: WorktreeManager,
+    repository: string,
+    overrides: Partial<Parameters<WorktreeManager["ensureManagedWorktree"]>[0]> = {}
+  ) {
+    const ids = identity();
+    return instance.ensureManagedWorktree({
+      sourceCheckoutRoot: repository,
+      stateRoot: repository,
+      namedWorkspaceRoots: [{ name: "repository", fsPath: repository }],
+      workflowName: "Managed Test Workflow",
+      ...ids,
+      ...overrides,
+    });
+  }
+
   test("discovers a branch checkout and rejects the initiating checkout", async () => {
     const { parent, repository } = await makeRepository("discover");
     const currentBranch = execFileSync(
@@ -310,5 +326,96 @@ suite("WorktreeManager", function () {
       "ok"
     );
     await retried.lease.release();
+  });
+
+  test("creates an atomic ownership record and re-enters idempotently", async () => {
+    const { parent, repository } = await makeRepository("managed-create");
+    const instance = manager(parent);
+    const first = await ensureManaged(instance, repository);
+    const record = await instance.readManagedWorktreeRecord(
+      repository,
+      first.branchName
+    );
+    assert.ok(record);
+    assert.strictEqual(record?.schemaVersion, 1);
+    assert.strictEqual(record?.baseCommit, first.baseCommit);
+    assert.strictEqual(record?.lastVerifiedBranchTip, first.baseCommit);
+    assert.strictEqual(record?.directoryState, "present");
+    assert.strictEqual(record?.branchState, "present");
+    assert.ok(record?.worktreePath.endsWith(path.basename(first.worktreePath)));
+    await first.lease.release();
+
+    const second = await ensureManaged(instance, repository);
+    assert.strictEqual(second.branchName, first.branchName);
+    assert.strictEqual(second.worktreePath, first.worktreePath);
+    assert.strictEqual(second.origin, "recovered");
+    await second.lease.release();
+  });
+
+  test("reconciles missing managed directories as no-changes, landed, or orphaned", async () => {
+    const noChanges = await makeRepository("managed-no-changes");
+    const noChangesManager = manager(noChanges.parent);
+    const noChangesInfo = await ensureManaged(noChangesManager, noChanges.repository);
+    await noChangesInfo.lease.release();
+    execFileSync("git", ["-C", noChanges.repository, "worktree", "remove", "--force", "--", noChangesInfo.worktreePath], { stdio: "ignore" });
+    assert.strictEqual(
+      await noChangesManager.recoverManagedWorktree({
+        sourceCheckoutRoot: noChanges.repository,
+        branchName: noChangesInfo.branchName,
+      }),
+      undefined
+    );
+    assert.strictEqual(
+      (await noChangesManager.readManagedWorktreeRecord(noChanges.repository, noChangesInfo.branchName))?.recoveryOutcome,
+      "no-changes"
+    );
+
+    const landed = await makeRepository("managed-landed");
+    const landedManager = manager(landed.parent);
+    const landedInfo = await ensureManaged(landedManager, landed.repository);
+    await fs.writeFile(path.join(landedInfo.worktreePath, "landed.txt"), "landed\n");
+    execFileSync("git", ["-C", landedInfo.worktreePath, "add", "landed.txt"]);
+    execFileSync("git", ["-C", landedInfo.worktreePath, "commit", "-m", "landed"], { stdio: "ignore" });
+    const landedTip = execFileSync("git", ["-C", landedInfo.worktreePath, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    await landedManager.markManagedBranchTipVerified(landed.repository, landedInfo.branchName, landedTip);
+    await landedInfo.lease.release();
+    execFileSync("git", ["-C", landed.repository, "worktree", "remove", "--force", "--", landedInfo.worktreePath], { stdio: "ignore" });
+    await landedManager.recoverManagedWorktree({ sourceCheckoutRoot: landed.repository, branchName: landedInfo.branchName });
+    assert.strictEqual(
+      (await landedManager.readManagedWorktreeRecord(landed.repository, landedInfo.branchName))?.recoveryOutcome,
+      "landed"
+    );
+
+    const orphaned = await makeRepository("managed-orphaned");
+    const orphanedManager = manager(orphaned.parent);
+    const orphanedInfo = await ensureManaged(orphanedManager, orphaned.repository);
+    await fs.writeFile(path.join(orphanedInfo.worktreePath, "orphaned.txt"), "orphaned\n");
+    execFileSync("git", ["-C", orphanedInfo.worktreePath, "add", "orphaned.txt"]);
+    execFileSync("git", ["-C", orphanedInfo.worktreePath, "commit", "-m", "orphaned"], { stdio: "ignore" });
+    await orphanedInfo.lease.release();
+    execFileSync("git", ["-C", orphaned.repository, "worktree", "remove", "--force", "--", orphanedInfo.worktreePath], { stdio: "ignore" });
+    await orphanedManager.recoverManagedWorktree({ sourceCheckoutRoot: orphaned.repository, branchName: orphanedInfo.branchName });
+    assert.strictEqual(
+      (await orphanedManager.readManagedWorktreeRecord(orphaned.repository, orphanedInfo.branchName))?.recoveryOutcome,
+      "orphaned"
+    );
+  });
+
+  test("requires the ownership record and recorded tip for managed branch authority", async () => {
+    const { parent, repository } = await makeRepository("managed-authority");
+    const instance = manager(parent);
+    const prefixBranch = "ctrlyoke/not-owned/branch";
+    execFileSync("git", ["-C", repository, "branch", prefixBranch]);
+    assert.strictEqual(await instance.isManagedBranchOwned(repository, prefixBranch), false);
+
+    const info = await ensureManaged(instance, repository);
+    await info.lease.release();
+    execFileSync("git", ["-C", repository, "worktree", "remove", "--force", "--", info.worktreePath], { stdio: "ignore" });
+    execFileSync("git", ["-C", repository, "branch", "-D", info.branchName], { stdio: "ignore" });
+    await fs.writeFile(path.join(repository, "recreated.txt"), "recreated\n");
+    execFileSync("git", ["-C", repository, "add", "recreated.txt"]);
+    execFileSync("git", ["-C", repository, "commit", "-m", "recreated"], { stdio: "ignore" });
+    execFileSync("git", ["-C", repository, "branch", info.branchName, "HEAD"]);
+    assert.strictEqual(await instance.isManagedBranchOwned(repository, info.branchName), false);
   });
 });

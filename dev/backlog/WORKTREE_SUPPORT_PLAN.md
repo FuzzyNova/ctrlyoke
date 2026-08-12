@@ -1984,7 +1984,7 @@ when the targeted directory has an incompatible lease.
 
 ### Phase 3 — Managed branch landing
 
-18. Implement ownership records, branch-tip validation, and idempotent create/recovery.
+18. Implement ownership records, branch-tip validation, and idempotent create/recovery. **Implemented.** Durable branch-hash records are atomically published under the common-directory mutation lock; managed creation captures the promoted run identity/base, uses the Phase 2 bounded naming helpers and initializer, and recovery distinguishes landed, no-change, and orphaned branches without treating naming prefixes as authority. Read-only discovery exposes stale managed checkouts for recovery.
 19. Add managed shorthand/object schema and editor support without `merge`.
     - Extend the drawer mode dropdown to Managed and reveal base/setup/keep,
       including the Keep control's undo consequence, and extend

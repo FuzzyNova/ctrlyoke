@@ -1,21 +1,28 @@
 import * as path from "path";
 import * as crypto from "crypto";
+import * as fs from "fs/promises";
 import {
   addWorktree,
+  currentBranch,
   gitCommonDir,
   hasUncommittedChanges,
   listWorktrees as listGitWorktrees,
+  pruneWorktrees,
   repoToplevel,
   resolveCommit,
   validateBranchName,
   type GitWorktreeEntry,
 } from "../../utils/GitUtils";
 import {
+  createManagedBranchName,
   createWorktreeDirectoryName,
   resolveThroughNearestExistingAncestor,
   resolveWorktreeRoot as resolveConfiguredRoot,
   withRepositoryWorktreeMutationLock,
 } from "../../utils/WorktreeUtils";
+import { writeFileAtomic } from "../../utils/AtomicFileUtils";
+import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
+import { LOCK_STATUS } from "../../types/DashboardConstants";
 import { isPathWithinDirectory } from "../../utils/PathSecurity";
 import { pathsEqual } from "../../utils/PathCasing";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
@@ -44,6 +51,31 @@ export type WorktreeMode = "managed" | "named";
 export type WorktreeManagerMode = WorktreeMode;
 export type WorktreeOrigin = "created" | "discovered" | "recovered";
 export type WorktreeLifecycleOwner = "ctrlyoke" | "user";
+export type ManagedWorktreeRecoveryOutcome =
+  | "landed"
+  | "no-changes"
+  | "orphaned";
+
+export const MANAGED_WORKTREE_RECORD_SCHEMA_VERSION = 1 as const;
+
+export interface ManagedWorktreeOwnershipRecord {
+  schemaVersion: typeof MANAGED_WORKTREE_RECORD_SCHEMA_VERSION;
+  branchName: string;
+  worktreePath: string;
+  sourceCheckoutRoot: string;
+  baseCommit: string;
+  targetBranch?: string;
+  lastVerifiedBranchTip: string;
+  stateRoot: string;
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  createdAt: number;
+  lifecycleState: "provisioning" | "ready" | "orphaned" | "settled";
+  directoryState: "present" | "removed" | "missing" | "remove-failed";
+  branchState: "present" | "deleted" | "missing";
+  recoveryOutcome?: ManagedWorktreeRecoveryOutcome;
+  finalBranchTip?: string;
+}
 
 /** The durable and in-memory identity of a resolved worktree run. */
 export interface WorktreeInfo {
@@ -62,10 +94,17 @@ export interface WorktreeInfo {
   /** Existing named worktrees are allowed to be dirty; this is informational. */
   dirty: boolean;
   /** The exclusive lease held for the lifetime of this resolved run. */
-  lease: ExecutionLeaseHandle;
+  lease?: ExecutionLeaseHandle;
   /** Process-session trust held while this worktree remains discoverable. */
-  runtimeTrust: RuntimeTrustedRootHandle;
+  runtimeTrust?: RuntimeTrustedRootHandle;
   setupOutcome?: "pending" | "running" | "succeeded" | "failed";
+  recoveryOutcome?: ManagedWorktreeRecoveryOutcome;
+}
+
+/** A resolved worktree that owns the process-local lease and trust handles. */
+export interface ActiveWorktreeInfo extends WorktreeInfo {
+  lease: ExecutionLeaseHandle;
+  runtimeTrust: RuntimeTrustedRootHandle;
 }
 
 export interface WorktreeManagerOptions {
@@ -109,6 +148,43 @@ export interface ResolveNamedWorktreeOptions {
   retrySetup?: boolean;
   /** Setup outcome restored from the addressed working file. */
   existingSetupOutcome?: "pending" | "running" | "succeeded" | "failed";
+}
+
+export interface EnsureManagedWorktreeOptions
+  extends Omit<
+    ResolveNamedWorktreeOptions,
+    "branchName" | "workflowKey" | "runRef"
+  > {
+  /** Display name used for both the managed branch slug and directory slug. */
+  workflowName?: string;
+  /** Existing promoted identity. A resolver may supply it for fresh runs. */
+  workflowKey?: WorkflowKey;
+  runRef?: RunRef;
+  /** Resolve/promote the run before any Git discovery or mutation. */
+  resolveRun?: () => Promise<{ workflowKey: WorkflowKey; runRef: RunRef }>;
+  /** Must acquire the lineage runner lock before worktree mutation begins. */
+  acquireRunnerLock?: (identity: {
+    workflowKey: WorkflowKey;
+    runRef: RunRef;
+  }) => Promise<void>;
+  targetBranch?: string;
+}
+
+export interface RecoverManagedWorktreeOptions {
+  sourceCheckoutRoot: string;
+  stateRoot?: string;
+  workflowKey?: WorkflowKey;
+  runRef?: RunRef;
+  branchName?: string;
+  workspaceRoots?: readonly string[];
+  namedWorkspaceRoots?: readonly ResolverWorkspaceFolder[];
+  approvedExternalRoots?: readonly string[];
+  additionalRoots?: readonly string[];
+  additionalTrustedRoots?: readonly string[];
+  runner?: ExecutionLeaseRequest["runner"];
+  instanceId?: string;
+  /** Discovery is read-only; recovery itself acquires a lease and trust. */
+  acquireLease?: boolean;
 }
 
 export class WorktreeSetupError extends Error {
@@ -194,12 +270,413 @@ export class WorktreeManager {
   }
 
   /**
+   * Return the stable record location for a managed branch. The branch itself
+   * is never used as a path component; only its bounded hash is.
+   */
+  public async managedWorktreeRecordPath(
+    sourceCheckoutRoot: string,
+    branchName: string
+  ): Promise<string> {
+    const commonDirectory = await this.requireCommonDirectory(
+      await this.requireRepositoryRoot(sourceCheckoutRoot)
+    );
+    return this.recordPath(commonDirectory, branchName);
+  }
+
+  /** Read one ownership record without treating its presence as ownership. */
+  public async readManagedWorktreeRecord(
+    sourceCheckoutRoot: string,
+    branchName: string
+  ): Promise<ManagedWorktreeOwnershipRecord | undefined> {
+    const recordPath = await this.managedWorktreeRecordPath(
+      sourceCheckoutRoot,
+      normalizeBranchName(branchName.trim())
+    );
+    return this.tryReadRecord(recordPath);
+  }
+
+  /**
+   * Check the only condition settlement may use before deleting a managed
+   * branch. A naming prefix or a worktree path is deliberately irrelevant.
+   */
+  public async isManagedBranchOwned(
+    sourceCheckoutRoot: string,
+    branchName: string
+  ): Promise<boolean> {
+    const normalizedBranch = normalizeBranchName(branchName.trim());
+    const record = await this.readManagedWorktreeRecord(
+      sourceCheckoutRoot,
+      normalizedBranch
+    );
+    if (!record || record.branchName !== normalizedBranch) return false;
+    try {
+      const currentTip = await resolveCommit(
+        await this.requireRepositoryRoot(sourceCheckoutRoot),
+        `refs/heads/${normalizedBranch}`
+      );
+      return currentTip === record.lastVerifiedBranchTip;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Record a tip verified by settlement without deleting or landing anything. */
+  public async markManagedBranchTipVerified(
+    sourceCheckoutRoot: string,
+    branchName: string,
+    branchTip: string
+  ): Promise<void> {
+    const repositoryRoot = await this.requireRepositoryRoot(sourceCheckoutRoot);
+    const normalizedBranch = normalizeBranchName(branchName.trim());
+    const commonDirectory = await this.requireCommonDirectory(repositoryRoot);
+    await withRepositoryWorktreeMutationLock(repositoryRoot, async () => {
+      const recordPath = this.recordPath(commonDirectory, normalizedBranch);
+      const record = await this.tryReadRecord(recordPath);
+      if (!record || record.branchName !== normalizedBranch) {
+        throw new Error(`No managed ownership record exists for "${normalizedBranch}".`);
+      }
+      const currentTip = await resolveCommit(
+        repositoryRoot,
+        `refs/heads/${normalizedBranch}`
+      );
+      if (currentTip !== branchTip) {
+        throw new Error(
+          `Managed branch "${normalizedBranch}" moved before its tip could be verified.`
+        );
+      }
+      await this.writeRecord(recordPath, {
+        ...record,
+        lastVerifiedBranchTip: branchTip,
+        finalBranchTip: branchTip,
+      });
+    });
+  }
+
+  /**
+   * Create or re-enter a managed worktree. The resolver and runner-lock hook
+   * are intentionally before Git discovery so callers cannot accidentally
+   * create a worktree for a draft or a merely viewed run.
+   */
+  public async ensureManagedWorktree(
+    options: EnsureManagedWorktreeOptions
+  ): Promise<ActiveWorktreeInfo> {
+    const identity = options.resolveRun
+      ? await options.resolveRun()
+      : this.requireRunIdentity(options);
+    await options.acquireRunnerLock?.(identity);
+
+    const sourceCheckoutRoot = await this.requireRepositoryRoot(
+      options.sourceCheckoutRoot
+    );
+    const repositoryInputs = await this.resolveExecutionInputs(
+      sourceCheckoutRoot,
+      options
+    );
+    const commonDirectory = await this.requireCommonDirectory(
+      sourceCheckoutRoot
+    );
+
+    return withRepositoryWorktreeMutationLock(sourceCheckoutRoot, async () => {
+      const records = await this.readRecords(commonDirectory);
+      const existingRecord = records.find(
+        (record) =>
+          pathsEqual(record.sourceCheckoutRoot, sourceCheckoutRoot) &&
+          record.workflowKey === identity.workflowKey &&
+          record.runRef === identity.runRef
+      );
+      const generatedBranchName = createManagedBranchName(
+        options.workflowName ?? String(identity.workflowKey),
+        identity.runRef
+      );
+      const branchName = existingRecord?.branchName ?? generatedBranchName;
+      await validateBranchName(branchName);
+
+      const entries = await listGitWorktrees(sourceCheckoutRoot);
+      let existingCheckout = entries.find(
+        (entry) => entry.branchName === branchName
+      );
+      if (
+        existingCheckout &&
+        pathsEqual(existingCheckout.worktreePath, sourceCheckoutRoot)
+      ) {
+        throw new Error(
+          `Managed branch "${branchName}" is already checked out in the source checkout.`
+        );
+      }
+
+      const baseCommit =
+        existingRecord?.baseCommit ??
+        (await resolveCommit(sourceCheckoutRoot, options.base?.trim() || "HEAD"));
+      const targetBranch =
+        existingRecord?.targetBranch ??
+        options.targetBranch?.trim() ??
+        (await currentBranch(sourceCheckoutRoot)) ??
+        undefined;
+      const root = await this.resolveWorktreeRoot(sourceCheckoutRoot);
+      const worktreePath =
+        existingRecord?.worktreePath ??
+        path.join(
+          root,
+          createWorktreeDirectoryName(
+            options.workflowName ?? String(identity.workflowKey),
+            commonDirectory,
+            {
+              kind: "managed",
+              workflowKey: identity.workflowKey,
+              runRef: identity.runRef,
+            }
+          )
+        );
+
+      if (
+        existingCheckout &&
+        !(await this.pathExists(existingCheckout.worktreePath))
+      ) {
+        await pruneWorktrees(sourceCheckoutRoot);
+        existingCheckout = undefined;
+      }
+
+      if (existingCheckout && !pathsEqual(existingCheckout.worktreePath, worktreePath)) {
+        throw new Error(
+          `Managed branch "${branchName}" is checked out at an unexpected path.`
+        );
+      }
+      await this.assertManagedPathIsAvailable(
+        worktreePath,
+        existingCheckout?.worktreePath
+      );
+      const localBranchCommit = existingCheckout
+        ? undefined
+        : await this.tryResolveLocalBranch(sourceCheckoutRoot, branchName);
+      if (localBranchCommit && !existingRecord) {
+        throw new Error(
+          `Managed branch collision: branch "${branchName}" exists without its ownership record.`
+        );
+      }
+
+      const recordPath = this.recordPath(commonDirectory, branchName);
+      const record: ManagedWorktreeOwnershipRecord = existingRecord ?? {
+        schemaVersion: MANAGED_WORKTREE_RECORD_SCHEMA_VERSION,
+        branchName,
+        worktreePath,
+        sourceCheckoutRoot,
+        baseCommit,
+        ...(targetBranch ? { targetBranch } : {}),
+        lastVerifiedBranchTip: baseCommit,
+        stateRoot: path.resolve(options.stateRoot),
+        workflowKey: identity.workflowKey,
+        runRef: identity.runRef,
+        createdAt: this.now(),
+        lifecycleState: "provisioning",
+        directoryState: "missing",
+        branchState: "missing",
+      };
+
+      if (existingRecord) {
+        this.assertRecordMatchesRequest(existingRecord, {
+          sourceCheckoutRoot,
+          workflowKey: identity.workflowKey,
+          runRef: identity.runRef,
+        });
+      } else {
+        await this.writeRecord(recordPath, record);
+      }
+
+      const origin: WorktreeOrigin = existingRecord ? "recovered" : "created";
+      let attached = existingCheckout;
+      if (!attached) {
+        await addWorktree(sourceCheckoutRoot, worktreePath, {
+          branchName,
+          createBranch: !localBranchCommit,
+          ...(localBranchCommit ? {} : { baseRef: baseCommit }),
+        });
+        attached = (await listGitWorktrees(sourceCheckoutRoot)).find(
+          (entry) => entry.branchName === branchName
+        );
+        if (!attached) {
+          throw new Error(
+            `Git created managed worktree "${branchName}" but it was not discoverable afterward.`
+          );
+        }
+      }
+      if (!pathsEqual(attached.worktreePath, worktreePath)) {
+        throw new Error(
+          `Managed branch "${branchName}" was attached at an unexpected path.`
+        );
+      }
+
+      await WorkspaceInitializer.initializeIfNeeded(worktreePath);
+      const updatedRecord: ManagedWorktreeOwnershipRecord = {
+        ...record,
+        worktreePath,
+        lifecycleState: "ready",
+        directoryState: "present",
+        branchState: "present",
+      };
+      await this.writeRecord(recordPath, updatedRecord);
+
+      return this.acquireManagedInfo({
+        record: updatedRecord,
+        repositoryInputs,
+        origin,
+        options,
+      });
+    });
+  }
+
+  /**
+   * Reconcile one durable record. Missing directories are classified from the
+   * recorded base and verified tip, never from branch naming or path location.
+   */
+  public async recoverManagedWorktree(
+    options: RecoverManagedWorktreeOptions
+  ): Promise<WorktreeInfo | undefined> {
+    const sourceCheckoutRoot = await this.requireRepositoryRoot(
+      options.sourceCheckoutRoot
+    );
+    const commonDirectory = await this.requireCommonDirectory(
+      sourceCheckoutRoot
+    );
+    return withRepositoryWorktreeMutationLock(sourceCheckoutRoot, async () => {
+      const records = await this.readRecords(commonDirectory);
+      const record = records.find(
+        (candidate) =>
+          pathsEqual(candidate.sourceCheckoutRoot, sourceCheckoutRoot) &&
+          (options.branchName === undefined ||
+            candidate.branchName === normalizeBranchName(options.branchName)) &&
+          (options.workflowKey === undefined ||
+            candidate.workflowKey === options.workflowKey) &&
+          (options.runRef === undefined || candidate.runRef === options.runRef)
+      );
+      if (!record) return undefined;
+
+      const branchTip = await this.tryResolveLocalBranch(
+        sourceCheckoutRoot,
+        record.branchName
+      );
+      const recordPath = this.recordPath(commonDirectory, record.branchName);
+      if (!branchTip) {
+        // The user deleted the branch. Removing only this now-stale record is
+        // safe reconciliation; no Git object is deleted by recovery.
+        await fs.unlink(recordPath).catch((error: unknown) => {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        });
+        return undefined;
+      }
+
+      const entries = await listGitWorktrees(sourceCheckoutRoot);
+      const entry = entries.find(
+        (candidate) => candidate.branchName === record.branchName
+      );
+      const directoryPresent = Boolean(
+        entry && (await this.pathExists(entry.worktreePath))
+      );
+      if (!directoryPresent) {
+        const recoveryOutcome =
+          branchTip === record.baseCommit
+            ? "no-changes"
+            : branchTip === record.lastVerifiedBranchTip &&
+                record.lastVerifiedBranchTip !== record.baseCommit
+              ? "landed"
+              : "orphaned";
+        await this.writeRecord(recordPath, {
+          ...record,
+          directoryState: "missing",
+          branchState: "present",
+          recoveryOutcome,
+          finalBranchTip: branchTip,
+          lifecycleState: recoveryOutcome === "orphaned" ? "orphaned" : "settled",
+        });
+        return undefined;
+      }
+      if (!entry || !pathsEqual(entry.worktreePath, record.worktreePath)) {
+        return undefined;
+      }
+
+      if (options.acquireLease === false) {
+        return this.buildManagedInfoWithoutLease(record, options, "recovered");
+      }
+
+      const runnerStatus = await WorkflowLockManager.checkLock(
+        record.stateRoot,
+        record.workflowKey
+      );
+      if (
+        runnerStatus === LOCK_STATUS.ACTIVE_CLI ||
+        runnerStatus === LOCK_STATUS.ACTIVE_VSCODE
+      ) {
+        return undefined;
+      }
+      return this.acquireManagedInfo({
+        record: {
+          ...record,
+          directoryState: "present",
+          branchState: "present",
+          lifecycleState: "ready",
+        },
+        repositoryInputs: await this.resolveExecutionInputs(
+          sourceCheckoutRoot,
+          this.recoveryAsResolveOptions(record, options)
+        ),
+        origin: "recovered",
+        options: this.recoveryAsResolveOptions(record, options),
+      });
+    });
+  }
+
+  /** Read-only activation discovery. Returned infos do not own a lease/trust. */
+  public async discoverRecoverableManagedWorktrees(
+    options: Omit<RecoverManagedWorktreeOptions, "branchName" | "acquireLease">
+  ): Promise<WorktreeInfo[]> {
+    const sourceCheckoutRoot = await this.requireRepositoryRoot(
+      options.sourceCheckoutRoot
+    );
+    const commonDirectory = await this.requireCommonDirectory(
+      sourceCheckoutRoot
+    );
+    const records = await this.readRecords(commonDirectory);
+    const entries = await listGitWorktrees(sourceCheckoutRoot);
+    const result: WorktreeInfo[] = [];
+    for (const record of records) {
+      if (!pathsEqual(record.sourceCheckoutRoot, sourceCheckoutRoot)) continue;
+      if (
+        options.workflowKey !== undefined &&
+        record.workflowKey !== options.workflowKey
+      ) continue;
+      if (options.runRef !== undefined && record.runRef !== options.runRef) continue;
+      const entry = entries.find(
+        (candidate) =>
+          candidate.branchName === record.branchName &&
+          pathsEqual(candidate.worktreePath, record.worktreePath)
+      );
+      if (!entry || !(await this.pathExists(record.worktreePath))) continue;
+      const runnerStatus = await WorkflowLockManager.checkLock(
+        record.stateRoot,
+        record.workflowKey
+      );
+      if (
+        runnerStatus === LOCK_STATUS.ACTIVE_CLI ||
+        runnerStatus === LOCK_STATUS.ACTIVE_VSCODE
+      ) continue;
+      if (await this.hasLiveLease(record.worktreePath)) continue;
+      result.push(
+        await this.buildManagedInfoWithoutLease(
+          record,
+          { ...options, sourceCheckoutRoot },
+          "recovered"
+        )
+      );
+    }
+    return result;
+  }
+
+  /**
    * Resolve a named branch, attaching or creating its linked checkout as
    * necessary. The returned lease must be released by the execution owner.
    */
   public async resolveNamedWorktree(
     options: ResolveNamedWorktreeOptions
-  ): Promise<WorktreeInfo> {
+  ): Promise<ActiveWorktreeInfo> {
     const branchName = normalizeBranchName(options.branchName.trim());
     if (!branchName) throw new Error("Named worktree mode requires a branch.");
 
@@ -416,7 +893,7 @@ export class WorktreeManager {
       }
     }
 
-    const info: WorktreeInfo = {
+    const info: ActiveWorktreeInfo = {
       mode: "named",
       origin,
       lifecycleOwner: "user",
@@ -454,7 +931,7 @@ export class WorktreeManager {
   /** Explicit user action for a previously blocked or interrupted setup. */
   public async retrySetup(
     options: ResolveNamedWorktreeOptions
-  ): Promise<WorktreeInfo> {
+  ): Promise<ActiveWorktreeInfo> {
     if (!options.setup?.trim()) {
       throw new Error("Retry Setup requires a configured setup command.");
     }
@@ -463,12 +940,12 @@ export class WorktreeManager {
 
   /** Release the lease held by a resolved worktree. No Git cleanup is performed. */
   public async releaseWorktree(info: WorktreeInfo): Promise<void> {
-    await info.lease.release();
+    await info.lease?.release();
   }
 
   /** Release process-session trust after the run/session is no longer loaded. */
   public releaseRuntimeTrust(info: WorktreeInfo): void {
-    info.runtimeTrust.release();
+    info.runtimeTrust?.release();
   }
 
   private async runSetup(
@@ -495,6 +972,322 @@ export class WorktreeManager {
     } finally {
       runner.dispose();
     }
+  }
+
+  private requireRunIdentity(options: EnsureManagedWorktreeOptions): {
+    workflowKey: WorkflowKey;
+    runRef: RunRef;
+  } {
+    if (!options.workflowKey || !options.runRef) {
+      throw new Error(
+        "Managed worktree execution requires a promoted workflowKey and runRef."
+      );
+    }
+    return { workflowKey: options.workflowKey, runRef: options.runRef };
+  }
+
+  private recordPath(commonDirectory: string, branchName: string): string {
+    const branchHash = crypto
+      .createHash("sha256")
+      .update(normalizeBranchName(branchName), "utf8")
+      .digest("hex");
+    return path.join(
+      commonDirectory,
+      "ctrlyoke",
+      "managed-worktrees",
+      `${branchHash}.json`
+    );
+  }
+
+  private async readRecords(
+    commonDirectory: string
+  ): Promise<ManagedWorktreeOwnershipRecord[]> {
+    const directory = path.join(commonDirectory, "ctrlyoke", "managed-worktrees");
+    let entries: import("fs").Dirent[];
+    try {
+      entries = await fs.readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    }
+    const records: ManagedWorktreeOwnershipRecord[] = [];
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      const record = await this.tryReadRecord(path.join(directory, entry.name));
+      if (record) records.push(record);
+    }
+    return records;
+  }
+
+  private async tryReadRecord(
+    recordPath: string
+  ): Promise<ManagedWorktreeOwnershipRecord | undefined> {
+    try {
+      const parsed = JSON.parse(
+        await fs.readFile(recordPath, "utf8")
+      ) as Partial<ManagedWorktreeOwnershipRecord>;
+      if (
+        parsed.schemaVersion !== MANAGED_WORKTREE_RECORD_SCHEMA_VERSION ||
+        typeof parsed.branchName !== "string" ||
+        typeof parsed.worktreePath !== "string" ||
+        typeof parsed.sourceCheckoutRoot !== "string" ||
+        typeof parsed.baseCommit !== "string" ||
+        typeof parsed.lastVerifiedBranchTip !== "string" ||
+        typeof parsed.stateRoot !== "string" ||
+        typeof parsed.workflowKey !== "string" ||
+        typeof parsed.runRef !== "string" ||
+        typeof parsed.createdAt !== "number" ||
+        !parsed.lifecycleState ||
+        !parsed.directoryState ||
+        !parsed.branchState
+      ) {
+        return undefined;
+      }
+      return parsed as ManagedWorktreeOwnershipRecord;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+      // A partially written/corrupt record is not ownership evidence. Ignore
+      // it during discovery; the next explicit ensure will fail on collisions
+      // rather than silently adopting it.
+      return undefined;
+    }
+  }
+
+  private async writeRecord(
+    recordPath: string,
+    record: ManagedWorktreeOwnershipRecord
+  ): Promise<void> {
+    await fs.mkdir(path.dirname(recordPath), { recursive: true });
+    await writeFileAtomic(recordPath, `${JSON.stringify(record, null, 2)}\n`);
+  }
+
+  private assertRecordMatchesRequest(
+    record: ManagedWorktreeOwnershipRecord,
+    request: {
+      sourceCheckoutRoot: string;
+      workflowKey: WorkflowKey;
+      runRef: RunRef;
+    }
+  ): void {
+    if (
+      !pathsEqual(record.sourceCheckoutRoot, request.sourceCheckoutRoot) ||
+      record.workflowKey !== request.workflowKey ||
+      record.runRef !== request.runRef
+    ) {
+      throw new Error(
+        `Managed ownership record for "${record.branchName}" belongs to another run.`
+      );
+    }
+  }
+
+  private async assertManagedPathIsAvailable(
+    worktreePath: string,
+    expectedPath?: string
+  ): Promise<void> {
+    if (expectedPath && pathsEqual(worktreePath, expectedPath)) return;
+    try {
+      const stats = await fs.lstat(worktreePath);
+      if (stats.isSymbolicLink() || !stats.isDirectory()) {
+        throw new Error(`Managed worktree path is not an available directory: ${worktreePath}`);
+      }
+      throw new Error(`Managed worktree path collision: ${worktreePath}`);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+
+  private async pathExists(candidate: string): Promise<boolean> {
+    try {
+      await fs.access(candidate);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async hasLiveLease(executionRoot: string): Promise<boolean> {
+    const scope = await ExecutionRootLeaseManager.getScopeInfo(executionRoot);
+    let entries: import("fs").Dirent[];
+    try {
+      entries = await fs.readdir(scope.leasesRoot, { withFileTypes: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+      throw error;
+    }
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      try {
+        const lease = JSON.parse(
+          await fs.readFile(path.join(scope.leasesRoot, entry.name), "utf8")
+        ) as { pid: number; lastHeartbeat: number };
+        if (!ExecutionRootLeaseManager.isLeaseStale(lease)) return true;
+      } catch {
+        // A malformed or disappearing lease cannot prove a live owner.
+      }
+    }
+    return false;
+  }
+
+  private recoveryAsResolveOptions(
+    record: ManagedWorktreeOwnershipRecord,
+    options: RecoverManagedWorktreeOptions
+  ): EnsureManagedWorktreeOptions {
+    const namedWorkspaceRoots = options.namedWorkspaceRoots ?? [
+      { name: "repository", fsPath: record.sourceCheckoutRoot },
+    ];
+    return {
+      sourceCheckoutRoot: record.sourceCheckoutRoot,
+      stateRoot: options.stateRoot ?? record.stateRoot,
+      workspaceRoots: options.workspaceRoots,
+      namedWorkspaceRoots,
+      approvedExternalRoots: options.approvedExternalRoots,
+      additionalRoots: options.additionalRoots,
+      additionalTrustedRoots: options.additionalTrustedRoots,
+      workflowKey: record.workflowKey,
+      runRef: record.runRef,
+      runner: options.runner ?? "vscode",
+      instanceId: options.instanceId,
+      targetBranch: record.targetBranch,
+    };
+  }
+
+  private async buildManagedInfoWithoutLease(
+    record: ManagedWorktreeOwnershipRecord,
+    options: RecoverManagedWorktreeOptions,
+    origin: WorktreeOrigin
+  ): Promise<WorktreeInfo> {
+    const resolvedOptions = this.recoveryAsResolveOptions(record, options);
+    const inputs = await this.resolveExecutionInputs(
+      record.sourceCheckoutRoot,
+      resolvedOptions
+    );
+    const executionWorkspace = this.buildExecutionWorkspace(
+      inputs,
+      record.worktreePath,
+      resolvedOptions
+    );
+    return {
+      mode: "managed",
+      origin,
+      lifecycleOwner: "ctrlyoke",
+      branchName: record.branchName,
+      worktreePath: record.worktreePath,
+      sourceCheckoutRoot: record.sourceCheckoutRoot,
+      baseCommit: record.baseCommit,
+      targetBranch: record.targetBranch,
+      workflowKey: record.workflowKey,
+      runRef: record.runRef,
+      createdAt: record.createdAt,
+      executionWorkspace,
+      dirty: false,
+      ...(record.recoveryOutcome
+        ? { recoveryOutcome: record.recoveryOutcome }
+        : {}),
+    };
+  }
+
+  private async acquireManagedInfo(args: {
+    record: ManagedWorktreeOwnershipRecord;
+    repositoryInputs: ResolvedRepositoryInputs;
+    origin: WorktreeOrigin;
+    options: EnsureManagedWorktreeOptions;
+  }): Promise<ActiveWorktreeInfo> {
+    const executionWorkspace = this.buildExecutionWorkspace(
+      args.repositoryInputs,
+      args.record.worktreePath,
+      args.options
+    );
+    const lease = await this.leaseManager.acquire({
+      mode: "exclusive-worktree",
+      stateRoot: args.record.stateRoot,
+      executionRoot: executionWorkspace.executionRoot,
+      workflowKey: args.record.workflowKey,
+      runRef: args.record.runRef,
+      runner: args.options.runner ?? "vscode",
+      instanceId: args.options.instanceId ?? crypto.randomUUID(),
+    });
+    let runtimeTrust: RuntimeTrustedRootHandle;
+    try {
+      runtimeTrust = await runtimeTrustedRootRegistry.register({
+        rootPath: args.record.worktreePath,
+        repositoryRoot: args.record.sourceCheckoutRoot,
+        ownerToken: args.options.instanceId,
+      });
+    } catch (error) {
+      await lease.release();
+      throw error;
+    }
+    const dirty = await hasUncommittedChanges(args.record.worktreePath);
+    const info: ActiveWorktreeInfo = {
+      mode: "managed",
+      origin: args.origin,
+      lifecycleOwner: "ctrlyoke",
+      branchName: args.record.branchName,
+      worktreePath: args.record.worktreePath,
+      sourceCheckoutRoot: args.record.sourceCheckoutRoot,
+      baseCommit: args.record.baseCommit,
+      targetBranch: args.record.targetBranch,
+      workflowKey: args.record.workflowKey,
+      runRef: args.record.runRef,
+      createdAt: args.record.createdAt,
+      executionWorkspace,
+      dirty,
+      lease,
+      runtimeTrust,
+      ...(args.record.recoveryOutcome
+        ? { recoveryOutcome: args.record.recoveryOutcome }
+        : {}),
+    };
+    await this.persistRuntime({
+      schemaVersion: 1,
+      mode: "managed",
+      origin: args.origin,
+      branchName: args.record.branchName,
+      worktreePath: args.record.worktreePath,
+      executionRoot: executionWorkspace.executionRoot,
+      executionCheckoutRoot: args.record.worktreePath,
+      sourceCheckoutRoot: args.record.sourceCheckoutRoot,
+      namedWorkspaceRoots: [...executionWorkspace.namedWorkspaceRoots],
+      baseCommit: args.record.baseCommit,
+      ...(args.record.targetBranch
+        ? { targetBranch: args.record.targetBranch }
+        : {}),
+      lifecycleOwner: "ctrlyoke",
+      lifecycleState: "ready",
+      directoryState: "present",
+      branchState: "present",
+      dirty,
+    });
+    return info;
+  }
+
+  private buildExecutionWorkspace(
+    inputs: ResolvedRepositoryInputs,
+    executionCheckoutRoot: string,
+    options: { stateRoot: string; worktree?: WorktreeResolution }
+  ): ExecutionWorkspace {
+    const mapSourcePath = (sourcePath: string): string =>
+      path.resolve(
+        executionCheckoutRoot,
+        path.relative(inputs.sourceCheckoutRoot, sourcePath)
+      );
+    const executionRoot = mapSourcePath(inputs.executionRoot);
+    return {
+      stateRoot: path.resolve(options.stateRoot),
+      executionRoot,
+      executionCheckoutRoot,
+      sourceCheckoutRoot: inputs.sourceCheckoutRoot,
+      workspaceRoots: dedupePaths([
+        executionRoot,
+        ...inputs.workspaceRoots.map((sourceRoot) => mapSourcePath(sourceRoot)),
+      ]),
+      namedWorkspaceRoots: inputs.namedWorkspaceRoots.map((rootEntry) => ({
+        ...rootEntry,
+        fsPath: mapSourcePath(rootEntry.fsPath),
+      })),
+      approvedExternalRoots: inputs.approvedExternalRoots,
+      ...(options.worktree ? { worktree: options.worktree } : {}),
+    };
   }
 
   private async requireRepositoryRoot(sourceCheckoutRoot: string): Promise<string> {
@@ -524,7 +1317,14 @@ export class WorktreeManager {
 
   private async resolveExecutionInputs(
     sourceCheckoutRoot: string,
-    options: ResolveNamedWorktreeOptions
+    options: {
+      stateRoot: string;
+      namedWorkspaceRoots: readonly ResolverWorkspaceFolder[];
+      workspaceRoots?: readonly string[];
+      approvedExternalRoots?: readonly string[];
+      additionalRoots?: readonly string[];
+      additionalTrustedRoots?: readonly string[];
+    }
   ): Promise<ResolvedRepositoryInputs> {
     const sourceRoot = await resolveThroughNearestExistingAncestor(
       sourceCheckoutRoot
