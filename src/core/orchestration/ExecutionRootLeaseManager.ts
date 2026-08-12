@@ -49,6 +49,13 @@ export interface ExecutionLeaseConflict {
   retryAction: "retry";
 }
 
+/** Read-only lease state used by worktree discovery and activation diagnostics. */
+export interface ExecutionLeaseInspection {
+  lease: ExecutionLease;
+  ageMs: number;
+  stale: boolean;
+}
+
 export class ExecutionLeaseConflictError extends Error {
   readonly conflict: ExecutionLeaseConflict;
   readonly retryable = true;
@@ -384,6 +391,42 @@ export class ExecutionRootLeaseManager {
     arbitrationPath: string;
   }> {
     return resolveLeaseScope(executionRoot);
+  }
+
+  /** Inspect persisted leases without pruning stale owners or changing Git state. */
+  static async inspectLeases(
+    executionRoot: string,
+    now = Date.now()
+  ): Promise<ExecutionLeaseInspection[]> {
+    const scope = await resolveLeaseScope(executionRoot);
+    let entries: import("fs").Dirent[];
+    try {
+      entries = await fs.readdir(scope.leasesRoot, { withFileTypes: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    }
+
+    const inspections: ExecutionLeaseInspection[] = [];
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      let lease: ExecutionLease | null;
+      try {
+        lease = await readJson<ExecutionLease>(
+          path.join(scope.leasesRoot, entry.name)
+        );
+      } catch {
+        // A malformed or disappearing lease cannot prove a live owner.
+        continue;
+      }
+      if (!lease) continue;
+      inspections.push({
+        lease,
+        ageMs: Math.max(0, now - lease.startedAt),
+        stale: ExecutionRootLeaseManager.isLeaseStale(lease),
+      });
+    }
+    return inspections;
   }
 
   /** Shared stale-owner predicate for callers inspecting persisted leases. */

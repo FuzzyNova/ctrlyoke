@@ -97,6 +97,7 @@ import { TemplateImporter } from "./orchestration/TemplateImporter";
 import { WorkflowCommandHandler } from "./orchestration/WorkflowCommandHandler";
 import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager";
 import { WorkspaceInitializer } from "./orchestration/WorkspaceInitializer";
+import { WorktreeManager } from "./orchestration/WorktreeManager";
 import { PromptFileParser } from "./PromptFileParser";
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
 import { PropertyResolver } from "../utils/PropertyResolver";
@@ -1224,6 +1225,7 @@ export class WorkflowOrchestrator {
         // Must run after harness init and before auto-load so stale RUNNING files
         // are normalized and CLI-managed workflows are registered.
         await this.setupCliWatching();
+        await this.discoverWorktreesOnActivation();
       }
 
       this.orchestratorInitialized = true;
@@ -5438,6 +5440,54 @@ export class WorkflowOrchestrator {
 
     // Entry Point 3: Watch for new runner.json files created while VS Code is open
     this.setupRunnerJsonCreateWatcher(workspaceFolderPath, runsRootDir);
+  }
+
+  /** Read-only activation report for managed and user-owned Git worktrees. */
+  private async discoverWorktreesOnActivation(): Promise<void> {
+    const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceFolderPath) return;
+
+    try {
+      const report = await new WorktreeManager().discoverActivationState({
+        sourceCheckoutRoot: workspaceFolderPath,
+      });
+      const inUse = report.worktrees.filter((entry) => entry.inUse);
+      const prunable = report.worktrees.filter((entry) => entry.prunableReason);
+
+      Log.info(
+        `[WorktreeRecovery] activation discovered ${report.worktrees.length} worktree(s), ` +
+          `${report.recoverableManagedWorktrees.length} recoverable managed, ` +
+          `${report.staleManagedWorktrees.length} stale managed record(s), ` +
+          `${prunable.length} prunable entr${prunable.length === 1 ? "y" : "ies"}.`
+      );
+      for (const entry of inUse) {
+        const owners = entry.leaseOwners
+          .map(
+            ({ lease, ageMs }) =>
+              `workflow ${lease.workflowKey}, run ${lease.runRef}; ` +
+              `${lease.runner} instance ${lease.instanceId}, PID ${lease.pid}; ` +
+              `state root ${lease.stateRoot}; lease age ${Math.floor(ageMs / 1000)}s`
+          )
+          .join(" | ");
+        Log.warn(
+          `[WorktreeRecovery] worktree in use: ${entry.worktreePath} — ${owners}`
+        );
+      }
+      for (const entry of prunable) {
+        Log.warn(
+          `[WorktreeRecovery] Git reports a prunable worktree entry: ${entry.worktreePath}` +
+            `${entry.prunableReason ? ` (${entry.prunableReason})` : ""}. No automatic prune was performed.`
+        );
+      }
+      for (const record of report.staleManagedWorktrees) {
+        Log.warn(
+          `[WorktreeRecovery] managed worktree requires reconciliation: ${record.branchName} at ${record.worktreePath}. ` +
+            "Activation is read-only; no directory or branch was deleted."
+        );
+      }
+    } catch (error) {
+      Log.warn("[WorktreeRecovery] activation discovery failed:", error);
+    }
   }
 
   /**

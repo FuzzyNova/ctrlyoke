@@ -69,6 +69,8 @@ export interface WorkflowOutputHistory {
   executionState: ExecutionState;
   /** Status projection sourced from this run's persisted `_runtime.worktree`. */
   worktree?: WorktreeRunProjection;
+  /** Durable notice when an inherited worktree default degraded to none. */
+  worktreeNotice?: string;
 
   // Per-step outputs (keyed by stepIndex)
   promptOutputs: {
@@ -86,7 +88,12 @@ export interface WorkflowOutputHistory {
 
 export type WorkflowRunMetadata = Pick<
   WorkflowOutputHistory,
-  "runId" | "startedAt" | "completedAt" | "executionState" | "worktree"
+  | "runId"
+  | "startedAt"
+  | "completedAt"
+  | "executionState"
+  | "worktree"
+  | "worktreeNotice"
 >;
 
 /**

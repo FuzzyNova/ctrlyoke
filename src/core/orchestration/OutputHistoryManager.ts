@@ -2,6 +2,9 @@ import * as fs from "fs";
 import * as path from "path";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import {
+  projectWorktreeRuntime,
+} from "../../types/CtrlYokeTypes";
 import type {
   RunRef,
   WorkflowKey,
@@ -860,8 +863,14 @@ export class OutputHistoryManager {
       );
       const workingFile = JSON.parse(
         await fs.promises.readFile(runFilePath, "utf8")
-      ) as { _runtime?: { worktree?: WorktreeRunProjection } };
-      enriched.worktree = workingFile._runtime?.worktree;
+      ) as {
+        _runtime?: {
+          worktree?: import("../../types/CtrlYokeTypes").WorkingFileWorktreeRuntime;
+          worktreeNotice?: string;
+        };
+      };
+      enriched.worktree = projectWorktreeRuntime(workingFile._runtime?.worktree);
+      enriched.worktreeNotice = workingFile._runtime?.worktreeNotice;
     } catch {
       // Older or partially recovered runs may not have a working file. The
       // timeline remains renderable without a worktree projection.
@@ -1010,6 +1019,7 @@ export class OutputHistoryManager {
         hasMixedModels,
         tokenTotals,
         worktree,
+        worktreeNotice,
       } = await this.readRunFileSummaryFields(runFilePath);
 
       const record: RunSummaryRecord = {
@@ -1038,6 +1048,7 @@ export class OutputHistoryManager {
           hasMixedModels,
           tokenTotals: tokenTotals ?? manifest.tokenTotals,
           worktree,
+          worktreeNotice,
         },
       };
 
@@ -1073,6 +1084,7 @@ export class OutputHistoryManager {
     executionEndTime?: number;
     tokenTotals?: WorkflowTokenTotals;
     worktree?: WorktreeRunProjection;
+    worktreeNotice?: string;
     primaryHarness?: string;
     primaryModel?: string;
     hasMixedHarnesses: boolean;
@@ -1087,7 +1099,8 @@ export class OutputHistoryManager {
           executionState?: ExecutionState;
           executionEndTime?: number;
           tokenTotals?: WorkflowTokenTotals;
-          worktree?: WorktreeRunProjection;
+          worktree?: import("../../types/CtrlYokeTypes").WorkingFileWorktreeRuntime;
+          worktreeNotice?: string;
         };
         steps?: Array<{
           type?: string;
@@ -1118,7 +1131,8 @@ export class OutputHistoryManager {
         executionState: workingFile._runtime?.executionState,
         executionEndTime: workingFile._runtime?.executionEndTime,
         tokenTotals: workingFile._runtime?.tokenTotals,
-        worktree: workingFile._runtime?.worktree,
+        worktree: projectWorktreeRuntime(workingFile._runtime?.worktree),
+        worktreeNotice: workingFile._runtime?.worktreeNotice,
         primaryHarness: harnesses.values().next().value,
         primaryModel: models.values().next().value,
         hasMixedHarnesses: harnesses.size > 1,

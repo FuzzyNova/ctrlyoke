@@ -9,6 +9,7 @@ import type {
   WorkflowKey,
   WorkflowLineageDescriptor,
   WorkingFile,
+  WorkingFileWorktreeRuntime,
 } from "../../types/CtrlYokeTypes";
 import { EXECUTION_STATES, RUNNER_IDS } from "../../types/DashboardConstants";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
@@ -45,7 +46,11 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
   async function createRun(
     suffix: string,
     runTime: string,
-    options: { prompt?: string; responseText?: string } = {}
+    options: {
+      prompt?: string;
+      responseText?: string;
+      worktree?: WorkingFileWorktreeRuntime;
+    } = {}
   ): Promise<RunFixture> {
     const workflowKey = `mcp-${suffix}-2026-01-01T00-00-00` as WorkflowKey;
     const runRef = `run-${runTime}` as RunRef;
@@ -83,6 +88,7 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       _runtime: {
         currentIndex: 1,
         executionState: EXECUTION_STATES.COMPLETED,
+        ...(options.worktree ? { worktree: options.worktree } : {}),
       },
     };
     await fs.mkdir(path.dirname(runFilePath), { recursive: true });
@@ -191,7 +197,26 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
   test("global_status reports sibling workflows and narrows on request", async () => {
     const server = await setup();
     const own = await createRun("own", "2026-01-01T00-00-00-000Z");
-    const other = await createRun("other", "2026-01-02T00-00-00-000Z");
+    const other = await createRun("other", "2026-01-02T00-00-00-000Z", {
+      worktree: {
+        schemaVersion: 1,
+        mode: "managed",
+        origin: "created",
+        branchName: "ctrlyoke/other/run-2",
+        worktreePath: path.join(workspaceRoot, "worktrees", "other"),
+        executionRoot: path.join(workspaceRoot, "worktrees", "other"),
+        executionCheckoutRoot: path.join(workspaceRoot, "worktrees", "other"),
+        sourceCheckoutRoot: workspaceRoot,
+        namedWorkspaceRoots: [{ name: "workspace", fsPath: workspaceRoot }],
+        baseCommit: "base",
+        lifecycleOwner: "ctrlyoke",
+        lifecycleState: "settled",
+        directoryState: "removed",
+        branchState: "present",
+        landingOutcome: "landed",
+        updatedAt: 2,
+      },
+    });
     process.env.CTRLYOKE_WORKING_FILE = own.runFilePath;
 
     const all = responseJson(
@@ -211,6 +236,14 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
       narrowed.workflows.map((workflow: any) => workflow.workflowKey),
       [other.workflowKey]
     );
+    const otherStatus = narrowed.workflows[0];
+    assert.deepStrictEqual(otherStatus.worktree, {
+      mode: "managed",
+      branchName: "ctrlyoke/other/run-2",
+      worktreePath: path.join(workspaceRoot, "worktrees", "other"),
+      lifecycleState: "settled",
+      directoryState: "removed",
+    });
   });
 
   test("refuses every workflow tool when no run is attached", async () => {

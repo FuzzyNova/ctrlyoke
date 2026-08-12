@@ -1421,6 +1421,11 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     return this.workingFileManager.updateWorktreeRuntime(patch);
   }
 
+  /** Persist a durable notice for an inherited worktree default degradation. */
+  public async updateWorktreeNotice(notice: string): Promise<void> {
+    return this.workingFileManager.updateWorktreeNotice(notice);
+  }
+
   /**
    * Get runtime state for workflow-level finalStep execution.
    */

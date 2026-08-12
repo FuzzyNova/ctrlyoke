@@ -266,6 +266,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
             startedAt={runBanner.startedAt}
             executionState={runBanner.executionState}
             tokenTotals={runBanner.tokenTotals}
+            worktree={runBanner.worktree}
             isPinned={isRunBannerPinned}
             onTogglePinned={onToggleRunBannerPinned}
             showBackToLive={showBackToLive}

@@ -867,6 +867,20 @@ export class CtrlYokeMCPServer {
               startedAt: data.startedAt ?? null,
               lastModifiedAt: data.lastModifiedAt ?? null,
               workingFile: path.relative(this.workspaceRoot, filePath),
+              ...(runtime.worktree
+                ? {
+                    worktree: {
+                      mode: runtime.worktree.mode,
+                      branchName: runtime.worktree.branchName,
+                      worktreePath: runtime.worktree.worktreePath,
+                      lifecycleState: runtime.worktree.lifecycleState,
+                      directoryState: runtime.worktree.directoryState,
+                    },
+                  }
+                : {}),
+              ...(runtime.worktreeNotice
+                ? { worktreeNotice: runtime.worktreeNotice }
+                : {}),
             };
           } catch {
             return null;

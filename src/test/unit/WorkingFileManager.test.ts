@@ -10,12 +10,21 @@ import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLine
 import type {
   PromptRuntimeMetadata,
   PromptStep,
+  RunRef,
   WorkingFile,
   WorkingFileWorktreeRuntime,
+  WorkflowKey,
   WorkflowTokenTotals,
 } from "../../types/CtrlYokeTypes";
 import { EXECUTION_STATES } from "../../types/DashboardConstants";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import {
+  clearRunSummaryCache,
+  runSummaryCacheSize,
+  stampRunFiles,
+  storeRunSummary,
+} from "../../core/orchestration/RunSummaryCache";
+import type { RunSummaryRecord } from "../../core/orchestration/OutputHistoryManager";
 
 // ─── Minimal mock for IWorkingFileQueueAccess ────────────────────────────────
 
@@ -503,6 +512,50 @@ suite("WorkingFileManager", () => {
       });
       assert.strictEqual(persisted.definitionRevision, 9);
       assert.strictEqual(access.getDefinitionRevision(), 9);
+    });
+
+    test("invalidates the run summary cache when worktree runtime changes", async () => {
+      clearRunSummaryCache();
+      const workingFilePath = tempFile("worktree-cache-invalidation");
+      const baseWorkingFile = makeMinimalWorkingFile();
+      await writeTempJson(workingFilePath, {
+        ...baseWorkingFile,
+        _runtime: {
+          ...baseWorkingFile._runtime,
+          worktree: makeWorktreeRuntime(),
+        },
+      });
+      const runDirectoryPath = path.dirname(workingFilePath);
+      const record = {
+        manifestExecutionState: EXECUTION_STATES.COMPLETED,
+        summary: {
+          workflowKey: "cache-lineage" as WorkflowKey,
+          runRef: "run-1" as RunRef,
+          runId: 1,
+          startedAt: 1,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+      } satisfies RunSummaryRecord;
+      storeRunSummary(
+        runDirectoryPath,
+        await stampRunFiles(
+          path.join(runDirectoryPath, "manifest.json"),
+          workingFilePath
+        ),
+        record
+      );
+      assert.strictEqual(runSummaryCacheSize(), 1);
+
+      await new WorkingFileManager(
+        makeMockAccess(workingFilePath)
+      ).updateWorktreeRuntime({ lifecycleState: "settled" });
+
+      assert.strictEqual(runSummaryCacheSize(), 0);
+      clearRunSummaryCache();
     });
 
     test("preserves an externally appended tail's disk revision during a runtime flush", async () => {

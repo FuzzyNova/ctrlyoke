@@ -1859,6 +1859,7 @@ export class WorkflowInstance {
       this.reportCompatibilityDiagnostics(compatibilityDiagnostics);
 
       if (worktreeNotice && historyFilePath) {
+        await this.promptQueue.updateWorktreeNotice(worktreeNotice);
         const timestampMs = Date.now();
         const stepIndex = currentQueueState.currentIndex;
         this.dashboardSink?.updateStatusMessage(

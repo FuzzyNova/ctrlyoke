@@ -11,7 +11,6 @@ import {
   hasGitOperationInProgress,
   hasUncommittedChanges,
   listWorktrees as listGitWorktrees,
-  pruneWorktrees,
   removeWorktree,
   repoToplevel,
   resolveCommit,
@@ -39,6 +38,7 @@ import { ScriptProcessRunner } from "./ScriptProcessRunner";
 import {
   ExecutionRootLeaseManager,
   type ExecutionLeaseHandle,
+  type ExecutionLeaseConflict,
   type ExecutionLeaseRequest,
 } from "./ExecutionRootLeaseManager";
 import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
@@ -132,6 +132,21 @@ export interface WorktreeManagerOptions {
   updateWorktreeRuntime?: (
     patch: WorkingFileWorktreeRuntimePatch
   ) => Promise<void>;
+}
+
+/** One Git-discovered checkout plus read-only ctrlyoke lease/ownership state. */
+export interface WorktreeDiscoveryEntry extends GitWorktreeEntry {
+  managed: boolean;
+  inUse: boolean;
+  leaseOwners: ExecutionLeaseConflict[];
+  stale: boolean;
+}
+
+/** Activation-time worktree report. It performs no Git or lease mutations. */
+export interface WorktreeActivationDiscovery {
+  worktrees: WorktreeDiscoveryEntry[];
+  recoverableManagedWorktrees: WorktreeInfo[];
+  staleManagedWorktrees: ManagedWorktreeOwnershipRecord[];
 }
 
 export interface CompleteManagedRunOptions {
@@ -827,8 +842,9 @@ export class WorktreeManager {
         existingCheckout &&
         !(await this.pathExists(existingCheckout.worktreePath))
       ) {
-        await pruneWorktrees(sourceCheckoutRoot);
-        existingCheckout = undefined;
+        throw new Error(
+          `Managed branch "${branchName}" has a stale Git worktree entry at "${existingCheckout.worktreePath}"; explicit repair is required.`
+        );
       }
 
       if (
@@ -1068,6 +1084,70 @@ export class WorktreeManager {
       );
     }
     return result;
+  }
+
+  /**
+   * Read-only activation discovery. Git's porcelain entry, ownership record,
+   * lease owners, and prunable marker are returned together so callers can
+   * render recovery warnings without guessing from branch names or paths.
+   */
+  public async discoverActivationState(
+    options: Omit<RecoverManagedWorktreeOptions, "branchName" | "acquireLease">
+  ): Promise<WorktreeActivationDiscovery> {
+    const sourceCheckoutRoot = await this.requireRepositoryRoot(
+      options.sourceCheckoutRoot
+    );
+    const commonDirectory =
+      await this.requireCommonDirectory(sourceCheckoutRoot);
+    const [records, entries, recoverableManagedWorktrees] = await Promise.all([
+      this.readRecords(commonDirectory),
+      listGitWorktrees(sourceCheckoutRoot),
+      this.discoverRecoverableManagedWorktrees({
+        ...options,
+        sourceCheckoutRoot,
+      }),
+    ]);
+
+    const worktrees: WorktreeDiscoveryEntry[] = [];
+    for (const entry of entries) {
+      const ownership = records.find(
+        (record) =>
+          record.branchName === entry.branchName &&
+          pathsEqual(record.worktreePath, entry.worktreePath)
+      );
+      const inspections = await ExecutionRootLeaseManager.inspectLeases(
+        entry.worktreePath
+      );
+      const leaseOwners: ExecutionLeaseConflict[] = inspections
+        .filter((inspection) => !inspection.stale)
+        .map((inspection) => ({
+          lease: inspection.lease,
+          ageMs: inspection.ageMs,
+          retryAction: "retry",
+        }));
+      worktrees.push({
+        ...entry,
+        managed: ownership !== undefined,
+        inUse: leaseOwners.length > 0,
+        leaseOwners,
+        stale: Boolean(entry.prunableReason),
+      });
+    }
+
+    const staleManagedWorktrees = records.filter((record) => {
+      const entry = worktrees.find(
+        (candidate) =>
+          candidate.branchName === record.branchName &&
+          pathsEqual(candidate.worktreePath, record.worktreePath)
+      );
+      return !entry || entry.stale;
+    });
+
+    return {
+      worktrees,
+      recoverableManagedWorktrees,
+      staleManagedWorktrees,
+    };
   }
 
   /**
@@ -1512,26 +1592,10 @@ export class WorktreeManager {
   }
 
   private async hasLiveLease(executionRoot: string): Promise<boolean> {
-    const scope = await ExecutionRootLeaseManager.getScopeInfo(executionRoot);
-    let entries: import("fs").Dirent[];
-    try {
-      entries = await fs.readdir(scope.leasesRoot, { withFileTypes: true });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
-      throw error;
-    }
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
-      try {
-        const lease = JSON.parse(
-          await fs.readFile(path.join(scope.leasesRoot, entry.name), "utf8")
-        ) as { pid: number; lastHeartbeat: number };
-        if (!ExecutionRootLeaseManager.isLeaseStale(lease)) return true;
-      } catch {
-        // A malformed or disappearing lease cannot prove a live owner.
-      }
-    }
-    return false;
+    const inspections = await ExecutionRootLeaseManager.inspectLeases(
+      executionRoot
+    );
+    return inspections.some((inspection) => !inspection.stale);
   }
 
   private recoveryAsResolveOptions(

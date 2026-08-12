@@ -1699,6 +1699,38 @@ export class WorkingFileManager {
     await operation;
   }
 
+  /** Persist a run-scoped notice without manufacturing a worktree runtime block. */
+  public async updateWorktreeNotice(notice: string): Promise<void> {
+    const workingFilePath = this.queueAccess.getWorkingFilePath();
+    if (!workingFilePath) {
+      return;
+    }
+
+    const operation = this.operationQueue.then(async () => {
+      await withFileLock(workingFilePath, async () => {
+        const workingFile = await this.readWorkingFile(workingFilePath);
+        const currentRuntime =
+          workingFile._runtime ?? {
+            currentIndex: this.queueAccess.getCurrentIndex(),
+            executionState: this.queueAccess.getStatus(),
+          };
+        workingFile._runtime = {
+          ...currentRuntime,
+          worktreeNotice: notice,
+        };
+        workingFile.lastModifiedAt = Date.now();
+        await this.writeWorkingFileAtomic(workingFilePath, workingFile, {
+          skipLock: true,
+        });
+      });
+    });
+    this.operationQueue = operation.then(
+      () => undefined,
+      () => undefined
+    );
+    await operation;
+  }
+
   /**
    * Update workflow-level properties in the working file (atomic + serialized).
    */

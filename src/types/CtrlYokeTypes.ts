@@ -459,7 +459,28 @@ export type WorktreeRunProjection = Pick<
   | "directoryState"
   | "landingOutcome"
   | "mergeOutcome"
->;
+> &
+  Partial<Pick<WorkingFileWorktreeRuntime, "lifecycleState" | "branchState">>;
+
+/** Project the disk-authoritative runtime to fields safe for status/history views. */
+export function projectWorktreeRuntime(
+  worktree: WorkingFileWorktreeRuntime | undefined
+): WorktreeRunProjection | undefined {
+  if (!worktree) return undefined;
+  return {
+    mode: worktree.mode,
+    branchName: worktree.branchName,
+    worktreePath: worktree.worktreePath,
+    sourceCheckoutRoot: worktree.sourceCheckoutRoot,
+    lifecycleState: worktree.lifecycleState,
+    directoryState: worktree.directoryState,
+    branchState: worktree.branchState,
+    ...(worktree.landingOutcome
+      ? { landingOutcome: worktree.landingOutcome }
+      : {}),
+    ...(worktree.mergeOutcome ? { mergeOutcome: worktree.mergeOutcome } : {}),
+  };
+}
 
 /** Partial lifecycle patch applied to persisted worktree runtime metadata. */
 export type WorkingFileWorktreeRuntimePatch =
@@ -512,6 +533,8 @@ export interface WorkingFileRuntime {
   };
   /** Disk-authoritative lifecycle metadata for a worktree-backed run. */
   worktree?: WorkingFileWorktreeRuntime;
+  /** Durable notice when an inherited worktree default degraded to none. */
+  worktreeNotice?: string;
 }
 
 /**

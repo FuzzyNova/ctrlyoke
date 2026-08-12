@@ -244,6 +244,16 @@ export class WorkspaceSessionManager {
           if (promptsWithSessions > 0) {
             detail += ` • Sessions: ${promptsWithSessions}`;
           }
+          const worktree = runtime?.worktree;
+          if (worktree) {
+            detail +=
+              ` • Worktree: ${worktree.branchName} (${worktree.mode}, ` +
+              `lifecycle ${worktree.lifecycleState}, directory ${worktree.directoryState}, ` +
+              `branch ${worktree.branchState})`;
+          }
+          if (runtime?.worktreeNotice) {
+            detail += ` • ${runtime.worktreeNotice}`;
+          }
 
           sessions.push({
             label: `${statusIcon} ${workingFile.workflowName}`,

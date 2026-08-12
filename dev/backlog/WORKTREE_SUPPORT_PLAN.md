@@ -2008,10 +2008,18 @@ when the targeted directory has an incompatible lease.
     terminal run. **Implemented.** Terminal worktree runs dispose integrations
     and stop activity watchers before the strict cleanup barrier; pause remains
     the only retained state.
-23. Persist status and enrich run summaries/global/session status.
+23. Persist status and enrich run summaries/global/session status. **Implemented.**
+    Worktree settlement fields now flow through the atomic runtime seam, global
+    status and session details expose the persisted projection, historical
+    summaries/history payloads remain run-owned, and cache entries are evicted
+    by the working-file writer. Inherited-default degradation notices are also
+    durable on the run runtime.
 24. Add View Diff and conditional Open Worktree actions to `RunSummaryBanner`,
     and extend the banner's landing/merge outcome display.
-25. Implement read-only activation recovery and warnings.
+25. Implement read-only activation recovery and warnings. **Implemented.** Git
+    worktree porcelain discovery reports recoverable managed entries, stale and
+    prunable state, and live lease owners without pruning user-owned entries;
+    explicit reconciliation remains separate from activation.
 26. Enforce landed-run undo behavior in the backend coordinator and protocol.
 
 Exit criterion: managed runs cannot lose uncommitted work on any ordinary

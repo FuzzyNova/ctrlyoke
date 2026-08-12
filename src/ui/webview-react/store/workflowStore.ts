@@ -1033,6 +1033,7 @@ export const useWorkflowStore = create<
                 completedAt: history.completedAt,
                 executionState: history.executionState,
                 worktree: history.worktree,
+                worktreeNotice: history.worktreeNotice,
               },
               }),
               undoRecords: preserveReferences(state.undoRecords, {}),

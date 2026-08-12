@@ -409,6 +409,66 @@ suite("WorktreeManager", function () {
     await second.lease.release();
   });
 
+  test("activation discovery reports live leases and prunable entries without pruning", async () => {
+    const { parent, repository } = await makeRepository("activation-discovery");
+    const instance = manager(parent);
+    const managed = await ensureManaged(instance, repository);
+
+    const userWorktreePath = path.join(parent, "user-prunable");
+    execFileSync(
+      "git",
+      [
+        "-C",
+        repository,
+        "worktree",
+        "add",
+        "-b",
+        "user/prunable",
+        userWorktreePath,
+      ],
+      { stdio: "ignore" }
+    );
+    await fs.rm(userWorktreePath, { recursive: true, force: true });
+
+    const before = execFileSync(
+      "git",
+      ["-C", repository, "worktree", "list", "--porcelain", "-z"],
+      { encoding: "utf8" }
+    );
+    const report = await instance.discoverActivationState({
+      sourceCheckoutRoot: repository,
+    });
+    const managedEntry = report.worktrees.find(
+      (entry) => entry.branchName === managed.branchName
+    );
+    const prunableEntry = report.worktrees.find(
+      (entry) => entry.branchName === "user/prunable"
+    );
+
+    assert.strictEqual(managedEntry?.inUse, true);
+    assert.strictEqual(
+      managedEntry?.leaseOwners[0]?.lease.workflowKey,
+      identity().workflowKey
+    );
+    assert.strictEqual(
+      managedEntry?.leaseOwners[0]?.lease.runRef,
+      identity().runRef
+    );
+    assert.strictEqual(prunableEntry?.stale, true);
+    const after = execFileSync(
+      "git",
+      ["-C", repository, "worktree", "list", "--porcelain", "-z"],
+      { encoding: "utf8" }
+    );
+    assert.strictEqual(
+      after,
+      before,
+      "read-only discovery must not prune Git entries"
+    );
+
+    await managed.lease.release();
+  });
+
   test("seeds .ctrlyoke/.gitignore in a newly created managed worktree", async () => {
     const { parent, repository } = await makeRepository("managed-gitignore");
     const info = await ensureManaged(manager(parent), repository);

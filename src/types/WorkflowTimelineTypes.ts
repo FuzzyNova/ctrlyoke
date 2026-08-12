@@ -134,6 +134,8 @@ export interface RunSummary {
   tokenTotals?: WorkflowTokenTotals;
   /** Status projection sourced from this run's persisted `_runtime.worktree`. */
   worktree?: WorktreeRunProjection;
+  /** Durable notice when an inherited worktree default degraded to none. */
+  worktreeNotice?: string;
 }
 
 export interface HistorySearchResult {
