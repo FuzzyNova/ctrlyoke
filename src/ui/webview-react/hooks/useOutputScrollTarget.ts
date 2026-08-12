@@ -47,6 +47,7 @@ interface UseOutputScrollTargetInput {
   lastUserScrollInputAtRef: RefObject<number | null>;
   outputOverscanRef: RefObject<number>;
   outputRef: RefObject<HTMLDivElement | null>;
+  pendingDirectScrollWriteRef: RefObject<boolean>;
   pendingNavigationRef: RefObject<unknown | null>;
   rowLayout: OutputRowLayoutModel;
   rowVirtualizer: RowVirtualizerLike;
@@ -76,6 +77,7 @@ export function useOutputScrollTarget({
   lastUserScrollInputAtRef,
   outputOverscanRef,
   outputRef,
+  pendingDirectScrollWriteRef,
   pendingNavigationRef,
   rowLayout,
   rowVirtualizer,
@@ -322,6 +324,12 @@ export function useOutputScrollTarget({
       const appliedDelta = resolved.top - previous;
       if (Math.abs(appliedDelta) >= 1) {
         isProgrammaticScrollRef.current = true;
+        // The virtualizer tracks scroll position from scroll *events*, so until
+        // this write's event lands its internal offset is stale by exactly this
+        // delta. Any row-measurement compensation resolved from that offset
+        // would write `staleOffset + rowDelta` and teleport the pane, so the
+        // flag stays raised until the scroll handler observes the write.
+        pendingDirectScrollWriteRef.current = true;
         scrollElement.scrollTop = resolved.top;
         lastScrollTopRef.current = scrollElement.scrollTop;
         requestAnimationFrame(() => {
@@ -356,6 +364,7 @@ export function useOutputScrollTarget({
       lastUserScrollInputAtRef,
       outputOverscanRef,
       outputRef,
+      pendingDirectScrollWriteRef,
       pendingNavigationRef,
       resolveScrollTopForTarget,
       rowsRef,

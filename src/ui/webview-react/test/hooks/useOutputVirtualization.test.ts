@@ -2,15 +2,14 @@ import { describe, expect, it } from "vitest";
 import { shouldCompensateOutputRowMeasurement } from "@hooks/useOutputVirtualization";
 
 const idleAboveViewportMeasurement = {
+  hasPendingDirectScrollWrite: false,
   hasRecentScrollEvent: false,
   isBulkRemeasureInProgress: false,
   isMeasurementFlushInProgress: false,
   isPostNavigationSettling: false,
   isRowResizeSuppressed: false,
   itemIndex: 4,
-  lastObservedScrollTop: 500,
   pendingNavigation: false,
-  scrollTop: 500,
   targetRowIndex: 5,
 };
 
@@ -31,7 +30,10 @@ describe("shouldCompensateOutputRowMeasurement", () => {
     ["the anchored row itself", { itemIndex: 5 }],
     ["a row after the anchor", { itemIndex: 6 }],
     ["a bottom target", { targetRowIndex: null }],
-    ["a pending programmatic scroll event", { lastObservedScrollTop: 450 }],
+    [
+      "an unobserved direct scrollTop write",
+      { hasPendingDirectScrollWrite: true },
+    ],
   ])("does not compensate during %s", (_label, override) => {
     expect(
       shouldCompensateOutputRowMeasurement({
@@ -39,5 +41,21 @@ describe("shouldCompensateOutputRowMeasurement", () => {
         ...override,
       })
     ).toBe(false);
+  });
+
+  // Regression: the staleness guard used to compare the live scrollTop against
+  // the last *observed* one. The virtualizer's own compensation writes scrollTop
+  // synchronously, so after the first compensated row every later above-anchor
+  // row in the same measurement burst was refused and its height delta shifted
+  // the viewport instead.
+  it("compensates every above-anchor row in one measurement burst", () => {
+    for (const itemIndex of [4, 3, 2]) {
+      expect(
+        shouldCompensateOutputRowMeasurement({
+          ...idleAboveViewportMeasurement,
+          itemIndex,
+        })
+      ).toBe(true);
+    }
   });
 });

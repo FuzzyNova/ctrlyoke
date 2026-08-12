@@ -24,6 +24,7 @@ function renderRowTargetHook(
       layoutApplyTrigger: "initial",
       outputOverscanRef: { current: 6 },
       outputRef: { current: scrollElement },
+      pendingDirectScrollWriteRef: { current: false },
       pendingNavigationRef: { current: null },
       restoreTrigger: "workflow",
       rowLayout: {
@@ -87,6 +88,7 @@ describe("useOutputScrollTarget", () => {
         layoutApplyTrigger: "initial",
         outputOverscanRef: { current: 6 },
         outputRef: { current: scrollElement },
+        pendingDirectScrollWriteRef: { current: false },
         pendingNavigationRef: { current: null },
         restoreTrigger: "workflow",
         rowLayout: { rowStartsByKey: new Map(), totalSize: 1000 },
@@ -146,6 +148,7 @@ describe("useOutputScrollTarget", () => {
         layoutApplyTrigger: "initial",
         outputOverscanRef: { current: 6 },
         outputRef: { current: scrollElement },
+        pendingDirectScrollWriteRef: { current: false },
         pendingNavigationRef: { current: null },
         restoreTrigger: "workflow",
         rowLayout: { rowStartsByKey: new Map(), totalSize: 5000 },

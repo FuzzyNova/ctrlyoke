@@ -53,28 +53,26 @@ interface PendingNavigationStateLike {
 }
 
 interface OutputRowMeasurementCompensationInput {
+  hasPendingDirectScrollWrite: boolean;
   hasRecentScrollEvent: boolean;
   isBulkRemeasureInProgress: boolean;
   isMeasurementFlushInProgress: boolean;
   isPostNavigationSettling: boolean;
   isRowResizeSuppressed: boolean;
   itemIndex: number;
-  lastObservedScrollTop: number | null;
   pendingNavigation: boolean;
-  scrollTop: number;
   targetRowIndex: number | null;
 }
 
 export function shouldCompensateOutputRowMeasurement({
+  hasPendingDirectScrollWrite,
   hasRecentScrollEvent,
   isBulkRemeasureInProgress,
   isMeasurementFlushInProgress,
   isPostNavigationSettling,
   isRowResizeSuppressed,
   itemIndex,
-  lastObservedScrollTop,
   pendingNavigation,
-  scrollTop,
   targetRowIndex,
 }: OutputRowMeasurementCompensationInput): boolean {
   return (
@@ -84,10 +82,9 @@ export function shouldCompensateOutputRowMeasurement({
     !pendingNavigation &&
     !isPostNavigationSettling &&
     !isRowResizeSuppressed &&
+    !hasPendingDirectScrollWrite &&
     targetRowIndex != null &&
-    itemIndex < targetRowIndex &&
-    lastObservedScrollTop != null &&
-    Math.abs(lastObservedScrollTop - scrollTop) < 1.5
+    itemIndex < targetRowIndex
   );
 }
 
@@ -104,7 +101,6 @@ interface UseOutputVirtualizationInput {
   getVirtualItemsRef: RefObject<() => readonly { index: number }[]>;
   isProgrammaticScrollRef: RefObject<boolean>;
   isMeasurementFlushInProgressRef: RefObject<boolean>;
-  lastObservedScrollTopRef: RefObject<number | null>;
   lastScrollEventAtRef: RefObject<number | null>;
   lastScrollTopRef: RefObject<number | null>;
   outputCollapsed: boolean;
@@ -114,6 +110,7 @@ interface UseOutputVirtualizationInput {
   outputOverscanRef: RefObject<number>;
   outputRef: RefObject<HTMLDivElement | null>;
   outputVirtualizationRowThreshold: number;
+  pendingDirectScrollWriteRef: RefObject<boolean>;
   pendingNavigationRef: RefObject<PendingNavigationStateLike | null>;
   postNavSettlingRef: RefObject<boolean>;
   rowRenderIdentity: string;
@@ -201,7 +198,6 @@ export function useOutputVirtualization({
   getVirtualItemsRef,
   isProgrammaticScrollRef,
   isMeasurementFlushInProgressRef,
-  lastObservedScrollTopRef,
   lastScrollEventAtRef,
   lastScrollTopRef,
   outputCollapsed,
@@ -211,6 +207,7 @@ export function useOutputVirtualization({
   outputOverscanRef,
   outputRef,
   outputVirtualizationRowThreshold,
+  pendingDirectScrollWriteRef,
   pendingNavigationRef,
   postNavSettlingRef,
   rowRenderIdentity,
@@ -549,6 +546,7 @@ export function useOutputVirtualization({
         ? (rowIndexByKey.get(target.rowKey ?? "") ?? null)
         : null;
     const shouldAdjust = shouldCompensateOutputRowMeasurement({
+      hasPendingDirectScrollWrite: pendingDirectScrollWriteRef.current,
       hasRecentScrollEvent,
       isBulkRemeasureInProgress: isBulkRemeasureInProgressRef.current,
       isMeasurementFlushInProgress: isMeasurementFlushInProgressRef.current,
@@ -557,20 +555,24 @@ export function useOutputVirtualization({
         rowResizeScrollSuppressUntilRef.current != null &&
         now < rowResizeScrollSuppressUntilRef.current,
       itemIndex: item.index,
-      lastObservedScrollTop: lastObservedScrollTopRef.current,
       pendingNavigation: pendingNavigationRef.current !== null,
-      scrollTop: scrollElement?.scrollTop ?? 0,
       targetRowIndex,
     });
 
     // Let the virtualizer apply exact size deltas only for rows strictly before
     // the saved anchor. A partially visible giant prompt/command can itself
     // start above scrollTop, but changing its height does not move its top and
-    // must not shift the viewport. Also require the last scroll event observed
-    // by both our handler and TanStack to match the DOM: applyScrollTarget
-    // writes scrollTop directly, and until its event arrives a correction based
-    // on TanStack's stale offset can turn a 50px row delta into a jump of tens
-    // of thousands of pixels.
+    // must not shift the viewport. The staleness guard is
+    // pendingDirectScrollWriteRef, NOT a scrollTop comparison: TanStack
+    // compensates by writing `internalOffset + accumulatedAdjustments` straight
+    // to the DOM, so within one measurement burst the DOM legitimately runs
+    // ahead of the last *observed* scroll position. Comparing the two rejected
+    // every row after the first in a burst (log 21:49:40: idx245 compensated,
+    // then idx241/idx243 — both above the anchor — refused at
+    // scrollTop 53214 vs observed 53172), and each refused row's delta shifted
+    // the viewport until the layout-effect lock yanked it back. The real hazard
+    // is only applyScrollTarget's own direct write, which TanStack cannot see
+    // until its scroll event lands.
     if (shouldAdjust) {
       isProgrammaticScrollRef.current = true;
       if (measurementCompensationFrameRef.current !== null) {
@@ -589,7 +591,7 @@ export function useOutputVirtualization({
         delta,
         scrollTop: scrollElement?.scrollTop ?? 0,
         targetRowIndex,
-        lastObservedScrollTop: lastObservedScrollTopRef.current,
+        pendingDirectScrollWrite: pendingDirectScrollWriteRef.current,
         overscan: outputOverscanRef.current,
         shouldAdjust,
       });

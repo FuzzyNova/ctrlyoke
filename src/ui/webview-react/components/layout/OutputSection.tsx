@@ -181,7 +181,8 @@ const OutputSectionInner: React.FC = () => {
   const runBannerPinned = useUiStore((s) => s.runBannerPinned);
   const toggleRunBannerPinned = useUiStore((s) => s.toggleRunBannerPinned);
   const displayedRunBanner = useMemo<RunBannerData | undefined>(() => {
-    if (!displayedRunSummary || displayedAddress?.kind !== "run") return undefined;
+    if (!displayedRunSummary || displayedAddress?.kind !== "run")
+      return undefined;
     if (isViewingHistory) {
       return {
         runId: displayedRunSummary.runId,
@@ -331,8 +332,11 @@ const OutputSectionInner: React.FC = () => {
   // before it re-anchors the viewport.
   const flushPendingScrollMeasurementsRef = useRef<() => void>(() => {});
   const lastScrollEventAtRef = useRef<number | null>(null);
-  const lastObservedScrollTopRef = useRef<number | null>(null);
   const lastScrollTopRef = useRef<number | null>(null);
+  // Raised by applyScrollTarget's direct scrollTop write, lowered by the scroll
+  // event it produces. While raised, TanStack's tracked offset is stale and its
+  // row-measurement compensation must not run.
+  const pendingDirectScrollWriteRef = useRef(false);
   const measurementVersionRefForScrollSeek = useRef(0);
   const virtualRowsLengthRef = useRef(0);
   const getRowEstimateStatsRef = useRef<() => unknown[]>(() => []);
@@ -470,6 +474,7 @@ const OutputSectionInner: React.FC = () => {
     lastScrollEventAtRef,
     lastUserScrollInputAtRef,
     measurementVersion: measurementVersionRefForScrollSeek.current,
+    outputRef,
     rows,
     rowsRef: scrollSeekRowsRef,
     virtualRowsLength: virtualRowsLengthRef.current,
@@ -502,7 +507,6 @@ const OutputSectionInner: React.FC = () => {
     getVirtualItemsRef,
     isProgrammaticScrollRef: isProgrammaticScroll,
     isMeasurementFlushInProgressRef,
-    lastObservedScrollTopRef,
     lastScrollEventAtRef,
     lastScrollTopRef,
     outputCollapsed,
@@ -512,6 +516,7 @@ const OutputSectionInner: React.FC = () => {
     outputOverscanRef,
     outputRef,
     outputVirtualizationRowThreshold,
+    pendingDirectScrollWriteRef,
     pendingNavigationRef,
     postNavSettlingRef,
     rowRenderIdentity,
@@ -550,6 +555,7 @@ const OutputSectionInner: React.FC = () => {
     layoutApplyTrigger: `${measurementVersion}:${outputOverscan}:${rows.length}:${scrollSeekPlaceholderActive}`,
     outputOverscanRef,
     outputRef,
+    pendingDirectScrollWriteRef,
     pendingNavigationRef,
     rowLayout,
     rowVirtualizer,
@@ -639,14 +645,13 @@ const OutputSectionInner: React.FC = () => {
   const handleScroll = useCallback(() => {
     const el = outputRef.current;
     if (!el) return;
+    // Cleared before every early return: this event also reached TanStack's own
+    // listener, so its offset is no longer stale regardless of what the rest of
+    // this handler decides to skip.
+    pendingDirectScrollWriteRef.current = false;
     if (suppressOutputLayoutWorkRef.current) {
       return;
     }
-    // Every DOM scroll event reaches TanStack's listener too. Keep this
-    // separate from lastScrollTopRef, which programmatic target writes update
-    // before their scroll event arrives, so row compensation can detect that
-    // short internal-offset synchronization gap.
-    lastObservedScrollTopRef.current = el.scrollTop;
     if (isProgrammaticScroll.current) {
       // Still run the latch so a user wheel mid-programmatic-scroll correctly
       // disables auto-scroll. Without this, the flag stays armed and the

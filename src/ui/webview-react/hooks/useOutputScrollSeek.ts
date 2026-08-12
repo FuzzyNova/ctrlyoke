@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { RefObject } from "react";
 import { getWheelDeltaPixels } from "@components/layout/output-section/OutputScrollSeekPlaceholder";
+import { clamp } from "@utils/number";
 import { logProfilerEvent } from "@utils/performanceProfiler";
 import {
   LARGE_WORKFLOW_ROW_THRESHOLD,
@@ -14,10 +15,18 @@ import {
 } from "@utils/outputScrollConstants";
 import type { OutputRenderRow } from "@utils/outputRows";
 
-const OUTPUT_VIRTUALIZER_OVERSCAN = 6;
+/**
+ * Idle overscan bounds. The effective value is derived per pane from
+ * `getIdleOverscan` so the off-screen buffer is sized in *viewports*, not in
+ * rows: a flat 6 meant three-plus screens of buffer on a phone (tall wrapped
+ * rows, short pane), and mounting/measuring that many off-screen rows cost
+ * 700-1800ms commits whose height corrections landed as visible jumps seconds
+ * after the user stopped scrolling.
+ */
+const OUTPUT_MIN_IDLE_OVERSCAN = 2;
+const OUTPUT_MAX_IDLE_OVERSCAN = 6;
 const OUTPUT_ACTIVE_SCROLL_OVERSCAN = 2;
 const OUTPUT_SCROLL_SEEK_RESTORE_OVERSCAN = 0;
-const OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN = 3;
 const OUTPUT_OVERSCAN_RESTORE_DELAY_MS = 250;
 const OUTPUT_SCROLL_SEEK_CONTINUE_DELTA_PX = 16;
 const OUTPUT_SCROLL_SEEK_SLOW_DELTA_PX = 48;
@@ -29,7 +38,29 @@ const OUTPUT_SCROLL_SEEK_MIN_VELOCITY_PX_MS = 0.3;
 const OUTPUT_SCROLL_SEEK_PAGE_FRACTION = 0.9;
 const OUTPUT_SCROLL_SEEK_SETTLE_MS = 2000;
 const OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN_DELAY_MS = 600;
-const OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS = 1800;
+
+/**
+ * Size the idle off-screen buffer at roughly one viewport in each direction.
+ *
+ * `scrollHeight` is the virtual canvas, so `scrollHeight / rowCount` is the
+ * mean row height across the whole workflow — including the rows that are not
+ * mounted, which is exactly the population being buffered.
+ */
+export function getIdleOverscanForViewport(
+  viewportHeightPx: number,
+  contentHeightPx: number,
+  rowCount: number
+): number {
+  const averageRowHeightPx = rowCount > 0 ? contentHeightPx / rowCount : 0;
+  if (!(averageRowHeightPx > 0) || !(viewportHeightPx > 0)) {
+    return OUTPUT_MAX_IDLE_OVERSCAN;
+  }
+  return clamp(
+    Math.ceil(viewportHeightPx / averageRowHeightPx),
+    OUTPUT_MIN_IDLE_OVERSCAN,
+    OUTPUT_MAX_IDLE_OVERSCAN
+  );
+}
 
 interface UseOutputScrollSeekInput {
   applyScrollTargetRef: RefObject<
@@ -47,6 +78,7 @@ interface UseOutputScrollSeekInput {
   lastScrollEventAtRef: RefObject<number | null>;
   lastUserScrollInputAtRef: RefObject<number | null>;
   measurementVersion: number;
+  outputRef: RefObject<HTMLDivElement | null>;
   rows: OutputRenderRow[];
   rowsRef: RefObject<readonly OutputRenderRow[]>;
   virtualRowsLength: number;
@@ -74,12 +106,13 @@ export function useOutputScrollSeek({
   lastScrollEventAtRef,
   lastUserScrollInputAtRef,
   measurementVersion,
+  outputRef,
   rows,
   rowsRef,
   virtualRowsLength,
 }: UseOutputScrollSeekInput) {
   const [outputOverscan, setOutputOverscan] = useState(
-    OUTPUT_VIRTUALIZER_OVERSCAN
+    OUTPUT_MAX_IDLE_OVERSCAN
   );
   const [scrollSeekPlaceholderActive, setScrollSeekPlaceholderActiveState] =
     useState(false);
@@ -103,6 +136,18 @@ export function useOutputScrollSeek({
   useEffect(() => {
     outputOverscanRef.current = outputOverscan;
   }, [outputOverscan]);
+
+  const getIdleOverscan = useCallback(() => {
+    const scrollElement = outputRef.current;
+    if (!scrollElement) {
+      return OUTPUT_MAX_IDLE_OVERSCAN;
+    }
+    return getIdleOverscanForViewport(
+      scrollElement.clientHeight,
+      scrollElement.scrollHeight,
+      rowsRef.current.length
+    );
+  }, [outputRef, rowsRef]);
 
   const setOutputOverscanMode = useCallback(
     (
@@ -199,13 +244,18 @@ export function useOutputScrollSeek({
             false
           );
         } else {
-          setOutputOverscanMode(OUTPUT_VIRTUALIZER_OVERSCAN, "idle", {
+          setOutputOverscanMode(getIdleOverscan(), "idle", {
             phase: "restore-full-overscan-direct",
           });
         }
       }, delayMs ?? OUTPUT_OVERSCAN_RESTORE_DELAY_MS);
     },
-    [lastScrollEventAtRef, lastUserScrollInputAtRef, setOutputOverscanMode]
+    [
+      getIdleOverscan,
+      lastScrollEventAtRef,
+      lastUserScrollInputAtRef,
+      setOutputOverscanMode,
+    ]
   );
 
   const enterFastScrollOverscan = useCallback(
@@ -449,10 +499,17 @@ export function useOutputScrollSeek({
     if (outputOverscanRef.current === OUTPUT_SCROLL_SEEK_RESTORE_OVERSCAN) {
       fullOverscanRestoreTimerRef.current = setTimeout(() => {
         fullOverscanRestoreTimerRef.current = null;
+        // Walk up to the idle target one row per frame and stop there. This
+        // used to climb to a fixed 3, wait another 1.8s, then jump to 6 — so
+        // off-screen rows kept mounting, measuring, and nudging the anchor for
+        // ~4s after the user's finger left the screen, which reads as an
+        // unprovoked jump rather than part of the settle. Every wave is a
+        // separate React commit, so pacing by frame still keeps them apart.
+        const idleOverscan = getIdleOverscan();
         let step = 1;
         const doNextOverscanStep = () => {
           if (overscanRestoreRafRef.current === null) return;
-          if (step <= OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN) {
+          if (step < idleOverscan) {
             setOutputOverscanMode(step, "idle", {
               phase: "restore-buffer-step",
               step,
@@ -462,12 +519,10 @@ export function useOutputScrollSeek({
               requestAnimationFrame(doNextOverscanStep);
           } else {
             overscanRestoreRafRef.current = null;
-            fullOverscanRestoreTimerRef.current = setTimeout(() => {
-              fullOverscanRestoreTimerRef.current = null;
-              setOutputOverscanMode(OUTPUT_VIRTUALIZER_OVERSCAN, "idle", {
-                phase: "restore-full-overscan",
-              });
-            }, OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS);
+            setOutputOverscanMode(idleOverscan, "idle", {
+              phase: "restore-full-overscan",
+              idleOverscan,
+            });
           }
         };
         overscanRestoreRafRef.current =
@@ -480,6 +535,7 @@ export function useOutputScrollSeek({
     applyScrollTargetRef,
     commitScrollTargetFromViewportRef,
     flushPendingScrollMeasurementsRef,
+    getIdleOverscan,
     getRowEstimateStats,
     hasOutput,
     measurementVersion,
