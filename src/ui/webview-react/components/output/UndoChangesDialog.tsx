@@ -18,6 +18,7 @@ import {
   type WorkflowStepEntry,
 } from "../../utils/promptUndo";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
+import type { RunRef, WorkflowKey } from "@root/types/CtrlYokeTypes";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { sendMessage } from "../../hooks/useMessageHandler";
@@ -27,7 +28,10 @@ export type { WorkflowStepEntry } from "../../utils/promptUndo";
 export interface UndoChangesDialogProps {
   mode: "undo" | "redo";
   target: OutputExecutionTarget;
-  workspacePath: string;
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  /** Legacy display-only input; never sent to the extension host. */
+  workspacePath?: string;
   input?: UndoDialogInput;
   redoInstructions?: UndoFileInstruction[];
   requestId: string;
@@ -106,7 +110,8 @@ function expandAggregatedWorkflowSelection(
 export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   mode,
   target,
-  workspacePath,
+  workflowKey,
+  runRef,
   input,
   redoInstructions,
   requestId,
@@ -215,7 +220,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
         mode === DIALOG_MODE.REDO
           ? MESSAGE_TYPES.REDO_WORKFLOW_CHANGES
           : MESSAGE_TYPES.UNDO_WORKFLOW_CHANGES,
-        { data: { requestId, workspacePath, entries } }
+        { data: { requestId, workflowKey, runRef, entries } }
       );
     } else if (mode === DIALOG_MODE.REDO) {
       const selectedInstructions = model.redoRows
@@ -227,7 +232,8 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
         data: {
           requestId,
           target,
-          workspacePath,
+          workflowKey,
+          runRef,
           files: selectedInstructions,
         },
       });
@@ -241,7 +247,8 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
         data: {
           requestId,
           target,
-          workspacePath,
+          workflowKey,
+          runRef,
           files: instructions,
         },
       });

@@ -7,6 +7,7 @@ import {
   MESSAGE_TYPES,
 } from "@root/types/DashboardConstants";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
+import type { RunRef, WorkflowKey } from "@root/types/CtrlYokeTypes";
 import type { UndoFileCandidate, UndoFileInstruction } from "@/types/messages";
 
 const { sendMessageMock } = vi.hoisted(() => ({
@@ -27,6 +28,8 @@ vi.mock("@utils/syntaxHighlighting", async (importOriginal) => {
 });
 
 describe("UndoChangesDialog", () => {
+  const workflowKey = "workflow-test" as WorkflowKey;
+  const runRef = "run-2026-08-11T00-00-00-000Z" as RunRef;
   const queueTarget: OutputExecutionTarget = {
     kind: FINAL_STEP_PHASES.QUEUE,
     stepIndex: 0,
@@ -61,6 +64,8 @@ describe("UndoChangesDialog", () => {
       <UndoChangesDialog
         mode="undo"
         target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
         workspacePath="C:/dev/ctrlyoke"
         requestId="workflow-undo-test"
         onClose={vi.fn()}
@@ -149,6 +154,8 @@ describe("UndoChangesDialog", () => {
         <UndoChangesDialog
           mode={testCase.mode}
           target={queueTarget}
+          workflowKey={workflowKey}
+          runRef={runRef}
           workspacePath="C:/dev/ctrlyoke"
           requestId={`row-shape-${index}`}
           onClose={vi.fn()}
@@ -187,6 +194,8 @@ describe("UndoChangesDialog", () => {
       <UndoChangesDialog
         mode="undo"
         target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
         workspacePath={input.workspacePath}
         input={input}
         requestId="single-undo-payload"
@@ -201,7 +210,8 @@ describe("UndoChangesDialog", () => {
         data: {
           requestId: "single-undo-payload",
           target: queueTarget,
-          workspacePath: input.workspacePath,
+          workflowKey,
+          runRef,
           files: [instruction],
         },
       }
@@ -234,6 +244,8 @@ describe("UndoChangesDialog", () => {
       <UndoChangesDialog
         mode="undo"
         target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
         workspacePath={input.workspacePath}
         input={input}
         requestId="open-file-test"
@@ -262,6 +274,8 @@ describe("UndoChangesDialog", () => {
       <UndoChangesDialog
         mode="redo"
         target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
         workspacePath="C:/dev/ctrlyoke"
         redoInstructions={[instruction]}
         requestId="single-redo-payload"
@@ -276,7 +290,8 @@ describe("UndoChangesDialog", () => {
         data: {
           requestId: "single-redo-payload",
           target: queueTarget,
-          workspacePath: "C:/dev/ctrlyoke",
+          workflowKey,
+          runRef,
           files: [instruction],
         },
       }
@@ -313,6 +328,8 @@ describe("UndoChangesDialog", () => {
       <UndoChangesDialog
         mode="undo"
         target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
         workspacePath="C:/dev/ctrlyoke"
         workflowEntries={entries}
         requestId="workflow-undo-payload"
@@ -325,7 +342,8 @@ describe("UndoChangesDialog", () => {
       {
         data: {
           requestId: "workflow-undo-payload",
-          workspacePath: "C:/dev/ctrlyoke",
+          workflowKey,
+          runRef,
           entries: [{ target: queueTarget, files: [undoInstruction] }],
         },
       }
@@ -337,6 +355,8 @@ describe("UndoChangesDialog", () => {
       <UndoChangesDialog
         mode="redo"
         target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
         workspacePath="C:/dev/ctrlyoke"
         workflowEntries={entries}
         requestId="workflow-redo-payload"
@@ -349,7 +369,8 @@ describe("UndoChangesDialog", () => {
       {
         data: {
           requestId: "workflow-redo-payload",
-          workspacePath: "C:/dev/ctrlyoke",
+          workflowKey,
+          runRef,
           entries: [{ target: queueTarget, files: [redoInstruction] }],
         },
       }
@@ -434,6 +455,8 @@ describe("UndoChangesDialog", () => {
       <UndoChangesDialog
         mode="undo"
         target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
         workspacePath="C:/dev/ctrlyoke"
         workflowEntries={entries}
         requestId="workflow-aggregate-undo"
@@ -450,7 +473,8 @@ describe("UndoChangesDialog", () => {
       {
         data: {
           requestId: "workflow-aggregate-undo",
-          workspacePath: "C:/dev/ctrlyoke",
+          workflowKey,
+          runRef,
           entries: [
             {
               target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },

@@ -1649,7 +1649,8 @@ export interface UndoPromptChangesMessage {
   data: {
     requestId: string;
     target: UndoExecutionTarget;
-    workspacePath: string;
+    workflowKey: WorkflowKey;
+    runRef: RunRef;
     files: UndoFileInstruction[];
   };
 }
@@ -1680,7 +1681,8 @@ export interface RedoPromptChangesMessage {
   data: {
     requestId: string;
     target: OutputExecutionTarget;
-    workspacePath: string;
+    workflowKey: WorkflowKey;
+    runRef: RunRef;
     files: UndoFileInstruction[];
   };
 }
@@ -1690,7 +1692,8 @@ export interface UndoWorkflowChangesMessage {
   type: typeof MESSAGE_TYPES.UNDO_WORKFLOW_CHANGES;
   data: {
     requestId: string;
-    workspacePath: string;
+    workflowKey: WorkflowKey;
+    runRef: RunRef;
     entries: Array<{
       target: UndoExecutionTarget;
       files: UndoFileInstruction[];
@@ -1703,7 +1706,8 @@ export interface RedoWorkflowChangesMessage {
   type: typeof MESSAGE_TYPES.REDO_WORKFLOW_CHANGES;
   data: {
     requestId: string;
-    workspacePath: string;
+    workflowKey: WorkflowKey;
+    runRef: RunRef;
     entries: Array<{
       target: OutputExecutionTarget;
       files: UndoFileInstruction[];

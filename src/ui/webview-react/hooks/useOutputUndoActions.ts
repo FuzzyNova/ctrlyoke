@@ -24,6 +24,7 @@ import type {
   WorkflowRunMetadata,
 } from "@root/types/OutputHistoryTypes";
 import { FINAL_STEP_PHASES } from "@/types/messages";
+import { useUiStore } from "@store/uiStore";
 
 type OutputHistoryView = {
   orderedEntries: OrderedHistoryEntry[];
@@ -69,6 +70,14 @@ export function useOutputUndoActions({
   uniqueStepTargets,
   workspaceSnapshots,
 }: UseOutputUndoActionsInput) {
+  const runAddress = useUiStore((state) =>
+    state.displayedViewAddress?.kind === "run"
+      ? {
+          workflowKey: state.displayedViewAddress.workflowKey,
+          runRef: state.displayedViewAddress.runRef,
+        }
+      : null
+  );
   const [minimapDialogState, setMinimapDialogState] =
     useState<MinimapDialogState | null>(null);
   const [workflowDialogState, setWorkflowDialogState] =
@@ -76,12 +85,11 @@ export function useOutputUndoActions({
 
   const workflowUndoRedoData = useMemo(() => {
     if (!allowUndoActions) {
-      return { undoEntries: [], redoEntries: [], workspacePath: "" };
+      return { undoEntries: [], redoEntries: [] };
     }
 
     const undoEntries: WorkflowStepEntry[] = [];
     const redoEntries: WorkflowStepEntry[] = [];
-    let workspacePath = "";
 
     for (const msgTarget of uniqueStepTargets) {
       const key = `${msgTarget.kind}:${msgTarget.index}`;
@@ -91,10 +99,6 @@ export function useOutputUndoActions({
       const lastMsg = allMessages[lastCliIdx];
       const lastOutput = lastMsg?.data as CliOutputType | undefined;
       if (!lastOutput || lastOutput.isStreaming) continue;
-
-      if (lastOutput.workingDirectory) {
-        workspacePath = lastOutput.workingDirectory;
-      }
 
       const isFinalStep = msgTarget.kind === FINAL_STEP_PHASES.FINAL_STEP;
       const stepIndex = msgTarget.index;
@@ -157,7 +161,7 @@ export function useOutputUndoActions({
       }
     }
 
-    return { undoEntries, redoEntries, workspacePath };
+    return { undoEntries, redoEntries };
   }, [
     allowUndoActions,
     allMessages,
@@ -172,38 +176,41 @@ export function useOutputUndoActions({
   ]);
 
   const openMinimapUndoDialog = useCallback(
-    ({ target, workspacePath, input }: OpenMinimapUndoDialogInput) => {
+    ({ target, input }: OpenMinimapUndoDialogInput) => {
+      if (!runAddress) return;
       setMinimapDialogState({
         mode: "undo",
         target,
-        workspacePath,
+        address: runAddress,
         input,
         requestId: generateId(),
       });
     },
-    []
+    [runAddress]
   );
 
   const openMinimapRedoDialog = useCallback(
     ({
       target,
-      workspacePath,
       redoInstructions,
+      // workspacePath remains a UI-only value used to build the diff model.
+      // It is intentionally not persisted in dialog state or sent to the host.
     }: OpenMinimapRedoDialogInput) => {
+      if (!runAddress) return;
       setMinimapDialogState({
         mode: "redo",
         target,
-        workspacePath,
+        address: runAddress,
         redoInstructions,
         requestId: generateId(),
       });
     },
-    []
+    [runAddress]
   );
 
   const handlePromptUndo = useCallback(
     (row: CliHeaderRow) => {
-      if (!row.promptUndo) return;
+      if (!row.promptUndo || !runAddress) return;
       const target: UndoExecutionTarget = row.isFinalStep
         ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.stepIndex }
         : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.stepIndex };
@@ -225,12 +232,13 @@ export function useOutputUndoActions({
         input,
       });
     },
-    [openMinimapUndoDialog]
+    [openMinimapUndoDialog, runAddress]
   );
 
   const handlePromptRedo = useCallback(
     (row: CliHeaderRow) => {
-      if (!row.promptUndo?.undoRecord?.redoInstructions?.length) return;
+      if (!row.promptUndo?.undoRecord?.redoInstructions?.length || !runAddress)
+        return;
       const target: UndoExecutionTarget = row.isFinalStep
         ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.stepIndex }
         : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.stepIndex };
@@ -240,7 +248,7 @@ export function useOutputUndoActions({
         redoInstructions: row.promptUndo.undoRecord.redoInstructions,
       });
     },
-    [openMinimapRedoDialog]
+    [openMinimapRedoDialog, runAddress]
   );
 
   const handleFileUndo = useCallback(
@@ -297,22 +305,24 @@ export function useOutputUndoActions({
   );
 
   const handleWorkflowUndo = useCallback(() => {
+    if (!runAddress) return;
     setWorkflowDialogState({
       mode: "undo",
-      workspacePath: workflowUndoRedoData.workspacePath,
+      address: runAddress,
       entries: workflowUndoRedoData.undoEntries,
       requestId: generateId(),
     });
-  }, [workflowUndoRedoData]);
+  }, [runAddress, workflowUndoRedoData]);
 
   const handleWorkflowRedo = useCallback(() => {
+    if (!runAddress) return;
     setWorkflowDialogState({
       mode: "redo",
-      workspacePath: workflowUndoRedoData.workspacePath,
+      address: runAddress,
       entries: workflowUndoRedoData.redoEntries,
       requestId: generateId(),
     });
-  }, [workflowUndoRedoData]);
+  }, [runAddress, workflowUndoRedoData]);
 
   const closeMinimapDialog = useCallback(() => {
     setMinimapDialogState(null);

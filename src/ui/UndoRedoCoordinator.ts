@@ -1,3 +1,5 @@
+import * as fs from "fs/promises";
+import * as path from "path";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import {
   FINAL_STEP_PHASES,
@@ -6,6 +8,12 @@ import {
 } from "../types/DashboardConstants";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { PostMessageFn } from "./WebviewSettingsSync";
+import type {
+  RunRef,
+  WorkflowKey,
+  WorkingFile,
+  WorkingFileWorktreeRuntime,
+} from "../types/CtrlYokeTypes";
 import type {
   UndoFileInstruction,
   UndoPromptChangesMessage,
@@ -17,12 +25,35 @@ import type {
 } from "../types/WebviewMessageTypes";
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
-import { getVsCodeNamedWorkspaceRoots } from "../platform/VsCodeWorkspaceRoot";
+import {
+  getVsCodeNamedWorkspaceRoots,
+  getVsCodeWorkspaceRoot,
+} from "../platform/VsCodeWorkspaceRoot";
+import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
+import * as WorkflowPaths from "../utils/WorkflowPaths";
+import {
+  currentBranch,
+  gitCommonDir,
+  listWorktrees,
+  repoToplevel,
+} from "../utils/GitUtils";
+import { isPathWithinDirectory } from "../utils/PathSecurity";
+import { pathsEqual } from "../utils/PathCasing";
 
 type SnapshotEntry = {
   target: OutputExecutionTarget;
   files: UndoFileInstruction[];
 };
+
+interface UndoExecutionWorkspace {
+  executionRoot: string;
+  namedWorkspaceRoots: ResolverWorkspaceFolder[];
+}
+
+interface CurrentWorkspaceRoots {
+  executionRoot: string;
+  namedWorkspaceRoots: ResolverWorkspaceFolder[];
+}
 
 /**
  * UndoRedoCoordinator
@@ -33,20 +64,25 @@ type SnapshotEntry = {
  */
 export class UndoRedoCoordinator {
   constructor(
-    private readonly getOrchestrator: () => WorkflowOrchestrator | undefined
+    private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
+    private readonly getCurrentWorkspaceRoots: () => CurrentWorkspaceRoots =
+      () => ({
+        executionRoot: getVsCodeWorkspaceRoot(),
+        namedWorkspaceRoots: getVsCodeNamedWorkspaceRoots(),
+      })
   ) {}
 
   async handleUndoPromptChanges(
     message: UndoPromptChangesMessage,
     postMessage: PostMessageFn,
-    clientId: string = PANEL_CLIENT_ID
+    _clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
-    const { requestId, target, files, workspacePath } = message.data;
+    const { requestId, target, files, workflowKey, runRef } = message.data;
     const result = await this.applyUndoEntries(
       [{ target, files }],
-      workspacePath,
+      workflowKey,
+      runRef,
       postMessage,
-      clientId,
       { emitUndoRecordWithoutHistory: true }
     );
     this.emitUndoPromptResult(postMessage, requestId, target, result);
@@ -55,14 +91,14 @@ export class UndoRedoCoordinator {
   async handleRedoPromptChanges(
     message: RedoPromptChangesMessage,
     postMessage: PostMessageFn,
-    clientId: string = PANEL_CLIENT_ID
+    _clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
-    const { requestId, target, files, workspacePath } = message.data;
+    const { requestId, target, files, workflowKey, runRef } = message.data;
     const result = await this.applyRedoEntries(
       [{ target, files }],
-      workspacePath,
+      workflowKey,
+      runRef,
       postMessage,
-      clientId
     );
     this.emitUndoPromptResult(postMessage, requestId, target, result);
   }
@@ -70,18 +106,18 @@ export class UndoRedoCoordinator {
   async handleUndoWorkflowChanges(
     message: UndoWorkflowChangesMessage,
     postMessage: PostMessageFn,
-    clientId: string = PANEL_CLIENT_ID
+    _clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
-    const { requestId, workspacePath, entries } = message.data;
+    const { requestId, workflowKey, runRef, entries } = message.data;
     const firstTarget = entries[0]?.target ?? {
       kind: FINAL_STEP_PHASES.QUEUE,
       stepIndex: 0,
     };
     const result = await this.applyUndoEntries(
       entries,
-      workspacePath,
+      workflowKey,
+      runRef,
       postMessage,
-      clientId,
       { emitUndoRecordWithoutHistory: false }
     );
     this.emitUndoPromptResult(postMessage, requestId, firstTarget, result);
@@ -90,38 +126,40 @@ export class UndoRedoCoordinator {
   async handleRedoWorkflowChanges(
     message: RedoWorkflowChangesMessage,
     postMessage: PostMessageFn,
-    clientId: string = PANEL_CLIENT_ID
+    _clientId: string = PANEL_CLIENT_ID
   ): Promise<void> {
-    const { requestId, workspacePath, entries } = message.data;
+    const { requestId, workflowKey, runRef, entries } = message.data;
     const firstTarget = entries[0]?.target ?? {
       kind: FINAL_STEP_PHASES.QUEUE,
       stepIndex: 0,
     };
     const result = await this.applyRedoEntries(
       entries,
-      workspacePath,
+      workflowKey,
+      runRef,
       postMessage,
-      clientId
     );
     this.emitUndoPromptResult(postMessage, requestId, firstTarget, result);
   }
 
   private async applyUndoEntries(
     entries: SnapshotEntry[],
-    workspacePath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
     postMessage: PostMessageFn,
-    clientId: string,
     options: { emitUndoRecordWithoutHistory: boolean }
   ): Promise<UndoResult> {
     return this.applySnapshotEntries(
       entries,
-      workspacePath,
+      workflowKey,
+      runRef,
       async (entry, result) => {
         await this.recordUndoApplied(
           entry.target,
           result,
           postMessage,
-          clientId,
+          workflowKey,
+          runRef,
           options.emitUndoRecordWithoutHistory
         );
       }
@@ -130,35 +168,57 @@ export class UndoRedoCoordinator {
 
   private async applyRedoEntries(
     entries: SnapshotEntry[],
-    workspacePath: string,
-    postMessage: PostMessageFn,
-    clientId: string
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    postMessage: PostMessageFn
   ): Promise<UndoResult> {
-    return this.applySnapshotEntries(entries, workspacePath, async (entry) => {
-      await this.recordRedoApplied(entry.target, postMessage, clientId);
-    });
+    return this.applySnapshotEntries(
+      entries,
+      workflowKey,
+      runRef,
+      async (entry) => {
+        await this.recordRedoApplied(
+          entry.target,
+          postMessage,
+          workflowKey,
+          runRef
+        );
+      }
+    );
   }
 
   private async applySnapshotEntries(
     entries: SnapshotEntry[],
-    workspacePath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
     afterRestore: (entry: SnapshotEntry, result: UndoResult) => Promise<void>
   ): Promise<UndoResult> {
     const snapshotService = new WorkspaceSnapshotService();
-    // Named roots let undo resolve folder-name-prefixed paths (multi-root) back
-    // to the correct repo; empty in single-root, where resolution is unchanged.
-    const namedRoots = getVsCodeNamedWorkspaceRoots();
     const restoredFiles: string[] = [];
     const failedFiles: Array<{ path: string; error: string }> = [];
     const redoInstructions: UndoFileInstruction[] = [];
+
+    let workspace: UndoExecutionWorkspace;
+    try {
+      workspace = await this.resolveUndoExecutionWorkspace(workflowKey, runRef);
+    } catch (error) {
+      return {
+        restoredFiles,
+        failedFiles: this.createFailedUndoFiles(
+          entries.flatMap((entry) => entry.files),
+          `Undo refused: ${getErrorMessage(error)}`
+        ),
+        redoInstructions,
+      };
+    }
 
     for (const entry of entries) {
       if (entry.files.length === 0) continue;
       try {
         const result = await snapshotService.undoFiles(
           entry.files,
-          workspacePath,
-          namedRoots
+          workspace.executionRoot,
+          workspace.namedWorkspaceRoots
         );
         restoredFiles.push(...result.restoredFiles);
         failedFiles.push(...result.failedFiles);
@@ -175,6 +235,118 @@ export class UndoRedoCoordinator {
     }
 
     return { restoredFiles, failedFiles, redoInstructions };
+  }
+
+  /** Resolve the only workspace an addressed run may write to. */
+  private async resolveUndoExecutionWorkspace(
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<UndoExecutionWorkspace> {
+    const current = this.getCurrentWorkspaceRoots();
+    const runFilePath = WorkflowPaths.runFilePath(
+      current.executionRoot,
+      workflowKey,
+      runRef
+    );
+    const workingFile = JSON.parse(
+      await fs.readFile(runFilePath, "utf8")
+    ) as WorkingFile;
+    const recordedWorktree = workingFile._runtime?.worktree;
+    if (!recordedWorktree) {
+      return current;
+    }
+
+    return this.validateRecordedWorktree(recordedWorktree);
+  }
+
+  private async validateRecordedWorktree(
+    recorded: WorkingFileWorktreeRuntime
+  ): Promise<UndoExecutionWorkspace> {
+    if (
+      recorded.directoryState !== "present" ||
+      recorded.lifecycleState === "orphaned" ||
+      recorded.lifecycleState === "blocked" ||
+      recorded.lifecycleState === "settled"
+    ) {
+      throw new Error("the recorded worktree is no longer an active checkout");
+    }
+
+    const [sourceCheckoutRoot, worktreePath, executionCheckoutRoot, executionRoot] =
+      await Promise.all([
+        this.realpathOrRefuse(recorded.sourceCheckoutRoot, "source checkout"),
+        this.realpathOrRefuse(recorded.worktreePath, "worktree"),
+        this.realpathOrRefuse(
+          recorded.executionCheckoutRoot,
+          "execution checkout"
+        ),
+        this.realpathOrRefuse(recorded.executionRoot, "execution root"),
+      ]);
+
+    if (!pathsEqual(worktreePath, executionCheckoutRoot)) {
+      throw new Error("the recorded checkout identity does not match");
+    }
+    if (!isPathWithinDirectory(executionRoot, executionCheckoutRoot)) {
+      throw new Error("the recorded execution root is outside its checkout");
+    }
+
+    const [sourceToplevel, executionToplevel, sourceCommonDir, executionCommonDir, branch, worktrees] =
+      await Promise.all([
+        repoToplevel(sourceCheckoutRoot),
+        repoToplevel(executionCheckoutRoot),
+        gitCommonDir(sourceCheckoutRoot),
+        gitCommonDir(executionCheckoutRoot),
+        currentBranch(executionCheckoutRoot),
+        listWorktrees(sourceCheckoutRoot),
+      ]);
+    if (
+      !sourceToplevel ||
+      !executionToplevel ||
+      !sourceCommonDir ||
+      !executionCommonDir ||
+      !pathsEqual(sourceToplevel, sourceCheckoutRoot) ||
+      !pathsEqual(sourceCommonDir, executionCommonDir) ||
+      !pathsEqual(executionToplevel, executionCheckoutRoot) ||
+      branch !== recorded.branchName
+    ) {
+      throw new Error("the recorded repository or branch identity does not match");
+    }
+
+    const matchingWorktree = worktrees.find(
+      (entry) =>
+        pathsEqual(entry.worktreePath, executionCheckoutRoot) &&
+        entry.branchName === recorded.branchName
+    );
+    if (!matchingWorktree) {
+      throw new Error("the recorded checkout is not the registered worktree");
+    }
+
+    const namedWorkspaceRoots = await Promise.all(
+      recorded.namedWorkspaceRoots.map(async (root) => {
+        const fsPath = await this.realpathOrRefuse(
+          root.fsPath,
+          `workspace root "${root.name}"`
+        );
+        if (!isPathWithinDirectory(fsPath, executionCheckoutRoot)) {
+          throw new Error(
+            `recorded workspace root "${root.name}" is outside the checkout`
+          );
+        }
+        return { ...root, fsPath };
+      })
+    );
+
+    return { executionRoot, namedWorkspaceRoots };
+  }
+
+  private async realpathOrRefuse(value: string, label: string): Promise<string> {
+    if (!value || !path.isAbsolute(value)) {
+      throw new Error(`recorded ${label} is invalid`);
+    }
+    try {
+      return path.normalize(await fs.realpath(value));
+    } catch {
+      throw new Error(`recorded ${label} is missing`);
+    }
   }
 
   private createFailedUndoFiles(
@@ -205,7 +377,8 @@ export class UndoRedoCoordinator {
     target: OutputExecutionTarget,
     result: UndoResult,
     postMessage: PostMessageFn,
-    clientId: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
     emitWithoutHistory: boolean
   ): Promise<void> {
     const undoRecord: UndoRecord = {
@@ -213,7 +386,7 @@ export class UndoRedoCoordinator {
       restoredFiles: result.restoredFiles,
       redoInstructions: result.redoInstructions,
     };
-    const historyFilePath = await this.resolveHistoryFilePath(clientId);
+    const historyFilePath = await this.resolveHistoryFilePath(workflowKey, runRef);
     const outputHistoryManager =
       this.getOrchestrator()?.getOutputHistoryManager();
     if (historyFilePath && outputHistoryManager) {
@@ -234,9 +407,10 @@ export class UndoRedoCoordinator {
   private async recordRedoApplied(
     target: OutputExecutionTarget,
     postMessage: PostMessageFn,
-    clientId: string
+    workflowKey: WorkflowKey,
+    runRef: RunRef
   ): Promise<void> {
-    const historyFilePath = await this.resolveHistoryFilePath(clientId);
+    const historyFilePath = await this.resolveHistoryFilePath(workflowKey, runRef);
     const outputHistoryManager =
       this.getOrchestrator()?.getOutputHistoryManager();
     if (!historyFilePath || !outputHistoryManager) {
@@ -276,15 +450,16 @@ export class UndoRedoCoordinator {
    * Resolve the current history file path for the active workflow.
    * Returns empty string if unavailable.
    */
-  private async resolveHistoryFilePath(clientId: string): Promise<string> {
+  private async resolveHistoryFilePath(
+    workflowKey: WorkflowKey,
+    runRef: RunRef
+  ): Promise<string> {
     try {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) return "";
-      const address = orchestrator.getViewAddress(clientId);
-      if (!address || address.kind !== "run") return "";
       return orchestrator
         .getOutputHistoryManager()
-        .getHistoryFilePath(address.workflowKey, address.runRef);
+        .getHistoryFilePath(workflowKey, runRef);
     } catch {
       return "";
     }

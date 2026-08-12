@@ -1965,7 +1965,11 @@ schema.
     file-access roots, and is deliberately excluded from harness `--add-dir`
     assembly and `ExternalRootsTrustStore`.
 16. Route snapshots, hosted repo attribution, and backend-resolved undo through the execution
-    workspace.
+    workspace. **Implemented.** Snapshot capture and restoration use the persisted execution
+    workspace, including remapped named roots and linked-worktree Git identity. Undo/redo
+    messages address a workflow run instead of supplying a client-controlled workspace path;
+    the backend resolves ordinary roots and validates recorded worktree presence, checkout,
+    common-directory, branch, and registered-worktree identity before applying changes.
 17. Verify all providers, including Claude/Qwen session logs and strict terminal cleanup.
 
 Exit criterion: existing parallel native workflows still coexist; a named

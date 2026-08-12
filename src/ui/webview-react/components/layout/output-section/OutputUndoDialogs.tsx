@@ -4,11 +4,12 @@ import type { WorkflowStepEntry } from "@components/output/UndoChangesDialog";
 import type { UndoExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type { UndoFileInstruction } from "@/types/messages";
 import type { UndoDialogInput } from "@utils/promptUndo";
+import type { WorkflowRunAddress } from "@root/types/CtrlYokeTypes";
 
 export interface MinimapDialogState {
   mode: "undo" | "redo";
   target: UndoExecutionTarget;
-  workspacePath: string;
+  address: WorkflowRunAddress;
   input?: UndoDialogInput;
   redoInstructions?: UndoFileInstruction[];
   requestId: string;
@@ -16,7 +17,7 @@ export interface MinimapDialogState {
 
 export interface WorkflowDialogState {
   mode: "undo" | "redo";
-  workspacePath: string;
+  address: WorkflowRunAddress;
   entries: WorkflowStepEntry[];
   requestId: string;
 }
@@ -39,7 +40,8 @@ export const OutputUndoDialogs: React.FC<OutputUndoDialogsProps> = ({
       <UndoChangesDialog
         mode={minimapDialogState.mode}
         target={minimapDialogState.target}
-        workspacePath={minimapDialogState.workspacePath}
+        workflowKey={minimapDialogState.address.workflowKey}
+        runRef={minimapDialogState.address.runRef}
         input={minimapDialogState.input}
         redoInstructions={minimapDialogState.redoInstructions}
         requestId={minimapDialogState.requestId}
@@ -51,7 +53,8 @@ export const OutputUndoDialogs: React.FC<OutputUndoDialogsProps> = ({
       <UndoChangesDialog
         mode={workflowDialogState.mode}
         target={workflowDialogState.entries[0].target}
-        workspacePath={workflowDialogState.workspacePath}
+        workflowKey={workflowDialogState.address.workflowKey}
+        runRef={workflowDialogState.address.runRef}
         requestId={workflowDialogState.requestId}
         workflowEntries={workflowDialogState.entries}
         onClose={onCloseWorkflowDialog}
