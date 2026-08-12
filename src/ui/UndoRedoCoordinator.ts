@@ -65,11 +65,10 @@ interface CurrentWorkspaceRoots {
 export class UndoRedoCoordinator {
   constructor(
     private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
-    private readonly getCurrentWorkspaceRoots: () => CurrentWorkspaceRoots =
-      () => ({
-        executionRoot: getVsCodeWorkspaceRoot(),
-        namedWorkspaceRoots: getVsCodeNamedWorkspaceRoots(),
-      })
+    private readonly getCurrentWorkspaceRoots: () => CurrentWorkspaceRoots = () => ({
+      executionRoot: getVsCodeWorkspaceRoot(),
+      namedWorkspaceRoots: getVsCodeNamedWorkspaceRoots(),
+    })
   ) {}
 
   async handleUndoPromptChanges(
@@ -98,7 +97,7 @@ export class UndoRedoCoordinator {
       [{ target, files }],
       workflowKey,
       runRef,
-      postMessage,
+      postMessage
     );
     this.emitUndoPromptResult(postMessage, requestId, target, result);
   }
@@ -137,7 +136,7 @@ export class UndoRedoCoordinator {
       entries,
       workflowKey,
       runRef,
-      postMessage,
+      postMessage
     );
     this.emitUndoPromptResult(postMessage, requestId, firstTarget, result);
   }
@@ -262,6 +261,11 @@ export class UndoRedoCoordinator {
   private async validateRecordedWorktree(
     recorded: WorkingFileWorktreeRuntime
   ): Promise<UndoExecutionWorkspace> {
+    if (recorded.mode === "managed" && recorded.lifecycleState === "settled") {
+      throw new Error(
+        "the managed worktree landed as a branch; filesystem undo is unavailable for the settled run (Git can show the recorded diff but cannot apply this undo)"
+      );
+    }
     if (
       recorded.directoryState !== "present" ||
       recorded.lifecycleState === "orphaned" ||
@@ -271,16 +275,20 @@ export class UndoRedoCoordinator {
       throw new Error("the recorded worktree is no longer an active checkout");
     }
 
-    const [sourceCheckoutRoot, worktreePath, executionCheckoutRoot, executionRoot] =
-      await Promise.all([
-        this.realpathOrRefuse(recorded.sourceCheckoutRoot, "source checkout"),
-        this.realpathOrRefuse(recorded.worktreePath, "worktree"),
-        this.realpathOrRefuse(
-          recorded.executionCheckoutRoot,
-          "execution checkout"
-        ),
-        this.realpathOrRefuse(recorded.executionRoot, "execution root"),
-      ]);
+    const [
+      sourceCheckoutRoot,
+      worktreePath,
+      executionCheckoutRoot,
+      executionRoot,
+    ] = await Promise.all([
+      this.realpathOrRefuse(recorded.sourceCheckoutRoot, "source checkout"),
+      this.realpathOrRefuse(recorded.worktreePath, "worktree"),
+      this.realpathOrRefuse(
+        recorded.executionCheckoutRoot,
+        "execution checkout"
+      ),
+      this.realpathOrRefuse(recorded.executionRoot, "execution root"),
+    ]);
 
     if (!pathsEqual(worktreePath, executionCheckoutRoot)) {
       throw new Error("the recorded checkout identity does not match");
@@ -289,15 +297,21 @@ export class UndoRedoCoordinator {
       throw new Error("the recorded execution root is outside its checkout");
     }
 
-    const [sourceToplevel, executionToplevel, sourceCommonDir, executionCommonDir, branch, worktrees] =
-      await Promise.all([
-        repoToplevel(sourceCheckoutRoot),
-        repoToplevel(executionCheckoutRoot),
-        gitCommonDir(sourceCheckoutRoot),
-        gitCommonDir(executionCheckoutRoot),
-        currentBranch(executionCheckoutRoot),
-        listWorktrees(sourceCheckoutRoot),
-      ]);
+    const [
+      sourceToplevel,
+      executionToplevel,
+      sourceCommonDir,
+      executionCommonDir,
+      branch,
+      worktrees,
+    ] = await Promise.all([
+      repoToplevel(sourceCheckoutRoot),
+      repoToplevel(executionCheckoutRoot),
+      gitCommonDir(sourceCheckoutRoot),
+      gitCommonDir(executionCheckoutRoot),
+      currentBranch(executionCheckoutRoot),
+      listWorktrees(sourceCheckoutRoot),
+    ]);
     if (
       !sourceToplevel ||
       !executionToplevel ||
@@ -308,7 +322,9 @@ export class UndoRedoCoordinator {
       !pathsEqual(executionToplevel, executionCheckoutRoot) ||
       branch !== recorded.branchName
     ) {
-      throw new Error("the recorded repository or branch identity does not match");
+      throw new Error(
+        "the recorded repository or branch identity does not match"
+      );
     }
 
     const matchingWorktree = worktrees.find(
@@ -338,7 +354,10 @@ export class UndoRedoCoordinator {
     return { executionRoot, namedWorkspaceRoots };
   }
 
-  private async realpathOrRefuse(value: string, label: string): Promise<string> {
+  private async realpathOrRefuse(
+    value: string,
+    label: string
+  ): Promise<string> {
     if (!value || !path.isAbsolute(value)) {
       throw new Error(`recorded ${label} is invalid`);
     }
@@ -386,7 +405,10 @@ export class UndoRedoCoordinator {
       restoredFiles: result.restoredFiles,
       redoInstructions: result.redoInstructions,
     };
-    const historyFilePath = await this.resolveHistoryFilePath(workflowKey, runRef);
+    const historyFilePath = await this.resolveHistoryFilePath(
+      workflowKey,
+      runRef
+    );
     const outputHistoryManager =
       this.getOrchestrator()?.getOutputHistoryManager();
     if (historyFilePath && outputHistoryManager) {
@@ -410,7 +432,10 @@ export class UndoRedoCoordinator {
     workflowKey: WorkflowKey,
     runRef: RunRef
   ): Promise<void> {
-    const historyFilePath = await this.resolveHistoryFilePath(workflowKey, runRef);
+    const historyFilePath = await this.resolveHistoryFilePath(
+      workflowKey,
+      runRef
+    );
     const outputHistoryManager =
       this.getOrchestrator()?.getOutputHistoryManager();
     if (!historyFilePath || !outputHistoryManager) {

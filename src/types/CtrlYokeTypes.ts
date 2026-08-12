@@ -423,6 +423,8 @@ export interface WorkingFileWorktreeRuntime {
   sourceCheckoutRoot: string;
   namedWorkspaceRoots: ResolverWorkspaceFolder[];
   baseCommit: string;
+  /** Number of files in the landed branch diff from baseCommit, when known. */
+  changedFileCount?: number;
   /** Whether the named checkout had uncommitted changes at run start. */
   dirty?: boolean;
   targetBranch?: string;
@@ -460,7 +462,12 @@ export type WorktreeRunProjection = Pick<
   | "landingOutcome"
   | "mergeOutcome"
 > &
-  Partial<Pick<WorkingFileWorktreeRuntime, "lifecycleState" | "branchState">>;
+  Partial<
+    Pick<
+      WorkingFileWorktreeRuntime,
+      "baseCommit" | "changedFileCount" | "lifecycleState" | "branchState"
+    >
+  >;
 
 /** Project the disk-authoritative runtime to fields safe for status/history views. */
 export function projectWorktreeRuntime(
@@ -472,6 +479,7 @@ export function projectWorktreeRuntime(
     branchName: worktree.branchName,
     worktreePath: worktree.worktreePath,
     sourceCheckoutRoot: worktree.sourceCheckoutRoot,
+    baseCommit: worktree.baseCommit,
     lifecycleState: worktree.lifecycleState,
     directoryState: worktree.directoryState,
     branchState: worktree.branchState,
@@ -479,6 +487,9 @@ export function projectWorktreeRuntime(
       ? { landingOutcome: worktree.landingOutcome }
       : {}),
     ...(worktree.mergeOutcome ? { mergeOutcome: worktree.mergeOutcome } : {}),
+    ...(worktree.changedFileCount !== undefined
+      ? { changedFileCount: worktree.changedFileCount }
+      : {}),
   };
 }
 
@@ -501,6 +512,7 @@ export interface WorktreeCompletionResult {
   targetBranch?: string;
   conflictFiles?: string[];
   autoCommitted?: boolean;
+  changedFileCount?: number;
   message?: string;
 }
 

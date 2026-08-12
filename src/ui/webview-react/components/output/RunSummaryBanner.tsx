@@ -1,6 +1,6 @@
 import React from "react";
 import { ExecutionStateBadge } from "@components/shared/ExecutionStateBadge";
-import { EXECUTION_STATES } from "@root/types/DashboardConstants";
+import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import {
   WorkflowTokenUsage,
   hasWorkflowTokenUsage,
@@ -10,6 +10,7 @@ import type {
   WorktreeRunProjection,
   WorkflowTokenTotals,
 } from "@root/types/CtrlYokeTypes";
+import { sendMessage } from "@hooks/useMessageHandler";
 
 /** The run identity/status data the banner displays — sourced from whichever run is currently displayed, live or historical. */
 export interface RunBannerData {
@@ -22,9 +23,7 @@ export interface RunBannerData {
 }
 
 function formatRelativeWorktreePath(worktree: WorktreeRunProjection): string {
-  const target = worktree.worktreePath
-    .replace(/\\/g, "/")
-    .replace(/\/+$/, "");
+  const target = worktree.worktreePath.replace(/\\/g, "/").replace(/\/+$/, "");
   const source = worktree.sourceCheckoutRoot
     .replace(/\\/g, "/")
     .replace(/\/+$/, "");
@@ -48,28 +47,34 @@ function formatRelativeWorktreePath(worktree: WorktreeRunProjection): string {
 function formatWorktreeOutcome(
   worktree: WorktreeRunProjection
 ): string | undefined {
-  switch (worktree.mergeOutcome) {
-    case "fast-forward":
-      return "merged (fast-forward)";
-    case "merge-commit":
-      return "merged (merge commit)";
-    case "conflict":
-      return "merge conflict — branch preserved";
-    case "abort-failed":
-      return "merge abort failed";
-    case "blocked":
-      return "merge blocked";
+  if (worktree.directoryState === "remove-failed") {
+    return "⚠ worktree removal failed — branch safe, directory kept";
   }
   switch (worktree.landingOutcome) {
     case "landed":
-      return "branch ready";
+      return `✓ branch ready — ${worktree.changedFileCount ?? 0} file${
+        worktree.changedFileCount === 1 ? "" : "s"
+      }`;
     case "no-changes":
-      return "no changes";
+      return "✓ no changes";
     case "blocked":
-      return "landing blocked";
+      return `⚠ commit blocked — worktree kept at ${formatRelativeWorktreePath(
+        worktree
+      )}`;
     default:
       return undefined;
   }
+}
+
+/** Settled managed runs cannot restore files into a checkout that no longer owns them. */
+export function isManagedWorktreeUndoUnavailable(
+  worktree: WorktreeRunProjection | undefined
+): boolean {
+  return (
+    worktree?.mode === "managed" &&
+    (worktree.lifecycleState === "settled" ||
+      worktree.directoryState !== "present")
+  );
 }
 
 function formatDirectoryState(worktree: WorktreeRunProjection): string {
@@ -131,12 +136,11 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
             >
               {worktree.branchName}
             </span>
-            {executionState === EXECUTION_STATES.COMPLETED &&
-              formatWorktreeOutcome(worktree) && (
-                <span className="whitespace-nowrap">
-                  &middot; {formatWorktreeOutcome(worktree)}
-                </span>
-              )}
+            {formatWorktreeOutcome(worktree) && (
+              <span className="whitespace-nowrap">
+                &middot; {formatWorktreeOutcome(worktree)}
+              </span>
+            )}
           </>
         )}
       </span>
@@ -149,6 +153,38 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
             Worktree: {formatRelativeWorktreePath(worktree)}
             {formatDirectoryState(worktree)}
           </span>
+        )}
+        {worktree && worktree.baseCommit && worktree.branchName && (
+          <>
+            <button
+              type="button"
+              onClick={() =>
+                sendMessage(MESSAGE_TYPES.VIEW_WORKTREE_DIFF, {
+                  sourceCheckoutRoot: worktree.sourceCheckoutRoot,
+                  baseCommit: worktree.baseCommit,
+                  branchName: worktree.branchName,
+                })
+              }
+              title="View the recorded branch against its recorded base commit"
+              className="text-link-fg hover:underline focus:outline-none"
+            >
+              View Diff
+            </button>
+            {worktree.directoryState === "present" && (
+              <button
+                type="button"
+                onClick={() =>
+                  sendMessage(MESSAGE_TYPES.OPEN_WORKTREE, {
+                    worktreePath: worktree.worktreePath,
+                  })
+                }
+                title="Open the worktree in a new window"
+                className="text-link-fg hover:underline focus:outline-none"
+              >
+                Open Worktree in New Window
+              </button>
+            )}
+          </>
         )}
         {hasWorkflowTokenUsage(tokenTotals) && (
           <WorkflowTokenUsage totals={tokenTotals} />
@@ -167,15 +203,15 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
           type="button"
           onClick={onTogglePinned}
           title={
-            isPinned
-              ? "Unpin (scrolls with output)"
-              : "Pin to top of output"
+            isPinned ? "Unpin (scrolls with output)" : "Pin to top of output"
           }
           aria-label={isPinned ? "Unpin run summary" : "Pin run summary"}
           aria-pressed={isPinned}
           className="icon-btn py-0.5 px-1"
         >
-          <i className={`codicon ${isPinned ? "codicon-pinned" : "codicon-pin"}`} />
+          <i
+            className={`codicon ${isPinned ? "codicon-pinned" : "codicon-pin"}`}
+          />
         </button>
       </span>
     </div>

@@ -20,12 +20,15 @@ import {
   MESSAGE_TYPES,
   MODEL_OPTION_VALUES,
   PANEL_CLIENT_ID,
+  USER_FEEDBACK_SEVERITY,
   VSCODE_COMMANDS,
   VSCODE_GIT_COMMANDS,
   type QueuePosition,
 } from "./types/DashboardConstants";
 import {
   getCommitDiff,
+  getDiffBetweenRefs,
+  getDiffFilesBetweenRefs,
   getWorkingTreeDiff,
   getStagedDiff,
   getStashDiff,
@@ -65,6 +68,7 @@ import {
 } from "./ui/ExternalFileTrustPrompt";
 import { ScmCommitCommand } from "./scm/ScmCommitCommand";
 import { CompositeUserFeedbackSink } from "./core/CompositeUserFeedbackSink";
+import { notifyUserFeedback } from "./core/UserFeedbackSink";
 import { VsCodeUserFeedbackSink } from "./platform/VsCodeUserFeedbackSink";
 import { HostedWebSocketUserFeedbackSink } from "./server/HostedWebSocketUserFeedbackSink";
 
@@ -680,6 +684,13 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 function registerCommands(context: vscode.ExtensionContext) {
+  const reportCommandError = (message: string): void => {
+    notifyUserFeedback(
+      workflowOrchestrator.getUserFeedbackSink(),
+      USER_FEEDBACK_SEVERITY.ERROR,
+      message
+    );
+  };
   const contextMenuReferenceCommands = new ContextMenuReferenceCommands(
     webviewProvider
   );
@@ -1088,6 +1099,105 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
+  const openWorktreeCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.OPEN_WORKTREE,
+    async (args: { worktreePath?: string }) => {
+      const worktreePath = args?.worktreePath;
+      if (!worktreePath || !path.isAbsolute(worktreePath)) {
+        reportCommandError(
+          "ctrlyoke: The recorded worktree path is unavailable."
+        );
+        return;
+      }
+      await vscode.commands.executeCommand(
+        "vscode.openFolder",
+        vscode.Uri.file(worktreePath),
+        true
+      );
+    }
+  );
+
+  const viewWorktreeDiffCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.VIEW_WORKTREE_DIFF,
+    async (args: {
+      sourceCheckoutRoot?: string;
+      baseCommit?: string;
+      branchName?: string;
+    }) => {
+      const sourceCheckoutRoot = args?.sourceCheckoutRoot;
+      const baseCommit = args?.baseCommit;
+      const branchName = args?.branchName;
+      if (
+        !sourceCheckoutRoot ||
+        !path.isAbsolute(sourceCheckoutRoot) ||
+        !baseCommit ||
+        !branchName
+      ) {
+        reportCommandError(
+          "ctrlyoke: The recorded worktree diff information is unavailable."
+        );
+        return;
+      }
+
+      const repoUri = vscode.Uri.file(sourceCheckoutRoot);
+      const targetRef = `refs/heads/${branchName}`;
+      const openGeneratedDiff = async (): Promise<void> => {
+        const content =
+          (
+            await getDiffBetweenRefs(sourceCheckoutRoot, baseCommit, targetRef)
+          ).trim() || "No changes between the recorded base and branch.";
+        const document = await vscode.workspace.openTextDocument({
+          content,
+          language: "diff",
+        });
+        await vscode.window.showTextDocument(document, { preview: true });
+      };
+
+      try {
+        const files = await getDiffFilesBetweenRefs(
+          sourceCheckoutRoot,
+          baseCommit,
+          targetRef
+        );
+        const gitApi = vscode.extensions
+          .getExtension<{
+            getAPI(version: 1): {
+              toGitUri(uri: vscode.Uri, ref: string): vscode.Uri;
+            };
+          }>("vscode.git")
+          ?.exports.getAPI(1);
+        if (!gitApi || files.length === 0) {
+          await openGeneratedDiff();
+          return;
+        }
+
+        const resources = files.map((relativePath) => {
+          const fileUri = vscode.Uri.joinPath(repoUri, relativePath);
+          return [
+            fileUri,
+            gitApi.toGitUri(fileUri, baseCommit),
+            gitApi.toGitUri(fileUri, targetRef),
+          ];
+        });
+        await vscode.commands.executeCommand(
+          VSCODE_GIT_COMMANDS.CHANGES,
+          `Managed branch diff: ${branchName}`,
+          resources
+        );
+      } catch (error) {
+        try {
+          await openGeneratedDiff();
+        } catch (fallbackError) {
+          reportCommandError(
+            `ctrlyoke: Failed to open worktree diff: ${getErrorMessage(
+              fallbackError
+            )}`
+          );
+        }
+      }
+    }
+  );
+
   const addFileToPromptEditorCommand = vscode.commands.registerCommand(
     "ctrlyoke.addFileToPromptEditor",
     async (uri: vscode.Uri) => {
@@ -1321,6 +1431,8 @@ function registerCommands(context: vscode.ExtensionContext) {
     confirmExternalFileTrustCommand,
     clearWorkflowCommand,
     openGitChangeCommand,
+    openWorktreeCommand,
+    viewWorktreeDiffCommand,
     addFileToPromptEditorCommand,
     addDirectoryToPromptEditorCommand,
     addSelectionToPromptEditorCommand,

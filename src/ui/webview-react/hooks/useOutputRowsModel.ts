@@ -43,6 +43,7 @@ interface UseOutputRowsModelInput {
   streamingChunks: Record<string, string>;
   finalStepStreamingChunks: Record<string, string>;
   isExecutionActive: boolean;
+  allowUndoActions: boolean;
   workspaceSnapshots: Record<number, WorkspaceSnapshot>;
   finalStepWorkspaceSnapshots: Record<number, WorkspaceSnapshot>;
   undoRecords: Record<string, UndoRecord>;
@@ -78,6 +79,7 @@ export function useOutputRowsModel({
   streamingChunks,
   finalStepStreamingChunks,
   isExecutionActive,
+  allowUndoActions,
   workspaceSnapshots,
   finalStepWorkspaceSnapshots,
   undoRecords,
@@ -167,7 +169,7 @@ export function useOutputRowsModel({
             streamingChunks,
             finalStepStreamingChunks,
             isExecutionActive,
-            allowUndoActions: isViewingHistory || !isExecutionActive,
+            allowUndoActions,
             isViewingHistory,
             historyOutputs,
             workspaceSnapshots,
@@ -194,6 +196,7 @@ export function useOutputRowsModel({
       streamingChunks,
       finalStepStreamingChunks,
       isExecutionActive,
+      allowUndoActions,
       isViewingHistory,
       historyOutputs,
       workspaceSnapshots,

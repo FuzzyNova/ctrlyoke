@@ -196,6 +196,47 @@ export async function getCommitDiff(
   return stdout;
 }
 
+/** Return repository-relative files changed between two commits/refs. */
+export async function getDiffFilesBetweenRefs(
+  workspaceRoot: string,
+  baseRef: string,
+  targetRef: string
+): Promise<string[]> {
+  const { stdout } = await execGit([
+    "-C",
+    workspaceRoot,
+    "diff",
+    "--name-only",
+    "-z",
+    "--no-renames",
+    "--diff-filter=ACDMRTUXB",
+    "--end-of-options",
+    baseRef,
+    targetRef,
+  ]);
+  return stdout.split("\0").filter(Boolean);
+}
+
+/** Return a unified diff between two commits/refs. */
+export async function getDiffBetweenRefs(
+  workspaceRoot: string,
+  baseRef: string,
+  targetRef: string
+): Promise<string> {
+  const { stdout } = await execGit([
+    "-C",
+    workspaceRoot,
+    "diff",
+    "--stat",
+    "-p",
+    "--no-ext-diff",
+    "--end-of-options",
+    baseRef,
+    targetRef,
+  ]);
+  return stdout;
+}
+
 /**
  * Returns working tree diff (unstaged changes + untracked file summary).
  */

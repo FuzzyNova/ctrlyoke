@@ -5,6 +5,7 @@ import {
   addWorktree,
   commitAll,
   currentBranch,
+  getDiffFilesBetweenRefs,
   deleteLocalBranch,
   gitCommonDir,
   getGitTrackedAndUntrackedFiles,
@@ -449,9 +450,13 @@ export class WorktreeManager {
         async () => {
           const record = await this.tryReadRecord(recordPath);
           if (!record || record.branchName !== info.branchName) {
-            return blocked("Managed ownership record is missing or mismatched.");
+            return blocked(
+              "Managed ownership record is missing or mismatched."
+            );
           }
-          if (!(await this.tryResolveLocalBranch(repositoryRoot, info.branchName))) {
+          if (
+            !(await this.tryResolveLocalBranch(repositoryRoot, info.branchName))
+          ) {
             return blocked(
               "Managed branch ref is missing; refusing to finalize an unowned checkout.",
               "missing"
@@ -464,9 +469,7 @@ export class WorktreeManager {
           );
           if (!identity.ok) return blocked(identity.message);
 
-          const paths = await getGitTrackedAndUntrackedFiles(
-            info.worktreePath
-          );
+          const paths = await getGitTrackedAndUntrackedFiles(info.worktreePath);
           const runtimePaths = paths.filter((repositoryRelativePath) =>
             isWorkspaceInitializerRuntimePath(repositoryRelativePath)
           );
@@ -498,10 +501,25 @@ export class WorktreeManager {
             "ctrlyoke: land managed workflow changes"
           );
           if (!committed) {
-            return blocked("Managed worktree commit found no changes to commit.");
+            return blocked(
+              "Managed worktree commit found no changes to commit."
+            );
           }
 
           const committedHead = await resolveCommit(info.worktreePath, "HEAD");
+          let changedFileCount: number | undefined;
+          try {
+            changedFileCount = (
+              await getDiffFilesBetweenRefs(
+                repositoryRoot,
+                record.baseCommit,
+                committedHead
+              )
+            ).length;
+          } catch {
+            // A missing count must not turn an already-landed commit into a
+            // blocked settlement. The branch and base remain authoritative.
+          }
           const landedIdentity = await this.validateManagedCheckoutIdentity(
             repositoryRoot,
             info,
@@ -524,6 +542,7 @@ export class WorktreeManager {
             directoryState: keep ? "present" : "present",
             branchState: "present",
             finalBranchTip: finalTip,
+            ...(changedFileCount !== undefined ? { changedFileCount } : {}),
             updatedAt: this.now(),
           });
 
@@ -535,6 +554,7 @@ export class WorktreeManager {
               branchName: info.branchName,
               ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
               autoCommitted: true,
+              ...(changedFileCount !== undefined ? { changedFileCount } : {}),
             };
           }
 
@@ -543,7 +563,8 @@ export class WorktreeManager {
             recordPath,
             landedRecord,
             info,
-            true
+            true,
+            changedFileCount
           );
         }
       );
@@ -558,12 +579,17 @@ export class WorktreeManager {
     repositoryRoot: string,
     info: WorktreeInfo,
     record: ManagedWorktreeOwnershipRecord
-  ): Promise<{ ok: true; headCommit: string } | { ok: false; message: string }> {
+  ): Promise<
+    { ok: true; headCommit: string } | { ok: false; message: string }
+  > {
     if (!(await this.pathExists(info.worktreePath))) {
       return { ok: false, message: "Managed worktree directory is missing." };
     }
     if (await hasGitOperationInProgress(info.worktreePath)) {
-      return { ok: false, message: "A Git operation is in progress in the managed worktree." };
+      return {
+        ok: false,
+        message: "A Git operation is in progress in the managed worktree.",
+      };
     }
     const checkedOutBranch = await currentBranch(info.worktreePath);
     if (checkedOutBranch !== info.branchName) {
@@ -578,7 +604,10 @@ export class WorktreeManager {
       `refs/heads/${info.branchName}`
     );
     if (headCommit !== branchTip) {
-      return { ok: false, message: "Managed worktree HEAD does not match its branch ref." };
+      return {
+        ok: false,
+        message: "Managed worktree HEAD does not match its branch ref.",
+      };
     }
     if (branchTip !== record.lastVerifiedBranchTip) {
       return {
@@ -611,6 +640,7 @@ export class WorktreeManager {
         directoryState: "present",
         branchState: "present",
         finalBranchTip: record.baseCommit,
+        changedFileCount: 0,
         updatedAt: this.now(),
       });
       return {
@@ -631,7 +661,8 @@ export class WorktreeManager {
         finalBranchTip: record.baseCommit,
       },
       info,
-      false
+      false,
+      0
     );
   }
 
@@ -640,7 +671,8 @@ export class WorktreeManager {
     recordPath: string,
     record: ManagedWorktreeOwnershipRecord,
     info: WorktreeInfo,
-    autoCommitted: boolean
+    autoCommitted: boolean,
+    changedFileCount?: number
   ): Promise<WorktreeCompletionResult> {
     try {
       await removeWorktree(repositoryRoot, info.worktreePath);
@@ -656,19 +688,23 @@ export class WorktreeManager {
       });
       await this.persistRuntime({
         lifecycleState: "settled",
-        landingOutcome: record.recoveryOutcome === "no-changes" ? "no-changes" : "landed",
+        landingOutcome:
+          record.recoveryOutcome === "no-changes" ? "no-changes" : "landed",
         directoryState: "remove-failed",
         branchState: "present",
         finalBranchTip: record.finalBranchTip,
+        ...(changedFileCount !== undefined ? { changedFileCount } : {}),
         updatedAt: this.now(),
       });
       return {
-        landingOutcome: record.recoveryOutcome === "no-changes" ? "no-changes" : "landed",
+        landingOutcome:
+          record.recoveryOutcome === "no-changes" ? "no-changes" : "landed",
         directoryOutcome: "remove-failed",
         branchState: "present",
         branchName: info.branchName,
         ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
         ...(autoCommitted ? { autoCommitted: true } : {}),
+        ...(changedFileCount !== undefined ? { changedFileCount } : {}),
         message,
       };
     }
@@ -682,7 +718,8 @@ export class WorktreeManager {
       );
       if (branchTip !== record.baseCommit) {
         branchState = branchTip ? "present" : "missing";
-        message = "Managed no-change branch changed before deletion; it was kept.";
+        message =
+          "Managed no-change branch changed before deletion; it was kept.";
       } else {
         try {
           await deleteLocalBranch(repositoryRoot, info.branchName);
@@ -710,6 +747,7 @@ export class WorktreeManager {
       directoryState: "removed",
       branchState,
       finalBranchTip: record.finalBranchTip,
+      ...(changedFileCount !== undefined ? { changedFileCount } : {}),
       updatedAt: this.now(),
     });
 
@@ -729,6 +767,7 @@ export class WorktreeManager {
       branchName: info.branchName,
       ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
       ...(autoCommitted ? { autoCommitted: true } : {}),
+      ...(changedFileCount !== undefined ? { changedFileCount } : {}),
       ...(message ? { message } : {}),
     };
   }
@@ -751,7 +790,9 @@ export class WorktreeManager {
         lifecycleState: patch.lifecycleState ?? "blocked",
         directoryState: patch.directoryState ?? "present",
         branchState: patch.branchState ?? "present",
-        ...(patch.finalBranchTip ? { finalBranchTip: patch.finalBranchTip } : {}),
+        ...(patch.finalBranchTip
+          ? { finalBranchTip: patch.finalBranchTip }
+          : {}),
       });
     }
     await this.persistRuntime({
@@ -1592,9 +1633,8 @@ export class WorktreeManager {
   }
 
   private async hasLiveLease(executionRoot: string): Promise<boolean> {
-    const inspections = await ExecutionRootLeaseManager.inspectLeases(
-      executionRoot
-    );
+    const inspections =
+      await ExecutionRootLeaseManager.inspectLeases(executionRoot);
     return inspections.some((inspection) => !inspection.stale);
   }
 

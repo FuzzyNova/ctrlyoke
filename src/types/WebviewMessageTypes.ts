@@ -1124,6 +1124,20 @@ export interface OpenPromptFileMessage {
   path: string;
 }
 
+/** Webview → Extension: open the recorded worktree checkout in a new window. */
+export interface OpenWorktreeMessage {
+  type: typeof MESSAGE_TYPES.OPEN_WORKTREE;
+  worktreePath: string;
+}
+
+/** Webview → Extension: view the recorded branch against its recorded base. */
+export interface ViewWorktreeDiffMessage {
+  type: typeof MESSAGE_TYPES.VIEW_WORKTREE_DIFF;
+  sourceCheckoutRoot: string;
+  baseCommit: string;
+  branchName: string;
+}
+
 /**
  * Global settings updated message (extension -> webview)
  */

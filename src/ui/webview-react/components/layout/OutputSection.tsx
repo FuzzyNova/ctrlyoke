@@ -32,7 +32,10 @@ import {
 } from "../../types/messages";
 import { type MinimapStep } from "../output/OutputMinimap";
 import { OutputFindBar } from "../output";
-import type { RunBannerData } from "../output/RunSummaryBanner";
+import {
+  isManagedWorktreeUndoUnavailable,
+  type RunBannerData,
+} from "../output/RunSummaryBanner";
 import { TerminalView } from "../output/TerminalView";
 import { useTerminalStore } from "@store/terminalStore";
 import type { TerminalSession } from "@store/terminalStore";
@@ -350,6 +353,9 @@ const OutputSectionInner: React.FC = () => {
   const isExecutionActive =
     executionState === EXECUTION_STATES.RUNNING ||
     executionState === EXECUTION_STATES.CANCELLING;
+  const allowUndoActions =
+    (isViewingHistory || !isExecutionActive) &&
+    !isManagedWorktreeUndoUnavailable(displayedRunBanner?.worktree);
 
   // Forward refs let useOutputRowsModel call the real invalidation/measurement
   // logic even though that logic is defined later (it depends on rowVirtualizer,
@@ -400,6 +406,7 @@ const OutputSectionInner: React.FC = () => {
     streamingChunks,
     finalStepStreamingChunks,
     isExecutionActive,
+    allowUndoActions,
     workspaceSnapshots,
     finalStepWorkspaceSnapshots,
     undoRecords,
@@ -943,10 +950,6 @@ const OutputSectionInner: React.FC = () => {
     historyOutputs,
     isViewingHistory,
   ]);
-
-  // History view should keep its undo affordances even if a live workflow is
-  // currently active elsewhere; otherwise historical per-diff undo buttons disappear.
-  const allowUndoActions = isViewingHistory || !isExecutionActive;
 
   const outputUndo = useOutputUndoActions({
     allMessages,

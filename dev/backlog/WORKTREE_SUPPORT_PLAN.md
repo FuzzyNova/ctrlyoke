@@ -2015,15 +2015,26 @@ when the targeted directory has an incompatible lease.
     by the working-file writer. Inherited-default degradation notices are also
     durable on the run runtime.
 24. Add View Diff and conditional Open Worktree actions to `RunSummaryBanner`,
-    and extend the banner's landing/merge outcome display.
+    and extend the banner's landing/merge outcome display. **Implemented.** The
+    banner exposes recorded-base-to-managed-branch diffs and opens present
+    worktrees in a new VS Code window; landing outcomes include changed-file
+    counts, no-change, commit-blocked, and removal-failed states. Merge actions
+    and merge outcomes remain deferred to Phase 4.
 25. Implement read-only activation recovery and warnings. **Implemented.** Git
     worktree porcelain discovery reports recoverable managed entries, stale and
     prunable state, and live lease owners without pruning user-owned entries;
     explicit reconciliation remains separate from activation.
 26. Enforce landed-run undo behavior in the backend coordinator and protocol.
+    **Implemented.** The coordinator reuses the recorded execution-workspace
+    validation and refuses filesystem undo for settled managed runs with a
+    branch-preservation explanation; snapshot diffs and repository attribution
+    remain available, while the webview suppresses the unavailable controls.
 
 Exit criterion: managed runs cannot lose uncommitted work on any ordinary
 completion/failure/cancellation path, and crash leftovers are discoverable.
+**Confirmed:** managed settlement preserves the committed branch or retained
+worktree on every landing outcome, and activation discovery exposes crash
+leftovers without pruning user-owned entries.
 
 ### Phase 4 — Merge and management UX
 

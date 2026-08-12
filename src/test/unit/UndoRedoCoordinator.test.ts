@@ -200,8 +200,20 @@ suite("UndoRedoCoordinator", function () {
     const workflowKey = "worktree-undo" as WorkflowKey;
     const runRef = "run-2026-08-11T00-00-01-000Z" as RunRef;
     try {
-      git(sourceRoot, "worktree", "add", "-q", "-b", "feature/undo", executionRoot);
-      await fs.writeFile(path.join(executionRoot, "shared.txt"), "agent\n", "utf8");
+      git(
+        sourceRoot,
+        "worktree",
+        "add",
+        "-q",
+        "-b",
+        "feature/undo",
+        executionRoot
+      );
+      await fs.writeFile(
+        path.join(executionRoot, "shared.txt"),
+        "agent\n",
+        "utf8"
+      );
       const runtime: WorkingFileWorktreeRuntime = {
         schemaVersion: 1,
         mode: "named",
@@ -258,7 +270,11 @@ suite("UndoRedoCoordinator", function () {
       );
 
       runtime.branchName = "feature/not-the-checked-out-branch";
-      await fs.writeFile(path.join(executionRoot, "shared.txt"), "agent-again\n", "utf8");
+      await fs.writeFile(
+        path.join(executionRoot, "shared.txt"),
+        "agent-again\n",
+        "utf8"
+      );
       await writeRunFile(sourceRoot, runtime, workflowKey, runRef);
       await coordinator.handleUndoPromptChanges(
         {
@@ -338,6 +354,83 @@ suite("UndoRedoCoordinator", function () {
         (() => undefined) as PostMessageFn
       );
 
+      assert.strictEqual(
+        await fs.readFile(path.join(sourceRoot, "shared.txt"), "utf8"),
+        "base\n"
+      );
+    } finally {
+      await fs.rm(sourceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses filesystem undo for a landed managed run with a clear explanation", async () => {
+    const sourceRoot = await createGitWorkspace();
+    const workflowKey = "landed-managed-undo" as WorkflowKey;
+    const runRef = "run-2026-08-11T00-00-03-000Z" as RunRef;
+    const messages: Array<{
+      type?: string;
+      data?: { failedFiles?: Array<{ error: string }> };
+    }> = [];
+    try {
+      await writeRunFile(
+        sourceRoot,
+        {
+          schemaVersion: 1,
+          mode: "managed",
+          origin: "created",
+          branchName: "ctrlyoke/landed",
+          worktreePath: path.join(sourceRoot, "missing-managed-worktree"),
+          executionRoot: path.join(sourceRoot, "missing-managed-worktree"),
+          executionCheckoutRoot: path.join(
+            sourceRoot,
+            "missing-managed-worktree"
+          ),
+          sourceCheckoutRoot: sourceRoot,
+          namedWorkspaceRoots: [],
+          baseCommit: git(sourceRoot, "rev-parse", "HEAD"),
+          lifecycleOwner: "ctrlyoke",
+          lifecycleState: "settled",
+          landingOutcome: "landed",
+          directoryState: "removed",
+          branchState: "present",
+          updatedAt: Date.now(),
+        },
+        workflowKey,
+        runRef
+      );
+      const coordinator = new UndoRedoCoordinator(
+        () => undefined,
+        () => ({ executionRoot: sourceRoot, namedWorkspaceRoots: [] })
+      );
+
+      await coordinator.handleUndoPromptChanges(
+        {
+          type: MESSAGE_TYPES.UNDO_PROMPT_CHANGES,
+          data: {
+            requestId: "landed-managed-undo",
+            workflowKey,
+            runRef,
+            target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+            files: [
+              {
+                path: "shared.txt",
+                action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
+                contentToRestore: "must-not-apply\n",
+              },
+            ],
+          },
+        },
+        ((message) =>
+          messages.push(message as (typeof messages)[number])) as PostMessageFn
+      );
+
+      const result = messages.find(
+        (message) => message.type === MESSAGE_TYPES.UNDO_PROMPT_RESULT
+      );
+      assert.match(
+        result?.data?.failedFiles?.[0]?.error ?? "",
+        /landed as a branch/
+      );
       assert.strictEqual(
         await fs.readFile(path.join(sourceRoot, "shared.txt"), "utf8"),
         "base\n"

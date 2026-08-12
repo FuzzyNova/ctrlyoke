@@ -153,6 +153,8 @@ export const MESSAGE_TYPES = {
   OPEN_FILE: "openFile", // Open file from an @file / #selection: / #sym: link
   OPEN_PROMPT_FILE: "openPromptFile", // Open a lone prompt-file reference
   OPEN_GIT_CHANGE: "openGitChange", // Webview -> Extension: open a git diff in a new editor (legacy)
+  OPEN_WORKTREE: "openWorktree", // Webview -> Extension: open a recorded worktree in a new window
+  VIEW_WORKTREE_DIFF: "viewWorktreeDiff", // Webview -> Extension: view a recorded worktree branch against its base
   OPEN_PRIOR_CONTEXT: "openPriorContext", // Webview -> Extension: preview inline $prior-context expansion (legacy)
   // REQUEST_GIT_CHANGE_PREVIEW and GIT_CHANGE_PREVIEW_RESULT removed — browser now opens
   // the WorkspaceDiffPane via openToGitRef(); VS Code uses OPEN_GIT_CHANGE → native commands.
@@ -2061,6 +2063,8 @@ export const VSCODE_COMMANDS = {
   CANCEL_COMMIT_MESSAGE_GENERATION: "ctrlyoke.cancelCommitMessageGeneration",
   REFRESH_HARNESS_USAGE: "ctrlyoke.refreshHarnessUsage",
   REFRESH_WORKSPACE_STATS: "ctrlyoke.refreshWorkspaceStats",
+  OPEN_WORKTREE: "ctrlyoke.openWorktree",
+  VIEW_WORKTREE_DIFF: "ctrlyoke.viewWorktreeDiff",
 } as const;
 
 // Built-in VS Code Git extension command IDs that ctrlyoke invokes to open

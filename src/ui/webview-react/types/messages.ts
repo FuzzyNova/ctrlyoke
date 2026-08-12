@@ -132,6 +132,8 @@ export {
   type ConvertPromptToFileMessage,
   type PromptFileCreatedMessage,
   type OpenPromptFileMessage,
+  type OpenWorktreeMessage,
+  type ViewWorktreeDiffMessage,
   type IncomingMessage,
   type SearchHistoryMessage,
   type SearchHistoryResultsMessage,

@@ -11,6 +11,7 @@ import {
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
   type WebviewLogLevel,
+  VSCODE_COMMANDS,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
@@ -594,6 +595,20 @@ export class WebviewMessageRouter {
       await vscode.commands.executeCommand("ctrlyoke.openGitChange", {
         workspaceRoot,
         ref: message.ref,
+      });
+    });
+
+    table.set(MESSAGE_TYPES.OPEN_WORKTREE, async (message) => {
+      await vscode.commands.executeCommand(VSCODE_COMMANDS.OPEN_WORKTREE, {
+        worktreePath: message.worktreePath,
+      });
+    });
+
+    table.set(MESSAGE_TYPES.VIEW_WORKTREE_DIFF, async (message) => {
+      await vscode.commands.executeCommand(VSCODE_COMMANDS.VIEW_WORKTREE_DIFF, {
+        sourceCheckoutRoot: message.sourceCheckoutRoot,
+        baseCommit: message.baseCommit,
+        branchName: message.branchName,
       });
     });
 

@@ -1,8 +1,9 @@
 import type { ComponentProps } from "react";
-import { describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { RunSummaryBanner } from "@components/output/RunSummaryBanner";
-import { EXECUTION_STATES } from "@/types/messages";
+import { EXECUTION_STATES, MESSAGE_TYPES } from "@/types/messages";
+import { isManagedWorktreeUndoUnavailable } from "@components/output/RunSummaryBanner";
 import type { WorkflowTokenTotals } from "@root/types/CtrlYokeTypes";
 
 const tokenTotals: WorkflowTokenTotals = {
@@ -21,6 +22,8 @@ const worktree = {
   branchName: "feature/historical",
   worktreePath: "C:/dev/FlightPath.worktrees/feature-historical",
   sourceCheckoutRoot: "C:/dev/FlightPath",
+  baseCommit: "base-commit",
+  changedFileCount: 12,
   directoryState: "present" as const,
   landingOutcome: "landed" as const,
   mergeOutcome: undefined,
@@ -45,6 +48,10 @@ function renderBanner(
 }
 
 describe("RunSummaryBanner", () => {
+  beforeEach(() => {
+    vi.mocked(window.vscodeApi!.postMessage).mockClear();
+  });
+
   it("shows the run number, date, status, and token/cost totals", () => {
     renderBanner();
 
@@ -67,7 +74,7 @@ describe("RunSummaryBanner", () => {
     renderBanner({ worktree });
 
     expect(screen.getByText("feature/historical")).toBeInTheDocument();
-    expect(screen.getByText(/branch ready/)).toBeInTheDocument();
+    expect(screen.getByText(/✓ branch ready — 12 files/)).toBeInTheDocument();
     expect(
       screen.getByText("Worktree: FlightPath.worktrees/feature-historical")
     ).toBeInTheDocument();
@@ -138,5 +145,48 @@ describe("RunSummaryBanner", () => {
     expect(
       screen.queryByRole("button", { name: /Back to Live/ })
     ).not.toBeInTheDocument();
+  });
+
+  it("uses the recorded base and branch for View Diff and opens only a present worktree", () => {
+    const firstRender = renderBanner({ worktree });
+
+    fireEvent.click(screen.getByRole("button", { name: "View Diff" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open Worktree in New Window" })
+    );
+
+    expect(window.vscodeApi!.postMessage).toHaveBeenNthCalledWith(1, {
+      type: MESSAGE_TYPES.VIEW_WORKTREE_DIFF,
+      sourceCheckoutRoot: worktree.sourceCheckoutRoot,
+      baseCommit: worktree.baseCommit,
+      branchName: worktree.branchName,
+    });
+    expect(window.vscodeApi!.postMessage).toHaveBeenNthCalledWith(2, {
+      type: MESSAGE_TYPES.OPEN_WORKTREE,
+      worktreePath: worktree.worktreePath,
+    });
+
+    firstRender.unmount();
+    renderBanner({
+      worktree: { ...worktree, directoryState: "removed" },
+    });
+    expect(
+      screen.queryByRole("button", { name: "Open Worktree in New Window" })
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "View Diff" })).toHaveLength(
+      1
+    );
+  });
+
+  it("disables filesystem undo for settled managed runs while retaining diff actions", () => {
+    expect(isManagedWorktreeUndoUnavailable(worktree)).toBe(false);
+    expect(
+      isManagedWorktreeUndoUnavailable({
+        ...worktree,
+        mode: "managed",
+        lifecycleState: "settled",
+        directoryState: "removed",
+      })
+    ).toBe(true);
   });
 });
