@@ -615,6 +615,9 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       if (authored === false) {
         return false;
       }
+      if (authored === true) {
+        return { mode: WORKTREE_MODES.MANAGED };
+      }
       if (authored === undefined) {
         const defaultWorktree = globalSettings.worktree ?? {
           mode: WORKTREE_MODES.NONE,

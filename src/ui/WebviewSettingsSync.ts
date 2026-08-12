@@ -630,9 +630,11 @@ export class WebviewSettingsSync {
       const defaultValue: WorktreeDefaultConfig =
         authored === false
           ? { mode: WORKTREE_MODES.NONE }
-          : typeof authored === "string"
-            ? { mode: WORKTREE_MODES.NAMED, branch: authored }
-            : authored;
+          : authored === true
+            ? { mode: WORKTREE_MODES.MANAGED }
+            : typeof authored === "string"
+              ? { mode: WORKTREE_MODES.NAMED, branch: authored }
+              : authored;
       await ConfigurationUtils.setDefaultWorktree(defaultValue);
     } else {
       await ConfigurationUtils.updateSetting(property, value);

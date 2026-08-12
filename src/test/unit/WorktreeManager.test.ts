@@ -15,9 +15,9 @@ suite("WorktreeManager", function () {
 
   teardown(async () => {
     await Promise.all(
-      temporaryDirectories.splice(0).map((directory) =>
-        fs.rm(directory, { recursive: true, force: true })
-      )
+      temporaryDirectories
+        .splice(0)
+        .map((directory) => fs.rm(directory, { recursive: true, force: true }))
     );
   });
 
@@ -25,13 +25,27 @@ suite("WorktreeManager", function () {
     parent: string;
     repository: string;
   }> {
-    const parent = await fs.mkdtemp(path.join(os.tmpdir(), `ctrlyoke-${name}-`));
+    const parent = await fs.mkdtemp(
+      path.join(os.tmpdir(), `ctrlyoke-${name}-`)
+    );
     temporaryDirectories.push(parent);
     const repository = path.join(parent, "repository");
     await fs.mkdir(repository);
     execFileSync("git", ["init", repository], { stdio: "ignore" });
-    execFileSync("git", ["-C", repository, "config", "user.email", "test@example.com"]);
-    execFileSync("git", ["-C", repository, "config", "user.name", "ctrlyoke test"]);
+    execFileSync("git", [
+      "-C",
+      repository,
+      "config",
+      "user.email",
+      "test@example.com",
+    ]);
+    execFileSync("git", [
+      "-C",
+      repository,
+      "config",
+      "user.name",
+      "ctrlyoke test",
+    ]);
     await fs.writeFile(path.join(repository, "README.md"), "base\n");
     execFileSync("git", ["-C", repository, "add", "README.md"]);
     execFileSync("git", ["-C", repository, "commit", "-m", "base"], {
@@ -47,14 +61,13 @@ suite("WorktreeManager", function () {
     };
   }
 
-  function manager(
-    parent: string,
-    updates: string[] = []
-  ): WorktreeManager {
+  function manager(parent: string, updates: string[] = []): WorktreeManager {
     return new WorktreeManager({
       worktreeRoot: path.join(parent, "worktrees"),
       updateWorktreeRuntime: async (patch) => {
-        updates.push(`${patch.lifecycleState ?? "unknown"}:${patch.dirty ?? false}`);
+        updates.push(
+          `${patch.lifecycleState ?? "unknown"}:${patch.dirty ?? false}`
+        );
       },
     });
   }
@@ -63,7 +76,9 @@ suite("WorktreeManager", function () {
     instance: WorktreeManager,
     repository: string,
     branchName: string,
-    overrides: Partial<Parameters<WorktreeManager["resolveNamedWorktree"]>[0]> = {}
+    overrides: Partial<
+      Parameters<WorktreeManager["resolveNamedWorktree"]>[0]
+    > = {}
   ) {
     const ids = identity();
     return instance.resolveNamedWorktree({
@@ -79,7 +94,9 @@ suite("WorktreeManager", function () {
   async function ensureManaged(
     instance: WorktreeManager,
     repository: string,
-    overrides: Partial<Parameters<WorktreeManager["ensureManagedWorktree"]>[0]> = {}
+    overrides: Partial<
+      Parameters<WorktreeManager["ensureManagedWorktree"]>[0]
+    > = {}
   ) {
     const ids = identity();
     return instance.ensureManagedWorktree({
@@ -105,10 +122,18 @@ suite("WorktreeManager", function () {
     );
 
     const linked = path.join(parent, "linked");
-    execFileSync("git", ["-C", repository, "worktree", "add", "-b", "feature/discovered", linked], {
-      stdio: "ignore",
-    });
-    const info = await resolve(manager(parent), repository, "feature/discovered");
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "add", "-b", "feature/discovered", linked],
+      {
+        stdio: "ignore",
+      }
+    );
+    const info = await resolve(
+      manager(parent),
+      repository,
+      "feature/discovered"
+    );
     assert.strictEqual(info.origin, "discovered");
     assert.strictEqual(info.worktreePath, linked);
     await info.lease.release();
@@ -124,9 +149,13 @@ suite("WorktreeManager", function () {
     );
     assert.strictEqual(attached.origin, "created");
     assert.strictEqual(
-      execFileSync("git", ["-C", attached.worktreePath, "branch", "--show-current"], {
-        encoding: "utf8",
-      }).trim(),
+      execFileSync(
+        "git",
+        ["-C", attached.worktreePath, "branch", "--show-current"],
+        {
+          encoding: "utf8",
+        }
+      ).trim(),
       "feature/existing"
     );
     await attached.lease.release();
@@ -141,15 +170,19 @@ suite("WorktreeManager", function () {
     assert.strictEqual(created.origin, "created");
     assert.strictEqual(created.dirty, false);
     assert.strictEqual(
-      execFileSync("git", ["-C", created.worktreePath, "branch", "--show-current"], {
-        encoding: "utf8",
-      }).trim(),
+      execFileSync(
+        "git",
+        ["-C", created.worktreePath, "branch", "--show-current"],
+        {
+          encoding: "utf8",
+        }
+      ).trim(),
       "feature/missing"
     );
     assert.strictEqual(
-      await fs.stat(path.join(created.worktreePath, ".ctrlyoke", ".gitignore")).then(
-        (stat) => stat.isFile()
-      ),
+      await fs
+        .stat(path.join(created.worktreePath, ".ctrlyoke", ".gitignore"))
+        .then((stat) => stat.isFile()),
       true
     );
     await created.lease.release();
@@ -158,9 +191,13 @@ suite("WorktreeManager", function () {
   test("reports dirty named worktrees and persists provisioning then ready", async () => {
     const { parent, repository } = await makeRepository("dirty");
     const linked = path.join(parent, "dirty-linked");
-    execFileSync("git", ["-C", repository, "worktree", "add", "-b", "feature/dirty", linked], {
-      stdio: "ignore",
-    });
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "add", "-b", "feature/dirty", linked],
+      {
+        stdio: "ignore",
+      }
+    );
     await fs.writeFile(path.join(linked, "dirty.txt"), "user change\n");
     const updates: string[] = [];
     const info = await resolve(
@@ -169,19 +206,23 @@ suite("WorktreeManager", function () {
       "feature/dirty"
     );
     assert.strictEqual(info.dirty, true);
-    assert.deepStrictEqual(updates.map((value) => value.split(":")[0]), [
-      "provisioning",
-      "ready",
-    ]);
+    assert.deepStrictEqual(
+      updates.map((value) => value.split(":")[0]),
+      ["provisioning", "ready"]
+    );
     await info.lease.release();
   });
 
   test("blocks an exclusive target while a native run owns the same worktree", async () => {
     const { parent, repository } = await makeRepository("lease-conflict");
     const linked = path.join(parent, "lease-linked");
-    execFileSync("git", ["-C", repository, "worktree", "add", "-b", "feature/lease", linked], {
-      stdio: "ignore",
-    });
+    execFileSync(
+      "git",
+      ["-C", repository, "worktree", "add", "-b", "feature/lease", linked],
+      {
+        stdio: "ignore",
+      }
+    );
     const ids = identity();
     const nativeLease = await ExecutionRootLeaseManager.acquire({
       mode: "shared-native",
@@ -244,8 +285,13 @@ suite("WorktreeManager", function () {
       }
     );
     assert.strictEqual(outside.executionWorkspace.stateRoot, state);
-    assert.strictEqual(outside.executionWorkspace.executionRoot, outside.worktreePath);
-    assert.deepStrictEqual(outside.executionWorkspace.workspaceRoots, [outside.worktreePath]);
+    assert.strictEqual(
+      outside.executionWorkspace.executionRoot,
+      outside.worktreePath
+    );
+    assert.deepStrictEqual(outside.executionWorkspace.workspaceRoots, [
+      outside.worktreePath,
+    ]);
     await outside.lease.release();
   });
 
@@ -269,13 +315,21 @@ suite("WorktreeManager", function () {
     const { parent, repository } = await makeRepository("setup-once");
     const setup = `node -e "require('fs').writeFileSync('setup-marker.txt', process.env.CTRLYOKE_VAR_MESSAGE)"`;
     const updates: string[] = [];
-    const info = await resolve(manager(parent, updates), repository, "feature/setup", {
-      setup,
-      vars: { message: "created" },
-    });
+    const info = await resolve(
+      manager(parent, updates),
+      repository,
+      "feature/setup",
+      {
+        setup,
+        vars: { message: "created" },
+      }
+    );
     assert.strictEqual(info.setupOutcome, "succeeded");
     assert.strictEqual(
-      await fs.readFile(path.join(info.worktreePath, "setup-marker.txt"), "utf8"),
+      await fs.readFile(
+        path.join(info.worktreePath, "setup-marker.txt"),
+        "utf8"
+      ),
       "created"
     );
     await info.lease.release();
@@ -322,7 +376,10 @@ suite("WorktreeManager", function () {
       { setup, existingSetupOutcome: "failed", retrySetup: true }
     );
     assert.strictEqual(
-      await fs.readFile(path.join(retried.worktreePath, "retry-marker.txt"), "utf8"),
+      await fs.readFile(
+        path.join(retried.worktreePath, "retry-marker.txt"),
+        "utf8"
+      ),
       "ok"
     );
     await retried.lease.release();
@@ -352,12 +409,56 @@ suite("WorktreeManager", function () {
     await second.lease.release();
   });
 
+  test("seeds .ctrlyoke/.gitignore in a newly created managed worktree", async () => {
+    const { parent, repository } = await makeRepository("managed-gitignore");
+    const info = await ensureManaged(manager(parent), repository);
+
+    assert.strictEqual(
+      await fs
+        .stat(path.join(info.worktreePath, ".ctrlyoke", ".gitignore"))
+        .then((stat) => stat.isFile()),
+      true
+    );
+    await info.lease.release();
+  });
+
+  test("runs setup before returning a newly created managed worktree", async () => {
+    const { parent, repository } = await makeRepository("managed-setup");
+    const setup = `node -e "require('fs').writeFileSync('managed-setup-marker.txt', 'created')"`;
+    const info = await ensureManaged(manager(parent), repository, { setup });
+
+    assert.strictEqual(info.setupOutcome, "succeeded");
+    assert.strictEqual(
+      await fs.readFile(
+        path.join(info.worktreePath, "managed-setup-marker.txt"),
+        "utf8"
+      ),
+      "created"
+    );
+    await info.lease.release();
+  });
+
   test("reconciles missing managed directories as no-changes, landed, or orphaned", async () => {
     const noChanges = await makeRepository("managed-no-changes");
     const noChangesManager = manager(noChanges.parent);
-    const noChangesInfo = await ensureManaged(noChangesManager, noChanges.repository);
+    const noChangesInfo = await ensureManaged(
+      noChangesManager,
+      noChanges.repository
+    );
     await noChangesInfo.lease.release();
-    execFileSync("git", ["-C", noChanges.repository, "worktree", "remove", "--force", "--", noChangesInfo.worktreePath], { stdio: "ignore" });
+    execFileSync(
+      "git",
+      [
+        "-C",
+        noChanges.repository,
+        "worktree",
+        "remove",
+        "--force",
+        "--",
+        noChangesInfo.worktreePath,
+      ],
+      { stdio: "ignore" }
+    );
     assert.strictEqual(
       await noChangesManager.recoverManagedWorktree({
         sourceCheckoutRoot: noChanges.repository,
@@ -366,37 +467,112 @@ suite("WorktreeManager", function () {
       undefined
     );
     assert.strictEqual(
-      (await noChangesManager.readManagedWorktreeRecord(noChanges.repository, noChangesInfo.branchName))?.recoveryOutcome,
+      (
+        await noChangesManager.readManagedWorktreeRecord(
+          noChanges.repository,
+          noChangesInfo.branchName
+        )
+      )?.recoveryOutcome,
       "no-changes"
     );
 
     const landed = await makeRepository("managed-landed");
     const landedManager = manager(landed.parent);
     const landedInfo = await ensureManaged(landedManager, landed.repository);
-    await fs.writeFile(path.join(landedInfo.worktreePath, "landed.txt"), "landed\n");
+    await fs.writeFile(
+      path.join(landedInfo.worktreePath, "landed.txt"),
+      "landed\n"
+    );
     execFileSync("git", ["-C", landedInfo.worktreePath, "add", "landed.txt"]);
-    execFileSync("git", ["-C", landedInfo.worktreePath, "commit", "-m", "landed"], { stdio: "ignore" });
-    const landedTip = execFileSync("git", ["-C", landedInfo.worktreePath, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-    await landedManager.markManagedBranchTipVerified(landed.repository, landedInfo.branchName, landedTip);
+    execFileSync(
+      "git",
+      ["-C", landedInfo.worktreePath, "commit", "-m", "landed"],
+      { stdio: "ignore" }
+    );
+    const landedTip = execFileSync(
+      "git",
+      ["-C", landedInfo.worktreePath, "rev-parse", "HEAD"],
+      { encoding: "utf8" }
+    ).trim();
+    await landedManager.markManagedBranchTipVerified(
+      landed.repository,
+      landedInfo.branchName,
+      landedTip
+    );
     await landedInfo.lease.release();
-    execFileSync("git", ["-C", landed.repository, "worktree", "remove", "--force", "--", landedInfo.worktreePath], { stdio: "ignore" });
-    await landedManager.recoverManagedWorktree({ sourceCheckoutRoot: landed.repository, branchName: landedInfo.branchName });
+    execFileSync(
+      "git",
+      [
+        "-C",
+        landed.repository,
+        "worktree",
+        "remove",
+        "--force",
+        "--",
+        landedInfo.worktreePath,
+      ],
+      { stdio: "ignore" }
+    );
+    await landedManager.recoverManagedWorktree({
+      sourceCheckoutRoot: landed.repository,
+      branchName: landedInfo.branchName,
+    });
     assert.strictEqual(
-      (await landedManager.readManagedWorktreeRecord(landed.repository, landedInfo.branchName))?.recoveryOutcome,
+      (
+        await landedManager.readManagedWorktreeRecord(
+          landed.repository,
+          landedInfo.branchName
+        )
+      )?.recoveryOutcome,
       "landed"
     );
 
     const orphaned = await makeRepository("managed-orphaned");
     const orphanedManager = manager(orphaned.parent);
-    const orphanedInfo = await ensureManaged(orphanedManager, orphaned.repository);
-    await fs.writeFile(path.join(orphanedInfo.worktreePath, "orphaned.txt"), "orphaned\n");
-    execFileSync("git", ["-C", orphanedInfo.worktreePath, "add", "orphaned.txt"]);
-    execFileSync("git", ["-C", orphanedInfo.worktreePath, "commit", "-m", "orphaned"], { stdio: "ignore" });
+    const orphanedInfo = await ensureManaged(
+      orphanedManager,
+      orphaned.repository
+    );
+    await fs.writeFile(
+      path.join(orphanedInfo.worktreePath, "orphaned.txt"),
+      "orphaned\n"
+    );
+    execFileSync("git", [
+      "-C",
+      orphanedInfo.worktreePath,
+      "add",
+      "orphaned.txt",
+    ]);
+    execFileSync(
+      "git",
+      ["-C", orphanedInfo.worktreePath, "commit", "-m", "orphaned"],
+      { stdio: "ignore" }
+    );
     await orphanedInfo.lease.release();
-    execFileSync("git", ["-C", orphaned.repository, "worktree", "remove", "--force", "--", orphanedInfo.worktreePath], { stdio: "ignore" });
-    await orphanedManager.recoverManagedWorktree({ sourceCheckoutRoot: orphaned.repository, branchName: orphanedInfo.branchName });
+    execFileSync(
+      "git",
+      [
+        "-C",
+        orphaned.repository,
+        "worktree",
+        "remove",
+        "--force",
+        "--",
+        orphanedInfo.worktreePath,
+      ],
+      { stdio: "ignore" }
+    );
+    await orphanedManager.recoverManagedWorktree({
+      sourceCheckoutRoot: orphaned.repository,
+      branchName: orphanedInfo.branchName,
+    });
     assert.strictEqual(
-      (await orphanedManager.readManagedWorktreeRecord(orphaned.repository, orphanedInfo.branchName))?.recoveryOutcome,
+      (
+        await orphanedManager.readManagedWorktreeRecord(
+          orphaned.repository,
+          orphanedInfo.branchName
+        )
+      )?.recoveryOutcome,
       "orphaned"
     );
   });
@@ -406,16 +582,38 @@ suite("WorktreeManager", function () {
     const instance = manager(parent);
     const prefixBranch = "ctrlyoke/not-owned/branch";
     execFileSync("git", ["-C", repository, "branch", prefixBranch]);
-    assert.strictEqual(await instance.isManagedBranchOwned(repository, prefixBranch), false);
+    assert.strictEqual(
+      await instance.isManagedBranchOwned(repository, prefixBranch),
+      false
+    );
 
     const info = await ensureManaged(instance, repository);
     await info.lease.release();
-    execFileSync("git", ["-C", repository, "worktree", "remove", "--force", "--", info.worktreePath], { stdio: "ignore" });
-    execFileSync("git", ["-C", repository, "branch", "-D", info.branchName], { stdio: "ignore" });
+    execFileSync(
+      "git",
+      [
+        "-C",
+        repository,
+        "worktree",
+        "remove",
+        "--force",
+        "--",
+        info.worktreePath,
+      ],
+      { stdio: "ignore" }
+    );
+    execFileSync("git", ["-C", repository, "branch", "-D", info.branchName], {
+      stdio: "ignore",
+    });
     await fs.writeFile(path.join(repository, "recreated.txt"), "recreated\n");
     execFileSync("git", ["-C", repository, "add", "recreated.txt"]);
-    execFileSync("git", ["-C", repository, "commit", "-m", "recreated"], { stdio: "ignore" });
+    execFileSync("git", ["-C", repository, "commit", "-m", "recreated"], {
+      stdio: "ignore",
+    });
     execFileSync("git", ["-C", repository, "branch", info.branchName, "HEAD"]);
-    assert.strictEqual(await instance.isManagedBranchOwned(repository, info.branchName), false);
+    assert.strictEqual(
+      await instance.isManagedBranchOwned(repository, info.branchName),
+      false
+    );
   });
 });

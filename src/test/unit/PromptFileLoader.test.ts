@@ -68,12 +68,33 @@ suite("PromptFileLoader Tests", () => {
       );
       tempDirs.push(workspaceRoot);
 
-      const forms: PromptFile[] = [
-        { steps: [{ prompt: "prompt" }], worktree: false },
-        { steps: [{ prompt: "prompt" }], worktree: "feature/short" },
+      const forms: Array<{ authored: PromptFile; expected: unknown }> = [
         {
-          steps: [{ type: "script", script: "npm test" }],
-          worktree: {
+          authored: { steps: [{ prompt: "prompt" }], worktree: false },
+          expected: false,
+        },
+        {
+          authored: { steps: [{ prompt: "prompt" }], worktree: true },
+          expected: true,
+        },
+        {
+          authored: {
+            steps: [{ prompt: "prompt" }],
+            worktree: "feature/short",
+          },
+          expected: "feature/short",
+        },
+        {
+          authored: {
+            steps: [{ type: "script", script: "npm test" }],
+            worktree: {
+              mode: "named",
+              branch: "feature/object",
+              base: "HEAD",
+              setup: "npm ci",
+            },
+          },
+          expected: {
             mode: "named",
             branch: "feature/object",
             base: "HEAD",
@@ -86,7 +107,7 @@ suite("PromptFileLoader Tests", () => {
         const queue = new PromptQueue();
         const loader = new PromptFileLoader(new PromptFileParser(), queue);
         const workingFilePath = await loader.loadFromMemory(
-          form,
+          form.authored,
           `worktree-${index}`,
           workspaceRoot
         );
@@ -95,7 +116,7 @@ suite("PromptFileLoader Tests", () => {
           throw new Error("working file should be created");
         }
         const workingFile = await queue.readWorkingFile(workingFilePath);
-        assert.deepStrictEqual(workingFile.worktree, form.worktree);
+        assert.deepStrictEqual(workingFile.worktree, form.expected);
       }
     });
   });
@@ -578,10 +599,7 @@ suite("PromptFileLoader Tests", () => {
         path.join(os.tmpdir(), "ctrlyoke-assets-warning-")
       );
       tempDirs.push(workspaceRoot);
-      const workflowPath = path.join(
-        workspaceRoot,
-        "portable.ctrlyoke.yaml"
-      );
+      const workflowPath = path.join(workspaceRoot, "portable.ctrlyoke.yaml");
       await fs.writeFile(
         workflowPath,
         [
@@ -688,9 +706,7 @@ suite("PromptFileLoader Tests", () => {
       await fs.writeFile(assetPath, "asset", "utf8");
       await fs.writeFile(
         workflowPath,
-        ["steps:", "  - prompt: Use @./relocated.assets/shot.png"].join(
-          "\n"
-        ),
+        ["steps:", "  - prompt: Use @./relocated.assets/shot.png"].join("\n"),
         "utf8"
       );
 
@@ -748,7 +764,11 @@ suite("PromptFileLoader Tests", () => {
         {
           workspaceRoot: firstWorkspace,
           destinationPath: initialWorkflowPath,
-          sourceDefinitionPath: path.join(firstWorkspace, "authored", "source.yaml"),
+          sourceDefinitionPath: path.join(
+            firstWorkspace,
+            "authored",
+            "source.yaml"
+          ),
         }
       );
       await writeWorkflowBundle({
@@ -780,17 +800,17 @@ suite("PromptFileLoader Tests", () => {
           () =>
             ({
               updateFileSelected: async () => {},
-              updateStatusMessage: (
-                _stepIndex: number,
-                message: string
-              ) => statusMessages.push(message),
+              updateStatusMessage: (_stepIndex: number, message: string) =>
+                statusMessages.push(message),
             }) as any
         );
 
         await loader.loadPromptFile(workflowPath, workspaceRoot);
         assert.deepStrictEqual(statusMessages, []);
 
-        const workflow = JSON.parse(await fs.readFile(workflowPath, "utf8")) as {
+        const workflow = JSON.parse(
+          await fs.readFile(workflowPath, "utf8")
+        ) as {
           steps: Array<{ prompt: string }>;
         };
         for (const reference of parseAllFileReferences(

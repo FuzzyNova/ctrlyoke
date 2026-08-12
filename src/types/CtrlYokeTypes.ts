@@ -130,13 +130,19 @@ export interface ErrorBehavior {
 }
 
 /**
- * Workflow-level worktree authoring supported by the current phase.
- * Managed worktrees and merge/keep options are intentionally deferred until
- * their runtime behavior exists.
+ * Workflow-level worktree authoring. `true` is accepted at the input boundary
+ * and normalized to the managed object form by PromptFileParser.
  */
 export type WorktreeConfig =
   | false
+  | true
   | string
+  | {
+      mode: typeof WORKTREE_MODES.MANAGED;
+      keep?: boolean;
+      base?: string;
+      setup?: string;
+    }
   | {
       mode: typeof WORKTREE_MODES.NAMED;
       branch: string;
@@ -144,8 +150,7 @@ export type WorktreeConfig =
       setup?: string;
     };
 
-/** Settings-tier worktree default. Managed mode is valid here before authored
- * managed-worktree syntax is exposed by the workflow schema. */
+/** Settings-tier worktree default, including managed-only retention. */
 export interface WorktreeDefaultConfig {
   mode: import("./DashboardConstants").WorktreeMode;
   branch?: string;
@@ -301,7 +306,7 @@ export const EXECUTION_PROPERTY_KEYS = [
 ] as const satisfies readonly (keyof ExecutionProperties)[];
 
 export interface PromptFile extends ExecutionProperties {
-  /** Named-worktree selection authored at the workflow root. */
+  /** Worktree selection authored at the workflow root. */
   worktree?: WorktreeConfig;
   prompt?: string;
   steps?: WorkflowStep[];
@@ -457,9 +462,8 @@ export type WorktreeRunProjection = Pick<
 >;
 
 /** Partial lifecycle patch applied to persisted worktree runtime metadata. */
-export type WorkingFileWorktreeRuntimePatch = Partial<
-  WorkingFileWorktreeRuntime
->;
+export type WorkingFileWorktreeRuntimePatch =
+  Partial<WorkingFileWorktreeRuntime>;
 
 /**
  * Runtime metadata for working files (optional, not required for user-created files)

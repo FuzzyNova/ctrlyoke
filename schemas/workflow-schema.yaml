@@ -164,9 +164,33 @@ definitions:
       - type: boolean
         const: false
         description: Explicitly run this workflow in the ordinary workspace.
+      - type: boolean
+        const: true
+        description: Managed-worktree shorthand.
       - type: string
         minLength: 1
         description: Named-worktree branch shorthand. The value must be a valid local Git branch name.
+      - type: object
+        description: Managed worktree configuration.
+        properties:
+          mode:
+            type: string
+            const: managed
+          keep:
+            type: boolean
+            description: >-
+              Keep the managed worktree directory after the run. Removing it ends filesystem undo
+              for that run.
+          base:
+            type: string
+            minLength: 1
+            description: Optional Git ref resolved to a commit when the worktree is created.
+          setup:
+            type: string
+            description: Optional setup command run after a new managed worktree is created.
+        required:
+          - mode
+        additionalProperties: false
       - type: object
         description: Named worktree configuration.
         properties:

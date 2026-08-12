@@ -126,4 +126,67 @@ suite("Workflow template schema", () => {
 
     assert.strictEqual(valid, true, JSON.stringify(validate.errors));
   });
+
+  test("accepts managed shorthand and object forms at both workflow roots", () => {
+    const validWorkflows = [
+      { prompt: "Implement the change", worktree: true },
+      {
+        steps: [{ prompt: "Implement the change" }],
+        worktree: {
+          mode: "managed",
+          keep: true,
+          base: "main",
+          setup: "npm ci",
+        },
+      },
+      { type: "script", script: "npm test", worktree: { mode: "managed" } },
+    ];
+
+    for (const workflow of validWorkflows) {
+      assert.strictEqual(
+        validate(workflow),
+        true,
+        JSON.stringify(validate.errors)
+      );
+    }
+  });
+
+  test("rejects merge everywhere and keeps worktree options mode-specific", () => {
+    const invalidWorkflows = [
+      {
+        prompt: "Implement the change",
+        worktree: { mode: "managed", merge: false },
+      },
+      {
+        prompt: "Implement the change",
+        worktree: { mode: "managed", branch: "feature" },
+      },
+      {
+        prompt: "Implement the change",
+        worktree: { mode: "named", branch: "feature", keep: true },
+      },
+      { steps: [{ prompt: "Implement the change", worktree: true }] },
+      {
+        steps: [{ prompt: "Implement the change" }],
+        finalStep: { prompt: "Review", worktree: true },
+      },
+      {
+        steps: [{ prompt: "Implement the change" }],
+        finalStep: {
+          type: "script",
+          script: "npm test",
+          worktree: { mode: "managed" },
+        },
+      },
+      { prompt: "Implement the change", _runtime: { worktree: true } },
+    ];
+
+    for (const workflow of invalidWorkflows) {
+      assert.strictEqual(
+        validate(workflow),
+        false,
+        JSON.stringify(validate.errors)
+      );
+    }
+  });
 });

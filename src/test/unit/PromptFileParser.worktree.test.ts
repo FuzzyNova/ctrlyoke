@@ -9,30 +9,48 @@ suite("PromptFileParser worktree authoring", function () {
 
   test("round-trips the supported root forms", async () => {
     const cases = [
-      { prompt: "prompt", worktree: false },
-      { prompt: "prompt", worktree: "feature/auto" },
+      { authored: { prompt: "prompt", worktree: false }, expected: false },
       {
-        steps: [{ prompt: "prompt" }],
-        worktree: {
-          mode: "named",
-          branch: "feature/named",
+        authored: { prompt: "prompt", worktree: true },
+        expected: { mode: "managed" },
+      },
+      {
+        authored: { prompt: "prompt", worktree: "feature/auto" },
+        expected: "feature/auto",
+      },
+      {
+        authored: {
+          steps: [{ prompt: "prompt" }],
+          worktree: {
+            mode: "managed",
+            keep: true,
+            base: "HEAD",
+            setup: "npm ci",
+          },
+        },
+        expected: {
+          mode: "managed",
+          keep: true,
           base: "HEAD",
           setup: "npm ci",
         },
       },
       {
-        type: "script",
-        script: "npm test",
-        worktree: "feature/script",
+        authored: {
+          type: "script",
+          script: "npm test",
+          worktree: "feature/script",
+        },
+        expected: "feature/script",
       },
     ] as const;
 
-    for (const authored of cases) {
+    for (const { authored, expected } of cases) {
       const parsed = await parser.validateAndNormalize(
         authored,
         "workflow.ctrlyoke.json"
       );
-      assert.deepStrictEqual(parsed.worktree, authored.worktree);
+      assert.deepStrictEqual(parsed.worktree, expected);
     }
   });
 
@@ -49,9 +67,14 @@ suite("PromptFileParser worktree authoring", function () {
   test("rejects worktree on nested steps, finalStep, and prompt runtime", async () => {
     const invalid = [
       { steps: [{ prompt: "prompt", worktree: false }] },
+      { steps: [{ type: "script", script: "npm test", worktree: true }] },
       {
         steps: [{ prompt: "prompt" }],
         finalStep: { prompt: "final", worktree: "feature/final" },
+      },
+      {
+        steps: [{ prompt: "prompt" }],
+        finalStep: { type: "script", script: "npm test", worktree: true },
       },
       {
         steps: [
@@ -68,12 +91,19 @@ suite("PromptFileParser worktree authoring", function () {
     }
   });
 
-  test("rejects unimplemented and empty worktree forms", async () => {
+  test("rejects merge, mode-invalid, and empty worktree forms", async () => {
     const invalid = [
       { prompt: "prompt", worktree: "" },
-      { steps: [{ prompt: "prompt" }], worktree: { mode: "named", branch: "" } },
+      {
+        steps: [{ prompt: "prompt" }],
+        worktree: { mode: "named", branch: "" },
+      },
+      {
+        prompt: "prompt",
+        worktree: { mode: "named", branch: "feature", keep: true },
+      },
       { prompt: "prompt", worktree: { mode: "managed", branch: "feature" } },
-      { prompt: "prompt", worktree: { mode: "named", branch: "feature", keep: true } },
+      { prompt: "prompt", worktree: { mode: "managed", merge: false } },
     ];
 
     for (const authored of invalid) {

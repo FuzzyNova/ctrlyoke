@@ -123,6 +123,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const effectiveWorktree = useMemo(() => {
     const authored = workflowProperties.worktree;
     if (authored === false) return false;
+    if (authored === true) return { mode: WORKTREE_MODES.MANAGED };
     if (authored === undefined) {
       const configured = globalSettings.worktree;
       return configured?.mode === WORKTREE_MODES.NONE

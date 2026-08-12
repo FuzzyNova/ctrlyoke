@@ -280,6 +280,41 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     );
   });
 
+  it("reveals Managed base/setup/keep, seeds them from defaults, and explains undo", () => {
+    useSettingsStore.getState().updateGlobalSetting("worktree", {
+      mode: WORKTREE_MODES.MANAGED,
+      base: "main",
+      setup: "npm ci",
+      keep: true,
+    });
+
+    render(<WorkflowPropertiesPanel />);
+    chooseWorktreeMode("Managed");
+
+    expect(screen.getByLabelText("Worktree base")).toHaveValue("main");
+    expect(screen.getByLabelText("Worktree setup")).toHaveValue("npm ci");
+    expect(screen.getByLabelText("Keep directory")).toBeChecked();
+    expect(screen.queryByLabelText("Worktree branch")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Removing the directory ends filesystem undo for that run/i
+      )
+    ).toBeInTheDocument();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "updateWorkflowProperties",
+        properties: {
+          worktree: {
+            mode: WORKTREE_MODES.MANAGED,
+            base: "main",
+            setup: "npm ci",
+            keep: true,
+          },
+        },
+      })
+    );
+  });
+
   it("surfaces an empty named branch as a field diagnostic", () => {
     useSettingsStore.getState().updateWorkflowProperty("worktree", {
       mode: WORKTREE_MODES.NAMED,

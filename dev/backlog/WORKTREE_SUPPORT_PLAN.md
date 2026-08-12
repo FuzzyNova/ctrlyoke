@@ -1989,9 +1989,16 @@ when the targeted directory has an incompatible lease.
     - Extend the drawer mode dropdown to Managed and reveal base/setup/keep,
       including the Keep control's undo consequence, and extend
       `defaults.worktree` support on `DefaultsHarnessPage` to the same fields.
+      **Implemented.** The workflow schema accepts `true` shorthand and the
+      managed object form, while rejecting `merge` and named-only combinations;
+      parser normalization, resolution, workflow properties, defaults, status,
+      and focused tests cover the managed fields.
 20. Confirm the Phase 2 `.ctrlyoke/.gitignore` seeding also covers managed creation,
-    then run setup before execution. The seeding becomes load-bearing here, because
-    managed auto-commit is what would otherwise sweep runtime files into the branch.
+      then run setup before execution. The seeding becomes load-bearing here, because
+      managed auto-commit is what would otherwise sweep runtime files into the branch.
+      **Implemented.** Managed creation initializes `.ctrlyoke/.gitignore` before
+      setup, and newly created managed worktrees run setup before being returned
+      for execution; focused manager coverage verifies both behaviors.
 21. Implement terminal-settlement cleanup, strict provider cleanup, auto-commit,
     no-change handling, landing, `keep`, and
     removal failure handling.

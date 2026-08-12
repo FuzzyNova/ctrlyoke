@@ -154,6 +154,67 @@ export function DefaultsHarnessPage({
             </SettingInputRow>
           </>
         )}
+        {wf.worktree.mode === WORKTREE_MODES.MANAGED && (
+          <>
+            <SettingInputRow
+              label="Base"
+              description="Optional Git ref used as the starting point for a new managed worktree."
+              id="defaults-worktree-base"
+              path="defaults.worktree.base"
+              {...rowProps}
+            >
+              <input
+                id="defaults-worktree-base"
+                type="text"
+                value={wf.worktree.base ?? ""}
+                onChange={(event) =>
+                  onUpdate("defaults.worktree.base", event.target.value)
+                }
+                placeholder="Default branch"
+                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
+              />
+            </SettingInputRow>
+            <SettingInputRow
+              label="Setup"
+              description="Optional command run after creating a managed worktree."
+              id="defaults-worktree-setup"
+              path="defaults.worktree.setup"
+              {...rowProps}
+            >
+              <input
+                id="defaults-worktree-setup"
+                type="text"
+                value={wf.worktree.setup ?? ""}
+                onChange={(event) =>
+                  onUpdate("defaults.worktree.setup", event.target.value)
+                }
+                placeholder="e.g. npm ci"
+                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
+              />
+            </SettingInputRow>
+            <SettingInputRow
+              label="Keep directory"
+              description="Keep managed worktrees after execution. Removing the directory ends filesystem undo for that run."
+              id="defaults-worktree-keep"
+              path="defaults.worktree.keep"
+              {...rowProps}
+            >
+              <label className="flex items-center gap-2 min-h-7 text-xs text-foreground">
+                <input
+                  id="defaults-worktree-keep"
+                  type="checkbox"
+                  aria-label="Keep directory"
+                  checked={wf.worktree.keep ?? false}
+                  onChange={(event) =>
+                    onUpdate("defaults.worktree.keep", event.target.checked)
+                  }
+                  className="accent-button-bg"
+                />
+                Keep managed worktrees for review and undo
+              </label>
+            </SettingInputRow>
+          </>
+        )}
       </div>
       <div className="border-t border-panel-border pt-4 space-y-3">
         <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">

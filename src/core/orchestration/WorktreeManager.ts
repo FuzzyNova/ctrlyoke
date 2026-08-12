@@ -150,11 +150,10 @@ export interface ResolveNamedWorktreeOptions {
   existingSetupOutcome?: "pending" | "running" | "succeeded" | "failed";
 }
 
-export interface EnsureManagedWorktreeOptions
-  extends Omit<
-    ResolveNamedWorktreeOptions,
-    "branchName" | "workflowKey" | "runRef"
-  > {
+export interface EnsureManagedWorktreeOptions extends Omit<
+  ResolveNamedWorktreeOptions,
+  "branchName" | "workflowKey" | "runRef"
+> {
   /** Display name used for both the managed branch slug and directory slug. */
   workflowName?: string;
   /** Existing promoted identity. A resolver may supply it for fresh runs. */
@@ -225,7 +224,8 @@ function dedupePaths(paths: readonly string[]): string[] {
   const result: string[] = [];
   for (const value of paths) {
     const resolved = path.resolve(value);
-    const key = process.platform === "win32" ? resolved.toLowerCase() : resolved;
+    const key =
+      process.platform === "win32" ? resolved.toLowerCase() : resolved;
     if (!seen.has(key)) {
       seen.add(key);
       result.push(resolved);
@@ -249,7 +249,9 @@ export class WorktreeManager {
   }
 
   /** Resolve the configured/sibling/fallback placement root for a repository. */
-  public async resolveWorktreeRoot(sourceCheckoutRoot: string): Promise<string> {
+  public async resolveWorktreeRoot(
+    sourceCheckoutRoot: string
+  ): Promise<string> {
     const sourceRoot = await this.requireRepositoryRoot(sourceCheckoutRoot);
     const worktrees = await listGitWorktrees(sourceRoot);
     const result = await resolveConfiguredRoot({
@@ -266,7 +268,9 @@ export class WorktreeManager {
   public async listWorktrees(
     sourceCheckoutRoot: string
   ): Promise<GitWorktreeEntry[]> {
-    return listGitWorktrees(await this.requireRepositoryRoot(sourceCheckoutRoot));
+    return listGitWorktrees(
+      await this.requireRepositoryRoot(sourceCheckoutRoot)
+    );
   }
 
   /**
@@ -333,7 +337,9 @@ export class WorktreeManager {
       const recordPath = this.recordPath(commonDirectory, normalizedBranch);
       const record = await this.tryReadRecord(recordPath);
       if (!record || record.branchName !== normalizedBranch) {
-        throw new Error(`No managed ownership record exists for "${normalizedBranch}".`);
+        throw new Error(
+          `No managed ownership record exists for "${normalizedBranch}".`
+        );
       }
       const currentTip = await resolveCommit(
         repositoryRoot,
@@ -372,9 +378,8 @@ export class WorktreeManager {
       sourceCheckoutRoot,
       options
     );
-    const commonDirectory = await this.requireCommonDirectory(
-      sourceCheckoutRoot
-    );
+    const commonDirectory =
+      await this.requireCommonDirectory(sourceCheckoutRoot);
 
     return withRepositoryWorktreeMutationLock(sourceCheckoutRoot, async () => {
       const records = await this.readRecords(commonDirectory);
@@ -406,7 +411,10 @@ export class WorktreeManager {
 
       const baseCommit =
         existingRecord?.baseCommit ??
-        (await resolveCommit(sourceCheckoutRoot, options.base?.trim() || "HEAD"));
+        (await resolveCommit(
+          sourceCheckoutRoot,
+          options.base?.trim() || "HEAD"
+        ));
       const targetBranch =
         existingRecord?.targetBranch ??
         options.targetBranch?.trim() ??
@@ -436,7 +444,10 @@ export class WorktreeManager {
         existingCheckout = undefined;
       }
 
-      if (existingCheckout && !pathsEqual(existingCheckout.worktreePath, worktreePath)) {
+      if (
+        existingCheckout &&
+        !pathsEqual(existingCheckout.worktreePath, worktreePath)
+      ) {
         throw new Error(
           `Managed branch "${branchName}" is checked out at an unexpected path.`
         );
@@ -534,9 +545,8 @@ export class WorktreeManager {
     const sourceCheckoutRoot = await this.requireRepositoryRoot(
       options.sourceCheckoutRoot
     );
-    const commonDirectory = await this.requireCommonDirectory(
-      sourceCheckoutRoot
-    );
+    const commonDirectory =
+      await this.requireCommonDirectory(sourceCheckoutRoot);
     return withRepositoryWorktreeMutationLock(sourceCheckoutRoot, async () => {
       const records = await this.readRecords(commonDirectory);
       const record = records.find(
@@ -585,7 +595,8 @@ export class WorktreeManager {
           branchState: "present",
           recoveryOutcome,
           finalBranchTip: branchTip,
-          lifecycleState: recoveryOutcome === "orphaned" ? "orphaned" : "settled",
+          lifecycleState:
+            recoveryOutcome === "orphaned" ? "orphaned" : "settled",
         });
         return undefined;
       }
@@ -631,9 +642,8 @@ export class WorktreeManager {
     const sourceCheckoutRoot = await this.requireRepositoryRoot(
       options.sourceCheckoutRoot
     );
-    const commonDirectory = await this.requireCommonDirectory(
-      sourceCheckoutRoot
-    );
+    const commonDirectory =
+      await this.requireCommonDirectory(sourceCheckoutRoot);
     const records = await this.readRecords(commonDirectory);
     const entries = await listGitWorktrees(sourceCheckoutRoot);
     const result: WorktreeInfo[] = [];
@@ -642,8 +652,10 @@ export class WorktreeManager {
       if (
         options.workflowKey !== undefined &&
         record.workflowKey !== options.workflowKey
-      ) continue;
-      if (options.runRef !== undefined && record.runRef !== options.runRef) continue;
+      )
+        continue;
+      if (options.runRef !== undefined && record.runRef !== options.runRef)
+        continue;
       const entry = entries.find(
         (candidate) =>
           candidate.branchName === record.branchName &&
@@ -657,7 +669,8 @@ export class WorktreeManager {
       if (
         runnerStatus === LOCK_STATUS.ACTIVE_CLI ||
         runnerStatus === LOCK_STATUS.ACTIVE_VSCODE
-      ) continue;
+      )
+        continue;
       if (await this.hasLiveLease(record.worktreePath)) continue;
       result.push(
         await this.buildManagedInfoWithoutLease(
@@ -711,7 +724,10 @@ export class WorktreeManager {
     const capturedBase = initialBranchCheckout
       ? initialBranchCheckout.headCommit
       : (existingLocalBranchCommit ??
-        (await resolveCommit(sourceCheckoutRoot, options.base?.trim() || "HEAD")));
+        (await resolveCommit(
+          sourceCheckoutRoot,
+          options.base?.trim() || "HEAD"
+        )));
 
     let origin: WorktreeOrigin = initialBranchCheckout
       ? "discovered"
@@ -719,9 +735,8 @@ export class WorktreeManager {
     let worktreePath = initialBranchCheckout?.worktreePath;
     const needsProvisioning = !worktreePath;
     if (needsProvisioning) {
-      const commonDirectory = await this.requireCommonDirectory(
-        sourceCheckoutRoot
-      );
+      const commonDirectory =
+        await this.requireCommonDirectory(sourceCheckoutRoot);
       worktreePath = path.join(
         root!,
         createWorktreeDirectoryName(branchName, commonDirectory, {
@@ -732,11 +747,7 @@ export class WorktreeManager {
     }
 
     await this.persistRuntime({
-      ...this.buildRuntime(
-        repositoryInputs,
-        branchName,
-        worktreePath!
-      ),
+      ...this.buildRuntime(repositoryInputs, branchName, worktreePath!),
       origin,
       lifecycleState: "provisioning",
       directoryState: needsProvisioning ? "missing" : "present",
@@ -822,7 +833,9 @@ export class WorktreeManager {
       executionCheckoutRoot,
       workspaceRoots: dedupePaths([
         executionRoot,
-        ...repositoryInputs.workspaceRoots.map((sourceRoot) => mapSourcePath(sourceRoot)),
+        ...repositoryInputs.workspaceRoots.map((sourceRoot) =>
+          mapSourcePath(sourceRoot)
+        ),
       ]),
       namedWorkspaceRoots: mappedNamedWorkspaceRoots,
       approvedExternalRoots: repositoryInputs.approvedExternalRoots,
@@ -873,7 +886,11 @@ export class WorktreeManager {
           setupOutcome,
           updatedAt: this.now(),
         });
-        await this.runSetup(executionCheckoutRoot, options.setup!, options.vars);
+        await this.runSetup(
+          executionCheckoutRoot,
+          options.setup!,
+          options.vars
+        );
         setupOutcome = "succeeded";
       } catch (error) {
         setupOutcome = "failed";
@@ -912,11 +929,7 @@ export class WorktreeManager {
     };
 
     await this.persistRuntime({
-      ...this.buildRuntime(
-        repositoryInputs,
-        branchName,
-        executionCheckoutRoot
-      ),
+      ...this.buildRuntime(repositoryInputs, branchName, executionCheckoutRoot),
       origin,
       lifecycleState: "ready",
       directoryState: "present",
@@ -1002,7 +1015,11 @@ export class WorktreeManager {
   private async readRecords(
     commonDirectory: string
   ): Promise<ManagedWorktreeOwnershipRecord[]> {
-    const directory = path.join(commonDirectory, "ctrlyoke", "managed-worktrees");
+    const directory = path.join(
+      commonDirectory,
+      "ctrlyoke",
+      "managed-worktrees"
+    );
     let entries: import("fs").Dirent[];
     try {
       entries = await fs.readdir(directory, { withFileTypes: true });
@@ -1088,7 +1105,9 @@ export class WorktreeManager {
     try {
       const stats = await fs.lstat(worktreePath);
       if (stats.isSymbolicLink() || !stats.isDirectory()) {
-        throw new Error(`Managed worktree path is not an available directory: ${worktreePath}`);
+        throw new Error(
+          `Managed worktree path is not an available directory: ${worktreePath}`
+        );
       }
       throw new Error(`Managed worktree path collision: ${worktreePath}`);
     } catch (error) {
@@ -1217,6 +1236,50 @@ export class WorktreeManager {
       await lease.release();
       throw error;
     }
+    const shouldRunSetup =
+      Boolean(args.options.setup?.trim()) && args.origin === "created";
+    let setupOutcome: WorktreeInfo["setupOutcome"];
+    if (shouldRunSetup) {
+      setupOutcome = "pending";
+      await this.persistRuntime({
+        lifecycleState: "provisioning",
+        directoryState: "present",
+        branchState: "present",
+        setupOutcome,
+        updatedAt: this.now(),
+      });
+      try {
+        setupOutcome = "running";
+        await this.persistRuntime({
+          lifecycleState: "provisioning",
+          directoryState: "present",
+          branchState: "present",
+          setupOutcome,
+          updatedAt: this.now(),
+        });
+        await this.runSetup(
+          args.record.worktreePath,
+          args.options.setup!,
+          args.options.vars
+        );
+        setupOutcome = "succeeded";
+      } catch (error) {
+        setupOutcome = "failed";
+        await this.persistRuntime({
+          lifecycleState: "blocked",
+          directoryState: "present",
+          branchState: "present",
+          setupOutcome,
+          dirty: await hasUncommittedChanges(args.record.worktreePath).catch(
+            () => undefined
+          ),
+          updatedAt: this.now(),
+        });
+        runtimeTrust.release();
+        await lease.release();
+        throw new WorktreeSetupError(args.record.worktreePath, error);
+      }
+    }
     const dirty = await hasUncommittedChanges(args.record.worktreePath);
     const info: ActiveWorktreeInfo = {
       mode: "managed",
@@ -1234,6 +1297,7 @@ export class WorktreeManager {
       dirty,
       lease,
       runtimeTrust,
+      ...(setupOutcome ? { setupOutcome } : {}),
       ...(args.record.recoveryOutcome
         ? { recoveryOutcome: args.record.recoveryOutcome }
         : {}),
@@ -1257,6 +1321,7 @@ export class WorktreeManager {
       directoryState: "present",
       branchState: "present",
       dirty,
+      ...(setupOutcome ? { setupOutcome } : {}),
     });
     return info;
   }
@@ -1290,17 +1355,24 @@ export class WorktreeManager {
     };
   }
 
-  private async requireRepositoryRoot(sourceCheckoutRoot: string): Promise<string> {
+  private async requireRepositoryRoot(
+    sourceCheckoutRoot: string
+  ): Promise<string> {
     const root = await repoToplevel(sourceCheckoutRoot);
     if (!root) {
-      throw new Error(`Cannot resolve a Git repository for ${sourceCheckoutRoot}.`);
+      throw new Error(
+        `Cannot resolve a Git repository for ${sourceCheckoutRoot}.`
+      );
     }
     return path.resolve(root);
   }
 
-  private async requireCommonDirectory(repositoryRoot: string): Promise<string> {
+  private async requireCommonDirectory(
+    repositoryRoot: string
+  ): Promise<string> {
     const common = await gitCommonDir(repositoryRoot);
-    if (!common) throw new Error("Cannot resolve the repository Git common directory.");
+    if (!common)
+      throw new Error("Cannot resolve the repository Git common directory.");
     return common;
   }
 
@@ -1326,13 +1398,16 @@ export class WorktreeManager {
       additionalTrustedRoots?: readonly string[];
     }
   ): Promise<ResolvedRepositoryInputs> {
-    const sourceRoot = await resolveThroughNearestExistingAncestor(
-      sourceCheckoutRoot
+    const sourceRoot =
+      await resolveThroughNearestExistingAncestor(sourceCheckoutRoot);
+    const stateRoot = await resolveThroughNearestExistingAncestor(
+      options.stateRoot
     );
-    const stateRoot = await resolveThroughNearestExistingAncestor(options.stateRoot);
     const namedWorkspaceRoots: ResolverWorkspaceFolder[] = [];
     for (const root of options.namedWorkspaceRoots) {
-      const resolvedRoot = await resolveThroughNearestExistingAncestor(root.fsPath);
+      const resolvedRoot = await resolveThroughNearestExistingAncestor(
+        root.fsPath
+      );
       if (!isPathWithinDirectory(resolvedRoot, sourceRoot)) {
         throw new Error(
           `Named workspace root is outside the source checkout and cannot be mapped: ${root.fsPath}`
@@ -1345,7 +1420,8 @@ export class WorktreeManager {
     for (const workspaceRoot of options.workspaceRoots ?? [
       ...namedWorkspaceRoots.map((root) => root.fsPath),
     ]) {
-      const resolvedRoot = await resolveThroughNearestExistingAncestor(workspaceRoot);
+      const resolvedRoot =
+        await resolveThroughNearestExistingAncestor(workspaceRoot);
       if (isPathWithinDirectory(resolvedRoot, sourceRoot)) {
         repositoryWorkspaceRoots.push(resolvedRoot);
       } else if (!pathsEqual(resolvedRoot, stateRoot)) {
@@ -1361,9 +1437,8 @@ export class WorktreeManager {
       ...(options.additionalTrustedRoots ?? []),
     ]);
     for (const trustRoot of trustRoots) {
-      const resolvedTrustRoot = await resolveThroughNearestExistingAncestor(
-        trustRoot
-      );
+      const resolvedTrustRoot =
+        await resolveThroughNearestExistingAncestor(trustRoot);
       if (pathsOverlap(resolvedTrustRoot, sourceRoot)) {
         throw new Error(
           `Trusted or additional root overlaps the source checkout and is not allowed in worktree mode: ${trustRoot}`

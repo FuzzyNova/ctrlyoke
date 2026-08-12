@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from "react";
-import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
+import type { ErrorBehavior, WorktreeConfig } from "@root/types/CtrlYokeTypes";
 import {
   useSettingsStore,
   type WorkflowProperties,
@@ -74,6 +74,33 @@ import {
 } from "@utils/compatibilityDiagnostics";
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const SETTINGS_DRAWER_BREAKPOINT = 400;
+
+type WorktreeField = "branch" | "base" | "setup" | "keep";
+type WorktreeObjectConfig = Exclude<WorktreeConfig, false | true | string>;
+
+function worktreeConfigForMode(
+  mode: (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES],
+  defaults: GlobalSettings["worktree"]
+): WorktreeObjectConfig {
+  if (mode === WORKTREE_MODES.MANAGED) {
+    return {
+      mode,
+      base: defaults?.base ?? "",
+      setup: defaults?.setup ?? "",
+      keep:
+        defaults?.mode === WORKTREE_MODES.MANAGED
+          ? (defaults.keep ?? false)
+          : false,
+    };
+  }
+  return {
+    mode: WORKTREE_MODES.NAMED,
+    branch:
+      defaults?.mode === WORKTREE_MODES.NAMED ? (defaults.branch ?? "") : "",
+    base: defaults?.base ?? "",
+    setup: defaults?.setup ?? "",
+  };
+}
 
 const BUTTON_STATE = {
   IDLE: "idle",
@@ -249,11 +276,17 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const effectiveWorktreeMode =
     effectiveWorktree === false ? WORKTREE_MODES.NONE : effectiveWorktree.mode;
   const effectiveWorktreeBranch =
-    effectiveWorktree === false ? "" : (effectiveWorktree.branch ?? "");
+    effectiveWorktree === false || !("branch" in effectiveWorktree)
+      ? ""
+      : (effectiveWorktree.branch ?? "");
   const effectiveWorktreeBase =
     effectiveWorktree === false ? "" : (effectiveWorktree.base ?? "");
   const effectiveWorktreeSetup =
     effectiveWorktree === false ? "" : (effectiveWorktree.setup ?? "");
+  const effectiveWorktreeKeep =
+    effectiveWorktree !== false && "keep" in effectiveWorktree
+      ? (effectiveWorktree.keep ?? false)
+      : false;
   const effectiveAgent = getEffectiveAgent();
   const effectiveSkills = getEffectiveSkills();
   const effectiveResumeSession = getEffectiveResumeSession();
@@ -272,17 +305,22 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const [worktreeSetupInput, setWorktreeSetupInput] = useState(
     effectiveWorktreeSetup
   );
+  const [worktreeKeepInput, setWorktreeKeepInput] = useState(
+    effectiveWorktreeKeep
+  );
 
   useEffect(() => {
     setWorktreeMode(effectiveWorktreeMode);
     setWorktreeBranchInput(effectiveWorktreeBranch);
     setWorktreeBaseInput(effectiveWorktreeBase);
     setWorktreeSetupInput(effectiveWorktreeSetup);
+    setWorktreeKeepInput(effectiveWorktreeKeep);
   }, [
     effectiveWorktreeBase,
     effectiveWorktreeBranch,
     effectiveWorktreeMode,
     effectiveWorktreeSetup,
+    effectiveWorktreeKeep,
   ]);
 
   const compatibility = useCompatibilityDiagnostics();
@@ -380,6 +418,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
             branch?: string;
             base?: string;
             setup?: string;
+            keep?: boolean;
           };
           if (config.mode === WORKTREE_MODES.NONE) {
             return { mode: WORKTREE_MODES.NONE };
@@ -389,6 +428,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
             branch: config.branch ?? "",
             base: config.base ?? "",
             setup: config.setup ?? "",
+            keep: config.keep ?? false,
           };
         };
         return (
@@ -625,55 +665,57 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
   const handleWorktreeModeChange = useCallback(
     (mode: string) => {
-      setWorktreeMode(
-        mode as (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES]
-      );
       if (mode === WORKTREE_MODES.NONE) {
+        setWorktreeMode(WORKTREE_MODES.NONE);
+        setWorktreeBranchInput("");
+        setWorktreeBaseInput("");
+        setWorktreeSetupInput("");
+        setWorktreeKeepInput(false);
         postWorkflowPropertiesUpdate({ worktree: false });
         return;
       }
 
-      const defaults = globalSettings.worktree;
-      const seeded =
-        defaults?.mode === WORKTREE_MODES.NAMED
-          ? {
-              mode: WORKTREE_MODES.NAMED,
-              branch: defaults.branch ?? "",
-              base: defaults.base ?? "",
-              setup: defaults.setup ?? "",
-            }
-          : {
-              mode: WORKTREE_MODES.NAMED,
-              branch: "",
-              base: "",
-              setup: "",
-            };
-      setWorktreeBranchInput(seeded.branch);
-      setWorktreeBaseInput(seeded.base);
-      setWorktreeSetupInput(seeded.setup);
+      const selectedMode = mode as Exclude<
+        (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES],
+        typeof WORKTREE_MODES.NONE
+      >;
+      const seeded = worktreeConfigForMode(
+        selectedMode,
+        globalSettings.worktree
+      );
+      setWorktreeMode(selectedMode);
+      setWorktreeBranchInput("branch" in seeded ? (seeded.branch ?? "") : "");
+      setWorktreeBaseInput(seeded.base ?? "");
+      setWorktreeSetupInput(seeded.setup ?? "");
+      setWorktreeKeepInput(
+        seeded.mode === WORKTREE_MODES.MANAGED ? (seeded.keep ?? false) : false
+      );
       postWorkflowPropertiesUpdate({ worktree: seeded });
     },
     [globalSettings.worktree, postWorkflowPropertiesUpdate]
   );
 
   const handleWorktreeFieldChange = useCallback(
-    (field: "branch" | "base" | "setup", value: string) => {
+    (field: WorktreeField, value: string | boolean) => {
       const current = useSettingsStore.getState().getEffectiveWorktree();
-      const currentConfig =
-        current !== false && current.mode === WORKTREE_MODES.NAMED
+      const currentConfig: WorktreeConfig =
+        current !== false && current.mode === WORKTREE_MODES.MANAGED
           ? {
-              mode: WORKTREE_MODES.NAMED,
-              branch: current.branch ?? "",
+              mode: WORKTREE_MODES.MANAGED,
               base: current.base ?? "",
               setup: current.setup ?? "",
+              keep: current.keep ?? false,
             }
           : {
               mode: WORKTREE_MODES.NAMED,
-              branch: "",
-              base: "",
-              setup: "",
+              branch:
+                current !== false && current.mode === WORKTREE_MODES.NAMED
+                  ? (current.branch ?? "")
+                  : "",
+              base: current !== false ? (current.base ?? "") : "",
+              setup: current !== false ? (current.setup ?? "") : "",
             };
-      const next = { ...currentConfig, [field]: value };
+      const next = { ...currentConfig, [field]: value } as WorktreeConfig;
       const settingsStore = useSettingsStore.getState();
       settingsStore.updateWorkflowProperty("worktree", next);
       syncWorkflowPropertiesForUndo();
@@ -1020,6 +1062,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
   const handleResetAllToDefault = useCallback(() => {
     const globalHarness = globalSettings.harness as string;
+    const resetWorktree = globalSettings.worktree;
     const updates: Partial<WorkflowProperties> = {
       harness: globalHarness,
       model: globalSettings.harnessDefaultModels[globalHarness],
@@ -1043,17 +1086,23 @@ const WorkflowPropertiesPanelInner: React.FC<{
       preCondition:
         globalSettings.defaultPreCondition as WorkflowProperties["preCondition"],
       worktree:
-        globalSettings.worktree?.mode === WORKTREE_MODES.NAMED
-          ? {
-              mode: WORKTREE_MODES.NAMED,
-              branch: globalSettings.worktree.branch ?? "",
-              base: globalSettings.worktree.base,
-              setup: globalSettings.worktree.setup,
-            }
-          : false,
+        resetWorktree?.mode === WORKTREE_MODES.NONE
+          ? false
+          : resetWorktree?.mode === WORKTREE_MODES.MANAGED
+            ? {
+                mode: WORKTREE_MODES.MANAGED,
+                base: resetWorktree.base,
+                setup: resetWorktree.setup,
+                keep: resetWorktree.keep,
+              }
+            : {
+                mode: WORKTREE_MODES.NAMED,
+                branch: resetWorktree?.branch ?? "",
+                base: resetWorktree?.base,
+                setup: resetWorktree?.setup,
+              },
     };
     setSessionIdInput("");
-    const resetWorktree = globalSettings.worktree;
     setWorktreeMode(resetWorktree?.mode ?? WORKTREE_MODES.NONE);
     setWorktreeBranchInput(
       resetWorktree?.mode === WORKTREE_MODES.NAMED
@@ -1061,14 +1110,21 @@ const WorkflowPropertiesPanelInner: React.FC<{
         : ""
     );
     setWorktreeBaseInput(
-      resetWorktree?.mode === WORKTREE_MODES.NAMED
+      resetWorktree?.mode === WORKTREE_MODES.NAMED ||
+        resetWorktree?.mode === WORKTREE_MODES.MANAGED
         ? (resetWorktree.base ?? "")
         : ""
     );
     setWorktreeSetupInput(
-      resetWorktree?.mode === WORKTREE_MODES.NAMED
+      resetWorktree?.mode === WORKTREE_MODES.NAMED ||
+        resetWorktree?.mode === WORKTREE_MODES.MANAGED
         ? (resetWorktree.setup ?? "")
         : ""
+    );
+    setWorktreeKeepInput(
+      resetWorktree?.mode === WORKTREE_MODES.MANAGED
+        ? (resetWorktree.keep ?? false)
+        : false
     );
     setEndConditionEnabled(
       globalSettings.defaultEndCondition !== null &&
@@ -1453,48 +1509,47 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     options={WORKTREE_MODE_OPTIONS}
                   />
                 </FormField>
-
-                <AnimatedSection
-                  visible={worktreeMode === WORKTREE_MODES.NAMED}
-                  className="min-w-0"
-                >
-                  <FormField
-                    label="Branch"
-                    htmlFor="settings-worktree-branch"
-                    description="Existing or new local Git branch for the named worktree."
-                  >
-                    <input
-                      type="text"
-                      id="settings-worktree-branch"
-                      aria-label="Worktree branch"
-                      aria-describedby={
-                        worktreeBranchDiagnostics.length > 0
-                          ? "settings-worktree-branch-diagnostic"
-                          : undefined
-                      }
-                      value={worktreeBranchInput}
-                      onChange={(event) =>
-                        setWorktreeBranchInput(event.target.value)
-                      }
-                      onBlur={() =>
-                        handleWorktreeFieldChange("branch", worktreeBranchInput)
-                      }
-                      className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono h-7`}
-                    />
-                    <FieldDiagnostic
-                      id="settings-worktree-branch-diagnostic"
-                      diagnostics={worktreeBranchDiagnostics}
-                    />
-                  </FormField>
-                </AnimatedSection>
               </DrawerRow>
 
-              <AnimatedSection visible={worktreeMode === WORKTREE_MODES.NAMED}>
+              <AnimatedSection visible={worktreeMode !== WORKTREE_MODES.NONE}>
                 <DrawerRow narrow={isNarrow}>
+                  {worktreeMode === WORKTREE_MODES.NAMED && (
+                    <FormField
+                      label="Branch"
+                      htmlFor="settings-worktree-branch"
+                      description="Existing or new local Git branch for the named worktree."
+                    >
+                      <input
+                        type="text"
+                        id="settings-worktree-branch"
+                        aria-label="Worktree branch"
+                        aria-describedby={
+                          worktreeBranchDiagnostics.length > 0
+                            ? "settings-worktree-branch-diagnostic"
+                            : undefined
+                        }
+                        value={worktreeBranchInput}
+                        onChange={(event) =>
+                          setWorktreeBranchInput(event.target.value)
+                        }
+                        onBlur={() =>
+                          handleWorktreeFieldChange(
+                            "branch",
+                            worktreeBranchInput
+                          )
+                        }
+                        className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono h-7`}
+                      />
+                      <FieldDiagnostic
+                        id="settings-worktree-branch-diagnostic"
+                        diagnostics={worktreeBranchDiagnostics}
+                      />
+                    </FormField>
+                  )}
                   <FormField
                     label="Base"
                     htmlFor="settings-worktree-base"
-                    description="Optional Git ref used as the starting point for a new branch."
+                    description="Optional Git ref used as the starting point for a new worktree."
                   >
                     <input
                       type="text"
@@ -1514,7 +1569,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   <FormField
                     label="Setup"
                     htmlFor="settings-worktree-setup"
-                    description="Optional command run after a new named worktree is created."
+                    description="Optional command run after a new worktree is created."
                   >
                     <input
                       type="text"
@@ -1531,15 +1586,42 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
                     />
                   </FormField>
+                  {worktreeMode === WORKTREE_MODES.MANAGED && (
+                    <FormField
+                      label="Keep directory"
+                      htmlFor="settings-worktree-keep"
+                      description="Keep the managed worktree after the run. Removing the directory ends filesystem undo for that run."
+                    >
+                      <label className="flex items-center gap-2 min-h-7 text-xs text-foreground">
+                        <input
+                          type="checkbox"
+                          id="settings-worktree-keep"
+                          aria-label="Keep directory"
+                          checked={worktreeKeepInput}
+                          onChange={(event) => {
+                            const keep = event.target.checked;
+                            setWorktreeKeepInput(keep);
+                            handleWorktreeFieldChange("keep", keep);
+                          }}
+                          className="accent-button-bg"
+                        />
+                        Keep managed worktree for review and undo
+                      </label>
+                      <p className="text-xxs text-description-fg">
+                        Removing the directory ends filesystem undo for that
+                        run.
+                      </p>
+                    </FormField>
+                  )}
                 </DrawerRow>
               </AnimatedSection>
 
               {workflowProperties.worktree === undefined &&
-                worktreeMode === WORKTREE_MODES.NAMED && (
+                worktreeMode !== WORKTREE_MODES.NONE && (
                   <p className="text-xxs text-warning-fg" role="status">
-                    This named default is inherited from settings. It uses one
-                    workspace-wide exclusive lease, so concurrent runs of this
-                    workflow serialize on the same branch.
+                    This worktree default is inherited from settings.
+                    {worktreeMode === WORKTREE_MODES.NAMED &&
+                      " It uses one workspace-wide exclusive lease, so concurrent runs of this workflow serialize on the same branch."}
                   </p>
                 )}
             </>

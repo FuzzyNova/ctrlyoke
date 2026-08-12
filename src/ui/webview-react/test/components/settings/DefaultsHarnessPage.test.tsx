@@ -67,6 +67,33 @@ describe("DefaultsHarnessPage execution defaults", () => {
     expect(screen.getByLabelText("Setup")).toHaveValue("npm ci");
   });
 
+  it("renders progressive Managed worktree defaults with the keep path", () => {
+    const onUpdate = vi.fn();
+    const settings = createSettings();
+    settings.settings.defaults.worktree = {
+      mode: WORKTREE_MODES.MANAGED,
+      base: "main",
+      setup: "npm ci",
+      keep: true,
+    };
+
+    render(
+      <DefaultsHarnessPage
+        settings={settings}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={onUpdate}
+        onReset={() => {}}
+      />
+    );
+
+    expect(screen.getByLabelText("Base")).toHaveValue("main");
+    expect(screen.getByLabelText("Setup")).toHaveValue("npm ci");
+    expect(screen.getByLabelText("Keep directory")).toBeChecked();
+
+    screen.getByLabelText("Keep directory").click();
+    expect(onUpdate).toHaveBeenCalledWith("defaults.worktree.keep", false);
+  });
+
   it("shows the active-scope reset affordance", async () => {
     const onReset = vi.fn();
     const user = userEvent.setup();

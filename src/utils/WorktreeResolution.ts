@@ -1,8 +1,5 @@
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
-import {
-  WORKTREE_MODES,
-  type WorktreeMode,
-} from "../types/DashboardConstants";
+import { WORKTREE_MODES, type WorktreeMode } from "../types/DashboardConstants";
 import type {
   WorktreeConfig,
   WorktreeDefaultConfig,
@@ -16,9 +13,7 @@ export interface WorkspaceWorktreeResolution extends WorktreeResolution {
   notice?: string;
 }
 
-function normalizeDefault(
-  value: WorktreeDefaultConfig
-): WorktreeResolution {
+function normalizeDefault(value: WorktreeDefaultConfig): WorktreeResolution {
   if (value.mode === WORKTREE_MODES.NONE) {
     return { origin: "default" };
   }
@@ -37,6 +32,12 @@ function normalizeDefault(
 function normalizeAuthored(
   value: Exclude<WorktreeConfig, false | undefined>
 ): WorktreeResolution {
+  if (value === true) {
+    return {
+      origin: "authored",
+      config: { mode: WORKTREE_MODES.MANAGED },
+    };
+  }
   if (typeof value === "string") {
     return {
       origin: "authored",
@@ -48,12 +49,7 @@ function normalizeAuthored(
   }
   return {
     origin: "authored",
-    config: {
-      mode: value.mode,
-      branch: value.branch,
-      base: value.base,
-      setup: value.setup,
-    },
+    config: { ...value },
   };
 }
 
@@ -91,7 +87,8 @@ export async function resolveWorktreeForWorkspace(
     return selection;
   }
 
-  const reason = eligibility.reason ?? "Workspace is not eligible for worktree mode.";
+  const reason =
+    eligibility.reason ?? "Workspace is not eligible for worktree mode.";
   if (selection.origin === "authored") {
     // Keep the shared eligibility reason in the hard failure.
     throw new Error(reason);

@@ -15,14 +15,16 @@ suite("WorktreeResolution", () => {
 
   teardown(async () => {
     await Promise.all(
-      temporaryDirectories.splice(0).map((directory) =>
-        fs.rm(directory, { recursive: true, force: true })
-      )
+      temporaryDirectories
+        .splice(0)
+        .map((directory) => fs.rm(directory, { recursive: true, force: true }))
     );
   });
 
   async function ineligibleRoot(): Promise<string> {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-worktree-resolution-"));
+    const root = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-worktree-resolution-")
+    );
     temporaryDirectories.push(root);
     return root;
   }
@@ -36,10 +38,10 @@ suite("WorktreeResolution", () => {
       keep: true,
     };
 
-    assert.deepStrictEqual(
-      resolveWorktreeSelection(undefined, defaultValue),
-      { origin: "default", config: defaultValue }
-    );
+    assert.deepStrictEqual(resolveWorktreeSelection(undefined, defaultValue), {
+      origin: "default",
+      config: defaultValue,
+    });
   });
 
   test("authored false overrides a configured default", () => {
@@ -49,6 +51,35 @@ suite("WorktreeResolution", () => {
         base: "main",
       }),
       { origin: "authored" }
+    );
+  });
+
+  test("normalizes authored managed shorthand and preserves managed options", () => {
+    assert.deepStrictEqual(
+      resolveWorktreeSelection(true, {
+        mode: WORKTREE_MODES.NONE,
+      }),
+      { origin: "authored", config: { mode: WORKTREE_MODES.MANAGED } }
+    );
+    assert.deepStrictEqual(
+      resolveWorktreeSelection(
+        {
+          mode: WORKTREE_MODES.MANAGED,
+          keep: true,
+          base: "main",
+          setup: "npm ci",
+        },
+        { mode: WORKTREE_MODES.NONE }
+      ),
+      {
+        origin: "authored",
+        config: {
+          mode: WORKTREE_MODES.MANAGED,
+          keep: true,
+          base: "main",
+          setup: "npm ci",
+        },
+      }
     );
   });
 
@@ -74,7 +105,10 @@ suite("WorktreeResolution", () => {
 
     assert.strictEqual(result.origin, "default");
     assert.strictEqual(result.config, undefined);
-    assert.match(result.notice ?? "", /Configured worktree default did not apply/);
+    assert.match(
+      result.notice ?? "",
+      /Configured worktree default did not apply/
+    );
     assert.match(result.notice ?? "", /requires a Git repository/);
   });
 
@@ -97,10 +131,15 @@ suite("WorktreeResolution", () => {
   });
 
   test("does not expose merge in the settings schema", async () => {
-    const schemaPath = path.resolve(__dirname, "../../../schemas/settings-schema.json");
+    const schemaPath = path.resolve(
+      __dirname,
+      "../../../schemas/settings-schema.json"
+    );
     const schema = JSON.parse(await fs.readFile(schemaPath, "utf8")) as {
       properties: {
-        defaults: { properties: { worktree: { properties: Record<string, unknown> } } };
+        defaults: {
+          properties: { worktree: { properties: Record<string, unknown> } };
+        };
       };
     };
 

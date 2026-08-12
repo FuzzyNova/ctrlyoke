@@ -19,6 +19,7 @@ import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
 import {
   STEP_TYPES,
   WORKFLOW_PROPERTY_KEYS,
+  WORKTREE_MODES,
 } from "../types/DashboardConstants";
 import { PromptFileResolver } from "./PromptFileResolver";
 
@@ -347,7 +348,12 @@ export class PromptFileParser {
     for (const key of WORKFLOW_PROPERTY_KEYS) {
       const value = parsed[key];
       if (value !== undefined) {
-        Object.assign(promptFile, { [key]: value });
+        Object.assign(promptFile, {
+          [key]:
+            key === "worktree" && value === true
+              ? { mode: WORKTREE_MODES.MANAGED }
+              : value,
+        });
       }
     }
     if (parsed.vars !== undefined) promptFile.vars = parsed.vars;

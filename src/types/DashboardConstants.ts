@@ -1076,6 +1076,7 @@ export const EXECUTION_MODE_OPTIONS = [
 
 export const WORKTREE_MODE_OPTIONS = [
   { value: WORKTREE_MODES.NONE, label: "None" },
+  { value: WORKTREE_MODES.MANAGED, label: "Managed" },
   { value: WORKTREE_MODES.NAMED, label: "Named" },
 ];
 

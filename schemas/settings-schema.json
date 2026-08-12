@@ -315,7 +315,7 @@
             },
             "keep": {
               "type": "boolean",
-              "description": "Keep managed worktrees after execution so their filesystem changes remain available for undo."
+              "description": "Keep managed worktrees after execution. Removing the directory ends filesystem undo for that run."
             }
           },
           "allOf": [
@@ -327,7 +327,41 @@
                 }
               },
               "then": {
-                "required": ["branch"]
+                "required": ["branch"],
+                "not": {
+                  "required": ["keep"]
+                }
+              }
+            },
+            {
+              "if": {
+                "required": ["mode"],
+                "properties": {
+                  "mode": { "const": "managed" }
+                }
+              },
+              "then": {
+                "not": {
+                  "required": ["branch"]
+                }
+              }
+            },
+            {
+              "if": {
+                "required": ["mode"],
+                "properties": {
+                  "mode": { "const": "none" }
+                }
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    { "required": ["branch"] },
+                    { "required": ["base"] },
+                    { "required": ["setup"] },
+                    { "required": ["keep"] }
+                  ]
+                }
               }
             }
           ]
