@@ -2001,9 +2001,13 @@ when the targeted directory has an incompatible lease.
       for execution; focused manager coverage verifies both behaviors.
 21. Implement terminal-settlement cleanup, strict provider cleanup, auto-commit,
     no-change handling, landing, `keep`, and
-    removal failure handling.
+    removal failure handling. **Implemented.** Managed settlement guards
+    checkout identity and initializer-owned runtime paths before staging, and
+    keeps the execution lease through commit/removal.
 22. Prevent retained integrations/sidecars from outliving any worktree-targeted
-    terminal run.
+    terminal run. **Implemented.** Terminal worktree runs dispose integrations
+    and stop activity watchers before the strict cleanup barrier; pause remains
+    the only retained state.
 23. Persist status and enrich run summaries/global/session status.
 24. Add View Diff and conditional Open Worktree actions to `RunSummaryBanner`,
     and extend the banner's landing/merge outcome display.

@@ -465,6 +465,24 @@ export type WorktreeRunProjection = Pick<
 export type WorkingFileWorktreeRuntimePatch =
   Partial<WorkingFileWorktreeRuntime>;
 
+/** Terminal result of a managed worktree settlement. */
+export interface WorktreeCompletionResult {
+  landingOutcome: "landed" | "no-changes" | "blocked";
+  mergeOutcome?:
+    | "fast-forward"
+    | "merge-commit"
+    | "conflict"
+    | "blocked"
+    | "abort-failed";
+  directoryOutcome: "removed" | "kept" | "remove-failed";
+  branchState: "present" | "deleted" | "missing";
+  branchName: string;
+  targetBranch?: string;
+  conflictFiles?: string[];
+  autoCommitted?: boolean;
+  message?: string;
+}
+
 /**
  * Runtime metadata for working files (optional, not required for user-created files)
  * Tracks workflow execution state only - does NOT include execution properties

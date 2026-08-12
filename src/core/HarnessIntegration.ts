@@ -145,6 +145,11 @@ export enum HarnessStatus {
   Unavailable = "unavailable",
 }
 
+export interface WorkflowArtifactCleanupResult {
+  cleaned: boolean;
+  failures: string[];
+}
+
 /**
  * Base class for Harness integrations
  *
@@ -368,6 +373,26 @@ export abstract class HarnessIntegration {
     _workspaceRoot: string
   ): Promise<void> {
     // no-op by default
+  }
+
+  /**
+   * Strict terminal cleanup used by managed worktrees. The legacy cleanup
+   * method intentionally remains best-effort for retained/native sessions;
+   * managed settlement needs an explicit proof barrier before it commits.
+   */
+  async cleanupWorkflowArtifactsStrict(
+    workingFilePath: string | undefined,
+    workspaceRoot: string
+  ): Promise<WorkflowArtifactCleanupResult> {
+    try {
+      await this.cleanupWorkflowArtifacts(workingFilePath, workspaceRoot);
+      return { cleaned: true, failures: [] };
+    } catch (error) {
+      return {
+        cleaned: false,
+        failures: [error instanceof Error ? error.message : String(error)],
+      };
+    }
   }
 
   /**

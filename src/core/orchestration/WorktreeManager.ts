@@ -3,11 +3,16 @@ import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import {
   addWorktree,
+  commitAll,
   currentBranch,
+  deleteLocalBranch,
   gitCommonDir,
+  getGitTrackedAndUntrackedFiles,
+  hasGitOperationInProgress,
   hasUncommittedChanges,
   listWorktrees as listGitWorktrees,
   pruneWorktrees,
+  removeWorktree,
   repoToplevel,
   resolveCommit,
   validateBranchName,
@@ -26,7 +31,10 @@ import { LOCK_STATUS } from "../../types/DashboardConstants";
 import { isPathWithinDirectory } from "../../utils/PathSecurity";
 import { pathsEqual } from "../../utils/PathCasing";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { WorkspaceInitializer } from "./WorkspaceInitializer";
+import {
+  WorkspaceInitializer,
+  isWorkspaceInitializerRuntimePath,
+} from "./WorkspaceInitializer";
 import { ScriptProcessRunner } from "./ScriptProcessRunner";
 import {
   ExecutionRootLeaseManager,
@@ -37,6 +45,7 @@ import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolv
 import type { ExecutionWorkspace } from "../../types/WorkflowContextTypes";
 import type {
   RunRef,
+  WorktreeCompletionResult,
   WorkflowKey,
   WorktreeResolution,
   WorkingFileWorktreeRuntimePatch,
@@ -70,7 +79,13 @@ export interface ManagedWorktreeOwnershipRecord {
   workflowKey: WorkflowKey;
   runRef: RunRef;
   createdAt: number;
-  lifecycleState: "provisioning" | "ready" | "orphaned" | "settled";
+  lifecycleState:
+    | "provisioning"
+    | "ready"
+    | "finalizing"
+    | "blocked"
+    | "orphaned"
+    | "settled";
   directoryState: "present" | "removed" | "missing" | "remove-failed";
   branchState: "present" | "deleted" | "missing";
   recoveryOutcome?: ManagedWorktreeRecoveryOutcome;
@@ -117,6 +132,13 @@ export interface WorktreeManagerOptions {
   updateWorktreeRuntime?: (
     patch: WorkingFileWorktreeRuntimePatch
   ) => Promise<void>;
+}
+
+export interface CompleteManagedRunOptions {
+  keep?: boolean;
+  /** The integration cleanup barrier must pass before Git is touched. */
+  artifactsClean?: boolean;
+  cleanupMessage?: string;
 }
 
 export interface ResolveNamedWorktreeOptions {
@@ -355,6 +377,371 @@ export class WorktreeManager {
         lastVerifiedBranchTip: branchTip,
         finalBranchTip: branchTip,
       });
+    });
+  }
+
+  /**
+   * Settle a managed run while its exclusive execution lease is still held.
+   * Cleanup of harness integrations is deliberately supplied by
+   * WorkflowInstance; this method owns the Git identity/runtime guards,
+   * landing, no-change branch cleanup, record persistence, and removal.
+   */
+  public async completeManagedRun(
+    info: WorktreeInfo,
+    options: CompleteManagedRunOptions = {}
+  ): Promise<WorktreeCompletionResult> {
+    const keep = options.keep === true;
+    const blocked = async (
+      message: string,
+      branchState: WorktreeCompletionResult["branchState"] = "present"
+    ): Promise<WorktreeCompletionResult> => {
+      await this.persistManagedSettlement(info, {
+        lifecycleState: "blocked",
+        landingOutcome: "blocked",
+        directoryState: "present",
+        branchState,
+        message,
+      });
+      return {
+        landingOutcome: "blocked",
+        directoryOutcome: "kept",
+        branchState,
+        branchName: info.branchName,
+        ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
+        message,
+      };
+    };
+
+    try {
+      if (info.mode !== "managed" || info.lifecycleOwner !== "ctrlyoke") {
+        return blocked("Only ctrlyoke-owned managed worktrees can be settled.");
+      }
+      if (options.artifactsClean === false) {
+        return blocked(
+          options.cleanupMessage ??
+            "Provider artifacts could not be proven clean; managed landing is blocked."
+        );
+      }
+
+      const repositoryRoot = await this.requireRepositoryRoot(
+        info.sourceCheckoutRoot
+      );
+      const commonDirectory = await this.requireCommonDirectory(repositoryRoot);
+      const recordPath = this.recordPath(commonDirectory, info.branchName);
+
+      return await withRepositoryWorktreeMutationLock(
+        repositoryRoot,
+        async () => {
+          const record = await this.tryReadRecord(recordPath);
+          if (!record || record.branchName !== info.branchName) {
+            return blocked("Managed ownership record is missing or mismatched.");
+          }
+          if (!(await this.tryResolveLocalBranch(repositoryRoot, info.branchName))) {
+            return blocked(
+              "Managed branch ref is missing; refusing to finalize an unowned checkout.",
+              "missing"
+            );
+          }
+          const identity = await this.validateManagedCheckoutIdentity(
+            repositoryRoot,
+            info,
+            record
+          );
+          if (!identity.ok) return blocked(identity.message);
+
+          const paths = await getGitTrackedAndUntrackedFiles(
+            info.worktreePath
+          );
+          const runtimePaths = paths.filter((repositoryRelativePath) =>
+            isWorkspaceInitializerRuntimePath(repositoryRelativePath)
+          );
+          if (runtimePaths.length > 0) {
+            return blocked(
+              `Managed landing would stage runtime paths: ${runtimePaths.join(", ")}`
+            );
+          }
+
+          const changed = await hasUncommittedChanges(info.worktreePath);
+          if (identity.headCommit === record.baseCommit && !changed) {
+            return this.completeManagedNoChange(
+              repositoryRoot,
+              recordPath,
+              record,
+              info,
+              keep
+            );
+          }
+
+          if (!changed) {
+            return blocked(
+              "Managed branch changed without a ctrlyoke landing; refusing to overwrite its identity."
+            );
+          }
+
+          const committed = await commitAll(
+            info.worktreePath,
+            "ctrlyoke: land managed workflow changes"
+          );
+          if (!committed) {
+            return blocked("Managed worktree commit found no changes to commit.");
+          }
+
+          const committedHead = await resolveCommit(info.worktreePath, "HEAD");
+          const landedIdentity = await this.validateManagedCheckoutIdentity(
+            repositoryRoot,
+            info,
+            { ...record, lastVerifiedBranchTip: committedHead }
+          );
+          if (!landedIdentity.ok) return blocked(landedIdentity.message);
+          const finalTip = landedIdentity.headCommit;
+          const landedRecord: ManagedWorktreeOwnershipRecord = {
+            ...record,
+            lifecycleState: "settled",
+            directoryState: keep ? "present" : "present",
+            branchState: "present",
+            lastVerifiedBranchTip: finalTip,
+            finalBranchTip: finalTip,
+          };
+          await this.writeRecord(recordPath, landedRecord);
+          await this.persistRuntime({
+            lifecycleState: "settled",
+            landingOutcome: "landed",
+            directoryState: keep ? "present" : "present",
+            branchState: "present",
+            finalBranchTip: finalTip,
+            updatedAt: this.now(),
+          });
+
+          if (keep) {
+            return {
+              landingOutcome: "landed",
+              directoryOutcome: "kept",
+              branchState: "present",
+              branchName: info.branchName,
+              ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
+              autoCommitted: true,
+            };
+          }
+
+          return this.removeAfterLanding(
+            repositoryRoot,
+            recordPath,
+            landedRecord,
+            info,
+            true
+          );
+        }
+      );
+    } catch (error) {
+      return blocked(error instanceof Error ? error.message : String(error));
+    } finally {
+      await info.lease?.release().catch(() => undefined);
+    }
+  }
+
+  private async validateManagedCheckoutIdentity(
+    repositoryRoot: string,
+    info: WorktreeInfo,
+    record: ManagedWorktreeOwnershipRecord
+  ): Promise<{ ok: true; headCommit: string } | { ok: false; message: string }> {
+    if (!(await this.pathExists(info.worktreePath))) {
+      return { ok: false, message: "Managed worktree directory is missing." };
+    }
+    if (await hasGitOperationInProgress(info.worktreePath)) {
+      return { ok: false, message: "A Git operation is in progress in the managed worktree." };
+    }
+    const checkedOutBranch = await currentBranch(info.worktreePath);
+    if (checkedOutBranch !== info.branchName) {
+      return {
+        ok: false,
+        message: `Managed worktree is attached to "${checkedOutBranch ?? "detached HEAD"}", expected "${info.branchName}".`,
+      };
+    }
+    const headCommit = await resolveCommit(info.worktreePath, "HEAD");
+    const branchTip = await resolveCommit(
+      repositoryRoot,
+      `refs/heads/${info.branchName}`
+    );
+    if (headCommit !== branchTip) {
+      return { ok: false, message: "Managed worktree HEAD does not match its branch ref." };
+    }
+    if (branchTip !== record.lastVerifiedBranchTip) {
+      return {
+        ok: false,
+        message: "Managed branch ref moved since ctrlyoke last verified it.",
+      };
+    }
+    return { ok: true, headCommit };
+  }
+
+  private async completeManagedNoChange(
+    repositoryRoot: string,
+    recordPath: string,
+    record: ManagedWorktreeOwnershipRecord,
+    info: WorktreeInfo,
+    keep: boolean
+  ): Promise<WorktreeCompletionResult> {
+    if (keep) {
+      await this.writeRecord(recordPath, {
+        ...record,
+        lifecycleState: "settled",
+        directoryState: "present",
+        branchState: "present",
+        recoveryOutcome: "no-changes",
+        finalBranchTip: record.baseCommit,
+      });
+      await this.persistRuntime({
+        lifecycleState: "settled",
+        landingOutcome: "no-changes",
+        directoryState: "present",
+        branchState: "present",
+        finalBranchTip: record.baseCommit,
+        updatedAt: this.now(),
+      });
+      return {
+        landingOutcome: "no-changes",
+        directoryOutcome: "kept",
+        branchState: "present",
+        branchName: info.branchName,
+        ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
+      };
+    }
+    return this.removeAfterLanding(
+      repositoryRoot,
+      recordPath,
+      {
+        ...record,
+        lifecycleState: "settled",
+        recoveryOutcome: "no-changes",
+        finalBranchTip: record.baseCommit,
+      },
+      info,
+      false
+    );
+  }
+
+  private async removeAfterLanding(
+    repositoryRoot: string,
+    recordPath: string,
+    record: ManagedWorktreeOwnershipRecord,
+    info: WorktreeInfo,
+    autoCommitted: boolean
+  ): Promise<WorktreeCompletionResult> {
+    try {
+      await removeWorktree(repositoryRoot, info.worktreePath);
+    } catch (error) {
+      const message = `Managed worktree removal failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`;
+      await this.writeRecord(recordPath, {
+        ...record,
+        lifecycleState: "settled",
+        directoryState: "remove-failed",
+        branchState: "present",
+      });
+      await this.persistRuntime({
+        lifecycleState: "settled",
+        landingOutcome: record.recoveryOutcome === "no-changes" ? "no-changes" : "landed",
+        directoryState: "remove-failed",
+        branchState: "present",
+        finalBranchTip: record.finalBranchTip,
+        updatedAt: this.now(),
+      });
+      return {
+        landingOutcome: record.recoveryOutcome === "no-changes" ? "no-changes" : "landed",
+        directoryOutcome: "remove-failed",
+        branchState: "present",
+        branchName: info.branchName,
+        ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
+        ...(autoCommitted ? { autoCommitted: true } : {}),
+        message,
+      };
+    }
+
+    let branchState: WorktreeCompletionResult["branchState"] = "present";
+    let message: string | undefined;
+    if (record.recoveryOutcome === "no-changes") {
+      const branchTip = await this.tryResolveLocalBranch(
+        repositoryRoot,
+        info.branchName
+      );
+      if (branchTip !== record.baseCommit) {
+        branchState = branchTip ? "present" : "missing";
+        message = "Managed no-change branch changed before deletion; it was kept.";
+      } else {
+        try {
+          await deleteLocalBranch(repositoryRoot, info.branchName);
+          branchState = "deleted";
+        } catch (error) {
+          message = `Managed no-change branch deletion failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`;
+        }
+      }
+    }
+
+    const landingOutcome =
+      record.recoveryOutcome === "no-changes" ? "no-changes" : "landed";
+    const finalRecord: ManagedWorktreeOwnershipRecord = {
+      ...record,
+      lifecycleState: "settled",
+      directoryState: "removed",
+      branchState,
+    };
+    await this.writeRecord(recordPath, finalRecord);
+    await this.persistRuntime({
+      lifecycleState: "settled",
+      landingOutcome,
+      directoryState: "removed",
+      branchState,
+      finalBranchTip: record.finalBranchTip,
+      updatedAt: this.now(),
+    });
+
+    if (landingOutcome === "no-changes" && branchState === "deleted") {
+      // The record is no longer needed only after both independent resources
+      // are durably recorded as gone. A crash before this unlink leaves the
+      // record as a safe reconciliation tombstone.
+      await fs.unlink(recordPath).catch((error: unknown) => {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      });
+    }
+
+    return {
+      landingOutcome,
+      directoryOutcome: "removed",
+      branchState,
+      branchName: info.branchName,
+      ...(info.targetBranch ? { targetBranch: info.targetBranch } : {}),
+      ...(autoCommitted ? { autoCommitted: true } : {}),
+      ...(message ? { message } : {}),
+    };
+  }
+
+  private async persistManagedSettlement(
+    info: WorktreeInfo,
+    patch: WorkingFileWorktreeRuntimePatch & {
+      landingOutcome: WorktreeCompletionResult["landingOutcome"];
+      message?: string;
+    }
+  ): Promise<void> {
+    const commonDirectory = await this.requireCommonDirectory(
+      await this.requireRepositoryRoot(info.sourceCheckoutRoot)
+    );
+    const recordPath = this.recordPath(commonDirectory, info.branchName);
+    const record = await this.tryReadRecord(recordPath);
+    if (record) {
+      await this.writeRecord(recordPath, {
+        ...record,
+        lifecycleState: patch.lifecycleState ?? "blocked",
+        directoryState: patch.directoryState ?? "present",
+        branchState: patch.branchState ?? "present",
+        ...(patch.finalBranchTip ? { finalBranchTip: patch.finalBranchTip } : {}),
+      });
+    }
+    await this.persistRuntime({
+      ...patch,
+      updatedAt: this.now(),
     });
   }
 
@@ -1504,3 +1891,4 @@ export class WorktreeManager {
 }
 
 export type { GitWorktreeEntry } from "../../utils/GitUtils";
+export type { WorktreeCompletionResult } from "../../types/CtrlYokeTypes";

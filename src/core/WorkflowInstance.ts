@@ -1901,6 +1901,30 @@ export class WorkflowInstance {
       this.promptQueue.finalizeFailedInFlightPrompt();
       this.workflowRuntime.fail();
       await this.promptQueue.commitRuntimeTransition();
+      // Worktree provisioning can succeed before integration construction or
+      // history startup fails. That path never enters startWorkflowExecution's
+      // finally block, so settle it here or setup/early-run edits would be
+      // stranded outside the managed landing barrier.
+      if (
+        !this.startPending &&
+        this.activeWorktree?.mode === "managed"
+      ) {
+        const worktree = this.activeWorktree;
+        this.worktreeManager.releaseRuntimeTrust(worktree);
+        await this.worktreeManager
+          .completeManagedRun(worktree, {
+            keep: this.worktreeResolution.config?.keep === true,
+            artifactsClean: true,
+          })
+          .catch((settlementError) =>
+            Log.error(
+              `[inst:${this.id.slice(0, 8)}] Failed to settle managed worktree after early execution error:`,
+              settlementError
+            )
+          );
+        this.executionLease = undefined;
+        this.activeWorktree = undefined;
+      }
       // Setup can fail before startWorkflowExecution enters its finally block;
       // release the lineage lock here so the blocked worktree can be retried
       // explicitly by the user.
@@ -3594,10 +3618,6 @@ export class WorkflowInstance {
       await this.configureExecutionWorkspace(this.defaultExecutionWorkspace);
       return;
     }
-    if (config.mode !== "named" || !config.branch) {
-      throw new Error("Managed worktree execution is not available yet.");
-    }
-
     if (this.activeWorktree && this.executionLease) {
       await this.configureExecutionWorkspace(
         this.activeWorktree.executionWorkspace
@@ -3620,9 +3640,8 @@ export class WorkflowInstance {
         ))._runtime?.worktree?.setupOutcome
       : undefined;
 
-    const info = await this.worktreeManager.resolveNamedWorktree({
+    const sharedOptions = {
       sourceCheckoutRoot,
-      branchName: config.branch,
       base: config.base,
       stateRoot: this.executionWorkspace.stateRoot,
       workspaceRoots: this.platform.getWorkspaceRoots(),
@@ -3637,7 +3656,23 @@ export class WorkflowInstance {
       vars: this.promptQueue.getWorkflowFile().vars,
       existingSetupOutcome,
       retrySetup,
-    });
+    } as const;
+    const info =
+      config.mode === "managed"
+        ? await this.worktreeManager.ensureManagedWorktree({
+            ...sharedOptions,
+            workflowName:
+              this.promptQueue.getState().workflowName || this.workflowName,
+            targetBranch: undefined,
+          })
+        : config.branch
+          ? await this.worktreeManager.resolveNamedWorktree({
+              ...sharedOptions,
+              branchName: config.branch,
+            })
+          : (() => {
+              throw new Error("Named worktree execution requires a branch.");
+            })();
     if (this.activeWorktree) {
       this.worktreeManager.releaseRuntimeTrust(this.activeWorktree);
     }
@@ -3829,6 +3864,12 @@ export class WorkflowInstance {
         this.workflowRuntime.status === EXECUTION_STATES.PAUSING;
       const preserveWorktreeReservation =
         paused && Boolean(this.executionWorkspace.worktree);
+      const terminalWorktreeRun =
+        !preserveWorktreeReservation && Boolean(this.activeWorktree);
+      const managedTerminalRun =
+        terminalWorktreeRun && this.activeWorktree?.mode === "managed";
+      let strictArtifactCleanupSucceeded = true;
+      let strictArtifactCleanupMessage: string | undefined;
 
       // Pause is not terminal for a worktree run. Keep the runner lock, the
       // exclusive lease, and their heartbeat until the loaded instance resumes
@@ -3890,19 +3931,90 @@ export class WorkflowInstance {
             ).finally(() => execIntegration.dispose());
           });
         } else {
-          await this.cleanupRetainedIntegrationArtifacts(
+          // A worktree-targeted terminal run cannot park a PTY or watcher:
+          // cleanup is the barrier that makes the lease safe to release.
+          // Dispose first so no background reader can recreate an artifact
+          // while provider cleanup is proving the directory clean.
+          if (terminalWorktreeRun) {
+            execIntegration.dispose();
+          }
+          const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
             harnessKey,
             execIntegration,
             workingFilePath,
-            execIntegration.getExecutionRoot() ?? workspaceRoot
+            execIntegration.getExecutionRoot() ?? workspaceRoot,
+            terminalWorktreeRun
           );
+          if (!cleanup.cleaned) {
+            strictArtifactCleanupSucceeded = false;
+            strictArtifactCleanupMessage = [
+              strictArtifactCleanupMessage,
+              cleanup.message,
+            ]
+              .filter(Boolean)
+              .join("; ");
+          }
           // Normal path: terminal closed or inject mode not active — dispose now
           // and save so the next run can close any VS Code terminal tab left open.
-          this.lastRunIntegrations.push(execIntegration);
-          execIntegration.dispose();
+          if (!terminalWorktreeRun) {
+            this.lastRunIntegrations.push(execIntegration);
+            execIntegration.dispose();
+          }
         }
       }
       this.executionIntegrations.clear();
+
+      // A retained entry can survive an unusual handoff path even when it was
+      // not reinserted into executionIntegrations. It is still part of the
+      // worktree cleanup barrier and must never outlive the lease.
+      if (terminalWorktreeRun) {
+        for (const [harnessKey, retained] of this.liveInjectIntegrations) {
+          retained.dispose();
+          const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
+            harnessKey,
+            retained,
+            workingFilePath,
+            retained.getExecutionRoot() ?? workspaceRoot,
+            true
+          );
+          if (!cleanup.cleaned) {
+            strictArtifactCleanupSucceeded = false;
+            strictArtifactCleanupMessage = [
+              strictArtifactCleanupMessage,
+              cleanup.message,
+            ]
+              .filter(Boolean)
+              .join("; ");
+          }
+        }
+        this.liveInjectIntegrations.clear();
+      }
+
+      if (terminalWorktreeRun && this.activeWorktree) {
+        const worktree = this.activeWorktree;
+        // Runtime trust is only needed while integrations are live. Remove it
+        // before the Git landing guard/commit, as required by finalization order.
+        this.worktreeManager.releaseRuntimeTrust(worktree);
+        if (managedTerminalRun) {
+          try {
+            await this.worktreeManager.completeManagedRun(worktree, {
+              keep: this.worktreeResolution.config?.keep === true,
+              artifactsClean: strictArtifactCleanupSucceeded,
+              cleanupMessage: strictArtifactCleanupMessage,
+            });
+          } catch (error) {
+            Log.error(
+              `[inst:${this.id.slice(0, 8)}] Managed worktree settlement failed:`,
+              error
+            );
+            await worktree.lease?.release().catch(() => undefined);
+          }
+        }
+        if (managedTerminalRun) {
+          this.executionLease = undefined;
+        }
+        this.activeWorktree = undefined;
+      }
 
       // A worktree lease is released only after every process, watcher,
       // sidecar, and workspace artifact owned by the run is gone. Otherwise a
@@ -3912,7 +4024,7 @@ export class WorkflowInstance {
         clearInterval(this.heartbeatInterval);
         this.heartbeatInterval = undefined;
       }
-      if (!preserveWorktreeReservation && this.executionLease) {
+      if (!preserveWorktreeReservation && !managedTerminalRun && this.executionLease) {
         const lease = this.executionLease;
         this.executionLease = undefined;
         await lease
@@ -3989,6 +4101,44 @@ export class WorkflowInstance {
     await integration
       .cleanupWorkflowArtifacts(workingFilePath, workspaceRoot)
       .catch((err) => Log.warn("Failed to clean up workflow artifacts:", err));
+  }
+
+  private async cleanupIntegrationArtifactsForSettlement(
+    harnessKey: string,
+    integration: HarnessIntegration,
+    workingFilePath: string | undefined,
+    workspaceRoot: string,
+    strict: boolean
+  ): Promise<{ cleaned: boolean; message?: string }> {
+    const retainedContext =
+      this.retainedIntegrationArtifactContexts.get(harnessKey);
+    if (retainedContext?.integration === integration) {
+      this.retainedIntegrationArtifactContexts.delete(harnessKey);
+    }
+    const effectiveWorkingFilePath =
+      retainedContext?.integration === integration
+        ? retainedContext.workingFilePath
+        : workingFilePath;
+    const effectiveWorkspaceRoot =
+      retainedContext?.integration === integration
+        ? retainedContext.workspaceRoot
+        : workspaceRoot;
+    if (!strict) {
+      await this.cleanupRetainedIntegrationArtifacts(
+        harnessKey,
+        integration,
+        effectiveWorkingFilePath,
+        effectiveWorkspaceRoot
+      );
+      return { cleaned: true };
+    }
+    const result = await integration.cleanupWorkflowArtifactsStrict(
+      effectiveWorkingFilePath,
+      effectiveWorkspaceRoot
+    );
+    return result.cleaned
+      ? { cleaned: true }
+      : { cleaned: false, message: result.failures.join("; ") };
   }
 
   private propagateWorkflowNameToIntegrations(): void {

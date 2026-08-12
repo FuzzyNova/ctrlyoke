@@ -13,7 +13,12 @@ const GITIGNORE_HEADER = [
   "# changes stay on this machine and every other clone regenerates the defaults.",
 ].join("\n");
 
-const GITIGNORE_ENTRIES = [
+/**
+ * Runtime entries written below `.ctrlyoke/`. Keep this exported: managed
+ * finalization uses the exact same list to reject a repository whose ignore
+ * rules failed to protect runtime state.
+ */
+export const WORKSPACE_INITIALIZER_RUNTIME_ENTRIES = [
   `${PATH_CONSTANTS.RUNS_DIR}/`,
   `${PATH_CONSTANTS.SEARCH_INDEX_DIR}/`,
   `${PATH_CONSTANTS.LOGS_DIR}/`,
@@ -24,7 +29,9 @@ const GITIGNORE_ENTRIES = [
   `${PATH_CONSTANTS.ATTACHMENTS_DIR}/`,
   `${PATH_CONSTANTS.PROMPTS_DIR}/`,
   `${PATH_CONSTANTS.USAGE_DIR}/`,
-];
+] as const;
+
+const GITIGNORE_ENTRIES = WORKSPACE_INITIALIZER_RUNTIME_ENTRIES;
 
 const GITIGNORE_SELF_ENTRY = ".gitignore";
 
@@ -34,6 +41,22 @@ const GITIGNORE_CONTENT = [
   GITIGNORE_SELF_ENTRY,
   "",
 ].join("\n");
+
+/** Return true for a repository-relative path inside a generated runtime entry. */
+export function isWorkspaceInitializerRuntimePath(
+  repositoryRelativePath: string
+): boolean {
+  const normalized = repositoryRelativePath.replace(/\\/g, "/");
+  const ctrlyokePrefix = `${PATH_CONSTANTS.CTRLYOKE_DIR}/`;
+  if (!normalized.startsWith(ctrlyokePrefix)) return false;
+  const ctrlyokeRelative = normalized.slice(ctrlyokePrefix.length);
+  return WORKSPACE_INITIALIZER_RUNTIME_ENTRIES.some((entry) => {
+    if (entry.endsWith("/")) {
+      return ctrlyokeRelative.startsWith(entry);
+    }
+    return ctrlyokeRelative === entry;
+  });
+}
 
 export class WorkspaceInitializer {
   /**

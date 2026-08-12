@@ -22,7 +22,11 @@ import {
   type ExecutionWorkspace,
   getExecutionWorkspaceIdentity,
 } from "../../types/WorkflowContextTypes";
-import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
+import {
+  HarnessIntegration,
+  HarnessStatus,
+  type WorkflowArtifactCleanupResult,
+} from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { CliProcessManager } from "../../utils/CliProcessManager";
 import type { TempFileManager } from "../../utils/TempFileManager";
@@ -1597,6 +1601,39 @@ export class CliIntegration extends HarnessIntegration {
       workspaceRoot,
       workingFilePath
     );
+  }
+
+  /** Strict variant used as the managed-worktree commit barrier. */
+  override async cleanupWorkflowArtifactsStrict(
+    workingFilePath: string | undefined,
+    workspaceRoot: string
+  ): Promise<WorkflowArtifactCleanupResult> {
+    const failures: string[] = [];
+    const paths = [
+      this.provider.getMcpConfigFilePath?.(workingFilePath, workspaceRoot),
+      ...(this.provider.getAdditionalCleanupFilePaths?.(workspaceRoot) ?? []),
+    ].filter((value): value is string => Boolean(value));
+
+    try {
+      await this.cleanupWorkflowArtifacts(workingFilePath, workspaceRoot);
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error));
+    }
+
+    for (const artifactPath of paths) {
+      try {
+        await fs.promises.access(artifactPath);
+        failures.push(`Provider artifact remains after cleanup: ${artifactPath}`);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          failures.push(
+            `Could not prove provider artifact cleanup: ${artifactPath}`
+          );
+        }
+      }
+    }
+
+    return { cleaned: failures.length === 0, failures };
   }
 
   /**

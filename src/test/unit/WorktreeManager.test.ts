@@ -577,6 +577,134 @@ suite("WorktreeManager", function () {
     );
   });
 
+  test("auto-commits managed changes, records the landing, and removes the worktree", async () => {
+    const { parent, repository } = await makeRepository("managed-complete");
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await fs.writeFile(path.join(info.worktreePath, "landed-by-ctrlyoke.txt"), "landed\n");
+
+    const result = await instance.completeManagedRun(info);
+
+    assert.strictEqual(result.landingOutcome, "landed");
+    assert.strictEqual(result.directoryOutcome, "removed");
+    assert.strictEqual(result.branchState, "present");
+    assert.strictEqual(result.branchName, info.branchName);
+    assert.strictEqual(result.autoCommitted, true);
+    assert.strictEqual(
+      (await instance.readManagedWorktreeRecord(repository, info.branchName))?.directoryState,
+      "removed"
+    );
+    assert.strictEqual(
+      execFileSync("git", ["-C", repository, "show", "--format=%s", "--no-patch", info.branchName], {
+        encoding: "utf8",
+      }).trim(),
+      "ctrlyoke: land managed workflow changes"
+    );
+  });
+
+  test("keeps a landed managed directory when keep is true", async () => {
+    const { parent, repository } = await makeRepository("managed-keep");
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await fs.writeFile(path.join(info.worktreePath, "kept.txt"), "kept\n");
+
+    const result = await instance.completeManagedRun(info, { keep: true });
+
+    assert.strictEqual(result.landingOutcome, "landed");
+    assert.strictEqual(result.directoryOutcome, "kept");
+    assert.strictEqual(result.branchState, "present");
+    assert.strictEqual(
+      await fs.readFile(path.join(info.worktreePath, "kept.txt"), "utf8"),
+      "kept\n"
+    );
+  });
+
+  test("handles no-change runs independently from directory retention", async () => {
+    const removed = await makeRepository("managed-no-change-remove");
+    const removedManager = manager(removed.parent);
+    const removedInfo = await ensureManaged(removedManager, removed.repository);
+    const removedResult = await removedManager.completeManagedRun(removedInfo);
+    assert.strictEqual(removedResult.landingOutcome, "no-changes");
+    assert.strictEqual(removedResult.directoryOutcome, "removed");
+    assert.strictEqual(removedResult.branchState, "deleted");
+    assert.strictEqual(
+      await removedManager.readManagedWorktreeRecord(
+        removed.repository,
+        removedInfo.branchName
+      ),
+      undefined
+    );
+
+    const kept = await makeRepository("managed-no-change-keep");
+    const keptManager = manager(kept.parent);
+    const keptInfo = await ensureManaged(keptManager, kept.repository);
+    const keptResult = await keptManager.completeManagedRun(keptInfo, {
+      keep: true,
+    });
+    assert.strictEqual(keptResult.landingOutcome, "no-changes");
+    assert.strictEqual(keptResult.directoryOutcome, "kept");
+    assert.strictEqual(keptResult.branchState, "present");
+    assert.ok(await fs.stat(keptInfo.worktreePath));
+  });
+
+  test("blocks a detached or switched managed checkout before staging", async () => {
+    const { parent, repository } = await makeRepository("managed-identity");
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    execFileSync("git", ["-C", info.worktreePath, "checkout", "--detach"], {
+      stdio: "ignore",
+    });
+    await fs.writeFile(path.join(info.worktreePath, "must-remain.txt"), "safe\n");
+
+    const result = await instance.completeManagedRun(info);
+
+    assert.strictEqual(result.landingOutcome, "blocked");
+    assert.strictEqual(result.directoryOutcome, "kept");
+    assert.strictEqual(await fs.readFile(path.join(info.worktreePath, "must-remain.txt"), "utf8"), "safe\n");
+  });
+
+  test("blocks strict cleanup failure without touching the managed checkout", async () => {
+    const { parent, repository } = await makeRepository("managed-cleanup-block");
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await fs.writeFile(path.join(info.worktreePath, "must-remain.txt"), "safe\n");
+
+    const result = await instance.completeManagedRun(info, {
+      artifactsClean: false,
+      cleanupMessage: "hook artifact remains",
+    });
+
+    assert.strictEqual(result.landingOutcome, "blocked");
+    assert.strictEqual(result.message, "hook artifact remains");
+    assert.ok(await fs.stat(info.worktreePath));
+    assert.strictEqual(
+      execFileSync("git", ["-C", info.worktreePath, "status", "--porcelain"], {
+        encoding: "utf8",
+      }).trim(),
+      "?? must-remain.txt"
+    );
+  });
+
+  test("rejects runtime paths when the worktree ignore file is absent", async () => {
+    const { parent, repository } = await makeRepository("managed-runtime-guard");
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await fs.rm(path.join(info.worktreePath, ".ctrlyoke", ".gitignore"));
+    await fs.mkdir(path.join(info.worktreePath, ".ctrlyoke", ".runs"), {
+      recursive: true,
+    });
+    await fs.writeFile(
+      path.join(info.worktreePath, ".ctrlyoke", ".runs", "runtime.json"),
+      "runtime\n"
+    );
+
+    const result = await instance.completeManagedRun(info);
+
+    assert.strictEqual(result.landingOutcome, "blocked");
+    assert.match(result.message ?? "", /runtime paths/);
+    assert.ok(await fs.stat(info.worktreePath));
+  });
+
   test("requires the ownership record and recorded tip for managed branch authority", async () => {
     const { parent, repository } = await makeRepository("managed-authority");
     const instance = manager(parent);

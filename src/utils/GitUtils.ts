@@ -429,6 +429,40 @@ export async function getGitTrackedFiles(repoRoot: string): Promise<string[]> {
   return stdout.split("\0").filter(Boolean);
 }
 
+/** Return tracked and non-ignored untracked paths, preserving Git's NUL-safe output. */
+export async function getGitTrackedAndUntrackedFiles(
+  repoRoot: string
+): Promise<string[]> {
+  const { stdout } = await execGit(
+    ["-C", repoRoot, "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+    { maxBuffer: GIT_MAX_BUFFER }
+  );
+  return stdout.split("\0").filter(Boolean);
+}
+
+/** Return true when Git reports an in-progress operation in this checkout. */
+export async function hasGitOperationInProgress(dir: string): Promise<boolean> {
+  const gitDir = await absoluteGitDir(dir);
+  if (!gitDir) return false;
+  const markers = [
+    "MERGE_HEAD",
+    "CHERRY_PICK_HEAD",
+    "REVERT_HEAD",
+    "rebase-apply",
+    "rebase-merge",
+    "sequencer",
+  ];
+  for (const marker of markers) {
+    try {
+      await fs.access(path.join(gitDir, marker));
+      return true;
+    } catch {
+      // The marker is absent; continue checking the other Git operations.
+    }
+  }
+  return false;
+}
+
 /**
  * Returns the names of entries directly inside `relDir` (relative to repoRoot)
  * that are ignored by .gitignore, or `null` if repoRoot is not a git repository
@@ -792,6 +826,23 @@ export async function commitAll(
 ): Promise<boolean> {
   if (!(await hasUncommittedChanges(dir))) return false;
   await execGit(["-C", dir, "add", "--all", "--", "."]);
-  await execGit(["-C", dir, "commit", `--message=${message}`, "--"]);
+  await execGit(
+    ["-C", dir, "commit", `--message=${message}`, "--"],
+    {
+      env: {
+        ...process.env,
+        GIT_EDITOR: "true",
+        GIT_TERMINAL_PROMPT: "0",
+      },
+    }
+  );
   return true;
+}
+
+/** Delete a local branch without forcing deletion of commits. */
+export async function deleteLocalBranch(
+  repoRoot: string,
+  branchName: string
+): Promise<void> {
+  await execGit(["-C", repoRoot, "branch", "-d", "--", branchName]);
 }
