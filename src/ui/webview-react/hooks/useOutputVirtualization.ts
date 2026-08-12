@@ -52,6 +52,45 @@ interface PendingNavigationStateLike {
   rowIndex: number;
 }
 
+interface OutputRowMeasurementCompensationInput {
+  hasRecentScrollEvent: boolean;
+  isBulkRemeasureInProgress: boolean;
+  isMeasurementFlushInProgress: boolean;
+  isPostNavigationSettling: boolean;
+  isRowResizeSuppressed: boolean;
+  itemIndex: number;
+  lastObservedScrollTop: number | null;
+  pendingNavigation: boolean;
+  scrollTop: number;
+  targetRowIndex: number | null;
+}
+
+export function shouldCompensateOutputRowMeasurement({
+  hasRecentScrollEvent,
+  isBulkRemeasureInProgress,
+  isMeasurementFlushInProgress,
+  isPostNavigationSettling,
+  isRowResizeSuppressed,
+  itemIndex,
+  lastObservedScrollTop,
+  pendingNavigation,
+  scrollTop,
+  targetRowIndex,
+}: OutputRowMeasurementCompensationInput): boolean {
+  return (
+    !hasRecentScrollEvent &&
+    !isBulkRemeasureInProgress &&
+    !isMeasurementFlushInProgress &&
+    !pendingNavigation &&
+    !isPostNavigationSettling &&
+    !isRowResizeSuppressed &&
+    targetRowIndex != null &&
+    itemIndex < targetRowIndex &&
+    lastObservedScrollTop != null &&
+    Math.abs(lastObservedScrollTop - scrollTop) < 1.5
+  );
+}
+
 interface UseOutputVirtualizationInput {
   applyScrollTargetRef: RefObject<
     (
@@ -63,8 +102,11 @@ interface UseOutputVirtualizationInput {
     }
   >;
   getVirtualItemsRef: RefObject<() => readonly { index: number }[]>;
+  isProgrammaticScrollRef: RefObject<boolean>;
   isMeasurementFlushInProgressRef: RefObject<boolean>;
+  lastObservedScrollTopRef: RefObject<number | null>;
   lastScrollEventAtRef: RefObject<number | null>;
+  lastScrollTopRef: RefObject<number | null>;
   outputCollapsed: boolean;
   outputContentWidth: number;
   outputFontSize: number;
@@ -79,7 +121,6 @@ interface UseOutputVirtualizationInput {
   rows: OutputRenderRow[];
   scrollSeekPlaceholderActive: boolean;
   scrollSeekRestoreRequestedAtRef: RefObject<number | null>;
-  scrollSeekSettlingUntilRef: RefObject<number | null>;
   scrollTargetRef: RefObject<{ kind: string; rowKey?: string }>;
 }
 
@@ -158,8 +199,11 @@ function getRowHeightBucket(row: OutputRenderRow): string {
 export function useOutputVirtualization({
   applyScrollTargetRef,
   getVirtualItemsRef,
+  isProgrammaticScrollRef,
   isMeasurementFlushInProgressRef,
+  lastObservedScrollTopRef,
   lastScrollEventAtRef,
+  lastScrollTopRef,
   outputCollapsed,
   outputContentWidth,
   outputFontSize,
@@ -174,7 +218,6 @@ export function useOutputVirtualization({
   rows,
   scrollSeekPlaceholderActive,
   scrollSeekRestoreRequestedAtRef,
-  scrollSeekSettlingUntilRef,
   scrollTargetRef,
 }: UseOutputVirtualizationInput) {
   const measurementCacheRef = useRef<Map<string, number>>(new Map());
@@ -198,6 +241,7 @@ export function useOutputVirtualization({
   const pendingMeasurementFlushTimerRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
+  const measurementCompensationFrameRef = useRef<number | null>(null);
   const postLoadRemeasureFrameRef = useRef<number | null>(null);
   const postLoadRemeasureTimerRef = useRef<ReturnType<
     typeof setTimeout
@@ -205,6 +249,10 @@ export function useOutputVirtualization({
   const schedulePendingMeasurementFlushRef = useRef<() => void>(() => {});
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
+  const rowIndexByKey = useMemo(
+    () => new Map(rows.map((row, index) => [row.key, index] as const)),
+    [rows]
+  );
 
   useEffect(() => {
     measurementVersionRef.current = measurementVersion;
@@ -490,45 +538,59 @@ export function useOutputVirtualization({
   getVirtualItemsRef.current = () => rowVirtualizer.getVirtualItems();
 
   rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, delta) => {
-    // During a bulk remeasure (rowVirtualizer.measure()), every visible row can
-    // report a size delta in the same synchronous pass. Each call below would
-    // otherwise invoke applyScrollTargetRef, which can commit a new scroll
-    // target and cascade into React's nested-update limit (error #185).
-    // performBulkRemeasure applies the scroll target once after the pass settles.
-    if (isBulkRemeasureInProgressRef.current) {
-      return false;
-    }
     const now = performance.now();
     const hasRecentScrollEvent =
       lastScrollEventAtRef.current != null &&
       now - lastScrollEventAtRef.current < OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
-    const targetRestore =
-      !hasRecentScrollEvent &&
-      !isMeasurementFlushInProgressRef.current &&
-      pendingNavigationRef.current === null &&
-      !postNavSettlingRef.current
-        ? applyScrollTargetRef.current("scroll-correction")
-        : { resolved: false, appliedDelta: 0 };
-    const shouldAdjust =
-      !targetRestore.resolved &&
-      !hasRecentScrollEvent &&
-      !isMeasurementFlushInProgressRef.current &&
-      pendingNavigationRef.current === null &&
-      !postNavSettlingRef.current &&
-      (scrollSeekSettlingUntilRef.current == null ||
-        now >= scrollSeekSettlingUntilRef.current) &&
-      (rowResizeScrollSuppressUntilRef.current == null ||
-        now >= rowResizeScrollSuppressUntilRef.current) &&
-      item.start < (outputRef.current?.scrollTop ?? 0);
+    const scrollElement = outputRef.current;
+    const target = scrollTargetRef.current;
+    const targetRowIndex =
+      target.kind === "row"
+        ? (rowIndexByKey.get(target.rowKey ?? "") ?? null)
+        : null;
+    const shouldAdjust = shouldCompensateOutputRowMeasurement({
+      hasRecentScrollEvent,
+      isBulkRemeasureInProgress: isBulkRemeasureInProgressRef.current,
+      isMeasurementFlushInProgress: isMeasurementFlushInProgressRef.current,
+      isPostNavigationSettling: postNavSettlingRef.current,
+      isRowResizeSuppressed:
+        rowResizeScrollSuppressUntilRef.current != null &&
+        now < rowResizeScrollSuppressUntilRef.current,
+      itemIndex: item.index,
+      lastObservedScrollTop: lastObservedScrollTopRef.current,
+      pendingNavigation: pendingNavigationRef.current !== null,
+      scrollTop: scrollElement?.scrollTop ?? 0,
+      targetRowIndex,
+    });
+
+    // Let the virtualizer apply exact size deltas only for rows strictly before
+    // the saved anchor. A partially visible giant prompt/command can itself
+    // start above scrollTop, but changing its height does not move its top and
+    // must not shift the viewport. Also require the last scroll event observed
+    // by both our handler and TanStack to match the DOM: applyScrollTarget
+    // writes scrollTop directly, and until its event arrives a correction based
+    // on TanStack's stale offset can turn a 50px row delta into a jump of tens
+    // of thousands of pixels.
+    if (shouldAdjust) {
+      isProgrammaticScrollRef.current = true;
+      if (measurementCompensationFrameRef.current !== null) {
+        cancelAnimationFrame(measurementCompensationFrameRef.current);
+      }
+      measurementCompensationFrameRef.current = requestAnimationFrame(() => {
+        measurementCompensationFrameRef.current = null;
+        lastScrollTopRef.current = outputRef.current?.scrollTop ?? null;
+        isProgrammaticScrollRef.current = false;
+      });
+    }
     if (isProfilingEnabled() && Math.abs(delta) >= 40) {
-      const scrollElement = outputRef.current;
       logProfilerEvent("scrollCorrection", {
         itemKey: item.key,
+        itemIndex: item.index,
         delta,
         scrollTop: scrollElement?.scrollTop ?? 0,
+        targetRowIndex,
+        lastObservedScrollTop: lastObservedScrollTopRef.current,
         overscan: outputOverscanRef.current,
-        targetResolved: targetRestore.resolved,
-        targetApplied: targetRestore.appliedDelta,
         shouldAdjust,
       });
     }
@@ -1121,6 +1183,11 @@ export function useOutputVirtualization({
         clearTimeout(pendingMeasurementFlushTimerRef.current);
         pendingMeasurementFlushTimerRef.current = null;
       }
+      if (measurementCompensationFrameRef.current !== null) {
+        cancelAnimationFrame(measurementCompensationFrameRef.current);
+        measurementCompensationFrameRef.current = null;
+      }
+      isProgrammaticScrollRef.current = false;
       if (postLoadRemeasureFrameRef.current !== null) {
         cancelAnimationFrame(postLoadRemeasureFrameRef.current);
         postLoadRemeasureFrameRef.current = null;

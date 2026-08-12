@@ -439,6 +439,7 @@ const WRAPPED_LINE_COUNT_CACHE_MAX_ENTRIES = 16;
 interface WrappedLineCountCacheEntry {
   charsPerLine: number;
   emptyLineWeight: number;
+  wrapAtWords: boolean;
   count: number;
 }
 
@@ -447,7 +448,8 @@ const wrappedLineCountCache = new Map<string, WrappedLineCountCacheEntry>();
 function countWrappedLines(
   text: string,
   charsPerLine: number,
-  emptyLineWeight: number
+  emptyLineWeight: number,
+  wrapAtWords: boolean
 ): number {
   return normalizeTextForLayout(text)
     .split("\n")
@@ -455,8 +457,54 @@ function countWrappedLines(
       if (rawLine.length === 0) {
         return total + emptyLineWeight;
       }
+      if (wrapAtWords) {
+        return total + countPreWrappedLineSegments(rawLine, charsPerLine);
+      }
       return total + Math.max(1, Math.ceil(rawLine.length / charsPerLine));
     }, 0);
+}
+
+/**
+ * Approximate `white-space: pre-wrap` plus `overflow-wrap: anywhere`.
+ *
+ * The browser prefers a whitespace break before falling back to an arbitrary
+ * character break. Treating every prose line as perfectly packed therefore
+ * under-counts narrow prompt and CLI-command rows by roughly 20%: unused space
+ * at each word boundary accumulates over dozens of visual lines.
+ */
+function countPreWrappedLineSegments(
+  rawLine: string,
+  charsPerLine: number
+): number {
+  const words = rawLine.trim().split(/\s+/);
+  if (words.length === 0 || (words.length === 1 && words[0] === "")) {
+    return 1;
+  }
+
+  let lines = 1;
+  let usedColumns = 0;
+  for (const word of words) {
+    if (word.length <= charsPerLine) {
+      const separatorColumns = usedColumns === 0 ? 0 : 1;
+      if (usedColumns + separatorColumns + word.length <= charsPerLine) {
+        usedColumns += separatorColumns + word.length;
+      } else {
+        lines += 1;
+        usedColumns = word.length;
+      }
+      continue;
+    }
+
+    let remainingWordColumns = word.length;
+    if (usedColumns > 0) {
+      const availableColumns = Math.max(0, charsPerLine - usedColumns - 1);
+      remainingWordColumns -= availableColumns;
+      lines += 1;
+    }
+    lines += Math.floor((remainingWordColumns - 1) / charsPerLine);
+    usedColumns = ((remainingWordColumns - 1) % charsPerLine) + 1;
+  }
+  return lines;
 }
 
 function estimateWrappedLineCount(
@@ -470,6 +518,7 @@ function estimateWrappedLineCount(
     // Default 1.0 counts them as full lines. Use 0.5 for markdown where \n\n
     // renders as a compact paragraph margin rather than a blank line.
     emptyLineWeight?: number;
+    wrapAtWords?: boolean;
   }
 ): number {
   if (text.length === 0) {
@@ -486,21 +535,28 @@ function estimateWrappedLineCount(
   );
   const charsPerLine = Math.max(8, Math.floor(availableWidth / charWidth));
   const emptyLineWeight = options?.emptyLineWeight ?? 1.0;
+  const wrapAtWords = options?.wrapAtWords ?? false;
 
   if (text.length < WRAPPED_LINE_COUNT_CACHE_MIN_CHARS) {
-    return countWrappedLines(text, charsPerLine, emptyLineWeight);
+    return countWrappedLines(text, charsPerLine, emptyLineWeight, wrapAtWords);
   }
 
   const cached = wrappedLineCountCache.get(text);
   if (
     cached &&
     cached.charsPerLine === charsPerLine &&
-    cached.emptyLineWeight === emptyLineWeight
+    cached.emptyLineWeight === emptyLineWeight &&
+    cached.wrapAtWords === wrapAtWords
   ) {
     return cached.count;
   }
 
-  const count = countWrappedLines(text, charsPerLine, emptyLineWeight);
+  const count = countWrappedLines(
+    text,
+    charsPerLine,
+    emptyLineWeight,
+    wrapAtWords
+  );
   // Map preserves insertion order, so the first key is the oldest entry.
   if (
     !cached &&
@@ -511,7 +567,12 @@ function estimateWrappedLineCount(
       wrappedLineCountCache.delete(oldest.value);
     }
   }
-  wrappedLineCountCache.set(text, { charsPerLine, emptyLineWeight, count });
+  wrappedLineCountCache.set(text, {
+    charsPerLine,
+    emptyLineWeight,
+    wrapAtWords,
+    count,
+  });
   return count;
 }
 
@@ -525,6 +586,7 @@ function estimateTextBlockHeight(
     charWidthMultiplier?: number;
     lineHeightMultiplier?: number;
     emptyLineWeight?: number;
+    wrapAtWords?: boolean;
   }
 ): number {
   const lineCount = estimateWrappedLineCount(
@@ -535,6 +597,7 @@ function estimateTextBlockHeight(
       chrome: options?.chrome,
       charWidthMultiplier: options?.charWidthMultiplier,
       emptyLineWeight: options?.emptyLineWeight,
+      wrapAtWords: options?.wrapAtWords,
     }
   );
   if (lineCount === 0) {
@@ -1345,6 +1408,7 @@ function estimateOutputRowContentHeight(
           lineHeightMultiplier: 1.4,
           verticalChrome: 24,
           chrome: 32,
+          wrapAtWords: true,
         }
       );
     case "cli-command":
@@ -1363,6 +1427,7 @@ function estimateOutputRowContentHeight(
           lineHeightMultiplier: 1.4,
           verticalChrome: 24,
           chrome: 32,
+          wrapAtWords: true,
         }
       );
     case "error":

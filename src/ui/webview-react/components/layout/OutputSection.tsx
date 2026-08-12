@@ -331,6 +331,7 @@ const OutputSectionInner: React.FC = () => {
   // before it re-anchors the viewport.
   const flushPendingScrollMeasurementsRef = useRef<() => void>(() => {});
   const lastScrollEventAtRef = useRef<number | null>(null);
+  const lastObservedScrollTopRef = useRef<number | null>(null);
   const lastScrollTopRef = useRef<number | null>(null);
   const measurementVersionRefForScrollSeek = useRef(0);
   const virtualRowsLengthRef = useRef(0);
@@ -453,7 +454,6 @@ const OutputSectionInner: React.FC = () => {
     scrollSeekPlaceholderActive,
     scrollSeekPlaceholderRef,
     scrollSeekRestoreRequestedAtRef,
-    scrollSeekSettlingUntilRef,
     updateScrollSeekForScroll,
     handleWheel,
     handleTouchStart,
@@ -500,8 +500,11 @@ const OutputSectionInner: React.FC = () => {
   } = useOutputVirtualization({
     applyScrollTargetRef,
     getVirtualItemsRef,
+    isProgrammaticScrollRef: isProgrammaticScroll,
     isMeasurementFlushInProgressRef,
+    lastObservedScrollTopRef,
     lastScrollEventAtRef,
+    lastScrollTopRef,
     outputCollapsed,
     outputContentWidth,
     outputFontSize,
@@ -516,7 +519,6 @@ const OutputSectionInner: React.FC = () => {
     rows,
     scrollSeekPlaceholderActive,
     scrollSeekRestoreRequestedAtRef,
-    scrollSeekSettlingUntilRef,
     scrollTargetRef,
   });
   flushPendingScrollMeasurementsRef.current = flushPendingScrollMeasurements;
@@ -640,6 +642,11 @@ const OutputSectionInner: React.FC = () => {
     if (suppressOutputLayoutWorkRef.current) {
       return;
     }
+    // Every DOM scroll event reaches TanStack's listener too. Keep this
+    // separate from lastScrollTopRef, which programmatic target writes update
+    // before their scroll event arrives, so row compensation can detect that
+    // short internal-offset synchronization gap.
+    lastObservedScrollTopRef.current = el.scrollTop;
     if (isProgrammaticScroll.current) {
       // Still run the latch so a user wheel mid-programmatic-scroll correctly
       // disables auto-scroll. Without this, the flag stays armed and the

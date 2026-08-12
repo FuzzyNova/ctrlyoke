@@ -1623,6 +1623,40 @@ describe("outputRows", () => {
     );
   });
 
+  it("accounts for preferred word-boundary wrapping in prompt and command rows", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const prose = Array.from(
+      { length: 40 },
+      (_value, index) => `argument-${index.toString().padStart(2, "0")}`
+    ).join(" ");
+    const packed = prose.replace(/ /g, "x");
+
+    const prompt = (text: string) =>
+      ({
+        key: `prompt-${text.length}`,
+        rowKind: "prompt",
+        target,
+        text,
+        estimateSize: 0,
+      }) as const;
+    const command = (text: string) =>
+      ({
+        key: `command-${text.length}`,
+        rowKind: "cli-command",
+        target,
+        command: text,
+        wasInjected: true,
+        estimateSize: 0,
+      }) as const;
+
+    expect(estimateOutputRowHeight(prompt(prose), 13, 320)).toBeGreaterThan(
+      estimateOutputRowHeight(prompt(packed), 13, 320)
+    );
+    expect(estimateOutputRowHeight(command(prose), 13, 320)).toBeGreaterThan(
+      estimateOutputRowHeight(command(packed), 13, 320)
+    );
+  });
+
   // Large plain-response rows (streaming script output) memoize their wrapped
   // line count, so the estimate must still track both the text and the layout
   // parameters rather than serving a stale cached height.
