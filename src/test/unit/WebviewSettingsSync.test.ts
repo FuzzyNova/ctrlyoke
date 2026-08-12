@@ -964,6 +964,43 @@ suite("WebviewSettingsSync", () => {
         "INIT's workflow payload is client-scoped, so READY must forward the sending client's id"
       );
     });
+
+    test("ignores duplicate panel READY messages for the same webview", async () => {
+      let panelReady = false;
+      let initialStateSendCount = 0;
+
+      const mockSettingsSync = {
+        sendInitialState: async () => {
+          initialStateSendCount++;
+        },
+      } as any;
+
+      const router = new WebviewMessageRouter(
+        () => {},
+        mockSettingsSync,
+        {} as any,
+        () => undefined,
+        {} as any,
+        {
+          handleClearWorkflow: async () => {},
+          updateWorkflowName: () => {},
+          onPanelReady: () => {
+            if (panelReady) return false;
+            panelReady = true;
+            return true;
+          },
+        }
+      );
+
+      await router.route({ type: MESSAGE_TYPES.READY });
+      await router.route({ type: MESSAGE_TYPES.READY });
+
+      assert.strictEqual(
+        initialStateSendCount,
+        1,
+        "duplicate READY must not restart initial state and workflow replay"
+      );
+    });
   });
 
   suite("WebviewMessageRouter — CREATE_WORKFLOW handler", () => {

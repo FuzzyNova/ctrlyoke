@@ -236,7 +236,13 @@ export class WebviewMessageRouter {
       if (ctx.clientId === PANEL_CLIENT_ID) {
         // Cancel RECONNECT retries before any awaited startup work so a valid
         // panel READY immediately stops further nudges from the extension.
-        this.callbacks.onPanelReady?.();
+        const shouldHandleReady = this.callbacks.onPanelReady?.();
+        if (shouldHandleReady === false) {
+          Log.debug(
+            "[WebviewMessageRouter] Ignoring duplicate panel READY for the current webview"
+          );
+          return;
+        }
       }
       await this.settingsSync.sendInitialState(ctx.postMessage, ctx.clientId);
       // Tell the webview its own client identity so it can compute isController
@@ -1655,9 +1661,11 @@ export interface WebviewRouterCallbacks {
   /**
    * Called synchronously when the VS Code panel sends READY.
    * Used by CtrlYokeWebviewProvider to cancel pending RECONNECT retries
-   * so no stale retries fire after the handshake is already complete.
+   * so no stale retries fire after the handshake is already complete. Returns
+   * false when this webview has already begun its READY handshake, allowing the
+   * router to discard duplicate READY messages queued during panel bootstrap.
    */
-  onPanelReady?: () => void;
+  onPanelReady?: () => boolean;
 }
 
 export interface WebviewRouteOptions {

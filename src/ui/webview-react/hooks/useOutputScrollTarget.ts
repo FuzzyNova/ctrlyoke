@@ -4,7 +4,10 @@ import {
   areOutputScrollTargetsEqual,
   type OutputScrollTarget,
 } from "@store/uiStore";
-import { captureViewportRowAnchor } from "@utils/outputDom";
+import {
+  captureViewportRowAnchor,
+  findRenderedRowElementByKey,
+} from "@utils/outputDom";
 import { clamp } from "@utils/number";
 import {
   isProfilingEnabled,
@@ -136,6 +139,31 @@ export function useOutputScrollTarget({
         return { top: maxScroll, resolved: true };
       }
 
+      // The target is normally one of the visible rows. Resolve it from the
+      // committed DOM so the lock follows what the user actually sees, rather
+      // than a virtualizer start that may still be converging as idle overscan
+      // mounts and measures nearby rows. This also preserves the coordinate
+      // offset of content rendered before the row canvas (the run banner).
+      const renderedTarget = findRenderedRowElementByKey(
+        scrollElement,
+        target.rowKey
+      );
+      if (renderedTarget) {
+        const scrollRect = scrollElement.getBoundingClientRect();
+        const rowRect = renderedTarget.getBoundingClientRect();
+        return {
+          top: clamp(
+            scrollElement.scrollTop +
+              rowRect.top -
+              scrollRect.top -
+              target.viewportOffsetPx,
+            0,
+            maxScroll
+          ),
+          resolved: true,
+        };
+      }
+
       let rowStart: number | undefined;
       for (const measurement of rowVirtualizer.measurementsCache) {
         if (measurement != null && String(measurement.key) === target.rowKey) {
@@ -148,8 +176,21 @@ export function useOutputScrollTarget({
         return { top: maxScroll, resolved: false };
       }
 
+      const rowContainer = scrollElement.querySelector<HTMLElement>(
+        "[data-output-row-container]"
+      );
+      const rowContainerOffset = rowContainer
+        ? scrollElement.scrollTop +
+          rowContainer.getBoundingClientRect().top -
+          scrollElement.getBoundingClientRect().top
+        : 0;
+
       return {
-        top: clamp(rowStart - target.viewportOffsetPx, 0, maxScroll),
+        top: clamp(
+          rowContainerOffset + rowStart - target.viewportOffsetPx,
+          0,
+          maxScroll
+        ),
         resolved: true,
       };
     },

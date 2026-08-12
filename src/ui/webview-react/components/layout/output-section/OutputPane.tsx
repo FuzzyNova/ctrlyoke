@@ -285,6 +285,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
           >
             {isOutputVirtualized ? (
               <div
+                data-output-row-container
                 style={{
                   height: `${virtualizedTotalSize}px`,
                   position: "relative",
@@ -332,7 +333,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
                 })}
               </div>
             ) : (
-              <div>
+              <div data-output-row-container>
                 {nonVirtualRows.map((row, rowIndex) => (
                   <div
                     key={row.key}

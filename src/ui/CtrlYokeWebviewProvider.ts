@@ -1076,10 +1076,14 @@ export class CtrlYokeWebviewProvider
     this.reconnectRetrySession++;
   }
 
-  private handlePanelReady(): void {
+  private handlePanelReady(): boolean {
     this.cancelReconnectRetry();
+    if (this.panelReady) {
+      return false;
+    }
     this.panelReady = true;
     this.flushPendingPromptEditorInserts();
+    return true;
   }
 
   private flushPendingPromptEditorInserts(): void {
