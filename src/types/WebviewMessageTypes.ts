@@ -1138,6 +1138,19 @@ export interface ViewWorktreeDiffMessage {
   branchName: string;
 }
 
+/** Webview → Extension: merge a persisted managed run into its source checkout. */
+export interface MergeWorktreeMessage {
+  type: typeof MESSAGE_TYPES.MERGE_WORKTREE;
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+}
+
+/** Extension → Webview: the persisted result of a managed-worktree merge. */
+export interface WorktreeMergeResultMessage {
+  type: typeof MESSAGE_TYPES.WORKTREE_MERGE_RESULT;
+  address: Extract<WorkflowViewAddress, { kind: "run" }>;
+  worktree: import("./CtrlYokeTypes").WorktreeRunProjection;
+}
+
 /**
  * Global settings updated message (extension -> webview)
  */

@@ -130,7 +130,7 @@ suite("WorktreeResolution", () => {
     });
   });
 
-  test("does not expose merge in the settings schema", async () => {
+  test("exposes merge in the settings schema", async () => {
     const schemaPath = path.resolve(
       __dirname,
       "../../../schemas/settings-schema.json"
@@ -145,7 +145,7 @@ suite("WorktreeResolution", () => {
 
     assert.strictEqual(
       "merge" in schema.properties.defaults.properties.worktree.properties,
-      false
+      true
     );
   });
 });

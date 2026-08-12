@@ -20,6 +20,7 @@ import {
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { isWorkflowRunning, isWorkflowActive } from "../utils/status";
+import type { WorktreeRunProjection } from "@root/types/CtrlYokeTypes";
 
 /**
  * Webview-local WorkflowStep union: uses WebviewMessageTypes.PromptStep
@@ -321,6 +322,7 @@ interface WorkflowActions {
 
   // History management
   loadHistoryRun: (history: WorkflowOutputHistory) => void;
+  updateHistoryWorktree: (worktree: WorktreeRunProjection) => void;
   /** Seed an executing run's live output view from its complete persisted timeline. */
   hydrateLiveRunHistory: (history: WorkflowOutputHistory) => void;
   clearHistoryOutputs: () => void;
@@ -1048,6 +1050,20 @@ export const useWorkflowStore = create<
             };
           })
         ),
+
+      updateHistoryWorktree: (worktree) =>
+        set((state) => {
+          if (!state.historyOutputs) return state;
+          return {
+            historyOutputs: {
+              ...state.historyOutputs,
+              runMetadata: {
+                ...state.historyOutputs.runMetadata,
+                worktree,
+              },
+            },
+          };
+        }),
 
       hydrateLiveRunHistory: (history) =>
         withUndoPause(() =>

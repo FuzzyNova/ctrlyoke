@@ -45,6 +45,10 @@ import { HistorySearchService } from "../core/orchestration/HistorySearchService
 import type { IDashboardProvider } from "./IDashboardProvider";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
+import type {
+  WorkflowViewAddress,
+  WorktreeRunProjection,
+} from "../types/CtrlYokeTypes";
 import type { PostMessageFn } from "./WebviewSettingsSync";
 import { DashboardBroadcastHub } from "./DashboardBroadcastHub";
 import { IS_DEV_MODE } from "../utils/BuildConfig";
@@ -100,6 +104,13 @@ export class CtrlYokeWebviewProvider
 
   public updateHarnessUsage(snapshots: HarnessUsageSnapshot[]): void {
     this.sink.updateHarnessUsage(snapshots);
+  }
+
+  public updateWorktreeMerge(
+    address: Extract<WorkflowViewAddress, { kind: "run" }>,
+    worktree: WorktreeRunProjection
+  ): void {
+    this.sink.updateWorktreeMerge(address, worktree);
   }
 
   /**

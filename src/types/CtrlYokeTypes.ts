@@ -139,6 +139,7 @@ export type WorktreeConfig =
   | string
   | {
       mode: typeof WORKTREE_MODES.MANAGED;
+      merge?: boolean;
       keep?: boolean;
       base?: string;
       setup?: string;
@@ -157,6 +158,7 @@ export interface WorktreeDefaultConfig {
   base?: string;
   setup?: string;
   keep?: boolean;
+  merge?: boolean;
 }
 
 /** Worktree settings plus the tier that supplied the value for one run. */

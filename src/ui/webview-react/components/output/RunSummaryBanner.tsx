@@ -8,6 +8,7 @@ import {
 import type { ExecutionState } from "@root/types/DashboardConstants";
 import type {
   WorktreeRunProjection,
+  WorkflowViewAddress,
   WorkflowTokenTotals,
 } from "@root/types/CtrlYokeTypes";
 import { sendMessage } from "@hooks/useMessageHandler";
@@ -20,6 +21,7 @@ export interface RunBannerData {
   tokenTotals?: WorkflowTokenTotals;
   /** Persisted projection from the displayed run's `_runtime.worktree`. */
   worktree?: WorktreeRunProjection;
+  address?: Extract<WorkflowViewAddress, { kind: "run" }>;
 }
 
 function formatRelativeWorktreePath(worktree: WorktreeRunProjection): string {
@@ -47,6 +49,17 @@ function formatRelativeWorktreePath(worktree: WorktreeRunProjection): string {
 function formatWorktreeOutcome(
   worktree: WorktreeRunProjection
 ): string | undefined {
+  switch (worktree.mergeOutcome) {
+    case "fast-forward":
+      return "✓ merged (fast-forward)";
+    case "merge-commit":
+      return "✓ merged (merge commit)";
+    case "conflict":
+      return "⚠ merge conflict — branch preserved";
+    case "blocked":
+    case "abort-failed":
+      return "⚠ merge blocked — source branch changed or checkout is dirty";
+  }
   if (worktree.directoryState === "remove-failed") {
     return "⚠ worktree removal failed — branch safe, directory kept";
   }
@@ -112,6 +125,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
   executionState,
   tokenTotals,
   worktree,
+  address,
   isPinned,
   onTogglePinned,
   showBackToLive,
@@ -184,6 +198,21 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
                 Open Worktree in New Window
               </button>
             )}
+            {address &&
+              worktree.mode === "managed" &&
+              worktree.branchState === "present" &&
+              worktree.landingOutcome === "landed" && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    sendMessage(MESSAGE_TYPES.MERGE_WORKTREE, { address })
+                  }
+                  title="Merge the managed branch into the captured source checkout"
+                  className="text-link-fg hover:underline focus:outline-none"
+                >
+                  Merge
+                </button>
+              )}
           </>
         )}
         {hasWorkflowTokenUsage(tokenTotals) && (

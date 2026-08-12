@@ -67,7 +67,7 @@ describe("DefaultsHarnessPage execution defaults", () => {
     expect(screen.getByLabelText("Setup")).toHaveValue("npm ci");
   });
 
-  it("renders progressive Managed worktree defaults with the keep path", () => {
+  it("renders progressive Managed worktree defaults with keep, merge, and the live-checkout warning", () => {
     const onUpdate = vi.fn();
     const settings = createSettings();
     settings.settings.defaults.worktree = {
@@ -75,6 +75,7 @@ describe("DefaultsHarnessPage execution defaults", () => {
       base: "main",
       setup: "npm ci",
       keep: true,
+      merge: true,
     };
 
     render(
@@ -89,9 +90,16 @@ describe("DefaultsHarnessPage execution defaults", () => {
     expect(screen.getByLabelText("Base")).toHaveValue("main");
     expect(screen.getByLabelText("Setup")).toHaveValue("npm ci");
     expect(screen.getByLabelText("Keep directory")).toBeChecked();
+    expect(screen.getByLabelText("Merge")).toBeChecked();
+    expect(
+      screen.getByText(/merges the managed branch into the working checkout after every run/i)
+    ).toBeInTheDocument();
 
     screen.getByLabelText("Keep directory").click();
     expect(onUpdate).toHaveBeenCalledWith("defaults.worktree.keep", false);
+
+    screen.getByLabelText("Merge").click();
+    expect(onUpdate).toHaveBeenCalledWith("defaults.worktree.merge", false);
   });
 
   it("shows the active-scope reset affordance", async () => {

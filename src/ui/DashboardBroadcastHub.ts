@@ -1,4 +1,9 @@
-import type { WorkflowStep, WorkflowSummary } from "../types/CtrlYokeTypes";
+import type {
+  WorkflowStep,
+  WorkflowSummary,
+  WorkflowViewAddress,
+  WorktreeRunProjection,
+} from "../types/CtrlYokeTypes";
 import type {
   FinalStepPhase,
   ExecutionPhase,
@@ -80,6 +85,15 @@ export class DashboardBroadcastHub
         workflowFilePath,
         workflowInstanceId
       );
+    }
+  }
+
+  updateWorktreeMerge(
+    address: Extract<WorkflowViewAddress, { kind: "run" }>,
+    worktree: WorktreeRunProjection
+  ): void {
+    for (const client of this.clients) {
+      client.updateWorktreeMerge?.(address, worktree);
     }
   }
 

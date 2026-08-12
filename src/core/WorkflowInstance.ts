@@ -1914,6 +1914,7 @@ export class WorkflowInstance {
         this.worktreeManager.releaseRuntimeTrust(worktree);
         await this.worktreeManager
           .completeManagedRun(worktree, {
+            merge: this.worktreeResolution.config?.merge === true,
             keep: this.worktreeResolution.config?.keep === true,
             artifactsClean: true,
           })
@@ -3999,6 +4000,7 @@ export class WorkflowInstance {
         if (managedTerminalRun) {
           try {
             await this.worktreeManager.completeManagedRun(worktree, {
+              merge: this.worktreeResolution.config?.merge === true,
               keep: this.worktreeResolution.config?.keep === true,
               artifactsClean: strictArtifactCleanupSucceeded,
               cleanupMessage: strictArtifactCleanupMessage,

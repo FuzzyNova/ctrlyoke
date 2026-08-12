@@ -171,6 +171,7 @@ const OutputSectionInner: React.FC = () => {
       (summary) => summary.runRef === displayedAddress.runRef
     );
   });
+  const displayedAddress = useUiStore((s) => s.displayedViewAddress);
   const liveWorkflowSummary = useUiStore((s) =>
     s.loadedWorkflows.find((w) => w.id === s.activeWorkflowId)
   );
@@ -180,10 +181,11 @@ const OutputSectionInner: React.FC = () => {
   const runBannerPinned = useUiStore((s) => s.runBannerPinned);
   const toggleRunBannerPinned = useUiStore((s) => s.toggleRunBannerPinned);
   const displayedRunBanner = useMemo<RunBannerData | undefined>(() => {
-    if (!displayedRunSummary) return undefined;
+    if (!displayedRunSummary || displayedAddress?.kind !== "run") return undefined;
     if (isViewingHistory) {
       return {
         runId: displayedRunSummary.runId,
+        address: displayedAddress,
         startedAt: displayedRunSummary.startedAt,
         executionState: displayedRunSummary.executionState,
         tokenTotals: displayedRunSummary.tokenTotals,
@@ -193,6 +195,7 @@ const OutputSectionInner: React.FC = () => {
     if (!liveWorkflowSummary) return undefined;
     return {
       runId: displayedRunSummary.runId,
+      address: displayedAddress,
       startedAt: liveWorkflowSummary.startedAt ?? displayedRunSummary.startedAt,
       executionState: liveWorkflowSummary.executionState,
       tokenTotals: liveWorkflowSummary.tokenTotals,
@@ -205,6 +208,7 @@ const OutputSectionInner: React.FC = () => {
     historyRunWorktree,
     isViewingHistory,
     liveWorkflowSummary,
+    displayedAddress,
   ]);
   const diffsCollapsed = useUiStore((s) => s.diffsCollapsed);
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);

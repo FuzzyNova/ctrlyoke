@@ -134,6 +134,7 @@ suite("Workflow template schema", () => {
         steps: [{ prompt: "Implement the change" }],
         worktree: {
           mode: "managed",
+          merge: true,
           keep: true,
           base: "main",
           setup: "npm ci",
@@ -151,21 +152,24 @@ suite("Workflow template schema", () => {
     }
   });
 
-  test("rejects merge everywhere and keeps worktree options mode-specific", () => {
+  test("accepts managed merge and rejects named and nested worktree locations", () => {
     const invalidWorkflows = [
-      {
-        prompt: "Implement the change",
-        worktree: { mode: "managed", merge: false },
-      },
       {
         prompt: "Implement the change",
         worktree: { mode: "managed", branch: "feature" },
       },
       {
         prompt: "Implement the change",
-        worktree: { mode: "named", branch: "feature", keep: true },
+        worktree: { mode: "named", branch: "feature", merge: true },
       },
-      { steps: [{ prompt: "Implement the change", worktree: true }] },
+      {
+        steps: [
+          {
+            prompt: "Implement the change",
+            worktree: { mode: "managed", merge: true },
+          },
+        ],
+      },
       {
         steps: [{ prompt: "Implement the change" }],
         finalStep: { prompt: "Review", worktree: true },
@@ -175,10 +179,13 @@ suite("Workflow template schema", () => {
         finalStep: {
           type: "script",
           script: "npm test",
-          worktree: { mode: "managed" },
+          worktree: { mode: "managed", merge: true },
         },
       },
-      { prompt: "Implement the change", _runtime: { worktree: true } },
+      {
+        prompt: "Implement the change",
+        _runtime: { worktree: { mode: "managed", merge: true } },
+      },
     ];
 
     for (const workflow of invalidWorkflows) {

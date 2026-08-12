@@ -4,7 +4,11 @@ import type {
   CliEvent,
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
-import type { WorkflowStep } from "../types/CtrlYokeTypes";
+import type {
+  WorkflowStep,
+  WorkflowViewAddress,
+  WorktreeRunProjection,
+} from "../types/CtrlYokeTypes";
 import type {
   FinalStepPhase,
   ExecutionPhase,
@@ -28,6 +32,13 @@ export class WorkflowTaggedSink implements IDashboardSink {
     private readonly inner: IDashboardSink,
     private readonly workflowId: string
   ) {}
+
+  updateWorktreeMerge(
+    address: Extract<WorkflowViewAddress, { kind: "run" }>,
+    worktree: WorktreeRunProjection
+  ): void {
+    this.inner.updateWorktreeMerge(address, worktree);
+  }
 
   async updateFileSelected(
     fileName: string,

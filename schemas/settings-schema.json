@@ -316,6 +316,10 @@
             "keep": {
               "type": "boolean",
               "description": "Keep managed worktrees after execution. Removing the directory ends filesystem undo for that run."
+            },
+            "merge": {
+              "type": "boolean",
+              "description": "Merge the managed branch into the source checkout after every run."
             }
           },
           "allOf": [
@@ -329,7 +333,10 @@
               "then": {
                 "required": ["branch"],
                 "not": {
-                  "required": ["keep"]
+                  "anyOf": [
+                    { "required": ["keep"] },
+                    { "required": ["merge"] }
+                  ]
                 }
               }
             },
@@ -359,7 +366,8 @@
                     { "required": ["branch"] },
                     { "required": ["base"] },
                     { "required": ["setup"] },
-                    { "required": ["keep"] }
+                    { "required": ["keep"] },
+                    { "required": ["merge"] }
                   ]
                 }
               }

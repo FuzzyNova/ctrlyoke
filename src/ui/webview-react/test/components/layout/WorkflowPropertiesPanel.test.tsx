@@ -280,12 +280,13 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     );
   });
 
-  it("reveals Managed base/setup/keep, seeds them from defaults, and explains undo", () => {
+  it("reveals Managed base/setup/keep/merge, seeds them from defaults, and explains undo", () => {
     useSettingsStore.getState().updateGlobalSetting("worktree", {
       mode: WORKTREE_MODES.MANAGED,
       base: "main",
       setup: "npm ci",
       keep: true,
+      merge: true,
     });
 
     render(<WorkflowPropertiesPanel />);
@@ -294,6 +295,7 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     expect(screen.getByLabelText("Worktree base")).toHaveValue("main");
     expect(screen.getByLabelText("Worktree setup")).toHaveValue("npm ci");
     expect(screen.getByLabelText("Keep directory")).toBeChecked();
+    expect(screen.getByLabelText("Merge")).toBeChecked();
     expect(screen.queryByLabelText("Worktree branch")).not.toBeInTheDocument();
     expect(
       screen.getByText(
@@ -309,6 +311,7 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
             base: "main",
             setup: "npm ci",
             keep: true,
+            merge: true,
           },
         },
       })

@@ -12,7 +12,11 @@ import type {
   CliEvent,
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
-import type { WorkflowStep } from "../types/CtrlYokeTypes";
+import type {
+  WorkflowStep,
+  WorkflowViewAddress,
+  WorktreeRunProjection,
+} from "../types/CtrlYokeTypes";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import type { CtrlYokeNotificationEvent } from "./notifications/CompletionNotificationFactory";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
@@ -35,6 +39,17 @@ export class PostMessageDashboardSink implements IDashboardSink {
     this.send({
       type: MESSAGE_TYPES.HARNESS_USAGE_UPDATED,
       snapshots,
+    });
+  }
+
+  updateWorktreeMerge(
+    address: Extract<WorkflowViewAddress, { kind: "run" }>,
+    worktree: WorktreeRunProjection
+  ): void {
+    this.send({
+      type: MESSAGE_TYPES.WORKTREE_MERGE_RESULT,
+      address,
+      worktree,
     });
   }
 

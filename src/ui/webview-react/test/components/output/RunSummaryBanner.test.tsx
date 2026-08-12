@@ -4,7 +4,12 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { RunSummaryBanner } from "@components/output/RunSummaryBanner";
 import { EXECUTION_STATES, MESSAGE_TYPES } from "@/types/messages";
 import { isManagedWorktreeUndoUnavailable } from "@components/output/RunSummaryBanner";
-import type { WorkflowTokenTotals } from "@root/types/CtrlYokeTypes";
+import type {
+  WorkflowViewAddress,
+  RunRef,
+  WorkflowKey,
+  WorkflowTokenTotals,
+} from "@root/types/CtrlYokeTypes";
 
 const tokenTotals: WorkflowTokenTotals = {
   total: 410_000,
@@ -26,6 +31,7 @@ const worktree = {
   changedFileCount: 12,
   directoryState: "present" as const,
   landingOutcome: "landed" as const,
+  branchState: "present" as const,
   mergeOutcome: undefined,
 };
 
@@ -78,6 +84,40 @@ describe("RunSummaryBanner", () => {
     expect(
       screen.getByText("Worktree: FlightPath.worktrees/feature-historical")
     ).toBeInTheDocument();
+  });
+
+  it.each([
+    ["fast-forward", "✓ merged (fast-forward)"],
+    ["merge-commit", "✓ merged (merge commit)"],
+    ["conflict", "⚠ merge conflict — branch preserved"],
+    ["blocked", "⚠ merge blocked — source branch changed or checkout is dirty"],
+  ] as const)("renders the persisted %s merge outcome", (mergeOutcome, text) => {
+    renderBanner({
+      worktree: {
+        ...worktree,
+        mode: "managed",
+        mergeOutcome,
+      },
+    });
+    expect(screen.getByText(text, { exact: false })).toBeInTheDocument();
+  });
+
+  it("sends Merge for a present landed managed run", () => {
+    const address = {
+      workflowKey: "workflow-key" as WorkflowKey,
+      kind: "run",
+      runRef: "run-1" as RunRef,
+    } satisfies Extract<WorkflowViewAddress, { kind: "run" }>;
+    renderBanner({
+      address,
+      worktree: { ...worktree, mode: "managed" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Merge" }));
+    expect(window.vscodeApi!.postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.MERGE_WORKTREE,
+      address,
+    });
   });
 
   it("applies sticky positioning only while pinned", () => {

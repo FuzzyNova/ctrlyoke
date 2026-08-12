@@ -75,7 +75,7 @@ import {
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const SETTINGS_DRAWER_BREAKPOINT = 400;
 
-type WorktreeField = "branch" | "base" | "setup" | "keep";
+type WorktreeField = "branch" | "base" | "setup" | "keep" | "merge";
 type WorktreeObjectConfig = Exclude<WorktreeConfig, false | true | string>;
 
 function worktreeConfigForMode(
@@ -87,6 +87,10 @@ function worktreeConfigForMode(
       mode,
       base: defaults?.base ?? "",
       setup: defaults?.setup ?? "",
+      merge:
+        defaults?.mode === WORKTREE_MODES.MANAGED
+          ? (defaults.merge ?? false)
+          : false,
       keep:
         defaults?.mode === WORKTREE_MODES.MANAGED
           ? (defaults.keep ?? false)
@@ -287,6 +291,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
     effectiveWorktree !== false && "keep" in effectiveWorktree
       ? (effectiveWorktree.keep ?? false)
       : false;
+  const effectiveWorktreeMerge =
+    effectiveWorktree !== false && "merge" in effectiveWorktree
+      ? (effectiveWorktree.merge ?? false)
+      : false;
   const effectiveAgent = getEffectiveAgent();
   const effectiveSkills = getEffectiveSkills();
   const effectiveResumeSession = getEffectiveResumeSession();
@@ -308,6 +316,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const [worktreeKeepInput, setWorktreeKeepInput] = useState(
     effectiveWorktreeKeep
   );
+  const [worktreeMergeInput, setWorktreeMergeInput] = useState(
+    effectiveWorktreeMerge
+  );
 
   useEffect(() => {
     setWorktreeMode(effectiveWorktreeMode);
@@ -315,12 +326,14 @@ const WorkflowPropertiesPanelInner: React.FC<{
     setWorktreeBaseInput(effectiveWorktreeBase);
     setWorktreeSetupInput(effectiveWorktreeSetup);
     setWorktreeKeepInput(effectiveWorktreeKeep);
+    setWorktreeMergeInput(effectiveWorktreeMerge);
   }, [
     effectiveWorktreeBase,
     effectiveWorktreeBranch,
     effectiveWorktreeMode,
     effectiveWorktreeSetup,
     effectiveWorktreeKeep,
+    effectiveWorktreeMerge,
   ]);
 
   const compatibility = useCompatibilityDiagnostics();
@@ -419,6 +432,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
             base?: string;
             setup?: string;
             keep?: boolean;
+            merge?: boolean;
           };
           if (config.mode === WORKTREE_MODES.NONE) {
             return { mode: WORKTREE_MODES.NONE };
@@ -429,6 +443,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
             base: config.base ?? "",
             setup: config.setup ?? "",
             keep: config.keep ?? false,
+            merge: config.merge ?? false,
           };
         };
         return (
@@ -671,6 +686,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
         setWorktreeBaseInput("");
         setWorktreeSetupInput("");
         setWorktreeKeepInput(false);
+        setWorktreeMergeInput(false);
         postWorkflowPropertiesUpdate({ worktree: false });
         return;
       }
@@ -690,6 +706,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
       setWorktreeKeepInput(
         seeded.mode === WORKTREE_MODES.MANAGED ? (seeded.keep ?? false) : false
       );
+      setWorktreeMergeInput(
+        seeded.mode === WORKTREE_MODES.MANAGED ? (seeded.merge ?? false) : false
+      );
       postWorkflowPropertiesUpdate({ worktree: seeded });
     },
     [globalSettings.worktree, postWorkflowPropertiesUpdate]
@@ -704,6 +723,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               mode: WORKTREE_MODES.MANAGED,
               base: current.base ?? "",
               setup: current.setup ?? "",
+              merge: current.merge ?? false,
               keep: current.keep ?? false,
             }
           : {
@@ -1094,6 +1114,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 base: resetWorktree.base,
                 setup: resetWorktree.setup,
                 keep: resetWorktree.keep,
+                merge: resetWorktree.merge,
               }
             : {
                 mode: WORKTREE_MODES.NAMED,
@@ -1120,6 +1141,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
         resetWorktree?.mode === WORKTREE_MODES.MANAGED
         ? (resetWorktree.setup ?? "")
         : ""
+    );
+    setWorktreeMergeInput(
+      resetWorktree?.mode === WORKTREE_MODES.MANAGED
+        ? (resetWorktree.merge ?? false)
+        : false
     );
     setWorktreeKeepInput(
       resetWorktree?.mode === WORKTREE_MODES.MANAGED
@@ -1587,31 +1613,54 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   </FormField>
                   {worktreeMode === WORKTREE_MODES.MANAGED && (
-                    <FormField
-                      label="Keep directory"
-                      htmlFor="settings-worktree-keep"
-                      description="Keep the managed worktree after the run. Removing the directory ends filesystem undo for that run."
-                    >
-                      <label className="flex items-center gap-2 min-h-7 text-xs text-foreground">
-                        <input
-                          type="checkbox"
-                          id="settings-worktree-keep"
-                          aria-label="Keep directory"
-                          checked={worktreeKeepInput}
-                          onChange={(event) => {
-                            const keep = event.target.checked;
-                            setWorktreeKeepInput(keep);
-                            handleWorktreeFieldChange("keep", keep);
-                          }}
-                          className="accent-button-bg"
-                        />
-                        Keep managed worktree for review and undo
-                      </label>
-                      <p className="text-xxs text-description-fg">
-                        Removing the directory ends filesystem undo for that
-                        run.
-                      </p>
-                    </FormField>
+                    <>
+                      <FormField
+                        label="Keep directory"
+                        htmlFor="settings-worktree-keep"
+                        description="Keep the managed worktree after the run. Removing the directory ends filesystem undo for that run."
+                      >
+                        <label className="flex items-center gap-2 min-h-7 text-xs text-foreground">
+                          <input
+                            type="checkbox"
+                            id="settings-worktree-keep"
+                            aria-label="Keep directory"
+                            checked={worktreeKeepInput}
+                            onChange={(event) => {
+                              const keep = event.target.checked;
+                              setWorktreeKeepInput(keep);
+                              handleWorktreeFieldChange("keep", keep);
+                            }}
+                            className="accent-button-bg"
+                          />
+                          Keep managed worktree for review and undo
+                        </label>
+                        <p className="text-xxs text-description-fg">
+                          Removing the directory ends filesystem undo for that
+                          run.
+                        </p>
+                      </FormField>
+                      <FormField
+                        label="Merge"
+                        htmlFor="settings-worktree-merge"
+                        description="Merge the managed branch into the working checkout after every run."
+                      >
+                        <label className="flex items-center gap-2 min-h-7 text-xs text-foreground">
+                          <input
+                            type="checkbox"
+                            id="settings-worktree-merge"
+                            aria-label="Merge"
+                            checked={worktreeMergeInput}
+                            onChange={(event) => {
+                              const merge = event.target.checked;
+                              setWorktreeMergeInput(merge);
+                              handleWorktreeFieldChange("merge", merge);
+                            }}
+                            className="accent-button-bg"
+                          />
+                          Merge into the working checkout after every run
+                        </label>
+                      </FormField>
+                    </>
                   )}
                 </DrawerRow>
               </AnimatedSection>

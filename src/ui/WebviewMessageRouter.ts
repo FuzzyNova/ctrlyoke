@@ -612,6 +612,12 @@ export class WebviewMessageRouter {
       });
     });
 
+    table.set(MESSAGE_TYPES.MERGE_WORKTREE, async (message) => {
+      await vscode.commands.executeCommand(VSCODE_COMMANDS.MERGE_WORKTREE, {
+        address: message.address,
+      });
+    });
+
     table.set(MESSAGE_TYPES.OPEN_PRIOR_CONTEXT, async (message, ctx) => {
       await this.promptEditorSupport.handleOpenPriorContext(
         ctx,

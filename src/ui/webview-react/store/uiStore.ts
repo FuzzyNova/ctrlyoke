@@ -18,9 +18,11 @@ import type {
 import type { HistoryEventKind } from "@root/types/WorkflowTimelineTypes";
 import type {
   WorkflowViewAddress,
+  WorkflowRunAddress,
   WorkflowRunNavigationSummary,
   WorkflowKey,
   WorkflowTokenTotals,
+  WorktreeRunProjection,
 } from "@root/types/CtrlYokeTypes";
 import type { SaveWorkflowBundlePreview } from "../types/messages";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
@@ -815,6 +817,10 @@ interface UiActions {
     descriptorRevision: number
   ) => void;
   markExecutionRunFinished: (executionState: ExecutionState) => void;
+  updateRunSummaryWorktree: (
+    runRef: WorkflowRunAddress["runRef"],
+    worktree: WorktreeRunProjection
+  ) => void;
   /** Marks `address` as the content actually applied to `workflowStore`. */
   markViewAddressApplied: (address: WorkflowViewAddress) => void;
   requestRunViewLoad: (
@@ -1577,6 +1583,13 @@ export const useUiStore = create<UiState & UiActions>()(
                 ),
               }
         ),
+
+      updateRunSummaryWorktree: (runRef, worktree) =>
+        set((state) => ({
+          runSummaries: state.runSummaries.map((summary) =>
+            summary.runRef === runRef ? { ...summary, worktree } : summary
+          ),
+        })),
 
       markViewAddressApplied: (address) => set({ appliedViewAddress: address }),
 

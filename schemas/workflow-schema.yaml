@@ -176,6 +176,9 @@ definitions:
           mode:
             type: string
             const: managed
+          merge:
+            type: boolean
+            description: Merge the managed branch into the captured source checkout after the run.
           keep:
             type: boolean
             description: >-

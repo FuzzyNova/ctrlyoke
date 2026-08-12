@@ -1,5 +1,9 @@
 import type { CliEvent, UndoExecutionTarget } from "./WebviewMessageTypes";
-import type { WorkflowStep } from "./CtrlYokeTypes";
+import type {
+  WorkflowStep,
+  WorkflowViewAddress,
+  WorktreeRunProjection,
+} from "./CtrlYokeTypes";
 import type {
   FinalStepPhase,
   ExecutionPhase,
@@ -192,4 +196,9 @@ export interface IDashboardSink {
 
   /** Broadcast normalized provider quota plus ctrlyoke-observed usage. */
   updateHarnessUsage(snapshots: HarnessUsageSnapshot[]): void;
+
+  updateWorktreeMerge(
+    address: Extract<WorkflowViewAddress, { kind: "run" }>,
+    worktree: WorktreeRunProjection
+  ): void;
 }

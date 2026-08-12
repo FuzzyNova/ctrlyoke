@@ -23,6 +23,7 @@ suite("PromptFileParser worktree authoring", function () {
           steps: [{ prompt: "prompt" }],
           worktree: {
             mode: "managed",
+            merge: true,
             keep: true,
             base: "HEAD",
             setup: "npm ci",
@@ -30,6 +31,7 @@ suite("PromptFileParser worktree authoring", function () {
         },
         expected: {
           mode: "managed",
+          merge: true,
           keep: true,
           base: "HEAD",
           setup: "npm ci",
@@ -91,7 +93,7 @@ suite("PromptFileParser worktree authoring", function () {
     }
   });
 
-  test("rejects merge, mode-invalid, and empty worktree forms", async () => {
+  test("rejects named merge, mode-invalid, and empty worktree forms", async () => {
     const invalid = [
       { prompt: "prompt", worktree: "" },
       {
@@ -103,7 +105,7 @@ suite("PromptFileParser worktree authoring", function () {
         worktree: { mode: "named", branch: "feature", keep: true },
       },
       { prompt: "prompt", worktree: { mode: "managed", branch: "feature" } },
-      { prompt: "prompt", worktree: { mode: "managed", merge: false } },
+      { prompt: "prompt", worktree: { mode: "named", branch: "feature", merge: true } },
     ];
 
     for (const authored of invalid) {

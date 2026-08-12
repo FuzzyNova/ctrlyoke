@@ -134,6 +134,8 @@ export {
   type OpenPromptFileMessage,
   type OpenWorktreeMessage,
   type ViewWorktreeDiffMessage,
+  type MergeWorktreeMessage,
+  type WorktreeMergeResultMessage,
   type IncomingMessage,
   type SearchHistoryMessage,
   type SearchHistoryResultsMessage,

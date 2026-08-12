@@ -167,7 +167,7 @@ export interface WorktreeActivationDiscovery {
 
 export interface CompleteManagedRunOptions {
   keep?: boolean;
-  /** Internal seam for the shared merge engine; not yet exposed to authoring/UI. */
+  /** Merge the managed branch into the captured source checkout. */
   merge?: boolean;
   /** The integration cleanup barrier must pass before Git is touched. */
   artifactsClean?: boolean;

@@ -2049,7 +2049,9 @@ leftovers without pruning user-owned entries.
     declarative and dashboard exposure remain deferred to step 28.
 28. Expose declarative `merge` and the dashboard Merge action together, plus the
     drawer Merge control and the `defaults.worktree.merge` settings row with its
-    live-checkout warning.
+    live-checkout warning. **Implemented.** Managed-only schema/parser support,
+    finalization wiring, settings and drawer controls, guarded dashboard merge,
+    persisted outcomes, and focused schema/UI coverage are now shipped together.
 29. Implement Manage Worktrees with safe remove/prune/branch cleanup inside the
     Worktrees settings section.
 30. Show cached ahead/behind data for named branches.

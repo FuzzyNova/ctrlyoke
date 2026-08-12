@@ -1198,6 +1198,28 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
+  const mergeWorktreeCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.MERGE_WORKTREE,
+    async (args: { address?: { workflowKey?: string; runRef?: string } }) => {
+      const address = args?.address;
+      if (!address?.workflowKey || !address.runRef) {
+        reportCommandError("ctrlyoke: The managed worktree merge target is unavailable.");
+        return;
+      }
+      try {
+        await workflowOrchestrator.mergeManagedWorktreeAtRun(
+          address as Parameters<
+            typeof workflowOrchestrator.mergeManagedWorktreeAtRun
+          >[0]
+        );
+      } catch (error) {
+        reportCommandError(
+          `ctrlyoke: Managed worktree merge failed: ${getErrorMessage(error)}`
+        );
+      }
+    }
+  );
+
   const addFileToPromptEditorCommand = vscode.commands.registerCommand(
     "ctrlyoke.addFileToPromptEditor",
     async (uri: vscode.Uri) => {
@@ -1433,6 +1455,7 @@ function registerCommands(context: vscode.ExtensionContext) {
     openGitChangeCommand,
     openWorktreeCommand,
     viewWorktreeDiffCommand,
+    mergeWorktreeCommand,
     addFileToPromptEditorCommand,
     addDirectoryToPromptEditorCommand,
     addSelectionToPromptEditorCommand,

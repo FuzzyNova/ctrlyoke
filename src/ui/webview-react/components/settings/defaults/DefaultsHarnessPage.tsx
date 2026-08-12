@@ -213,6 +213,27 @@ export function DefaultsHarnessPage({
                 Keep managed worktrees for review and undo
               </label>
             </SettingInputRow>
+            <SettingInputRow
+              label="Merge"
+              description="Merge is the only worktree option that writes to your live working checkout: it merges the managed branch into the working checkout after every run. The engine requires the captured target branch and a clean checkout, takes an exclusive lease, and aborts cleanly on conflict."
+              id="defaults-worktree-merge"
+              path="defaults.worktree.merge"
+              {...rowProps}
+            >
+              <label className="flex items-center gap-2 min-h-7 text-xs text-foreground">
+                <input
+                  id="defaults-worktree-merge"
+                  type="checkbox"
+                  aria-label="Merge"
+                  checked={wf.worktree.merge ?? false}
+                  onChange={(event) =>
+                    onUpdate("defaults.worktree.merge", event.target.checked)
+                  }
+                  className="accent-button-bg"
+                />
+                Merge into the working checkout after every run
+              </label>
+            </SettingInputRow>
           </>
         )}
       </div>

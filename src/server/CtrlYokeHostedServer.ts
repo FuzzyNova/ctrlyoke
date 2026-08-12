@@ -9,6 +9,10 @@ import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { IDashboardProvider } from "../ui/IDashboardProvider";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
+import type {
+  WorkflowViewAddress,
+  WorktreeRunProjection,
+} from "../types/CtrlYokeTypes";
 import type { WorkflowSummary, WorkflowStep } from "../types/CtrlYokeTypes";
 import type {
   CliEvent,
@@ -614,6 +618,13 @@ export class CtrlYokeHostedServer
 
   updateHarnessUsage(snapshots: HarnessUsageSnapshot[]): void {
     this.sink.updateHarnessUsage(snapshots);
+  }
+
+  updateWorktreeMerge(
+    address: Extract<WorkflowViewAddress, { kind: "run" }>,
+    worktree: WorktreeRunProjection
+  ): void {
+    this.sink.updateWorktreeMerge(address, worktree);
   }
 
   // ── Theme var snapshot (fed from VS Code webview capture) ─────────────────

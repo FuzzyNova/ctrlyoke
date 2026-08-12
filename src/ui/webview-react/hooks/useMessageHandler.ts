@@ -1973,6 +1973,18 @@ export function createMessageHandlers(
     useRunSummaryCacheStore.getState().resolveRunSummaries(message);
   };
 
+  handlers[MESSAGE_TYPES.WORKTREE_MERGE_RESULT] = (message) => {
+    if (!message.address || !message.worktree) return;
+    const uiStore = useUiStore.getState();
+    if (!areWorkflowAddressesEqual(message.address, uiStore.appliedViewAddress)) {
+      return;
+    }
+    useUiStore
+      .getState()
+      .updateRunSummaryWorktree(message.address.runRef, message.worktree);
+    useWorkflowStore.getState().updateHistoryWorktree(message.worktree);
+  };
+
   // EXECUTION_PREVIEW_RESULT - one request-correlated, redacted snapshot
   handlers[MESSAGE_TYPES.EXECUTION_PREVIEW_RESULT] = (message) => {
     useExecutionPreviewStore.getState().resolve(message);

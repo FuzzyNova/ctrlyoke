@@ -36,6 +36,8 @@ import {
   type RunRef,
   type WorkflowRunAddress,
   type WorkflowViewAddress,
+  type WorktreeRunProjection,
+  projectWorktreeRuntime,
   workflowDisplayStep,
   isScriptStep,
 } from "../types/CtrlYokeTypes";
@@ -97,7 +99,7 @@ import { TemplateImporter } from "./orchestration/TemplateImporter";
 import { WorkflowCommandHandler } from "./orchestration/WorkflowCommandHandler";
 import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager";
 import { WorkspaceInitializer } from "./orchestration/WorkspaceInitializer";
-import { WorktreeManager } from "./orchestration/WorktreeManager";
+import { WorktreeManager, type WorktreeInfo } from "./orchestration/WorktreeManager";
 import { PromptFileParser } from "./PromptFileParser";
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
 import { PropertyResolver } from "../utils/PropertyResolver";
@@ -3268,6 +3270,76 @@ export class WorkflowOrchestrator {
 
   getOutputHistoryManager(): OutputHistoryManager {
     return this.getActiveInstance().outputHistoryManager;
+  }
+
+  /** Merge a persisted managed run into its captured source checkout. */
+  async mergeManagedWorktreeAtRun(
+    address: Extract<WorkflowViewAddress, { kind: "run" }>
+  ): Promise<WorktreeRunProjection> {
+    const workspaceRoot = this.requireWorkspaceRoot();
+    const workingFilePath = WorkflowPaths.runFilePath(
+      workspaceRoot,
+      address.workflowKey,
+      address.runRef
+    );
+    const workingFile = JSON.parse(
+      await fs.promises.readFile(workingFilePath, "utf8")
+    ) as WorkingFile;
+    const runtime = workingFile._runtime?.worktree;
+    if (!runtime || runtime.mode !== "managed") {
+      throw new Error("Merge is available only for managed worktree runs.");
+    }
+    if (runtime.branchState !== "present") {
+      throw new Error("The managed worktree branch is no longer present.");
+    }
+    const executionWorkspace = {
+      stateRoot: workspaceRoot,
+      executionRoot: runtime.executionRoot,
+      executionCheckoutRoot: runtime.executionCheckoutRoot,
+      sourceCheckoutRoot: runtime.sourceCheckoutRoot,
+      workspaceRoots: runtime.namedWorkspaceRoots.map((root) => root.fsPath),
+      namedWorkspaceRoots: runtime.namedWorkspaceRoots,
+      approvedExternalRoots: [],
+    };
+    const info: WorktreeInfo = {
+      mode: runtime.mode,
+      origin: runtime.origin,
+      lifecycleOwner: runtime.lifecycleOwner,
+      branchName: runtime.branchName,
+      worktreePath: runtime.worktreePath,
+      sourceCheckoutRoot: runtime.sourceCheckoutRoot,
+      baseCommit: runtime.baseCommit,
+      ...(runtime.targetBranch ? { targetBranch: runtime.targetBranch } : {}),
+      workflowKey: address.workflowKey,
+      runRef: address.runRef,
+      createdAt: workingFile.startedAt ?? Date.now(),
+      executionWorkspace,
+      dirty: runtime.dirty ?? false,
+      ...(runtime.sourceCheckoutDirty !== undefined
+        ? { sourceCheckoutDirty: runtime.sourceCheckoutDirty }
+        : {}),
+    };
+    const result = await new WorktreeManager().mergeManagedWorktree(info);
+    await WorkingFileManager.updateWorktreeRuntimeAtRun(
+      workspaceRoot,
+      address.workflowKey,
+      address.runRef,
+      {
+        mergeOutcome: result.mergeOutcome,
+        ...(result.conflictFiles ? { conflictFiles: result.conflictFiles } : {}),
+        ...(result.message ? { message: result.message } : {}),
+        updatedAt: Date.now(),
+      }
+    );
+    const updated = JSON.parse(
+      await fs.promises.readFile(workingFilePath, "utf8")
+    ) as WorkingFile;
+    const projection = projectWorktreeRuntime(updated._runtime?.worktree);
+    if (!projection) {
+      throw new Error("The managed worktree merge did not produce a runtime projection.");
+    }
+    this.dashboardBroadcastHub.updateWorktreeMerge(address, projection);
+    return projection;
   }
 
   async updateWorkingFileProperties(

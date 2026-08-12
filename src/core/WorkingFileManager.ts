@@ -1654,6 +1654,39 @@ export class WorkingFileManager {
     };
   }
 
+  /** Patch persisted worktree lifecycle metadata for an addressed run. */
+  public static async updateWorktreeRuntimeAtRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    patch: WorkingFileWorktreeRuntimePatch
+  ): Promise<void> {
+    const workingFilePath = WorkflowPaths.runFilePath(
+      workspaceFolderPath,
+      workflowKey,
+      runRef
+    );
+    await withFileLock(workingFilePath, async () => {
+      const workingFile = await readWorkingFileFromDisk(workingFilePath);
+      const currentRuntime = workingFile._runtime ?? {
+        currentIndex: 0,
+        executionState: EXECUTION_STATES.IDLE,
+      };
+      workingFile._runtime = {
+        ...currentRuntime,
+        worktree: {
+          ...currentRuntime.worktree,
+          ...patch,
+          updatedAt: patch.updatedAt ?? Date.now(),
+        } as NonNullable<typeof currentRuntime.worktree>,
+      };
+      workingFile.lastModifiedAt = Date.now();
+      await writeWorkingFileAtomicTo(workingFilePath, workingFile, {
+        skipLock: true,
+      });
+    });
+  }
+
   /**
    * Atomically patch the disk-authoritative worktree runtime block.
    *

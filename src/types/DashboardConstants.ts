@@ -155,6 +155,8 @@ export const MESSAGE_TYPES = {
   OPEN_GIT_CHANGE: "openGitChange", // Webview -> Extension: open a git diff in a new editor (legacy)
   OPEN_WORKTREE: "openWorktree", // Webview -> Extension: open a recorded worktree in a new window
   VIEW_WORKTREE_DIFF: "viewWorktreeDiff", // Webview -> Extension: view a recorded worktree branch against its base
+  MERGE_WORKTREE: "mergeWorktree", // Webview -> Extension: merge a managed run's branch into its source checkout
+  WORKTREE_MERGE_RESULT: "worktreeMergeResult", // Extension -> Webview: persisted merge projection
   OPEN_PRIOR_CONTEXT: "openPriorContext", // Webview -> Extension: preview inline $prior-context expansion (legacy)
   // REQUEST_GIT_CHANGE_PREVIEW and GIT_CHANGE_PREVIEW_RESULT removed — browser now opens
   // the WorkspaceDiffPane via openToGitRef(); VS Code uses OPEN_GIT_CHANGE → native commands.
@@ -2065,6 +2067,7 @@ export const VSCODE_COMMANDS = {
   REFRESH_WORKSPACE_STATS: "ctrlyoke.refreshWorkspaceStats",
   OPEN_WORKTREE: "ctrlyoke.openWorktree",
   VIEW_WORKTREE_DIFF: "ctrlyoke.viewWorktreeDiff",
+  MERGE_WORKTREE: "ctrlyoke.mergeWorktree",
 } as const;
 
 // Built-in VS Code Git extension command IDs that ctrlyoke invokes to open
