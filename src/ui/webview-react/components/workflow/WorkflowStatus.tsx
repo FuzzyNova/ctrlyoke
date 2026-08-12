@@ -18,7 +18,11 @@ import {
   TERMINAL_SESSION_STATUS,
   type ExecutionState,
 } from "../../types/messages";
-import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
+import {
+  DEFAULT_WORKFLOW_NAME,
+  WORKTREE_MODES,
+  WORKTREE_MODE_OPTIONS,
+} from "@root/types/DashboardConstants";
 import { WorkflowList, type UnifiedWorkflowRow } from "./WorkflowList";
 import { RunPanel } from "./RunPanel";
 import { RunIdentityBadge } from "./RunIdentityBadge";
@@ -115,7 +119,38 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     executionRunRef,
     isViewingHistory,
   } = useUiStore();
-  const { globalSettings } = useSettingsStore();
+  const { globalSettings, workflowProperties } = useSettingsStore();
+  const effectiveWorktree = useMemo(() => {
+    const authored = workflowProperties.worktree;
+    if (authored === false) return false;
+    if (authored === undefined) {
+      const configured = globalSettings.worktree;
+      return configured?.mode === WORKTREE_MODES.NONE
+        ? false
+        : (configured ?? false);
+    }
+    if (typeof authored === "string") {
+      return { mode: WORKTREE_MODES.NAMED, branch: authored };
+    }
+    return authored;
+  }, [globalSettings.worktree, workflowProperties.worktree]);
+  const worktreeIndicator = useMemo(() => {
+    if (
+      effectiveWorktree === false ||
+      effectiveWorktree.mode === WORKTREE_MODES.NONE
+    ) {
+      return undefined;
+    }
+    const modeLabel =
+      WORKTREE_MODE_OPTIONS.find(
+        (option) => option.value === effectiveWorktree.mode
+      )?.label ?? effectiveWorktree.mode;
+    const branch =
+      "branch" in effectiveWorktree && effectiveWorktree.branch?.trim();
+    return {
+      title: `${modeLabel} worktree${branch ? `: ${branch}` : ""}`,
+    };
+  }, [effectiveWorktree]);
   // Global set of workflows with a running PTY, broadcast by the extension. This
   // is complete for every workflow on every client (including hosted browser
   // tabs) — unlike the per-workflow `sessions` map, which a client only hydrates
@@ -1381,6 +1416,16 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                   aria-label="Terminal session is still running"
                 >
                   <i className="codicon codicon-terminal text-sm" />
+                </span>
+              )}
+
+              {!isNarrow && worktreeIndicator && (
+                <span
+                  className="flex-shrink-0 w-4 flex items-center justify-center text-description-fg"
+                  title={worktreeIndicator.title}
+                  aria-label={worktreeIndicator.title}
+                >
+                  <i className="codicon codicon-source-control text-sm" />
                 </span>
               )}
 

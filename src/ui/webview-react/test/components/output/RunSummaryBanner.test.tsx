@@ -16,6 +16,16 @@ const tokenTotals: WorkflowTokenTotals = {
   byLocalDay: {},
 };
 
+const worktree = {
+  mode: "named" as const,
+  branchName: "feature/historical",
+  worktreePath: "C:/dev/FlightPath.worktrees/feature-historical",
+  sourceCheckoutRoot: "C:/dev/FlightPath",
+  directoryState: "present" as const,
+  landingOutcome: "landed" as const,
+  mergeOutcome: undefined,
+};
+
 function renderBanner(
   overrides: Partial<ComponentProps<typeof RunSummaryBanner>> = {}
 ) {
@@ -51,6 +61,16 @@ describe("RunSummaryBanner", () => {
     expect(
       screen.queryByTestId("workflow-token-usage")
     ).not.toBeInTheDocument();
+  });
+
+  it("renders the persisted branch, landing outcome, and source-relative worktree path", () => {
+    renderBanner({ worktree });
+
+    expect(screen.getByText("feature/historical")).toBeInTheDocument();
+    expect(screen.getByText(/branch ready/)).toBeInTheDocument();
+    expect(
+      screen.getByText("Worktree: FlightPath.worktrees/feature-historical")
+    ).toBeInTheDocument();
   });
 
   it("applies sticky positioning only while pinned", () => {

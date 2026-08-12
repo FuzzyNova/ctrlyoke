@@ -1,11 +1,15 @@
 import React from "react";
 import { ExecutionStateBadge } from "@components/shared/ExecutionStateBadge";
+import { EXECUTION_STATES } from "@root/types/DashboardConstants";
 import {
   WorkflowTokenUsage,
   hasWorkflowTokenUsage,
 } from "@components/workflow/WorkflowTokenUsage";
 import type { ExecutionState } from "@root/types/DashboardConstants";
-import type { WorkflowTokenTotals } from "@root/types/CtrlYokeTypes";
+import type {
+  WorktreeRunProjection,
+  WorkflowTokenTotals,
+} from "@root/types/CtrlYokeTypes";
 
 /** The run identity/status data the banner displays — sourced from whichever run is currently displayed, live or historical. */
 export interface RunBannerData {
@@ -13,6 +17,72 @@ export interface RunBannerData {
   startedAt: number;
   executionState: ExecutionState;
   tokenTotals?: WorkflowTokenTotals;
+  /** Persisted projection from the displayed run's `_runtime.worktree`. */
+  worktree?: WorktreeRunProjection;
+}
+
+function formatRelativeWorktreePath(worktree: WorktreeRunProjection): string {
+  const target = worktree.worktreePath
+    .replace(/\\/g, "/")
+    .replace(/\/+$/, "");
+  const source = worktree.sourceCheckoutRoot
+    .replace(/\\/g, "/")
+    .replace(/\/+$/, "");
+  const parentEnd = source.lastIndexOf("/");
+  if (parentEnd < 0) return target;
+
+  const parent = source.slice(0, parentEnd) || "/";
+  const comparable = (value: string) =>
+    /^[A-Za-z]:\//.test(value) ? value.toLowerCase() : value;
+  const comparableParent = comparable(parent);
+  const comparableTarget = comparable(target);
+  if (
+    comparableTarget === comparableParent ||
+    comparableTarget.startsWith(`${comparableParent}/`)
+  ) {
+    return target.slice(parent.length + (parent === "/" ? 0 : 1));
+  }
+  return target;
+}
+
+function formatWorktreeOutcome(
+  worktree: WorktreeRunProjection
+): string | undefined {
+  switch (worktree.mergeOutcome) {
+    case "fast-forward":
+      return "merged (fast-forward)";
+    case "merge-commit":
+      return "merged (merge commit)";
+    case "conflict":
+      return "merge conflict — branch preserved";
+    case "abort-failed":
+      return "merge abort failed";
+    case "blocked":
+      return "merge blocked";
+  }
+  switch (worktree.landingOutcome) {
+    case "landed":
+      return "branch ready";
+    case "no-changes":
+      return "no changes";
+    case "blocked":
+      return "landing blocked";
+    default:
+      return undefined;
+  }
+}
+
+function formatDirectoryState(worktree: WorktreeRunProjection): string {
+  switch (worktree.directoryState) {
+    case "removed":
+      return " (removed)";
+    case "missing":
+      return " (missing)";
+    case "remove-failed":
+      return " (removal failed)";
+    default:
+      return "";
+  }
 }
 
 export interface RunSummaryBannerProps extends RunBannerData {
@@ -36,6 +106,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
   startedAt,
   executionState,
   tokenTotals,
+  worktree,
   isPinned,
   onTogglePinned,
   showBackToLive,
@@ -48,12 +119,37 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
       }`}
     >
       <span className="flex items-center gap-2 min-w-0">
-        <span className="truncate">
+        <span className="truncate min-w-0">
           Run {runId} &middot; {new Date(startedAt).toLocaleString()}
         </span>
         <ExecutionStateBadge state={executionState} />
+        {worktree && (
+          <>
+            <span
+              className="truncate"
+              title={`Worktree branch: ${worktree.branchName}`}
+            >
+              {worktree.branchName}
+            </span>
+            {executionState === EXECUTION_STATES.COMPLETED &&
+              formatWorktreeOutcome(worktree) && (
+                <span className="whitespace-nowrap">
+                  &middot; {formatWorktreeOutcome(worktree)}
+                </span>
+              )}
+          </>
+        )}
       </span>
       <span className="flex items-center gap-2 flex-shrink-0">
+        {worktree && (
+          <span
+            className="hidden sm:inline truncate max-w-72"
+            title={`Worktree: ${worktree.worktreePath}`}
+          >
+            Worktree: {formatRelativeWorktreePath(worktree)}
+            {formatDirectoryState(worktree)}
+          </span>
+        )}
         {hasWorkflowTokenUsage(tokenTotals) && (
           <WorkflowTokenUsage totals={tokenTotals} />
         )}

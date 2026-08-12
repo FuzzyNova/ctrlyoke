@@ -1030,9 +1030,10 @@ export const useWorkflowStore = create<
                 runMetadata: {
                   runId: history.runId,
                   startedAt: history.startedAt,
-                  completedAt: history.completedAt,
-                  executionState: history.executionState,
-                },
+                completedAt: history.completedAt,
+                executionState: history.executionState,
+                worktree: history.worktree,
+              },
               }),
               undoRecords: preserveReferences(state.undoRecords, {}),
               workspaceSnapshots: preserveReferences(

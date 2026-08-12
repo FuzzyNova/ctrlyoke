@@ -19,6 +19,7 @@ import {
   SESSION_KINDS,
   TERMINAL_SESSION_STATUS,
 } from "@/types/messages";
+import { WORKTREE_MODES } from "@root/types/DashboardConstants";
 
 const postMessageSpy = vi.fn();
 
@@ -118,6 +119,43 @@ describe("WorkflowStatus — loaded state", () => {
     });
     render(<WorkflowStatus />);
     expect(screen.queryByText(EXECUTION_STATES.IDLE)).not.toBeInTheDocument();
+  });
+
+  it("shows the worktree source-control indicator with its mode and branch in the wide header", () => {
+    const getBoundingClientRect = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({ width: 500 } as DOMRect);
+    useSettingsStore.setState({
+      workflowProperties: {
+        worktree: { mode: WORKTREE_MODES.NAMED, branch: "feature/status" },
+      },
+    });
+
+    render(<WorkflowStatus />);
+
+    const indicator = screen.getByLabelText(
+      "Named worktree: feature/status"
+    );
+    expect(indicator).toHaveAttribute(
+      "title",
+      "Named worktree: feature/status"
+    );
+    expect(indicator.querySelector(".codicon-source-control")).toBeInTheDocument();
+    getBoundingClientRect.mockRestore();
+  });
+
+  it("keeps the worktree indicator out of the narrow header", () => {
+    useSettingsStore.setState({
+      workflowProperties: {
+        worktree: { mode: WORKTREE_MODES.NAMED, branch: "feature/status" },
+      },
+    });
+
+    render(<WorkflowStatus />);
+
+    expect(
+      screen.queryByLabelText("Named worktree: feature/status")
+    ).not.toBeInTheDocument();
   });
 
   it("clicking the name button enters edit mode", async () => {

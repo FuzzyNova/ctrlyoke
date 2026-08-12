@@ -11,8 +11,9 @@ import type { RunSummaryRecord } from "./OutputHistoryManager";
  * grows without bound while the runs themselves stop changing the moment they
  * finish. Every run-view load and every definition mutation pays it.
  *
- * Cached values are display metadata only — harness/model disclosure and the
- * run's lifecycle state. The addressed run's own definition, its timeline, and
+ * Cached values are display metadata only — harness/model disclosure, the
+ * run's lifecycle state, and its persisted worktree status projection. The
+ * addressed run's own definition, its timeline, and
  * the lineage descriptor are deliberately **not** cached, because those carry
  * the optimistic-concurrency state that mutations are validated against. Keep it
  * that way: **no cached value may ever participate in a revision check.** The

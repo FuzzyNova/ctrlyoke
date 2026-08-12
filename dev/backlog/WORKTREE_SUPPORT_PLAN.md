@@ -1921,7 +1921,7 @@ live branch values.
 This phase changes vocabulary and dependency boundaries but exposes no worktree
 schema.
 
-### Phase 2 — Named worktrees and execution leases
+### Phase 2 — Named worktrees and execution leases — **Complete**
 
 10. Consolidate Git identity helpers and implement NUL-delimited porcelain parsing. **Implemented.**
 11. Implement strict workspace eligibility, safe root resolution, and the
@@ -1932,8 +1932,8 @@ schema.
     - Authored-definition support for the named forms is implemented: root-only
       schema validation, typed parsing/property persistence, and definition
       revision snapshots. Settings defaults and origin-guarded selection are
-      implemented; named-worktree lifecycle and the remaining editor/runtime
-      surfaces remain part of the subsequent Phase 2 work.
+    implemented; named-worktree lifecycle and the remaining runtime surfaces
+    are implemented below.
     - Runtime persistence is implemented: `WorkingFileManager` owns an atomic
       typed worktree-runtime patch seam, ordinary runtime projections preserve
       `_runtime.worktree`, and promotion/re-run seed fresh runtime metadata.
@@ -1951,7 +1951,9 @@ schema.
       The authoring matrix is covered by focused webview tests; managed and
       merge controls remain deferred to Phases 3 and 4.
     - Add the `WorkflowStatus` worktree indicator and the `RunSummaryBanner`
-      worktree projection.
+      worktree projection sourced from each run's persisted `_runtime.worktree`.
+      **Implemented.** No View Diff/Open Worktree/Merge actions are included;
+      those remain deferred to Phases 3 and 4.
 14. Implement named discovery/create/setup plus explicit failed-setup retry. **Named
     setup and execution integration implemented.** Named discovery/create/attach,
     source-checkout rejection, execution-root remapping, trust-overlap preflight,
@@ -1976,7 +1978,9 @@ schema.
 
 Exit criterion: existing parallel native workflows still coexist; a named
 worktree runs safely and is blocked only by incompatible activity in that same
-directory.
+directory. **Confirmed:** shared-native lease tests cover parallel native
+coexistence, and named-worktree tests cover safe execution plus blocking only
+when the targeted directory has an incompatible lease.
 
 ### Phase 3 — Managed branch landing
 

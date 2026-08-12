@@ -12,6 +12,7 @@ import type {
   WorkflowStep,
   WorkflowTokenTotals,
   WorktreeConfig,
+  WorktreeRunProjection,
 } from "./CtrlYokeTypes";
 import type {
   OutputExecutionTarget,
@@ -131,6 +132,8 @@ export interface RunSummary {
   hasMixedHarnesses: boolean;
   hasMixedModels: boolean;
   tokenTotals?: WorkflowTokenTotals;
+  /** Status projection sourced from this run's persisted `_runtime.worktree`. */
+  worktree?: WorktreeRunProjection;
 }
 
 export interface HistorySearchResult {

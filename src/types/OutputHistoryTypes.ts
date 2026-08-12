@@ -8,6 +8,7 @@ import {
 import type {
   WorkflowRuntimeCommand,
   WorkflowRuntimeState,
+  WorktreeRunProjection,
 } from "./CtrlYokeTypes";
 import { CliOutput, UndoFileInstruction } from "./WebviewMessageTypes";
 import type { StatusMessage } from "./WebviewMessageTypes";
@@ -66,6 +67,8 @@ export interface WorkflowOutputHistory {
   startedAt: number;
   completedAt?: number;
   executionState: ExecutionState;
+  /** Status projection sourced from this run's persisted `_runtime.worktree`. */
+  worktree?: WorktreeRunProjection;
 
   // Per-step outputs (keyed by stepIndex)
   promptOutputs: {
@@ -83,7 +86,7 @@ export interface WorkflowOutputHistory {
 
 export type WorkflowRunMetadata = Pick<
   WorkflowOutputHistory,
-  "runId" | "startedAt" | "completedAt" | "executionState"
+  "runId" | "startedAt" | "completedAt" | "executionState" | "worktree"
 >;
 
 /**

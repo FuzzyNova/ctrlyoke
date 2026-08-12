@@ -444,6 +444,18 @@ export interface WorkingFileWorktreeRuntime {
   updatedAt: number;
 }
 
+/** Persisted worktree fields safe to carry in run-list/history projections. */
+export type WorktreeRunProjection = Pick<
+  WorkingFileWorktreeRuntime,
+  | "mode"
+  | "branchName"
+  | "worktreePath"
+  | "sourceCheckoutRoot"
+  | "directoryState"
+  | "landingOutcome"
+  | "mergeOutcome"
+>;
+
 /** Partial lifecycle patch applied to persisted worktree runtime metadata. */
 export type WorkingFileWorktreeRuntimePatch = Partial<
   WorkingFileWorktreeRuntime

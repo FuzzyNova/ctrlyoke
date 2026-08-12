@@ -1,10 +1,12 @@
 import * as fs from "fs";
+import * as path from "path";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type {
   RunRef,
   WorkflowKey,
   WorkflowTokenTotals,
+  WorktreeRunProjection,
 } from "../../types/CtrlYokeTypes";
 import {
   WorkflowOutputHistory,
@@ -850,7 +852,21 @@ export class OutputHistoryManager {
    */
   async loadHistory(historyFilePath: string): Promise<WorkflowOutputHistory> {
     const history = await this.timelineAdapter.loadHistory(historyFilePath);
-    return this.enrichSnapshotsInHistory(history);
+    const enriched = await this.enrichSnapshotsInHistory(history);
+    try {
+      const runFilePath = path.join(
+        path.dirname(historyFilePath),
+        WorkflowPaths.WORKING_FILE_NAME
+      );
+      const workingFile = JSON.parse(
+        await fs.promises.readFile(runFilePath, "utf8")
+      ) as { _runtime?: { worktree?: WorktreeRunProjection } };
+      enriched.worktree = workingFile._runtime?.worktree;
+    } catch {
+      // Older or partially recovered runs may not have a working file. The
+      // timeline remains renderable without a worktree projection.
+    }
+    return enriched;
   }
 
   /**
@@ -993,6 +1009,7 @@ export class OutputHistoryManager {
         hasMixedHarnesses,
         hasMixedModels,
         tokenTotals,
+        worktree,
       } = await this.readRunFileSummaryFields(runFilePath);
 
       const record: RunSummaryRecord = {
@@ -1020,6 +1037,7 @@ export class OutputHistoryManager {
           hasMixedHarnesses,
           hasMixedModels,
           tokenTotals: tokenTotals ?? manifest.tokenTotals,
+          worktree,
         },
       };
 
@@ -1054,6 +1072,7 @@ export class OutputHistoryManager {
     executionState?: ExecutionState;
     executionEndTime?: number;
     tokenTotals?: WorkflowTokenTotals;
+    worktree?: WorktreeRunProjection;
     primaryHarness?: string;
     primaryModel?: string;
     hasMixedHarnesses: boolean;
@@ -1068,6 +1087,7 @@ export class OutputHistoryManager {
           executionState?: ExecutionState;
           executionEndTime?: number;
           tokenTotals?: WorkflowTokenTotals;
+          worktree?: WorktreeRunProjection;
         };
         steps?: Array<{
           type?: string;
@@ -1098,6 +1118,7 @@ export class OutputHistoryManager {
         executionState: workingFile._runtime?.executionState,
         executionEndTime: workingFile._runtime?.executionEndTime,
         tokenTotals: workingFile._runtime?.tokenTotals,
+        worktree: workingFile._runtime?.worktree,
         primaryHarness: harnesses.values().next().value,
         primaryModel: models.values().next().value,
         hasMixedHarnesses: harnesses.size > 1,
