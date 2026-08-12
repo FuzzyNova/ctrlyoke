@@ -533,6 +533,10 @@ export function createMessageHandlers(
     applyTerminalSetting(message.path, message.value);
   };
 
+  handlers[MESSAGE_TYPES.WORKTREE_MANAGEMENT_STATE] = (message) => {
+    useSettingsStore.getState().setWorktreeManagement(message.state ?? null);
+  };
+
   // --------------------------------------------------------------------------
   // Developer dashboard events
   // --------------------------------------------------------------------------

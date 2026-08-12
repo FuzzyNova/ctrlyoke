@@ -425,6 +425,9 @@ export interface WorkingFileWorktreeRuntime {
   sourceCheckoutRoot: string;
   namedWorkspaceRoots: ResolverWorkspaceFolder[];
   baseCommit: string;
+  /** Recorded comparison base used for named-branch divergence, when known. */
+  comparisonBaseLabel?: string;
+  comparisonBaseCommit?: string;
   /** Number of files in the landed branch diff from baseCommit, when known. */
   changedFileCount?: number;
   /** Whether the named checkout had uncommitted changes at run start. */
@@ -472,6 +475,7 @@ export type WorktreeRunProjection = Pick<
     Pick<
       WorkingFileWorktreeRuntime,
       "baseCommit" | "changedFileCount" | "lifecycleState" | "branchState"
+      | "comparisonBaseLabel" | "comparisonBaseCommit"
     >
   >;
 
@@ -496,6 +500,12 @@ export function projectWorktreeRuntime(
       ? { landingOutcome: worktree.landingOutcome }
       : {}),
     ...(worktree.mergeOutcome ? { mergeOutcome: worktree.mergeOutcome } : {}),
+    ...(worktree.comparisonBaseLabel
+      ? { comparisonBaseLabel: worktree.comparisonBaseLabel }
+      : {}),
+    ...(worktree.comparisonBaseCommit
+      ? { comparisonBaseCommit: worktree.comparisonBaseCommit }
+      : {}),
     ...(worktree.changedFileCount !== undefined
       ? { changedFileCount: worktree.changedFileCount }
       : {}),

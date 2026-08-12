@@ -157,6 +157,10 @@ export const MESSAGE_TYPES = {
   VIEW_WORKTREE_DIFF: "viewWorktreeDiff", // Webview -> Extension: view a recorded worktree branch against its base
   MERGE_WORKTREE: "mergeWorktree", // Webview -> Extension: merge a managed run's branch into its source checkout
   WORKTREE_MERGE_RESULT: "worktreeMergeResult", // Extension -> Webview: persisted merge projection
+  REQUEST_WORKTREE_MANAGEMENT_STATE: "requestWorktreeManagementState",
+  WORKTREE_MANAGEMENT_STATE: "worktreeManagementState",
+  WORKTREE_MANAGEMENT_ACTION: "worktreeManagementAction",
+  OPEN_WORKTREE_OWNER: "openWorktreeOwner",
   OPEN_PRIOR_CONTEXT: "openPriorContext", // Webview -> Extension: preview inline $prior-context expansion (legacy)
   // REQUEST_GIT_CHANGE_PREVIEW and GIT_CHANGE_PREVIEW_RESULT removed — browser now opens
   // the WorkspaceDiffPane via openToGitRef(); VS Code uses OPEN_GIT_CHANGE → native commands.
@@ -1064,6 +1068,17 @@ export const WORKTREE_MODES = {
 } as const;
 
 export type WorktreeMode = (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES];
+
+export const WORKTREE_MANAGEMENT_ACTIONS = {
+  REMOVE: "remove",
+  FORCE_REMOVE: "force-remove",
+  PRUNE: "prune",
+  REPAIR: "repair",
+  CLEANUP_BRANCH: "cleanup-branch",
+} as const;
+
+export type WorktreeManagementAction =
+  (typeof WORKTREE_MANAGEMENT_ACTIONS)[keyof typeof WORKTREE_MANAGEMENT_ACTIONS];
 
 export const EXECUTION_MODES = {
   INTERACTIVE: "interactive",
@@ -2068,6 +2083,8 @@ export const VSCODE_COMMANDS = {
   OPEN_WORKTREE: "ctrlyoke.openWorktree",
   VIEW_WORKTREE_DIFF: "ctrlyoke.viewWorktreeDiff",
   MERGE_WORKTREE: "ctrlyoke.mergeWorktree",
+  MANAGE_WORKTREES: "ctrlyoke.manageWorktrees",
+  OPEN_WORKTREE_OWNER: "ctrlyoke.openWorktreeOwner",
 } as const;
 
 // Built-in VS Code Git extension command IDs that ctrlyoke invokes to open

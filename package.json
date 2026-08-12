@@ -143,6 +143,12 @@
         "category": "ctrlyoke"
       },
       {
+        "command": "ctrlyoke.manageWorktrees",
+        "title": "ctrlyoke: Manage Worktrees",
+        "category": "ctrlyoke",
+        "icon": "$(source-control)"
+      },
+      {
         "command": "ctrlyoke.refreshHarnessUsage",
         "title": "ctrlyoke: Refresh Harness Usage",
         "category": "ctrlyoke"

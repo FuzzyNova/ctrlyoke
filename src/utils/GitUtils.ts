@@ -816,6 +816,14 @@ export async function pruneWorktrees(repoRoot: string): Promise<void> {
   await execGit(["-C", repoRoot, "worktree", "prune"]);
 }
 
+/** Repair one explicitly requested worktree admin entry. */
+export async function repairWorktree(
+  repoRoot: string,
+  worktreePath: string
+): Promise<void> {
+  await execGit(["-C", repoRoot, "worktree", "repair", "--", worktreePath]);
+}
+
 export async function currentBranch(dir: string): Promise<string | null> {
   try {
     const { stdout } = await execGit([
@@ -846,6 +854,85 @@ export async function resolveCommit(dir: string, ref: string): Promise<string> {
   const commit = stdout.trim();
   if (!commit) throw new Error(`Git ref does not resolve to a commit: ${ref}`);
   return commit;
+}
+
+/** Return whether a local branch ref exists. */
+export async function localBranchExists(
+  repoRoot: string,
+  branchName: string
+): Promise<boolean> {
+  try {
+    await resolveCommit(repoRoot, `refs/heads/${branchName}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Return the configured upstream for a local branch, if one is configured. */
+export async function getBranchUpstream(
+  repoRoot: string,
+  branchName: string
+): Promise<string | undefined> {
+  try {
+    const { stdout } = await execGit([
+      "-C",
+      repoRoot,
+      "for-each-ref",
+      "--format=%(upstream:short)",
+      `refs/heads/${branchName}`,
+    ]);
+    const upstream = stdout.trim();
+    return upstream || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Return ancestry-based ahead/behind counts for two commit-ish values. */
+export async function getAheadBehind(
+  repoRoot: string,
+  baseRef: string,
+  branchRef: string
+): Promise<{ ahead: number; behind: number }> {
+  const { stdout } = await execGit([
+    "-C",
+    repoRoot,
+    "rev-list",
+    "--left-right",
+    "--count",
+    "--end-of-options",
+    `${baseRef}...${branchRef}`,
+  ]);
+  const [behindText, aheadText] = stdout.trim().split(/\s+/);
+  const behind = Number.parseInt(behindText ?? "", 10);
+  const ahead = Number.parseInt(aheadText ?? "", 10);
+  if (!Number.isInteger(ahead) || !Number.isInteger(behind)) {
+    throw new Error("Git returned an invalid ahead/behind count.");
+  }
+  return { ahead, behind };
+}
+
+/** Return true only when the first commit is an ancestor of the second. */
+export async function isCommitAncestor(
+  repoRoot: string,
+  ancestorRef: string,
+  descendantRef: string
+): Promise<boolean> {
+  try {
+    await execGit([
+      "-C",
+      repoRoot,
+      "merge-base",
+      "--is-ancestor",
+      "--end-of-options",
+      ancestorRef,
+      descendantRef,
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function hasUncommittedChanges(dir: string): Promise<boolean> {
@@ -917,7 +1004,15 @@ export async function commitAll(
 /** Delete a local branch without forcing deletion of commits. */
 export async function deleteLocalBranch(
   repoRoot: string,
-  branchName: string
+  branchName: string,
+  force = false
 ): Promise<void> {
-  await execGit(["-C", repoRoot, "branch", "-d", "--", branchName]);
+  await execGit([
+    "-C",
+    repoRoot,
+    "branch",
+    force ? "-D" : "-d",
+    "--",
+    branchName,
+  ]);
 }

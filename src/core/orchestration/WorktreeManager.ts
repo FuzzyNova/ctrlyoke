@@ -7,6 +7,8 @@ import {
   commitAll,
   currentBranch,
   getDiffFilesBetweenRefs,
+  getAheadBehind,
+  getBranchUpstream,
   getUnmergedPaths,
   deleteLocalBranch,
   gitCommonDir,
@@ -17,8 +19,12 @@ import {
   mergeFastForward,
   mergeNoFastForward,
   removeWorktree,
+  pruneWorktrees,
+  repairWorktree,
   repoToplevel,
   resolveCommit,
+  isCommitAncestor,
+  localBranchExists,
   validateBranchName,
   type GitWorktreeEntry,
 } from "../../utils/GitUtils";
@@ -31,7 +37,11 @@ import {
 } from "../../utils/WorktreeUtils";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
-import { LOCK_STATUS } from "../../types/DashboardConstants";
+import {
+  LOCK_STATUS,
+  WORKTREE_MANAGEMENT_ACTIONS,
+  type WorktreeManagementAction,
+} from "../../types/DashboardConstants";
 import { isPathWithinDirectory } from "../../utils/PathSecurity";
 import { pathsEqual } from "../../utils/PathCasing";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
@@ -156,6 +166,49 @@ export interface WorktreeDiscoveryEntry extends GitWorktreeEntry {
   inUse: boolean;
   leaseOwners: ExecutionLeaseConflict[];
   stale: boolean;
+}
+
+export interface NamedBranchDivergence {
+  comparisonLabel: string;
+  comparisonCommit: string;
+  ahead: number;
+  behind: number;
+  calculatedAt: number;
+}
+
+export interface WorktreeManagementEntry {
+  worktreePath: string;
+  headCommit: string;
+  branchName?: string;
+  ownership: "managed" | "user";
+  lifecycleState?: ManagedWorktreeOwnershipRecord["lifecycleState"];
+  directoryState?: ManagedWorktreeOwnershipRecord["directoryState"];
+  branchState: "present" | "missing" | "deleted";
+  createdAt?: number;
+  ageMs?: number;
+  inUse: boolean;
+  leaseOwners: ExecutionLeaseConflict[];
+  stale: boolean;
+  prunableReason?: string;
+  targetBranch?: string;
+  branchCleanupEligible: boolean;
+  branchCleanupReason?: string;
+  divergence?: NamedBranchDivergence;
+}
+
+export interface WorktreeManagementState {
+  resolvedRoot: string;
+  entries: WorktreeManagementEntry[];
+  staleManagedRecords: ManagedWorktreeOwnershipRecord[];
+  generatedAt: number;
+}
+
+export interface WorktreeManagementActionOptions {
+  sourceCheckoutRoot: string;
+  action: WorktreeManagementAction;
+  worktreePath?: string;
+  branchName?: string;
+  confirmed?: boolean;
 }
 
 /** Activation-time worktree report. It performs no Git or lease mutations. */
@@ -306,6 +359,10 @@ function dedupePaths(paths: readonly string[]): string[] {
  * trust, lease, and runtime-persistence boundaries around it.
  */
 export class WorktreeManager {
+  private static readonly namedDivergenceCache = new Map<
+    string,
+    NamedBranchDivergence
+  >();
   private readonly leaseManager: ExecutionRootLeaseManager;
   private readonly now: () => number;
   private readonly mergeOperations: WorktreeMergeOperations;
@@ -1396,6 +1453,281 @@ export class WorktreeManager {
   }
 
   /**
+   * Read the settings-page management model. This method never mutates Git;
+   * divergence is deliberately served from the process cache when available.
+   */
+  public async getManagementState(
+    sourceCheckoutRoot: string
+  ): Promise<WorktreeManagementState> {
+    const sourceRoot = await this.requireRepositoryRoot(sourceCheckoutRoot);
+    const commonDirectory = await this.requireCommonDirectory(sourceRoot);
+    const [records, entries] = await Promise.all([
+      this.readRecords(commonDirectory),
+      listGitWorktrees(sourceRoot),
+    ]);
+    const now = this.now();
+    const managedEntries: WorktreeManagementEntry[] = [];
+
+    for (const entry of entries) {
+      const record = records.find(
+        (candidate) =>
+          candidate.branchName === entry.branchName &&
+          pathsEqual(candidate.worktreePath, entry.worktreePath)
+      );
+      const inspections = await ExecutionRootLeaseManager.inspectLeases(
+        entry.worktreePath,
+        now
+      );
+      const leaseOwners = inspections
+        .filter((inspection) => !inspection.stale)
+        .map((inspection) => ({
+          lease: inspection.lease,
+          ageMs: inspection.ageMs,
+          retryAction: "retry" as const,
+        }));
+      const inUse = leaseOwners.length > 0;
+      const branchState = entry.branchName
+        ? (await localBranchExists(sourceRoot, entry.branchName))
+          ? "present"
+          : "missing"
+        : "missing";
+      const divergence =
+        !record && entry.branchName
+          ? WorktreeManager.namedDivergenceCache.get(
+              this.divergenceCacheKey(sourceRoot, entry.branchName)
+            )
+          : undefined;
+      const createdAt = record?.createdAt;
+      const branchCleanup = record
+        ? await this.getBranchCleanupEligibility(
+            sourceRoot,
+            record,
+            entry,
+            inUse
+          )
+        : { eligible: false, reason: "Only ctrlyoke-owned branches qualify." };
+      managedEntries.push({
+        worktreePath: entry.worktreePath,
+        headCommit: entry.headCommit,
+        ...(entry.branchName ? { branchName: entry.branchName } : {}),
+        ownership: record ? "managed" : "user",
+        ...(record?.lifecycleState
+          ? { lifecycleState: record.lifecycleState }
+          : {}),
+        ...(record?.directoryState
+          ? { directoryState: record.directoryState }
+          : {}),
+        branchState,
+        ...(createdAt !== undefined ? { createdAt, ageMs: now - createdAt } : {}),
+        inUse,
+        leaseOwners,
+        stale: Boolean(entry.prunableReason),
+        ...(entry.prunableReason
+          ? { prunableReason: entry.prunableReason }
+          : {}),
+        ...(record?.targetBranch ? { targetBranch: record.targetBranch } : {}),
+        branchCleanupEligible: branchCleanup.eligible,
+        ...(branchCleanup.reason
+          ? { branchCleanupReason: branchCleanup.reason }
+          : {}),
+        ...(divergence ? { divergence } : {}),
+      });
+    }
+
+    const staleManagedRecords = records.filter(
+      (record) =>
+        !managedEntries.some(
+          (entry) =>
+            entry.ownership === "managed" &&
+            entry.branchName === record.branchName &&
+            pathsEqual(entry.worktreePath, record.worktreePath)
+        )
+    );
+
+    for (const record of staleManagedRecords) {
+      managedEntries.push({
+        worktreePath: record.worktreePath,
+        headCommit: record.lastVerifiedBranchTip,
+        branchName: record.branchName,
+        ownership: "managed",
+        lifecycleState: record.lifecycleState,
+        directoryState: record.directoryState,
+        branchState: record.branchState,
+        createdAt: record.createdAt,
+        ageMs: now - record.createdAt,
+        inUse: false,
+        leaseOwners: [],
+        stale: true,
+        branchCleanupEligible: false,
+        branchCleanupReason:
+          "The Git worktree admin entry is stale; repair is required.",
+        ...(record.targetBranch ? { targetBranch: record.targetBranch } : {}),
+      });
+    }
+
+    return {
+      resolvedRoot: await this.resolveWorktreeRoot(sourceRoot),
+      entries: managedEntries,
+      staleManagedRecords,
+      generatedAt: now,
+    };
+  }
+
+  /** Refresh named-branch divergence and return a new management snapshot. */
+  public async refreshManagementState(
+    sourceCheckoutRoot: string
+  ): Promise<WorktreeManagementState> {
+    const sourceRoot = await this.requireRepositoryRoot(sourceCheckoutRoot);
+    const entries = await listGitWorktrees(sourceRoot);
+    for (const entry of entries) {
+      if (!entry.branchName || pathsEqual(entry.worktreePath, sourceRoot)) continue;
+      const label = await getBranchUpstream(sourceRoot, entry.branchName);
+      if (!label) continue;
+      try {
+        const comparisonCommit = await resolveCommit(sourceRoot, label);
+        const counts = await getAheadBehind(
+          sourceRoot,
+          comparisonCommit,
+          `refs/heads/${entry.branchName}`
+        );
+        WorktreeManager.namedDivergenceCache.set(
+          this.divergenceCacheKey(sourceRoot, entry.branchName),
+          {
+            comparisonLabel: label,
+            comparisonCommit,
+            ...counts,
+            calculatedAt: this.now(),
+          }
+        );
+      } catch {
+        // Divergence is informational. An unavailable upstream never blocks a run.
+      }
+    }
+    return this.getManagementState(sourceRoot);
+  }
+
+  /** Apply one explicitly requested management action after revalidation. */
+  public async applyManagementAction(
+    options: WorktreeManagementActionOptions
+  ): Promise<void> {
+    const sourceRoot = await this.requireRepositoryRoot(
+      options.sourceCheckoutRoot
+    );
+    if (
+      (options.action === WORKTREE_MANAGEMENT_ACTIONS.FORCE_REMOVE ||
+        (options.action === WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH &&
+          options.confirmed)) &&
+      options.confirmed !== true
+    ) {
+      throw new Error("This destructive worktree action requires confirmation.");
+    }
+    if (options.action === WORKTREE_MANAGEMENT_ACTIONS.PRUNE) {
+      await pruneWorktrees(sourceRoot);
+      return;
+    }
+    if (!options.worktreePath && !options.branchName) {
+      throw new Error("A worktree or branch target is required.");
+    }
+
+    await withRepositoryWorktreeMutationLock(sourceRoot, async () => {
+      const commonDirectory = await this.requireCommonDirectory(sourceRoot);
+      const records = await this.readRecords(commonDirectory);
+      const record = records.find(
+        (candidate) =>
+          (options.branchName && candidate.branchName === options.branchName) ||
+          (options.worktreePath &&
+            pathsEqual(candidate.worktreePath, options.worktreePath))
+      );
+      if (!record) {
+        throw new Error("Only a valid ctrlyoke ownership record can be changed.");
+      }
+      if (options.action === WORKTREE_MANAGEMENT_ACTIONS.REPAIR) {
+        if (!pathsEqual(record.worktreePath, options.worktreePath ?? "")) {
+          throw new Error("Targeted repair must name the recorded worktree path.");
+        }
+        await repairWorktree(sourceRoot, record.worktreePath);
+        return;
+      }
+
+      const currentEntries = await listGitWorktrees(sourceRoot);
+      const entry = currentEntries.find(
+        (candidate) =>
+          candidate.branchName === record.branchName &&
+          pathsEqual(candidate.worktreePath, record.worktreePath)
+      );
+      const inspections = entry
+        ? await ExecutionRootLeaseManager.inspectLeases(record.worktreePath)
+        : [];
+      const liveLease = inspections.find((inspection) => !inspection.stale);
+      if (liveLease) {
+        const owner = liveLease.lease;
+        throw new Error(
+          `Worktree is in use by workflow ${owner.workflowKey}, run ${owner.runRef}.`
+        );
+      }
+
+      if (
+        options.action === WORKTREE_MANAGEMENT_ACTIONS.REMOVE ||
+        options.action === WORKTREE_MANAGEMENT_ACTIONS.FORCE_REMOVE
+      ) {
+        if (!entry) throw new Error("The worktree admin entry is stale; repair it first.");
+        await removeWorktree(
+          sourceRoot,
+          record.worktreePath,
+          options.action === WORKTREE_MANAGEMENT_ACTIONS.FORCE_REMOVE
+        );
+        await this.writeRecord(
+          this.recordPath(commonDirectory, record.branchName),
+          {
+            ...record,
+            lifecycleState: "settled",
+            directoryState: "removed",
+          }
+        );
+        return;
+      }
+
+      if (options.action === WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH) {
+        if (entry) throw new Error("A checked-out branch cannot be deleted.");
+        const runnerStatus = await WorkflowLockManager.checkLock(
+          record.stateRoot,
+          record.workflowKey
+        );
+        if (runnerStatus !== LOCK_STATUS.NONE) {
+          throw new Error("The managed run is still live or recoverable.");
+        }
+        const currentTip = await resolveCommit(
+          sourceRoot,
+          `refs/heads/${record.branchName}`
+        );
+        if (currentTip !== record.lastVerifiedBranchTip) {
+          throw new Error("The branch tip changed outside ctrlyoke; refusing cleanup.");
+        }
+        const eligible = await this.getBranchCleanupEligibility(
+          sourceRoot,
+          record,
+          undefined,
+          false
+        );
+        if (!eligible.eligible && options.confirmed !== true) {
+          throw new Error(
+            `${eligible.reason ?? "Branch is not provably merged."} Confirm explicit deletion to continue.`
+          );
+        }
+        await deleteLocalBranch(
+          sourceRoot,
+          record.branchName,
+          options.confirmed === true
+        );
+        await this.writeRecord(
+          this.recordPath(commonDirectory, record.branchName),
+          { ...record, branchState: "deleted" }
+        );
+      }
+    });
+  }
+
+  /**
    * Resolve a named branch, attaching or creating its linked checkout as
    * necessary. The returned lease must be released by the execution owner.
    */
@@ -1526,6 +1858,44 @@ export class WorktreeManager {
     await WorkspaceInitializer.initializeIfNeeded(executionCheckoutRoot);
     const dirty = await hasUncommittedChanges(executionCheckoutRoot);
     const baseCommit = await resolveCommit(executionCheckoutRoot, "HEAD");
+    const comparisonBaseLabel =
+      options.base?.trim() ||
+      (await getBranchUpstream(executionCheckoutRoot, branchName));
+    let comparisonBaseCommit: string | undefined;
+    if (comparisonBaseLabel) {
+      try {
+        comparisonBaseCommit = await resolveCommit(
+          executionCheckoutRoot,
+          comparisonBaseLabel
+        );
+        void getAheadBehind(
+          executionCheckoutRoot,
+          comparisonBaseCommit,
+          `refs/heads/${branchName}`
+        )
+          .then((counts) => {
+            WorktreeManager.namedDivergenceCache.set(
+              this.divergenceCacheKey(sourceCheckoutRoot, branchName),
+              {
+                comparisonLabel: comparisonBaseLabel,
+                comparisonCommit: comparisonBaseCommit!,
+                ...counts,
+                calculatedAt: this.now(),
+              }
+            );
+          })
+          .catch(() => undefined);
+      } catch {
+        // A missing configured comparison base is informational only.
+        WorktreeManager.namedDivergenceCache.delete(
+          this.divergenceCacheKey(sourceCheckoutRoot, branchName)
+        );
+      }
+    } else {
+      WorktreeManager.namedDivergenceCache.delete(
+        this.divergenceCacheKey(sourceCheckoutRoot, branchName)
+      );
+    }
     const mapSourcePath = (sourcePath: string): string =>
       path.resolve(
         executionCheckoutRoot,
@@ -1630,6 +2000,9 @@ export class WorktreeManager {
       worktreePath: executionCheckoutRoot,
       sourceCheckoutRoot,
       baseCommit,
+      ...(comparisonBaseLabel && comparisonBaseCommit
+        ? { comparisonBaseLabel, comparisonBaseCommit }
+        : {}),
       workflowKey: options.workflowKey,
       runRef: options.runRef,
       createdAt: this.now(),
@@ -1648,6 +2021,9 @@ export class WorktreeManager {
       branchState: "present",
       baseCommit,
       dirty,
+      ...(comparisonBaseLabel && comparisonBaseCommit
+        ? { comparisonBaseLabel, comparisonBaseCommit }
+        : {}),
       ...(setupOutcome ? { setupOutcome } : {}),
     });
     return info;
@@ -2087,6 +2463,65 @@ export class WorktreeManager {
     } catch {
       return undefined;
     }
+  }
+
+  private divergenceCacheKey(sourceRoot: string, branchName: string): string {
+    return `${path.resolve(sourceRoot)}\0${branchName}`;
+  }
+
+  private async getBranchCleanupEligibility(
+    sourceRoot: string,
+    record: ManagedWorktreeOwnershipRecord,
+    entry: GitWorktreeEntry | undefined,
+    inUse: boolean
+  ): Promise<{ eligible: boolean; reason?: string }> {
+    if (entry) return { eligible: false, reason: "Branch is checked out." };
+    if (inUse) return { eligible: false, reason: "Worktree has a live lease." };
+    if (!record.targetBranch) {
+      return {
+        eligible: false,
+        reason: "The ownership record has no recorded target branch.",
+      };
+    }
+    if (
+      (await WorkflowLockManager.checkLock(
+        record.stateRoot,
+        record.workflowKey
+      )) !== LOCK_STATUS.NONE
+    ) {
+      return {
+        eligible: false,
+        reason: "The managed run is live or recoverable.",
+      };
+    }
+    let currentTip: string;
+    try {
+      currentTip = await resolveCommit(
+        sourceRoot,
+        `refs/heads/${record.branchName}`
+      );
+    } catch {
+      return { eligible: false, reason: "The recorded branch no longer exists." };
+    }
+    if (currentTip !== record.lastVerifiedBranchTip) {
+      return {
+        eligible: false,
+        reason: "The branch tip changed outside ctrlyoke.",
+      };
+    }
+    if (
+      !(await isCommitAncestor(
+        sourceRoot,
+        `refs/heads/${record.branchName}`,
+        record.targetBranch
+      ))
+    ) {
+      return {
+        eligible: false,
+        reason: `The branch is not proven merged into ${record.targetBranch}.`,
+      };
+    }
+    return { eligible: true };
   }
 
   private async resolveExecutionInputs(

@@ -37,6 +37,7 @@ import {
   type NotificationKind,
   type SettingScope,
   type SettingWriteScope,
+  type WorktreeManagementAction,
   type WorkflowFileFormat,
 } from "./DashboardConstants";
 import type {
@@ -1151,6 +1152,67 @@ export interface WorktreeMergeResultMessage {
   worktree: import("./CtrlYokeTypes").WorktreeRunProjection;
 }
 
+export interface WorktreeManagementStateMessage {
+  type: typeof MESSAGE_TYPES.WORKTREE_MANAGEMENT_STATE;
+  state: WorktreeManagementState;
+}
+
+export interface WorktreeManagementLeaseOwner {
+  lease: { workflowKey: string; runRef: string; stateRoot: string };
+  ageMs: number;
+}
+
+export interface WorktreeManagementEntry {
+  worktreePath: string;
+  headCommit: string;
+  branchName?: string;
+  ownership: "managed" | "user";
+  lifecycleState?: string;
+  directoryState?: string;
+  branchState: "present" | "missing" | "deleted";
+  createdAt?: number;
+  ageMs?: number;
+  inUse: boolean;
+  leaseOwners: WorktreeManagementLeaseOwner[];
+  stale: boolean;
+  prunableReason?: string;
+  targetBranch?: string;
+  branchCleanupEligible: boolean;
+  branchCleanupReason?: string;
+  divergence?: {
+    comparisonLabel: string;
+    comparisonCommit: string;
+    ahead: number;
+    behind: number;
+    calculatedAt: number;
+  };
+}
+
+export interface WorktreeManagementState {
+  resolvedRoot: string;
+  entries: WorktreeManagementEntry[];
+  staleManagedRecords: unknown[];
+  generatedAt: number;
+}
+
+export interface RequestWorktreeManagementStateMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_WORKTREE_MANAGEMENT_STATE;
+  refresh?: boolean;
+}
+
+export interface OpenWorktreeOwnerMessage {
+  type: typeof MESSAGE_TYPES.OPEN_WORKTREE_OWNER;
+  stateRoot: string;
+}
+
+export interface WorktreeManagementActionMessage {
+  type: typeof MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION;
+  action: WorktreeManagementAction;
+  worktreePath?: string;
+  branchName?: string;
+  confirmed?: boolean;
+}
+
 /**
  * Global settings updated message (extension -> webview)
  */
@@ -2088,6 +2150,7 @@ export type IncomingMessage =
   | McpLocalScanResultMessage
   | McpRegistrySearchResultMessage
   | GlobalSettingsLoadedMessage
+  | WorktreeManagementStateMessage
   | GlobalSettingUpdatedMessage
   | NotificationEventMessage
   | UserFeedbackMessage

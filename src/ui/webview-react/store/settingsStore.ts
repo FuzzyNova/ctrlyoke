@@ -24,6 +24,7 @@ import type {
   FullGlobalSettings,
   PreCondition,
   TerminalSettings,
+  WorktreeManagementState,
 } from "@root/types/WebviewMessageTypes";
 import type {
   EndCondition,
@@ -223,6 +224,7 @@ interface SettingsState {
   dev: DevStatus | null;
   devBuild: DevBuildState;
   lastCommitMessageGeneration: CommitMessageGenerationRecord | null;
+  worktreeManagement: WorktreeManagementState | null;
 }
 
 /**
@@ -298,6 +300,7 @@ interface SettingsActions {
   setLastCommitMessageGeneration: (
     record: CommitMessageGenerationRecord | null
   ) => void;
+  setWorktreeManagement: (state: WorktreeManagementState | null) => void;
 
   // Effective value resolution (workflow > global)
   getEffectiveHarness: () => HarnessId;
@@ -430,6 +433,7 @@ const initialState: SettingsState = {
     lastResult: null,
   },
   lastCommitMessageGeneration: null,
+  worktreeManagement: null,
 };
 
 export const useSettingsStore = create<SettingsState & SettingsActions>(
@@ -587,6 +591,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
 
     setLastCommitMessageGeneration: (record) =>
       set({ lastCommitMessageGeneration: record }),
+    setWorktreeManagement: (state) => set({ worktreeManagement: state }),
 
     // ============================================================================
     // EFFECTIVE VALUE RESOLUTION (Workflow > Global)

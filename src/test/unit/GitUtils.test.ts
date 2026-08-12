@@ -18,6 +18,9 @@ import {
   absoluteGitDir,
   gitCommonDir,
   gitPath,
+  getAheadBehind,
+  getBranchUpstream,
+  isCommitAncestor,
 } from "../../utils/GitUtils";
 
 suite("GitUtils.gitRefExists", function () {
@@ -255,5 +258,22 @@ suite("GitUtils worktree plumbing", function () {
         error.existingWorktreePath === path.normalize(attached)
     );
     await removeWorktree(workspaceRoot, attached);
+  });
+
+  test("computes labeled ahead/behind counts without syncing", async () => {
+    runGit(["checkout", "-b", "feature"]);
+    await fs.writeFile(path.join(workspaceRoot, "tracked.txt"), "feature\n");
+    runGit(["add", "tracked.txt"]);
+    runGit(["commit", "-m", "Feature"]);
+    runGit(["checkout", "-b", "base", "HEAD~1"]);
+    runGit(["checkout", "feature"]);
+    runGit(["branch", "--set-upstream-to=base", "feature"]);
+
+    assert.deepStrictEqual(
+      await getAheadBehind(workspaceRoot, "base", "feature"),
+      { ahead: 1, behind: 0 }
+    );
+    assert.strictEqual(await getBranchUpstream(workspaceRoot, "feature"), "base");
+    assert.strictEqual(await isCommitAncestor(workspaceRoot, "base", "feature"), true);
   });
 });

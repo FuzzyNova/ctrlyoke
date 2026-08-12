@@ -1428,6 +1428,28 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
+  const manageWorktreesCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.MANAGE_WORKTREES,
+    async () => {
+      await vscode.commands.executeCommand("ctrlyoke.openPanel");
+    }
+  );
+
+  const openWorktreeOwnerCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.OPEN_WORKTREE_OWNER,
+    async (args: { stateRoot?: string }) => {
+      if (!args?.stateRoot || !path.isAbsolute(args.stateRoot)) {
+        reportCommandError("ctrlyoke: The owning workspace path is unavailable.");
+        return;
+      }
+      await vscode.commands.executeCommand(
+        "vscode.openFolder",
+        vscode.Uri.file(args.stateRoot),
+        true
+      );
+    }
+  );
+
   // Add all production commands to subscriptions
   context.subscriptions.push(
     openPanelCommand,
@@ -1456,6 +1478,8 @@ function registerCommands(context: vscode.ExtensionContext) {
     openWorktreeCommand,
     viewWorktreeDiffCommand,
     mergeWorktreeCommand,
+    manageWorktreesCommand,
+    openWorktreeOwnerCommand,
     addFileToPromptEditorCommand,
     addDirectoryToPromptEditorCommand,
     addSelectionToPromptEditorCommand,

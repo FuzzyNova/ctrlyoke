@@ -15,6 +15,11 @@
 > drawer controls, the settings schema and settings-UI placement, and reverses the
 > unjustified "no global default" rule in favor of `defaults.worktree` with an
 > authored-vs-inherited origin guard.
+>
+> **Revision note (2026-08-11):** Completed the first release. Worktree
+> management and named-branch divergence are now available; concurrency
+> thresholds, retention policies, historical landed-run undo, passthrough roots,
+> multi-repository fan-out, and cache-sharing ergonomics remain Phase 5 work.
 
 ---
 
@@ -1831,6 +1836,22 @@ live branch values.
 - No-change cleanup deletes only the still-owned empty branch when `keep` is
   false; `keep: true` preserves it because the worktree remains attached.
 
+### Management and divergence
+
+- Manage Worktrees lists Git entries with ownership, lease owner details, branch
+  state, age, stale/prunable state, and the resolved root.
+- Safe bulk branch cleanup preselects only valid ctrlyoke records that are
+  inactive, unchecked out, and ancestry-proven merged into their recorded target.
+  Squash/rebase merges remain explicit confirmed deletions; landed branches are
+  never deleted automatically.
+- Remove, force-remove, targeted repair, prune, and branch deletion revalidate
+  ownership and lease state. Force removal and explicit deletion require
+  confirmation, and pruning is never automatic for user-owned entries.
+- Named ahead/behind data is cached and labeled with the recorded explicit base
+  or configured upstream. The resolved comparison commit is persisted with the
+  named runtime; no unlabeled checkout inference or automatic synchronization
+  is performed.
+
 ### Merge
 
 - Target branch changed.
@@ -1841,6 +1862,20 @@ live branch values.
 - Abort failure.
 - Empty branch cleanup.
 - Source execution-lease conflict.
+
+### Management and named divergence
+
+- Bulk cleanup preselects only provably safe merged branches; explicit
+  squash/rebase deletion remains confirmed and landed branches are never
+  automatic cleanup targets.
+- Force removal requires explicit confirmation; managed finalization does not
+  escalate ordinary removal failures.
+- Prune is explicit and never runs automatically against user-owned entries;
+  stale admin entries offer targeted repair.
+- Live leases render the root in use with owner details and Retry/Open owning
+  workspace affordances.
+- Named ahead/behind uses the recorded labeled base and resolved commit, omits
+  counts without a base, and never auto-syncs.
 
 ### Snapshots and undo
 
@@ -2036,7 +2071,7 @@ completion/failure/cancellation path, and crash leftovers are discoverable.
 worktree on every landing outcome, and activation discovery exposes crash
 leftovers without pruning user-owned entries.
 
-### Phase 4 — Merge and management UX
+### Phase 4 — Merge and management UX — **Complete**
 
 27. Implement one guarded merge engine with source-checkout exclusive leasing.
     **Implemented.** `WorktreeManager.mergeManagedWorktree` is the shared
@@ -2053,8 +2088,16 @@ leftovers without pruning user-owned entries.
     finalization wiring, settings and drawer controls, guarded dashboard merge,
     persisted outcomes, and focused schema/UI coverage are now shipped together.
 29. Implement Manage Worktrees with safe remove/prune/branch cleanup inside the
-    Worktrees settings section.
-30. Show cached ahead/behind data for named branches.
+    Worktrees settings section. **Implemented.** The settings section lists
+    ownership, lease state, branch state, age, stale/prunable entries, and the
+    resolved root; safe bulk cleanup is limited to ancestry-proven merged
+    branches, while force removal and explicit deletion are confirmed actions.
+    Retry/Open owning workspace actions are shown for live leases, and the
+    command palette exposes `ctrlyoke.manageWorktrees`.
+30. Show cached ahead/behind data for named branches. **Implemented.** Named
+    resolution records the explicit comparison base or configured upstream and
+    its resolved commit; cached counts are labeled and non-blocking, with no
+    automatic sync and no counts when no comparison base is known.
 
 ### Phase 5 — Deferred expansion
 

@@ -59,6 +59,7 @@ import {
   type ActionType,
   type StepStatus,
   type FinalStepPhase,
+  type WorktreeManagementAction,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
@@ -99,7 +100,10 @@ import { TemplateImporter } from "./orchestration/TemplateImporter";
 import { WorkflowCommandHandler } from "./orchestration/WorkflowCommandHandler";
 import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager";
 import { WorkspaceInitializer } from "./orchestration/WorkspaceInitializer";
-import { WorktreeManager, type WorktreeInfo } from "./orchestration/WorktreeManager";
+import {
+  WorktreeManager,
+  type WorktreeInfo,
+} from "./orchestration/WorktreeManager";
 import { PromptFileParser } from "./PromptFileParser";
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
 import { PropertyResolver } from "../utils/PropertyResolver";
@@ -3340,6 +3344,28 @@ export class WorkflowOrchestrator {
     }
     this.dashboardBroadcastHub.updateWorktreeMerge(address, projection);
     return projection;
+  }
+
+  async getWorktreeManagementState() {
+    return new WorktreeManager().getManagementState(this.requireWorkspaceRoot());
+  }
+
+  async refreshWorktreeManagementState() {
+    return new WorktreeManager().refreshManagementState(
+      this.requireWorkspaceRoot()
+    );
+  }
+
+  async applyWorktreeManagementAction(options: {
+    action: WorktreeManagementAction;
+    worktreePath?: string;
+    branchName?: string;
+    confirmed?: boolean;
+  }): Promise<void> {
+    await new WorktreeManager().applyManagementAction({
+      sourceCheckoutRoot: this.requireWorkspaceRoot(),
+      ...options,
+    });
   }
 
   async updateWorkingFileProperties(

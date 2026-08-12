@@ -1153,6 +1153,39 @@ export class WebviewMessageRouter {
       );
     });
 
+    const sendWorktreeManagementState = async (
+      refresh: boolean,
+      ctx: WebviewClientContext
+    ): Promise<void> => {
+      const orchestrator = this.getOrchestrator();
+      if (!orchestrator) return;
+      const state = refresh
+        ? await orchestrator.refreshWorktreeManagementState()
+        : await orchestrator.getWorktreeManagementState();
+      ctx.emit({ type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_STATE, state });
+    };
+
+    table.set(
+      MESSAGE_TYPES.REQUEST_WORKTREE_MANAGEMENT_STATE,
+      (message, ctx) => sendWorktreeManagementState(message.refresh === true, ctx)
+    );
+    table.set(MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION, async (message, ctx) => {
+      const orchestrator = this.getOrchestrator();
+      if (!orchestrator) return;
+      await orchestrator.applyWorktreeManagementAction({
+        action: message.action,
+        worktreePath: message.worktreePath,
+        branchName: message.branchName,
+        confirmed: message.confirmed,
+      });
+      await sendWorktreeManagementState(true, ctx);
+    });
+    table.set(MESSAGE_TYPES.OPEN_WORKTREE_OWNER, async (message) => {
+      await vscode.commands.executeCommand(VSCODE_COMMANDS.OPEN_WORKTREE_OWNER, {
+        stateRoot: message.stateRoot,
+      });
+    });
+
     table.set(MESSAGE_TYPES.REQUEST_HARNESS_USAGE, (_message, ctx) => {
       const service = this.getOrchestrator()?.getHarnessUsageService();
       ctx.emit({

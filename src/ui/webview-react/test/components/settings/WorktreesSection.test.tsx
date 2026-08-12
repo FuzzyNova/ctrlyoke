@@ -1,9 +1,10 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorktreesSection } from "@components/settings/WorktreesSection";
 import { SETTING_SCOPES } from "@root/types/DashboardConstants";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import { useSettingsStore } from "@store/settingsStore";
 
 function createSettings(root = ""): FullGlobalSettings {
   return {
@@ -17,6 +18,66 @@ function createSettings(root = ""): FullGlobalSettings {
 }
 
 describe("WorktreesSection", () => {
+  afterEach(() => {
+    useSettingsStore.getState().setWorktreeManagement(null);
+  });
+  it("preselects only provably safe merged branches and exposes in-use owners", () => {
+    const postMessage = vi.fn();
+    window.vscodeApi = {
+      postMessage,
+      getState: () => undefined,
+      setState: () => undefined,
+    };
+    useSettingsStore.getState().setWorktreeManagement({
+      resolvedRoot: "C:/worktrees",
+      generatedAt: Date.now(),
+      staleManagedRecords: [],
+      entries: [
+        {
+          worktreePath: "C:/worktrees/safe",
+          headCommit: "a",
+          branchName: "ctrlyoke/safe",
+          ownership: "managed",
+          branchState: "present",
+          inUse: false,
+          leaseOwners: [],
+          stale: false,
+          branchCleanupEligible: true,
+        },
+        {
+          worktreePath: "C:/worktrees/live",
+          headCommit: "b",
+          branchName: "ctrlyoke/live",
+          ownership: "managed",
+          branchState: "present",
+          inUse: true,
+          leaseOwners: [
+            {
+              lease: { workflowKey: "wf", runRef: "run", stateRoot: "C:/repo" },
+              ageMs: 1000,
+            },
+          ],
+          stale: false,
+          branchCleanupEligible: false,
+        },
+      ],
+    });
+
+    render(
+      <WorktreesSection
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Clean up safe merged branches (1)" })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/In use — wf\/run/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open owning workspace" })).toBeInTheDocument();
+  });
   it("shows the effective root and locks the setting at workspace scope", () => {
     render(
       <WorktreesSection
