@@ -418,6 +418,8 @@ export interface WorkingFileWorktreeRuntime {
   sourceCheckoutRoot: string;
   namedWorkspaceRoots: ResolverWorkspaceFolder[];
   baseCommit: string;
+  /** Whether the named checkout had uncommitted changes at run start. */
+  dirty?: boolean;
   targetBranch?: string;
   lifecycleOwner: "ctrlyoke" | "user";
   lifecycleState:

@@ -1950,12 +1950,17 @@ schema.
       settings section holding `worktrees.root`. No tab-badge work.
     - Add the `WorkflowStatus` worktree indicator and the `RunSummaryBanner`
       worktree projection.
-14. Implement named discovery/create/setup plus explicit failed-setup retry. Seed
-    `.ctrlyoke/.gitignore` via `WorkspaceInitializer.initializeIfNeeded(executionRoot)`
-    at the single create/attach site here, before the first setup or harness write.
-    Named mode never auto-commits, so seeding is not yet load-bearing, but the call
-    site is shared with managed mode and belongs with the code that creates the
-    directory.
+14. Implement named discovery/create/setup plus explicit failed-setup retry. **Resolution
+    half implemented.** Named discovery/create/attach, source-checkout rejection,
+    execution-root remapping, trust-overlap preflight, exclusive lease acquisition,
+    dirty-state reporting, runtime provisioning/ready persistence, and
+    `.ctrlyoke/.gitignore` seeding are implemented in `WorktreeManager`. Setup,
+    explicit failed-setup retry, and the remaining execution integration stay
+    pending for the next step. Seed `.ctrlyoke/.gitignore` via
+    `WorkspaceInitializer.initializeIfNeeded(executionRoot)` at the single
+    create/attach site here, before the first setup or harness write. Named mode
+    never auto-commits, so seeding is not yet load-bearing, but the call site is
+    shared with managed mode and belongs with the code that creates the directory.
 15. Add runtime trusted-root registration.
 16. Route snapshots, hosted repo attribution, and backend-resolved undo through the execution
     workspace.
