@@ -182,6 +182,8 @@ export interface AskUserQuestionOption {
  * A single question asked via AskUserQuestion, plus its resolution once answered.
  */
 export interface AskUserQuestionEntry {
+  /** Provider-defined identifier used to correlate an answer to this question. */
+  id?: string;
   /** The question text. */
   question: string;
   /** Short category label shown alongside the question (Claude calls this "header"). */

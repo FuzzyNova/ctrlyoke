@@ -2805,6 +2805,97 @@ suite("CodexLogParser", () => {
       assert.strictEqual((bashEvents[0].data as any).command, "npm test");
     });
 
+    test("should parse request_user_input questions and resolved answers", () => {
+      const events = [
+        {
+          type: "response_item",
+          timestamp: 1786659661471,
+          payload: {
+            type: "function_call",
+            name: "request_user_input",
+            arguments: JSON.stringify({
+              questions: [
+                {
+                  header: "Favorite animal",
+                  id: "favorite_animal",
+                  question: "What's your favorite animal?",
+                  options: [
+                    {
+                      label: "Dog",
+                      description: "Loyal and playful companion.",
+                    },
+                    {
+                      label: "Cat",
+                      description: "Curious and independent companion.",
+                    },
+                    {
+                      label: "Snake",
+                      description: "Sleek and fascinating reptile.",
+                    },
+                  ],
+                },
+              ],
+            }),
+            call_id: "call-question-1",
+          },
+        },
+        {
+          type: "response_item",
+          timestamp: 1786659669721,
+          payload: {
+            type: "function_call_output",
+            call_id: "call-question-1",
+            output: JSON.stringify({
+              answers: { favorite_animal: { answers: ["Snake"] } },
+            }),
+          },
+        },
+      ];
+
+      const response = parser.extractResponse(events);
+      const askEvents = response.events.filter(
+        (event) => event.type === CLI_EVENT_TYPES.ASK_USER_QUESTION
+      );
+
+      assert.strictEqual(askEvents.length, 2);
+      const initiated = askEvents[0].data as AskUserQuestionData;
+      assert.strictEqual(initiated.status, OPERATION_STATUS.INITIATED);
+      assert.strictEqual(initiated.questions[0].id, "favorite_animal");
+      assert.deepStrictEqual(
+        initiated.questions[0].options.map(({ label, description }) => ({
+          label,
+          description,
+        })),
+        [
+          { label: "Dog", description: "Loyal and playful companion." },
+          { label: "Cat", description: "Curious and independent companion." },
+          { label: "Snake", description: "Sleek and fascinating reptile." },
+        ]
+      );
+
+      const completed = askEvents[1].data as AskUserQuestionData;
+      assert.strictEqual(completed.status, OPERATION_STATUS.COMPLETED);
+      assert.strictEqual(completed.questions[0].answer, "Snake");
+
+      const streamingParser = new CodexLogParser();
+      const streamedInitiated =
+        streamingParser.extractStructuredEventsFromEvent(
+          events[0] as unknown as BaseCliEvent
+        );
+      const streamedCompleted =
+        streamingParser.extractStructuredEventsFromEvent(
+          events[1] as unknown as BaseCliEvent
+        );
+      assert.deepStrictEqual(
+        streamedInitiated.map((event) => event.type),
+        [CLI_EVENT_TYPES.ASK_USER_QUESTION]
+      );
+      assert.strictEqual(
+        (streamedCompleted[0].data as AskUserQuestionData).questions[0].answer,
+        "Snake"
+      );
+    });
+
     test("should parse function_call arguments when passed as JSON string", () => {
       const events = [
         {

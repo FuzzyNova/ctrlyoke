@@ -6,6 +6,9 @@ import {
   FileEditData,
   FileDeleteData,
   ToolResultData,
+  AskUserQuestionData,
+  AskUserQuestionEntry,
+  AskUserQuestionOption,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -22,7 +25,8 @@ import { BaseToolBuilder } from "../shared/BaseToolBuilder";
  *
  * MCP_TOOL_CALL and WEB_SEARCH are point-in-time — no separate completion
  * event arrives for them. TOOL_CALL (generic fallback) also has no tracked
- * completion. Everything else (BASH, FILE_*) has a matching _output event.
+ * completion. BASH, FILE_*, and request_user_input have matching output
+ * events.
  */
 const TYPES_WITH_COMPLETION = new Set<string>([
   CLI_EVENT_TYPES.BASH_COMMAND,
@@ -30,6 +34,7 @@ const TYPES_WITH_COMPLETION = new Set<string>([
   CLI_EVENT_TYPES.FILE_WRITE,
   CLI_EVENT_TYPES.FILE_EDIT,
   CLI_EVENT_TYPES.FILE_DELETE,
+  CLI_EVENT_TYPES.ASK_USER_QUESTION,
 ]);
 
 /**
@@ -49,6 +54,8 @@ const TYPES_WITH_COMPLETION = new Set<string>([
  * headless Codex runs.
  */
 export class CodexToolBuilder {
+  private static readonly REQUEST_USER_INPUT_TOOL_NAME = "request_user_input";
+
   // ── LOG FORMAT: INITIATED ─────────────────────────────────────────────────
 
   /**
@@ -76,6 +83,12 @@ export class CodexToolBuilder {
     callId: string | undefined,
     timestamp: number
   ): CliEvent[] {
+    if (toolName === this.REQUEST_USER_INPUT_TOOL_NAME) {
+      return [
+        this.buildRequestUserInputInitiatedEvent(params, callId, timestamp),
+      ];
+    }
+
     // Codex-specific: apply_patch encodes multi-file edits in a custom patch format
     if (
       toolName === "apply_patch" &&
@@ -530,8 +543,8 @@ export class CodexToolBuilder {
    * Parses Codex's function_call_output format:
    * `"Exit code: X\nWall time: Y\nTotal output lines: Z\nOutput:\n<content>"`
    *
-   * Only bash commands arrive via function_call_output (other tools use
-   * custom_tool_call_output). When isBash is false, falls back to TOOL_RESULT.
+   * Bash commands and request_user_input arrive via function_call_output; other
+   * tools use custom_tool_call_output. Unknown calls fall back to TOOL_RESULT.
    *
    * @param isBash         - Whether the tracked call was a BASH_COMMAND
    * @param rawOutput      - Raw output string from event.payload.output
@@ -546,6 +559,15 @@ export class CodexToolBuilder {
     timestamp: number,
     initiatedEvent?: CliEvent
   ): CliEvent {
+    if (initiatedEvent?.type === CLI_EVENT_TYPES.ASK_USER_QUESTION) {
+      return this.buildRequestUserInputCompletedEvent(
+        rawOutput,
+        callId,
+        timestamp,
+        initiatedEvent
+      );
+    }
+
     if (isBash) {
       const exitCodeMatch = rawOutput.match(/Exit code: (\d+)/);
       const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1], 10) : 0;
@@ -576,6 +598,171 @@ export class CodexToolBuilder {
         result: { success: true, output: rawOutput },
       } as ToolResultData,
     };
+  }
+
+  private static buildRequestUserInputInitiatedEvent(
+    params: Record<string, unknown>,
+    toolCallId: string | undefined,
+    timestamp: number
+  ): CliEvent {
+    return {
+      type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+      timestamp,
+      data: {
+        toolCallId,
+        questions: this.parseRequestUserInputQuestions(params.questions),
+        status: OPERATION_STATUS.INITIATED,
+      } as AskUserQuestionData,
+    };
+  }
+
+  private static parseRequestUserInputQuestions(
+    rawQuestions: unknown
+  ): AskUserQuestionEntry[] {
+    if (!Array.isArray(rawQuestions)) {
+      return [];
+    }
+
+    return rawQuestions.map((rawQuestion) => {
+      const question = (rawQuestion ?? {}) as Record<string, unknown>;
+      return {
+        id: typeof question.id === "string" ? question.id : undefined,
+        question:
+          typeof question.question === "string" ? question.question : "",
+        header:
+          typeof question.header === "string" ? question.header : undefined,
+        multiSelect:
+          typeof question.multiSelect === "boolean"
+            ? question.multiSelect
+            : undefined,
+        options: this.parseRequestUserInputOptions(question.options),
+      };
+    });
+  }
+
+  private static parseRequestUserInputOptions(
+    rawOptions: unknown
+  ): AskUserQuestionOption[] {
+    if (!Array.isArray(rawOptions)) {
+      return [];
+    }
+
+    return rawOptions.map((rawOption) => {
+      const option = (rawOption ?? {}) as Record<string, unknown>;
+      return {
+        label: typeof option.label === "string" ? option.label : "",
+        description:
+          typeof option.description === "string"
+            ? option.description
+            : undefined,
+        preview:
+          typeof option.preview === "string" ? option.preview : undefined,
+      };
+    });
+  }
+
+  private static buildRequestUserInputCompletedEvent(
+    rawOutput: string,
+    toolCallId: string | undefined,
+    timestamp: number,
+    initiatedEvent: CliEvent
+  ): CliEvent {
+    const initiatedData = initiatedEvent.data as AskUserQuestionData;
+    const parsedOutput = this.parseRequestUserInputOutput(rawOutput);
+    const answers = parsedOutput?.answers;
+
+    if (!answers) {
+      return {
+        type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+        timestamp,
+        data: {
+          toolCallId,
+          questions: initiatedData.questions,
+          status: OPERATION_STATUS.FAILED,
+          declined: {
+            reason: "rejected",
+            feedback: rawOutput || undefined,
+          },
+        } as AskUserQuestionData,
+      };
+    }
+
+    return {
+      type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+      timestamp,
+      data: {
+        toolCallId,
+        questions: initiatedData.questions.map((question) =>
+          this.resolveRequestUserInputAnswer(question, answers)
+        ),
+        status: OPERATION_STATUS.COMPLETED,
+      } as AskUserQuestionData,
+    };
+  }
+
+  private static parseRequestUserInputOutput(rawOutput: string): {
+    answers?: Record<string, unknown>;
+  } | null {
+    try {
+      const parsed = JSON.parse(rawOutput) as Record<string, unknown>;
+      const answers = parsed.answers;
+      return answers && typeof answers === "object" && !Array.isArray(answers)
+        ? { answers: answers as Record<string, unknown> }
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private static resolveRequestUserInputAnswer(
+    question: AskUserQuestionEntry,
+    answers: Record<string, unknown>
+  ): AskUserQuestionEntry {
+    const rawAnswer =
+      (question.id ? answers[question.id] : undefined) ??
+      answers[question.question];
+    const answerValues = this.extractRequestUserInputAnswerValues(rawAnswer);
+    if (answerValues.length === 0) {
+      return { ...question };
+    }
+
+    const resolved = answerValues.map((value) =>
+      this.resolveRequestUserInputOption(value, question.options)
+    );
+    const selectedOptions = resolved.filter(
+      (value): value is { answer: string; preview?: string } =>
+        typeof value === "object"
+    );
+    return {
+      ...question,
+      answer: resolved
+        .map((value) => (typeof value === "string" ? value : value.answer))
+        .join(", "),
+      answerPreview: selectedOptions[0]?.preview,
+    };
+  }
+
+  private static extractRequestUserInputAnswerValues(
+    rawAnswer: unknown
+  ): string[] {
+    const answerPayload =
+      rawAnswer && typeof rawAnswer === "object" && !Array.isArray(rawAnswer)
+        ? (rawAnswer as { answers?: unknown }).answers
+        : rawAnswer;
+    const values = Array.isArray(answerPayload)
+      ? answerPayload
+      : answerPayload === undefined
+        ? []
+        : [answerPayload];
+    return values.filter((value): value is string => typeof value === "string");
+  }
+
+  private static resolveRequestUserInputOption(
+    answer: string,
+    options: AskUserQuestionOption[]
+  ): string | { answer: string; preview?: string } {
+    const option = options.find((candidate) => candidate.label === answer);
+    return option ? { answer: option.label, preview: option.preview } : answer;
   }
 
   // ── ITEM FORMAT: INITIATED ────────────────────────────────────────────────
