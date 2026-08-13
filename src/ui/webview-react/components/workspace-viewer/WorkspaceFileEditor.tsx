@@ -305,12 +305,21 @@ function findWorkspaceReferenceMatches(
   offset = 0
 ): WorkspaceReferenceMatch[] {
   const patterns = {
-    fullFileQuoted: /@"([^"]+\.[a-zA-Z0-9]+)"(?!\/)/g,
-    directoryQuoted: /@"([^"]+\/)"(?![\w])/g,
-    fullFile: /@([^\s@#"]+\.[a-zA-Z0-9]+)(?!\/)/g,
-    directory: /@([^\s@#"]+\/)/g,
-    lineRangeQuoted: /#selection:"([^"]+)":(\d+)-(\d+)/g,
-    lineRange: /#selection:([^\s:"]+):(\d+)-(\d+)/g,
+    // The lookbehind rejects not just alphanumerics but every other character
+    // that's legal inside a filename (+, -, _, =, @, #, $, %, ^, &, !, ~), so
+    // `(@file.ts`/`"@file.ts` still match (punctuation isn't a filename
+    // char), but an email (nathan@gmail.com) or a filename mentioned in
+    // prose like data_file~@backup!.csv doesn't. The unquoted path bodies
+    // below allow an embedded @ so a filename like myimage@512x512.png
+    // parses as one reference rather than splitting at the inner @; must
+    // stay in lockstep with atomicReferences.ts, PromptLinkProvider.ts, and
+    // FileReferenceParser.ts.
+    fullFileQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])@"([^"]+\.[a-zA-Z0-9]+)"(?!\/)/g,
+    directoryQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])@"([^"]+\/)"(?![\w])/g,
+    fullFile: /(?<![A-Za-z0-9_+=@#$%^&!~-])@([^\s#"]+\.[a-zA-Z0-9]+)(?!\/)/g,
+    directory: /(?<![A-Za-z0-9_+=@#$%^&!~-])@([^\s#"]+\/)/g,
+    lineRangeQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])#selection:"([^"]+)":(\d+)-(\d+)/g,
+    lineRange: /(?<![A-Za-z0-9_+=@#$%^&!~-])#selection:([^\s:"]+):(\d+)-(\d+)/g,
     // Must stay in lockstep with the canonical symbol pattern in
     // src/ui/webview-react/utils/atomicReferences.ts and
     // src/utils/FileReferenceParser.ts: one regex, quoted-or-bare per field,
@@ -318,7 +327,7 @@ function findWorkspaceReferenceMatches(
     // misses renders as inert text here while every other surface links it.
     // Groups: 1 kind, 2/3 quoted/bare path, 4/5 quoted/bare name, 6-7 range.
     symbol:
-      /#sym(?:\.([a-z-]+))?:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
+      /(?<![A-Za-z0-9_+=@#$%^&!~-])#sym(?:\.([a-z-]+))?:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
   };
 
   const fileMatches: WorkspaceReferenceMatch[] = [];

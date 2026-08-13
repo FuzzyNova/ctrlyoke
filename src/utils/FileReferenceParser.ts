@@ -85,7 +85,14 @@ export function parseAtReferences(prompt: string): FileReference[] {
   // Regex to match @path or @"path with spaces"
   // Group 1: quoted path, Group 2: unquoted path
   // Unquoted paths end at whitespace or colon (include . for extensions)
-  const regex = /@(?:"([^"]+)"|([^\s:]+))/g;
+  // The lookbehind rejects not just alphanumerics but every other character
+  // that's legal inside a filename (+, -, _, =, @, #, $, %, ^, &, !, ~), so
+  // an email (nathan@gmail.com) or a filename like data_file~@backup!.csv
+  // mentioned in prose isn't mistaken for a reference at the inner @ — while
+  // `(@file.ts` or `"@file.ts` still match, since `(`/`"` aren't filename
+  // characters. The unquoted body still permits an embedded @ so a path like
+  // src/myimage@512x512.png parses as one reference, not split at the inner @.
+  const regex = /(?<![A-Za-z0-9_+=@#$%^&!~-])@(?:"([^"]+)"|([^\s:]+))/g;
   let match;
 
   while ((match = regex.exec(prompt)) !== null) {
@@ -149,7 +156,9 @@ export function parseSelectionReferences(prompt: string): FileReference[] {
 
   // Match #selection:path:startLine-endLine for line ranges ONLY
   // Group 1: quoted path, Group 2: unquoted path, Group 3: startLine, Group 4: endLine
-  const regex = /#selection:(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g;
+  // Same word-boundary rationale as parseAtReferences: rejects filename-legal
+  // characters immediately before #, not just alphanumerics.
+  const regex = /(?<![A-Za-z0-9_+=@#$%^&!~-])#selection:(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g;
   let match;
 
   while ((match = regex.exec(prompt)) !== null) {
@@ -197,8 +206,10 @@ export function parseSymbolReferences(prompt: string): FileReference[] {
   // `see #sym:a.ts:MyClass, at 12:30-45`. Everything else a language server
   // emits — `Foo<T>`, `my-thing`, `Foo.bar`, `#private`, `doThing()` — is a
   // legal bare name and needs no quoting.
+  // Same word-boundary rationale as parseAtReferences: rejects filename-legal
+  // characters immediately before #, not just alphanumerics.
   const regex =
-    /#sym(?:\.([a-z-]+))?:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g;
+    /(?<![A-Za-z0-9_+=@#$%^&!~-])#sym(?:\.([a-z-]+))?:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g;
   let match;
 
   while ((match = regex.exec(prompt)) !== null) {
@@ -262,7 +273,11 @@ export function parseInlinePriorContextRefs(
   text: string
 ): InlinePriorContextMatch[] {
   const matches: InlinePriorContextMatch[] = [];
-  const regex = /\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\-]*)?)/g;
+  // Same word-boundary rationale as parseAtReferences: rejects filename-legal
+  // characters immediately before $, not just alphanumerics — e.g. a
+  // shell/env-style "price$previous" or a filename containing "$" shouldn't
+  // expand.
+  const regex = /(?<![A-Za-z0-9_+=@#$%^&!~-])\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\-]*)?)/g;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {
@@ -378,7 +393,11 @@ export function parseGitChangeReferences(text: string): GitChangeReference[] {
   // ~staged — exact keyword
   // ~stash:<N> — stash entry by index
   // ~[0-9a-f]{7,40} — commit hash (case-insensitive)
-  const regex = /~(diff|staged|stash:(\d+)|([0-9a-f]{7,40}))/gi;
+  // Same word-boundary rationale as parseAtReferences: rejects filename-legal
+  // characters immediately before ~, not just alphanumerics (e.g. a word
+  // ending in a hex-looking suffix like "abc123~stale" or a filename like
+  // "data_file~@backup!.csv" shouldn't be mistaken for a commit-hash ref).
+  const regex = /(?<![A-Za-z0-9_+=@#$%^&!~-])~(diff|staged|stash:(\d+)|([0-9a-f]{7,40}))/gi;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {

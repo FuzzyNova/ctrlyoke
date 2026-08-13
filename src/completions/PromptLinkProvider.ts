@@ -36,31 +36,42 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   // Regex patterns for detecting context references.
   // Each pattern has a quoted variant (for paths with spaces) and an unquoted variant.
   // Note: Patterns are recreated for each call to ensure proper state reset.
+  //
+  // Every pattern below starts with a lookbehind rejecting not just
+  // alphanumerics but every other character that's legal inside a filename
+  // (+, -, _, =, @, #, $, %, ^, &, !, ~). This lets a reference start right
+  // after punctuation like `(` or `"` (e.g. `(@file.ts is the ref)`) while
+  // rejecting a mid-word match such as an email address (nathan@gmail.com)
+  // or a filename like data_file~@backup!.csv mentioned in prose. Must stay
+  // in lockstep with the equivalent patterns in atomicReferences.ts,
+  // WorkspaceFileEditor.tsx, and src/utils/FileReferenceParser.ts.
   private readonly patterns = {
     // @"path with spaces/file.ext" (quoted path, full file)
-    fullFileQuoted: /@"([^"]+\.[a-zA-Z0-9]+)"/g,
+    fullFileQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])@"([^"]+\.[a-zA-Z0-9]+)"/g,
 
     // @file.ext (unquoted, no trailing slash, has extension)
     // Matches: @src/extension.ts, @docs/plan.md
-    fullFile: /@([^\s@#"]+\.[a-zA-Z0-9]+)/g,
+    // The body allows an embedded @ (e.g. myimage@512x512.png) so a filename
+    // containing one still parses as a single reference.
+    fullFile: /(?<![A-Za-z0-9_+=@#$%^&!~-])@([^\s#"]+\.[a-zA-Z0-9]+)/g,
 
     // @"path with spaces/dir/" (quoted path, directory with trailing slash)
-    directoryQuoted: /@"([^"]+\/)"/g,
+    directoryQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])@"([^"]+\/)"/g,
 
     // @dir/ (unquoted, trailing slash)
     // Matches: @src/ui/, @docs/
-    directory: /@([^\s@#"]+\/)/g,
+    directory: /(?<![A-Za-z0-9_+=@#$%^&!~-])@([^\s#"]+\/)/g,
 
     // #selection:<path>:10-20 — path quoted, or bare with no whitespace/`:`/`"`.
     // Groups: 1 quoted path, 2 bare path, 3 startLine, 4 endLine.
-    lineRange: /#selection:(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
+    lineRange: /(?<![A-Za-z0-9_+=@#$%^&!~-])#selection:(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
 
     // #sym[.kind]:<path>:<symbol>:42-58 — both fields quoted or bare, same rule.
     // Groups: 1 kind, 2/3 quoted/bare path, 4/5 quoted/bare symbol, 6-7 line range.
     // Matches: #sym:src/extension.ts:activate:14-36
     //          #sym:"C:/dev/my repo/a.ts":"get value":14-36
     symbol:
-      /#sym(?:\.([a-z-]+))?:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
+      /(?<![A-Za-z0-9_+=@#$%^&!~-])#sym(?:\.([a-z-]+))?:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
   };
 
   /**
@@ -502,11 +513,20 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
 
     const gitPatterns = [
       // ~diff and ~staged (fixed keywords)
-      { pattern: /~(diff|staged)/g, getRef: (m: RegExpExecArray) => m[1] },
+      {
+        pattern: /(?<![A-Za-z0-9_+=@#$%^&!~-])~(diff|staged)/g,
+        getRef: (m: RegExpExecArray) => m[1],
+      },
       // ~stash:N
-      { pattern: /~(stash:\d+)/g, getRef: (m: RegExpExecArray) => m[1] },
+      {
+        pattern: /(?<![A-Za-z0-9_+=@#$%^&!~-])~(stash:\d+)/g,
+        getRef: (m: RegExpExecArray) => m[1],
+      },
       // ~<7-40 hex chars> (commit hash)
-      { pattern: /~([0-9a-f]{7,40})/gi, getRef: (m: RegExpExecArray) => m[1] },
+      {
+        pattern: /(?<![A-Za-z0-9_+=@#$%^&!~-])~([0-9a-f]{7,40})/gi,
+        getRef: (m: RegExpExecArray) => m[1],
+      },
     ];
 
     for (const { pattern, getRef } of gitPatterns) {

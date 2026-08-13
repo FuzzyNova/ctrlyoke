@@ -445,6 +445,25 @@ function completionCacheKey(trigger: CompletionTrigger, query: string): string {
   return `${trigger} ${query}`;
 }
 
+// Find the rightmost occurrence of `triggerChar` in `text` that isn't
+// preceded by a character that's legal inside a filename — letters, digits,
+// or `_ + - = @ # $ % ^ & ! ~`. It can start right after whitespace,
+// punctuation like `(`/`"`, or the start of the string, but not mid-word or
+// mid-filename. This keeps an email address (nathan@gmail.com) or a filename
+// mentioned in prose (data_file~@backup!.csv, myimage@512x512.png) from
+// being treated as the start of a new @/#/~/$ reference, while still
+// resolving to the earlier, legitimate trigger when one exists (so
+// `@src/myimage@512x512.p` still resolves to the leading @, keeping the
+// embedded @ in the query).
+// Mirrored in PromptCompletionProvider.ts — keep both in sync.
+function findWordStartTriggerIndex(text: string, triggerChar: string): number {
+  let index = text.lastIndexOf(triggerChar);
+  while (index > 0 && /[A-Za-z0-9_+=@#$%^&!~-]/.test(text[index - 1])) {
+    index = text.lastIndexOf(triggerChar, index - 1);
+  }
+  return index;
+}
+
 export function buildPromptReferenceInsertion(
   docText: string,
   request: PromptEditorInsertRequest,
@@ -1069,10 +1088,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       const lineObj = context.state.doc.lineAt(context.pos);
       const textBefore = lineObj.text.slice(0, context.pos - lineObj.from);
 
-      const lastAtIndex = textBefore.lastIndexOf("@");
-      const lastHashIndex = textBefore.lastIndexOf("#");
-      const lastTildeIndex = textBefore.lastIndexOf("~");
-      const lastDollarIndex = textBefore.lastIndexOf("$");
+      const lastAtIndex = findWordStartTriggerIndex(textBefore, "@");
+      const lastHashIndex = findWordStartTriggerIndex(textBefore, "#");
+      const lastTildeIndex = findWordStartTriggerIndex(textBefore, "~");
+      const lastDollarIndex = findWordStartTriggerIndex(textBefore, "$");
 
       const maxIndex = Math.max(
         lastAtIndex,

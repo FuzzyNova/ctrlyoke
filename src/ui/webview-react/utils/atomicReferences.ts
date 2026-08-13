@@ -483,19 +483,28 @@ export function findContextReferenceMatches(
   offset = 0
 ): ContextReferenceMatch[] {
   const patterns = {
-    fullFileQuoted: /@"([^"]+\.[a-zA-Z0-9]+)"(?!\/)/g,
-    directoryQuoted: /@"([^"]+\/)"(?![\w])/g,
-    fullFile: /@([^\s@#"]+\.[a-zA-Z0-9]+)(?![a-zA-Z0-9/])/g,
-    directory: /@([^\s@#"]+\/)/g,
+    // The lookbehind rejects not just alphanumerics but every other character
+    // that's legal inside a filename (+, -, _, =, @, #, $, %, ^, &, !, ~), so
+    // `(@file.ts`/`"@file.ts` still match (punctuation isn't a filename
+    // char), but an email (nathan@gmail.com) or a filename mentioned in
+    // prose like data_file~@backup!.csv doesn't. The unquoted path bodies
+    // below allow an embedded @ so a filename like myimage@512x512.png
+    // parses as one reference rather than splitting at the inner @; must
+    // stay in lockstep with the equivalent change in FileReferenceParser.ts,
+    // PromptLinkProvider.ts, and WorkspaceFileEditor.tsx.
+    fullFileQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])@"([^"]+\.[a-zA-Z0-9]+)"(?!\/)/g,
+    directoryQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])@"([^"]+\/)"(?![\w])/g,
+    fullFile: /(?<![A-Za-z0-9_+=@#$%^&!~-])@([^\s#"]+\.[a-zA-Z0-9]+)(?![a-zA-Z0-9/])/g,
+    directory: /(?<![A-Za-z0-9_+=@#$%^&!~-])@([^\s#"]+\/)/g,
     // Path and symbol name are colon-delimited fields: quoted, or bare with no
     // whitespace/`:`/`"`. Must stay in lockstep with the runtime patterns in
     // src/utils/FileReferenceParser.ts — the two parsers are separate by design
     // (see the module header), but a reference this one chips while the runtime
     // one ignores is a reference that renders clickable and silently expands to
     // nothing.
-    lineRange: /#selection:(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
+    lineRange: /(?<![A-Za-z0-9_+=@#$%^&!~-])#selection:(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
     symbol:
-      /#sym(?:\.([a-z-]+))?:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
+      /(?<![A-Za-z0-9_+=@#$%^&!~-])#sym(?:\.([a-z-]+))?:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
   };
   const fileMatches: ContextReferenceMatch[] = [];
   const directoryMatches: ContextReferenceMatch[] = [];
@@ -576,9 +585,12 @@ export function findContextReferenceMatches(
       }
     }
   };
-  collectGitMatches(/~(diff|staged)/g, (m) => m[1]);
-  collectGitMatches(/~(stash:\d+)/g, (m) => m[1]);
-  collectGitMatches(/~([0-9a-f]{7,40})/gi, (m) => m[1].toLowerCase());
+  collectGitMatches(/(?<![A-Za-z0-9_+=@#$%^&!~-])~(diff|staged)/g, (m) => m[1]);
+  collectGitMatches(/(?<![A-Za-z0-9_+=@#$%^&!~-])~(stash:\d+)/g, (m) => m[1]);
+  collectGitMatches(
+    /(?<![A-Za-z0-9_+=@#$%^&!~-])~([0-9a-f]{7,40})/gi,
+    (m) => m[1].toLowerCase()
+  );
   return [
     ...fileMatches,
     ...filteredDirectoryMatches,
@@ -628,7 +640,8 @@ export function findInlinePriorContextRefs(
   offset = 0
 ): InlinePriorContextRef[] {
   const results: InlinePriorContextRef[] = [];
-  const regex = /\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\-]*)?)/g;
+  // Same word-boundary rationale as the @/#/~ patterns above.
+  const regex = /(?<![A-Za-z0-9_+=@#$%^&!~-])\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\-]*)?)/g;
   let match: RegExpExecArray | null;
   while ((match = regex.exec(text)) !== null) {
     const body = match[1];
