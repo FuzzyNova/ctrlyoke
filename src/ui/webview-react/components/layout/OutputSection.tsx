@@ -63,6 +63,7 @@ import {
 } from "@utils/outputScrollConstants";
 import {
   getDistanceFromBottomPx,
+  isProgrammaticScrollEcho,
   nextAutoscrollArmed,
 } from "@utils/outputAutoscroll";
 
@@ -305,7 +306,6 @@ const OutputSectionInner: React.FC = () => {
     "split" | "unified"
   >("split");
   const [outputContentWidth, setOutputContentWidth] = useState(0);
-  const rowResizeScrollSuppressUntilRef = useRef<number | null>(null);
   const lastUserScrollInputAtRef = useRef<number | null>(null);
   const getVirtualItemsRef = useRef<() => readonly { index: number }[]>(
     () => []
@@ -333,10 +333,10 @@ const OutputSectionInner: React.FC = () => {
   const flushPendingScrollMeasurementsRef = useRef<() => void>(() => {});
   const lastScrollEventAtRef = useRef<number | null>(null);
   const lastScrollTopRef = useRef<number | null>(null);
-  // Raised by applyScrollTarget's direct scrollTop write, lowered by the scroll
-  // event it produces. While raised, TanStack's tracked offset is stale and its
-  // row-measurement compensation must not run.
-  const pendingDirectScrollWriteRef = useRef(false);
+  // The exact scrollTop applyScrollTarget last wrote, so the scroll event it
+  // produces can be identified as ours by position however late it lands.
+  // Cleared by the first scroll event that does not match it.
+  const lastProgrammaticScrollTopRef = useRef<number | null>(null);
   const measurementVersionRefForScrollSeek = useRef(0);
   const virtualRowsLengthRef = useRef(0);
   const getRowEstimateStatsRef = useRef<() => unknown[]>(() => []);
@@ -508,7 +508,6 @@ const OutputSectionInner: React.FC = () => {
     isProgrammaticScrollRef: isProgrammaticScroll,
     isMeasurementFlushInProgressRef,
     lastScrollEventAtRef,
-    lastScrollTopRef,
     outputCollapsed,
     outputContentWidth,
     outputFontSize,
@@ -516,11 +515,7 @@ const OutputSectionInner: React.FC = () => {
     outputOverscanRef,
     outputRef,
     outputVirtualizationRowThreshold,
-    pendingDirectScrollWriteRef,
-    pendingNavigationRef,
-    postNavSettlingRef,
     rowRenderIdentity,
-    rowResizeScrollSuppressUntilRef,
     rows,
     scrollSeekPlaceholderActive,
     scrollSeekRestoreRequestedAtRef,
@@ -549,13 +544,13 @@ const OutputSectionInner: React.FC = () => {
     commitScrollTargetFromViewportRef,
     defaultTarget: DEFAULT_OUTPUT_SCROLL_TARGET,
     isProgrammaticScrollRef: isProgrammaticScroll,
+    lastProgrammaticScrollTopRef,
     lastScrollEventAtRef,
     lastScrollTopRef,
     lastUserScrollInputAtRef,
     layoutApplyTrigger: `${measurementVersion}:${outputOverscan}:${rows.length}:${scrollSeekPlaceholderActive}`,
     outputOverscanRef,
     outputRef,
-    pendingDirectScrollWriteRef,
     pendingNavigationRef,
     rowLayout,
     rowVirtualizer,
@@ -645,10 +640,6 @@ const OutputSectionInner: React.FC = () => {
   const handleScroll = useCallback(() => {
     const el = outputRef.current;
     if (!el) return;
-    // Cleared before every early return: this event also reached TanStack's own
-    // listener, so its offset is no longer stale regardless of what the rest of
-    // this handler decides to skip.
-    pendingDirectScrollWriteRef.current = false;
     if (suppressOutputLayoutWorkRef.current) {
       return;
     }
@@ -676,6 +667,40 @@ const OutputSectionInner: React.FC = () => {
     // Suppress scroll-state updates for those so the freeze isn't re-activated,
     // which would cause partial scroll compensation (only first row compensated).
     if (isMeasurementFlushInProgressRef.current) return;
+
+    // Second, value-based guard on our own writes — `isProgrammaticScroll` is a
+    // timing guard and cannot cover a burst of them. Re-anchoring on an escaped
+    // echo is what turns a correction the lock made into the pane's new resting
+    // place: on 2026-08-12 00:03:34 the lock corrected -133px, its echo arrived
+    // 20ms later carrying scrollDeltaPx 0, and the commit below adopted the
+    // corrected position (anchor offset 219.26 -> 296.72) — a jump that never
+    // returns. See isProgrammaticScrollEcho for why position, not timing.
+    const lastProgrammaticScrollTop = lastProgrammaticScrollTopRef.current;
+    if (
+      isProgrammaticScrollEcho({
+        scrollTop: el.scrollTop,
+        lastProgrammaticScrollTop,
+        hasRecentUserScrollInput:
+          lastUserScrollInputAtRef.current != null &&
+          performance.now() - lastUserScrollInputAtRef.current <=
+            OUTPUT_USER_SCROLL_INPUT_GRACE_MS,
+      })
+    ) {
+      logProfilerEvent("scrollAttribution", {
+        verdict: "programmatic-echo",
+        scrollTop: el.scrollTop,
+        lastProgrammaticScrollTop,
+        sinceLastScrollEventMs:
+          lastScrollEventAtRef.current == null
+            ? null
+            : performance.now() - lastScrollEventAtRef.current,
+      });
+      return;
+    }
+    // A scroll we did not write invalidates the marker; keeping it would let a
+    // later user scroll that happens to land on the same pixel be swallowed.
+    lastProgrammaticScrollTopRef.current = null;
+
     const startedAt = performance.now();
     const now = startedAt;
     const previousScrollEventAt = lastScrollEventAtRef.current;

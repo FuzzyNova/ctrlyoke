@@ -5,7 +5,8 @@ import type { OutputScrollTarget } from "@store/uiStore";
 
 function renderRowTargetHook(
   scrollElement: HTMLDivElement,
-  rowTarget: OutputScrollTarget
+  rowTarget: OutputScrollTarget,
+  lastProgrammaticScrollTopRef: { current: number | null } = { current: null }
 ) {
   return renderHook(() =>
     useOutputScrollTarget({
@@ -18,13 +19,13 @@ function renderRowTargetHook(
       commitScrollTargetFromViewportRef: { current: () => undefined },
       defaultTarget: { kind: "bottom" },
       isProgrammaticScrollRef: { current: false },
+      lastProgrammaticScrollTopRef,
       lastScrollEventAtRef: { current: null },
       lastScrollTopRef: { current: null },
       lastUserScrollInputAtRef: { current: null },
       layoutApplyTrigger: "initial",
       outputOverscanRef: { current: 6 },
       outputRef: { current: scrollElement },
-      pendingDirectScrollWriteRef: { current: false },
       pendingNavigationRef: { current: null },
       restoreTrigger: "workflow",
       rowLayout: {
@@ -82,13 +83,13 @@ describe("useOutputScrollTarget", () => {
         commitScrollTargetFromViewportRef: { current: () => undefined },
         defaultTarget,
         isProgrammaticScrollRef: { current: false },
+        lastProgrammaticScrollTopRef: { current: null },
         lastScrollEventAtRef: { current: null },
         lastScrollTopRef: { current: null },
         lastUserScrollInputAtRef,
         layoutApplyTrigger: "initial",
         outputOverscanRef: { current: 6 },
         outputRef: { current: scrollElement },
-        pendingDirectScrollWriteRef: { current: false },
         pendingNavigationRef: { current: null },
         restoreTrigger: "workflow",
         rowLayout: { rowStartsByKey: new Map(), totalSize: 1000 },
@@ -142,13 +143,13 @@ describe("useOutputScrollTarget", () => {
         commitScrollTargetFromViewportRef: { current: () => undefined },
         defaultTarget,
         isProgrammaticScrollRef: { current: false },
+        lastProgrammaticScrollTopRef: { current: null },
         lastScrollEventAtRef: { current: null },
         lastScrollTopRef: { current: null },
         lastUserScrollInputAtRef: { current: null },
         layoutApplyTrigger: "initial",
         outputOverscanRef: { current: 6 },
         outputRef: { current: scrollElement },
-        pendingDirectScrollWriteRef: { current: false },
         pendingNavigationRef: { current: null },
         restoreTrigger: "workflow",
         rowLayout: { rowStartsByKey: new Map(), totalSize: 5000 },
@@ -212,6 +213,51 @@ describe("useOutputScrollTarget", () => {
     });
 
     expect(scrollTop).toBe(433);
+  });
+
+  // The scroll event this write provokes can outlive the isProgrammaticScroll
+  // flag, and only the recorded position can identify it as ours once it does.
+  // Without it, handleScroll re-anchors on the pane's own correction.
+  it("records where it put the pane so the resulting scroll event is attributable", () => {
+    const scrollElement = document.createElement("div");
+    const rowElement = document.createElement("div");
+    rowElement.dataset.rowKey = "row-1";
+    scrollElement.append(rowElement);
+
+    let scrollTop = 400;
+    Object.defineProperties(scrollElement, {
+      clientHeight: { configurable: true, value: 200 },
+      scrollHeight: { configurable: true, value: 1200 },
+      scrollTop: {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value: number) => {
+          scrollTop = value;
+        },
+      },
+    });
+    scrollElement.getBoundingClientRect = () =>
+      ({ top: 20, bottom: 220, height: 200 }) as DOMRect;
+    rowElement.getBoundingClientRect = () => {
+      const top = 553 - scrollTop;
+      return { top, bottom: top + 50, height: 50 } as DOMRect;
+    };
+
+    const lastProgrammaticScrollTopRef: { current: number | null } = {
+      current: null,
+    };
+    const { result } = renderRowTargetHook(
+      scrollElement,
+      { kind: "row", rowKey: "row-1", viewportOffsetPx: 100 },
+      lastProgrammaticScrollTopRef
+    );
+
+    act(() => {
+      result.current.applyScrollTarget("layout-effect", { force: true });
+    });
+
+    expect(scrollTop).toBe(433);
+    expect(lastProgrammaticScrollTopRef.current).toBe(433);
   });
 
   it("includes the row-container offset when the target row is not rendered yet", () => {

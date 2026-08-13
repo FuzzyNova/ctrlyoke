@@ -28,6 +28,20 @@ interface RowVirtualizerLike {
   measurementsCache: Array<RowMeasurement | null | undefined>;
 }
 
+interface ResolvedScrollTop {
+  top: number;
+  resolved: boolean;
+  /**
+   * Where the anchor row actually sits in the viewport right now, when it was
+   * resolved from live DOM geometry. Diagnostic only: comparing successive
+   * values tells whether a correction is compensating movement the browser
+   * already painted (`observedOffsetPx` changed by the same amount we are about
+   * to apply, so the net effect is invisible) or introducing movement of its
+   * own (`observedOffsetPx` unchanged, so the correction *is* the jump).
+   */
+  observedOffsetPx?: number;
+}
+
 interface UseOutputScrollTargetInput {
   applyScrollTargetRef: RefObject<
     (
@@ -42,12 +56,12 @@ interface UseOutputScrollTargetInput {
   commitScrollTargetFromViewportRef: RefObject<(reason: string) => void>;
   defaultTarget: OutputScrollTarget;
   isProgrammaticScrollRef: RefObject<boolean>;
+  lastProgrammaticScrollTopRef: RefObject<number | null>;
   lastScrollEventAtRef: RefObject<number | null>;
   lastScrollTopRef: RefObject<number | null>;
   lastUserScrollInputAtRef: RefObject<number | null>;
   outputOverscanRef: RefObject<number>;
   outputRef: RefObject<HTMLDivElement | null>;
-  pendingDirectScrollWriteRef: RefObject<boolean>;
   pendingNavigationRef: RefObject<unknown | null>;
   rowLayout: OutputRowLayoutModel;
   rowVirtualizer: RowVirtualizerLike;
@@ -72,12 +86,12 @@ export function useOutputScrollTarget({
   commitScrollTargetFromViewportRef,
   defaultTarget,
   isProgrammaticScrollRef,
+  lastProgrammaticScrollTopRef,
   lastScrollEventAtRef,
   lastScrollTopRef,
   lastUserScrollInputAtRef,
   outputOverscanRef,
   outputRef,
-  pendingDirectScrollWriteRef,
   pendingNavigationRef,
   rowLayout,
   rowVirtualizer,
@@ -99,11 +113,15 @@ export function useOutputScrollTarget({
     typeof setTimeout
   > | null>(null);
   const scrollTargetCommitRetryCountRef = useRef(0);
+  // Diagnostics for the apply log only — never read by behaviour.
+  const lastObservedAnchorOffsetRef = useRef<number | null>(null);
+  const lastApplyAtRef = useRef<number | null>(null);
   const previousRestoreTriggerRef = useRef<string | null>(null);
   const previousWorkflowScrollTargetIdRef = useRef<string | null>(null);
 
   const setCurrentScrollTarget = useCallback(
     (target: OutputScrollTarget, reason: string) => {
+      const previousTarget = scrollTargetRef.current;
       scrollTargetRef.current = target;
       autoscrollEnabledRef.current = target.kind === "bottom";
       setOutputScrollTarget(workflowScrollTargetId, target);
@@ -113,6 +131,16 @@ export function useOutputScrollTarget({
           phase: "set",
           reason,
           target,
+          // Re-anchoring the same row at a different offset means the pane
+          // settled somewhere other than where the user left it and this commit
+          // is accepting that as the new resting place — the signature of a
+          // jump that never returns.
+          offsetDriftPx:
+            previousTarget.kind === "row" &&
+            target.kind === "row" &&
+            previousTarget.rowKey === target.rowKey
+              ? target.viewportOffsetPx - previousTarget.viewportOffsetPx
+              : undefined,
           workflowId: workflowScrollTargetId,
         });
       }
@@ -126,7 +154,7 @@ export function useOutputScrollTarget({
   );
 
   const resolveScrollTopForTarget = useCallback(
-    (target: OutputScrollTarget): { top: number; resolved: boolean } | null => {
+    (target: OutputScrollTarget): ResolvedScrollTop | null => {
       const scrollElement = outputRef.current;
       if (!scrollElement) {
         return null;
@@ -153,16 +181,17 @@ export function useOutputScrollTarget({
       if (renderedTarget) {
         const scrollRect = scrollElement.getBoundingClientRect();
         const rowRect = renderedTarget.getBoundingClientRect();
+        const observedOffsetPx = rowRect.top - scrollRect.top;
         return {
           top: clamp(
             scrollElement.scrollTop +
-              rowRect.top -
-              scrollRect.top -
+              observedOffsetPx -
               target.viewportOffsetPx,
             0,
             maxScroll
           ),
           resolved: true,
+          observedOffsetPx,
         };
       }
 
@@ -324,14 +353,13 @@ export function useOutputScrollTarget({
       const appliedDelta = resolved.top - previous;
       if (Math.abs(appliedDelta) >= 1) {
         isProgrammaticScrollRef.current = true;
-        // The virtualizer tracks scroll position from scroll *events*, so until
-        // this write's event lands its internal offset is stale by exactly this
-        // delta. Any row-measurement compensation resolved from that offset
-        // would write `staleOffset + rowDelta` and teleport the pane, so the
-        // flag stays raised until the scroll handler observes the write.
-        pendingDirectScrollWriteRef.current = true;
         scrollElement.scrollTop = resolved.top;
         lastScrollTopRef.current = scrollElement.scrollTop;
+        // Record *where* we put the pane, not just that we moved it. The scroll
+        // event this write produces can arrive after `isProgrammaticScrollRef`
+        // has already been lowered (see the echo guard in OutputSection's
+        // handleScroll), and only the position identifies it as ours.
+        lastProgrammaticScrollTopRef.current = scrollElement.scrollTop;
         requestAnimationFrame(() => {
           isProgrammaticScrollRef.current = false;
         });
@@ -341,6 +369,7 @@ export function useOutputScrollTarget({
         isProfilingEnabled() &&
         (Math.abs(appliedDelta) >= 1 || !resolved.resolved)
       ) {
+        const previousObservedOffsetPx = lastObservedAnchorOffsetRef.current;
         logProfilerEvent("scrollTarget", {
           phase: "apply",
           reason: phase,
@@ -348,9 +377,30 @@ export function useOutputScrollTarget({
           resolved: resolved.resolved,
           appliedDelta,
           scrollTop: scrollElement.scrollTop,
+          // scrollTop is read back after the write: a value that does not match
+          // `resolved.top` means the browser refused or clamped it, which makes
+          // the next apply resolve a delta that looks like fresh drift.
+          scrollTopHonored:
+            Math.abs(scrollElement.scrollTop - resolved.top) < 1,
+          // Where the anchor row was, and how far it had moved since the last
+          // apply. `anchorMovedSinceLastApply ~= appliedDelta` is a correction
+          // that cancels a real shift and paints as no movement at all; ~0 with
+          // a non-zero appliedDelta means this apply is itself the visible jump.
+          observedOffsetPx: resolved.observedOffsetPx,
+          anchorMovedSinceLastApply:
+            resolved.observedOffsetPx != null &&
+            previousObservedOffsetPx != null
+              ? resolved.observedOffsetPx - previousObservedOffsetPx
+              : undefined,
+          msSinceLastApply:
+            lastApplyAtRef.current == null
+              ? undefined
+              : now - lastApplyAtRef.current,
           overscan: outputOverscanRef.current,
         });
       }
+      lastObservedAnchorOffsetRef.current = resolved.observedOffsetPx ?? null;
+      lastApplyAtRef.current = now;
 
       return { resolved: resolved.resolved, appliedDelta };
     },
@@ -359,12 +409,12 @@ export function useOutputScrollTarget({
       commitScrollTargetFromViewportRef,
       defaultTarget,
       isProgrammaticScrollRef,
+      lastProgrammaticScrollTopRef,
       lastScrollEventAtRef,
       lastScrollTopRef,
       lastUserScrollInputAtRef,
       outputOverscanRef,
       outputRef,
-      pendingDirectScrollWriteRef,
       pendingNavigationRef,
       resolveScrollTopForTarget,
       rowsRef,

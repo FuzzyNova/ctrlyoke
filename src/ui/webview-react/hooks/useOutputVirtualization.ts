@@ -28,7 +28,6 @@ import {
   type StructuredEventRow,
 } from "@utils/outputRows";
 
-const OUTPUT_ROW_RESIZE_SCROLL_SUPPRESS_MS = 300;
 const POST_LOAD_REMEASURE_DELAY_MS = 80;
 const NON_VIRTUAL_STAGING_ROW_THRESHOLD = 60;
 const NON_VIRTUAL_INITIAL_RENDER_ROWS = 24;
@@ -48,46 +47,6 @@ interface OutputRowLayoutModel {
   totalSize: number;
 }
 
-interface PendingNavigationStateLike {
-  rowIndex: number;
-}
-
-interface OutputRowMeasurementCompensationInput {
-  hasPendingDirectScrollWrite: boolean;
-  hasRecentScrollEvent: boolean;
-  isBulkRemeasureInProgress: boolean;
-  isMeasurementFlushInProgress: boolean;
-  isPostNavigationSettling: boolean;
-  isRowResizeSuppressed: boolean;
-  itemIndex: number;
-  pendingNavigation: boolean;
-  targetRowIndex: number | null;
-}
-
-export function shouldCompensateOutputRowMeasurement({
-  hasPendingDirectScrollWrite,
-  hasRecentScrollEvent,
-  isBulkRemeasureInProgress,
-  isMeasurementFlushInProgress,
-  isPostNavigationSettling,
-  isRowResizeSuppressed,
-  itemIndex,
-  pendingNavigation,
-  targetRowIndex,
-}: OutputRowMeasurementCompensationInput): boolean {
-  return (
-    !hasRecentScrollEvent &&
-    !isBulkRemeasureInProgress &&
-    !isMeasurementFlushInProgress &&
-    !pendingNavigation &&
-    !isPostNavigationSettling &&
-    !isRowResizeSuppressed &&
-    !hasPendingDirectScrollWrite &&
-    targetRowIndex != null &&
-    itemIndex < targetRowIndex
-  );
-}
-
 interface UseOutputVirtualizationInput {
   applyScrollTargetRef: RefObject<
     (
@@ -102,7 +61,6 @@ interface UseOutputVirtualizationInput {
   isProgrammaticScrollRef: RefObject<boolean>;
   isMeasurementFlushInProgressRef: RefObject<boolean>;
   lastScrollEventAtRef: RefObject<number | null>;
-  lastScrollTopRef: RefObject<number | null>;
   outputCollapsed: boolean;
   outputContentWidth: number;
   outputFontSize: number;
@@ -110,11 +68,7 @@ interface UseOutputVirtualizationInput {
   outputOverscanRef: RefObject<number>;
   outputRef: RefObject<HTMLDivElement | null>;
   outputVirtualizationRowThreshold: number;
-  pendingDirectScrollWriteRef: RefObject<boolean>;
-  pendingNavigationRef: RefObject<PendingNavigationStateLike | null>;
-  postNavSettlingRef: RefObject<boolean>;
   rowRenderIdentity: string;
-  rowResizeScrollSuppressUntilRef: RefObject<number | null>;
   rows: OutputRenderRow[];
   scrollSeekPlaceholderActive: boolean;
   scrollSeekRestoreRequestedAtRef: RefObject<number | null>;
@@ -199,7 +153,6 @@ export function useOutputVirtualization({
   isProgrammaticScrollRef,
   isMeasurementFlushInProgressRef,
   lastScrollEventAtRef,
-  lastScrollTopRef,
   outputCollapsed,
   outputContentWidth,
   outputFontSize,
@@ -207,11 +160,7 @@ export function useOutputVirtualization({
   outputOverscanRef,
   outputRef,
   outputVirtualizationRowThreshold,
-  pendingDirectScrollWriteRef,
-  pendingNavigationRef,
-  postNavSettlingRef,
   rowRenderIdentity,
-  rowResizeScrollSuppressUntilRef,
   rows,
   scrollSeekPlaceholderActive,
   scrollSeekRestoreRequestedAtRef,
@@ -238,7 +187,6 @@ export function useOutputVirtualization({
   const pendingMeasurementFlushTimerRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
-  const measurementCompensationFrameRef = useRef<number | null>(null);
   const postLoadRemeasureFrameRef = useRef<number | null>(null);
   const postLoadRemeasureTimerRef = useRef<ReturnType<
     typeof setTimeout
@@ -534,75 +482,51 @@ export function useOutputVirtualization({
   });
   getVirtualItemsRef.current = () => rowVirtualizer.getVirtualItems();
 
+  // The virtualizer must never compensate a size change itself: the anchor lock
+  // in `useOutputScrollTarget` is the single owner of scrollTop.
+  //
+  // The two cannot coexist, because they act on different clocks. Rows are
+  // absolutely positioned at `translateY(virtualRow.start)`, so a row growing
+  // does not displace its siblings — the anchor row only moves once React
+  // commits the new starts. The virtualizer's compensation runs from the
+  // ResizeObserver, *before* that commit: it writes `scrollTop += delta` while
+  // every row is still painted at its old offset, so the whole viewport visibly
+  // slides by the delta. Hundreds of milliseconds later (a phone commit for this
+  // pane runs 450-650ms) the re-render lands, the anchor row moves by the same
+  // delta, and the layout-effect lock reads the settled DOM and puts it back.
+  // That round trip is exactly the "jumps ~40px then jumps back a second later"
+  // the profiler captured on 2026-08-12 23:36:33 — TanStack compensating +51.77
+  // for row 479 while the lock applied -50.91 against a DOM that had not moved
+  // yet, then chasing +391.7 and -632.43 as the commits caught up.
+  //
+  // The lock alone is complete and cannot overshoot: `measurementVersion` is in
+  // `layoutApplyTrigger`, so every measurement round re-runs it, and it resolves
+  // from the anchor row's own `getBoundingClientRect()` in a layout effect —
+  // closed-loop against the committed DOM, pre-paint. A refused compensation
+  // costs nothing: with no scrollTop write and no committed start change, the
+  // viewport simply does not move.
   rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, delta) => {
-    const now = performance.now();
-    const hasRecentScrollEvent =
-      lastScrollEventAtRef.current != null &&
-      now - lastScrollEventAtRef.current < OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
-    const scrollElement = outputRef.current;
-    const target = scrollTargetRef.current;
-    const targetRowIndex =
-      target.kind === "row"
-        ? (rowIndexByKey.get(target.rowKey ?? "") ?? null)
-        : null;
-    const shouldAdjust = shouldCompensateOutputRowMeasurement({
-      hasPendingDirectScrollWrite: pendingDirectScrollWriteRef.current,
-      hasRecentScrollEvent,
-      isBulkRemeasureInProgress: isBulkRemeasureInProgressRef.current,
-      isMeasurementFlushInProgress: isMeasurementFlushInProgressRef.current,
-      isPostNavigationSettling: postNavSettlingRef.current,
-      isRowResizeSuppressed:
-        rowResizeScrollSuppressUntilRef.current != null &&
-        now < rowResizeScrollSuppressUntilRef.current,
-      itemIndex: item.index,
-      pendingNavigation: pendingNavigationRef.current !== null,
-      targetRowIndex,
-    });
-
-    // Let the virtualizer apply exact size deltas only for rows strictly before
-    // the saved anchor. A partially visible giant prompt/command can itself
-    // start above scrollTop, but changing its height does not move its top and
-    // must not shift the viewport. The staleness guard is
-    // pendingDirectScrollWriteRef, NOT a scrollTop comparison: TanStack
-    // compensates by writing `internalOffset + accumulatedAdjustments` straight
-    // to the DOM, so within one measurement burst the DOM legitimately runs
-    // ahead of the last *observed* scroll position. Comparing the two rejected
-    // every row after the first in a burst (log 21:49:40: idx245 compensated,
-    // then idx241/idx243 — both above the anchor — refused at
-    // scrollTop 53214 vs observed 53172), and each refused row's delta shifted
-    // the viewport until the layout-effect lock yanked it back. The real hazard
-    // is only applyScrollTarget's own direct write, which TanStack cannot see
-    // until its scroll event lands.
-    if (shouldAdjust) {
-      isProgrammaticScrollRef.current = true;
-      if (measurementCompensationFrameRef.current !== null) {
-        cancelAnimationFrame(measurementCompensationFrameRef.current);
-      }
-      measurementCompensationFrameRef.current = requestAnimationFrame(() => {
-        measurementCompensationFrameRef.current = null;
-        lastScrollTopRef.current = outputRef.current?.scrollTop ?? null;
-        isProgrammaticScrollRef.current = false;
-      });
-    }
     if (isProfilingEnabled() && Math.abs(delta) >= 40) {
+      const target = scrollTargetRef.current;
       logProfilerEvent("scrollCorrection", {
         itemKey: item.key,
         itemIndex: item.index,
         delta,
-        scrollTop: scrollElement?.scrollTop ?? 0,
-        targetRowIndex,
-        pendingDirectScrollWrite: pendingDirectScrollWriteRef.current,
+        scrollTop: outputRef.current?.scrollTop ?? 0,
+        targetRowIndex:
+          target.kind === "row"
+            ? (rowIndexByKey.get(target.rowKey ?? "") ?? null)
+            : null,
         overscan: outputOverscanRef.current,
-        shouldAdjust,
+        deferredToAnchorLock: true,
       });
     }
-    return shouldAdjust;
+    return false;
   };
 
   // Wraps rowVirtualizer.measure() so the resulting burst of per-row size-change
-  // notifications doesn't each trigger applyScrollTargetRef (see
-  // shouldAdjustScrollPositionOnItemSizeChange above). The scroll target is
-  // reconciled once, after the measure pass and its re-render have settled.
+  // notifications doesn't each trigger applyScrollTargetRef. The scroll target
+  // is reconciled once, after the measure pass and its re-render have settled.
   const performBulkRemeasure = useCallback(() => {
     isBulkRemeasureInProgressRef.current = true;
     rowVirtualizer.measure();
@@ -1138,8 +1062,6 @@ export function useOutputVirtualization({
 
   const invalidateMeasuredRowForUserResize = useCallback(
     (rowKey: string) => {
-      rowResizeScrollSuppressUntilRef.current =
-        performance.now() + OUTPUT_ROW_RESIZE_SCROLL_SUPPRESS_MS;
       measurementCacheRef.current.delete(rowKey);
 
       requestAnimationFrame(() => {
@@ -1167,12 +1089,7 @@ export function useOutputVirtualization({
         });
       });
     },
-    [
-      applyScrollTargetRef,
-      outputRef,
-      rowResizeScrollSuppressUntilRef,
-      rowVirtualizer,
-    ]
+    [applyScrollTargetRef, outputRef, rowVirtualizer]
   );
 
   useEffect(
@@ -1184,10 +1101,6 @@ export function useOutputVirtualization({
       if (pendingMeasurementFlushTimerRef.current !== null) {
         clearTimeout(pendingMeasurementFlushTimerRef.current);
         pendingMeasurementFlushTimerRef.current = null;
-      }
-      if (measurementCompensationFrameRef.current !== null) {
-        cancelAnimationFrame(measurementCompensationFrameRef.current);
-        measurementCompensationFrameRef.current = null;
       }
       isProgrammaticScrollRef.current = false;
       if (postLoadRemeasureFrameRef.current !== null) {

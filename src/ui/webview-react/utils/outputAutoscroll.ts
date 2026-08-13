@@ -63,6 +63,43 @@ export function isWithinAutoscrollRearmThreshold(
   return distanceFromBottomPx <= OUTPUT_AUTOSCROLL_REARM_THRESHOLD_PX;
 }
 
+export interface ProgrammaticScrollEchoInput {
+  /** Scroll position reported by the event being attributed. */
+  scrollTop: number;
+  /** Exact scrollTop the pane's own last scroll-target write set, if any. */
+  lastProgrammaticScrollTop: number | null;
+  /** Whether a real wheel/touch input landed inside the input grace window. */
+  hasRecentUserScrollInput: boolean;
+}
+
+/**
+ * Whether a scroll event is the echo of the pane's own scroll-target write.
+ *
+ * Attribution has to be by *position*, not by timing. The obvious guard — raise
+ * a flag around the write, lower it on the next animation frame — cannot cover a
+ * burst, and the anchor lock writes in bursts: each write arms the flag and
+ * schedules its own frame to disarm, so an early frame lowers it before the
+ * browser dispatches the (coalesced, frequently late) scroll event. Whatever
+ * escapes then looks exactly like a user scroll, and re-anchoring on it turns a
+ * correction the lock made into the pane's new resting place.
+ *
+ * A position match survives any number of dropped frames. Requiring no recent
+ * real input is what keeps a user who happens to land on that exact pixel from
+ * being ignored — touch and wheel both stamp their input before the resulting
+ * scroll event arrives.
+ */
+export function isProgrammaticScrollEcho({
+  scrollTop,
+  lastProgrammaticScrollTop,
+  hasRecentUserScrollInput,
+}: ProgrammaticScrollEchoInput): boolean {
+  return (
+    lastProgrammaticScrollTop !== null &&
+    !hasRecentUserScrollInput &&
+    Math.abs(scrollTop - lastProgrammaticScrollTop) < 1
+  );
+}
+
 /**
  * Next armed state for the auto-scroll latch. Pure so the state machine can be
  * tested without a DOM: callers own reading geometry and deciding attribution.

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getAutoscrollReleaseThresholdPx,
   getDistanceFromBottomPx,
+  isProgrammaticScrollEcho,
   isWithinAutoscrollRearmThreshold,
   nextAutoscrollArmed,
   type AutoscrollLatchInput,
@@ -136,5 +137,51 @@ describe("outputAutoscroll", () => {
         })
       ).toBe(false);
     });
+  });
+});
+
+describe("isProgrammaticScrollEcho", () => {
+  const echo = { scrollTop: 82918, lastProgrammaticScrollTop: 82918 };
+
+  // Position is the whole signal — there is deliberately no timing input, so an
+  // echo is claimed however many frames late the browser dispatches it. The
+  // flag-plus-animation-frame guard this backstops cannot do that, and every
+  // escaped echo re-anchors the pane where the lock left it rather than where
+  // the user did.
+  it("claims an event sitting exactly where the pane last wrote", () => {
+    expect(
+      isProgrammaticScrollEcho({ ...echo, hasRecentUserScrollInput: false })
+    ).toBe(true);
+  });
+
+  it("claims a sub-pixel rounding difference from that write", () => {
+    expect(
+      isProgrammaticScrollEcho({
+        ...echo,
+        scrollTop: 82918.4,
+        hasRecentUserScrollInput: false,
+      })
+    ).toBe(true);
+  });
+
+  it.each([
+    ["the pane moved since that write", { scrollTop: 82900 }],
+    ["nothing has been written yet", { lastProgrammaticScrollTop: null }],
+  ])("does not claim an event when %s", (_label, override) => {
+    expect(
+      isProgrammaticScrollEcho({
+        ...echo,
+        ...override,
+        hasRecentUserScrollInput: false,
+      })
+    ).toBe(false);
+  });
+
+  // A user who scrolls back to the exact pixel the lock last wrote must still
+  // be heard; their wheel/touch stamp lands before the scroll event does.
+  it("yields to a real input landing on the same pixel", () => {
+    expect(
+      isProgrammaticScrollEcho({ ...echo, hasRecentUserScrollInput: true })
+    ).toBe(false);
   });
 });
