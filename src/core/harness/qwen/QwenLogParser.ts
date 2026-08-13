@@ -17,6 +17,9 @@ import {
   ThinkingBlock,
   TextData,
   UnifiedDiffHunk,
+  AskUserQuestionData,
+  AskUserQuestionEntry,
+  AskUserQuestionOption,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -140,7 +143,7 @@ interface QwenProviderEvent extends BaseCliEvent {
   toolCallResult?: {
     callId: string;
     status: "success" | "error";
-    resultDisplay?: string;
+    resultDisplay?: string | Record<string, unknown>;
   };
 }
 
@@ -151,6 +154,15 @@ export class QwenLogParser extends BaseLogParser {
    * Falls back to process.cwd() when not set (CLI mode).
    */
   private workspaceRoot?: string;
+
+  /**
+   * Streaming extraction receives one JSONL event at a time, so retain the
+   * question set until Qwen emits the matching tool_result event.
+   */
+  private readonly streamingAskQuestions = new Map<
+    string,
+    AskUserQuestionEntry[]
+  >();
 
   /**
    * Set the workspace root directory for session log discovery.
@@ -187,6 +199,7 @@ export class QwenLogParser extends BaseLogParser {
     // Maps callId → full file path so tool_result events can get the path from the
     // original functionCall args (resultDisplay.fileName is basename only)
     const callPathMap = new Map<string, string>();
+    const askQuestionMap = new Map<string, AskUserQuestionEntry[]>();
 
     for (const event of events as QwenProviderEvent[]) {
       // Extract session ID from top-level field (present on all event types)
@@ -233,11 +246,10 @@ export class QwenLogParser extends BaseLogParser {
               callPathMap.set(part.functionCall.id, fp);
             }
             outputEvents.push(
-              ...BaseToolBuilder.buildInitiatedEvents(
-                part.functionCall.name,
-                args,
-                part.functionCall.id,
-                timestamp
+              ...this.buildFunctionCallEvents(
+                part.functionCall,
+                timestamp,
+                askQuestionMap
               )
             );
           }
@@ -265,6 +277,16 @@ export class QwenLogParser extends BaseLogParser {
       if (event.type === "tool_result" && event.message?.parts) {
         for (const part of event.message.parts) {
           if (part.functionResponse) {
+            const askEvent = this.buildAskUserQuestionCompletedEvent(
+              part.functionResponse,
+              event,
+              askQuestionMap
+            );
+            if (askEvent) {
+              outputEvents.push(askEvent);
+              continue;
+            }
+
             const resp = part.functionResponse.response;
             const isError = !!resp.error;
             outputEvents.push({
@@ -647,11 +669,10 @@ export class QwenLogParser extends BaseLogParser {
 
         if (part.functionCall) {
           cliEvents.push(
-            ...BaseToolBuilder.buildInitiatedEvents(
-              part.functionCall.name,
-              part.functionCall.args || {},
-              part.functionCall.id,
-              timestamp
+            ...this.buildFunctionCallEvents(
+              part.functionCall,
+              timestamp,
+              this.streamingAskQuestions
             )
           );
         }
@@ -661,6 +682,16 @@ export class QwenLogParser extends BaseLogParser {
     if (e.type === "tool_result" && e.message?.parts) {
       for (const part of e.message.parts) {
         if (part.functionResponse) {
+          const askEvent = this.buildAskUserQuestionCompletedEvent(
+            part.functionResponse,
+            e,
+            this.streamingAskQuestions
+          );
+          if (askEvent) {
+            cliEvents.push(askEvent);
+            continue;
+          }
+
           const resp = part.functionResponse.response;
           const isError = !!resp.error;
           cliEvents.push({
@@ -680,6 +711,251 @@ export class QwenLogParser extends BaseLogParser {
     }
 
     return cliEvents;
+  }
+
+  private static readonly ASK_USER_QUESTION_TOOL_NAMES = new Set([
+    "ask_user_question",
+    "ask_user",
+    "askuserquestion",
+  ]);
+
+  private isAskUserQuestionTool(toolName: string | undefined): boolean {
+    return (
+      !!toolName &&
+      QwenLogParser.ASK_USER_QUESTION_TOOL_NAMES.has(toolName.toLowerCase())
+    );
+  }
+
+  private buildFunctionCallEvents(
+    functionCall: NonNullable<QwenMessagePart["functionCall"]>,
+    timestamp: number,
+    askQuestionMap: Map<string, AskUserQuestionEntry[]>
+  ): CliEvent[] {
+    const args = functionCall.args || {};
+    if (!this.isAskUserQuestionTool(functionCall.name)) {
+      return BaseToolBuilder.buildInitiatedEvents(
+        functionCall.name,
+        args,
+        functionCall.id,
+        timestamp
+      );
+    }
+
+    const questions = this.parseAskUserQuestionEntries(args);
+    askQuestionMap.set(functionCall.id, questions);
+    return [
+      {
+        type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+        timestamp,
+        data: {
+          toolCallId: functionCall.id,
+          questions,
+          status: OPERATION_STATUS.INITIATED,
+        } as AskUserQuestionData,
+      },
+    ];
+  }
+
+  private buildAskUserQuestionCompletedEvent(
+    functionResponse: NonNullable<QwenMessagePart["functionResponse"]>,
+    event: QwenProviderEvent,
+    askQuestionMap: Map<string, AskUserQuestionEntry[]>
+  ): CliEvent | undefined {
+    const callId = functionResponse.id;
+    const questions = askQuestionMap.get(callId) ?? [];
+    if (
+      !this.isAskUserQuestionTool(functionResponse.name) &&
+      !questions.length
+    ) {
+      return undefined;
+    }
+
+    askQuestionMap.delete(callId);
+    const response = functionResponse.response;
+    const resultText = this.getQwenToolResultText(response, event);
+    const success = !response.error && event.toolCallResult?.status !== "error";
+
+    if (!success) {
+      return {
+        type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+        timestamp: this.getEventTimestamp(event),
+        data: {
+          toolCallId: callId,
+          questions,
+          status: OPERATION_STATUS.FAILED,
+          declined: {
+            reason: "rejected",
+            feedback: resultText || response.error,
+          },
+        } as AskUserQuestionData,
+      };
+    }
+
+    const answers = this.parseQwenAnswers(resultText);
+    return {
+      type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+      timestamp: this.getEventTimestamp(event),
+      data: {
+        toolCallId: callId,
+        questions: questions.map((question, index) =>
+          this.resolveQwenAnswer(question, answers, index, resultText)
+        ),
+        status: OPERATION_STATUS.COMPLETED,
+      } as AskUserQuestionData,
+    };
+  }
+
+  private getEventTimestamp(event: QwenProviderEvent): number {
+    return event.timestamp ? new Date(event.timestamp).getTime() : Date.now();
+  }
+
+  private getQwenToolResultText(
+    response: NonNullable<QwenMessagePart["functionResponse"]>["response"],
+    event: QwenProviderEvent
+  ): string {
+    if (typeof response.output === "string" && response.output.length > 0) {
+      return response.output;
+    }
+    const resultDisplay = event.toolCallResult?.resultDisplay;
+    return typeof resultDisplay === "string"
+      ? resultDisplay
+      : resultDisplay
+        ? JSON.stringify(resultDisplay)
+        : "";
+  }
+
+  private parseAskUserQuestionEntries(
+    args: Record<string, any>
+  ): AskUserQuestionEntry[] {
+    let rawQuestions: unknown = args.questions;
+    if (typeof rawQuestions === "string") {
+      try {
+        rawQuestions = JSON.parse(rawQuestions);
+      } catch {
+        rawQuestions = undefined;
+      }
+    }
+
+    if (Array.isArray(rawQuestions)) {
+      return rawQuestions.map((rawQuestion) => {
+        const question = (rawQuestion ?? {}) as Record<string, unknown>;
+        return {
+          id: typeof question.id === "string" ? question.id : undefined,
+          question:
+            typeof question.question === "string" ? question.question : "",
+          header:
+            typeof question.header === "string" ? question.header : undefined,
+          multiSelect:
+            typeof question.multiSelect === "boolean"
+              ? question.multiSelect
+              : typeof question.multi_select === "boolean"
+                ? question.multi_select
+                : undefined,
+          options: this.parseQwenOptions(question.options ?? question.choices),
+        };
+      });
+    }
+
+    if (typeof args.question === "string") {
+      return [
+        {
+          question: args.question,
+          options: this.parseQwenOptions(args.options ?? args.choices),
+        },
+      ];
+    }
+
+    return [];
+  }
+
+  private parseQwenOptions(rawOptions: unknown): AskUserQuestionOption[] {
+    if (!Array.isArray(rawOptions)) {
+      return [];
+    }
+
+    return rawOptions.map((rawOption) => {
+      if (typeof rawOption === "string") {
+        return { label: rawOption };
+      }
+
+      const option = (rawOption ?? {}) as Record<string, unknown>;
+      const rawDescription =
+        typeof option.description === "string" ? option.description : undefined;
+      const inferred = rawDescription
+        ? this.splitQwenDescription(rawDescription)
+        : {};
+      return {
+        label: typeof option.label === "string" ? option.label : "",
+        description: inferred.description,
+        preview:
+          typeof option.preview === "string"
+            ? option.preview
+            : inferred.preview,
+      };
+    });
+  }
+
+  private splitQwenDescription(description: string): {
+    description?: string;
+    preview?: string;
+  } {
+    const paragraphs = description.split(/\r?\n\s*\r?\n/);
+    if (paragraphs.length < 2) {
+      return { description };
+    }
+
+    const preview = paragraphs.slice(1).join("\n\n").trimEnd();
+    const asciiLines = preview
+      .split(/\r?\n/)
+      .filter((line) => /[\\/|()<>^~_=]/.test(line));
+    if (asciiLines.length < 2) {
+      return { description };
+    }
+
+    return {
+      description: paragraphs[0].trim(),
+      preview,
+    };
+  }
+
+  private parseQwenAnswers(resultText: string): Map<string, string> {
+    const answers = new Map<string, string>();
+    const answerPattern = /\*\*(.+?)\*\*\s*:\s*([^\r\n]*)/g;
+    let match: RegExpExecArray | null;
+    while ((match = answerPattern.exec(resultText)) !== null) {
+      answers.set(match[1].trim(), match[2].trim());
+    }
+    return answers;
+  }
+
+  private resolveQwenAnswer(
+    question: AskUserQuestionEntry,
+    answers: Map<string, string>,
+    index: number,
+    resultText: string
+  ): AskUserQuestionEntry {
+    const answer =
+      answers.get(question.header ?? "") ??
+      answers.get(question.question) ??
+      (answers.size === 1 ? answers.values().next().value : undefined) ??
+      (answers.size === 0 && index === 0 && question.options.length === 0
+        ? resultText.trim()
+        : undefined);
+    if (!answer) {
+      return { ...question };
+    }
+
+    const selected = question.options.find(
+      (option) =>
+        answer === option.label ||
+        answer.startsWith(`${option.label} \u2014 `) ||
+        answer.startsWith(`${option.label}\n`)
+    );
+    return {
+      ...question,
+      answer: selected?.label ?? answer,
+      answerPreview: selected?.preview,
+    };
   }
 
   /**

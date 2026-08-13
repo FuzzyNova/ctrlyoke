@@ -3940,6 +3940,99 @@ suite("OpenCodeLogParser", () => {
     });
   });
 
+  suite("ask user question events", () => {
+    test("parses OpenCode question options, previews, and selected answer", () => {
+      const questionPart = {
+        tool: "question",
+        callID: "call_question_1",
+        state: {
+          status: "completed",
+          input: {
+            questions: [
+              {
+                question: "What's your favorite animal?",
+                header: "Favorite animal",
+                options: [
+                  {
+                    label: "Dog",
+                    description: "Loyal, playful companion.\n\n   / \\__\n  (    @\\___",
+                  },
+                  {
+                    label: "Cat",
+                    description: "Independent, graceful.\n\n /\\_/\\\n( o.o )",
+                  },
+                ],
+              },
+            ],
+          },
+          output:
+            'User has answered your questions: "What\'s your favorite animal?"="Cat".',
+          metadata: { answers: [["Cat"]] },
+        },
+      };
+      const event = {
+        type: "tool_use",
+        sessionID: "ses_question",
+        timestamp: 1000,
+        part: questionPart,
+      } as unknown as BaseCliEvent;
+
+      const response = parser.extractResponse([event]);
+      assert.strictEqual(response.events.length, 1);
+      assert.strictEqual(
+        response.events[0].type,
+        CLI_EVENT_TYPES.ASK_USER_QUESTION
+      );
+
+      const data = response.events[0].data as AskUserQuestionData;
+      assert.strictEqual(data.toolCallId, "call_question_1");
+      assert.strictEqual(data.status, OPERATION_STATUS.COMPLETED);
+      assert.strictEqual(data.questions[0].question, "What's your favorite animal?");
+      assert.deepStrictEqual(data.questions[0].options[0], {
+        label: "Dog",
+        description: "Loyal, playful companion.",
+        preview: "   / \\__\n  (    @\\___",
+      });
+      assert.strictEqual(data.questions[0].answer, "Cat");
+      assert.strictEqual(
+        data.questions[0].answerPreview,
+        " /\\_/\\\n( o.o )"
+      );
+    });
+
+    test("uses the same question mapping for streaming events", () => {
+      const event = {
+        type: "tool_use",
+        sessionID: "ses_question",
+        timestamp: 1000,
+        part: {
+          tool: "question",
+          callID: "call_question_stream",
+          state: {
+            status: "completed",
+            input: {
+              questions: [
+                { question: "Continue?", options: [{ label: "Yes" }] },
+              ],
+            },
+            output: 'User has answered your questions: "Continue?"="Yes".',
+            metadata: { answers: [["Yes"]] },
+          },
+        },
+      } as unknown as BaseCliEvent;
+
+      const events = parser.extractStructuredEventsFromEvent(event);
+      assert.deepStrictEqual(
+        events.map((item) => item.type),
+        [CLI_EVENT_TYPES.ASK_USER_QUESTION]
+      );
+      assert.strictEqual(
+        (events[0].data as AskUserQuestionData).questions[0].answer,
+        "Yes"
+      );
+    });
+  });
+
   suite("getFinalEventsOnCompletion", () => {
     test("should return no additional events by default for file-backed parsers", async () => {
       const copilotParser = new CopilotLogParser();
@@ -4336,6 +4429,106 @@ suite("QwenLogParser", () => {
       assert.strictEqual(
         output.metadata.usage?.totalConfidence,
         TOKEN_TOTAL_CONFIDENCE.ACCUMULATED
+      );
+    });
+
+    test("maps Qwen ask_user_question calls and answers to rich question events", () => {
+      const parser = new QwenLogParser();
+      const events = [
+        {
+          type: "assistant",
+          timestamp: "2026-08-13T22:54:59.892Z",
+          sessionId: "qwen-session",
+          message: {
+            role: "model",
+            parts: [
+              {
+                functionCall: {
+                  id: "call-ask-1",
+                  name: "ask_user_question",
+                  args: {
+                    questions: [
+                      {
+                        question: "What's your favorite animal?",
+                        header: "Favorite",
+                        options: [
+                          {
+                            label: "Dog",
+                            description:
+                              "Loyal companions.\n\n    /\\_/\\\n   ( o.o )",
+                          },
+                          {
+                            label: "Cat",
+                            description:
+                              "Independent and curious.\n\n     /\\_/\\\n    ( =.= )",
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        },
+        {
+          type: "tool_result",
+          timestamp: "2026-08-13T22:55:08.152Z",
+          sessionId: "qwen-session",
+          message: {
+            role: "user",
+            parts: [
+              {
+                functionResponse: {
+                  id: "call-ask-1",
+                  name: "ask_user_question",
+                  response: {
+                    output:
+                      "User has provided the following answers:\n\n**Favorite**: Cat",
+                  },
+                },
+              },
+            ],
+          },
+          toolCallResult: {
+            callId: "call-ask-1",
+            status: "success",
+            resultDisplay:
+              "User has provided the following answers:\n\n**Favorite**: Cat",
+          },
+        },
+      ] as unknown as BaseCliEvent[];
+
+      const output = parser.extractResponse(events);
+      assert.deepStrictEqual(
+        output.events.map((event) => event.type),
+        [CLI_EVENT_TYPES.ASK_USER_QUESTION, CLI_EVENT_TYPES.ASK_USER_QUESTION]
+      );
+
+      const initiated = output.events[0].data as AskUserQuestionData;
+      assert.strictEqual(initiated.status, OPERATION_STATUS.INITIATED);
+      assert.strictEqual(
+        initiated.questions[0].options[0].description,
+        "Loyal companions."
+      );
+      assert.ok(initiated.questions[0].options[0].preview?.includes("/\\_/\\"));
+
+      const completed = output.events[1].data as AskUserQuestionData;
+      assert.strictEqual(completed.status, OPERATION_STATUS.COMPLETED);
+      assert.strictEqual(completed.questions[0].answer, "Cat");
+      assert.ok(completed.questions[0].answerPreview?.includes("/\\_/\\"));
+
+      const streamingParser = new QwenLogParser();
+      const streamed = events.flatMap((event) =>
+        streamingParser.extractStructuredEventsFromEvent(event)
+      );
+      assert.deepStrictEqual(
+        streamed.map((event) => event.type),
+        [CLI_EVENT_TYPES.ASK_USER_QUESTION, CLI_EVENT_TYPES.ASK_USER_QUESTION]
+      );
+      assert.strictEqual(
+        (streamed[1].data as AskUserQuestionData).questions[0].answer,
+        "Cat"
       );
     });
   });

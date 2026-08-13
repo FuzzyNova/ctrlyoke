@@ -283,7 +283,7 @@ export class OpenCodeLogParser extends BaseLogParser {
    * mirrors the `extractResponse` switch exactly but for a single event:
    * - `text`               → TEXT CliEvent
    * - `thinking`           → THINKING CliEvent
-   * - `tool_use`           → semantic INITIATED event via mapOpenCodeToolPartToCliEvent
+   * - `tool_use`           → semantic tool/question event via mapOpenCodeToolPartToCliEvent
    *
    * step_start and step_finish carry no displayable content and produce no events.
    */
@@ -656,7 +656,8 @@ export class OpenCodeLogParser extends BaseLogParser {
    *   step-start   → step_start
    *   step-finish  → step_finish  (carries reason + tokens)
    *   text         → text         (carries part.text)
-   *   tool         → tool_use     (carries part.tool + part.state)
+   *   tool         → tool_use     (carries part.tool + part.state; `question`
+   *                                becomes ASK_USER_QUESTION)
    *   reasoning    → thinking     (carries part.text — extended thinking content)
    *   compaction   → compaction   (carries auto + overflow flags)
    *   subtask      → subtask      (carries description + agent + model)
