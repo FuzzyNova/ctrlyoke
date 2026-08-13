@@ -1,5 +1,6 @@
 import React from "react";
 import type {
+  AskUserQuestionData,
   BashCommandData,
   CliEvent,
   CompactionData,
@@ -20,6 +21,7 @@ import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import type { OutputMessageTarget } from "./outputProjection";
 import type { OutputRenderRow } from "./outputRows";
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
+import { buildAskUserQuestionSearchSegments } from "./askUserQuestionLayout";
 
 type OutputFindField =
   | "header"
@@ -243,6 +245,12 @@ export function getOutputRowSearchSegments(
           return createSegments([
             { field: "toolContent", text: getToolResultText(data.result) },
           ]);
+        }
+        case CLI_EVENT_TYPES.ASK_USER_QUESTION: {
+          const data = event.data as AskUserQuestionData;
+          return buildAskUserQuestionSearchSegments(data).map(
+            ({ field, text, start, end }) => ({ field, text, start, end })
+          );
         }
         case CLI_EVENT_TYPES.COMPACTION: {
           const data = event.data as CompactionData;

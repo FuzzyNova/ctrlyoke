@@ -12,6 +12,7 @@ import {
 import { useSettingsStore } from "@store/settingsStore";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import {
+  AskUserQuestionOutput,
   BashOutput,
   FileDeleteOutput,
   FileEditOutput,
@@ -30,6 +31,7 @@ import {
 } from "./BashOutput";
 import { ScriptVerdict } from "./ScriptVerdict";
 import type {
+  AskUserQuestionData,
   BashCommandData,
   CliEvent,
   CompactionData,
@@ -837,6 +839,12 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
               getFieldMatches("toolContent")
             )}
           />
+        );
+      }
+      case CLI_EVENT_TYPES.ASK_USER_QUESTION: {
+        const data = event.data as AskUserQuestionData;
+        return (
+          <AskUserQuestionOutput data={data} findDecorations={findDecorations} />
         );
       }
       case CLI_EVENT_TYPES.COMPACTION: {

@@ -6,6 +6,7 @@ import {
   type ExecutionPhase,
 } from "../types/messages";
 import type {
+  AskUserQuestionData,
   CliOutput as CliOutputType,
   CliEvent,
   OutputStatusMessage,
@@ -1137,6 +1138,77 @@ function estimateBashOutputHeight(
   return totalHeight + TOOL_CALL_BLOCK_HALF_VERTICAL_CHROME;
 }
 
+/**
+ * AskUserQuestion has no measured DOM geometry to calibrate against yet (it's
+ * a new row kind), so this follows the same shape as the other ● block
+ * estimators — header line + a wrapped-line estimate per rendered text piece —
+ * and relies on the virtualizer's post-measurement correction for the rest.
+ */
+function estimateAskUserQuestionHeight(
+  data: AskUserQuestionData,
+  outputContentWidth: number | undefined,
+  outputFontSize: number
+): number {
+  const smFontSize = Math.max(11, outputFontSize - 1);
+  const detailChrome = OUTPUT_ROW_HORIZONTAL_PADDING + 12;
+  const detailLine = (text: string) =>
+    Math.max(
+      1,
+      estimateWrappedLineCount(text, outputContentWidth, smFontSize, {
+        chrome: detailChrome,
+        charWidthMultiplier: 0.58,
+      })
+    ) * toolResultLineHeight(outputFontSize);
+
+  let height =
+    TOOL_CALL_BLOCK_VERTICAL_CHROME + toolCallLineHeight(outputFontSize);
+
+  for (const question of data.questions) {
+    height +=
+      Math.max(
+        1,
+        estimateWrappedLineCount(
+          question.question,
+          outputContentWidth,
+          outputFontSize,
+          { chrome: OUTPUT_ROW_HORIZONTAL_PADDING, charWidthMultiplier: 0.6 }
+        )
+      ) * toolCallLineHeight(outputFontSize);
+
+    for (const option of question.options) {
+      height += detailLine(
+        option.description
+          ? `${option.label}: ${option.description}`
+          : option.label
+      );
+      if (option.label === question.answer && option.preview) {
+        height += option.preview.split("\n").length * toolResultLineHeight(outputFontSize);
+      }
+    }
+
+    const answerIsCustomReply =
+      question.answer &&
+      !question.options.some((option) => option.label === question.answer);
+    if (answerIsCustomReply) {
+      height += detailLine(question.answer!);
+    }
+    if (question.notes) {
+      height += detailLine(question.notes);
+    }
+
+    height += 6;
+  }
+
+  if (data.declined) {
+    height += toolResultLineHeight(outputFontSize);
+    if (data.declined.feedback) {
+      height += detailLine(data.declined.feedback);
+    }
+  }
+
+  return height;
+}
+
 function estimateStructuredTextHeight(
   row: StructuredEventRow,
   fullContentWidth: number | undefined,
@@ -1287,6 +1359,14 @@ function estimateStructuredTextHeight(
         fullContentWidth,
         outputFontSize,
         18
+      );
+    }
+    case CLI_EVENT_TYPES.ASK_USER_QUESTION: {
+      const data = row.event.data as AskUserQuestionData;
+      return estimateAskUserQuestionHeight(
+        data,
+        outputContentWidth,
+        outputFontSize
       );
     }
     default:

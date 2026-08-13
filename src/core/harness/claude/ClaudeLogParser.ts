@@ -85,7 +85,15 @@ interface ClaudeProviderEvent extends BaseCliEvent {
   model?: string;
   subtype?: string;
   durationMs?: number;
-  toolUseResult?: Record<string, any>;
+  /**
+   * CLI-injected structured metadata for the paired tool_result. Usually an
+   * object (Edit/Write/Bash results), but a rejected tool_use reports it as a
+   * plain string (e.g. "User rejected tool use") — see `userFeedback`, which
+   * carries the human's guidance on a sibling field when they typed a reason.
+   */
+  toolUseResult?: unknown;
+  /** Human guidance accompanying a tool-use rejection, when they typed one. */
+  userFeedback?: string;
   usage?: {
     input_tokens?: number;
     output_tokens?: number;
@@ -203,6 +211,11 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       | undefined;
     let model: string | undefined;
     let elapsed: number | undefined;
+    // tool_use id -> tool name, populated as assistant tool_use blocks are
+    // seen so the later user/tool_result event can attribute a decline (which
+    // carries no structured data of its own) to AskUserQuestion specifically —
+    // see ClaudeToolBuilder.tryBuildAskUserQuestionEvent.
+    const pendingToolNames = new Map<string, string>();
 
     for (const event of events as ClaudeProviderEvent[]) {
       // Extract session ID from any event
@@ -283,6 +296,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
           // TOOL_USE - Map Claude tools to semantic event types
           if (contentBlock.type === "tool_use") {
+            if (contentBlock.id && contentBlock.name) {
+              pendingToolNames.set(contentBlock.id, contentBlock.name);
+            }
             outputEvents.push(
               ...ClaudeToolBuilder.buildInitiatedEvents(
                 contentBlock.name,
@@ -317,14 +333,22 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         ClaudeToolBuilder.processToolResultBlocks(
           event.message.content,
           timestamp,
-          outputEvents
+          outputEvents,
+          {
+            toolUseResult: event.toolUseResult,
+            userFeedback: event.userFeedback,
+            resolveToolName: (toolUseId) =>
+              toolUseId ? pendingToolNames.get(toolUseId) : undefined,
+          }
         );
 
         // Process structured tool_use_result metadata for rich diff data
-        // This contains accurate line numbers and full file context for Edit operations
-        if (event.toolUseResult) {
+        // This contains accurate line numbers and full file context for Edit
+        // operations. toolUseResult is a plain string for a rejected tool_use
+        // (handled above), so only objects reach the field-based matching here.
+        if (event.toolUseResult && typeof event.toolUseResult === "object") {
           ClaudeToolBuilder.processToolUseResultMetadata(
-            event.toolUseResult,
+            event.toolUseResult as Record<string, any>,
             timestamp,
             outputEvents
           );
@@ -1021,21 +1045,36 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     if (e.type === "user" && Array.isArray(e.message?.content)) {
       for (const block of e.message.content) {
         if (block.type === "tool_result") {
-          const outputText = ClaudeToolBuilder.extractToolResultText(
-            block.content
+          const toolName = block.tool_use_id
+            ? this.pendingStreamingToolUses.get(block.tool_use_id)
+            : undefined;
+          const askEvent = ClaudeToolBuilder.tryBuildAskUserQuestionEvent(
+            toolName,
+            block.tool_use_id,
+            e.toolUseResult,
+            block.is_error === true,
+            e.userFeedback,
+            timestamp
           );
-          events.push({
-            type: CLI_EVENT_TYPES.TOOL_RESULT,
-            timestamp,
-            data: {
-              toolCallId: block.tool_use_id,
-              result: {
-                success: !block.is_error,
-                output: outputText,
-                error: block.is_error ? outputText : undefined,
-              },
-            } as ToolResultData,
-          });
+          if (askEvent) {
+            events.push(askEvent);
+          } else {
+            const outputText = ClaudeToolBuilder.extractToolResultText(
+              block.content
+            );
+            events.push({
+              type: CLI_EVENT_TYPES.TOOL_RESULT,
+              timestamp,
+              data: {
+                toolCallId: block.tool_use_id,
+                result: {
+                  success: !block.is_error,
+                  output: outputText,
+                  error: block.is_error ? outputText : undefined,
+                },
+              } as ToolResultData,
+            });
+          }
           if (block.tool_use_id) {
             this.pendingStreamingToolUses.delete(block.tool_use_id);
           }

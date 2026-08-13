@@ -1,4 +1,5 @@
 import type {
+  AskUserQuestionData,
   BashCommandData,
   CliEvent,
   FileDeleteData,
@@ -29,6 +30,7 @@ const SEMANTIC_OPERATION_TYPES = new Set<string>([
   CLI_EVENT_TYPES.FILE_WRITE,
   CLI_EVENT_TYPES.FILE_EDIT,
   CLI_EVENT_TYPES.FILE_DELETE,
+  CLI_EVENT_TYPES.ASK_USER_QUESTION,
 ]);
 
 function cloneEvent(event: CliEvent): CliEvent {
@@ -145,6 +147,12 @@ function getEventKey(event: CliEvent): string | undefined {
       const data = event.data as McpToolCallData;
       return data.server && data.tool
         ? `mcp:${data.server}.${data.tool}`
+        : undefined;
+    }
+    case CLI_EVENT_TYPES.ASK_USER_QUESTION: {
+      const data = event.data as AskUserQuestionData;
+      return data.toolCallId
+        ? `askUserQuestion:${data.toolCallId}`
         : undefined;
     }
     case CLI_EVENT_TYPES.WEB_SEARCH: {
@@ -587,6 +595,23 @@ function mergeInitiatedWithCompleted(
           error: completedData.error ?? initiatedData.error,
           success: completedData.success ?? initiatedData.success,
         } as FileDeleteData,
+      };
+    }
+    case CLI_EVENT_TYPES.ASK_USER_QUESTION: {
+      const initiatedData = initiated.data as AskUserQuestionData;
+      const completedData = completed.data as AskUserQuestionData;
+      // A decline carries no structured question data of its own (the CLI
+      // only reports a rejection string) — fall back to the full question set
+      // the INITIATED event parsed from the original tool_use.
+      return {
+        ...completed,
+        timestamp: initiated.timestamp ?? completed.timestamp,
+        data: {
+          ...completedData,
+          questions: completedData.questions.length
+            ? completedData.questions
+            : initiatedData.questions,
+        } as AskUserQuestionData,
       };
     }
     default:

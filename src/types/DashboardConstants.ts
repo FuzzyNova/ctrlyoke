@@ -1696,6 +1696,12 @@ export const CLI_EVENT_TYPES = {
   MCP_TOOL_CALL: "mcpToolCall",
   WEB_SEARCH: "webSearch",
 
+  /** Interactive question(s) the AI asked the user mid-turn (Claude's AskUserQuestion
+   *  tool, and equivalents on other harnesses). Carries the question set on the
+   *  INITIATED event and the resolved answers/decline on the COMPLETED/FAILED one —
+   *  see AskUserQuestionData in CliOutputTypes.ts. */
+  ASK_USER_QUESTION: "askUserQuestion",
+
   // Generic fallback for unrecognized tools
   TOOL_CALL: "toolCall",
 

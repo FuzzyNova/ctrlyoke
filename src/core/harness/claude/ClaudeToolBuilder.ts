@@ -5,6 +5,9 @@ import type {
   FileWriteData,
   FileReadData,
   BashCommandData,
+  AskUserQuestionData,
+  AskUserQuestionEntry,
+  AskUserQuestionOption,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -54,6 +57,26 @@ export class ClaudeToolBuilder {
     callerType?: string
   ): CliEvent[] {
     const ct = callerType ? { callerType } : {};
+
+    // Claude-specific: AskUserQuestion parses into the full question/option
+    // set up front, so the pending question is visible while the user is
+    // still answering — the answer arrives later via tryBuildAskUserQuestionEvent.
+    if (toolName === "AskUserQuestion") {
+      return [
+        {
+          type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+          timestamp,
+          ...ct,
+          data: {
+            toolCallId: toolId,
+            questions: ClaudeToolBuilder.parseAskUserQuestionEntries(
+              input.questions
+            ),
+            status: OPERATION_STATUS.INITIATED,
+          } as AskUserQuestionData,
+        },
+      ];
+    }
 
     // Claude-specific: multiedit fans out to one FILE_EDIT per edited file
     if (toolName === "multiedit" && Array.isArray(input.edits)) {
@@ -117,10 +140,17 @@ export class ClaudeToolBuilder {
   }
 
   /**
-   * Process tool_result content blocks into TOOL_RESULT events.
+   * Process tool_result content blocks into events.
    *
-   * Processes content array from user-type messages, creating a TOOL_RESULT event
-   * for each `tool_result` block. Handles the `is_error` flag from Claude API.
+   * Processes content array from user-type messages, creating one event per
+   * `tool_result` block. Handles the `is_error` flag from Claude API.
+   *
+   * `context` lets a caller that also has access to the sibling `toolUseResult`
+   * (Claude's per-user-event structured metadata field) and a way to resolve
+   * the originating tool's name route AskUserQuestion blocks to a rich
+   * ASK_USER_QUESTION event instead of the generic TOOL_RESULT fallback — see
+   * `tryBuildAskUserQuestionEvent`. Omit it to get the plain TOOL_RESULT
+   * behavior for every block.
    *
    * @param contentBlocks - Array of content blocks from a user message
    * @param timestamp - Timestamp to use for created events
@@ -129,27 +159,185 @@ export class ClaudeToolBuilder {
   static processToolResultBlocks(
     contentBlocks: Record<string, any>[],
     timestamp: number,
-    events: CliEvent[]
+    events: CliEvent[],
+    context?: {
+      toolUseResult?: unknown;
+      userFeedback?: string;
+      resolveToolName?: (toolUseId: string | undefined) => string | undefined;
+    }
   ): void {
     for (const block of contentBlocks) {
-      if (block.type === "tool_result") {
-        const outputText = ClaudeToolBuilder.extractToolResultText(
-          block.content
-        );
-        events.push({
-          type: CLI_EVENT_TYPES.TOOL_RESULT,
-          timestamp,
-          data: {
-            toolCallId: block.tool_use_id,
-            result: {
-              success: !block.is_error,
-              output: outputText,
-              error: block.is_error ? outputText : undefined,
-            },
-          } as ToolResultData,
-        });
+      if (block.type !== "tool_result") continue;
+
+      const askEvent = ClaudeToolBuilder.tryBuildAskUserQuestionEvent(
+        context?.resolveToolName?.(block.tool_use_id),
+        block.tool_use_id,
+        context?.toolUseResult,
+        block.is_error === true,
+        context?.userFeedback,
+        timestamp
+      );
+      if (askEvent) {
+        events.push(askEvent);
+        continue;
       }
+
+      const outputText = ClaudeToolBuilder.extractToolResultText(
+        block.content
+      );
+      events.push({
+        type: CLI_EVENT_TYPES.TOOL_RESULT,
+        timestamp,
+        data: {
+          toolCallId: block.tool_use_id,
+          result: {
+            success: !block.is_error,
+            output: outputText,
+            error: block.is_error ? outputText : undefined,
+          },
+        } as ToolResultData,
+      });
     }
+  }
+
+  // ── ASK USER QUESTION ──────────────────────────────────────────────────────
+
+  private static parseAskUserQuestionOptions(
+    rawOptions: unknown
+  ): AskUserQuestionOption[] {
+    if (!Array.isArray(rawOptions)) return [];
+    return rawOptions.map((raw) => {
+      const o = (raw ?? {}) as Record<string, unknown>;
+      return {
+        label: typeof o.label === "string" ? o.label : "",
+        description:
+          typeof o.description === "string" ? o.description : undefined,
+        preview: typeof o.preview === "string" ? o.preview : undefined,
+      };
+    });
+  }
+
+  private static parseAskUserQuestionEntries(
+    rawQuestions: unknown
+  ): AskUserQuestionEntry[] {
+    if (!Array.isArray(rawQuestions)) return [];
+    return rawQuestions.map((raw) => {
+      const q = (raw ?? {}) as Record<string, unknown>;
+      return {
+        question: typeof q.question === "string" ? q.question : "",
+        header: typeof q.header === "string" ? q.header : undefined,
+        multiSelect:
+          typeof q.multiSelect === "boolean" ? q.multiSelect : undefined,
+        options: ClaudeToolBuilder.parseAskUserQuestionOptions(q.options),
+      };
+    });
+  }
+
+  /**
+   * Structural check for Claude's answered-AskUserQuestion `toolUseResult`
+   * shape: `{ questions: [...], answers: { [question]: string }, annotations?: {...} }`.
+   * Unambiguous — no other tool's `toolUseResult` carries both `questions` and
+   * `answers` — so this alone is enough to detect the answered case without
+   * knowing the originating tool name.
+   */
+  private static isAskUserQuestionResult(toolUseResult: unknown): toolUseResult is {
+    questions: Array<Record<string, unknown>>;
+    answers?: Record<string, string>;
+    annotations?: Record<string, { notes?: string; preview?: string }>;
+  } {
+    if (typeof toolUseResult !== "object" || toolUseResult === null) {
+      return false;
+    }
+    const r = toolUseResult as Record<string, unknown>;
+    return (
+      Array.isArray(r.questions) &&
+      typeof r.answers === "object" &&
+      r.answers !== null
+    );
+  }
+
+  /**
+   * Build a rich ASK_USER_QUESTION completion event for a `tool_result` block,
+   * covering both Claude's answered and declined shapes. Returns undefined for
+   * every other tool so the caller can fall back to the generic TOOL_RESULT event.
+   *
+   * Two independent signals are needed because a decline carries no structured
+   * data of its own (`toolUseResult` is just a rejection string, identical to
+   * declining any other tool): the answered shape is self-identifying via
+   * `isAskUserQuestionResult`, but the decline case can only be attributed to
+   * AskUserQuestion by the originating tool's name — passed in by the caller,
+   * which tracks tool_use id → name as it walks the assistant/user event pairs
+   * (see `pendingStreamingToolUses` / the batch-local map in ClaudeLogParser).
+   *
+   * A declined result carries no `questions` of its own — the shared
+   * CliEventNormalizer backfills them from the matching INITIATED event when it
+   * merges the two into one row.
+   */
+  static tryBuildAskUserQuestionEvent(
+    toolName: string | undefined,
+    toolCallId: string | undefined,
+    toolUseResult: unknown,
+    isError: boolean,
+    userFeedback: string | undefined,
+    timestamp: number
+  ): CliEvent | undefined {
+    const looksLikeAnswer =
+      ClaudeToolBuilder.isAskUserQuestionResult(toolUseResult);
+    if (!looksLikeAnswer && toolName !== "AskUserQuestion") {
+      return undefined;
+    }
+
+    if (looksLikeAnswer) {
+      const r = toolUseResult as {
+        questions: Array<Record<string, unknown>>;
+        answers?: Record<string, string>;
+        annotations?: Record<string, { notes?: string; preview?: string }>;
+      };
+      const questions: AskUserQuestionEntry[] = r.questions.map((q) => {
+        const questionText = typeof q.question === "string" ? q.question : "";
+        const annotation = r.annotations?.[questionText];
+        return {
+          question: questionText,
+          header: typeof q.header === "string" ? q.header : undefined,
+          multiSelect:
+            typeof q.multiSelect === "boolean" ? q.multiSelect : undefined,
+          options: ClaudeToolBuilder.parseAskUserQuestionOptions(q.options),
+          answer: r.answers?.[questionText],
+          notes: annotation?.notes,
+          answerPreview: annotation?.preview,
+        };
+      });
+      return {
+        type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+        timestamp,
+        data: {
+          toolCallId,
+          questions,
+          status: OPERATION_STATUS.COMPLETED,
+        } as AskUserQuestionData,
+      };
+    }
+
+    // Declined: Claude reports rejection as a plain string with no structured
+    // question data. The "clarify" template is what AskUserQuestion's own
+    // "Let's discuss this" path produces; anything else is a plain decline.
+    const isClarify =
+      isError &&
+      typeof userFeedback === "string" &&
+      userFeedback.includes("wants to clarify these questions");
+    return {
+      type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+      timestamp,
+      data: {
+        toolCallId,
+        questions: [],
+        status: OPERATION_STATUS.FAILED,
+        declined: {
+          reason: isClarify ? "clarify" : "rejected",
+          feedback: userFeedback,
+        },
+      } as AskUserQuestionData,
+    };
   }
 
   // ── COMPLETED (structured CLI metadata) ────────────────────────────────────

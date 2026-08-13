@@ -17,6 +17,7 @@ import {
   ThinkingBlock,
   TextData,
   FileWriteData,
+  AskUserQuestionData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -620,6 +621,312 @@ suite("ClaudeLogParser", () => {
       const response = parser.extractResponse(events);
 
       assert.strictEqual(response.metadata.sessionId, "first-session");
+    });
+
+    test("should build a rich ASK_USER_QUESTION event when AskUserQuestion is answered", () => {
+      const events = [
+        {
+          type: "assistant",
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: "toolu_1",
+                name: "AskUserQuestion",
+                input: {
+                  questions: [
+                    {
+                      question: "Favorite animal?",
+                      header: "Animal",
+                      multiSelect: false,
+                      options: [
+                        {
+                          label: "Cat",
+                          description: "Feline",
+                          preview: "/\\_/\\",
+                        },
+                        { label: "Dog", description: "Canine" },
+                      ],
+                    },
+                  ],
+                },
+              },
+            ],
+            stop_reason: "tool_use",
+          },
+          sessionId: "s1",
+        },
+        {
+          type: "user",
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "toolu_1",
+                content:
+                  'Your questions have been answered: "Favorite animal?"="Cat". You can now continue with these answers in mind.',
+              },
+            ],
+          },
+          toolUseResult: {
+            questions: [
+              {
+                question: "Favorite animal?",
+                header: "Animal",
+                multiSelect: false,
+                options: [
+                  { label: "Cat", description: "Feline", preview: "/\\_/\\" },
+                  { label: "Dog", description: "Canine" },
+                ],
+              },
+            ],
+            answers: { "Favorite animal?": "Cat" },
+            annotations: { "Favorite animal?": { preview: "/\\_/\\" } },
+          },
+        },
+        {
+          type: "assistant",
+          message: {
+            content: [{ type: "text", text: "Cat it is." }],
+            stop_reason: "end_turn",
+          },
+        },
+      ];
+
+      const response = parser.extractResponse(events);
+      const askEvents = response.events.filter(
+        (e) => e.type === CLI_EVENT_TYPES.ASK_USER_QUESTION
+      );
+      assert.strictEqual(askEvents.length, 2, "initiated + completed events");
+
+      const initiated = askEvents[0].data as AskUserQuestionData;
+      assert.strictEqual(initiated.status, "initiated");
+      assert.strictEqual(initiated.questions.length, 1);
+      assert.strictEqual(initiated.questions[0].options.length, 2);
+
+      const completed = askEvents[1].data as AskUserQuestionData;
+      assert.strictEqual(completed.status, "completed");
+      assert.strictEqual(completed.questions[0].answer, "Cat");
+      assert.strictEqual(completed.questions[0].answerPreview, "/\\_/\\");
+
+      // No redundant generic TOOL_RESULT should be emitted for this block.
+      assert.strictEqual(
+        response.events.filter((e) => e.type === CLI_EVENT_TYPES.TOOL_RESULT)
+          .length,
+        0
+      );
+    });
+
+    test("should keep a freeform typed reply as the answer when it doesn't match an option label", () => {
+      const events = [
+        {
+          type: "assistant",
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: "toolu_free",
+                name: "AskUserQuestion",
+                input: {
+                  questions: [
+                    {
+                      question: "Ship it?",
+                      options: [{ label: "Yes" }, { label: "No" }],
+                    },
+                  ],
+                },
+              },
+            ],
+            stop_reason: "tool_use",
+          },
+        },
+        {
+          type: "user",
+          message: {
+            content: [
+              { type: "tool_result", tool_use_id: "toolu_free", content: "..." },
+            ],
+          },
+          toolUseResult: {
+            questions: [
+              {
+                question: "Ship it?",
+                options: [{ label: "Yes" }, { label: "No" }],
+              },
+            ],
+            answers: { "Ship it?": "Not yet, let's wait for QA" },
+          },
+        },
+      ];
+
+      const response = parser.extractResponse(events);
+      const completed = response.events.find(
+        (e) =>
+          e.type === CLI_EVENT_TYPES.ASK_USER_QUESTION &&
+          (e.data as AskUserQuestionData).status === "completed"
+      )!.data as AskUserQuestionData;
+
+      assert.strictEqual(
+        completed.questions[0].answer,
+        "Not yet, let's wait for QA"
+      );
+      assert.ok(
+        !completed.questions[0].options.some(
+          (o) => o.label === completed.questions[0].answer
+        )
+      );
+    });
+
+    test("should mark a declined AskUserQuestion as 'clarify' when the user asks to discuss it", () => {
+      const events = [
+        {
+          type: "assistant",
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: "toolu_2",
+                name: "AskUserQuestion",
+                input: {
+                  questions: [
+                    {
+                      question: "Pick a color",
+                      options: [{ label: "Red" }, { label: "Blue" }],
+                    },
+                  ],
+                },
+              },
+            ],
+            stop_reason: "tool_use",
+          },
+        },
+        {
+          type: "user",
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "toolu_2",
+                is_error: true,
+                content:
+                  "The user doesn't want to proceed with this tool use.",
+              },
+            ],
+          },
+          toolUseResult:
+            "Error: The user doesn't want to proceed with this tool use.",
+          userFeedback:
+            "The user wants to clarify these questions.\n    This means they may have additional information, context or questions for you.",
+        },
+      ];
+
+      const response = parser.extractResponse(events);
+      const askEvents = response.events.filter(
+        (e) => e.type === CLI_EVENT_TYPES.ASK_USER_QUESTION
+      );
+      assert.strictEqual(askEvents.length, 2);
+
+      const declined = askEvents[1].data as AskUserQuestionData;
+      assert.strictEqual(declined.status, "failed");
+      assert.strictEqual(declined.declined?.reason, "clarify");
+      // The decline carries no structured questions of its own — the shared
+      // normalizer backfills them from the INITIATED event at render time.
+      assert.strictEqual(declined.questions.length, 0);
+    });
+
+    test("should mark a plain AskUserQuestion decline as 'rejected'", () => {
+      const events = [
+        {
+          type: "assistant",
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: "toolu_3",
+                name: "AskUserQuestion",
+                input: {
+                  questions: [{ question: "Continue?", options: [] }],
+                },
+              },
+            ],
+            stop_reason: "tool_use",
+          },
+        },
+        {
+          type: "user",
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "toolu_3",
+                is_error: true,
+                content: "The user doesn't want to proceed with this tool use.",
+              },
+            ],
+          },
+          toolUseResult: "User rejected tool use",
+        },
+      ];
+
+      const response = parser.extractResponse(events);
+      const declined = response.events.find(
+        (e) =>
+          e.type === CLI_EVENT_TYPES.ASK_USER_QUESTION &&
+          (e.data as AskUserQuestionData).status === "failed"
+      )?.data as AskUserQuestionData | undefined;
+
+      assert.ok(declined);
+      assert.strictEqual(declined!.declined?.reason, "rejected");
+    });
+
+    test("should not attribute a rejected non-AskUserQuestion tool call to ASK_USER_QUESTION", () => {
+      const events = [
+        {
+          type: "assistant",
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: "toolu_edit",
+                name: "edit",
+                input: {
+                  file_path: "a.ts",
+                  old_string: "x",
+                  new_string: "y",
+                },
+              },
+            ],
+            stop_reason: "tool_use",
+          },
+        },
+        {
+          type: "user",
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "toolu_edit",
+                is_error: true,
+                content: "The user doesn't want to proceed with this tool use.",
+              },
+            ],
+          },
+          toolUseResult: "User rejected tool use",
+        },
+      ];
+
+      const response = parser.extractResponse(events);
+      assert.strictEqual(
+        response.events.filter(
+          (e) => e.type === CLI_EVENT_TYPES.ASK_USER_QUESTION
+        ).length,
+        0
+      );
+      assert.strictEqual(
+        response.events.filter((e) => e.type === CLI_EVENT_TYPES.TOOL_RESULT)
+          .length,
+        1
+      );
     });
   });
 

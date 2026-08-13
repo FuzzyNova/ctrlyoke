@@ -43,6 +43,10 @@ export {
   type ContextWindowSyncData,
   type UnifiedDiffHunk,
   type UniversalCliOutput,
+  type AskUserQuestionData,
+  type AskUserQuestionEntry,
+  type AskUserQuestionOption,
+  type AskUserQuestionDeclined,
 
   // Structured output and display types
   type StructuredOutput,

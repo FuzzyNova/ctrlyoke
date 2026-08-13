@@ -52,7 +52,8 @@ export type CliEventData =
   | CompactionData
   | UserSteerData
   | FollowUpResumedData
-  | ContextWindowSyncData;
+  | ContextWindowSyncData
+  | AskUserQuestionData;
 
 /**
  * Data for a text event (AI response text).
@@ -162,6 +163,67 @@ export interface CompactionData {
   summary?: string;
   /** Whether compaction was triggered by context overflow (OpenCode-specific) */
   overflow?: boolean;
+}
+
+/**
+ * One selectable option offered for an AskUserQuestion entry.
+ */
+export interface AskUserQuestionOption {
+  /** Option label — this is the exact string that shows up verbatim as `answer`
+   *  on AskUserQuestionEntry when the user picks it. */
+  label: string;
+  /** Short rationale for the option, when the harness supports it. */
+  description?: string;
+  /** ASCII/plain-text preview art attached to the option, when the harness supports it. */
+  preview?: string;
+}
+
+/**
+ * A single question asked via AskUserQuestion, plus its resolution once answered.
+ */
+export interface AskUserQuestionEntry {
+  /** The question text. */
+  question: string;
+  /** Short category label shown alongside the question (Claude calls this "header"). */
+  header?: string;
+  /** Whether the user could pick more than one option. */
+  multiSelect?: boolean;
+  options: AskUserQuestionOption[];
+  /**
+   * The resolved answer, once available: either one of `options[].label` verbatim
+   * (selected option), or freeform text the user typed instead of picking an
+   * option. Undefined while the question is still pending.
+   */
+  answer?: string;
+  /** Freeform notes the user attached alongside (or instead of) a selected option. */
+  notes?: string;
+  /** The selected option's `preview`, carried over so it survives even if `options` is later trimmed. */
+  answerPreview?: string;
+}
+
+/**
+ * Present on a resolved AskUserQuestionData when the user declined to answer
+ * rather than picking an option or typing a reply.
+ */
+export interface AskUserQuestionDeclined {
+  /** "clarify" — user asked to discuss/reformulate instead of answering.
+   *  "rejected" — user declined with no further explanation. */
+  reason: "clarify" | "rejected";
+  /** Full guidance text captured for the "clarify" case. */
+  feedback?: string;
+}
+
+/**
+ * Data for an interactive question the AI asked the user mid-turn (Claude's
+ * AskUserQuestion tool; harness-agnostic so other providers can populate it too).
+ */
+export interface AskUserQuestionData {
+  /** Correlates the INITIATED (asked) and COMPLETED/FAILED (resolved) halves of this call. */
+  toolCallId?: string;
+  questions: AskUserQuestionEntry[];
+  /** Lifecycle stage: initiated (pending), completed (answered), failed (declined). */
+  status?: FileOperationStatus;
+  declined?: AskUserQuestionDeclined;
 }
 
 /**

@@ -267,6 +267,10 @@ export type {
   ContextWindowSyncData,
   UniversalCliOutput,
   UnifiedDiffHunk,
+  AskUserQuestionData,
+  AskUserQuestionEntry,
+  AskUserQuestionOption,
+  AskUserQuestionDeclined,
 } from "./CliOutputTypes";
 
 // Alias for the detailed CliEvent type from CliOutputTypes

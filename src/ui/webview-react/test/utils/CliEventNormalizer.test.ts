@@ -285,4 +285,81 @@ describe("CliEventNormalizer", () => {
       status: OPERATION_STATUS.COMPLETED,
     });
   });
+
+  it("collapses an initiated AskUserQuestion and its answer into one event", () => {
+    const events: CliEvent[] = [
+      {
+        type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+        data: {
+          toolCallId: "ask-1",
+          status: OPERATION_STATUS.INITIATED,
+          questions: [
+            {
+              question: "Favorite animal?",
+              options: [{ label: "Cat" }, { label: "Dog" }],
+            },
+          ],
+        },
+      },
+      {
+        type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+        data: {
+          toolCallId: "ask-1",
+          status: OPERATION_STATUS.COMPLETED,
+          questions: [
+            {
+              question: "Favorite animal?",
+              options: [{ label: "Cat" }, { label: "Dog" }],
+              answer: "Cat",
+            },
+          ],
+        },
+      },
+    ];
+
+    const normalized = normalizeCliEvents(events);
+
+    expect(normalized).toHaveLength(1);
+    expect(normalized[0].type).toBe(CLI_EVENT_TYPES.ASK_USER_QUESTION);
+    expect(normalized[0].data).toMatchObject({
+      status: OPERATION_STATUS.COMPLETED,
+      questions: [{ question: "Favorite animal?", answer: "Cat" }],
+    });
+  });
+
+  it("backfills the question set onto a declined AskUserQuestion from its initiated event", () => {
+    const events: CliEvent[] = [
+      {
+        type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+        data: {
+          toolCallId: "ask-2",
+          status: OPERATION_STATUS.INITIATED,
+          questions: [
+            {
+              question: "Ship it?",
+              options: [{ label: "Yes" }, { label: "No" }],
+            },
+          ],
+        },
+      },
+      {
+        type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+        data: {
+          toolCallId: "ask-2",
+          status: OPERATION_STATUS.FAILED,
+          questions: [],
+          declined: { reason: "clarify", feedback: "hold on, what about X?" },
+        },
+      },
+    ];
+
+    const normalized = normalizeCliEvents(events);
+
+    expect(normalized).toHaveLength(1);
+    expect(normalized[0].data).toMatchObject({
+      status: OPERATION_STATUS.FAILED,
+      declined: { reason: "clarify", feedback: "hold on, what about X?" },
+      questions: [{ question: "Ship it?" }],
+    });
+  });
 });
