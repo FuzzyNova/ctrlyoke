@@ -15,21 +15,21 @@
 | ------------------------- | ------------------------------------ | -------------------------------------------------------- |
 | Domain + DNS (Cloudflare) | `flightpath.dev` live, DNS → Netlify | **Migrate** — stand up `ctrlyoke.dev`, 301 old → new     |
 | Netlify site              | hosting `flightpath.dev`             | **Migrate** — repoint primary domain to `ctrlyoke.dev`   |
-| Google Workspace inboxes  | 6 product inboxes `@flightpath.dev`  | **Migrate** — recreate `@ctrlyoke.dev`, old → forwarders |
+| Google Workspace inboxes  | 6 product inboxes `@flightpath.dev`  | **Migrate** — rename to `@ctrlyoke.dev`, clean break (no traffic ever hit old addresses) |
 | GitHub repo               | `FuzzyNova/flightpath`               | **Migrate** — rename to `FuzzyNova/ctrlyoke`             |
 | VS Code Marketplace       | not yet published                    | **Create fresh** — publish `fuzzynova.ctrlyoke`          |
 | Lemon Squeezy             | **never created**                    | **Create fresh** under ctrlyoke                          |
 | Keygen                    | **never created**                    | **Create fresh** under ctrlyoke                          |
 
-> **Decisions carried over from the rebrand plan:** keep `flightpath.dev` as a **permanent 301 redirect**, and keep `@flightpath.dev` inboxes as **forwarders during a short overlap**. Publisher stays **`fuzzynova`** (studio identity, unaffected).
+> **Decisions carried over from the rebrand plan:** keep `flightpath.dev` as a **permanent 301 redirect** (web traffic/SEO). Email inboxes are a **clean break, no forwarders** — pre-release, zero customers, nothing has ever hit the `@flightpath.dev` inboxes, so there's no one to catch. Publisher stays **`fuzzynova`** (studio identity, unaffected).
 
 ---
 
 ## 1. Domain & DNS — Cloudflare
 
 - [x] Confirm `ctrlyoke.dev` is registered and in the Cloudflare account (per the rebrand plan it + `controlyoke.*` and `.com` are owned and TM-cleared).
-- [ ] Add `ctrlyoke.dev` to Cloudflare DNS; create the records Netlify requires for the apex + `www` (see §2 — Netlify will give you the target).
-- [ ] Decide the redirect strategy and keep it **permanent**:
+- [x] Add `ctrlyoke.dev` to Cloudflare DNS; create the records Netlify requires for the apex + `www` (see §2 — Netlify will give you the target).
+- [x] Decide the redirect strategy and keep it **permanent**:
   - `flightpath.dev` → `ctrlyoke.dev` **301** (preserve old links / SEO).
   - `controlyoke.dev` / `controlyoke.com` / `ctrlyoke.com` → **301 → `ctrlyoke.dev`** (canonical).
 - [ ] Verify DNS propagation before flipping anything customer-facing (apex + `www` + any `mail`/MX records for §3).
@@ -51,24 +51,24 @@
 
 ## 3. Google Workspace — product email
 
-- [ ] Add `ctrlyoke.dev` to the existing Workspace (secondary domain or alias domain, mirroring how `flightpath.dev` was added). Verify domain ownership.
-- [ ] Configure **SPF, DKIM, DMARC** for `ctrlyoke.dev`.
-- [ ] Recreate the 6 product groups/inboxes under `@ctrlyoke.dev`, routed to the admin mailbox:
-  - [ ] `support@ctrlyoke.dev`
-  - [ ] `billing@ctrlyoke.dev`
-  - [ ] `security@ctrlyoke.dev`
-  - [ ] `sales@ctrlyoke.dev`
-  - [ ] `privacy@ctrlyoke.dev`
-  - [ ] `licensing@ctrlyoke.dev`
-- [ ] Keep the `@flightpath.dev` versions as **forwarders → `@ctrlyoke.dev`** for the overlap window.
+- [x] Add `ctrlyoke.dev` to the existing Workspace (secondary domain or alias domain, mirroring how `flightpath.dev` was added). Verify domain ownership.
+- [x] Configure **SPF, DKIM, DMARC** for `ctrlyoke.dev`.
+- [x] Rename the 6 existing product groups/inboxes from `@flightpath.dev` to `@ctrlyoke.dev` in place (edit email address + name/description on each group), routed to the admin mailbox:
+  - [x] `support@ctrlyoke.dev`
+  - [x] `billing@ctrlyoke.dev`
+  - [x] `security@ctrlyoke.dev`
+  - [x] `sales@ctrlyoke.dev`
+  - [x] `privacy@ctrlyoke.dev`
+  - [x] `licensing@ctrlyoke.dev`
+- [x] Clean break — no `@flightpath.dev` forwarders/aliases kept. Nothing has ever hit these inboxes, so there's no overlap window needed.
 - [ ] Studio inboxes `admin@`/`hello@fuzzno.com` are **unaffected** — do not touch.
 - [ ] These addresses are already referenced in the shipped `LICENSE.md` / `PRIVACY.md` and the site footer (all now `@ctrlyoke.dev`), so the inboxes must exist before/at launch.
 
 ## 4. GitHub repository
 
-- [ ] Rename `FuzzyNova/flightpath` → `FuzzyNova/ctrlyoke` (GitHub auto-redirects the old URLs).
-- [ ] `package.json` `repository`/`homepage`/`bugs` and docs/landing links already point at `FuzzyNova/ctrlyoke` + `ctrlyoke.dev` — **they 404 until this rename + the domain go live.** No code change needed after; just verify they resolve.
-- [ ] Sanity-check `.vscode/launch.json` `--disable-extension=...` id against your actually-installed extension id (was a flagged loose end in the rebrand plan).
+- [x] Rename `FuzzyNova/flightpath` → `FuzzyNova/ctrlyoke` (GitHub auto-redirects the old URLs).
+- [x] `package.json` `repository`/`homepage`/`bugs` and docs/landing links already point at `FuzzyNova/ctrlyoke` + `ctrlyoke.dev` — **they 404 until this rename + the domain go live.** No code change needed after; just verify they resolve.
+- [x] Sanity-check `.vscode/launch.json` `--disable-extension=...` id against your actually-installed extension id (was a flagged loose end in the rebrand plan).
 
 ## 5. VS Code Marketplace
 
