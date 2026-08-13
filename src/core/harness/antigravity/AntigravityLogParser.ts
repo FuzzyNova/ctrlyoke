@@ -62,7 +62,9 @@ interface AntigravityLogEvent extends BaseCliEvent {
   transcriptEntry?: AntigravityTranscriptEntry;
   thinking?: string;
   plannerToolCalls?: AntigravityTranscriptEntry["tool_calls"];
+  plannerToolCallIds?: string[];
   toolCall?: AntigravityPlannerToolCall;
+  toolCallId?: string;
   resultEntry?: AntigravityTranscriptEntry;
   taskId?: string;
   model?: string;
@@ -89,6 +91,7 @@ const BASELINE_CHECKPOINT_REGEX = /\{\{\s*CHECKPOINT\s+0\s*\}\}/i;
 interface PendingPlannerToolCall {
   call: AntigravityPlannerToolCall;
   plannerEventId: string;
+  toolCallId: string;
   timestamp: number;
 }
 
@@ -263,13 +266,18 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     const outputEvents = events.flatMap((event) =>
       this.extractStructuredEventsFromEvent(event)
     );
-    const unmatchedEvents = this.pendingPlannerToolCalls.map((pending) =>
-      AntigravityToolEventBuilder.buildUnmatchedCall(
-        pending.call,
-        pending.timestamp,
-        pending.plannerEventId
+    const unmatchedEvents = this.pendingPlannerToolCalls
+      .filter(
+        (pending) =>
+          !AntigravityToolEventBuilder.isAskUserQuestionTool(pending.call.name)
       )
-    );
+      .map((pending) =>
+        AntigravityToolEventBuilder.buildUnmatchedCall(
+          pending.call,
+          pending.timestamp,
+          pending.plannerEventId
+        )
+      );
     for (const unmatched of unmatchedEvents) {
       const insertAt = outputEvents.findIndex(
         (event) =>
@@ -405,6 +413,22 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
           } as ThinkingBlock,
         });
       }
+      for (const [index, call] of (
+        antigravityEvent.plannerToolCalls ?? []
+      ).entries()) {
+        if (AntigravityToolEventBuilder.isAskUserQuestionTool(call.name)) {
+          const toolCallId =
+            antigravityEvent.plannerToolCallIds?.[index] ??
+            `${antigravityEvent.eventId ?? "unknown"}:tool-${index}`;
+          structuredEvents.push(
+            AntigravityToolEventBuilder.buildAskUserQuestionInitiatedEvent(
+              call,
+              toolCallId,
+              timestamp
+            )
+          );
+        }
+      }
       return structuredEvents;
     }
 
@@ -417,6 +441,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         result: antigravityEvent.resultEntry,
         timestamp,
         eventId: antigravityEvent.eventId,
+        toolCallId: antigravityEvent.toolCallId,
         taskId: antigravityEvent.taskId,
       });
     }
@@ -530,7 +555,14 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       entry.source === "MODEL" &&
       entry.type === "GENERIC" &&
       entry.status === "RUNNING";
-    if (entry.status !== "DONE" && !isBackgroundLaunch && !isGenericRunning) {
+    const isAskQuestionResult =
+      entry.source === "MODEL" && entry.type === "ASK_QUESTION";
+    if (
+      entry.status !== "DONE" &&
+      !isBackgroundLaunch &&
+      !isGenericRunning &&
+      !isAskQuestionResult
+    ) {
       return [];
     }
 
@@ -557,10 +589,14 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         typeof entry.content === "string" ? entry.content.trim() : "";
       const thinking = entry.thinking?.trim() ?? "";
       const plannerToolCalls = entry.tool_calls ?? [];
-      for (const call of plannerToolCalls) {
+      const plannerToolCallIds = plannerToolCalls.map(
+        (_call, index) => `${eventId}:tool-${index}`
+      );
+      for (const [index, call] of plannerToolCalls.entries()) {
         this.pendingPlannerToolCalls.push({
           call,
           plannerEventId: eventId,
+          toolCallId: plannerToolCallIds[index],
           timestamp,
         });
       }
@@ -573,6 +609,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
           line: text,
           thinking: thinking || undefined,
           plannerToolCalls,
+          plannerToolCallIds,
           ...base,
         },
       ];
@@ -585,6 +622,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
           type: "transcript.tool",
           line: typeof entry.content === "string" ? entry.content : "",
           toolCall: call?.call,
+          toolCallId: call?.toolCallId,
           resultEntry: entry,
           taskId: this.extractTaskId(entry),
           ...base,
@@ -649,6 +687,7 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       "LIST_RESOURCES",
       "READ_RESOURCE",
       "SEARCH_WEB",
+      "ASK_QUESTION",
     ].includes(entry.type);
   }
 
@@ -688,6 +727,8 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         return name === "read_resource";
       case "SEARCH_WEB":
         return name === "search_web";
+      case "ASK_QUESTION":
+        return AntigravityToolEventBuilder.isAskUserQuestionTool(name);
       case "LIST_DIRECTORY":
         return name === "list_dir";
       case "GREP_SEARCH":
@@ -976,7 +1017,8 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       ? (streamJsonUsage.totalTokens ?? inputTokens + outputTokens)
       : (statuslineUsage?.totalTokens ?? inputTokens + outputTokens);
     const contextWindowUsedTokens =
-      statuslineUsage?.contextWindowUsedTokens ?? event?.contextWindowUsedTokens;
+      statuslineUsage?.contextWindowUsedTokens ??
+      event?.contextWindowUsedTokens;
     const contextWindowSize =
       statuslineUsage?.contextWindowSize ??
       event?.contextWindowSize ??

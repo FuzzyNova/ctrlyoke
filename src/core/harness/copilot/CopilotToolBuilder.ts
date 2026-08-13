@@ -8,6 +8,9 @@ import {
   McpToolCallData,
   WebSearchData,
   ToolCall,
+  AskUserQuestionData,
+  AskUserQuestionEntry,
+  AskUserQuestionOption,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -20,21 +23,226 @@ import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 
 type CopilotToolArgs = Record<string, unknown> | string;
 
+interface CopilotToolTelemetry {
+  properties?: Record<string, unknown>;
+  restrictedProperties?: Record<string, unknown>;
+}
+
+interface CopilotCompletionData {
+  toolCallId?: string;
+  success?: boolean;
+  result?: { content?: string; detailedContent?: string };
+  error?: { message?: string };
+  toolTelemetry?: CopilotToolTelemetry;
+}
+
 /**
  * Builds CliEvents from Copilot CLI tool call payloads.
  *
  * The static builders cover the full tool call lifecycle:
  * - `buildInitiatedEvents` — called on tool.execution_start (or toolRequests);
- *   includes old/new content for FILE_EDIT so the attempted diff is visible
- *   immediately and on failure.
+ *   includes the complete question/options payload for ask_user and old/new
+ *   content for FILE_EDIT so the attempted operation is visible immediately.
  * - `buildCompletedEvents` — called on tool.execution_complete; carries
- *   structuredPatch with accurate line numbers which the UI prefers over
- *   the client-side diff generated from INITIATED old/new content.
+ *   resolved answers for ask_user and structuredPatch with accurate line
+ *   numbers which the UI prefers over the client-side diff generated from
+ *   INITIATED old/new content.
  *
  * CopilotLogParser uses these methods for both interactive log events and
  * headless stdout events, so the event-shaping logic is never duplicated.
  */
 export class CopilotToolBuilder {
+  private static readonly ASK_USER_TOOL_NAMES = new Set([
+    "ask_user",
+    "ask_user_question",
+    "askuserquestion",
+  ]);
+
+  static isAskUserQuestionTool(toolName: string): boolean {
+    return this.ASK_USER_TOOL_NAMES.has(toolName.toLowerCase());
+  }
+
+  private static parseChoice(rawChoice: unknown): AskUserQuestionOption {
+    if (typeof rawChoice !== "string") {
+      const choice = (rawChoice ?? {}) as Record<string, unknown>;
+      return {
+        label: typeof choice.label === "string" ? choice.label : "",
+        description:
+          typeof choice.description === "string"
+            ? choice.description
+            : undefined,
+        preview:
+          typeof choice.preview === "string" ? choice.preview : undefined,
+      };
+    }
+
+    const [firstLine, ...previewLines] = rawChoice.split("\n");
+    const descriptionSeparator = firstLine.indexOf(" \u2014 ");
+    if (descriptionSeparator <= 0) {
+      return { label: rawChoice };
+    }
+
+    return {
+      label: firstLine.slice(0, descriptionSeparator),
+      description: firstLine.slice(descriptionSeparator + 3),
+      preview: previewLines.length ? previewLines.join("\n") : undefined,
+    };
+  }
+
+  private static parseChoices(rawChoices: unknown): AskUserQuestionOption[] {
+    let choices: unknown = rawChoices;
+    if (typeof choices === "string") {
+      try {
+        choices = JSON.parse(choices);
+      } catch {
+        choices = [choices];
+      }
+    }
+    return Array.isArray(choices)
+      ? choices.map((choice) => this.parseChoice(choice))
+      : [];
+  }
+
+  private static parseQuestionEntries(
+    args: CopilotToolArgs,
+    fallbackQuestion?: string,
+    fallbackChoices?: unknown
+  ): AskUserQuestionEntry[] {
+    const input =
+      typeof args === "string" ? undefined : (args as Record<string, unknown>);
+    const rawQuestions = input?.questions;
+
+    if (Array.isArray(rawQuestions)) {
+      return rawQuestions.map((rawQuestion) => {
+        const question = (rawQuestion ?? {}) as Record<string, unknown>;
+        return {
+          question:
+            typeof question.question === "string"
+              ? question.question
+              : (fallbackQuestion ?? ""),
+          header:
+            typeof question.header === "string" ? question.header : undefined,
+          multiSelect:
+            typeof question.multiSelect === "boolean"
+              ? question.multiSelect
+              : undefined,
+          options: this.parseChoices(
+            question.options ?? question.choices ?? fallbackChoices
+          ),
+        };
+      });
+    }
+
+    return [
+      {
+        question:
+          typeof input?.question === "string"
+            ? input.question
+            : (fallbackQuestion ?? ""),
+        options: this.parseChoices(input?.choices ?? fallbackChoices),
+      },
+    ];
+  }
+
+  private static getCompletionText(
+    completionData: CopilotCompletionData
+  ): string | undefined {
+    const resultText =
+      completionData.result?.content || completionData.result?.detailedContent;
+    if (!resultText) {
+      return undefined;
+    }
+    const selectedPrefix = "User selected: ";
+    return resultText.startsWith(selectedPrefix)
+      ? resultText.slice(selectedPrefix.length)
+      : resultText;
+  }
+
+  private static getAnswer(
+    completionData: CopilotCompletionData
+  ): string | undefined {
+    const answer = completionData.toolTelemetry?.restrictedProperties?.answer;
+    return typeof answer === "string"
+      ? answer
+      : this.getCompletionText(completionData);
+  }
+
+  private static resolveAnswer(
+    answer: string | undefined,
+    options: AskUserQuestionOption[]
+  ): { answer?: string; answerPreview?: string } {
+    if (!answer) {
+      return {};
+    }
+
+    const selected = options.find(
+      (option) =>
+        answer === option.label ||
+        answer.startsWith(`${option.label} \u2014 `) ||
+        answer.startsWith(`${option.label}\n`)
+    );
+    return selected
+      ? { answer: selected.label, answerPreview: selected.preview }
+      : { answer };
+  }
+
+  private static buildAskUserQuestionInitiatedEvent(
+    args: CopilotToolArgs,
+    toolCallId: string | undefined,
+    timestamp: number
+  ): CliEvent {
+    return {
+      type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+      timestamp,
+      data: {
+        toolCallId,
+        questions: this.parseQuestionEntries(args),
+        status: OPERATION_STATUS.INITIATED,
+      } as AskUserQuestionData,
+    };
+  }
+
+  private static buildAskUserQuestionCompletedEvent(
+    args: CopilotToolArgs,
+    toolCallId: string | undefined,
+    completionData: CopilotCompletionData
+  ): CliEvent {
+    const restricted = completionData.toolTelemetry?.restrictedProperties;
+    const fallbackQuestion =
+      typeof restricted?.question === "string"
+        ? restricted.question
+        : undefined;
+    const fallbackChoices = restricted?.choices;
+    const questions = this.parseQuestionEntries(
+      args,
+      fallbackQuestion,
+      fallbackChoices
+    );
+    const success = completionData.success === true;
+    const answer = success ? this.getAnswer(completionData) : undefined;
+    const resolvedQuestions = questions.map((question) => ({
+      ...question,
+      ...this.resolveAnswer(answer, question.options),
+    }));
+    const declinedText = this.getCompletionText(completionData);
+
+    return {
+      type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+      timestamp: Date.now(),
+      data: {
+        toolCallId,
+        questions: resolvedQuestions,
+        status: success ? OPERATION_STATUS.COMPLETED : OPERATION_STATUS.FAILED,
+        declined: success
+          ? undefined
+          : {
+              reason: "rejected",
+              feedback: declinedText,
+            },
+      } as AskUserQuestionData,
+    };
+  }
+
   /**
    * Build an INITIATED CliEvent for a Copilot tool call.
    *
@@ -56,6 +264,12 @@ export class CopilotToolBuilder {
     toolCallId: string | undefined,
     timestamp: number
   ): CliEvent[] {
+    if (this.isAskUserQuestionTool(toolName)) {
+      return [
+        this.buildAskUserQuestionInitiatedEvent(args, toolCallId, timestamp),
+      ];
+    }
+
     if (toolName === "apply_patch" && typeof args === "string") {
       const fileEdits = ApplyPatchParser.parseFileEdits(args);
       if (fileEdits.length > 0) {
@@ -102,12 +316,18 @@ export class CopilotToolBuilder {
   static buildCompletedEvents(
     toolName: string,
     args: CopilotToolArgs,
-    completionData: {
-      success?: boolean;
-      result?: { content?: string; detailedContent?: string };
-      error?: { message?: string };
-    }
+    completionData: CopilotCompletionData
   ): CliEvent[] {
+    if (this.isAskUserQuestionTool(toolName)) {
+      return [
+        this.buildAskUserQuestionCompletedEvent(
+          args,
+          completionData.toolCallId,
+          completionData
+        ),
+      ];
+    }
+
     const classification = CliEventMapper.classifyTool(toolName);
     const classifiedType = classification.type;
     const success = completionData?.success === true;

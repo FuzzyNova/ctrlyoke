@@ -8,8 +8,10 @@ import { AntigravityTranscriptReader } from "../../core/harness/antigravity/Anti
 import {
   CLI_EVENT_TYPES,
   HARNESS_IDS,
+  OPERATION_STATUS,
   TOKEN_TOTAL_CONFIDENCE,
 } from "../../types/DashboardConstants";
+import type { AskUserQuestionData } from "../../types/CliOutputTypes";
 import type { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogParser";
 
 async function withTemporaryHome<T>(
@@ -955,6 +957,102 @@ suite("AntigravityLogParser", () => {
           planner.eventId
         );
       });
+    });
+
+    test("maps ask_question calls and answers into a semantic question event", async () => {
+      await withAntigravityTranscriptSession(
+        [],
+        async ({ parser, logPath, appendTranscript }) => {
+          appendTranscript(
+            {
+              source: "MODEL",
+              type: "PLANNER_RESPONSE",
+              status: "DONE",
+              created_at: "2026-08-13T21:54:12Z",
+              tool_calls: [
+                {
+                  name: "ask_question",
+                  args: {
+                    questions: [
+                      {
+                        is_multi_select: false,
+                        question: "What's your favorite animal?",
+                        options: [
+                          "(Recommended) dog - Loyal and playful companion.\nASCII Art:\n / \\__",
+                          "cat - Curious and independent.\nASCII Art:\n /\\_/\\\n( o.o )",
+                          "snake - Sleek and quiet reptile.\nASCII Art:\n  ~~\\",
+                        ],
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+            {
+              source: "MODEL",
+              type: "ASK_QUESTION",
+              status: "DONE",
+              created_at: "2026-08-13T21:54:43Z",
+              content:
+                "Created At: 2026-08-13T21:54:14-05:00\n" +
+                "Completed At: 2026-08-13T21:54:43-05:00\n" +
+                "A1: snake - Sleek and quiet reptile.\n" +
+                "ASCII Art:\n" +
+                "  ~~\\",
+            }
+          );
+          const events = await parser.readNewLines(logPath);
+          const structured = events.flatMap((event) =>
+            parser.extractStructuredEventsFromEvent(event)
+          );
+
+          assert.deepStrictEqual(
+            structured.map((event) => event.type),
+            [
+              CLI_EVENT_TYPES.ASK_USER_QUESTION,
+              CLI_EVENT_TYPES.ASK_USER_QUESTION,
+            ]
+          );
+
+          const initiated = structured[0].data as AskUserQuestionData;
+          assert.strictEqual(initiated.status, OPERATION_STATUS.INITIATED);
+          assert.strictEqual(
+            initiated.questions[0].question,
+            "What's your favorite animal?"
+          );
+          assert.deepStrictEqual(
+            initiated.questions[0].options.map((option) => option.label),
+            ["dog", "cat", "snake"]
+          );
+          assert.strictEqual(
+            initiated.questions[0].options[1].description,
+            "Curious and independent."
+          );
+          assert.strictEqual(
+            initiated.questions[0].options[1].preview,
+            " /\\_/\\\n( o.o )"
+          );
+
+          const completed = structured[1].data as AskUserQuestionData;
+          assert.strictEqual(completed.status, OPERATION_STATUS.COMPLETED);
+          assert.strictEqual(completed.questions[0].answer, "snake");
+          assert.strictEqual(completed.questions[0].answerPreview, "  ~~\\");
+
+          const output = parser.extractResponse(events);
+          assert.strictEqual(
+            output.events.filter(
+              (event) => event.type === CLI_EVENT_TYPES.ASK_USER_QUESTION
+            ).length,
+            2
+          );
+          assert.strictEqual(
+            output.events.filter(
+              (event) => event.type === CLI_EVENT_TYPES.TOOL_CALL
+            ).length,
+            0
+          );
+        }
+      );
     });
   });
 

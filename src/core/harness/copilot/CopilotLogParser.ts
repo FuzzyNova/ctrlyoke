@@ -46,7 +46,7 @@ import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
  * - **Old format (pre-v0.0.384):** `<session-id>.jsonl` (flat file)
  * - **New format (v0.0.384+):** `<session-id>/events.jsonl` (subdirectory)
  *
- * **Supported Event Types (9 types per COPILOT_LOG_SCHEMA.md):**
+ * **Supported Event Types (10 types per COPILOT_LOG_SCHEMA.md):**
  * - `session.start` - Session initialization (sessionId, copilotVersion, selectedModel)
  * - `session.info` - Informational messages (authentication, MCP connections)
  * - `session.error` - Session-level errors (model call failures, API errors)
@@ -483,26 +483,32 @@ export class CopilotLogParser extends BaseLogParser {
           pendingTools.delete(event.data.toolCallId);
         }
 
-        // Always emit TOOL_RESULT
-        const toolResultRaw = event.data.result?.content;
-        const toolResultStr =
-          typeof toolResultRaw === "string"
-            ? toolResultRaw
-            : toolResultRaw
-              ? JSON.stringify(toolResultRaw)
-              : undefined;
-        outputEvents.push({
-          type: CLI_EVENT_TYPES.TOOL_RESULT,
-          timestamp,
-          data: {
-            toolCallId: event.data.toolCallId,
-            result: {
-              success: event.data.success,
-              output: toolResultStr,
-              error: event.data.success ? undefined : toolResultStr,
-            },
-          } as ToolResultData,
-        });
+        // Semantic question events already contain the resolved answer or
+        // decline details, so do not append a duplicate generic result row.
+        if (
+          !pendingTool ||
+          !CopilotToolBuilder.isAskUserQuestionTool(pendingTool.toolName)
+        ) {
+          const toolResultRaw = event.data.result?.content;
+          const toolResultStr =
+            typeof toolResultRaw === "string"
+              ? toolResultRaw
+              : toolResultRaw
+                ? JSON.stringify(toolResultRaw)
+                : undefined;
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.TOOL_RESULT,
+            timestamp,
+            data: {
+              toolCallId: event.data.toolCallId,
+              result: {
+                success: event.data.success,
+                output: toolResultStr,
+                error: event.data.success ? undefined : toolResultStr,
+              },
+            } as ToolResultData,
+          });
+        }
       }
     }
 
@@ -1083,9 +1089,12 @@ export class CopilotLogParser extends BaseLogParser {
       return results;
     }
 
-    // tool.execution_complete: emit completed events + TOOL_RESULT, then clean up
+    // tool.execution_complete: emit completed events and clean up
     if (ev.type === "tool.execution_complete") {
       const pending = this.pendingStreamingTools.get(data.toolCallId);
+      const isAskUserQuestion =
+        pending !== undefined &&
+        CopilotToolBuilder.isAskUserQuestionTool(pending.toolName);
       if (pending) {
         results.push(
           ...CopilotToolBuilder.buildCompletedEvents(
@@ -1097,25 +1106,27 @@ export class CopilotLogParser extends BaseLogParser {
         this.pendingStreamingTools.delete(data.toolCallId);
       }
 
-      const toolResultRaw = data.result?.content;
-      const toolResultStr =
-        typeof toolResultRaw === "string"
-          ? toolResultRaw
-          : toolResultRaw
-            ? JSON.stringify(toolResultRaw)
-            : undefined;
-      results.push({
-        type: CLI_EVENT_TYPES.TOOL_RESULT,
-        timestamp,
-        data: {
-          toolCallId: data.toolCallId,
-          result: {
-            success: data.success,
-            output: toolResultStr,
-            error: data.success ? undefined : toolResultStr,
-          },
-        } as ToolResultData,
-      });
+      if (!isAskUserQuestion) {
+        const toolResultRaw = data.result?.content;
+        const toolResultStr =
+          typeof toolResultRaw === "string"
+            ? toolResultRaw
+            : toolResultRaw
+              ? JSON.stringify(toolResultRaw)
+              : undefined;
+        results.push({
+          type: CLI_EVENT_TYPES.TOOL_RESULT,
+          timestamp,
+          data: {
+            toolCallId: data.toolCallId,
+            result: {
+              success: data.success,
+              output: toolResultStr,
+              error: data.success ? undefined : toolResultStr,
+            },
+          } as ToolResultData,
+        });
+      }
       return results;
     }
 

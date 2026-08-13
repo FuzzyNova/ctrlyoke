@@ -7,6 +7,9 @@ import {
   McpToolCallData,
   ToolCall,
   WebSearchData,
+  AskUserQuestionData,
+  AskUserQuestionEntry,
+  AskUserQuestionOption,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -24,6 +27,7 @@ export interface AntigravityToolMapping {
   result: AntigravityTranscriptEntry;
   timestamp: number;
   eventId?: string;
+  toolCallId?: string;
   taskId?: string;
 }
 
@@ -33,6 +37,16 @@ export interface AntigravityToolMapping {
  * call plus its adjacent result, or a result that had no matching call.
  */
 export class AntigravityToolEventBuilder {
+  private static readonly ASK_USER_QUESTION_TOOL_NAME = "ask_question";
+  private static readonly ASK_USER_QUESTION_ENTRY_TYPE = "ASK_QUESTION";
+
+  static isAskUserQuestionTool(toolName: string | undefined): boolean {
+    return (
+      toolName?.toLowerCase() ===
+      AntigravityToolEventBuilder.ASK_USER_QUESTION_TOOL_NAME
+    );
+  }
+
   static build(mapping: AntigravityToolMapping): CliEvent[] {
     const { call, result, timestamp, eventId, taskId } = mapping;
     const toolName = call?.name ?? this.toolNameFromResult(result);
@@ -42,6 +56,17 @@ export class AntigravityToolEventBuilder {
     const error = success ? undefined : this.resultError(result);
     const resultText = this.stringContent(result);
     const id = taskId ?? eventId;
+
+    if (result.type === this.ASK_USER_QUESTION_ENTRY_TYPE) {
+      return [
+        this.buildAskUserQuestionCompletedEvent(
+          call,
+          result,
+          mapping.toolCallId,
+          timestamp
+        ),
+      ];
+    }
 
     if (result.status === "RUNNING") {
       return [
@@ -203,6 +228,189 @@ export class AntigravityToolEventBuilder {
         id: eventId,
       } as ToolCall,
     };
+  }
+
+  static buildAskUserQuestionInitiatedEvent(
+    call: AntigravityPlannerToolCall,
+    toolCallId: string,
+    timestamp: number
+  ): CliEvent {
+    return {
+      type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+      timestamp,
+      data: {
+        toolCallId,
+        questions: this.parseQuestions(call.args),
+        status: OPERATION_STATUS.INITIATED,
+      } as AskUserQuestionData,
+    };
+  }
+
+  private static buildAskUserQuestionCompletedEvent(
+    call: AntigravityPlannerToolCall | undefined,
+    result: AntigravityTranscriptEntry,
+    toolCallId: string | undefined,
+    timestamp: number
+  ): CliEvent {
+    const questions = this.parseQuestions(call?.args);
+    const answers = this.parseAnswers(this.stringContent(result));
+    const resolvedQuestions = questions.map((question, index) => ({
+      ...question,
+      ...this.resolveAnswer(
+        answers.get(index + 1) ??
+          (questions.length === 1 ? this.stringContent(result) : undefined),
+        question.options
+      ),
+    }));
+    const completed = result.status === "DONE";
+
+    return {
+      type: CLI_EVENT_TYPES.ASK_USER_QUESTION,
+      timestamp,
+      data: {
+        toolCallId,
+        questions: resolvedQuestions,
+        status: completed
+          ? OPERATION_STATUS.COMPLETED
+          : OPERATION_STATUS.FAILED,
+        declined: completed
+          ? undefined
+          : {
+              reason: "rejected",
+              feedback: this.stringContent(result) || undefined,
+            },
+      } as AskUserQuestionData,
+    };
+  }
+
+  private static parseQuestions(
+    args: Record<string, unknown> | undefined
+  ): AskUserQuestionEntry[] {
+    let rawQuestions = args?.questions;
+    if (typeof rawQuestions === "string") {
+      try {
+        rawQuestions = JSON.parse(rawQuestions);
+      } catch {
+        return [];
+      }
+    }
+    if (!Array.isArray(rawQuestions)) {
+      return [];
+    }
+
+    return rawQuestions.map((rawQuestion) => {
+      const question = isRecord(rawQuestion) ? rawQuestion : {};
+      return {
+        question:
+          typeof question.question === "string" ? question.question : "",
+        multiSelect:
+          typeof question.is_multi_select === "boolean"
+            ? question.is_multi_select
+            : typeof question.multiSelect === "boolean"
+              ? question.multiSelect
+              : undefined,
+        options: this.parseOptions(question.options),
+      };
+    });
+  }
+
+  private static parseOptions(rawOptions: unknown): AskUserQuestionOption[] {
+    if (!Array.isArray(rawOptions)) {
+      return [];
+    }
+
+    return rawOptions.map((rawOption) => {
+      if (isRecord(rawOption)) {
+        return {
+          label: typeof rawOption.label === "string" ? rawOption.label : "",
+          description:
+            typeof rawOption.description === "string"
+              ? rawOption.description
+              : undefined,
+          preview:
+            typeof rawOption.preview === "string"
+              ? rawOption.preview
+              : undefined,
+        };
+      }
+
+      if (typeof rawOption !== "string") {
+        return { label: "" };
+      }
+
+      const normalized = rawOption
+        .replace(/^\s*\(Recommended\)\s*/i, "")
+        .trim();
+      const separator = normalized.match(/\s+-\s+/);
+      if (!separator || separator.index === undefined) {
+        return { label: normalized };
+      }
+
+      const label = normalized.slice(0, separator.index).trim();
+      const detail = normalized.slice(separator.index + separator[0].length);
+      const previewMarker = detail.search(/ASCII Art\s*:/i);
+      if (previewMarker < 0) {
+        return { label, description: detail.trim() };
+      }
+
+      const description = detail.slice(0, previewMarker).trim();
+      const preview = detail
+        .slice(previewMarker + "ASCII Art:".length)
+        .replace(/^\r?\n/, "")
+        .replace(/\s+$/, "");
+      return {
+        label,
+        description: description || undefined,
+        preview: preview || undefined,
+      };
+    });
+  }
+
+  private static parseAnswers(content: string): Map<number, string> {
+    const answers = new Map<number, string>();
+    let currentAnswer: number | undefined;
+    let lines: string[] = [];
+
+    const flush = () => {
+      if (currentAnswer !== undefined) {
+        answers.set(currentAnswer, lines.join("\n").trim());
+      }
+    };
+
+    for (const line of content.split(/\r?\n/)) {
+      const match = line.match(/^\s*A(\d+)\s*:\s*(.*)$/i);
+      if (match) {
+        flush();
+        currentAnswer = Number(match[1]);
+        lines = [match[2]];
+      } else if (currentAnswer !== undefined) {
+        lines.push(line);
+      }
+    }
+    flush();
+    return answers;
+  }
+
+  private static resolveAnswer(
+    answer: string | undefined,
+    options: AskUserQuestionOption[]
+  ): { answer?: string; answerPreview?: string } {
+    if (!answer) {
+      return {};
+    }
+
+    const normalizedAnswer = answer
+      .replace(/^\s*\(Recommended\)\s*/i, "")
+      .trim();
+    const selected = options.find(
+      (option) =>
+        normalizedAnswer === option.label ||
+        normalizedAnswer.startsWith(`${option.label} - `) ||
+        normalizedAnswer.startsWith(`${option.label}\n`)
+    );
+    return selected
+      ? { answer: selected.label, answerPreview: selected.preview }
+      : { answer: normalizedAnswer };
   }
 
   private static buildCodeAction(

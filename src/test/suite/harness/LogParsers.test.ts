@@ -22,6 +22,7 @@ import {
 import {
   CLI_EVENT_TYPES,
   HARNESS_IDS,
+  OPERATION_STATUS,
   TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
 import {
@@ -1663,6 +1664,118 @@ suite("CopilotLogParser", () => {
       assert.strictEqual(
         (fileWriteEvents[0].data as any).content,
         "export const x = 1;"
+      );
+    });
+
+    test("should preserve Copilot ask_user questions, choices, and answer", () => {
+      const choices = [
+        "dog \u2014 loyal companion\n / \\__",
+        "cat \u2014 curious friend\n /\\_/\\\\\n( o.o )",
+        "snake \u2014 quiet reptile",
+      ];
+      const events = [
+        {
+          type: "tool.execution_start",
+          data: {
+            toolCallId: "ask-1",
+            toolName: "ask_user",
+            arguments: {
+              question: "What's your favorite animal?",
+              choices,
+            },
+          },
+          timestamp: "2026-08-13T21:42:10.574Z",
+        },
+        {
+          type: "tool.execution_complete",
+          data: {
+            toolCallId: "ask-1",
+            success: true,
+            result: {
+              content:
+                "User selected: cat \u2014 curious friend\n /\\_/\\\\\n( o.o )",
+            },
+            toolTelemetry: {
+              properties: {
+                outcome: "answered",
+                had_choices: true,
+                was_freeform: false,
+              },
+              restrictedProperties: {
+                question: "What's your favorite animal?",
+                choices: JSON.stringify(choices),
+                answer: "cat \u2014 curious friend\n /\\_/\\\\\n( o.o )",
+              },
+            },
+          },
+          timestamp: "2026-08-13T21:42:20.965Z",
+        },
+      ];
+
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+      const askEvents = response.events.filter(
+        (event) => event.type === CLI_EVENT_TYPES.ASK_USER_QUESTION
+      );
+
+      assert.strictEqual(askEvents.length, 2);
+      assert.strictEqual(
+        response.events.filter(
+          (event) => event.type === CLI_EVENT_TYPES.TOOL_RESULT
+        ).length,
+        0
+      );
+      assert.strictEqual(
+        response.events.filter(
+          (event) => event.type === CLI_EVENT_TYPES.TOOL_CALL
+        ).length,
+        0
+      );
+
+      const initiated = askEvents[0].data as AskUserQuestionData;
+      assert.strictEqual(initiated.status, OPERATION_STATUS.INITIATED);
+      assert.strictEqual(
+        initiated.questions[0].question,
+        "What's your favorite animal?"
+      );
+      assert.deepStrictEqual(
+        initiated.questions[0].options.map((option) => option.label),
+        ["dog", "cat", "snake"]
+      );
+      assert.strictEqual(
+        initiated.questions[0].options[1].description,
+        "curious friend"
+      );
+      assert.strictEqual(
+        initiated.questions[0].options[1].preview,
+        " /\\_/\\\\\n( o.o )"
+      );
+
+      const completed = askEvents[1].data as AskUserQuestionData;
+      assert.strictEqual(completed.status, OPERATION_STATUS.COMPLETED);
+      assert.strictEqual(completed.questions[0].answer, "cat");
+      assert.strictEqual(
+        completed.questions[0].answerPreview,
+        " /\\_/\\\\\n( o.o )"
+      );
+
+      const streamingParser = new CopilotLogParser();
+      const streamedInitiated =
+        streamingParser.extractStructuredEventsFromEvent(
+          events[0] as unknown as BaseCliEvent
+        );
+      const streamedCompleted =
+        streamingParser.extractStructuredEventsFromEvent(
+          events[1] as unknown as BaseCliEvent
+        );
+      assert.deepStrictEqual(
+        streamedInitiated.map((event) => event.type),
+        [CLI_EVENT_TYPES.ASK_USER_QUESTION]
+      );
+      assert.deepStrictEqual(
+        streamedCompleted.map((event) => event.type),
+        [CLI_EVENT_TYPES.ASK_USER_QUESTION]
       );
     });
 
