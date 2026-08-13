@@ -170,6 +170,28 @@ describe("buildDiffRenderPlan", () => {
     );
   });
 
+  // Row height is the one part of a diff estimate that is derivable from CSS
+  // rather than calibrated, so it is pinned here. The invented
+  // `max(18, (fs - 1) * 1.55)` that preceded it read 18.6 against a real 18px
+  // grid — a silent 3.3% on every diff, ~100px on the 167-row diff in the
+  // 2026-08-13 log — and its floor over-predicted every base font below 13px.
+  it.each([
+    [13, 18],
+    [12, 16.5],
+    [16, 22.5],
+  ])(
+    "puts diff rows on the DOM's line-height grid at %ipx",
+    (fontSize, expected) => {
+      const plan = buildDiffRenderPlan(replaceHunk, {
+        viewType: "unified",
+        outputFontSize: fontSize,
+      });
+
+      expect(plan.lineHeight).toBeCloseTo(expected);
+      expect(plan.bodyHeight).toBeCloseTo(3 * expected);
+    }
+  );
+
   it("models split replacements with fewer rendered rows than unified", () => {
     const unifiedPlan = buildDiffRenderPlan(replaceHunk, {
       viewType: "unified",

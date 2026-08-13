@@ -84,6 +84,88 @@ export function toolResultLineHeight(outputFontSize: number): number {
 }
 
 /**
+ * `line-height` on react-diff-view's `.diff-line`. Unlike the ● block's
+ * `leading-relaxed`, this one comes from the vendored stylesheet
+ * (`react-diff-view/style/index.css`), which globals.css theme-maps but never
+ * overrides.
+ */
+export const DIFF_LINE_HEIGHT = 1.5;
+
+/**
+ * Height of one rendered diff row, derived rather than calibrated: globals.css
+ * sets `.diff { font-size: var(--fp-output-font-size-sm) }` (base − 1) and the
+ * vendored `.diff-line { line-height: 1.5 }` is never overridden, so at the
+ * default 13px base a diff row is exactly 18px. The 2026-08-13 profiler log
+ * corroborates it — the diff bodies large enough to swamp their chrome measured
+ * 3006 = 18×167, 2124 = 18×118, 504 = 18×28, 396 = 18×22 and 288 = 18×16.
+ *
+ * Because the height is exact, a residual on a diff estimate is always a wrong
+ * **row count** (wrapping, gaps, view type), never a wrong row height.
+ */
+export function diffLineHeight(outputFontSize: number): number {
+  return (outputFontSize - 1) * DIFF_LINE_HEIGHT;
+}
+
+/**
+ * Advance width of one glyph in the diff table's monospace font, which is what
+ * `ch` resolves to inside it. `.diff` renders at `--fp-output-font-size-sm`
+ * (base − 1) in `--vscode-editor-font-family`; 0.55em is Consolas, the Windows
+ * VS Code default, and the other common editor faces sit within a few percent
+ * of it.
+ */
+export function diffCharWidth(outputFontSize: number): number {
+  return Math.max(5.5, (outputFontSize - 1) * 0.55);
+}
+
+/**
+ * Horizontal space the diff table spends on anything that is not code.
+ *
+ * Every term is read off the DOM rather than fitted. `.diff-gutter-col` is
+ * `width: 7ch` and *both* view types render two of them (unified numbers old
+ * and new in separate columns; split gives each side its own). `.diff-code`
+ * carries `padding: 0 0 0 .5em`, once per code column — one unified, two split.
+ * The table sits inside a 1px-bordered wrapper, itself inside OutputRow's
+ * `px-[var(--spacing-md)]`; the ● gutter is *not* subtracted, because diffs
+ * render through ToolCallBlock's `fullBleed` slot and span it.
+ *
+ * The constants this replaced (168 unified / 224 split, plus a 24px "column
+ * gap" a `table-layout: fixed` table does not have) overstated it by ~50px,
+ * which on a phone is 13% of the pane. Every diff in the 2026-08-13 03:54 log
+ * that was built at a known width over-predicted by 15-20% as a result — 598
+ * vs 524, 440 vs 378, 753 vs 666, 550 vs 468 — all in the same direction,
+ * which is the signature of lost width rather than of a bad wrap model.
+ */
+export function diffHorizontalChrome(
+  viewType: "split" | "unified",
+  outputFontSize: number
+): number {
+  const codeColumns = diffCodeColumns(viewType);
+  return (
+    OUTPUT_ROW_HORIZONTAL_PADDING +
+    DIFF_WRAPPER_BORDER_WIDTH +
+    DIFF_GUTTER_COLUMNS *
+      DIFF_GUTTER_COLUMN_CH *
+      diffCharWidth(outputFontSize) +
+    codeColumns * DIFF_CODE_CELL_PADDING_EM * (outputFontSize - 1)
+  );
+}
+
+/** Code columns the diff table renders: one for unified, one per side for split. */
+export function diffCodeColumns(viewType: "split" | "unified"): number {
+  return viewType === "split" ? 2 : 1;
+}
+
+/** `.diff-gutter-col { width: 7ch }`, rendered twice by both view types. */
+const DIFF_GUTTER_COLUMNS = 2;
+const DIFF_GUTTER_COLUMN_CH = 7;
+/** `.diff-code { padding: 0 0 0 .5em }`. */
+const DIFF_CODE_CELL_PADDING_EM = 0.5;
+/** The `border` on DiffView's `overflow-x-auto` wrapper, both edges. */
+const DIFF_WRAPPER_BORDER_WIDTH = 2;
+/** Never wrap against a code column narrower than this — it explodes row counts. */
+export const MIN_DIFF_CODE_COLUMN_WIDTH = 120;
+
+/**
  * Width the `⎿` marker and its `gap-1` take from a result line's text column.
  * The marker is `shrink-0`, so unlike the text it never wraps.
  */

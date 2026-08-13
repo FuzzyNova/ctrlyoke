@@ -13,8 +13,12 @@ import { normalizeStructuredPatch } from "./diffUtils";
 import {
   DEFAULT_OUTPUT_CONTENT_WIDTH,
   DEFAULT_OUTPUT_FONT_SIZE,
-  MIN_OUTPUT_CONTENT_WIDTH as MIN_DIFF_CONTENT_WIDTH,
+  MIN_DIFF_CODE_COLUMN_WIDTH,
   OUTPUT_RELAXED_LINE_HEIGHT,
+  diffCharWidth,
+  diffCodeColumns,
+  diffHorizontalChrome,
+  diffLineHeight,
   toolCallLineHeight,
 } from "./outputLineMetrics";
 import type { UnifiedDiffHunk } from "../types/cliEvents";
@@ -187,9 +191,6 @@ export interface DiffRenderPlanOptions {
  */
 const DIFF_VERTICAL_CHROME_HEIGHT = 28;
 const STANDALONE_DIFF_HEIGHT = 72;
-const UNIFIED_DIFF_HORIZONTAL_CHROME = 168;
-const SPLIT_DIFF_HORIZONTAL_CHROME = 224;
-const SPLIT_DIFF_COLUMN_GAP = 24;
 
 function getRenderedRows(runs: readonly RenderedDiffRun[]): number {
   return runs.reduce((sum, run) => sum + run.count, 0);
@@ -222,22 +223,20 @@ function getApproximateDiffCharsPerLine(
     outputContentWidth && outputContentWidth > 0
       ? outputContentWidth
       : DEFAULT_OUTPUT_CONTENT_WIDTH;
-  const availableWidth = Math.max(
-    MIN_DIFF_CONTENT_WIDTH,
-    baseWidth -
-      (viewType === "split"
-        ? SPLIT_DIFF_HORIZONTAL_CHROME
-        : UNIFIED_DIFF_HORIZONTAL_CHROME)
+  const codeColumns = diffCodeColumns(viewType);
+  // Chrome and glyph width both come from the diff table's own CSS now — see
+  // diffHorizontalChrome. The calibrated constants they replace (168 unified,
+  // 224 split, plus a 24px inter-column gap that a `table-layout: fixed` table
+  // does not have) charged ~50px too much, which is 13% of a phone pane and
+  // made every wrap-bound estimate run long.
+  const codeColumnWidth = Math.max(
+    MIN_DIFF_CODE_COLUMN_WIDTH,
+    (baseWidth - diffHorizontalChrome(viewType, outputFontSize)) / codeColumns
   );
-  const lineColumnWidth =
-    viewType === "split"
-      ? Math.max(120, Math.floor((availableWidth - SPLIT_DIFF_COLUMN_GAP) / 2))
-      : availableWidth;
-  // 0.50 (not 0.62): diff viewers render at ~6.5px/char at 13px font, giving ~46 chars/line
-  // on a 301px content area. Using 0.62 estimated only 37 chars/line, causing ~24% row overcount
-  // (confirmed by scaleFactor=0.82 across n=13 samples in profiler data).
-  const charWidth = Math.max(5.5, outputFontSize * 0.5);
-  return Math.max(8, Math.floor(lineColumnWidth / charWidth));
+  return Math.max(
+    8,
+    Math.floor(codeColumnWidth / diffCharWidth(outputFontSize))
+  );
 }
 
 function estimateRenderedVisualRows(
@@ -493,7 +492,12 @@ export function buildDiffRenderPlanFromStats(
     Math.max(1, options.toolHeaderLines ?? 1) *
     toolCallLineHeight(outputFontSize);
   const headerHeight = (outputFontSize - 2) * OUTPUT_RELAXED_LINE_HEIGHT;
-  const lineHeight = Math.max(18, (outputFontSize - 1) * 1.55);
+  // Measured geometry, not calibration — see diffLineHeight. The invented
+  // `max(18, (fs - 1) * 1.55)` this replaces resolved to 18.6 at the default
+  // font size against a real grid of exactly 18, quietly adding 3.3% to every
+  // diff (~100px on the 167-row diff in the 2026-08-13 log), and its 18px floor
+  // over-predicted every row for any base font below 13.
+  const lineHeight = diffLineHeight(outputFontSize);
   const decorationHeight = DIFF_VERTICAL_CHROME_HEIGHT;
   const visualRenderedRows =
     options.hunks && options.hunks.length > 0

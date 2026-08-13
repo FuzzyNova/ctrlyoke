@@ -576,7 +576,17 @@ const OutputSectionInner: React.FC = () => {
     }
   }, [outputCollapsed]);
 
-  useEffect(() => {
+  // Layout effect, not effect: the pane's width is an *input* to row geometry,
+  // not a reaction to it. Diff rows bake their whole render plan at build time
+  // from this width, and an unmeasured pane resolves to
+  // DEFAULT_OUTPUT_CONTENT_WIDTH (760) — roughly double a phone's — which
+  // under-counts wrapping by the same factor. Measuring after paint let the
+  // virtualizer measure and cache rows sized against 760 before the real width
+  // ever landed: on 2026-08-13 03:54:52 one diff estimated 2767 and measured
+  // 4914 (78% under) while its neighbours, built after the width arrived, were
+  // within 15%. Running before paint means the corrected width is already in
+  // the tree the first time anything is measured.
+  useLayoutEffect(() => {
     const el = outputRef.current;
     if (!el || outputCollapsed) return;
 
