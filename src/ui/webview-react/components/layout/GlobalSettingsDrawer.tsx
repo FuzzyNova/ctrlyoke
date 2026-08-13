@@ -29,7 +29,6 @@ import { ExitButton, ScopeToggle } from "../shared";
 
 const ALL_TABS = [
   { id: "general", label: "General", icon: "codicon-settings" },
-  { id: "stats", label: "Stats & Usage", icon: "codicon-graph" },
   { id: "workflow", label: "Workflow Defaults", icon: "codicon-globe" },
   { id: "permissions", label: "Advanced Permissions", icon: "codicon-shield" },
   { id: "execution", label: "Execution", icon: "codicon-play" },
@@ -45,6 +44,7 @@ const ALL_TABS = [
   },
   { id: "mcpmanager", label: "MCP Manager", icon: "codicon-mcp" },
   { id: "commit", label: "Commit Message", icon: "codicon-git-commit" },
+  { id: "stats", label: "Stats & Usage", icon: "codicon-graph" },
   { id: "developer", label: "Developer", icon: "codicon-tools" },
 ];
 

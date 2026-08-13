@@ -1,6 +1,8 @@
 import {
   HARNESS_IDS,
   HARNESS_QUOTA_SOURCES,
+  HARNESS_USAGE_UNITS,
+  WORKFLOW_TOKEN_COVERAGE,
 } from "@root/types/DashboardConstants";
 import type { HarnessId } from "@root/types/DashboardConstants";
 import {
@@ -11,6 +13,8 @@ import type { HarnessUsageSnapshot } from "@root/types/UsageTypes";
 import {
   formatCostLabel,
   formatCostSourcePhrase,
+  formatTokenCount,
+  formatTokenTotal,
 } from "@root/utils/TokenFormatting";
 
 function formatTimestamp(value: number | undefined): string {
@@ -102,7 +106,15 @@ export function UsageCard({
         {(["daily", "weekly", "monthly"] as const).map((period) => (
           <div key={period} className="rounded bg-input-bg px-2 py-1">
             <div className="text-description-fg capitalize">{period}</div>
-            <div>{observed[period]?.total ?? 0} tokens</div>
+            <div>
+              {formatTokenTotal(
+                observed[period]?.total,
+                observed[period]?.partial
+                  ? WORKFLOW_TOKEN_COVERAGE.PARTIAL
+                  : WORKFLOW_TOKEN_COVERAGE.COMPLETE
+              ) || "0"}{" "}
+              tokens
+            </div>
           </div>
         ))}
       </div>
@@ -122,8 +134,10 @@ export function UsageCard({
         <div className="space-y-1">
           {snapshot.quota.windows.map((window) => (
             <div key={window.id} className="text-description-fg">
-              {window.label}: {window.used ?? "—"}
-              {window.limit !== undefined ? ` / ${window.limit}` : ""}
+              {window.label}: {formatQuotaValue(window.used, window.unit)}
+              {window.limit !== undefined
+                ? ` / ${formatQuotaValue(window.limit, window.unit)}`
+                : ""}
               {window.resetAt !== undefined
                 ? ` · resets ${formatTimestamp(window.resetAt)}`
                 : ""}
@@ -139,4 +153,14 @@ export function UsageCard({
       </div>
     </div>
   );
+}
+
+function formatQuotaValue(
+  value: number | undefined,
+  unit: (typeof HARNESS_USAGE_UNITS)[keyof typeof HARNESS_USAGE_UNITS]
+): string {
+  if (value === undefined) return "—";
+  return unit === HARNESS_USAGE_UNITS.TOKENS
+    ? formatTokenCount(value)
+    : String(value);
 }

@@ -72,4 +72,31 @@ describe("StatsUsageSection", () => {
       type: MESSAGE_TYPES.REFRESH_WORKSPACE_STATS,
     });
   });
+
+  it("formats large observed token counts compactly", () => {
+    useHarnessUsageStore.getState().setSnapshots([
+      {
+        harnessId: HARNESS_IDS.QWEN_CLI,
+        updatedAt: Date.now(),
+        quota: {
+          harnessId: HARNESS_IDS.QWEN_CLI,
+          source: "unavailable",
+          staleAfterMs: 0,
+          windows: [],
+        },
+        observed: {
+          daily: {
+            input: 500,
+            output: 1_000,
+            total: 1_500,
+            since: Date.now(),
+          },
+        },
+      },
+    ]);
+
+    render(<StatsUsageSection hideCost={false} />);
+
+    expect(screen.getByText("1.5k tokens")).toBeInTheDocument();
+  });
 });

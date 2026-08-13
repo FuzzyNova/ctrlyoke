@@ -916,11 +916,11 @@ export const HARNESS_INFO = {
 /** Theme-aware colors for the workspace harness-share bar. */
 export const HARNESS_CHART_COLORS: Record<HarnessId, string> = {
   [HARNESS_IDS.COPILOT_CLI]: "var(--vscode-charts-blue, #59a4f9)",
-  [HARNESS_IDS.CLAUDE_CLI]: "var(--vscode-charts-green, #89d185)",
-  [HARNESS_IDS.CODEX_CLI]: "var(--vscode-charts-purple, #b180d7)",
-  [HARNESS_IDS.OPENCODE_CLI]: "var(--vscode-charts-red, #f14c4c)",
-  [HARNESS_IDS.QWEN_CLI]: "var(--vscode-charts-yellow, #cca700)",
-  [HARNESS_IDS.ANTIGRAVITY_CLI]: "var(--vscode-charts-orange, #d18616)",
+  [HARNESS_IDS.CLAUDE_CLI]: "var(--vscode-charts-orange, #d18616)",
+  [HARNESS_IDS.CODEX_CLI]: "var(--vscode-editor-foreground, #ffffff)",
+  [HARNESS_IDS.OPENCODE_CLI]: "var(--vscode-charts-gray, #808080)",
+  [HARNESS_IDS.QWEN_CLI]: "var(--vscode-charts-purple, #b180d7)",
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: "var(--vscode-charts-green, #89d185)",
 };
 
 // ============================================================================
