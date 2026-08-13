@@ -928,11 +928,10 @@ export const useEditorStore = create<
   setHasActiveQueue: (hasQueue) => set({ hasActiveQueue: hasQueue }),
 
   preparePromptEditorForInsert: () => {
-    const state = get();
-    if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
-      state.deselect();
-    }
-
+    // Deliberately does NOT deselect out of edit mode: CodeMirrorEditor binds
+    // to promptText/pendingPromptEditorInserts regardless of whether the
+    // editor is creating a new step or editing an existing one, so the
+    // pending insert should land wherever the user is currently editing.
     if (get().stepType === STEP_TYPES.SCRIPT) {
       get().setStepType(STEP_TYPES.PROMPT);
     }

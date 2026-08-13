@@ -350,14 +350,14 @@ describe("prompt editor inserts", () => {
     expect(store().stepType).toBe(STEP_TYPES.PROMPT);
   });
 
-  it("returns from edit mode before inserting", () => {
+  it("keeps edit mode active so an insert lands in the edited step", () => {
     store().setPromptText("Draft before editing");
     store().enterEditMode(0, makePromptStep({ prompt: "Existing prompt" }));
 
     store().preparePromptEditorForInsert();
 
-    expect(store().selectionTarget.kind).toBe("newPrompt");
-    expect(store().promptText).toBe("Draft before editing");
+    expect(store().selectionTarget.kind).toBe("queue");
+    expect(store().promptText).toBe("Existing prompt");
   });
 
   it("queues and consumes pending insert requests", () => {

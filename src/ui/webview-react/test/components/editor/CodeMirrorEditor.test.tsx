@@ -318,6 +318,48 @@ describe("CodeMirrorEditor prompt reference insertion", () => {
     });
   });
 
+  it("prepends a space when the cursor sits directly after a filename-legal character", () => {
+    const result = buildPromptReferenceInsertion(
+      "Review",
+      {
+        requestId: "insert-3",
+        references: ["@src/app.ts"],
+        mode: PROMPT_EDITOR_INSERT_MODES.INSERT,
+      },
+      { from: "Review".length, to: "Review".length }
+    );
+
+    expect(result).toEqual({
+      from: "Review".length,
+      to: "Review".length,
+      text: " @src/app.ts",
+    });
+  });
+
+  it("does not prepend a space when the cursor follows whitespace or punctuation", () => {
+    const afterSpace = buildPromptReferenceInsertion(
+      "Review ",
+      {
+        requestId: "insert-4",
+        references: ["@src/app.ts"],
+        mode: PROMPT_EDITOR_INSERT_MODES.INSERT,
+      },
+      { from: "Review ".length, to: "Review ".length }
+    );
+    expect(afterSpace.text).toBe("@src/app.ts");
+
+    const afterParen = buildPromptReferenceInsertion(
+      "See (",
+      {
+        requestId: "insert-5",
+        references: ["@src/app.ts"],
+        mode: PROMPT_EDITOR_INSERT_MODES.INSERT,
+      },
+      { from: "See (".length, to: "See (".length }
+    );
+    expect(afterParen.text).toBe("@src/app.ts");
+  });
+
   it("appends references at the end of the document in append mode", () => {
     const result = buildPromptReferenceInsertion(
       "Analyze current output",

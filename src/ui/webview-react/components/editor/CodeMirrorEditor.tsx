@@ -445,20 +445,27 @@ function completionCacheKey(trigger: CompletionTrigger, query: string): string {
   return `${trigger} ${query}`;
 }
 
+// Characters that are legal inside a filename — letters, digits, or
+// `_ + - = @ # $ % ^ & ! ~`. A trigger char (@/#/~/$) immediately preceded by
+// one of these is treated as mid-word/mid-filename, not the start of a new
+// reference — see the word-boundary lookbehind shared by
+// PromptLinkProvider.ts, atomicReferences.ts, WorkspaceFileEditor.tsx, and
+// FileReferenceParser.ts.
+const FILENAME_BOUNDARY_CHAR_RE = /[A-Za-z0-9_+=@#$%^&!~-]/;
+
 // Find the rightmost occurrence of `triggerChar` in `text` that isn't
-// preceded by a character that's legal inside a filename — letters, digits,
-// or `_ + - = @ # $ % ^ & ! ~`. It can start right after whitespace,
-// punctuation like `(`/`"`, or the start of the string, but not mid-word or
-// mid-filename. This keeps an email address (nathan@gmail.com) or a filename
-// mentioned in prose (data_file~@backup!.csv, myimage@512x512.png) from
-// being treated as the start of a new @/#/~/$ reference, while still
-// resolving to the earlier, legitimate trigger when one exists (so
-// `@src/myimage@512x512.p` still resolves to the leading @, keeping the
-// embedded @ in the query).
+// preceded by a character that's legal inside a filename. It can start right
+// after whitespace, punctuation like `(`/`"`, or the start of the string, but
+// not mid-word or mid-filename. This keeps an email address
+// (nathan@gmail.com) or a filename mentioned in prose
+// (data_file~@backup!.csv, myimage@512x512.png) from being treated as the
+// start of a new @/#/~/$ reference, while still resolving to the earlier,
+// legitimate trigger when one exists (so `@src/myimage@512x512.p` still
+// resolves to the leading @, keeping the embedded @ in the query).
 // Mirrored in PromptCompletionProvider.ts — keep both in sync.
 function findWordStartTriggerIndex(text: string, triggerChar: string): number {
   let index = text.lastIndexOf(triggerChar);
-  while (index > 0 && /[A-Za-z0-9_+=@#$%^&!~-]/.test(text[index - 1])) {
+  while (index > 0 && FILENAME_BOUNDARY_CHAR_RE.test(text[index - 1])) {
     index = text.lastIndexOf(triggerChar, index - 1);
   }
   return index;
@@ -490,9 +497,22 @@ export function buildPromptReferenceInsertion(
       docText[selection.from - 1] !== "\n" &&
       docText[selection.to] !== "\n");
 
-  const text = shouldSurroundWithNewlines
+  let text = shouldSurroundWithNewlines
     ? `\n${referencesText}\n`
     : referencesText;
+
+  // Without surrounding newlines, the reference lands directly against
+  // whatever precedes the cursor/selection. If that character is legal
+  // inside a filename (e.g. the trailing char of a word), the trigger
+  // char's word-boundary lookbehind (see FILENAME_BOUNDARY_CHAR_RE) would
+  // reject it as mid-word and the reference would silently fail to parse —
+  // insert a leading space to keep it a real trigger.
+  if (!shouldSurroundWithNewlines && selection.from > 0) {
+    const charBefore = docText[selection.from - 1];
+    if (FILENAME_BOUNDARY_CHAR_RE.test(charBefore)) {
+      text = ` ${text}`;
+    }
+  }
 
   return {
     from: selection.from,
