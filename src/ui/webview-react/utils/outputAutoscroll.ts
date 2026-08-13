@@ -13,6 +13,7 @@
  * moving the viewport, so it can never release the latch.
  */
 import {
+  OUTPUT_ABOVE_VIEWPORT_SYNC_CORRECTION_MIN_DELTA_PX,
   OUTPUT_AUTOSCROLL_REARM_THRESHOLD_PX,
   OUTPUT_AUTOSCROLL_RELEASE_MIN_PX,
   OUTPUT_AUTOSCROLL_RELEASE_VIEWPORT_FRACTION,
@@ -97,6 +98,116 @@ export function isProgrammaticScrollEcho({
     lastProgrammaticScrollTop !== null &&
     !hasRecentUserScrollInput &&
     Math.abs(scrollTop - lastProgrammaticScrollTop) < 1
+  );
+}
+
+/**
+ * Who moved the output pane. One verdict per scroll event, in the order the
+ * handler's guards apply, so the classification and the control flow cannot
+ * drift apart.
+ */
+export const OUTPUT_SCROLL_VERDICTS = {
+  /** Layout work is suppressed wholesale (collapsed pane, tab switch, ...). */
+  suppressedLayoutWork: "suppressed-layout-work",
+  /** The `isProgrammaticScroll` timing flag was still raised. */
+  programmaticFlag: "programmatic-flag",
+  /** A measurement flush owns the pane for the duration of its rAF chain. */
+  measurementFlush: "measurement-flush",
+  /** Position-matched echo of the anchor lock's own write. */
+  programmaticEcho: "programmatic-echo",
+  /** Nothing of ours claimed it — treated as the user. */
+  userScroll: "user-scroll",
+} as const;
+
+export type OutputScrollVerdict =
+  (typeof OUTPUT_SCROLL_VERDICTS)[keyof typeof OUTPUT_SCROLL_VERDICTS];
+
+export interface OutputScrollAttributionInput extends ProgrammaticScrollEchoInput {
+  isLayoutWorkSuppressed: boolean;
+  isProgrammaticScrollFlagRaised: boolean;
+  isMeasurementFlushInProgress: boolean;
+}
+
+/**
+ * Attribute one scroll event.
+ *
+ * Split out from the handler so every event can be *classified before any of
+ * them is dropped*. Three of these verdicts used to be bare early returns that
+ * ran ahead of all logging, so a settle window — precisely the window where the
+ * pane misbehaves — recorded no scroll activity at all: on 2026-08-13 00:25:59
+ * a measurement flush was in progress for the whole burst, and `scrollTop` moved
+ * ~116px between two of the lock's own applies with nothing in the log to say
+ * what moved it. Returning a verdict instead of returning early lets the caller
+ * log first and branch second.
+ */
+export function classifyOutputScrollEvent({
+  hasRecentUserScrollInput,
+  isLayoutWorkSuppressed,
+  isMeasurementFlushInProgress,
+  isProgrammaticScrollFlagRaised,
+  lastProgrammaticScrollTop,
+  scrollTop,
+}: OutputScrollAttributionInput): OutputScrollVerdict {
+  if (isLayoutWorkSuppressed) {
+    return OUTPUT_SCROLL_VERDICTS.suppressedLayoutWork;
+  }
+  if (isProgrammaticScrollFlagRaised) {
+    return OUTPUT_SCROLL_VERDICTS.programmaticFlag;
+  }
+  if (isMeasurementFlushInProgress) {
+    return OUTPUT_SCROLL_VERDICTS.measurementFlush;
+  }
+  if (
+    isProgrammaticScrollEcho({
+      scrollTop,
+      lastProgrammaticScrollTop,
+      hasRecentUserScrollInput,
+    })
+  ) {
+    return OUTPUT_SCROLL_VERDICTS.programmaticEcho;
+  }
+  return OUTPUT_SCROLL_VERDICTS.userScroll;
+}
+
+export interface MeasurementCorrectionSyncInput {
+  /** Signed height change this measurement reported for the row. */
+  heightDeltaPx: number;
+  /** Viewport-space top of the row that just resized. */
+  rowTopPx: number;
+  /**
+   * Viewport-space top of the position the anchor row is pinned to, or of the
+   * scroll container when no row anchor is committed.
+   */
+  anchorTopPx: number;
+}
+
+/**
+ * Whether a row's new measurement must bump the layout version *synchronously*
+ * so the anchor lock's correction batches into the same commit as the reflow.
+ *
+ * The distinction that matters is "does this resize move the anchor", and the
+ * answer is purely ordinal: rows are laid out in sequence, so a row starting
+ * before the anchor displaces it and a row starting at or after it does not.
+ *
+ * This used to ask whether the row sat entirely above the *viewport* instead,
+ * which is a much narrower set. The anchor is not at the viewport top — the
+ * lock pins it wherever the user left it, routinely a few hundred pixels down —
+ * so every resize in the band between the viewport top and the anchor, plus
+ * every row straddling the top edge, failed the test and took the batched rAF
+ * path. That path lands the correction one paint *after* the reflow, which is
+ * the visible "jump to B, snap back to A" flash: on 2026-08-13 00:26:00 five
+ * such corrections ran over 460ms against an anchor committed at offset 314.75
+ * in a 586px viewport.
+ */
+export function shouldSyncMeasurementCorrection({
+  anchorTopPx,
+  heightDeltaPx,
+  rowTopPx,
+}: MeasurementCorrectionSyncInput): boolean {
+  return (
+    Math.abs(heightDeltaPx) >=
+      OUTPUT_ABOVE_VIEWPORT_SYNC_CORRECTION_MIN_DELTA_PX &&
+    rowTopPx < anchorTopPx
   );
 }
 

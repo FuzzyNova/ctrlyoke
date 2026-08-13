@@ -51,6 +51,7 @@ import { useLongPress } from "@hooks/useLongPress";
 import { toOutputMessageTarget } from "@utils/outputProjection";
 import {
   getProfilerState,
+  isProfilingEnabled,
   logProfilerEvent,
   shouldLogScrollFrame,
 } from "@utils/performanceProfiler";
@@ -62,8 +63,9 @@ import {
   OUTPUT_USER_SCROLL_INPUT_GRACE_MS,
 } from "@utils/outputScrollConstants";
 import {
+  OUTPUT_SCROLL_VERDICTS,
+  classifyOutputScrollEvent,
   getDistanceFromBottomPx,
-  isProgrammaticScrollEcho,
   nextAutoscrollArmed,
 } from "@utils/outputAutoscroll";
 
@@ -337,6 +339,11 @@ const OutputSectionInner: React.FC = () => {
   // produces can be identified as ours by position however late it lands.
   // Cleared by the first scroll event that does not match it.
   const lastProgrammaticScrollTopRef = useRef<number | null>(null);
+  // scrollTop as of the last scroll event of ANY verdict, including the ones
+  // handleScroll drops. Diagnostics only: lastScrollTopRef deliberately tracks
+  // just the user-attributed ones, which leaves gaps exactly where the pane
+  // misbehaves.
+  const lastObservedScrollTopRef = useRef<number | null>(null);
   const measurementVersionRefForScrollSeek = useRef(0);
   const virtualRowsLengthRef = useRef(0);
   const getRowEstimateStatsRef = useRef<() => unknown[]>(() => []);
@@ -640,10 +647,61 @@ const OutputSectionInner: React.FC = () => {
   const handleScroll = useCallback(() => {
     const el = outputRef.current;
     if (!el) return;
-    if (suppressOutputLayoutWorkRef.current) {
+
+    const lastProgrammaticScrollTop = lastProgrammaticScrollTopRef.current;
+    const hasRecentUserScrollInput =
+      lastUserScrollInputAtRef.current != null &&
+      performance.now() - lastUserScrollInputAtRef.current <=
+        OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
+    // Attribute first, branch second. Every guard below used to be a bare early
+    // return, so the three that fire during a settle left no trace at all —
+    // which is why the ~116px of unexplained scrollTop movement between the
+    // lock's own applies on 2026-08-13 00:26:00 could not be pinned on anyone.
+    // See classifyOutputScrollEvent for the verdict order.
+    const verdict = classifyOutputScrollEvent({
+      hasRecentUserScrollInput,
+      isLayoutWorkSuppressed: suppressOutputLayoutWorkRef.current,
+      isMeasurementFlushInProgress: isMeasurementFlushInProgressRef.current,
+      isProgrammaticScrollFlagRaised: isProgrammaticScroll.current,
+      lastProgrammaticScrollTop,
+      scrollTop: el.scrollTop,
+    });
+
+    if (isProfilingEnabled()) {
+      const previousObservedScrollTop = lastObservedScrollTopRef.current;
+      logProfilerEvent("scrollAttribution", {
+        verdict,
+        scrollTop: el.scrollTop,
+        lastProgrammaticScrollTop,
+        // The load-bearing field. The anchor lock is the pane's only writer, so
+        // outside a user scroll the pane should sit exactly where the lock last
+        // put it. A non-zero value on any verdict other than user-scroll means a
+        // third party moved scrollTop, and its sign and size name the culprit.
+        unattributedDeltaPx:
+          lastProgrammaticScrollTop == null
+            ? null
+            : el.scrollTop - lastProgrammaticScrollTop,
+        // Movement since the previous scroll event *of any verdict*, so a burst
+        // reads as a trajectory rather than as disconnected samples.
+        deltaSinceLastEventPx:
+          previousObservedScrollTop == null
+            ? null
+            : el.scrollTop - previousObservedScrollTop,
+        sinceLastScrollEventMs:
+          lastScrollEventAtRef.current == null
+            ? null
+            : performance.now() - lastScrollEventAtRef.current,
+        hasRecentUserScrollInput,
+      });
+    }
+    // Tracked for every event including the dropped ones — that continuity is
+    // the whole point of classifying before returning.
+    lastObservedScrollTopRef.current = el.scrollTop;
+
+    if (verdict === OUTPUT_SCROLL_VERDICTS.suppressedLayoutWork) {
       return;
     }
-    if (isProgrammaticScroll.current) {
+    if (verdict === OUTPUT_SCROLL_VERDICTS.programmaticFlag) {
       // Still run the latch so a user wheel mid-programmatic-scroll correctly
       // disables auto-scroll. Without this, the flag stays armed and the
       // auto-scroll effect fires again on the next measurementVersion bump.
@@ -656,45 +714,22 @@ const OutputSectionInner: React.FC = () => {
         movedUp:
           lastScrollTopRef.current != null &&
           el.scrollTop < lastScrollTopRef.current,
-        isUserDriven:
-          lastUserScrollInputAtRef.current != null &&
-          performance.now() - lastUserScrollInputAtRef.current <=
-            OUTPUT_USER_SCROLL_INPUT_GRACE_MS,
+        isUserDriven: hasRecentUserScrollInput,
       });
       return;
     }
     // TanStack's rAF-deferred scroll corrections fire during the flush window.
     // Suppress scroll-state updates for those so the freeze isn't re-activated,
     // which would cause partial scroll compensation (only first row compensated).
-    if (isMeasurementFlushInProgressRef.current) return;
-
-    // Second, value-based guard on our own writes — `isProgrammaticScroll` is a
-    // timing guard and cannot cover a burst of them. Re-anchoring on an escaped
-    // echo is what turns a correction the lock made into the pane's new resting
-    // place: on 2026-08-12 00:03:34 the lock corrected -133px, its echo arrived
-    // 20ms later carrying scrollDeltaPx 0, and the commit below adopted the
-    // corrected position (anchor offset 219.26 -> 296.72) — a jump that never
-    // returns. See isProgrammaticScrollEcho for why position, not timing.
-    const lastProgrammaticScrollTop = lastProgrammaticScrollTopRef.current;
-    if (
-      isProgrammaticScrollEcho({
-        scrollTop: el.scrollTop,
-        lastProgrammaticScrollTop,
-        hasRecentUserScrollInput:
-          lastUserScrollInputAtRef.current != null &&
-          performance.now() - lastUserScrollInputAtRef.current <=
-            OUTPUT_USER_SCROLL_INPUT_GRACE_MS,
-      })
-    ) {
-      logProfilerEvent("scrollAttribution", {
-        verdict: "programmatic-echo",
-        scrollTop: el.scrollTop,
-        lastProgrammaticScrollTop,
-        sinceLastScrollEventMs:
-          lastScrollEventAtRef.current == null
-            ? null
-            : performance.now() - lastScrollEventAtRef.current,
-      });
+    if (verdict === OUTPUT_SCROLL_VERDICTS.measurementFlush) {
+      return;
+    }
+    // Re-anchoring on an escaped echo is what turns a correction the lock made
+    // into the pane's new resting place: on 2026-08-12 00:03:34 the lock
+    // corrected -133px, its echo arrived 20ms later carrying scrollDeltaPx 0,
+    // and the commit below adopted the corrected position (anchor offset 219.26
+    // -> 296.72) — a jump that never returns.
+    if (verdict === OUTPUT_SCROLL_VERDICTS.programmaticEcho) {
       return;
     }
     // A scroll we did not write invalidates the marker; keeping it would let a

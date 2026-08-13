@@ -44,7 +44,7 @@ function renderVirtualization(rows: OutputRenderRow[]) {
       scrollSeekPlaceholderActive: false,
       scrollSeekRestoreRequestedAtRef: { current: null },
       scrollTargetRef: {
-        current: { kind: "row", rowKey: "row-20" },
+        current: { kind: "row", rowKey: "row-20", viewportOffsetPx: 200 },
       },
     })
   );

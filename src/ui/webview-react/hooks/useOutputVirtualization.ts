@@ -18,10 +18,9 @@ import {
   shouldLogMeasurement,
   shouldLogVirtualRange,
 } from "@utils/performanceProfiler";
-import {
-  OUTPUT_USER_SCROLL_INPUT_GRACE_MS,
-  OUTPUT_ABOVE_VIEWPORT_SYNC_CORRECTION_MIN_DELTA_PX,
-} from "@utils/outputScrollConstants";
+import { OUTPUT_USER_SCROLL_INPUT_GRACE_MS } from "@utils/outputScrollConstants";
+import { shouldSyncMeasurementCorrection } from "@utils/outputAutoscroll";
+import type { OutputScrollTarget } from "@store/uiStore";
 import {
   estimateOutputRowHeight,
   type OutputRenderRow,
@@ -72,7 +71,7 @@ interface UseOutputVirtualizationInput {
   rows: OutputRenderRow[];
   scrollSeekPlaceholderActive: boolean;
   scrollSeekRestoreRequestedAtRef: RefObject<number | null>;
-  scrollTargetRef: RefObject<{ kind: string; rowKey?: string }>;
+  scrollTargetRef: RefObject<OutputScrollTarget>;
 }
 
 function getZeroHeightStructuredEventReason(
@@ -419,25 +418,36 @@ export function useOutputVirtualization({
           });
         }
       }
-      // When a row ABOVE the viewport changes height meaningfully, its reflow
+      // When a row ABOVE THE ANCHOR changes height meaningfully, its reflow
       // shifts everything below it — including the anchored content the user is
       // looking at. scheduleMeasurementVersionBump defers the corrective
       // layout-effect to a rAF, so the correction lands a frame AFTER TanStack's
       // reflow has already painted: the visible "jump then snap back" flash. For
       // that case bump the version synchronously so the correction batches with
-      // the reflow render and lands in the SAME paint. The common in/after-
-      // viewport case keeps the batched rAF bump to avoid per-row render churn,
-      // and the flush path owns its own (already synchronous) reconciliation.
-      const baseHeight = previousHeight ?? estimatedHeight;
+      // the reflow render and lands in the SAME paint. Rows at or after the
+      // anchor cannot move it, so they keep the batched rAF bump to avoid
+      // per-row render churn, and the flush path owns its own (already
+      // synchronous) reconciliation.
+      //
+      // The anchor's pinned position is read from the committed target rather
+      // than from the anchor row's DOM rect: it is the offset the lock is about
+      // to restore the row *to*, so it stays a fixed reference no matter how far
+      // the in-flight reflow has already displaced the row — and it costs no
+      // extra layout read.
       const scrollElement = outputRef.current;
-      const isAboveViewportSignificantResize =
+      const heightDeltaPx = nextHeight - (previousHeight ?? estimatedHeight);
+      const target = scrollTargetRef.current;
+      if (
         !isMeasurementFlushInProgressRef.current &&
         scrollElement != null &&
-        Math.abs(nextHeight - baseHeight) >=
-          OUTPUT_ABOVE_VIEWPORT_SYNC_CORRECTION_MIN_DELTA_PX &&
-        element.getBoundingClientRect().bottom <=
-          scrollElement.getBoundingClientRect().top;
-      if (isAboveViewportSignificantResize) {
+        shouldSyncMeasurementCorrection({
+          heightDeltaPx,
+          rowTopPx: element.getBoundingClientRect().top,
+          anchorTopPx:
+            scrollElement.getBoundingClientRect().top +
+            (target.kind === "row" ? target.viewportOffsetPx : 0),
+        })
+      ) {
         setMeasurementVersion((version) => version + 1);
       } else {
         scheduleMeasurementVersionBump();
@@ -449,6 +459,7 @@ export function useOutputVirtualization({
       lastScrollEventAtRef,
       outputRef,
       scheduleMeasurementVersionBump,
+      scrollTargetRef,
     ]
   );
 
@@ -515,7 +526,7 @@ export function useOutputVirtualization({
         scrollTop: outputRef.current?.scrollTop ?? 0,
         targetRowIndex:
           target.kind === "row"
-            ? (rowIndexByKey.get(target.rowKey ?? "") ?? null)
+            ? (rowIndexByKey.get(target.rowKey) ?? null)
             : null,
         overscan: outputOverscanRef.current,
         deferredToAnchorLock: true,

@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  OUTPUT_SCROLL_VERDICTS,
+  classifyOutputScrollEvent,
   getAutoscrollReleaseThresholdPx,
   getDistanceFromBottomPx,
   isProgrammaticScrollEcho,
   isWithinAutoscrollRearmThreshold,
   nextAutoscrollArmed,
+  shouldSyncMeasurementCorrection,
   type AutoscrollLatchInput,
+  type OutputScrollAttributionInput,
 } from "@utils/outputAutoscroll";
 import {
+  OUTPUT_ABOVE_VIEWPORT_SYNC_CORRECTION_MIN_DELTA_PX,
   OUTPUT_AUTOSCROLL_REARM_THRESHOLD_PX,
   OUTPUT_AUTOSCROLL_RELEASE_MIN_PX,
 } from "@utils/outputScrollConstants";
@@ -183,5 +188,136 @@ describe("isProgrammaticScrollEcho", () => {
     expect(
       isProgrammaticScrollEcho({ ...echo, hasRecentUserScrollInput: true })
     ).toBe(false);
+  });
+});
+
+describe("classifyOutputScrollEvent", () => {
+  function classify(
+    overrides: Partial<OutputScrollAttributionInput> = {}
+  ): string {
+    return classifyOutputScrollEvent({
+      hasRecentUserScrollInput: false,
+      isLayoutWorkSuppressed: false,
+      isMeasurementFlushInProgress: false,
+      isProgrammaticScrollFlagRaised: false,
+      lastProgrammaticScrollTop: null,
+      scrollTop: 82918,
+      ...overrides,
+    });
+  }
+
+  it("attributes an unclaimed event to the user", () => {
+    expect(classify()).toBe(OUTPUT_SCROLL_VERDICTS.userScroll);
+  });
+
+  it.each([
+    [
+      OUTPUT_SCROLL_VERDICTS.suppressedLayoutWork,
+      { isLayoutWorkSuppressed: true },
+    ],
+    [
+      OUTPUT_SCROLL_VERDICTS.programmaticFlag,
+      { isProgrammaticScrollFlagRaised: true },
+    ],
+    [
+      OUTPUT_SCROLL_VERDICTS.measurementFlush,
+      { isMeasurementFlushInProgress: true },
+    ],
+    [
+      OUTPUT_SCROLL_VERDICTS.programmaticEcho,
+      { lastProgrammaticScrollTop: 82918 },
+    ],
+  ])("returns %s", (verdict, overrides) => {
+    expect(classify(overrides)).toBe(verdict);
+  });
+
+  // Order is the contract, not an implementation detail: the handler branches on
+  // the verdict, so a reordering here silently reroutes events. The echo check
+  // is last because it is the only one that can be wrong about a user who lands
+  // on the lock's pixel, and the three flags above it are unambiguous.
+  it("prefers the earlier guard when several apply at once", () => {
+    expect(
+      classify({
+        isLayoutWorkSuppressed: true,
+        isProgrammaticScrollFlagRaised: true,
+        isMeasurementFlushInProgress: true,
+        lastProgrammaticScrollTop: 82918,
+      })
+    ).toBe(OUTPUT_SCROLL_VERDICTS.suppressedLayoutWork);
+    expect(
+      classify({
+        isProgrammaticScrollFlagRaised: true,
+        isMeasurementFlushInProgress: true,
+      })
+    ).toBe(OUTPUT_SCROLL_VERDICTS.programmaticFlag);
+  });
+
+  // Every verdict must be reachable and distinct — the reason the handler can
+  // log one line per scroll event and have it mean something.
+  it("never returns a verdict outside the published set", () => {
+    expect(Object.values(OUTPUT_SCROLL_VERDICTS)).toContain(classify());
+  });
+});
+
+describe("shouldSyncMeasurementCorrection", () => {
+  const bigEnough = OUTPUT_ABOVE_VIEWPORT_SYNC_CORRECTION_MIN_DELTA_PX;
+
+  // The anchor sits wherever the user left it, commonly a few hundred pixels
+  // down the pane. A row resizing in the band between the viewport top and the
+  // anchor displaces the anchor, so its correction has to batch into the same
+  // commit as the reflow or it paints as a flash.
+  it("claims a row inside the viewport but above the anchor", () => {
+    expect(
+      shouldSyncMeasurementCorrection({
+        heightDeltaPx: bigEnough,
+        rowTopPx: 100,
+        anchorTopPx: 314,
+      })
+    ).toBe(true);
+  });
+
+  it("claims a row straddling the viewport top", () => {
+    expect(
+      shouldSyncMeasurementCorrection({
+        heightDeltaPx: bigEnough,
+        rowTopPx: -80,
+        anchorTopPx: 314,
+      })
+    ).toBe(true);
+  });
+
+  // Resizing the anchor row does not move its own top, and nothing after it can
+  // reach back. Both keep the batched bump so a burst costs one render.
+  it.each([
+    ["the anchor row itself", 314],
+    ["a row below the anchor", 900],
+  ])("defers %s to the batched bump", (_label, rowTopPx) => {
+    expect(
+      shouldSyncMeasurementCorrection({
+        heightDeltaPx: bigEnough,
+        rowTopPx,
+        anchorTopPx: 314,
+      })
+    ).toBe(false);
+  });
+
+  it("defers a sub-threshold change however far above the anchor it is", () => {
+    expect(
+      shouldSyncMeasurementCorrection({
+        heightDeltaPx: bigEnough - 1,
+        rowTopPx: -5000,
+        anchorTopPx: 314,
+      })
+    ).toBe(false);
+  });
+
+  it("claims a shrink as readily as a growth", () => {
+    expect(
+      shouldSyncMeasurementCorrection({
+        heightDeltaPx: -bigEnough,
+        rowTopPx: 100,
+        anchorTopPx: 314,
+      })
+    ).toBe(true);
   });
 });

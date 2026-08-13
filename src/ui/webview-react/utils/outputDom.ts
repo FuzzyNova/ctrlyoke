@@ -76,7 +76,18 @@ export function captureViewportRowAnchor(
     const rowCenter = rowRect.top + rowRect.height / 2;
     const distance = Math.abs(rowCenter - viewportCenter);
     if (rowRect.top >= containerRect.top) {
-      const topDistance = Math.abs(rowRect.top - viewportCenter);
+      // Nearest the container's TOP, which is what "visible-top" claims. This
+      // scored against the viewport *centre* until 2026-08-13, so the committed
+      // anchor was routinely a few hundred pixels down the pane (offsets of
+      // 244-325 in a 586px viewport are all over that day's profiler log). Two
+      // things went wrong downstream. Every row resizing in the band above the
+      // anchor displaced it while failing the "above the viewport" test that
+      // decides whether the lock's correction lands in the same paint as the
+      // reflow — see shouldSyncMeasurementCorrection. And a tall row, whose top
+      // can sit far above the fold while its centre is near it, produced wildly
+      // negative offsets (-2261, -731) that are self-consistent but useless as a
+      // restore reference.
+      const topDistance = rowRect.top - containerRect.top;
       if (!bestVisibleTop || topDistance < bestVisibleTop.distance) {
         bestVisibleTop = { element, distance: topDistance };
       }
