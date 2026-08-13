@@ -27,7 +27,7 @@
 
 ## 1. Domain & DNS — Cloudflare
 
-- [ ] Confirm `ctrlyoke.dev` is registered and in the Cloudflare account (per the rebrand plan it + `controlyoke.*` and `.com` are owned and TM-cleared).
+- [x] Confirm `ctrlyoke.dev` is registered and in the Cloudflare account (per the rebrand plan it + `controlyoke.*` and `.com` are owned and TM-cleared).
 - [ ] Add `ctrlyoke.dev` to Cloudflare DNS; create the records Netlify requires for the apex + `www` (see §2 — Netlify will give you the target).
 - [ ] Decide the redirect strategy and keep it **permanent**:
   - `flightpath.dev` → `ctrlyoke.dev` **301** (preserve old links / SEO).
@@ -36,9 +36,17 @@
 
 ## 2. Netlify
 
-- [ ] On the **existing** Netlify site (the one behind the `NETLIFY_SITE_ID` repo secret — `deploy.yml` already calls it "the ctrlyoke.dev Netlify site"), add `ctrlyoke.dev` as a custom domain and set it as the **primary** domain.
-- [ ] Provision/verify the Netlify-managed TLS cert for `ctrlyoke.dev` (+ `www`).
-- [ ] Keep `flightpath.dev` attached as a domain alias **or** handle the 301 at Cloudflare (pick one place to own the redirect — don't double-redirect).
+- [x] **Cloudflare DNS first** (Netlify can't be set primary until DNS resolves):
+  - [x] In the Cloudflare zone for `ctrlyoke.dev`, add a record: Type **CNAME**, Name **`@`** (apex), Target **`apex-loadbalancer.netlify.com`**, Proxy status **DNS only** (grey cloud — do **not** proxy; Cloudflare's orange-cloud proxy blocks Netlify's SSL validation/provisioning for the domain). Cloudflare auto-flattens CNAME-at-apex records, so a plain CNAME here works even though the record is at the root — no separate "ALIAS"/"ANAME" record type needed.
+  - [x] Add a second record for `www`: Type **CNAME**, Name **`www`**, Target `<your-site>.netlify.app` (or `apex-loadbalancer.netlify.com`), Proxy status **DNS only**.
+  - [x] Wait for propagation (`dig ctrlyoke.dev` / `dig www.ctrlyoke.dev` should resolve).
+- [x] **Netlify — add + promote the domain**, on the **existing** site (the one behind the `NETLIFY_SITE_ID` repo secret — `deploy.yml` already calls it "the ctrlyoke.dev Netlify site"):
+  - [x] Site settings → Domain management → **Add domain alias** (this is the same "add domain" action; it's just labeled "alias" because a primary domain — `flightpath.dev` — already exists) → enter `ctrlyoke.dev` → save.
+  - [x] Once the Cloudflare CNAME above has propagated and Netlify shows the domain as verified/DNS-configured, use that domain row's **Options menu → "Set as primary domain"** to promote `ctrlyoke.dev`. This automatically demotes `flightpath.dev` to a non-primary alias.
+- [x] Provision/verify the Netlify-managed TLS cert for `ctrlyoke.dev` (+ `www`) — Site settings → Domain management → HTTPS section; click "Renew certificate" if it doesn't auto-provision within a few minutes of the domain verifying.
+- [x] Decide where the `flightpath.dev` → `ctrlyoke.dev` 301 lives (pick **one** place — don't double-redirect):
+  - **Option A (chosen):** Remove `flightpath.dev` from Netlify's domain list entirely (Options → Remove domain), then in Cloudflare create a **Redirect Rule** (Rules → Redirect Rules) matching `flightpath.dev/*` → dynamic redirect to `https://ctrlyoke.dev/${1}`, status 301, preserve query string. The zone's DNS record for `flightpath.dev` just needs to resolve to anything Cloudflare-proxied (orange cloud) so the rule can intercept — a dummy proxied `A` record (e.g. `192.0.2.1`) is fine.
+  - Option B (not chosen): keep `flightpath.dev` attached to Netlify as a domain alias and let Netlify serve the redirect.
 - [ ] Confirm `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` secrets are still valid; trigger a prod deploy and confirm `https://ctrlyoke.dev` + `/docs/` + `/pricing` + `/terms` + `/privacy` all load with the new branding and the new favicon/logo.
 
 ## 3. Google Workspace — product email
