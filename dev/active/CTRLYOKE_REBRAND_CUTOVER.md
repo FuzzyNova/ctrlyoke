@@ -47,7 +47,7 @@
 - [x] Decide where the `flightpath.dev` → `ctrlyoke.dev` 301 lives (pick **one** place — don't double-redirect):
   - **Option A (chosen):** Remove `flightpath.dev` from Netlify's domain list entirely (Options → Remove domain), then in Cloudflare create a **Redirect Rule** (Rules → Redirect Rules) matching `flightpath.dev/*` → dynamic redirect to `https://ctrlyoke.dev/${1}`, status 301, preserve query string. The zone's DNS record for `flightpath.dev` just needs to resolve to anything Cloudflare-proxied (orange cloud) so the rule can intercept — a dummy proxied `A` record (e.g. `192.0.2.1`) is fine.
   - Option B (not chosen): keep `flightpath.dev` attached to Netlify as a domain alias and let Netlify serve the redirect.
-- [ ] Confirm `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` secrets are still valid; trigger a prod deploy and confirm `https://ctrlyoke.dev` + `/docs/` + `/pricing` + `/terms` + `/privacy` all load with the new branding and the new favicon/logo.
+- [x] Confirm `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` secrets are still valid; trigger a prod deploy and confirm `https://ctrlyoke.dev` + `/docs/` + `/pricing` + `/terms` + `/privacy` all load with the new branding and the new favicon/logo.
 
 ## 3. Google Workspace — product email
 
