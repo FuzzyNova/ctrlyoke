@@ -51,12 +51,15 @@ import { useLongPress } from "@hooks/useLongPress";
 import { toOutputMessageTarget } from "@utils/outputProjection";
 import {
   getProfilerState,
-  isProfilingEnabled,
   logProfilerEvent,
+  shouldLogScrollAttribution,
   shouldLogScrollFrame,
 } from "@utils/performanceProfiler";
 import { WebviewLog } from "@utils/logger";
-import { captureViewportRowAnchor } from "@utils/outputDom";
+import {
+  captureViewportRowAnchor,
+  findRenderedRowElementByKey,
+} from "@utils/outputDom";
 import {
   LARGE_WORKFLOW_ROW_THRESHOLD,
   OUTPUT_AUTOSCROLL_REARM_THRESHOLD_PX,
@@ -67,6 +70,7 @@ import {
   classifyOutputScrollEvent,
   getDistanceFromBottomPx,
   nextAutoscrollArmed,
+  resolveDiffGapExpansionScrollTarget,
 } from "@utils/outputAutoscroll";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` returning a new
@@ -542,6 +546,68 @@ const OutputSectionInner: React.FC = () => {
   invalidateMeasuredRowForUserResizeImplRef.current =
     invalidateMeasuredRowForUserResize;
 
+  // Diff gap expansion inserts hidden hunk lines *above* the clicked "Show N
+  // more" button, growing the diff row's own height without moving the row's
+  // top. The anchor lock's row-top-based correction below only reacts to rows
+  // resizing *above* the committed anchor, so when the anchor is this diff
+  // row itself — routine once a diff exceeds the viewport, since it is then
+  // the only thing visible — nothing corrects for content shifting inside it,
+  // and the click point jumps by however many lines were revealed. Re-pointing
+  // the committed target's viewportOffsetPx by the measured height delta
+  // *before* the lock's own layout effect resolves it lets the lock apply the
+  // compensation itself on its next resolve, which keeps it the pane's sole
+  // scrollTop writer — this effect must be registered before useOutputScrollTarget
+  // below so React runs it first within the same commit.
+  const pendingDiffGapExpansionRef = useRef<{
+    rowKey: string;
+    heightBefore: number;
+  } | null>(null);
+
+  const handleDiffGapExpandWithScrollPin = useCallback(
+    (
+      rowKey: string,
+      diffKey: string,
+      gapIndex: number,
+      nextExpandedToLine: number
+    ) => {
+      const scrollElement = outputRef.current;
+      const rowElement = scrollElement
+        ? findRenderedRowElementByKey(scrollElement, rowKey)
+        : null;
+      if (rowElement) {
+        pendingDiffGapExpansionRef.current = {
+          rowKey,
+          heightBefore: rowElement.getBoundingClientRect().height,
+        };
+      }
+      handleDiffGapExpand(rowKey, diffKey, gapIndex, nextExpandedToLine);
+    },
+    [handleDiffGapExpand, outputRef]
+  );
+
+  useLayoutEffect(() => {
+    const pending = pendingDiffGapExpansionRef.current;
+    if (!pending) return;
+    pendingDiffGapExpansionRef.current = null;
+
+    const scrollElement = outputRef.current;
+    const rowElement = scrollElement
+      ? findRenderedRowElementByKey(scrollElement, pending.rowKey)
+      : null;
+    if (!scrollElement || !rowElement) return;
+
+    const insertedHeightPx =
+      rowElement.getBoundingClientRect().height - pending.heightBefore;
+    const repointedTarget = resolveDiffGapExpansionScrollTarget(
+      scrollTargetRef.current,
+      pending.rowKey,
+      insertedHeightPx
+    );
+    if (repointedTarget) {
+      scrollTargetRef.current = repointedTarget;
+    }
+  }, [rows, scrollTargetRef, outputRef]);
+
   const {
     applyScrollTarget,
     scheduleScrollTargetCommit,
@@ -693,7 +759,9 @@ const OutputSectionInner: React.FC = () => {
       scrollTop: el.scrollTop,
     });
 
-    if (isProfilingEnabled()) {
+    if (
+      shouldLogScrollAttribution(verdict === OUTPUT_SCROLL_VERDICTS.userScroll)
+    ) {
       const previousObservedScrollTop = lastObservedScrollTopRef.current;
       logProfilerEvent("scrollAttribution", {
         verdict,
@@ -1396,7 +1464,7 @@ const OutputSectionInner: React.FC = () => {
           onAttemptGroupToggle={handleAttemptGroupToggle}
           onContextMenuOpen={openContextMenu}
           onDiffCollapsedChange={handleDiffCollapsedChange}
-          onDiffGapExpand={handleDiffGapExpand}
+          onDiffGapExpand={handleDiffGapExpandWithScrollPin}
           onFileUndo={handleFileUndo}
           onMinimapStepClick={handleMinimapStepClick}
           onOutputProfilerRender={handleOutputProfilerRender}

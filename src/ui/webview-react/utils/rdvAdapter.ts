@@ -7,7 +7,7 @@
  *  - parseUnifiedDiffToFiles() — raw unified diff text (git show output) → ParsedDiffFile[]
  */
 import * as DiffLib from "diff";
-import { parseDiff } from "react-diff-view";
+import { getCollapsedLinesCountBetween, parseDiff } from "react-diff-view";
 import type { HunkData, ChangeData, DiffType, ViewType } from "react-diff-view";
 import { normalizeStructuredPatch } from "./diffUtils";
 import {
@@ -17,6 +17,7 @@ import {
   OUTPUT_RELAXED_LINE_HEIGHT,
   diffCharWidth,
   diffCodeColumns,
+  diffGapDecorationHeight,
   diffHorizontalChrome,
   diffLineHeight,
   toolCallLineHeight,
@@ -161,6 +162,10 @@ export interface DiffRenderPlan {
   toolLineHeight: number;
   headerHeight: number;
   decorationHeight: number;
+  /** Collapsed "Show N hidden lines" bars still present between hunks. */
+  gapDecorationRows: number;
+  /** Total height those bars contribute — already folded into {@link bodyHeight}. */
+  gapDecorationsHeight: number;
   bodyHeight: number;
   diffBlockHeight: number;
   totalHeight: number;
@@ -284,6 +289,23 @@ function estimateRenderedVisualRows(
   }
 
   return Math.max(0, visualRows);
+}
+
+/**
+ * Number of collapsed "Show N hidden lines" gap bars still present in `hunks`.
+ * Mirrors DiffView.tsx's own render loop exactly: a gap exists between two
+ * adjacent hunks whenever `getCollapsedLinesCountBetween` is positive, and a
+ * fully-expanded gap (chunk/all mode via `expandFromRawCode`) merges its two
+ * hunks into one, removing the pair this counts.
+ */
+function countCollapsedDiffGaps(hunks: readonly HunkData[]): number {
+  let count = 0;
+  for (let index = 1; index < hunks.length; index++) {
+    if (getCollapsedLinesCountBetween(hunks[index - 1], hunks[index]) > 0) {
+      count++;
+    }
+  }
+  return count;
 }
 
 function getDefaultGapExpansionPlanState(): DiffGapExpansionPlanState {
@@ -478,6 +500,8 @@ export function buildDiffRenderPlanFromStats(
       toolLineHeight: STANDALONE_DIFF_HEIGHT,
       headerHeight: 0,
       decorationHeight: 0,
+      gapDecorationRows: 0,
+      gapDecorationsHeight: 0,
       bodyHeight: 0,
       diffBlockHeight: STANDALONE_DIFF_HEIGHT,
       totalHeight: STANDALONE_DIFF_HEIGHT,
@@ -508,10 +532,24 @@ export function buildDiffRenderPlanFromStats(
           outputFontSize
         )
       : renderedRows;
-  const bodyHeight = collapsed ? 0 : visualRenderedRows * lineHeight;
+  // Each collapsed gap between hunks renders its own "Show N hidden lines" bar
+  // — a real row `estimateRenderedVisualRows` never walks, since it only sums
+  // `hunk.changes`. A multi-hunk diff with any gap still open under-counted by
+  // exactly this much.
+  const gapDecorationRows = options.hunks
+    ? countCollapsedDiffGaps(options.hunks)
+    : 0;
+  const gapDecorationsHeight = collapsed
+    ? 0
+    : gapDecorationRows * diffGapDecorationHeight(outputFontSize);
+  const bodyHeight = collapsed
+    ? 0
+    : visualRenderedRows * lineHeight + gapDecorationsHeight;
   const diffBlockHeight =
     headerHeight +
-    (collapsed ? 0 : Math.max(1, visualRenderedRows) * lineHeight);
+    (collapsed
+      ? 0
+      : Math.max(1, visualRenderedRows) * lineHeight + gapDecorationsHeight);
 
   return {
     viewType,
@@ -524,6 +562,8 @@ export function buildDiffRenderPlanFromStats(
     toolLineHeight,
     headerHeight,
     decorationHeight,
+    gapDecorationRows,
+    gapDecorationsHeight,
     bodyHeight,
     diffBlockHeight,
     totalHeight: toolLineHeight + headerHeight + decorationHeight + bodyHeight,

@@ -7,10 +7,13 @@ import {
   isProgrammaticScrollEcho,
   isWithinAutoscrollRearmThreshold,
   nextAutoscrollArmed,
+  resolveDeferredScrollTargetApplyDelayMs,
+  resolveDiffGapExpansionScrollTarget,
   shouldSyncMeasurementCorrection,
   type AutoscrollLatchInput,
   type OutputScrollAttributionInput,
 } from "@utils/outputAutoscroll";
+import type { OutputScrollTarget } from "@store/uiStore";
 import {
   OUTPUT_AUTOSCROLL_REARM_THRESHOLD_PX,
   OUTPUT_AUTOSCROLL_RELEASE_MIN_PX,
@@ -337,5 +340,114 @@ describe("shouldSyncMeasurementCorrection", () => {
         anchorTopPx: 314,
       })
     ).toBe(true);
+  });
+});
+
+describe("resolveDeferredScrollTargetApplyDelayMs", () => {
+  const userScrollInputGraceMs = 200;
+
+  // A muted attempt that lands right as the scroll happened needs the full
+  // window before the mute genuinely expires.
+  it("waits the full grace period when the mute was just triggered", () => {
+    expect(
+      resolveDeferredScrollTargetApplyDelayMs({
+        now: 1000,
+        lastUserScrollInputAt: 1000,
+        lastScrollEventAt: null,
+        userScrollInputGraceMs,
+      })
+    ).toBe(200);
+  });
+
+  // The bug this closes: a reflow-triggered muted attempt arriving partway
+  // through the window used to wait a *full* grace period from itself,
+  // stacking extra delay on top of what was already elapsed (150ms elapsed +
+  // a fresh 200ms = 350ms uncorrected instead of the 50ms actually left).
+  it("only waits out whatever remains of the window", () => {
+    expect(
+      resolveDeferredScrollTargetApplyDelayMs({
+        now: 1150,
+        lastUserScrollInputAt: 1000,
+        lastScrollEventAt: null,
+        userScrollInputGraceMs,
+      })
+    ).toBe(50);
+  });
+
+  it("floors at zero once the window has already elapsed", () => {
+    expect(
+      resolveDeferredScrollTargetApplyDelayMs({
+        now: 1500,
+        lastUserScrollInputAt: 1000,
+        lastScrollEventAt: null,
+        userScrollInputGraceMs,
+      })
+    ).toBe(0);
+  });
+
+  // Either signal can be the one that armed the mute — the later of the two
+  // is what actually governs when it expires.
+  it("uses whichever signal is more recent", () => {
+    expect(
+      resolveDeferredScrollTargetApplyDelayMs({
+        now: 1100,
+        lastUserScrollInputAt: 1000,
+        lastScrollEventAt: 1080,
+        userScrollInputGraceMs,
+      })
+    ).toBe(180);
+  });
+
+  it("treats a missing signal as having never happened", () => {
+    expect(
+      resolveDeferredScrollTargetApplyDelayMs({
+        now: 1100,
+        lastUserScrollInputAt: null,
+        lastScrollEventAt: 1080,
+        userScrollInputGraceMs,
+      })
+    ).toBe(180);
+  });
+});
+
+describe("resolveDiffGapExpansionScrollTarget", () => {
+  const anchoredRow: OutputScrollTarget = {
+    kind: "row",
+    rowKey: "diff-row",
+    viewportOffsetPx: 120,
+  };
+
+  // The row's own top hasn't moved — the growth is entirely inside it — so
+  // the anchor lock's ordinal above-anchor check never fires for it. Shrinking
+  // viewportOffsetPx is what makes the lock's own next resolve scroll further
+  // by exactly the growth, which is what re-centers the point the user clicked.
+  it("shrinks viewportOffsetPx by the measured growth when the anchor is the row that grew", () => {
+    expect(
+      resolveDiffGapExpansionScrollTarget(anchoredRow, "diff-row", 450)
+    ).toEqual({ kind: "row", rowKey: "diff-row", viewportOffsetPx: -330 });
+  });
+
+  it("grows viewportOffsetPx back when the expanded gap is collapsed again", () => {
+    expect(
+      resolveDiffGapExpansionScrollTarget(anchoredRow, "diff-row", -450)
+    ).toEqual({ kind: "row", rowKey: "diff-row", viewportOffsetPx: 570 });
+  });
+
+  it("does nothing when a different row is anchored", () => {
+    expect(
+      resolveDiffGapExpansionScrollTarget(anchoredRow, "other-row", 450)
+    ).toBeNull();
+  });
+
+  it("does nothing while auto-scroll is pinned to the bottom", () => {
+    expect(
+      resolveDiffGapExpansionScrollTarget({ kind: "bottom" }, "diff-row", 450)
+    ).toBeNull();
+  });
+
+  it("ignores a sub-pixel measurement no-op", () => {
+    expect(
+      resolveDiffGapExpansionScrollTarget(anchoredRow, "diff-row", 0.4)
+    ).toBeNull();
   });
 });

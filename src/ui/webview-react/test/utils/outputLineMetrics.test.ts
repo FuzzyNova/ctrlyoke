@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  DIFF_GAP_DECORATION_VERTICAL_PADDING,
   DIFF_LINE_HEIGHT,
+  OUTPUT_RELAXED_LINE_HEIGHT,
   OUTPUT_ROW_HORIZONTAL_PADDING,
   diffCharWidth,
   diffCodeColumns,
+  diffGapDecorationHeight,
   diffHorizontalChrome,
   diffLineHeight,
 } from "@utils/outputLineMetrics";
@@ -25,6 +28,21 @@ describe("diff geometry", () => {
     it("keeps scaling below the default font size", () => {
       expect(diffLineHeight(12)).toBeCloseTo(16.5);
       expect(diffLineHeight(11)).toBeLessThan(diffLineHeight(12));
+    });
+  });
+
+  describe("diffGapDecorationHeight", () => {
+    it("matches the xs header line height plus its own py-0.5 padding", () => {
+      expect(diffGapDecorationHeight(13)).toBeCloseTo(
+        (13 - 2) * OUTPUT_RELAXED_LINE_HEIGHT +
+          DIFF_GAP_DECORATION_VERTICAL_PADDING
+      );
+    });
+
+    it("scales with the output font size", () => {
+      expect(diffGapDecorationHeight(16)).toBeGreaterThan(
+        diffGapDecorationHeight(13)
+      );
     });
   });
 

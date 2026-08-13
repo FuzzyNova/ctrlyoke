@@ -106,6 +106,23 @@ export function diffLineHeight(outputFontSize: number): number {
   return (outputFontSize - 1) * DIFF_LINE_HEIGHT;
 }
 
+/** `py-0.5` on DiffView's gap decoration bar (Tailwind's default spacing scale, unoverridden here). */
+export const DIFF_GAP_DECORATION_VERTICAL_PADDING = 4;
+
+/**
+ * Height of one "Show N hidden lines" gap decoration bar between hunks.
+ * Renders outside `.diff-line` (it is DiffView's own markup, not react-diff-view's
+ * vendored row CSS), at the same `text-[length:var(--fp-output-font-size-xs)]`
+ * class as the diff's own header line — so it shares that line's already-measured
+ * `leading-relaxed` line height, plus its own `py-0.5` the header line doesn't have.
+ */
+export function diffGapDecorationHeight(outputFontSize: number): number {
+  return (
+    (outputFontSize - 2) * OUTPUT_RELAXED_LINE_HEIGHT +
+    DIFF_GAP_DECORATION_VERTICAL_PADDING
+  );
+}
+
 /**
  * Advance width of one glyph in the diff table's monospace font, which is what
  * `ch` resolves to inside it. `.diff` renders at `--fp-output-font-size-sm`

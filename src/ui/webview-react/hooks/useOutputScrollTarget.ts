@@ -8,6 +8,7 @@ import {
   captureViewportRowAnchor,
   findRenderedRowElementByKey,
 } from "@utils/outputDom";
+import { resolveDeferredScrollTargetApplyDelayMs } from "@utils/outputAutoscroll";
 import { clamp } from "@utils/number";
 import {
   isProfilingEnabled,
@@ -309,10 +310,16 @@ export function useOutputScrollTarget({
           if (deferredScrollTargetApplyTimerRef.current !== null) {
             clearTimeout(deferredScrollTargetApplyTimerRef.current);
           }
+          const deferredApplyDelayMs = resolveDeferredScrollTargetApplyDelayMs({
+            now,
+            lastUserScrollInputAt: lastUserScrollInputAtRef.current,
+            lastScrollEventAt: lastScrollEventAtRef.current,
+            userScrollInputGraceMs,
+          });
           deferredScrollTargetApplyTimerRef.current = setTimeout(() => {
             deferredScrollTargetApplyTimerRef.current = null;
             applyScrollTargetRef.current(`${phase}-deferred`);
-          }, userScrollInputGraceMs);
+          }, deferredApplyDelayMs);
         }
         return { resolved: false, appliedDelta: 0 };
       }

@@ -116,6 +116,79 @@ describe("useOutputScrollTarget", () => {
     expect(scrollTop).toBe(800);
   });
 
+  // A reflow-triggered muted attempt arriving partway through the grace window
+  // must only wait out what remains of it, not a fresh full window from itself
+  // — otherwise a reflow landing late in the window paints uncorrected for up
+  // to 2x the grace period instead of being capped at it.
+  it("retries a guarded apply after only the remaining grace window, not a fresh one", () => {
+    vi.useFakeTimers();
+    const scrollElement = document.createElement("div");
+    let scrollTop = 0;
+    Object.defineProperties(scrollElement, {
+      clientHeight: { configurable: true, value: 200 },
+      scrollHeight: { configurable: true, value: 1000 },
+      scrollTop: {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value: number) => {
+          scrollTop = value;
+        },
+      },
+    });
+
+    const defaultTarget: OutputScrollTarget = { kind: "bottom" };
+    const applyScrollTargetRef = {
+      current: () => ({ resolved: false, appliedDelta: 0 }),
+    };
+    // Scroll input "happened" 150ms before this render, so only 50ms of the
+    // 200ms grace window remains.
+    const lastUserScrollInputAtRef: { current: number | null } = {
+      current: performance.now() - 150,
+    };
+
+    const { result } = renderHook(() =>
+      useOutputScrollTarget({
+        applyScrollTargetRef,
+        autoscrollEnabledRef: { current: true },
+        bottomThresholdPx: 24,
+        commitMaxRetries: 2,
+        commitScrollTargetFromViewportRef: { current: () => undefined },
+        defaultTarget,
+        isProgrammaticScrollRef: { current: false },
+        lastProgrammaticScrollTopRef: { current: null },
+        lastScrollEventAtRef: { current: null },
+        lastScrollTopRef: { current: null },
+        lastUserScrollInputAtRef,
+        layoutApplyTrigger: "initial",
+        outputOverscanRef: { current: 6 },
+        outputRef: { current: scrollElement },
+        pendingNavigationRef: { current: null },
+        restoreTrigger: "workflow",
+        rowLayout: { rowStartsByKey: new Map(), totalSize: 1000 },
+        rowsRef: { current: [{ key: "row-1" }] },
+        rowVirtualizer: { measurementsCache: [] },
+        savedOutputScrollTarget: defaultTarget,
+        scrollTargetRef: { current: defaultTarget },
+        setOutputScrollTarget: vi.fn(),
+        userScrollInputGraceMs: 200,
+        workflowScrollTargetId: "workflow",
+      })
+    );
+
+    act(() => {
+      result.current.applyScrollTarget("layout-effect");
+    });
+    expect(scrollTop).toBe(0);
+
+    lastUserScrollInputAtRef.current = null;
+    act(() => {
+      // A fresh 200ms window from this attempt would still be muted here.
+      vi.advanceTimersByTime(50);
+    });
+
+    expect(scrollTop).toBe(800);
+  });
+
   // Guards the sticky-bottom latch: while auto-scroll is armed, a viewport that
   // streaming output has grown past must still commit the bottom target.
   // Committing a row anchor here would disarm auto-scroll for the rest of the

@@ -207,6 +207,89 @@ describe("buildDiffRenderPlan", () => {
     expect(splitPlan.bodyHeight).toBeLessThan(unifiedPlan.bodyHeight);
     expect(splitPlan.totalHeight).toBeLessThan(unifiedPlan.totalHeight);
   });
+
+  // Each collapsed gap between hunks renders its own "Show N hidden lines" bar
+  // that estimateRenderedVisualRows never walks (it only sums hunk.changes),
+  // so a multi-hunk diff with a gap still open under-counted by exactly one bar.
+  describe("gap decoration rows", () => {
+    const twoHunksWithGap = [
+      {
+        content: "@@ -1,3 +1,3 @@",
+        oldStart: 1,
+        oldLines: 3,
+        newStart: 1,
+        newLines: 3,
+        changes: [
+          {
+            type: "normal" as const,
+            isNormal: true as const,
+            oldLineNumber: 1,
+            newLineNumber: 1,
+            content: "context",
+          },
+        ],
+      },
+      {
+        content: "@@ -10,2 +10,2 @@",
+        oldStart: 10,
+        oldLines: 2,
+        newStart: 10,
+        newLines: 2,
+        changes: [
+          {
+            type: "normal" as const,
+            isNormal: true as const,
+            oldLineNumber: 10,
+            newLineNumber: 10,
+            content: "more context",
+          },
+        ],
+      },
+    ];
+
+    it("counts a gap between two hunks and adds its height to the body", () => {
+      const withGap = buildDiffRenderPlan(twoHunksWithGap, {
+        viewType: "unified",
+        outputFontSize: 13,
+      });
+      const withoutGap = buildDiffRenderPlan([twoHunksWithGap[0]], {
+        viewType: "unified",
+        outputFontSize: 13,
+      });
+
+      expect(withGap.gapDecorationRows).toBe(1);
+      expect(withGap.gapDecorationsHeight).toBeGreaterThan(0);
+      expect(withGap.bodyHeight).toBeCloseTo(
+        withGap.renderedRows * withGap.lineHeight + withGap.gapDecorationsHeight
+      );
+      expect(withoutGap.gapDecorationRows).toBe(0);
+    });
+
+    it("does not count a zero-length gap between adjacent hunks", () => {
+      const adjacentHunks = [
+        twoHunksWithGap[0],
+        { ...twoHunksWithGap[1], oldStart: 4, newStart: 4 },
+      ];
+
+      expect(
+        buildDiffRenderPlan(adjacentHunks, {
+          viewType: "unified",
+          outputFontSize: 13,
+        }).gapDecorationRows
+      ).toBe(0);
+    });
+
+    it("omits gap decoration height while collapsed", () => {
+      const plan = buildDiffRenderPlan(twoHunksWithGap, {
+        viewType: "unified",
+        outputFontSize: 13,
+        collapsed: true,
+      });
+
+      expect(plan.gapDecorationsHeight).toBe(0);
+      expect(plan.bodyHeight).toBe(0);
+    });
+  });
 });
 
 describe("syntaxHighlighting", () => {

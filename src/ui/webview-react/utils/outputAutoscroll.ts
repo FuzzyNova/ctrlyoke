@@ -18,6 +18,7 @@ import {
   OUTPUT_AUTOSCROLL_RELEASE_VIEWPORT_FRACTION,
   OUTPUT_MEASUREMENT_REFLOW_MIN_DELTA_PX,
 } from "./outputScrollConstants";
+import type { OutputScrollTarget } from "@store/uiStore";
 
 export interface AutoscrollLatchInput {
   /** Current gap between the viewport bottom and the content bottom. */
@@ -246,4 +247,77 @@ export function nextAutoscrollArmed({
   return (
     distanceFromBottomPx <= getAutoscrollReleaseThresholdPx(viewportHeightPx)
   );
+}
+
+/**
+ * How long to wait before retrying an `applyScrollTarget` call that was muted
+ * because of recent user scroll input.
+ *
+ * `applyScrollTarget` mutes itself for `userScrollInputGraceMs` after the most
+ * recent real scroll signal so it never fights an active user gesture — but a
+ * reflow landing inside that window (e.g. streaming content growing a row)
+ * paints uncorrected until the retry fires. Scheduling the retry a full
+ * `userScrollInputGraceMs` from *this muted attempt* — rather than from the
+ * scroll signal that caused the mute — stacks extra, unnecessary delay on top
+ * whenever the attempt itself lands partway through the window (a reflow
+ * arriving 150ms after the user's last scroll would otherwise wait a further
+ * 200ms, painting wrong for 350ms instead of the 50ms actually left on the
+ * mute). Targeting the window's real expiry instead caps the uncorrected
+ * paint at `userScrollInputGraceMs`, and stays correct across repeated muted
+ * attempts during a burst of reflows, since each recomputes from the same
+ * fixed signal rather than resetting the clock.
+ */
+export function resolveDeferredScrollTargetApplyDelayMs({
+  now,
+  lastUserScrollInputAt,
+  lastScrollEventAt,
+  userScrollInputGraceMs,
+}: {
+  now: number;
+  lastUserScrollInputAt: number | null;
+  lastScrollEventAt: number | null;
+  userScrollInputGraceMs: number;
+}): number {
+  const mostRecentUserSignalAt = Math.max(
+    lastUserScrollInputAt ?? -Infinity,
+    lastScrollEventAt ?? -Infinity
+  );
+  return Math.max(0, userScrollInputGraceMs - (now - mostRecentUserSignalAt));
+}
+
+/**
+ * Re-points a committed row anchor after content was inserted *inside* that
+ * same row, above the point the user was looking at — e.g. expanding a diff's
+ * "Show N more lines" gap, which grows the row without moving its own top.
+ *
+ * The anchor lock (`shouldSyncMeasurementCorrection`) only reacts to rows
+ * resizing *above* the committed anchor; a row resizing internally, at or
+ * below its own top, ordinally never qualifies. That is correct for the
+ * anchor's own row-top position (which genuinely hasn't moved) and wrong for
+ * whatever the user was actually looking at inside a row taller than the
+ * viewport — routine once a diff exceeds it, since the diff is then the only
+ * thing visible and so is always the anchor. Shrinking the committed
+ * `viewportOffsetPx` by the measured growth makes the lock's own next resolve
+ * scroll further by exactly that amount, which is what re-centers the click
+ * point without a second writer touching `scrollTop` directly.
+ *
+ * Returns `null` when the currently committed target isn't anchored to the
+ * row that grew — nothing to re-point, the existing above-anchor correction
+ * already covers every other case.
+ */
+export function resolveDiffGapExpansionScrollTarget(
+  currentTarget: OutputScrollTarget,
+  rowKey: string,
+  insertedHeightPx: number
+): OutputScrollTarget | null {
+  if (currentTarget.kind !== "row" || currentTarget.rowKey !== rowKey) {
+    return null;
+  }
+  if (Math.abs(insertedHeightPx) < 1) {
+    return null;
+  }
+  return {
+    ...currentTarget,
+    viewportOffsetPx: currentTarget.viewportOffsetPx - insertedHeightPx,
+  };
 }

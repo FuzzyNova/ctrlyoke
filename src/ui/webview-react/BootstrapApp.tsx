@@ -1,18 +1,9 @@
-import {
-  Profiler,
-  useEffect,
-  useRef,
-  useState,
-  type ComponentType,
-} from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { isStandalone, useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useUiStore } from "@store/uiStore";
 import { WebviewLog } from "@utils/logger";
 import { markFreshPageReadySent } from "@hooks/reconnectWatchdog";
-import { createProfilerRenderHandler } from "@utils/performanceProfiler";
-
-const handleAppProfilerRender = createProfilerRenderHandler("App");
 
 type DashboardAppComponent = ComponentType;
 
@@ -96,9 +87,5 @@ export default function BootstrapApp() {
     );
   }
 
-  return (
-    <Profiler id="App" onRender={handleAppProfilerRender}>
-      <DashboardApp />
-    </Profiler>
-  );
+  return <DashboardApp />;
 }

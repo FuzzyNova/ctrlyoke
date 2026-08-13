@@ -217,11 +217,7 @@ vi.mock("@components/layout/output-section/OutputSectionHeader", () => ({
     terminalExecutionRunLabel: string | null;
   }) => (
     <>
-      <button
-        type="button"
-        aria-pressed={isFindOpen}
-        onClick={onToggleFind}
-      >
+      <button type="button" aria-pressed={isFindOpen} onClick={onToggleFind}>
         Toggle output find
       </button>
       <button type="button" onClick={onToggleCollapse}>
@@ -303,6 +299,7 @@ vi.mock("@utils/performanceProfiler", () => ({
   getProfilerState: () => ({ enabled: false, slowThresholdMs: 50 }),
   logProfilerEvent: vi.fn(),
   shouldLogScrollFrame: () => false,
+  shouldLogScrollAttribution: () => false,
 }));
 
 vi.mock("@utils/logger", () => ({

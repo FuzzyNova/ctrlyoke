@@ -7,6 +7,7 @@ type PerformanceProfilerOptions = {
   logLongFrames?: boolean;
   logMeasurements?: boolean;
   logVirtualRanges?: boolean;
+  logScrollAttribution?: boolean;
 };
 
 type PerformanceProfilerState = Required<PerformanceProfilerOptions> & {
@@ -35,6 +36,7 @@ const DEFAULT_STATE: PerformanceProfilerState = {
   logLongFrames: false,
   logMeasurements: false,
   logVirtualRanges: false,
+  logScrollAttribution: false,
 };
 
 const state: PerformanceProfilerState = {
@@ -116,6 +118,9 @@ function applyOptions(options: PerformanceProfilerOptions): void {
   }
   if (options.logLongFrames != null) {
     state.logLongFrames = options.logLongFrames;
+  }
+  if (options.logScrollAttribution != null) {
+    state.logScrollAttribution = options.logScrollAttribution;
   }
 }
 
@@ -260,6 +265,18 @@ export function shouldLogScrollFrame(gapMs: number): boolean {
     state.enabled &&
     (state.logAllScrollFrames || gapMs >= state.slowThresholdMs)
   );
+}
+
+/**
+ * Per-scroll-event attribution logging. `isRoutineVerdict` is true for the
+ * high-volume "nothing of ours claimed it" case (`OUTPUT_SCROLL_VERDICTS.userScroll`)
+ * — that verdict fires once per physical scroll event and was 68% of a 27-minute
+ * session's log by itself, so it needs its own opt-in flag. The verdicts that
+ * actually diagnose a settle-window bug (suppressed/programmatic/echo) are rare
+ * by comparison and always log while profiling is on.
+ */
+export function shouldLogScrollAttribution(isRoutineVerdict: boolean): boolean {
+  return state.enabled && (!isRoutineVerdict || state.logScrollAttribution);
 }
 
 /**

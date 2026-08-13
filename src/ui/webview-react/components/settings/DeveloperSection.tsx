@@ -278,6 +278,14 @@ export function DeveloperSection() {
                   updateProfilerOptions({ logAllScrollFrames: checked })
                 }
               />
+              <SettingToggleRow
+                label="Log every scroll attribution event"
+                description="Verbose; logs the routine 'user-scroll' verdict for every scroll event. Settle-window verdicts (suppressed/programmatic/echo) always log while profiling is on."
+                checked={profilerState.logScrollAttribution}
+                onChange={(checked) =>
+                  updateProfilerOptions({ logScrollAttribution: checked })
+                }
+              />
             </div>
           </div>
         )}
