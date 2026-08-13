@@ -42,7 +42,7 @@ export default defineConfig({
             { text: "Codex CLI", link: "/harnesses/codex-cli" },
             { text: "OpenCode CLI", link: "/harnesses/opencode-cli" },
             { text: "Qwen CLI", link: "/harnesses/qwen-cli" },
-            { text: "Gemini CLI", link: "/harnesses/gemini-cli" },
+            { text: "Antigravity CLI", link: "/harnesses/antigravity-cli" },
           ],
         },
       ],
