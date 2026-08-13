@@ -13,10 +13,10 @@
  * moving the viewport, so it can never release the latch.
  */
 import {
-  OUTPUT_ABOVE_VIEWPORT_SYNC_CORRECTION_MIN_DELTA_PX,
   OUTPUT_AUTOSCROLL_REARM_THRESHOLD_PX,
   OUTPUT_AUTOSCROLL_RELEASE_MIN_PX,
   OUTPUT_AUTOSCROLL_RELEASE_VIEWPORT_FRACTION,
+  OUTPUT_MEASUREMENT_REFLOW_MIN_DELTA_PX,
 } from "./outputScrollConstants";
 
 export interface AutoscrollLatchInput {
@@ -198,6 +198,16 @@ export interface MeasurementCorrectionSyncInput {
  * the visible "jump to B, snap back to A" flash: on 2026-08-13 00:26:00 five
  * such corrections ran over 460ms against an anchor committed at offset 314.75
  * in a 586px viewport.
+ *
+ * There is deliberately no magnitude threshold beyond the sub-pixel no-op
+ * floor. A 24px one lived here on the theory that only large reflows earned a
+ * synchronous bump, but a threshold like that *is* the amplitude of the flash
+ * it admits — every displacement under it paints before its correction. Nor
+ * does it buy the render it was meant to save: `measureElement` runs inside
+ * TanStack's ResizeObserver callback, whose own `resizeItem` -> `notify()`
+ * re-renders in that same synchronous stack, so React batches this bump into a
+ * render that was already going to happen. The rAF path is the one that adds a
+ * render, later and separately.
  */
 export function shouldSyncMeasurementCorrection({
   anchorTopPx,
@@ -205,8 +215,7 @@ export function shouldSyncMeasurementCorrection({
   rowTopPx,
 }: MeasurementCorrectionSyncInput): boolean {
   return (
-    Math.abs(heightDeltaPx) >=
-      OUTPUT_ABOVE_VIEWPORT_SYNC_CORRECTION_MIN_DELTA_PX &&
+    Math.abs(heightDeltaPx) >= OUTPUT_MEASUREMENT_REFLOW_MIN_DELTA_PX &&
     rowTopPx < anchorTopPx
   );
 }

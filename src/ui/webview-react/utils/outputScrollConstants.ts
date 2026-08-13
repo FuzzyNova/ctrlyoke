@@ -32,9 +32,20 @@ export const OUTPUT_AUTOSCROLL_RELEASE_MIN_PX = 150;
 export const LARGE_WORKFLOW_ROW_THRESHOLD = 20;
 
 /**
- * Minimum height change (px) for an above-viewport row before its measurement
- * forces a synchronous layout-version bump. Below this, the batched rAF bump is
- * used; at/above it, the corrective scroll-target apply is coalesced into the
- * same paint as the row's reflow to avoid a one-frame "jump then snap" flash.
+ * Height change (px) below which a row's measurement is treated as a no-op and
+ * left to the batched rAF bump.
+ *
+ * This is a sub-pixel floor, not a tuning knob. It used to be 24px, on the
+ * theory that only large reflows were worth a synchronous layout-version bump —
+ * but the threshold *is* the amplitude of the flash it lets through, because
+ * anything below it paints the reflow one frame before the correction. The
+ * 2026-08-13 04:31 profiler session recorded 45 of 140 settled corrections in
+ * the 1-24px band, arriving in frame-cadence bursts.
+ *
+ * Deriving the diff geometry from CSS (commit 17ace0f1) is what made that
+ * visible: it moved most first-measurement deltas out of the >=24px synchronous
+ * band and into the deferred one — `bashCommand` n=150 avgDelta 0, `fileRead`
+ * n=44 avgDelta -7, `diff:unified:expanded` n=43 avgDelta 12. Better estimates
+ * mean smaller reflows, and smaller reflows were the ones being deferred.
  */
-export const OUTPUT_ABOVE_VIEWPORT_SYNC_CORRECTION_MIN_DELTA_PX = 24;
+export const OUTPUT_MEASUREMENT_REFLOW_MIN_DELTA_PX = 1;

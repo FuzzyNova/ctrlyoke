@@ -308,6 +308,9 @@ const OutputSectionInner: React.FC = () => {
     "split" | "unified"
   >("split");
   const [outputContentWidth, setOutputContentWidth] = useState(0);
+  // Width as of the pane's last measurement, so the resize handler can detect a
+  // real change without depending on the state value it writes.
+  const lastMeasuredOutputWidthRef = useRef(0);
   const lastUserScrollInputAtRef = useRef<number | null>(null);
   const getVirtualItemsRef = useRef<() => readonly { index: number }[]>(
     () => []
@@ -586,6 +589,16 @@ const OutputSectionInner: React.FC = () => {
   // 4914 (78% under) while its neighbours, built after the width arrived, were
   // within 15%. Running before paint means the corrected width is already in
   // the tree the first time anything is measured.
+  // Every dependency here must be stable, and the two that are not are reached
+  // through refs on purpose. `applyScrollTarget`'s identity changes on every
+  // measurement round (it closes over `rowLayout`), and `outputContentWidth` is
+  // set by this very effect — so listing either one re-runs the effect on
+  // essentially every commit. Under `useEffect` that was merely wasteful
+  // re-subscription after paint; as a layout effect it forces a synchronous
+  // `getBoundingClientRect()` against a 6,000-row, million-pixel scroll canvas
+  // *inside the commit phase*, which is how the panel's expensive-commit rate
+  // went from 3.1/min to 7.4/min and its commit time from 1.5s to 3.3s per
+  // minute between the 04:01 and 04:12 profiler sessions on 2026-08-13.
   useLayoutEffect(() => {
     const el = outputRef.current;
     if (!el || outputCollapsed) return;
@@ -595,11 +608,14 @@ const OutputSectionInner: React.FC = () => {
         return;
       }
       const width = el.getBoundingClientRect().width;
-      const widthChanged =
-        outputContentWidth > 0 && Math.abs(outputContentWidth - width) >= 0.5;
-      if (widthChanged) {
-        applyScrollTarget("width-change");
+      const previousWidth = lastMeasuredOutputWidthRef.current;
+      // Compare against what this effect last *measured*, not against state:
+      // the state write below is async, so a resize burst would otherwise
+      // re-compare against a stale value and re-fire the scroll correction.
+      if (previousWidth > 0 && Math.abs(previousWidth - width) >= 0.5) {
+        applyScrollTargetRef.current("width-change");
       }
+      lastMeasuredOutputWidthRef.current = width;
       setOutputContentWidth((prev) => {
         if (Math.abs(prev - width) < 0.5) return prev;
         return width;
@@ -617,7 +633,7 @@ const OutputSectionInner: React.FC = () => {
       createAnimationFrameResizeObserver(updateDiffViewType);
     observer.observe(el);
     return disconnect;
-  }, [activeOutputTab, applyScrollTarget, outputCollapsed, outputContentWidth]);
+  }, [activeOutputTab, applyScrollTargetRef, outputCollapsed]);
 
   useEffect(() => {
     if (outputContentWidth <= 0) {

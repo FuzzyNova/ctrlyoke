@@ -12,7 +12,6 @@ import {
   type OutputScrollAttributionInput,
 } from "@utils/outputAutoscroll";
 import {
-  OUTPUT_ABOVE_VIEWPORT_SYNC_CORRECTION_MIN_DELTA_PX,
   OUTPUT_AUTOSCROLL_REARM_THRESHOLD_PX,
   OUTPUT_AUTOSCROLL_RELEASE_MIN_PX,
 } from "@utils/outputScrollConstants";
@@ -260,7 +259,7 @@ describe("classifyOutputScrollEvent", () => {
 });
 
 describe("shouldSyncMeasurementCorrection", () => {
-  const bigEnough = OUTPUT_ABOVE_VIEWPORT_SYNC_CORRECTION_MIN_DELTA_PX;
+  const bigEnough = 24;
 
   // The anchor sits wherever the user left it, commonly a few hundred pixels
   // down the pane. A row resizing in the band between the viewport top and the
@@ -301,10 +300,29 @@ describe("shouldSyncMeasurementCorrection", () => {
     ).toBe(false);
   });
 
-  it("defers a sub-threshold change however far above the anchor it is", () => {
+  // A magnitude threshold here is the amplitude of the flash it admits: every
+  // above-anchor displacement below it paints a frame before its correction.
+  // The 2026-08-13 04:31 session put 45 of 140 settled corrections in the 1-24px
+  // band that the old 24px threshold deferred. Only a sub-pixel no-op is
+  // deferred now, so a small resize must claim the synchronous path.
+  it.each([
+    ["a one-pixel growth", 1],
+    ["a small growth well under the old 24px threshold", 6],
+    ["a small shrink", -6],
+  ])("claims %s above the anchor", (_label, heightDeltaPx) => {
     expect(
       shouldSyncMeasurementCorrection({
-        heightDeltaPx: bigEnough - 1,
+        heightDeltaPx,
+        rowTopPx: 100,
+        anchorTopPx: 314,
+      })
+    ).toBe(true);
+  });
+
+  it("defers a measurement that did not move the row at all", () => {
+    expect(
+      shouldSyncMeasurementCorrection({
+        heightDeltaPx: 0.25,
         rowTopPx: -5000,
         anchorTopPx: 314,
       })

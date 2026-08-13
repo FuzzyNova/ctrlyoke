@@ -418,16 +418,19 @@ export function useOutputVirtualization({
           });
         }
       }
-      // When a row ABOVE THE ANCHOR changes height meaningfully, its reflow
-      // shifts everything below it — including the anchored content the user is
-      // looking at. scheduleMeasurementVersionBump defers the corrective
-      // layout-effect to a rAF, so the correction lands a frame AFTER TanStack's
-      // reflow has already painted: the visible "jump then snap back" flash. For
-      // that case bump the version synchronously so the correction batches with
-      // the reflow render and lands in the SAME paint. Rows at or after the
-      // anchor cannot move it, so they keep the batched rAF bump to avoid
-      // per-row render churn, and the flush path owns its own (already
-      // synchronous) reconciliation.
+      // When a row ABOVE THE ANCHOR changes height, its reflow shifts everything
+      // below it — including the anchored content the user is looking at.
+      // scheduleMeasurementVersionBump defers the corrective layout-effect to a
+      // rAF, so the correction lands a frame AFTER TanStack's reflow has already
+      // painted: the visible "jump then snap back" flash. For that case bump the
+      // version synchronously so the correction batches with the reflow render
+      // and lands in the SAME paint. Rows at or after the anchor cannot move it,
+      // so they keep the batched rAF bump, and the flush path owns its own
+      // (already synchronous) reconciliation.
+      //
+      // Every above-anchor resize takes the synchronous path, however small —
+      // see shouldSyncMeasurementCorrection for why a magnitude threshold here
+      // sets the flash amplitude without saving a render.
       //
       // The anchor's pinned position is read from the committed target rather
       // than from the anchor row's DOM rect: it is the offset the lock is about
