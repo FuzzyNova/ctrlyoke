@@ -481,6 +481,17 @@ export async function getGitTrackedAndUntrackedFiles(
   return stdout.split("\0").filter(Boolean);
 }
 
+/** Return non-ignored untracked paths, preserving Git's NUL-safe output. */
+export async function getGitUntrackedFiles(
+  repoRoot: string
+): Promise<string[]> {
+  const { stdout } = await execGit(
+    ["-C", repoRoot, "ls-files", "--others", "--exclude-standard", "-z"],
+    { maxBuffer: GIT_MAX_BUFFER }
+  );
+  return stdout.split("\0").filter(Boolean);
+}
+
 /** Return true when Git reports an in-progress operation in this checkout. */
 export async function hasGitOperationInProgress(dir: string): Promise<boolean> {
   const gitDir = await absoluteGitDir(dir);

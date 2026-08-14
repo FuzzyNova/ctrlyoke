@@ -40,10 +40,12 @@ suite("WorkspaceInitializer", () => {
         "# ctrlyoke generated runtime entries are machine-local. Authored files in\n" +
           "# templates/, scripts/, agents/, skills/, mcp/, and settings.json remain trackable.\n" +
           "#\n" +
-          "# This file ignores ITSELF (last line) so initializing ctrlyoke leaves your\n" +
-          "# worktree clean. If you edit this file — e.g. to start tracking runs or\n" +
-          "# attachments — DELETE the `.gitignore` line at the bottom first. Otherwise your\n" +
-          "# changes stay on this machine and every other clone regenerates the defaults.\n"
+          "# This file ignores ITSELF (last line) so initialization leaves your worktree\n" +
+          "# clean. Before editing it, DELETE that `.gitignore` line. Its absence marks\n" +
+          "# this file as user-owned, and ctrlyoke will stop restoring removed defaults.\n" +
+          "#\n" +
+          "# Managed worktrees reject non-ignored untracked runtime files. They never land\n" +
+          "# certs/, notifications/, temp/, or logs/, even when explicitly tracked.\n"
       )
     );
     assert.match(gitignoreContent, /^\.runs\/$/m);
@@ -89,12 +91,15 @@ suite("WorkspaceInitializer", () => {
     }
   });
 
-  test("appends missing generated .gitignore entries without removing user entries", async () => {
+  test("restores missing entries while the generated ownership marker remains", async () => {
     const workspaceRoot = createWorkspace();
     const ctrlyokeDir = path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR);
     const gitignorePath = path.join(ctrlyokeDir, ".gitignore");
-    await fs.promises.mkdir(ctrlyokeDir, { recursive: true });
-    const existingContent = "custom-entry\n# user comment\nlogs/\n";
+    await WorkspaceInitializer.initializeIfNeeded(workspaceRoot);
+    const generatedContent = await fs.promises.readFile(gitignorePath, "utf8");
+    const existingContent = generatedContent
+      .replace("capabilities.json\n", "")
+      .replace(".gitignore\n", "custom-entry\n.gitignore\n");
     await fs.promises.writeFile(gitignorePath, existingContent, "utf8");
 
     await WorkspaceInitializer.reinitialize(workspaceRoot);
@@ -102,7 +107,6 @@ suite("WorkspaceInitializer", () => {
     const gitignoreContent = await fs.promises.readFile(gitignorePath, "utf8");
     assert.ok(gitignoreContent.startsWith(existingContent));
     assert.match(gitignoreContent, /^custom-entry$/m);
-    assert.match(gitignoreContent, /^# user comment$/m);
     assert.strictEqual(
       gitignoreContent.match(/^logs\/$/gm)?.length,
       1,
@@ -113,39 +117,43 @@ suite("WorkspaceInitializer", () => {
     assert.match(gitignoreContent, /^\.gitignore$/m);
     assert.strictEqual(
       gitignoreContent.slice(existingContent.length),
-      [
-        ".runs/",
-        ".search-index/",
-        "temp/",
-        "certs/",
-        "notifications/",
-        "capabilities.json",
-        "attachments/",
-        "prompts/",
-        ".usage/",
-        ".gitignore",
-        "",
-      ].join("\n")
+      "capabilities.json\n"
     );
   });
 
-  test("does not append generated header comments as entries", async () => {
+  test("preserves a pre-existing user-owned .gitignore byte-for-byte", async () => {
     const workspaceRoot = createWorkspace();
     const ctrlyokeDir = path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR);
     const gitignorePath = path.join(ctrlyokeDir, ".gitignore");
     await fs.promises.mkdir(ctrlyokeDir, { recursive: true });
-    await fs.promises.writeFile(gitignorePath, "custom-entry\n", "utf8");
+    const userContent = "custom-entry\n# user comment\nlogs/\n";
+    await fs.promises.writeFile(gitignorePath, userContent, "utf8");
 
     await WorkspaceInitializer.reinitialize(workspaceRoot);
 
     const gitignoreContent = await fs.promises.readFile(gitignorePath, "utf8");
-    assert.strictEqual(
-      gitignoreContent.includes("# ctrlyoke generated runtime entries"),
-      false
+    assert.strictEqual(gitignoreContent, userContent);
+  });
+
+  test("transfers ownership when the generated self-ignore entry is deleted", async () => {
+    const workspaceRoot = createWorkspace();
+    await WorkspaceInitializer.initializeIfNeeded(workspaceRoot);
+    const gitignorePath = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
+      ".gitignore"
     );
+    const generatedContent = await fs.promises.readFile(gitignorePath, "utf8");
+    const userContent = generatedContent
+      .replace("prompts/\n", "")
+      .replace(".gitignore\n", "# user-owned\n");
+    await fs.promises.writeFile(gitignorePath, userContent, "utf8");
+
+    await WorkspaceInitializer.reinitialize(workspaceRoot);
+
     assert.strictEqual(
-      gitignoreContent.includes("# This file ignores ITSELF"),
-      false
+      await fs.promises.readFile(gitignorePath, "utf8"),
+      userContent
     );
   });
 });

@@ -56,7 +56,11 @@ original subject matter. Files you author directly, such as a
 The generated `.ctrlyoke/.gitignore` ignores `.runs/`, `attachments/`, `prompts/`, logs, temporary
 files, and other machine-local runtime data. It does not ignore exported `<workflow>.assets/`
 directories. The `.gitignore` is editable: remove the entries for anything you want tracked, but
-delete the `.gitignore` self-ignore line at the bottom first or the change stays on this machine.
+delete the `.gitignore` self-ignore line at the bottom first. That marks the file as user-owned, so
+ctrlyoke no longer restores removed defaults and the change can be committed. Managed-worktree
+landing accepts deliberately tracked prompts, attachments, and other non-sensitive runtime files,
+but rejects non-ignored untracked runtime output. It always rejects `certs/`, `notifications/`,
+`temp/`, and `logs/`, even if tracked.
 
 `settings.json` is tracked by default as project configuration. Its `server.certPath` and
 `server.keyPath` fields are machine-local and should point to files available on each machine.

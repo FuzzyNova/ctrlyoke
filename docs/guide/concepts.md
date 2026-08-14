@@ -29,8 +29,12 @@ dependencies only; references such as `@src/foo.ts`, committed prompt files, and
 `.ctrlyoke/scripts/**` still require the repository they operate on.
 
 The `.ctrlyoke/.gitignore` is editable. Delete its self-ignore line at the bottom before removing
-other entries, or the edit remains local. `settings.json` is tracked by default; the
-`server.certPath` and `server.keyPath` settings are machine-local paths.
+other entries. That deletion marks the file as user-owned, so ctrlyoke stops restoring generated
+defaults and the change can be committed. Managed-worktree landing permits runtime files you
+deliberately track, including prompts and attachments, but blocks non-ignored untracked runtime
+output. It always blocks `certs/`, `notifications/`, `temp/`, and `logs/`, even if tracked, because
+those directories can contain secrets or ephemeral transport data. `settings.json` is tracked by
+default; the `server.certPath` and `server.keyPath` settings are machine-local paths.
 
 ## Step
 

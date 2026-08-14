@@ -7,16 +7,24 @@ const GITIGNORE_HEADER = [
   "# ctrlyoke generated runtime entries are machine-local. Authored files in",
   "# templates/, scripts/, agents/, skills/, mcp/, and settings.json remain trackable.",
   "#",
-  "# This file ignores ITSELF (last line) so initializing ctrlyoke leaves your",
-  "# worktree clean. If you edit this file — e.g. to start tracking runs or",
-  "# attachments — DELETE the `.gitignore` line at the bottom first. Otherwise your",
-  "# changes stay on this machine and every other clone regenerates the defaults.",
+  "# This file ignores ITSELF (last line) so initialization leaves your worktree",
+  "# clean. Before editing it, DELETE that `.gitignore` line. Its absence marks",
+  "# this file as user-owned, and ctrlyoke will stop restoring removed defaults.",
+  "#",
+  "# Managed worktrees reject non-ignored untracked runtime files. They never land",
+  "# certs/, notifications/, temp/, or logs/, even when explicitly tracked.",
 ].join("\n");
 
+interface WorkspaceRuntimeEntryRule {
+  entry: string;
+  blockWhenTracked: boolean;
+}
+
 /**
- * Runtime entries written below `.ctrlyoke/`. Keep this exported: managed
- * finalization uses the exact same list to reject a repository whose ignore
- * rules failed to protect runtime state.
+ * Runtime entries written below `.ctrlyoke/`. Managed finalization rejects any
+ * non-ignored untracked path in this list. Entries marked `blockWhenTracked`
+ * are secrets or ephemeral transport artifacts and are rejected even when a
+ * user explicitly added them to Git.
  *
  * The rule is "ignore what ctrlyoke generates for itself; track what you
  * authored or explicitly exported" — which is why `templates/`, `scripts/`,
@@ -36,22 +44,31 @@ const GITIGNORE_HEADER = [
  *   creates it, so users never produce the directory. This repo ignores it from
  *   the root `.gitignore` because ctrlyoke develops itself. Do not "fix" that.
  *
- * `ensureGitignore` only ever appends missing entries — it never prunes — so an
- * entry added here is permanent for every existing workspace, and removing one
- * from this list does nothing for users who already have it. Add deliberately.
+ * While the generated self-ignore marker remains, `ensureGitignore` appends
+ * missing entries but never prunes. Removing that marker transfers ownership
+ * to the user, after which initialization leaves the file byte-for-byte alone.
+ * Add defaults deliberately because generated files retain old entries.
  */
-export const WORKSPACE_INITIALIZER_RUNTIME_ENTRIES = [
-  `${PATH_CONSTANTS.RUNS_DIR}/`,
-  `${PATH_CONSTANTS.SEARCH_INDEX_DIR}/`,
-  `${PATH_CONSTANTS.LOGS_DIR}/`,
-  `${PATH_CONSTANTS.TEMP_DIR}/`,
-  `${PATH_CONSTANTS.CERTS_DIR}/`,
-  `${PATH_CONSTANTS.NOTIFICATIONS_DIR}/`,
-  PATH_CONSTANTS.CAPABILITIES_FILE,
-  `${PATH_CONSTANTS.ATTACHMENTS_DIR}/`,
-  `${PATH_CONSTANTS.PROMPTS_DIR}/`,
-  `${PATH_CONSTANTS.USAGE_DIR}/`,
-] as const;
+const WORKSPACE_RUNTIME_ENTRY_RULES: readonly WorkspaceRuntimeEntryRule[] = [
+  { entry: `${PATH_CONSTANTS.RUNS_DIR}/`, blockWhenTracked: false },
+  { entry: `${PATH_CONSTANTS.SEARCH_INDEX_DIR}/`, blockWhenTracked: false },
+  { entry: `${PATH_CONSTANTS.LOGS_DIR}/`, blockWhenTracked: true },
+  { entry: `${PATH_CONSTANTS.TEMP_DIR}/`, blockWhenTracked: true },
+  { entry: `${PATH_CONSTANTS.CERTS_DIR}/`, blockWhenTracked: true },
+  { entry: `${PATH_CONSTANTS.NOTIFICATIONS_DIR}/`, blockWhenTracked: true },
+  { entry: PATH_CONSTANTS.CAPABILITIES_FILE, blockWhenTracked: false },
+  { entry: `${PATH_CONSTANTS.ATTACHMENTS_DIR}/`, blockWhenTracked: false },
+  { entry: `${PATH_CONSTANTS.PROMPTS_DIR}/`, blockWhenTracked: false },
+  { entry: `${PATH_CONSTANTS.USAGE_DIR}/`, blockWhenTracked: false },
+];
+
+export const WORKSPACE_INITIALIZER_RUNTIME_ENTRIES =
+  WORKSPACE_RUNTIME_ENTRY_RULES.map(({ entry }) => entry);
+
+const WORKSPACE_INITIALIZER_UNSAFE_ENTRIES =
+  WORKSPACE_RUNTIME_ENTRY_RULES.filter(
+    ({ blockWhenTracked }) => blockWhenTracked
+  ).map(({ entry }) => entry);
 
 const GITIGNORE_ENTRIES = WORKSPACE_INITIALIZER_RUNTIME_ENTRIES;
 
@@ -72,6 +89,30 @@ export function isWorkspaceInitializerRuntimePath(
   repositoryRelativePath: string,
   workspaceRelativeRoot = ""
 ): boolean {
+  return isWorkspaceInitializerEntryPath(
+    repositoryRelativePath,
+    workspaceRelativeRoot,
+    WORKSPACE_INITIALIZER_RUNTIME_ENTRIES
+  );
+}
+
+/** Return true for a path that managed landing must reject even when tracked. */
+export function isWorkspaceInitializerUnsafePath(
+  repositoryRelativePath: string,
+  workspaceRelativeRoot = ""
+): boolean {
+  return isWorkspaceInitializerEntryPath(
+    repositoryRelativePath,
+    workspaceRelativeRoot,
+    WORKSPACE_INITIALIZER_UNSAFE_ENTRIES
+  );
+}
+
+function isWorkspaceInitializerEntryPath(
+  repositoryRelativePath: string,
+  workspaceRelativeRoot: string,
+  entries: readonly string[]
+): boolean {
   const normalized = repositoryRelativePath.replace(/\\/g, "/");
   const normalizedWorkspaceRoot = workspaceRelativeRoot
     .replace(/\\/g, "/")
@@ -82,7 +123,7 @@ export function isWorkspaceInitializerRuntimePath(
     : `${PATH_CONSTANTS.CTRLYOKE_DIR}/`;
   if (!normalized.startsWith(ctrlyokePrefix)) return false;
   const ctrlyokeRelative = normalized.slice(ctrlyokePrefix.length);
-  return WORKSPACE_INITIALIZER_RUNTIME_ENTRIES.some((entry) => {
+  return entries.some((entry) => {
     if (entry.endsWith("/")) {
       return ctrlyokeRelative.startsWith(entry);
     }
@@ -143,8 +184,8 @@ export class WorkspaceInitializer {
 
   /**
    * Re-initialize workspace: ensures `.ctrlyoke/` and its .gitignore exist and
-   * that the .gitignore lists every generated entry.
-   * Does not overwrite existing files. Safe to call at any time.
+   * that a generated .gitignore lists every generated entry. A .gitignore
+   * without the generated self-ignore entry is user-owned and left untouched.
    */
   static async reinitialize(workspaceRoot: string): Promise<void> {
     await WorkspaceInitializer.initializeIfNeeded(workspaceRoot);
@@ -164,11 +205,12 @@ export class WorkspaceInitializer {
         .map((line) => line.trim())
         .filter((line) => line.length > 0)
     );
-    const missingEntries = [...GITIGNORE_ENTRIES, GITIGNORE_SELF_ENTRY].filter(
-      (line) => {
-        const entry = line.trim();
-        return entry.length > 0 && !currentEntries.has(entry);
-      }
+    if (!currentEntries.has(GITIGNORE_SELF_ENTRY)) {
+      return;
+    }
+
+    const missingEntries = GITIGNORE_ENTRIES.filter(
+      (entry) => !currentEntries.has(entry)
     );
 
     if (missingEntries.length === 0) {

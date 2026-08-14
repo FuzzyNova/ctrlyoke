@@ -962,8 +962,116 @@ suite("WorktreeManager", function () {
     );
   });
 
-  test("rejects nested execution-root runtime paths when its ignore file is absent", async () => {
-    const { parent, repository } = await makeRepository("managed-runtime-guard");
+  test("lands deliberately tracked prompts and attachments", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-tracked-assets"
+    );
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    const ctrlyokeRoot = path.join(info.worktreePath, ".ctrlyoke");
+    const trackedPaths = [
+      ".ctrlyoke/prompts/tracked.prompt.md",
+      ".ctrlyoke/attachments/tracked.txt",
+    ];
+    for (const relativePath of trackedPaths) {
+      const absolutePath = path.join(info.worktreePath, relativePath);
+      await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+      await fs.writeFile(absolutePath, "tracked\n");
+    }
+    execFileSync(
+      "git",
+      ["-C", info.worktreePath, "add", "-f", "--", ...trackedPaths],
+      { stdio: "ignore" }
+    );
+
+    const result = await instance.completeManagedRun(info, { keep: true });
+
+    assert.strictEqual(result.landingOutcome, "landed");
+    assert.strictEqual(result.directoryOutcome, "kept");
+    assert.deepStrictEqual(
+      execFileSync("git", ["-C", info.worktreePath, "ls-files", ".ctrlyoke"], {
+        encoding: "utf8",
+      })
+        .trim()
+        .split(/\r?\n/)
+        .sort(),
+      trackedPaths.map((trackedPath) => trackedPath.replace(/\\/g, "/")).sort()
+    );
+    assert.ok(await fs.stat(ctrlyokeRoot));
+  });
+
+  test("blocks unsafe runtime paths even when deliberately tracked", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-unsafe-runtime"
+    );
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    const unsafePaths = [
+      ".ctrlyoke/certs/server.key",
+      ".ctrlyoke/notifications/subscription.json",
+      ".ctrlyoke/temp/prompt.txt",
+      ".ctrlyoke/logs/session.log",
+    ];
+    for (const relativePath of unsafePaths) {
+      const absolutePath = path.join(info.worktreePath, relativePath);
+      await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+      await fs.writeFile(absolutePath, "unsafe\n");
+    }
+    execFileSync(
+      "git",
+      ["-C", info.worktreePath, "add", "-f", "--", ...unsafePaths],
+      { stdio: "ignore" }
+    );
+
+    const result = await instance.completeManagedRun(info);
+
+    assert.strictEqual(result.landingOutcome, "blocked");
+    assert.match(
+      result.message ?? "",
+      /unsafe or non-ignored untracked runtime paths/
+    );
+    for (const relativePath of unsafePaths) {
+      assert.match(
+        result.message ?? "",
+        new RegExp(path.basename(relativePath))
+      );
+    }
+    assert.ok(await fs.stat(info.worktreePath));
+  });
+
+  test("blocks untracked prompt output after .gitignore becomes user-owned", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-untracked-prompt"
+    );
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    const ctrlyokeRoot = path.join(info.worktreePath, ".ctrlyoke");
+    const gitignorePath = path.join(ctrlyokeRoot, ".gitignore");
+    const generatedGitignore = await fs.readFile(gitignorePath, "utf8");
+    await fs.writeFile(
+      gitignorePath,
+      generatedGitignore.replace("prompts/\n", "").replace(".gitignore\n", "")
+    );
+    const promptPath = path.join(
+      ctrlyokeRoot,
+      "prompts",
+      "untracked.prompt.md"
+    );
+    await fs.mkdir(path.dirname(promptPath), { recursive: true });
+    await fs.writeFile(promptPath, "untracked\n");
+
+    const result = await instance.completeManagedRun(info);
+
+    assert.strictEqual(result.landingOutcome, "blocked");
+    assert.match(result.message ?? "", /untracked runtime paths/);
+    assert.match(result.message ?? "", /untracked\.prompt\.md/);
+    assert.ok(await fs.stat(info.worktreePath));
+  });
+
+  test("rejects untracked nested execution-root runtime paths when its ignore file is absent", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-runtime-guard"
+    );
     const instance = manager(parent);
     const stateRoot = path.join(repository, "packages", "app");
     await fs.mkdir(stateRoot, { recursive: true });

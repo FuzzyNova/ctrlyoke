@@ -13,6 +13,7 @@ import {
   deleteLocalBranch,
   gitCommonDir,
   getGitTrackedAndUntrackedFiles,
+  getGitUntrackedFiles,
   hasGitOperationInProgress,
   hasUncommittedChanges,
   listWorktrees as listGitWorktrees,
@@ -48,6 +49,7 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
   WorkspaceInitializer,
   isWorkspaceInitializerRuntimePath,
+  isWorkspaceInitializerUnsafePath,
 } from "./WorkspaceInitializer";
 import { ScriptProcessRunner } from "./ScriptProcessRunner";
 import {
@@ -568,20 +570,30 @@ export class WorktreeManager {
           );
           if (!identity.ok) return blocked(identity.message);
 
-          const paths = await getGitTrackedAndUntrackedFiles(info.worktreePath);
+          const [paths, untrackedPaths] = await Promise.all([
+            getGitTrackedAndUntrackedFiles(info.worktreePath),
+            getGitUntrackedFiles(info.worktreePath),
+          ]);
+          const untrackedPathSet = new Set(untrackedPaths);
           const executionRootRelative = path.relative(
             info.executionWorkspace.executionCheckoutRoot ?? info.worktreePath,
             info.executionWorkspace.executionRoot
           );
-          const runtimePaths = paths.filter((repositoryRelativePath) =>
-            isWorkspaceInitializerRuntimePath(
-              repositoryRelativePath,
-              executionRootRelative
-            )
+          const blockedRuntimePaths = paths.filter(
+            (repositoryRelativePath) =>
+              (untrackedPathSet.has(repositoryRelativePath) &&
+                isWorkspaceInitializerRuntimePath(
+                  repositoryRelativePath,
+                  executionRootRelative
+                )) ||
+              isWorkspaceInitializerUnsafePath(
+                repositoryRelativePath,
+                executionRootRelative
+              )
           );
-          if (runtimePaths.length > 0) {
+          if (blockedRuntimePaths.length > 0) {
             return blocked(
-              `Managed landing would stage runtime paths: ${runtimePaths.join(", ")}`
+              `Managed landing is blocked by unsafe or non-ignored untracked runtime paths: ${blockedRuntimePaths.join(", ")}`
             );
           }
 
