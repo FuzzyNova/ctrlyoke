@@ -131,35 +131,66 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
   showBackToLive,
   onBackToLive,
 }) => {
+  const worktreeOutcome = worktree
+    ? formatWorktreeOutcome(worktree)
+    : undefined;
+
   return (
     <div
-      className={`flex items-center justify-between gap-2 px-3 py-1.5 text-[length:var(--fp-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border flex-shrink-0 ${
+      className={`flex flex-col gap-1 px-3 py-1.5 text-[length:var(--fp-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border flex-shrink-0 ${
         isPinned ? "sticky top-0 z-10" : ""
       }`}
     >
-      <span className="flex items-center gap-2 min-w-0">
-        <span className="truncate min-w-0">
-          Run {runId} &middot; {new Date(startedAt).toLocaleString()}
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="truncate min-w-0">
+            Run {runId} &middot; {new Date(startedAt).toLocaleString()}
+          </span>
+          <ExecutionStateBadge state={executionState} />
         </span>
-        <ExecutionStateBadge state={executionState} />
-        {worktree && (
-          <>
-            <span
-              className="truncate"
-              title={`Worktree branch: ${worktree.branchName}`}
+        <span className="flex items-center gap-2 flex-shrink-0">
+          {hasWorkflowTokenUsage(tokenTotals) && (
+            <WorkflowTokenUsage totals={tokenTotals} />
+          )}
+          {showBackToLive && onBackToLive && (
+            <button
+              type="button"
+              onClick={onBackToLive}
+              className="text-link-fg hover:underline focus:outline-none"
             >
-              {worktree.branchName}
+              Back to Live{" "}
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse align-middle" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onTogglePinned}
+            title={
+              isPinned ? "Unpin (scrolls with output)" : "Pin to top of output"
+            }
+            aria-label={isPinned ? "Unpin run summary" : "Pin run summary"}
+            aria-pressed={isPinned}
+            className="icon-btn py-0.5 px-1"
+          >
+            <i
+              className={`codicon ${isPinned ? "codicon-pinned" : "codicon-pin"}`}
+            />
+          </button>
+        </span>
+      </div>
+      {worktree && (
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <span
+            className="truncate min-w-0"
+            title={`Worktree branch: ${worktree.branchName}`}
+          >
+            {worktree.branchName}
+          </span>
+          {worktreeOutcome && (
+            <span className="whitespace-nowrap">
+              &middot; {worktreeOutcome}
             </span>
-            {formatWorktreeOutcome(worktree) && (
-              <span className="whitespace-nowrap">
-                &middot; {formatWorktreeOutcome(worktree)}
-              </span>
-            )}
-          </>
-        )}
-      </span>
-      <span className="flex items-center gap-2 flex-shrink-0">
-        {worktree && (
+          )}
           <span
             className="hidden sm:inline truncate max-w-72"
             title={`Worktree: ${worktree.worktreePath}`}
@@ -167,82 +198,55 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
             Worktree: {formatRelativeWorktreePath(worktree)}
             {formatDirectoryState(worktree)}
           </span>
-        )}
-        {worktree && worktree.baseCommit && worktree.branchName && (
-          <>
-            <button
-              type="button"
-              onClick={() =>
-                sendMessage(MESSAGE_TYPES.VIEW_WORKTREE_DIFF, {
-                  sourceCheckoutRoot: worktree.sourceCheckoutRoot,
-                  baseCommit: worktree.baseCommit,
-                  branchName: worktree.branchName,
-                })
-              }
-              title="View the recorded branch against its recorded base commit"
-              className="text-link-fg hover:underline focus:outline-none"
-            >
-              View Diff
-            </button>
-            {worktree.directoryState === "present" && (
+          {worktree.baseCommit && worktree.branchName && (
+            <>
               <button
                 type="button"
                 onClick={() =>
-                  sendMessage(MESSAGE_TYPES.OPEN_WORKTREE, {
-                    worktreePath: worktree.worktreePath,
+                  sendMessage(MESSAGE_TYPES.VIEW_WORKTREE_DIFF, {
+                    sourceCheckoutRoot: worktree.sourceCheckoutRoot,
+                    baseCommit: worktree.baseCommit,
+                    branchName: worktree.branchName,
                   })
                 }
-                title="Open the worktree in a new window"
+                title="View the recorded branch against its recorded base commit"
                 className="text-link-fg hover:underline focus:outline-none"
               >
-                Open Worktree in New Window
+                View Diff
               </button>
-            )}
-            {address &&
-              worktree.mode === "managed" &&
-              worktree.branchState === "present" &&
-              worktree.landingOutcome === "landed" && (
+              {worktree.directoryState === "present" && (
                 <button
                   type="button"
                   onClick={() =>
-                    sendMessage(MESSAGE_TYPES.MERGE_WORKTREE, { address })
+                    sendMessage(MESSAGE_TYPES.OPEN_WORKTREE, {
+                      worktreePath: worktree.worktreePath,
+                    })
                   }
-                  title="Merge the managed branch into the captured source checkout"
+                  title="Open the worktree in a new window"
                   className="text-link-fg hover:underline focus:outline-none"
                 >
-                  Merge
+                  Open Worktree in New Window
                 </button>
               )}
-          </>
-        )}
-        {hasWorkflowTokenUsage(tokenTotals) && (
-          <WorkflowTokenUsage totals={tokenTotals} />
-        )}
-        {showBackToLive && onBackToLive && (
-          <button
-            type="button"
-            onClick={onBackToLive}
-            className="text-link-fg hover:underline focus:outline-none"
-          >
-            Back to Live{" "}
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse align-middle" />
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={onTogglePinned}
-          title={
-            isPinned ? "Unpin (scrolls with output)" : "Pin to top of output"
-          }
-          aria-label={isPinned ? "Unpin run summary" : "Pin run summary"}
-          aria-pressed={isPinned}
-          className="icon-btn py-0.5 px-1"
-        >
-          <i
-            className={`codicon ${isPinned ? "codicon-pinned" : "codicon-pin"}`}
-          />
-        </button>
-      </span>
+              {address &&
+                worktree.mode === "managed" &&
+                worktree.branchState === "present" &&
+                worktree.landingOutcome === "landed" && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      sendMessage(MESSAGE_TYPES.MERGE_WORKTREE, { address })
+                    }
+                    title="Merge the managed branch into the captured source checkout"
+                    className="text-link-fg hover:underline focus:outline-none"
+                  >
+                    Merge
+                  </button>
+                )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 };

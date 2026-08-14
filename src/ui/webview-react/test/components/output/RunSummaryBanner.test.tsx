@@ -76,14 +76,20 @@ describe("RunSummaryBanner", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders the persisted branch, landing outcome, and source-relative worktree path", () => {
-    renderBanner({ worktree });
+  it("renders worktree details on their own row below the run summary", () => {
+    const { container } = renderBanner({ worktree });
 
     expect(screen.getByText("feature/historical")).toBeInTheDocument();
     expect(screen.getByText(/✓ branch ready — 12 files/)).toBeInTheDocument();
     expect(
       screen.getByText("Worktree: FlightPath.worktrees/feature-historical")
     ).toBeInTheDocument();
+
+    const banner = container.firstElementChild;
+    expect(banner?.children).toHaveLength(2);
+    expect(banner?.children[0]).toHaveTextContent(/Run 14/);
+    expect(banner?.children[0]).not.toHaveTextContent("feature/historical");
+    expect(banner?.children[1]).toHaveTextContent("feature/historical");
   });
 
   it.each([
