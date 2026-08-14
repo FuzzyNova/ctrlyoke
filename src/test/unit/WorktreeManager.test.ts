@@ -81,6 +81,36 @@ suite("WorktreeManager", function () {
     });
   }
 
+  function localBranchExists(repository: string, branchName: string): boolean {
+    try {
+      execFileSync(
+        "git",
+        ["-C", repository, "rev-parse", "--verify", `refs/heads/${branchName}`],
+        { stdio: "ignore" }
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function managedRecordFiles(repository: string): Promise<string[]> {
+    const commonDirectory = path.resolve(
+      repository,
+      execFileSync("git", ["-C", repository, "rev-parse", "--git-common-dir"], {
+        encoding: "utf8",
+      }).trim()
+    );
+    try {
+      return await fs.readdir(
+        path.join(commonDirectory, "ctrlyoke", "managed-worktrees")
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    }
+  }
+
   async function resolve(
     instance: WorktreeManager,
     repository: string,
@@ -624,7 +654,9 @@ suite("WorktreeManager", function () {
   });
 
   test("reruns setup when a managed append recreates a removed directory", async () => {
-    const { parent, repository } = await makeRepository("managed-setup-recreate");
+    const { parent, repository } = await makeRepository(
+      "managed-setup-recreate"
+    );
     const instance = manager(parent);
     const setup = `node -e "require('fs').appendFileSync('managed-setup-marker.txt', 'setup\\n')"`;
 
@@ -704,10 +736,172 @@ suite("WorktreeManager", function () {
     assert.ok(
       runtimePatches.some(
         (patch) =>
-          patch.lifecycleState === "blocked" &&
-          patch.setupOutcome === "failed"
+          patch.lifecycleState === "blocked" && patch.setupOutcome === "failed"
       )
     );
+  });
+
+  test("reclaims a blocked managed setup attempt on the next managed run", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-setup-reclaim"
+    );
+    const instance = manager(parent);
+    await assert.rejects(
+      ensureManaged(instance, repository, {
+        runRef: "run-1" as RunRef,
+        setup: `node -e "process.exit(7)"`,
+      }),
+      /Worktree setup failed/
+    );
+
+    const blocked = (await instance.listWorktrees(repository)).find(
+      (entry) => entry.worktreePath !== repository
+    );
+    assert.ok(blocked?.branchName);
+
+    const retried = await ensureManaged(instance, repository, {
+      runRef: "run-2" as RunRef,
+      setup: `node -e "require('fs').writeFileSync('retry-marker.txt', 'ok')"`,
+    });
+    assert.strictEqual(
+      (await instance.listWorktrees(repository)).some(
+        (entry) => entry.branchName === blocked!.branchName
+      ),
+      false
+    );
+    assert.strictEqual(
+      localBranchExists(repository, blocked!.branchName!),
+      false
+    );
+    assert.strictEqual(
+      await instance.readManagedWorktreeRecord(
+        repository,
+        blocked!.branchName!
+      ),
+      undefined
+    );
+    await retried.lease.release();
+  });
+
+  test("keeps a blocked managed branch whose watermark carries landed commits", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-setup-reclaim-landed"
+    );
+    const instance = manager(parent);
+    await assert.rejects(
+      ensureManaged(instance, repository, {
+        runRef: "run-1" as RunRef,
+        setup: `node -e "process.exit(7)"`,
+      }),
+      /Worktree setup failed/
+    );
+    const blocked = (await instance.listWorktrees(repository)).find(
+      (entry) => entry.worktreePath !== repository
+    );
+    assert.ok(blocked?.branchName);
+    await fs.writeFile(
+      path.join(blocked!.worktreePath, "landed.txt"),
+      "landed\n"
+    );
+    execFileSync("git", ["-C", blocked!.worktreePath, "add", "landed.txt"]);
+    execFileSync(
+      "git",
+      ["-C", blocked!.worktreePath, "commit", "-m", "landed"],
+      { stdio: "ignore" }
+    );
+    const landedTip = execFileSync(
+      "git",
+      ["-C", blocked!.worktreePath, "rev-parse", "HEAD"],
+      { encoding: "utf8" }
+    ).trim();
+    await instance.markManagedBranchTipVerified(
+      repository,
+      blocked!.branchName!,
+      landedTip
+    );
+
+    const retried = await ensureManaged(instance, repository, {
+      runRef: "run-2" as RunRef,
+    });
+    assert.strictEqual(
+      localBranchExists(repository, blocked!.branchName!),
+      true
+    );
+    const retainedRecord = await instance.readManagedWorktreeRecord(
+      repository,
+      blocked!.branchName!
+    );
+    assert.strictEqual(retainedRecord?.directoryState, "removed");
+    assert.strictEqual(retainedRecord?.branchState, "present");
+    await retried.lease.release();
+  });
+
+  test("leaves a blocked managed attempt alone while its worktree has a live lease", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-setup-reclaim-lease"
+    );
+    const instance = manager(parent);
+    await assert.rejects(
+      ensureManaged(instance, repository, {
+        runRef: "run-1" as RunRef,
+        setup: `node -e "process.exit(7)"`,
+      }),
+      /Worktree setup failed/
+    );
+    const blocked = (await instance.listWorktrees(repository)).find(
+      (entry) => entry.worktreePath !== repository
+    );
+    assert.ok(blocked?.branchName);
+    const liveLease = await ExecutionRootLeaseManager.acquire({
+      mode: "exclusive-worktree",
+      stateRoot: repository,
+      executionRoot: blocked!.worktreePath,
+      workflowKey: "live-blocked" as WorkflowKey,
+      runRef: "run-live" as RunRef,
+      runner: "vscode",
+      instanceId: "live-blocked-instance",
+    });
+    try {
+      const retried = await ensureManaged(instance, repository, {
+        runRef: "run-2" as RunRef,
+      });
+      assert.strictEqual(
+        (await instance.listWorktrees(repository)).some(
+          (entry) => entry.branchName === blocked!.branchName
+        ),
+        true
+      );
+      assert.strictEqual(
+        localBranchExists(repository, blocked!.branchName!),
+        true
+      );
+      assert.ok(
+        await instance.readManagedWorktreeRecord(
+          repository,
+          blocked!.branchName!
+        )
+      );
+      await retried.lease.release();
+    } finally {
+      await liveLease.release();
+    }
+  });
+
+  test("does not accumulate ownership records across repeated failed managed attempts", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-setup-reclaim-repeat"
+    );
+    const instance = manager(parent);
+    for (const runNumber of [1, 2, 3]) {
+      await assert.rejects(
+        ensureManaged(instance, repository, {
+          runRef: `run-${runNumber}` as RunRef,
+          setup: `node -e "process.exit(7)"`,
+        }),
+        /Worktree setup failed/
+      );
+      assert.strictEqual((await managedRecordFiles(repository)).length, 1);
+    }
   });
 
   test("reconciles missing managed directories as no-changes, landed, or orphaned", async () => {
@@ -853,7 +1047,10 @@ suite("WorktreeManager", function () {
     const { parent, repository } = await makeRepository("managed-complete");
     const instance = manager(parent);
     const info = await ensureManaged(instance, repository);
-    await fs.writeFile(path.join(info.worktreePath, "landed-by-ctrlyoke.txt"), "landed\n");
+    await fs.writeFile(
+      path.join(info.worktreePath, "landed-by-ctrlyoke.txt"),
+      "landed\n"
+    );
 
     const result = await instance.completeManagedRun(info);
 
@@ -863,13 +1060,25 @@ suite("WorktreeManager", function () {
     assert.strictEqual(result.branchName, info.branchName);
     assert.strictEqual(result.autoCommitted, true);
     assert.strictEqual(
-      (await instance.readManagedWorktreeRecord(repository, info.branchName))?.directoryState,
+      (await instance.readManagedWorktreeRecord(repository, info.branchName))
+        ?.directoryState,
       "removed"
     );
     assert.strictEqual(
-      execFileSync("git", ["-C", repository, "show", "--format=%s", "--no-patch", info.branchName], {
-        encoding: "utf8",
-      }).trim(),
+      execFileSync(
+        "git",
+        [
+          "-C",
+          repository,
+          "show",
+          "--format=%s",
+          "--no-patch",
+          info.branchName,
+        ],
+        {
+          encoding: "utf8",
+        }
+      ).trim(),
       'chore(ctrlyoke): auto-commit changes for "Managed Test Workflow"'
     );
   });
@@ -897,10 +1106,12 @@ suite("WorktreeManager", function () {
     assert.strictEqual(appendResult.directoryOutcome, "removed");
     assert.strictEqual(appendResult.branchState, "present");
     assert.strictEqual(
-      (await instance.readManagedWorktreeRecord(
-        repository,
-        appendInfo.branchName
-      ))?.finalBranchTip,
+      (
+        await instance.readManagedWorktreeRecord(
+          repository,
+          appendInfo.branchName
+        )
+      )?.finalBranchTip,
       execFileSync(
         "git",
         ["-C", repository, "rev-parse", appendInfo.branchName],
@@ -941,7 +1152,10 @@ suite("WorktreeManager", function () {
     const { parent, repository } = await makeRepository("merge-target-branch");
     const instance = manager(parent);
     const info = await ensureManaged(instance, repository);
-    await fs.writeFile(path.join(info.worktreePath, "managed.txt"), "managed\n");
+    await fs.writeFile(
+      path.join(info.worktreePath, "managed.txt"),
+      "managed\n"
+    );
     execFileSync("git", ["-C", repository, "checkout", "-b", "other"], {
       stdio: "ignore",
     });
@@ -960,7 +1174,10 @@ suite("WorktreeManager", function () {
     const instance = manager(parent);
     const info = await ensureManaged(instance, repository);
     assert.strictEqual(info.sourceCheckoutDirty, true);
-    await fs.writeFile(path.join(info.worktreePath, "managed.txt"), "managed\n");
+    await fs.writeFile(
+      path.join(info.worktreePath, "managed.txt"),
+      "managed\n"
+    );
 
     const result = await instance.completeManagedRun(info, { merge: true });
 
@@ -977,16 +1194,18 @@ suite("WorktreeManager", function () {
     const { parent, repository } = await makeRepository("merge-fast-forward");
     const instance = manager(parent);
     const info = await ensureManaged(instance, repository);
-    await fs.writeFile(path.join(info.worktreePath, "managed.txt"), "managed\n");
+    await fs.writeFile(
+      path.join(info.worktreePath, "managed.txt"),
+      "managed\n"
+    );
 
     const result = await instance.completeManagedRun(info, { merge: true });
 
     assert.strictEqual(result.mergeOutcome, "fast-forward");
     assert.strictEqual(
-      (await fs.readFile(path.join(repository, "managed.txt"), "utf8")).replaceAll(
-        "\r\n",
-        "\n"
-      ),
+      (
+        await fs.readFile(path.join(repository, "managed.txt"), "utf8")
+      ).replaceAll("\r\n", "\n"),
       "managed\n"
     );
   });
@@ -995,7 +1214,10 @@ suite("WorktreeManager", function () {
     const { parent, repository } = await makeRepository("merge-commit");
     const instance = manager(parent);
     const info = await ensureManaged(instance, repository);
-    await fs.writeFile(path.join(info.worktreePath, "managed.txt"), "managed\n");
+    await fs.writeFile(
+      path.join(info.worktreePath, "managed.txt"),
+      "managed\n"
+    );
     await fs.writeFile(path.join(repository, "source.txt"), "source\n");
     execFileSync("git", ["-C", repository, "add", "source.txt"]);
     execFileSync("git", ["-C", repository, "commit", "-m", "source change"], {
@@ -1006,9 +1228,15 @@ suite("WorktreeManager", function () {
 
     assert.strictEqual(result.mergeOutcome, "merge-commit");
     assert.strictEqual(
-      execFileSync("git", ["-C", repository, "show", "-s", "--format=%P", "HEAD"], {
-        encoding: "utf8",
-      }).trim().split(/\s+/).length,
+      execFileSync(
+        "git",
+        ["-C", repository, "show", "-s", "--format=%P", "HEAD"],
+        {
+          encoding: "utf8",
+        }
+      )
+        .trim()
+        .split(/\s+/).length,
       2
     );
   });
@@ -1072,7 +1300,10 @@ suite("WorktreeManager", function () {
     const { parent, repository } = await makeRepository("merge-lease-conflict");
     const instance = manager(parent);
     const info = await ensureManaged(instance, repository);
-    await fs.writeFile(path.join(info.worktreePath, "managed.txt"), "managed\n");
+    await fs.writeFile(
+      path.join(info.worktreePath, "managed.txt"),
+      "managed\n"
+    );
     const sourceLease = await ExecutionRootLeaseManager.acquire({
       mode: "exclusive-worktree",
       stateRoot: repository,
@@ -1094,13 +1325,18 @@ suite("WorktreeManager", function () {
   });
 
   test("refuses merge for a managed worktree captured from a detached source checkout", async () => {
-    const { parent, repository } = await makeRepository("merge-detached-source");
+    const { parent, repository } = await makeRepository(
+      "merge-detached-source"
+    );
     execFileSync("git", ["-C", repository, "checkout", "--detach"], {
       stdio: "ignore",
     });
     const instance = manager(parent);
     const info = await ensureManaged(instance, repository);
-    await fs.writeFile(path.join(info.worktreePath, "managed.txt"), "managed\n");
+    await fs.writeFile(
+      path.join(info.worktreePath, "managed.txt"),
+      "managed\n"
+    );
 
     const result = await instance.completeManagedRun(info, { merge: true });
 
@@ -1160,20 +1396,34 @@ suite("WorktreeManager", function () {
     execFileSync("git", ["-C", info.worktreePath, "checkout", "--detach"], {
       stdio: "ignore",
     });
-    await fs.writeFile(path.join(info.worktreePath, "must-remain.txt"), "safe\n");
+    await fs.writeFile(
+      path.join(info.worktreePath, "must-remain.txt"),
+      "safe\n"
+    );
 
     const result = await instance.completeManagedRun(info);
 
     assert.strictEqual(result.landingOutcome, "blocked");
     assert.strictEqual(result.directoryOutcome, "kept");
-    assert.strictEqual(await fs.readFile(path.join(info.worktreePath, "must-remain.txt"), "utf8"), "safe\n");
+    assert.strictEqual(
+      await fs.readFile(
+        path.join(info.worktreePath, "must-remain.txt"),
+        "utf8"
+      ),
+      "safe\n"
+    );
   });
 
   test("blocks strict cleanup failure without touching the managed checkout", async () => {
-    const { parent, repository } = await makeRepository("managed-cleanup-block");
+    const { parent, repository } = await makeRepository(
+      "managed-cleanup-block"
+    );
     const instance = manager(parent);
     const info = await ensureManaged(instance, repository);
-    await fs.writeFile(path.join(info.worktreePath, "must-remain.txt"), "safe\n");
+    await fs.writeFile(
+      path.join(info.worktreePath, "must-remain.txt"),
+      "safe\n"
+    );
 
     const result = await instance.completeManagedRun(info, {
       artifactsClean: false,

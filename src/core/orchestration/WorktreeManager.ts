@@ -114,6 +114,8 @@ export interface ManagedWorktreeOwnershipRecord {
   branchState: "present" | "deleted" | "missing";
   recoveryOutcome?: ManagedWorktreeRecoveryOutcome;
   finalBranchTip?: string;
+  /** A failed managed setup is eligible for deferred cleanup on re-run. */
+  setupOutcome?: "succeeded" | "failed";
 }
 
 export interface NamedWorktreeSetupRecord {
@@ -651,7 +653,9 @@ export class WorktreeManager {
           if (changed) {
             await commitAll(
               info.worktreePath,
-              buildManagedAutoCommitMessage(info.workflowName ?? info.branchName)
+              buildManagedAutoCommitMessage(
+                info.workflowName ?? info.branchName
+              )
             );
           }
 
@@ -1153,7 +1157,13 @@ export class WorktreeManager {
       await this.requireCommonDirectory(sourceCheckoutRoot);
 
     return withRepositoryWorktreeMutationLock(sourceCheckoutRoot, async () => {
-      const records = await this.readRecords(commonDirectory);
+      let records = await this.readRecords(commonDirectory);
+      await this.reconcileBlockedManagedWorktrees(
+        sourceCheckoutRoot,
+        commonDirectory,
+        records
+      );
+      records = await this.readRecords(commonDirectory);
       const existingRecord = records.find(
         (record) =>
           pathsEqual(record.sourceCheckoutRoot, sourceCheckoutRoot) &&
@@ -1310,6 +1320,7 @@ export class WorktreeManager {
 
       return this.acquireManagedInfo({
         record: updatedRecord,
+        recordPath,
         repositoryInputs,
         origin,
         // The observed addWorktree call is authoritative: it proves this
@@ -1336,7 +1347,13 @@ export class WorktreeManager {
     const commonDirectory =
       await this.requireCommonDirectory(sourceCheckoutRoot);
     return withRepositoryWorktreeMutationLock(sourceCheckoutRoot, async () => {
-      const records = await this.readRecords(commonDirectory);
+      let records = await this.readRecords(commonDirectory);
+      await this.reconcileBlockedManagedWorktrees(
+        sourceCheckoutRoot,
+        commonDirectory,
+        records
+      );
+      records = await this.readRecords(commonDirectory);
       const record = records.find(
         (candidate) =>
           pathsEqual(candidate.sourceCheckoutRoot, sourceCheckoutRoot) &&
@@ -1413,6 +1430,7 @@ export class WorktreeManager {
           branchState: "present",
           lifecycleState: "ready",
         },
+        recordPath,
         repositoryInputs: await this.resolveExecutionInputs(
           sourceCheckoutRoot,
           this.recoveryAsResolveOptions(record, options)
@@ -2257,6 +2275,9 @@ export class WorktreeManager {
           typeof parsed.workflowKey !== "string" ||
           typeof parsed.runRef !== "string" ||
           typeof parsed.createdAt !== "number" ||
+          (parsed.setupOutcome !== undefined &&
+            parsed.setupOutcome !== "succeeded" &&
+            parsed.setupOutcome !== "failed") ||
           !parsed.lifecycleState ||
           !parsed.directoryState ||
           !parsed.branchState
@@ -2400,6 +2421,112 @@ export class WorktreeManager {
     };
   }
 
+  /**
+   * Reclaim failed managed setup attempts when a managed run is retried or a
+   * durable record is explicitly recovered. The failed checkout remains
+   * inspectable until that trigger, but it must not become permanent state.
+   *
+   * This method is called while the repository mutation lock is held. It only
+   * considers records that explicitly identify a failed setup, checks the
+   * worktree lease before removal, and unlinks the ownership record last.
+   */
+  private async reconcileBlockedManagedWorktrees(
+    repositoryRoot: string,
+    commonDirectory: string,
+    records: readonly ManagedWorktreeOwnershipRecord[]
+  ): Promise<void> {
+    const candidates = records.filter(
+      (record) =>
+        pathsEqual(record.sourceCheckoutRoot, repositoryRoot) &&
+        record.lifecycleState === "blocked" &&
+        record.setupOutcome === "failed"
+    );
+    if (candidates.length === 0) return;
+
+    let entries = await listGitWorktrees(repositoryRoot);
+    for (const record of candidates) {
+      const liveLease = (
+        await ExecutionRootLeaseManager.inspectLeases(record.worktreePath)
+      ).some((inspection) => !inspection.stale);
+      if (liveLease) continue;
+
+      const entry = entries.find(
+        (candidate) =>
+          candidate.branchName === record.branchName &&
+          pathsEqual(candidate.worktreePath, record.worktreePath)
+      );
+      const unexpectedEntry = entries.find(
+        (candidate) => candidate.branchName === record.branchName
+      );
+      if (unexpectedEntry && !entry) continue;
+
+      if (entry) {
+        try {
+          // A failed setup may have left ignored or untracked output behind.
+          // The ownership record and the absence of a live lease authorize
+          // removing this managed checkout on the retry/recovery trigger.
+          await removeWorktree(repositoryRoot, record.worktreePath, true);
+        } catch {
+          continue;
+        }
+        entries = await listGitWorktrees(repositoryRoot);
+        if (
+          entries.some(
+            (candidate) => candidate.branchName === record.branchName
+          )
+        ) {
+          continue;
+        }
+      } else if (await this.pathExists(record.worktreePath)) {
+        // A directory without its matching Git admin entry needs explicit
+        // repair; never remove an ambiguous path during reconciliation.
+        continue;
+      }
+
+      const branchTip = await this.tryResolveLocalBranch(
+        repositoryRoot,
+        record.branchName
+      );
+      let branchState: ManagedWorktreeOwnershipRecord["branchState"] =
+        "missing";
+      if (branchTip) {
+        // A changed watermark is evidence that ctrlyoke landed or otherwise
+        // verified commits on this branch. Keep it even though setup failed.
+        const branchIsUntouched =
+          branchTip === record.lastVerifiedBranchTip &&
+          getManagedWorktreeWatermark(record) === record.baseCommit;
+        if (branchIsUntouched) {
+          try {
+            await deleteLocalBranch(repositoryRoot, record.branchName);
+            branchState = "deleted";
+          } catch {
+            branchState = "present";
+          }
+        } else {
+          branchState = "present";
+        }
+      }
+
+      const recordPath = this.recordPath(commonDirectory, record.branchName);
+      const reconciledRecord: ManagedWorktreeOwnershipRecord = {
+        ...record,
+        lifecycleState: "settled",
+        directoryState: "removed",
+        branchState,
+      };
+      await this.writeRecord(recordPath, reconciledRecord);
+
+      if (branchState === "deleted" || branchState === "missing") {
+        // Keep the record as a tombstone until both independently-owned
+        // resources have been observed gone. A crash before this unlink is
+        // therefore safe to reconcile again.
+        await fs.unlink(recordPath).catch((error: unknown) => {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        });
+      }
+    }
+  }
+
   private async buildManagedInfoWithoutLease(
     record: ManagedWorktreeOwnershipRecord,
     options: RecoverManagedWorktreeOptions,
@@ -2438,6 +2565,7 @@ export class WorktreeManager {
 
   private async acquireManagedInfo(args: {
     record: ManagedWorktreeOwnershipRecord;
+    recordPath: string;
     repositoryInputs: ResolvedRepositoryInputs;
     origin: WorktreeOrigin;
     directoryRecreated: boolean;
@@ -2501,6 +2629,13 @@ export class WorktreeManager {
         setupOutcome = "succeeded";
       } catch (error) {
         setupOutcome = "failed";
+        await this.writeRecord(args.recordPath, {
+          ...args.record,
+          lifecycleState: "blocked",
+          directoryState: "present",
+          branchState: "present",
+          setupOutcome,
+        });
         await this.persistRuntime({
           lifecycleState: "blocked",
           directoryState: "present",
@@ -2516,6 +2651,18 @@ export class WorktreeManager {
         throw new WorktreeSetupError(args.record.worktreePath, error);
       }
     }
+    const readyRecord: ManagedWorktreeOwnershipRecord = {
+      ...args.record,
+      lifecycleState: "ready",
+      directoryState: "present",
+      branchState: "present",
+    };
+    if (setupOutcome === "succeeded" || setupOutcome === "failed") {
+      readyRecord.setupOutcome = setupOutcome;
+    } else {
+      delete readyRecord.setupOutcome;
+    }
+    await this.writeRecord(args.recordPath, readyRecord);
     const dirty = await hasUncommittedChanges(args.record.worktreePath);
     const info: ActiveWorktreeInfo = {
       mode: "managed",

@@ -1,8 +1,8 @@
-# Managed Worktree — Append-Continuation Bugs
+# Managed Worktree — Append-Continuation Bugs (Completed)
 
-> **Status:** Backlog / diagnosis. Five defects, found by tracing "append a
-> prompt to a completed workflow running on a managed worktree." Bugs 2 and 3
-> are fixed; the remaining defects are confirmed by code reading.
+> **Status:** Completed implementation record. The append-continuation and
+> failed-setup defects below were traced, fixed, or deliberately dropped after
+> the five implementation steps described here.
 >
 > | # | Bug | Severity | Status |
 > | - | --- | -------- | ------ |
@@ -15,7 +15,8 @@
 >
 > Bugs 1–3 are the "follow up on a landed managed run" case. Bugs 4–6 are the
 > separate "recover from a failed setup" case; see *Recovery: re-run, not a
-> button* below for why 4 and 5 should probably be dropped in favor of fixing 6.
+> button* below for why 4 and 5 were dropped in favor of fixing 6 and cleaning
+> up failed managed attempts.
 >
 > Only bites workflows that opted into managed mode —
 > `defaults.worktree.mode` is `WORKTREE_MODES.NONE` (`CtrlYokeSettings.ts:334`).
@@ -147,8 +148,9 @@ after pending or running leaves a state that the next Run re-provisions.
 
 ## Recovery: re-run, not a button
 
-Whether Bugs 4 and 5 are worth fixing as specified depends on whether an
-explicit Retry Setup action earns its place. It probably does not.
+The recovery decision is to keep re-run as the only user gesture and reconcile
+failed managed attempts when that gesture, or explicit recovery, next reaches
+the existing managed-worktree machinery.
 
 **Managed already recovers by re-running.** A plain re-run promotes a new run →
 new `runRef` → new branch name and directory path → no ownership record →
@@ -177,10 +179,11 @@ bounded deliberately. If an affordance is ever wanted, it belongs on the
 worktree status surface beside the blocked state, as a dashboard action rather
 than a correlated interaction request.
 
-**Recommendation:** fix Bug 6, drop Bugs 4 and 5 as specified, and delete
+**Decision:** Bug 6 is fixed; Bugs 4 and 5 are dropped; and delete
 `WorktreeManager.retrySetup()` / `WorkflowInstance.retryWorktreeSetup()` as dead
 code rather than wiring them up. Separately, clean up blocked managed worktrees
-so failed attempts stop accumulating.
+so failed attempts stop accumulating. The deferred cleanup rationale and
+invariants are recorded in the Step 5 decision above.
 
 ---
 
@@ -296,7 +299,7 @@ updates this document's status table as it goes.
 | 2 | Re-provision managed worktrees whose directory was recreated | 1 | complete |
 | 3 | `WORKTREE_MODE_HELP_TEXT` / `WORKTREE_KEEP_HELP_TEXT` + schema copy | — | complete |
 | 4 | Durable per-worktree named setup state; delete Retry Setup | 6, 4, 5 | complete |
-| 5 | Clean up blocked managed attempts so they stop accumulating | — | not started |
+| 5 | Clean up blocked managed attempts so they stop accumulating | — | complete |
 
 Sequencing constraints that are not arbitrary:
 
@@ -312,8 +315,22 @@ not the branch: a branch can be detached and reattached at another path, while
 the setup state belongs to the directory that was provisioned. The existing
 hashed record-path, JSON read/validation, and atomic write helpers are shared
 with managed ownership records; the named store has its own schema version so
-its records cannot be mistaken for ownership records. Step 5's cleanup decision
-remains open for its own implementation.
+its records cannot be mistaken for ownership records.
+
+Step 5's cleanup decision is deferred reconciliation through the existing
+managed-worktree recovery path. Setup failure is recorded durably on the
+ownership record as `lifecycleState: "blocked"` plus `setupOutcome: "failed"`.
+The next managed re-run or explicit recovery removes that owned checkout under
+the repository mutation lock, but leaves it available for inspection until
+that trigger. Cleanup requires no live execution lease, removes only a path
+and branch covered by the ownership record, deletes a branch only when its
+watermark is still the original base, and writes the reconciled tombstone
+before unlinking the record. A changed watermark therefore preserves a branch
+that carries a ctrlyoke-landed commit, while a crash midway through cleanup
+leaves a record that can be reconciled again. This extends the existing
+reconciliation machinery instead of adding an eager failure-only cleanup path;
+it preserves useful setup diagnostics without allowing failed attempts to
+accumulate after the user retries.
 
 ## Testing
 
