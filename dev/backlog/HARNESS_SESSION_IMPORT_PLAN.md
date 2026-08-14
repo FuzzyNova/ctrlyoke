@@ -1,10 +1,16 @@
 # Harness Session Import Plan
 
+> **Status:** Proposed — not implemented. Grounding re-verified 2026-08-14; the
+> citations below match current code. Two earlier assumptions were wrong and have
+> been corrected in place: the run-storage path (`.ctrlyoke/.history/…` never
+> existed under that name) and the relationship to terminal follow-up tracking,
+> which shipped without the shared primitive this plan assumed it would share.
+
 ## Overview
 
 Add the ability to **import a native harness session** (a Claude / Copilot / Codex /
-Gemini / Qwen / OpenCode session recorded outside ctrlyoke) into ctrlyoke's history so
-it becomes a first-class, searchable, browsable workflow with full undo/redo fidelity.
+OpenCode / Qwen / Antigravity session recorded outside ctrlyoke) into ctrlyoke's history
+so it becomes a first-class, searchable, browsable workflow with full undo/redo fidelity.
 
 Concretely: a new **"Import from harness session…"** entry in
 `WorkflowControls.tsx` opens a picker listing sessions found in each harness's native
@@ -13,17 +19,27 @@ into turns, and materializes:
 
 - **one new workflow file** (`<name>.ctrlyoke.json`) whose steps are the user prompts
   from that session, and
-- **one new run history** (`.ctrlyoke/.history/<workflow-id>/run-<ts>/` with
-  `manifest.json` + `events.jsonl`) whose `cliOutputRecorded` events reproduce the
+- **one new run** in ctrlyoke's run storage (`<runsRoot>/<workflowKey>/run-<timestamp>/`
+  with `manifest.json` + `events.jsonl`) whose `cliOutputRecorded` events reproduce the
   session's prompts, responses, tool calls, thinking, and token stats.
+
+Never construct that path by hand: `src/utils/WorkflowPaths.ts` is the only module
+allowed to build it, and `USER_SCOPED_RUN_HISTORY_PLAN.md` relocates `runsRoot()` out of
+the workspace entirely — code that goes through `WorkflowPaths` follows that move for
+free, code that string-joins `.ctrlyoke` does not.
 
 The result opens in the dashboard exactly like a workflow ctrlyoke ran itself — same
 `OutputPane` rendering, same minimap, same undo/redo affordances.
 
-This is the "import" half of the full-fidelity-history goal. The "live capture" half —
-watching a still-open TUI for prompts the user types directly — is
-`../implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`. **The two share one new core primitive: turn
-segmentation of a session log.** See [Relationship](#relationship-to-terminal-follow-up-tracking).
+Two sibling plans share this one's machinery:
+
+- `../implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md` — the "live capture" half. It has
+  **shipped**, and it did _not_ build the turn-segmentation primitive an earlier draft of
+  this plan assumed the two would share. See
+  [Relationship](#relationship-to-terminal-follow-up-tracking).
+- `RUN_EXPORT_PLAN.md` — imports a **ctrlyoke run bundle** rather than a native session
+  log, and materializes it through the same final step. That plan proposes factoring the
+  materializer out as `RunMaterializer` with two sources; build it once.
 
 ---
 
@@ -36,7 +52,7 @@ segmentation of a session log.** See [Relationship](#relationship-to-terminal-fo
 | Structured per-event streaming                                           | `ILogParser.extractStructuredEventsFromEvent`                                                                                                                                                                                                                      | ✅ reuse per-turn                                                               |
 | Session-id extraction, completion detection, stats formatting            | `extractSessionId`, `isComplete`, `formatStatistics`                                                                                                                                                                                                               | ✅ reuse                                                                        |
 | Session-log discovery by prompt/sessionId                                | `discoverSessionLog`                                                                                                                                                                                                                                               | ➖ related, but keyed off a known prompt — not an enumerator                    |
-| Parser instance per harness                                              | `ICliProvider.logParser` (`src/core/harness/shared/interfaces/ICliProvider.ts:103`)                                                                                                                                                                                | ✅ the harness→parser map already exists                                        |
+| Parser instance per harness                                              | `ICliProvider.logParser` (`src/core/harness/shared/interfaces/ICliProvider.ts:123`)                                                                                                                                                                                | ✅ the harness→parser map already exists                                        |
 | Native log dir per harness (private)                                     | e.g. `ClaudeLogParser` `~/.claude/projects/<project>/<session>.jsonl` + `sessions-index.json`; Copilot `~/.copilot/session-state/<session>/events.jsonl`; Codex `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` (see `dev/research/CLI_LOG_FILES_INVESTIGATION.md`) | ➖ each parser knows its dir internally; there is no public "list sessions" API |
 | Run-history storage: `manifest.json` + `events.jsonl`                    | `TimelineRecorder`, `OutputHistoryManager`                                                                                                                                                                                                                         | ✅ reuse — write path is already public                                         |
 | History event holding a turn                                             | `TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED` → payload `{ cliOutput: CliOutput }` targeting an `OutputExecutionTarget` (`{ kind: queue, stepIndex }`)                                                                                                                | ✅ this is the import target shape                                              |
@@ -93,7 +109,9 @@ interface ILogParser {
   inspection at `ClaudeLogParser.ts:241`). Tool-result `user` events are excluded.
 - **Copilot**: human prompt = `user.message` events (per
   `CLI_LOG_FILES_INVESTIGATION.md`), excluding tool-execution traffic.
-- **Codex / Gemini / Qwen / OpenCode**: analogous, using each format's user-message event.
+- **Codex / Qwen / OpenCode / Antigravity**: analogous, using each format's user-message
+  event. `OpenCodeLogParser.ts:576` already classifies candidate user-steer events and is
+  the natural place for that harness's implementation.
 - Per turn, response content comes from the **existing** `extractResponse(turn.events)`
   — no new extraction logic, just a narrower event slice. Same for
   `extractStructuredEventsFromEvent` if we want per-event granularity, and
@@ -170,10 +188,15 @@ A small backend service — `HarnessSessionImportService` (in `src/core/orchestr
    watcher picks it up like any other workflow. Mark provenance in a workflow-level
    field (e.g. `importedFrom: { harnessId, sessionId, logPath, importedAtMs }`) — add to
    the schema and `CtrlYokeTypes`.
-4. **Materialize one run.** Via `OutputHistoryManager`:
-   - `workflowId = OutputHistoryManager.extractWorkflowId(workflowFilePath)`
-   - `initializeRun(workflowId)` → `historyFilePath` (creates
-     `run-<ts>/manifest.json` + empty `events.jsonl`).
+4. **Materialize one run.** Via `OutputHistoryManager`. Note the run **directory** is
+   allocated first and history is seeded into it — `initializeRunAt` does not create the
+   run, it populates one (`OutputHistoryManager.ts:243-289`):
+   - Allocate the lineage and run through the normal path
+     (`WorkflowLineageRepository.allocateRun` via `WorkingFileManager.promoteToNewRun`),
+     yielding `{ workflowKey, runRef, runDir, runId }`.
+   - `initializeRunAt(workflowKey, runRef, runDir, runId, startedAt, [], initialDefinition)`
+     → `{ filePath, runCount }`; `filePath` is the `historyFilePath` below. Pass the
+     session's original start time as `startedAt` (see step 5).
    - For each turn `i`: - `universal = parser.extractResponse(turn.events)` - Map `universal → CliOutput` (`prompt`, `response`, `structured`, `elapsed`,
      `tokens`, `timestampMs = turn.startedAtMs`, `workingDirectory =
 summary.projectPath`, `runIndex: 0`, `attemptIndex: 0`). Reuse the **same**
@@ -181,15 +204,24 @@ summary.projectPath`, `runIndex: 0`, `attemptIndex: 0`). Reuse the **same**
      it isn't already a shared helper). - `saveExecutionOutput(historyFilePath, { kind: queue, stepIndex: i }, [cliOutput])`
      → appends a `cliOutputRecorded` event.
    - `finalizeRun(historyFilePath, EXECUTION_STATES.COMPLETED, turns.length)`.
-5. **Timestamps.** Because history uses real `timestampMs`/`startedAt`, and
-   `run-<ts>` directory names encode the start time, the imported run should be stamped
-   with the **session's original** times, not now — so an imported run sorts into
-   history where it actually happened. Pass the session start time through
-   `TimelineRecorder.initializeRun`'s `startedAt` (already a parameter) rather than
-   `Date.now()`.
+5. **Timestamps.** Because history uses real `timestampMs`/`startedAt`, and the
+   `run-<timestamp>` directory name encodes the start time (`WorkflowPaths.formatRunRef`),
+   the imported run should be stamped with the **session's original** times, not now — so
+   an imported run sorts into history where it actually happened. Pass the session start
+   time as `initializeRunAt`'s `startedAt` (already a parameter) rather than `Date.now()`.
+   The `runRef` must be derived from the same timestamp or the directory name and the
+   manifest disagree.
+6. **Close the run.** `finalizeRun(historyFilePath, EXECUTION_STATES.COMPLETED,
+turns.length)` (`OutputHistoryManager.ts:751-756`); pass `activeExecutionMs` when the
+   log gives enough information to compute it.
 
 No new storage format: an imported run is byte-compatible with a ctrlyoke-run one, so
 `OutputPane`, the minimap, search indexing, and undo/redo work with zero UI changes.
+
+**Factor this step out.** `RUN_EXPORT_PLAN.md` needs the identical "allocate → seed →
+append events → finalize" sequence with a different front end. Extract it as a
+`RunMaterializer` taking already-shaped events, and let both the session importer and the
+bundle importer call it. Built separately, the two will diverge.
 
 ### Undo/redo for imports — what actually works
 
@@ -235,23 +267,29 @@ diffs. Do NOT globally disable undo.** Two follow-on decisions:
 
 ### Undo target must clamp to the _open_ workspace (security)
 
-The apply-undo guard in `WorkspaceSnapshotService.ts:774-795` resolves the target as
-`path.resolve(workspacePath, instruction.path)` and rejects anything **outside
-`workspacePath`** as "Path traversal detected — skipping". Critically, `workspacePath`
-comes from the **CliOutput's `workingDirectory`**, not the currently-open VS Code
-workspace (`useOutputUndoActions.ts:95`).
+The apply-undo guard is `WorkspaceSnapshotService.undoFiles(files, workspacePath,
+namedRoots?)` (`WorkspaceSnapshotService.ts:1016-1058`). It resolves each instruction with
+`resolveNamedRelativePath` and rejects anything not inside its trusted-root set —
+`workspacePath` plus every named root — as "Path traversal detected — skipping", using
+the shared `isPathWithinDirectory` helper (`src/utils/PathSecurity.ts`).
 
-That matters for cross-workspace imports (next section): if we stamp imported outputs
-with the session's **original** absolute `workingDirectory`, the guard would happily
-write undo edits back into that _foreign_ directory on disk, because those paths are
-"inside" the declared `workingDirectory`. That silently escapes the open workspace.
+The hazard is **where `workspacePath` comes from**: the webview still derives it from an
+output's recorded `workingDirectory` (`useOutputUndoActions.ts:273-275`). So the guard is
+only as trustworthy as that recorded value. If we stamp imported outputs with the
+session's **original** absolute `workingDirectory`, the guard would happily write undo
+edits into that _foreign_ directory, because those paths are genuinely "inside" the
+declared root. That silently escapes the open workspace.
 
-**Fix:** the undo-apply path must additionally verify the resolved target is inside the
-**currently open workspace** (`getVsCodeWorkspaceRoot()`, using the existing `isPathInside`
-helper at `WebviewMessageRouter.ts:2050`) — not only inside the output's recorded
-`workingDirectory`. Files outside it render their diff read-only with the apply button
-disabled (or route through the existing `ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md` mechanism if
-the user opts in).
+**Fix:** the undo-apply path must verify the resolved target against the **currently open
+workspace** — `getVsCodeWorkspaceRoot()` and its named roots, resolved extension-side —
+not against a root derived from recorded output. Files outside it render their diff
+read-only with the apply button disabled (or route through the existing
+`ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md` mechanism if the user opts in).
+
+`RUN_EXPORT_PLAN.md` §6 raises the same issue one severity higher: for an imported run
+bundle, `workingDirectory` is not merely foreign but attacker-chosen, so that plan
+requires recomputing it on materialization rather than trusting it. Doing that here too
+makes the guard's input trustworthy for both sources.
 
 ---
 
@@ -302,25 +340,39 @@ core/ext/webview per project conventions), not duplicated in the webview.
 
 ## Relationship to Terminal Follow-up Tracking
 
-`../implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md` watches a **live** session log and needs to detect
-"a new human turn just appeared." This plan parses a **completed** log and needs "split
-all human turns." Both are the same boundary problem:
+**This section was written before the follow-up tracker shipped, and its central claim no
+longer holds.** `../implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md` is **implemented** (for
+Claude, Copilot, and Antigravity), and it solved a narrower problem with a different
+architecture: `SessionActivityWatcher` keeps the shared provider log reader alive after a
+prompt monitor resolves, and `CliLogMonitor` holds completion while
+`BackgroundFollowUpState` (`src/core/harness/shared/BackgroundFollowUpState.ts`) tracks
+background-task identities and a resumed-turn latch. It detects _"is this prompt really
+finished?"_, not _"where does each human turn begin?"_
 
-|           | Session Import (this plan)                | Terminal Follow-up Tracking                |
-| --------- | ----------------------------------------- | ------------------------------------------ |
-| Input     | a finished session log, read once         | a live-growing session log, tailed         |
-| Core need | `segmentSessionTurns` over all events     | `isHumanPromptEvent` at the current offset |
-| Output    | N `cliOutputRecorded` events in a new run | 1 observed turn appended to the live run   |
+Verified 2026-08-14: `segmentSessionTurns`, `isHumanPromptEvent`, `SessionTurn`, and
+`listNativeSessions` appear nowhere in `src/`. **Both primitives are still unbuilt, and
+this plan is now their only consumer.** Two consequences:
 
-**Build `isHumanPromptEvent` + `segmentSessionTurns` once, in the parser layer.** The
-follow-up tracker consumes `isHumanPromptEvent` incrementally as new lines arrive; the
-importer consumes `segmentSessionTurns` in bulk. Doing the import first is a good forcing
-function: it validates per-harness human-prompt detection against real historical logs
-before the live tracker depends on it.
+- The old "build it once, and doing import first de-risks the live tracker" framing is
+  obsolete. There is no second consumer waiting; phase 1 is justified by import alone.
+- The nearest existing work is **user-steer classification**, which the shipped pump
+  already owns (`CliLogEventPump.ts:31` — "user-steer classification/emission";
+  `SessionActivityWatcher.ts:12` forwards user-steer events; `OpenCodeLogParser.ts:576`
+  classifies candidates). `isHumanPromptEvent` is the same judgement — "is this user-role
+  event a real human turn, or protocol traffic?" — asked at a different moment. Implement
+  it by **reconciling with that classifier rather than beside it**; two disagreeing
+  answers to one question is the failure mode.
 
-Convergence point: an imported run and a live-observed follow-up turn should both carry
-an origin marker (`importedFrom` vs `terminal-followup`) and render with a visual badge
-in `OutputPane`, distinguishing "observed" turns from ctrlyoke-dispatched ones.
+|           | Session Import (this plan)                | Terminal Follow-up Tracking (shipped)        |
+| --------- | ----------------------------------------- | -------------------------------------------- |
+| Input     | a finished session log, read once         | a live session, watched after prompt resolve |
+| Core need | `segmentSessionTurns` over all events     | background-task + resumed-turn state         |
+| Output    | N `cliOutputRecorded` events in a new run | completion held/released for the live prompt |
+
+Convergence point that still stands: an imported run, a live-observed follow-up turn, and
+an imported run bundle (`RUN_EXPORT_PLAN.md`) should all carry an origin marker and render
+with a visual badge in `OutputPane`, distinguishing observed and imported turns from
+ctrlyoke-dispatched ones. Design that badge once, for three origins.
 
 ---
 
@@ -366,9 +418,10 @@ in `OutputPane`, distinguishing "observed" turns from ctrlyoke-dispatched ones.
    Promote `getLogDirectory`/`resolveLogPath` to shared/protected.
 2. **Enumeration.** `listNativeSessions` per parser + `HarnessSessionImportService`
    fan-out. Unit tests over fixture directories.
-3. **Import pipeline.** `importSession` → workflow file + run history via
-   `OutputHistoryManager`. Single-source the `UniversalCliOutput → CliOutput` mapping.
-   Add `importedFrom` to schema + `CtrlYokeTypes`.
+3. **Import pipeline.** `importSession` → workflow file + run history via the shared
+   `RunMaterializer` over `OutputHistoryManager`. Single-source the
+   `UniversalCliOutput → CliOutput` mapping. Add `importedFrom` to schema +
+   `CtrlYokeTypes`.
 4. **UI.** WorkflowControls entry, `HarnessSessionPickerModal`, message plumbing, load
    imported workflow on success.
 5. **Undo wiring + provenance.** Per-file undo/redo works for imports out of the box via
@@ -378,8 +431,10 @@ in `OutputPane`, distinguishing "observed" turns from ctrlyoke-dispatched ones.
    exists, and (c) an "imported" / "observed" badge in `OutputPane` (shared with the
    follow-up tracker) that also signals which turns support undo.
 
-Phases 1–2 are the shared foundation with the terminal-follow-up tracker and should land
-first regardless of which consumer ships next.
+Phases 1–2 are this plan's own foundation, not a shared one — the follow-up tracker
+shipped without them (see Relationship). What _is_ shared is phase 3's materializer, which
+`RUN_EXPORT_PLAN.md` phase 2 also consumes; whichever plan reaches it first should extract
+it rather than inline it.
 
 ---
 

@@ -37,6 +37,17 @@ G's other work — capability domains, tab badges, generated docs, the Codex
 investigation — does not need it and can proceed independently. See "What
 remains" near the end of this document for the full breakdown.
 
+**Addendum 2026-08-14 — the Secrets plan left this queue.**
+[`ROADMAP.md`](ROADMAP.md) promoted
+[`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md) to a
+**P0 pre-release one-way door**, on irreversibility grounds rather than the
+dependency grounds this document reasons from: unredacted run artifacts already
+written cannot be retracted, and Stage B shipped a writer whose v1 contract
+promises verbatim condition stdout/stderr. Stage G's dry-run leg is therefore no
+longer waiting on an unscheduled plan — it is waiting on P0 work with an owner.
+Nothing else in this queue changes; D and F remain the next unblocked steps. See
+the revised recommendation at the end.
+
 ---
 
 ## The framing this settles
@@ -102,11 +113,11 @@ Two consequences worth naming up front:
 Only four real dependencies exist across the three plans. Everything else is
 preference.
 
-| Work                                            | Genuinely requires                                                                                                                                              |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Feedback Phase 3 (client-scoped routing)        | Feedback Phase 2's sink contract                                                                                                                                |
-| Feedback Phase 4 (interactive choices)          | Feedback Phase 2's transport                                                                                                                                    |
-| Decoupling Stage 10 (`StandaloneServerAdapter`) | Feedback Phase 2 deleting the five `PlatformAdapter` UI methods                                                                                                 |
+| Work                                            | Genuinely requires                                                                                                                                                  |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Feedback Phase 3 (client-scoped routing)        | Feedback Phase 2's sink contract                                                                                                                                    |
+| Feedback Phase 4 (interactive choices)          | Feedback Phase 2's transport                                                                                                                                        |
+| Decoupling Stage 10 (`StandaloneServerAdapter`) | Feedback Phase 2 deleting the five `PlatformAdapter` UI methods                                                                                                     |
 | Compatibility Phase 2 — **dry-run leg only**    | [`DRY_RUN_PREVIEW_PLAN.md`](../implemented/DRY_RUN_PREVIEW_PLAN.md), which itself needs [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md) |
 
 **The last row is why Compatibility Phase 2 had to be split.** It is written as
@@ -381,27 +392,27 @@ Single-session steps. Each commits its own work and leaves this document and its
 owning plan current. Steps are strictly ordered within a stage; stages B and C
 may be swapped as a block.
 
-| #   | Stage | Scope                                                                                                                                                                                            |
-| --- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | A.1   | **DONE** — Shrink-only `show*Message` and adapter-UI counters, with baselines committed as measured above                                                                                        |
-| 2   | A.2   | **DONE** — Author-time diagnostic for ctrlyoke MCP tool denials; route `permissionApplication.diagnostics` off `Log.warn`                                                                        |
-| 3   | A.3   | **DONE** — Antigravity `allowAll` no longer uses the dangerous bypass; mode fidelity is partial and author-time compatibility remains honest                                                     |
-| 4   | A.4   | **DONE** — Preserve `headers` (and other unmodelled fields) across the `McpServerForm` edit round trip with transport-aware invalidation                                                         |
-| 5   | B.1   | **DONE** — Typed pre/end-condition summaries are queue-owned and recorded through final verdict/error/retry paths; effective `executionMode` persists in `_runtime` (plan §3)                    |
-| 6   | B.2   | **DONE** — `RunOutputResolver` one-pass attempt/file-event/loop projection with focused streaming/history coverage (plan §2)                                                                     |
-| 7   | B.3   | **DONE** — CLI-local result contract + `CliJsonResultBuilder`, consuming steps 5–6 (plan §1)                                                                                                     |
-| 8   | B.4   | **DONE** — Wire the builder into `cli.ts` success and `catch` paths; single-line stdout (plan §4)                                                                                                |
-| 9   | B.5   | **DONE** — Live end-to-end CLI verification on `opencode-cli`; fixed defects; moved the plan to `dev/implemented/`                                                                               |
-| 10  | C.1   | **DONE** — Added the `USER_FEEDBACK` contract, payload type, unconditional browser toast handler, and focused Vitest coverage                                                                    |
-| 11  | C.2   | **DONE** — Added the injectable feedback sink contract and VS Code/console/hosted-WebSocket implementations, with browser-only broadcast and focused Mocha coverage                              |
-| 12  | C.3   | **DONE** — Migrated all 19 adapter-UI calls incl. `CliIntegration.ts:1380` `showChoice` (Phase 2.5 Site 3); deleted the five `PlatformAdapter` UI methods and updated all impls                  |
-| 13  | C.4   | **DONE** — AST-verified triage of all 63 reusable direct sites: 1 policy deletion, 7 duplicate deletions, 8 noise deletions, 39 scoped replies, 8 broadcast/interaction-held sites; no migration |
-| 14  | C.5   | **DONE** — Executed the triage for the core/orchestration group (32 sites in 4 files); retained five interaction holds for Phase 4 and recorded 23 client-scope fallbacks for Stage E            |
-| 15  | C.6   | **DONE** — Executed the triage for the ui/utils group (31 sites in 8 files); reusable direct-message baseline is now 6, with the six Phase 4 interaction holds remaining                         |
-| 16  | D     | **TODO — next up.** `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                                                |
+| #   | Stage | Scope                                                                                                                                                                                                                                               |
+| --- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | A.1   | **DONE** — Shrink-only `show*Message` and adapter-UI counters, with baselines committed as measured above                                                                                                                                           |
+| 2   | A.2   | **DONE** — Author-time diagnostic for ctrlyoke MCP tool denials; route `permissionApplication.diagnostics` off `Log.warn`                                                                                                                           |
+| 3   | A.3   | **DONE** — Antigravity `allowAll` no longer uses the dangerous bypass; mode fidelity is partial and author-time compatibility remains honest                                                                                                        |
+| 4   | A.4   | **DONE** — Preserve `headers` (and other unmodelled fields) across the `McpServerForm` edit round trip with transport-aware invalidation                                                                                                            |
+| 5   | B.1   | **DONE** — Typed pre/end-condition summaries are queue-owned and recorded through final verdict/error/retry paths; effective `executionMode` persists in `_runtime` (plan §3)                                                                       |
+| 6   | B.2   | **DONE** — `RunOutputResolver` one-pass attempt/file-event/loop projection with focused streaming/history coverage (plan §2)                                                                                                                        |
+| 7   | B.3   | **DONE** — CLI-local result contract + `CliJsonResultBuilder`, consuming steps 5–6 (plan §1)                                                                                                                                                        |
+| 8   | B.4   | **DONE** — Wire the builder into `cli.ts` success and `catch` paths; single-line stdout (plan §4)                                                                                                                                                   |
+| 9   | B.5   | **DONE** — Live end-to-end CLI verification on `opencode-cli`; fixed defects; moved the plan to `dev/implemented/`                                                                                                                                  |
+| 10  | C.1   | **DONE** — Added the `USER_FEEDBACK` contract, payload type, unconditional browser toast handler, and focused Vitest coverage                                                                                                                       |
+| 11  | C.2   | **DONE** — Added the injectable feedback sink contract and VS Code/console/hosted-WebSocket implementations, with browser-only broadcast and focused Mocha coverage                                                                                 |
+| 12  | C.3   | **DONE** — Migrated all 19 adapter-UI calls incl. `CliIntegration.ts:1380` `showChoice` (Phase 2.5 Site 3); deleted the five `PlatformAdapter` UI methods and updated all impls                                                                     |
+| 13  | C.4   | **DONE** — AST-verified triage of all 63 reusable direct sites: 1 policy deletion, 7 duplicate deletions, 8 noise deletions, 39 scoped replies, 8 broadcast/interaction-held sites; no migration                                                    |
+| 14  | C.5   | **DONE** — Executed the triage for the core/orchestration group (32 sites in 4 files); retained five interaction holds for Phase 4 and recorded 23 client-scope fallbacks for Stage E                                                               |
+| 15  | C.6   | **DONE** — Executed the triage for the ui/utils group (31 sites in 8 files); reusable direct-message baseline is now 6, with the six Phase 4 interaction holds remaining                                                                            |
+| 16  | D     | **TODO — next up.** `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                                                                                                    |
 | 17  | E     | **DONE** — `WebviewClientContext` threaded through `WorkflowMutationCoordinator`, `WorkflowStepHandlers`, `UndoRedoCoordinator`, and terminal handlers (landed 2026-07-24 to 2026-08-06); two-tab isolation test in `CoreFeedbackMigration.test.ts` |
-| 18  | F     | **TODO.** `USER_INTERACTION_REQUEST` contract; migrate the 6 surviving action-bearing sites; headless fallbacks                                                                                  |
-| 19  | G.x   | **TODO.** Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration (dry-run sub-leg blocked on `SECRETS_AND_REDACTION_PLAN.md`)                                   |
+| 18  | F     | **TODO.** `USER_INTERACTION_REQUEST` contract; migrate the 6 surviving action-bearing sites; headless fallbacks                                                                                                                                     |
+| 19  | G.x   | **TODO.** Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration (dry-run sub-leg blocked on `SECRETS_AND_REDACTION_PLAN.md`)                                                                                      |
 
 **Stage B was reordered on 2026-08-02 from the plan's section numbering.** The
 plan lists the builder first, but `CliJsonResultBuilder` consumes the projection
@@ -596,15 +607,15 @@ just because the products share history and directories.
 
 Re-verified against `src/` on 2026-08-11, not read from the plans.
 
-| Stage | Scope | Status |
-| ----- | ----- | ------ |
-| A     | Guards, baselines, three bug fixes | **Done** |
-| B     | Automation API `--json` v1 | **Done** |
-| C     | Browser feedback Phases 2 and 2.5 | **Done** |
-| D     | CLI `validate --harness` / `--all-installed-harnesses --json` | **Not started** — no dependency, smallest remaining chunk |
-| E     | Client-scoped routing | **Done** (confirmed complete this pass; previously unmarked) |
-| F     | Interactive choices / `USER_INTERACTION_REQUEST` | **Not started** |
-| G     | Compatibility Phase 3 domains + docs + Codex investigation + dry-run leg | **Not started**; dry-run sub-leg additionally blocked on the Secrets plan |
+| Stage | Scope                                                                    | Status                                                                                             |
+| ----- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| A     | Guards, baselines, three bug fixes                                       | **Done**                                                                                           |
+| B     | Automation API `--json` v1                                               | **Done**                                                                                           |
+| C     | Browser feedback Phases 2 and 2.5                                        | **Done**                                                                                           |
+| D     | CLI `validate --harness` / `--all-installed-harnesses --json`            | **Not started** — no dependency, smallest remaining chunk                                          |
+| E     | Client-scoped routing                                                    | **Done** (confirmed complete this pass; previously unmarked)                                       |
+| F     | Interactive choices / `USER_INTERACTION_REQUEST`                         | **Not started**                                                                                    |
+| G     | Compatibility Phase 3 domains + docs + Codex investigation + dry-run leg | **Not started**; dry-run sub-leg waits on the Secrets plan, now scheduled as P0 outside this queue |
 
 Three items stand between this document and being fully closed out:
 
@@ -623,22 +634,44 @@ Three items stand between this document and being fully closed out:
    compatibility docs, the Codex partial-support investigation — has no such
    dependency and can proceed without the Secrets plan.
 
-**Recommendation:** do D and F next, in either order — both are small,
-independent, and fully unblocked. Then start G's non-dry-run work
+**Recommendation (revised 2026-08-14):** do D and F next, in either order — both
+are small, independent, and fully unblocked. Then start G's non-dry-run work
 (capability domains one at a time, per the plan's own completeness-test
-discipline) without waiting on the Secrets plan; only pick up the Secrets
-plan itself when Stage G's dry-run leg is the piece actually being worked, since
-it is a real plan of its own (`SecretStore`, redaction pipeline, authoring
-diagnostics) rather than a quick unblock. Once D, F, and G are done, this
-document's queue is complete and it can move to `dev/implemented/` — record
-that decision explicitly at that time rather than inferring it from an empty
-queue.
+discipline).
+
+**The Secrets plan is no longer sequenced from here.** The previous
+recommendation was to pick it up only when Stage G's dry-run leg was the piece
+actually being worked. [`ROADMAP.md`](ROADMAP.md) promoted
+[`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md) to a
+**P0 pre-release one-way door** on 2026-08-14, on a criterion this document does
+not model: irreversibility. Redaction is not merely a dependency of dry-run
+preview — it is a producer for everything that writes run artifacts, and
+unredacted artifacts already written cannot be retracted. Stage B has **already
+shipped** one such writer: the JSON v1 contract promises pre-condition,
+end-condition, and script stdout/stderr "exactly as produced; no CLI-only
+truncation."
+
+That promotion does not contradict this document's ordering rule — "defer only on
+a real unbuilt dependency, or when landing it first makes later work harder" — it
+satisfies it. Redaction is a contract that later writers consume, so
+contracts-before-consumers applies, and this document already applied that rule
+to reorder Stage B. The practical effect on the queue is the trigger this
+document's own "What would change this recommendation" anticipated: Stage G's
+dry-run leg stops being blocked and can sit beside Stage D whenever the Secrets
+work lands.
+
+Once D, F, and G are done, this document's queue is complete and it can move to
+`dev/implemented/` — record that decision explicitly at that time rather than
+inferring it from an empty queue.
 
 ## What would change this recommendation
 
-- `DRY_RUN_PREVIEW_PLAN.md` is shipped; taking on `SECRETS_AND_REDACTION_PLAN.md` —
+- ~~`DRY_RUN_PREVIEW_PLAN.md` is shipped; taking on `SECRETS_AND_REDACTION_PLAN.md` —
   that pulls Compatibility Phase 2's dry-run leg out of Stage G and back beside
-  Stage D.
+  Stage D.~~ **Triggered 2026-08-14.** The Secrets plan was promoted to a P0
+  pre-release one-way door in [`ROADMAP.md`](ROADMAP.md), so it is now scheduled
+  independently of this queue. When it lands, move Stage G's dry-run leg beside
+  Stage D as described.
 - ~~Pulling [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)
   forward — its Phase 5 needs the `PlatformAdapter` UI methods gone, which would
   promote Stage C.3 ahead of everything else in Stage C.~~ Moot: Stage C.3
