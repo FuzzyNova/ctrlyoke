@@ -704,7 +704,7 @@ suite("WorktreeManager", function () {
       execFileSync("git", ["-C", repository, "show", "--format=%s", "--no-patch", info.branchName], {
         encoding: "utf8",
       }).trim(),
-      "ctrlyoke: land managed workflow changes"
+      'chore(ctrlyoke): auto-commit changes for "Managed Test Workflow"'
     );
   });
 

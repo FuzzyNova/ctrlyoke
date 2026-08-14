@@ -121,6 +121,13 @@ export interface WorktreeInfo {
   targetBranch?: string;
   workflowKey: WorkflowKey;
   runRef: RunRef;
+  /**
+   * Display name captured at creation time, in-memory only (never persisted
+   * to the ownership record). Used to label the managed auto-commit message;
+   * falls back to `branchName` when unavailable (e.g. after crash recovery,
+   * when the caller did not resupply it).
+   */
+  workflowName?: string;
   createdAt: number;
   executionWorkspace: ExecutionWorkspace;
   /** Existing named worktrees are allowed to be dirty; this is informational. */
@@ -296,6 +303,8 @@ export interface RecoverManagedWorktreeOptions {
   workflowKey?: WorkflowKey;
   runRef?: RunRef;
   branchName?: string;
+  /** Display name for the managed auto-commit message; see `WorktreeInfo.workflowName`. */
+  workflowName?: string;
   workspaceRoots?: readonly string[];
   namedWorkspaceRoots?: readonly ResolverWorkspaceFolder[];
   approvedExternalRoots?: readonly string[];
@@ -329,6 +338,19 @@ function normalizeBranchName(branchName: string): string {
   return branchName.startsWith("refs/heads/")
     ? branchName.slice("refs/heads/".length)
     : branchName;
+}
+
+/**
+ * Build the deterministic, non-AI commit message used to land a managed
+ * worktree's changes (see `WORKTREE_SUPPORT_PLAN.md` "Finalization order").
+ * `label` is the workflow's display name when available, falling back to the
+ * generated branch name (e.g. after crash recovery, when the original caller
+ * did not resupply `workflowName`). Newlines are collapsed so the subject
+ * always stays a single line.
+ */
+function buildManagedAutoCommitMessage(label: string): string {
+  const singleLine = label.replace(/\s*\n\s*/g, " ").trim();
+  return `chore(ctrlyoke): auto-commit changes for "${singleLine}"`;
 }
 
 function pathsOverlap(left: string, right: string): boolean {
@@ -601,7 +623,7 @@ export class WorktreeManager {
           if (changed) {
             await commitAll(
               info.worktreePath,
-              "ctrlyoke: land managed workflow changes"
+              buildManagedAutoCommitMessage(info.workflowName ?? info.branchName)
             );
           }
 
@@ -2304,6 +2326,7 @@ export class WorktreeManager {
       targetBranch: record.targetBranch,
       workflowKey: record.workflowKey,
       runRef: record.runRef,
+      ...(options.workflowName ? { workflowName: options.workflowName } : {}),
       createdAt: record.createdAt,
       executionWorkspace,
       dirty: false,
@@ -2404,6 +2427,9 @@ export class WorktreeManager {
       targetBranch: args.record.targetBranch,
       workflowKey: args.record.workflowKey,
       runRef: args.record.runRef,
+      ...(args.options.workflowName
+        ? { workflowName: args.options.workflowName }
+        : {}),
       createdAt: args.record.createdAt,
       executionWorkspace,
       dirty,
