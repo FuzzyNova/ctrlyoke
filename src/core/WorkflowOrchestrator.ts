@@ -3816,7 +3816,7 @@ export class WorkflowOrchestrator {
         // advanced the descriptor revision, and a client left on the source
         // address keeps echoing the superseded pair, so its very next mutation
         // (including a second Set Start Position) is rejected as a conflict.
-        await this.switchClientToSeededRun(seededAddress, clientId);
+        await this.switchClientToRunAddress(seededAddress, clientId);
         // Whoever stayed on the source run still holds that stale descriptor
         // revision and a run list missing the fork.
         await this.invalidateRunViews(address.workflowKey, address.runRef);
@@ -3949,13 +3949,17 @@ export class WorkflowOrchestrator {
   }
 
   /**
-   * Moves the initiating client onto a run that was just seeded but is not
-   * executing. `seedAndExecuteAtRun` has `switchClientToPreparedExecution` for
-   * the executing case; this is the idle counterpart, and it exists for the
-   * same reason — the fork is only complete once the client is visibly bound to
-   * it and holding the new run's revision pair.
+   * Moves a client onto a run address by pushing it a fresh run-view
+   * snapshot, falling back to a bare registry update if no message sink is
+   * available (or the push itself fails) — the caller's action must still be
+   * complete even without a visible client to follow it.
+   *
+   * Shared by every path that moves a client's address without the client
+   * having asked for that exact address itself: `seedAndExecuteAtRun`'s idle
+   * counterpart (a seed forks a new run the client must follow) and
+   * `executeDraftAtAddress` (a draft promoted into a run mid-request).
    */
-  private async switchClientToSeededRun(
+  private async switchClientToRunAddress(
     address: Extract<WorkflowViewAddress, { kind: "run" }>,
     clientId: string
   ): Promise<void> {
@@ -3963,8 +3967,8 @@ export class WorkflowOrchestrator {
       this.getViewMessageSinks().get(clientId) ??
       (clientId === this.PANEL_CLIENT_ID ? this.storedPanelSend : undefined);
     if (!send) {
-      // No sink to publish through, but the address must still follow the fork
-      // or the client's next addressed mutation targets the source run.
+      // No sink to publish through, but the address must still follow along
+      // or the client's next addressed mutation targets the stale one.
       this.getViewAddressRegistry().set(clientId, address);
       return;
     }
@@ -3972,7 +3976,7 @@ export class WorkflowOrchestrator {
       await this.loadRunViewForClient(address, send, clientId);
     } catch (error) {
       Log.warn(
-        `[WorkflowOrchestrator] Failed to switch ${clientId} to seeded run ${address.runRef}: ${getErrorMessage(error)}`
+        `[WorkflowOrchestrator] Failed to switch ${clientId} to run ${address.runRef}: ${getErrorMessage(error)}`
       );
       this.getViewAddressRegistry().set(clientId, address);
     }
@@ -4066,7 +4070,43 @@ export class WorkflowOrchestrator {
     if ((draft.definitionRevision ?? 1) !== expectedDefinitionRevision) {
       throw new Error("Definition revision conflict while running draft");
     }
-    await this.getInstanceForClient(clientId).executeLoadedPromptFile();
+    const instance = this.getInstanceForClient(clientId);
+    // Promoting the draft moves this client's own address from draft to the
+    // new run — unlike invalidateRunViews (which only refreshes clients
+    // already addressed at a run), nothing else tells a client still
+    // addressed at the draft that its promotion happened. Without this the
+    // client stays on the draft address for the run's entire duration: no
+    // RunSummaryBanner, no run-panel entry, until some unrelated navigation
+    // (switching workflows and back) happens to force a fresh snapshot.
+    // Mirrors seedAndExecuteAtRun: execute without awaiting the full run, and
+    // resolve this call once the client is visibly moved onto the promoted
+    // run's address rather than once every step has finished.
+    let prepared = false;
+    let resolvePrepared!: () => void;
+    let rejectPrepared!: (error: unknown) => void;
+    const preparedPromise = new Promise<void>((resolve, reject) => {
+      resolvePrepared = resolve;
+      rejectPrepared = reject;
+    });
+    void instance
+      .executeLoadedPromptFile(undefined, false, "", false, async () => {
+        const state = instance.getQueueState();
+        if (state.workflowKey && state.runRef) {
+          await this.switchClientToRunAddress(
+            { workflowKey: state.workflowKey, kind: "run", runRef: state.runRef },
+            clientId
+          );
+        }
+        prepared = true;
+        resolvePrepared();
+      })
+      .catch((error) => {
+        if (!prepared) {
+          rejectPrepared(error);
+        }
+        Log.error(`Failed to execute draft: ${getErrorMessage(error)}`);
+      });
+    await preparedPromise;
   }
 
   /** One client action: restore the committed run, then seed and execute a new RunRef. */

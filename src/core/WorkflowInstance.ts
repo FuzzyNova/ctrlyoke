@@ -1368,12 +1368,22 @@ export class WorkflowInstance {
 
   /**
    * Execute the currently loaded prompt file.
+   *
+   * `onPrepared`, when given, fires once the run's identity is settled — a
+   * fresh start has promoted its draft (or a continuation has bound its
+   * existing run) and `getQueueState().runRef` names the run this call is
+   * about to execute — but before the step loop and worktree/lock
+   * acquisition begin. Mirrors `executeSeededRun`'s `onPrepared`: callers that
+   * promote a draft while a client is still addressed at it (e.g.
+   * `executeDraftAtAddress`) use this to move that client onto the new run's
+   * address without waiting for the whole run to finish.
    */
   async executeLoadedPromptFile(
     modeOverride?: HarnessId,
     continueFromCurrent: boolean = false,
     preinitializedHistoryFilePath: string = "",
-    prePromotedFreshStart: boolean = false
+    prePromotedFreshStart: boolean = false,
+    onPrepared?: () => Promise<void>
   ): Promise<void> {
     if (!this.currentPromptFile) {
       const queueState = this.promptQueue.getState();
@@ -1751,6 +1761,11 @@ export class WorkflowInstance {
           `🟢 [APPEND-DEBUG] Idle continuation (stop+skip): Reusing existing history file: ${historyFilePath}`
         );
       }
+
+      // Identity is settled (queue state names the run this call is about to
+      // execute) — safe for a caller to move its client onto it now, before
+      // the potentially long-running step loop below even starts.
+      await onPrepared?.();
 
       // The runner lock must precede any worktree discovery or mutation. The
       // same lock is reused by startWorkflowExecution below.

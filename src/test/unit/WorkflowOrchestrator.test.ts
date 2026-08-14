@@ -3223,6 +3223,91 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     }
   });
 
+  test("running a draft moves the initiating client onto the promoted run before execution finishes", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-execute-draft-")
+    );
+    try {
+      const manager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "step one" }],
+        getCurrentIndex: () => 0,
+        getStatus: () => EXECUTION_STATES.IDLE,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Draft run",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const { workflowKey } = await manager.createWorkingFile(
+        "draft-run",
+        [{ prompt: "step one" }],
+        workspace,
+        "Draft run"
+      );
+      const descriptor = await new WorkflowLineageRepository().readDescriptor(
+        workspace,
+        workflowKey
+      );
+
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.instances = new Map();
+      internal.retiredInstances = new Map();
+      internal.cliSessions = new Map();
+      internal.viewAddressRegistry = new Map([
+        [PANEL_CLIENT_ID, { workflowKey, kind: "draft" }],
+      ]);
+      internal.viewMessageSinks = new Map();
+      internal.lineageRepository = new WorkflowLineageRepository();
+
+      // Execution never resolves until the test releases it — proves
+      // executeDraftAtAddress resolves once the client is switched onto the
+      // promoted run's address, not once the whole run finishes.
+      const promotedRunRef = "run-2026-08-14T00-00-00-000Z" as never;
+      let releaseExecution!: () => void;
+      const executionGate = new Promise<void>((resolve) => {
+        releaseExecution = resolve;
+      });
+      const fakeInstance = {
+        getQueueState: () => ({ workflowKey, runRef: promotedRunRef }),
+        executeLoadedPromptFile: async (
+          _mode: unknown,
+          _continueFromCurrent: unknown,
+          _preinitializedHistoryFilePath: unknown,
+          _prePromotedFreshStart: unknown,
+          onPrepared?: () => Promise<void>
+        ) => {
+          await onPrepared?.();
+          await executionGate;
+        },
+      };
+      internal.getInstanceForClient = () => fakeInstance;
+
+      await orchestrator.executeDraftAtAddress(
+        { workflowKey, kind: "draft" },
+        1,
+        descriptor.revision,
+        PANEL_CLIENT_ID
+      );
+
+      assert.deepStrictEqual(
+        internal.viewAddressRegistry.get(PANEL_CLIENT_ID),
+        { workflowKey, kind: "run", runRef: promotedRunRef }
+      );
+
+      releaseExecution();
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   test("same-run continuation reuses the retired run owner and switches before executing", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-continue-owner-")

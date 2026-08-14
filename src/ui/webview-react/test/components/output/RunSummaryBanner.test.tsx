@@ -80,7 +80,7 @@ describe("RunSummaryBanner", () => {
     const { container } = renderBanner({ worktree });
 
     expect(screen.getByText("feature/historical")).toBeInTheDocument();
-    expect(screen.getByText(/✓ branch ready — 12 files/)).toBeInTheDocument();
+    expect(screen.getByText(/Branch ready — 12 files/)).toBeInTheDocument();
     expect(
       screen.getByText("Worktree: FlightPath.worktrees/feature-historical")
     ).toBeInTheDocument();
@@ -93,10 +93,10 @@ describe("RunSummaryBanner", () => {
   });
 
   it.each([
-    ["fast-forward", "✓ merged (fast-forward)"],
-    ["merge-commit", "✓ merged (merge commit)"],
-    ["conflict", "⚠ merge conflict — branch preserved"],
-    ["blocked", "⚠ merge blocked — source branch changed or checkout is dirty"],
+    ["fast-forward", "Merged (fast-forward)"],
+    ["merge-commit", "Merged (merge commit)"],
+    ["conflict", "Merge conflict — branch preserved"],
+    ["blocked", "Auto merge blocked — source branch changed or checkout is dirty"],
   ] as const)(
     "renders the persisted %s merge outcome",
     (mergeOutcome, text) => {

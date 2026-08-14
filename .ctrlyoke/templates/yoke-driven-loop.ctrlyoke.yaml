@@ -62,3 +62,5 @@ finalStep:
 
     You don't need to work out whether this is your first review pass — you're
     resuming your planning session, so read the state and act accordingly.
+
+    When the plan is complete, move the spec to the dev/implemented/ directory as part of your final commit.
