@@ -1,6 +1,7 @@
 # User-Scoped Run History
 
-> **Status:** Backlog — not implemented. Written 2026-08-13.
+> **Status:** Implementation-ready — not implemented. Written and code-audited
+> 2026-08-13.
 >
 > **Problem in one line:** `git clean -fdx` is routine repo hygiene and it
 > permanently destroys every ctrlyoke run in the workspace, because `.ctrlyoke/.runs/`
@@ -18,11 +19,11 @@
 No. This was tested rather than assumed, in a throwaway repo with
 `.ctrlyoke/.runs/` listed in `.gitignore`:
 
-| Command          | Result for `.ctrlyoke/.runs/`                       |
-| ---------------- | --------------------------------------------------- |
-| `git clean -fd`  | **Survives** — ignored files are skipped without `-x` |
-| `git clean -fdx` | **Deleted** — "Removing .ctrlyoke/.runs"            |
-| `git clean -ffdx`| Deleted, along with everything else                  |
+| Command           | Result for `.ctrlyoke/.runs/`                         |
+| ----------------- | ----------------------------------------------------- |
+| `git clean -fd`   | **Survives** — ignored files are skipped without `-x` |
+| `git clean -fdx`  | **Deleted** — "Removing .ctrlyoke/.runs"              |
+| `git clean -ffdx` | Deleted, along with everything else                   |
 
 `-x` means "also remove ignored files." There is no `.gitignore` syntax, no
 negation pattern, and no persistent Git config that exempts a path from it —
@@ -47,24 +48,35 @@ is how.
 `WORKSPACE_INITIALIZER_RUNTIME_ENTRIES` in
 `src/core/orchestration/WorkspaceInitializer.ts:21-32` is the authoritative list
 of what ctrlyoke gitignores, and therefore the exact list of what `git clean -fdx`
-destroys. Auditing it turns up **three** categories, not one — and two entries
-that are in it by mistake.
+destroys. Auditing it turns up **three** categories, not one. Two entries that
+look misplaced (`attachments/` and `prompts/`) are deliberate; see 2.3.
 
-| Entry               | Nature                        | Verdict |
-| ------------------- | ----------------------------- | ------- |
-| `.runs/`            | project-derived               | **Move** → project dir |
-| `.search-index/`    | project-derived (indexes `.runs`) | **Move** → project dir |
-| `.usage/`           | **mixed** — see 2.1           | **Split** |
-| `notifications/`    | account/device state          | **Move** → user scope |
-| `certs/`            | machine state                 | **Move** → user scope (default) |
-| `attachments/`      | ephemeral-run assets          | **Stay**, ignored — see 2.3 |
-| `prompts/`          | ephemeral-run prompt bodies   | **Stay**, ignored — see 2.3 |
-| `logs/`             | disposable diagnostics        | **Stay**, ignored — see 2.4 |
-| `temp/`             | ephemeral by design           | **Stay**, ignored |
-| `capabilities.json` | regenerated each activation   | **Stay**, ignored |
+| Entry               | Nature                            | Verdict                                                       |
+| ------------------- | --------------------------------- | ------------------------------------------------------------- |
+| `.runs/`            | project-derived                   | **Move** → project dir                                        |
+| `.search-index/`    | project-derived (indexes `.runs`) | **Move** → project dir                                        |
+| `.usage/`           | **mixed** — see 2.1               | **Split**                                                     |
+| `notifications/`    | browser-push keys/subscriptions   | **Move** → user scope                                         |
+| `certs/`            | machine state                     | **No change** — already user-default; retain workspace opt-in |
+| `attachments/`      | ephemeral-run assets              | **Stay**, ignored — see 2.3                                   |
+| `prompts/`          | ephemeral-run prompt bodies       | **Stay**, ignored — see 2.3                                   |
+| `logs/`             | disposable diagnostics            | **Stay**, ignored — see 2.4                                   |
+| `temp/`             | ephemeral by design               | **Stay**, ignored                                             |
+| `capabilities.json` | regenerated each activation       | **Stay**, ignored                                             |
 
 Not in the ignore list and not at risk: `workflows/`, `templates/`, `skills/`,
 `agents/`, `scripts/`, `mcp/`, `settings.json` — authored and tracked already.
+
+Two other uses of “snapshot” are unrelated to `.usage/provider-snapshots.json`:
+
+- `.ctrlyoke/snapshots/` contains dev-only UX-capture Markdown created by
+  `UxSnapshotButton`/`DevCommands`. It stays in the workspace and remains outside
+  this plan; `WorkspaceInitializer` deliberately does not add it to generated
+  user workspaces.
+- `WorkspaceSnapshotService` captures before/after file state for undo. It has no
+  snapshot storage directory: the resulting `WorkspaceSnapshot` is persisted in
+  the run timeline's `events.jsonl`, so it follows `.runs/` automatically. Undo
+  still restores files in the execution workspace.
 
 ### 2.1 `.usage/` is three files with three different scopes
 
@@ -73,50 +85,82 @@ wrong for the rest. `src/utils/UsagePaths.ts` defines three files:
 
 - **`lifetime-stats.json`** (`LifetimeUsageStore`) — keyed
   `lineages: Record<WorkflowKey, …>` and rebuilt by walking `runsRoot`. It cannot
-  go global: `allocateWorkflowKey` only guarantees uniqueness *within one runs
-  root*, so two projects can each hold a `fix-tests-2026-08-01T…` key and a
+  go global: `allocateWorkflowKey` only guarantees uniqueness _within one runs
+  root_, so two projects can each hold a `fix-tests-2026-08-01T…` key and a
   shared file would silently merge them. **Project dir**, beside the `.runs` it
   summarizes.
 - **`observed-usage.json`** (`ObservedHarnessUsageStore`) — `runs` is keyed by
   `{workflowKey, runRef}`, same argument. **Project dir.** Its `buckets`
-  (daily/weekly/monthly per harness) *are* an account-level question, and today
+  (daily/weekly/monthly per harness) _are_ an account-level question, and today
   they are quietly wrong: "tokens I burned on Claude this week" is currently
   split across one file per workspace, each holding a fraction. Once every
   project lives under one root, the correct total is a fold over
   `~/.ctrlyoke/projects/*/.usage/observed-usage.json` — a read-side change, not
   a storage one.
-- **`provider-snapshots.json`** (`HarnessUsageService.ts:185`) — provider-reported
-  quota windows. This one has **zero** project derivation. A Claude Pro quota is
-  not per-workspace; storing it per-workspace means N copies of one account-level
-  truth, each stale in a different way, each wiped by `git clean`. **True user
-  scope: `~/.ctrlyoke/usage/provider-snapshots.json`.** Going global means several
-  VS Code windows write one file, but that is already safe:
-  `HarnessUsageService.persistProviderSnapshots` (line 422) already wraps the
-  write in `withFileLock` and stages through a temp file before renaming. No new
-  concurrency work — and the shared file is strictly better, since today two open
-  windows each burn their own provider API refresh to learn the same quota.
+- **`provider-snapshots.json`** (`HarnessUsageService.ts:185`) — a cache of
+  provider-reported **account quota windows** (`HarnessQuotaSnapshot`: harness,
+  source, fetch/staleness timestamps, reset windows, and plan type). “Snapshot”
+  here means a point-in-time usage/quota reading; it is unrelated to UX snapshots
+  and undo snapshots. This file has **zero** project derivation. A Claude Pro
+  quota is not per-workspace; storing it per-workspace means N copies of one
+  account-level truth, each stale in a different way, each wiped by `git clean`.
+  **True user scope: `~/.ctrlyoke/usage/provider-snapshots.json`.** Going global means several
+  VS Code windows write one file. `HarnessUsageService.persistProviderSnapshots`
+  (line 422) already prevents corrupt interleaved writes with `withFileLock` and
+  an atomic rename, but it writes the process's entire in-memory map and can still
+  overwrite a newer snapshot written by another process. Under the existing lock,
+  re-read the shared file and merge per harness by newest `fetchedAt` before
+  writing. Cross-process provider-call deduplication is a separate optimization;
+  the current in-memory `refreshPromises` map does not provide it, so do not claim
+  the scope move eliminates duplicate refresh calls.
 
-### 2.2 `notifications/` and `certs/` are not project data at all
+### 2.2 `notifications/` must move; `certs/` is already user-default
 
 `WebPushService.ts:76-88` stores the VAPID keypair and the push-subscription
 registry under the workspace. Neither is project-scoped: the VAPID keypair is
-the identity of *this user's* push sender, and losing it invalidates every
+the identity of _this user's_ push sender, and losing it invalidates every
 existing subscription — every phone and browser must re-subscribe, with no error
 message explaining why notifications went quiet. `git clean -fdx` in any repo
 does this today. **Move to `~/.ctrlyoke/notifications/`.**
 
+This move is **browser push only**. `PATH_CONSTANTS.NOTIFICATIONS_DIR` is consumed
+by `WebPushService` for `vapid-keys.json` and `push-subscriptions.json`; it is not
+the hook handoff location. Harness start/stop/tool hook monitors continue using
+`<stateRoot>/.ctrlyoke/temp/<harness>-notifications/` through
+`CliNotificationMonitor`, and `.ctrlyoke/temp/` remains workspace-scoped and
+gitignored. VS Code toast notification settings/events also remain configuration
+and in-memory delivery behavior, not files under `notifications/`.
+
+This scope change creates a concurrency requirement that does not exist today.
+`WebPushService.operationQueue` serializes one server instance only; two VS Code
+windows will share the files after the move. Put both VAPID-key creation and
+subscription read-modify-write operations behind `withFileLock`, retaining the
+atomic temp-file rename. The key-generation lock is essential: two first-time
+servers must not return different public keys and then race to persist one of
+them. Use distinct locks per file so an outbound send does not block an
+unrelated public-key read.
+
 `certs/` holds the self-signed TLS cert for the hosted dashboard. Regenerating it
 means re-accepting the certificate warning on every device that had trusted it.
-Notably, `WebviewSettingsSync.handleGenerateServerCert` (line ~1089) **already**
-branches `scope === CONFIG_SCOPE.USER ? homedirFn() : getVsCodeWorkspaceRoot()`,
-so `~/.ctrlyoke/certs/` is an existing, working code path. The change is to make
-user scope the default, not to build anything.
+The implementation-readiness audit confirmed this is already solved:
+
+- `GlobalSettingsDrawer` initializes its shared scope toggle to `user`;
+- `ServerSection.handleGenerateCert` sends that currently selected scope; and
+- `WebviewSettingsSync.handleGenerateServerCert` writes both `cert.pem`/`key.pem`
+  and `server.tls.certPath`/`keyPath` to the selected user or workspace scope.
+
+Therefore there is **no certificate storage change in this plan**. Preserve the
+current user default and explicit workspace option. Keep `certs/` in the
+workspace runtime ignore/landing guard because a user who deliberately selects
+Workspace still creates `<stateRoot>/.ctrlyoke/certs/`. Existing workspace certs
+are neither moved nor rewritten. Existing `WebviewSettingsSync.test.ts` coverage
+already asserts both the user and workspace branches.
 
 ### 2.3 `attachments/` and `prompts/` stay ignored — but two comments claim otherwise
 
 These two look misfiled and are not. `dev/implemented/WORKFLOW_PORTABILITY_PLAN.md`
 settled it deliberately, and its ledger step 12 ("Missing-assets warning, ignore
-entries, docs") is `done` — the entries are the *last* step of a shipped design,
+entries, docs") is `done` — the entries are the _last_ step of a shipped design,
 not an oversight.
 
 The reasoning there is worth restating because it is exactly what makes the
@@ -137,7 +181,7 @@ files. What it deletes here is ephemeral-run scratch, which is the intent.
 
 **Separately, and more decisively for this document: they cannot move either.**
 Both stores hold files that are `@`-referenced into prompts and therefore read
-*by the harness*, and harnesses sandbox to the workspace. A user-scoped
+_by the harness_, and harnesses sandbox to the workspace. A user-scoped
 `~/.ctrlyoke/attachments/` would need a per-harness escape hatch to be readable
 at all — Claude Code's `--add-dir`, and an equivalent for each of the other five
 — turning a pasted screenshot into a permissions problem. Run history has no
@@ -161,7 +205,7 @@ took them at face value and proposed reversing a deliberate decision. Correct
 them to point at the Save-As bundling contract. That is the whole fix here; it is
 a comment change, not a policy change.
 
-The one real residual gap is already decided in that plan's §8.4: adding a *new*
+The one real residual gap is already decided in that plan's §8.4: adding a _new_
 screenshot to an already-committed workflow lands ignored until the workflow is
 re-saved. Covered by a release note, deliberately not by code.
 
@@ -174,7 +218,7 @@ Tempting, but no — for three reasons:
 2. The durable thing you actually want after the fact is the run's own
    `events.jsonl`, which already lives in `.runs/` and therefore already moves.
 3. The cost is real. `src/scripts/ctrlyoke-hook-utils.js` derives the logs
-   directory *positionally* — it walks up two levels from the notify directory to
+   directory _positionally_ — it walks up two levels from the notify directory to
    reach `.ctrlyoke/` and appends `logs/`. Those scripts are spawned by external
    harness CLIs with the workspace as cwd. Moving logs means threading a new
    absolute path into every `src/scripts/ctrlyoke-*-hook.js`, plus rewriting the
@@ -185,17 +229,19 @@ Real plumbing cost, zero durability benefit. Leave them.
 
 ### 2.5 Resulting move set
 
-Three units, cleanly separable:
+Three scope outcomes, with the two move units cleanly separable:
 
 - **Project-derived** → `~/.ctrlyoke/projects/<key>/`: `.runs/`,
   `.search-index/`, `.usage/{lifetime-stats,observed-usage}.json`. These are
   three projections of one run corpus and must never diverge — they move together
   or not at all.
-- **Account/machine** → `~/.ctrlyoke/`: `notifications/`, `certs/`,
+- **Account/machine** → `~/.ctrlyoke/`: `notifications/` and
   `usage/provider-snapshots.json`. Independent of the above; ships on its own.
-  Note this *strengthens* the "secrets, hard rule" line in
+  Note this _strengthens_ the "secrets, hard rule" line in
   `WORKFLOW_PORTABILITY_PLAN.md` §2 rather than relaxing it — a private key that
   lives outside the repo cannot be committed by an edited `.gitignore` at all.
+- **Workspace runtime** → stays under `<stateRoot>/.ctrlyoke/`: `attachments/`,
+  `prompts/`, `logs/`, `temp/`, and `capabilities.json`.
 
 Nothing gets un-ignored. `attachments/` and `prompts/` stay exactly as they are
 (2.3).
@@ -216,8 +262,8 @@ users were explicitly pointed at going silently inert is the worst version of
 this; it has to be replaced in the same release, not left to be discovered.
 
 **`storage.runHistoryLocation` (5.4) is the replacement, and it is a better
-one.** The `.gitignore` dial only ever chose whether to *track* runs that were
-already in the workspace; the setting chooses where they *live*. Present it as
+one.** The `.gitignore` dial only ever chose whether to _track_ runs that were
+already in the workspace; the setting chooses where they _live_. Present it as
 the answer to "I want my runs in source control," not as an unrelated storage
 knob.
 
@@ -225,7 +271,7 @@ knob.
 stated, because the three pieces were designed at different times:
 
 - **Ephemeral, workspace-scoped:** `attachments/` and `prompts/` — assets for
-  runs happening in *this* workspace, readable by the harness because they are
+  runs happening in _this_ workspace, readable by the harness because they are
   inside it (2.3).
 - **Ephemeral, user-scoped:** `.runs/` — the run history and metadata those
   assets belong to. Outside the workspace, and outside the harness sandbox,
@@ -241,11 +287,10 @@ intended behavior. Keep it. No `.ctrlyoke/workflows/` default — the point is t
 durable workflows are ordinary repo files, and steering the default into
 `.ctrlyoke/` would undercut that.
 
-Worth saying plainly in the docs: **this is what every other harness does.**
-Claude, Codex, and the rest all keep session history in a user-level directory
-keyed by project path. Users arriving from those tools will find run history
-outside the repo unsurprising; what would surprise them is a tool that puts
-conversation logs in their commits.
+Worth saying plainly in the docs: **user-level, project-keyed session history is
+a familiar harness pattern.** Claude and Codex use it, so users arriving from
+those tools will find run history outside the repo unsurprising; what would
+surprise them is a tool that puts conversation logs in their commits.
 
 Concretely, in the same release: update the QUICK_START/`docs/guide/` copy
 drafted in `WORKFLOW_PORTABILITY_PLAN.md` §7, and update the `.gitignore` header
@@ -261,12 +306,12 @@ the file is how you "start tracking runs," which becomes the wrong instruction.
   settings.json                     ← already exists (FileConfigBackend.ts:107)
   external-roots-trust.json         ← already exists (ExternalRootsTrustStore.ts)
   agents/  skills/  templates/      ← already exist (HarnessDirectoryUtils.ts)
-  certs/                            ← moved; path already supported today (2.2)
-  notifications/                    ← moved: VAPID keypair + subscriptions (2.2)
+  certs/                            ← already the default generated-cert location
+  notifications/                    ← moved: browser-push VAPID keypair + subscriptions (2.2)
   usage/
-    provider-snapshots.json         ← moved: account-level quota, not project (2.1)
+    provider-snapshots.json         ← moved: cached provider account-quota windows (2.1)
   projects/
-    ctrlyoke-3f9a2c71/
+    ctrlyoke-3f9a2c71b947/
       project.json                  ← identity + reverse lookup
       .runs/<workflowKey>/...       ← byte-identical to today's layout
       .search-index/
@@ -286,31 +331,60 @@ path by replacing separators with `-`. It is readable, and it collides:
 `C:\dev\ctrlyoke` and `C:\dev-ctrlyoke` produce the same directory, silently
 fusing two projects' histories. Don't copy that part.
 
-**Use `<slug>-<hash8>`:**
+**Use `<slug>-<hash12>`:**
 
-- `slug` = sanitized basename of the state root (`ctrlyoke`), for human scanning.
-- `hash8` = first 8 hex chars of `sha256(foldPathForCompare(path.resolve(stateRoot)))`.
+- `slug` = lowercase ASCII-sanitized basename of the state root (`ctrlyoke`),
+  capped at 48 characters, with `project` as the empty fallback.
+- `hash12` = first 12 hex chars of
+  `sha256(foldPathForCompare(path.resolve(stateRoot)))`.
 
 `foldPathForCompare` already exists in `src/utils/PathCasing.ts` and already owns
 the win32 case-folding problem — reuse it rather than inventing a second
-canonicalization. Result: `ctrlyoke-3f9a2c71`. Readable at a glance, collision-free
-in practice, and stable across the drive-letter casing differences that
-`PathCasing.ts` documents (VS Code emits `c:/…`, Node emits `C:\…`).
+canonicalization. Result: `ctrlyoke-3f9a2c71b947`. Twelve hex characters keep
+the directory readable while making a collision negligible even at a scale far
+beyond a personal project list. The result is stable across the drive-letter
+casing differences that `PathCasing.ts` documents (VS Code emits `c:/…`, Node
+emits `C:\…`).
 
 ### 3.2 `project.json`
 
 ```jsonc
 {
   "schemaVersion": 1,
-  "statePath": "C:\\dev\\ctrlyoke",   // absolute, as first seen
+  "statePath": "C:\\dev\\ctrlyoke", // absolute, as first seen
   "gitToplevel": "C:\\dev\\ctrlyoke", // if any, for future relink heuristics
   "createdAt": "2026-08-13T23:00:00.000Z",
-  "lastOpenedAt": "2026-08-13T23:40:00.000Z"
+  "lastOpenedAt": "2026-08-13T23:40:00.000Z",
 }
 ```
 
 Needed for three things: reverse lookup when a user finds an opaque hash dir,
 a future cross-project history browser, and pruning.
+
+Path calculation stays pure and synchronous; metadata persistence does not
+belong in `projectStateRoot()`. Add a vscode-free `ProjectStateRegistry` that is
+initialized after config bootstrap and before any history scan in the extension
+and history-using CLI commands (`run`, not parse-only `validate` or unrelated
+`commit`). In user mode it:
+
+1. creates the project directory and `project.json` under a file lock;
+2. writes through a same-directory temp file and atomic rename;
+3. preserves `createdAt`, refreshes `lastOpenedAt`, and records `gitToplevel`
+   when the caller has one; and
+4. compares an existing `statePath` with `pathsEqual` before allowing access.
+
+A mismatched `statePath` is a fatal collision/corruption error — never append a
+longer hash dynamically, because that makes the mapping nondeterministic between
+processes and breaks the migration script. A missing `project.json` is accepted
+only when the computed project directory is empty; a non-empty unowned directory
+also fails loudly. Reject metadata with a newer unsupported `schemaVersion`.
+Workspace mode does not create a user project directory or `project.json`.
+
+Treat the user state tree as private data: create new POSIX directories with
+mode `0700` and metadata/notification/usage files with mode `0600` (Windows
+ignores these modes). Registry, prune, relink, and migration operations must
+reject symlinked project directories and re-run containment checks against the
+real `<ctrlyokeStateHome>/projects` root before renaming or deleting anything.
 
 ### 3.3 What the key is derived from — and what it is not
 
@@ -325,15 +399,23 @@ That is the desired behavior and it comes for free.
 paths are two projects with two histories; fusing them by remote URL or by the
 initial commit would be wrong and surprising.
 
-Consequence to accept: opening a worktree directory *directly* as its own VS Code
+Consequence to accept: opening a worktree directory _directly_ as its own VS Code
 workspace yields its own history, because its `stateRoot` is that directory.
 Correct by the same rule, but worth a doc note.
+
+**Multi-root resolution is already decided by existing architecture:** there is
+one history project per resolved ctrlyoke state root, not one per workspace
+folder. `getVsCodeWorkspaceRoot()` selects the `.code-workspace` directory, the
+configured `ctrlyoke.workspaceDirectory`, or the first folder; all other folders
+are additional trusted/execution roots only. Hash that one resolved root. This
+preserves the current single dashboard/session namespace for the window and
+avoids duplicate `WorkflowKey` namespaces inside one orchestrator.
 
 ---
 
 ## 4. The change is small, because one function already owns the root
 
-`src/utils/WorkflowPaths.ts` is, by its own header comment, "the *only* module
+`src/utils/WorkflowPaths.ts` is, by its own header comment, "the _only_ module
 allowed to construct a `.runs` path from raw parts." That holds up: every one of
 `lineageDir`, `descriptorPath`, `runnerLockPath`, `draftDir`, `draftFilePath`,
 `runDir`, `runFilePath`, `pendingRewindDir`, `manifestPath`, `eventsPath`,
@@ -342,7 +424,11 @@ allowed to construct a `.runs` path from raw parts." That holds up: every one of
 
 ```ts
 export function runsRoot(workspaceRoot: string): string {
-  return path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR, PATH_CONSTANTS.RUNS_DIR);
+  return path.join(
+    workspaceRoot,
+    PATH_CONSTANTS.CTRLYOKE_DIR,
+    PATH_CONSTANTS.RUNS_DIR
+  );
 }
 ```
 
@@ -353,29 +439,62 @@ lives under" and starts meaning "the project identity" — a rename to
 
 ```ts
 // src/utils/ProjectStatePaths.ts  (new — must stay vscode-free)
-export function projectStateRoot(stateRoot: string): string;
+export function ctrlyokeStateHome(): string;
+export function projectStateRoot(
+  stateRoot: string,
+  location: RunHistoryLocation
+): string;
 export function projectKey(stateRoot: string): string;
 
 // WorkflowPaths.ts
 export function runsRoot(stateRoot: string): string {
-  return path.join(projectStateRoot(stateRoot), PATH_CONSTANTS.RUNS_DIR);
+  return path.join(
+    projectStateRoot(stateRoot, getFrozenRunHistoryLocation()),
+    PATH_CONSTANTS.RUNS_DIR
+  );
 }
 ```
 
 **Hard constraint:** `ProjectStatePaths.ts` may import only `node:path`,
-`node:os`, `node:crypto`, and `PathCasing`. `WorkflowPaths.ts` is deliberately
+`node:os`, `node:crypto`, `PathCasing`, and type-only shared storage contracts.
+`WorkflowPaths.ts` is deliberately
 vscode-free so `src/mcp-server.ts` (plain Node/CJS) can import it — that is why
-`mcp-server.ts:806`'s `.runs/` scan will follow the move with no edit at all.
+`mcp-server.ts:806`'s `.runs/` scan can keep using the same path API.
 Importing anything vscode-shaped into the new module silently breaks the MCP
 server bundle.
 
+The location setting introduces one necessary boundary that the first draft
+missed: `projectStateRoot(stateRoot)` cannot both stay pure and discover a user
+setting by itself. Resolve `storage.runHistoryLocation` once, after config
+backends are initialized, and freeze it for the process lifetime in a small
+vscode-free storage-policy module. `WorkflowPaths`, `UsagePaths`, and the search
+index use that frozen value. The extension and CLI initialize it before any
+history consumer. Export the resolved value to the MCP child process (for
+example `CTRLYOKE_RUN_HISTORY_LOCATION`) and initialize the same policy at MCP
+startup; the pinned `CTRLYOKE_WORKING_FILE` is not enough because
+`ctrlyoke_global_status` scans sibling lineages.
+
+Changing the setting while the extension is running writes the new user value
+but does not retarget live instances or locks. The settings UI must label it
+"Requires reload" and offer/recommend a window reload. This avoids one process
+reading a lock in one root and releasing it in another. CLI invocations naturally
+pick up the new value on their next process start.
+
+`ctrlyokeStateHome()` returns the resolved `CTRLYOKE_HOME` override when present,
+otherwise `path.join(os.homedir(), ".ctrlyoke")`. The override is intentionally
+limited to the new project/account state described by this plan; existing
+settings, agents, skills, and templates keep their current home resolution.
+Use the same helper for project state, browser-push state, and provider quota
+snapshots so tests and side-by-side builds do not leak those new writes into the
+real home.
+
 `HistorySearchIndexService.ts:753` gets the same one-line treatment for
-`.search-index`.
+`.search-index`: derive it from `projectStateRoot(stateRoot, frozenLocation)`.
 
 `src/utils/UsagePaths.ts` is the one that does **not** get a uniform treatment,
 per 2.1: `lifetimeStatsPath` and `observedUsagePath` retarget to the project
 dir, while `providerSnapshotsPath` drops its `workspaceRoot` parameter entirely
-and returns `~/.ctrlyoke/usage/provider-snapshots.json`. Dropping the parameter
+and returns `<ctrlyokeStateHome>/usage/provider-snapshots.json`. Dropping the parameter
 rather than ignoring it is deliberate — it makes the scope change visible at
 every call site (`HarnessUsageService.ts:185`) instead of leaving a lie in the
 signature.
@@ -387,21 +506,29 @@ signature.
 These are the reason this is a plan and not a one-line patch. Each one assumes
 today that "run artifacts are inside the workspace."
 
-### 5.1 The runner.json watcher — will break
+### 5.1 Four VS Code watchers — all will break
 
-`WorkflowOrchestrator.ts:5597-5604` builds its watcher glob by making the runs
-root *relative to the workspace*:
+`WorkflowOrchestrator.ts:5597-5604` builds its `runner.json` discovery watcher
+by making the runs root _relative to the workspace_:
 
 ```ts
-const runsRootRelative = path.relative(workspaceFolderPath, runsRootDir).replace(/\\/g, "/");
-const pattern = new vscode.RelativePattern(workspaceFolderPath, `${runsRootRelative}/*/runner.json`);
+const runsRootRelative = path
+  .relative(workspaceFolderPath, runsRootDir)
+  .replace(/\\/g, "/");
+const pattern = new vscode.RelativePattern(
+  workspaceFolderPath,
+  `${runsRootRelative}/*/runner.json`
+);
 ```
 
 After the move this yields a `../../../Users/...` pattern, which VS Code will not
 watch. Fix by basing the pattern on the runs root itself:
 
 ```ts
-const pattern = new vscode.RelativePattern(vscode.Uri.file(runsRootDir), "*/runner.json");
+const pattern = new vscode.RelativePattern(
+  vscode.Uri.file(runsRootDir),
+  "*/runner.json"
+);
 ```
 
 VS Code has supported watching outside the workspace via a `Uri`-based
@@ -411,6 +538,24 @@ out-of-workspace watching actually fires** on Windows during Phase 1 rather than
 trusting the API surface. This watcher is how VS Code notices a CLI-started run,
 so a silent failure here is a real regression with no error message.
 
+The initial audit missed the three exact-file watchers in `CliWatchSession`:
+
+- `setupWorkingFileWatcher()` bases the run file on `workspaceFolderPath`;
+- `setupLockFileWatcher()` bases `runner.json` on `workspaceFolderPath`; and
+- `setupHistoryWatcher()` bases the manifest on `workspaceFolderPath`.
+
+All three will also produce `../../..` patterns. For an exact external file,
+base the `RelativePattern` on `vscode.Uri.file(path.dirname(targetPath))` and use
+`path.basename(targetPath)` as the pattern. Preserve the existing create/change/
+delete subscriptions and heartbeat fallback. Ensure the project and `.runs`
+directories exist before installing the discovery watcher; a watcher rooted at
+a nonexistent external directory cannot reliably observe the directory itself
+being created.
+
+Add focused mocked-pattern tests for all four bases, plus one manual or extension
+integration check on Windows that starts a CLI run after VS Code activation and
+observes live working-file, manifest, and lock-delete events.
+
 ### 5.2 File access policy — run artifacts leave the trusted set
 
 `src/utils/FileAccessPolicy.ts` allows a path when it is inside
@@ -419,35 +564,51 @@ so a silent failure here is a real regression with no error message.
 After the move they fail both.
 
 Do **not** fix this by pushing the project state root into
-`ExecutionWorkspace.workspaceRoots` — that widens what the *harness* may read,
+`ExecutionWorkspace.workspaceRoots` — that widens what the _harness_ may read,
 and does it invisibly. Add a third, explicit reason instead:
 
 ```ts
-type FileAccessReason = "workspace" | "ownStateRoot" | "trustedExternalRoot" | "outsideTrustedRoots";
+type FileAccessReason =
+  | "workspace"
+  | "ownStateRoot"
+  | "trustedExternalRoot"
+  | "outsideTrustedRoots";
 ```
 
-`ownStateRoot` covers ctrlyoke's own UI reads (open a run definition, resolve a
-prior-context source) and stays auditable at the call site. It must **not** be
-fed into the harness's approved-roots list.
+Add an explicit `ownStateRoots` option to the pure policy comparator and check it
+after workspace roots but before approved external roots. `ownStateRoot` covers
+ctrlyoke-owned UI reads and stays auditable at each call site. Pass it only from
+UI/open-file and prompt-file resolution paths that are allowed to inspect the
+current project's run artifacts. Do not pass it to `RunOutputResolver`'s file-
+change projection (those paths describe harness workspace edits), and do **not**
+feed it into `ExecutionWorkspace.workspaceRoots`, `ContextExpander`, attachment
+builders, or any harness approved/additional-root list.
 
-Decide explicitly and record the answer: today a user can write
-`@.ctrlyoke/.runs/<key>/<run>/…` in a prompt, and
-`AddressedPriorContextResolver.ts:97` validates such sources against the runs
-root. After the move that literal workspace-relative reference is dead. Either
-keep resolving it via the project state root, or introduce an explicit
-`@runs/…` form. Silently returning "file not found" is the one unacceptable
-outcome.
+The first draft conflated two different mechanisms. `AddressedPriorContextResolver`
+does not accept a literal path; it accepts `{ workflowKey, runRef }`, constructs
+the manifest through `WorkflowPaths`, and will follow the move automatically.
+A literal `@.ctrlyoke/.runs/...` is only a normal workspace file reference today.
+Do not add a compatibility alias or a new `@runs/` virtual filesystem. Such an
+alias would create a second history-address grammar and encourage durable
+workflows to depend on machine-local artifacts. The supported path-independent
+form is `priorContext: { workflowKey, runRef }`; update validation/help text so a
+missing old-style `@.ctrlyoke/.runs/...` reference points users to that form
+rather than failing without guidance.
 
 ### 5.3 A throwaway script, not a migration
 
 ctrlyoke is pre-release with no customers and one developer. There is **no
 compatibility contract to honor**: no read-through fallback to the old location,
 no first-load migration offer, no `MOVED.md` breadcrumb, no deprecation window,
-no test suite for the move. New code reads the new location, full stop.
+and no permanent compatibility suite for the old layout. New code reads the new
+location, full stop.
 
 What is actually needed is a one-off `scripts/migrate-runs-to-user-scope.mjs`
 that the author runs once per repo across roughly five repositories on Windows,
-macOS, and Linux, and then deletes.
+macOS, and Linux, and then deletes. Although disposable, cover its key, dry-run,
+live-lock, destination-conflict, and `EXDEV` behavior with a focused test while
+it exists; a migration utility whose failure looks like data loss should not be
+validated only by inspection.
 
 Cross-platform is the only real requirement, and it is narrower than it sounds —
 the script must produce **exactly** the project key the implementation will
@@ -455,7 +616,10 @@ compute, or it files history into a directory ctrlyoke never looks in and the
 result looks identical to data loss. Two consequences:
 
 - Give it a `--print-key` mode. Run it, compare against the path the extension
-  resolves, *then* move anything.
+  resolves (including the 12-character hash), _then_ move anything.
+- Accept `--state-root <path>` (default `process.cwd()`) and print the resolved
+  state root, key, and full destination. A repository root is not always the
+  state root in a `.code-workspace` or `ctrlyoke.workspaceDirectory` setup.
 - Case folding differs by platform (win32 folds, macOS/Linux do not — see
   `PathCasing.foldPathForCompare`). Duplicate that behavior exactly rather than
   approximating it with `toLowerCase()`.
@@ -476,17 +640,30 @@ Keep three safety properties from the existing script and drop the rest:
 
 Refuse to run if any `runner.json` in the tree holds a live PID.
 
-Only `.runs/` needs moving. `.search-index/` and `.usage/` are derived from it
-and rebuild themselves (`LifetimeUsageStore` already has a checkpointed backfill
-path — `LIFETIME_USAGE_ERROR_CODES.BACKFILL_REQUIRED`), so the script should
-delete them and let the next activation regenerate. Confirm `observed-usage.json`
-also backfills before relying on this; if it does not, move it rather than
-teaching the script to reconstruct it.
+Refuse to merge any destination that already contains a lineage or observed-
+usage contribution. A prior extension activation may legitimately have created
+a matching `project.json` plus empty `.runs`, `.search-index`, or `.usage`
+scaffolding; validate the metadata and allow/remove only that empty scaffold.
+Create or validate `project.json` using the same schema and collision rules as
+the implementation.
+For the `EXDEV` fallback, copy into a hidden staging sibling under the destination
+project, fsync/close files, rename the completed staging directory into place,
+and only then remove the source. A direct recursive copy exposes a half-migrated
+history to an extension opened mid-command.
+
+Move `.runs/` **and** `.usage/observed-usage.json`. The current
+`ObservedHarnessUsageStore` has no manifest backfill; deleting that file loses
+its retained daily/weekly/monthly contributions until runs happen to be written
+again. `lifetime-stats.json` is genuinely rebuildable and `.search-index/` is
+derived, so delete those source artifacts on `--apply` after the run move
+succeeds. Do not migrate workspace `provider-snapshots.json`; the account-scoped
+service can refresh it. Remove an empty source `.usage/` directory, but leave any
+unknown files untouched and report them.
 
 Nothing else needs rewriting: `QueueState.workingFilePath` is in-memory per
-client, `workflow.json` stores `latestRunRef` (a ref, not a path), and the VS Code
-`globalState` recent-workflow entries hold absolute paths used only for dedup,
-which self-heal.
+client, `workflow.json` stores `latestRunRef` (a ref, not a path), recent workflows
+are rebuilt by scanning descriptors, and the webview persists
+`displayedViewAddress` as `{ workflowKey, runRef? }` rather than an absolute path.
 
 ### 5.4 `storage.runHistoryLocation`
 
@@ -501,8 +678,20 @@ branch to keep correct — every existing test already covers that path.
 **User scope only.** A workspace-scope setting that relocates where ctrlyoke
 writes state is a cloned repo redirecting another user's writes, and it creates
 a chicken-and-egg problem: state location would depend on a file inside the
-location being decided. Enforce this in the settings schema, not just by
-convention.
+location being decided. The shared JSON schema cannot distinguish which backend
+it is validating, so enforce this where scope is known: add `storage` to
+`CtrlYokeConfigService`'s workspace-forbidden paths (the same mechanism already
+used for `worktrees`) and omit/disable workspace-scope controls in the settings
+UI. On reads, use the default/user backend value only; ignore and diagnose a
+manually authored workspace `storage` object so it cannot win through the normal
+workspace-over-user merge. Add the type/default, `RUN_HISTORY_LOCATIONS` constants,
+schema, `ConfigurationUtils` accessor, settings UI, docs, and config-service tests.
+
+Switching the setting does not migrate data. The UI warning must say that the
+other location will appear as a different history after reload and that the
+user can switch back without data loss. The personal migration script handles
+only the one-time pre-release workspace → user move; `history relink` handles a
+project path change, not a location-mode change.
 
 ### 5.5 Smaller items
 
@@ -513,10 +702,12 @@ convention.
   consumer: `WorktreeManager.ts:573` uses it via
   `isWorkspaceInitializerRuntimePath` to **block** a managed worktree landing
   that would stage a runtime path ("Managed landing would stage runtime paths:
-  …"). Do not remove the moved entries (`.runs/`, `.search-index/`, `.usage/`,
-  `notifications/`, `certs/`) once the directories relocate — a pre-migration
-  repo, or a user who set `storage.runHistoryLocation: "workspace"` (5.4), still
-  has them on disk and still needs both the ignore rule and the landing guard.
+  …"). Do not remove the entries for moved/default-user data (`.runs/`,
+  `.search-index/`, `.usage/`, `notifications/`) or for workspace-opt-in `certs/`.
+  A pre-migration repo, a user who set
+  `storage.runHistoryLocation: "workspace"` (5.4), or a user who explicitly
+  generated a workspace certificate can still have them on disk and still needs
+  both the ignore rule and the landing guard.
   `ensureGitignore` is append-only anyway, so removing an entry would not reach
   existing workspaces; it would only desynchronize the guard from reality.
 - `WorkspaceInitializer` itself scaffolds no subdirectories (`initializeIfNeeded`
@@ -524,17 +715,34 @@ convention.
   directory on demand), so there is no directory-creation code to remove — only
   the generated `.gitignore` **header text** to correct per 2.6.
 - Home directories under OneDrive/Dropbox now sync run history — mostly a
-  feature, but concurrent sync writes to `runner.json` deserve a doc note.
+  feature, but running the same project simultaneously on two synced machines is
+  unsupported: PIDs and file locks are machine-local. Document that restriction;
+  do not imply the runner lock can coordinate across devices.
 - Deleting a repo now orphans its project directory forever. Ship a
   `ctrlyoke history prune` (list projects whose `statePath` no longer exists,
-  confirm, delete) in the same phase, not "later."
+  confirm, delete) in the same release, not "later." Treat inaccessible paths
+  (permissions, disconnected network volumes, transient I/O errors) as unknown,
+  not orphaned. Refuse to prune a project containing a live `runner.json`; require
+  `--yes` for non-interactive deletion and default to a list/dry-run.
 - Moving or renaming a repo silently starts an empty history — the same flaw
   Claude has. `ctrlyoke history relink <oldPath> <newPath>` is a cheap fix given
-  `project.json` already records `statePath`.
+  `project.json` already records `statePath`. Relink computes both keys, refuses
+  a live runner or destination containing real history, but may replace the
+  matching empty scaffold created by opening `newPath` before relinking. It
+  atomically renames the project directory within `<ctrlyokeStateHome>/projects`,
+  preserves `createdAt`, and updates
+  `statePath`, `gitToplevel`, and `lastOpenedAt` under the registry lock. It is a
+  user-history command even when the current storage preference is `workspace`.
 - `.github/copilot-instructions.md` documents `.ctrlyoke/.runs/<workflowKey>/`
   as a debugging location (run storage, `runner.json`, `events.jsonl`). That
   section becomes wrong on the day this ships and must be updated in the same
   change. Its `.ctrlyoke/logs/` guidance stays correct — see 2.4.
+- Update every current user-facing/debugging reference found by the path audit,
+  not only QUICK_START: `README.md`, `QUICK_START.md`, `docs/guide/**`,
+  `docs/troubleshooting/index.md`, `.github/copilot-instructions.md`, the scoped
+  core/orchestration/types/utils instruction files, and
+  `src/templates/agents/ctrlyoke-tech-support.agent.md`. Code comments that name
+  the old physical root should say "run storage" or show both resolved modes.
 
 ---
 
@@ -543,39 +751,58 @@ convention.
 27 files under `src/test/` reference `.runs`, `runsRoot`, or `WorkflowPaths`.
 Most construct a temp workspace and assert on paths beneath it.
 
-The leverage: point `projectStateRoot()` at an injectable base (env var
-`CTRLYOKE_HOME`, honored by `ProjectStatePaths` only) and most of these keep
-working with a per-test temp home. Tests that hardcode
+The leverage: point `projectStateRoot()` at an injectable base (`CTRLYOKE_HOME`)
+and most of these keep working with an isolated test home. Set it once in the
+extension-test bootstrap to a unique temp directory for that process; do not
+mutate a process-global environment variable in concurrently running suites.
+Tests that hardcode
 `path.join(workspace, ".ctrlyoke", ".runs")` must move to
 `WorkflowPaths.runsRoot(workspace)` — which is what the module's own header
 already tells them to do, so this is a conformance fix, not new debt.
 
 `CTRLYOKE_HOME` is also the honest answer for CI and for anyone running two
-ctrlyoke builds side by side.
+ctrlyoke builds side by side. Child MCP processes inherit both it and the frozen
+location value.
+
+Required focused coverage:
+
+- deterministic keys across Windows drive-letter casing, slug sanitization,
+  workspace/user modes, and `CTRLYOKE_HOME`;
+- `project.json` create/update, unsupported schema, missing metadata in a
+  non-empty directory, and state-path collision failure;
+- user-only config enforcement and reload/frozen-policy behavior;
+- all four external watcher patterns;
+- `ownStateRoot` allowing UI reads without widening harness trusted roots;
+- project-scoped search/usage paths, account-scoped provider-quota/browser-push
+  paths, and unchanged workspace-scoped hook-notification/UX-snapshot paths;
+- multi-root uses the one resolved state root; managed worktrees keep the
+  initiating `stateRoot`; and direct worktree opens get their own key;
+- prune/relink dry-run, live-run refusal, inaccessible-path handling, and
+  destination collision; and
+- migration of `.runs` plus observed usage, including the `EXDEV` staged move.
 
 ---
 
 ## 7. Phasing
 
-| Phase | Content | Ships value alone? |
-| ----- | ------- | ------------------ |
 Being pre-release removes the usual constraint that a storage move must be
 survivable in stages. There is no installed base to keep working, so the
 sequencing below is about reviewable chunks, not compatibility windows.
 
-| Phase | Content | Ships value alone? |
-| ----- | ------- | ------------------ |
-| 1 | `ProjectStatePaths.ts`, redirect `runsRoot`, `.search-index` and the two project-scoped `.usage` files follow, fix the watcher (5.1), `FileAccessPolicy` `ownStateRoot` (5.2), `CTRLYOKE_HOME`, test conformance | **Yes** — this is the whole fix |
-| 2 | `storage.runHistoryLocation` (5.4), plus the 2.6 messaging: QUICK_START/`docs/guide/` copy, generated `.gitignore` header, `ui.instructions.md` | Required in the same release as 1 |
-| 3 | **Account/machine scope (2.2):** `notifications/`, `certs/` default to user scope, `provider-snapshots.json` → `~/.ctrlyoke/usage/` | Yes — fully independent, could go first |
-| 4 | `history prune`, `history relink` | Yes |
-| 5 | Read-side rollups: fold `observed-usage.json` buckets across projects (2.1) | Yes |
+| Phase | Content                                                                                                                                                                                                                                                          | Ships value alone?                                                              |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 1     | `ProjectStatePaths`, frozen storage policy/MCP propagation, `ProjectStateRegistry`, redirect `runsRoot`, `.search-index` and project `.usage`, fix all four watchers (5.1), scoped `FileAccessPolicy` support (5.2), `CTRLYOKE_HOME`, test conformance           | **Yes** — default user storage works end to end                                 |
+| 2     | `storage.runHistoryLocation` (5.4), reload behavior, plus the 2.6 messaging and complete old-path documentation audit                                                                                                                                            | Required in the same release as 1                                               |
+| 3     | **Account/machine scope (2.2):** lock-safe global browser-push `notifications/` and provider-quota cache `provider-snapshots.json` → `<ctrlyokeStateHome>/usage/` with merge-on-write; no cert, hook-notification, UX-snapshot, or undo-snapshot behavior change | Yes — independently reviewable; may introduce the small state-home helper first |
+| 4     | `history prune`, `history relink`                                                                                                                                                                                                                                | Yes; release gate for 1/2, though reviewable separately                         |
+| 5     | Read-side rollups: fold `observed-usage.json` buckets across projects (2.1)                                                                                                                                                                                      | Yes                                                                             |
 
 `scripts/migrate-runs-to-user-scope.mjs` (5.3) is not a phase — it is a personal
 tool written alongside phase 1, run once per repo, and deleted.
 
-Phase 3 has no dependency on the `ProjectStatePaths` work; if this plan stalls,
-it is still worth landing on its own.
+Phase 3 has no dependency on project-key or run-history redirection. It shares
+only the small `ctrlyokeStateHome()` helper and is still worth landing if the
+rest of the plan stalls.
 
 `attachments/`, `prompts/` (2.3) and `logs/` (2.4) are deliberately absent — they
 stay where they are. The stale comments identified in 2.3 were corrected when this
@@ -592,8 +819,8 @@ single workspace's `runsRoot`). Once every project's runs live under one root,
 directory walks over `~/.ctrlyoke/projects/*/` rather than features that need
 new storage. Relevant to `STATS_AND_USAGE_PAGE_PLAN.md`.
 
-The cost, stated plainly: run history stops being shareable by commit *by
-default*. Nobody was committing `.runs` — it has been gitignored the whole time —
+The cost, stated plainly: run history stops being shareable by commit _by
+default_. Nobody was committing `.runs` — it has been gitignored the whole time —
 so nothing regresses in practice, and `storage.runHistoryLocation: "workspace"`
 (5.4) keeps the door open for anyone who wants it. If sharing a single run
 becomes a real requirement, that still wants an explicit export/import (see
@@ -601,21 +828,23 @@ becomes a real requirement, that still wants an explicit export/import (see
 
 ---
 
-## 9. Open questions
+## 9. Decisions recorded by the implementation-readiness review
 
-1. **`@.ctrlyoke/.runs/…` references** (5.2) — keep resolving the old spelling
-   against the new root, or introduce `@runs/…`? Needs a decision before phase 1
-   lands. Note the harness-sandbox asymmetry in 2.3 applies here too: whatever the
-   spelling, ctrlyoke resolves and injects the content, so the harness never needs
-   filesystem access to the runs root.
-2. **Multi-root workspaces** — one project dir per folder is the natural reading
-   of the current per-`workspaceFolderPath` code, but confirm nothing assumes a
-   single history across folders.
-3. **`hash8` collision handling** — 8 hex chars over a user's project count is
-   effectively safe, but `project.json` makes detection trivial. Fail loudly on
-   a `statePath` mismatch, or extend to `hash12`? Cheap to decide, expensive to
-   discover later.
+1. **No `@runs/` alias and no legacy path remap.** Addressed history injection
+   uses the existing path-independent `{ workflowKey, runRef }` prior-context
+   form. Literal workspace file references remain literal and receive actionable
+   missing-reference guidance.
+2. **One project per resolved state root in a multi-root window.** Additional
+   workspace folders do not create additional history namespaces.
+3. **Use `hash12`; fail on metadata mismatch.** Never lengthen a colliding key
+   dynamically.
+4. **Storage location is startup-frozen and user-only.** A change requires reload,
+   does not move data, and is propagated explicitly to MCP children.
+5. **Observed usage moves with runs.** It does not currently backfill from
+   manifests; lifetime stats and the search index do.
+6. **Prune/relink ship in the same release.** They can be separate review phases,
+   but user-scoped project directories do not ship without lifecycle tools.
 
-**Resolved:** whether `storage.runHistoryLocation` could lag the move — it
-cannot; per 2.6 it is the replacement for a documented affordance, so it ships in
-the same release (phase 2).
+No product decision remains open. The choices above follow the current
+architecture and the plan's existing security/compatibility constraints; change
+one only if a different product behavior is desired.
