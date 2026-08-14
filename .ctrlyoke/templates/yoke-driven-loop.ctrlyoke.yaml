@@ -11,6 +11,7 @@ _templateMeta:
         - "**/*.json"
       autoFillFilename: true
 resumeSession: false
+priorContext: none
 harness: codex-cli
 model: gpt-5.6-luna
 executionMode: headless
@@ -24,7 +25,6 @@ steps:
     agent: spec-orchestrator
     mcpServers:
       - ctrlyoke
-    priorContext: none
     prompt: |
       Be my ctrlyoke orchestrator for this specification:
       @{file:specFile}
@@ -49,7 +49,6 @@ finalStep:
     - ctrlyoke
   resumeSession: true
   sessionId: 1
-  priorContext: none
   prompt: |
     Resume your ctrlyoke orchestrator session for this specification:
     @{file:specFile}
