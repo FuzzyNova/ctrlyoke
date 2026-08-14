@@ -38,6 +38,12 @@ import {
 
 const CODEX_HOOK_ARGS = ["--enable", "hooks"] as const;
 const CODEX_NOTIFICATION_SCRIPT_NAME = "ctrlyoke-codex-notify.js";
+// Without this override, interactive Codex sessions hang waiting for an update
+// confirmation prompt on startup. Headless is unaffected but the flag is harmless there.
+const CODEX_SKIP_UPDATE_CHECK_ARGS = [
+  "-c",
+  "check_for_update_on_startup=false",
+] as const;
 
 /**
  * Codex CLI Harness
@@ -193,6 +199,8 @@ export class CodexCliProvider implements ICliProvider {
     approvedExternalRoots?: readonly string[]
   ): Promise<CliProviderPreparation> {
     const args: string[] = [];
+
+    args.push(...CODEX_SKIP_UPDATE_CHECK_ARGS);
 
     // Use resolved properties if available (from PropertyResolver three-tier precedence)
     const resolvedModel = workflowContext?.resolvedProperties?.model;
