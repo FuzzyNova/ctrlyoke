@@ -83,6 +83,13 @@ export type ManagedWorktreeRecoveryOutcome =
   | "orphaned";
 
 export const MANAGED_WORKTREE_RECORD_SCHEMA_VERSION = 1 as const;
+export const NAMED_WORKTREE_SETUP_RECORD_SCHEMA_VERSION = 1 as const;
+
+export type NamedWorktreeSetupOutcome =
+  | "pending"
+  | "running"
+  | "succeeded"
+  | "failed";
 
 export interface ManagedWorktreeOwnershipRecord {
   schemaVersion: typeof MANAGED_WORKTREE_RECORD_SCHEMA_VERSION;
@@ -107,6 +114,13 @@ export interface ManagedWorktreeOwnershipRecord {
   branchState: "present" | "deleted" | "missing";
   recoveryOutcome?: ManagedWorktreeRecoveryOutcome;
   finalBranchTip?: string;
+}
+
+export interface NamedWorktreeSetupRecord {
+  schemaVersion: typeof NAMED_WORKTREE_SETUP_RECORD_SCHEMA_VERSION;
+  worktreePath: string;
+  setupOutcome: NamedWorktreeSetupOutcome;
+  updatedAt: number;
 }
 
 function getManagedWorktreeWatermark(
@@ -274,17 +288,10 @@ export interface ResolveNamedWorktreeOptions {
   instanceId?: string;
   /** Authored/default selection to retain on the execution workspace. */
   worktree?: WorktreeResolution;
-  /**
-   * Managed setup is automatically attempted for each newly created or
-   * recreated checkout; named setup remains creation-only unless retried.
-   */
+  /** Managed setup is automatically attempted for each newly created or recreated checkout. */
   setup?: string;
   /** Workflow vars are exported as CTRLYOKE_VAR_* by the shared runner. */
   vars?: Record<string, string>;
-  /** Explicit user action to retry a pending/running/failed setup. */
-  retrySetup?: boolean;
-  /** Setup outcome restored from the addressed working file. */
-  existingSetupOutcome?: "pending" | "running" | "succeeded" | "failed";
 }
 
 export interface EnsureManagedWorktreeOptions extends Omit<
@@ -461,6 +468,18 @@ export class WorktreeManager {
       normalizeBranchName(branchName.trim())
     );
     return this.tryReadRecord(recordPath);
+  }
+
+  /** Read the durable setup outcome associated with a named worktree path. */
+  public async readNamedWorktreeSetupRecord(
+    sourceCheckoutRoot: string,
+    worktreePath: string
+  ): Promise<NamedWorktreeSetupRecord | undefined> {
+    const repositoryRoot = await this.requireRepositoryRoot(sourceCheckoutRoot);
+    const commonDirectory = await this.requireCommonDirectory(repositoryRoot);
+    return this.tryReadNamedSetupRecord(
+      this.recordPath(commonDirectory, worktreePath, "named-worktrees")
+    );
   }
 
   /**
@@ -1838,6 +1857,8 @@ export class WorktreeManager {
       );
     }
 
+    const commonDirectory =
+      await this.requireCommonDirectory(sourceCheckoutRoot);
     const root = initialBranchCheckout
       ? undefined
       : await this.resolveWorktreeRoot(sourceCheckoutRoot);
@@ -1858,8 +1879,6 @@ export class WorktreeManager {
     let worktreePath = initialBranchCheckout?.worktreePath;
     const needsProvisioning = !worktreePath;
     if (needsProvisioning) {
-      const commonDirectory =
-        await this.requireCommonDirectory(sourceCheckoutRoot);
       worktreePath = path.join(
         root!,
         createWorktreeDirectoryName(branchName, commonDirectory, {
@@ -1925,6 +1944,13 @@ export class WorktreeManager {
       throw new Error(`Named worktree "${branchName}" could not be resolved.`);
     }
     const executionCheckoutRoot = worktreePath;
+    const namedSetupRecordPath = this.recordPath(
+      commonDirectory,
+      executionCheckoutRoot,
+      "named-worktrees"
+    );
+    const namedSetupRecord =
+      await this.tryReadNamedSetupRecord(namedSetupRecordPath);
     const mapSourcePath = (sourcePath: string): string =>
       path.resolve(
         executionCheckoutRoot,
@@ -1932,12 +1958,12 @@ export class WorktreeManager {
       );
     const executionRoot = mapSourcePath(repositoryInputs.executionRoot);
     if (
-      options.existingSetupOutcome &&
-      options.existingSetupOutcome !== "succeeded" &&
-      !options.retrySetup
+      namedSetupRecord &&
+      namedSetupRecord.setupOutcome !== "succeeded" &&
+      !options.setup?.trim()
     ) {
       throw new Error(
-        `Named worktree setup is ${options.existingSetupOutcome}; use Retry Setup to run it explicitly.`
+        `Named worktree setup is ${namedSetupRecord.setupOutcome}; a setup command is required to re-provision it.`
       );
     }
     await WorkspaceInitializer.initializeIfNeeded(executionRoot);
@@ -2027,10 +2053,16 @@ export class WorktreeManager {
 
     const shouldRunSetup =
       Boolean(options.setup?.trim()) &&
-      (origin === "created" || options.retrySetup === true);
-    let setupOutcome: WorktreeInfo["setupOutcome"];
+      namedSetupRecord?.setupOutcome !== "succeeded";
+    let setupOutcome: WorktreeInfo["setupOutcome"] = options.setup?.trim()
+      ? namedSetupRecord?.setupOutcome
+      : undefined;
     if (shouldRunSetup) {
       setupOutcome = "pending";
+      await this.writeNamedSetupRecord(namedSetupRecordPath, {
+        worktreePath: executionCheckoutRoot,
+        setupOutcome,
+      });
       await this.persistRuntime({
         lifecycleState: "provisioning",
         directoryState: "present",
@@ -2040,6 +2072,10 @@ export class WorktreeManager {
       });
       try {
         setupOutcome = "running";
+        await this.writeNamedSetupRecord(namedSetupRecordPath, {
+          worktreePath: executionCheckoutRoot,
+          setupOutcome,
+        });
         await this.persistRuntime({
           lifecycleState: "provisioning",
           directoryState: "present",
@@ -2053,8 +2089,16 @@ export class WorktreeManager {
           options.vars
         );
         setupOutcome = "succeeded";
+        await this.writeNamedSetupRecord(namedSetupRecordPath, {
+          worktreePath: executionCheckoutRoot,
+          setupOutcome,
+        });
       } catch (error) {
         setupOutcome = "failed";
+        await this.writeNamedSetupRecord(namedSetupRecordPath, {
+          worktreePath: executionCheckoutRoot,
+          setupOutcome,
+        });
         await this.persistRuntime({
           lifecycleState: "blocked",
           directoryState: "present",
@@ -2108,16 +2152,6 @@ export class WorktreeManager {
     return info;
   }
 
-  /** Explicit user action for a previously blocked or interrupted setup. */
-  public async retrySetup(
-    options: ResolveNamedWorktreeOptions
-  ): Promise<ActiveWorktreeInfo> {
-    if (!options.setup?.trim()) {
-      throw new Error("Retry Setup requires a configured setup command.");
-    }
-    return this.resolveNamedWorktree({ ...options, retrySetup: true });
-  }
-
   /** Release the lease held by a resolved worktree. No Git cleanup is performed. */
   public async releaseWorktree(info: WorktreeInfo): Promise<void> {
     await info.lease?.release();
@@ -2166,17 +2200,20 @@ export class WorktreeManager {
     return { workflowKey: options.workflowKey, runRef: options.runRef };
   }
 
-  private recordPath(commonDirectory: string, branchName: string): string {
-    const branchHash = crypto
+  private recordPath(
+    commonDirectory: string,
+    key: string,
+    store: "managed-worktrees" | "named-worktrees" = "managed-worktrees"
+  ): string {
+    const recordKey =
+      store === "managed-worktrees"
+        ? normalizeBranchName(key)
+        : path.resolve(key);
+    const keyHash = crypto
       .createHash("sha256")
-      .update(normalizeBranchName(branchName), "utf8")
+      .update(recordKey, "utf8")
       .digest("hex");
-    return path.join(
-      commonDirectory,
-      "ctrlyoke",
-      "managed-worktrees",
-      `${branchHash}.json`
-    );
+    return path.join(commonDirectory, "ctrlyoke", store, `${keyHash}.json`);
   }
 
   private async readRecords(
@@ -2206,40 +2243,83 @@ export class WorktreeManager {
   private async tryReadRecord(
     recordPath: string
   ): Promise<ManagedWorktreeOwnershipRecord | undefined> {
+    return this.tryReadJsonRecord<ManagedWorktreeOwnershipRecord>(
+      recordPath,
+      (parsed) => {
+        if (
+          parsed.schemaVersion !== MANAGED_WORKTREE_RECORD_SCHEMA_VERSION ||
+          typeof parsed.branchName !== "string" ||
+          typeof parsed.worktreePath !== "string" ||
+          typeof parsed.sourceCheckoutRoot !== "string" ||
+          typeof parsed.baseCommit !== "string" ||
+          typeof parsed.lastVerifiedBranchTip !== "string" ||
+          typeof parsed.stateRoot !== "string" ||
+          typeof parsed.workflowKey !== "string" ||
+          typeof parsed.runRef !== "string" ||
+          typeof parsed.createdAt !== "number" ||
+          !parsed.lifecycleState ||
+          !parsed.directoryState ||
+          !parsed.branchState
+        ) {
+          return undefined;
+        }
+        return parsed as ManagedWorktreeOwnershipRecord;
+      }
+    );
+  }
+
+  private async tryReadNamedSetupRecord(
+    recordPath: string
+  ): Promise<NamedWorktreeSetupRecord | undefined> {
+    return this.tryReadJsonRecord<NamedWorktreeSetupRecord>(
+      recordPath,
+      (parsed) => {
+        if (
+          parsed.schemaVersion !== NAMED_WORKTREE_SETUP_RECORD_SCHEMA_VERSION ||
+          typeof parsed.worktreePath !== "string" ||
+          (parsed.setupOutcome !== "pending" &&
+            parsed.setupOutcome !== "running" &&
+            parsed.setupOutcome !== "succeeded" &&
+            parsed.setupOutcome !== "failed") ||
+          typeof parsed.updatedAt !== "number"
+        ) {
+          return undefined;
+        }
+        return parsed as NamedWorktreeSetupRecord;
+      }
+    );
+  }
+
+  private async tryReadJsonRecord<T>(
+    recordPath: string,
+    validate: (parsed: Partial<T>) => T | undefined
+  ): Promise<T | undefined> {
     try {
       const parsed = JSON.parse(
         await fs.readFile(recordPath, "utf8")
-      ) as Partial<ManagedWorktreeOwnershipRecord>;
-      if (
-        parsed.schemaVersion !== MANAGED_WORKTREE_RECORD_SCHEMA_VERSION ||
-        typeof parsed.branchName !== "string" ||
-        typeof parsed.worktreePath !== "string" ||
-        typeof parsed.sourceCheckoutRoot !== "string" ||
-        typeof parsed.baseCommit !== "string" ||
-        typeof parsed.lastVerifiedBranchTip !== "string" ||
-        typeof parsed.stateRoot !== "string" ||
-        typeof parsed.workflowKey !== "string" ||
-        typeof parsed.runRef !== "string" ||
-        typeof parsed.createdAt !== "number" ||
-        !parsed.lifecycleState ||
-        !parsed.directoryState ||
-        !parsed.branchState
-      ) {
-        return undefined;
-      }
-      return parsed as ManagedWorktreeOwnershipRecord;
+      ) as Partial<T>;
+      return validate(parsed);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-      // A partially written/corrupt record is not ownership evidence. Ignore
-      // it during discovery; the next explicit ensure will fail on collisions
-      // rather than silently adopting it.
+      // A partially written/corrupt record is not ownership or setup evidence.
       return undefined;
     }
   }
 
+  private async writeNamedSetupRecord(
+    recordPath: string,
+    record: Pick<NamedWorktreeSetupRecord, "worktreePath" | "setupOutcome">
+  ): Promise<void> {
+    await this.writeRecord(recordPath, {
+      schemaVersion: NAMED_WORKTREE_SETUP_RECORD_SCHEMA_VERSION,
+      ...record,
+      updatedAt: this.now(),
+    });
+  }
+
   private async writeRecord(
     recordPath: string,
-    record: ManagedWorktreeOwnershipRecord
+    record: ManagedWorktreeOwnershipRecord | NamedWorktreeSetupRecord
   ): Promise<void> {
     await fs.mkdir(path.dirname(recordPath), { recursive: true });
     await writeFileAtomic(recordPath, `${JSON.stringify(record, null, 2)}\n`);

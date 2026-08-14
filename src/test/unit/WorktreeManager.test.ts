@@ -360,42 +360,45 @@ suite("WorktreeManager", function () {
     );
   });
 
-  test("blocks failed setup, leaves the directory, and releases its lease", async () => {
+  test("persists failed setup durably, leaves the directory, and throws", async () => {
     const { parent, repository } = await makeRepository("setup-failed");
     const updates: string[] = [];
+    const instance = manager(parent, updates);
     const setup = `node -e "process.exit(7)"`;
     await assert.rejects(
-      resolve(manager(parent, updates), repository, "feature/setup-failed", {
+      resolve(instance, repository, "feature/setup-failed", {
         setup,
       }),
-      /Worktree setup failed/
+      (error: unknown) => error instanceof WorktreeSetupError
     );
     const worktrees = await fs.readdir(path.join(parent, "worktrees"));
     assert.strictEqual(worktrees.length, 1);
     assert.ok(updates.some((value) => value.startsWith("blocked")));
+    const worktree = (await instance.listWorktrees(repository)).find(
+      (entry) => entry.branchName === "feature/setup-failed"
+    );
+    assert.ok(worktree);
+    const record = await instance.readNamedWorktreeSetupRecord(
+      repository,
+      worktree!.worktreePath
+    );
+    assert.strictEqual(record?.setupOutcome, "failed");
   });
 
-  test("does not retry a failed setup unless explicitly requested", async () => {
+  test("re-runs failed setup on the next resolve", async () => {
     const { parent, repository } = await makeRepository("setup-retry");
-    const setup = `node -e "require('fs').writeFileSync('retry-marker.txt', 'ok')"`;
-    const first = await resolve(manager(parent), repository, "feature/retry", {
-      setup: `node -e "process.exit(7)"`,
-    }).catch(() => undefined);
-    assert.strictEqual(first, undefined);
-
+    const instance = manager(parent);
     await assert.rejects(
-      resolve(manager(parent), repository, "feature/retry", {
-        setup,
-        existingSetupOutcome: "failed",
+      resolve(instance, repository, "feature/retry", {
+        setup: `node -e "process.exit(7)"`,
       }),
-      /use Retry Setup/
+      /Worktree setup failed/
     );
-    const retried = await resolve(
-      manager(parent),
-      repository,
-      "feature/retry",
-      { setup, existingSetupOutcome: "failed", retrySetup: true }
-    );
+    const setup = `node -e "require('fs').writeFileSync('retry-marker.txt', 'ok')"`;
+    const retried = await resolve(instance, repository, "feature/retry", {
+      setup,
+    });
+    assert.strictEqual(retried.setupOutcome, "succeeded");
     assert.strictEqual(
       await fs.readFile(
         path.join(retried.worktreePath, "retry-marker.txt"),
@@ -404,6 +407,81 @@ suite("WorktreeManager", function () {
       "ok"
     );
     await retried.lease.release();
+  });
+
+  test("does not re-run a recorded succeeded setup", async () => {
+    const { parent, repository } = await makeRepository("setup-succeeded");
+    const instance = manager(parent);
+    const first = await resolve(instance, repository, "feature/succeeded", {
+      setup: `node -e "require('fs').writeFileSync('setup-marker.txt', 'first')"`,
+    });
+    await first.lease.release();
+
+    const second = await resolve(instance, repository, "feature/succeeded", {
+      setup: `node -e "process.exit(13)"`,
+    });
+    assert.strictEqual(second.setupOutcome, "succeeded");
+    assert.strictEqual(
+      await fs.readFile(
+        path.join(second.worktreePath, "setup-marker.txt"),
+        "utf8"
+      ),
+      "first"
+    );
+    await second.lease.release();
+  });
+
+  test("re-runs setup after a crash-shaped running record", async () => {
+    const { parent, repository } = await makeRepository("setup-running");
+    const instance = manager(parent);
+    await assert.rejects(
+      resolve(instance, repository, "feature/running", {
+        setup: `node -e "process.exit(7)"`,
+      }),
+      /Worktree setup failed/
+    );
+    const worktree = (await instance.listWorktrees(repository)).find(
+      (entry) => entry.branchName === "feature/running"
+    );
+    assert.ok(worktree);
+    const commonDirectory = path.resolve(
+      repository,
+      execFileSync("git", ["-C", repository, "rev-parse", "--git-common-dir"], {
+        encoding: "utf8",
+      }).trim()
+    );
+    const recordDirectory = path.join(
+      commonDirectory,
+      "ctrlyoke",
+      "named-worktrees"
+    );
+    const [recordFile] = await fs.readdir(recordDirectory);
+    const recordPath = path.join(recordDirectory, recordFile);
+    const record = JSON.parse(await fs.readFile(recordPath, "utf8")) as {
+      setupOutcome: string;
+      updatedAt: number;
+    };
+    await fs.writeFile(
+      recordPath,
+      JSON.stringify({
+        ...record,
+        setupOutcome: "running",
+        updatedAt: Date.now(),
+      })
+    );
+
+    const resolved = await resolve(instance, repository, "feature/running", {
+      setup: `node -e "require('fs').writeFileSync('running-marker.txt', 'ok')"`,
+    });
+    assert.strictEqual(resolved.setupOutcome, "succeeded");
+    assert.strictEqual(
+      await fs.readFile(
+        path.join(resolved.worktreePath, "running-marker.txt"),
+        "utf8"
+      ),
+      "ok"
+    );
+    await resolved.lease.release();
   });
 
   test("creates an atomic ownership record and re-enters idempotently", async () => {

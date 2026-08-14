@@ -521,10 +521,11 @@ do not block: named mode is explicitly user-owned and does not auto-commit or
 remove anything. Its run-start `baseCommit` is the named branch's HEAD, distinct
 from the optional labeled comparison base used for ahead/behind display.
 
-Setup is at-most-once automatically, not blindly rerun after a crash. Persist
-`pending | running | succeeded | failed`; an interrupted or failed setup blocks
-the run and offers an explicit Retry Setup action. Retrying may repeat a
-non-idempotent command, so it always requires user action. The setup command uses
+Setup persists `pending | running | succeeded | failed` per named worktree.
+An interrupted or failed setup blocks that run, and the next Run automatically
+re-runs setup; a recorded `succeeded` setup is never repeated. This makes the
+ordinary re-run gesture the recovery path while still avoiding repetition of a
+known-good command. The setup command uses
 the shared script process runner, `executionRoot` as cwd, the normal script
 timeout, and workflow/CLI variable substitution. Extract the shell/process runner
 from `EndConditionEvaluator`; its current execution method is private, so there is
@@ -1815,8 +1816,8 @@ live branch values.
 - Reject the named branch when its checkout is the initiating source checkout.
 - Attach an existing un-checked-out branch.
 - Create a missing branch/worktree and run setup once.
-- Failed/interrupted setup never auto-retries; explicit retry updates the
-  persisted setup outcome.
+- Failed/interrupted setup blocks the current run and auto-retries on the next
+  Run; a recorded success is not repeated.
 - Never commit/remove a named worktree.
 - Existing dirty named worktree is reported but remains usable.
 - Native run in the same worktree blocks exclusive targeting.
@@ -1992,12 +1993,12 @@ schema.
       worktree projection sourced from each run's persisted `_runtime.worktree`.
       **Implemented.** No View Diff/Open Worktree/Merge actions are included;
       those remain deferred to Phases 3 and 4.
-14. Implement named discovery/create/setup plus explicit failed-setup retry. **Named
+14. Implement named discovery/create/setup plus durable failed-setup re-run. **Named
     setup and execution integration implemented.** Named discovery/create/attach,
     source-checkout rejection, execution-root remapping, trust-overlap preflight,
     exclusive lease acquisition, dirty-state reporting, runtime provisioning/ready
     persistence, `.ctrlyoke/.gitignore` seeding, shared-runner setup, persisted
-    at-most-once outcomes, explicit retry, blocked-state recovery, and terminal
+    per-worktree outcomes, automatic re-run recovery, blocked-state recovery, and terminal
     integration disposal are implemented in `WorktreeManager`/`WorkflowInstance`.
     Managed lifecycle creation/finalization remains Phase 3 work. Seed
     `.ctrlyoke/.gitignore` via `WorkspaceInitializer.initializeIfNeeded(executionRoot)`

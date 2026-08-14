@@ -188,8 +188,8 @@ already keeps a fourth phase from colliding with step 0's own CLI entry — that
 is exactly the collision the phase dimension was introduced to prevent.
 
 **Target:** queue target index `0`, `runIndex 0`, `attemptIndex 0`, phase
-`worktreeSetup`. Retry Setup increments `attemptIndex`, giving "Setup retry 2"
-headers for free, the same way end-condition retries already work.
+`worktreeSetup`. Each new Run that re-provisions increments `attemptIndex`, giving
+distinct setup-attempt headers the same way end-condition retries already work.
 
 **Driving the reporter without a condition.** `ScriptExecutionReporter` already
 takes an `evaluate?` override (`:78`, consumed at `:238`), so a plain script that
@@ -324,14 +324,14 @@ displaying the *previous* run as though nothing happened. The dashboard leaves
 → `onRuntimeTransition` → `updateExecutionState(ERROR)` (`:4279`). The setup
 failure output and status message land on the failed run, where they belong.
 
-### Retry Setup path
+### Re-run recovery path
 
-`WorkflowInstance.retryWorktreeSetup()` (`:527`) runs outside any execution —
-it acquires the runner lock, calls `prepareExecutionWorktree(true)`, releases the
-worktree, and returns. The history file for the run still exists, so setup output
-can be persisted at `(step 0, run 0, attempt N, worktreeSetup)`. Whether the
-dashboard is showing that run at the time is a separate question; at minimum the
-history must capture it so the output is there when the run is reopened.
+There is no separate Retry Setup action. A failed setup leaves its durable named
+worktree outcome as `failed` (or `running` if the host crashed), and the next Run
+resolves the same directory and re-runs setup. A recorded `succeeded` outcome
+skips setup. Setup output therefore belongs to the run that attempted it; a
+later re-run records its own setup output in its own history rather than mutating
+an earlier run outside execution.
 
 ---
 
@@ -351,8 +351,9 @@ history must capture it so the output is there when the run is reopened.
    `EXECUTION_STATES.ERROR`, and emits **one status message**:
    `Execution failed: Worktree setup failed in <path>: <cause>`.
 
-So: hard stop, run marked ERROR, no retry, no `onError` consultation. The only
-recovery is the explicit **Retry Setup** action.
+So: hard stop, run marked ERROR, no `onError` consultation. The recovery gesture
+is pressing **Run** again; non-succeeded durable setup state makes that attempt
+re-provision the worktree.
 
 `errorBehavior` is a step-scoped property (`EXECUTION_PROPERTY_KEYS` in
 `CtrlYokeTypes.ts:306`), resolved per step through the
@@ -361,10 +362,10 @@ there is no resolution context — the omission is structural, not an oversight.
 
 ### Recommendation: keep the hard block, fix the reporting
 
-The `WORKTREE_SUPPORT_PLAN` rationale still holds — `npm ci` and friends are not
-reliably idempotent, so automatic retry can leave a half-installed tree, and
-`onError: "continue"` would run the whole workflow in a worktree that was never
-provisioned. Neither is a behavior worth having.
+The `WORKTREE_SUPPORT_PLAN` policy still holds — `npm ci` and friends should not
+be repeated after a known-good setup, and `onError: "continue"` would run the
+whole workflow in a worktree that was never provisioned. Re-running only a
+non-succeeded outcome preserves that boundary.
 
 What is actually wrong is the reporting, and Part 2 fixes it: full stdout and
 stderr in the output pane, streamed live, with an exit-code verdict row and a
@@ -374,7 +375,8 @@ Two small follow-ons:
 
 - State plainly in `schemas/workflow-schema.json` (`worktree.setup` description)
   and in the `errorBehavior` description that setup is outside the `errorBehavior`
-  policy and fails to a blocked worktree with an explicit Retry Setup action.
+  policy and fails to a blocked worktree; the next Run is the recovery gesture
+  for non-succeeded setup.
 - `WorktreeSetupError`'s message currently folds `result.error` (raw stderr) into
   its text. Once the full output is rendered above it, trim the message the way
   `summarizeStatusError` (`ScriptExecutionReporter.ts:89`) already trims condition
@@ -401,8 +403,8 @@ stays blank.
 implementation, `WorkflowInstance`-supplied reporter implementation, header
 label/icon for the setup source in `CliHeaderRowView` (`OutputRow.tsx:934`).
 
-**Phase 5 — Retry Setup output.** Attempt-indexed setup entries and whatever
-dashboard surface shows them outside an active run.
+**Phase 5 — Re-run setup output.** Keep attempt-indexed setup entries attached to
+the run that performs each re-run; no separate dashboard action is required.
 
 ---
 

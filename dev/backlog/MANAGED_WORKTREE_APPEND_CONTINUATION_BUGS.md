@@ -9,9 +9,9 @@
 > | 1 | Append after a landed run gets an empty checkout with setup skipped | High — agent starts in a tree that does not build | fixed in step 2 |
 > | 2 | No-change append on a landed branch blocks finalization | High — normal conversational turn reports a bogus identity error | fixed |
 > | 3 | `changedFileCount` diffs from the original base | Low — misreported count | fixed |
-> | 4 | "Retry Setup" action is unreachable (zero callers) | Medium — failed setup has no recovery path | not started |
-> | 5 | Retry Setup would still no-op for managed once wired | Medium — blocks the fix for 4 | not started |
-> | 6 | Named mode silently runs in a half-provisioned worktree after a failed setup | High — no error, no setup, no warning | not started |
+> | 4 | "Retry Setup" action is unreachable (zero callers) | Medium — failed setup has no recovery path | dropped — re-run is the recovery gesture |
+> | 5 | Retry Setup would still no-op for managed once wired | Medium — blocks the fix for 4 | dropped — no action is wired |
+> | 6 | Named mode silently runs in a half-provisioned worktree after a failed setup | High — no error, no setup, no warning | fixed |
 >
 > Bugs 1–3 are the "follow up on a landed managed run" case. Bugs 4–6 are the
 > separate "recover from a failed setup" case; see *Recovery: re-run, not a
@@ -110,85 +110,38 @@ Bug 2's watermark fixes this too.
 
 ## Bug 4 — "Retry Setup" is unreachable
 
-`WORKTREE_SUPPORT_PLAN.md` specifies that "an interrupted or failed setup blocks
-the run and offers an explicit Retry Setup action." The backend exists:
-
-- `WorktreeManager.retrySetup()` (`:2092`)
-- `WorkflowInstance.retryWorktreeSetup()` (`:527`)
-
-**Neither has a single caller** — no VS Code command, no webview message, no
-Workflow Properties control, no test. `retrySetup` is correctly absent from
-`schemas/workflow-schema.json` (`:208-280` defines only `mode`, `branch`,
-`base`, `setup`, `keep`, `merge`); it is a *user action*, not an authored
-option. The action was simply never wired up.
-
-Consequence: a failed setup leaves the worktree `blocked` with no recovery path
-short of editing the workflow. Note this interacts with Bug 1's fix — if setup
-becomes idempotent enough to re-run on recreate, the manual retry matters less,
-but a genuinely failed first setup still needs it.
+The planned action had no caller: no VS Code command, webview message, Workflow
+Properties control, or test. The action was deleted in step 4 rather than wired
+up. A failed setup remains a hard error for that run, and pressing Run again
+re-enters the resolver, which automatically re-runs the non-succeeded setup.
 
 ## Bug 5 — Retry Setup would still be a no-op for managed worktrees
 
-Wiring Bug 4 up is not sufficient. The named path honors the explicit retry flag:
-
-```ts
-// WorktreeManager.ts:2009 — named
-const shouldRunSetup =
-  Boolean(options.setup?.trim()) &&
-  (origin === "created" || options.retrySetup === true);
-```
-
-The managed path drops it:
-
-```ts
-// WorktreeManager.ts:2371 — managed
-const shouldRunSetup =
-  Boolean(args.options.setup?.trim()) && args.origin === "created";
-```
-
-`WorkflowInstance.retryWorktreeSetup()` (`:527`) routes through
-`prepareExecutionWorktree(true)` for both modes, so on a managed worktree whose
-record exists the action would silently do nothing — no setup, no error, no
-state change. Since a blocked setup leaves the record in place, that is exactly
-the state Retry Setup exists to recover from.
-
-**Fix direction:** thread `retrySetup` into the managed branch on the same terms
-as named. One-line parity fix; land it together with Bug 4 or the wired-up
-action ships broken for managed mode.
+This is dropped with Bug 4. Managed re-runs already create a fresh run and
+re-provision when the checkout needs it; adding a user-action flag would create
+another recovery surface without improving the named-mode failure. No retry
+parameter is threaded through either mode.
 
 ## Bug 6 — named mode silently runs unprovisioned after a failed setup
 
-`resolveNamedWorktree` refuses to proceed when the recorded setup outcome is not
-`succeeded` (`:1913-1920`):
+`resolveNamedWorktree` now reads a versioned setup record keyed by the resolved
+worktree path. It runs setup whenever the durable outcome is absent, `pending`,
+`running`, or `failed`, and skips it only for `succeeded`.
 
-```ts
-if (options.existingSetupOutcome &&
-    options.existingSetupOutcome !== "succeeded" &&
-    !options.retrySetup) {
-  throw new Error(
-    `Named worktree setup is ${options.existingSetupOutcome}; use Retry Setup to run it explicitly.`
-  );
-}
-```
-
-`existingSetupOutcome` is read from the **current run's** working file
-(`WorkflowInstance.ts:3639-3643`), and `promoteToNewRun` writes a fresh
-`_runtime` with no worktree block (`WorkingFileManager.ts:471-476`). So the
-guard only sees a failure within the same run:
-
-- **Same run** (resume/continue) → throws, pointing at an action that does not
-  exist (Bug 4). Dead end.
-- **Fresh re-run** → `existingSetupOutcome` is `undefined`, the guard does not
-  fire, `origin` resolves `discovered` (the worktree survives a failed setup),
-  and `shouldRunSetup` is false. The workflow runs in the half-provisioned tree
-  **with no setup, no warning, and no error.**
+`existingSetupOutcome` was read from the **current run's** working file, and
+`promoteToNewRun` writes a fresh `_runtime` with no worktree block. A fresh
+re-run therefore forgot the failed setup, discovered the surviving worktree,
+and skipped setup.
 
 The silent path is the more damaging of the two, and it is the default one for
 anyone who reacts to a failed run by pressing Run again.
 
-**Fix direction:** setup outcome must be durable **per worktree**, not per run.
-A named worktree's provisioning state is a property of the directory, and a
-promoted run legitimately forgets everything about the previous run.
+Step 4 stores a versioned setup record under
+`<commonDirectory>/ctrlyoke/named-worktrees/<sha256(resolved worktree path)>.json`.
+The resolver reads that record and runs setup whenever its outcome is absent,
+pending, running, or failed; only `succeeded` suppresses setup. Each transition
+is written durably alongside the existing per-run runtime update, so a crash
+after pending or running leaves a state that the next Run re-provisions.
 
 ---
 
@@ -342,7 +295,7 @@ updates this document's status table as it goes.
 | 1 | Settlement watermark in `completeManagedRun` | 2, 3 | complete |
 | 2 | Re-provision managed worktrees whose directory was recreated | 1 | complete |
 | 3 | `WORKTREE_MODE_HELP_TEXT` / `WORKTREE_KEEP_HELP_TEXT` + schema copy | — | complete |
-| 4 | Durable per-worktree named setup state; delete Retry Setup | 6, 4, 5 | not started |
+| 4 | Durable per-worktree named setup state; delete Retry Setup | 6, 4, 5 | complete |
 | 5 | Clean up blocked managed attempts so they stop accumulating | — | not started |
 
 Sequencing constraints that are not arbitrary:
@@ -353,9 +306,14 @@ Sequencing constraints that are not arbitrary:
   setup re-run automatically; deleting first would leave named mode with no
   recovery path at all.
 
-Two steps carry a design decision the diagnosis deliberately left open — where
-durable named setup state lives (step 4) and when a blocked managed attempt is
-reclaimed (step 5). Each records its decision and rationale in this document.
+Step 4's storage decision is to use a sibling `named-worktrees` store and key
+records by the resolved worktree path. The directory is the provisioning unit,
+not the branch: a branch can be detached and reattached at another path, while
+the setup state belongs to the directory that was provisioned. The existing
+hashed record-path, JSON read/validation, and atomic write helpers are shared
+with managed ownership records; the named store has its own schema version so
+its records cannot be mistaken for ownership records. Step 5's cleanup decision
+remains open for its own implementation.
 
 ## Testing
 

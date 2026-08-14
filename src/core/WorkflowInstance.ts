@@ -523,23 +523,6 @@ export class WorkflowInstance {
     return this.worktreeResolution;
   }
 
-  /** Explicit Retry Setup action; automatic execution never sets this flag. */
-  async retryWorktreeSetup(): Promise<void> {
-    if (!this.worktreeResolution.config?.setup?.trim()) {
-      throw new Error("No worktree setup command is configured.");
-    }
-    await this.ensureRunnerLock(this.promptQueue.getState().workingFilePath);
-    try {
-      await this.prepareExecutionWorktree(true);
-      if (this.activeWorktree) {
-        await this.worktreeManager.releaseWorktree(this.activeWorktree);
-        this.executionLease = undefined;
-      }
-    } finally {
-      await this.releaseRunnerLock();
-    }
-  }
-
   private async analyzeWorkflowCompatibility(
     workflow: PromptFile
   ): Promise<CompatibilityDiagnostic[]> {
@@ -3614,7 +3597,7 @@ export class WorkflowInstance {
     );
   }
 
-  private async prepareExecutionWorktree(retrySetup = false): Promise<void> {
+  private async prepareExecutionWorktree(): Promise<void> {
     const config = this.worktreeResolution.config;
     if (!config) {
       await this.configureExecutionWorkspace(this.defaultExecutionWorkspace);
@@ -3636,12 +3619,6 @@ export class WorkflowInstance {
       );
     }
 
-    const existingSetupOutcome = this.promptQueue.getState().workingFilePath
-      ? (await this.promptQueue.readWorkingFile(
-          this.promptQueue.getState().workingFilePath!
-        ))._runtime?.worktree?.setupOutcome
-      : undefined;
-
     const sharedOptions = {
       sourceCheckoutRoot,
       base: config.base,
@@ -3656,8 +3633,6 @@ export class WorkflowInstance {
       worktree: this.worktreeResolution,
       setup: config.setup,
       vars: this.promptQueue.getWorkflowFile().vars,
-      existingSetupOutcome,
-      retrySetup,
     } as const;
     const info =
       config.mode === "managed"
