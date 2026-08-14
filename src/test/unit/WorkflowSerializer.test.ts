@@ -34,6 +34,26 @@ function fakeWorkspaceState(): any {
   };
 }
 
+class RecordingMemento implements vscode.Memento {
+  private readonly values = new Map<string, unknown>();
+
+  keys(): readonly string[] {
+    return [...this.values.keys()];
+  }
+
+  get<T>(key: string): T | undefined;
+  get<T>(key: string, defaultValue: T): T;
+  get<T>(key: string, defaultValue?: T): T | undefined {
+    return this.values.has(key)
+      ? (this.values.get(key) as T)
+      : defaultValue;
+  }
+
+  async update(key: string, value: unknown): Promise<void> {
+    this.values.set(key, value);
+  }
+}
+
 interface SchemaNode {
   $ref?: string;
   properties?: Record<string, unknown>;
@@ -216,6 +236,75 @@ suite("WorkflowSerializer", () => {
         ]);
       } finally {
         configService.set = originalSet;
+      }
+    });
+  });
+
+  suite("handleBrowseTemplateFile", () => {
+    test("remembers the selected file's directory for the next native picker", async () => {
+      const workspaceRoot = path.join(os.tmpdir(), "ctrlyoke-picker-workspace");
+      const selectedFile = path.join(workspaceRoot, "specs", "feature.md");
+      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+      const originalShowOpenDialog = vscode.window.showOpenDialog;
+      const dialogOptions: vscode.OpenDialogOptions[] = [];
+      let callCount = 0;
+
+      try {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: [
+            {
+              uri: vscode.Uri.file(workspaceRoot),
+              name: "picker-workspace",
+              index: 0,
+            },
+          ],
+          configurable: true,
+        });
+        Object.defineProperty(vscode.window, "showOpenDialog", {
+          value: async (options: vscode.OpenDialogOptions) => {
+            dialogOptions.push(options);
+            callCount += 1;
+            return callCount === 1 ? [vscode.Uri.file(selectedFile)] : undefined;
+          },
+          configurable: true,
+        });
+
+        const messages: unknown[] = [];
+        const serializer = new WorkflowSerializer(
+          (message) => messages.push(message),
+          {} as any,
+          () => undefined,
+          () => undefined,
+          new RecordingMemento()
+        );
+
+        await serializer.handleBrowseTemplateFile("spec", ["**/*.md"]);
+        await serializer.handleBrowseTemplateFile("spec", ["**/*.md"]);
+
+        assert.strictEqual(
+          dialogOptions[0].defaultUri?.fsPath,
+          vscode.Uri.file(workspaceRoot).fsPath
+        );
+        assert.strictEqual(
+          dialogOptions[1].defaultUri?.fsPath,
+          path.dirname(vscode.Uri.file(selectedFile).fsPath)
+        );
+        assert.deepStrictEqual(messages, [
+          {
+            type: MESSAGE_TYPES.TEMPLATE_FILE_SELECTED,
+            variable: "spec",
+            path: "specs/feature.md",
+          },
+        ]);
+      } finally {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: originalWorkspaceFolders,
+          configurable: true,
+        });
+        Object.defineProperty(vscode.window, "showOpenDialog", {
+          value: originalShowOpenDialog,
+          configurable: true,
+        });
       }
     });
   });
