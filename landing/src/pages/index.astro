@@ -14,57 +14,80 @@ const harnesses = [
 
 const features = [
   {
-    title: "Six harnesses",
-    body: "Copilot CLI, Claude Code, Codex, OpenCode, Qwen, and Antigravity CLI. One workflow file, any harness.",
+    title: "One interface, six harnesses",
+    body: "Copilot CLI, Claude Code, Codex, OpenCode, Qwen, and Antigravity CLI share one prompt language, one editor, and one set of controls.",
     icon: "⚡",
   },
   {
-    title: "YAML · JSON · Markdown",
-    body: "Define workflows in the format you prefer. Version-controlled, diff-friendly, and composable.",
-    icon: "📄",
+    title: "Point at the context you mean",
+    body: "Reference files, symbols, selections, Git changes, commits, and prior-step output — readable in the prompt, expanded before the harness sees it.",
+    icon: "📎",
   },
   {
-    title: "End conditions",
-    body: "Each step runs a validation script before moving on. No silently passing bad output down the chain.",
-    icon: "✓",
+    title: "A prompt editor for real work",
+    body: "Context-aware completions, reference validation, expanded-context token estimates, image paste, and spell check.",
+    icon: "✎",
   },
   {
-    title: "Live dashboard",
-    body: "A React panel in VS Code shows real-time step execution, output history, and an embedded terminal.",
+    title: "Build visually. Save as code.",
+    body: "Compose and rearrange workflows in the dashboard, then keep the result as ordinary YAML or JSON that travels with the project.",
+    icon: "🧩",
+  },
+  {
+    title: "One reversible view of every result",
+    body: "Normalized output, inline diffs, an output minimap, and undo/redo down to a single file — no matter which harness ran it.",
     icon: "⬛",
   },
   {
-    title: "CLI + MCP server",
-    body: "ctrlyoke run executes any workflow headlessly. The MCP server exposes your workflows as tools other AI agents can queue.",
+    title: "Native terminal, structured control",
+    body: "Watch and steer the real interactive CLI in an embedded terminal while ctrlyoke builds a searchable record beside it.",
     icon: ">_",
   },
   {
-    title: "Parallel execution",
-    body: "Run multiple workflows simultaneously, each with independent pause, resume, and cancel controls.",
-    icon: "⇉",
+    title: "Validation, not vibes",
+    body: "Pre- and end-conditions gate each step with the scripts your project already trusts — continue, retry, skip, or stop.",
+    icon: "✓",
+  },
+  {
+    title: "Searchable, replayable history",
+    body: "Find the prompt, command, diff, or answer you remember, then reopen and rerun the complete workflow around it.",
+    icon: "🔍",
+  },
+  {
+    title: "One place for your toolkit",
+    body: "Manage agents, skills, MCP servers, and hooks once, then reuse them across every harness you run.",
+    icon: "🧰",
   },
 ];
 
 const steps = [
   {
     number: "1",
-    title: "Write",
-    body: "Define steps, prompts, and end conditions in a .ctrlyoke.yaml file. Supports YAML, JSON, and prompt Markdown.",
+    title: "Prompt",
+    body: "Reference files, symbols, selections, and Git changes right in the editor — with completions, validation, and token estimates.",
   },
   {
     number: "2",
-    title: "Run",
-    body: "ctrlyoke drives your AI harness step by step, streaming output to the dashboard and log files in real time.",
+    title: "Steer",
+    body: "Watch and drive the native terminal directly, or let a structured workflow carry the step forward for you.",
   },
   {
     number: "3",
-    title: "Validate",
-    body: "End conditions check each step's output before continuing. Retry, move on, or stop — on your terms.",
+    title: "Automate",
+    body: "Chain prompts and scripts into a validated workflow. Retry on real output, mix harnesses, run several at once.",
+  },
+  {
+    number: "4",
+    title: "Revisit",
+    body: "Every run lands in a searchable, diffable history you can replay, export, or run again.",
   },
 ];
 ---
 
-<Layout title="ctrlyoke — AI workflow automation for VS Code">
+<Layout
+  title="ctrlyoke — One interface for every AI coding harness"
+  description="The better way to prompt, steer, automate, and revisit work across Claude Code, Codex, Copilot CLI, and more."
+>
 
   <!-- Hero -->
   <section class="relative overflow-hidden border-b border-white/5 bg-brand-950 px-6 py-24 md:py-36">
@@ -75,12 +98,11 @@ const steps = [
         Free to install · Pro for power users
       </div>
       <h1 class="mb-6 text-5xl font-bold leading-tight tracking-tight text-white md:text-6xl">
-        Run your AI coding<br />assistant, hands-free
+        One interface for<br />every AI coding harness
       </h1>
       <p class="mx-auto mb-10 max-w-2xl text-lg text-slate-400 md:text-xl">
-        ctrlyoke turns Copilot, Claude, Codex, and more into structured, step-by-step
-        workflows — validated at each stage, resumable from any state, and running while
-        you do something else.
+        The better way to prompt, steer, automate, and revisit work across Claude Code,
+        Codex, Copilot CLI, and more.
       </p>
       <div class="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
         <Cta
@@ -105,7 +127,7 @@ const steps = [
   <section class="border-b border-white/5 bg-brand-900/30 px-6 py-20">
     <div class="mx-auto max-w-4xl">
       <p class="mb-8 text-center text-sm font-medium uppercase tracking-widest text-slate-500">
-        Define a workflow in YAML
+        Build visually. This is the file underneath.
       </p>
       <div class="overflow-hidden rounded-xl border border-white/8 bg-brand-900">
         <div class="flex items-center gap-1.5 border-b border-white/5 px-4 py-3">
@@ -137,7 +159,7 @@ const steps = [
   <section class="border-b border-white/5 px-6 py-20">
     <div class="mx-auto max-w-4xl text-center">
       <p class="mb-10 text-sm font-medium uppercase tracking-widest text-slate-500">
-        Works with every major AI coding assistant
+        One consistent interface across supported harnesses
       </p>
       <div class="flex flex-wrap items-center justify-center gap-4">
         {harnesses.map((h) => (
@@ -155,11 +177,11 @@ const steps = [
     <div class="mx-auto max-w-6xl">
       <div class="mb-16 text-center">
         <h2 class="mb-4 text-3xl font-bold text-white md:text-4xl">
-          Everything you need to automate AI workflows
+          One control surface for everything you do with AI harnesses
         </h2>
         <p class="mx-auto max-w-xl text-slate-400">
-          A complete orchestration layer for AI coding assistants — from a single prompt to a
-          multi-step pipeline with validation gates and live monitoring.
+          From a single richly-referenced prompt to a validated multi-step pipeline — one
+          prompt language, one output view, one reusable toolkit underneath.
         </p>
       </div>
       <div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -181,9 +203,9 @@ const steps = [
     <div class="mx-auto max-w-4xl">
       <div class="mb-16 text-center">
         <h2 class="mb-4 text-3xl font-bold text-white md:text-4xl">How it works</h2>
-        <p class="text-slate-400">Three steps from idea to automated workflow.</p>
+        <p class="text-slate-400">Prompt, steer, automate, and revisit — all from the same interface.</p>
       </div>
-      <div class="grid grid-cols-1 gap-8 md:grid-cols-3">
+      <div class="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
         {steps.map((s) => (
           <div class="relative flex flex-col items-start">
             <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-full border border-sky-400/30 bg-sky-400/10 text-lg font-bold text-sky-400">
@@ -213,11 +235,12 @@ const steps = [
         <div class="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {[
             "Remote & LAN browser dashboard",
-            "QR-to-phone instant access",
-            "Custom execution hooks",
+            "LAN IP binding & QR-to-phone access",
+            "HTTPS with custom TLS certificates",
+            "Push notifications (browser + mobile)",
+            "Custom icon color",
             "Air-gapped offline activation",
             "14-day free trial — no card required",
-            "All future Pro features",
           ].map((item) => (
             <div class="flex items-center gap-2.5 text-sm text-slate-300">
               <svg class="h-4 w-4 shrink-0 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
