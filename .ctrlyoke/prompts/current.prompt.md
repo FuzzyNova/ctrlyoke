@@ -1,4 +1,0 @@
-here is a prompt with lots of different references in it:
-
-@ctrlyoke/src/test/unit/CodexCliProvider.test.ts is a test and here is a directory at the root @ctrlyoke/src/ui/webview-react/test/ and here is a symbol #sym:ctrlyoke/src/types/CtrlYokeTypes.ts:prompt:216-216 and here is another class #sym:ctrlyoke/src/ui/IDashboardProvider.ts:IDashboardProvider:12-56 and here is prior context item $previous, and here is a diff ~ee45689d1f7b851338e3cbf2dcc280cfdcf2064e of a specific value and there is another #selection:ctrlyoke/src/ui/webview-react/utils/codemirrorTheme.ts:56-68 selection but what about #sym:ctrlyoke/src/ui/webview-react/components/shared/ActionDropdown.tsx:ActionDropdownItemContent():26-43 and stuff. @path/to/file/that/is/fake.txt
-@ctrlyoke/src/ui/webview-react/components/editor/CodeMirrorEditor.tsx
