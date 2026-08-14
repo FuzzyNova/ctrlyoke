@@ -2069,9 +2069,13 @@ export class WorktreeManager {
       throw error;
     }
 
+    // A checkout this call created is unprovisioned by definition, so it must
+    // run setup even when a record survives from a previous checkout at the
+    // same path: named worktree paths are derived deterministically from the
+    // branch, so removing and recreating one reuses the earlier record's key.
     const shouldRunSetup =
       Boolean(options.setup?.trim()) &&
-      namedSetupRecord?.setupOutcome !== "succeeded";
+      (origin === "created" || namedSetupRecord?.setupOutcome !== "succeeded");
     let setupOutcome: WorktreeInfo["setupOutcome"] = options.setup?.trim()
       ? namedSetupRecord?.setupOutcome
       : undefined;

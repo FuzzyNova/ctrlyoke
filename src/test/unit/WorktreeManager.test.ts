@@ -461,6 +461,40 @@ suite("WorktreeManager", function () {
     await second.lease.release();
   });
 
+  test("re-runs setup when a removed named checkout is recreated", async () => {
+    const { parent, repository } = await makeRepository("setup-recreated");
+    const instance = manager(parent);
+    const first = await resolve(instance, repository, "feature/recreated", {
+      setup: `node -e "require('fs').writeFileSync('setup-marker.txt', 'first')"`,
+    });
+    await first.lease.release();
+
+    // Named worktree paths are derived deterministically from the branch, so
+    // the recreated checkout reuses the succeeded record's key.
+    execFileSync("git", [
+      "-C",
+      repository,
+      "worktree",
+      "remove",
+      "--force",
+      first.worktreePath,
+    ]);
+
+    const recreated = await resolve(instance, repository, "feature/recreated", {
+      setup: `node -e "require('fs').writeFileSync('setup-marker.txt', 'second')"`,
+    });
+    assert.strictEqual(recreated.worktreePath, first.worktreePath);
+    assert.strictEqual(recreated.setupOutcome, "succeeded");
+    assert.strictEqual(
+      await fs.readFile(
+        path.join(recreated.worktreePath, "setup-marker.txt"),
+        "utf8"
+      ),
+      "second"
+    );
+    await recreated.lease.release();
+  });
+
   test("re-runs setup after a crash-shaped running record", async () => {
     const { parent, repository } = await makeRepository("setup-running");
     const instance = manager(parent);

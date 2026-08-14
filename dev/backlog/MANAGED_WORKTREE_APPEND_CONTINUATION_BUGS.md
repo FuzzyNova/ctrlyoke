@@ -144,6 +144,16 @@ pending, running, or failed; only `succeeded` suppresses setup. Each transition
 is written durably alongside the existing per-run runtime update, so a crash
 after pending or running leaves a state that the next Run re-provisions.
 
+**A newly created checkout always runs setup, whatever the record says**
+(review-pass fix). Named worktree paths are derived deterministically from the
+branch (`createWorktreeDirectoryName`, `kind: "named"`), so a worktree removed
+and later recreated lands at the *same* path and inherits the previous
+checkout's record. Keying provisioning state to the directory therefore needs
+`origin === "created"` to override a surviving `succeeded` record; without it a
+stale record silently suppressed setup on an empty new checkout — Bug 1's exact
+failure shape, reintroduced in named mode. Covered by "re-runs setup when a
+removed named checkout is recreated" in `WorktreeManager.test.ts`.
+
 ---
 
 ## Recovery: re-run, not a button
@@ -242,7 +252,7 @@ Surfaces to update:
 | -------------------------------------------------------- | ------------------------------------------------------------ |
 | `DashboardConstants.ts`                                  | the two new help constants                                  |
 | `WorkflowPropertiesPanel.tsx:1517`, `:1620`, `:1637-1640` | consume them; drop the duplicated keep sub-paragraph        |
-| `settings/WorktreesSection.tsx`, `DefaultsHarnessPage.tsx` | same text on the `defaults.worktree` rows                   |
+| `DefaultsHarnessPage.tsx`                                | same text on the `defaults.worktree` rows                   |
 | `schemas/workflow-schema.json:226`, `:238`, `:251`        | branch-object and `keep` descriptions (YAML authoring hover) |
 | `schemas/settings-schema.json:293`, `:300`, `:318`        | the settings-side equivalents                               |
 
@@ -252,6 +262,10 @@ mode-level prose lives on the enclosing branch objects — `"Managed worktree
 configuration."` (`:226`) and `"Named worktree configuration."` (`:251`) — so
 that is what the new copy replaces there. `settings-schema.json:298` does have a
 real `mode` description.
+
+`settings/WorktreesSection.tsx` was listed here in error: it carries only the
+worktree *root directory* setting, with no mode or `keep` row, so it was
+correctly left alone.
 
 The JSON schemas cannot import the TS constant, so their descriptions stay a
 deliberate near-duplicate — schema text serves YAML authoring, the constant
