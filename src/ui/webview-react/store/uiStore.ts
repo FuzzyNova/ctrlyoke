@@ -504,8 +504,11 @@ interface UiState {
   savePathCheck: SavePathCheck | null;
 
   // Web-native file/directory picker modal (standalone/hosted mode only) —
-  // one canonical instance shared by every caller. Transient, not persisted.
+  // one canonical transient request shared by every caller, plus its persisted
+  // last successful directory.
   fileBrowserState: FileBrowserRequest | null;
+  /** Last successfully selected directory in the web-native file browser. */
+  fileBrowserLastDirectory: string | null;
   /** Last folder selected via the native OS picker for Save As location; cleared after SaveWorkflowDialog consumes it */
   saveLocationSelection: { path: string } | null;
 
@@ -713,6 +716,7 @@ interface UiActions {
   // File browser modal (standalone/hosted mode)
   openFileBrowser: (request: FileBrowserRequest) => void;
   closeFileBrowser: () => void;
+  setFileBrowserLastDirectory: (path: string) => void;
   setSaveLocationSelection: (selection: { path: string } | null) => void;
 
   // New workflow modal
@@ -897,6 +901,7 @@ const initialState: UiState = {
   saveWorkflowDialogData: null,
   savePathCheck: null,
   fileBrowserState: null,
+  fileBrowserLastDirectory: null,
   saveLocationSelection: null,
   stepsCollapsed: false,
   finalStepFooterExpanded: false,
@@ -998,6 +1003,7 @@ const persistedFields = [
   "mobileStepsOpen",
   "mobileStepsMode",
   "uxSnapshotButtonVisible",
+  "fileBrowserLastDirectory",
 ] as const;
 
 export const useUiStore = create<UiState & UiActions>()(
@@ -1249,6 +1255,9 @@ export const useUiStore = create<UiState & UiActions>()(
       openFileBrowser: (request) => set({ fileBrowserState: request }),
 
       closeFileBrowser: () => set({ fileBrowserState: null }),
+
+      setFileBrowserLastDirectory: (path) =>
+        set({ fileBrowserLastDirectory: path }),
 
       setSaveLocationSelection: (selection) =>
         set({ saveLocationSelection: selection }),

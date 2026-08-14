@@ -17,7 +17,13 @@ import {
  */
 export const FileBrowserModal: React.FC = () => {
   const fileBrowserState = useUiStore((s) => s.fileBrowserState);
+  const fileBrowserLastDirectory = useUiStore(
+    (s) => s.fileBrowserLastDirectory
+  );
   const closeFileBrowser = useUiStore((s) => s.closeFileBrowser);
+  const setFileBrowserLastDirectory = useUiStore(
+    (s) => s.setFileBrowserLastDirectory
+  );
 
   const [path, setPath] = useState("");
   const [parentPath, setParentPath] = useState<string | null>(null);
@@ -57,8 +63,10 @@ export const FileBrowserModal: React.FC = () => {
       setPath(fwd(result.path));
       setParentPath(result.parentPath !== null ? fwd(result.parentPath) : null);
       setRootLabel(result.rootLabel);
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      return false;
     } finally {
       setLoading(false);
     }
@@ -69,11 +77,22 @@ export const FileBrowserModal: React.FC = () => {
     if (!fileBrowserState) return;
     setSelectedFile(null);
     setError(null);
-    void loadDirectory(fileBrowserState.initialPath ?? "");
+    const initialPath =
+      fileBrowserState.initialPath ?? fileBrowserLastDirectory ?? "";
+    const shouldFallbackToRoot =
+      fileBrowserState.initialPath === undefined &&
+      fileBrowserLastDirectory !== null &&
+      initialPath !== "";
+    void (async () => {
+      const loaded = await loadDirectory(initialPath);
+      if (!loaded && shouldFallbackToRoot) {
+        await loadDirectory("");
+      }
+    })();
     // Intentional: only re-run when a new request object opens the modal,
     // not on every loadDirectory identity change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileBrowserState]);
+  }, [fileBrowserState, fileBrowserLastDirectory]);
 
   const handleCancel = useCallback(() => {
     closeFileBrowser();
@@ -83,12 +102,20 @@ export const FileBrowserModal: React.FC = () => {
     if (!fileBrowserState) return;
     if (fileBrowserState.mode === "file") {
       if (!selectedFile) return;
+      setFileBrowserLastDirectory(path);
       fileBrowserState.onSelect(selectedFile);
     } else {
+      setFileBrowserLastDirectory(path);
       fileBrowserState.onSelect(path);
     }
     closeFileBrowser();
-  }, [fileBrowserState, selectedFile, path, closeFileBrowser]);
+  }, [
+    fileBrowserState,
+    selectedFile,
+    path,
+    setFileBrowserLastDirectory,
+    closeFileBrowser,
+  ]);
 
   const handleEntryClick = useCallback(
     (entry: WorkspaceEntry) => {

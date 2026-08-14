@@ -68,6 +68,8 @@ import { writeWorkflowBundle } from "../utils/WorkflowBundleWriter";
  */
 /** workspaceState key for the last directory a durable workflow was exported to (Save As). */
 const LAST_EXPORT_DIR_KEY = "ctrlyoke.lastWorkflowExportDir";
+/** workspaceState key for the last directory used by a template variable picker. */
+const LAST_TEMPLATE_BROWSE_DIR_KEY = "ctrlyoke.lastTemplateBrowseDir";
 
 export class WorkflowSerializer {
   private readonly lineageRepository = new WorkflowLineageRepository();
@@ -1032,19 +1034,33 @@ export class WorkflowSerializer {
       filters["All Files"] = ["*"];
     }
 
+    const lastBrowseDirectory = this.workspaceState.get<string>(
+      LAST_TEMPLATE_BROWSE_DIR_KEY
+    );
+
     const uris = await vscode.window.showOpenDialog({
       canSelectMany: false,
       canSelectFolders: !!selectFolder,
       canSelectFiles: !selectFolder,
-      defaultUri: workspaceRoot ? vscode.Uri.file(workspaceRoot) : undefined,
+      defaultUri: lastBrowseDirectory
+        ? vscode.Uri.file(lastBrowseDirectory)
+        : workspaceRoot
+          ? vscode.Uri.file(workspaceRoot)
+          : undefined,
       filters: selectFolder ? undefined : filters,
       title: selectFolder
         ? `Select folder for {${variable}}`
         : `Select file for {${variable}}`,
     });
 
+    const selectedUri = uris?.[0];
     const filePath = this.resolveDialogSelection(uris, workspaceRoot);
-    if (filePath !== undefined) {
+    if (selectedUri && filePath !== undefined) {
+      const selectedPath = selectedUri.fsPath;
+      await this.workspaceState.update(
+        LAST_TEMPLATE_BROWSE_DIR_KEY,
+        selectFolder ? selectedPath : path.dirname(selectedPath)
+      );
       pm({
         type: MESSAGE_TYPES.TEMPLATE_FILE_SELECTED,
         variable,

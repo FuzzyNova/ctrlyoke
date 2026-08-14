@@ -6,7 +6,7 @@
  * that state directly before rendering, mirroring WorkspaceViewerModal.test.tsx.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FileBrowserModal } from "@components/workflow/FileBrowserModal";
 import { useUiStore } from "@store/uiStore";
@@ -47,7 +47,10 @@ function mockTree(dirPath: string): Promise<WorkspaceTreeResponse> {
 beforeEach(() => {
   workspaceTreeMock.mockReset();
   workspaceTreeMock.mockImplementation((dirPath: string) => mockTree(dirPath));
-  useUiStore.getState().closeFileBrowser();
+  useUiStore.setState({
+    fileBrowserState: null,
+    fileBrowserLastDirectory: null,
+  });
 });
 
 describe("FileBrowserModal — visibility", () => {
@@ -77,6 +80,49 @@ describe("FileBrowserModal — navigation", () => {
 
     await waitFor(() => expect(workspaceTreeMock).toHaveBeenCalledWith("src"));
     expect(await screen.findByText("index.ts")).toBeInTheDocument();
+  });
+
+  it("reopens in the directory used for the previous selection", async () => {
+    const user = userEvent.setup();
+    useUiStore.getState().openFileBrowser({ mode: "file", onSelect: vi.fn() });
+    render(<FileBrowserModal />);
+
+    await user.click(await screen.findByText("src/"));
+    await user.click(await screen.findByText("index.ts"));
+    await user.click(screen.getByRole("button", { name: "Select File" }));
+
+    expect(useUiStore.getState().fileBrowserLastDirectory).toBe("src");
+    workspaceTreeMock.mockClear();
+
+    act(() => {
+      useUiStore
+        .getState()
+        .openFileBrowser({ mode: "file", onSelect: vi.fn() });
+    });
+
+    await waitFor(() => expect(workspaceTreeMock).toHaveBeenCalledWith("src"));
+    expect(await screen.findByText("index.ts")).toBeInTheDocument();
+  });
+
+  it("falls back to the workspace root when the remembered directory is stale", async () => {
+    useUiStore.setState({ fileBrowserLastDirectory: "deleted" });
+    workspaceTreeMock.mockImplementation((dirPath: string) => {
+      if (dirPath === "deleted") {
+        return Promise.reject(new Error("Directory not found"));
+      }
+      return mockTree(dirPath);
+    });
+    useUiStore.getState().openFileBrowser({ mode: "file", onSelect: vi.fn() });
+
+    render(<FileBrowserModal />);
+
+    await waitFor(() => {
+      expect(workspaceTreeMock.mock.calls.map(([path]) => path)).toEqual([
+        "deleted",
+        "",
+      ]);
+    });
+    expect(await screen.findByText("readme.md")).toBeInTheDocument();
   });
 });
 
