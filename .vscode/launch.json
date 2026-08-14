@@ -38,6 +38,18 @@
       "preLaunchTask": "npm: compile:prod"
     },
     {
+      "name": "Run Extension (Multi Repo)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--disable-extension=fuzzynova.ctrlyoke",
+        "${workspaceFolder}/ctrlyoke-fuzzno.code-workspace"
+      ],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "npm: compile"
+    },
+    {
       "name": "Run Extension (Debug, Isolated)",
       "type": "extensionHost",
       "request": "launch",
