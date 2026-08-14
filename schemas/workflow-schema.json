@@ -224,7 +224,7 @@
         },
         {
           "type": "object",
-          "description": "Managed worktree configuration.",
+          "description": "Managed creates a throw-away worktree and branch per run and removes the directory when the workflow completes, leaving the branch for review; pick it for isolated runs you will not follow up on.",
           "properties": {
             "mode": {
               "type": "string",
@@ -236,7 +236,7 @@
             },
             "keep": {
               "type": "boolean",
-              "description": "Keep the managed worktree directory after the run. Removing it ends filesystem undo for that run."
+              "description": "Keeps the managed worktree directory after the run instead of removing it. Without it, appending a follow-up prompt recreates the directory from the branch; ignored files such as node_modules are gone and the setup command runs again, so a long setup pays that cost on every append. Removing the directory also ends filesystem undo for that run."
             },
             "base": {
               "type": "string",
@@ -253,7 +253,7 @@
         },
         {
           "type": "object",
-          "description": "Named worktree configuration.",
+          "description": "Named targets a persistent worktree you own, which ctrlyoke never commits, merges, or removes; pick it for conversational workflows you will append to.",
           "properties": {
             "mode": {
               "type": "string",

@@ -5,7 +5,11 @@ import { DefaultsHarnessPage } from "@components/settings/defaults/DefaultsHarne
 import { SETTING_SCOPES } from "@/types/messages";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
-import { WORKTREE_MODES } from "@root/types/DashboardConstants";
+import {
+  WORKTREE_KEEP_HELP_TEXT,
+  WORKTREE_MODE_HELP_TEXT,
+  WORKTREE_MODES,
+} from "@root/types/DashboardConstants";
 
 function createSettings(
   sources: Record<string, "user" | "workspace" | "default"> = {}
@@ -62,6 +66,7 @@ describe("DefaultsHarnessPage execution defaults", () => {
     );
 
     expect(screen.getByText("Worktree Defaults")).toBeInTheDocument();
+    expect(screen.getByText(WORKTREE_MODE_HELP_TEXT)).toBeInTheDocument();
     expect(screen.getByLabelText("Branch")).toHaveValue("settings-branch");
     expect(screen.getByLabelText("Base")).toHaveValue("main");
     expect(screen.getByLabelText("Setup")).toHaveValue("npm ci");
@@ -91,6 +96,7 @@ describe("DefaultsHarnessPage execution defaults", () => {
     expect(screen.getByLabelText("Setup")).toHaveValue("npm ci");
     expect(screen.getByLabelText("Keep directory")).toBeChecked();
     expect(screen.getByLabelText("Merge")).toBeChecked();
+    expect(screen.getByText(WORKTREE_KEEP_HELP_TEXT)).toBeInTheDocument();
     expect(
       screen.getByText(/merges the managed branch into the working checkout after every run/i)
     ).toBeInTheDocument();

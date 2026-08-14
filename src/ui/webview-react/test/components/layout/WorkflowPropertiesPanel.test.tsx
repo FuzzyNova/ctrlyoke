@@ -9,6 +9,8 @@ import {
   EXECUTION_MODES,
   HARNESS_IDS,
   PERMISSION_MODES,
+  WORKTREE_KEEP_HELP_TEXT,
+  WORKTREE_MODE_HELP_TEXT,
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
 
@@ -247,6 +249,10 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
 
     expect(screen.getByLabelText("Worktree")).toHaveTextContent("None");
     expect(screen.queryByLabelText("Worktree branch")).not.toBeInTheDocument();
+    expect(screen.getByText("Worktree", { selector: "label" })).toHaveAttribute(
+      "title",
+      WORKTREE_MODE_HELP_TEXT
+    );
   });
 
   it("reveals only Named fields and seeds them from the settings default", () => {
@@ -298,10 +304,8 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     expect(screen.getByLabelText("Merge")).toBeChecked();
     expect(screen.queryByLabelText("Worktree branch")).not.toBeInTheDocument();
     expect(
-      screen.getByText(
-        /Removing the directory ends filesystem undo for that run/i
-      )
-    ).toBeInTheDocument();
+      screen.getByText("Keep directory", { selector: "label" })
+    ).toHaveAttribute("title", WORKTREE_KEEP_HELP_TEXT);
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "updateWorkflowProperties",

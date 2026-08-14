@@ -5,6 +5,8 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import {
   EXECUTION_MODE_OPTIONS,
+  WORKTREE_KEEP_HELP_TEXT,
+  WORKTREE_MODE_HELP_TEXT,
   WORKTREE_MODE_OPTIONS,
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
@@ -81,7 +83,7 @@ export function DefaultsHarnessPage({
         </h3>
         <SettingInputRow
           label="Worktree mode"
-          description="Default checkout selection for workflows that do not set a worktree."
+          description={WORKTREE_MODE_HELP_TEXT}
           id="defaults-worktree-mode"
           path="defaults.worktree.mode"
           {...rowProps}
@@ -194,7 +196,7 @@ export function DefaultsHarnessPage({
             </SettingInputRow>
             <SettingInputRow
               label="Keep directory"
-              description="Keep managed worktrees after execution. Removing the directory ends filesystem undo for that run."
+              description={WORKTREE_KEEP_HELP_TEXT}
               id="defaults-worktree-keep"
               path="defaults.worktree.keep"
               {...rowProps}

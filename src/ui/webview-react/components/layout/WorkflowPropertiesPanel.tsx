@@ -52,6 +52,8 @@ import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import {
   EXECUTION_MODE_HELP_TEXT,
   EXECUTION_MODE_OPTIONS,
+  WORKTREE_KEEP_HELP_TEXT,
+  WORKTREE_MODE_HELP_TEXT,
   WORKTREE_MODE_OPTIONS,
   WORKTREE_MODES,
   PERMISSION_MODES,
@@ -1514,7 +1516,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 <FormField
                   label="Worktree"
                   htmlFor="settings-worktree-mode"
-                  description="Choose the checkout used by this workflow. Worktrees are workflow-level and do not apply to individual prompts."
+                  description={WORKTREE_MODE_HELP_TEXT}
                   setAsDefaultButton={
                     <SetAsDefaultButton
                       property="worktree"
@@ -1617,7 +1619,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       <FormField
                         label="Keep directory"
                         htmlFor="settings-worktree-keep"
-                        description="Keep the managed worktree after the run. Removing the directory ends filesystem undo for that run."
+                        description={WORKTREE_KEEP_HELP_TEXT}
                       >
                         <label className="flex items-center gap-2 min-h-7 text-xs text-foreground">
                           <input
@@ -1634,10 +1636,6 @@ const WorkflowPropertiesPanelInner: React.FC<{
                           />
                           Keep managed worktree for review and undo
                         </label>
-                        <p className="text-xxs text-description-fg">
-                          Removing the directory ends filesystem undo for that
-                          run.
-                        </p>
                       </FormField>
                       <FormField
                         label="Merge"

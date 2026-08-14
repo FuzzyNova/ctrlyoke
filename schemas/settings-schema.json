@@ -297,7 +297,7 @@
               "type": "string",
               "enum": ["none", "managed", "named"],
               "default": "none",
-              "description": "Default worktree mode for new workflows."
+              "description": "Default worktree mode for new workflows: none uses the working checkout; managed creates and removes a throw-away worktree per run; named targets a persistent worktree you own for appendable workflows."
             },
             "branch": {
               "type": "string",
@@ -315,7 +315,7 @@
             },
             "keep": {
               "type": "boolean",
-              "description": "Keep managed worktrees after execution. Removing the directory ends filesystem undo for that run."
+              "description": "Keeps the managed worktree directory after the run. Without it, appending recreates the directory, loses ignored files such as node_modules, and reruns setup; removing it also ends filesystem undo for that run."
             },
             "merge": {
               "type": "boolean",

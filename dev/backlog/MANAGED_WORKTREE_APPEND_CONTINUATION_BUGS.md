@@ -341,7 +341,7 @@ updates this document's status table as it goes.
 | ---- | ----- | ---- | ------ |
 | 1 | Settlement watermark in `completeManagedRun` | 2, 3 | complete |
 | 2 | Re-provision managed worktrees whose directory was recreated | 1 | complete |
-| 3 | `WORKTREE_MODE_HELP_TEXT` / `WORKTREE_KEEP_HELP_TEXT` + schema copy | — | not started |
+| 3 | `WORKTREE_MODE_HELP_TEXT` / `WORKTREE_KEEP_HELP_TEXT` + schema copy | — | complete |
 | 4 | Durable per-worktree named setup state; delete Retry Setup | 6, 4, 5 | not started |
 | 5 | Clean up blocked managed attempts so they stop accumulating | — | not started |
 
