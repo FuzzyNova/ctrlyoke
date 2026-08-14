@@ -6,6 +6,7 @@ import { execFileSync } from "child_process";
 import { suite, teardown, test } from "mocha";
 import {
   WorktreeManager,
+  WorktreeSetupError,
   type WorktreeMergeOperations,
 } from "../../core/orchestration/WorktreeManager";
 import { ExecutionRootLeaseManager } from "../../core/orchestration/ExecutionRootLeaseManager";
@@ -542,6 +543,93 @@ suite("WorktreeManager", function () {
       "created"
     );
     await info.lease.release();
+  });
+
+  test("reruns setup when a managed append recreates a removed directory", async () => {
+    const { parent, repository } = await makeRepository("managed-setup-recreate");
+    const instance = manager(parent);
+    const setup = `node -e "require('fs').appendFileSync('managed-setup-marker.txt', 'setup\\n')"`;
+
+    const first = await ensureManaged(instance, repository, { setup });
+    await instance.completeManagedRun(first);
+    const recordAfterRemoval = await instance.readManagedWorktreeRecord(
+      repository,
+      first.branchName
+    );
+    assert.strictEqual(recordAfterRemoval?.directoryState, "removed");
+
+    const append = await ensureManaged(instance, repository, { setup });
+    assert.strictEqual(append.origin, "recovered");
+    assert.strictEqual(append.setupOutcome, "succeeded");
+    assert.strictEqual(
+      (
+        await fs.readFile(
+          path.join(append.worktreePath, "managed-setup-marker.txt"),
+          "utf8"
+        )
+      ).replaceAll("\r\n", "\n"),
+      "setup\nsetup\n"
+    );
+    await append.lease.release();
+  });
+
+  test("does not rerun setup when a managed append keeps its directory", async () => {
+    const { parent, repository } = await makeRepository("managed-setup-keep");
+    const instance = manager(parent);
+    const setup = `node -e "require('fs').appendFileSync('managed-setup-marker.txt', 'setup\\n')"`;
+
+    const first = await ensureManaged(instance, repository, { setup });
+    await instance.completeManagedRun(first, { keep: true });
+
+    const append = await ensureManaged(instance, repository, { setup });
+    assert.strictEqual(append.origin, "recovered");
+    assert.strictEqual(append.setupOutcome, undefined);
+    assert.strictEqual(
+      await fs.readFile(
+        path.join(append.worktreePath, "managed-setup-marker.txt"),
+        "utf8"
+      ),
+      "setup\n"
+    );
+    await append.lease.release();
+  });
+
+  test("persists failed setup and throws when a managed append recreate fails", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-setup-recreate-failed"
+    );
+    const runtimePatches: Array<{
+      lifecycleState?: string;
+      setupOutcome?: string;
+    }> = [];
+    const instance = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      updateWorktreeRuntime: async (patch) => {
+        runtimePatches.push(patch);
+      },
+    });
+
+    const first = await ensureManaged(instance, repository, {
+      setup: `node -e "require('fs').writeFileSync('managed-setup-marker.txt', 'setup')"`,
+    });
+    await instance.completeManagedRun(first);
+
+    await assert.rejects(
+      ensureManaged(instance, repository, {
+        setup: `node -e "process.exit(7)"`,
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof WorktreeSetupError);
+        return true;
+      }
+    );
+    assert.ok(
+      runtimePatches.some(
+        (patch) =>
+          patch.lifecycleState === "blocked" &&
+          patch.setupOutcome === "failed"
+      )
+    );
   });
 
   test("reconciles missing managed directories as no-changes, landed, or orphaned", async () => {

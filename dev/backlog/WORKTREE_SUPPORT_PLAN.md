@@ -195,10 +195,12 @@ convention.
 
 ### Fresh-checkout consequences
 
-A new managed worktree does not contain ignored files such as `node_modules`,
-local `.env` files, generated assets, or initialized caches. Managed mode is not
-considered ready until it supports a setup command that runs once after
-creation and before the first workflow step.
+A new or recreated managed worktree does not contain ignored files such as
+`node_modules`, local `.env` files, generated assets, or initialized caches.
+Managed mode is not considered ready until it supports a setup command that
+runs after creation or recreation and before the first workflow step. The
+command must therefore be idempotent for append continuations that recreate
+the throw-away directory.
 
 Setup failure marks the worktree blocked and leaves the directory in place for
 inspection. ctrlyoke must never delete a directory after a failed setup if that
@@ -452,7 +454,8 @@ Lifecycle:
 5. Persist provisioning worktree runtime metadata through `WorkingFileManager`.
 6. Acquire an exclusive execution lease for that worktree.
 7. Seed `.ctrlyoke/.gitignore` into the worktree before any harness write.
-8. Run the configured setup command once and persist its outcome.
+8. Run the configured setup command when creating or recreating the checkout
+   and persist its outcome.
 9. Persist ready worktree runtime metadata through `WorkingFileManager`.
 10. Run every workflow phase there.
 11. On terminal settlement, stop integrations/sidecars and clean provider artifacts.

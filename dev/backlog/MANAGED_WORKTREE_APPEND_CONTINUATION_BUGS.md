@@ -6,7 +6,7 @@
 >
 > | # | Bug | Severity | Status |
 > | - | --- | -------- | ------ |
-> | 1 | Append after a landed run gets an empty checkout with setup skipped | High — agent starts in a tree that does not build | not started |
+> | 1 | Append after a landed run gets an empty checkout with setup skipped | High — agent starts in a tree that does not build | fixed in step 2 |
 > | 2 | No-change append on a landed branch blocks finalization | High — normal conversational turn reports a bogus identity error | fixed |
 > | 3 | `changedFileCount` diffs from the original base | Low — misreported count | fixed |
 > | 4 | "Retry Setup" action is unreachable (zero callers) | Medium — failed setup has no recovery path | not started |
@@ -63,13 +63,12 @@ in the branch, therefore absent from the new directory — and setup, the one
 thing that would restore them, is skipped. The agent starts in a tree that does
 not build.
 
-**Fix direction:** `shouldRunSetup` must not key off `origin` alone. The real
-question is "does this directory need provisioning?", which is
-`origin === "created" || directory was just recreated`. The record already
-tracks `directoryState`, so a `recovered` resolution whose recorded
-`directoryState` is `"removed"` is exactly the recreate case. Note this makes
-setup idempotency matter more than the current design assumed — see the
-`retrySetup` reasoning in `WORKTREE_SUPPORT_PLAN.md`.
+**Status: fixed in step 2.** `shouldRunSetup` now answers whether this
+directory needs provisioning: it is true for `origin === "created"` or when
+the resolver observed that it had to call `addWorktree`. The latter is the
+authoritative signal; a recorded `directoryState: "removed"` corroborates the
+recreate case without changing the honest `origin: "recovered"` projection.
+Setup idempotency therefore matters more than the original design assumed.
 
 ## Bug 2 — a no-change append on a landed branch blocks finalization
 
@@ -315,22 +314,23 @@ Which bug an append hits depends on whether the *previous* turn wrote files:
 
 | Previous turn | Record after settle | Append `origin` | Setup | Outcome                                        |
 | ------------- | -------------------- | --------------- | ----- | ---------------------------------------------- |
-| landed        | kept                 | `recovered`     | skipped | Bug 1: empty checkout, unprovisioned          |
+| landed        | kept                 | `recovered`     | runs  | fixed: recreated checkout is provisioned      |
 | no changes    | unlinked             | `created`       | runs  | new branch + directory; setup re-runs each time |
 
 The second row is the "setup fires on every append" case. The first is the
 inverse and more damaging. A spec-design conversation alternates between the two
 shapes turn by turn, so an append-heavy workflow hits both.
 
-## Workaround until fixed
+## Recommendation for append-heavy workflows
 
-`worktree.keep: true` avoids Bug 1 entirely: the directory is never removed at
-settlement, so the append finds `existingCheckout` present, reuses the directory
-with its ignored files intact, and skips setup correctly. It does not help Bug 2.
+`worktree.keep: true` is the documented recommendation for append-heavy managed
+workflows: the directory remains attached at settlement, so an append reuses
+the checkout with its ignored files intact and does not pay setup again. It
+also avoids Bug 1's old empty-checkout failure. It does not change the
+no-change watermark behavior from Bug 2.
 
-This stays the recommended setting for append-heavy managed workflows *after*
-the fix too — per the decision above, `keep: false` re-provisions on every
-append by design.
+With `keep: false`, managed mode still re-provisions and reruns setup on every
+append by design, as specified above.
 
 ## Implementation plan (staged 2026-08-14)
 
@@ -340,7 +340,7 @@ updates this document's status table as it goes.
 | Step | Scope | Bugs | Status |
 | ---- | ----- | ---- | ------ |
 | 1 | Settlement watermark in `completeManagedRun` | 2, 3 | complete |
-| 2 | Re-provision managed worktrees whose directory was recreated | 1 | not started |
+| 2 | Re-provision managed worktrees whose directory was recreated | 1 | complete |
 | 3 | `WORKTREE_MODE_HELP_TEXT` / `WORKTREE_KEEP_HELP_TEXT` + schema copy | — | not started |
 | 4 | Durable per-worktree named setup state; delete Retry Setup | 6, 4, 5 | not started |
 | 5 | Clean up blocked managed attempts so they stop accumulating | — | not started |

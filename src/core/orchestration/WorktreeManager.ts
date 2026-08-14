@@ -274,7 +274,10 @@ export interface ResolveNamedWorktreeOptions {
   instanceId?: string;
   /** Authored/default selection to retain on the execution workspace. */
   worktree?: WorktreeResolution;
-  /** Setup is automatically attempted only for a newly created checkout. */
+  /**
+   * Managed setup is automatically attempted for each newly created or
+   * recreated checkout; named setup remains creation-only unless retried.
+   */
   setup?: string;
   /** Workflow vars are exported as CTRLYOKE_VAR_* by the shared runner. */
   vars?: Record<string, string>;
@@ -1248,7 +1251,9 @@ export class WorktreeManager {
 
       const origin: WorktreeOrigin = existingRecord ? "recovered" : "created";
       let attached = existingCheckout;
+      let directoryRecreated = false;
       if (!attached) {
+        directoryRecreated = true;
         await addWorktree(sourceCheckoutRoot, worktreePath, {
           branchName,
           createBranch: !localBranchCommit,
@@ -1288,6 +1293,11 @@ export class WorktreeManager {
         record: updatedRecord,
         repositoryInputs,
         origin,
+        // The observed addWorktree call is authoritative: it proves this
+        // invocation provisioned a directory. A recorded "removed" state is
+        // corroboration for the normal append shape, but may be stale if the
+        // checkout was retained, so it must not replace the observation.
+        directoryRecreated,
         options,
         sourceCheckoutDirty,
       });
@@ -1389,6 +1399,7 @@ export class WorktreeManager {
           this.recoveryAsResolveOptions(record, options)
         ),
         origin: "recovered",
+        directoryRecreated: false,
         options: this.recoveryAsResolveOptions(record, options),
       });
     });
@@ -2349,6 +2360,7 @@ export class WorktreeManager {
     record: ManagedWorktreeOwnershipRecord;
     repositoryInputs: ResolvedRepositoryInputs;
     origin: WorktreeOrigin;
+    directoryRecreated: boolean;
     options: EnsureManagedWorktreeOptions;
     sourceCheckoutDirty?: boolean;
   }): Promise<ActiveWorktreeInfo> {
@@ -2378,7 +2390,8 @@ export class WorktreeManager {
       throw error;
     }
     const shouldRunSetup =
-      Boolean(args.options.setup?.trim()) && args.origin === "created";
+      Boolean(args.options.setup?.trim()) &&
+      (args.origin === "created" || args.directoryRecreated);
     let setupOutcome: WorktreeInfo["setupOutcome"];
     if (shouldRunSetup) {
       setupOutcome = "pending";
@@ -2398,6 +2411,8 @@ export class WorktreeManager {
           setupOutcome,
           updatedAt: this.now(),
         });
+        // Recreated managed directories omit ignored dependencies and caches,
+        // so setup must remain idempotent as append continuations re-provision.
         await this.runSetup(
           args.record.worktreePath,
           args.options.setup!,
