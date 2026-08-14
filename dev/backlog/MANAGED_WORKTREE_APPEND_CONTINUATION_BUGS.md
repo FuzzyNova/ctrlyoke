@@ -288,8 +288,15 @@ Surfaces to update:
 | `DashboardConstants.ts`                                  | the two new help constants                                  |
 | `WorkflowPropertiesPanel.tsx:1517`, `:1620`, `:1637-1640` | consume them; drop the duplicated keep sub-paragraph        |
 | `settings/WorktreesSection.tsx`, `DefaultsHarnessPage.tsx` | same text on the `defaults.worktree` rows                   |
-| `schemas/workflow-schema.json:227`, `:239`, `:256`        | mode and `keep` descriptions (YAML authoring hover)         |
+| `schemas/workflow-schema.json:226`, `:238`, `:251`        | branch-object and `keep` descriptions (YAML authoring hover) |
 | `schemas/settings-schema.json:293`, `:300`, `:318`        | the settings-side equivalents                               |
+
+Correction (2026-08-14): the `mode` properties in `workflow-schema.json` are bare
+`const` values with **no** `description` field (`:229-232`, `:254-257`). The
+mode-level prose lives on the enclosing branch objects — `"Managed worktree
+configuration."` (`:226`) and `"Named worktree configuration."` (`:251`) — so
+that is what the new copy replaces there. `settings-schema.json:298` does have a
+real `mode` description.
 
 The JSON schemas cannot import the TS constant, so their descriptions stay a
 deliberate near-duplicate — schema text serves YAML authoring, the constant
@@ -324,6 +331,31 @@ with its ignored files intact, and skips setup correctly. It does not help Bug 2
 This stays the recommended setting for append-heavy managed workflows *after*
 the fix too — per the decision above, `keep: false` re-provisions on every
 append by design.
+
+## Implementation plan (staged 2026-08-14)
+
+Five steps, in dependency order. Each lands with tests and its own commit, and
+updates this document's status table as it goes.
+
+| Step | Scope | Bugs | Status |
+| ---- | ----- | ---- | ------ |
+| 1 | Settlement watermark in `completeManagedRun` | 2, 3 | not started |
+| 2 | Re-provision managed worktrees whose directory was recreated | 1 | not started |
+| 3 | `WORKTREE_MODE_HELP_TEXT` / `WORKTREE_KEEP_HELP_TEXT` + schema copy | — | not started |
+| 4 | Durable per-worktree named setup state; delete Retry Setup | 6, 4, 5 | not started |
+| 5 | Clean up blocked managed attempts so they stop accumulating | — | not started |
+
+Sequencing constraints that are not arbitrary:
+
+- Step 3 must not land before step 2. The copy describes setup re-running on
+  append, which is only true once Bug 1 is fixed.
+- Step 4 must delete `retrySetup` only *after* the same step makes a failed
+  setup re-run automatically; deleting first would leave named mode with no
+  recovery path at all.
+
+Two steps carry a design decision the diagnosis deliberately left open — where
+durable named setup state lives (step 4) and when a blocked managed attempt is
+reclaimed (step 5). Each records its decision and rationale in this document.
 
 ## Testing
 
