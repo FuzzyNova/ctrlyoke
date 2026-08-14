@@ -708,6 +708,69 @@ suite("WorktreeManager", function () {
     );
   });
 
+  test("settles a no-change append after a landed turn without deleting its branch", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-no-change-append"
+    );
+    const instance = manager(parent);
+    const firstInfo = await ensureManaged(instance, repository);
+    await fs.writeFile(
+      path.join(firstInfo.worktreePath, "first-turn.txt"),
+      "first\n"
+    );
+
+    const firstResult = await instance.completeManagedRun(firstInfo, {
+      keep: true,
+    });
+    assert.strictEqual(firstResult.landingOutcome, "landed");
+
+    const appendInfo = await ensureManaged(instance, repository);
+    const appendResult = await instance.completeManagedRun(appendInfo);
+
+    assert.strictEqual(appendResult.landingOutcome, "no-changes");
+    assert.strictEqual(appendResult.directoryOutcome, "removed");
+    assert.strictEqual(appendResult.branchState, "present");
+    assert.strictEqual(
+      (await instance.readManagedWorktreeRecord(
+        repository,
+        appendInfo.branchName
+      ))?.finalBranchTip,
+      execFileSync(
+        "git",
+        ["-C", repository, "rev-parse", appendInfo.branchName],
+        { encoding: "utf8" }
+      ).trim()
+    );
+  });
+
+  test("counts only the files changed by a landed append", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-landed-append-count"
+    );
+    const instance = manager(parent);
+    const firstInfo = await ensureManaged(instance, repository);
+    await fs.writeFile(
+      path.join(firstInfo.worktreePath, "first-turn.txt"),
+      "first\n"
+    );
+    const firstResult = await instance.completeManagedRun(firstInfo, {
+      keep: true,
+    });
+    assert.strictEqual(firstResult.landingOutcome, "landed");
+
+    const appendInfo = await ensureManaged(instance, repository);
+    await fs.writeFile(
+      path.join(appendInfo.worktreePath, "second-turn.txt"),
+      "second\n"
+    );
+    const appendResult = await instance.completeManagedRun(appendInfo, {
+      keep: true,
+    });
+
+    assert.strictEqual(appendResult.landingOutcome, "landed");
+    assert.strictEqual(appendResult.changedFileCount, 1);
+  });
+
   test("blocks merge when the source checkout changed branches", async () => {
     const { parent, repository } = await makeRepository("merge-target-branch");
     const instance = manager(parent);

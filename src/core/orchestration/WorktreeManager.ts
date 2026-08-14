@@ -109,6 +109,12 @@ export interface ManagedWorktreeOwnershipRecord {
   finalBranchTip?: string;
 }
 
+function getManagedWorktreeWatermark(
+  record: ManagedWorktreeOwnershipRecord
+): string {
+  return record.finalBranchTip ?? record.baseCommit;
+}
+
 /** The durable and in-memory identity of a resolved worktree run. */
 export interface WorktreeInfo {
   mode: WorktreeMode;
@@ -628,7 +634,8 @@ export class WorktreeManager {
           }
 
           const committedHead = await resolveCommit(info.worktreePath, "HEAD");
-          if (committedHead === record.baseCommit) {
+          const watermark = getManagedWorktreeWatermark(record);
+          if (committedHead === watermark) {
             return this.completeManagedNoChange(
               repositoryRoot,
               recordPath,
@@ -649,7 +656,7 @@ export class WorktreeManager {
             changedFileCount = (
               await getDiffFilesBetweenRefs(
                 repositoryRoot,
-                record.baseCommit,
+                watermark,
                 committedHead
               )
             ).length;
@@ -908,14 +915,14 @@ export class WorktreeManager {
         directoryState: "present",
         branchState: "present",
         recoveryOutcome: "no-changes",
-        finalBranchTip: record.baseCommit,
+        finalBranchTip: getManagedWorktreeWatermark(record),
       });
       await this.persistRuntime({
         lifecycleState: "settled",
         landingOutcome: "no-changes",
         directoryState: "present",
         branchState: "present",
-        finalBranchTip: record.baseCommit,
+        finalBranchTip: getManagedWorktreeWatermark(record),
         changedFileCount: 0,
         updatedAt: this.now(),
       });
@@ -934,7 +941,7 @@ export class WorktreeManager {
         ...record,
         lifecycleState: "settled",
         recoveryOutcome: "no-changes",
-        finalBranchTip: record.baseCommit,
+        finalBranchTip: getManagedWorktreeWatermark(record),
       },
       info,
       false,
@@ -1003,6 +1010,8 @@ export class WorktreeManager {
         repositoryRoot,
         info.branchName
       );
+      // Settlement uses the per-attempt watermark above, but deletion must
+      // stay gated on the original base so a landed append's branch survives.
       if (branchTip !== record.baseCommit) {
         branchState = branchTip ? "present" : "missing";
         message =

@@ -1,17 +1,17 @@
 # Managed Worktree — Append-Continuation Bugs
 
 > **Status:** Backlog / diagnosis. Five defects, found by tracing "append a
-> prompt to a completed workflow running on a managed worktree." All confirmed
-> by code reading; none reproduced yet.
+> prompt to a completed workflow running on a managed worktree." Bugs 2 and 3
+> are fixed; the remaining defects are confirmed by code reading.
 >
-> | # | Bug | Severity |
-> | - | --- | -------- |
-> | 1 | Append after a landed run gets an empty checkout with setup skipped | High — agent starts in a tree that does not build |
-> | 2 | No-change append on a landed branch blocks finalization | High — normal conversational turn reports a bogus identity error |
-> | 3 | `changedFileCount` diffs from the original base | Low — misreported count |
-> | 4 | "Retry Setup" action is unreachable (zero callers) | Medium — failed setup has no recovery path |
-> | 5 | Retry Setup would still no-op for managed once wired | Medium — blocks the fix for 4 |
-> | 6 | Named mode silently runs in a half-provisioned worktree after a failed setup | High — no error, no setup, no warning |
+> | # | Bug | Severity | Status |
+> | - | --- | -------- | ------ |
+> | 1 | Append after a landed run gets an empty checkout with setup skipped | High — agent starts in a tree that does not build | not started |
+> | 2 | No-change append on a landed branch blocks finalization | High — normal conversational turn reports a bogus identity error | fixed |
+> | 3 | `changedFileCount` diffs from the original base | Low — misreported count | fixed |
+> | 4 | "Retry Setup" action is unreachable (zero callers) | Medium — failed setup has no recovery path | not started |
+> | 5 | Retry Setup would still no-op for managed once wired | Medium — blocks the fix for 4 | not started |
+> | 6 | Named mode silently runs in a half-provisioned worktree after a failed setup | High — no error, no setup, no warning | not started |
 >
 > Bugs 1–3 are the "follow up on a landed managed run" case. Bugs 4–6 are the
 > separate "recover from a failed setup" case; see *Recovery: re-run, not a
@@ -339,7 +339,7 @@ updates this document's status table as it goes.
 
 | Step | Scope | Bugs | Status |
 | ---- | ----- | ---- | ------ |
-| 1 | Settlement watermark in `completeManagedRun` | 2, 3 | not started |
+| 1 | Settlement watermark in `completeManagedRun` | 2, 3 | complete |
 | 2 | Re-provision managed worktrees whose directory was recreated | 1 | not started |
 | 3 | `WORKTREE_MODE_HELP_TEXT` / `WORKTREE_KEEP_HELP_TEXT` + schema copy | — | not started |
 | 4 | Durable per-worktree named setup state; delete Retry Setup | 6, 4, 5 | not started |
