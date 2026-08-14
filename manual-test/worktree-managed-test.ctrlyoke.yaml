@@ -56,12 +56,11 @@ prompt: |
   4. Reply with a one-line confirmation that you added the function.
 
 endCondition:
-  # check_has_add_function.py is NOT used here: it reads sys.stdin expecting
-  # the AI's chat response, but ctrlyoke never writes the response to a
-  # condition script's stdin (or anywhere else the script can see) - that
-  # script would just hang until timeout. Verify the actual file on disk
-  # instead, inside the execution root ctrlyoke sets as cwd (the worktree,
-  # for this test).
+  # A stdin-reading script (checking the AI's chat response for "apply_discount")
+  # would NOT work here: ctrlyoke never writes the response to a condition
+  # script's stdin (or anywhere else the script can see) - it would just hang
+  # until timeout. Verify the actual file on disk instead, inside the
+  # execution root ctrlyoke sets as cwd (the worktree, for this test).
   script: manual-test/.ctrlyoke/scripts/check_file_contains.py manual-test/sample-code/example.py "def apply_discount"
   returns: "true"
   onFail: retry

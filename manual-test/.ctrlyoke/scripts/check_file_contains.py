@@ -4,17 +4,16 @@ End condition script that checks whether a file on disk contains a given
 substring. Exits 0 in all cases (a failed check is a validation result, not a
 script error) so onFail/retry handling works correctly.
 
-Why this exists instead of reusing check_has_add_function.py:
+Why a script can't just read the AI's response from stdin:
 ctrlyoke end-condition scripts are NEVER given the AI's chat response text.
 EndConditionEvaluator.evaluateCondition() only threads workflow `vars` through
 (as CTRLYOKE_VAR_<KEY> env vars) - nothing is written to argv, env, or stdin.
 CliProcessManager spawns condition scripts with stdin set to "pipe" (so a
 script that merely probes for a handle doesn't see a closed/NUL stream), but
 nothing ever writes to or closes that pipe. A script that calls
-`sys.stdin.read()` expecting the assistant's reply - as check_has_add_function.py
-does - blocks until the condition's timeout kills it, instead of returning a
-real true/false. Verify actual workflow state on disk instead, the same way
-check_counter.py does.
+`sys.stdin.read()` expecting the assistant's reply blocks until the
+condition's timeout kills it, instead of returning a real true/false. Verify
+actual workflow state on disk instead, the same way check_counter.py does.
 
 IMPORTANT: print ONLY "true"/"false" on stdout (send any diagnostics to
 stderr). EndConditionEvaluator's default "auto" compare falls back to exit

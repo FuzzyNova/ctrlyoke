@@ -79,7 +79,6 @@ When creating new files:
 | ------------------------------------ | --------------------------------------- | -------- |
 | `simple-prompt-test.prompt.md`       | Markdown format, basic execution        | 5 sec    |
 | `yaml-format-test.ctrlyoke.yaml`     | YAML parsing, multi-line strings        | 5 sec    |
-| `yaml-multi-step-test.ctrlyoke.yaml` | YAML multi-step with session continuity | 10 sec   |
 | `.ctrlyoke/simple.prompt.md`         | Simple prompt in .ctrlyoke directory    | 5 sec    |
 | `.ctrlyoke/multi-step.ctrlyoke.json` | Multi-step with model switching         | 15 sec   |
 
@@ -562,13 +561,15 @@ Create in `.ctrlyoke/scripts/`:
 
 ```python
 import sys
-response = sys.stdin.read()
-# Validation logic here
+# End condition scripts are NEVER given the AI's chat response text - ctrlyoke
+# doesn't write it to stdin, argv, or env. Verify real workflow state on disk
+# instead (a file's contents, a counter value, etc.) - see check_counter.py
+# and check_file_contains.py for the pattern.
 print('true' if valid else 'false')
 sys.exit(0)
 ```
 
-Test: `echo "test" | python manual-test/.ctrlyoke/scripts/validate.py`
+Test: `python manual-test/.ctrlyoke/scripts/validate.py <args>`
 
 ---
 
