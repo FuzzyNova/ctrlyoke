@@ -52,9 +52,19 @@ export class TempFileManager {
    * saved or unsaved. Combined with content-addressed filenames from
    * `createPastedImageFile()`, this makes the folder a content store: identical
    * bytes always resolve to the same path, so a given image is stored **once**
-   * and deduped across every workflow that references it. It is a sibling of
-   * `temp/` and intentionally **not** gitignored, so committing the workflow
-   * file alongside this folder is enough to share both.
+   * and deduped across every workflow that references it.
+   *
+   * A sibling of `temp/`, and like it **gitignored** — but for a different
+   * reason. `temp/` is swept per turn; this store persists. It is ignored
+   * because most of what lands here belongs to ephemeral `.runs/` work (debug
+   * screenshots pasted mid-conversation), and one directory cannot be both
+   * ignored for those and tracked for the assets of a durable workflow. Save As
+   * resolves it: exporting a workflow copies the assets it actually references
+   * into a tracked sibling `<workflow>.assets/` and rewrites the references, so
+   * the exported artifact is self-contained without this store ever being
+   * committed. Un-ignoring it would commit every unrelated paste and still not
+   * make an export complete. See `ui.instructions.md` ("Save As owns bundle
+   * portability").
    */
   getAttachmentsDir(): string {
     return path.join(

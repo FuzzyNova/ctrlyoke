@@ -17,6 +17,28 @@ const GITIGNORE_HEADER = [
  * Runtime entries written below `.ctrlyoke/`. Keep this exported: managed
  * finalization uses the exact same list to reject a repository whose ignore
  * rules failed to protect runtime state.
+ *
+ * The rule is "ignore what ctrlyoke generates for itself; track what you
+ * authored or explicitly exported" — which is why `templates/`, `scripts/`,
+ * `agents/`, `skills/`, `mcp/servers.json`, and `settings.json` are absent.
+ * Three entries have non-obvious reasons:
+ *
+ * - `certs/` and `notifications/` hold a TLS private key and the VAPID private
+ *   key. Secrets — never track these.
+ * - `attachments/` and `prompts/` are generated stores whose contents mostly
+ *   belong to ephemeral `.runs/` work. They are safe to ignore **only because
+ *   Save As bundles**: exporting a workflow copies the assets it references
+ *   into a tracked sibling `<workflow>.assets/` and rewrites the references.
+ *   Adding them here before that shipped would have left tracked workflows
+ *   pointing at ignored files on another clone. See `PATH_CONSTANTS.ATTACHMENTS_DIR`
+ *   and `ui.instructions.md` ("Save As owns bundle portability").
+ * - `snapshots/` is deliberately *not* here: only the dev-build `UxSnapshotButton`
+ *   creates it, so users never produce the directory. This repo ignores it from
+ *   the root `.gitignore` because ctrlyoke develops itself. Do not "fix" that.
+ *
+ * `ensureGitignore` only ever appends missing entries — it never prunes — so an
+ * entry added here is permanent for every existing workspace, and removing one
+ * from this list does nothing for users who already have it. Add deliberately.
  */
 export const WORKSPACE_INITIALIZER_RUNTIME_ENTRIES = [
   `${PATH_CONSTANTS.RUNS_DIR}/`,

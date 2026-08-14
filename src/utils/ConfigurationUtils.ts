@@ -133,7 +133,11 @@ export const PATH_CONSTANTS = {
   /** Scripts directory name (subdirectory of CTRLYOKE_DIR) */
   SCRIPTS_DIR: "scripts",
 
-  /** Prompts directory name (subdirectory of CTRLYOKE_DIR) */
+  /**
+   * Prompts directory name (subdirectory of CTRLYOKE_DIR).
+   * Generated store for prompt bodies composed in the dashboard, **gitignored**
+   * for the same reason as ATTACHMENTS_DIR — see that comment.
+   */
   PROMPTS_DIR: "prompts",
 
   /** Templates directory name (subdirectory of CTRLYOKE_DIR) */
@@ -147,8 +151,21 @@ export const PATH_CONSTANTS = {
 
   /**
    * Attachments directory name (subdirectory of CTRLYOKE_DIR).
-   * Committed, un-gitignored home for pasted images belonging to saved
-   * workflows — deliberately persistent, unlike TEMP_DIR.
+   * Content-addressed store for pasted images. Persistent, unlike TEMP_DIR, but
+   * **gitignored**: it holds assets belonging to ephemeral `.runs/` work, and no
+   * single ignore rule can serve both those and assets of a durable, committed
+   * workflow. The split is made by lifecycle instead — Save As copies the assets
+   * a workflow actually references into a tracked sibling `<workflow>.assets/`
+   * and rewrites the references, so an exported workflow is self-contained and
+   * this store never needs to be committed. Do not un-ignore it; that trades a
+   * complete export for a directory of unrelated debug screenshots.
+   *
+   * It must also stay **inside the workspace**, independently of the tracking
+   * question: these files are `@`-referenced into prompts and therefore read by
+   * the harness, and harnesses sandbox to the workspace. A user-scoped store
+   * would need per-harness escapes (Claude's `--add-dir`, and an equivalent for
+   * each of the others) to read a pasted screenshot.
+   * See `ui.instructions.md` ("Save As owns bundle portability").
    */
   ATTACHMENTS_DIR: "attachments",
 
