@@ -64,12 +64,22 @@ const GITIGNORE_CONTENT = [
   "",
 ].join("\n");
 
-/** Return true for a repository-relative path inside a generated runtime entry. */
+/**
+ * Return true for a repository-relative path inside a generated runtime entry
+ * rooted at the repository-relative execution workspace.
+ */
 export function isWorkspaceInitializerRuntimePath(
-  repositoryRelativePath: string
+  repositoryRelativePath: string,
+  workspaceRelativeRoot = ""
 ): boolean {
   const normalized = repositoryRelativePath.replace(/\\/g, "/");
-  const ctrlyokePrefix = `${PATH_CONSTANTS.CTRLYOKE_DIR}/`;
+  const normalizedWorkspaceRoot = workspaceRelativeRoot
+    .replace(/\\/g, "/")
+    .replace(/^\.\//, "")
+    .replace(/\/$/, "");
+  const ctrlyokePrefix = normalizedWorkspaceRoot
+    ? `${normalizedWorkspaceRoot}/${PATH_CONSTANTS.CTRLYOKE_DIR}/`
+    : `${PATH_CONSTANTS.CTRLYOKE_DIR}/`;
   if (!normalized.startsWith(ctrlyokePrefix)) return false;
   const ctrlyokeRelative = normalized.slice(ctrlyokePrefix.length);
   return WORKSPACE_INITIALIZER_RUNTIME_ENTRIES.some((entry) => {

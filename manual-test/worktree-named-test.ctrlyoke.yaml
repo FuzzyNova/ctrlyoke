@@ -1,0 +1,70 @@
+# Named Worktree Test
+#
+# Tests ctrlyoke's named (persistent, user-owned) git worktree lifecycle:
+#   - First run: neither the `ctrlyoke-worktree-test` branch nor a worktree for
+#     it exist yet, so ctrlyoke creates both and runs `setup` once.
+#   - Second run: the branch/worktree already exist, so ctrlyoke attaches to
+#     them and does NOT re-run `setup`.
+#   - Named mode never auto-commits, merges, removes the worktree, or deletes
+#     the branch - cleanup is entirely manual.
+#
+# You do NOT need to manually create the worktree/branch first - ctrlyoke
+# creates it on the first run because `ctrlyoke-worktree-test` doesn't exist yet.
+#
+# Run this once per harness (pick the harness in the dashboard before running -
+# it is intentionally NOT hardcoded here) to confirm notifications, hooks, and
+# MCP all resolve correctly from inside a named worktree.
+#
+# Manual verification:
+#   1. A sibling `<repoName>.worktrees/ctrlyoke-worktree-test-*` directory
+#      appears next to this checkout (or under your configured worktrees.root).
+#   2. Inside that worktree: manual-test/sample-code/example.py has the new
+#      `apply_discount` method, and manual-test/worktree-named-setup-marker.txt
+#      exists.
+#   3. THIS checkout's example.py is UNCHANGED - named mode never merges back.
+#   4. Run this file a second time: `setup` is skipped this time (the marker
+#      file's contents/timestamp don't change), proving at-most-once setup on
+#      an already-created named worktree.
+#
+# Cleanup when done experimenting:
+#   git worktree remove <path-from-step-1> --force
+#   git branch -D ctrlyoke-worktree-test
+#
+# `setup` intentionally does NOT run `npm ci`: nothing in this run touches
+# ctrlyoke's own node_modules (the harness CLI just edits example.py; it is
+# not building/testing this repo), and installing ctrlyoke's dependencies on
+# every run would violate this suite's "seconds, not minutes" test philosophy
+# (see README). The `node -e` marker line is enough to prove `setup` executed
+# exactly once. If you specifically want to exercise a realistic dependency-
+# restoring setup command, change it to `setup: npm ci && node -e "..."`.
+
+worktree:
+  mode: named
+  branch: ctrlyoke-worktree-test
+  setup: node -e "require('fs').writeFileSync('manual-test/worktree-named-setup-marker.txt', 'named setup ran\n')"
+
+prompt: |
+  We are testing ctrlyoke's named git worktree feature. This run executes inside
+  a persistent, user-owned worktree checked out on the `ctrlyoke-worktree-test`
+  branch - it is not merged or cleaned up automatically.
+
+  1. Open @manual-test/sample-code/example.py
+  2. Add a new method to the `Inventory` class:
+     `def apply_discount(self, product_id: int, percent: float) -> bool` that
+     reduces the matching product's `price` by `percent` percent and returns
+     `True`, or returns `False` if no product with that id exists.
+  3. Save the file.
+  4. Reply with a one-line confirmation that you added the function.
+
+endCondition:
+  # check_has_add_function.py is NOT used here: it reads sys.stdin expecting
+  # the AI's chat response, but ctrlyoke never writes the response to a
+  # condition script's stdin (or anywhere else the script can see) - that
+  # script would just hang until timeout. Verify the actual file on disk
+  # instead, inside the execution root ctrlyoke sets as cwd (the named
+  # worktree, for this test).
+  script: manual-test/.ctrlyoke/scripts/check_file_contains.py manual-test/sample-code/example.py "def apply_discount"
+  returns: "true"
+  onFail: retry
+  maxRetries: 2
+  retryPrompt: "example.py doesn't contain 'def apply_discount' yet. Please add that method to the Inventory class and save the file."

@@ -114,6 +114,18 @@ When creating new files:
 | `script-step-test.ctrlyoke.yaml`            | scriptStep executes without AI           | 10 sec   |
 | `end-condition-continue-test.ctrlyoke.yaml` | endCondition onFail: "continue" advances | 10 sec   |
 
+### Worktree Tests
+
+Run these against **each of the six harnesses** (pick the harness in the
+dashboard before running — it is intentionally not hardcoded in the files) to
+confirm notifications, hooks, and MCP all resolve correctly from inside a
+worktree, not just the ordinary workspace.
+
+| File                                 | Tests                                              | Duration |
+| ------------------------------------- | --------------------------------------------------- | -------- |
+| `worktree-managed-test.ctrlyoke.yaml` | Managed worktree: setup, auto-commit, auto-merge, cleanup | 15 sec   |
+| `worktree-named-test.ctrlyoke.yaml`   | Named worktree: create-once setup, no auto-commit/merge   | 15 sec   |
+
 ---
 
 ## Test Scenarios
@@ -314,6 +326,50 @@ echo 0 > counter.txt
 
 ---
 
+### 12. Managed Worktree Lifecycle
+
+**File:** `worktree-managed-test.ctrlyoke.yaml`
+
+**Test:** Right-click → "Run with ctrlyoke" (repeat once per harness; reset
+per the file's header comment between runs)
+
+**Expected:**
+
+- Run executes inside an isolated managed worktree (a sibling
+  `ctrlyoke.worktrees/...` directory), not this live workspace.
+- `setup` runs once, before the first prompt, creating
+  `manual-test/worktree-managed-setup-marker.txt` in the worktree.
+- The agent adds `apply_discount` to `Inventory` in
+  `manual-test/sample-code/example.py`.
+- Auto-commit lands both the setup marker and the code edit on a generated
+  `ctrlyoke/...` branch.
+- `merge: true` merges that branch back into this checkout's current branch,
+  so **this checkout's** `example.py` and setup marker appear after the run.
+- The worktree directory is removed afterward (`keep` defaults to `false`).
+
+---
+
+### 13. Named Worktree Lifecycle
+
+**File:** `worktree-named-test.ctrlyoke.yaml`
+
+**Test:** Right-click → "Run with ctrlyoke" **twice** (repeat the pair once
+per harness; no manual worktree/branch setup needed — ctrlyoke creates them)
+
+**Expected:**
+
+- First run: neither the `ctrlyoke-worktree-test` branch nor its worktree
+  exist, so ctrlyoke creates both and runs `setup` once.
+- Second run: ctrlyoke attaches to the existing branch/worktree and does
+  **not** re-run `setup` (marker file is untouched).
+- The agent's edit lands only inside the named worktree — **this checkout's**
+  `example.py` is never modified, and nothing is auto-committed, merged, or
+  cleaned up.
+- Clean up manually afterward: `git worktree remove <path> --force` then
+  `git branch -D ctrlyoke-worktree-test`.
+
+---
+
 ## End Condition Scripts
 
 Located in `.ctrlyoke/scripts/`:
@@ -327,6 +383,7 @@ Located in `.ctrlyoke/scripts/`:
 | `timeout_script.py`      | Timeout handling (sleeps 20s) | Timeout        |
 | `check_counter.py`       | Validates counter equals 3    | `true`/`false` |
 | `check_counter_value.py` | Validates counter equals N    | `true`/`false` |
+| `check_file_contains.py` | Validates a file (path + substring args) contains text | `true`/`false` |
 
 ---
 

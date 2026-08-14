@@ -1,0 +1,69 @@
+# Managed Worktree Test
+#
+# Tests ctrlyoke's managed (ephemeral) git worktree lifecycle end-to-end:
+#   - The run executes inside an isolated managed worktree, not this live workspace.
+#   - `setup` runs exactly once, before the first prompt, with the worktree as cwd.
+#   - Auto-commit lands the agent's file edit on the managed branch.
+#   - `merge: true` merges/fast-forwards that branch back into this checkout's
+#     current branch once the run finishes.
+#   - `keep: false` (the default - omitted here) removes the worktree directory
+#     once landing/merge is done.
+#
+# Run this once per harness (pick the harness in the dashboard before running -
+# it is intentionally NOT hardcoded here) to confirm notifications, hooks, and
+# MCP all resolve correctly from inside the worktree.
+#
+# Manual verification after the run completes:
+#   1. THIS checkout's manual-test/sample-code/example.py now has the new
+#      `apply_discount` method (proves auto-commit + merge landed the change).
+#   2. manual-test/worktree-managed-setup-marker.txt exists in THIS checkout
+#      (proves `setup` ran once in the worktree and was merged back with it).
+#   3. `git log --oneline -5` shows a `ctrlyoke/...` branch merged in.
+#   4. No sibling `ctrlyoke.worktrees` directory is left over for this run
+#      (directory cleanup happened after merge).
+#
+# Reset before re-running (otherwise the function already exists and the run
+# will correctly short-circuit into the "no-changes" landing path instead of
+# exercising commit + merge again):
+#   git checkout -- manual-test/sample-code/example.py
+#   Remove-Item manual-test/worktree-managed-setup-marker.txt -ErrorAction SilentlyContinue
+#   git branch -D <the ctrlyoke/worktree-managed-test/... branch left behind, if not auto-deleted>
+#
+# `setup` intentionally does NOT run `npm ci`: nothing in this run touches
+# ctrlyoke's own node_modules (the harness CLI just edits example.py; it is
+# not building/testing this repo), and installing ctrlyoke's dependencies on
+# every run would violate this suite's "seconds, not minutes" test philosophy
+# (see README). The `node -e` marker line is enough to prove `setup` executed
+# exactly once in the worktree. If you specifically want to exercise a
+# realistic dependency-restoring setup command, change it to
+# `setup: npm ci && node -e "..."`.
+
+worktree:
+  mode: managed
+  merge: true
+  setup: node -e "require('fs').writeFileSync('manual-test/worktree-managed-setup-marker.txt', 'managed setup ran\n')"
+
+prompt: |
+  We are testing ctrlyoke's managed git worktree feature. This run executes inside
+  an isolated worktree copy of the repository, not your normal workspace.
+
+  1. Open @manual-test/sample-code/example.py
+  2. Add a new method to the `Inventory` class:
+     `def apply_discount(self, product_id: int, percent: float) -> bool` that
+     reduces the matching product's `price` by `percent` percent and returns
+     `True`, or returns `False` if no product with that id exists.
+  3. Save the file.
+  4. Reply with a one-line confirmation that you added the function.
+
+endCondition:
+  # check_has_add_function.py is NOT used here: it reads sys.stdin expecting
+  # the AI's chat response, but ctrlyoke never writes the response to a
+  # condition script's stdin (or anywhere else the script can see) - that
+  # script would just hang until timeout. Verify the actual file on disk
+  # instead, inside the execution root ctrlyoke sets as cwd (the worktree,
+  # for this test).
+  script: manual-test/.ctrlyoke/scripts/check_file_contains.py manual-test/sample-code/example.py "def apply_discount"
+  returns: "true"
+  onFail: retry
+  maxRetries: 2
+  retryPrompt: "example.py doesn't contain 'def apply_discount' yet. Please add that method to the Inventory class and save the file."

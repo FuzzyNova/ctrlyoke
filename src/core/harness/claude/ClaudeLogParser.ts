@@ -1217,8 +1217,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * @remarks
    * **Normalization Rules:**
    * - Convert drive colon to double dash (Windows: `C:\` → `C--`)
-   * - Replace path separators with dashes (leading slash becomes a leading dash)
+   * - Replace path separators and periods with dashes (leading slash becomes a leading dash)
    * - Example Windows: `C:\dev\ctrlyoke` → `C--dev-ctrlyoke`
+   * - Example worktree: `C:\dev\ctrlyoke.worktrees\run` →
+   *   `C--dev-ctrlyoke-worktrees-run`
    * - Example Unix: `/home/name/dev/ctrlyoke` → `-home-name-dev-ctrlyoke`
    *
    * **Note:** This is based on observed Claude CLI behavior.
@@ -1228,9 +1230,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     // Replace drive letter colon with double dash on Windows (e.g., "C:\dev\ctrlyoke" → "C--dev-ctrlyoke")
     let normalized = workspacePath.replace(/^([A-Z]):[\\\/]/i, "$1--");
 
-    // Replace path separators with dashes (leading slash on Unix becomes a leading dash,
-    // matching Claude CLI's observed behavior: "/home/user/dev" → "-home-user-dev")
-    normalized = normalized.replace(/[\\\/]/g, "-");
+    // Claude also replaces periods in path components. This matters for the
+    // default managed-worktree parent (`<repo>.worktrees`): preserving the dot
+    // makes us poll a project directory Claude never writes.
+    normalized = normalized.replace(/[\\\/.]/g, "-");
 
     return normalized;
   }

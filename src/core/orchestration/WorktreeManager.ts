@@ -569,8 +569,15 @@ export class WorktreeManager {
           if (!identity.ok) return blocked(identity.message);
 
           const paths = await getGitTrackedAndUntrackedFiles(info.worktreePath);
+          const executionRootRelative = path.relative(
+            info.executionWorkspace.executionCheckoutRoot ?? info.worktreePath,
+            info.executionWorkspace.executionRoot
+          );
           const runtimePaths = paths.filter((repositoryRelativePath) =>
-            isWorkspaceInitializerRuntimePath(repositoryRelativePath)
+            isWorkspaceInitializerRuntimePath(
+              repositoryRelativePath,
+              executionRootRelative
+            )
           );
           if (runtimePaths.length > 0) {
             return blocked(
@@ -1219,7 +1226,12 @@ export class WorktreeManager {
         );
       }
 
-      await WorkspaceInitializer.initializeIfNeeded(worktreePath);
+      const executionRoot = this.buildExecutionWorkspace(
+        repositoryInputs,
+        worktreePath,
+        options
+      ).executionRoot;
+      await WorkspaceInitializer.initializeIfNeeded(executionRoot);
       const updatedRecord: ManagedWorktreeOwnershipRecord = {
         ...record,
         worktreePath,
@@ -1858,6 +1870,13 @@ export class WorktreeManager {
     if (!worktreePath) {
       throw new Error(`Named worktree "${branchName}" could not be resolved.`);
     }
+    const executionCheckoutRoot = worktreePath;
+    const mapSourcePath = (sourcePath: string): string =>
+      path.resolve(
+        executionCheckoutRoot,
+        path.relative(sourceCheckoutRoot, sourcePath)
+      );
+    const executionRoot = mapSourcePath(repositoryInputs.executionRoot);
     if (
       options.existingSetupOutcome &&
       options.existingSetupOutcome !== "succeeded" &&
@@ -1867,8 +1886,7 @@ export class WorktreeManager {
         `Named worktree setup is ${options.existingSetupOutcome}; use Retry Setup to run it explicitly.`
       );
     }
-    const executionCheckoutRoot = worktreePath;
-    await WorkspaceInitializer.initializeIfNeeded(executionCheckoutRoot);
+    await WorkspaceInitializer.initializeIfNeeded(executionRoot);
     const dirty = await hasUncommittedChanges(executionCheckoutRoot);
     const baseCommit = await resolveCommit(executionCheckoutRoot, "HEAD");
     const comparisonBaseLabel =
@@ -1909,18 +1927,12 @@ export class WorktreeManager {
         this.divergenceCacheKey(sourceCheckoutRoot, branchName)
       );
     }
-    const mapSourcePath = (sourcePath: string): string =>
-      path.resolve(
-        executionCheckoutRoot,
-        path.relative(sourceCheckoutRoot, sourcePath)
-      );
     const mappedNamedWorkspaceRoots = repositoryInputs.namedWorkspaceRoots.map(
       (rootEntry) => ({
         ...rootEntry,
         fsPath: mapSourcePath(rootEntry.fsPath),
       })
     );
-    const executionRoot = mapSourcePath(repositoryInputs.executionRoot);
     const executionWorkspace: ExecutionWorkspace = {
       stateRoot: options.stateRoot,
       executionRoot,

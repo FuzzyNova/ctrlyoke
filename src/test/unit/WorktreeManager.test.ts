@@ -281,6 +281,18 @@ suite("WorktreeManager", function () {
       info.executionWorkspace.namedWorkspaceRoots[0]?.fsPath,
       path.join(info.worktreePath, "packages", "app")
     );
+    assert.strictEqual(
+      await fs
+        .stat(
+          path.join(
+            info.executionWorkspace.executionRoot,
+            ".ctrlyoke",
+            ".gitignore"
+          )
+        )
+        .then((stat) => stat.isFile()),
+      true
+    );
     await info.lease.release();
 
     const outside = await resolve(
@@ -484,6 +496,32 @@ suite("WorktreeManager", function () {
     assert.strictEqual(
       await fs
         .stat(path.join(info.worktreePath, ".ctrlyoke", ".gitignore"))
+        .then((stat) => stat.isFile()),
+      true
+    );
+    await info.lease.release();
+  });
+
+  test("seeds .ctrlyoke/.gitignore at a nested managed execution root", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-nested-gitignore"
+    );
+    const stateRoot = path.join(repository, "packages", "app");
+    await fs.mkdir(stateRoot, { recursive: true });
+    const info = await ensureManaged(manager(parent), repository, {
+      stateRoot,
+      namedWorkspaceRoots: [{ name: "app", fsPath: stateRoot }],
+    });
+
+    assert.strictEqual(
+      await fs
+        .stat(
+          path.join(
+            info.executionWorkspace.executionRoot,
+            ".ctrlyoke",
+            ".gitignore"
+          )
+        )
         .then((stat) => stat.isFile()),
       true
     );
@@ -924,16 +962,23 @@ suite("WorktreeManager", function () {
     );
   });
 
-  test("rejects runtime paths when the worktree ignore file is absent", async () => {
+  test("rejects nested execution-root runtime paths when its ignore file is absent", async () => {
     const { parent, repository } = await makeRepository("managed-runtime-guard");
     const instance = manager(parent);
-    const info = await ensureManaged(instance, repository);
-    await fs.rm(path.join(info.worktreePath, ".ctrlyoke", ".gitignore"));
-    await fs.mkdir(path.join(info.worktreePath, ".ctrlyoke", ".runs"), {
-      recursive: true,
+    const stateRoot = path.join(repository, "packages", "app");
+    await fs.mkdir(stateRoot, { recursive: true });
+    const info = await ensureManaged(instance, repository, {
+      stateRoot,
+      namedWorkspaceRoots: [{ name: "app", fsPath: stateRoot }],
     });
+    const runtimeRoot = path.join(
+      info.executionWorkspace.executionRoot,
+      ".ctrlyoke"
+    );
+    await fs.rm(path.join(runtimeRoot, ".gitignore"));
+    await fs.mkdir(path.join(runtimeRoot, ".runs"), { recursive: true });
     await fs.writeFile(
-      path.join(info.worktreePath, ".ctrlyoke", ".runs", "runtime.json"),
+      path.join(runtimeRoot, ".runs", "runtime.json"),
       "runtime\n"
     );
 
