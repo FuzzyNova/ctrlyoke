@@ -79,12 +79,18 @@ export function scanCtrlYokeSlashTokens(
 }
 
 /** Rewrite all ctrlyoke slash references while preserving all other text. */
-export function rewriteCtrlYokeSlashTokens(text: string): string {
+export function rewriteCtrlYokeSlashTokens(
+  text: string,
+  shouldRewrite: (token: CtrlYokeSlashToken) => boolean = () => true
+): string {
   const tokens = scanCtrlYokeSlashTokens(text);
   let rewritten = text;
 
   for (let index = tokens.length - 1; index >= 0; index -= 1) {
     const token = tokens[index];
+    if (!shouldRewrite(token)) {
+      continue;
+    }
     const replacement = `${token.kind}: ${token.name}`;
     rewritten =
       rewritten.slice(0, token.index) +

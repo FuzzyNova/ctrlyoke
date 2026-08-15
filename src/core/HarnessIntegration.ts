@@ -32,6 +32,7 @@ import {
   PriorContextItemType,
 } from "../types/DashboardConstants";
 import type { InlinePriorContextRef } from "../utils/FileReferenceParser";
+import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
 
 /**
@@ -695,6 +696,10 @@ export abstract class HarnessIntegration {
    * Examples: "/handoff", "/compact", "/context".
    */
   protected extractLeadingSlashCommand(text: string): string | null {
+    const leadingCtrlYokeToken = scanCtrlYokeSlashTokens(text)[0];
+    if (leadingCtrlYokeToken?.index === 0) {
+      return null;
+    }
     const match = text.match(/^(\/\w+)/);
     return match ? match[1] : null;
   }

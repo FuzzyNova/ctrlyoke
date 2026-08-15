@@ -61,6 +61,183 @@ suite("CliPromptPreparer", () => {
     });
   });
 
+  test("should keep pure native /commit and /mcp commands inline", async () => {
+    for (const command of ["/commit", "/mcp"]) {
+      let buildSectionsCalled = false;
+      const preparer = new CliPromptPreparer({
+        shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+        buildPromptSections: async () => {
+          buildSectionsCalled = true;
+          return createSections();
+        },
+        extractLeadingSlashCommand: (text) => text,
+        isSimplePrompt: () => true,
+        buildPriorContextXmlFromItems: () => "",
+        getWorkspaceRoot: () => process.cwd(),
+        getTempFileSplitConfig: () => undefined,
+        formatDirectFileRef: () => "",
+        formatTempFileRef: () => "",
+        formatCategorizedReferences: () => "",
+      });
+
+      const result = await preparer.preparePrompt(
+        { prompt: command } as PromptStep,
+        undefined,
+        undefined,
+        undefined
+      );
+
+      assert.deepStrictEqual(result, {
+        promptWithInstruction: command,
+        tempFilePaths: [],
+      });
+      assert.strictEqual(buildSectionsCalled, false);
+    }
+  });
+
+  test("should attach and rewrite a discovered inline skill without mutating the prompt", async () => {
+    const workspaceRoot = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-inline-skill-")
+    );
+    const skillPath = path.join(
+      workspaceRoot,
+      ".ctrlyoke",
+      "skills",
+      "commit",
+      "SKILL.md"
+    );
+    await fs.promises.mkdir(path.dirname(skillPath), { recursive: true });
+    await fs.promises.writeFile(skillPath, "---\ndescription: Commit changes\n---\n", "utf8");
+
+    let capturedSkills: string[] | undefined;
+    const prompt = {
+      prompt: "/skill:commit",
+    } as PromptStep;
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (_prompt, _agent, skills) => {
+        capturedSkills = skills;
+        return createSections({
+          skillContent: skills?.length ? "attached commit skill" : null,
+          userPromptText: _prompt.prompt,
+        });
+      },
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => workspaceRoot,
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    try {
+      const result = await preparer.planPrompt(
+        prompt,
+        undefined,
+        undefined,
+        undefined
+      );
+
+      assert.deepStrictEqual(capturedSkills, ["commit"]);
+      assert.ok(result.files.some((file) => file.content.includes("skill")));
+      assert.strictEqual(
+        result.files.find((file) => file.category === "prompt")?.content,
+        "skill: commit"
+      );
+      assert.strictEqual(prompt.prompt, "/skill:commit");
+    } finally {
+      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("should merge inline skills with explicit skills without duplicates", async () => {
+    const workspaceRoot = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-inline-skill-")
+    );
+    const skillPath = path.join(
+      workspaceRoot,
+      ".ctrlyoke",
+      "skills",
+      "commit",
+      "SKILL.md"
+    );
+    await fs.promises.mkdir(path.dirname(skillPath), { recursive: true });
+    await fs.promises.writeFile(skillPath, "# commit", "utf8");
+
+    let capturedSkills: string[] | undefined;
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (_prompt, _agent, skills) => {
+        capturedSkills = skills;
+        return createSections({
+          skillContent: skills?.length ? "attached skills" : null,
+          userPromptText: _prompt.prompt,
+        });
+      },
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => workspaceRoot,
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    try {
+      const result = await preparer.planPrompt(
+        { prompt: "using /skill:commit now" } as PromptStep,
+        undefined,
+        { skills: ["commit", "review"] } as any,
+        undefined
+      );
+
+      assert.deepStrictEqual(capturedSkills, ["commit", "review"]);
+      assert.strictEqual(
+        result.files.find((file) => file.category === "prompt")?.content,
+        "using skill: commit now"
+      );
+    } finally {
+      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("should leave an unknown inline skill and report a diagnostic", async () => {
+    const workspaceRoot = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-inline-skill-")
+    );
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (_prompt) =>
+        createSections({ userPromptText: _prompt.prompt }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => workspaceRoot,
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    try {
+      const result = await preparer.planPrompt(
+        { prompt: "/skill:unknown" } as PromptStep,
+        undefined,
+        undefined,
+        undefined
+      );
+
+      assert.strictEqual(result.promptWithInstruction, "/skill:unknown");
+      assert.strictEqual(result.diagnostics.length, 1);
+      assert.strictEqual(result.diagnostics[0].code, "prompt.skill.unknown");
+    } finally {
+      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("should keep attaching agents and skills that were not previously attached on resume", async () => {
     let capturedAgent: string | undefined;
     let capturedSkills: string[] | undefined;

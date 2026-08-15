@@ -51,6 +51,10 @@ class MockVsCodePlatform
 }
 
 class TestCliIntegration extends CliIntegration {
+  public extractSlashCommand(text: string): string | null {
+    return this.extractLeadingSlashCommand(text);
+  }
+
   public configuredExecutionMode(): string {
     return this.getExecutionMode();
   }
@@ -239,6 +243,21 @@ suite("CliIntegration", () => {
         null
       );
     });
+  });
+
+  test("does not classify ctrlyoke slash references as native commands", () => {
+    const integration = createTestIntegration();
+
+    assert.strictEqual(integration.extractSlashCommand("/commit"), "/commit");
+    assert.strictEqual(integration.extractSlashCommand("/mcp"), "/mcp");
+    assert.strictEqual(
+      integration.extractSlashCommand("/skill:commit"),
+      null
+    );
+    assert.strictEqual(
+      integration.extractSlashCommand("/mcp:playwright"),
+      null
+    );
   });
 
   test("should delegate retained artifact policy to the CLI provider", () => {

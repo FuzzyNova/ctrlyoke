@@ -16,6 +16,7 @@ import {
   PREVIEW_PROMPT_CATEGORIES,
   PREVIEW_TRUNCATION_REASONS,
   TEMP_FILE_CATEGORIES,
+  CTRLYOKE_SLASH_TOKEN_KINDS,
   type PreviewPromptCategory,
 } from "../../../types/DashboardConstants";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
@@ -23,6 +24,11 @@ import { TempFileManager } from "../../../utils/TempFileManager";
 import { Log } from "../../../utils/Log";
 import { parseInlinePriorContextRefs } from "../../../utils/FileReferenceParser";
 import { ResumeAttachmentResolver } from "../../../utils/ResumeAttachmentResolver";
+import {
+  scanCtrlYokeSlashTokens,
+  rewriteCtrlYokeSlashTokens,
+} from "../../../utils/CtrlYokeSlashTokens";
+import { SkillDiscovery } from "../../../utils/SkillDiscovery";
 import {
   estimateFileTokens,
   type FileTokenEstimate,
@@ -45,6 +51,7 @@ import type { PreparedMutation } from "./interfaces/PreparedMutation";
 const PROMPT_DIAGNOSTIC_CODES = {
   LARGE_REFERENCE: "prompt.reference.implausibly-large",
   OVER_INLINE_CAP: "prompt.content.over-inline-cap",
+  UNKNOWN_SKILL_REFERENCE: "prompt.skill.unknown",
 } as const;
 
 export interface PlannedPromptFile {
@@ -116,6 +123,8 @@ export class CliPromptPreparer {
     const isPureSlashCommand =
       slashCommand !== null && /^\/\w+\s*$/.test(originalPromptText);
 
+    // Keep colon-containing ctrlyoke references out of this native-command
+    // bypass; the regex intentionally recognizes only plain slash commands.
     if (isPureSlashCommand) {
       Log.debug(
         `⚡ Slash command detected ("${slashCommand}") — skipping instruction assembly`
@@ -125,6 +134,7 @@ export class CliPromptPreparer {
 
     const promptIndex = workflowContext?.promptIndex ?? 0;
     const allPrompts = workflowContext?.allPrompts ?? [prompt];
+    const workspaceRoot = this.deps.getWorkspaceRoot();
     const attachmentResolution =
       !!resolvedSessionId &&
       this.deps.shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume()
@@ -141,14 +151,60 @@ export class CliPromptPreparer {
             agent: resolvedProperties?.agent,
             skills: resolvedProperties?.skills,
           };
+    const skillTokens = scanCtrlYokeSlashTokens(originalPromptText).filter(
+      (token) => token.kind === CTRLYOKE_SLASH_TOKEN_KINDS.SKILL
+    );
+    const discoveredSkills = skillTokens.length
+      ? await SkillDiscovery.discoverSkills(workspaceRoot)
+      : [];
+    const inlineSkillNames = [
+      ...new Set(
+        skillTokens
+          .filter((token) =>
+            SkillDiscovery.resolveCtrlYokeSkillInvocation(
+              discoveredSkills,
+              token.name,
+              resolvedProperties?.harness,
+              workspaceRoot
+            )
+          )
+          .map((token) => token.name)
+      ),
+    ];
+    const effectiveSkills = [
+      ...new Set([...(attachmentResolution.skills ?? []), ...inlineSkillNames]),
+    ];
+    const effectiveSkillResolution =
+      effectiveSkills.length > 0 ? effectiveSkills : undefined;
+    const harnessId = resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI;
+    const inlineSkillDiagnostics = skillTokens
+      .filter((token) => !inlineSkillNames.includes(token.name))
+      .map((token) =>
+        this.createDiagnostic(
+          PROMPT_DIAGNOSTIC_CODES.UNKNOWN_SKILL_REFERENCE,
+          harnessId,
+          `Skill "${token.name}" referenced by ${token.raw} was not found among discovered skills.`
+        )
+      );
     const sections = await this.deps.buildPromptSections(
       prompt,
       attachmentResolution.agent,
-      attachmentResolution.skills
+      effectiveSkillResolution
     );
+    const outgoingSections = {
+      ...sections,
+      userPromptText: rewriteCtrlYokeSlashTokens(
+        sections.userPromptText,
+        (token) =>
+          token.kind === CTRLYOKE_SLASH_TOKEN_KINDS.SKILL &&
+          inlineSkillNames.includes(token.name)
+      ),
+    };
 
     const resolvedPriorContext = resolvedProperties?.priorContext;
-    const inlineRefs = parseInlinePriorContextRefs(sections.userPromptText).map(
+    const inlineRefs = parseInlinePriorContextRefs(
+      outgoingSections.userPromptText
+    ).map(
       (match) => match.ref
     );
     const hasPriorContext =
@@ -159,28 +215,32 @@ export class CliPromptPreparer {
       !!sections.skillContent ||
       sections.directFileRefs.length > 0 ||
       !!sections.excerptContent ||
-      hasPriorContext;
+      hasPriorContext ||
+      inlineSkillNames.length > 0;
     const inlineCheck = this.makeInlineCheck(injectMode);
 
-    if (!hasExtras && inlineCheck(sections.userPromptText)) {
-      return this.createInlinePlan(sections.userPromptText);
+    if (!hasExtras && inlineCheck(outgoingSections.userPromptText)) {
+      return this.createInlinePlan(
+        outgoingSections.userPromptText,
+        inlineSkillDiagnostics
+      );
     }
 
     // Preserve the live fast path: direct references remain inline when the
     // rest of the prompt is safe to send as-is.
     if (
-      sections.directFileRefs.length > 0 &&
-      !sections.agentContent &&
-      !sections.skillContent &&
-      !sections.excerptContent &&
+      outgoingSections.directFileRefs.length > 0 &&
+      !outgoingSections.agentContent &&
+      !outgoingSections.skillContent &&
       !hasPriorContext &&
-      inlineCheck(sections.userPromptText)
+      inlineCheck(outgoingSections.userPromptText)
     ) {
-      return this.createInlinePlanWithReferences(
-        sections.userPromptText,
-        sections.directFileRefs,
-        resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI
+      const plan = await this.createInlinePlanWithReferences(
+        outgoingSections.userPromptText,
+        outgoingSections.directFileRefs,
+        harnessId
       );
+      return this.withDiagnostics(plan, inlineSkillDiagnostics);
     }
 
     const contextItems = hasPriorContext
@@ -203,18 +263,22 @@ export class CliPromptPreparer {
         : undefined;
 
     const plan = await this.createCategorizedPromptPlan(
-      sections,
+      outgoingSections,
       workflowContext,
       resolvedContextContent,
       hasPriorContext,
-      resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI
+      harnessId
+    );
+    const planWithDiagnostics = this.withDiagnostics(
+      plan,
+      inlineSkillDiagnostics
     );
     if (!slashCommand) {
-      return plan;
+      return planWithDiagnostics;
     }
     return {
-      ...plan,
-      promptWithInstruction: `${slashCommand} ${plan.promptWithInstruction.trimStart()}`,
+      ...planWithDiagnostics,
+      promptWithInstruction: `${slashCommand} ${planWithDiagnostics.promptWithInstruction.trimStart()}`,
     };
   }
 
@@ -258,7 +322,10 @@ export class CliPromptPreparer {
       : this.deps.isSimplePrompt;
   }
 
-  private createInlinePlan(promptText: string): PromptPreparationPlan {
+  private createInlinePlan(
+    promptText: string,
+    diagnostics: readonly CompatibilityDiagnostic[] = []
+  ): PromptPreparationPlan {
     const body = this.createBodySection(
       PREVIEW_PROMPT_CATEGORIES.PROMPT_TEXT,
       promptText,
@@ -276,8 +343,17 @@ export class CliPromptPreparer {
         includedBodyByteCount: body.includedByteCount,
         bodyBudgetBytes: MAX_PREVIEW_BODY_BYTES,
       },
-      diagnostics: [],
+      diagnostics: [...diagnostics],
     };
+  }
+
+  private withDiagnostics(
+    plan: PromptPreparationPlan,
+    diagnostics: readonly CompatibilityDiagnostic[]
+  ): PromptPreparationPlan {
+    return diagnostics.length === 0
+      ? plan
+      : { ...plan, diagnostics: [...diagnostics, ...plan.diagnostics] };
   }
 
   private async createInlinePlanWithReferences(
