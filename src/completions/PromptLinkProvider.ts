@@ -23,6 +23,7 @@ import { getFrozenRunHistoryLocation } from "../utils/RunHistoryStoragePolicy";
 import { projectStateRoot } from "../utils/ProjectStatePaths";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import { SkillDiscovery } from "../utils/SkillDiscovery";
+import { CTRLYOKE_SLASH_TOKEN_KINDS } from "../types/DashboardConstants";
 
 /**
  * Provides clickable links for ctrlyoke context references
@@ -207,7 +208,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     workspaceRoot: string
   ): Promise<vscode.DocumentLink[]> {
     const skillTokens = scanCtrlYokeSlashTokens(text).filter(
-      (token) => token.kind === "skill"
+      (token) => token.kind === CTRLYOKE_SLASH_TOKEN_KINDS.SKILL
     );
     if (skillTokens.length === 0) {
       return [];

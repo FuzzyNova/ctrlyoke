@@ -30,6 +30,37 @@ suite("CtrlYokeSlashTokens", () => {
     });
   });
 
+  test("does not swallow sentence punctuation into the name", () => {
+    // A trailing "." or "-" is ordinary prose, not part of the reference. If it
+    // were captured, the name would never resolve and the literal token would
+    // reach the harness — the exact collision this syntax exists to avoid.
+    assert.deepStrictEqual(
+      scanCtrlYokeSlashTokens(
+        "commit the changes using /skill:commit."
+      ).map((token) => token.raw),
+      ["/skill:commit"]
+    );
+    assert.deepStrictEqual(
+      scanCtrlYokeSlashTokens("check the UI with /mcp:playwright!").map(
+        (token) => token.name
+      ),
+      ["playwright"]
+    );
+    assert.strictEqual(
+      rewriteCtrlYokeSlashTokens("commit using /skill:commit."),
+      "commit using skill: commit."
+    );
+  });
+
+  test("leaves the three-segment tool form untouched", () => {
+    // `/mcp:<server>:<tool>` is a follow-on phase; until it ships it must not be
+    // mistaken for a server reference with trailing text.
+    assert.deepStrictEqual(
+      scanCtrlYokeSlashTokens("/mcp:playwright:browser_hover"),
+      []
+    );
+  });
+
   test("scans every occurrence with source locations", () => {
     const text = "use /skill:commit and /mcp:playwright now";
     assert.deepStrictEqual(scanCtrlYokeSlashTokens(text), [

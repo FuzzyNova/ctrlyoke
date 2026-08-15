@@ -50,7 +50,10 @@ import {
 import { Prec, RangeSetBuilder, StateEffect } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { openContextReference } from "@utils/contextReferenceActions";
-import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import {
+  USER_FEEDBACK_SEVERITY,
+  CTRLYOKE_SLASH_TOKEN_KINDS,
+} from "@root/types/DashboardConstants";
 import {
   MESSAGE_TYPES,
   EDITOR_PLACEHOLDER_TEXT,
@@ -2445,7 +2448,7 @@ export function createSlashTokenDecorationExtension() {
           const text = view.state.doc.sliceString(from, to);
           for (const token of scanCtrlYokeSlashTokens(text)) {
             if (
-              token.kind !== "skill" ||
+              token.kind !== CTRLYOKE_SLASH_TOKEN_KINDS.SKILL ||
               isInFencedBlock(
                 token.index + from,
                 token.index + from + token.length,
@@ -2461,7 +2464,7 @@ export function createSlashTokenDecorationExtension() {
               Decoration.mark({
                 class: "cm-link",
                 attributes: {
-                  "data-type": "skill",
+                  "data-type": CTRLYOKE_SLASH_TOKEN_KINDS.SKILL,
                   "data-skill-name": token.name,
                 },
               })
@@ -2654,7 +2657,9 @@ function openContextReferenceLink(
   vscode: any,
   stepCountRef: React.RefObject<number>
 ): boolean {
-  if (target.getAttribute("data-type") === "skill") {
+  if (
+    target.getAttribute("data-type") === CTRLYOKE_SLASH_TOKEN_KINDS.SKILL
+  ) {
     const skillName = target.getAttribute("data-skill-name");
     if (!skillName) return false;
 

@@ -3,8 +3,14 @@ import {
   type CtrlYokeSlashTokenKind,
 } from "../types/DashboardConstants";
 
-const TOKEN_NAME_PATTERN = "[a-zA-Z0-9._-]+";
-const TOKEN_BOUNDARY_PATTERN = "[a-zA-Z0-9._:-]";
+// A name may contain `.`, `_`, and `-` internally but must start and end on an
+// alphanumeric, so ordinary sentence punctuation is not swallowed into it:
+// "commit the changes using /skill:commit." references `commit`, not `commit.`.
+const TOKEN_NAME_PATTERN = "[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?";
+// Only a further `:` disqualifies a match, so the three-segment
+// `/mcp:<server>:<tool>` form (a follow-on phase) is left entirely alone rather
+// than being mistaken for a server reference with trailing text.
+const TOKEN_BOUNDARY_PATTERN = "[a-zA-Z0-9:]";
 const TOKEN_PATTERN = new RegExp(
   `\\/(${Object.values(CTRLYOKE_SLASH_TOKEN_KINDS).join("|")}):(${TOKEN_NAME_PATTERN})(?!${TOKEN_BOUNDARY_PATTERN})`,
   "g"

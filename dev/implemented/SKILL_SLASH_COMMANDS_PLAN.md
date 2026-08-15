@@ -121,6 +121,13 @@ numbers (they drift) but the constraints themselves are load-bearing.
    `trigger: string` (`WebviewMessageTypes.ts:2117`), and `CompletionTrigger` is a webview-local
    union (`CodeMirrorEditor.tsx:136`). Adding `"/"` is a one-line union change plus routing.
 
+9. **`CliPromptPreparer`'s second fast path guards on four section kinds, not three.** The
+   direct-reference fast path at `planPrompt()` emits only the prompt text and its direct file
+   references, so it must stay gated on `!agentContent && !skillContent && !excerptContent &&
+   !hasPriorContext`. Dropping any one of those conditions silently discards that section from what
+   reaches the harness — no error, no diagnostic, just missing context. Excerpt content was lost
+   this way once during implementation; `CliPromptPreparer.test.ts` now pins it.
+
 ---
 
 ## Goals
@@ -595,9 +602,19 @@ design work. Implementers should follow them rather than re-litigating.
 
 1. **VS Code `PromptCompletionProvider` `/` support → Phase 2.** Webview-first, matching the
    existing rollout table. The extension-side completion helper is shared, so Phase 2 is wiring only.
-2. **Bare-word labels, no quoting.** Token names are constrained to `[a-zA-Z0-9._-]+` by the Design
-   §1 grammar, so `skill: <name>` / `mcp: <name>` never needs quoting. A name that doesn't match the
-   grammar simply isn't a ctrlyoke token and is left alone.
+2. **Bare-word labels, no quoting.** Token names never need quoting, so `skill: <name>` /
+   `mcp: <name>` is always safe. A name that doesn't match the grammar simply isn't a ctrlyoke token
+   and is left alone. As shipped, the grammar is slightly tighter than the original
+   `[a-zA-Z0-9._-]+`: a name may contain `.`, `_`, and `-` internally but **must start and end on an
+   alphanumeric**, and a match is rejected when the character that follows it is alphanumeric or
+   `:`. Both refinements are load-bearing:
+   - Without the end-anchor, ordinary sentence punctuation is swallowed into the name —
+     `commit the changes using /skill:commit.` would reference a skill called `commit.`, fail to
+     resolve, and leak the literal `/skill:commit.` to the harness, which is the exact collision
+     this syntax exists to prevent.
+   - The trailing `:` exclusion is what keeps the three-segment `/mcp:<server>:<tool>` form (Phase 4)
+     from being mis-read as a server reference with trailing text. Until that phase ships, the
+     three-segment form is left entirely untouched rather than partially matched.
 3. **Dedupe by identity, not label:** MCP servers by resolved `McpServerConfig.id`, skills by skill
    name (with the discovery precedence order in `SkillDiscovery.discoverSkills()` picking the file
    when several copies exist).

@@ -28,6 +28,61 @@ function createSections(overrides?: Partial<PromptSections>): PromptSections {
 }
 
 suite("CliPromptPreparer", () => {
+  test("should not take the direct-reference fast path when excerpt content exists", async () => {
+    // The fast path emits only the prompt text and its direct file references,
+    // so excerpt content would be silently dropped from what reaches the
+    // harness. Direct refs plus an excerpt must go through full assembly.
+    let formattedExcerptRefs: string[] = [];
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({
+          directFileRefs: ["/workspace/Plan.md"],
+          excerptContent: "<attachment>excerpt</attachment>",
+          userPromptText: "summarize the plan",
+        }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (
+        _agentRefs,
+        _skillRefs,
+        directRefs,
+        contextRefs,
+        excerptRefs,
+        promptRefs
+      ) => {
+        formattedExcerptRefs = [...excerptRefs];
+        return [...directRefs, ...contextRefs, ...excerptRefs, ...promptRefs].join(
+          " | "
+        );
+      },
+    });
+
+    const plan = await preparer.planPrompt(
+      { prompt: "summarize the plan" } as PromptStep,
+      undefined,
+      undefined,
+      undefined
+    );
+
+    assert.ok(
+      formattedExcerptRefs.length > 0,
+      "excerpt content must survive into the assembled prompt"
+    );
+    assert.ok(
+      plan.promptPreview.sections.some(
+        (section) =>
+          section.category === PREVIEW_PROMPT_CATEGORIES.INLINE_REFERENCE
+      ),
+      "excerpt content must appear in the prompt preview"
+    );
+  });
+
   test("should use fast path for simple prompts with no extras", async () => {
     const preparer = new CliPromptPreparer({
       shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,

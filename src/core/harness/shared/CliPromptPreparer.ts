@@ -249,6 +249,7 @@ export class CliPromptPreparer {
       outgoingSections.directFileRefs.length > 0 &&
       !outgoingSections.agentContent &&
       !outgoingSections.skillContent &&
+      !outgoingSections.excerptContent &&
       !hasPriorContext &&
       inlineCheck(outgoingSections.userPromptText)
     ) {

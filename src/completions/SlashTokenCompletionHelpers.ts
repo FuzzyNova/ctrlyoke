@@ -3,6 +3,13 @@ import type { PlainCompletionItem } from "./CompletionHelpers";
 import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
 import { SkillDiscovery, type SkillInfo } from "../utils/SkillDiscovery";
 import type { ManagedMcpServer } from "../types/WebviewMessageTypes";
+import {
+  CTRLYOKE_SLASH_TOKEN_KINDS,
+  type CtrlYokeSlashTokenKind,
+} from "../types/DashboardConstants";
+
+/** Prefix that introduces a namespaced ctrlyoke reference, e.g. `/skill:`. */
+const tokenPrefix = (kind: CtrlYokeSlashTokenKind): string => `/${kind}:`;
 
 export interface SkillTokenCompletionItem extends PlainCompletionItem {
   commandType: "ctrlyokeSkill";
@@ -18,7 +25,11 @@ export type SlashTokenCompletionItem =
   | SkillTokenCompletionItem
   | McpTokenCompletionItem;
 
-type SlashTokenCompletionKind = "skill" | "mcp" | "merged";
+const MERGED_COMPLETION_KIND = "merged";
+
+type SlashTokenCompletionKind =
+  | CtrlYokeSlashTokenKind
+  | typeof MERGED_COMPLETION_KIND;
 
 interface SlashTokenCompletionContext {
   kind: SlashTokenCompletionKind;
@@ -60,11 +71,11 @@ export async function getCtrlYokeSlashCompletions(
     await getDiscoveredSlashTokenSources(workspaceRoot);
 
   const skillItems =
-    context.kind === "mcp"
+    context.kind === CTRLYOKE_SLASH_TOKEN_KINDS.MCP
       ? []
       : createSkillTokenCompletions(skills, context.namePrefix);
   const mcpItems =
-    context.kind === "skill"
+    context.kind === CTRLYOKE_SLASH_TOKEN_KINDS.SKILL
       ? []
       : createMcpTokenCompletions(managedServers, context.namePrefix);
 
@@ -98,13 +109,13 @@ function parseSlashTokenCompletionContext(
   prefix: string
 ): SlashTokenCompletionContext | undefined {
   if (prefix === "/") {
-    return { kind: "merged", namePrefix: "" };
+    return { kind: MERGED_COMPLETION_KIND, namePrefix: "" };
   }
-  if (prefix.startsWith("/skill:")) {
-    return { kind: "skill", namePrefix: prefix.slice("/skill:".length) };
-  }
-  if (prefix.startsWith("/mcp:")) {
-    return { kind: "mcp", namePrefix: prefix.slice("/mcp:".length) };
+  for (const kind of Object.values(CTRLYOKE_SLASH_TOKEN_KINDS)) {
+    const namespace = tokenPrefix(kind);
+    if (prefix.startsWith(namespace)) {
+      return { kind, namePrefix: prefix.slice(namespace.length) };
+    }
   }
   return undefined;
 }
@@ -159,7 +170,7 @@ function createSkillTokenCompletions(
       skillName: skill.name,
       label: skill.name,
       kind: vscode.CompletionItemKind.Keyword,
-      insertText: `/skill:${skill.name}`,
+      insertText: `${tokenPrefix(CTRLYOKE_SLASH_TOKEN_KINDS.SKILL)}${skill.name}`,
       detail: description
         ? `ctrlyoke skill · ${source} · ${description}`
         : `ctrlyoke skill · ${source}`,
@@ -183,7 +194,7 @@ function createMcpTokenCompletions(
       mcpServerName: server.id,
       label: server.id,
       kind: vscode.CompletionItemKind.Module,
-      insertText: `/mcp:${server.id}`,
+      insertText: `${tokenPrefix(CTRLYOKE_SLASH_TOKEN_KINDS.MCP)}${server.id}`,
       detail: formatMcpDetail(server),
       filterText: server.id,
     }));
