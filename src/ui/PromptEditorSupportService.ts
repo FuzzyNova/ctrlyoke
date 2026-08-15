@@ -52,6 +52,7 @@ import {
   getGitChangeCompletions,
   getPromptFileCompletions,
   getPriorContextCompletions,
+  getCtrlYokeSlashCompletions,
   findSymbolKindForReference,
   getPathSuggestions,
   type PlainCompletionItem,
@@ -174,7 +175,9 @@ export class PromptEditorSupportService {
     trigger: string,
     prefix: string
   ): Promise<any[]> {
-    if (trigger === "@") {
+    if (trigger === "/") {
+      return await getCtrlYokeSlashCompletions(this.getWorkspaceRoot(), prefix);
+    } else if (trigger === "@") {
       return await getFileCompletions(prefix.substring(1)); // Remove @
     } else if (trigger === "#") {
       return await getHashCompletions(prefix.substring(1)); // Remove #

@@ -9,12 +9,18 @@ import {
   getHashSelectionCompletions,
   getPathSuggestions,
   getPromptFileCompletions,
+  getCtrlYokeSlashCompletions,
+  clearSlashTokenCompletionCache,
   findDocumentSymbolByNameAndRange,
   findWorkspaceSymbolByUriNameAndRange,
   mapSymbolKindToReferenceKind,
 } from "../../completions/CompletionHelpers";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { SYMBOL_KIND_ICONS } from "../../types/SymbolKindConstants";
+import { SkillDiscovery, type SkillInfo } from "../../utils/SkillDiscovery";
+import { McpRegistryFileManager } from "../../utils/McpRegistryFileManager";
+import type { ManagedMcpServer } from "../../types/WebviewMessageTypes";
+import type { McpServerConfig } from "../../types/CtrlYokeTypes";
 
 suite("CompletionHelpers", () => {
   const originalFindFiles = vscode.workspace.findFiles;
@@ -495,6 +501,107 @@ suite("findWorkspaceSymbolByUriNameAndRange", () => {
     assert.strictEqual(
       findWorkspaceSymbolByUriNameAndRange([], uriA, "missing", 1, 2),
       undefined
+    );
+  });
+});
+
+suite("slash-token completions", () => {
+  const originalDiscoverSkills = SkillDiscovery.discoverSkills;
+  const originalReadAll = McpRegistryFileManager.prototype.readAll;
+
+  const skills: SkillInfo[] = [
+    {
+      name: "commit",
+      displayName: "Commit",
+      path: "/skills/commit/SKILL.md",
+      description: "Create a focused commit",
+      source: "workspace",
+    },
+    {
+      name: "review",
+      displayName: "Review",
+      path: "/skills/review/SKILL.md",
+      description: "Review changes",
+      source: "user",
+    },
+  ];
+  const playwright: McpServerConfig = {
+    id: "playwright",
+    command: "node",
+    args: ["playwright-server.js"],
+  };
+  const managedServers: ManagedMcpServer[] = [
+    {
+      id: playwright.id,
+      displayName: "Playwright",
+      config: playwright,
+      locations: [],
+    },
+  ];
+
+  setup(() => {
+    clearSlashTokenCompletionCache();
+    SkillDiscovery.discoverSkills = async () => skills;
+    McpRegistryFileManager.prototype.readAll = async () => managedServers;
+  });
+
+  teardown(() => {
+    clearSlashTokenCompletionCache();
+    SkillDiscovery.discoverSkills = originalDiscoverSkills;
+    McpRegistryFileManager.prototype.readAll = originalReadAll;
+  });
+
+  test("merges discovered skills with registry servers for the bare slash trigger", async () => {
+    const items = await getCtrlYokeSlashCompletions("/workspace", "/");
+
+    assert.deepStrictEqual(
+      items.map((item) => item.label),
+      ["commit", "playwright", "review"]
+    );
+    assert.strictEqual(
+      items.find((item) => item.label === "commit")?.detail,
+      "ctrlyoke skill · workspace · Create a focused commit"
+    );
+    assert.strictEqual(
+      items.find((item) => item.label === "playwright")?.detail,
+      "ctrlyoke MCP server · node playwright-server.js"
+    );
+  });
+
+  test("filters skills and MCP servers by their explicit namespace", async () => {
+    const skillItems = await getCtrlYokeSlashCompletions(
+      "/workspace",
+      "/skill:c"
+    );
+    const mcpItems = await getCtrlYokeSlashCompletions("/workspace", "/mcp:p");
+
+    assert.deepStrictEqual(
+      skillItems.map((item) => item.label),
+      ["commit"]
+    );
+    assert.deepStrictEqual(
+      mcpItems.map((item) => item.label),
+      ["playwright"]
+    );
+    assert.strictEqual(skillItems[0].insertText, "/skill:commit");
+    assert.strictEqual(mcpItems[0].insertText, "/mcp:playwright");
+  });
+
+  test("does not depend on a selected harness", async () => {
+    const first = await getCtrlYokeSlashCompletions("/workspace", "/");
+    const second = await getCtrlYokeSlashCompletions("/workspace", "/");
+
+    assert.deepStrictEqual(
+      first.map(({ label, insertText, detail }) => ({
+        label,
+        insertText,
+        detail,
+      })),
+      second.map(({ label, insertText, detail }) => ({
+        label,
+        insertText,
+        detail,
+      }))
     );
   });
 });

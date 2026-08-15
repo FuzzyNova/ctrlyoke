@@ -25,6 +25,17 @@ import {
   normalizeReferencePath,
 } from "./ContextReferenceBuilder";
 import { SYMBOL_KIND_ICONS } from "../types/SymbolKindConstants";
+import { clearSlashTokenCompletionCache } from "./SlashTokenCompletionHelpers";
+
+export {
+  clearSlashTokenCompletionCache,
+  getCtrlYokeSlashCompletions,
+  getMcpTokenCompletions,
+  getSkillTokenCompletions,
+  type McpTokenCompletionItem,
+  type SkillTokenCompletionItem,
+  type SlashTokenCompletionItem,
+} from "./SlashTokenCompletionHelpers";
 
 /**
  * Plain completion item (framework-agnostic)
@@ -372,6 +383,7 @@ export function initializeCompletionHelpers(
   // Clear cache when the gitignore setting changes (or any config changes)
   const unsubscribe = configService.subscribe(() => {
     clearFilesCache();
+    clearSlashTokenCompletionCache();
     Log.debug("[Completions] Cache cleared due to config change");
   });
   configWatcher = { dispose: unsubscribe };
@@ -1133,7 +1145,7 @@ export function getPriorContextCompletions(
  */
 export function toVSCodeCompletionItem(
   item: PlainCompletionItem,
-  _triggerChar: "@" | "#" | "~" | "$",
+  _triggerChar: "@" | "#" | "~" | "$" | "/",
   range?: vscode.Range
 ): vscode.CompletionItem {
   const vscodeItem = new vscode.CompletionItem(item.label, item.kind);

@@ -21,6 +21,8 @@ import { PromptFileResolver } from "../core/PromptFileResolver";
 import { runtimeTrustedRootRegistry } from "../utils/RuntimeTrustedRootRegistry";
 import { getFrozenRunHistoryLocation } from "../utils/RunHistoryStoragePolicy";
 import { projectStateRoot } from "../utils/ProjectStatePaths";
+import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
+import { SkillDiscovery } from "../utils/SkillDiscovery";
 
 /**
  * Provides clickable links for ctrlyoke context references
@@ -30,6 +32,7 @@ import { projectStateRoot } from "../utils/ProjectStatePaths";
  * - @path/to/dir/          → Reveal directory
  * - #selection:path:10-20  → Open file with line selection
  * - #sym:path:symbol:42-58 → Open file at symbol range
+ * - /skill:name             → Open the resolved ctrlyoke SKILL.md
  *
  * Enables Ctrl+Click (Cmd+Click on Mac) navigation from prompts back to source code.
  * Complements PromptCompletionProvider for bidirectional context flow.
@@ -66,7 +69,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
 
     // #selection:<path>:10-20 — path quoted, or bare with no whitespace/`:`/`"`.
     // Groups: 1 quoted path, 2 bare path, 3 startLine, 4 endLine.
-    lineRange: /(?<![A-Za-z0-9_+=@#$%^&!~-])#selection:(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
+    lineRange:
+      /(?<![A-Za-z0-9_+=@#$%^&!~-])#selection:(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
 
     // #sym[.kind]:<path>:<symbol>:42-58 — both fields quoted or bare, same rule.
     // Groups: 1 kind, 2/3 quoted/bare path, 4/5 quoted/bare symbol, 6-7 line range.
@@ -79,10 +83,10 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   /**
    * Provide document links for prompt files
    */
-  provideDocumentLinks(
+  async provideDocumentLinks(
     document: vscode.TextDocument,
     _token: vscode.CancellationToken
-  ): vscode.DocumentLink[] | undefined {
+  ): Promise<vscode.DocumentLink[] | undefined> {
     // Only provide links for prompt files
     if (!this.isPromptFile(document)) {
       return undefined;
@@ -189,6 +193,47 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     // 5. Detect git change references (~diff, ~staged, ~stash:N, ~<hash>)
     links.push(...this.findGitChangeLinks(document, text));
 
+    links.push(
+      ...(await this.findSkillTokenLinks(document, text, workspaceRoot))
+    );
+
+    return links;
+  }
+
+  /** Resolve explicit ctrlyoke skill references using runtime discovery order. */
+  private async findSkillTokenLinks(
+    document: vscode.TextDocument,
+    text: string,
+    workspaceRoot: string
+  ): Promise<vscode.DocumentLink[]> {
+    const skillTokens = scanCtrlYokeSlashTokens(text).filter(
+      (token) => token.kind === "skill"
+    );
+    if (skillTokens.length === 0) {
+      return [];
+    }
+
+    const skills = await SkillDiscovery.discoverSkills(workspaceRoot);
+    const links: vscode.DocumentLink[] = [];
+
+    for (const token of skillTokens) {
+      const skill = SkillDiscovery.resolveCtrlYokeSkillInvocation(
+        skills,
+        token.name
+      );
+      if (!skill) {
+        continue;
+      }
+
+      const range = new vscode.Range(
+        document.positionAt(token.index),
+        document.positionAt(token.index + token.length)
+      );
+      const link = new vscode.DocumentLink(range, vscode.Uri.file(skill.path));
+      link.tooltip = `Open ctrlyoke skill ${token.name}`;
+      links.push(link);
+    }
+
     return links;
   }
 
@@ -219,7 +264,9 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
 
     const resolution = resolver.resolvePathSync(trimmedPath, document.fileName);
     const resolvedPath =
-      resolution.status === "missing" ? resolution.candidates[0] : resolution.path;
+      resolution.status === "missing"
+        ? resolution.candidates[0]
+        : resolution.path;
     if (!resolvedPath) {
       return [];
     }
