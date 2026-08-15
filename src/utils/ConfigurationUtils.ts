@@ -10,6 +10,7 @@ import {
 import type {
   CtrlYokeGlobalSettings,
   ModelPricingOverride,
+  RunHistoryLocation,
   TerminalSettings,
 } from "../types/CtrlYokeSettings";
 import {
@@ -41,7 +42,8 @@ export const CONFIG_KEYS = {
   // Top-level section keys (used with configService.get())
   GENERAL: "general",
   DEFAULTS: "defaults",
-  WORKTREES: "worktrees",
+  WORKTREES: SETTING_PATHS.WORKTREES,
+  STORAGE: SETTING_PATHS.STORAGE,
   PERMISSIONS: "permissions",
   EXECUTION: "execution",
   QUEUE: "queue",
@@ -65,6 +67,7 @@ export const CONFIG_KEYS = {
   DEFAULTS_PRE_CONDITION: "defaults.preCondition",
   DEFAULTS_WORKTREE: "defaults.worktree",
   WORKTREES_ROOT: "worktrees.root",
+  STORAGE_RUN_HISTORY_LOCATION: SETTING_PATHS.STORAGE_RUN_HISTORY_LOCATION,
   DEFAULTS_ERROR_BEHAVIOR: "defaults.errorBehavior",
   DEFAULTS_TOOL_PERMISSIONS: "defaults.toolPermissions",
   DEFAULTS_TOOL_PERMISSIONS_MODE: "defaults.toolPermissions.mode",
@@ -613,6 +616,11 @@ export const ConfigurationUtils = {
   /** Get the user-only checkout placement root, or undefined when unset. */
   getWorktreeRoot(): string | undefined {
     return configService.getConfiguredWorktreeRoot();
+  },
+
+  /** Get the user-only location selected for persisted workflow run history. */
+  getRunHistoryLocation(): RunHistoryLocation {
+    return configService.get(CONFIG_KEYS.STORAGE).runHistoryLocation;
   },
 
   /**

@@ -258,6 +258,35 @@ suite("CtrlYokeConfigService", () => {
     assert.strictEqual(wrote, false);
   });
 
+  test("rejects workspace-scope run history location writes", async () => {
+    let wrote = false;
+    service.setWorkspaceBackend({
+      getAll: () => ({}),
+      set: async () => {
+        wrote = true;
+      },
+    });
+
+    await assert.rejects(
+      service.set("storage.runHistoryLocation", "workspace", "workspace"),
+      /user-scope only/
+    );
+    assert.strictEqual(wrote, false);
+  });
+
+  test("ignores workspace-scope storage settings during the effective merge", () => {
+    service.setUserBackend(
+      makeBackend({ storage: { runHistoryLocation: "user" } })
+    );
+    service.setWorkspaceBackend({
+      filePath: "C:\\workspace\\.ctrlyoke\\settings.json",
+      getAll: () => ({ storage: { runHistoryLocation: "workspace" } }),
+      set: async () => {},
+    });
+
+    assert.strictEqual(service.get("storage").runHistoryLocation, "user");
+  });
+
   test("subscribe listener is called after notify()", () => {
     let called = 0;
     const unsubscribe = service.subscribe(() => {

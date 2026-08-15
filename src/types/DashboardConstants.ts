@@ -25,6 +25,12 @@ export type WorkflowFileFormat =
 /** Name of the manifest that identifies a ctrlyoke-managed bundle assets directory. */
 export const BUNDLE_MANIFEST_FILE_NAME = ".ctrlyoke-assets.json";
 
+/** Supported locations for persisted workflow run history. */
+export const RUN_HISTORY_LOCATIONS = {
+  USER: "user",
+  WORKSPACE: "workspace",
+} as const;
+
 // ============================================================================
 // MESSAGE TYPES - Communication between extension and webview
 // ============================================================================
@@ -894,6 +900,9 @@ export const COMPATIBILITY_SOURCE_TIERS = {
 
 /** Shared dot-notation paths for settings consumed across the extension and webview. */
 export const SETTING_PATHS = {
+  STORAGE: "storage",
+  WORKTREES: "worktrees",
+  STORAGE_RUN_HISTORY_LOCATION: "storage.runHistoryLocation",
   PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING:
     "permissions.antigravityStatusLineTracking",
 } as const;

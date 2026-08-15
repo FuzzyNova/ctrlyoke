@@ -5,6 +5,7 @@ import type {
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../types/CtrlYokeSettings";
 import {
   SETTING_SCOPES,
+  SETTING_PATHS,
   type SettingScope,
   type SettingWriteScope,
 } from "../types/DashboardConstants";
@@ -19,12 +20,21 @@ export interface ResolvedSetting<T> {
 export interface ConfigBackend {
   getAll(): PartialCtrlYokeSettings;
   set<T>(path: string, value: T): Promise<void>;
+  /** Backing file path used in diagnostics when available. */
+  readonly filePath?: string;
 }
 
-const WORKTREES_PATH = "worktrees";
+const WORKSPACE_FORBIDDEN_SETTING_ROOTS = [
+  SETTING_PATHS.WORKTREES,
+  SETTING_PATHS.STORAGE,
+] as const;
 
-function isWorkspaceForbiddenWorktreePath(path: string): boolean {
-  return path === WORKTREES_PATH || path.startsWith(`${WORKTREES_PATH}.`);
+function getWorkspaceForbiddenSettingRoot(
+  settingPath: string
+): (typeof WORKSPACE_FORBIDDEN_SETTING_ROOTS)[number] | undefined {
+  return WORKSPACE_FORBIDDEN_SETTING_ROOTS.find(
+    (root) => settingPath === root || settingPath.startsWith(`${root}.`)
+  );
 }
 
 /** Deep merge: source properties override target; objects are merged recursively, arrays/primitives are replaced */
@@ -61,6 +71,7 @@ export class CtrlYokeConfigService {
   private userBackend?: ConfigBackend;
   private cliOverlay?: PartialCtrlYokeSettings;
   private listeners: Set<() => void> = new Set();
+  private warnedWorkspaceStorageBackends = new WeakSet<ConfigBackend>();
 
   setWorkspaceBackend(backend: ConfigBackend): void {
     this.workspaceBackend = backend;
@@ -81,7 +92,7 @@ export class CtrlYokeConfigService {
     if (this.cliOverlay && key in this.cliOverlay) {
       return { value: this.getAll()[key], source: "cli" };
     }
-    if (this.workspaceBackend && key in this.workspaceBackend.getAll()) {
+    if (key in this.getWorkspaceSettings()) {
       return { value: this.getAll()[key], source: "workspace" };
     }
     if (this.userBackend && key in this.userBackend.getAll()) {
@@ -119,6 +130,9 @@ export class CtrlYokeConfigService {
       scope === SETTING_SCOPES.WORKSPACE
         ? this.workspaceBackend
         : this.userBackend;
+    if (scope === SETTING_SCOPES.WORKSPACE) {
+      return this.getWorkspaceSettings()[key];
+    }
     return backend?.getAll()[key];
   }
 
@@ -155,7 +169,7 @@ export class CtrlYokeConfigService {
     if (this.workspaceBackend) {
       result = deepMerge(
         result as unknown as Record<string, unknown>,
-        this.workspaceBackend.getAll() as unknown as Record<string, unknown>
+        this.getWorkspaceSettings() as unknown as Record<string, unknown>
       ) as unknown as CtrlYokeGlobalSettings;
     }
 
@@ -175,12 +189,18 @@ export class CtrlYokeConfigService {
     value: unknown,
     scope: SettingWriteScope
   ): Promise<void> {
-    if (
-      scope === SETTING_SCOPES.WORKSPACE &&
-      isWorkspaceForbiddenWorktreePath(path)
-    ) {
+    const forbiddenRoot =
+      scope === SETTING_SCOPES.WORKSPACE
+        ? getWorkspaceForbiddenSettingRoot(path)
+        : undefined;
+    if (forbiddenRoot === SETTING_PATHS.WORKTREES) {
       throw new Error(
         "The worktrees.root setting is user-scope only and cannot be written at workspace scope."
+      );
+    }
+    if (forbiddenRoot === SETTING_PATHS.STORAGE) {
+      throw new Error(
+        "The storage.runHistoryLocation setting is user-scope only and cannot be written at workspace scope."
       );
     }
     const backend =
@@ -239,7 +259,7 @@ export class CtrlYokeConfigService {
 
     if (this.userBackend) walkLeaves(this.userBackend.getAll(), "", "user");
     if (this.workspaceBackend)
-      walkLeaves(this.workspaceBackend.getAll(), "", "workspace");
+      walkLeaves(this.getWorkspaceSettings(), "", "workspace");
 
     return sources;
   }
@@ -247,6 +267,35 @@ export class CtrlYokeConfigService {
   /** Notify all subscribers */
   notify(): void {
     this.listeners.forEach((listener) => listener());
+  }
+
+  /**
+   * Return workspace settings after removing user-only sections. Workspace
+   * config is still read for diagnostics, but forbidden values never enter the
+   * effective hierarchy or source map.
+   */
+  private getWorkspaceSettings(): PartialCtrlYokeSettings {
+    if (!this.workspaceBackend) {
+      return {};
+    }
+
+    const settings = this.workspaceBackend.getAll();
+    if (
+      settings.storage !== undefined &&
+      !this.warnedWorkspaceStorageBackends.has(this.workspaceBackend)
+    ) {
+      this.warnedWorkspaceStorageBackends.add(this.workspaceBackend);
+      console.warn(
+        `[ctrlyoke] Ignoring user-only storage settings in workspace file ${this.workspaceBackend.filePath ?? "<workspace settings file>"}.`
+      );
+    }
+
+    if (settings.storage === undefined) {
+      return settings;
+    }
+
+    const { storage: _ignoredStorage, ...allowedSettings } = settings;
+    return allowedSettings;
   }
 }
 

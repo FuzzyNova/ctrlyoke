@@ -387,6 +387,19 @@
         }
       }
     },
+    "storage": {
+      "type": "object",
+      "description": "User-only storage location configuration.",
+      "additionalProperties": false,
+      "properties": {
+        "runHistoryLocation": {
+          "type": "string",
+          "enum": ["user", "workspace"],
+          "default": "user",
+          "description": "Store run history under the user state home or beside the workspace."
+        }
+      }
+    },
     "permissions": {
       "type": "object",
       "description": "Harness-specific path and sandbox permission settings.",

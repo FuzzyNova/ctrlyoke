@@ -10,6 +10,7 @@ import {
   type BrowserNotificationMode,
   type HookEvent,
   type ExecutionMode,
+  RUN_HISTORY_LOCATIONS,
   WORKTREE_MODES,
 } from "./DashboardConstants";
 import {
@@ -26,6 +27,9 @@ import type {
 } from "./CtrlYokeTypes";
 
 export type { WorktreeDefaultConfig } from "./CtrlYokeTypes";
+
+export type RunHistoryLocation =
+  (typeof RUN_HISTORY_LOCATIONS)[keyof typeof RUN_HISTORY_LOCATIONS];
 
 /** User-supplied per-million-token pricing for a harness/model pair. */
 export interface ModelPricingOverride {
@@ -78,6 +82,11 @@ export interface CtrlYokeGlobalSettings {
   /** User-only machine/repository placement configuration. */
   worktrees: {
     root: string;
+  };
+
+  /** User-only location for persisted workflow run history. */
+  storage: {
+    runHistoryLocation: RunHistoryLocation;
   };
 
   // Permissions (harness-specific advanced settings)
@@ -336,6 +345,9 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   },
   worktrees: {
     root: "",
+  },
+  storage: {
+    runHistoryLocation: RUN_HISTORY_LOCATIONS.USER,
   },
   permissions: {
     codexSandboxMode: "workspace-write",
