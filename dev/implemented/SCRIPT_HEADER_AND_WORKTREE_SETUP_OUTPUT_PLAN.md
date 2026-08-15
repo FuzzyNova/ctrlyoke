@@ -318,16 +318,14 @@ on the append-continuation branch, where the `EXECUTION_STARTED` dispatch has no
 yet fired.
 
 The hoist is still correct and still the right scope — it fixes the fresh-start
-case and must not drag the continuation branches along (see Risks). But the
-continuation case can no longer be waved off as rare, and its live-render
-behavior must be _determined rather than assumed_. The relevant asymmetry:
+case and must not drag the continuation branches along (see Risks). The
+continuation case, however, could not be waved off as rare, so its live-render
+behavior was determined rather than assumed. The relevant asymmetry:
 the continuation branch of the webview handler is **not** the destructive reset.
 It promotes history to live and calls `clearRuntimeStateFromStep(preserveStepCount)`
 (`useMessageHandler.ts:~897`), which leaves runtime state for steps _below_
 `preserveStepCount` — and setup publishes at step 0 — whereas the fresh-start
-branch calls `clearAllRuntimeState()` and wipes everything. Phase 3 must
-establish empirically whether setup output published before a continuation
-dispatch survives the promote, and record the answer here.
+branch calls `clearAllRuntimeState()` and wipes everything.
 
 The empirical result is that it **does survive**. A live step-0 entry published
 before the continuation dispatch remains in `liveOrderedEntries` after the
