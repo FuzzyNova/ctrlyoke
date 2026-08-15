@@ -89,8 +89,11 @@ relies on it.
 
 `script-command` reuses `formatCliCommandDisplay` (so the `cwd>` prefix and
 working directory stay) but takes its own left-border token —
-`--output-script-border`, distinct from `--output-prompt-border` (blue) and
-`--output-command-border` (yellow). `CliTerminalFormatter` mirrors these two
+`output-script-border`, distinct from `output-prompt-border` (blue) and
+`output-command-border` (yellow, `rgb(255, 200, 100)`). These are Tailwind theme
+colors, not CSS custom properties: they are declared in
+`src/ui/webview-react/tailwind.config.js:179` and consumed as
+`border-l-output-command-border`. `CliTerminalFormatter` mirrors these two
 colors in comments at `src/cli/CliTerminalFormatter.ts:490` and `:501`; add the
 third there only if/when the CLI grows script-source awareness (it has none
 today — `renderPromptHeader` is driven by `onPromptStart`, which the script path
@@ -104,7 +107,7 @@ never fires).
 | `components/output/OutputRow.tsx`                | new `case "script-command"`; add to `isCliGroupRow` list (`:1636`)     |
 | `utils/outputFind.ts`                            | search segment beside the `cli-command` case (`:174`)                  |
 | `utils/markdownExport.ts`                        | see below                                                              |
-| `output-section/OutputScrollSeekPlaceholder.tsx` | label                                                                  |
+| `components/layout/output-section/OutputScrollSeekPlaceholder.tsx` | label                                                 |
 
 The `estimateSize` case is a copy of `cli-command`'s (same font, same chrome,
 same `formatCliCommandDisplay` input) — extract the shared body rather than
@@ -289,20 +292,41 @@ this.dashboardSink.updateExecutionStarted(
 ```
 
 Hoist exactly that above `prepareExecutionWorktree` and leave the two
-continuation branches untouched. This aligns with where setup actually runs:
-`shouldRunSetup` requires `origin === "created"` (`WorktreeManager.ts:2009`),
-while continuations either hit `prepareExecutionWorktree`'s early return
-(`:3623`) or re-resolve an existing worktree as `discovered`/`recovered`.
+continuation branches untouched.
 
-**Known limitation, accepted deliberately:** that alignment is not airtight.
-`origin` is decided solely by whether the ownership record exists
-(`WorktreeManager.ts:1235`) — directory state is irrelevant. A managed run that
-settles as `no-changes` unlinks its record (`:1045-1051`), so the *next*
-append-continuation resolves as `created` and setup runs on a continuation
-branch, where the dispatch has not yet fired and its output is not rendered
-live. The output is still persisted to history and visible on reload. The
-alternative is restructuring terminal inject lifecycle so `isInjectMode` leaves
-`EXECUTION_STARTED`, which is not worth it for this case.
+**⚠ Setup on continuation branches is now a normal path, not an edge case.**
+An earlier draft of this plan justified the hoist by claiming `shouldRunSetup`
+requires `origin === "created"`, so setup could only ever run on a fresh start.
+That is no longer true — verify against the current code, which has two distinct
+conditions:
+
+| Site                                    | Condition (verified)                                                    |
+| --------------------------------------- | ----------------------------------------------------------------------- |
+| managed (`WorktreeManager.ts:2604-2606`) | `origin === "created" \|\| args.directoryRecreated`                      |
+| named (`WorktreeManager.ts:2076-2078`)   | `origin === "created" \|\| namedSetupRecord?.setupOutcome !== "succeeded"` |
+
+Commits `e5b8d79e` ("reprovision managed worktrees on append"), `53dace9f`, and
+`8f927336` widened these deliberately: a managed append continuation
+*recreates* its directory and therefore *re-runs setup*. So setup routinely runs
+on the append-continuation branch, where the `EXECUTION_STARTED` dispatch has not
+yet fired.
+
+The hoist is still correct and still the right scope — it fixes the fresh-start
+case and must not drag the continuation branches along (see Risks). But the
+continuation case can no longer be waved off as rare, and its live-render
+behavior must be *determined rather than assumed*. The relevant asymmetry:
+the continuation branch of the webview handler is **not** the destructive reset.
+It promotes history to live and calls `clearRuntimeStateFromStep(preserveStepCount)`
+(`useMessageHandler.ts:~897`), which leaves runtime state for steps *below*
+`preserveStepCount` — and setup publishes at step 0 — whereas the fresh-start
+branch calls `clearAllRuntimeState()` and wipes everything. Phase 3 must
+establish empirically whether setup output published before a continuation
+dispatch survives the promote, and record the answer here.
+
+**Accepted fallback if it does not survive:** the output is still persisted to
+history and visible on reload, and the alternative — restructuring the terminal
+inject lifecycle so `isInjectMode` leaves `EXECUTION_STARTED` — is not worth it.
+Document the limitation rather than expanding the hoist.
 
 See [`./MANAGED_WORKTREE_APPEND_CONTINUATION_BUGS.md`](./MANAGED_WORKTREE_APPEND_CONTINUATION_BUGS.md)
 — that path has correctness bugs independent of output rendering, and they
@@ -424,8 +448,10 @@ Webview (`src/ui/webview-react/test/**`):
 Extension host (`src/test/**`):
 
 - `scriptExecutionReporter.test.ts` — a `worktreeSetup` source emits
-  placeholder → chunks → final output with an exit-code verdict, and never calls
-  `cacheRuntimeOutput`.
+  placeholder → chunks → final output with an exit-code verdict, and records a
+  `worktreeSetup`-phased CLI entry via `recordScriptExecution`
+  (`ScriptExecutionReporter.ts:277`) keyed so it does not collide with step 0's
+  prompt entry.
 - `WorktreeManager` — `runSetup` delegates to the injected `WorktreeSetupRunner`;
   the default implementation preserves today's throw-on-failure contract; a
   failed setup still persists `blocked` / `failed` and releases the lease.
