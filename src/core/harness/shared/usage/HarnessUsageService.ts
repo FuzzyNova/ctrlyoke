@@ -326,14 +326,14 @@ export class HarnessUsageService {
 
   private async refreshObservedUsage(): Promise<void> {
     try {
-      const data = await this.observedStore.read(this.now());
+      const buckets = await this.observedStore.readForDisplay(this.now());
       const now = this.now();
       const observedErrorCode = this.observedStore.getLastErrorCode();
       for (const harnessId of HARNESS_ID_LIST) {
         const observed: HarnessUsageSnapshot["observed"] = {};
         for (const period of Object.values(HARNESS_OBSERVED_PERIODS)) {
           observed[period] =
-            data.buckets[period][observedKey(period, now)]?.[harnessId] ??
+            buckets[period][observedKey(period, now)]?.[harnessId] ??
             emptyObserved(period, now);
         }
         if (observedErrorCode && !this.quotaCache.get(harnessId)?.errorCode) {

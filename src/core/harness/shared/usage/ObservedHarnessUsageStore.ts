@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import type { Dirent } from "fs";
 import type {
   HarnessId,
   HarnessObservedPeriod,
@@ -9,6 +10,7 @@ import {
   ATTEMPT_COST_SOURCES,
   HARNESS_IDS,
   HARNESS_OBSERVED_PERIODS,
+  RUN_HISTORY_LOCATIONS,
   WORKFLOW_TOKEN_COVERAGE,
 } from "../../../../types/DashboardConstants";
 import type { HarnessObservedTokens } from "../../../../types/UsageTypes";
@@ -19,7 +21,12 @@ import type {
   WorkflowTokenTotals,
 } from "../../../../types/CtrlYokeTypes";
 import { withFileLock } from "../../../../utils/FileLockUtils";
-import { observedUsagePath } from "../../../../utils/UsagePaths";
+import { getFrozenRunHistoryLocation } from "../../../../utils/RunHistoryStoragePolicy";
+import { userProjectsRoot } from "../../../../utils/ProjectStatePaths";
+import {
+  observedUsagePath,
+  observedUsagePathForProject,
+} from "../../../../utils/UsagePaths";
 
 export const OBSERVED_USAGE_SCHEMA_VERSION = 1 as const;
 
@@ -353,6 +360,127 @@ function rebuildBuckets(data: ObservedHarnessUsageStoreData): void {
   }
 }
 
+function isFiniteNonNegative(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isValidObservedTokens(value: unknown): value is HarnessObservedTokens {
+  if (!isRecord(value)) return false;
+  if (
+    !isFiniteNonNegative(value.input) ||
+    !isFiniteNonNegative(value.output) ||
+    !isFiniteNonNegative(value.total) ||
+    !isFiniteNonNegative(value.since)
+  ) {
+    return false;
+  }
+  for (const key of [
+    "cachedInput",
+    "cacheCreated",
+    "reasoningOutput",
+    "costUsd",
+  ]) {
+    if (key in value && !isFiniteNonNegative(value[key])) return false;
+  }
+  if (
+    "costPartial" in value &&
+    typeof value.costPartial !== "boolean"
+  ) {
+    return false;
+  }
+  if ("partial" in value && typeof value.partial !== "boolean") {
+    return false;
+  }
+  if (
+    "costSources" in value &&
+    (!Array.isArray(value.costSources) ||
+      value.costSources.some(
+        (source) =>
+          !Object.values(ATTEMPT_COST_SOURCES).includes(
+            source as AttemptCostSource
+          )
+      ))
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function validateBucketsForRollup(
+  buckets: ObservedHarnessUsageBuckets
+): void {
+  for (const period of Object.values(HARNESS_OBSERVED_PERIODS)) {
+    for (const [bucketKey, harnesses] of Object.entries(buckets[period])) {
+      if (!isLocalDayKey(bucketKey) || !isRecord(harnesses)) {
+        throw new Error(OBSERVED_USAGE_ERROR_CODES.MALFORMED_DATA);
+      }
+      for (const [harnessId, values] of Object.entries(harnesses)) {
+        if (
+          !VALID_HARNESS_IDS.has(harnessId as HarnessId) ||
+          !isValidObservedTokens(values)
+        ) {
+          throw new Error(OBSERVED_USAGE_ERROR_CODES.MALFORMED_DATA);
+        }
+      }
+    }
+  }
+}
+
+function mergeBuckets(
+  target: ObservedHarnessUsageBuckets,
+  source: ObservedHarnessUsageBuckets
+): void {
+  for (const period of Object.values(HARNESS_OBSERVED_PERIODS)) {
+    for (const [bucketKey, harnesses] of Object.entries(source[period])) {
+      const targetBucket = target[period][bucketKey] ?? {};
+      for (const [harnessId, values] of Object.entries(harnesses)) {
+        if (!values) continue;
+        const current = targetBucket[harnessId as HarnessId];
+        targetBucket[harnessId as HarnessId] = {
+          ...addUsage(current, values, 1),
+          since: current?.since ?? values.since,
+        };
+      }
+      if (Object.keys(targetBucket).length > 0) {
+        target[period][bucketKey] = targetBucket;
+      }
+    }
+  }
+}
+
+async function readProjectUsageBuckets(
+  filePath: string
+): Promise<ObservedHarnessUsageBuckets | undefined> {
+  try {
+    const raw = await fs.readFile(filePath, "utf8");
+    const data = validateStore(JSON.parse(raw));
+    validateBucketsForRollup(data.buckets);
+    return data.buckets;
+  } catch {
+    return undefined;
+  }
+}
+
+async function foldProjectUsageBuckets(): Promise<ObservedHarnessUsageBuckets> {
+  const buckets = EMPTY_BUCKETS();
+  const projectsRoot = userProjectsRoot();
+  let entries: Dirent[];
+  try {
+    entries = await fs.readdir(projectsRoot, { withFileTypes: true });
+  } catch {
+    return buckets;
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const projectBuckets = await readProjectUsageBuckets(
+      observedUsagePathForProject(path.join(projectsRoot, entry.name))
+    );
+    if (projectBuckets) mergeBuckets(buckets, projectBuckets);
+  }
+  return buckets;
+}
+
 function validateStore(value: unknown): ObservedHarnessUsageStoreData {
   if (
     !isRecord(value) ||
@@ -428,6 +556,16 @@ export class ObservedHarnessUsageStore {
       await this.writeAtomic(data);
       return data;
     });
+  }
+
+  /** Read the buckets used by the dashboard, folding user-scoped projects. */
+  async readForDisplay(
+    now: number = Date.now()
+  ): Promise<ObservedHarnessUsageBuckets> {
+    if (getFrozenRunHistoryLocation() === RUN_HISTORY_LOCATIONS.WORKSPACE) {
+      return (await this.read(now)).buckets;
+    }
+    return foldProjectUsageBuckets();
   }
 
   async upsertRunContribution(

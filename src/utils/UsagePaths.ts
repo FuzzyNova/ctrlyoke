@@ -18,7 +18,14 @@ export function usageDir(workspaceRoot: string): string {
 }
 
 export function observedUsagePath(workspaceRoot: string): string {
-  return path.join(projectUsageDir(workspaceRoot), OBSERVED_USAGE_FILE_NAME);
+  return observedUsagePathForProject(
+    projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation())
+  );
+}
+
+/** Resolve observed usage for an already-resolved project state directory. */
+export function observedUsagePathForProject(projectRoot: string): string {
+  return path.join(projectUsageDirForProject(projectRoot), OBSERVED_USAGE_FILE_NAME);
 }
 
 export function providerSnapshotsPath(): string {
@@ -34,8 +41,11 @@ export function lifetimeStatsPath(workspaceRoot: string): string {
 }
 
 function projectUsageDir(stateRoot: string): string {
-  return path.join(
-    projectStateRoot(stateRoot, getFrozenRunHistoryLocation()),
-    PATH_CONSTANTS.USAGE_DIR
+  return projectUsageDirForProject(
+    projectStateRoot(stateRoot, getFrozenRunHistoryLocation())
   );
+}
+
+function projectUsageDirForProject(projectRoot: string): string {
+  return path.join(projectRoot, PATH_CONSTANTS.USAGE_DIR);
 }
