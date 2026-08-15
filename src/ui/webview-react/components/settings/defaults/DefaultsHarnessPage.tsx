@@ -138,7 +138,7 @@ export function DefaultsHarnessPage({
             </SettingInputRow>
             <SettingInputRow
               label="Setup"
-              description="Optional command run after creating a named worktree."
+              description="Optional command run after creating a named worktree. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it."
               id="defaults-worktree-setup"
               path="defaults.worktree.setup"
               {...rowProps}
@@ -178,7 +178,7 @@ export function DefaultsHarnessPage({
             </SettingInputRow>
             <SettingInputRow
               label="Setup"
-              description="Optional command run after creating a managed worktree."
+              description="Optional command run after creating a managed worktree. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it."
               id="defaults-worktree-setup"
               path="defaults.worktree.setup"
               {...rowProps}

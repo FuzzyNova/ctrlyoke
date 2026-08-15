@@ -1597,7 +1597,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   <FormField
                     label="Setup"
                     htmlFor="settings-worktree-setup"
-                    description="Optional command run after a new worktree is created."
+                    description="Optional command run after a new worktree is created. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it."
                   >
                     <input
                       type="text"

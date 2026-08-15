@@ -1,11 +1,11 @@
 # Script Header Row and Worktree Setup Output
 
-> **Status:** Phases 1–4 complete; Phase 5 remains backlog/design. Two related changes on the same pipeline:
+> **Status:** Complete. All five phases are implemented. Two related changes on the same pipeline:
 > (1) a script execution renders its command twice, and (2) worktree setup
 > produces no output at all while it runs.
 >
-> Builds directly on [`../implemented/SCRIPT_OUTPUT_UNIFICATION_PLAN.md`](../implemented/SCRIPT_OUTPUT_UNIFICATION_PLAN.md)
-> and the setup lifecycle in [`./WORKTREE_SUPPORT_PLAN.md`](./WORKTREE_SUPPORT_PLAN.md).
+> Builds directly on [`./SCRIPT_OUTPUT_UNIFICATION_PLAN.md`](./SCRIPT_OUTPUT_UNIFICATION_PLAN.md)
+> and the setup lifecycle in [`../backlog/WORKTREE_SUPPORT_PLAN.md`](../backlog/WORKTREE_SUPPORT_PLAN.md).
 
 ---
 
@@ -26,10 +26,10 @@ const initOutput: CliOutput = {
 
 `buildOutputRows` then emits one row per field, unconditionally:
 
-| Site                  | Row                                    | Renders                                          |
-| --------------------- | -------------------------------------- | ------------------------------------------------ |
-| `outputRows.ts:1892`  | `rowKind: "prompt"`                    | the raw script string, via `PromptReferenceText`  |
-| `outputRows.ts:1905`  | `rowKind: "cli-command"`               | `` `${workingDirectory}> ${command}` ``           |
+| Site                 | Row                      | Renders                                          |
+| -------------------- | ------------------------ | ------------------------------------------------ |
+| `outputRows.ts:1892` | `rowKind: "prompt"`      | the raw script string, via `PromptReferenceText` |
+| `outputRows.ts:1905` | `rowKind: "cli-command"` | `` `${workingDirectory}> ${command}` ``          |
 
 So every script step, pre-condition, and end-condition shows its command twice —
 once bare, once with a `cwd>` prefix. This applies to all four
@@ -101,13 +101,13 @@ never fires).
 
 ### Webview touchpoints
 
-| File                                             | Change                                                                 |
-| ------------------------------------------------ | ---------------------------------------------------------------------- |
-| `utils/outputRows.ts`                            | `ScriptCommandRow` type, builder branch, `estimateSize` case (`:1551`) |
-| `components/output/OutputRow.tsx`                | new `case "script-command"`; add to `isCliGroupRow` list (`:1644`)     |
-| `utils/outputFind.ts`                            | search segment beside the `cli-command` case (`:171`)                  |
-| `utils/markdownExport.ts`                        | see below                                                              |
-| `components/layout/output-section/OutputScrollSeekPlaceholder.tsx` | label                                                 |
+| File                                                               | Change                                                                 |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `utils/outputRows.ts`                                              | `ScriptCommandRow` type, builder branch, `estimateSize` case (`:1551`) |
+| `components/output/OutputRow.tsx`                                  | new `case "script-command"`; add to `isCliGroupRow` list (`:1644`)     |
+| `utils/outputFind.ts`                                              | search segment beside the `cli-command` case (`:171`)                  |
+| `utils/markdownExport.ts`                                          | see below                                                              |
+| `components/layout/output-section/OutputScrollSeekPlaceholder.tsx` | label                                                                  |
 
 The `estimateSize` case is a copy of `cli-command`'s (same font, same chrome,
 same `formatCliCommandDisplay` input) — extract the shared body rather than
@@ -156,7 +156,7 @@ private async runSetup(executionRoot, setup, vars): Promise<void> {
   the thrown message. On success, the entire output of `npm ci` is dropped.
 - **Nothing is persisted.** No CLI entry, no `events.jsonl` line, no
   `recordScriptExecution`. Only `setupOutcome: "pending" | "running" |
-  "succeeded" | "failed"` lands in the working file
+"succeeded" | "failed"` lands in the working file
   (`WorktreeManager.ts:2011-2042`).
 
 Hence a 5-minute setup is 5 minutes of blank pane. Timeout is not the issue —
@@ -173,14 +173,14 @@ export const SCRIPT_OUTPUT_SOURCES = {
   SCRIPT_STEP: "script",
   PRE_CONDITION: "preCondition",
   END_CONDITION: "endCondition",
-  WORKTREE_SETUP: "worktreeSetup",   // new
+  WORKTREE_SETUP: "worktreeSetup", // new
 } as const;
 
 export const EXECUTION_PHASES = {
   PROMPT: "prompt",
   PRE_CONDITION: "preCondition",
   END_CONDITION: "endCondition",
-  WORKTREE_SETUP: "worktreeSetup",   // new
+  WORKTREE_SETUP: "worktreeSetup", // new
 } as const;
 ```
 
@@ -254,7 +254,7 @@ Setup output published before that dispatch is not merely unattached — it is
 workflowStore.clearHistoryOutputs();
 uiStore.clearHistoryView();
 workflowStore.setPrompts(resetPrompts);
-workflowStore.clearAllRuntimeState();   // ← wipes anything published before this
+workflowStore.clearAllRuntimeState(); // ← wipes anything published before this
 ```
 
 The history side is fine — `historyFilePath` is resolved earlier
@@ -287,7 +287,13 @@ The **fresh-start branch has no such dependency**:
 ```ts
 this.clearOutputBuffers();
 this.dashboardSink.updateExecutionStarted(
-  this.id, fileName, totalSteps, undefined, undefined, undefined, executionMode
+  this.id,
+  fileName,
+  totalSteps,
+  undefined,
+  undefined,
+  undefined,
+  executionMode
 );
 ```
 
@@ -300,24 +306,24 @@ requires `origin === "created"`, so setup could only ever run on a fresh start.
 That is no longer true — verify against the current code, which has two distinct
 conditions:
 
-| Site                                    | Condition (verified)                                                    |
-| --------------------------------------- | ----------------------------------------------------------------------- |
-| managed (`WorktreeManager.ts:2604-2606`) | `origin === "created" \|\| args.directoryRecreated`                      |
+| Site                                     | Condition (verified)                                                       |
+| ---------------------------------------- | -------------------------------------------------------------------------- |
+| managed (`WorktreeManager.ts:2604-2606`) | `origin === "created" \|\| args.directoryRecreated`                        |
 | named (`WorktreeManager.ts:2076-2078`)   | `origin === "created" \|\| namedSetupRecord?.setupOutcome !== "succeeded"` |
 
 Commits `e5b8d79e` ("reprovision managed worktrees on append"), `53dace9f`, and
 `8f927336` widened these deliberately: a managed append continuation
-*recreates* its directory and therefore *re-runs setup*. So setup routinely runs
+_recreates_ its directory and therefore _re-runs setup_. So setup routinely runs
 on the append-continuation branch, where the `EXECUTION_STARTED` dispatch has not
 yet fired.
 
 The hoist is still correct and still the right scope — it fixes the fresh-start
 case and must not drag the continuation branches along (see Risks). But the
 continuation case can no longer be waved off as rare, and its live-render
-behavior must be *determined rather than assumed*. The relevant asymmetry:
+behavior must be _determined rather than assumed_. The relevant asymmetry:
 the continuation branch of the webview handler is **not** the destructive reset.
 It promotes history to live and calls `clearRuntimeStateFromStep(preserveStepCount)`
-(`useMessageHandler.ts:~897`), which leaves runtime state for steps *below*
+(`useMessageHandler.ts:~897`), which leaves runtime state for steps _below_
 `preserveStepCount` — and setup publishes at step 0 — whereas the fresh-start
 branch calls `clearAllRuntimeState()` and wipes everything. Phase 3 must
 establish empirically whether setup output published before a continuation
@@ -331,7 +337,7 @@ handler promotes history, clears the history view, and calls
 clears runtime state at and after the preserved-step boundary; it does not wipe
 the step-0 live entry, so no continuation-specific hoist is needed.
 
-See [`./MANAGED_WORKTREE_APPEND_CONTINUATION_BUGS.md`](./MANAGED_WORKTREE_APPEND_CONTINUATION_BUGS.md)
+See [`../backlog/MANAGED_WORKTREE_APPEND_CONTINUATION_BUGS.md`](../backlog/MANAGED_WORKTREE_APPEND_CONTINUATION_BUGS.md)
 — that path has correctness bugs independent of output rendering, and they
 should be settled before this plan's Phase 4 assumes anything about when setup
 runs.
@@ -346,7 +352,7 @@ This is an improvement rather than a regression. `initializeRunAt` already ran a
 `:1649`, so the run is promoted and its directory published on disk before
 worktree prep — the run genuinely exists, and showing it as started-then-failed
 is more honest than today's behavior, where a failed run leaves the dashboard
-displaying the *previous* run as though nothing happened. The dashboard leaves
+displaying the _previous_ run as though nothing happened. The dashboard leaves
 `RUNNING` correctly on the failure path: the catch calls `workflowRuntime.fail()`
 → `onRuntimeTransition` → `updateExecutionState(ERROR)` (`:4279`). The setup
 failure output and status message land on the failed run, where they belong.
@@ -439,8 +445,12 @@ the continuation handler's step-0 output preservation. This lands before Phase
 reporter-backed runner from `WorkflowInstance` with live/history output and
 exit-code verdicts, and added the setup header label/icon in `OutputRow.tsx`.
 
-**Phase 5 — Re-run setup output.** Keep attempt-indexed setup entries attached to
-the run that performs each re-run; no separate dashboard action is required.
+**Phase 5 — Re-run setup output.** ✅ Complete. Attempt-indexed setup entries stay
+attached to the run that performs each attempt; no separate dashboard action is
+required. Durable `failed`/`running` setup outcomes re-run on the next Run,
+while `succeeded` skips setup. Regression coverage proves that two successive
+runs write independent setup entries and that the earlier run's history is not
+mutated.
 
 ---
 
@@ -463,10 +473,14 @@ Extension host (`src/test/**`):
   placeholder → chunks → final output with an exit-code verdict, and records a
   `worktreeSetup`-phased CLI entry via `recordScriptExecution`
   (`ScriptExecutionReporter.ts:277`) keyed so it does not collide with step 0's
-  prompt entry.
+  prompt entry. A two-run regression verifies that each run gets its own
+  attempt-indexed setup entry and that writing the second run leaves the first
+  run's `events.jsonl` unchanged.
 - `WorktreeManager` — `runSetup` delegates to the injected `WorktreeSetupRunner`;
   the default implementation preserves today's throw-on-failure contract; a
-  failed setup still persists `blocked` / `failed` and releases the lease.
+  failed setup still persists `blocked` / `failed` and releases the lease; the
+  `WorktreeSetupError` summary is sanitized and capped without duplicating raw
+  stderr.
 - Timeline adapter — a `worktreeSetup` entry and a `prompt` entry at
   `(step 0, run 0, attempt 0)` both survive `getCliEntryKey` dedupe.
 
@@ -478,11 +492,14 @@ Extension host (`src/test/**`):
   the continuation/append branches at `WorkflowInstance.ts:1781-1850` are dragged
   along, `canReuseForInject()` is evaluated against a stale execution-workspace
   identity and a PTY rooted in the wrong checkout can be reused. Cover this with
-  a test that a continuation into a worktree run still dispatches *after*
+  a test that a continuation into a worktree run still dispatches _after_
   `prepareExecutionWorktree`.
 - **Estimate drift.** `script-command` must not diverge from `cli-command`'s
   height estimate; share the body.
 - **Setup volume.** A verbose `npm ci` persists its full stdout per attempt into
-  `events.jsonl`. `StreamingHistoryBuffer` batches, but the condition-output cap
-  deferred by `SCRIPT_OUTPUT_UNIFICATION_PLAN` becomes more relevant here than it
-  was for gates.
+  `events.jsonl`. No cap is needed in this closure: setup output is the primary
+  diagnostic artifact for a blocked worktree, and truncating it would need a
+  broader retention/display policy than this reporting fix. `StreamingHistoryBuffer`
+  still batches writes, while the existing unbounded history setting preserves
+  the complete attempt. Revisit this as a separate history-volume policy if
+  real-world setup logs make disk growth material.

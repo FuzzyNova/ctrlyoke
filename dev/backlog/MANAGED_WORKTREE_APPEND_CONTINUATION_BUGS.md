@@ -173,6 +173,9 @@ setup state plus re-running setup whenever the last outcome is not `succeeded`.
 Once that lands, re-run is a complete recovery gesture for both modes and a
 dedicated action has nothing left to do.
 
+The run-scoped setup output and history behavior is completed in
+[`SCRIPT_HEADER_AND_WORKTREE_SETUP_OUTPUT_PLAN.md`](../implemented/SCRIPT_HEADER_AND_WORKTREE_SETUP_OUTPUT_PLAN.md).
+
 `WORKTREE_SUPPORT_PLAN.md` requires explicit user action because "retrying may
 repeat a non-idempotent command." That reasoning holds for re-running a
 **succeeded** setup and is much weaker for a **failed** one, where re-running is

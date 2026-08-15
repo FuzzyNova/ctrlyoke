@@ -61,6 +61,7 @@ import {
   type ExecutionLeaseConflict,
   type ExecutionLeaseRequest,
 } from "./ExecutionRootLeaseManager";
+import { summarizeStatusError } from "./ScriptExecutionReporter";
 import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
 import type { ExecutionWorkspace } from "../../types/WorkflowContextTypes";
 import type {
@@ -206,9 +207,7 @@ export interface WorktreeSetupRunner {
   }): Promise<ScriptProcessResult>;
 }
 
-type WorktreeSetupRunnerArgs = Parameters<
-  WorktreeSetupRunner["run"]
->[0];
+type WorktreeSetupRunnerArgs = Parameters<WorktreeSetupRunner["run"]>[0];
 
 /** Headless setup transport used when no live reporter is available. */
 export class DefaultWorktreeSetupRunner implements WorktreeSetupRunner {
@@ -384,7 +383,10 @@ export class WorktreeSetupError extends Error {
   readonly worktreePath: string;
 
   constructor(worktreePath: string, cause: unknown) {
-    super(`Worktree setup failed in ${worktreePath}: ${cause}`);
+    const causeText = cause instanceof Error ? cause.message : String(cause);
+    super(
+      `Worktree setup failed in ${worktreePath}: ${summarizeStatusError(causeText)}`
+    );
     this.name = "WorktreeSetupError";
     this.worktreePath = worktreePath;
   }

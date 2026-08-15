@@ -20,9 +20,7 @@ import {
 } from "../types/DashboardConstants";
 import type { CliOutput } from "../types/WebviewMessageTypes";
 import { TIMELINE_EVENT_TYPES } from "../types/WorkflowTimelineTypes";
-import type {
-  OrderedCliHistoryEntry,
-} from "../types/OutputHistoryTypes";
+import type { OrderedCliHistoryEntry } from "../types/OutputHistoryTypes";
 import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
 
 const temporaryDirectories: string[] = [];
@@ -220,6 +218,97 @@ suite("ScriptExecutionReporter", () => {
           event.eventType === TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED
       );
     assert.strictEqual(scriptEvent?.phase, EXECUTION_PHASES.WORKTREE_SETUP);
+  });
+
+  test("keeps setup output attempt-indexed and isolated to each run history", async () => {
+    const temporaryDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-script-reporter-rerun-")
+    );
+    temporaryDirectories.push(temporaryDirectory);
+    const historyManager = new OutputHistoryManager(temporaryDirectory);
+    const firstHistoryFilePath = (
+      await historyManager.initializeRunAt(
+        "reporter-rerun" as WorkflowKey,
+        "run-1" as RunRef,
+        path.join(temporaryDirectory, "run-1"),
+        1,
+        100
+      )
+    ).filePath;
+    const secondHistoryFilePath = (
+      await historyManager.initializeRunAt(
+        "reporter-rerun" as WorkflowKey,
+        "run-2" as RunRef,
+        path.join(temporaryDirectory, "run-2"),
+        2,
+        200
+      )
+    ).filePath;
+
+    const reportSetup = async (
+      historyFilePath: string,
+      command: string,
+      timestampMs: number
+    ) => {
+      const { reporter, context } = makeReporter(makeResult(), []);
+      context.historyFilePath = historyFilePath;
+      context.outputHistoryManager = historyManager;
+      await reporter.report({
+        context,
+        source: SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP,
+        properties: { script: command, compareSource: "exitCode" },
+        phase: EXECUTION_PHASES.WORKTREE_SETUP,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        signedStepIndex: 0,
+        runIndex: 0,
+        attemptIndex: 0,
+        timestampMs,
+        onPass: "continue",
+        onFail: "stopWorkflow",
+        actionForErrored: "stopWorkflow",
+        evaluate: async () =>
+          makeResult({
+            actual: "0",
+            actualSource: "exitCode",
+            stdout: `${command}\n`,
+            result: `${command}\n`,
+          }),
+      });
+    };
+
+    await reportSetup(firstHistoryFilePath, "setup-first", 100);
+    const firstEventsBefore = await fs.readFile(
+      path.join(path.dirname(firstHistoryFilePath), "events.jsonl"),
+      "utf8"
+    );
+    await reportSetup(secondHistoryFilePath, "setup-second", 200);
+
+    const firstHistory = await historyManager.loadHistory(firstHistoryFilePath);
+    const secondHistory = await historyManager.loadHistory(
+      secondHistoryFilePath
+    );
+    const findSetupEntry = (
+      history: Awaited<ReturnType<OutputHistoryManager["loadHistory"]>>
+    ) =>
+      history.orderedEntries.find(
+        (entry): entry is OrderedCliHistoryEntry =>
+          entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
+          entry.phase === EXECUTION_PHASES.WORKTREE_SETUP
+      );
+    const firstSetup = findSetupEntry(firstHistory);
+    const secondSetup = findSetupEntry(secondHistory);
+
+    assert.strictEqual(firstSetup?.attemptIndex, 0);
+    assert.strictEqual(firstSetup?.cliOutput.cliCommand, "setup-first");
+    assert.strictEqual(secondSetup?.attemptIndex, 0);
+    assert.strictEqual(secondSetup?.cliOutput.cliCommand, "setup-second");
+    assert.strictEqual(
+      await fs.readFile(
+        path.join(path.dirname(firstHistoryFilePath), "events.jsonl"),
+        "utf8"
+      ),
+      firstEventsBefore
+    );
   });
 
   test("sanitizes final-step streaming chunks before dashboard delivery", async () => {

@@ -196,7 +196,11 @@ definitions:
             description: Optional Git ref resolved to a commit when the worktree is created.
           setup:
             type: string
-            description: Optional setup command run after a new managed worktree is created.
+            description: >-
+              Optional setup command run after a new managed worktree is created. Setup is outside
+              the step-scoped errorBehavior policy: it runs before any step is in flight, so a
+              non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded
+              outcome is skipped.
         required:
           - mode
         additionalProperties: false
@@ -218,7 +222,11 @@ definitions:
             description: Optional Git ref resolved to a commit when the worktree is created.
           setup:
             type: string
-            description: Optional setup command run after a new named worktree is created.
+            description: >-
+              Optional setup command run after a new named worktree is created. Setup is outside the
+              step-scoped errorBehavior policy: it runs before any step is in flight, so a
+              non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded
+              outcome is skipped.
         required:
           - mode
           - branch
@@ -562,7 +570,11 @@ definitions:
           - type: 'null'
         description: >-
           Internal-error policy for every step phase: pre-conditions, prompts/harnesses,
-          end-conditions, and script steps. Use null to explicitly disable an inherited policy.
+          end-conditions, and script steps. Worktree setup is outside this policy: errorBehavior is
+          step-scoped (EXECUTION_PROPERTY_KEYS) and resolves through the prompt → workflow →
+          settings chain, but setup runs before any step is in flight, so it has no resolution
+          context; a non-succeeded setup blocks the worktree and the next Run is the recovery
+          gesture. Use null to explicitly disable an inherited policy.
   workflowStep:
     allOf:
       - oneOf:
@@ -831,7 +843,10 @@ definitions:
     type: object
     description: >-
       Policy for internal errors in any step phase, including pre-conditions, prompts/harnesses,
-      end-conditions, and script steps.
+      end-conditions, and script steps. Worktree setup is outside this policy: errorBehavior is
+      step-scoped (EXECUTION_PROPERTY_KEYS) and resolves through the prompt → workflow → settings
+      chain, but setup runs before any step is in flight, so it has no resolution context; a
+      non-succeeded setup blocks the worktree and the next Run is the recovery gesture.
     properties:
       onError:
         type: string

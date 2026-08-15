@@ -11,6 +11,7 @@ import {
   type WorktreeSetupRunner,
 } from "../../core/orchestration/WorktreeManager";
 import { ExecutionRootLeaseManager } from "../../core/orchestration/ExecutionRootLeaseManager";
+import { summarizeStatusError } from "../../core/orchestration/ScriptExecutionReporter";
 import type { ScriptProcessResult } from "../../core/orchestration/ScriptProcessRunner";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 
@@ -460,6 +461,38 @@ suite("WorktreeManager", function () {
       worktree!.worktreePath
     );
     assert.strictEqual(record?.setupOutcome, "failed");
+  });
+
+  test("summarizes setup errors instead of duplicating the raw output", async () => {
+    const { parent, repository } = await makeRepository("setup-error-summary");
+    const rawError = `\u001b[31mfirst line\u001b[0m\r\nsecond line ${"details ".repeat(40)}`;
+    const runner = new RecordingWorktreeSetupRunner({
+      success: false,
+      result: "",
+      error: rawError,
+      stdout: "",
+      stderr: rawError,
+      exitCode: 1,
+    });
+    const instance = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      worktreeSetupRunner: runner,
+    });
+
+    await assert.rejects(
+      resolve(instance, repository, "feature/setup-error-summary", {
+        setup: "npm ci",
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof WorktreeSetupError);
+        const setupError = error as WorktreeSetupError;
+        assert.strictEqual(
+          setupError.message,
+          `Worktree setup failed in ${setupError.worktreePath}: ${summarizeStatusError(rawError)}`
+        );
+        return true;
+      }
+    );
   });
 
   test("re-runs failed setup on the next resolve", async () => {
