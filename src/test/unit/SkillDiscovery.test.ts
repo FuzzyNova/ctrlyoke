@@ -1,10 +1,12 @@
 import * as assert from "assert";
 import * as fs from "fs";
+import * as fsp from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import { suite, test } from "mocha";
+import { suite, setup, teardown, test } from "mocha";
 import { AgentExpander } from "../../utils/AgentExpander";
-import { SkillDiscovery } from "../../utils/SkillDiscovery";
+import { HARNESS_IDS, type HarnessId } from "../../types/DashboardConstants";
+import { SkillDiscovery, type SkillInfo } from "../../utils/SkillDiscovery";
 import { SkillExpander } from "../../utils/SkillExpander";
 
 suite("Execution-root asset discovery", () => {
@@ -72,5 +74,127 @@ suite("Execution-root asset discovery", () => {
     } finally {
       fs.rmSync(worktreeRoot, { recursive: true, force: true });
     }
+  });
+});
+
+suite("SkillDiscovery helpers", () => {
+  let tempRoot: string;
+  let workspaceRoot: string;
+
+  setup(async () => {
+    tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-skills-"));
+    workspaceRoot = path.join(tempRoot, "workspace");
+    await fsp.mkdir(workspaceRoot, { recursive: true });
+  });
+
+  teardown(async () => {
+    await fsp.rm(tempRoot, { recursive: true, force: true });
+  });
+
+  function skill(name: string, skillPath: string): SkillInfo {
+    return {
+      name,
+      displayName: name,
+      path: skillPath,
+      description: "",
+      source: "workspace",
+    };
+  }
+
+  async function createSkill(directory: string, name: string): Promise<string> {
+    const skillDirectory = path.join(directory, name);
+    await fsp.mkdir(skillDirectory, { recursive: true });
+    const skillPath = path.join(skillDirectory, "SKILL.md");
+    await fsp.writeFile(skillPath, "# skill\n");
+    return skillPath;
+  }
+
+  test("identifies a skill native to one harness but not another", async () => {
+    const claudePath = await createSkill(
+      path.join(workspaceRoot, ".claude", "skills"),
+      "shared"
+    );
+    const discovered = skill("shared", claudePath);
+
+    assert.strictEqual(
+      SkillDiscovery.isSkillNativeToHarness(
+        discovered,
+        HARNESS_IDS.CLAUDE_CLI,
+        workspaceRoot
+      ),
+      true
+    );
+    assert.strictEqual(
+      SkillDiscovery.isSkillNativeToHarness(
+        discovered,
+        HARNESS_IDS.COPILOT_CLI,
+        workspaceRoot
+      ),
+      false
+    );
+    assert.strictEqual(
+      SkillDiscovery.findSkillForHarness(
+        [discovered],
+        "shared",
+        HARNESS_IDS.CLAUDE_CLI,
+        workspaceRoot
+      ),
+      discovered
+    );
+    assert.strictEqual(
+      SkillDiscovery.findSkillForHarness(
+        [discovered],
+        "shared",
+        HARNESS_IDS.COPILOT_CLI,
+        workspaceRoot
+      ),
+      undefined
+    );
+  });
+
+  test("identifies a ctrlyoke-only skill", async () => {
+    const ctrlyokePath = await createSkill(
+      path.join(workspaceRoot, ".ctrlyoke", "skills"),
+      "portable"
+    );
+    const discovered = skill("portable", ctrlyokePath);
+
+    for (const harnessId of Object.values(HARNESS_IDS) as HarnessId[]) {
+      assert.strictEqual(
+        SkillDiscovery.isSkillNativeToHarness(
+          discovered,
+          harnessId,
+          workspaceRoot
+        ),
+        false
+      );
+    }
+    assert.strictEqual(
+      SkillDiscovery.resolveCtrlYokeSkillInvocation(
+        [discovered],
+        "portable",
+        HARNESS_IDS.COPILOT_CLI,
+        workspaceRoot
+      ),
+      discovered
+    );
+  });
+
+  test("resolves duplicate names using discovery precedence", () => {
+    const first = skill("duplicate", path.join(tempRoot, "first", "SKILL.md"));
+    const second = skill(
+      "duplicate",
+      path.join(tempRoot, "second", "SKILL.md")
+    );
+
+    assert.strictEqual(
+      SkillDiscovery.resolveCtrlYokeSkillInvocation(
+        [first, second],
+        "duplicate",
+        HARNESS_IDS.COPILOT_CLI,
+        workspaceRoot
+      ),
+      first
+    );
   });
 });

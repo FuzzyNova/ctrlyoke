@@ -1951,6 +1951,15 @@ export const SPECIAL_TARGET_IDS = {
   AGENTS: "agents",
 } as const;
 
+// Explicit ctrlyoke prompt references. Plain slash commands remain harness-native.
+export const CTRLYOKE_SLASH_TOKEN_KINDS = {
+  SKILL: "skill",
+  MCP: "mcp",
+} as const;
+
+export type CtrlYokeSlashTokenKind =
+  (typeof CTRLYOKE_SLASH_TOKEN_KINDS)[keyof typeof CTRLYOKE_SLASH_TOKEN_KINDS];
+
 // ============================================================================
 // TYPE HELPERS - For TypeScript type safety
 // ============================================================================

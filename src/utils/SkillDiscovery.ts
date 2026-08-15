@@ -6,13 +6,16 @@ import { Log } from "./Log";
 import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
 import {
   getHarnessSkillDirs,
+  getHarnessUserSkillDirs,
   getCtrlYokeSkillDir,
 } from "./HarnessDirectoryUtils";
 import {
   HARNESS_IDS,
   DISCOVERY_SOURCES,
+  type HarnessId,
   type DiscoverySource,
 } from "../types/DashboardConstants";
+import { isPathWithinDirectory } from "./PathSecurity";
 
 /**
  * Represents a discovered skill
@@ -314,5 +317,57 @@ export class SkillDiscovery {
     name: string
   ): SkillInfo | undefined {
     return skills.find((skill) => skill.name === name);
+  }
+
+  /**
+   * Find the first copy of a skill in the active harness's native search paths.
+   * Filtering preserves the discovery order supplied by the caller.
+   */
+  static findSkillForHarness(
+    skills: SkillInfo[],
+    name: string,
+    harnessId: HarnessId,
+    workspaceRoot?: string
+  ): SkillInfo | undefined {
+    return skills.find(
+      (skill) =>
+        skill.name === name &&
+        this.isSkillNativeToHarness(skill, harnessId, workspaceRoot)
+    );
+  }
+
+  /**
+   * Determine whether a discovered skill lives in a harness-native skill dir.
+   * A skill under .ctrlyoke/skills is intentionally not native to any harness.
+   */
+  static isSkillNativeToHarness(
+    skill: SkillInfo,
+    harnessId: HarnessId,
+    workspaceRoot?: string
+  ): boolean {
+    const nativeDirs = [
+      ...getHarnessUserSkillDirs(harnessId),
+      ...(workspaceRoot ? getHarnessSkillDirs(harnessId, workspaceRoot) : []),
+    ];
+    const skillPath = path.resolve(skill.path);
+
+    return nativeDirs.some((directory) =>
+      isPathWithinDirectory(skillPath, path.resolve(directory))
+    );
+  }
+
+  /**
+   * Resolve an explicit /skill:<name> reference to its discovered SKILL.md.
+   * The first matching entry wins, matching discoverSkills()'s precedence.
+   * Native-vs-ctrlyoke classification is available through
+   * isSkillNativeToHarness(); resolution itself remains harness-independent.
+   */
+  static resolveCtrlYokeSkillInvocation(
+    skills: SkillInfo[],
+    name: string,
+    _harnessId?: HarnessId,
+    _workspaceRoot?: string
+  ): SkillInfo | undefined {
+    return this.findSkillByName(skills, name);
   }
 }
