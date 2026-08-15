@@ -27,6 +27,33 @@ suite("FileAccessPolicy", () => {
     assert.strictEqual(decision.matchedRoot, externalRoot);
   });
 
+  test("allows a UI read inside its own state root without trusting that root as workspace", () => {
+    const ownStateRoot = path.resolve(
+      "/home/tester/.ctrlyoke/projects/frontend"
+    );
+    const candidate = path.join(
+      ownStateRoot,
+      ".runs",
+      "workflow",
+      "manifest.json"
+    );
+    const decision = evaluateFileAccess(candidate, {
+      workspaceRoots: [workspaceRoot],
+      ownStateRoots: [ownStateRoot],
+      approvedExternalRoots: [],
+    });
+    assert.strictEqual(decision.allowed, true);
+    assert.strictEqual(decision.reason, "ownStateRoot");
+    assert.strictEqual(decision.matchedRoot, ownStateRoot);
+
+    const harnessDecision = evaluateFileAccess(candidate, {
+      workspaceRoots: [workspaceRoot],
+      approvedExternalRoots: [],
+    });
+    assert.strictEqual(harnessDecision.allowed, false);
+    assert.strictEqual(harnessDecision.reason, "outsideTrustedRoots");
+  });
+
   test("blocks a path outside every trusted root", () => {
     const decision = evaluateFileAccess(path.resolve("/etc/passwd"), {
       workspaceRoots: [workspaceRoot],

@@ -140,6 +140,17 @@ suite("PromptFileResolver", () => {
     );
   });
 
+  test("guides old workspace run-history references to priorContext", async () => {
+    const resolver = new PromptFileResolver({ workspaceRoot });
+
+    await assert.rejects(
+      resolver.resolvePromptValue(
+        "./.ctrlyoke/.runs/workflow/run/manifest.json"
+      ),
+      /priorContext: \{ workflowKey, runRef \}/
+    );
+  });
+
   test("defers variable-backed references during static validation", async () => {
     const resolver = new PromptFileResolver({ workspaceRoot });
     await resolver.validatePromptReference("./{{name}}.prompt.md");
@@ -203,6 +214,30 @@ suite("PromptFileResolver", () => {
       assert.strictEqual(absolute.status, "missing");
     } finally {
       await fs.rm(outsideFile, { force: true });
+    }
+  });
+
+  test("allows a UI prompt-file read from its own state root without widening workspace roots", async () => {
+    const ownStateRoot = path.join(
+      path.dirname(workspaceRoot),
+      "ctrlyoke-state"
+    );
+    const statePrompt = path.join(ownStateRoot, "run", "prior.prompt.md");
+    await fs.mkdir(path.dirname(statePrompt), { recursive: true });
+    await fs.writeFile(statePrompt, "prior output", "utf8");
+
+    try {
+      const resolver = new PromptFileResolver({
+        workspaceRoot,
+        trustedRoots: [workspaceRoot],
+        ownStateRoots: [ownStateRoot],
+      });
+      const resolution = await resolver.resolve(statePrompt);
+
+      assert.strictEqual(resolution.status, "resolved");
+      assert.strictEqual(resolution.path, statePrompt);
+    } finally {
+      await fs.rm(ownStateRoot, { recursive: true, force: true });
     }
   });
 

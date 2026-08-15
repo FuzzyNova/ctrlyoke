@@ -8,6 +8,7 @@ import { isPathWithinDirectory } from "./PathSecurity";
  */
 type FileAccessReason =
   | "workspace"
+  | "ownStateRoot"
   | "trustedExternalRoot"
   | "outsideTrustedRoots";
 
@@ -23,6 +24,8 @@ export interface FileAccessDecision {
 export interface FileAccessPolicyOptions {
   /** Every directory trusted as "inside the workspace" (see `getVsCodeTrustedWorkspaceRoots`/`getWorkspaceRoots`). */
   workspaceRoots: readonly string[];
+  /** ctrlyoke-owned state roots that UI/open-file flows may inspect. */
+  ownStateRoots?: readonly string[];
   /** External roots currently authorized for this workspace (see `ConfigurationUtils.getEffectiveApprovedExternalFileRoots`). */
   approvedExternalRoots: readonly string[];
 }
@@ -50,6 +53,17 @@ export function evaluateFileAccess(
       return {
         allowed: true,
         reason: "workspace",
+        normalizedPath: candidatePath,
+        matchedRoot: root,
+      };
+    }
+  }
+
+  for (const root of options.ownStateRoots ?? []) {
+    if (isPathWithinDirectory(candidatePath, root)) {
+      return {
+        allowed: true,
+        reason: "ownStateRoot",
         normalizedPath: candidatePath,
         matchedRoot: root,
       };

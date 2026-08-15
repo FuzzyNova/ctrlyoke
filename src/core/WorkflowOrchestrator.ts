@@ -272,6 +272,8 @@ export class WorkflowOrchestrator {
 
   /** Watcher for *.runner.json creation (Entry Point 3: CLI starts while VS Code is open) */
   private runnerJsonCreateWatcher?: vscode.FileSystemWatcher;
+  /** Polling fallback for VS Code builds that do not deliver external recursive events. */
+  private runnerJsonDiscoveryPollInterval?: ReturnType<typeof setInterval>;
 
   private readonly PANEL_CLIENT_ID = PANEL_CLIENT_ID;
 
@@ -4981,6 +4983,10 @@ export class WorkflowOrchestrator {
 
     // Dispose the runner.json create watcher
     this.runnerJsonCreateWatcher?.dispose();
+    if (this.runnerJsonDiscoveryPollInterval !== undefined) {
+      clearInterval(this.runnerJsonDiscoveryPollInterval);
+      this.runnerJsonDiscoveryPollInterval = undefined;
+    }
 
     this.statusBarManager.dispose();
     this.endConditionEvaluatorForCommands.dispose();
@@ -5497,6 +5503,19 @@ export class WorkflowOrchestrator {
 
     const runsRootDir = WorkflowPaths.runsRoot(workspaceFolderPath);
 
+    // VS Code cannot reliably observe an external directory that does not
+    // exist yet. Create the project state and .runs directories before
+    // installing the discovery watcher below.
+    try {
+      await fs.promises.mkdir(runsRootDir, { recursive: true });
+    } catch (err) {
+      Log.warn(
+        `[WorkflowOrchestrator] setupCliWatching: unable to create runs root "${runsRootDir}" — CLI discovery watcher not installed:`,
+        err
+      );
+      return;
+    }
+
     // Normalize stale locks and get active-cli paths
     let activeCliPaths: string[];
     let recoveredPaths: string[];
@@ -5636,12 +5655,9 @@ export class WorkflowOrchestrator {
     workspaceFolderPath: string,
     runsRootDir: string
   ): void {
-    const runsRootRelative = path
-      .relative(workspaceFolderPath, runsRootDir)
-      .replace(/\\/g, "/");
     const pattern = new vscode.RelativePattern(
-      workspaceFolderPath,
-      `${runsRootRelative}/*/runner.json`
+      vscode.Uri.file(runsRootDir),
+      "*/runner.json"
     );
     this.runnerJsonCreateWatcher =
       vscode.workspace.createFileSystemWatcher(pattern);
@@ -5659,6 +5675,47 @@ export class WorkflowOrchestrator {
     this.runnerJsonCreateWatcher.onDidChange(async (uri) => {
       await this.handleRunnerJsonEvent(uri.fsPath, workspaceFolderPath);
     });
+
+    // VS Code 1.133 on Windows did not deliver the recursive event for a
+    // runner file created below an external RelativePattern base. Keep the
+    // watcher for hosts that do support it, but poll the small lineage-root
+    // directory as a reliable discovery fallback.
+    this.runnerJsonDiscoveryPollInterval = setInterval(() => {
+      void this.pollRunnerJsonDiscovery(runsRootDir, workspaceFolderPath);
+    }, 1_000);
+  }
+
+  private async pollRunnerJsonDiscovery(
+    runsRootDir: string,
+    workspaceFolderPath: string
+  ): Promise<void> {
+    try {
+      const entries = await fs.promises.readdir(runsRootDir, {
+        withFileTypes: true,
+      });
+      await Promise.all(
+        entries
+          .filter((entry) => entry.isDirectory())
+          .map(async (entry) => {
+            const runnerPath = path.join(
+              runsRootDir,
+              entry.name,
+              "runner.json"
+            );
+            try {
+              await fs.promises.access(runnerPath);
+            } catch {
+              return;
+            }
+            await this.handleRunnerJsonEvent(runnerPath, workspaceFolderPath);
+          })
+      );
+    } catch (err) {
+      Log.debug(
+        `[WorkflowOrchestrator] pollRunnerJsonDiscovery: unable to scan "${runsRootDir}":`,
+        err
+      );
+    }
   }
 
   private async handleRunnerJsonEvent(

@@ -15,6 +15,8 @@ export interface PromptFileResolverOptions {
   namedRoots?: readonly ResolverWorkspaceFolder[];
   /** Workspace and external roots used to authorize candidates before reads. */
   trustedRoots?: readonly string[];
+  /** ctrlyoke-owned state roots allowed for UI prompt-file reads. */
+  ownStateRoots?: readonly string[];
   approvedExternalRoots?: readonly string[];
   /** Disable workflow-relative refs when the authored definition is unmappable. */
   allowWorkflowRelativeReferences?: boolean;
@@ -85,6 +87,7 @@ export class PromptFileResolver {
   private readonly workspaceRoot?: string;
   private readonly namedRoots: readonly ResolverWorkspaceFolder[];
   private readonly trustedRoots?: readonly string[];
+  private readonly ownStateRoots?: readonly string[];
   private readonly approvedExternalRoots?: readonly string[];
   private readonly allowWorkflowRelativeReferences: boolean;
 
@@ -92,6 +95,7 @@ export class PromptFileResolver {
     this.workspaceRoot = options.workspaceRoot;
     this.namedRoots = options.namedRoots ?? [];
     this.trustedRoots = options.trustedRoots;
+    this.ownStateRoots = options.ownStateRoots;
     this.approvedExternalRoots = options.approvedExternalRoots;
     this.allowWorkflowRelativeReferences =
       options.allowWorkflowRelativeReferences ?? true;
@@ -157,7 +161,8 @@ export class PromptFileResolver {
 
     const detail =
       resolution.status === "missing"
-        ? "could not be found"
+        ? (getLegacyRunHistoryReferenceGuidance(reference) ??
+          "could not be found")
         : `could not be read: ${getErrorMessage(resolution.error)}`;
     throw new PromptFileReferenceError(
       `Prompt file reference "${reference}" ${detail}`,
@@ -337,9 +342,27 @@ export class PromptFileResolver {
 
     return evaluateFileAccess(candidate, {
       workspaceRoots: this.trustedRoots ?? [],
+      ownStateRoots: this.ownStateRoots,
       approvedExternalRoots: this.approvedExternalRoots ?? [],
     }).allowed;
   }
+}
+
+/** Explain how to address moved run history without embedding a local path. */
+export function getLegacyRunHistoryReferenceGuidance(
+  reference: string
+): string | undefined {
+  const normalized = reference.trim().replace(/^@/, "").replace(/\\/g, "/");
+  const legacyPrefix = [".ctrlyoke/.runs", "./.ctrlyoke/.runs"];
+  if (
+    !legacyPrefix.some(
+      (prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`)
+    )
+  ) {
+    return undefined;
+  }
+
+  return "run history is not a workspace file; use priorContext: { workflowKey, runRef } to reference a completed run";
 }
 
 function getErrorMessage(error: unknown): string {

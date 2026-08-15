@@ -99,11 +99,10 @@ export class CliWatchSession implements vscode.Disposable {
   // ─────────────────────────────────────────────────────────────────────────
 
   private setupWorkingFileWatcher(): void {
+    const targetPath = this.workingFilePath;
     const pattern = new vscode.RelativePattern(
-      this.workspaceFolderPath,
-      path
-        .relative(this.workspaceFolderPath, this.workingFilePath)
-        .replace(/\\/g, "/")
+      vscode.Uri.file(path.dirname(targetPath)),
+      path.basename(targetPath)
     );
     const watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
@@ -180,19 +179,14 @@ export class CliWatchSession implements vscode.Disposable {
   // ─────────────────────────────────────────────────────────────────────────
 
   private setupLockFileWatcher(): void {
-    const lockRelativePath = path
-      .relative(
-        this.workspaceFolderPath,
-        WorkflowLockManager.getLockPath(
-          this.workspaceFolderPath,
-          this.workflowKey
-        )
-      )
-      .replace(/\\/g, "/");
+    const targetPath = WorkflowLockManager.getLockPath(
+      this.workspaceFolderPath,
+      this.workflowKey
+    );
 
     const pattern = new vscode.RelativePattern(
-      this.workspaceFolderPath,
-      lockRelativePath
+      vscode.Uri.file(path.dirname(targetPath)),
+      path.basename(targetPath)
     );
     const watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
@@ -215,11 +209,10 @@ export class CliWatchSession implements vscode.Disposable {
     Log.debug(
       `[CliWatchSession] watching run: ${this.workflowKey}/${this.runRef}`
     );
+    const targetPath = this.manifestPath;
     const pattern = new vscode.RelativePattern(
-      this.workspaceFolderPath,
-      path
-        .relative(this.workspaceFolderPath, this.manifestPath)
-        .replace(/\\/g, "/")
+      vscode.Uri.file(path.dirname(targetPath)),
+      path.basename(targetPath)
     );
     const watcher = vscode.workspace.createFileSystemWatcher(pattern);
 

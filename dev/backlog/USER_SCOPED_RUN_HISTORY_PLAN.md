@@ -1008,7 +1008,7 @@ commit that implements it. Phase numbers refer to §7.
 | 1   | `ProjectStatePaths` + frozen storage policy + `storage.runHistoryLocation` config | 1/2   | done |
 | 2   | `ProjectStateRegistry` + bootstrap freeze + MCP propagation              | 1     | done    |
 | 3   | Redirect `runsRoot`, `.search-index`, project `.usage`; test conformance | 1     | done |
-| 4   | Four external watchers + `ownStateRoot` file-access scope               | 1     | pending |
+| 4   | Four external watchers + `ownStateRoot` file-access scope               | 1     | done — mocked watcher-base coverage passes. Windows VS Code 1.133.0 verification showed that recursive external `*/runner.json` create/change events do not fire, so the watcher is retained for compatible hosts and a 1-second `.runs` lineage-directory polling fallback now covers CLI discovery. |
 | 5   | `scripts/migrate-runs-to-user-scope.mjs` (throwaway) + focused test      | 1     | pending |
 | 6   | Settings UI control + requires-reload behavior                          | 2     | pending |
 | 7   | Documentation/messaging audit (2.6, 5.5)                                | 2     | pending |

@@ -31,7 +31,10 @@ import {
   getTrustedSourceDefinitionDir,
   type ResolverWorkspaceFolder,
 } from "../platform/WorkspaceRootResolver";
-import { PromptFileResolver } from "../core/PromptFileResolver";
+import {
+  getLegacyRunHistoryReferenceGuidance,
+  PromptFileResolver,
+} from "../core/PromptFileResolver";
 import { PromptFileWriter } from "../utils/PromptFileWriter";
 import {
   ConfigurationUtils,
@@ -39,6 +42,8 @@ import {
 } from "../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import { runtimeTrustedRootRegistry } from "../utils/RuntimeTrustedRootRegistry";
+import { getFrozenRunHistoryLocation } from "../utils/RunHistoryStoragePolicy";
+import { projectStateRoot } from "../utils/ProjectStatePaths";
 import { Log } from "../utils/Log";
 import {
   getFileCompletions,
@@ -91,6 +96,10 @@ export class PromptEditorSupportService {
       ...getVsCodeTrustedWorkspaceRoots(),
       ...runtimeTrustedRootRegistry.getRoots(),
     ];
+  }
+
+  private getOwnStateRoots(workspaceRoot: string): string[] {
+    return [projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation())];
   }
 
   async handleCompletionRequest(
@@ -204,10 +213,14 @@ export class PromptEditorSupportService {
     const workspaceIdentity = workspaceRoot
       ? ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot)
       : undefined;
+    const ownStateRoots = workspaceRoot
+      ? this.getOwnStateRoots(workspaceRoot)
+      : undefined;
     const resolver = new PromptFileResolver({
       workspaceRoot: workspaceRoot ?? undefined,
       namedRoots: workspaceRoot ? getVsCodeNamedWorkspaceRoots() : [],
       trustedRoots,
+      ownStateRoots,
       approvedExternalRoots: workspaceIdentity
         ? ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
             workspaceIdentity
@@ -290,10 +303,12 @@ export class PromptEditorSupportService {
         throw new Error("No workspace folder open");
       }
       const workspaceRoot = getVsCodeWorkspaceRoot();
+      const ownStateRoots = this.getOwnStateRoots(workspaceRoot);
       const resolver = new PromptFileResolver({
         workspaceRoot,
         namedRoots: getVsCodeNamedWorkspaceRoots(),
         trustedRoots: this.getTrustedWorkspaceRoots(),
+        ownStateRoots,
         approvedExternalRoots:
           ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
             ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot)
@@ -321,6 +336,7 @@ export class PromptEditorSupportService {
       };
       const decision = evaluateFileAccess(resolvedPath, {
         workspaceRoots: trustedRoots,
+        ownStateRoots,
         approvedExternalRoots,
       });
       if (!decision.allowed) {
@@ -759,7 +775,10 @@ export class PromptEditorSupportService {
       }
     }
 
-    return { exists: false };
+    return {
+      exists: false,
+      message: getLegacyRunHistoryReferenceGuidance(filePath),
+    };
   }
 
   private async validateGitContextReference(
@@ -836,12 +855,14 @@ export class PromptEditorSupportService {
 
       const workspaceIdentity =
         ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+      const ownStateRoots = this.getOwnStateRoots(workspaceRoot);
       const approvedExternalRoots =
         ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
           workspaceIdentity
         );
       const decision = evaluateFileAccess(targetUri.fsPath, {
         workspaceRoots: trustedRoots,
+        ownStateRoots,
         approvedExternalRoots,
       });
       const target: FileOpenTarget = {

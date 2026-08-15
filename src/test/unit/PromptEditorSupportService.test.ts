@@ -175,4 +175,34 @@ suite("PromptEditorSupportService", () => {
       /relative to the workflow file, which has no known location/i
     );
   });
+
+  test("guides old workspace run-history refs to path-independent priorContext", async () => {
+    const emitted: unknown[] = [];
+    const service = new PromptEditorSupportService(
+      () => workspaceRoot,
+      () => undefined,
+      () => undefined
+    );
+
+    await service.handleContextRefsValidation(
+      createWebviewClientContext("test-client", (message) => {
+        emitted.push(message);
+      }),
+      [
+        {
+          id: "old-run",
+          type: "file",
+          path: "@.ctrlyoke/.runs/workflow/run/manifest.json",
+        },
+      ]
+    );
+
+    const result = emitted[0] as {
+      results: Array<{ exists: boolean; message?: string }>;
+    };
+    assert.strictEqual(result.results[0].exists, false);
+    assert.match(result.results[0].message ?? "", /priorContext/);
+    assert.match(result.results[0].message ?? "", /workflowKey/);
+    assert.match(result.results[0].message ?? "", /runRef/);
+  });
 });

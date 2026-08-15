@@ -19,6 +19,8 @@ import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import type { FileOpenTarget } from "../ui/ExternalFileTrustPrompt";
 import { PromptFileResolver } from "../core/PromptFileResolver";
 import { runtimeTrustedRootRegistry } from "../utils/RuntimeTrustedRootRegistry";
+import { getFrozenRunHistoryLocation } from "../utils/RunHistoryStoragePolicy";
+import { projectStateRoot } from "../utils/ProjectStatePaths";
 
 /**
  * Provides clickable links for ctrlyoke context references
@@ -109,6 +111,9 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       ConfigurationUtils.getEffectiveApprovedExternalFileRoots(
         workspaceIdentity
       );
+    const ownStateRoots = [
+      projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
+    ];
 
     // A standalone prompt-file path has no @/# marker, so it needs its own
     // link entry. Keep this separate from context-reference matching because
@@ -121,7 +126,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         workspaceRoot,
         namedRoots,
         trustedRoots,
-        approvedExternalRoots
+        approvedExternalRoots,
+        ownStateRoots
       )
     );
 
@@ -134,6 +140,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         namedRoots,
         trustedRoots,
         approvedExternalRoots,
+        ownStateRoots,
         sourceDefinitionDir
       )
     );
@@ -147,6 +154,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         namedRoots,
         trustedRoots,
         approvedExternalRoots,
+        ownStateRoots,
         sourceDefinitionDir
       )
     );
@@ -160,6 +168,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         namedRoots,
         trustedRoots,
         approvedExternalRoots,
+        ownStateRoots,
         sourceDefinitionDir
       )
     );
@@ -172,7 +181,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         workspaceRoot,
         namedRoots,
         trustedRoots,
-        approvedExternalRoots
+        approvedExternalRoots,
+        ownStateRoots
       )
     );
 
@@ -192,13 +202,15 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     workspaceRoot: string,
     namedRoots: readonly ResolverWorkspaceFolder[],
     trustedRoots: readonly string[],
-    approvedExternalRoots: readonly string[]
+    approvedExternalRoots: readonly string[],
+    ownStateRoots: readonly string[]
   ): vscode.DocumentLink[] {
     const trimmedPath = text.trim();
     const resolver = new PromptFileResolver({
       workspaceRoot,
       namedRoots,
       trustedRoots,
+      ownStateRoots,
       approvedExternalRoots,
     });
     if (!resolver.looksLikePromptFilePath(trimmedPath)) {
@@ -214,6 +226,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
 
     const decision = evaluateFileAccess(resolvedPath, {
       workspaceRoots: trustedRoots,
+      ownStateRoots,
       approvedExternalRoots,
     });
     const start = text.indexOf(trimmedPath);
@@ -248,6 +261,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     namedRoots: readonly ResolverWorkspaceFolder[],
     trustedRoots: readonly string[],
     approvedExternalRoots: readonly string[],
+    ownStateRoots: readonly string[],
     sourceDefinitionDir?: string
   ): FileAccessDecision | undefined {
     let resolved: string;
@@ -262,6 +276,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     }
     return evaluateFileAccess(resolved, {
       workspaceRoots: trustedRoots,
+      ownStateRoots,
       approvedExternalRoots,
     });
   }
@@ -312,6 +327,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     namedRoots: readonly ResolverWorkspaceFolder[],
     trustedRoots: readonly string[],
     approvedExternalRoots: readonly string[],
+    ownStateRoots: readonly string[],
     sourceDefinitionDir?: string
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
@@ -325,6 +341,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         namedRoots,
         trustedRoots,
         approvedExternalRoots,
+        ownStateRoots,
         sourceDefinitionDir
       );
       if (!decision) {
@@ -376,6 +393,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     namedRoots: readonly ResolverWorkspaceFolder[],
     trustedRoots: readonly string[],
     approvedExternalRoots: readonly string[],
+    ownStateRoots: readonly string[],
     sourceDefinitionDir?: string
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
@@ -389,6 +407,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         namedRoots,
         trustedRoots,
         approvedExternalRoots,
+        ownStateRoots,
         sourceDefinitionDir
       );
       if (!decision) {
@@ -444,6 +463,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     namedRoots: readonly ResolverWorkspaceFolder[],
     trustedRoots: readonly string[],
     approvedExternalRoots: readonly string[],
+    ownStateRoots: readonly string[],
     sourceDefinitionDir?: string
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
@@ -460,6 +480,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         namedRoots,
         trustedRoots,
         approvedExternalRoots,
+        ownStateRoots,
         sourceDefinitionDir
       );
       if (!decision) {
@@ -563,6 +584,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     namedRoots: readonly ResolverWorkspaceFolder[],
     trustedRoots: readonly string[],
     approvedExternalRoots: readonly string[],
+    ownStateRoots: readonly string[],
     sourceDefinitionDir?: string
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
@@ -580,6 +602,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         namedRoots,
         trustedRoots,
         approvedExternalRoots,
+        ownStateRoots,
         sourceDefinitionDir
       );
       if (!decision) {
