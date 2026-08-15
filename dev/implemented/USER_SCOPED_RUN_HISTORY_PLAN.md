@@ -1,7 +1,7 @@
 # User-Scoped Run History
 
-> **Status:** Implementation-ready — not implemented. Written and code-audited
-> 2026-08-13.
+> **Status:** Implemented 2026-08-15 across all five phases; see the §10 ledger.
+> Written and code-audited 2026-08-13.
 >
 > **Problem in one line:** `git clean -fdx` is routine repo hygiene and it
 > permanently destroys every ctrlyoke run in the workspace, because `.ctrlyoke/.runs/`
@@ -1021,3 +1021,19 @@ repository; no earlier row remains pending. Deliberately deferred work remains
 shared run-history export/import, cross-project lifetime statistics or search,
 and the separate provider-refresh deduplication optimization. Workspace-local
 attachments, prompts, logs, and capabilities also remain outside this move.
+
+**Review-pass cleanup (2026-08-15):** the row-4 polling fallback originally
+re-read and re-`checkLock`ed every `runner.json` in the runs root on every
+one-second tick, for the host's lifetime. It now skips lineages that already
+have a live `CliWatchSession` (the lineage directory name is the `workflowKey`,
+so this costs no I/O), and gates the rest on an mtime cache so an unchanged or
+stale lock is processed once rather than every second. A new lock has no cached
+entry and is still discovered on the next tick. The lock path is built through
+`WorkflowPaths.runnerLockPath` rather than joining `runner.json` by hand, per
+that module's "only module allowed to construct a `.runs` path" rule. Also
+removed `UsagePaths.usageDir`, which became dead when usage files moved to the
+project directory in row 3.
+
+**Known unrelated condition:** `npm run format:check` reports pre-existing
+Prettier drift across ~100 files repo-wide. It predates this plan (104 files
+before this work, 102 after) and is deliberately not addressed here.

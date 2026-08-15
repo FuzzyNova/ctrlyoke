@@ -8,15 +8,6 @@ const PROVIDER_SNAPSHOTS_FILE_NAME = "provider-snapshots.json";
 const LIFETIME_STATS_FILE_NAME = "lifetime-stats.json";
 const ACCOUNT_USAGE_DIR_NAME = "usage";
 
-/** Canonical authority for workspace-scoped usage files. */
-export function usageDir(workspaceRoot: string): string {
-  return path.join(
-    workspaceRoot,
-    PATH_CONSTANTS.CTRLYOKE_DIR,
-    PATH_CONSTANTS.USAGE_DIR
-  );
-}
-
 export function observedUsagePath(workspaceRoot: string): string {
   return observedUsagePathForProject(
     projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation())
@@ -25,7 +16,10 @@ export function observedUsagePath(workspaceRoot: string): string {
 
 /** Resolve observed usage for an already-resolved project state directory. */
 export function observedUsagePathForProject(projectRoot: string): string {
-  return path.join(projectUsageDirForProject(projectRoot), OBSERVED_USAGE_FILE_NAME);
+  return path.join(
+    projectUsageDirForProject(projectRoot),
+    OBSERVED_USAGE_FILE_NAME
+  );
 }
 
 export function providerSnapshotsPath(): string {

@@ -105,7 +105,7 @@ re-litigated.
 
 1. **User-scoped run history** — move run storage out of the workspace before
    there is an installed base.
-   ([plan](../backlog/USER_SCOPED_RUN_HISTORY_PLAN.md))
+   ([plan](../implemented/USER_SCOPED_RUN_HISTORY_PLAN.md))
    Implementation-ready, and previously absent from this roadmap entirely. Its
    §5.3 explicitly spends the pre-release budget: no read-through fallback, no
    first-load migration prompt, no deprecation window, no permanent old-layout
@@ -236,7 +236,7 @@ both carry is satisfied by that promotion rather than blocking them.
 9. **Run history lifecycle and platform decoupling** — `history prune` /
    `history relink` ship with the P0 storage move, and the Node-only runtime
    graph is the shared foundation for `ctrlyoke server`.
-   ([plans](../backlog/USER_SCOPED_RUN_HISTORY_PLAN.md),
+   ([plans](../implemented/USER_SCOPED_RUN_HISTORY_PLAN.md),
    [decoupling](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md))
 
 ### P2 — Strategic differentiators
@@ -471,7 +471,7 @@ criteria matter more than speculative dates.
 | [`EXECUTION_GUARDRAILS_PLAN.md`](../backlog/EXECUTION_GUARDRAILS_PLAN.md)                          | P2 (reduced scope)                                    |
 | [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../active/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md) | P0 phase 1; P1 phases 2–3                             |
 | [`TOOL_PERMISSION_PARITY_PLAN.md`](../implemented/TOOL_PERMISSION_PARITY_PLAN.md)                  | P0                                                    |
-| [`USER_SCOPED_RUN_HISTORY_PLAN.md`](../backlog/USER_SCOPED_RUN_HISTORY_PLAN.md)                    | **P0** (one-way door)                                 |
+| [`USER_SCOPED_RUN_HISTORY_PLAN.md`](../implemented/USER_SCOPED_RUN_HISTORY_PLAN.md)                    | **P0** (one-way door)                                 |
 | [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md)                        | **P0** (one-way door; was P1)                         |
 | [`DRY_RUN_PREVIEW_PLAN.md`](../implemented/DRY_RUN_PREVIEW_PLAN.md)                                | P1                                                    |
 | [`TEMPLATE_REQUIRED_VARIABLES_PLAN.md`](../backlog/TEMPLATE_REQUIRED_VARIABLES_PLAN.md)            | P1                                                    |

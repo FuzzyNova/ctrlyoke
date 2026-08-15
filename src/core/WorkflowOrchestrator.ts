@@ -274,6 +274,13 @@ export class WorkflowOrchestrator {
   private runnerJsonCreateWatcher?: vscode.FileSystemWatcher;
   /** Polling fallback for VS Code builds that do not deliver external recursive events. */
   private runnerJsonDiscoveryPollInterval?: ReturnType<typeof setInterval>;
+  /**
+   * Last `runner.json` mtime already handed to `handleRunnerJsonEvent`, keyed by
+   * lock path. The poll fires every second for the host's lifetime, so without
+   * this every stale lock in the runs root would be re-read and re-`checkLock`ed
+   * on every tick. A new lock has no entry and is processed immediately.
+   */
+  private readonly polledRunnerJsonMtimes = new Map<string, number>();
 
   private readonly PANEL_CLIENT_ID = PANEL_CLIENT_ID;
 
@@ -3332,7 +3339,9 @@ export class WorkflowOrchestrator {
       address.runRef,
       {
         mergeOutcome: result.mergeOutcome,
-        ...(result.conflictFiles ? { conflictFiles: result.conflictFiles } : {}),
+        ...(result.conflictFiles
+          ? { conflictFiles: result.conflictFiles }
+          : {}),
         ...(result.message ? { message: result.message } : {}),
         updatedAt: Date.now(),
       }
@@ -3342,14 +3351,18 @@ export class WorkflowOrchestrator {
     ) as WorkingFile;
     const projection = projectWorktreeRuntime(updated._runtime?.worktree);
     if (!projection) {
-      throw new Error("The managed worktree merge did not produce a runtime projection.");
+      throw new Error(
+        "The managed worktree merge did not produce a runtime projection."
+      );
     }
     this.dashboardBroadcastHub.updateWorktreeMerge(address, projection);
     return projection;
   }
 
   async getWorktreeManagementState() {
-    return new WorktreeManager().getManagementState(this.requireWorkspaceRoot());
+    return new WorktreeManager().getManagementState(
+      this.requireWorkspaceRoot()
+    );
   }
 
   async refreshWorktreeManagementState() {
@@ -4095,7 +4108,11 @@ export class WorkflowOrchestrator {
         const state = instance.getQueueState();
         if (state.workflowKey && state.runRef) {
           await this.switchClientToRunAddress(
-            { workflowKey: state.workflowKey, kind: "run", runRef: state.runRef },
+            {
+              workflowKey: state.workflowKey,
+              kind: "run",
+              runRef: state.runRef,
+            },
             clientId
           );
         }
@@ -4987,6 +5004,7 @@ export class WorkflowOrchestrator {
       clearInterval(this.runnerJsonDiscoveryPollInterval);
       this.runnerJsonDiscoveryPollInterval = undefined;
     }
+    this.polledRunnerJsonMtimes.clear();
 
     this.statusBarManager.dispose();
     this.endConditionEvaluatorForCommands.dispose();
@@ -5693,23 +5711,46 @@ export class WorkflowOrchestrator {
       const entries = await fs.promises.readdir(runsRootDir, {
         withFileTypes: true,
       });
+      const seenRunnerPaths = new Set<string>();
       await Promise.all(
         entries
           .filter((entry) => entry.isDirectory())
+          // The lineage directory name *is* the workflowKey, so an already
+          // watched run can be skipped without touching the filesystem.
+          .filter((entry) => !this.cliSessions.has(entry.name))
           .map(async (entry) => {
-            const runnerPath = path.join(
-              runsRootDir,
-              entry.name,
-              "runner.json"
-            );
+            // WorkflowPaths owns every `.runs` path; it rejects a directory
+            // name that is not a valid workflowKey, which is not a lineage.
+            let runnerPath: string;
             try {
-              await fs.promises.access(runnerPath);
+              runnerPath = WorkflowPaths.runnerLockPath(
+                workspaceFolderPath,
+                entry.name as WorkflowKey
+              );
             } catch {
               return;
             }
+            let mtimeMs: number;
+            try {
+              ({ mtimeMs } = await fs.promises.stat(runnerPath));
+            } catch {
+              return;
+            }
+            seenRunnerPaths.add(runnerPath);
+            if (this.polledRunnerJsonMtimes.get(runnerPath) === mtimeMs) {
+              return;
+            }
+            this.polledRunnerJsonMtimes.set(runnerPath, mtimeMs);
             await this.handleRunnerJsonEvent(runnerPath, workspaceFolderPath);
           })
       );
+      // Drop locks that have been released so a later run at the same path is
+      // treated as new rather than being suppressed by a remembered mtime.
+      for (const trackedPath of this.polledRunnerJsonMtimes.keys()) {
+        if (!seenRunnerPaths.has(trackedPath)) {
+          this.polledRunnerJsonMtimes.delete(trackedPath);
+        }
+      }
     } catch (err) {
       Log.debug(
         `[WorkflowOrchestrator] pollRunnerJsonDiscovery: unable to scan "${runsRootDir}":`,
