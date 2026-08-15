@@ -18,7 +18,11 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 - `ctrlyoke-<timestamp>.log` — session log; state transitions, orchestration flow, session ID resolution. Start here for unexpected stops or state issues.
 - `ctrlyoke-<harness>-hook-debug.log` (e.g. `ctrlyoke-copilot-hook-debug.log`) — every hook/notify invocation and result. Start here when completion never fires or session IDs don't match.
 
-**Run storage** (in `.ctrlyoke/.runs/<workflowKey>/`):
+**Run storage** is resolved by `WorkflowPaths.runsRoot(stateRoot)`. In the default user mode it
+is `<ctrlyokeStateHome>/projects/<slug>-<hash12>/.runs/<workflowKey>/`; in workspace mode it is
+`<stateRoot>/.ctrlyoke/.runs/<workflowKey>/`. Managed worktree runs keep the initiating
+checkout's `stateRoot`; opening a worktree directory directly as its own VS Code workspace gives
+it its own history.
 
 - `workflow.json` — lineage descriptor (name, favorite, `latestRunRef`, `nextRunId`).
 - `runner.json` — runner lock, naming the exact executing `RunRef`; a stale file with a dead PID can cause false "already running" errors — safe to delete.
@@ -26,6 +30,11 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 - `run-<timestamp>/workflow.ctrlyoke.json` — that run's live working copy with `_runtime` blocks per step (harness, sessionId, responseText, timestamps).
 - `run-<timestamp>/events.jsonl` — per-step output events (one CLI output chunk per line). Useful for comparing actual AI output vs. what an end-condition script received, or diagnosing why a retry loop triggered.
 - `run-<timestamp>/manifest.json` — step metadata and run summary.
+
+User-scoped history under OneDrive or Dropbox is synchronized, but running the same project
+simultaneously on two synced machines is unsupported: PIDs and file locks are machine-local and
+cannot coordinate across devices. The `.ctrlyoke/logs/` guidance above remains workspace-scoped
+because logs deliberately do not move.
 
 **Adding logs**: use `Log` from `src/utils/Log.ts` for extension/backend code; use `WebviewLog` from `src/ui/webview-react/utils/logger.ts` for webview/UI code. Do not use `console.log` directly.
 

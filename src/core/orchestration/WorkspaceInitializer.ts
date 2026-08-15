@@ -34,7 +34,7 @@ interface WorkspaceRuntimeEntryRule {
  * - `certs/` and `notifications/` hold a TLS private key and the VAPID private
  *   key. Secrets — never track these.
  * - `attachments/` and `prompts/` are generated stores whose contents mostly
- *   belong to ephemeral `.runs/` work. They are safe to ignore **only because
+ *   belong to ephemeral run work. They are safe to ignore **only because
  *   Save As bundles**: exporting a workflow copies the assets it references
  *   into a tracked sibling `<workflow>.assets/` and rewrites the references.
  *   Adding them here before that shipped would have left tracked workflows

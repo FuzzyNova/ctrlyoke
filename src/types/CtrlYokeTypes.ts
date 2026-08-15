@@ -336,7 +336,7 @@ export interface FinalStepRuntimeState {
 }
 
 /**
- * Stable identity for a workflow lineage directory: `.ctrlyoke/.runs/<workflowKey>/`.
+ * Stable identity for a workflow lineage directory in run storage: `.runs/<workflowKey>/`.
  * A sanitized name plus creation timestamp, minted once by `WorkflowLineageRepository`
  * and never re-derived from a mutable file path. Opaque — always go through
  * `WorkflowPaths`/`WorkflowLineageRepository` to mint or validate one.
@@ -344,7 +344,7 @@ export interface FinalStepRuntimeState {
 export type WorkflowKey = string & { readonly __workflowKey: unique symbol };
 
 /**
- * Stable identity for one promoted run directory: `.ctrlyoke/.runs/<workflowKey>/run-<ts>/`.
+ * Stable identity for one promoted run directory in run storage: `.runs/<workflowKey>/run-<ts>/`.
  * The run directory name itself (`run-<UTC-ms-timestamp>`). Opaque — always go through
  * `WorkflowPaths`/`WorkflowLineageRepository` to mint or validate one.
  */
@@ -376,7 +376,7 @@ export function isWorkflowRunAddress(
 
 /**
  * Authoritative lineage metadata and allocation state, persisted at
- * `.ctrlyoke/.runs/<workflowKey>/workflow.json`. `WorkflowLineageRepository` is the only writer.
+ * `.runs/<workflowKey>/workflow.json` in run storage. `WorkflowLineageRepository` is the only writer.
  */
 export interface WorkflowLineageDescriptor {
   schemaVersion: number;
@@ -643,7 +643,7 @@ export interface WorkflowAttemptTransition {
 
 /**
  * Working file format - same schema as PromptFile with optional runtime metadata.
- * Stored at `.ctrlyoke/.runs/<workflowKey>/{draft,run-<ts>}/workflow.ctrlyoke.json`.
+ * Stored at `.runs/<workflowKey>/{draft,run-<ts>}/workflow.ctrlyoke.json` in run storage.
  */
 export interface WorkingFile extends PromptFile {
   originalFile?: string; // Path to original prompt file (undefined for ephemeral/dashboard-created workflows)
@@ -1044,7 +1044,7 @@ export const workflowDisplayStep = (
 /**
  * Process lock file written at the lineage root while one of its runs is executing.
  * Enables the VS Code extension and CLI to coexist without stomping on each other's state.
- * Lock file path: `.ctrlyoke/.runs/<workflowKey>/runner.json`.
+ * Lock file path: `.runs/<workflowKey>/runner.json` in run storage.
  */
 export interface WorkflowRunnerLock {
   /** Lineage this lock belongs to. */

@@ -19,22 +19,40 @@ A workflow is a `.ctrlyoke.yaml`, `.ctrlyoke.json`, or `.prompt.md` file that de
 
 ### Durable workflows and generated files
 
-Dashboard work is stored under `.ctrlyoke/.runs/` and is machine-local by default. The generated
-`.ctrlyoke/.gitignore` also ignores `attachments/`, `prompts/`, logs, temporary files, and other
-runtime data. Use **Save As** when a workflow is worth keeping: it writes the workflow plus its
-dependencies, copying inline attachments into a sibling `<workflow>.assets/` directory and
-inlining lone prompt-file bodies. The workflow file and its sibling assets directory can be moved
-or copied together to another directory or repository and still resolve. This carries generated
-dependencies only; references such as `@src/foo.ts`, committed prompt files, and
-`.ctrlyoke/scripts/**` still require the repository they operate on.
+Dashboard work is ephemeral. By default, run history is user-scoped at
+`<ctrlyokeStateHome>/projects/<slug>-<hash12>/.runs/`, keyed from the resolved
+`ExecutionWorkspace.stateRoot`; it is outside the workspace and harness sandbox because only
+ctrlyoke reads it. `storage.runHistoryLocation: "workspace"` keeps it beside the repo at
+`<stateRoot>/.ctrlyoke/.runs/` for locality or durability, but workspace mode still ignores
+`.runs/` and neither mode makes runs shareable. User-level, project-keyed session history is also
+the familiar pattern used by Claude and Codex.
 
-The `.ctrlyoke/.gitignore` is editable. Delete its self-ignore line at the bottom before removing
-other entries. That deletion marks the file as user-owned, so ctrlyoke stops restoring generated
-defaults and the change can be committed. Managed-worktree landing permits runtime files you
-deliberately track, including prompts and attachments, but blocks non-ignored untracked runtime
-output. It always blocks `certs/`, `notifications/`, `temp/`, and `logs/`, even if tracked, because
-those directories can contain secrets or ephemeral transport data. `settings.json` is tracked by
-default; the `server.certPath` and `server.keyPath` settings are machine-local paths.
+`attachments/` and `prompts/` stay ephemeral and workspace-scoped under `.ctrlyoke/`. Harnesses
+read those files through `@` references, so they must remain inside the workspace sandbox.
+
+Use **Save As** when a workflow is worth keeping: it writes the workflow plus its dependencies,
+copying inline attachments into a sibling `<workflow>.assets/` directory and inlining lone
+prompt-file bodies. A workflow you hand-author anywhere in the repo or promote to a template is
+also durable; templates are the reusable form of a workflow you run often, while Save As produces
+a copy. The workflow file and its sibling assets directory can be moved or copied together to
+another directory or repository and still resolve. This carries generated dependencies only;
+references such as `@src/foo.ts`, committed prompt files, and `.ctrlyoke/scripts/**` still require
+the repository they operate on.
+
+The generated `.ctrlyoke/.gitignore` continues to ignore workspace runtime entries. It is
+append-only, so deleting an entry is restored on the next activation; use the explicit run export
+described in `dev/backlog/RUN_EXPORT_PLAN.md` to share a run. Managed-worktree landing permits
+runtime files you deliberately track, including prompts and attachments, but blocks non-ignored
+untracked runtime output. It always blocks `certs/`, `notifications/`, `temp/`, and `logs/`, even
+if tracked, because those directories can contain secrets or ephemeral transport data.
+`settings.json` is tracked by default; the `server.certPath` and `server.keyPath` settings are
+machine-local paths.
+
+Managed worktree runs retain the initiating checkout's `stateRoot` and therefore its history.
+Opening a worktree directory directly as its own VS Code workspace gives that directory its own
+history. Home directories under OneDrive or Dropbox sync user-scoped history, but simultaneous
+runs of the same project on two synced machines are unsupported because PIDs and file locks are
+machine-local.
 
 ## Step
 
@@ -72,9 +90,9 @@ Prompts can include structured references that the prompt editor understands:
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `@path/to/file.ts`                             | Attach a full file                                                                                                  |
 | `@path/to/dir/`                                | Attach a directory tree                                                                                             |
-| `@./path/to/file.ts`, `@../path/to/file.ts`    | Attach a file relative to the workflow file                                                                        |
+| `@./path/to/file.ts`, `@../path/to/file.ts`    | Attach a file relative to the workflow file                                                                         |
 | `#selection:path/to/file.ts:10-25`             | Attach a line range                                                                                                 |
-| `#selection:./path/to/file.ts:10-25`            | Attach a line range relative to the workflow file                                                                   |
+| `#selection:./path/to/file.ts:10-25`           | Attach a line range relative to the workflow file                                                                   |
 | `#sym.<kind>:path/to/file.ts:SymbolName:42-60` | Attach a symbol definition; ctrlyoke inserts the kind, while `#sym:path:SymbolName:42-60` remains valid and generic |
 | `~diff`, `~staged`, `~stash:0`, `~<commit>`    | Attach git change context                                                                                           |
 | `$previous`, `$all`, `$step:1`                 | Inject prior ctrlyoke output                                                                                        |

@@ -5,7 +5,7 @@
 `.ctrlyoke/attachments/` and `.ctrlyoke/prompts/` currently serve two populations with nothing in
 common:
 
-- files referenced from an **ephemeral run** under `.runs/` — pasted debug screenshots, prompts
+- files referenced from an **ephemeral run** in run storage — pasted debug screenshots, prompts
   composed in the dashboard. Lifetime: the run. Never leave the machine.
 - files referenced from a **durable, committed workflow** — the hand-authored YAML case. Lifetime:
   the repo. Must travel with it.
@@ -25,7 +25,7 @@ silently breaking anything.
 ## 1. Where workflows live
 
 **By default, work you do in the dashboard is machine-local.** Composing, queueing, appending, and
-running all happen inside `.ctrlyoke/.runs/`, which is gitignored — along with the screenshots you
+running all happen in ephemeral run storage, which is outside the workspace by default — along with the screenshots you
 paste and the prompt files you create along the way. Most of that work is a conversation, not an
 artifact, so none of it reaches a commit unless you ask for it.
 
@@ -33,14 +33,15 @@ artifact, so none of it reaches a commit unless you ask for it.
 `*.prompt.md` anywhere in the repo is tracked like any other source file, as is everything under
 `templates/`. You get one by writing it directly or by exporting a run with Save As.
 
-**How much is ignored is a dial, not a fixed setting.** `.ctrlyoke/.gitignore` is a plain file the
-user owns; someone who wants their runs in source control edits it (see §4 for the one caveat that
-makes that stick). So the split above is a default, not a mode the user is in.
+**Run-history locality is a setting, not a `.gitignore` dial.**
+`storage.runHistoryLocation` selects user-scoped project storage by default or workspace storage
+beside the repo. Workspace mode still ignores `.runs/`, and the setting is not a sharing mechanism;
+the explicit run export is the portable form.
 
 Two supporting facts:
 
 - **ctrlyoke's persistence already assumes the ephemeral default.** `isFavorite` lives in the
-  lineage descriptor at `.ctrlyoke/.runs/<workflowKey>/workflow.json`
+  lineage descriptor in run storage at `<workflowKey>/workflow.json`
   (`WorkflowLineageRepository.ts:86`), which is gitignored — a favorite is a machine-local bookmark
   by construction. Runs, their definitions, and their metadata are all per-machine.
 - **Save As is the only path _out_ of the ephemeral side.** Favorites don't travel, runs don't
@@ -149,19 +150,19 @@ Sibling layout's one real weakness is "move the YAML, forget the assets". Mitiga
 
 The rule is about _where a reference points_, not what kind of reference it is:
 
-| Reference                                                            | Action                                                                                         |
-| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Lone step `prompt` resolving into `.ctrlyoke/prompts/**`             | **inline** the resolved content, including `""` for an empty draft                             |
-| Inline `@`, `#selection:`, or `#sym` into `.ctrlyoke/attachments/**` | **copy** the underlying file into `<basename>.assets/`; rebuild the token with the new path    |
-| Inline `@`, `#selection:`, or `#sym` into `.ctrlyoke/prompts/**`     | copy + rewrite — **do not inline** (see below)                                                 |
-| Inline ref into a manifested `*.assets/**` file                     | copy + rewrite into the destination bundle's assets directory; manifest ownership makes it managed |
-| Directory `@.../` into either generated store                        | block save and ask for explicit file refs; copying the shared store would leak unrelated files |
-| Inline ref into ordinary repo files (`src/…`)                        | leave alone — travels with the repo                                                            |
-| Missing generated-store ref or anything under `.ctrlyoke/temp/**`    | block save — emitting a knowingly incomplete artifact violates the goal                        |
-| Generated-store path containing `{{var}}`                            | block save — export cannot know which runtime file to copy                                     |
-| Lone absolute prompt-file path outside the workspace                 | warn and leave unchanged; it is deliberately machine-specific                                  |
-| Inline absolute path outside the workspace                           | block save; `ContextExpander` already blocks it at execution                                   |
-| Script command/path into `.ctrlyoke/scripts/**`                      | leave alone — `scripts/` is tracked                                                            |
+| Reference                                                            | Action                                                                                             |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Lone step `prompt` resolving into `.ctrlyoke/prompts/**`             | **inline** the resolved content, including `""` for an empty draft                                 |
+| Inline `@`, `#selection:`, or `#sym` into `.ctrlyoke/attachments/**` | **copy** the underlying file into `<basename>.assets/`; rebuild the token with the new path        |
+| Inline `@`, `#selection:`, or `#sym` into `.ctrlyoke/prompts/**`     | copy + rewrite — **do not inline** (see below)                                                     |
+| Inline ref into a manifested `*.assets/**` file                      | copy + rewrite into the destination bundle's assets directory; manifest ownership makes it managed |
+| Directory `@.../` into either generated store                        | block save and ask for explicit file refs; copying the shared store would leak unrelated files     |
+| Inline ref into ordinary repo files (`src/…`)                        | leave alone — travels with the repo                                                                |
+| Missing generated-store ref or anything under `.ctrlyoke/temp/**`    | block save — emitting a knowingly incomplete artifact violates the goal                            |
+| Generated-store path containing `{{var}}`                            | block save — export cannot know which runtime file to copy                                         |
+| Lone absolute prompt-file path outside the workspace                 | warn and leave unchanged; it is deliberately machine-specific                                      |
+| Inline absolute path outside the workspace                           | block save; `ContextExpander` already blocks it at execution                                       |
+| Script command/path into `.ctrlyoke/scripts/**`                      | leave alone — `scripts/` is tracked                                                                |
 
 **Why inline a lone prompt-file body but copy an `@ref` to the same file:** these are two different
 mechanisms. A lone path as a step's `prompt` is resolved through the shared `PromptFileResolver` —
@@ -206,7 +207,7 @@ explicit reconfirmation. Never delete a larger/different set than the one the us
   `WorkflowSerializer.handleSaveWorkflow()` (`:499-523`). It returns a rewritten clean object plus
   a typed copy/warning/blocker/prune plan; it does not perform writes while discovering references.
   Pass the semantic source-definition path from the addressed lineage into the analyzer so lone
-  prompt refs use the same base as execution; never resolve them relative to the `.runs/` working
+  prompt refs use the same base as execution; never resolve them relative to the run-storage working
   copy.
 - Reference discovery covers top-level `prompt`, every prompt step, and `finalStep`. Use the
   runtime parser `parseAllFileReferences()` from `src/utils/FileReferenceParser.ts` plus
@@ -248,10 +249,10 @@ explicit reconfirmation. Never delete a larger/different set than the one the us
 ## 4. The self-ignoring `.gitignore` trap
 
 `.ctrlyoke/.gitignore` lists itself, which is what keeps a fresh init from dirtying the worktree.
-The trap: a user who edits it — to start tracking runs, say — makes a change that (a) never travels,
+The trap: a user who edits it to change runtime tracking makes a change that (a) never travels,
 because the file ignores itself, and (b) cannot be reconciled on the other machine, which
-regenerates the defaults and silently re-ignores everything. Two clones of one repo, different
-tracking behavior, no signal anywhere.
+regenerates missing defaults. `ensureGitignore` is append-only, so deleting an entry does not
+survive activation; use `storage.runHistoryLocation` for locality and explicit export for sharing.
 
 **Decision:** say so at the top of every newly generated file, with the self-ignore line last:
 
@@ -299,20 +300,20 @@ work items across both plans. `PFE` = `dev/implemented/PROMPT_FILE_EXTRACTION_PL
 **Each step must tick its own row to `done` when it commits** — this table is the cross-session
 record of what has actually landed.
 
-| #   | Step                                              | Covers          | Status |
-| --- | ------------------------------------------------- | --------------- | ------ |
-| 1   | `.gitignore` header + self-ignore warning         | WP §4 / P1      | done   |
-| 2   | Shared `PromptFileResolver` (refactor only)       | PFE §4.4 / P1   | done   |
-| 3   | Just-in-time resolution contract                  | PFE §4.4, §3.1a | done   |
-| 4   | Serializer field completeness (`executionMode`)   | WP §3.4         | done   |
-| 5   | Bundle analyzer (`src/utils/WorkflowBundleAnalyzer.ts`) | WP §3.2 / P3 | done   |
-| 6   | Bundle writer, manifest, Save-As/template wiring  | WP §3.4 / P3    | done   |
-| 7   | Save-dialog bundle disclosure + plan fingerprint  | WP §3.3 / P3    | done   |
-| 8   | Gitignore toggle → icon-only; prune label API     | PFE §2.2 / P2   | done   |
-| 9   | Prompt-file writer + message contract             | PFE §4.1-4.2    | done   |
-| 10  | Convert button + empty-file UX                    | PFE §2.1, §3.1a | done   |
-| 11  | Delete `createPromptFile` / `createDraftPrompt`   | PFE §5 / P5     | done   |
-| 12  | Missing-assets warning, ignore entries, docs      | WP P5-P7        | done   |
+| #   | Step                                                    | Covers          | Status |
+| --- | ------------------------------------------------------- | --------------- | ------ |
+| 1   | `.gitignore` header + self-ignore warning               | WP §4 / P1      | done   |
+| 2   | Shared `PromptFileResolver` (refactor only)             | PFE §4.4 / P1   | done   |
+| 3   | Just-in-time resolution contract                        | PFE §4.4, §3.1a | done   |
+| 4   | Serializer field completeness (`executionMode`)         | WP §3.4         | done   |
+| 5   | Bundle analyzer (`src/utils/WorkflowBundleAnalyzer.ts`) | WP §3.2 / P3    | done   |
+| 6   | Bundle writer, manifest, Save-As/template wiring        | WP §3.4 / P3    | done   |
+| 7   | Save-dialog bundle disclosure + plan fingerprint        | WP §3.3 / P3    | done   |
+| 8   | Gitignore toggle → icon-only; prune label API           | PFE §2.2 / P2   | done   |
+| 9   | Prompt-file writer + message contract                   | PFE §4.1-4.2    | done   |
+| 10  | Convert button + empty-file UX                          | PFE §2.1, §3.1a | done   |
+| 11  | Delete `createPromptFile` / `createDraftPrompt`         | PFE §5 / P5     | done   |
+| 12  | Missing-assets warning, ignore entries, docs            | WP P5-P7        | done   |
 
 Ordering constraints this split honors: step 3 precedes every consumer of file-backed prompts;
 steps 5-7 (bundling) precede steps 9-10 (the writer), which precede step 12 (the ignore entries).
@@ -351,19 +352,18 @@ landed, so the prompt-file writer steps may proceed.
 - `QUICK_START.md`, `docs/guide/` — state what's ignored, how to make a workflow durable, and that
   the `.gitignore` is editable. No mode vocabulary (§1). Draft copy:
 
-  > **Workflows you build in the dashboard stay on your machine.** Everything you queue, run, and
-  > edit lives under `.ctrlyoke/.runs/`, which ctrlyoke gitignores — including screenshots you paste
-  > and prompt files you create along the way. Most of that work is a conversation, not an artifact,
-  > so nothing lands in your commits by default.
+  > **Workflows you build in the dashboard stay on your machine.** By default, run history is
+  > user-scoped in the ctrlyoke state home; workspace mode keeps it beside the repo and still
+  > ignores `.runs/`. Attachments and prompts remain workspace-scoped because harnesses read them
+  > through `@` references. The storage setting controls locality and durability, not sharing.
   >
   > **When a workflow turns out to be worth keeping, use Save As.** It writes a portable copy — the
   > workflow file plus any assets it depends on — anywhere you choose in the repo. That copy is
   > yours to commit and share. You can also just write a `.ctrlyoke.yaml` by hand; files you author
   > are tracked like any other source file.
   >
-  > **Want your runs committed instead?** Edit `.ctrlyoke/.gitignore` and remove the lines you want
-  > tracked — but delete the `.gitignore` line at the bottom first, or your change stays on this
-  > machine.
+  > **Want to share a run?** Use the explicit run export described in
+  > `dev/backlog/RUN_EXPORT_PLAN.md`; `storage.runHistoryLocation` is not a sharing mechanism.
 
 - `docs/reference/commands.md` — Save As now bundles; say what it copies and what it inlines.
 - `.github/instructions/` — the tracking rule and the "ignoring `prompts/`/`attachments/` is only
@@ -388,7 +388,7 @@ assets (§8.5).
 The alternative — teach reference resolution a workflow-file-relative base so `@./fix-tests.assets/
 shot.png` works and the pair is freely movable — is a genuine cross-layer change with a wrinkle
 that is easy to miss: **at execution time the workflow being run is the working file inside
-`.runs/<key>/run-<ts>/`, not the file the user saved.** "Relative to the workflow file" would have
+run storage `<key>/run-<ts>/`, not the file the user saved.** "Relative to the workflow file" would have
 to mean `descriptor.originalFile`, which is optional and can go stale. Not worth it for v1.
 
 **Decision: workspace-relative rewrite.** Revisit only if moving exported pairs turns out to be

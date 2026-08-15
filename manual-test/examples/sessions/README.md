@@ -167,7 +167,7 @@ After running a workflow, check the working file to verify session continuity:
 
 ```bash
 # View working file
-cat .ctrlyoke/.runs/<workflowKey>/run-<timestamp>/workflow.ctrlyoke.json
+cat <run-storage>/<workflowKey>/run-<timestamp>/workflow.ctrlyoke.json
 ```
 
 **Expected Structure:**
@@ -216,7 +216,7 @@ prompts:
 
 **Check:**
 
-1. Run definition exists: `.ctrlyoke/.runs/<workflowKey>/run-<timestamp>/workflow.ctrlyoke.json`
+1. Run definition exists in run storage: `<workflowKey>/run-<timestamp>/workflow.ctrlyoke.json`
 2. Previous prompt has `_runtime.sessionId`
 3. Harnesss match (Copilot → Copilot, not Copilot → Claude)
 4. Session ID format valid for harness

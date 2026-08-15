@@ -37,7 +37,7 @@ function sleep(ms: number): Promise<void> {
  * WorkflowLockManager
  *
  * Exclusive, owner-token-safe runner-lock CRUD for workflow process coordination.
- * Lock files live at `.ctrlyoke/.runs/<workflowKey>/runner.json` — one per lineage, naming
+ * Lock files live in run storage at `<workflowKey>/runner.json` — one per lineage, naming
  * the exact `RunRef` currently executing (never merely the viewed run).
  *
  * Acquire is a true `fs.open(path, "wx")` exclusive create (mirroring `FileLockUtils`),
@@ -236,7 +236,7 @@ export class WorkflowLockManager {
   /**
    * Normalize stale locks on extension startup.
    *
-   * Scans every lineage directory under `.ctrlyoke/.runs/`. For each lineage whose
+   * Scans every lineage directory under run storage. For each lineage whose
    * locked `RunRef`'s `_runtime.executionState` is active (running/pausing/cancelling):
    *   - "none" or "stale" lock  → writes "stopped" to that run's `_runtime.executionState`,
    *     cleans up any stale lock file

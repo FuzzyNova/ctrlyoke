@@ -196,7 +196,7 @@ export class PromptEditorSupportService {
   /**
    * Validate whether a file-ref path typed in the prompt editor resolves to
    * an actual readable file. The source directory comes from the addressed
-   * lineage descriptor, never from the `.runs/...` working copy.
+   * lineage descriptor, never from the run-storage working copy.
    */
   async handleFileRefValidation(
     ctx: WebviewClientContext,

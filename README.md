@@ -276,7 +276,7 @@ The ctrlyoke panel opens in the VS Code bottom panel area and contains:
 | `ctrlyoke: Open ctrlyoke Panel`         | Open the dashboard in the bottom panel                |
 | `ctrlyoke: New Workflow from Template`  | Create a workflow from a built-in or custom template  |
 | `ctrlyoke: New Blank Workflow`          | Clear the dashboard and start with an empty workflow  |
-| Editor convert button                  | Write a step prompt to `.ctrlyoke/prompts/`           |
+| Editor convert button                   | Write a step prompt to `.ctrlyoke/prompts/`           |
 | `ctrlyoke: Run with ctrlyoke`           | Run a prompt file (Explorer / editor context menu)    |
 | `ctrlyoke: Load in ctrlyoke`            | Load a prompt file into the dashboard without running |
 | `ctrlyoke: Queue with ctrlyoke`         | Append prompts to the end of the active queue         |
@@ -376,12 +376,13 @@ not determine workflow field support.
 
 ### Output and history
 
-| Setting                | Default | Description                                                                                     |
-| ---------------------- | ------- | ----------------------------------------------------------------------------------------------- |
-| `showCliOutput`        | `true`  | Show CLI output in the Output panel                                                             |
-| `showCliCommand`       | `false` | Show the full CLI invocation in the dashboard                                                   |
-| `runs.maxRuns`         | `-1`    | Maximum completed runs retained per workflow lineage; `-1` keeps all runs in `.ctrlyoke/.runs/` |
-| `enableDiagnosticLogs` | `false` | Write diagnostic logs to `.ctrlyoke/logs/`                                                      |
+| Setting                      | Default | Description                                                                                                                                                 |
+| ---------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `showCliOutput`              | `true`  | Show CLI output in the Output panel                                                                                                                         |
+| `showCliCommand`             | `false` | Show the full CLI invocation in the dashboard                                                                                                               |
+| `runs.maxRuns`               | `-1`    | Maximum completed runs retained per workflow lineage; `-1` keeps all runs in run storage                                                                    |
+| `storage.runHistoryLocation` | `user`  | `user` keeps project-keyed history under the ctrlyoke state home; `workspace` keeps it beside the repo. This controls locality and durability, not sharing. |
+| `enableDiagnosticLogs`       | `false` | Write diagnostic logs to `.ctrlyoke/logs/`                                                                                                                  |
 
 ---
 

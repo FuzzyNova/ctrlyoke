@@ -374,7 +374,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
   /**
    * Restore queue state from a working file (including runtime state)
-   * This is used when resuming a previous session from .ctrlyoke/.runs
+   * This is used when resuming a previous session from run storage.
    * @param workingFilePath Path to the working file
    */
   async restoreFromWorkingFile(

@@ -226,15 +226,22 @@ Error behavior:
   </executionAndValidation>
 
 <stateAndTroubleshooting>
-Workspace files:
-- `.ctrlyoke/.runs/<workflowKey>/workflow.json`: lineage descriptor (name, favorite, latest run).
-- `.ctrlyoke/.runs/<workflowKey>/runner.json`: runner lock naming the exact executing run; stale dead-PID locks can make a workflow look already running.
-- `.ctrlyoke/.runs/<workflowKey>/draft/workflow.ctrlyoke.json`: not-yet-executed definition, before the first run.
-- `.ctrlyoke/.runs/<workflowKey>/run-<timestamp>/workflow.ctrlyoke.json`: that run's live working copy and runtime state.
-- `.ctrlyoke/.runs/<workflowKey>/run-<timestamp>/events.jsonl`: per-step output events.
-- `.ctrlyoke/.runs/<workflowKey>/run-<timestamp>/manifest.json`: run metadata and summary.
+Run storage (resolved by `WorkflowPaths.runsRoot(stateRoot)`):
+- Default user mode: `<ctrlyokeStateHome>/projects/<slug>-<hash12>/.runs/<workflowKey>/`.
+- Workspace mode: `<stateRoot>/.ctrlyoke/.runs/<workflowKey>/`.
+- `workflow.json`: lineage descriptor (name, favorite, latest run).
+- `runner.json`: runner lock naming the exact executing run; stale dead-PID locks can make a workflow look already running.
+- `draft/workflow.ctrlyoke.json`: not-yet-executed definition, before the first run.
+- `run-<timestamp>/workflow.ctrlyoke.json`: that run's live working copy and runtime state.
+- `run-<timestamp>/events.jsonl`: per-step output events.
+- `run-<timestamp>/manifest.json`: run metadata and summary.
 - `.ctrlyoke/logs/ctrlyoke-<timestamp>.log`: main session log.
 - `.ctrlyoke/logs/ctrlyoke-<harness>-hook-debug.log`: hook/notification debug log for completion detection.
+
+Managed worktree runs keep the initiating checkout's `stateRoot` and history. Opening a worktree
+directory directly as its own VS Code workspace gives it its own history. User-scoped history
+under OneDrive or Dropbox syncs, but the same project must not run simultaneously on two synced
+machines because PIDs and file locks are machine-local.
 
 Troubleshooting checklist:
 
@@ -243,9 +250,9 @@ Troubleshooting checklist:
 3. Check Global Settings -> Workflow Defaults for default harness/model and per-harness extra args.
 4. Check Workflow Properties -> Harness for workflow-level overrides and the effective model.
 5. If a prompt never completes, check the harness hook debug log and whether interactive/headless mode matches the harness behavior.
-6. If a workflow appears stuck or already running, inspect `.ctrlyoke/.runs/<workflowKey>/runner.json` for a stale lock.
+6. If a workflow appears stuck or already running, inspect the run-storage `<workflowKey>/runner.json` for a stale lock.
 7. If retries behave oddly, inspect the end-condition script, `compareSource`, timeout, and the run's `events.jsonl`.
-8. If history/search output is missing, inspect `.ctrlyoke/.runs/<workflowKey>/` directly.
+8. If history/search output is missing, inspect the run-storage `<workflowKey>/` directory directly.
 9. If MCP tools are unavailable, confirm `mcpServers` includes the server at the right scope and that the target harness supports the exported config path.
 10. If the dashboard is read-only, the workflow may be CLI-managed or actively running.
     </stateAndTroubleshooting>

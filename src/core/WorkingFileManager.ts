@@ -188,7 +188,8 @@ export interface IWorkingFileQueueAccess {
 }
 
 /**
- * Manages run/draft working file (.ctrlyoke/.runs/<workflowKey>/{draft,run-<ts>}/workflow.ctrlyoke.json) persistence.
+ * Manages run/draft working-file persistence in run storage under
+ * `<workflowKey>/{draft,run-<ts>}/workflow.ctrlyoke.json`.
  *
  * Extracted from PromptQueue to separate file I/O concerns from queue state management.
  * All serialized operations go through an internal operation queue to prevent races.
@@ -1708,9 +1709,9 @@ export class WorkingFileManager {
         const workingFile = await this.readWorkingFile(workingFilePath);
         const currentRuntime =
           workingFile._runtime ?? {
-            currentIndex: this.queueAccess.getCurrentIndex(),
-            executionState: this.queueAccess.getStatus(),
-          };
+          currentIndex: this.queueAccess.getCurrentIndex(),
+          executionState: this.queueAccess.getStatus(),
+        };
         workingFile._runtime = {
           ...currentRuntime,
           worktree: {
@@ -1744,9 +1745,9 @@ export class WorkingFileManager {
         const workingFile = await this.readWorkingFile(workingFilePath);
         const currentRuntime =
           workingFile._runtime ?? {
-            currentIndex: this.queueAccess.getCurrentIndex(),
-            executionState: this.queueAccess.getStatus(),
-          };
+          currentIndex: this.queueAccess.getCurrentIndex(),
+          executionState: this.queueAccess.getStatus(),
+        };
         workingFile._runtime = {
           ...currentRuntime,
           worktreeNotice: notice,

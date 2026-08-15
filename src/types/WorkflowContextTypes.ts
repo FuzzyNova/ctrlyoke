@@ -18,7 +18,7 @@ import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver"
  * callers from adding an ad-hoc cwd override.
  */
 export interface ExecutionWorkspace {
-  /** Where ctrlyoke stores .ctrlyoke/.runs, history, queue state, and locks. */
+  /** The resolved run-storage state root for history, queue state, and locks. */
   readonly stateRoot: string;
 
   /** The cwd used by the harness, scripts, conditions, and temp prompt files. */

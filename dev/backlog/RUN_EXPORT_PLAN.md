@@ -5,13 +5,13 @@
 > **Problem in one line:** run history is machine-local and about to become
 > user-scoped, so there is no supported way to hand someone a run — and
 > `USER_SCOPED_RUN_HISTORY_PLAN.md` §2.6.1 rules out the obvious workaround of
-> committing `.runs/`.
+> committing the run-storage directory.
 >
 > **Relationship to neighbours.** `USER_SCOPED_RUN_HISTORY_PLAN.md` §2.6.2 names
 > this document as the answer it defers to. `HARNESS_SESSION_IMPORT_PLAN.md`
 > already specifies the run **materializer** this plan's importer reuses — one
 > materializer, two sources. `WORKFLOW_RELATIVE_ASSET_REFS_PLAN.md` listed
-> "making `.runs/` state portable" as an explicit non-goal; this is where that
+> "making live run storage portable" as an explicit non-goal; this is where that
 > gets picked up.
 
 ---
@@ -262,7 +262,7 @@ stranger.
 - Not a sync mechanism, and not shared live history. A bundle is a snapshot.
 - Does not change where run history is stored — orthogonal to
   `storage.runHistoryLocation`.
-- Does not make `.runs/` itself committable; the bundle is the committable form.
+- Does not make live run storage itself committable; the bundle is the committable form.
 - No round-trip fidelity guarantee. Redaction is lossy on purpose, and identity
   is intentionally not preserved.
 

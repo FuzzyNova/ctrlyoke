@@ -39,10 +39,12 @@ Use one of these entry points:
 
 ## Make a workflow durable
 
-**Workflows you build in the dashboard stay on your machine.** Everything you queue, run, and
-edit lives under `.ctrlyoke/.runs/`, which ctrlyoke gitignores — including screenshots you paste
-and prompt files you create along the way. Most of that work is a conversation, not an artifact,
-so nothing lands in your commits by default.
+**Workflows you build in the dashboard stay on your machine.** By default, run history is
+user-scoped under `<ctrlyokeStateHome>/projects/<slug>-<hash12>/.runs/`, keyed from the resolved
+`stateRoot`. It is outside the workspace and harness sandbox because only ctrlyoke reads it.
+Attachments and prompts remain ephemeral workspace-scoped files under `.ctrlyoke/` because the
+harness reads them through `@` references. User-level, project-keyed session history is a familiar
+pattern from Claude and Codex.
 
 **When a workflow turns out to be worth keeping, use Save As.** It writes a portable copy — the
 workflow file plus any assets it depends on — anywhere you choose in the repo. Save As copies
@@ -55,12 +57,22 @@ original subject matter. Files you author directly, such as a
 
 The generated `.ctrlyoke/.gitignore` ignores `.runs/`, `attachments/`, `prompts/`, logs, temporary
 files, and other machine-local runtime data. It does not ignore exported `<workflow>.assets/`
-directories. The `.gitignore` is editable: remove the entries for anything you want tracked, but
-delete the `.gitignore` self-ignore line at the bottom first. That marks the file as user-owned, so
-ctrlyoke no longer restores removed defaults and the change can be committed. Managed-worktree
-landing accepts deliberately tracked prompts, attachments, and other non-sensitive runtime files,
-but rejects non-ignored untracked runtime output. It always rejects `certs/`, `notifications/`,
-`temp/`, and `logs/`, even if tracked.
+directories. Set `storage.runHistoryLocation` to `workspace` to keep history beside the repo at
+`<stateRoot>/.ctrlyoke/.runs/`; workspace mode still ignores `.runs/`. The setting controls
+locality and durability, not sharing. Since `ensureGitignore` is append-only, removing entries is
+restored on activation. Use the explicit run export described in
+`dev/backlog/RUN_EXPORT_PLAN.md` to share a run.
+
+Durable workflows are files you export with Save As, hand-author anywhere in the repo, or promote
+to a template. Templates are the reusable form of a workflow you run often; Save As creates a
+copy. Managed-worktree landing accepts deliberately tracked prompts, attachments, and other
+non-sensitive runtime files, but rejects non-ignored untracked runtime output. It always rejects
+`certs/`, `notifications/`, `temp/`, and `logs/`, even if tracked.
+
+Managed worktree runs use the initiating checkout's history. Opening a worktree directory directly
+as its own VS Code workspace gives it its own history. OneDrive/Dropbox home directories sync
+user-scoped history, but simultaneous runs of the same project on two synced machines are
+unsupported because PIDs and file locks are machine-local.
 
 `settings.json` is tracked by default as project configuration. Its `server.certPath` and
 `server.keyPath` fields are machine-local and should point to files available on each machine.

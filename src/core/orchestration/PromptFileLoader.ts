@@ -163,7 +163,7 @@ export class PromptFileLoader {
 
     await this.validateAndReportCompatibility(promptFile);
 
-    // Create the lineage's draft under .ctrlyoke/.runs/<workflowKey>/draft/
+    // Create the lineage's draft under run storage/<workflowKey>/draft/.
     let workingFilePath: string | undefined;
     if (workspaceFolderPath) {
       try {

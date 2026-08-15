@@ -816,7 +816,7 @@ export class CtrlYokeMCPServer {
    * business enumerating the workspace's workflows.
    */
   private async handleGlobalStatus(args: unknown) {
-    log("Scanning .runs/ for all workflow lineages:", this.workspaceRoot);
+    log("Scanning run storage for all workflow lineages:", this.workspaceRoot);
 
     try {
       this.requireRunAddress("global_status");

@@ -250,7 +250,7 @@ workflow list.
 ### Backfill for pre-existing runs
 
 Every run that finished before this ships is absent from the store. Yes — the
-backfill scrapes `.ctrlyoke/.runs`, reading each run's `manifest.json` (never its
+backfill scrapes each project's run storage, reading each run's `manifest.json` (never its
 `events.jsonl`) and folding `tokenTotals` + lifecycle fields into the totals.
 
 **The existing config gate covers both stores** (decided). `feedObservedHarnessUsage`
@@ -585,40 +585,40 @@ Phase 1 is independently shippable and is the fix for the stated problem.
 ## Acceptance Criteria
 
 - [x] `DefaultsHarnessPage` / `HarnessesSection` render no usage data and send no
-  usage messages; every usage surface in the drawer lives on the Stats page.
+      usage messages; every usage surface in the drawer lives on the Stats page.
 - [x] Lifetime totals derive only from persisted `WorkflowTokenTotals`; nothing on
-  this page reparses `events.jsonl`, OTel spans, or provider transcripts.
+      this page reparses `events.jsonl`, OTel spans, or provider transcripts.
 - [x] Repeated terminal notifications and same-run continuations replace one durable
-  run contribution rather than double-counting — same guarantee the observed
-  store already makes.
+      run contribution rather than double-counting — same guarantee the observed
+      store already makes.
 - [x] Workflow count includes draft-only lineages; run count does not.
 - [x] Duration is pause-aware where available, and the page discloses how many runs
-  fall back to wall clock rather than blending the two silently.
+      fall back to wall clock rather than blending the two silently.
 - [x] **No run is ever excluded from the totals for being old or for exceeding a
-  count threshold**, and **no run ever becomes unrevisable.** Appending to,
-  continuing, or editing a run of any age updates the totals correctly, with no
-  double-counting. Regression test: count a run, advance the clock past any
-  cache/window horizon, evict the recent-contribution cache, continue that run,
-  and assert the totals reflect the new value rather than the sum of both.
+      count threshold**, and **no run ever becomes unrevisable.** Appending to,
+      continuing, or editing a run of any age updates the totals correctly, with no
+      double-counting. Regression test: count a run, advance the clock past any
+      cache/window horizon, evict the recent-contribution cache, continue that run,
+      and assert the totals reflect the new value rather than the sum of both.
 - [x] The always-read stats document and the per-lineage index are O(lineages), not
-  O(runs): totals for a workspace with millions of runs load without parsing a
-  per-run ledger.
+      O(runs): totals for a workspace with millions of runs load without parsing a
+      per-run ledger.
 - [x] Backfill is bounded in concurrency and memory, resumable across interruption
-  via mid-scan checkpoints, idempotent, and reports progress; unreadable
-  manifests are counted and disclosed, never silently dropped.
+      via mid-scan checkpoints, idempotent, and reports progress; unreadable
+      manifests are counted and disclosed, never silently dropped.
 - [x] Freshness gating never determines correctness: with every directory mtime
-  stale or unavailable, the counted-interval check still counts every run.
+      stale or unavailable, the counted-interval check still counts every run.
 - [x] A full rebuild reproduces the same totals as incremental accumulation.
 - [x] The share bar is never the only encoding of a value; the rows carry the
-  numbers as text and the bar is `aria-hidden`.
+      numbers as text and the bar is `aria-hidden`.
 - [x] Zero-usage harnesses never render as an empty row or a zero-width segment.
 - [x] Export payloads contain no workflow name, workflow key, run ref, file path, or
-  account identifier, and carry the scope + estimate disclaimers.
+      account identifier, and carry the scope + estimate disclaimers.
 - [x] `ui.hideCost` suppresses cost on the page and in every export format.
 - [x] Stats collection, backfill, refresh failures, and malformed store files are
-  all non-blocking for workflow execution.
+      all non-blocking for workflow execution.
 - [x] Opening the settings drawer is no slower than before; stats load on tab
-  activation.
+      activation.
 
 ---
 
@@ -642,8 +642,8 @@ Resolved August 11, 2026:
 3. **`activeExecutionMs` is added to `WorkflowRunManifest`.** Manifest only; no
    `workflow-schema.json` entry needed, since that schema validates
    `**/*.ctrlyoke.json` and not `manifest.json`.
-4. **The backfill scrapes `.ctrlyoke/.runs`, gated by per-lineage directory
-   mtime — not a single `.runs` root mtime.** A root-level check would miss runs
+4. **The backfill scrapes each project's run storage, gated by per-lineage directory
+   mtime — not a single run-storage root mtime.** A root-level check would miss runs
    added inside existing lineages. mtime is an optimization layered over the
    counted-interval index, which remains the correctness mechanism. See
    [Backfill](#backfill-for-pre-existing-runs).
@@ -674,7 +674,7 @@ Resolved August 11, 2026:
 ## Appendix — Working-File Schema Squiggles (fixed alongside this plan)
 
 While confirming that `activeExecutionMs` needed no schema change, a validation
-sweep of all 1,020 working files under `.ctrlyoke/.runs` found **862 of them
+sweep of all 1,020 working files in the project's run storage found **862 of them
 already failing** `schemas/workflow-schema.json`. Fixed in the same change:
 
 | Cause                                                                                                             | Files | Fix                                                                                                                     |

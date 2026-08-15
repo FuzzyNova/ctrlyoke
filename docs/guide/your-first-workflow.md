@@ -57,4 +57,7 @@ finalStep:
 
 ## After the first run
 
-Open the run's working file under `.ctrlyoke/.runs/<workflowKey>/run-<timestamp>/` if you want to inspect persisted runtime metadata such as the resolved harness, model, session ID, and timestamps.
+Open the run's working file under run storage at `<workflowKey>/run-<timestamp>/` if you want to
+inspect persisted runtime metadata such as the resolved harness, model, session ID, and
+timestamps. User mode stores this under the ctrlyoke state home; workspace mode stores it under
+`<stateRoot>/.ctrlyoke/.runs/`.

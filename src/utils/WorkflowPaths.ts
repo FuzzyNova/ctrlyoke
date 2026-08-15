@@ -8,7 +8,7 @@ import { TIMELINE_STORAGE_FILES } from "../types/WorkflowTimelineTypes";
 import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
 
 /**
- * Canonical, VS Code-free authority for the `.runs/<workflowKey>/...` layout.
+ * Canonical, VS Code-free authority for the run-storage `.runs/<workflowKey>/...` layout.
  *
  * This is the *only* module allowed to construct a `.runs` path from raw parts, mint or
  * validate a `WorkflowKey`/`RunRef`, or decide whether a path is safely contained within
@@ -312,7 +312,7 @@ function assertContained(workspaceRoot: string, candidate: string): void {
 
 // ---- Directory-entry classification (for scans) ----
 
-/** True for direct children of `.runs/` that are real, addressable lineage directories. */
+/** True for direct children of the run-storage `.runs/` root that are real lineage directories. */
 export function isLineageDirEntry(entry: fs.Dirent): boolean {
   return (
     entry.isDirectory() &&
@@ -343,7 +343,7 @@ export interface ParsedRunFilePath {
 }
 
 /**
- * Parses `.../.runs/<workflowKey>/<runRef>/workflow.ctrlyoke.json` back into its address.
+ * Parses a run-storage `.runs/<workflowKey>/<runRef>/workflow.ctrlyoke.json` path back into its address.
  * Returns `undefined` for anything that isn't exactly that shape (draft files, other
  * artifacts, and paths outside the runs root all return `undefined` — use
  * `parseRunArtifactPath` for the more permissive form).

@@ -14,7 +14,7 @@ import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
  * RESPONSIBILITY: Session Persistence & Recovery
  *
  * Handles session management including:
- * - Auto-loading most recent session from .ctrlyoke/.runs/
+ * - Auto-loading most recent session from run storage
  * - Discovering prompt files in workspace
  * - Finding and sorting each lineage's current definition file by recency
  * - Session continuity after VS Code restart or crash
@@ -28,7 +28,7 @@ export class WorkspaceSessionManager {
   ) {}
 
   /**
-   * Auto-load the most recent workflow session from .ctrlyoke/.runs/
+   * Auto-load the most recent workflow session from run storage.
    * This enables seamless resume after VS Code restarts or crashes
    *
    * @param workspaceFolder Current workspace folder
@@ -69,7 +69,7 @@ export class WorkspaceSessionManager {
   }
 
   /**
-   * Resolve the current most-recent working file from .ctrlyoke/.runs/.
+   * Resolve the current most-recent working file from run storage.
    * Reads lineage metadata from disk each time so reconnecting clients always
    * use fresh recency data rather than a startup snapshot.
    */
@@ -183,7 +183,7 @@ export class WorkspaceSessionManager {
   }
 
   /**
-   * Discover all available sessions under .ctrlyoke/.runs/.
+   * Discover all available sessions under run storage.
    * Returns session metadata for UI display.
    *
    * @param workspaceFolder Current workspace folder

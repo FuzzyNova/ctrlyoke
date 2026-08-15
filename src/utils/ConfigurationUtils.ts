@@ -155,7 +155,7 @@ export const PATH_CONSTANTS = {
   /**
    * Attachments directory name (subdirectory of CTRLYOKE_DIR).
    * Content-addressed store for pasted images. Persistent, unlike TEMP_DIR, but
-   * **gitignored**: it holds assets belonging to ephemeral `.runs/` work, and no
+   * **gitignored**: it holds assets belonging to ephemeral run work, and no
    * single ignore rule can serve both those and assets of a durable, committed
    * workflow. The split is made by lifecycle instead — Save As copies the assets
    * a workflow actually references into a tracked sibling `<workflow>.assets/`

@@ -48,10 +48,18 @@ Workflow files themselves can live anywhere in your workspace — at the
 
 ### Tracking and Save As
 
-**Workflows you build in the dashboard stay on your machine.** Everything you queue, run, and
-edit lives under `.ctrlyoke/.runs/`, which ctrlyoke gitignores — including screenshots you paste
-and prompt files you create along the way. Most of that work is a conversation, not an artifact,
-so nothing lands in your commits by default.
+**Workflows you build in the dashboard stay on your machine.** Run history is user-scoped by
+default, under `<ctrlyokeStateHome>/projects/<slug>-<hash12>/.runs/`, keyed from the workspace's
+resolved `stateRoot`. It is outside the workspace and the harness sandbox because only ctrlyoke
+reads it. Most of that work is a conversation, not an artifact, so nothing lands in your commits
+by default.
+
+Attachments and prompts remain ephemeral workspace-scoped files under `.ctrlyoke/`: the harness
+needs to read them through `@` references inside its workspace sandbox. Set
+`storage.runHistoryLocation` to `workspace` when you want run storage beside the repo at
+`<stateRoot>/.ctrlyoke/.runs/`; workspace mode still ignores `.runs/`. The setting controls
+locality and durability, not sharing. User-level, project-keyed session history is a familiar
+pattern from Claude and Codex.
 
 **When a workflow turns out to be worth keeping, use Save As.** It writes a portable copy — the
 workflow file plus any assets it depends on — anywhere you choose in the repo. That copy is yours
@@ -64,12 +72,13 @@ author are tracked like any other source file.
 
 The generated `.ctrlyoke/.gitignore` ignores `.runs/`, `attachments/`, `prompts/`, logs, temporary
 files, and other machine-local runtime data. It does not ignore exported `<workflow>.assets/`
-directories. `settings.json` is tracked by default because it is project configuration; its
-`server.certPath` and `server.keyPath` values are machine-local and should point to local files.
+directories. `ensureGitignore` restores missing entries on activation, so editing the file is not
+the way to share or retain a run. Use an explicit run export when that feature is available; its
+portable bundle is described in `dev/backlog/RUN_EXPORT_PLAN.md`.
 
-**Want your runs committed instead?** Edit `.ctrlyoke/.gitignore` and remove the lines you want
-tracked — but delete the `.gitignore` line at the bottom first, or your change stays on this
-machine.
+**Durable workflows** are ordinary files you export with Save As, hand-author anywhere in the
+repo, or promote to a template. Templates are the reusable form for workflows you run often; Save
+As produces a copy rather than a reusable template.
 
 ---
 
@@ -223,19 +232,19 @@ The script runs in an isolated child process. The `returns` value is compared ag
 
 ## Command Reference
 
-| Command                                | What It Does                                        |
-| -------------------------------------- | --------------------------------------------------- |
-| `ctrlyoke: Open ctrlyoke Panel`        | Open the dashboard sidebar                          |
-| `ctrlyoke: Initialize Workspace`       | Create `.ctrlyoke/` directory structure             |
-| `ctrlyoke: New Workflow from Template` | Create a workflow from a built-in template          |
-| Editor convert button                 | Write a step prompt to `.ctrlyoke/prompts/`         |
+| Command                                | What It Does                                          |
+| -------------------------------------- | ----------------------------------------------------- |
+| `ctrlyoke: Open ctrlyoke Panel`        | Open the dashboard sidebar                            |
+| `ctrlyoke: Initialize Workspace`       | Create `.ctrlyoke/` directory structure               |
+| `ctrlyoke: New Workflow from Template` | Create a workflow from a built-in template            |
+| Editor convert button                  | Write a step prompt to `.ctrlyoke/prompts/`           |
 | Save As from the dashboard             | Write a portable workflow and bundle its dependencies |
-| `ctrlyoke: Run` (editor title bar)     | Run the active workflow file                        |
-| `ctrlyoke: Pause Execution`            | Pause after the current step completes              |
-| `ctrlyoke: Resume Execution`           | Resume a paused workflow                            |
-| `ctrlyoke: Stop Execution`             | Stop and reset the current workflow                 |
-| `ctrlyoke: Resume Session`             | Reconnect to an interrupted session                 |
-| `ctrlyoke: Show Output Panel`          | Open the ctrlyoke output log                        |
+| `ctrlyoke: Run` (editor title bar)     | Run the active workflow file                          |
+| `ctrlyoke: Pause Execution`            | Pause after the current step completes                |
+| `ctrlyoke: Resume Execution`           | Resume a paused workflow                              |
+| `ctrlyoke: Stop Execution`             | Stop and reset the current workflow                   |
+| `ctrlyoke: Resume Session`             | Reconnect to an interrupted session                   |
+| `ctrlyoke: Show Output Panel`          | Open the ctrlyoke output log                          |
 
 Right-click context menu on workflow files:
 
@@ -260,11 +269,18 @@ Settings follow three-tier precedence: prompt-level overrides > workflow-level d
 
 **Workflow stuck after a crash**
 
-Inspect the lineage runner lock at `.ctrlyoke/.runs/<workflowKey>/runner.json` if a workflow appears already running. ctrlyoke checks stale locks on startup; do not remove a lock belonging to a live process.
+Inspect the run-storage lineage's `runner.json` if a workflow appears already running. ctrlyoke
+checks stale locks on startup; do not remove a lock belonging to a live process. Managed worktree
+runs use the initiating checkout's history; opening a worktree directory directly as its own VS
+Code workspace gives it its own history.
 
 **Output is missing or incomplete**
 
-Open `.ctrlyoke/.runs/<workflowKey>/run-<timestamp>/workflow.ctrlyoke.json` for the exact run definition and resumable metadata. Run output is recorded in that run's `events.jsonl`, while `manifest.json` contains its summary.
+Open the run-storage lineage's `run-<timestamp>/workflow.ctrlyoke.json` for the exact run
+definition and resumable metadata. Run output is recorded in that run's `events.jsonl`, while
+`manifest.json` contains its summary. A home directory under OneDrive or Dropbox synchronizes
+user-scoped history, but running the same project simultaneously on two synced machines is
+unsupported: PIDs and file locks are machine-local and cannot coordinate across devices.
 
 ---
 

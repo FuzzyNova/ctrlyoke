@@ -1934,7 +1934,7 @@ export class WorkflowOrchestrator {
    * standalone file picker and the workspace-editor context menu both do), so
    * this goes through `loadPromptFile` to create the lineage's draft — not
    * through `loadWorkflowForClient`, which expects an existing working file
-   * under `.ctrlyoke/.runs/`.
+   * under run storage.
    */
   async loadPromptFileForClient(
     filePath: string,
@@ -2241,7 +2241,7 @@ export class WorkflowOrchestrator {
   /**
    * Return the authored source definition for a client's addressed lineage.
    * This deliberately reads the lineage descriptor rather than deriving a
-   * semantic base from the draft/run working-copy path under `.runs/`.
+   * semantic base from the draft/run working-copy path in run storage.
    */
   async getViewSourceDefinitionPath(clientId: string): Promise<string | null> {
     const address = this.getViewAddress(clientId);

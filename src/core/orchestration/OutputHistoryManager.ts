@@ -118,7 +118,8 @@ export interface RunSummaryRecord {
  * RESPONSIBILITY: Workflow Output History Storage & Retrieval
  *
  * Manages per-run output history for workflows. Runs are stored as
- * manifest.json + events.jsonl timeline data under `.ctrlyoke/.runs/<workflowKey>/<runRef>/`.
+ * manifest.json + events.jsonl timeline data under run storage at
+ * `<workflowKey>/<runRef>/`.
  * `WorkflowLineageRepository` owns the `RunRef` directory itself (created together with
  * the run's `workflow.ctrlyoke.json` at promotion time); this class only populates and
  * maintains the manifest/events pair inside it.

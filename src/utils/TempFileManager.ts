@@ -56,7 +56,7 @@ export class TempFileManager {
    *
    * A sibling of `temp/`, and like it **gitignored** — but for a different
    * reason. `temp/` is swept per turn; this store persists. It is ignored
-   * because most of what lands here belongs to ephemeral `.runs/` work (debug
+   * because most of what lands here belongs to ephemeral run work (debug
    * screenshots pasted mid-conversation), and one directory cannot be both
    * ignored for those and tracked for the assets of a durable workflow. Save As
    * resolves it: exporting a workflow copies the assets it actually references

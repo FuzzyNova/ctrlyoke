@@ -425,7 +425,7 @@ export class WorkflowLineageRepository {
     });
   }
 
-  /** Lists every valid lineage directory's `WorkflowKey` directly under `.runs/`. */
+  /** Lists every valid lineage directory's `WorkflowKey` directly under run storage. */
   async listLineageKeys(workspaceRoot: string): Promise<WorkflowKey[]> {
     const root = WorkflowPaths.runsRoot(workspaceRoot);
     let entries: fs.Dirent[];
