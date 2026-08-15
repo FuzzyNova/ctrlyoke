@@ -73,6 +73,13 @@ import { HarnessCapabilityRegistry } from "./core/HarnessCapabilityRegistry";
 import type { HarnessCapabilitySource } from "./core/HarnessCapabilityRegistry";
 import { PropertyResolver } from "./utils/PropertyResolver";
 import type { WorkflowExecutionPreview } from "./types/ExecutionPreviewTypes";
+import { repoToplevel } from "./utils/GitUtils";
+import {
+  ProjectStateRegistry,
+  getStateHomeWarning,
+} from "./utils/ProjectStateRegistry";
+import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
+import { initializeRunHistoryLocation } from "./utils/RunHistoryStoragePolicy";
 
 // Mark this process as the standalone CLI binary before anything else runs.
 setRuntimeMode(RUNNER_IDS.CLI);
@@ -352,6 +359,25 @@ async function runCommand(
     };
   }
   configService.setCliOverlay(overlay);
+
+  // Run history is a startup-frozen resource. Initialize it only for the
+  // execution/continuation command family; validate and commit have separate
+  // lightweight bootstraps and must not create project state.
+  const runHistoryLocation = configService.get("storage").runHistoryLocation;
+  initializeRunHistoryLocation(runHistoryLocation);
+  const gitToplevel = await repoToplevel(workingDir);
+  const stateHomeWarning = getStateHomeWarning(
+    ctrlyokeStateHome(),
+    [workingDir],
+    gitToplevel ? [gitToplevel] : []
+  );
+  if (stateHomeWarning) {
+    Log.warn(`ctrlyoke: ${stateHomeWarning}`);
+  }
+  await new ProjectStateRegistry().initialize(
+    workingDir,
+    gitToplevel ?? undefined
+  );
 
   // Fail closed when this workspace requests external file roots
   // (permissions.allowedExternalFileRoots at workspace scope) that have not

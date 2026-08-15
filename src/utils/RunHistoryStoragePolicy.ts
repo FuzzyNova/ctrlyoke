@@ -1,4 +1,5 @@
 import type { RunHistoryLocation } from "../types/CtrlYokeSettings";
+import { RUN_HISTORY_LOCATIONS } from "../types/DashboardConstants";
 
 let frozenLocation: RunHistoryLocation | undefined;
 
@@ -22,6 +23,24 @@ export function getFrozenRunHistoryLocation(): RunHistoryLocation {
     );
   }
   return frozenLocation;
+}
+
+/** Return whether startup has already frozen the process-wide location. */
+export function isRunHistoryLocationInitialized(): boolean {
+  return frozenLocation !== undefined;
+}
+
+/** Parse the MCP environment representation, defaulting to the user scope. */
+export function parseRunHistoryLocation(
+  value: string | undefined
+): RunHistoryLocation {
+  if (value === undefined || value === RUN_HISTORY_LOCATIONS.USER) {
+    return RUN_HISTORY_LOCATIONS.USER;
+  }
+  if (value === RUN_HISTORY_LOCATIONS.WORKSPACE) {
+    return RUN_HISTORY_LOCATIONS.WORKSPACE;
+  }
+  throw new Error(`Unsupported run history location: ${value}`);
 }
 
 /** Reset the process-wide policy for isolated unit tests. */

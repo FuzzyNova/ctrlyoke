@@ -5,6 +5,11 @@ import type { McpServerConfig } from "../../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../../../config/ExternalRootsTrustStore";
 import { Log } from "../../../utils/Log";
+import {
+  getFrozenRunHistoryLocation,
+  isRunHistoryLocationInitialized,
+} from "../../../utils/RunHistoryStoragePolicy";
+import { ctrlyokeStateHome } from "../../../utils/ProjectStatePaths";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
@@ -386,13 +391,20 @@ export class CliProviderUtils {
     const additionalEnv: Record<string, string> | undefined = hasCtrlYokeServer
       ? (() => {
           const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
-          return {
+          const env = {
             CTRLYOKE_MAX_QUEUE_SIZE: dynamicQueueConfig.maxQueueSize.toString(),
             CTRLYOKE_UNLIMITED_MODE:
               dynamicQueueConfig.unlimitedMode.toString(),
             CTRLYOKE_DIAGNOSTIC_LOGS:
               ConfigurationUtils.isDiagnosticLogsEnabled().toString(),
           };
+          if (isRunHistoryLocationInitialized()) {
+            Object.assign(env, {
+              CTRLYOKE_HOME: ctrlyokeStateHome(),
+              CTRLYOKE_RUN_HISTORY_LOCATION: getFrozenRunHistoryLocation(),
+            });
+          }
+          return env;
         })()
       : undefined;
 

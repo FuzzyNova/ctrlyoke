@@ -40,6 +40,16 @@ import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageR
 import { RunContinuationService } from "./core/orchestration/RunContinuationService";
 import { RunOutputResolver } from "./core/orchestration/RunOutputResolver";
 import type { RunRef, WorkflowKey } from "./types/CtrlYokeTypes";
+import { repoToplevel } from "./utils/GitUtils";
+import {
+  ProjectStateRegistry,
+  getStateHomeWarning,
+} from "./utils/ProjectStateRegistry";
+import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
+import {
+  initializeRunHistoryLocation,
+  parseRunHistoryLocation,
+} from "./utils/RunHistoryStoragePolicy";
 
 // Path constants (must match ConfigurationUtils.PATH_CONSTANTS)
 const CTRLYOKE_DIR = ".ctrlyoke";
@@ -145,6 +155,9 @@ export class CtrlYokeMCPServer {
       CTRLYOKE_WORKING_FILE:
         process.env.CTRLYOKE_WORKING_FILE ||
         "(not set — workflow tools will refuse to run)",
+      CTRLYOKE_HOME: process.env.CTRLYOKE_HOME || "(default)",
+      CTRLYOKE_RUN_HISTORY_LOCATION:
+        process.env.CTRLYOKE_RUN_HISTORY_LOCATION || "(default: user)",
       CTRLYOKE_MAX_QUEUE_SIZE:
         process.env.CTRLYOKE_MAX_QUEUE_SIZE || "(not set — default 100)",
       CTRLYOKE_UNLIMITED_MODE:
@@ -1078,13 +1091,34 @@ export class CtrlYokeMCPServer {
   }
 }
 
+/** Freeze and prepare the same project registry used by extension and CLI. */
+export async function initializeMcpStorage(
+  root = workspaceRoot
+): Promise<void> {
+  const location = parseRunHistoryLocation(
+    process.env.CTRLYOKE_RUN_HISTORY_LOCATION
+  );
+  initializeRunHistoryLocation(location);
+  const gitToplevel = await repoToplevel(root);
+  const stateHomeWarning = getStateHomeWarning(
+    ctrlyokeStateHome(),
+    [root],
+    gitToplevel ? [gitToplevel] : []
+  );
+  if (stateHomeWarning) {
+    log(`WARNING: ${stateHomeWarning}`);
+  }
+  await new ProjectStateRegistry().initialize(root, gitToplevel ?? undefined);
+}
+
 if (require.main === module) {
   log("Initializing ctrlyoke MCP Server...");
-  const server = new CtrlYokeMCPServer();
-  server.start().catch((error) => {
-    log("FATAL ERROR: Failed to start MCP server");
-    log("Error:", error);
-    log("Stack:", error.stack);
-    process.exit(1);
-  });
+  initializeMcpStorage()
+    .then(() => new CtrlYokeMCPServer().start())
+    .catch((error) => {
+      log("FATAL ERROR: Failed to start MCP server");
+      log("Error:", error);
+      log("Stack:", error.stack);
+      process.exit(1);
+    });
 }

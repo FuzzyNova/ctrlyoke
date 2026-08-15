@@ -33,6 +33,7 @@ import {
   getStagedDiff,
   getStashDiff,
   getStashFiles,
+  repoToplevel,
 } from "./utils/GitUtils";
 import {
   getQueueStatus,
@@ -71,6 +72,12 @@ import { CompositeUserFeedbackSink } from "./core/CompositeUserFeedbackSink";
 import { notifyUserFeedback } from "./core/UserFeedbackSink";
 import { VsCodeUserFeedbackSink } from "./platform/VsCodeUserFeedbackSink";
 import { HostedWebSocketUserFeedbackSink } from "./server/HostedWebSocketUserFeedbackSink";
+import {
+  ProjectStateRegistry,
+  getStateHomeWarning,
+} from "./utils/ProjectStateRegistry";
+import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
+import { initializeRunHistoryLocation } from "./utils/RunHistoryStoragePolicy";
 
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: CtrlYokeWebviewProvider;
@@ -367,6 +374,31 @@ export async function activate(context: vscode.ExtensionContext) {
       context,
       workspaceFolders?.length ? getVsCodeWorkspaceRoot() : undefined
     );
+
+    // Freeze storage placement before any history consumer is initialized.
+    const runHistoryLocation = configService.get("storage").runHistoryLocation;
+    initializeRunHistoryLocation(runHistoryLocation);
+    const resolvedStateRoot = workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : undefined;
+    const gitToplevel = resolvedStateRoot
+      ? await repoToplevel(resolvedStateRoot)
+      : null;
+    const stateHomeWarning = getStateHomeWarning(
+      ctrlyokeStateHome(),
+      resolvedStateRoot ? [resolvedStateRoot] : [],
+      gitToplevel ? [gitToplevel] : []
+    );
+    if (stateHomeWarning) {
+      Log.warn(`ctrlyoke: ${stateHomeWarning}`);
+    }
+    if (resolvedStateRoot) {
+      await new ProjectStateRegistry().initialize(
+        resolvedStateRoot,
+        gitToplevel ?? undefined
+      );
+    }
+
     // Initialize model registry (queries available Copilot models)
     // Run this early so models are available for IntelliSense
     initializeModelRegistry().catch((err) => {

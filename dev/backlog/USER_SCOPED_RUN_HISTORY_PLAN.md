@@ -1006,7 +1006,7 @@ commit that implements it. Phase numbers refer to §7.
 | #   | Step                                                                    | Phase | Status  |
 | --- | ----------------------------------------------------------------------- | ----- | ------- |
 | 1   | `ProjectStatePaths` + frozen storage policy + `storage.runHistoryLocation` config | 1/2   | done |
-| 2   | `ProjectStateRegistry` + bootstrap freeze + MCP propagation              | 1     | pending |
+| 2   | `ProjectStateRegistry` + bootstrap freeze + MCP propagation              | 1     | done    |
 | 3   | Redirect `runsRoot`, `.search-index`, project `.usage`; test conformance | 1     | pending |
 | 4   | Four external watchers + `ownStateRoot` file-access scope               | 1     | pending |
 | 5   | `scripts/migrate-runs-to-user-scope.mjs` (throwaway) + focused test      | 1     | pending |
