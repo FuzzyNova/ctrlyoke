@@ -979,13 +979,10 @@ suite("WorkingFileManager", () => {
         steps,
         EXECUTION_STATES.COMPLETED
       );
-      const sourcePath = path.join(
+      const sourcePath = WorkflowPaths.runFilePath(
         tmpWorkspace,
-        ".ctrlyoke",
-        ".runs",
-        workflowKey,
-        runRef,
-        "workflow.ctrlyoke.json"
+        workflowKey as WorkflowKey,
+        runRef as RunRef
       );
       const before = await fs.readFile(sourcePath, "utf-8");
 
@@ -1060,13 +1057,10 @@ suite("WorkingFileManager", () => {
         (
           JSON.parse(
             await fs.readFile(
-              path.join(
+              WorkflowPaths.manifestPath(
                 tmpWorkspace,
-                ".ctrlyoke",
-                ".runs",
-                workflowKey,
-                seededRunRef,
-                "manifest.json"
+                workflowKey as WorkflowKey,
+                seededRunRef as RunRef
               ),
               "utf-8"
             )
@@ -1885,13 +1879,7 @@ suite("WorkingFileManager", () => {
       ) as WorkingFile;
       const descriptor = JSON.parse(
         await fs.readFile(
-          path.join(
-            tmpWorkspace,
-            ".ctrlyoke",
-            ".runs",
-            workflowKey,
-            "workflow.json"
-          ),
+          WorkflowPaths.descriptorPath(tmpWorkspace, workflowKey),
           "utf8"
         )
       );

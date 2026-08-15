@@ -23,6 +23,8 @@ import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { withFileLock } from "../../utils/FileLockUtils";
 import { Log } from "../../utils/Log";
+import { projectStateRoot } from "../../utils/ProjectStatePaths";
+import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 import {
@@ -748,8 +750,10 @@ export class HistorySearchIndexService {
 
   private getIndexDir(workspaceFolderPath: string): string {
     return path.join(
-      workspaceFolderPath,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
+      projectStateRoot(
+        workspaceFolderPath,
+        getFrozenRunHistoryLocation()
+      ),
       PATH_CONSTANTS.SEARCH_INDEX_DIR
     );
   }

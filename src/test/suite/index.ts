@@ -1,6 +1,31 @@
 import * as path from "path";
+import * as vscode from "vscode";
 import Mocha from "mocha";
 import { glob } from "glob";
+import { RUN_HISTORY_LOCATIONS } from "../../types/DashboardConstants";
+import {
+  initializeRunHistoryLocation,
+  isRunHistoryLocationInitialized,
+} from "../../utils/RunHistoryStoragePolicy";
+
+async function activateExtensionForTests(): Promise<void> {
+  const extension = vscode.extensions.all.find(
+    (candidate) =>
+      candidate.id === "fuzzynova.ctrlyoke" ||
+      candidate.packageJSON.name === "ctrlyoke"
+  );
+  if (!extension) {
+    throw new Error("ctrlyoke extension must be loaded for extension tests");
+  }
+  if (!extension.isActive) {
+    await extension.activate();
+  }
+  // The extension bundle has its own copy of this vscode-free policy module;
+  // initialize the test module copy for directly imported production modules.
+  if (!isRunHistoryLocationInitialized()) {
+    initializeRunHistoryLocation(RUN_HISTORY_LOCATIONS.USER);
+  }
+}
 
 export function run(): Promise<void> {
   // Create the mocha test
@@ -30,7 +55,8 @@ export function run(): Promise<void> {
       e(err);
     });
     testFileStream.on("end", () => {
-      try {
+      void (async () => {
+        await activateExtensionForTests();
         // Run the mocha test
         mocha.run((failures: number) => {
           if (failures > 0) {
@@ -39,10 +65,10 @@ export function run(): Promise<void> {
             c();
           }
         });
-      } catch (err) {
+      })().catch((err) => {
         console.error(err);
         e(err);
-      }
+      });
     });
   });
 }

@@ -9,7 +9,10 @@ import { RUN_HISTORY_LOCATIONS } from "../../types/DashboardConstants";
 
 suite("RunHistoryStoragePolicy", () => {
   setup(() => resetRunHistoryLocationForTests());
-  teardown(() => resetRunHistoryLocationForTests());
+  teardown(() => {
+    resetRunHistoryLocationForTests();
+    initializeRunHistoryLocation(RUN_HISTORY_LOCATIONS.USER);
+  });
 
   test("requires initialization before reading", () => {
     assert.throws(

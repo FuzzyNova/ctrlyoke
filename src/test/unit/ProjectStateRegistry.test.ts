@@ -13,29 +13,18 @@ import { projectStateRoot } from "../../utils/ProjectStatePaths";
 import { RUN_HISTORY_LOCATIONS } from "../../types/DashboardConstants";
 
 suite("ProjectStateRegistry", () => {
-  const originalHome = process.env.CTRLYOKE_HOME;
-  let stateHome: string;
   let stateRoot: string;
 
   setup(async () => {
-    stateHome = await fs.mkdtemp(
-      path.join(os.tmpdir(), "ctrlyoke-registry-home-")
-    );
     stateRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-registry-state-")
     );
-    process.env.CTRLYOKE_HOME = stateHome;
     resetRunHistoryLocationForTests();
   });
 
   teardown(async () => {
     resetRunHistoryLocationForTests();
-    if (originalHome === undefined) {
-      delete process.env.CTRLYOKE_HOME;
-    } else {
-      process.env.CTRLYOKE_HOME = originalHome;
-    }
-    await fs.rm(stateHome, { recursive: true, force: true });
+    initializeRunHistoryLocation(RUN_HISTORY_LOCATIONS.USER);
     await fs.rm(stateRoot, { recursive: true, force: true });
   });
 

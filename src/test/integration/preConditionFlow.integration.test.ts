@@ -16,6 +16,7 @@ import {
   type ExecutionHarness,
 } from "./helpers/executionHarness";
 import { configService } from "../../config/CtrlYokeConfigService";
+import * as WorkflowPaths from "../../utils/WorkflowPaths";
 
 /**
  * Full user-flow coverage for workflow-level `preCondition`: load a workflow
@@ -241,7 +242,7 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
 
     const eventsPath = (
       await findFiles(
-        path.join(workspace, ".ctrlyoke", ".runs"),
+        WorkflowPaths.runsRoot(workspace),
         "events.jsonl"
       )
     )[0];
@@ -326,7 +327,7 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     assert.deepStrictEqual(harness.integration.sentPrompts, ["step 1"]);
     const eventsPath = (
       await findFiles(
-        path.join(workspace, ".ctrlyoke", ".runs"),
+        WorkflowPaths.runsRoot(workspace),
         "events.jsonl"
       )
     )[0];

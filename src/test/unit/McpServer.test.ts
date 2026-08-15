@@ -2,8 +2,11 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import { afterEach, suite, test } from "mocha";
-import { CtrlYokeMCPServer } from "../../mcp-server";
+import { afterEach, suite, suiteSetup, suiteTeardown, test } from "mocha";
+import {
+  CtrlYokeMCPServer,
+  initializeMcpStorage,
+} from "../../mcp-server";
 import type {
   RunRef,
   WorkflowKey,
@@ -11,9 +14,17 @@ import type {
   WorkingFile,
   WorkingFileWorktreeRuntime,
 } from "../../types/CtrlYokeTypes";
-import { EXECUTION_STATES, RUNNER_IDS } from "../../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  RUNNER_IDS,
+  RUN_HISTORY_LOCATIONS,
+} from "../../types/DashboardConstants";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
+import {
+  initializeRunHistoryLocation,
+  isRunHistoryLocationInitialized,
+} from "../../utils/RunHistoryStoragePolicy";
 import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 
@@ -29,6 +40,33 @@ function responseJson(result: unknown): any {
 }
 
 suite("CtrlYokeMCPServer run-addressed contracts", () => {
+  let mcpStateRoot: string;
+
+  suiteSetup(async () => {
+    mcpStateRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-mcp-test-state-")
+    );
+    try {
+      await initializeMcpStorage(mcpStateRoot);
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !error.message.includes('already frozen as "user"')
+      ) {
+        throw error;
+      }
+    }
+    if (!isRunHistoryLocationInitialized()) {
+      initializeRunHistoryLocation(RUN_HISTORY_LOCATIONS.USER);
+    }
+  });
+
+  suiteTeardown(async () => {
+    if (mcpStateRoot) {
+      await fs.rm(mcpStateRoot, { recursive: true, force: true });
+    }
+  });
+
   let workspaceRoot: string;
   let priorPinnedFile: string | undefined;
 

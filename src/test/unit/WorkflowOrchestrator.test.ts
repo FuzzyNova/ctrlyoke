@@ -1580,20 +1580,14 @@ suite("WorkflowOrchestrator handleClientReady", () => {
    */
   async function writeRunTimeline(
     workspace: string,
-    workflowKey: string,
-    runRef: string,
+    workflowKey: import("../../types/CtrlYokeTypes").WorkflowKey,
+    runRef: import("../../types/CtrlYokeTypes").RunRef,
     executionState: string
   ): Promise<void> {
-    const runDir = path.join(
-      workspace,
-      ".ctrlyoke",
-      ".runs",
-      workflowKey,
-      runRef
-    );
+    const runDir = WorkflowPaths.runDir(workspace, workflowKey, runRef);
     await fs.mkdir(runDir, { recursive: true });
     await fs.writeFile(
-      path.join(runDir, "manifest.json"),
+      WorkflowPaths.manifestPath(workspace, workflowKey, runRef),
       JSON.stringify({
         schemaVersion: "2.3.0",
         storageKind: "timeline",
@@ -1604,7 +1598,10 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         definitionRevision: 1,
       })
     );
-    await fs.writeFile(path.join(runDir, "events.jsonl"), "");
+    await fs.writeFile(
+      WorkflowPaths.eventsPath(workspace, workflowKey, runRef),
+      ""
+    );
   }
 
   // Regression: the buffered-output overlay exists to catch in-memory output
@@ -2289,16 +2286,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
       assert.strictEqual(written.definitionRevision, 2);
 
       const draftExists = await fs
-        .access(
-          path.join(
-            workspace,
-            ".ctrlyoke",
-            ".runs",
-            workflowKey,
-            "draft",
-            "workflow.ctrlyoke.json"
-          )
-        )
+        .access(WorkflowPaths.draftFilePath(workspace, workflowKey))
         .then(() => true)
         .catch(() => false);
       assert.strictEqual(draftExists, false);

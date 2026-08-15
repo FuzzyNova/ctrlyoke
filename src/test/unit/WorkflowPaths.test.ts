@@ -5,6 +5,12 @@ import * as path from "path";
 import { suite, test } from "mocha";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
+import { RUN_HISTORY_LOCATIONS } from "../../types/DashboardConstants";
+import {
+  initializeRunHistoryLocation,
+  resetRunHistoryLocationForTests,
+} from "../../utils/RunHistoryStoragePolicy";
+import { projectStateRoot } from "../../utils/ProjectStatePaths";
 
 suite("WorkflowPaths", () => {
   suite("assertValidWorkflowKey / assertValidRunRef", () => {
@@ -48,73 +54,34 @@ suite("WorkflowPaths", () => {
     const runRef = "run-2026-07-20T10-30-00-000Z" as RunRef;
 
     test("builds the expected layout paths", () => {
+      const runsRoot = WorkflowPaths.runsRoot(workspaceRoot);
       assert.strictEqual(
         WorkflowPaths.lineageDir(workspaceRoot, workflowKey),
-        path.join(workspaceRoot, ".ctrlyoke", ".runs", workflowKey)
+        path.join(runsRoot, workflowKey)
       );
       assert.strictEqual(
         WorkflowPaths.descriptorPath(workspaceRoot, workflowKey),
-        path.join(
-          workspaceRoot,
-          ".ctrlyoke",
-          ".runs",
-          workflowKey,
-          "workflow.json"
-        )
+        path.join(runsRoot, workflowKey, "workflow.json")
       );
       assert.strictEqual(
         WorkflowPaths.draftFilePath(workspaceRoot, workflowKey),
-        path.join(
-          workspaceRoot,
-          ".ctrlyoke",
-          ".runs",
-          workflowKey,
-          "draft",
-          "workflow.ctrlyoke.json"
-        )
+        path.join(runsRoot, workflowKey, "draft", "workflow.ctrlyoke.json")
       );
       assert.strictEqual(
         WorkflowPaths.runFilePath(workspaceRoot, workflowKey, runRef),
-        path.join(
-          workspaceRoot,
-          ".ctrlyoke",
-          ".runs",
-          workflowKey,
-          runRef,
-          "workflow.ctrlyoke.json"
-        )
+        path.join(runsRoot, workflowKey, runRef, "workflow.ctrlyoke.json")
       );
       assert.strictEqual(
         WorkflowPaths.manifestPath(workspaceRoot, workflowKey, runRef),
-        path.join(
-          workspaceRoot,
-          ".ctrlyoke",
-          ".runs",
-          workflowKey,
-          runRef,
-          "manifest.json"
-        )
+        path.join(runsRoot, workflowKey, runRef, "manifest.json")
       );
       assert.strictEqual(
         WorkflowPaths.eventsPath(workspaceRoot, workflowKey, runRef),
-        path.join(
-          workspaceRoot,
-          ".ctrlyoke",
-          ".runs",
-          workflowKey,
-          runRef,
-          "events.jsonl"
-        )
+        path.join(runsRoot, workflowKey, runRef, "events.jsonl")
       );
       assert.strictEqual(
         WorkflowPaths.runnerLockPath(workspaceRoot, workflowKey),
-        path.join(
-          workspaceRoot,
-          ".ctrlyoke",
-          ".runs",
-          workflowKey,
-          "runner.json"
-        )
+        path.join(runsRoot, workflowKey, "runner.json")
       );
     });
 
@@ -237,6 +204,38 @@ suite("WorkflowPaths", () => {
       );
       assert.ok(firstStat.isDirectory());
       assert.ok(secondStat.isDirectory());
+    });
+  });
+
+  suite("run-history location", () => {
+    const stateRoot = path.join("C:", "dev", "some-workspace");
+
+    setup(() => {
+      resetRunHistoryLocationForTests();
+    });
+
+    teardown(() => {
+      resetRunHistoryLocationForTests();
+      initializeRunHistoryLocation(RUN_HISTORY_LOCATIONS.USER);
+    });
+
+    test("uses the project directory in user mode", () => {
+      initializeRunHistoryLocation(RUN_HISTORY_LOCATIONS.USER);
+      assert.strictEqual(
+        WorkflowPaths.runsRoot(stateRoot),
+        path.join(
+          projectStateRoot(stateRoot, RUN_HISTORY_LOCATIONS.USER),
+          ".runs"
+        )
+      );
+    });
+
+    test("preserves today's workspace layout in workspace mode", () => {
+      initializeRunHistoryLocation(RUN_HISTORY_LOCATIONS.WORKSPACE);
+      assert.strictEqual(
+        WorkflowPaths.runsRoot(stateRoot),
+        path.join(stateRoot, ".ctrlyoke", ".runs")
+      );
     });
   });
 });

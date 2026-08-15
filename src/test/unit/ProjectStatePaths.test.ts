@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import * as os from "os";
 import * as path from "path";
-import { suite, test, setup, teardown } from "mocha";
+import { suite, test } from "mocha";
 import {
   ctrlyokeStateHome,
   projectKey,
@@ -10,20 +10,6 @@ import {
 import { RUN_HISTORY_LOCATIONS } from "../../types/DashboardConstants";
 
 suite("ProjectStatePaths", () => {
-  const originalHome = process.env.CTRLYOKE_HOME;
-
-  setup(() => {
-    delete process.env.CTRLYOKE_HOME;
-  });
-
-  teardown(() => {
-    if (originalHome === undefined) {
-      delete process.env.CTRLYOKE_HOME;
-    } else {
-      process.env.CTRLYOKE_HOME = originalHome;
-    }
-  });
-
   test("folds Windows drive-letter casing into one deterministic key", () => {
     if (process.platform !== "win32") return;
 
@@ -59,17 +45,16 @@ suite("ProjectStatePaths", () => {
     );
   });
 
-  test("uses the resolved CTRLYOKE_HOME override", () => {
-    process.env.CTRLYOKE_HOME = path.join("relative", "state-home");
+  test("uses the CTRLYOKE_HOME override from the extension-test bootstrap", () => {
+    assert.ok(process.env.CTRLYOKE_HOME);
     assert.strictEqual(
       ctrlyokeStateHome(),
-      path.resolve("relative", "state-home")
+      path.resolve(process.env.CTRLYOKE_HOME!)
     );
   });
 
   test("preserves the workspace layout and derives the user project root", () => {
     const stateRoot = path.join(os.tmpdir(), "ctrlyoke-state-root");
-    process.env.CTRLYOKE_HOME = path.join(os.tmpdir(), "ctrlyoke-home");
 
     assert.strictEqual(
       projectStateRoot(stateRoot, RUN_HISTORY_LOCATIONS.WORKSPACE),

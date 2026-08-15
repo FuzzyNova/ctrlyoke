@@ -2,11 +2,13 @@ import * as fs from "fs";
 import * as path from "path";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import { isPathWithinDirectory } from "./PathSecurity";
+import { getFrozenRunHistoryLocation } from "./RunHistoryStoragePolicy";
+import { projectStateRoot } from "./ProjectStatePaths";
 import { TIMELINE_STORAGE_FILES } from "../types/WorkflowTimelineTypes";
 import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
 
 /**
- * Canonical, VS Code-free authority for the `.ctrlyoke/.runs/<workflowKey>/...` layout.
+ * Canonical, VS Code-free authority for the `.runs/<workflowKey>/...` layout.
  *
  * This is the *only* module allowed to construct a `.runs` path from raw parts, mint or
  * validate a `WorkflowKey`/`RunRef`, or decide whether a path is safely contained within
@@ -152,10 +154,10 @@ export function workflowNameFromKey(workflowKey: string): string {
 
 // ---- Root/lineage/run path construction ----
 
-export function runsRoot(workspaceRoot: string): string {
+/** Resolve the `.runs` root for the project identified by `stateRoot`. */
+export function runsRoot(stateRoot: string): string {
   return path.join(
-    workspaceRoot,
-    PATH_CONSTANTS.CTRLYOKE_DIR,
+    projectStateRoot(stateRoot, getFrozenRunHistoryLocation()),
     PATH_CONSTANTS.RUNS_DIR
   );
 }

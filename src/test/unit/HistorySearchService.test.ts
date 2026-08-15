@@ -17,6 +17,8 @@ import {
   type WorkflowTimelineEventDraft,
 } from "../../types/WorkflowTimelineTypes";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+import { projectStateRoot } from "../../utils/ProjectStatePaths";
+import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type {
   RunRef,
@@ -393,8 +395,7 @@ suite("HistorySearchService", () => {
     assert.strictEqual(initial.totalCount, 1);
 
     const documentsPath = path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
+      projectStateRoot(workspaceRoot, getFrozenRunHistoryLocation()),
       PATH_CONSTANTS.SEARCH_INDEX_DIR,
       "documents.jsonl"
     );

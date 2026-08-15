@@ -1347,9 +1347,18 @@ export class WorkflowSerializer {
   async handleClearWorkflowHistory(
     postMessage?: PostMessageFn
   ): Promise<boolean> {
+    const workspaceRoot = vscode.workspace.workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : undefined;
+    if (!workspaceRoot) {
+      return false;
+    }
+
     const pm = postMessage ?? this.postMessage;
     const confirm = await vscode.window.showWarningMessage(
-      "Delete all workflows and their history from .ctrlyoke/.runs?",
+      `Delete all workflows and their history from ${path.resolve(
+        WorkflowPaths.runsRoot(workspaceRoot)
+      )}?`,
       { modal: true },
       "Delete All"
     );
@@ -1359,13 +1368,6 @@ export class WorkflowSerializer {
     }
 
     try {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.length
-        ? getVsCodeWorkspaceRoot()
-        : undefined;
-      if (!workspaceRoot) {
-        return false;
-      }
-
       try {
         const workflowKeys =
           await this.lineageRepository.listLineageKeys(workspaceRoot);
