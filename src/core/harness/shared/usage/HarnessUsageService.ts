@@ -182,7 +182,7 @@ export class HarnessUsageService {
     now: () => number = Date.now,
     options: HarnessUsageServiceOptions = {}
   ) {
-    this.providerSnapshotsFile = providerSnapshotsPath(workspaceRoot);
+    this.providerSnapshotsFile = providerSnapshotsPath();
     this.observedStore = observedStore;
     this.emit = emit;
     this.now = now;
@@ -421,18 +421,19 @@ export class HarnessUsageService {
 
   private async persistProviderSnapshots(): Promise<void> {
     try {
+      await ensurePrivateDirectory(path.dirname(this.providerSnapshotsFile));
       await withFileLock(this.providerSnapshotsFile, async () => {
-        await fs.mkdir(path.dirname(this.providerSnapshotsFile), {
-          recursive: true,
-        });
-        const snapshots: Partial<Record<HarnessId, HarnessQuotaSnapshot>> = {};
+        const persisted = await readPersistedProviderUsage(
+          this.providerSnapshotsFile
+        );
+        const snapshots: Partial<Record<HarnessId, HarnessQuotaSnapshot>> =
+          {};
         for (const harnessId of HARNESS_ID_LIST) {
-          const quota = this.quotaCache.get(harnessId);
+          const current = this.quotaCache.get(harnessId);
+          const foreign = persisted?.snapshots[harnessId];
+          const quota = selectNewestQuota(current, foreign);
           if (quota?.fetchedAt !== undefined) {
-            snapshots[harnessId] = {
-              ...cloneQuota(quota),
-              message: undefined,
-            };
+            snapshots[harnessId] = stripPersistedQuota(quota);
           }
         }
         const data: PersistedProviderUsage = {
@@ -440,8 +441,18 @@ export class HarnessUsageService {
           snapshots,
         };
         const tempPath = `${this.providerSnapshotsFile}.${process.pid}.${this.now()}.tmp`;
-        await fs.writeFile(tempPath, JSON.stringify(data, null, 2), "utf8");
-        await fs.rename(tempPath, this.providerSnapshotsFile);
+        try {
+          await fs.writeFile(tempPath, JSON.stringify(data, null, 2), {
+            encoding: "utf8",
+            mode: 0o600,
+          });
+          await fs.chmod(tempPath, 0o600);
+          await fs.rename(tempPath, this.providerSnapshotsFile);
+          await fs.chmod(this.providerSnapshotsFile, 0o600);
+        } catch (error) {
+          await fs.unlink(tempPath).catch(() => undefined);
+          throw error;
+        }
       });
     } catch {
       // Provider persistence is best effort and never affects execution.
@@ -456,4 +467,63 @@ export class HarnessUsageService {
       )
       .catch(() => undefined);
   }
+}
+
+function selectNewestQuota(
+  current: HarnessQuotaSnapshot | undefined,
+  foreign: HarnessQuotaSnapshot | undefined
+): HarnessQuotaSnapshot | undefined {
+  if (!current) return foreign;
+  if (!foreign) return current;
+  return (foreign.fetchedAt ?? 0) > (current.fetchedAt ?? 0)
+    ? foreign
+    : current;
+}
+
+function stripPersistedQuota(
+  quota: HarnessQuotaSnapshot
+): HarnessQuotaSnapshot {
+  return {
+    ...cloneQuota(quota),
+    message: undefined,
+  };
+}
+
+async function readPersistedProviderUsage(
+  filePath: string
+): Promise<PersistedProviderUsage | undefined> {
+  try {
+    const raw = await fs.readFile(filePath, "utf8");
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      !isRecord(parsed) ||
+      parsed.schemaVersion !== PROVIDER_USAGE_SCHEMA_VERSION ||
+      !isRecord(parsed.snapshots)
+    ) {
+      return undefined;
+    }
+
+    const snapshots: Partial<Record<HarnessId, HarnessQuotaSnapshot>> = {};
+    for (const [harnessId, value] of Object.entries(parsed.snapshots)) {
+      if (
+        VALID_HARNESS_IDS.has(harnessId as HarnessId) &&
+        isRecord(value) &&
+        Array.isArray(value.windows) &&
+        typeof value.source === "string" &&
+        typeof value.fetchedAt === "number"
+      ) {
+        snapshots[harnessId as HarnessId] = normalizeQuota(
+          value as unknown as HarnessQuotaSnapshot
+        );
+      }
+    }
+    return { schemaVersion: PROVIDER_USAGE_SCHEMA_VERSION, snapshots };
+  } catch {
+    return undefined;
+  }
+}
+
+async function ensurePrivateDirectory(directory: string): Promise<void> {
+  await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+  await fs.chmod(directory, 0o700);
 }

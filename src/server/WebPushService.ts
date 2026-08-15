@@ -3,8 +3,13 @@ import { promises as fsp } from "fs";
 import * as path from "path";
 import { createHash } from "crypto";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
+import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
+import { withFileLock } from "../utils/FileLockUtils";
 import { Log } from "../utils/Log";
 import type { CompletionNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
+
+const PRIVATE_DIRECTORY_MODE = 0o700;
+const PRIVATE_FILE_MODE = 0o600;
 
 export interface WebPushSubscriptionPayload {
   endpoint: string;
@@ -70,12 +75,10 @@ export class WebPushService {
   private operationQueue: Promise<unknown> = Promise.resolve();
 
   constructor(
-    workspaceRoot: string,
     private readonly vapidSubject: string = "mailto:ctrlyoke@example.com" //TODO: update this with a valid support email when we get one
   ) {
     this.notificationsDir = path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.CTRLYOKE_DIR,
+      ctrlyokeStateHome(),
       PATH_CONSTANTS.NOTIFICATIONS_DIR
     );
     this.vapidKeysPath = path.join(
@@ -94,7 +97,9 @@ export class WebPushService {
 
   async listSubscriptions(): Promise<PushSubscriptionListResult> {
     return this.withSerializedAccess(async () => {
-      const registry = await this.readSubscriptions();
+      const registry = await this.withSubscriptionFileLock(() =>
+        this.readSubscriptions()
+      );
       const subscriptions = registry.subscriptions.map((subscription) => ({
         id: subscription.id,
         createdAt: subscription.createdAt,
@@ -120,52 +125,56 @@ export class WebPushService {
     metadata: { userAgent?: string; label?: string }
   ): Promise<StoredPushSubscription> {
     return this.withSerializedAccess(async () => {
-      const registry = await this.readSubscriptions();
-      const now = Date.now();
-      const endpointHash = hashEndpoint(subscription.endpoint);
-      const existing = registry.subscriptions.find(
-        (item) => item.endpointHash === endpointHash
-      );
-
-      const next: StoredPushSubscription = {
-        ...(existing ?? {
-          id: endpointHash,
-          createdAt: now,
-        }),
-        endpoint: subscription.endpoint,
-        endpointHash,
-        expirationTime: subscription.expirationTime,
-        keys: subscription.keys,
-        updatedAt: now,
-        userAgent: metadata.userAgent,
-        label: metadata.label,
-      };
-
-      if (existing) {
-        registry.subscriptions = registry.subscriptions.map((item) =>
-          item.id === existing.id ? next : item
+      return this.withSubscriptionFileLock(async () => {
+        const registry = await this.readSubscriptions();
+        const now = Date.now();
+        const endpointHash = hashEndpoint(subscription.endpoint);
+        const existing = registry.subscriptions.find(
+          (item) => item.endpointHash === endpointHash
         );
-      } else {
-        registry.subscriptions.push(next);
-      }
 
-      await this.writeSubscriptions(registry);
-      return next;
+        const next: StoredPushSubscription = {
+          ...(existing ?? {
+            id: endpointHash,
+            createdAt: now,
+          }),
+          endpoint: subscription.endpoint,
+          endpointHash,
+          expirationTime: subscription.expirationTime,
+          keys: subscription.keys,
+          updatedAt: now,
+          userAgent: metadata.userAgent,
+          label: metadata.label,
+        };
+
+        if (existing) {
+          registry.subscriptions = registry.subscriptions.map((item) =>
+            item.id === existing.id ? next : item
+          );
+        } else {
+          registry.subscriptions.push(next);
+        }
+
+        await this.writeSubscriptions(registry);
+        return next;
+      });
     });
   }
 
   async removeSubscription(id: string): Promise<boolean> {
     return this.withSerializedAccess(async () => {
-      const registry = await this.readSubscriptions();
-      const before = registry.subscriptions.length;
-      registry.subscriptions = registry.subscriptions.filter(
-        (subscription) => subscription.id !== id
-      );
-      if (registry.subscriptions.length === before) {
-        return false;
-      }
-      await this.writeSubscriptions(registry);
-      return true;
+      return this.withSubscriptionFileLock(async () => {
+        const registry = await this.readSubscriptions();
+        const before = registry.subscriptions.length;
+        registry.subscriptions = registry.subscriptions.filter(
+          (subscription) => subscription.id !== id
+        );
+        if (registry.subscriptions.length === before) {
+          return false;
+        }
+        await this.writeSubscriptions(registry);
+        return true;
+      });
     });
   }
 
@@ -173,90 +182,92 @@ export class WebPushService {
     event: CompletionNotificationEvent
   ): Promise<{ sent: number; removed: number; failed: number }> {
     return this.withSerializedAccess(async () => {
-      const registry = await this.readSubscriptions();
-      if (registry.subscriptions.length === 0) {
-        return { sent: 0, removed: 0, failed: 0 };
-      }
-
-      const keys = await this.getOrCreateVapidKeys();
-      const payload = JSON.stringify({
-        id: event.id,
-        title: event.title,
-        body: event.body,
-        tag: event.tag,
-        severity: event.severity,
-        kind: event.kind,
-        url: event.url,
-      });
-
-      let sent = 0;
-      let removed = 0;
-      let failed = 0;
-      const survivors: StoredPushSubscription[] = [];
-
-      for (const subscription of registry.subscriptions) {
-        try {
-          const { endpoint, headers, body } = await buildPushHTTPRequest({
-            privateJWK: keys.privateJwk,
-            subscription: {
-              endpoint: subscription.endpoint,
-              keys: subscription.keys,
-            },
-            message: {
-              payload: JSON.parse(payload),
-              adminContact: this.vapidSubject,
-              options: { ttl: 60 },
-            },
-          });
-          const response = await fetch(endpoint, {
-            method: "POST",
-            headers,
-            body,
-          });
-          if (!response.ok) {
-            throw new PushDeliveryError(
-              response.status,
-              await safeReadResponseText(response)
-            );
-          }
-          sent += 1;
-          survivors.push({
-            ...subscription,
-            lastSuccessAt: Date.now(),
-            lastFailureAt: undefined,
-            lastFailureStatus: undefined,
-            lastFailureMessage: undefined,
-            updatedAt: Date.now(),
-          });
-        } catch (error) {
-          failed += 1;
-          const statusCode = getStatusCode(error);
-          const redactedHash = subscription.endpointHash.slice(0, 12);
-
-          if (statusCode === 404 || statusCode === 410) {
-            removed += 1;
-            Log.info(
-              `[WebPushService] removed expired push subscription ${redactedHash} status=${statusCode}`
-            );
-            continue;
-          }
-
-          Log.warn(
-            `[WebPushService] push send failed for ${redactedHash} status=${statusCode ?? "unknown"}`
-          );
-          survivors.push({
-            ...subscription,
-            lastFailureAt: Date.now(),
-            lastFailureStatus: statusCode,
-            lastFailureMessage: getErrorMessage(error),
-            updatedAt: Date.now(),
-          });
+      return this.withSubscriptionFileLock(async () => {
+        const registry = await this.readSubscriptions();
+        if (registry.subscriptions.length === 0) {
+          return { sent: 0, removed: 0, failed: 0 };
         }
-      }
 
-      registry.subscriptions = survivors;
-      await this.writeSubscriptions(registry);
-      return { sent, removed, failed };
+        const keys = await this.getOrCreateVapidKeys();
+        const payload = JSON.stringify({
+          id: event.id,
+          title: event.title,
+          body: event.body,
+          tag: event.tag,
+          severity: event.severity,
+          kind: event.kind,
+          url: event.url,
+        });
+
+        let sent = 0;
+        let removed = 0;
+        let failed = 0;
+        const survivors: StoredPushSubscription[] = [];
+
+        for (const subscription of registry.subscriptions) {
+          try {
+            const { endpoint, headers, body } = await buildPushHTTPRequest({
+              privateJWK: keys.privateJwk,
+              subscription: {
+                endpoint: subscription.endpoint,
+                keys: subscription.keys,
+              },
+              message: {
+                payload: JSON.parse(payload),
+                adminContact: this.vapidSubject,
+                options: { ttl: 60 },
+              },
+            });
+            const response = await fetch(endpoint, {
+              method: "POST",
+              headers,
+              body,
+            });
+            if (!response.ok) {
+              throw new PushDeliveryError(
+                response.status,
+                await safeReadResponseText(response)
+              );
+            }
+            sent += 1;
+            survivors.push({
+              ...subscription,
+              lastSuccessAt: Date.now(),
+              lastFailureAt: undefined,
+              lastFailureStatus: undefined,
+              lastFailureMessage: undefined,
+              updatedAt: Date.now(),
+            });
+          } catch (error) {
+            failed += 1;
+            const statusCode = getStatusCode(error);
+            const redactedHash = subscription.endpointHash.slice(0, 12);
+
+            if (statusCode === 404 || statusCode === 410) {
+              removed += 1;
+              Log.info(
+                `[WebPushService] removed expired push subscription ${redactedHash} status=${statusCode}`
+              );
+              continue;
+            }
+
+            Log.warn(
+              `[WebPushService] push send failed for ${redactedHash} status=${statusCode ?? "unknown"}`
+            );
+            survivors.push({
+              ...subscription,
+              lastFailureAt: Date.now(),
+              lastFailureStatus: statusCode,
+              lastFailureMessage: getErrorMessage(error),
+              updatedAt: Date.now(),
+            });
+          }
+        }
+
+        registry.subscriptions = survivors;
+        await this.writeSubscriptions(registry);
+        return { sent, removed, failed };
+      });
     });
   }
 
@@ -270,29 +281,32 @@ export class WebPushService {
   }
 
   private async getOrCreateVapidKeys(): Promise<StoredVapidKeys> {
-    await ensureDirectory(this.notificationsDir);
-
-    try {
-      const content = await fsp.readFile(this.vapidKeysPath, "utf8");
-      const parsed = JSON.parse(content) as Partial<StoredVapidKeys>;
-      if (isStoredVapidKeys(parsed)) {
-        return parsed;
+    await ensurePrivateDirectory(this.notificationsDir);
+    return withFileLock(this.vapidKeysPath, async () => {
+      try {
+        const content = await fsp.readFile(this.vapidKeysPath, "utf8");
+        const parsed = JSON.parse(content) as Partial<StoredVapidKeys>;
+        if (isStoredVapidKeys(parsed)) {
+          await fsp.chmod(this.vapidKeysPath, PRIVATE_FILE_MODE);
+          return parsed;
+        }
+      } catch {
+        // Fall through and generate new keys.
       }
-    } catch {
-      // Fall through and generate new keys.
-    }
 
-    const generated = await generateVapidKeys();
-    await atomicWriteJson(this.vapidKeysPath, generated);
-    return generated;
+      const generated = await generateVapidKeys();
+      await atomicWriteJson(this.vapidKeysPath, generated);
+      return generated;
+    });
   }
 
   private async readSubscriptions(): Promise<StoredPushRegistry> {
-    await ensureDirectory(this.notificationsDir);
+    await ensurePrivateDirectory(this.notificationsDir);
 
     try {
       const content = await fsp.readFile(this.subscriptionsPath, "utf8");
       const parsed = JSON.parse(content) as Partial<StoredPushRegistry>;
+      await fsp.chmod(this.subscriptionsPath, PRIVATE_FILE_MODE);
       return {
         subscriptions: Array.isArray(parsed.subscriptions)
           ? parsed.subscriptions.filter(isValidStoredSubscription)
@@ -307,6 +321,13 @@ export class WebPushService {
     registry: StoredPushRegistry
   ): Promise<void> {
     await atomicWriteJson(this.subscriptionsPath, registry);
+  }
+
+  private async withSubscriptionFileLock<T>(
+    action: () => Promise<T>
+  ): Promise<T> {
+    await ensurePrivateDirectory(this.notificationsDir);
+    return withFileLock(this.subscriptionsPath, action);
   }
 }
 
@@ -435,18 +456,29 @@ function isSubscriptionStale(subscription: StoredPushSubscription): boolean {
   return subscription.lastFailureAt > subscription.lastSuccessAt;
 }
 
-async function ensureDirectory(dirPath: string): Promise<void> {
-  await fsp.mkdir(dirPath, { recursive: true });
+async function ensurePrivateDirectory(dirPath: string): Promise<void> {
+  await fsp.mkdir(dirPath, { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
+  await fsp.chmod(dirPath, PRIVATE_DIRECTORY_MODE);
 }
 
 async function atomicWriteJson(
   targetPath: string,
   value: unknown
 ): Promise<void> {
-  await ensureDirectory(path.dirname(targetPath));
+  await ensurePrivateDirectory(path.dirname(targetPath));
   const tempPath = `${targetPath}.${process.pid}.${Date.now()}.tmp`;
-  await fsp.writeFile(tempPath, JSON.stringify(value, null, 2), "utf8");
-  await fsp.rename(tempPath, targetPath);
+  try {
+    await fsp.writeFile(tempPath, JSON.stringify(value, null, 2), {
+      encoding: "utf8",
+      mode: PRIVATE_FILE_MODE,
+    });
+    await fsp.chmod(tempPath, PRIVATE_FILE_MODE);
+    await fsp.rename(tempPath, targetPath);
+    await fsp.chmod(targetPath, PRIVATE_FILE_MODE);
+  } catch (error) {
+    await fsp.unlink(tempPath).catch(() => undefined);
+    throw error;
+  }
 }
 
 function getStatusCode(error: unknown): number | undefined {

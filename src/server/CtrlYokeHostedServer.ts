@@ -191,7 +191,7 @@ export class CtrlYokeHostedServer
     tlsConfig?: { certPath: string; keyPath: string }
   ) {
     this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
-    this.webPushService = new WebPushService(workspaceRoot);
+    this.webPushService = new WebPushService();
     this.viewerService = new HostedWorkspaceViewerService(
       workspaceRoot,
       namedWorkspaceRoots

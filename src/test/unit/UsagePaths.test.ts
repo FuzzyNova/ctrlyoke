@@ -7,7 +7,10 @@ import {
   initializeRunHistoryLocation,
   resetRunHistoryLocationForTests,
 } from "../../utils/RunHistoryStoragePolicy";
-import { projectStateRoot } from "../../utils/ProjectStatePaths";
+import {
+  ctrlyokeStateHome,
+  projectStateRoot,
+} from "../../utils/ProjectStatePaths";
 import {
   lifetimeStatsPath,
   observedUsagePath,
@@ -46,11 +49,11 @@ suite("UsagePaths", () => {
     }
   });
 
-  test("leaves provider snapshots at the existing workspace path", () => {
+  test("stores provider snapshots in the account-scoped state home", () => {
     initializeRunHistoryLocation(RUN_HISTORY_LOCATIONS.USER);
     assert.strictEqual(
-      providerSnapshotsPath(stateRoot),
-      path.join(stateRoot, ".ctrlyoke", ".usage", "provider-snapshots.json")
+      providerSnapshotsPath(),
+      path.join(ctrlyokeStateHome(), "usage", "provider-snapshots.json")
     );
   });
 });
