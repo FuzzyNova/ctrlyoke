@@ -241,6 +241,22 @@ export class McpRegistryFileManager {
   }
 }
 
+/** Find a managed MCP server by its ctrlyoke registry ID. */
+export function findManagedMcpServerByName(
+  servers: readonly ManagedMcpServer[],
+  name: string
+): ManagedMcpServer | undefined {
+  return servers.find((server) => server.id === name);
+}
+
+/** Resolve a ctrlyoke registry ID to the config consumed by harnesses. */
+export function resolveCtrlYokeMcpInvocation(
+  servers: readonly ManagedMcpServer[],
+  name: string
+): McpServerConfig | undefined {
+  return findManagedMcpServerByName(servers, name)?.config;
+}
+
 function sortLocations(
   locations: ManagedMcpServer["locations"]
 ): ManagedMcpServer["locations"] {

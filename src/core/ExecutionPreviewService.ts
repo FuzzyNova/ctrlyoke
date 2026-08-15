@@ -31,7 +31,10 @@ import type {
   ScriptStep,
   WorkflowStep,
 } from "../types/CtrlYokeTypes";
-import type { ExecutionPreviewScope } from "../types/WebviewMessageTypes";
+import type {
+  ExecutionPreviewScope,
+  ManagedMcpServer,
+} from "../types/WebviewMessageTypes";
 import { isScriptStep, type DynamicQueueConfig } from "../types/CtrlYokeTypes";
 import type {
   ExecutionPropertyDefaults,
@@ -63,6 +66,8 @@ import {
   redactPreviewText,
 } from "../types/PreviewRedactor";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
+import { McpServerNormalizer } from "../utils/McpServerNormalizer";
+import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
 import { SessionValidator } from "../utils/SessionValidator";
 import { CliPromptPreparer } from "./harness/shared/CliPromptPreparer";
 import { CliExecutionSession } from "./harness/shared/CliExecutionSession";
@@ -149,8 +154,7 @@ export class ExecutionPreviewService {
         ? options.workspaceRoots
         : undefined,
       approvedExternalRoots: options.approvedExternalRoots,
-      allowWorkflowRelativeReferences:
-        options.allowWorkflowRelativeReferences,
+      allowWorkflowRelativeReferences: options.allowWorkflowRelativeReferences,
     });
   }
 
@@ -180,11 +184,7 @@ export class ExecutionPreviewService {
         : request.sourceDefinitionPath;
     const preparedSteps = await Promise.all(
       workflow.steps?.map((step) =>
-        this.substituteStep(
-          step,
-          variables,
-          semanticSourceDefinitionPath
-        )
+        this.substituteStep(step, variables, semanticSourceDefinitionPath)
       ) ?? []
     );
     const preparedFinalStep = workflow.finalStep
@@ -204,19 +204,30 @@ export class ExecutionPreviewService {
       ...(preparedFinalStep ? { finalStep: preparedFinalStep } : {}),
     };
     const targets = this.selectTargets(preparedWorkflow, scope);
+    const managedMcpServers = await new McpRegistryFileManager(
+      this.options.workspaceRoot
+    ).readAll();
 
     const resolvedTargets = new Map<number, ResolvedExecutionTarget>();
     for (const target of targets) {
       if (isScriptStep(target.step)) {
         continue;
       }
-      resolvedTargets.set(
-        target.stepIndex,
-        resolveExecutionProperties(target.step, preparedWorkflow, {
+      const resolution = resolveExecutionProperties(
+        target.step,
+        preparedWorkflow,
+        {
           defaults: this.options.defaults,
           hostCanProvidePty: this.options.hostCanProvidePty,
-        })
+        }
       );
+      resolvedTargets.set(target.stepIndex, {
+        ...resolution,
+        properties: await McpServerNormalizer.apply(
+          resolution.properties,
+          managedMcpServers
+        ),
+      });
     }
 
     const compatibilityTargets: CompatibilityExecutionTarget[] = targets
@@ -244,6 +255,7 @@ export class ExecutionPreviewService {
           variables,
           request,
           resolvedTargets.get(target.stepIndex),
+          managedMcpServers,
           compatibilityDiagnostics
         )
       );
@@ -304,6 +316,7 @@ export class ExecutionPreviewService {
     variables: Record<string, string>,
     request: ExecutionPreviewRequest,
     resolvedTarget: ResolvedExecutionTarget | undefined,
+    managedMcpServers: readonly ManagedMcpServer[],
     compatibilityDiagnostics: readonly CompatibilityDiagnostic[]
   ): Promise<StepExecutionPreview> {
     const step = target.step;
@@ -314,9 +327,12 @@ export class ExecutionPreviewService {
         defaults: this.options.defaults,
         hostCanProvidePty: this.options.hostCanProvidePty,
       });
-    const properties = VarSubstitutor.applyToResolvedProperties(
-      targetResolution.properties,
-      variables
+    const properties = await McpServerNormalizer.apply(
+      VarSubstitutor.applyToResolvedProperties(
+        targetResolution.properties,
+        variables
+      ),
+      managedMcpServers
     );
     const harness = await this.options.getHarness(properties.harness);
     const resolvedSessionId = isScriptStep(step)
@@ -468,7 +484,10 @@ export class ExecutionPreviewService {
         script: VarSubstitutor.substitute(step.script, variables),
       });
     }
-    const substituted = VarSubstitutor.applyToPromptText(step.prompt, variables);
+    const substituted = VarSubstitutor.applyToPromptText(
+      step.prompt,
+      variables
+    );
     return this.promptFileResolver
       .resolvePromptValue(substituted, sourceDefinitionPath)
       .then((prompt) => ({ ...step, prompt }));

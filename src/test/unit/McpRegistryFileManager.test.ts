@@ -4,7 +4,11 @@ import * as os from "os";
 import * as path from "path";
 import { suite, setup, teardown, test } from "mocha";
 import { SETTING_SCOPES } from "../../types/DashboardConstants";
-import { McpRegistryFileManager } from "../../utils/McpRegistryFileManager";
+import {
+  findManagedMcpServerByName,
+  McpRegistryFileManager,
+  resolveCtrlYokeMcpInvocation,
+} from "../../utils/McpRegistryFileManager";
 
 suite("McpRegistryFileManager", () => {
   let tempRoot: string;
@@ -75,6 +79,16 @@ suite("McpRegistryFileManager", () => {
     assert.deepStrictEqual(
       workspaceOnly?.locations.map((location) => location.scope),
       [SETTING_SCOPES.WORKSPACE]
+    );
+
+    assert.strictEqual(findManagedMcpServerByName(servers, "shared"), shared);
+    assert.strictEqual(
+      resolveCtrlYokeMcpInvocation(servers, "shared")?.command,
+      "workspace-command"
+    );
+    assert.strictEqual(
+      resolveCtrlYokeMcpInvocation(servers, "missing"),
+      undefined
     );
   });
 

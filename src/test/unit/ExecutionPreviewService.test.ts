@@ -16,13 +16,20 @@ import {
   HARNESS_IDS,
   PREVIEW_MUTATION_SCOPES,
   PREVIEW_SCOPES,
+  SETTING_SCOPES,
 } from "../../types/DashboardConstants";
 import type { HarnessCapabilityRegistrySnapshot } from "../../types/CompatibilityTypes";
 import type { PromptFile } from "../../types/CtrlYokeTypes";
-import type { ExecutionPropertyDefaults } from "../../types/ExecutionPropertyResolver";
+import {
+  resolveExecutionProperties,
+  type ExecutionPropertyDefaults,
+} from "../../types/ExecutionPropertyResolver";
 import type { ExecutionPlan } from "../../core/harness/shared/ExecutionPlanBuilder";
 import type { PreparedMutation } from "../../core/harness/shared/interfaces/PreparedMutation";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+import { McpRegistryFileManager } from "../../utils/McpRegistryFileManager";
+import { McpServerNormalizer } from "../../utils/McpServerNormalizer";
+import { CliProviderUtils } from "../../core/harness/shared/CliProviderUtils";
 
 const fsPromises = fs.promises;
 let temporaryRoots: string[] = [];
@@ -310,6 +317,77 @@ suite("ExecutionPreviewService", () => {
       assert.deepStrictEqual(writes, []);
     } finally {
       fsPromises.writeFile = originalWriteFile;
+    }
+  });
+
+  test("uses the same normalized MCP server set as execution planning", async () => {
+    const root = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-preview-mcp-normalization-")
+    );
+    const home = path.join(root, "home");
+    await fsPromises.mkdir(home, { recursive: true });
+    temporaryRoots.push(root);
+
+    const originalHome = process.env.HOME;
+    const originalUserProfile = process.env.USERPROFILE;
+    process.env.HOME = home;
+    process.env.USERPROFILE = home;
+
+    try {
+      const server = {
+        id: "playwright",
+        command: "node",
+        args: ["playwright-server.js"],
+      };
+      const registry = new McpRegistryFileManager(root);
+      await registry.addOrUpdate(server, SETTING_SCOPES.WORKSPACE);
+      const defaults = createDefaults();
+      const rawProperties = resolveExecutionProperties(
+        { prompt: "use the service", mcpServers: ["playwright"] },
+        { steps: [] },
+        { defaults, hostCanProvidePty: false }
+      ).properties;
+      const executionProperties = await McpServerNormalizer.applyFromRegistry(
+        rawProperties,
+        root
+      );
+      let executionServerIds: string[] = [];
+      await CliProviderUtils.planMcpConfigBlock(
+        {
+          promptIndex: 0,
+          allPrompts: [],
+          resolvedProperties: executionProperties,
+        },
+        root,
+        "extension",
+        async (
+          _serverPath,
+          _workspaceRoot,
+          _workingFilePath,
+          _env,
+          servers
+        ) => {
+          executionServerIds = (servers ?? []).map((entry) => entry.id);
+          return { cliArgs: [], mutations: [], diagnostics: [] };
+        }
+      );
+
+      const preview = await createService(root).build({
+        workflow: {
+          steps: [{ prompt: "use the service", mcpServers: ["playwright"] }],
+        },
+      });
+
+      assert.deepStrictEqual(
+        preview.steps[0].resolvedProperties.mcpServerIds,
+        executionServerIds
+      );
+      assert.deepStrictEqual(executionServerIds, ["playwright"]);
+    } finally {
+      if (originalHome === undefined) delete process.env.HOME;
+      else process.env.HOME = originalHome;
+      if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+      else process.env.USERPROFILE = originalUserProfile;
     }
   });
 

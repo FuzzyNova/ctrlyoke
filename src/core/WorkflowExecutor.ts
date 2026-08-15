@@ -51,6 +51,7 @@ import {
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { sanitizeTerminalOutput } from "../utils/TerminalOutputSanitizer";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
+import { McpServerNormalizer } from "../utils/McpServerNormalizer";
 import { PromptFileResolver } from "./PromptFileResolver";
 import {
   CliOutputFormatter,
@@ -658,6 +659,11 @@ export class WorkflowExecutor {
       if (!effectivePromptText.trim()) {
         throw new Error("Prompt is empty after resolving its prompt file");
       }
+
+      resolvedProperties = await McpServerNormalizer.applyFromRegistry(
+        resolvedProperties,
+        context.workspaceFolderPath ?? context.executionWorkspace.executionRoot
+      );
 
       const integration = context.getIntegrationForPrompt(
         prompt,
