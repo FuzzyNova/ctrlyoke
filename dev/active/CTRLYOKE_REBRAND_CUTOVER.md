@@ -11,15 +11,15 @@
 
 ## Migrate vs. create-fresh — at a glance
 
-| Area                      | Prior state (FlightPath)             | This cutover                                             |
-| ------------------------- | ------------------------------------ | -------------------------------------------------------- |
-| Domain + DNS (Cloudflare) | `flightpath.dev` live, DNS → Netlify | **Migrate** — stand up `ctrlyoke.dev`, 301 old → new     |
-| Netlify site              | hosting `flightpath.dev`             | **Migrate** — repoint primary domain to `ctrlyoke.dev`   |
+| Area                      | Prior state (FlightPath)             | This cutover                                                                             |
+| ------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Domain + DNS (Cloudflare) | `flightpath.dev` live, DNS → Netlify | **Migrate** — stand up `ctrlyoke.dev`, 301 old → new                                     |
+| Netlify site              | hosting `flightpath.dev`             | **Migrate** — repoint primary domain to `ctrlyoke.dev`                                   |
 | Google Workspace inboxes  | 6 product inboxes `@flightpath.dev`  | **Migrate** — rename to `@ctrlyoke.dev`, clean break (no traffic ever hit old addresses) |
-| GitHub repo               | `FuzzyNova/flightpath`               | **Migrate** — rename to `FuzzyNova/ctrlyoke`             |
-| VS Code Marketplace       | not yet published                    | **Create fresh** — publish `fuzzynova.ctrlyoke`          |
-| Lemon Squeezy             | **never created**                    | **Create fresh** under ctrlyoke                          |
-| Keygen                    | **never created**                    | **Create fresh** under ctrlyoke                          |
+| GitHub repo               | `FuzzyNova/flightpath`               | **Migrate** — rename to `FuzzyNova/ctrlyoke`                                             |
+| VS Code Marketplace       | not yet published                    | **Create fresh** — publish `fuzzynova.ctrlyoke`                                          |
+| Lemon Squeezy             | **never created**                    | **Create fresh** under ctrlyoke                                                          |
+| Keygen                    | **never created**                    | **Create fresh** under ctrlyoke                                                          |
 
 > **Decisions carried over from the rebrand plan:** keep `flightpath.dev` as a **permanent 301 redirect** (web traffic/SEO). Email inboxes are a **clean break, no forwarders** — pre-release, zero customers, nothing has ever hit the `@flightpath.dev` inboxes, so there's no one to catch. Publisher stays **`fuzzynova`** (studio identity, unaffected).
 
@@ -32,7 +32,7 @@
 - [x] Decide the redirect strategy and keep it **permanent**:
   - `flightpath.dev` → `ctrlyoke.dev` **301** (preserve old links / SEO).
   - `controlyoke.dev` / `controlyoke.com` / `ctrlyoke.com` → **301 → `ctrlyoke.dev`** (canonical).
-- [ ] Verify DNS propagation before flipping anything customer-facing (apex + `www` + any `mail`/MX records for §3).
+- [x] Verify DNS propagation before flipping anything customer-facing (apex + `www` + any `mail`/MX records for §3).
 
 ## 2. Netlify
 
@@ -72,9 +72,9 @@
 
 ## 5. VS Code Marketplace
 
-- [ ] Publish the extension as **`fuzzynova.ctrlyoke`** (driven by `package.json` `name`, already set). Publisher `fuzzynova` is unchanged.
-- [ ] `MARKETPLACE_URL` in `landing/src/config.ts` already points at `fuzzynova.ctrlyoke` — the listing link goes live when the item is published.
-- [ ] Confirm marketplace publisher contact / branding reads ctrlyoke.
+- [x] Publish the extension as **`fuzzynova.ctrlyoke`** (driven by `package.json` `name`, already set). Publisher `fuzzynova` is unchanged. Published then immediately unpublished (no "Unlist" option was available) — the `publisher.name` identifier is permanently reserved to `fuzzynova` regardless of unpublish state.
+- [x] `MARKETPLACE_URL` in `landing/src/config.ts` already points at `fuzzynova.ctrlyoke` — the listing link goes live when the item is published.
+- [x] Confirm marketplace publisher contact / branding reads ctrlyoke.
 
 ## 6. Lemon Squeezy — create fresh under ctrlyoke
 
