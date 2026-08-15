@@ -1,10 +1,12 @@
 # `ctrlyoke`
 
-The standalone CLI currently exposes two commands:
+The standalone CLI currently exposes these commands:
 
 ```text
 ctrlyoke run [file]
 ctrlyoke validate <file>
+ctrlyoke history prune [--yes]
+ctrlyoke history relink <oldPath> <newPath> [--yes]
 ```
 
 ## `ctrlyoke run`
@@ -54,3 +56,39 @@ Validate a workflow file without running it:
 ```bash
 ctrlyoke validate my-workflow.ctrlyoke.yaml
 ```
+
+## `ctrlyoke history prune`
+
+List user-scoped project directories whose recorded `statePath` no longer
+exists:
+
+```bash
+ctrlyoke history prune
+```
+
+This is a dry run by default. In a non-interactive shell, pass `--yes` to
+delete the listed orphaned project history:
+
+```bash
+ctrlyoke history prune --yes
+```
+
+Inaccessible repository paths are reported as unknown and are never deleted.
+Projects with a live `runner.json` are also refused. The command scans the
+user project registry under `<ctrlyokeStateHome>/projects/` and does not need a
+workspace to be open.
+
+## `ctrlyoke history relink`
+
+Move history after a repository is renamed or moved:
+
+```bash
+ctrlyoke history relink /old/repository /new/repository --yes
+```
+
+Without `--yes`, the command only previews the relink (or asks for confirmation
+when attached to an interactive terminal). It refuses live runners and
+destinations containing history. A matching empty destination scaffold may be
+replaced automatically. Relinking operates on the user project tree even when
+`storage.runHistoryLocation` is currently `workspace`; changing that setting
+does not migrate history.

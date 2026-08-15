@@ -162,6 +162,11 @@ export function runsRoot(stateRoot: string): string {
   );
 }
 
+/** Resolve `.runs` beneath an already-selected project state root. */
+export function runsRootForProjectState(projectRoot: string): string {
+  return path.join(path.resolve(projectRoot), PATH_CONSTANTS.RUNS_DIR);
+}
+
 export function lineageDir(
   workspaceRoot: string,
   workflowKey: WorkflowKey

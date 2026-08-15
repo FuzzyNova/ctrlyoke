@@ -55,6 +55,11 @@ export function projectStateRoot(
   throw new Error(`Unsupported run history location: ${String(location)}`);
 }
 
+/** Resolve the user-scoped project registry root without consulting frozen policy. */
+export function userProjectsRoot(): string {
+  return path.join(ctrlyokeStateHome(), PROJECTS_DIR);
+}
+
 function sanitizeProjectSlug(basename: string): string {
   const ascii = basename
     .normalize("NFKD")

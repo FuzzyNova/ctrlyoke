@@ -67,6 +67,11 @@ import {
   type RerunOptions,
   type RunCommandOptions,
 } from "./cli/CliRunCommandDefinitions";
+import { registerHistoryCommands } from "./cli/HistoryCommandDefinitions";
+import {
+  pruneHistoryCommand,
+  relinkHistoryCommand,
+} from "./cli/HistoryCommands";
 import { resolveCliExecutionMode } from "./cli/CliExecutionMode";
 import { ExecutionPreviewService } from "./core/ExecutionPreviewService";
 import { HarnessCapabilityRegistry } from "./core/HarnessCapabilityRegistry";
@@ -101,6 +106,27 @@ registerRunScopedCommands(program, {
   rerun: rerunCommand,
   append: appendCommand,
   continue: continueCommand,
+});
+
+registerHistoryCommands(program, {
+  prune: (options) =>
+    handleHistoryCommand(
+      pruneHistoryCommand(options, {
+        writeOut: (message) => console.log(message),
+        writeErr: (message) => console.error(chalk.yellow(message)),
+        isInteractive: !!process.stdin.isTTY && !!process.stdout.isTTY,
+        confirm: promptYesNo,
+      })
+    ),
+  relink: (oldPath, newPath, options) =>
+    handleHistoryCommand(
+      relinkHistoryCommand(oldPath, newPath, options, {
+        writeOut: (message) => console.log(message),
+        writeErr: (message) => console.error(chalk.yellow(message)),
+        isInteractive: !!process.stdin.isTTY && !!process.stdout.isTTY,
+        confirm: promptYesNo,
+      })
+    ),
 });
 
 program
@@ -659,6 +685,14 @@ async function runCommand(
     }
     process.exit(2);
   }
+}
+
+function handleHistoryCommand(operation: Promise<void>): Promise<void> {
+  return operation.catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(chalk.red(`Error: ${message}`));
+    process.exit(2);
+  });
 }
 
 async function dryRunCommand(

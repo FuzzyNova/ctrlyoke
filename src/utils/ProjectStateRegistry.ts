@@ -3,15 +3,20 @@ import * as path from "node:path";
 import { withFileLock } from "./FileLockUtils";
 import { renameWithTransientRetry } from "./AtomicFileUtils";
 import { pathsEqual } from "./PathCasing";
-import { ctrlyokeStateHome, projectStateRoot } from "./ProjectStatePaths";
+import {
+  ctrlyokeStateHome,
+  projectStateRoot,
+  userProjectsRoot,
+} from "./ProjectStatePaths";
 import type { RunHistoryLocation } from "../types/CtrlYokeSettings";
 import { RUN_HISTORY_LOCATIONS } from "../types/DashboardConstants";
 import { getFrozenRunHistoryLocation } from "./RunHistoryStoragePolicy";
 
-const PROJECT_METADATA_FILE_NAME = "project.json";
+export const PROJECT_METADATA_FILE_NAME = "project.json";
 const PROJECT_SCHEMA_VERSION = 1;
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
+const REGISTRY_LOCK_NAME = ".registry";
 
 export interface ProjectStateMetadata {
   schemaVersion: 1;
@@ -61,46 +66,114 @@ export class ProjectStateRegistry {
     // The lock is a sibling of the project directory so it can be acquired
     // before the directory exists. It is still inside the private projects
     // root and is removed by withFileLock after the transaction completes.
-    return withFileLock(projectRoot, async () => {
-      await assertContainedByRealRoot(projectsRoot, projectRoot);
-      await rejectSymlinkProjectDirectory(projectRoot);
+    return withUserProjectRegistryLock(async () => {
+      return withFileLock(projectRoot, async () => {
+        await assertContainedByRealRoot(projectsRoot, projectRoot);
+        await rejectSymlinkProjectDirectory(projectRoot);
 
-      const projectExists = await pathExists(projectRoot);
-      if (!projectExists) {
-        await fs.mkdir(projectRoot, {
-          recursive: false,
-          mode: PRIVATE_DIRECTORY_MODE,
-        });
-      } else {
-        const stats = await fs.lstat(projectRoot);
-        if (!stats.isDirectory()) {
-          throw new Error(
-            `Project state path is not a directory: ${projectRoot}`
-          );
+        const projectExists = await pathExists(projectRoot);
+        if (!projectExists) {
+          await fs.mkdir(projectRoot, {
+            recursive: false,
+            mode: PRIVATE_DIRECTORY_MODE,
+          });
+        } else {
+          const stats = await fs.lstat(projectRoot);
+          if (!stats.isDirectory()) {
+            throw new Error(
+              `Project state path is not a directory: ${projectRoot}`
+            );
+          }
         }
-      }
-      await fs.chmod(projectRoot, PRIVATE_DIRECTORY_MODE);
+        await fs.chmod(projectRoot, PRIVATE_DIRECTORY_MODE);
 
-      await assertContainedByRealRoot(projectsRoot, projectRoot);
-      await rejectSymlinkProjectDirectory(projectRoot);
+        await assertContainedByRealRoot(projectsRoot, projectRoot);
+        await rejectSymlinkProjectDirectory(projectRoot);
 
-      const metadataPath = path.join(projectRoot, PROJECT_METADATA_FILE_NAME);
-      const metadata = await readOrCreateMetadata(
-        projectRoot,
-        metadataPath,
-        resolvedStateRoot,
-        gitToplevel
-      );
-      await writeMetadataAtomically(
-        projectsRoot,
-        projectRoot,
-        metadataPath,
-        metadata
-      );
+        const metadataPath = path.join(projectRoot, PROJECT_METADATA_FILE_NAME);
+        const metadata = await readOrCreateMetadata(
+          projectRoot,
+          metadataPath,
+          resolvedStateRoot,
+          gitToplevel
+        );
+        await writeMetadataAtomically(
+          projectsRoot,
+          projectRoot,
+          metadataPath,
+          metadata
+        );
 
-      return { projectRoot, metadataPath, metadata };
+        return { projectRoot, metadataPath, metadata };
+      });
     });
   }
+}
+
+/** Resolve the private project-state directory used by user-scoped history. */
+export function userProjectStatesRoot(): string {
+  return userProjectsRoot();
+}
+
+/** Serialize mutations that enumerate, rename, or delete project directories. */
+export async function withUserProjectRegistryLock<T>(
+  action: (projectsRoot: string) => Promise<T>
+): Promise<T> {
+  const projectsRoot = userProjectStatesRoot();
+  await ensurePrivateDirectory(ctrlyokeStateHome());
+  await ensurePrivateDirectory(projectsRoot);
+
+  return withFileLock(path.join(projectsRoot, REGISTRY_LOCK_NAME), async () => {
+    await assertContainedByRealRoot(projectsRoot, projectsRoot);
+    return action(projectsRoot);
+  });
+}
+
+/** Re-check a project path against the real projects root immediately before mutation. */
+export async function assertUserProjectContained(
+  projectsRoot: string,
+  projectRoot: string
+): Promise<void> {
+  await assertContainedByRealRoot(projectsRoot, projectRoot);
+}
+
+/** Reject a project root that could redirect a lifecycle operation elsewhere. */
+export async function assertProjectDirectoryIsReal(
+  projectRoot: string
+): Promise<void> {
+  await rejectSymlinkProjectDirectory(projectRoot);
+}
+
+/** Read and validate one project registry record without following a directory symlink. */
+export async function readProjectStateMetadata(
+  projectRoot: string
+): Promise<ProjectStateMetadata | undefined> {
+  const metadataPath = path.join(projectRoot, PROJECT_METADATA_FILE_NAME);
+  const stats = await lstatIfExists(metadataPath);
+  if (!stats) {
+    return undefined;
+  }
+  if (stats.isSymbolicLink()) {
+    throw new Error(`Project metadata must not be a symlink: ${metadataPath}`);
+  }
+  if (!stats.isFile()) {
+    throw new Error(`Project metadata is not a file: ${metadataPath}`);
+  }
+  return parseMetadata(await fs.readFile(metadataPath, "utf8"), metadataPath);
+}
+
+/** Write one project registry record atomically while preserving its directory boundary. */
+export async function writeProjectStateMetadata(
+  projectsRoot: string,
+  projectRoot: string,
+  metadata: ProjectStateMetadata
+): Promise<void> {
+  await writeMetadataAtomically(
+    projectsRoot,
+    projectRoot,
+    path.join(projectRoot, PROJECT_METADATA_FILE_NAME),
+    metadata
+  );
 }
 
 /** Return a warning when the private state home is inside a repository/state root. */
