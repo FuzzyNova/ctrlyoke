@@ -1438,10 +1438,9 @@ export class OutputHistoryManager {
         attemptIndex: cliOutput.attemptIndex ?? 0,
         phase,
         definitionRevision,
-        responseKind:
-          cliOutput.source === "script"
-            ? TIMELINE_ATTEMPT_KINDS.SCRIPT
-            : TIMELINE_ATTEMPT_KINDS.AI,
+        responseKind: cliOutput.source
+          ? TIMELINE_ATTEMPT_KINDS.SCRIPT
+          : TIMELINE_ATTEMPT_KINDS.AI,
         payload: { cliOutput },
       })
     );

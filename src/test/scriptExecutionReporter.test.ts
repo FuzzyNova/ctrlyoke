@@ -1,5 +1,8 @@
 import { strict as assert } from "assert";
-import { suite, test } from "mocha";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
+import { suite, teardown, test } from "mocha";
 import type {
   EndConditionEvaluator,
   EvaluationResult,
@@ -8,12 +11,29 @@ import {
   ScriptExecutionReporter,
   type ScriptExecutionReporterContext,
 } from "../core/orchestration/ScriptExecutionReporter";
+import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
 import {
   EXECUTION_PHASES,
   FINAL_STEP_PHASES,
+  OUTPUT_HISTORY_KINDS,
   SCRIPT_OUTPUT_SOURCES,
 } from "../types/DashboardConstants";
 import type { CliOutput } from "../types/WebviewMessageTypes";
+import { TIMELINE_EVENT_TYPES } from "../types/WorkflowTimelineTypes";
+import type {
+  OrderedCliHistoryEntry,
+} from "../types/OutputHistoryTypes";
+import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
+
+const temporaryDirectories: string[] = [];
+
+teardown(async () => {
+  await Promise.all(
+    temporaryDirectories
+      .splice(0)
+      .map((directory) => fs.rm(directory, { recursive: true, force: true }))
+  );
+});
 
 function makeResult(
   overrides: Partial<EvaluationResult> = {}
@@ -128,6 +148,78 @@ suite("ScriptExecutionReporter", () => {
         error: undefined,
       });
     }
+  });
+
+  test("persists a worktree setup output entry in its own phase", async () => {
+    const temporaryDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-script-reporter-")
+    );
+    temporaryDirectories.push(temporaryDirectory);
+    const historyManager = new OutputHistoryManager(temporaryDirectory);
+    const historyFilePath = (
+      await historyManager.initializeRunAt(
+        "reporter-test" as WorkflowKey,
+        "run-1" as RunRef,
+        path.join(temporaryDirectory, "run"),
+        1,
+        Date.now()
+      )
+    ).filePath;
+    const events: string[] = [];
+    const { reporter, context } = makeReporter(makeResult(), events);
+    context.historyFilePath = historyFilePath;
+    context.outputHistoryManager = historyManager;
+
+    await reporter.report({
+      context,
+      source: SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP,
+      properties: {
+        script: "npm ci",
+        compareSource: "exitCode",
+      },
+      phase: EXECUTION_PHASES.WORKTREE_SETUP,
+      target: { kind: "queue", stepIndex: 0 },
+      signedStepIndex: 0,
+      runIndex: 0,
+      attemptIndex: 0,
+      timestampMs: 100,
+      onPass: "continue",
+      onFail: "stopWorkflow",
+      actionForErrored: "stopWorkflow",
+      evaluate: async (onOutput) => {
+        onOutput("installing\n");
+        return makeResult({
+          actual: "0",
+          actualSource: "exitCode",
+          stdout: "installing\n",
+          result: "installing\n",
+        });
+      },
+    });
+
+    assert.deepStrictEqual(events, ["placeholder", "installing\n", "final"]);
+    const history = await historyManager.loadHistory(historyFilePath);
+    const setupEntry = history.orderedEntries.find(
+      (entry): entry is OrderedCliHistoryEntry =>
+        entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
+        entry.phase === EXECUTION_PHASES.WORKTREE_SETUP
+    );
+    assert.ok(setupEntry);
+    assert.strictEqual(setupEntry?.attemptIndex, 0);
+
+    const eventLines = await fs.readFile(
+      path.join(path.dirname(historyFilePath), "events.jsonl"),
+      "utf8"
+    );
+    const scriptEvent = eventLines
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { eventType: string; phase?: string })
+      .find(
+        (event) =>
+          event.eventType === TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED
+      );
+    assert.strictEqual(scriptEvent?.phase, EXECUTION_PHASES.WORKTREE_SETUP);
   });
 
   test("sanitizes final-step streaming chunks before dashboard delivery", async () => {

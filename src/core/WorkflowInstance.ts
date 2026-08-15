@@ -12,7 +12,10 @@ import {
   stripViewOnlyWorkflowStepFields,
 } from "./WorkflowStepSanitizer";
 import { HarnessIntegration, HarnessStatus } from "./HarnessIntegration";
-import { EndConditionEvaluator } from "./EndConditionEvaluator";
+import {
+  EndConditionEvaluator,
+  type EvaluationResult,
+} from "./EndConditionEvaluator";
 import { EndConditionHandler } from "./EndConditionHandler";
 import { WorkflowExecutor, WorkflowExecutionContext } from "./WorkflowExecutor";
 import {
@@ -38,6 +41,8 @@ import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { pathsEqual } from "../utils/PathCasing";
 import {
   ACTION_TYPES,
+  COMPARE_SOURCES,
+  CONDITION_ACTIONS,
   DEFAULT_WORKFLOW_NAME,
   CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
@@ -48,6 +53,8 @@ import {
   SESSION_KINDS,
   STATUS_MESSAGE_SEVERITY,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  EXECUTION_PHASES,
+  SCRIPT_OUTPUT_SOURCES,
   STEP_STATUS,
   STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
@@ -86,7 +93,16 @@ import {
 import {
   WorktreeManager,
   type WorktreeInfo,
+  type WorktreeSetupRunner,
 } from "./orchestration/WorktreeManager";
+import {
+  ScriptExecutionReporter,
+  type ScriptExecutionReporterContext,
+} from "./orchestration/ScriptExecutionReporter";
+import {
+  ScriptProcessRunner,
+  type ScriptProcessResult,
+} from "./orchestration/ScriptProcessRunner";
 
 // Import orchestration classes
 import { PromptFileLoader } from "./orchestration/PromptFileLoader";
@@ -1793,7 +1809,7 @@ export class WorkflowInstance {
         );
       }
 
-      await this.prepareExecutionWorktree();
+      await this.prepareExecutionWorktree(historyFilePath);
 
       // Create the execution integration only after the execution workspace
       // has been remapped to the resolved worktree.
@@ -3621,7 +3637,125 @@ export class WorkflowInstance {
     );
   }
 
-  private async prepareExecutionWorktree(): Promise<void> {
+  private createWorktreeSetupRunner(
+    historyFilePath: string
+  ): WorktreeSetupRunner {
+    return {
+      run: async (args) => {
+        const processRunner = new ScriptProcessRunner(args.executionRoot);
+        const reporter = new ScriptExecutionReporter(
+          this.endConditionEvaluator
+        );
+        let processResult: ScriptProcessResult | undefined;
+        try {
+          await reporter.report({
+            context: {
+              executionWorkspace: {
+                ...this.executionWorkspace,
+                executionRoot: args.executionRoot,
+              },
+              workspaceFolderPath: args.executionRoot,
+              historyFilePath,
+              dashboardProvider: this.dashboardSink,
+              outputHistoryManager: this.outputHistoryManager,
+              getDefinitionRevisionContext: () =>
+                this.getDefinitionRevisionContext(),
+            } satisfies ScriptExecutionReporterContext,
+            source: SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP,
+            properties: {
+              script: args.command,
+              compareSource: COMPARE_SOURCES.EXIT_CODE,
+            },
+            phase: EXECUTION_PHASES.WORKTREE_SETUP,
+            target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+            signedStepIndex: 0,
+            runIndex: 0,
+            attemptIndex: args.attemptIndex,
+            timestampMs: Date.now(),
+            onPass: CONDITION_ACTIONS.CONTINUE,
+            onFail: CONDITION_ACTIONS.STOP_WORKFLOW,
+            actionForErrored: CONDITION_ACTIONS.STOP_WORKFLOW,
+            statusLabel: "Worktree setup",
+            emitStatus: false,
+            vars: args.vars,
+            evaluate: async (onOutput): Promise<EvaluationResult> => {
+              const startedAt = Date.now();
+              processResult = await processRunner.run({
+                cwd: args.executionRoot,
+                timeout: args.timeoutMs,
+                argv: [args.command],
+                vars: args.vars,
+                onOutput,
+                viaShell: true,
+              });
+              const comparison = this.endConditionEvaluator.evaluateResult(
+                {
+                  result: processResult.result,
+                  stdout: processResult.stdout,
+                  stderr: processResult.stderr,
+                  exitCode: processResult.exitCode,
+                  success: processResult.success,
+                },
+                undefined,
+                COMPARE_SOURCES.EXIT_CODE
+              );
+              return {
+                ...comparison,
+                errored: processResult.errored ?? false,
+                stdout: processResult.stdout ?? "",
+                stderr: processResult.stderr ?? "",
+                result: processResult.result,
+                error: processResult.error,
+                timeout: processResult.timeout,
+                duration: Date.now() - startedAt,
+                exitCode: processResult.exitCode,
+              };
+            },
+          });
+          if (!processResult) {
+            throw new Error("Worktree setup did not produce a process result");
+          }
+          return processResult;
+        } finally {
+          processRunner.dispose();
+        }
+      },
+    };
+  }
+
+  private async getNextWorktreeSetupAttemptIndex(
+    historyFilePath: string
+  ): Promise<number> {
+    if (!historyFilePath) {
+      return 0;
+    }
+    try {
+      const history = await this.outputHistoryManager.loadHistory(
+        historyFilePath
+      );
+      let nextAttemptIndex = 0;
+      for (const entry of history.orderedEntries) {
+        if (
+          entry.kind !== OUTPUT_HISTORY_KINDS.CLI ||
+          entry.phase !== EXECUTION_PHASES.WORKTREE_SETUP
+        ) {
+          continue;
+        }
+        nextAttemptIndex = Math.max(nextAttemptIndex, entry.attemptIndex + 1);
+      }
+      return nextAttemptIndex;
+    } catch (error) {
+      Log.warn(
+        `[inst:${this.id.slice(0, 8)}] Failed to read prior worktree setup attempts:`,
+        error
+      );
+      return 0;
+    }
+  }
+
+  private async prepareExecutionWorktree(
+    historyFilePath: string
+  ): Promise<void> {
     const config = this.worktreeResolution.config;
     if (!config) {
       await this.configureExecutionWorkspace(this.defaultExecutionWorkspace);
@@ -3643,6 +3777,9 @@ export class WorkflowInstance {
       );
     }
 
+    const setupAttemptIndex = config.setup?.trim()
+      ? await this.getNextWorktreeSetupAttemptIndex(historyFilePath)
+      : 0;
     const sharedOptions = {
       sourceCheckoutRoot,
       base: config.base,
@@ -3657,6 +3794,8 @@ export class WorkflowInstance {
       worktree: this.worktreeResolution,
       setup: config.setup,
       vars: this.promptQueue.getWorkflowFile().vars,
+      setupAttemptIndex,
+      worktreeSetupRunner: this.createWorktreeSetupRunner(historyFilePath),
     } as const;
     const info =
       config.mode === "managed"

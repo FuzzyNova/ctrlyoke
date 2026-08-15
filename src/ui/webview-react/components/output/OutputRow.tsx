@@ -934,11 +934,15 @@ const CliHeaderRowView: React.FC<{
   if (isScriptOutput(output)) {
     const isConditionOutput =
       output.source !== SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP;
+    const isWorktreeSetup =
+      output.source === SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP;
     const conditionLabel =
       output.source === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
         ? "Pre-condition"
         : output.source === SCRIPT_OUTPUT_SOURCES.END_CONDITION
           ? `End condition${row.attemptIndex > 0 ? ` retry ${row.attemptIndex + 1}` : ""}`
+          : isWorktreeSetup
+            ? "Worktree setup"
           : undefined;
     const headerLabel = isConditionOutput
       ? conditionLabel
@@ -946,7 +950,9 @@ const CliHeaderRowView: React.FC<{
     const headerIcon =
       output.source === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
         ? "codicon-shield"
-        : "codicon-checklist";
+        : isWorktreeSetup
+          ? "codicon-tools"
+          : "codicon-checklist";
     return (
       <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex min-w-0 flex-wrap items-start gap-x-[var(--spacing-sm)] gap-y-[var(--spacing-xs)]">
         <span className="inline-flex min-w-0 flex-1 flex-wrap items-center gap-x-1 gap-y-[2px]">

@@ -51,7 +51,10 @@ import {
   isWorkspaceInitializerRuntimePath,
   isWorkspaceInitializerUnsafePath,
 } from "./WorkspaceInitializer";
-import { ScriptProcessRunner } from "./ScriptProcessRunner";
+import {
+  ScriptProcessRunner,
+  type ScriptProcessResult,
+} from "./ScriptProcessRunner";
 import {
   ExecutionRootLeaseManager,
   type ExecutionLeaseHandle,
@@ -182,6 +185,8 @@ export interface WorktreeManagerOptions {
   ) => Promise<void>;
   /** Injectable Git seam for merge recovery tests and future adapters. */
   mergeOperations?: Partial<WorktreeMergeOperations>;
+  /** Process-level seam for setup; reporters are supplied by workflow owners. */
+  worktreeSetupRunner?: WorktreeSetupRunner;
 }
 
 export interface WorktreeMergeOperations {
@@ -189,6 +194,43 @@ export interface WorktreeMergeOperations {
   noFastForward: (dir: string, ref: string) => Promise<void>;
   getUnmergedPaths: (dir: string) => Promise<string[]>;
   abort: (dir: string) => Promise<void>;
+}
+
+export interface WorktreeSetupRunner {
+  run(args: {
+    executionRoot: string;
+    command: string;
+    vars?: Record<string, string>;
+    timeoutMs: number;
+    attemptIndex: number;
+  }): Promise<ScriptProcessResult>;
+}
+
+type WorktreeSetupRunnerArgs = Parameters<
+  WorktreeSetupRunner["run"]
+>[0];
+
+/** Headless setup transport used when no live reporter is available. */
+export class DefaultWorktreeSetupRunner implements WorktreeSetupRunner {
+  async run({
+    executionRoot,
+    command,
+    vars,
+    timeoutMs,
+  }: WorktreeSetupRunnerArgs): Promise<ScriptProcessResult> {
+    const runner = new ScriptProcessRunner(executionRoot);
+    try {
+      return await runner.run({
+        cwd: executionRoot,
+        timeout: timeoutMs,
+        argv: [command],
+        vars,
+        viaShell: true,
+      });
+    } finally {
+      runner.dispose();
+    }
+  }
 }
 
 /** One Git-discovered checkout plus read-only ctrlyoke lease/ownership state. */
@@ -294,6 +336,10 @@ export interface ResolveNamedWorktreeOptions {
   setup?: string;
   /** Workflow vars are exported as CTRLYOKE_VAR_* by the shared runner. */
   vars?: Record<string, string>;
+  /** Attempt identity for setup output within this run. */
+  setupAttemptIndex?: number;
+  /** Optional per-execution reporter-backed setup transport. */
+  worktreeSetupRunner?: WorktreeSetupRunner;
 }
 
 export interface EnsureManagedWorktreeOptions extends Omit<
@@ -408,6 +454,7 @@ export class WorktreeManager {
   private readonly leaseManager: ExecutionRootLeaseManager;
   private readonly now: () => number;
   private readonly mergeOperations: WorktreeMergeOperations;
+  private readonly worktreeSetupRunner: WorktreeSetupRunner;
 
   public constructor(private readonly options: WorktreeManagerOptions = {}) {
     this.leaseManager = options.leaseManager ?? new ExecutionRootLeaseManager();
@@ -419,6 +466,8 @@ export class WorktreeManager {
       abort: abortMerge,
       ...options.mergeOperations,
     };
+    this.worktreeSetupRunner =
+      options.worktreeSetupRunner ?? new DefaultWorktreeSetupRunner();
   }
 
   /** Resolve the configured/sibling/fallback placement root for a repository. */
@@ -2108,7 +2157,9 @@ export class WorktreeManager {
         await this.runSetup(
           executionCheckoutRoot,
           options.setup!,
-          options.vars
+          options.vars,
+          options.setupAttemptIndex ?? 0,
+          options.worktreeSetupRunner
         );
         setupOutcome = "succeeded";
         await this.writeNamedSetupRecord(namedSetupRecordPath, {
@@ -2187,26 +2238,22 @@ export class WorktreeManager {
   private async runSetup(
     executionRoot: string,
     setup: string,
-    vars?: Record<string, string>
+    vars: Record<string, string> | undefined,
+    attemptIndex: number,
+    setupRunner?: WorktreeSetupRunner
   ): Promise<void> {
     const command = VarSubstitutor.substitute(setup, vars ?? {});
-    const runner = new ScriptProcessRunner(executionRoot);
-    try {
-      const result = await runner.run({
-        cwd: executionRoot,
-        timeout: ConfigurationUtils.getScriptTimeoutMs(),
-        argv: [command],
-        vars,
-        viaShell: true,
-      });
-      if (!result.success) {
-        throw new Error(
-          result.error ||
-            `Setup exited with code ${result.exitCode ?? "unknown"}`
-        );
-      }
-    } finally {
-      runner.dispose();
+    const result = await (setupRunner ?? this.worktreeSetupRunner).run({
+      executionRoot,
+      command,
+      vars,
+      timeoutMs: ConfigurationUtils.getScriptTimeoutMs(),
+      attemptIndex,
+    });
+    if (!result.success) {
+      throw new Error(
+        result.error || `Setup exited with code ${result.exitCode ?? "unknown"}`
+      );
     }
   }
 
@@ -2628,7 +2675,9 @@ export class WorktreeManager {
         await this.runSetup(
           args.record.worktreePath,
           args.options.setup!,
-          args.options.vars
+          args.options.vars,
+          args.options.setupAttemptIndex ?? 0,
+          args.options.worktreeSetupRunner
         );
         setupOutcome = "succeeded";
       } catch (error) {

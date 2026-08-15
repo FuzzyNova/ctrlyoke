@@ -8,9 +8,24 @@ import {
   WorktreeManager,
   WorktreeSetupError,
   type WorktreeMergeOperations,
+  type WorktreeSetupRunner,
 } from "../../core/orchestration/WorktreeManager";
 import { ExecutionRootLeaseManager } from "../../core/orchestration/ExecutionRootLeaseManager";
+import type { ScriptProcessResult } from "../../core/orchestration/ScriptProcessRunner";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
+
+class RecordingWorktreeSetupRunner implements WorktreeSetupRunner {
+  readonly calls: Array<Parameters<WorktreeSetupRunner["run"]>[0]> = [];
+
+  constructor(private readonly result: ScriptProcessResult) {}
+
+  async run(
+    args: Parameters<WorktreeSetupRunner["run"]>[0]
+  ): Promise<ScriptProcessResult> {
+    this.calls.push(args);
+    return this.result;
+  }
+}
 
 suite("WorktreeManager", function () {
   this.timeout(20_000);
@@ -388,6 +403,38 @@ suite("WorktreeManager", function () {
       updates.filter((value) => value.startsWith("provisioning")),
       ["provisioning:false", "provisioning:false", "provisioning:false"]
     );
+  });
+
+  test("delegates setup to the injected runner with substituted variables", async () => {
+    const { parent, repository } = await makeRepository("setup-runner");
+    const runner = new RecordingWorktreeSetupRunner({
+      success: true,
+      result: "",
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+    });
+    const instance = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      worktreeSetupRunner: runner,
+    });
+
+    const info = await resolve(instance, repository, "feature/setup-runner", {
+      setup: "echo {{message}}",
+      vars: { message: "created" },
+      setupAttemptIndex: 3,
+    });
+
+    assert.strictEqual(runner.calls.length, 1);
+    assert.deepStrictEqual(runner.calls[0], {
+      executionRoot: info.worktreePath,
+      command: "echo created",
+      vars: { message: "created" },
+      timeoutMs: runner.calls[0]!.timeoutMs,
+      attemptIndex: 3,
+    });
+    assert.ok(runner.calls[0]!.timeoutMs > 0);
+    await info.lease.release();
   });
 
   test("persists failed setup durably, leaves the directory, and throws", async () => {

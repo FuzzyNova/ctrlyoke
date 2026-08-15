@@ -1,6 +1,6 @@
 # Script Header Row and Worktree Setup Output
 
-> **Status:** Phases 1–2 complete; Phases 3–5 remain backlog/design. Two related changes on the same pipeline:
+> **Status:** Phases 1–4 complete; Phase 5 remains backlog/design. Two related changes on the same pipeline:
 > (1) a script execution renders its command twice, and (2) worktree setup
 > produces no output at all while it runs.
 >
@@ -434,9 +434,10 @@ the continuation branches in place. Regression tests cover both orderings and
 the continuation handler's step-0 output preservation. This lands before Phase
 4 so the live pane is populated for setup output.
 
-**Phase 4 — setup through the reporter.** `WorktreeSetupRunner` port, default
-implementation, `WorkflowInstance`-supplied reporter implementation, header
-label/icon for the setup source in `CliHeaderRowView` (`OutputRow.tsx:934`).
+**Phase 4 — setup through the reporter.** ✅ Complete. Added the
+`WorktreeSetupRunner` port and default headless implementation, supplied a
+reporter-backed runner from `WorkflowInstance` with live/history output and
+exit-code verdicts, and added the setup header label/icon in `OutputRow.tsx`.
 
 **Phase 5 — Re-run setup output.** Keep attempt-indexed setup entries attached to
 the run that performs each re-run; no separate dashboard action is required.
