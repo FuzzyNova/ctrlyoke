@@ -49,7 +49,9 @@ function cliEvent(
     responseKind:
       phase === EXECUTION_PHASES.END_CONDITION
         ? TIMELINE_ATTEMPT_KINDS.CONDITION
-        : TIMELINE_ATTEMPT_KINDS.AI,
+        : phase === EXECUTION_PHASES.WORKTREE_SETUP
+          ? TIMELINE_ATTEMPT_KINDS.SETUP
+          : TIMELINE_ATTEMPT_KINDS.AI,
     payload: { cliOutput: output(response) },
   };
 }
@@ -90,6 +92,29 @@ suite("OutputHistoryTimelineAdapter", () => {
     assert.strictEqual(
       getCliEntryKey(TARGET, 0, 0, EXECUTION_PHASES.PROMPT),
       "queue:0:run:0:attempt:0"
+    );
+  });
+
+  test("keeps setup and prompt entries distinct at the same attempt identity", () => {
+    const adapter = new OutputHistoryTimelineAdapter();
+    const history = adapter.project(MANIFEST, [
+      cliEvent(0, EXECUTION_PHASES.PROMPT, "prompt output"),
+      cliEvent(1, EXECUTION_PHASES.WORKTREE_SETUP, "setup output"),
+    ]);
+
+    const cliEntries = history.orderedEntries.filter(
+      (entry) => entry.kind === OUTPUT_HISTORY_KINDS.CLI
+    );
+    assert.strictEqual(cliEntries.length, 2);
+    assert.deepStrictEqual(
+      cliEntries.map(
+        (entry) => entry.kind === OUTPUT_HISTORY_KINDS.CLI && entry.phase
+      ),
+      [EXECUTION_PHASES.PROMPT, EXECUTION_PHASES.WORKTREE_SETUP]
+    );
+    assert.notStrictEqual(
+      getCliEntryKey(TARGET, 0, 0, EXECUTION_PHASES.PROMPT),
+      getCliEntryKey(TARGET, 0, 0, EXECUTION_PHASES.WORKTREE_SETUP)
     );
   });
 });

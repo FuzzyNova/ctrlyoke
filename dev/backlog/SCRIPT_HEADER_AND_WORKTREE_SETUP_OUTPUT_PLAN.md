@@ -1,6 +1,6 @@
 # Script Header Row and Worktree Setup Output
 
-> **Status:** Phase 1 complete; Phases 2–5 remain backlog/design. Two related changes on the same pipeline:
+> **Status:** Phases 1–2 complete; Phases 3–5 remain backlog/design. Two related changes on the same pipeline:
 > (1) a script execution renders its command twice, and (2) worktree setup
 > produces no output at all while it runs.
 >
@@ -414,9 +414,16 @@ Two small follow-ons:
 renderer, border token, `estimateSize`, find segments, markdown export, and
 regression coverage landed without Part 2.
 
-**Phase 2 — setup contracts.** `SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP`,
-`EXECUTION_PHASES.WORKTREE_SETUP`, `TIMELINE_ATTEMPT_KINDS.SETUP`, phase-mapping
-helper. Typecheck is the gate.
+**Phase 2 — setup contracts.** ✅ Complete. Added
+`SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP`, `EXECUTION_PHASES.WORKTREE_SETUP`,
+`TIMELINE_ATTEMPT_KINDS.SETUP`, and explicit source-to-phase mapping. The
+consumer sweep found the exhaustive `HistoryCandidateExtractor` source map;
+setup output is classified under the existing script history kind. No other
+exhaustive consumers required changes. `getCliEntryKey`,
+`getStreamingChunkKey`, and `findMatchingCliEntryIndex` retain the phase
+dimension, so setup and prompt entries at `(step 0, run 0, attempt 0)` do not
+collide. The timeline-adapter regression covers this, and `npm run typecheck`
+passes.
 
 **Phase 3 — execution-started ordering.** Hoist the fresh-start
 `updateExecutionStarted` dispatch ahead of `prepareExecutionWorktree`, leaving

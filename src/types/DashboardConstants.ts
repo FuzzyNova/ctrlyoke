@@ -1538,6 +1538,7 @@ export const SCRIPT_OUTPUT_SOURCES = {
   SCRIPT_STEP: "script", // keeps today's value — see migration note
   PRE_CONDITION: "preCondition",
   END_CONDITION: "endCondition",
+  WORKTREE_SETUP: "worktreeSetup",
 } as const;
 
 // ============================================================================
@@ -1579,6 +1580,7 @@ export const EXECUTION_PHASES = {
   PROMPT: "prompt", // default; omitted in keys for stability
   PRE_CONDITION: "preCondition",
   END_CONDITION: "endCondition",
+  WORKTREE_SETUP: "worktreeSetup",
 } as const;
 
 // ============================================================================
@@ -2061,6 +2063,8 @@ export function getExecutionPhaseForScriptOutputSource(
       return EXECUTION_PHASES.PRE_CONDITION;
     case SCRIPT_OUTPUT_SOURCES.END_CONDITION:
       return EXECUTION_PHASES.END_CONDITION;
+    case SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP:
+      return EXECUTION_PHASES.WORKTREE_SETUP;
     default:
       return EXECUTION_PHASES.PROMPT;
   }

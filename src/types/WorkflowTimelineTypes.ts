@@ -71,6 +71,7 @@ export const TIMELINE_ATTEMPT_KINDS = {
   AI: "ai",
   SCRIPT: "script",
   CONDITION: "condition",
+  SETUP: "setup",
 } as const;
 
 export type TimelineAttemptKind =

@@ -337,9 +337,15 @@ export class ScriptExecutionReporter {
   private getAttemptKind(
     source: ScriptOutputSource
   ): TimelineAttemptStartContext["kind"] {
-    return source === SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP
-      ? TIMELINE_ATTEMPT_KINDS.SCRIPT
-      : TIMELINE_ATTEMPT_KINDS.CONDITION;
+    switch (source) {
+      case SCRIPT_OUTPUT_SOURCES.SCRIPT_STEP:
+        return TIMELINE_ATTEMPT_KINDS.SCRIPT;
+      case SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP:
+        return TIMELINE_ATTEMPT_KINDS.SETUP;
+      case SCRIPT_OUTPUT_SOURCES.PRE_CONDITION:
+      case SCRIPT_OUTPUT_SOURCES.END_CONDITION:
+        return TIMELINE_ATTEMPT_KINDS.CONDITION;
+    }
   }
 
   private dispatchDashboardOutput(
