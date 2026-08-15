@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { isStandalone, useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import {
   MESSAGE_TYPES,
@@ -119,6 +119,14 @@ export function GlobalSettingsDrawer() {
     });
   }
 
+  function handleReloadWindow() {
+    if (isStandalone) {
+      window.location.reload();
+      return;
+    }
+    vscode.postMessage({ type: MESSAGE_TYPES.RELOAD_WINDOW });
+  }
+
   const sectionProps = {
     activeScope,
     onUpdate: handleUpdate,
@@ -207,7 +215,11 @@ export function GlobalSettingsDrawer() {
           <div className="flex-1 overflow-y-auto">
             <div className="p-4 max-w-2xl">
               {fullSettings && effectiveActiveTab === "general" && (
-                <GeneralSection settings={fullSettings} {...sectionProps} />
+                <GeneralSection
+                  settings={fullSettings}
+                  {...sectionProps}
+                  onReload={handleReloadWindow}
+                />
               )}
               {fullSettings && effectiveActiveTab === "stats" && (
                 <StatsUsageSection

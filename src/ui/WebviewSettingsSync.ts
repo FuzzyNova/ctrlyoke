@@ -61,6 +61,7 @@ import type {
   WorkflowDefinitionMutation,
 } from "../types/WebviewMessageTypes";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
+import * as WorkflowPaths from "../utils/WorkflowPaths";
 
 /**
  * Harness availability status
@@ -828,7 +829,16 @@ export class WebviewSettingsSync {
       },
       workspaceRoot,
       settingSources: configService.getLeafSources(),
+      runHistoryPath: this.getResolvedRunHistoryPath(),
     };
+  }
+
+  /** Return the canonical absolute `.runs` directory shown by the settings UI. */
+  private getResolvedRunHistoryPath(): string | null {
+    if (!vscode.workspace.workspaceFolders?.length) {
+      return null;
+    }
+    return WorkflowPaths.runsRoot(getVsCodeWorkspaceRoot());
   }
 
   /**
@@ -1006,6 +1016,7 @@ export class WebviewSettingsSync {
         settings: {
           settings: allSettings,
           sources,
+          runHistoryPath: this.getResolvedRunHistoryPath(),
           isMultiRoot: isMultiRootWorkspace(),
         },
         commitMessageGeneration: commitMessageGenerationTracker.getLastRecord(),

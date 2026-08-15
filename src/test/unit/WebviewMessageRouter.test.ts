@@ -10,8 +10,12 @@
  */
 import * as assert from "assert";
 import * as path from "path";
+import * as vscode from "vscode";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
-import { MESSAGE_TYPES } from "../../types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  VSCODE_COMMANDS,
+} from "../../types/DashboardConstants";
 
 function buildRouter(orchestrator: unknown): WebviewMessageRouter {
   const settingsSync = {
@@ -52,6 +56,25 @@ suite("WebviewMessageRouter — client workflow file paths", () => {
         .endsWith("manual-test/pass-retry-test.ctrlyoke.json"),
       `resolution must preserve the requested file, got "${loaded[0]}"`
     );
+  });
+
+  test("RELOAD_WINDOW invokes VS Code's window reload command", async () => {
+    const originalExecuteCommand = vscode.commands.executeCommand;
+    const commands: string[] = [];
+    vscode.commands.executeCommand = (async (command: string) => {
+      commands.push(command);
+      return undefined;
+    }) as typeof vscode.commands.executeCommand;
+
+    try {
+      await buildRouter(undefined).route({
+        type: MESSAGE_TYPES.RELOAD_WINDOW,
+      });
+    } finally {
+      vscode.commands.executeCommand = originalExecuteCommand;
+    }
+
+    assert.deepStrictEqual(commands, [VSCODE_COMMANDS.RELOAD_WINDOW]);
   });
 
   test("APPEND_FILE resolves a workspace-relative path to an absolute one", async () => {

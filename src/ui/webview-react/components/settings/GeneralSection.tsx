@@ -8,12 +8,14 @@ import { SettingInputRow } from "../shared/SettingInputRow";
 import { LocalNumberInput, LocalTextInput } from "../shared/LocalInputs";
 import { CustomSelect } from "../shared/CustomSelect";
 import { DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT } from "@root/types/CtrlYokeSettings";
+import { RunHistorySection } from "./RunHistorySection";
 
 interface Props {
   settings: FullGlobalSettings;
   activeScope: SettingWriteScope;
   onUpdate: (path: string, value: unknown) => void;
   onReset: (path: string) => void;
+  onReload: () => void;
 }
 
 export function GeneralSection({
@@ -21,6 +23,7 @@ export function GeneralSection({
   activeScope,
   onUpdate,
   onReset,
+  onReload,
 }: Props) {
   const general = settings.settings.general;
   const ui = settings.settings.ui;
@@ -330,6 +333,13 @@ export function GeneralSection({
           {...rowProps}
         />
       </div>
+      <RunHistorySection
+        settings={settings}
+        activeScope={activeScope}
+        onUpdate={onUpdate}
+        onReset={onReset}
+        onReload={onReload}
+      />
     </div>
   );
 }

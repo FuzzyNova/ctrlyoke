@@ -1257,6 +1257,8 @@ export type SettingSource = SettingScope;
 export interface FullGlobalSettings {
   settings: CtrlYokeGlobalSettings;
   sources: Record<string, SettingSource>;
+  /** Canonical absolute `.runs` directory for the current workspace. */
+  runHistoryPath?: string | null;
   /**
    * Whether the current VS Code window has more than one workspace folder
    * open. When true, `ui.useAbsolutePathReferences` is forced on regardless

@@ -1150,6 +1150,10 @@ export class WebviewMessageRouter {
       this.settingsSync.handleGlobalSettingsLoadRequest(ctx.postMessage);
     });
 
+    table.set(MESSAGE_TYPES.RELOAD_WINDOW, async () => {
+      await vscode.commands.executeCommand(VSCODE_COMMANDS.RELOAD_WINDOW);
+    });
+
     table.set(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, (message, ctx) => {
       this.settingsSync.handleUpdateGlobalSetting(
         message.path,

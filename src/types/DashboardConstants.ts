@@ -114,6 +114,7 @@ export const MESSAGE_TYPES = {
   GLOBAL_SETTINGS_LOADED: "globalSettingsLoaded", // Extension -> Webview: Full settings payload + sources
   UPDATE_GLOBAL_SETTING: "updateGlobalSetting", // Webview -> Extension: { path, value, scope }
   GLOBAL_SETTING_UPDATED: "globalSettingUpdated", // Extension -> Webview: { path, value, source } acknowledgment
+  RELOAD_WINDOW: "reloadWindow", // Webview -> Extension: Apply startup-frozen settings after a window reload
   REQUEST_HARNESS_USAGE: "requestHarnessUsage", // Webview -> Extension: return cache and refresh in background
   REFRESH_HARNESS_USAGE: "refreshHarnessUsage", // Webview -> Extension: refresh provider usage
   HARNESS_USAGE_UPDATED: "harnessUsageUpdated", // Extension -> Webview: normalized usage snapshots
@@ -2110,6 +2111,7 @@ export const VSCODE_COMMANDS = {
   MERGE_WORKTREE: "ctrlyoke.mergeWorktree",
   MANAGE_WORKTREES: "ctrlyoke.manageWorktrees",
   OPEN_WORKTREE_OWNER: "ctrlyoke.openWorktreeOwner",
+  RELOAD_WINDOW: "workbench.action.reloadWindow",
 } as const;
 
 // Built-in VS Code Git extension command IDs that ctrlyoke invokes to open
