@@ -67,6 +67,7 @@ import { WebviewLog } from "../../utils/logger";
 import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
+import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
 
 // Typo.js spell checker (will be loaded from window.Typo)
 declare global {
@@ -133,7 +134,7 @@ export interface ContextReferenceValidationResult {
   suggestions?: string[];
 }
 
-type CompletionTrigger = "@" | "#" | "~" | "$" | "path";
+type CompletionTrigger = "/" | "@" | "#" | "~" | "$" | "path";
 
 interface ExtensionCompletionItem {
   label: string;
@@ -268,6 +269,7 @@ function shouldBypassCodeMirrorFiltering(
   }
 
   return (
+    request.trigger === "/" ||
     request.trigger === "path" ||
     (request.trigger === "@" &&
       (request.query.startsWith('"') ||
@@ -311,7 +313,12 @@ function withReferenceBoundarySpace(
   applyText: string,
   trigger: CompletionTrigger | undefined
 ): string {
-  if (trigger === "path" || applyText.length === 0 || /\s$/.test(applyText)) {
+  if (
+    trigger === "/" ||
+    trigger === "path" ||
+    applyText.length === 0 ||
+    /\s$/.test(applyText)
+  ) {
     return applyText;
   }
   // A quoted path ends in `"`; look past it for the real terminator.
@@ -354,7 +361,15 @@ export function buildCodeMirrorCompletionResult(
       useFilterTextForMatching && item.filterText
         ? item.filterText
         : item.label;
-    const applyText = item.insertText || item.label;
+    const rawApplyText = item.insertText || item.label;
+    // The slash is already present in the document at `from`. Extension-side
+    // slash completions use the complete token as their insertText so the
+    // same plain payload works for VS Code and webview consumers; CodeMirror
+    // replaces only the text after that trigger character.
+    const applyText =
+      request?.trigger === "/" && rawApplyText.startsWith("/")
+        ? rawApplyText.slice(1)
+        : rawApplyText;
     // Final inserted text — a trailing boundary space for terminal references.
     const applyValue = withReferenceBoundarySpace(applyText, request?.trigger);
 
@@ -469,6 +484,24 @@ function findWordStartTriggerIndex(text: string, triggerChar: string): number {
     index = text.lastIndexOf(triggerChar, index - 1);
   }
   return index;
+}
+
+/**
+ * Find the slash-token completion context immediately before the cursor.
+ * Native slash commands are intentionally still eligible for the merged
+ * ctrlyoke insertion list; selecting an entry makes the namespace explicit.
+ */
+export function findSlashCompletionContext(
+  textBefore: string,
+  lineFrom = 0
+): { from: number; query: string } | null {
+  const slashIndex = findWordStartTriggerIndex(textBefore, "/");
+  if (slashIndex === -1) return null;
+
+  const query = textBefore.slice(slashIndex + 1);
+  if (!/^[a-zA-Z0-9:._-]*$/.test(query)) return null;
+
+  return { from: lineFrom + slashIndex, query };
 }
 
 export function buildPromptReferenceInsertion(
@@ -1112,8 +1145,13 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       const lastHashIndex = findWordStartTriggerIndex(textBefore, "#");
       const lastTildeIndex = findWordStartTriggerIndex(textBefore, "~");
       const lastDollarIndex = findWordStartTriggerIndex(textBefore, "$");
+      const slashContext = findSlashCompletionContext(textBefore, lineObj.from);
+      const lastSlashIndex = slashContext
+        ? slashContext.from - lineObj.from
+        : -1;
 
       const maxIndex = Math.max(
+        lastSlashIndex,
         lastAtIndex,
         lastHashIndex,
         lastTildeIndex,
@@ -1124,7 +1162,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       let trigger: string;
       let afterTrigger: string;
 
-      if (maxIndex === lastAtIndex) {
+      if (maxIndex === lastSlashIndex) {
+        trigger = "/";
+        afterTrigger = slashContext!.query;
+      } else if (maxIndex === lastAtIndex) {
         trigger = "@";
         afterTrigger = textBefore.slice(lastAtIndex + 1);
       } else if (maxIndex === lastHashIndex) {
@@ -1389,6 +1430,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
               createLinkDecorationExtension(referenceValidityRef.current),
               createPriorContextDecorationExtension(),
             ]),
+        createSlashTokenDecorationExtension(),
         createFileRefDecorationExtension(isMultiRootWorkspace),
         createPriorContextLintExtension(stepCountRef, hasFinalStepRef),
         createClickHandlerExtension(vscode, stepCountRef),
@@ -2379,6 +2421,61 @@ function createLinkDecorationExtension(
   return linkPlugin;
 }
 
+/** Decorate explicit ctrlyoke skill references; native slash commands stay plain text. */
+export function createSlashTokenDecorationExtension() {
+  return ViewPlugin.fromClass(
+    class implements PluginValue {
+      decorations;
+
+      constructor(view: EditorView) {
+        this.decorations = this.buildDecorations(view);
+      }
+
+      update(update: ViewUpdate) {
+        if (update.docChanged || update.viewportChanged) {
+          this.decorations = this.buildDecorations(update.view);
+        }
+      }
+
+      buildDecorations(view: EditorView) {
+        const builder = new RangeSetBuilder<Decoration>();
+        const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
+
+        for (const { from, to } of view.visibleRanges) {
+          const text = view.state.doc.sliceString(from, to);
+          for (const token of scanCtrlYokeSlashTokens(text)) {
+            if (
+              token.kind !== "skill" ||
+              isInFencedBlock(
+                token.index + from,
+                token.index + from + token.length,
+                fencedRanges
+              )
+            ) {
+              continue;
+            }
+
+            builder.add(
+              token.index + from,
+              token.index + from + token.length,
+              Decoration.mark({
+                class: "cm-link",
+                attributes: {
+                  "data-type": "skill",
+                  "data-skill-name": token.name,
+                },
+              })
+            );
+          }
+        }
+
+        return builder.finish();
+      }
+    },
+    { decorations: (v) => v.decorations }
+  );
+}
+
 // Decorate the entire editor content when it is a lone file-path reference
 function createFileRefDecorationExtension(allowWorkspaceFolderPrefix: boolean) {
   return ViewPlugin.fromClass(
@@ -2557,6 +2654,17 @@ function openContextReferenceLink(
   vscode: any,
   stepCountRef: React.RefObject<number>
 ): boolean {
+  if (target.getAttribute("data-type") === "skill") {
+    const skillName = target.getAttribute("data-skill-name");
+    if (!skillName) return false;
+
+    vscode.postMessage({
+      type: MESSAGE_TYPES.OPEN_SKILL,
+      skillName,
+    });
+    return true;
+  }
+
   // The async validation pass marks references it resolved as nonexistent with
   // data-invalid (on the atomic chip and on the non-atomic link mark). Refuse to
   // open those — otherwise the click asks VS Code to open a file that isn't
@@ -2681,6 +2789,7 @@ export function createClickHandlerExtension(
         !target.classList.contains(ATOMIC_REFERENCE_CHIP_CLASS) &&
         type !== "git" &&
         type !== "priorContext" &&
+        type !== "skill" &&
         !(event.ctrlKey || event.metaKey)
       ) {
         return false;

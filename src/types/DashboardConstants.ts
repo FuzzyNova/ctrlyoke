@@ -158,6 +158,7 @@ export const MESSAGE_TYPES = {
   REQUEST_COMPLETIONS: "requestCompletions", // Request autocomplete suggestions
   COMPLETIONS_RESPONSE: "completionsResponse", // Return autocomplete suggestions
   OPEN_FILE: "openFile", // Open file from an @file / #selection: / #sym: link
+  OPEN_SKILL: "openSkill", // Open a resolved ctrlyoke SKILL.md link
   OPEN_PROMPT_FILE: "openPromptFile", // Open a lone prompt-file reference
   OPEN_GIT_CHANGE: "openGitChange", // Webview -> Extension: open a git diff in a new editor (legacy)
   OPEN_WORKTREE: "openWorktree", // Webview -> Extension: open a recorded worktree in a new window

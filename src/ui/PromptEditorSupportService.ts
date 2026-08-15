@@ -60,6 +60,7 @@ import {
 import { getStashList, gitRefExists } from "../utils/GitUtils";
 import { ContextExpander } from "../utils/ContextExpander";
 import { decodePriorContextTokenRef } from "../utils/FileReferenceParser";
+import { SkillDiscovery } from "../utils/SkillDiscovery";
 import { encode } from "gpt-tokenizer";
 import { PriorContextPreviewBuilder } from "../utils/PriorContextPreviewBuilder";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
@@ -892,6 +893,24 @@ export class PromptEditorSupportService {
         error: `Failed to open: ${relativePath}`,
       });
     }
+  }
+
+  async handleOpenSkill(
+    _ctx: WebviewClientContext,
+    skillName: string
+  ): Promise<void> {
+    const workspaceRoot = this.getWorkspaceRoot();
+    const skills = await SkillDiscovery.discoverSkills(workspaceRoot);
+    const skill = SkillDiscovery.resolveCtrlYokeSkillInvocation(
+      skills,
+      skillName
+    );
+    if (!skill) {
+      Log.warn(`Unable to resolve ctrlyoke skill link: ${skillName}`);
+      return;
+    }
+
+    await openResolvedTarget({ path: skill.path });
   }
 
   /** Build the prior-context XML preview without opening it in an editor. */

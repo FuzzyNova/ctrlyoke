@@ -591,6 +591,10 @@ export class WebviewMessageRouter {
       );
     });
 
+    table.set(MESSAGE_TYPES.OPEN_SKILL, (message, ctx) => {
+      this.promptEditorSupport.handleOpenSkill(ctx, message.skillName);
+    });
+
     table.set(MESSAGE_TYPES.OPEN_GIT_CHANGE, async (message) => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.length
         ? getVsCodeWorkspaceRoot()

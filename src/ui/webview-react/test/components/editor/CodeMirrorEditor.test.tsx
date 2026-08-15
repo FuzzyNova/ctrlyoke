@@ -8,7 +8,9 @@ import {
   createAtomicReferenceExtension,
   createClickHandlerExtension,
   createContextReferenceLintExtension,
+  createSlashTokenDecorationExtension,
   destroyOrphanedMouseSelection,
+  findSlashCompletionContext,
   getRetryPlaceholderCompletions,
   keyboardTooltipSpace,
   type CodeMirrorEditorMode,
@@ -69,6 +71,35 @@ describe("CodeMirrorEditor retry placeholder completions", () => {
 });
 
 describe("CodeMirrorEditor external reference completions", () => {
+  it("finds slash-token completion contexts and allows namespace punctuation", () => {
+    expect(findSlashCompletionContext("/", 4)).toEqual({ from: 4, query: "" });
+    expect(findSlashCompletionContext("use /skill:code-review", 0)).toEqual({
+      from: 4,
+      query: "skill:code-review",
+    });
+    expect(findSlashCompletionContext("use /mcp:playwright", 0)).toEqual({
+      from: 4,
+      query: "mcp:playwright",
+    });
+    expect(findSlashCompletionContext("/skill:bad name")).toBeNull();
+  });
+
+  it("maps slash completion items to explicit skill and MCP insertions", () => {
+    const result = buildCodeMirrorCompletionResult(
+      [
+        { label: "commit", insertText: "/skill:commit" },
+        { label: "playwright", insertText: "/mcp:playwright" },
+      ],
+      0,
+      { trigger: "/", query: "" }
+    );
+
+    expect(result.options.map((option) => option.apply)).toEqual([
+      "skill:commit",
+      "mcp:playwright",
+    ]);
+  });
+
   it("disables CodeMirror filtering for @ completions when the query already includes a path", () => {
     const result = buildCodeMirrorCompletionResult(
       [
@@ -140,6 +171,44 @@ describe("CodeMirrorEditor external reference completions", () => {
     expect(result.from).toBe(0);
     expect(result.filter).toBe(false);
     expect(result.options[0]?.apply).toBe("root2/prompts/current.prompt.md");
+  });
+});
+
+describe("CodeMirrorEditor ctrlyoke skill links", () => {
+  it("decorates only explicit skills and opens the selected skill", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const postMessage = vi.fn();
+    const view = new EditorView({
+      parent,
+      doc: "/skill:commit /mcp:playwright /commit /mcp",
+      extensions: [
+        createSlashTokenDecorationExtension(),
+        createClickHandlerExtension({ postMessage }, { current: 0 }),
+      ],
+    });
+
+    try {
+      const skillLink = view.dom.querySelector<HTMLElement>(".cm-link");
+      expect(skillLink?.textContent).toBe("/skill:commit");
+      expect(skillLink?.getAttribute("data-skill-name")).toBe("commit");
+      expect(view.dom.querySelectorAll(".cm-link")).toHaveLength(1);
+
+      const click = new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+      });
+      skillLink?.dispatchEvent(click);
+
+      expect(postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.OPEN_SKILL,
+        skillName: "commit",
+      });
+      expect(click.defaultPrevented).toBe(true);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
   });
 });
 

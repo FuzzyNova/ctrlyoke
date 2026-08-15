@@ -637,18 +637,25 @@ design work. Implementers should follow them rather than re-litigating.
 
 ### Phase 1
 
-- Add `/skill:` and `/mcp:` parsing
-- Fix the bare-string MCP resolution gap (independent value even without `/mcp:` shipping)
-- Add webview dropdown completions for both
-- Add prompt-file and webview links for `/skill:` (defer `/mcp:` linking if Open Question 8 isn't resolved yet)
-- Add prompt-preparation support for `/skill:` with outgoing rewrite
-- Add property-resolution support for `/mcp:` with outgoing in-place rewrite
+- Keep `/skill:<name>` and `/mcp:<name>` explicit, parseable namespaces while
+  leaving native `/...` commands untouched.
+- Resolve bare MCP registry IDs and merge known `/mcp:<name>` references into
+  the effective server set before process planning.
+- Provide webview-only completion insertion for discovered ctrlyoke skills and
+  registered MCP servers, including prefix filtering for each namespace.
+- Make `/skill:<name>` links open the resolved `SKILL.md` from both prompt files
+  and the webview editor; keep `/mcp:<name>` as plain text until its manager
+  focus affordance is defined.
+- Attach referenced skills during prompt preparation and rewrite known
+  `/skill:`/`/mcp:` tokens to their grammar-neutral outgoing labels.
 
 ### Phase 2
 
-- Add VS Code editor skill/MCP-token completions in `PromptCompletionProvider`
-- Add optional UI hints when a plain `/skill` or `/mcp` collides with a ctrlyoke skill/server of the same name
-- Resolve `/mcp:` linking (Open Question 8) and ship it
+- Wire the shared completion helpers into the VS Code editor's
+  `PromptCompletionProvider`.
+- Add optional UI hints when a plain `/skill` or `/mcp` collides with a ctrlyoke
+  skill/server of the same name.
+- Add `/mcp:<name>` links once the MCP Manager can focus the referenced server.
 
 ### Phase 3
 
