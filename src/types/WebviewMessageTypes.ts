@@ -178,8 +178,8 @@ export interface TokenStats {
  * Single source of truth for all CLI response data
  */
 export interface CliOutput {
-  /** The prompt text that was sent */
-  prompt: string;
+  /** The prompt text that was sent; omitted for script execution output. */
+  prompt?: string;
   /** Plain text response (streaming or complete) */
   response: string;
   /** Structured output with tool calls, thinking blocks, and metadata (CLI only) */

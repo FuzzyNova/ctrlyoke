@@ -177,6 +177,7 @@ module.exports = {
         // ── Output block border colors (constant, theme independent) ──
         "output-prompt-border": "rgb(100, 100, 255)",
         "output-command-border": "rgb(255, 200, 100)",
+        "output-script-border": "rgb(200, 120, 255)",
         "output-streaming": "#4ec9b0",
 
         // ── Overlay scrims (status bars over mirrored terminal content) ──

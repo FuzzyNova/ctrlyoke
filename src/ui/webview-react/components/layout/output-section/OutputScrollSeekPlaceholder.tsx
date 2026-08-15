@@ -33,6 +33,8 @@ function getScrollSeekRowLabel(row: OutputRenderRow): string {
       return row.stepLabel;
     case "cli-command":
       return "Command";
+    case "script-command":
+      return "Script command";
     case "plain-response":
       return "Response";
     case "script-output":

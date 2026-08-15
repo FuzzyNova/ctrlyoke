@@ -164,12 +164,19 @@ export interface PromptRow extends OutputRowBase {
   text: string;
 }
 
-export interface CliCommandRow extends OutputRowBase {
-  rowKind: "cli-command";
+interface CommandRowBase extends OutputRowBase {
   target: OutputMessageTarget;
   workingDirectory?: string;
   command: string;
   wasInjected?: boolean;
+}
+
+export interface CliCommandRow extends CommandRowBase {
+  rowKind: "cli-command";
+}
+
+export interface ScriptCommandRow extends CommandRowBase {
+  rowKind: "script-command";
 }
 
 export interface ErrorRow extends OutputRowBase {
@@ -256,6 +263,7 @@ export type OutputRenderRow =
   | CliHeaderRow
   | PromptRow
   | CliCommandRow
+  | ScriptCommandRow
   | ErrorRow
   | StructuredEventRow
   | PlainResponseRow
@@ -1537,23 +1545,13 @@ function estimateOutputRowContentHeight(
         }
       );
     case "cli-command":
+    case "script-command":
       // OUTPUT_BLOCK_BASE: font-mono sm font, body line-height:1.4, py-sm+my-sm=24px chrome.
       // chrome:32 matches actual horizontal padding (px-md outer + px-sm inner + border-l-3).
-      return estimateTextBlockHeight(
-        formatCliCommandDisplay(
-          row.command,
-          row.workingDirectory,
-          row.wasInjected
-        ),
+      return estimateCliCommandRowHeight(
+        row,
         outputContentWidth,
-        outputFontSize - 1,
-        {
-          charWidthMultiplier: 0.6,
-          lineHeightMultiplier: 1.4,
-          verticalChrome: 24,
-          chrome: 32,
-          wrapAtWords: true,
-        }
+        outputFontSize
       );
     case "error":
       return estimateTextBlockHeight(
@@ -1605,6 +1603,25 @@ function estimateOutputRowContentHeight(
             outputFontSize
           );
   }
+}
+
+function estimateCliCommandRowHeight(
+  row: CliCommandRow | ScriptCommandRow,
+  outputContentWidth: number | undefined,
+  outputFontSize: number
+): number {
+  return estimateTextBlockHeight(
+    formatCliCommandDisplay(row.command, row.workingDirectory, row.wasInjected),
+    outputContentWidth,
+    outputFontSize - 1,
+    {
+      charWidthMultiplier: 0.6,
+      lineHeightMultiplier: 1.4,
+      verticalChrome: 24,
+      chrome: 32,
+      wrapAtWords: true,
+    }
+  );
 }
 
 export function estimateOutputDiffBlockHeight(
@@ -1870,7 +1887,9 @@ export function buildOutputRows(
       estimateSize: 44,
     });
 
-    if (output.prompt) {
+    const scriptish = isScriptOutput(output);
+
+    if (output.prompt && !scriptish) {
       rows.push({
         key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:prompt`,
         rowKind: "prompt",
@@ -1883,7 +1902,7 @@ export function buildOutputRows(
     if (output.cliCommand) {
       rows.push({
         key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:command`,
-        rowKind: "cli-command",
+        rowKind: scriptish ? "script-command" : "cli-command",
         target,
         workingDirectory: output.workingDirectory,
         command: output.cliCommand,

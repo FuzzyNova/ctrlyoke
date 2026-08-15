@@ -17,7 +17,11 @@ import {
 import { CLI_EVENT_TYPES } from "@/types/cliEvents";
 import { generateMarkdownExport } from "@utils/markdownExport";
 import type { UnifiedDiffHunk } from "@/types/cliEvents";
-import { FINAL_STEP_PHASES, OUTPUT_HISTORY_KINDS } from "@/types/messages";
+import {
+  FINAL_STEP_PHASES,
+  OUTPUT_HISTORY_KINDS,
+  SCRIPT_OUTPUT_SOURCES,
+} from "@/types/messages";
 import { hasRenderableDiff } from "@utils/diffUtils";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -451,6 +455,33 @@ describe("generateMarkdownExport", () => {
     const md = generateMarkdownExport(outputs, metadata);
     expect(md).toContain("```bash");
     expect(md).toContain("/workspace> claude --model sonnet");
+  });
+
+  it("does not export script prompts and keeps script commands when command export is disabled", () => {
+    for (const source of Object.values(SCRIPT_OUTPUT_SOURCES)) {
+      const md = generateMarkdownExport(
+        [
+          {
+            type: "cli" as const,
+            target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+            timestamp: 1000,
+            attemptIndex: 0,
+            data: {
+              prompt: "npm test",
+              cliCommand: "npm test",
+              workingDirectory: "/workspace",
+              response: "PASS",
+              source,
+            },
+          },
+        ],
+        metadata,
+        { exportOptions: { includeCommand: false } }
+      );
+
+      expect(md).not.toContain("### Prompt");
+      expect(md).toContain("/workspace> npm test");
+    }
   });
 
   it("renders injected prompts in the command section using the injected text", () => {

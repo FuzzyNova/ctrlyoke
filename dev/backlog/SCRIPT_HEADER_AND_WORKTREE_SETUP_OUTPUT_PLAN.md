@@ -1,6 +1,6 @@
 # Script Header Row and Worktree Setup Output
 
-> **Status:** Backlog / design. Two related changes on the same pipeline:
+> **Status:** Phase 1 complete; Phases 2–5 remain backlog/design. Two related changes on the same pipeline:
 > (1) a script execution renders its command twice, and (2) worktree setup
 > produces no output at all while it runs.
 >
@@ -28,8 +28,8 @@ const initOutput: CliOutput = {
 
 | Site                  | Row                                    | Renders                                          |
 | --------------------- | -------------------------------------- | ------------------------------------------------ |
-| `outputRows.ts:1873`  | `rowKind: "prompt"`                    | the raw script string, via `PromptReferenceText`  |
-| `outputRows.ts:1883`  | `rowKind: "cli-command"`               | `` `${workingDirectory}> ${command}` ``           |
+| `outputRows.ts:1892`  | `rowKind: "prompt"`                    | the raw script string, via `PromptReferenceText`  |
+| `outputRows.ts:1905`  | `rowKind: "cli-command"`               | `` `${workingDirectory}> ${command}` ``           |
 
 So every script step, pre-condition, and end-condition shows its command twice —
 once bare, once with a `cwd>` prefix. This applies to all four
@@ -81,7 +81,7 @@ script `CliOutput` as well, so new runs don't carry a duplicate payload — but
 the builder guard is the load-bearing half.
 
 Keep the `prompt: properties.script` field on the **attempt context** passed to
-`startStreamingExecutionOutput` (`ScriptExecutionReporter.ts:192`). That is the
+`startStreamingExecutionOutput` (`ScriptExecutionReporter.ts:191`). That is the
 timeline/search identity for the attempt, not a rendered row, and history search
 relies on it.
 
@@ -92,7 +92,7 @@ working directory stay) but takes its own left-border token —
 `output-script-border`, distinct from `output-prompt-border` (blue) and
 `output-command-border` (yellow, `rgb(255, 200, 100)`). These are Tailwind theme
 colors, not CSS custom properties: they are declared in
-`src/ui/webview-react/tailwind.config.js:179` and consumed as
+`src/ui/webview-react/tailwind.config.js:180` and consumed as
 `border-l-output-command-border`. `CliTerminalFormatter` mirrors these two
 colors in comments at `src/cli/CliTerminalFormatter.ts:490` and `:501`; add the
 third there only if/when the CLI grows script-source awareness (it has none
@@ -103,9 +103,9 @@ never fires).
 
 | File                                             | Change                                                                 |
 | ------------------------------------------------ | ---------------------------------------------------------------------- |
-| `utils/outputRows.ts`                            | `ScriptCommandRow` type, builder branch, `estimateSize` case (`:1539`) |
-| `components/output/OutputRow.tsx`                | new `case "script-command"`; add to `isCliGroupRow` list (`:1636`)     |
-| `utils/outputFind.ts`                            | search segment beside the `cli-command` case (`:174`)                  |
+| `utils/outputRows.ts`                            | `ScriptCommandRow` type, builder branch, `estimateSize` case (`:1551`) |
+| `components/output/OutputRow.tsx`                | new `case "script-command"`; add to `isCliGroupRow` list (`:1644`)     |
+| `utils/outputFind.ts`                            | search segment beside the `cli-command` case (`:171`)                  |
 | `utils/markdownExport.ts`                        | see below                                                              |
 | `components/layout/output-section/OutputScrollSeekPlaceholder.tsx` | label                                                 |
 
@@ -115,10 +115,10 @@ duplicating the magic numbers.
 
 ### Markdown export has the same bug, plus a narrower one
 
-`markdownExport.ts:431` emits a `### Prompt` block whenever `output.prompt` is
-set, then `:440` emits `### CLI Command` — the same duplication, in exported
-form. Additionally `:417` detects scripts as
-`(output as { source?: string }).source === STEP_TYPES.SCRIPT`, which misses
+`markdownExport.ts:432` emits a `### Prompt` block whenever `output.prompt` is
+set, then `:441` emits `### CLI Command` — the same duplication, in exported
+form. Additionally `markdownExport.ts:419` now uses `isScriptOutput` instead of
+the old `(output as { source?: string }).source === STEP_TYPES.SCRIPT` check, which misses
 `preCondition` and `endCondition` sources entirely and re-implements a helper
 that already exists.
 
@@ -410,9 +410,9 @@ Two small follow-ons:
 
 ## Phasing
 
-**Phase 1 — script-command row.** Row kind, builder branch, renderer, border
-token, `estimateSize`, find segments, markdown export. Self-contained; ships
-without Part 2.
+**Phase 1 — script-command row.** ✅ Complete. Row kind, builder branch,
+renderer, border token, `estimateSize`, find segments, markdown export, and
+regression coverage landed without Part 2.
 
 **Phase 2 — setup contracts.** `SCRIPT_OUTPUT_SOURCES.WORKTREE_SETUP`,
 `EXECUTION_PHASES.WORKTREE_SETUP`, `TIMELINE_ATTEMPT_KINDS.SETUP`, phase-mapping

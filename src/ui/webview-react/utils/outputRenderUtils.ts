@@ -101,7 +101,7 @@ function buildOutputDiffStats(
   };
 }
 
-export function isScriptOutput(output: CliOutputType): boolean {
+export function isScriptOutput(output: Pick<CliOutputType, "source">): boolean {
   return output.source != null;
 }
 

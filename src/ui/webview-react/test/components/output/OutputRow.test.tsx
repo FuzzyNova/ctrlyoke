@@ -190,6 +190,28 @@ describe("OutputRow token stats", () => {
   });
 });
 
+describe("OutputRow script commands", () => {
+  it("renders the working-directory prefix with the script border", () => {
+    const row: OutputRenderRow = {
+      key: "row-script-command",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: "script-command",
+      command: "npm test",
+      workingDirectory: "/workspace",
+    };
+
+    const { container } = render(
+      <OutputRow row={row} isExecutionActive={false} />
+    );
+
+    expect(container).toHaveTextContent("/workspace> npm test");
+    expect(
+      container.querySelector(".border-l-output-script-border")
+    ).not.toBeNull();
+  });
+});
+
 describe("OutputRow collapsed attempt groups", () => {
   it("labels the aggregate with the number of attempts", () => {
     const onToggle = vi.fn();

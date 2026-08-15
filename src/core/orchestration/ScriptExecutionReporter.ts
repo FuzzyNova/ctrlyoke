@@ -165,7 +165,6 @@ export class ScriptExecutionReporter {
     const history = context.outputHistoryManager;
     const targetForHistory = target;
     const initOutput: CliOutput = {
-      prompt: properties.script,
       response: "",
       elapsed: 0,
       isStreaming: true,

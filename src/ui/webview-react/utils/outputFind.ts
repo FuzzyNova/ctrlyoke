@@ -168,6 +168,7 @@ export function getOutputRowSearchSegments(
     case "prompt":
       return createSegments([{ field: "prompt", text: row.text }]);
     case "cli-command":
+    case "script-command":
       return createSegments([
         {
           field: "command",

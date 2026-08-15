@@ -337,7 +337,7 @@ export class OutputHistoryManager {
     attemptContext: TimelineAttemptStartContext = {
       kind: TIMELINE_ATTEMPT_KINDS.AI,
       startReason: TIMELINE_ATTEMPT_START_REASONS.INITIAL,
-      prompt: cliOutput.prompt,
+      prompt: cliOutput.prompt ?? "",
     }
   ): Promise<void> {
     if (!historyFilePath) {

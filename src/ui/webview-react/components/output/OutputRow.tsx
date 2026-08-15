@@ -1493,9 +1493,14 @@ function OutputRowComponent({
       );
       break;
     case "cli-command":
+    case "script-command": {
+      const borderClass =
+        row.rowKind === "script-command"
+          ? "border-l-output-script-border"
+          : "border-l-output-command-border";
       content = (
         <div
-          className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)] whitespace-pre-wrap [overflow-wrap:anywhere]`}
+          className={`${OUTPUT_BLOCK_BASE} ${borderClass} text-[var(--fg-primary)] whitespace-pre-wrap [overflow-wrap:anywhere]`}
         >
           {highlightText(
             formatCliCommandDisplay(
@@ -1508,6 +1513,7 @@ function OutputRowComponent({
         </div>
       );
       break;
+    }
     case "error": {
       const isWarning = isUserStoppedMessage(row.errorMessage);
       const borderClass = isWarning
@@ -1635,6 +1641,7 @@ function OutputRowComponent({
     row.rowKind === "cli-header" ||
     row.rowKind === "prompt" ||
     row.rowKind === "cli-command" ||
+    row.rowKind === "script-command" ||
     row.rowKind === "error" ||
     row.rowKind === "plain-response" ||
     row.rowKind === "script-output" ||

@@ -124,6 +124,7 @@ function getRowHeightBucket(row: OutputRenderRow): string {
     case "cli-header":
     case "prompt":
     case "cli-command":
+    case "script-command":
     case "error":
     case "plain-response":
     case "script-output":
@@ -380,12 +381,11 @@ export function useOutputVirtualization({
             };
             extras.outputLength = (bc.output ?? "").length;
             extras.errorLength = (bc.error ?? "").length;
-          } else if (row.rowKind === "cli-command") {
-            const cmd = row as unknown as {
-              command?: string;
-              workingDirectory?: string;
-            };
-            const fullText = `${cmd.workingDirectory || "workspace"}> ${cmd.command ?? ""}`;
+          } else if (
+            row.rowKind === "cli-command" ||
+            row.rowKind === "script-command"
+          ) {
+            const fullText = `${row.workingDirectory || "workspace"}> ${row.command}`;
             extras.commandLength = fullText.length;
             extras.commandPreview = fullText.slice(0, 120).replace(/\n/g, "↵");
           }

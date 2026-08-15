@@ -24,6 +24,64 @@ import {
 describe("outputRows", () => {
   const steps = [{ name: "Analyze code" } as WorkflowStep];
 
+  it("renders a recorded script command once while preserving harness prompt rows", () => {
+    const buildRows = (
+      source?: (typeof SCRIPT_OUTPUT_SOURCES)[keyof typeof SCRIPT_OUTPUT_SOURCES]
+    ) =>
+      buildOutputRows({
+        allMessages: [
+          {
+            type: "cli",
+            target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+            timestamp: 1000,
+            attemptIndex: 0,
+            runIndex: 0,
+            data: {
+              prompt: "npm test",
+              cliCommand: "npm test",
+              response: "",
+              elapsed: 0,
+              isStreaming: false,
+              ...(source ? { source } : {}),
+            },
+          },
+        ],
+        steps,
+        finalStep: null,
+        streamingChunks: {},
+        finalStepStreamingChunks: {},
+        isExecutionActive: false,
+        allowUndoActions: false,
+        isViewingHistory: true,
+        historyOutputs: null,
+        workspaceSnapshots: {},
+        finalStepWorkspaceSnapshots: {},
+        undoRecords: {},
+        diffCollapseState: new Map(),
+        diffExpansionState: new Map(),
+        toolCallExpansionState: new Map(),
+        defaultDiffCollapsed: false,
+      });
+
+    const scriptRows = buildRows(SCRIPT_OUTPUT_SOURCES.PRE_CONDITION).rows;
+    expect(
+      scriptRows
+        .filter(
+          (row) => row.rowKind === "prompt" || row.rowKind.includes("command")
+        )
+        .map((row) => row.rowKind)
+    ).toEqual(["script-command"]);
+
+    const harnessRows = buildRows().rows;
+    expect(
+      harnessRows
+        .filter(
+          (row) => row.rowKind === "prompt" || row.rowKind.includes("command")
+        )
+        .map((row) => row.rowKind)
+    ).toEqual(["prompt", "cli-command"]);
+  });
+
   it("collapses retry attempts into an explicitly labelled aggregate", () => {
     const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
     const allMessages: OutputMessage[] = [0, 1].map((attemptIndex) => ({
@@ -217,8 +275,7 @@ describe("outputRows", () => {
     expect(result.rows.map((row) => row.rowKind)).toEqual([
       "step-anchor",
       "cli-header",
-      "prompt",
-      "cli-command",
+      "script-command",
       "script-output",
       "script-verdict",
       "stats",

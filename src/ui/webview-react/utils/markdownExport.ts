@@ -18,13 +18,13 @@ import type {
   ToolResultData,
   TextData,
   ThinkingBlock,
+  CliOutput as CliOutputType,
 } from "../types/cliEvents";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/cliEvents";
 import {
   HARNESS_INFO,
   FINAL_STEP_PHASES,
-  STEP_TYPES,
   type FinalStepPhase,
 } from "../types/messages";
 import { mapOrderedHistoryEntriesToMessages } from "./outputProjection";
@@ -36,6 +36,7 @@ import {
   getFirstWords,
 } from "./outputUtils";
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
+import { isScriptOutput } from "./outputRenderUtils";
 
 // ── Private helpers ────────────────────────────────────────────────────────────
 
@@ -392,6 +393,7 @@ export function generateMarkdownExport(
         cliCommand?: string;
         cliCommandWasInjected?: boolean;
         workingDirectory?: string;
+        source?: CliOutputType["source"];
         tokens?: {
           prompt: number;
           completion: number;
@@ -414,8 +416,7 @@ export function generateMarkdownExport(
         );
         const isFinalStep = item.target.kind === FINAL_STEP_PHASES.FINAL_STEP;
         const stepNum = item.target.index + 1;
-        const isScript =
-          (output as { source?: string }).source === STEP_TYPES.SCRIPT;
+        const isScript = isScriptOutput(output);
         const stepDisplayName =
           item.stepName ||
           (isScript
@@ -428,7 +429,7 @@ export function generateMarkdownExport(
         lines.push("");
       }
 
-      if (output.prompt) {
+      if (output.prompt && !isScriptOutput(output)) {
         if (includeMetadata) lines.push("### Prompt");
         lines.push("");
         lines.push("```");
@@ -437,7 +438,7 @@ export function generateMarkdownExport(
         lines.push("");
       }
 
-      if (includeCommand && output.cliCommand) {
+      if ((includeCommand || isScriptOutput(output)) && output.cliCommand) {
         if (includeMetadata) lines.push("### CLI Command");
         lines.push("");
         lines.push(output.cliCommandWasInjected ? "```" : "```bash");
