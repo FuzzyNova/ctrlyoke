@@ -323,10 +323,13 @@ branch calls `clearAllRuntimeState()` and wipes everything. Phase 3 must
 establish empirically whether setup output published before a continuation
 dispatch survives the promote, and record the answer here.
 
-**Accepted fallback if it does not survive:** the output is still persisted to
-history and visible on reload, and the alternative — restructuring the terminal
-inject lifecycle so `isInjectMode` leaves `EXECUTION_STARTED` — is not worth it.
-Document the limitation rather than expanding the hoist.
+The empirical result is that it **does survive**. A live step-0 entry published
+before the continuation dispatch remains in `liveOrderedEntries` after the
+handler promotes history, clears the history view, and calls
+`clearRuntimeStateFromStep(preserveStepCount)`. The focused
+`useMessageHandler` regression test covers that exact sequence. The handler only
+clears runtime state at and after the preserved-step boundary; it does not wipe
+the step-0 live entry, so no continuation-specific hoist is needed.
 
 See [`./MANAGED_WORKTREE_APPEND_CONTINUATION_BUGS.md`](./MANAGED_WORKTREE_APPEND_CONTINUATION_BUGS.md)
 — that path has correctness bugs independent of output rendering, and they
@@ -425,10 +428,11 @@ dimension, so setup and prompt entries at `(step 0, run 0, attempt 0)` do not
 collide. The timeline-adapter regression covers this, and `npm run typecheck`
 passes.
 
-**Phase 3 — execution-started ordering.** Hoist the fresh-start
+**Phase 3 — execution-started ordering.** ✅ Complete. Hoisted the fresh-start
 `updateExecutionStarted` dispatch ahead of `prepareExecutionWorktree`, leaving
-the continuation branches in place. Must land before Phase 4 or the live pane
-stays blank.
+the continuation branches in place. Regression tests cover both orderings and
+the continuation handler's step-0 output preservation. This lands before Phase
+4 so the live pane is populated for setup output.
 
 **Phase 4 — setup through the reporter.** `WorktreeSetupRunner` port, default
 implementation, `WorkflowInstance`-supplied reporter implementation, header

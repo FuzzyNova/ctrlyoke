@@ -1770,6 +1770,29 @@ export class WorkflowInstance {
       // The runner lock must precede any worktree discovery or mutation. The
       // same lock is reused by startWorkflowExecution below.
       await this.ensureRunnerLock(workingFilePath);
+
+      if (
+        this.dashboardSink &&
+        totalSteps > 0 &&
+        !continueFromCurrent &&
+        !isAppendContinuation &&
+        !isIdleContinuation
+      ) {
+        Log.debug(
+          `[executeLoadedPromptFile] Sending EXECUTION_STARTED fresh start, totalSteps=${totalSteps}`
+        );
+        this.clearOutputBuffers();
+        this.dashboardSink.updateExecutionStarted(
+          this.id,
+          fileName,
+          totalSteps,
+          undefined,
+          undefined,
+          undefined,
+          executionMode
+        );
+      }
+
       await this.prepareExecutionWorktree();
 
       // Create the execution integration only after the execution workspace
@@ -1830,20 +1853,6 @@ export class WorkflowInstance {
               executionMode
             );
           }
-        } else {
-          Log.debug(
-            `[executeLoadedPromptFile] Sending EXECUTION_STARTED fresh start, totalSteps=${totalSteps}`
-          );
-          this.clearOutputBuffers();
-          this.dashboardSink.updateExecutionStarted(
-            this.id,
-            fileName,
-            totalSteps,
-            undefined,
-            undefined,
-            undefined,
-            executionMode
-          );
         }
       }
 

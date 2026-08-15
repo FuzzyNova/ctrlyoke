@@ -2587,6 +2587,44 @@ describe("STEPS_EXTENDED", () => {
 // ---------------------------------------------------------------------------
 
 describe("EXECUTION_STARTED", () => {
+  it("preserves step-zero output published before a continuation start", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "wf.yaml",
+      steps: [makePrompt("Step 1"), makePrompt("Step 2")],
+    });
+    const setupOutput = {
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      runIndex: 0,
+      attemptIndex: 0,
+      cliOutput: {
+        prompt: "worktree setup",
+        response: "setup output",
+        elapsed: 1,
+        isStreaming: false,
+      },
+      timestampMs: 1000,
+      sequence: 0,
+    };
+    useWorkflowStore.getState().appendLiveEntry(setupOutput);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_STARTED, {
+        workflowId: "workflow-1",
+        fileName: "wf.yaml",
+        totalSteps: 2,
+        isContinuation: true,
+        preserveStepCount: 1,
+      });
+    });
+
+    expect(useWorkflowStore.getState().liveOrderedEntries).toContainEqual(
+      setupOutput
+    );
+  });
+
   it("expands the output section and shows output for headless runs when auto-focus is enabled", () => {
     renderHook(() => useMessageHandler());
 

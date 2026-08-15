@@ -1514,11 +1514,13 @@ suite("WorkflowInstance append-and-continue", () => {
     const platform = new MockPlatform();
 
     let executionStartedArgs: any[] | undefined;
+    const lifecycle: string[] = [];
     const dashboardSink: any = {
       updateFileSelected: async () => {},
       updateSessionRestored: async () => {},
       updateExecutionStarted: (...args: any[]) => {
         executionStartedArgs = args;
+        lifecycle.push("execution-started");
       },
       updateProgress: () => {},
       updateExecutionState: () => {},
@@ -1564,6 +1566,9 @@ suite("WorkflowInstance append-and-continue", () => {
     (instance.promptQueue as any).restart = async () => {
       restartCalled = true;
     };
+    (instance as any).prepareExecutionWorktree = async () => {
+      lifecycle.push("prepare-worktree");
+    };
     (instance as any).startWorkflowExecution = async () => {};
 
     await (instance as any).executeLoadedPromptFile();
@@ -1577,6 +1582,63 @@ suite("WorkflowInstance append-and-continue", () => {
       1,
       undefined,
       "interactive",
+    ]);
+    assert.deepStrictEqual(lifecycle, [
+      "prepare-worktree",
+      "execution-started",
+    ]);
+  });
+
+  test("dispatches fresh execution start before preparing its worktree", async () => {
+    const platform = new MockPlatform();
+    const lifecycle: string[] = [];
+    const dashboardSink: any = {
+      updateFileSelected: async () => {},
+      updateSessionRestored: async () => {},
+      updateExecutionStarted: () => {
+        lifecycle.push("execution-started");
+      },
+      updateProgress: () => {},
+      updateExecutionState: () => {},
+      updateStepStatus: () => {},
+      updateRetryAttempt: () => {},
+      updateCliOutput: () => {},
+      updateCliStreamingChunk: () => {},
+      updateCliStreamingEvents: () => {},
+      updateStepsExtended: () => {},
+      updatePromptDeleted: () => {},
+      updateFinalStep: () => {},
+      updateFinalStepStatus: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
+      updateStatusMessage: () => {},
+      notifyPromptsReordered: () => {},
+    };
+    const instance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    instance.promptQueue.loadPrompts({ steps: [{ prompt: "fresh prompt" }] });
+    instance.setCurrentPromptFile("workflow.prompt.md", {
+      steps: [{ prompt: "fresh prompt" }],
+    });
+    (instance as any).prepareExecutionWorktree = async () => {
+      lifecycle.push("prepare-worktree");
+    };
+    (instance as any).startWorkflowExecution = async () => {};
+
+    await (instance as any).executeLoadedPromptFile();
+
+    assert.deepStrictEqual(lifecycle, [
+      "execution-started",
+      "prepare-worktree",
     ]);
   });
 
