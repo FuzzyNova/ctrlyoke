@@ -1132,7 +1132,20 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     >
       {/* CodeMirror Editor + Properties Drawer container (prompt mode only) */}
       {!isScriptMode && (
-        <div className="prompt-editor-wrapper flex flex-col flex-1 min-h-0 overflow-hidden relative isolate">
+        // overflow-clip (not overflow-hidden): PropertiesDrawer's closed-state
+        // `translateY` pushes its transformed box below this wrapper's own
+        // bounds, which — per the CSS scrollable-overflow spec — still counts
+        // toward this element's scrollable overflow even though it's clipped
+        // from view. `overflow: hidden` clips the paint but still permits a
+        // program/browser to set `scrollTop` into that hidden region (exactly
+        // like the iOS `overflow: hidden` scrollTop quirk handled in App.tsx);
+        // dragging a text selection near/past the bottom edge triggers
+        // Chromium's native "auto-scroll the nearest scrollable ancestor to
+        // reveal the selection focus" behavior, which scrolls this wrapper
+        // into that hidden region and un-clips the drawer mid-drag. `clip`
+        // disables scrolling (including programmatic) entirely, so there is no
+        // scroll position left for that behavior to move into.
+        <div className="prompt-editor-wrapper flex flex-col flex-1 min-h-0 overflow-clip relative isolate">
           <CodeMirrorEditor
             value={promptText}
             onChange={handleTextChange}
