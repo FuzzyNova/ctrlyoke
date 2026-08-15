@@ -19,12 +19,14 @@ import type {
 import { CliAdapter } from "../../platform/CliAdapter";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import type { VsCodeAdapter } from "../../platform/VsCodeAdapter";
-import type { PromptStep } from "../../types/CtrlYokeTypes";
+import type { McpServerConfig, PromptStep } from "../../types/CtrlYokeTypes";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { InteractiveInjectContext } from "../../core/harness/shared/CliExecutionRunner";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { ExecutionWorkspace } from "../../types/WorkflowContextTypes";
+import type { ManagedMcpServer } from "../../types/WebviewMessageTypes";
+import { McpServerNormalizer } from "../../utils/McpServerNormalizer";
 
 class MockVsCodePlatform
   implements PlatformAdapter, Pick<VsCodeAdapter, "getExtensionContext">
@@ -241,6 +243,43 @@ suite("CliIntegration", () => {
           "session-existing"
         ),
         null
+      );
+    });
+
+    test("retires the PTY when a queued MCP reference changes the normalized server set", async () => {
+      const playwright: McpServerConfig = {
+        id: "playwright",
+        command: "node",
+        args: ["playwright-server.js"],
+      };
+      const managedServers: ManagedMcpServer[] = [
+        {
+          id: playwright.id,
+          displayName: "Playwright",
+          config: playwright,
+          locations: [],
+        },
+      ];
+      const initial = await McpServerNormalizer.apply(
+        createResolvedProperties({ mcpServers: [] }),
+        managedServers,
+        "plain prompt"
+      );
+      const queued = await McpServerNormalizer.apply(
+        createResolvedProperties({ mcpServers: [] }),
+        managedServers,
+        "use /mcp:playwright for the UI"
+      );
+
+      assert.deepStrictEqual(initial.mcpServers, []);
+      assert.deepStrictEqual(queued.mcpServers, [playwright]);
+      assert.strictEqual(
+        getInjectIncompatibilityReason(
+          createInteractiveInjectContext(initial),
+          queued,
+          "session-existing"
+        ),
+        "mcpServers changed"
       );
     });
   });

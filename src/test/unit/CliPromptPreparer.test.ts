@@ -204,6 +204,67 @@ suite("CliPromptPreparer", () => {
     }
   });
 
+  test("should rewrite resolved MCP references in place, including repeated guidance", async () => {
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (_prompt) =>
+        createSections({ userPromptText: _prompt.prompt }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: () => "",
+      formatTempFileRef: () => "",
+      formatCategorizedReferences: () => "",
+    });
+
+    const result = await preparer.planPrompt(
+      {
+        prompt:
+          "only use /mcp:ctrlyoke if you need to add more steps, and only use /mcp:playwright if you need to test a UI",
+      } as PromptStep,
+      undefined,
+      {
+        mcpServers: [
+          "ctrlyoke",
+          { id: "playwright", command: "node", args: ["server.js"] },
+        ],
+      } as any,
+      undefined
+    );
+
+    assert.strictEqual(
+      result.promptWithInstruction,
+      "only use mcp: ctrlyoke if you need to add more steps, and only use mcp: playwright if you need to test a UI"
+    );
+  });
+
+  test("should leave an unknown MCP reference untouched", async () => {
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (_prompt) =>
+        createSections({ userPromptText: _prompt.prompt }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: () => "",
+      formatTempFileRef: () => "",
+      formatCategorizedReferences: () => "",
+    });
+
+    const result = await preparer.planPrompt(
+      { prompt: "/mcp:unknown" } as PromptStep,
+      undefined,
+      { mcpServers: null } as any,
+      undefined
+    );
+
+    assert.strictEqual(result.promptWithInstruction, "/mcp:unknown");
+  });
+
   test("should leave an unknown inline skill and report a diagnostic", async () => {
     const workspaceRoot = await fs.promises.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-inline-skill-")

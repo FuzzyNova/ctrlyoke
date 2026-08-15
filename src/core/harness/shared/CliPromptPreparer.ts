@@ -154,6 +154,9 @@ export class CliPromptPreparer {
     const skillTokens = scanCtrlYokeSlashTokens(originalPromptText).filter(
       (token) => token.kind === CTRLYOKE_SLASH_TOKEN_KINDS.SKILL
     );
+    const mcpTokens = scanCtrlYokeSlashTokens(originalPromptText).filter(
+      (token) => token.kind === CTRLYOKE_SLASH_TOKEN_KINDS.MCP
+    );
     const discoveredSkills = skillTokens.length
       ? await SkillDiscovery.discoverSkills(workspaceRoot)
       : [];
@@ -176,6 +179,18 @@ export class CliPromptPreparer {
     ];
     const effectiveSkillResolution =
       effectiveSkills.length > 0 ? effectiveSkills : undefined;
+    const resolvedMcpServerIds = new Set(
+      (resolvedProperties?.mcpServers ?? []).map((server) =>
+        typeof server === "string" ? server : server.id
+      )
+    );
+    const inlineMcpNames = [
+      ...new Set(
+        mcpTokens
+          .filter((token) => resolvedMcpServerIds.has(token.name))
+          .map((token) => token.name)
+      ),
+    ];
     const harnessId = resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI;
     const inlineSkillDiagnostics = skillTokens
       .filter((token) => !inlineSkillNames.includes(token.name))
@@ -196,8 +211,10 @@ export class CliPromptPreparer {
       userPromptText: rewriteCtrlYokeSlashTokens(
         sections.userPromptText,
         (token) =>
-          token.kind === CTRLYOKE_SLASH_TOKEN_KINDS.SKILL &&
-          inlineSkillNames.includes(token.name)
+          (token.kind === CTRLYOKE_SLASH_TOKEN_KINDS.SKILL &&
+            inlineSkillNames.includes(token.name)) ||
+          (token.kind === CTRLYOKE_SLASH_TOKEN_KINDS.MCP &&
+            inlineMcpNames.includes(token.name))
       ),
     };
 

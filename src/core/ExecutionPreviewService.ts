@@ -209,6 +209,10 @@ export class ExecutionPreviewService {
     ).readAll();
 
     const resolvedTargets = new Map<number, ResolvedExecutionTarget>();
+    const mcpNormalizationDiagnostics = new Map<
+      number,
+      readonly CompatibilityDiagnostic[]
+    >();
     for (const target of targets) {
       if (isScriptStep(target.step)) {
         continue;
@@ -221,12 +225,18 @@ export class ExecutionPreviewService {
           hostCanProvidePty: this.options.hostCanProvidePty,
         }
       );
+      const normalized = await McpServerNormalizer.applyWithDiagnostics(
+        resolution.properties,
+        managedMcpServers,
+        target.step.prompt
+      );
+      mcpNormalizationDiagnostics.set(
+        target.stepIndex,
+        normalized.diagnostics
+      );
       resolvedTargets.set(target.stepIndex, {
         ...resolution,
-        properties: await McpServerNormalizer.apply(
-          resolution.properties,
-          managedMcpServers
-        ),
+        properties: normalized.properties,
       });
     }
 
@@ -256,7 +266,8 @@ export class ExecutionPreviewService {
           request,
           resolvedTargets.get(target.stepIndex),
           managedMcpServers,
-          compatibilityDiagnostics
+          compatibilityDiagnostics,
+          mcpNormalizationDiagnostics.get(target.stepIndex) ?? []
         )
       );
     }
@@ -317,7 +328,8 @@ export class ExecutionPreviewService {
     request: ExecutionPreviewRequest,
     resolvedTarget: ResolvedExecutionTarget | undefined,
     managedMcpServers: readonly ManagedMcpServer[],
-    compatibilityDiagnostics: readonly CompatibilityDiagnostic[]
+    compatibilityDiagnostics: readonly CompatibilityDiagnostic[],
+    mcpNormalizationDiagnostics: readonly CompatibilityDiagnostic[]
   ): Promise<StepExecutionPreview> {
     const step = target.step;
     const promptStep = isScriptStep(step) ? this.scriptAsPrompt(step) : step;
@@ -332,7 +344,8 @@ export class ExecutionPreviewService {
         targetResolution.properties,
         variables
       ),
-      managedMcpServers
+      managedMcpServers,
+      promptStep.prompt
     );
     const harness = await this.options.getHarness(properties.harness);
     const resolvedSessionId = isScriptStep(step)
@@ -350,7 +363,10 @@ export class ExecutionPreviewService {
       Boolean(resolvedSessionId)
     );
     const variablesPreview = this.buildVariablesPreview(variables, request);
-    const diagnostics = this.stepDiagnostics(target, compatibilityDiagnostics);
+    const diagnostics = [
+      ...this.stepDiagnostics(target, compatibilityDiagnostics),
+      ...mcpNormalizationDiagnostics,
+    ];
 
     if (isScriptStep(step)) {
       const scriptCommand = this.buildScriptCommand(step);

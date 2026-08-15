@@ -318,6 +318,11 @@ That single helper does both jobs:
 - **merge** `/mcp:<mcp-name>` tokens scanned from the effective prompt text, deduped by `id`, force
   -attached even when `mcpServers: [...]` wasn't configured for this step
 
+Known inline references are added even when the resolved property is `null`, while unresolved
+inline references remain visible and produce a warning `CompatibilityDiagnostic`; they are not
+silently attached or deleted. The normalized snapshot is the value used by both spawn planning
+and interactive inject compatibility checks.
+
 Doing both in one pass means every downstream consumer (`CliProviderUtils`, `ExecutionPlanBuilder`,
 the Claude/Copilot providers, `ExecutionPreviewService`) sees a fully-resolved array and the
 existing `typeof server === "object"` filters keep working unchanged.

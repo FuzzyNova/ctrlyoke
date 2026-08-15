@@ -660,10 +660,15 @@ export class WorkflowExecutor {
         throw new Error("Prompt is empty after resolving its prompt file");
       }
 
-      resolvedProperties = await McpServerNormalizer.applyFromRegistry(
-        resolvedProperties,
-        context.workspaceFolderPath ?? context.executionWorkspace.executionRoot
-      );
+      const mcpNormalization =
+        await McpServerNormalizer.applyFromRegistryWithDiagnostics(
+          resolvedProperties,
+          context.workspaceFolderPath ??
+            context.executionWorkspace.executionRoot,
+          effectivePromptText
+        );
+      resolvedProperties = mcpNormalization.properties;
+      context.reportCompatibilityDiagnostics?.(mcpNormalization.diagnostics);
 
       const integration = context.getIntegrationForPrompt(
         prompt,
@@ -2439,7 +2444,7 @@ export class WorkflowExecutor {
     ): Promise<string | null> => {
       const state = this.promptQueue.getState();
       const workflowFile = this.promptQueue.getWorkflowFile();
-      const resolvedProperties = PropertyResolver.resolve(
+      let resolvedProperties = PropertyResolver.resolve(
         retryPromptStep,
         workflowFile,
         { hostCanProvidePty: context.hostCanProvidePty }
@@ -2457,6 +2462,16 @@ export class WorkflowExecutor {
           "Retry prompt is empty after resolving its prompt file"
         );
       }
+
+      const mcpNormalization =
+        await McpServerNormalizer.applyFromRegistryWithDiagnostics(
+          resolvedProperties,
+          context.workspaceFolderPath ??
+            context.executionWorkspace.executionRoot,
+          effectiveRetryPrompt.prompt
+        );
+      resolvedProperties = mcpNormalization.properties;
+      context.reportCompatibilityDiagnostics?.(mcpNormalization.diagnostics);
 
       if (context.historyFilePath && context.outputHistoryManager) {
         await context.outputHistoryManager.recordRetryScheduled(

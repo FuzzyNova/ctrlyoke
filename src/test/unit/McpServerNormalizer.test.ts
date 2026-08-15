@@ -91,12 +91,53 @@ suite("McpServerNormalizer", () => {
     assert.deepStrictEqual(normalized.mcpServers, ["ctrlyoke"]);
   });
 
+  test("merges an inline MCP reference when no MCP property is configured", async () => {
+    const normalized = await McpServerNormalizer.apply(
+      createProperties([]),
+      MANAGED_SERVERS,
+      "/mcp:playwright"
+    );
+    assert.deepStrictEqual(normalized.mcpServers, [PLAYWRIGHT_SERVER]);
+  });
+
+  test("merges inline MCP references with the ctrlyoke sentinel without duplication", async () => {
+    const normalized = await McpServerNormalizer.apply(
+      createProperties(["ctrlyoke"]),
+      MANAGED_SERVERS,
+      "only use /mcp:ctrlyoke if needed, and /mcp:playwright for UI tests"
+    );
+    assert.deepStrictEqual(normalized.mcpServers, [
+      "ctrlyoke",
+      PLAYWRIGHT_SERVER,
+    ]);
+  });
+
+  test("lets a known inline MCP reference override an explicit null", async () => {
+    const normalized = await McpServerNormalizer.apply(
+      createProperties(null),
+      MANAGED_SERVERS,
+      "/mcp:playwright"
+    );
+    assert.deepStrictEqual(normalized.mcpServers, [PLAYWRIGHT_SERVER]);
+  });
+
   test("drops unknown IDs without throwing", async () => {
     const normalized = await McpServerNormalizer.apply(
       createProperties(["missing"]),
       MANAGED_SERVERS
     );
     assert.deepStrictEqual(normalized.mcpServers, []);
+  });
+
+  test("keeps an unknown inline MCP reference and emits a diagnostic", async () => {
+    const result = await McpServerNormalizer.applyWithDiagnostics(
+      createProperties(null),
+      MANAGED_SERVERS,
+      "/mcp:unknown"
+    );
+    assert.strictEqual(result.properties.mcpServers, null);
+    assert.strictEqual(result.diagnostics.length, 1);
+    assert.strictEqual(result.diagnostics[0].code, "prompt.mcp.unknown");
   });
 
   test("preserves an explicit null MCP override", async () => {
