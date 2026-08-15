@@ -46,3 +46,5 @@ Add animation for output window new messages and fix scroll lock behavior and gl
 add find to output window and make icons bigger
 
 script result string doesn't wrap properly in the OutputSection
+
+FOUND THE EDITOR SHIFT CAUSE: it happens when you drag to select - so figure out why dragging to select drags the whole editor down and brings the propery drawer up.
