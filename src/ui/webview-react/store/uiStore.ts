@@ -580,11 +580,11 @@ interface UiState {
   // Notification toast queue (transient, not persisted)
   toastQueue: ToastItem[];
 
-  // Content preview modal (git diff / prior-context XML) — transient, not persisted
+  // Content preview modal (git diff / prior-context XML / mcp config JSON) — transient, not persisted
   contentPreviewModal: {
     title: string;
     content: string;
-    language: "diff" | "xml";
+    language: "diff" | "xml" | "json";
     ref: string;
   } | null;
 
@@ -778,7 +778,7 @@ interface UiActions {
     modal: {
       title: string;
       content: string;
-      language: "diff" | "xml";
+      language: "diff" | "xml" | "json";
       ref: string;
     } | null
   ) => void;
@@ -1838,6 +1838,7 @@ export const useUiStore = create<UiState & UiActions>()(
           footerOpenPicker: null,
           horizontalPanelResizeActive: false,
           suffixEditConfirmation: null,
+          contentPreviewModal: null,
         }),
 
       resetLayoutState: () => {

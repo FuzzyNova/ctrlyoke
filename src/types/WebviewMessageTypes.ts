@@ -1951,6 +1951,18 @@ export interface McpRegistrySearchResultMessage {
   error?: string;
 }
 
+export interface RequestMcpConfigPreviewMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_MCP_CONFIG_PREVIEW;
+  mcpServerName: string;
+}
+
+export interface McpConfigPreviewResultMessage {
+  type: typeof MESSAGE_TYPES.MCP_CONFIG_PREVIEW_RESULT;
+  mcpServerName: string;
+  content: string;
+  found: boolean;
+}
+
 // ============================================================================
 // HARNESS FILE MANAGER TYPES
 // ============================================================================

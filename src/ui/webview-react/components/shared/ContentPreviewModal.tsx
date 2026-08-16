@@ -7,8 +7,9 @@ import { MESSAGE_TYPES } from "@/types/messages";
 import { downloadTextFile } from "@utils/diff";
 
 /**
- * Modal that displays prior-context XML preview content (and, as a fallback in
- * VS Code mode, git-ref diffs before the native diff command is available).
+ * Modal that displays prior-context XML preview content, a resolved
+ * `/mcp:<name>` reference's server config as JSON, and (as a fallback in
+ * VS Code mode) git-ref diffs before the native diff command is available.
  * The primary git-ref path in browser mode now renders in WorkspaceDiffPane.
  *
  * Footer actions:
@@ -39,7 +40,12 @@ export const ContentPreviewModal: React.FC = () => {
   const handleExport = useCallback(() => {
     if (!modal) return;
     if (isStandalone) {
-      const ext = modal.language === "diff" ? ".diff" : ".xml";
+      const ext =
+        modal.language === "diff"
+          ? ".diff"
+          : modal.language === "json"
+            ? ".json"
+            : ".xml";
       const filename = `ctrlyoke-${modal.ref.replace(/[^a-z0-9_]/gi, "-").toLowerCase()}${ext}`;
       downloadTextFile(filename, modal.content);
     } else {

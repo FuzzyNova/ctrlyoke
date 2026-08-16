@@ -30,6 +30,7 @@ import type {
   RunExecutionControlMessage,
   SetStartPositionMessage,
   DiscardContinuationMessage,
+  RequestMcpConfigPreviewMessage,
   RequestMcpRegistrySearchMessage,
   SaveMcpRegistryServerMessage,
   UndoPromptChangesMessage,
@@ -759,6 +760,13 @@ export class WebviewMessageRouter {
       await this.mcpManager.handleDeleteFromHarness(
         ctx,
         message as DeleteMcpFromHarnessMessage
+      );
+    });
+
+    table.set(MESSAGE_TYPES.REQUEST_MCP_CONFIG_PREVIEW, async (message, ctx) => {
+      await this.mcpManager.handleRequestMcpConfigPreview(
+        ctx,
+        message as RequestMcpConfigPreviewMessage
       );
     });
   }
