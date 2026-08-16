@@ -25,6 +25,8 @@ import { PromptStep } from "../../types/CtrlYokeTypes";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
+import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
+import { ExecutionLeaseConflictError } from "../../core/orchestration/ExecutionRootLeaseManager";
 
 /** Test-only shim mirroring OutputHistoryManager.test.ts's initTestRun helper. */
 async function initTestRun(
@@ -1948,6 +1950,134 @@ suite("WorkflowInstance retained integration artifacts", () => {
     assert.strictEqual(integration.disposeCalls, 1);
   });
 
+  test("gracefully closes the terminal before disposing a worktree-run integration", async () => {
+    class WorktreeIntegration extends MockHarnessIntegration {
+      gracefulCloseCalls = 0;
+      disposeCalls = 0;
+      private gracefulCloseHappened = false;
+      private disposedAfterGracefulClose = false;
+
+      override closeTerminalGracefully(): void {
+        this.gracefulCloseCalls += 1;
+        this.gracefulCloseHappened = true;
+      }
+
+      override dispose(): void {
+        this.disposeCalls += 1;
+        this.disposedAfterGracefulClose = this.gracefulCloseHappened;
+        super.dispose();
+      }
+
+      wasGracefullyClosedBeforeDispose(): boolean {
+        return this.disposedAfterGracefulClose;
+      }
+    }
+
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const integration = new WorktreeIntegration(undefined, false);
+    (instance as any).executionIntegrations.set(
+      HARNESS_IDS.CLAUDE_CLI,
+      integration
+    );
+    (instance as any).workflowExecutor.execute = async () => {};
+    // Simulate a live worktree run reaching terminal settlement: an active
+    // worktree reservation with no pause in effect.
+    (instance as any).executionWorkspace.worktree = { mode: "named" };
+    (instance as any).activeWorktree = { mode: "named" };
+
+    await (instance as any).startWorkflowExecution(
+      integration,
+      "",
+      "workflow.ctrlyoke.json"
+    );
+
+    assert.strictEqual(
+      integration.gracefulCloseCalls,
+      1,
+      "a worktree-rooted PTY must be gracefully closed, not merely detached, " +
+        "before its execution lease can be released"
+    );
+    assert.strictEqual(integration.disposeCalls, 1);
+    assert.ok(
+      integration.wasGracefullyClosedBeforeDispose(),
+      "closeTerminalGracefully must run before dispose so no orphaned " +
+        "process survives worktree settlement"
+    );
+  });
+
+  test("retains the PTY and worktree reservation when a named-worktree run settles with an injectable PTY", async () => {
+    class InjectableIntegration extends MockHarnessIntegration {
+      disposeCalls = 0;
+      gracefulCloseCalls = 0;
+
+      override canReuseForInject(): boolean {
+        return true;
+      }
+
+      override closeTerminalGracefully(): void {
+        this.gracefulCloseCalls += 1;
+      }
+
+      override dispose(): void {
+        this.disposeCalls += 1;
+        super.dispose();
+      }
+    }
+
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const integration = new InjectableIntegration(undefined, false);
+    (instance as any).executionIntegrations.set(
+      HARNESS_IDS.CLAUDE_CLI,
+      integration
+    );
+    (instance as any).workflowExecutor.execute = async () => {};
+    // Named worktrees never auto-commit, so a run finishing (not pausing)
+    // must not tear down a still-injectable PTY the same way managed mode
+    // does.
+    (instance as any).executionWorkspace.worktree = { mode: "named" };
+    (instance as any).activeWorktree = { mode: "named" };
+
+    await (instance as any).startWorkflowExecution(
+      integration,
+      "",
+      "workflow.ctrlyoke.json"
+    );
+
+    assert.strictEqual(
+      integration.disposeCalls,
+      0,
+      "an injectable PTY on a named worktree must survive run settlement"
+    );
+    assert.strictEqual(integration.gracefulCloseCalls, 0);
+    assert.strictEqual(
+      (instance as any).liveInjectIntegrations.get(HARNESS_IDS.CLAUDE_CLI),
+      integration,
+      "the integration must be parked so the next run can reuse it via inject"
+    );
+    assert.ok(
+      (instance as any).activeWorktree,
+      "the named worktree reservation must stay live while its PTY is retained"
+    );
+  });
+
   test("closes retained terminals when a different run starts", async () => {
     class RetainedTerminalIntegration extends MockHarnessIntegration {
       closeCalls = 0;
@@ -1992,6 +2122,131 @@ suite("WorkflowInstance retained integration artifacts", () => {
     assert.strictEqual(livePrevious.disposeCalls, 1);
     assert.strictEqual((instance as any).lastRunIntegrations.length, 0);
     assert.strictEqual((instance as any).liveInjectIntegrations.size, 0);
+  });
+});
+
+suite("WorkflowInstance execution-lease conflict messaging", () => {
+  test("names the worktree and the owning workflow instead of raw lease internals", async () => {
+    const stateRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-lease-conflict-")
+    );
+    try {
+      const owningLineage = await new WorkflowLineageRepository().createLineage(
+        stateRoot,
+        "release-notes",
+        "Draft release notes"
+      );
+
+      const platform = new MockPlatform();
+      const instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        process.cwd()
+      );
+      (instance as any).worktreeResolution = {
+        origin: "authored",
+        config: { mode: "named", branch: "small-feature" },
+      };
+
+      const conflictError = new ExecutionLeaseConflictError(
+        {
+          lease: {
+            ownerToken: "owner-token",
+            mode: "exclusive-worktree",
+            pid: 4242,
+            runner: "vscode",
+            instanceId: "owner-instance",
+            stateRoot,
+            executionRoot: path.join(stateRoot, "worktree"),
+            workflowKey: owningLineage.workflowKey,
+            runRef: "run-2026-08-16T12-00-00-000Z" as any,
+            startedAt: Date.now() - 90_000,
+            lastHeartbeat: Date.now(),
+          },
+          ageMs: 90_000,
+          retryAction: "retry",
+        },
+        async () => {
+          throw new Error("retry not exercised in this test");
+        }
+      );
+
+      const message = await (instance as any).describeLeaseConflict(
+        conflictError
+      );
+
+      assert.ok(
+        message.includes("Draft release notes"),
+        `expected the owning workflow's display name in: ${message}`
+      );
+      assert.ok(
+        message.includes("small-feature"),
+        `expected the named worktree branch in: ${message}`
+      );
+      assert.ok(
+        !message.includes(owningLineage.workflowKey),
+        "the friendly name should replace the raw workflowKey, not sit alongside it"
+      );
+    } finally {
+      await fs.rm(stateRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("falls back to the workflow key when the owning lineage's descriptor can't be read", async () => {
+    const stateRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-lease-conflict-fallback-")
+    );
+    try {
+      const platform = new MockPlatform();
+      const instance = new WorkflowInstance(
+        platform,
+        undefined,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        process.cwd()
+      );
+      (instance as any).worktreeResolution = { origin: "default" };
+
+      const conflictError = new ExecutionLeaseConflictError(
+        {
+          lease: {
+            ownerToken: "owner-token",
+            mode: "exclusive-worktree",
+            pid: 4242,
+            runner: "cli",
+            instanceId: "owner-instance",
+            stateRoot,
+            executionRoot: path.join(stateRoot, "worktree"),
+            workflowKey: "missing-lineage-key" as any,
+            runRef: "run-2026-08-16T12-00-00-000Z" as any,
+            startedAt: Date.now() - 5_000,
+            lastHeartbeat: Date.now(),
+          },
+          ageMs: 5_000,
+          retryAction: "retry",
+        },
+        async () => {
+          throw new Error("retry not exercised in this test");
+        }
+      );
+
+      const message = await (instance as any).describeLeaseConflict(
+        conflictError
+      );
+
+      assert.ok(
+        message.includes("missing-lineage-key"),
+        `expected the raw workflow key as a fallback in: ${message}`
+      );
+    } finally {
+      await fs.rm(stateRoot, { recursive: true, force: true });
+    }
   });
 });
 

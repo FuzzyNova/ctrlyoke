@@ -58,6 +58,7 @@ import {
   STEP_STATUS,
   STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
+  WORKTREE_MODES,
   type ActionType,
   type ExecutionMode,
   type QueuePosition,
@@ -88,6 +89,7 @@ import { TypedEmitter } from "../utils/TypedEmitter";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 import {
   ExecutionRootLeaseManager,
+  ExecutionLeaseConflictError,
   type ExecutionLeaseHandle,
 } from "./orchestration/ExecutionRootLeaseManager";
 import {
@@ -112,6 +114,7 @@ import {
   OutputHistoryManager,
   type DefinitionRevisionContext,
 } from "./orchestration/OutputHistoryManager";
+import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { HarnessCapabilityRegistry } from "./HarnessCapabilityRegistry";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
@@ -213,6 +216,8 @@ export class WorkflowInstance {
   private endConditionHandler: EndConditionHandler;
   private readonly worktreeManager: WorktreeManager;
   private activeWorktree: WorktreeInfo | undefined;
+  /** Used only to look up another lease owner's display name for lease-conflict errors. */
+  private readonly lineageRepository = new WorkflowLineageRepository();
 
   /** Reference to the loaded source prompt file */
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
@@ -1992,14 +1997,16 @@ export class WorkflowInstance {
             Log.warn("Failed to finalize history run on early error:", err)
           );
       }
+      const executionFailureMessage =
+        await this.describeExecutionFailure(error);
       notifyUserFeedback(
         this.userFeedbackSink,
         "error",
-        `ctrlyoke: Execution failed: ${error}`
+        `ctrlyoke: Execution failed: ${executionFailureMessage}`
       );
       this.dashboardSink?.updateStatusMessage(
         this.promptQueue.getState().currentIndex,
-        `Execution failed: ${getErrorMessage(error)}`,
+        `Execution failed: ${executionFailureMessage}`,
         STATUS_MESSAGE_SEVERITY.ERROR,
         this.id
       );
@@ -3753,6 +3760,55 @@ export class WorkflowInstance {
     }
   }
 
+  /**
+   * Turns a caught execution-start error into the text shown to the user via
+   * notifyUserFeedback/updateStatusMessage. Only ExecutionLeaseConflictError
+   * gets special handling — everything else keeps its plain message.
+   */
+  private async describeExecutionFailure(error: unknown): Promise<string> {
+    if (error instanceof ExecutionLeaseConflictError) {
+      return this.describeLeaseConflict(error);
+    }
+    return getErrorMessage(error);
+  }
+
+  /**
+   * A lease conflict is common and actionable — unlike most execution
+   * errors, the fix is simply "wait for or stop the other run" — so it gets
+   * a message naming the worktree and the owning workflow instead of
+   * ExecutionRootLeaseManager's technical detail (workflowKey/runRef/PID).
+   * ExecutionRootLeaseManager itself stays generic (shared-native leases
+   * have no worktree at all), so this enrichment happens here rather than
+   * there.
+   */
+  private async describeLeaseConflict(
+    error: ExecutionLeaseConflictError
+  ): Promise<string> {
+    const owner = error.conflict.lease;
+    const ageSeconds = Math.max(0, Math.floor(error.conflict.ageMs / 1000));
+    const ageLabel =
+      ageSeconds < 60 ? `${ageSeconds}s` : `${Math.floor(ageSeconds / 60)}m`;
+
+    const ownerDescriptor = await this.lineageRepository
+      .tryReadDescriptor(owner.stateRoot, owner.workflowKey as WorkflowKey)
+      .catch(() => undefined);
+    const ownerName = ownerDescriptor?.workflowName?.trim() || owner.workflowKey;
+
+    const config = this.worktreeResolution.config;
+    const target =
+      config?.mode === WORKTREE_MODES.NAMED
+        ? `named worktree "${config.branch}"`
+        : owner.mode === "exclusive-worktree"
+          ? "this worktree"
+          : "this execution directory";
+
+    return (
+      `Can't start — "${ownerName}" is still holding the lease on ${target} ` +
+      `(started ${ageLabel} ago). Close its live harness session or wait ` +
+      `for it to finish, then run this workflow again.`
+    );
+  }
+
   private async prepareExecutionWorktree(
     historyFilePath: string
   ): Promise<void> {
@@ -4002,8 +4058,26 @@ export class WorkflowInstance {
       const paused =
         this.workflowRuntime.status === EXECUTION_STATES.PAUSED ||
         this.workflowRuntime.status === EXECUTION_STATES.PAUSING;
-      const preserveWorktreeReservation =
+      const pausedWorktreeReservation =
         paused && Boolean(this.executionWorkspace.worktree);
+      // Named worktrees are user-owned: ctrlyoke never auto-commits, merges, or
+      // removes them, so — unlike managed mode, whose finalization auto-commits
+      // and may delete the directory — nothing requires the working tree to be
+      // quiescent once the queue empties. When a live inject-capable PTY is
+      // still running, keep the lease/PTY alive for a possible follow-up prompt
+      // instead of tearing everything down, mirroring how a pause preserves the
+      // reservation. Only the lease/lock stay reserved this way; the per-run
+      // helpers below still exist to dispose/discard once the user actually
+      // stops the run or the process exits and the lease goes stale.
+      const namedWorktreeInjectRetention =
+        !paused &&
+        this.activeWorktree?.mode === "named" &&
+        ConfigurationUtils.isInjectModeEnabled() &&
+        Array.from(this.executionIntegrations.values()).some((integration) =>
+          integration.canReuseForInject()
+        );
+      const preserveWorktreeReservation =
+        pausedWorktreeReservation || namedWorktreeInjectRetention;
       const terminalWorktreeRun =
         !preserveWorktreeReservation && Boolean(this.activeWorktree);
       const managedTerminalRun =
@@ -4013,7 +4087,8 @@ export class WorkflowInstance {
 
       // Pause is not terminal for a worktree run. Keep the runner lock, the
       // exclusive lease, and their heartbeat until the loaded instance resumes
-      // or the process dies and stale-lock recovery takes over.
+      // or the process dies and stale-lock recovery takes over. The same is
+      // true when a named worktree's PTY is being kept alive for inject.
       // Dispose all execution integrations created for this run, unless they have
       // a live PTY with inject context — those are saved to liveInjectIntegrations
       // so the next run can reuse them without re-spawning.
@@ -4076,6 +4151,7 @@ export class WorkflowInstance {
           // Dispose first so no background reader can recreate an artifact
           // while provider cleanup is proving the directory clean.
           if (terminalWorktreeRun) {
+            execIntegration.closeTerminalGracefully();
             execIntegration.dispose();
           }
           const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
@@ -4109,6 +4185,7 @@ export class WorkflowInstance {
       // worktree cleanup barrier and must never outlive the lease.
       if (terminalWorktreeRun) {
         for (const [harnessKey, retained] of this.liveInjectIntegrations) {
+          retained.closeTerminalGracefully();
           retained.dispose();
           const cleanup = await this.cleanupIntegrationArtifactsForSettlement(
             harnessKey,
