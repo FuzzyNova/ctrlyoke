@@ -316,18 +316,13 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       "newest first, one summary per run"
     );
 
-    const descriptor = await new WorkflowLineageRepository().readDescriptor(
-      tempWorkspace,
-      workflowKey
-    );
     await WorkingFileManager.insertStepAtRun(
       tempWorkspace,
       workflowKey,
       middle,
       0,
       { prompt: "appended", harness: HARNESS_IDS.QWEN_CLI } as WorkflowStep,
-      1,
-      descriptor.revision
+      1
     );
 
     const after = await manager.getRunSummaries(workflowKey);

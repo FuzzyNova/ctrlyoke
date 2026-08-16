@@ -334,7 +334,9 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     assert.strictEqual(result.workflowKey, run.workflowKey);
     assert.strictEqual(result.runRef, run.runRef);
     assert.strictEqual(result.definitionRevision, 5);
-    assert.strictEqual(result.descriptorRevision, 4);
+    // The descriptor is untouched by an ordinary append: it stays at the
+    // fixture's starting revision rather than bumping alongside content.
+    assert.strictEqual(result.descriptorRevision, 3);
     assert.strictEqual(persisted.steps?.length, 2);
     assert.strictEqual(
       persisted.steps?.[0]._runtime?.sessionId,
