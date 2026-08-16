@@ -1514,7 +1514,7 @@ export function createMessageHandlers(
     if (uiStore.duplicateWorkflowRequest?.requestId !== message.requestId) {
       return;
     }
-    uiStore.setDuplicateWorkflowError(message.error);
+    uiStore.retireDuplicateWorkflowRequest(message.error);
   };
 
   // --------------------------------------------------------------------------

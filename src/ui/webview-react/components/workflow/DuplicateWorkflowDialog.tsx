@@ -134,13 +134,16 @@ export const DuplicateWorkflowDialog: React.FC = () => {
       ...(model !== SAME_AS_SOURCE ? { model } : {}),
     };
     const requestId = nextDuplicateRequestId();
-    beginRequest(requestId, workflowName);
-    vscode.postMessage({
-      type: MESSAGE_TYPES.CREATE_WORKFLOW_VARIANT,
+    const request = {
       requestId,
       source: dialogData.source,
       workflowName,
       overrides: Object.keys(overrides).length > 0 ? overrides : undefined,
+    };
+    beginRequest(request);
+    vscode.postMessage({
+      type: MESSAGE_TYPES.CREATE_WORKFLOW_VARIANT,
+      ...request,
     });
   }, [beginRequest, dialogData, harness, model, name, vscode]);
 

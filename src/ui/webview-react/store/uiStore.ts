@@ -24,6 +24,7 @@ import type {
   WorkflowTokenTotals,
   WorktreeRunProjection,
 } from "@root/types/CtrlYokeTypes";
+import type { CreateWorkflowVariantRequest } from "@root/types/WebviewMessageTypes";
 import type { SaveWorkflowBundlePreview } from "../types/messages";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import { isWorkflowRunning } from "@utils/status";
@@ -214,10 +215,10 @@ export interface DuplicateWorkflowDialogData {
   invoker: HTMLElement | null;
 }
 
-export interface DuplicateWorkflowRequest {
-  requestId: string;
-  workflowName: string;
-}
+export type DuplicateWorkflowRequest = Omit<
+  CreateWorkflowVariantRequest,
+  "type"
+>;
 
 /** Transient, request-addressed save-path preflight state. */
 export interface SavePathCheck {
@@ -746,10 +747,8 @@ interface UiActions {
     invoker?: HTMLElement | null
   ) => void;
   closeDuplicateWorkflowDialog: () => void;
-  beginDuplicateWorkflowRequest: (
-    requestId: string,
-    workflowName: string
-  ) => void;
+  beginDuplicateWorkflowRequest: (request: DuplicateWorkflowRequest) => void;
+  retireDuplicateWorkflowRequest: (error: string) => void;
   setDuplicateWorkflowError: (error: string | null) => void;
 
   // File browser modal (standalone/hosted mode)
@@ -1287,11 +1286,14 @@ export const useUiStore = create<UiState & UiActions>()(
         }
       },
 
-      beginDuplicateWorkflowRequest: (requestId, workflowName) =>
+      beginDuplicateWorkflowRequest: (request) =>
         set({
-          duplicateWorkflowRequest: { requestId, workflowName },
+          duplicateWorkflowRequest: request,
           duplicateWorkflowError: null,
         }),
+
+      retireDuplicateWorkflowRequest: (error) =>
+        set({ duplicateWorkflowRequest: null, duplicateWorkflowError: error }),
 
       setDuplicateWorkflowError: (error) =>
         set({ duplicateWorkflowError: error }),

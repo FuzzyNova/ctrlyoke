@@ -359,6 +359,11 @@ interface CreateWorkflowVariantRequest {
   passes these messages straight through — it intercepts only heartbeat/theme/
   preview types — so no server-side change is needed beyond the shared
   `MESSAGE_TYPES` additions.
+- **Delivery is request-id idempotent.** The router keys a bounded, expiring
+  reply cache by `(ctx.clientId, requestId)` so hosted reconnect retries replay
+  one creation result without allocating a second lineage. The webview retains
+  the exact payload, reissues it on an interval, and retires it with an inline
+  error after a bounded number of attempts; late replies are ignored.
 
 The service:
 

@@ -99,6 +99,33 @@ describe("DuplicateWorkflowDialog", () => {
       "Could not create variant"
     );
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(useUiStore.getState().duplicateWorkflowRequest).toBeNull();
+    expect(screen.getByRole("button", { name: "Duplicate" })).toBeEnabled();
+  });
+
+  it("ignores a late success for a failed request", () => {
+    render(<DuplicateWorkflowDialog />);
+    openDialog();
+    fireEvent.click(screen.getByRole("button", { name: "Duplicate" }));
+    const request = postMessageSpy.mock.calls[0][0] as { requestId: string };
+
+    act(() => {
+      createMessageHandlers()[MESSAGE_TYPES.WORKFLOW_VARIANT_FAILED]({
+        type: MESSAGE_TYPES.WORKFLOW_VARIANT_FAILED,
+        requestId: request.requestId,
+        error: "Could not create variant",
+      });
+      createMessageHandlers()[MESSAGE_TYPES.WORKFLOW_VARIANT_CREATED]({
+        type: MESSAGE_TYPES.WORKFLOW_VARIANT_CREATED,
+        requestId: request.requestId,
+        address: { workflowKey: "stale" as never, kind: "draft" },
+      });
+    });
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Could not create variant"
+    );
   });
 
   it("refreshes and navigates only this client after success", () => {
