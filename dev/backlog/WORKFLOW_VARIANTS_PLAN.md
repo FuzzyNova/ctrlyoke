@@ -33,7 +33,7 @@ report merely to remove this setup friction.
 
 An earlier revision of this plan proposed two user-facing actions — **Duplicate
 Workflow** (source: the lineage's draft) and **Fork as New Workflow** (source:
-the addressed draft *or* historical run). Checked against the current code, that
+the addressed draft _or_ historical run). Checked against the current code, that
 split does not survive:
 
 ### 1. "The lineage's draft" usually does not exist
@@ -45,7 +45,8 @@ deletes it. A lineage has a draft **only before its first run**, or while a
 computes the flag the UI uses:
 
 ```typescript
-const hasDraft = !descriptor.latestRunRef || descriptor.pendingEdit?.kind === "draft";
+const hasDraft =
+  !descriptor.latestRunRef || descriptor.pendingEdit?.kind === "draft";
 ```
 
 So a Duplicate defined as "copy the draft" is unavailable on the overwhelming
@@ -63,9 +64,9 @@ entry point, not of the command.
 ### 3. "Fork" already means something else here
 
 The codebase already spends "fork" on same-lineage operations: commit `659cfda7`
-is *"fork promoted runs into drafts for edits"*, and
+is _"fork promoted runs into drafts for edits"_, and
 `WORKFLOW_CONTEXT_MENU_PLAN.md` uses "forks history" for re-run. Both stay
-*inside* one lineage. A user-facing **Fork** that means "leaves the lineage"
+_inside_ one lineage. A user-facing **Fork** that means "leaves the lineage"
 inverts the word against its established use here.
 
 **Decision:** ship one command, **Duplicate Workflow…**, whose source is an
@@ -73,7 +74,7 @@ explicit `WorkflowViewAddress` supplied by whichever control invoked it. The
 dialog names that source on screen so the user can see what is being copied.
 
 **What would reopen this:** a second operation that produces a materially
-different artifact — copying run history, or creating a variant *inside* the
+different artifact — copying run history, or creating a variant _inside_ the
 source lineage rather than beside it. Neither is in scope (see Non-goals). A
 different default source alone is not enough to justify a second menu item.
 
@@ -109,10 +110,10 @@ The source is always an address the invoking control already holds. There is no
 implicit "latest run" fallback anywhere — a control that cannot name an address
 does not offer the command.
 
-| Invoked from                          | Source address                                                                       |
-| ------------------------------------- | ------------------------------------------------------------------------------------ |
-| Header / `WorkflowControls`           | `uiStore.displayedViewAddress` — the run or draft this client is looking at right now |
-| A run-panel row                       | that row's own address (draft, or `run:<runRef>`)                                     |
+| Invoked from                           | Source address                                                                           |
+| -------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Header / `WorkflowControls`            | `uiStore.displayedViewAddress` — the run or draft this client is looking at right now    |
+| A run-panel row                        | that row's own address (draft, or `run:<runRef>`)                                        |
 | A recent or running row's context menu | that lineage's primary address (`RecentWorkflow.address` — its latest run, or its draft) |
 
 This answers the question the two-command split was trying to answer. Duplicating
@@ -156,7 +157,7 @@ what `seedNewRun` already does, and Duplicate must not diverge from it:
 ...(overrides.harness ? { harness: overrides.harness } : {}),
 ```
 
-**Why this is not negotiable.** Per-step harness pins are frequently the *point*
+**Why this is not negotiable.** Per-step harness pins are frequently the _point_
 of a workflow, not an incidental setting. Consider:
 
 ```
@@ -169,10 +170,10 @@ step 5: implement the final plan          (workflow default)
 
 Clearing the pins here does not produce a variant of this workflow — it destroys
 it, collapsing three deliberately different authors into one. And the bake-off
-this workflow's owner actually wants is "which harness *synthesizes and
-implements* best," which is precisely a change to the workflow-level default
+this workflow's owner actually wants is "which harness _synthesizes and
+implements_ best," which is precisely a change to the workflow-level default
 with steps 1–3 left alone. The narrow rule serves the comparison use case
-*better* than the broad one, not merely more safely.
+_better_ than the broad one, not merely more safely.
 
 An earlier revision of this plan proposed clearing step pins under an override.
 It was wrong; do not reintroduce it, and do not add a "also apply to all steps"
@@ -208,7 +209,7 @@ this plan.
 Four entry points, one command, one dialog. Every one of them resolves to a
 `WorkflowViewAddress` before opening the dialog.
 
-### 1. `WorkflowControls.tsx` — the New split button *(primary)*
+### 1. `WorkflowControls.tsx` — the New split button _(primary)_
 
 A fourth dropdown option after "Queue from File…". This is the right home
 because every other item in that menu creates a workflow, and because the file
@@ -272,12 +273,12 @@ per-step affordance. Duplicate is a whole-workflow operation.
 New `DuplicateWorkflowDialog`, over the shared `Modal`. Deliberately much smaller
 than `SaveWorkflowDialog` — read that component to see what **not** to copy.
 
-| Field            | Control                      | Default                                 | Notes                                                                                                            |
-| ---------------- | ---------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Source           | read-only text               | `"<Name> · Run 3"` / `"<Name> · Draft"` | Not editable. Label it with the same helper the header uses (`viewedRunLabel`) so the wording matches the badge.  |
-| Name             | text input, autofocus+select | `<source name> Copy`                    | Required, non-empty. No filename validation.                                                                     |
+| Field            | Control                      | Default                                 | Notes                                                                                                               |
+| ---------------- | ---------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Source           | read-only text               | `"<Name> · Run 3"` / `"<Name> · Draft"` | Not editable. Label it with the same helper the header uses (`viewedRunLabel`) so the wording matches the badge.    |
+| Name             | text input, autofocus+select | `<source name> Copy`                    | Required, non-empty. No filename validation.                                                                        |
 | Workflow Harness | select                       | "Same as source"                        | Options from `HARNESS_IDS`. The word **Workflow** is load-bearing — see above; do not shorten it back to "Harness". |
-| Workflow Model   | select                       | "Same as source"                        | Filtered by the selected harness; see `ModelConstants.ts`.                                                        |
+| Workflow Model   | select                       | "Same as source"                        | Filtered by the selected harness; see `ModelConstants.ts`.                                                          |
 
 Footer: **Cancel** / **Duplicate**. Enter submits when the name is non-empty.
 
@@ -374,7 +375,7 @@ The service:
 
 An earlier revision said to extract Save As's clean-workflow allowlist from
 `WorkflowSerializer` and share it. **Do not.** `WorkflowSerializer.buildCleanWorkflow`
-produces an *export document*: it drops `workflowName`, `startedAt`, and
+produces an _export document_: it drops `workflowName`, `startedAt`, and
 `originalFile`, and the Save As path around it also inlines and bundles assets.
 A new lineage's draft is a `WorkingFile` and needs those fields.
 
@@ -400,7 +401,7 @@ Creation is all-or-nothing. If the draft write fails after
 `createLineage` has allocated the key, remove only the newly allocated
 incomplete lineage and report the failure. The source lineage is read-only
 throughout — no descriptor lock on the source, no revision expectation, because
-duplication does not mutate it. (This is the one place Duplicate is *simpler*
+duplication does not mutate it. (This is the one place Duplicate is _simpler_
 than `seedNewRun`, which must guard the source descriptor because it writes to
 it.)
 
@@ -420,7 +421,7 @@ it.)
 `WorkflowList.tsx`, making the common harness comparison visible without a
 dedicated comparison engine.
 
-If the user does *not* want a second row in the workflow list — just the same
+If the user does _not_ want a second row in the workflow list — just the same
 workflow re-run under a different harness — the existing `seedNewRun` path
 already covers that, and Duplicate is the wrong tool.
 
@@ -464,19 +465,19 @@ one checkout. Parallel workflows can edit the same files and interfere.
 
 ### Phase 2 — Duplicate UX
 
-- [ ] Add `DuplicateWorkflowDialog` (source / name / workflow harness / workflow
+- [x] Add `DuplicateWorkflowDialog` (source / name / workflow harness / workflow
       model).
-- [ ] Add **Duplicate Workflow…** to `WorkflowControls`'s dropdown, with the
+- [x] Add **Duplicate Workflow…** to `WorkflowControls`'s dropdown, with the
       `isViewingRun` label switch and disabled when there is no displayed
       address.
-- [ ] Add **Duplicate Workflow…** to the workflow context menu
+- [x] Add **Duplicate Workflow…** to the workflow context menu
       (`WORKFLOW_CONTEXT_MENU_PLAN.md`) on recent rows, running rows, the header
       split button, and run-panel rows.
-- [ ] Refresh recent workflows and switch **only the requesting client** to the
+- [x] Refresh recent workflows and switch **only the requesting client** to the
       new draft.
-- [ ] React tests (`src/ui/webview-react/test/**`): the dialog names the
+- [x] React tests (`src/ui/webview-react/test/**`): the dialog names the
       displayed run as source when the header shows a non-latest run; a
-      run-panel row duplicates *that* row's address; dialog validation; success
+      run-panel row duplicates _that_ row's address; dialog validation; success
       navigation; failure keeps the dialog open with the typed name; focus
       restoration; other clients keep their selection.
 
@@ -521,7 +522,7 @@ one checkout. Parallel workflows can edit the same files and interfere.
   "apply to all steps" checkbox in the dialog.
 - Copying or linking run histories.
 - A provenance chain / lineage graph UI.
-- Duplicating into the *same* lineage — that is `seedNewRun`, which exists.
+- Duplicating into the _same_ lineage — that is `seedNewRun`, which exists.
 - A `ctrlyoke duplicate` CLI command or an MCP tool. The service is written
   platform-neutral so either could be added later, but neither ships here.
 - A native split-screen comparison view.

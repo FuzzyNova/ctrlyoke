@@ -27,6 +27,7 @@ export interface WorkflowContextMenuTarget {
 }
 
 interface UseWorkflowContextMenuOptions {
+  onDuplicate: (target: WorkflowContextMenuTarget) => void;
   onToggleFavorite: (address: WorkflowViewAddress) => void;
   onDelete: (target: WorkflowContextMenuTarget) => void;
   onCloseDropdown: () => void;
@@ -36,6 +37,7 @@ const copyRunDirectoryTitle =
   "Copies the path; in hosted browser mode, it is on the server's filesystem.";
 
 export function useWorkflowContextMenu({
+  onDuplicate,
   onToggleFavorite,
   onDelete,
   onCloseDropdown,
@@ -61,6 +63,13 @@ export function useWorkflowContextMenu({
         x,
         y,
         items: [
+          {
+            label: "Duplicate Workflow…",
+            icon: "codicon-copy",
+            disabled: false,
+            onClick: () => onDuplicate(target),
+          },
+          { type: "divider" },
           {
             label: "Copy Run Directory Path",
             icon: "codicon-copy",
@@ -114,7 +123,7 @@ export function useWorkflowContextMenu({
         ],
       });
     },
-    [onCloseDropdown, onDelete, onToggleFavorite]
+    [onCloseDropdown, onDelete, onDuplicate, onToggleFavorite]
   );
 
   const workflowContextMenuPortal = contextMenu ? (

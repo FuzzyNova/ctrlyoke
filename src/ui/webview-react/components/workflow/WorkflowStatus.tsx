@@ -126,6 +126,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     pendingRunViewSwitch,
     recentWorkflows,
     setRecentWorkflows,
+    openDuplicateWorkflowDialog,
     setActiveWorkflowWorkingFilePath,
     runSummaries,
     executionRunRef,
@@ -1086,10 +1087,29 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     [handleDeleteRunPanelRow, handleRemoveWorkflow]
   );
 
+  const handleDuplicateWorkflow = useCallback(
+    (target: WorkflowContextMenuTarget) => {
+      const invoker =
+        typeof document !== "undefined" &&
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      openDuplicateWorkflowDialog(
+        {
+          source: target.address,
+          workflowName: target.workflowName,
+        },
+        invoker
+      );
+    },
+    [openDuplicateWorkflowDialog]
+  );
+
   const {
     openContextMenu: openWorkflowContextMenu,
     workflowContextMenuPortal,
   } = useWorkflowContextMenu({
+    onDuplicate: handleDuplicateWorkflow,
     onToggleFavorite: handleToggleFavorite,
     onDelete: handleWorkflowContextMenuDelete,
     onCloseDropdown: closeDropdown,

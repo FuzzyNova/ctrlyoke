@@ -157,6 +157,11 @@ describe("RunSummaryRow", () => {
       10,
       20,
       expect.objectContaining({
+        address: {
+          workflowKey: "wf",
+          kind: "run",
+          runRef: "run-14",
+        },
         scope: "run",
         workflowName: "Workflow",
         isFavorite: true,

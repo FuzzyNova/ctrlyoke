@@ -86,6 +86,7 @@ import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
 import { getReadyPreferredViewAddress } from "@/navigation/readyRoute";
 import { getWorkflowDefinitionMutation } from "../utils/workflowMutation";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
+import { navigateToWorkflowAddress } from "@utils/runNavigation";
 
 // ============================================================================
 // Types
@@ -1469,6 +1470,34 @@ export function createMessageHandlers(
     uiStore.setRecentWorkflows(message.workflows || []);
   };
 
+  // WORKFLOW_VARIANT_CREATED - create and navigate only the requesting client
+  handlers[MESSAGE_TYPES.WORKFLOW_VARIANT_CREATED] = (message) => {
+    const uiStore = useUiStore.getState();
+    const pending = uiStore.duplicateWorkflowRequest;
+    const dialog = uiStore.duplicateWorkflowDialogData;
+    if (!pending || !dialog || pending.requestId !== message.requestId) {
+      return;
+    }
+
+    const vscode = getVsCodeApi();
+    uiStore.closeDuplicateWorkflowDialog();
+    vscode.postMessage({ type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS });
+    navigateToWorkflowAddress(vscode, message.address, pending.workflowName);
+    uiStore.showToast(
+      `Created workflow "${pending.workflowName}"`,
+      USER_FEEDBACK_SEVERITY.SUCCESS
+    );
+  };
+
+  // WORKFLOW_VARIANT_FAILED - keep the dialog and its typed name open
+  handlers[MESSAGE_TYPES.WORKFLOW_VARIANT_FAILED] = (message) => {
+    const uiStore = useUiStore.getState();
+    if (uiStore.duplicateWorkflowRequest?.requestId !== message.requestId) {
+      return;
+    }
+    uiStore.setDuplicateWorkflowError(message.error);
+  };
+
   // --------------------------------------------------------------------------
   // OPEN_NEW_WORKFLOW_MODAL - Open modal to create new workflow
   // --------------------------------------------------------------------------
@@ -1878,12 +1907,8 @@ export function createMessageHandlers(
   // WORKFLOW_VIEW_IDENTITY - authoritative address/revisions after a write
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY] = (message) => {
-    const {
-      address,
-      runDirectory,
-      definitionRevision,
-      descriptorRevision,
-    } = message;
+    const { address, runDirectory, definitionRevision, descriptorRevision } =
+      message;
     if (!address) return;
     if (typeof definitionRevision === "number") {
       useExecutionPreviewStore
@@ -1986,7 +2011,9 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.WORKTREE_MERGE_RESULT] = (message) => {
     if (!message.address || !message.worktree) return;
     const uiStore = useUiStore.getState();
-    if (!areWorkflowAddressesEqual(message.address, uiStore.appliedViewAddress)) {
+    if (
+      !areWorkflowAddressesEqual(message.address, uiStore.appliedViewAddress)
+    ) {
       return;
     }
     useUiStore

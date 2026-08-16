@@ -31,10 +31,12 @@ function TestHarness({
   menuTarget?: WorkflowContextMenuTarget;
 }) {
   const onToggleFavorite = vi.fn();
+  const onDuplicate = vi.fn();
   const onDelete = vi.fn();
   const onCloseDropdown = vi.fn();
   const { openContextMenu, workflowContextMenuPortal } = useWorkflowContextMenu(
     {
+      onDuplicate,
       onToggleFavorite,
       onDelete,
       onCloseDropdown,
@@ -62,7 +64,7 @@ describe("useWorkflowContextMenu", () => {
 
   afterEach(() => cleanup());
 
-  it("renders copy, divider, favorite, and scoped delete in order", () => {
+  it("renders duplicate, copy, divider, favorite, and scoped delete in order", () => {
     render(<TestHarness />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
@@ -70,11 +72,12 @@ describe("useWorkflowContextMenu", () => {
       screen.getAllByRole("button").map((button) => button.textContent?.trim())
     ).toEqual([
       "Open menu",
+      "Duplicate Workflow…",
       "Copy Run Directory Path",
       "Add to Favorites",
       "Delete Workflow",
     ]);
-    expect(screen.getAllByRole("separator")).toHaveLength(1);
+    expect(screen.getAllByRole("separator")).toHaveLength(2);
     expect(
       screen.getByRole("button", { name: "Copy Run Directory Path" })
     ).toHaveAttribute("title", expect.stringContaining("server's filesystem"));

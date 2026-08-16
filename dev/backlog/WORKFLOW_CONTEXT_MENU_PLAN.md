@@ -57,8 +57,8 @@ Surface 4 was absent from an earlier revision of this plan, which covered only
 the workflow list and the header. It belongs here for two reasons:
 
 - **It is where "which run?" is unambiguous.** Every other surface names a
-  lineage and resolves to *an* address (its primary one, or the client's
-  displayed one). A run-panel row *is* an address. Copy Run Directory Path is at
+  lineage and resolves to _an_ address (its primary one, or the client's
+  displayed one). A run-panel row _is_ an address. Copy Run Directory Path is at
   its most obviously correct here, and this plan's entire field-placement
   argument below exists to protect that property on the surfaces where it is
   fragile.
@@ -75,12 +75,12 @@ share the single hook instance with no new portal or listener pair.
 
 ### Item set
 
-| Item                           | Message                                             | Notes                                                        |
-| ------------------------------ | --------------------------------------------------- | ------------------------------------------------------------ |
-| Copy Run Directory Path        | none (clipboard)                                    | New. See below                                               |
-| — divider —                    |                                                     |                                                              |
-| Add to / Remove from Favorites | `TOGGLE_WORKFLOW_FAVORITE`                          | Always lineage-scoped, on every surface                      |
-| Delete Workflow / Delete Run   | `REMOVE_WORKFLOW_HISTORY` / `DELETE_RUN_HISTORY`    | Scope-dependent, see below; honours `confirmDeleteOperations` |
+| Item                           | Message                                          | Notes                                                         |
+| ------------------------------ | ------------------------------------------------ | ------------------------------------------------------------- |
+| Copy Run Directory Path        | none (clipboard)                                 | New. See below                                                |
+| — divider —                    |                                                  |                                                               |
+| Add to / Remove from Favorites | `TOGGLE_WORKFLOW_FAVORITE`                       | Always lineage-scoped, on every surface                       |
+| Delete Workflow / Delete Run   | `REMOVE_WORKFLOW_HISTORY` / `DELETE_RUN_HISTORY` | Scope-dependent, see below; honours `confirmDeleteOperations` |
 
 ### Delete is scope-dependent; Favorite is not
 
@@ -249,7 +249,7 @@ per-lineage lookup:
 | Run-panel row (run)   | new `runDirectory` on `RunSummary`                                                 |
 | Run-panel row (draft) | new `draftDirectory` on `WorkflowRunNavigationSummary`                             |
 
-A run-panel run row needs no placement argument — the row *is* an address, so a
+A run-panel run row needs no placement argument — the row _is_ an address, so a
 per-row field cannot drift from it. `RunSummary` is produced by
 `OutputHistoryManager.getRunSummaries`, whose per-run read already holds
 `runDirectoryPath` (it keys the summary cache on it), so this is a field
@@ -258,10 +258,11 @@ assignment, not a new resolution.
 **The draft row is the trap on this surface.** `RunPanelRow`'s `"draft"` variant
 carries no summary, so the obvious move is to take its directory from the drilled
 lineage's `RecentWorkflow.runDirectory` — and that is wrong. That field tracks the
-lineage's *primary* address, and `hasDraft` is true in two different situations:
+lineage's _primary_ address, and `hasDraft` is true in two different situations:
 
 ```typescript
-const hasDraft = !descriptor.latestRunRef || descriptor.pendingEdit?.kind === "draft";
+const hasDraft =
+  !descriptor.latestRunRef || descriptor.pendingEdit?.kind === "draft";
 ```
 
 In the second case the lineage has runs, so its primary address is the latest
@@ -528,10 +529,10 @@ the UI that consumes it.
       exists with a long recent list and with the run panel open; the dropdown
       survives a menu click; the run panel is not dismissed by one.
 
-### Phase 2 — Duplicate (deferred to `WORKFLOW_VARIANTS_PLAN.md`)
+### Phase 2 — Duplicate (landed with `WORKFLOW_VARIANTS_PLAN.md`)
 
-- [ ] **Duplicate Workflow…** joins this menu on all four surfaces once that
-      plan's shared clone service exists. This plan adds no cloning code.
+- [x] **Duplicate Workflow…** has joined this menu on all four surfaces now
+      that the shared clone service exists. This plan adds no cloning code.
 
       It slots above the Copy item with its own divider, and it is the reason
       run-panel rows are in scope here: it is the only item whose usefulness

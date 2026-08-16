@@ -203,6 +203,17 @@ export interface SaveWorkflowDialogData {
   defaultFormat: WorkflowFileFormat;
 }
 
+export interface DuplicateWorkflowDialogData {
+  source: WorkflowViewAddress;
+  workflowName: string;
+  invoker: HTMLElement | null;
+}
+
+export interface DuplicateWorkflowRequest {
+  requestId: string;
+  workflowName: string;
+}
+
 /** Transient, request-addressed save-path preflight state. */
 export interface SavePathCheck {
   requestId: string;
@@ -508,6 +519,12 @@ interface UiState {
   saveWorkflowDialogData: SaveWorkflowDialogData | null;
   savePathCheck: SavePathCheck | null;
 
+  // Duplicate workflow dialog state
+  duplicateWorkflowDialogOpen: boolean;
+  duplicateWorkflowDialogData: DuplicateWorkflowDialogData | null;
+  duplicateWorkflowRequest: DuplicateWorkflowRequest | null;
+  duplicateWorkflowError: string | null;
+
   // Web-native file/directory picker modal (standalone/hosted mode only) —
   // one canonical transient request shared by every caller, plus its persisted
   // last successful directory.
@@ -718,6 +735,18 @@ interface UiActions {
   resolveSavePathCheck: (result: Omit<SavePathCheck, "checking">) => void;
   clearSavePathCheck: () => void;
 
+  // Duplicate workflow dialog
+  openDuplicateWorkflowDialog: (
+    data: Omit<DuplicateWorkflowDialogData, "invoker">,
+    invoker?: HTMLElement | null
+  ) => void;
+  closeDuplicateWorkflowDialog: () => void;
+  beginDuplicateWorkflowRequest: (
+    requestId: string,
+    workflowName: string
+  ) => void;
+  setDuplicateWorkflowError: (error: string | null) => void;
+
   // File browser modal (standalone/hosted mode)
   openFileBrowser: (request: FileBrowserRequest) => void;
   closeFileBrowser: () => void;
@@ -907,6 +936,10 @@ const initialState: UiState = {
   saveWorkflowDialogOpen: false,
   saveWorkflowDialogData: null,
   savePathCheck: null,
+  duplicateWorkflowDialogOpen: false,
+  duplicateWorkflowDialogData: null,
+  duplicateWorkflowRequest: null,
+  duplicateWorkflowError: null,
   fileBrowserState: null,
   fileBrowserLastDirectory: null,
   saveLocationSelection: null,
@@ -1227,6 +1260,36 @@ export const useUiStore = create<UiState & UiActions>()(
           saveWorkflowDialogData: null,
           savePathCheck: null,
         }),
+
+      openDuplicateWorkflowDialog: (data, invoker = null) =>
+        set({
+          duplicateWorkflowDialogOpen: true,
+          duplicateWorkflowDialogData: { ...data, invoker },
+          duplicateWorkflowRequest: null,
+          duplicateWorkflowError: null,
+        }),
+
+      closeDuplicateWorkflowDialog: () => {
+        const invoker = get().duplicateWorkflowDialogData?.invoker;
+        set({
+          duplicateWorkflowDialogOpen: false,
+          duplicateWorkflowDialogData: null,
+          duplicateWorkflowRequest: null,
+          duplicateWorkflowError: null,
+        });
+        if (invoker && typeof document !== "undefined") {
+          invoker.focus();
+        }
+      },
+
+      beginDuplicateWorkflowRequest: (requestId, workflowName) =>
+        set({
+          duplicateWorkflowRequest: { requestId, workflowName },
+          duplicateWorkflowError: null,
+        }),
+
+      setDuplicateWorkflowError: (error) =>
+        set({ duplicateWorkflowError: error }),
 
       beginSavePathCheck: (requestId, path, address) =>
         set({
@@ -1824,6 +1887,10 @@ export const useUiStore = create<UiState & UiActions>()(
           saveWorkflowDialogOpen: false,
           saveWorkflowDialogData: null,
           savePathCheck: null,
+          duplicateWorkflowDialogOpen: false,
+          duplicateWorkflowDialogData: null,
+          duplicateWorkflowRequest: null,
+          duplicateWorkflowError: null,
           fileBrowserState: null,
           propertiesDrawerOpen: false,
           selectedOutputStep: null,
