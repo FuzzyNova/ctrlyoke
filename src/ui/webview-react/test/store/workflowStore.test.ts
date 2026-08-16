@@ -423,6 +423,99 @@ describe("appendStreamingEvents", () => {
     ]);
   });
 
+  it("updates the rendered history snapshot when follow-up activity arrives for a retired run", () => {
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+
+    const completedEntry: OrderedCliHistoryEntry = {
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      runIndex: 0,
+      attemptIndex: 0,
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "done" } }],
+          metadata: {},
+        },
+      }),
+      timestampMs: Date.now(),
+      sequence: 0,
+    };
+    useWorkflowStore.setState({
+      liveOrderedEntries: [],
+      historyOutputs: {
+        orderedEntries: [completedEntry],
+        promptOutputs: {},
+        runMetadata: {
+          runId: 1,
+          startedAt: Date.now() - 1000,
+          executionState: EXECUTION_STATES.COMPLETED,
+        },
+      },
+    });
+
+    store().appendStreamingEvents(0, [
+      { type: CLI_EVENT_TYPES.USER_STEER, data: { text: "one more thing" } },
+    ]);
+
+    const historyEntry = store().historyOutputs
+      ?.orderedEntries[0] as OrderedCliHistoryEntry;
+    expect(
+      historyEntry.cliOutput.structured?.events.map((event) => event.type)
+    ).toEqual([
+      CLI_EVENT_TYPES.TEXT,
+      CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
+      CLI_EVENT_TYPES.USER_STEER,
+    ]);
+    expect(
+      (store().liveOrderedEntries[0] as OrderedCliHistoryEntry).cliOutput
+        .structured?.events
+    ).toEqual(historyEntry.cliOutput.structured?.events);
+  });
+
+  it("updates a retired run's final-step history snapshot with follow-up activity", () => {
+    const completedEntry: OrderedCliHistoryEntry = {
+      kind: OUTPUT_HISTORY_KINDS.CLI,
+      target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 0 },
+      runIndex: 0,
+      attemptIndex: 0,
+      cliOutput: makeOutput({
+        structured: {
+          events: [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "final" } }],
+          metadata: {},
+        },
+      }),
+      timestampMs: Date.now(),
+      sequence: 0,
+    };
+    useWorkflowStore.setState({
+      liveOrderedEntries: [],
+      historyOutputs: {
+        orderedEntries: [completedEntry],
+        promptOutputs: {},
+        finalStepOutputs: {},
+        runMetadata: {
+          runId: 1,
+          startedAt: Date.now() - 1000,
+          executionState: EXECUTION_STATES.COMPLETED,
+        },
+      },
+    });
+
+    store().appendFinalStepStreamingEvents(0, [
+      { type: CLI_EVENT_TYPES.TEXT, data: { text: "follow-up" } },
+    ]);
+
+    const historyEntry = store().historyOutputs
+      ?.orderedEntries[0] as OrderedCliHistoryEntry;
+    expect(
+      historyEntry.cliOutput.structured?.events.map((event) => event.type)
+    ).toEqual([
+      CLI_EVENT_TYPES.TEXT,
+      CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
+      CLI_EVENT_TYPES.TEXT,
+    ]);
+  });
+
   it("inserts the follow-up divider only once across multiple resumed batches", () => {
     store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
 

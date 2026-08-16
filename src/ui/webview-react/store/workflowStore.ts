@@ -239,8 +239,8 @@ interface WorkflowState {
 
   // Self-contained history snapshot for the currently-viewed historical run.
   // When isViewingHistory=true (in uiStore), OutputSection renders from historyOutputs
-  // instead of liveOrderedEntries. The live entries continue to be updated normally —
-  // history browsing has zero impact on live capture.
+  // instead of liveOrderedEntries. Post-completion session activity updates both
+  // collections so a retired run remains live while its terminal is still open.
   historyOutputs: {
     orderedEntries: OrderedHistoryEntry[];
     promptOutputs: Record<number, StepOutput>;
@@ -528,6 +528,105 @@ function overlayLiveHistoryEntries(
   return { entries, nextSequence };
 }
 
+interface StreamingEventsEntryMerge {
+  entries: OrderedHistoryEntry[];
+  matchedEntry?: OrderedCliHistoryEntry;
+}
+
+function mergeStreamingEventsIntoEntries(
+  entries: OrderedHistoryEntry[],
+  identity: CliEntryIdentity,
+  events: any[]
+): StreamingEventsEntryMerge {
+  const existingIdx = findCliEntryIndexByIdentity(entries, identity);
+  if (existingIdx < 0) {
+    return { entries };
+  }
+
+  const existing = entries[existingIdx] as OrderedCliHistoryEntry;
+  const matchedEntry: OrderedCliHistoryEntry = {
+    ...existing,
+    cliOutput: mergeResumedActivityIntoOutput(existing.cliOutput, events),
+  };
+  const updatedEntries = [...entries];
+  updatedEntries[existingIdx] = matchedEntry;
+  return { entries: updatedEntries, matchedEntry };
+}
+
+function appendStreamingEventsToOutputState(
+  state: WorkflowState,
+  target: OutputExecutionTarget,
+  events: any[],
+  attemptIndex: number,
+  runIndex: number
+): Pick<
+  WorkflowState,
+  "liveOrderedEntries" | "liveSequence" | "historyOutputs"
+> {
+  const identity: CliEntryIdentity = {
+    target,
+    runIndex,
+    attemptIndex,
+    phase: EXECUTION_PHASES.PROMPT,
+  };
+  const liveMerge = mergeStreamingEventsIntoEntries(
+    state.liveOrderedEntries,
+    identity,
+    events
+  );
+  const historyMerge = state.historyOutputs
+    ? mergeStreamingEventsIntoEntries(
+        state.historyOutputs.orderedEntries,
+        identity,
+        events
+      )
+    : undefined;
+
+  let liveOrderedEntries = liveMerge.entries;
+  let liveSequence = state.liveSequence;
+  if (!liveMerge.matchedEntry) {
+    const historyEntry = historyMerge?.matchedEntry;
+    const cliOutput: CliOutput = historyEntry?.cliOutput ?? {
+      prompt: "",
+      response: "",
+      structured: {
+        events: mergeStreamingEvents([], events),
+        metadata: {},
+      },
+      elapsed: 0,
+      isStreaming: true,
+      timestampMs: Date.now(),
+      attemptIndex,
+      runIndex,
+    };
+    const entry: OrderedCliHistoryEntry = {
+      ...(historyEntry ?? {
+        kind: OUTPUT_HISTORY_KINDS.CLI,
+        target,
+        runIndex,
+        attemptIndex,
+        cliOutput,
+        timestampMs: cliOutput.timestampMs!,
+      }),
+      sequence: liveSequence,
+    };
+    liveOrderedEntries = [...liveOrderedEntries, entry];
+    liveSequence += 1;
+  }
+
+  return {
+    liveOrderedEntries,
+    liveSequence,
+    historyOutputs:
+      state.historyOutputs && historyMerge?.matchedEntry
+        ? {
+            ...state.historyOutputs,
+            orderedEntries: historyMerge.entries,
+          }
+        : state.historyOutputs,
+  };
+}
+
 function getUndoRecordKey(target: UndoExecutionTarget): string {
   return target.kind === FINAL_STEP_PHASES.QUEUE
     ? `queue-${target.stepIndex}`
@@ -716,65 +815,18 @@ export const useWorkflowStore = create<
         runIndex = 0
       ) =>
         withUndoPause(() =>
-          set((state) => {
-            const target: OutputExecutionTarget = {
-              kind: FINAL_STEP_PHASES.QUEUE,
-              stepIndex,
-            };
-            // Structured events are only ever produced by the prompt phase, so
-            // this must not attach them to a pre-/end-condition record that
-            // shares the same (target, runIndex, attemptIndex).
-            const existingIdx = findCliEntryIndexByIdentity(
-              state.liveOrderedEntries,
+          set((state) =>
+            appendStreamingEventsToOutputState(
+              state,
               {
-                target,
-                runIndex,
-                attemptIndex,
-                phase: EXECUTION_PHASES.PROMPT,
-              }
-            );
-            if (existingIdx >= 0) {
-              const existing = state.liveOrderedEntries[
-                existingIdx
-              ] as OrderedCliHistoryEntry;
-              const updatedOutput = mergeResumedActivityIntoOutput(
-                existing.cliOutput,
-                events
-              );
-              const newEntries = [...state.liveOrderedEntries];
-              newEntries[existingIdx] = {
-                ...existing,
-                cliOutput: updatedOutput,
-              };
-              return { liveOrderedEntries: newEntries };
-            }
-            const streamingOutput: CliOutput = {
-              prompt: "",
-              response: "",
-              structured: {
-                events: mergeStreamingEvents([], events),
-                metadata: {},
+                kind: FINAL_STEP_PHASES.QUEUE,
+                stepIndex,
               },
-              elapsed: 0,
-              isStreaming: true,
-              timestampMs: Date.now(),
+              events,
               attemptIndex,
-              runIndex,
-            };
-            const newEntry: OrderedCliHistoryEntry = {
-              kind: OUTPUT_HISTORY_KINDS.CLI,
-              target,
-              runIndex,
-              attemptIndex,
-              cliOutput: streamingOutput,
-              timestampMs: streamingOutput.timestampMs!,
-              sequence: state.liveSequence,
-            };
-            return {
-              liveOrderedEntries: [...state.liveOrderedEntries, newEntry],
-              liveSequence: state.liveSequence + 1,
-            };
-          })
+              runIndex
+            )
+          )
         ),
 
       appendFinalStepStreamingChunk: (loopIndex, chunk, phase) =>
@@ -807,63 +859,18 @@ export const useWorkflowStore = create<
         runIndex = 0
       ) =>
         withUndoPause(() =>
-          set((state) => {
-            const target: OutputExecutionTarget = {
-              kind: FINAL_STEP_PHASES.FINAL_STEP,
-              loopIndex,
-            };
-            // Same phase constraint as the queue-step path above.
-            const existingIdx = findCliEntryIndexByIdentity(
-              state.liveOrderedEntries,
+          set((state) =>
+            appendStreamingEventsToOutputState(
+              state,
               {
-                target,
-                runIndex,
-                attemptIndex,
-                phase: EXECUTION_PHASES.PROMPT,
-              }
-            );
-            if (existingIdx >= 0) {
-              const existing = state.liveOrderedEntries[
-                existingIdx
-              ] as OrderedCliHistoryEntry;
-              const updatedOutput = mergeResumedActivityIntoOutput(
-                existing.cliOutput,
-                events
-              );
-              const newEntries = [...state.liveOrderedEntries];
-              newEntries[existingIdx] = {
-                ...existing,
-                cliOutput: updatedOutput,
-              };
-              return { liveOrderedEntries: newEntries };
-            }
-            const streamingOutput: CliOutput = {
-              prompt: "",
-              response: "",
-              structured: {
-                events: mergeStreamingEvents([], events),
-                metadata: {},
+                kind: FINAL_STEP_PHASES.FINAL_STEP,
+                loopIndex,
               },
-              elapsed: 0,
-              isStreaming: true,
-              timestampMs: Date.now(),
+              events,
               attemptIndex,
-              runIndex,
-            };
-            const newEntry: OrderedCliHistoryEntry = {
-              kind: OUTPUT_HISTORY_KINDS.CLI,
-              target,
-              runIndex,
-              attemptIndex,
-              cliOutput: streamingOutput,
-              timestampMs: streamingOutput.timestampMs!,
-              sequence: state.liveSequence,
-            };
-            return {
-              liveOrderedEntries: [...state.liveOrderedEntries, newEntry],
-              liveSequence: state.liveSequence + 1,
-            };
-          })
+              runIndex
+            )
+          )
         ),
 
       // ============================================================================
