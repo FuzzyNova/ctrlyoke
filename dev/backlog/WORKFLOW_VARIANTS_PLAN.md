@@ -444,18 +444,18 @@ one checkout. Parallel workflows can edit the same files and interfere.
 
 ### Phase 1 — Shared clone service
 
-- [ ] Add `WorkflowVariantService` (`src/core/orchestration/`) over
+- [x] Add `WorkflowVariantService` (`src/core/orchestration/`) over
       `WorkflowLineageRepository.createLineage` + `WorkingFileManager`, reusing
       `stripStepRuntime` / `stripViewOnlyWorkflowStepFields`. Model it on
       `WorkingFileManager.seedNewRun`.
-- [ ] Support both draft and run source addresses.
-- [ ] Apply overrides to the **workflow-level** `harness`/`model` only, exactly
+- [x] Support both draft and run source addresses.
+- [x] Apply overrides to the **workflow-level** `harness`/`model` only, exactly
       as `seedNewRun` does. Step-level pins are copied through untouched.
-- [ ] Add the three message types and their `WebviewMessageRouter` entries,
+- [x] Add the three message types and their `WebviewMessageRouter` entries,
       `requestId`-correlated and delivered to the requesting client only.
-- [ ] Roll back the allocated lineage if the draft write fails.
-- [ ] Add the provenance fields to `WorkflowLineageDescriptor` and record them.
-- [ ] Unit tests (`src/test/**`): exact-source resolution for a draft and for a
+- [x] Roll back the allocated lineage if the draft write fails.
+- [x] Add the provenance fields to `WorkflowLineageDescriptor` and record them.
+- [x] Unit tests (`src/test/**`): exact-source resolution for a draft and for a
       non-latest run; runtime stripping; override application; **a multi-harness
       workflow whose steps pin three different harnesses keeps all three pins
       after a duplicate that overrides the workflow harness**; provenance;

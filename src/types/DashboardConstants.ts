@@ -220,6 +220,9 @@ export const MESSAGE_TYPES = {
   WORKFLOW_SAVE_FAILED: "workflowSaveFailed", // Extension -> Webview: { error } failure
   SAVE_WORKFLOW_AS_TEMPLATE: "saveWorkflowAsTemplate", // Webview -> Extension: { name, scope, format } — snapshot current workflow as a custom template
   WORKFLOW_SAVED_AS_TEMPLATE: "workflowSavedAsTemplate", // Extension -> Webview: { templates, templateId } success (failure reuses WORKFLOW_SAVE_FAILED)
+  CREATE_WORKFLOW_VARIANT: "createWorkflowVariant",
+  WORKFLOW_VARIANT_CREATED: "workflowVariantCreated",
+  WORKFLOW_VARIANT_FAILED: "workflowVariantFailed",
   BROWSE_SAVE_LOCATION: "browseSaveLocation", // Webview -> Extension: Request OS folder picker for the Save As location (VS Code panel only)
   SAVE_LOCATION_SELECTED: "saveLocationSelected", // Extension -> Webview: OS folder picker result { path }
 

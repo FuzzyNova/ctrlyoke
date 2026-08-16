@@ -1029,6 +1029,32 @@ export interface WorkflowSavedAsTemplateMessage {
   templateId?: string;
 }
 
+/** Webview → Extension: create a new lineage from an explicitly addressed definition. */
+export interface CreateWorkflowVariantRequest {
+  type: typeof MESSAGE_TYPES.CREATE_WORKFLOW_VARIANT;
+  requestId: string;
+  source: WorkflowViewAddress;
+  workflowName: string;
+  overrides?: {
+    harness?: HarnessId;
+    model?: string;
+  };
+}
+
+/** Extension → Webview: addressed workflow variant creation succeeded. */
+export interface WorkflowVariantCreatedMessage {
+  type: typeof MESSAGE_TYPES.WORKFLOW_VARIANT_CREATED;
+  requestId: string;
+  address: Extract<WorkflowViewAddress, { kind: "draft" }>;
+}
+
+/** Extension → Webview: addressed workflow variant creation failed. */
+export interface WorkflowVariantFailedMessage {
+  type: typeof MESSAGE_TYPES.WORKFLOW_VARIANT_FAILED;
+  requestId: string;
+  error: string;
+}
+
 /**
  * Workflows list message (extension -> webview, multi-workflow coordination)
  */
@@ -2140,6 +2166,8 @@ export type IncomingMessage =
   | WorkflowSavedMessage
   | WorkflowSaveFailedMessage
   | WorkflowSavedAsTemplateMessage
+  | WorkflowVariantCreatedMessage
+  | WorkflowVariantFailedMessage
   | WorkflowsListMessage
   | WorkflowAddedMessage
   | WorkflowDismissedMessage

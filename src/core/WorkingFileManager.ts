@@ -219,7 +219,22 @@ export class WorkingFileManager {
    * @returns Parsed working file
    */
   public async readWorkingFile(workingFilePath: string): Promise<WorkingFile> {
+    return WorkingFileManager.readWorkingFileFromDisk(workingFilePath);
+  }
+
+  /** Read any run-storage working file without requiring a live queue adapter. */
+  public static async readWorkingFileFromDisk(
+    workingFilePath: string
+  ): Promise<WorkingFile> {
     return readWorkingFileFromDisk(workingFilePath);
+  }
+
+  /** Write a run-storage working file atomically without requiring a live queue adapter. */
+  public static async writeWorkingFileAtomic(
+    workingFilePath: string,
+    workingFile: WorkingFile
+  ): Promise<void> {
+    return writeWorkingFileAtomicTo(workingFilePath, workingFile);
   }
 
   /** Applies to the next definition write only; runtime persistence remains unguarded. */
@@ -513,6 +528,11 @@ export class WorkingFileManager {
     );
 
     const startedAt = Date.now();
+    const finalStep = source.finalStep
+      ? stripViewOnlyWorkflowStepFields(
+          stripStepRuntime([source.finalStep])[0]
+        )
+      : undefined;
     const workingFile: WorkingFile = {
       ...source,
       ...(descriptor.originalFile
@@ -526,6 +546,7 @@ export class WorkingFileManager {
       steps: stripStepRuntime(source.steps ?? []).map(
         stripViewOnlyWorkflowStepFields
       ),
+      ...(finalStep ? { finalStep } : {}),
       ...(overrides.harness ? { harness: overrides.harness } : {}),
       ...(overrides.model ? { model: overrides.model } : {}),
       _runtime: {

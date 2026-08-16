@@ -389,6 +389,14 @@ export interface WorkflowLineageDescriptor {
   lastModifiedAt: number;
   /** Repairable hint, not the storage source of truth — validate against manifests before trusting. */
   latestRunRef?: RunRef;
+  /** Source lineage when this workflow was created as a variant. Informational only. */
+  sourceWorkflowKey?: WorkflowKey;
+  /** Source run when this workflow was created from a promoted run. Informational only. */
+  sourceRunRef?: RunRef;
+  /** Source display name when this workflow was created as a variant. */
+  sourceWorkflowName?: string;
+  /** Time at which this workflow variant was created. */
+  variantCreatedAt?: number;
   /** Monotonic; never decremented after deletion. */
   nextRunId: number;
   /**

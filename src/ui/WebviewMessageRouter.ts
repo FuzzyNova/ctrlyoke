@@ -57,6 +57,7 @@ import {
   type WebviewClientContext,
 } from "./WebviewClientContext";
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
+import { WorkflowVariantService } from "../core/orchestration/WorkflowVariantService";
 import { redactExecutionPreview } from "../types/PreviewRedactor";
 
 /**
@@ -218,6 +219,7 @@ export class WebviewMessageRouter {
     this.registerMcpManager(table);
     this.registerHarnessFiles(table);
     this.registerOutputHistory(table);
+    this.registerWorkflowVariants(table);
     this.registerWorkflowModal(table);
     this.registerWorkflowStatus(table);
     this.registerSettings(table);
@@ -964,6 +966,37 @@ export class WebviewMessageRouter {
         }
       }
     );
+  }
+
+  private registerWorkflowVariants(table: DispatchTable): void {
+    table.set(MESSAGE_TYPES.CREATE_WORKFLOW_VARIANT, async (message, ctx) => {
+      try {
+        const address = await new WorkflowVariantService(
+          this.getWorkspaceRoot()
+        ).createWorkflowVariant({
+          source: message.source,
+          workflowName: message.workflowName,
+          overrides: message.overrides,
+        });
+        ctx.postMessage({
+          type: MESSAGE_TYPES.WORKFLOW_VARIANT_CREATED,
+          requestId: message.requestId,
+          address,
+        });
+      } catch (error) {
+        ctx.postMessage({
+          type: MESSAGE_TYPES.WORKFLOW_VARIANT_FAILED,
+          requestId: message.requestId,
+          error: getErrorMessage(error),
+        });
+      }
+    });
+
+    // These are extension → webview replies. They are registered so the
+    // dispatch table remains complete if a transport feeds a reply back into
+    // the router; the originating handler above is the only producer.
+    table.set(MESSAGE_TYPES.WORKFLOW_VARIANT_CREATED, () => undefined);
+    table.set(MESSAGE_TYPES.WORKFLOW_VARIANT_FAILED, () => undefined);
   }
 
   private registerWorkflowModal(table: DispatchTable): void {
