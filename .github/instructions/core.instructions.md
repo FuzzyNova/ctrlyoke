@@ -105,6 +105,7 @@ Top-level ctrlyoke core orchestration only: workflow registry, per-workflow runt
 - Queue status/append behavior for agent callers lives in `src/mcp-server.ts`, which is now its only consumer. (`QueueOperations.ts` used to centralize it across the MCP server and the VS Code LM tools; those tools were removed with the Copilot Chat harness and the module went with them.)
 - `TemplateManager` reads built-in template metadata from `_templateMeta` in template files; `blank` is the one built-in generated in code instead of loaded from disk.
 - `OutputCaptureBuffer` is the per-workflow replay buffer for inactive/background workflows; it captures regular steps and final-step loops separately so dashboard state can be reconstructed when views switch.
+- **`ExecutionPreviewService` must never touch Git or the filesystem beyond reads.** Its worktree preview (`buildWorktreePreview` → `WorktreeUtils.previewWorktreePlacement`) is read-only by construction: named-branch placement is exact only when `git worktree list` already has a matching entry, otherwise it's a deterministic best guess computed without calling `WorktreeManager`'s mutating root-resolution (which creates directories). Managed-mode placement can never be exact in preview — its branch name embeds a `RunRef` that only a real run allocates — so `plannedDirectory` stays `undefined` for managed mode and callers must show `plannedDirectoryNotice` instead of inventing a path.
 
 </sharedContracts>
 

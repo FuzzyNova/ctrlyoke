@@ -16,6 +16,7 @@ import {
   PREVIEW_PROPERTY_SOURCES,
   PREVIEW_SCOPES,
   PREVIEW_STEP_TYPES,
+  WORKTREE_MODES,
   type HarnessId,
   type PreviewPermissionAction,
   type PreviewPropertySource,
@@ -59,6 +60,7 @@ import {
   type WorkflowExecutionPreview,
   type WorkflowPreviewSummary,
   type WorkspaceMutationPreview,
+  type WorktreeExecutionPreview,
 } from "../types/ExecutionPreviewTypes";
 import { renderCommandForDisplay } from "../types/CommandDisplayFormatter";
 import {
@@ -77,9 +79,17 @@ import {
 } from "./harness/shared/ExecutionPlanBuilder";
 import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
 import type { PreparedMutation } from "./harness/shared/interfaces/PreparedMutation";
-import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../utils/ConfigurationUtils";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import { PromptFileResolver } from "./PromptFileResolver";
+import { resolveWorktreeSelection } from "../utils/WorktreeResolution";
+import {
+  evaluateWorkspaceEligibility,
+  previewWorktreePlacement,
+} from "../utils/WorktreeUtils";
 
 /** The already-wired shared planners for one CLI harness. */
 export interface ExecutionPreviewHarness {
@@ -230,10 +240,7 @@ export class ExecutionPreviewService {
         managedMcpServers,
         target.step.prompt
       );
-      mcpNormalizationDiagnostics.set(
-        target.stepIndex,
-        normalized.diagnostics
-      );
+      mcpNormalizationDiagnostics.set(target.stepIndex, normalized.diagnostics);
       resolvedTargets.set(target.stepIndex, {
         ...resolution,
         properties: normalized.properties,
@@ -255,6 +262,8 @@ export class ExecutionPreviewService {
       workspace: { workspaceRoot: this.options.workspaceRoot },
     });
 
+    const worktreePreview = await this.buildWorktreePreview(preparedWorkflow);
+
     const steps: StepExecutionPreview[] = [];
     for (const target of targets) {
       steps.push(
@@ -267,7 +276,8 @@ export class ExecutionPreviewService {
           resolvedTargets.get(target.stepIndex),
           managedMcpServers,
           compatibilityDiagnostics,
-          mcpNormalizationDiagnostics.get(target.stepIndex) ?? []
+          mcpNormalizationDiagnostics.get(target.stepIndex) ?? [],
+          worktreePreview
         )
       );
     }
@@ -317,6 +327,7 @@ export class ExecutionPreviewService {
       workflow: workflowSummary,
       steps,
       diagnostics: this.dedupeDiagnostics(diagnostics),
+      ...(worktreePreview ? { worktree: worktreePreview } : {}),
     };
   }
 
@@ -329,7 +340,8 @@ export class ExecutionPreviewService {
     resolvedTarget: ResolvedExecutionTarget | undefined,
     managedMcpServers: readonly ManagedMcpServer[],
     compatibilityDiagnostics: readonly CompatibilityDiagnostic[],
-    mcpNormalizationDiagnostics: readonly CompatibilityDiagnostic[]
+    mcpNormalizationDiagnostics: readonly CompatibilityDiagnostic[],
+    worktreePreview: WorktreeExecutionPreview | undefined
   ): Promise<StepExecutionPreview> {
     const step = target.step;
     const promptStep = isScriptStep(step) ? this.scriptAsPrompt(step) : step;
@@ -369,7 +381,7 @@ export class ExecutionPreviewService {
     ];
 
     if (isScriptStep(step)) {
-      const scriptCommand = this.buildScriptCommand(step);
+      const scriptCommand = this.buildScriptCommand(step, worktreePreview);
       return {
         stepIndex: target.stepIndex,
         ...(step.name ? { stepName: step.name } : {}),
@@ -421,7 +433,8 @@ export class ExecutionPreviewService {
     const command = this.toCommandPreview(
       executionPlan,
       harness.provider,
-      properties
+      properties,
+      worktreePreview
     );
     const permissionApplication = this.toPermissionPreview(
       executionPlan,
@@ -602,10 +615,74 @@ export class ExecutionPreviewService {
     };
   }
 
+  /**
+   * Read-only preview of the workflow's worktree configuration and, where
+   * knowable without a real run identity, the directory it will execute in.
+   * Never creates a branch, worktree, or directory — dry-run/preview only.
+   */
+  private async buildWorktreePreview(
+    workflow: PromptFile
+  ): Promise<WorktreeExecutionPreview | undefined> {
+    const selection = resolveWorktreeSelection(
+      workflow.worktree,
+      ConfigurationUtils.getDefaultWorktree()
+    );
+    if (!selection.config || selection.config.mode === WORKTREE_MODES.NONE) {
+      return undefined;
+    }
+    const { mode, branch, base } = selection.config;
+    const workspaceRoot = this.options.workspaceRoot;
+    const eligibility = await evaluateWorkspaceEligibility(
+      this.options.namedWorkspaceRoots ?? []
+    );
+    if (!eligibility.eligible || !workspaceRoot) {
+      return {
+        mode,
+        origin: selection.origin,
+        branch,
+        base,
+        eligible: false,
+        eligibilityReason:
+          eligibility.reason ??
+          "No workspace root is available to place a worktree.",
+        plannedDirectoryIsExact: false,
+      };
+    }
+
+    const placement =
+      mode === WORKTREE_MODES.MANAGED
+        ? await previewWorktreePlacement({
+            sourceCheckoutRoot: workspaceRoot,
+            mode: "managed",
+          })
+        : branch
+          ? await previewWorktreePlacement({
+              sourceCheckoutRoot: workspaceRoot,
+              mode: "named",
+              branch,
+            })
+          : {
+              isExact: false,
+              notice: "Named worktree mode requires a branch.",
+            };
+
+    return {
+      mode,
+      origin: selection.origin,
+      branch,
+      base,
+      eligible: true,
+      plannedDirectory: placement.directory,
+      plannedDirectoryIsExact: placement.isExact,
+      plannedDirectoryNotice: placement.notice,
+    };
+  }
+
   private toCommandPreview(
     plan: ExecutionPlan,
     provider: ICliProvider,
-    properties: ResolvedProperties
+    properties: ResolvedProperties,
+    worktreePreview: WorktreeExecutionPreview | undefined
   ): CommandPreview {
     const args = [...plan.args];
     const mcpSecrets = (properties.mcpServers ?? [])
@@ -643,9 +720,21 @@ export class ExecutionPreviewService {
       displayCommand,
       displayShell,
       requiresShellVerbatimArgs,
-      cwd: this.options.cwd ?? this.options.workspaceRoot ?? process.cwd(),
+      cwd: this.resolveCwd(worktreePreview),
       environmentKeys: [...environmentKeys],
     };
+  }
+
+  /** The default cwd, or the worktree's planned directory when one is known. */
+  private resolveCwd(
+    worktreePreview: WorktreeExecutionPreview | undefined
+  ): string {
+    return (
+      worktreePreview?.plannedDirectory ??
+      this.options.cwd ??
+      this.options.workspaceRoot ??
+      process.cwd()
+    );
   }
 
   private toPermissionPreview(
@@ -925,7 +1014,10 @@ export class ExecutionPreviewService {
       .join(", ");
   }
 
-  private buildScriptCommand(step: ScriptStep): CommandPreview {
+  private buildScriptCommand(
+    step: ScriptStep,
+    worktreePreview: WorktreeExecutionPreview | undefined
+  ): CommandPreview {
     const isWindows = (this.options.platform ?? process.platform) === "win32";
     const executable = isWindows
       ? (process.env.ComSpec ?? "cmd.exe")
@@ -949,7 +1041,7 @@ export class ExecutionPreviewService {
       displayCommand,
       displayShell,
       requiresShellVerbatimArgs: isWindows,
-      cwd: this.options.cwd ?? this.options.workspaceRoot ?? process.cwd(),
+      cwd: this.resolveCwd(worktreePreview),
       environmentKeys: [],
     };
   }

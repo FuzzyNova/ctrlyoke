@@ -7,6 +7,7 @@ import {
   type PreviewPromptCategory,
   type PreviewStepType,
   type PreviewTruncationReason,
+  type WorktreeMode,
 } from "./DashboardConstants";
 import type { CompatibilityDiagnostic } from "./CompatibilityTypes";
 import type { CommandDisplayShell } from "./CommandDisplayFormatter";
@@ -34,6 +35,27 @@ export interface WorkflowExecutionPreview {
   workflow: WorkflowPreviewSummary;
   steps: StepExecutionPreview[];
   diagnostics: CompatibilityDiagnostic[];
+  /** Absent when the workflow is not configured to use a worktree. */
+  worktree?: WorktreeExecutionPreview;
+}
+
+export interface WorktreeExecutionPreview {
+  mode: WorktreeMode;
+  /** Which tier supplied the mode: the workflow itself, or a settings default. */
+  origin: "authored" | "default";
+  branch?: string;
+  base?: string;
+  eligible: boolean;
+  eligibilityReason?: string;
+  /** The directory the run is expected to execute in, when knowable without
+   *  creating anything. Absent for managed mode (its path depends on a
+   *  run ID assigned only when the workflow actually runs). */
+  plannedDirectory?: string;
+  /** True when `plannedDirectory` was confirmed against an existing Git
+   *  worktree entry rather than computed as a best guess. */
+  plannedDirectoryIsExact: boolean;
+  /** Explains why `plannedDirectory` is absent, or why it is only a guess. */
+  plannedDirectoryNotice?: string;
 }
 
 export interface WorkflowPreviewSummary {

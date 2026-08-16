@@ -13,6 +13,8 @@ import {
   PREVIEW_PROMPT_CATEGORY_LABELS,
   PREVIEW_TRUNCATION_REASON_COPY,
   PREVIEW_TRUNCATION_REASONS,
+  WORKTREE_MODE_OPTIONS,
+  WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
 import type {
   CompatibilityDiagnostic,
@@ -26,6 +28,7 @@ import type {
   StepExecutionPreview,
   WorkflowExecutionPreview,
   WorkspaceMutationPreview,
+  WorktreeExecutionPreview,
 } from "@root/types/ExecutionPreviewTypes";
 import type { ExecutionPreviewScope } from "@root/types/WebviewMessageTypes";
 import {
@@ -210,6 +213,64 @@ function DefinitionList({
         </React.Fragment>
       ))}
     </dl>
+  );
+}
+
+const WORKTREE_MODE_LABEL: Record<string, string> = Object.fromEntries(
+  WORKTREE_MODE_OPTIONS.map((option) => [option.value, option.label])
+);
+
+function WorktreeSummary({
+  worktree,
+}: {
+  worktree: WorktreeExecutionPreview;
+}): React.ReactElement {
+  const entries: [string, React.ReactNode][] = [
+    ["Mode", WORKTREE_MODE_LABEL[worktree.mode] ?? worktree.mode],
+    ["Source", worktree.origin === "authored" ? "Workflow" : "Default setting"],
+    ...(worktree.branch
+      ? ([["Branch", worktree.branch]] as [string, React.ReactNode][])
+      : []),
+    ...(worktree.base
+      ? ([["Base", worktree.base]] as [string, React.ReactNode][])
+      : []),
+    [
+      "Working directory",
+      worktree.plannedDirectory ? (
+        <code className="break-all">{worktree.plannedDirectory}</code>
+      ) : (
+        "Not yet known"
+      ),
+    ],
+  ];
+  return (
+    <section>
+      <h3 className="mb-3 text-sm font-semibold text-foreground">Worktree</h3>
+      <DefinitionList entries={entries} />
+      {!worktree.eligible && (
+        <div className="mt-2 flex items-start gap-1 rounded border border-error-fg border-opacity-40 bg-severity-error-bg px-3 py-2 text-xs text-error-fg">
+          <i
+            className="codicon codicon-error mt-px flex-shrink-0"
+            aria-hidden="true"
+          />
+          <span>
+            This run will not use a worktree
+            {worktree.eligibilityReason
+              ? `: ${worktree.eligibilityReason}`
+              : "."}
+          </span>
+        </div>
+      )}
+      {worktree.eligible && worktree.plannedDirectoryNotice && (
+        <div className="mt-2 flex items-start gap-1 text-xxs text-description-fg">
+          <i
+            className="codicon codicon-info mt-px flex-shrink-0"
+            aria-hidden="true"
+          />
+          <span>{worktree.plannedDirectoryNotice}</span>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -508,6 +569,8 @@ function OverviewPanel({
           ]}
         />
       </div>
+
+      {preview.worktree && <WorktreeSummary worktree={preview.worktree} />}
 
       <section>
         <h3 className="mb-3 text-sm font-semibold text-foreground">
@@ -821,10 +884,12 @@ const WINDOWS_COMMAND_DISPLAY_SHELLS = ["powershell", "cmd"] as const;
 
 function CommandPanel({
   step,
+  worktree,
   selectedShell,
   onSelectShell,
 }: {
   step: StepExecutionPreview;
+  worktree: WorktreeExecutionPreview | undefined;
   selectedShell: CommandDisplayShell | undefined;
   onSelectShell: (shell: CommandDisplayShell) => void;
 }): React.ReactElement {
@@ -891,6 +956,33 @@ function CommandPanel({
           ],
         ]}
       />
+      {worktree?.eligible && worktree.mode === WORKTREE_MODES.MANAGED && (
+        <div className="flex items-start gap-1 text-xxs text-description-fg">
+          <i
+            className="codicon codicon-info mt-px flex-shrink-0"
+            aria-hidden="true"
+          />
+          <span>
+            This step actually runs inside a managed worktree, not the directory
+            shown above — its exact path is assigned when this workflow runs.
+            See Worktree in the Overview tab for details.
+          </span>
+        </div>
+      )}
+      {worktree?.eligible &&
+        worktree.mode === WORKTREE_MODES.NAMED &&
+        !worktree.plannedDirectoryIsExact && (
+          <div className="flex items-start gap-1 text-xxs text-description-fg">
+            <i
+              className="codicon codicon-info mt-px flex-shrink-0"
+              aria-hidden="true"
+            />
+            <span>
+              The working directory above is a best-effort guess for this named
+              worktree. See Worktree in the Overview tab for details.
+            </span>
+          </div>
+        )}
     </div>
   );
 }
@@ -966,6 +1058,7 @@ function ConditionsPanel({
 
 function StepDetail({
   step,
+  worktree,
   activeTab,
   onTabChange,
   onNavigateToTab,
@@ -975,6 +1068,7 @@ function StepDetail({
   onSelectShell,
 }: {
   step: StepExecutionPreview;
+  worktree: WorktreeExecutionPreview | undefined;
   activeTab: DryRunTab;
   onTabChange: (tab: DryRunTab) => void;
   onNavigateToTab: (tab: DryRunTab) => void;
@@ -1046,6 +1140,7 @@ function StepDetail({
         {activeTab === DRY_RUN_TABS.COMMAND && (
           <CommandPanel
             step={step}
+            worktree={worktree}
             selectedShell={selectedShell}
             onSelectShell={onSelectShell}
           />
@@ -1359,6 +1454,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
             ) : activeStep ? (
               <StepDetail
                 step={activeStep}
+                worktree={preview.worktree}
                 activeTab={activeTab}
                 onTabChange={(tab) =>
                   setActiveTabs((current) => ({

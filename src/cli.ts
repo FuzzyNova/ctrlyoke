@@ -765,6 +765,7 @@ async function dryRunCommand(
       workspaceRoots: platform.getWorkspaceRoots(),
       approvedExternalRoots:
         platform.getApprovedExternalFileRoots?.(workingDir),
+      namedWorkspaceRoots: platform.getNamedWorkspaceRoots(),
       extensionPath: platform.getExtensionPath(),
       hostCanProvidePty,
       cwd: workingDir,

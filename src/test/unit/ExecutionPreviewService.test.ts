@@ -2,6 +2,7 @@ import * as assert from "assert";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { execFileSync } from "child_process";
 import { suite, teardown, test } from "mocha";
 import {
   ExecutionPreviewService,
@@ -17,6 +18,7 @@ import {
   PREVIEW_MUTATION_SCOPES,
   PREVIEW_SCOPES,
   SETTING_SCOPES,
+  WORKTREE_MODES,
 } from "../../types/DashboardConstants";
 import type { HarnessCapabilityRegistrySnapshot } from "../../types/CompatibilityTypes";
 import type { PromptFile } from "../../types/CtrlYokeTypes";
@@ -30,6 +32,8 @@ import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 import { McpRegistryFileManager } from "../../utils/McpRegistryFileManager";
 import { McpServerNormalizer } from "../../utils/McpServerNormalizer";
 import { CliProviderUtils } from "../../core/harness/shared/CliProviderUtils";
+import { pathsEqual } from "../../utils/PathCasing";
+import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
 
 const fsPromises = fs.promises;
 let temporaryRoots: string[] = [];
@@ -151,7 +155,8 @@ function createExecutionPlan(mutations: PreparedMutation[]): ExecutionPlan {
 
 function createService(
   workspaceRoot?: string,
-  plannedMutations?: PreparedMutation[]
+  plannedMutations?: PreparedMutation[],
+  namedWorkspaceRoots?: readonly ResolverWorkspaceFolder[]
 ): ExecutionPreviewService {
   const harness = createHarness(workspaceRoot);
   if (plannedMutations) {
@@ -164,9 +169,33 @@ function createService(
     getHarness: () => harness,
     workspaceRoot,
     workspaceRoots: workspaceRoot ? [workspaceRoot] : [],
+    namedWorkspaceRoots,
     extensionPath: "extension",
     hostCanProvidePty: false,
     platform: "linux",
+  });
+}
+
+async function initGitRepo(repository: string): Promise<void> {
+  execFileSync("git", ["init", repository], { stdio: "ignore" });
+  execFileSync("git", [
+    "-C",
+    repository,
+    "config",
+    "user.email",
+    "test@example.com",
+  ]);
+  execFileSync("git", [
+    "-C",
+    repository,
+    "config",
+    "user.name",
+    "ctrlyoke test",
+  ]);
+  await fsPromises.writeFile(path.join(repository, "README.md"), "base\n");
+  execFileSync("git", ["-C", repository, "add", "README.md"]);
+  execFileSync("git", ["-C", repository, "commit", "-m", "base"], {
+    stdio: "ignore",
   });
 }
 
@@ -554,5 +583,131 @@ suite("ExecutionPreviewService", () => {
 
     assert.strictEqual(applied, false);
     assert.strictEqual(preview.steps[0]?.workspaceMutations.length, 1);
+  });
+
+  test("omits the worktree preview when the workflow is not configured to use one", async () => {
+    const preview = await createService().build({
+      workflow: { steps: [{ prompt: "no worktree here" }] },
+    });
+
+    assert.strictEqual(preview.worktree, undefined);
+  });
+
+  test("reports worktree ineligibility instead of throwing when the workspace isn't a Git repository", async () => {
+    const workspaceRoot = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-preview-worktree-ineligible-")
+    );
+    temporaryRoots.push(workspaceRoot);
+
+    const preview = await createService(workspaceRoot, undefined, [
+      { name: "root", fsPath: workspaceRoot },
+    ]).build({
+      workflow: { worktree: true, steps: [{ prompt: "wants a worktree" }] },
+    });
+
+    assert.ok(preview.worktree);
+    assert.strictEqual(preview.worktree.mode, WORKTREE_MODES.MANAGED);
+    assert.strictEqual(preview.worktree.eligible, false);
+    assert.ok(preview.worktree.eligibilityReason);
+    // Ineligible means no worktree applies, so the command still runs in the
+    // ordinary workspace root rather than a guessed worktree directory.
+    assert.ok(pathsEqual(preview.steps[0].command!.cwd, workspaceRoot));
+  });
+
+  test("computes a deterministic named-worktree directory when no matching checkout exists yet", async function () {
+    this.timeout(20_000);
+    const parent = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-preview-worktree-named-")
+    );
+    temporaryRoots.push(parent);
+    const workspaceRoot = path.join(parent, "repository");
+    await fsPromises.mkdir(workspaceRoot);
+    await initGitRepo(workspaceRoot);
+
+    const preview = await createService(workspaceRoot, undefined, [
+      { name: "root", fsPath: workspaceRoot },
+    ]).build({
+      workflow: {
+        worktree: "feature/preview-test",
+        steps: [{ prompt: "wants a named worktree" }],
+      },
+    });
+
+    assert.ok(preview.worktree);
+    assert.strictEqual(preview.worktree.mode, WORKTREE_MODES.NAMED);
+    assert.strictEqual(preview.worktree.branch, "feature/preview-test");
+    assert.strictEqual(preview.worktree.eligible, true);
+    assert.ok(preview.worktree.plannedDirectory);
+    assert.strictEqual(preview.worktree.plannedDirectoryIsExact, false);
+    assert.strictEqual(
+      preview.steps[0].command!.cwd,
+      preview.worktree.plannedDirectory
+    );
+  });
+
+  test("reports the exact directory when the named branch already has a Git worktree checked out", async function () {
+    this.timeout(20_000);
+    const parent = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-preview-worktree-exact-")
+    );
+    temporaryRoots.push(parent);
+    const workspaceRoot = path.join(parent, "repository");
+    await fsPromises.mkdir(workspaceRoot);
+    await initGitRepo(workspaceRoot);
+    const existingCheckout = path.join(parent, "existing-checkout");
+    execFileSync("git", [
+      "-C",
+      workspaceRoot,
+      "worktree",
+      "add",
+      existingCheckout,
+      "-b",
+      "feature/already-checked-out",
+    ]);
+
+    const preview = await createService(workspaceRoot, undefined, [
+      { name: "root", fsPath: workspaceRoot },
+    ]).build({
+      workflow: {
+        worktree: "feature/already-checked-out",
+        steps: [{ prompt: "wants the existing worktree" }],
+      },
+    });
+
+    assert.ok(preview.worktree);
+    assert.strictEqual(preview.worktree.plannedDirectoryIsExact, true);
+    assert.ok(
+      pathsEqual(preview.worktree.plannedDirectory ?? "", existingCheckout)
+    );
+    assert.ok(pathsEqual(preview.steps[0].command!.cwd, existingCheckout));
+  });
+
+  test("computes a managed-worktree preview without an exact path, noting the run-ID dependency", async function () {
+    this.timeout(20_000);
+    const parent = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-preview-worktree-managed-")
+    );
+    temporaryRoots.push(parent);
+    const workspaceRoot = path.join(parent, "repository");
+    await fsPromises.mkdir(workspaceRoot);
+    await initGitRepo(workspaceRoot);
+
+    const preview = await createService(workspaceRoot, undefined, [
+      { name: "root", fsPath: workspaceRoot },
+    ]).build({
+      workflow: {
+        worktree: true,
+        steps: [{ prompt: "wants a managed worktree" }],
+      },
+    });
+
+    assert.ok(preview.worktree);
+    assert.strictEqual(preview.worktree.mode, WORKTREE_MODES.MANAGED);
+    assert.strictEqual(preview.worktree.eligible, true);
+    assert.strictEqual(preview.worktree.plannedDirectory, undefined);
+    assert.ok(preview.worktree.plannedDirectoryNotice);
+    // Managed mode can't know its real directory before a run allocates an
+    // ID, so the command preview keeps showing the ordinary workspace root.
+    assert.ok(pathsEqual(preview.steps[0].command!.cwd, workspaceRoot));
   });
 });

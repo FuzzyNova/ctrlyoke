@@ -6,6 +6,8 @@ import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver"
 import type { WorkspaceRepo } from "../types/HostedWorkspaceViewerTypes";
 import {
   gitCommonDir,
+  listWorktrees,
+  repoToplevel,
   type GitWorktreeEntry,
   validateBranchName,
 } from "./GitUtils";
@@ -124,7 +126,10 @@ export interface WorktreeRootResolution {
   tier: "explicit" | "sibling" | "fallback";
 }
 
-function expandExplicitRoot(value: string, homeDirectory: string): string {
+export function expandExplicitRoot(
+  value: string,
+  homeDirectory: string
+): string {
   const trimmed = value.trim();
   if (trimmed === "~") return homeDirectory;
   if (trimmed.startsWith(`~${path.sep}`) || trimmed.startsWith("~/")) {
@@ -227,13 +232,101 @@ export async function resolveWorktreeRoot(
 /** Resolve a worktree root using the user-scope settings value. */
 export async function resolveConfiguredWorktreeRoot(
   sourceCheckoutRoot: string,
-  options: Omit<WorktreeRootResolutionOptions, "sourceCheckoutRoot" | "explicitRoot"> = {}
+  options: Omit<
+    WorktreeRootResolutionOptions,
+    "sourceCheckoutRoot" | "explicitRoot"
+  > = {}
 ): Promise<WorktreeRootResolution> {
   return resolveWorktreeRoot({
     ...options,
     sourceCheckoutRoot,
     explicitRoot: ConfigurationUtils.getWorktreeRoot(),
   });
+}
+
+export interface WorktreePlacementPreview {
+  /** Directory the run is expected to execute in, when it can be determined
+   *  without creating anything. Absent when nothing can be inferred without
+   *  a real run identity (managed mode) or a resolvable Git repository. */
+  directory?: string;
+  /** True only when `directory` was confirmed against an existing Git
+   *  worktree entry; false for a computed-but-unconfirmed best guess. */
+  isExact: boolean;
+  /** Explains why `directory` is absent, or why it is only a best guess. */
+  notice?: string;
+}
+
+/**
+ * Best-effort, read-only preview of where a worktree run would execute.
+ * Never creates a directory, branch, or Git worktree state — safe to call
+ * from dry-run/preview. Named-branch placement is exact once Git already has
+ * a matching worktree entry, and otherwise a deterministic best guess (the
+ * same hash inputs `WorktreeManager.resolveNamedWorktree` would use).
+ * Managed placement can't be previewed exactly because its branch name is
+ * derived from a `RunRef` that a dry run never allocates.
+ */
+export async function previewWorktreePlacement(
+  options:
+    | { sourceCheckoutRoot: string; mode: "managed" }
+    | { sourceCheckoutRoot: string; mode: "named"; branch: string }
+): Promise<WorktreePlacementPreview> {
+  const repositoryRoot = await repoToplevel(options.sourceCheckoutRoot);
+  if (!repositoryRoot) {
+    return {
+      isExact: false,
+      notice:
+        "Cannot resolve a Git repository to preview the worktree location.",
+    };
+  }
+
+  if (options.mode === "named") {
+    const entries = await listWorktrees(repositoryRoot).catch(
+      () => [] as GitWorktreeEntry[]
+    );
+    const existing = entries.find(
+      (entry) => entry.branchName === options.branch
+    );
+    if (existing) {
+      return { directory: existing.worktreePath, isExact: true };
+    }
+  }
+
+  if (options.mode === "managed") {
+    return {
+      isExact: false,
+      notice:
+        "The managed worktree path includes a run ID assigned when this workflow runs.",
+    };
+  }
+
+  const commonDirectory = await gitCommonDir(repositoryRoot);
+  if (!commonDirectory) {
+    return {
+      isExact: false,
+      notice:
+        "Cannot resolve the repository's Git common directory to preview the worktree location.",
+    };
+  }
+
+  const explicitRoot = ConfigurationUtils.getWorktreeRoot()?.trim();
+  const root = explicitRoot
+    ? expandExplicitRoot(explicitRoot, os.homedir())
+    : path.join(
+        path.dirname(repositoryRoot),
+        `${path.basename(repositoryRoot)}.worktrees`
+      );
+  const directoryName = createWorktreeDirectoryName(
+    options.branch,
+    commonDirectory,
+    { kind: "named", branchRef: options.branch }
+  );
+  return {
+    directory: path.join(root, directoryName),
+    isExact: false,
+    notice: explicitRoot
+      ? undefined
+      : "Assumes the default worktree location; the actual run may use a fallback location if this one can't be created.",
+  };
 }
 
 export interface WorktreePlacementOptions {
