@@ -49,9 +49,13 @@ export function useWorkflowContextMenu({
       const hasRunDirectory = Boolean(target.runDirectory);
       const deleteLabel =
         target.scope === "lineage" ? "Delete Workflow" : "Delete Run";
+      const isDraftRun =
+        target.scope === "run" && target.address.kind === "draft";
       const deleteDisabledTitle = target.isExecuting
         ? `Cannot delete ${target.scope === "lineage" ? "a workflow" : "a run"} while it is executing`
-        : undefined;
+        : isDraftRun
+          ? "The draft cannot be deleted from the run panel"
+          : undefined;
 
       setContextMenu({
         x,
@@ -100,7 +104,7 @@ export function useWorkflowContextMenu({
           {
             label: deleteLabel,
             icon: "codicon-trash",
-            disabled: target.isExecuting,
+            disabled: target.isExecuting || isDraftRun,
             disabledTitle: deleteDisabledTitle,
             onClick: () => {
               onCloseDropdown();

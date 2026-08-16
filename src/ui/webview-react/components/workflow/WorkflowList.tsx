@@ -27,8 +27,12 @@ import type {
   WorkflowRunNavigationSummary,
   WorkflowViewAddress,
 } from "@root/types/CtrlYokeTypes";
+import type { ExecutionState } from "../../types/messages";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import { isDrillableRunNav } from "@utils/runNavigation";
+import { isWorkflowActive } from "../../utils/status";
+import { useLongPress } from "@hooks/useLongPress";
+import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
 
 /**
  * One row of the unified workflow dropdown list: either a lineage executing
@@ -85,6 +89,11 @@ interface WorkflowListProps {
   onToggleFavorite?: (address: WorkflowViewAddress) => void;
   /** Drills into a lineage's run panel without selecting/loading it. Omitted rows render no indicator. */
   onDrillIntoRuns?: (workflow: RecentWorkflow) => void;
+  onOpenContextMenu?: (
+    x: number,
+    y: number,
+    target: WorkflowContextMenuTarget
+  ) => void;
   onNewWorkflow?: () => void;
   onClose?: () => void;
   searchValue?: string;
@@ -107,6 +116,11 @@ interface RecentWorkflowRowProps {
   onToggleFavorite?: (address: WorkflowViewAddress) => void;
   onRemove?: (address: WorkflowViewAddress) => void;
   onDrillIntoRuns?: (workflow: RecentWorkflow) => void;
+  onOpenContextMenu?: (
+    x: number,
+    y: number,
+    target: WorkflowContextMenuTarget
+  ) => void;
   /** List-scoped: reserve the indicator's track even on this row when a sibling row is drillable, so time/badge columns stay aligned. */
   showRunIndicatorTrack: boolean;
 }
@@ -120,6 +134,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   onToggleFavorite,
   onRemove,
   onDrillIntoRuns,
+  onOpenContextMenu,
   showRunIndicatorTrack,
 }) => {
   const isCurrent = areWorkflowAddressesEqual(workflow.address, currentAddress);
@@ -129,9 +144,27 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   const timeAgo = formatRelativeTimeVerbose(
     workflow.lastModifiedAt || workflow.startedAt
   );
+  const openContextMenu = (x: number, y: number) => {
+    onOpenContextMenu?.(x, y, {
+      address: workflow.address,
+      workflowName: workflow.workflowName,
+      scope: "lineage",
+      isFavorite: workflow.isFavorite,
+      runDirectory: workflow.runDirectory,
+      isExecuting: isWorkflowActive(workflow.executionState as ExecutionState),
+    });
+  };
+  const longPressHandlers = useLongPress(
+    onOpenContextMenu ? openContextMenu : undefined
+  );
 
   return (
     <div
+      {...longPressHandlers}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        openContextMenu(event.clientX, event.clientY);
+      }}
       title={workflow.address.workflowKey}
       className={`workflow-menu-item group flex items-center px-2 py-2 text-left text-sm transition-colors gap-2 ${
         isCurrent
@@ -305,6 +338,7 @@ export const WorkflowList = React.forwardRef<
     onRemove,
     onToggleFavorite,
     onDrillIntoRuns,
+    onOpenContextMenu,
     onNewWorkflow,
     onClose,
     searchValue = "",
@@ -406,12 +440,14 @@ export const WorkflowList = React.forwardRef<
                   hasActiveTerminal={runningHasActiveTerminal(row.workflow.id)}
                   tier={tier}
                   runNav={row.lineage?.runNav}
+                  lineage={row.lineage}
                   showRunIndicatorTrack={hasDrillableRow}
                   onDrillIntoRuns={
                     row.lineage && onDrillIntoRuns
                       ? () => onDrillIntoRuns(row.lineage!)
                       : undefined
                   }
+                  onOpenContextMenu={onOpenContextMenu}
                   onClick={() => onSwitchRunning(row.workflow.id)}
                   onPause={() => onPauseRunning(row.workflow)}
                   onCancelPause={() => onCancelPauseRunning(row.workflow)}
@@ -451,6 +487,7 @@ export const WorkflowList = React.forwardRef<
                 onToggleFavorite={onToggleFavorite}
                 onRemove={onRemove}
                 onDrillIntoRuns={onDrillIntoRuns}
+                onOpenContextMenu={onOpenContextMenu}
                 showRunIndicatorTrack={hasDrillableRow}
               />
             )}

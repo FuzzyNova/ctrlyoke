@@ -1,4 +1,10 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RunningWorkflowItem } from "@components/workflow/RunningWorkflowItem";
 import { EXECUTION_STATES } from "@/types/messages";
@@ -76,5 +82,42 @@ describe("RunningWorkflowItem", () => {
       vi.advanceTimersByTime(2_000);
     });
     expect(screen.getByText("1:07")).toBeInTheDocument();
+  });
+
+  it("keeps Copy unavailable when the running lineage is not in recent history", () => {
+    const onOpenContextMenu = vi.fn();
+    const { container } = render(
+      <RunningWorkflowItem
+        workflow={{
+          id: "running",
+          workflowKey: "wf" as never,
+          runRef: "run-1" as never,
+          workflowName: "Running workflow",
+          filePath: "running.prompt.md",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 1,
+          totalSteps: 2,
+        }}
+        isCurrent
+        hasActiveTerminal={false}
+        onOpenContextMenu={onOpenContextMenu}
+        {...callbacks}
+      />
+    );
+
+    fireEvent.contextMenu(container.querySelector(".running-workflow-item")!, {
+      clientX: 10,
+      clientY: 20,
+    });
+
+    expect(onOpenContextMenu).toHaveBeenCalledWith(
+      10,
+      20,
+      expect.objectContaining({
+        scope: "lineage",
+        runDirectory: undefined,
+        isExecuting: true,
+      })
+    );
   });
 });

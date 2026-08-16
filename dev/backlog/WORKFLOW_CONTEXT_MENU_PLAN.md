@@ -1,6 +1,6 @@
 # Workflow Context Menu
 
-> **Status:** Proposed
+> **Status:** Phase 1 delivered; Phase 2 deferred to `WORKFLOW_VARIANTS_PLAN.md`
 >
 > **Priority:** P2 — one new affordance (Copy Run Directory Path) plus the
 > gesture infrastructure that Duplicate will land on.
@@ -502,15 +502,14 @@ the UI that consumes it.
       `hasDraft` in `WorkflowSerializer.getRecentWorkflows` — **not** derived
       from the lineage's primary `runDirectory`; see above.
 - [x] Add `useWorkflowContextMenu.tsx` over `StepContextMenu` and instantiate it
-      once in `WorkflowStatus`. Row threading remains deferred with the row
-      surfaces; this step consumes the hook from the header surface.
+      once in `WorkflowStatus`; thread its opener through all four surfaces.
 - [x] Wire `onContextMenu` (with `preventDefault`) + `useLongPress` on the
       `workflow-split-button` container. Recent, running, and run-panel row
       containers remain deferred to the next surface step.
 - [x] Give `StepContextMenu`'s root a marker class and add it to
       `WorkflowStatus`'s outside-click `closest()` test; make Delete close the
       dropdown, Favorite and Copy leave it open.
-- [ ] Extension-side tests (`src/test/**`): `runDirectory` correct for a run
+- [x] Extension-side tests (`src/test/**`): `runDirectory` correct for a run
       primary address and for a draft-only lineage; present on both
       address-setting messages and on `RunSummary`.
 - [x] React tests (`src/ui/webview-react/test/**`): header item set and
@@ -518,7 +517,7 @@ the UI that consumes it.
       shows a non-latest run (the regression this plan's field placement
       exists to prevent); Copy disabled when no directory is known; the shared
       hook confirms a successful copy with a toast.
-- [ ] React tests (`src/ui/webview-react/test/**`) for deferred row surfaces:
+- [x] React tests (`src/ui/webview-react/test/**`) for row surfaces:
       Copy on a run-panel row uses that row's directory;
       Copy on the run-panel **draft** row of a lineage that already has runs
       yields the draft directory, not the latest run's; Copy disabled when no

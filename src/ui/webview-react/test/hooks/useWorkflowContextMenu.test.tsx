@@ -25,7 +25,11 @@ const target: WorkflowContextMenuTarget = {
   isExecuting: false,
 };
 
-function TestHarness({ menuTarget = target }: { menuTarget?: typeof target }) {
+function TestHarness({
+  menuTarget = target,
+}: {
+  menuTarget?: WorkflowContextMenuTarget;
+}) {
   const onToggleFavorite = vi.fn();
   const onDelete = vi.fn();
   const onCloseDropdown = vi.fn();
@@ -95,6 +99,26 @@ describe("useWorkflowContextMenu", () => {
     ).toHaveAttribute(
       "title",
       "Cannot delete a workflow while it is executing"
+    );
+  });
+
+  it("disables run deletion for the synthetic draft row", () => {
+    render(
+      <TestHarness
+        menuTarget={{
+          ...target,
+          scope: "run",
+          address: { workflowKey: "workflow-1" as never, kind: "draft" },
+          runDirectory: "/runs/workflow-1/draft",
+        }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(screen.getByRole("button", { name: "Delete Run" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete Run" })).toHaveAttribute(
+      "title",
+      "The draft cannot be deleted from the run panel"
     );
   });
 

@@ -7,7 +7,7 @@
  * tier is and isn't allowed to abbreviate.
  */
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { RunSummaryRow } from "@components/workflow/RunSummaryRow";
 import type { WorkflowRowTier } from "@/constants";
 import { EXECUTION_STATES, HARNESS_IDS } from "@/types/messages";
@@ -17,6 +17,7 @@ import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
 const summary = {
   workflowKey: "wf" as never,
   runRef: "run-14" as never,
+  runDirectory: "/runs/wf/run-14",
   runId: 14,
   startedAt: Date.now() - 5 * 60 * 1000,
   completedAt: Date.now() - 5 * 60 * 1000,
@@ -123,5 +124,78 @@ describe("RunSummaryRow", () => {
     expect(
       screen.getByRole("button", { name: /Run 14 — completed/i })
     ).toBeInTheDocument();
+  });
+
+  it("opens a run-scoped target with the row's own directory", () => {
+    const onOpenContextMenu = vi.fn();
+    const { container } = render(
+      <RunSummaryRow
+        row={{ kind: "run", summary }}
+        rowKey="run:wf:run-14"
+        isViewed={false}
+        isPending={false}
+        isLive={false}
+        canDelete
+        contextMenuAddress={{
+          workflowKey: "wf" as never,
+          kind: "run",
+          runRef: "run-14" as never,
+        }}
+        workflowName="Workflow"
+        isFavorite
+        onOpenContextMenu={onOpenContextMenu}
+        onSelect={vi.fn()}
+      />
+    );
+
+    fireEvent.contextMenu(container.querySelector(".run-panel-row")!, {
+      clientX: 10,
+      clientY: 20,
+    });
+
+    expect(onOpenContextMenu).toHaveBeenCalledWith(
+      10,
+      20,
+      expect.objectContaining({
+        scope: "run",
+        workflowName: "Workflow",
+        isFavorite: true,
+        runDirectory: "/runs/wf/run-14",
+        isExecuting: false,
+      })
+    );
+  });
+
+  it("uses the dedicated draft directory for the draft row", () => {
+    const onOpenContextMenu = vi.fn();
+    const { container } = render(
+      <RunSummaryRow
+        row={{ kind: "draft" }}
+        rowKey="draft:wf"
+        isViewed={false}
+        isPending={false}
+        isLive={false}
+        canDelete={false}
+        contextMenuAddress={{ workflowKey: "wf" as never, kind: "draft" }}
+        draftDirectory="/runs/wf/draft"
+        onOpenContextMenu={onOpenContextMenu}
+        onSelect={vi.fn()}
+      />
+    );
+
+    fireEvent.contextMenu(container.querySelector(".run-panel-row")!, {
+      clientX: 10,
+      clientY: 20,
+    });
+
+    expect(onOpenContextMenu).toHaveBeenCalledWith(
+      10,
+      20,
+      expect.objectContaining({
+        address: { workflowKey: "wf", kind: "draft" },
+        runDirectory: "/runs/wf/draft",
+        isExecuting: false,
+      })
+    );
   });
 });
