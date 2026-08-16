@@ -282,6 +282,8 @@ export const MESSAGE_TYPES = {
   MCP_REGISTRY_SERVERS_UPDATE: "mcpRegistryServersUpdate", // Extension -> Webview: { servers: ManagedMcpServer[] }
   MCP_LOCAL_SCAN_RESULT: "mcpLocalScanResult", // Extension -> Webview: { servers: LocalMcpServerEntry[], error? }
   MCP_REGISTRY_SEARCH_RESULT: "mcpRegistrySearchResult", // Extension -> Webview: { servers: RegistryMcpEntry[], nextCursor?, error? }
+  REQUEST_MCP_CONFIG_PREVIEW: "requestMcpConfigPreview", // Webview -> Extension: request a /mcp:<name> reference's resolved server config for the preview modal
+  MCP_CONFIG_PREVIEW_RESULT: "mcpConfigPreviewResult", // Extension -> Webview: { mcpServerName, content, found } JSON for modal
 
   // Harness File Manager — Webview ↔ Extension
   REQUEST_HARNESS_FILES: "requestHarnessFiles", // Webview -> Extension: { fileType: "agent" | "skill" }

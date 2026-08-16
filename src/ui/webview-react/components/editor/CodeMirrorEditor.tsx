@@ -2424,7 +2424,7 @@ function createLinkDecorationExtension(
   return linkPlugin;
 }
 
-/** Decorate explicit ctrlyoke skill references; native slash commands stay plain text. */
+/** Decorate explicit ctrlyoke skill/MCP references; native slash commands stay plain text. */
 export function createSlashTokenDecorationExtension() {
   return ViewPlugin.fromClass(
     class implements PluginValue {
@@ -2448,7 +2448,6 @@ export function createSlashTokenDecorationExtension() {
           const text = view.state.doc.sliceString(from, to);
           for (const token of scanCtrlYokeSlashTokens(text)) {
             if (
-              token.kind !== CTRLYOKE_SLASH_TOKEN_KINDS.SKILL ||
               isInFencedBlock(
                 token.index + from,
                 token.index + from + token.length,
@@ -2458,15 +2457,23 @@ export function createSlashTokenDecorationExtension() {
               continue;
             }
 
+            const attributes: Record<string, string> =
+              token.kind === CTRLYOKE_SLASH_TOKEN_KINDS.MCP
+                ? {
+                    "data-type": CTRLYOKE_SLASH_TOKEN_KINDS.MCP,
+                    "data-mcp-server-name": token.name,
+                  }
+                : {
+                    "data-type": CTRLYOKE_SLASH_TOKEN_KINDS.SKILL,
+                    "data-skill-name": token.name,
+                  };
+
             builder.add(
               token.index + from,
               token.index + from + token.length,
               Decoration.mark({
                 class: "cm-link",
-                attributes: {
-                  "data-type": CTRLYOKE_SLASH_TOKEN_KINDS.SKILL,
-                  "data-skill-name": token.name,
-                },
+                attributes,
               })
             );
           }
@@ -2670,6 +2677,17 @@ function openContextReferenceLink(
     return true;
   }
 
+  if (target.getAttribute("data-type") === CTRLYOKE_SLASH_TOKEN_KINDS.MCP) {
+    const mcpServerName = target.getAttribute("data-mcp-server-name");
+    if (!mcpServerName) return false;
+
+    vscode.postMessage({
+      type: MESSAGE_TYPES.REQUEST_MCP_CONFIG_PREVIEW,
+      mcpServerName,
+    });
+    return true;
+  }
+
   // The async validation pass marks references it resolved as nonexistent with
   // data-invalid (on the atomic chip and on the non-atomic link mark). Refuse to
   // open those — otherwise the click asks VS Code to open a file that isn't
@@ -2795,6 +2813,7 @@ export function createClickHandlerExtension(
         type !== "git" &&
         type !== "priorContext" &&
         type !== "skill" &&
+        type !== "mcp" &&
         !(event.ctrlKey || event.metaKey)
       ) {
         return false;

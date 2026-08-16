@@ -174,8 +174,8 @@ describe("CodeMirrorEditor external reference completions", () => {
   });
 });
 
-describe("CodeMirrorEditor ctrlyoke skill links", () => {
-  it("decorates only explicit skills and opens the selected skill", () => {
+describe("CodeMirrorEditor ctrlyoke skill/mcp links", () => {
+  it("decorates only explicit skill/mcp tokens and opens the selected skill", () => {
     const parent = document.createElement("div");
     document.body.appendChild(parent);
     const postMessage = vi.fn();
@@ -189,20 +189,58 @@ describe("CodeMirrorEditor ctrlyoke skill links", () => {
     });
 
     try {
-      const skillLink = view.dom.querySelector<HTMLElement>(".cm-link");
-      expect(skillLink?.textContent).toBe("/skill:commit");
-      expect(skillLink?.getAttribute("data-skill-name")).toBe("commit");
-      expect(view.dom.querySelectorAll(".cm-link")).toHaveLength(1);
+      const links = view.dom.querySelectorAll<HTMLElement>(".cm-link");
+      expect(links).toHaveLength(2);
+
+      const skillLink = links[0];
+      expect(skillLink.textContent).toBe("/skill:commit");
+      expect(skillLink.getAttribute("data-skill-name")).toBe("commit");
 
       const click = new MouseEvent("click", {
         bubbles: true,
         cancelable: true,
       });
-      skillLink?.dispatchEvent(click);
+      skillLink.dispatchEvent(click);
 
       expect(postMessage).toHaveBeenCalledWith({
         type: MESSAGE_TYPES.OPEN_SKILL,
         skillName: "commit",
+      });
+      expect(click.defaultPrevented).toBe(true);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
+  it("decorates an explicit mcp token and requests its config preview", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const postMessage = vi.fn();
+    const view = new EditorView({
+      parent,
+      doc: "/skill:commit /mcp:playwright /commit /mcp",
+      extensions: [
+        createSlashTokenDecorationExtension(),
+        createClickHandlerExtension({ postMessage }, { current: 0 }),
+      ],
+    });
+
+    try {
+      const links = view.dom.querySelectorAll<HTMLElement>(".cm-link");
+      const mcpLink = links[1];
+      expect(mcpLink.textContent).toBe("/mcp:playwright");
+      expect(mcpLink.getAttribute("data-mcp-server-name")).toBe("playwright");
+
+      const click = new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+      });
+      mcpLink.dispatchEvent(click);
+
+      expect(postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.REQUEST_MCP_CONFIG_PREVIEW,
+        mcpServerName: "playwright",
       });
       expect(click.defaultPrevented).toBe(true);
     } finally {

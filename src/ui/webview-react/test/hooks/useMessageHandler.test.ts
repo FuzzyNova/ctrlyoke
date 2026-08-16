@@ -3225,3 +3225,62 @@ describe("PRIOR_CONTEXT_PREVIEW_RESULT", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// MCP_CONFIG_PREVIEW_RESULT
+// ---------------------------------------------------------------------------
+
+describe("MCP_CONFIG_PREVIEW_RESULT", () => {
+  it("opens the content preview modal with json language when found", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.MCP_CONFIG_PREVIEW_RESULT, {
+        mcpServerName: "playwright",
+        content: '{\n  "id": "playwright"\n}',
+        found: true,
+      });
+    });
+
+    const modal = useUiStore.getState().contentPreviewModal;
+    expect(modal).not.toBeNull();
+    expect(modal?.language).toBe("json");
+    expect(modal?.ref).toBe("playwright");
+    expect(modal?.title).toContain("playwright");
+    expect(modal?.content).toContain('"id": "playwright"');
+  });
+
+  it("shows a warning toast instead of a modal when not found", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.MCP_CONFIG_PREVIEW_RESULT, {
+        mcpServerName: "unknown-server",
+        content: "",
+        found: false,
+      });
+    });
+
+    expect(useUiStore.getState().contentPreviewModal).toBeNull();
+    const toasts = useUiStore.getState().toastQueue;
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0]?.message).toContain("unknown-server");
+    expect(toasts[0]?.severity).toBe(USER_FEEDBACK_SEVERITY.WARNING);
+  });
+
+  it("does not warn about unknown message type", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.MCP_CONFIG_PREVIEW_RESULT, {
+        mcpServerName: "playwright",
+        content: "{}",
+        found: true,
+      });
+    });
+
+    expect(webviewWarnMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("Unknown message type")
+    );
+  });
+});

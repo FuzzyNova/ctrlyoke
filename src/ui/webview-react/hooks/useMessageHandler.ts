@@ -1822,6 +1822,28 @@ export function createMessageHandlers(
   };
 
   // --------------------------------------------------------------------------
+  // MCP_CONFIG_PREVIEW_RESULT
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.MCP_CONFIG_PREVIEW_RESULT] = (message) => {
+    const mcpServerName = message.mcpServerName as string;
+    if (!message.found) {
+      useUiStore
+        .getState()
+        .showToast(
+          `Can't preview — no MCP server named "${mcpServerName}" was found in the ctrlyoke registry`,
+          USER_FEEDBACK_SEVERITY.WARNING
+        );
+      return;
+    }
+    useUiStore.getState().setContentPreviewModal({
+      title: `mcp: ${mcpServerName}`,
+      content: message.content as string,
+      language: "json",
+      ref: mcpServerName,
+    });
+  };
+
+  // --------------------------------------------------------------------------
   // ATTACHMENT_TOKEN_COUNTS_RESPONSE - Handled by useAttachmentTokenCount.ts
   // --------------------------------------------------------------------------
   // This message is consumed by a module-level window listener in

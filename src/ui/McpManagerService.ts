@@ -1,8 +1,9 @@
-import { MESSAGE_TYPES } from "../types/DashboardConstants";
+import { MESSAGE_TYPES, SPECIAL_TARGET_IDS } from "../types/DashboardConstants";
 import type {
   DeleteMcpFromHarnessMessage,
   DeleteMcpRegistryServerMessage,
   ExportMcpToHarnessMessage,
+  RequestMcpConfigPreviewMessage,
   RequestMcpRegistrySearchMessage,
   SaveMcpRegistryServerMessage,
 } from "../types/WebviewMessageTypes";
@@ -12,9 +13,26 @@ import {
   safeDiscoverLocalMcpServers,
   safeFetchMcpRegistry,
 } from "../utils/McpDiscoveryUtils";
-import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
+import {
+  McpRegistryFileManager,
+  resolveCtrlYokeMcpInvocation,
+} from "../utils/McpRegistryFileManager";
 import { Log } from "../utils/Log";
 import type { WebviewClientContext } from "./WebviewClientContext";
+
+/**
+ * Static preview shown for `/mcp:ctrlyoke` — the reserved built-in-server
+ * sentinel is never a registry entry (see `resolveCtrlYokeMcpInvocation`,
+ * which only resolves user-registered servers), so there is no
+ * `McpServerConfig` to read back for it.
+ */
+const CTRLYOKE_BUILTIN_MCP_SERVER_PREVIEW = {
+  id: SPECIAL_TARGET_IDS.CTRLYOKE,
+  type: "built-in",
+  description:
+    "ctrlyoke's built-in MCP server. Gives the model queue-status and append-queue tools scoped to the current workflow run.",
+  tools: ["ctrlyoke_queue_status", "ctrlyoke_append_queue"],
+};
 
 /**
  * MCP manager message handlers: manage ctrlyoke's MCP registry, discover MCP
@@ -179,5 +197,37 @@ export class McpManagerService {
         errorMessage
       );
     }
+  }
+
+  /**
+   * Resolve a `/mcp:<name>` reference to the exact JSON config that would be
+   * attached, for the prompt editor's content preview modal. An unresolved
+   * name (deleted registry entry, typo) reports `found: false` rather than
+   * throwing — the modal surfaces that as "not found" instead of erroring.
+   */
+  async handleRequestMcpConfigPreview(
+    ctx: WebviewClientContext,
+    message: RequestMcpConfigPreviewMessage
+  ): Promise<void> {
+    const mcpServerName = message.mcpServerName;
+
+    if (mcpServerName === SPECIAL_TARGET_IDS.CTRLYOKE) {
+      ctx.emit({
+        type: MESSAGE_TYPES.MCP_CONFIG_PREVIEW_RESULT,
+        mcpServerName,
+        content: JSON.stringify(CTRLYOKE_BUILTIN_MCP_SERVER_PREVIEW, null, 2),
+        found: true,
+      });
+      return;
+    }
+
+    const servers = await this.getRegistryFileManager().readAll();
+    const config = resolveCtrlYokeMcpInvocation(servers, mcpServerName);
+    ctx.emit({
+      type: MESSAGE_TYPES.MCP_CONFIG_PREVIEW_RESULT,
+      mcpServerName,
+      content: config ? JSON.stringify(config, null, 2) : "",
+      found: Boolean(config),
+    });
   }
 }
