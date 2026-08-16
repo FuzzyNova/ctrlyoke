@@ -3,9 +3,9 @@
 > **Status:** Proposed
 >
 > **Priority:** P2 — one new affordance (Copy Run Directory Path) plus the
-> gesture infrastructure that Duplicate/Fork will land on.
+> gesture infrastructure that Duplicate will land on.
 >
-> **Related:** `WORKFLOW_VARIANTS_PLAN.md` (Duplicate / Fork are future items in
+> **Related:** `WORKFLOW_VARIANTS_PLAN.md` (Duplicate is a future item in
 > this same menu), `MCP_RUN_PATH_FIELDS_PLAN.md` (same "where is this run?"
 > question, MCP side), `RUN_EXPORT_PLAN.md`,
 > `dev/implemented/USER_SCOPED_RUN_HISTORY_PLAN.md`
@@ -14,10 +14,13 @@
 
 ## Problem
 
-Workflow actions are reachable only through visible controls, split across three
+Workflow actions are reachable only through visible controls, split across four
 surfaces: the header's execution slots (displayed workflow only), a recent row's
-`RowActionRail` (favourite, remove), and a running row's rail (pause,
-cancel-pause, resume, stop). Anything that does not fit a rail has nowhere to go.
+`RowActionRail` (favourite, remove), a running row's rail (pause, cancel-pause,
+resume, stop), and a run-panel row's rail (delete run). Anything that does not
+fit a rail has nowhere to go — and the rails are already width-constrained on
+purpose, since `RunSummaryRow` reserves its delete track on every row to keep the
+time column aligned.
 
 More concretely: run history moved out of the workspace in
 `USER_SCOPED_RUN_HISTORY_PLAN.md`. A run now lives under
@@ -28,7 +31,7 @@ users needing to map an opaque hash directory back to a project; this is the
 forward direction, and today the only way to answer "where is this run?" is to
 compute a SHA-256 by hand.
 
-A right-click / long-press menu gives that a home, and gives Duplicate and Fork
+A right-click / long-press menu gives that a home, and gives Duplicate
 (`WORKFLOW_VARIANTS_PLAN.md`) somewhere to land later.
 
 ---
@@ -37,22 +40,62 @@ A right-click / long-press menu gives that a home, and gives Duplicate and Fork
 
 Add one context menu, opened by right-click or long-press, on:
 
-1. each row of the workflow dropdown — recent rows (`WorkflowList.tsx`'s
-   `RecentWorkflowRow`) and running rows (`RunningWorkflowItem.tsx`); and
-2. the header's workflow split button (`WorkflowStatus.tsx`), targeting the
-   currently displayed workflow.
+1. recent rows in the workflow dropdown (`WorkflowList.tsx`'s
+   `RecentWorkflowRow`);
+2. running rows (`RunningWorkflowItem.tsx`);
+3. the header's workflow split button (`WorkflowStatus.tsx`), targeting the
+   currently displayed workflow; and
+4. each row of the run panel — `RunSummaryRow` inside `RunPanel.tsx` — targeting
+   that exact draft or run.
 
 Same menu, same hook, same item set. The target is whichever row was
 right-clicked, or the displayed workflow for the header.
 
+### The fourth surface: run-panel rows
+
+Surface 4 was absent from an earlier revision of this plan, which covered only
+the workflow list and the header. It belongs here for two reasons:
+
+- **It is where "which run?" is unambiguous.** Every other surface names a
+  lineage and resolves to *an* address (its primary one, or the client's
+  displayed one). A run-panel row *is* an address. Copy Run Directory Path is at
+  its most obviously correct here, and this plan's entire field-placement
+  argument below exists to protect that property on the surfaces where it is
+  fragile.
+- **`WORKFLOW_VARIANTS_PLAN.md` requires it.** Duplicating a specific historical
+  run is the case that plan's decision record turns on, and the run panel is the
+  only place a specific historical run can be pointed at. Adding the surface
+  later means reopening `RunPanel`, `RunSummaryRow`, `WorkflowStatus`, and the
+  `RunSummary` contract a second time.
+
+Cost is two extra fields (`RunSummary.runDirectory` and
+`WorkflowRunNavigationSummary.draftDirectory`) and one extra threading path —
+see Phase 1. The rows already render inside `WorkflowStatus`'s dropdown, so they
+share the single hook instance with no new portal or listener pair.
+
 ### Item set
 
-| Item                           | Message                    | Notes                                           |
-| ------------------------------ | -------------------------- | ----------------------------------------------- |
-| Copy Run Directory Path        | none (clipboard)           | New. See below                                  |
-| — divider —                    |                            |                                                 |
-| Add to / Remove from Favorites | `TOGGLE_WORKFLOW_FAVORITE` | Address-only today; free                        |
-| Delete                         | `REMOVE_WORKFLOW_HISTORY`  | Address-only; honours `confirmDeleteOperations` |
+| Item                           | Message                                             | Notes                                                        |
+| ------------------------------ | --------------------------------------------------- | ------------------------------------------------------------ |
+| Copy Run Directory Path        | none (clipboard)                                    | New. See below                                               |
+| — divider —                    |                                                     |                                                              |
+| Add to / Remove from Favorites | `TOGGLE_WORKFLOW_FAVORITE`                          | Always lineage-scoped, on every surface                      |
+| Delete Workflow / Delete Run   | `REMOVE_WORKFLOW_HISTORY` / `DELETE_RUN_HISTORY`    | Scope-dependent, see below; honours `confirmDeleteOperations` |
+
+### Delete is scope-dependent; Favorite is not
+
+`isFavorite` lives on the lineage descriptor, so Favorite means the same thing
+from any surface — including a run-panel row, where the panel header already
+names the lineage it belongs to. One label, one message, everywhere.
+
+Delete cannot be flattened the same way. On a lineage-scoped target it removes
+the workflow and all its history (`REMOVE_WORKFLOW_HISTORY`); on a run-scoped
+target it removes that one run (`DELETE_RUN_HISTORY`, the message
+`WorkflowStatus.handleDeleteRunPanelRow` already posts for the rail's trash
+button). Rather than let one label mean two things, the item's label follows the
+target's scope — **Delete Workflow** or **Delete Run** — and the descriptor
+carries that scope explicitly (see below). Both honour
+`confirmDeleteOperations`; neither introduces a second confirmation path.
 
 **No execution items.** Not Run, not Re-run, not Continue, not Resume, not
 Pause/Stop. See the decision record below — this is the plan's main finding and
@@ -198,11 +241,38 @@ exists for.
 So `runDirectory` goes on the messages that establish an address, not on a
 per-lineage lookup:
 
-| Target             | Source                                                                             |
-| ------------------ | ---------------------------------------------------------------------------------- |
-| Recent row         | new `runDirectory` on `RecentWorkflowsMessage` / `RecentWorkflow`                  |
-| Running row        | same field, via the `lineage` already threaded onto `UnifiedWorkflowRow`           |
-| Header (displayed) | new `runDirectory` on `RunViewLoadedMessage` **and** `WorkflowViewIdentityMessage` |
+| Target                | Source                                                                             |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| Recent row            | new `runDirectory` on `RecentWorkflowsMessage` / `RecentWorkflow`                  |
+| Running row           | same field, via the `lineage` already threaded onto `UnifiedWorkflowRow`           |
+| Header (displayed)    | new `runDirectory` on `RunViewLoadedMessage` **and** `WorkflowViewIdentityMessage` |
+| Run-panel row (run)   | new `runDirectory` on `RunSummary`                                                 |
+| Run-panel row (draft) | new `draftDirectory` on `WorkflowRunNavigationSummary`                             |
+
+A run-panel run row needs no placement argument — the row *is* an address, so a
+per-row field cannot drift from it. `RunSummary` is produced by
+`OutputHistoryManager.getRunSummaries`, whose per-run read already holds
+`runDirectoryPath` (it keys the summary cache on it), so this is a field
+assignment, not a new resolution.
+
+**The draft row is the trap on this surface.** `RunPanelRow`'s `"draft"` variant
+carries no summary, so the obvious move is to take its directory from the drilled
+lineage's `RecentWorkflow.runDirectory` — and that is wrong. That field tracks the
+lineage's *primary* address, and `hasDraft` is true in two different situations:
+
+```typescript
+const hasDraft = !descriptor.latestRunRef || descriptor.pendingEdit?.kind === "draft";
+```
+
+In the second case the lineage has runs, so its primary address is the latest
+**run** — and the draft row would copy a run's directory. Silently wrong, in the
+same shape as the header bug this plan's field placement exists to prevent.
+
+Put `draftDirectory?: string` on `WorkflowRunNavigationSummary` instead, beside
+the `hasDraft` flag that decides whether the draft row renders at all. The two
+are written together and read together, so they cannot disagree. `runNav` is
+already shared across `RecentWorkflow` and `WorkflowSummary`, which is why it is
+the right home rather than a parallel optional field on each.
 
 Rules that make this correct rather than merely populated:
 
@@ -225,8 +295,13 @@ descriptorRevision)`. Extend that action (and the `RUN_VIEW_LOADED` reducer)
   this session may not be in the recent list yet).
 - `WorkflowSerializer.getRecentWorkflows` already resolves the primary address to
   a `filePath` via `WorkflowPaths.runFilePath`/`draftFilePath` in order to read
-  the row, so the sibling directory (`WorkflowPaths.runDir`/`draftDir`) is a
-  one-line addition beside it.
+  the row, so `runDirectory` (`WorkflowPaths.runDir`/`draftDir`) is a one-line
+  addition beside it.
+- **`draftDirectory` is not that sibling.** It is always
+  `WorkflowPaths.draftDir(workspaceRoot, workflowKey)` — the draft's location does
+  not depend on the primary address, which is exactly the decoupling that makes
+  it correct for a lineage whose primary is a run. Populate it in the same
+  function, next to `hasDraft`, and only when `hasDraft` is true.
 
 **Do not build a `RESOLVE_WORKFLOW_PATH` request/response.** A request/response
 pair over the hosted socket needs the reissue-and-retire treatment
@@ -280,6 +355,14 @@ neither the rows nor the header decide what the menu contains:
 interface WorkflowContextMenuTarget {
   address: WorkflowViewAddress;
   workflowName: string;
+  /**
+   * "lineage" — the whole workflow (list rows, header). Delete removes it and
+   * all its history.
+   * "run" — one addressed run inside a lineage (run-panel rows). Delete removes
+   * only that run.
+   */
+  scope: "lineage" | "run";
+  /** Lineage-scoped on every surface, including run-panel rows. */
   isFavorite?: boolean;
   /** Absent → Copy renders disabled. */
   runDirectory?: string;
@@ -287,6 +370,11 @@ interface WorkflowContextMenuTarget {
   isExecuting: boolean;
 }
 ```
+
+`scope` is what lets one hook build both Delete variants without the rows
+deciding anything; keep it a typed union rather than inferring it from
+`address.kind`, since a lineage row can legitimately carry a `run` address (its
+primary one) while still meaning "the whole workflow."
 
 Note what is absent: no execution state, no step counts, no revisions. With no
 execution items, the menu needs none of it. If an execution item is ever added
@@ -310,13 +398,20 @@ opening another" accidental rather than guaranteed.
   callbacks they already receive.
 - Each row builds its own `WorkflowContextMenuTarget` — that is the only
   row-kind-specific logic, and it is three fields:
-  - recent row: `isFavorite` from the entry, `runDirectory` from the entry,
-    `isExecuting` via `isWorkflowActive(workflow.executionState)`;
-  - running row: `isFavorite`/`runDirectory` from `row.lineage`, `isExecuting`
-    true by construction.
+  - recent row: `scope: "lineage"`, `isFavorite` from the entry, `runDirectory`
+    from the entry, `isExecuting` via `isWorkflowActive(workflow.executionState)`;
+  - running row: `scope: "lineage"`, `isFavorite`/`runDirectory` from
+    `row.lineage`, `isExecuting` true by construction.
 - The header's split button calls the same `openContextMenu` with a target built
   from `displayedViewAddress`, `displayName`, the displayed `runDirectory` from
-  `uiStore`, and the displayed lineage's `isFavorite` from `recentWorkflows`.
+  `uiStore`, and the displayed lineage's `isFavorite` from `recentWorkflows` —
+  `scope: "lineage"`.
+- `RunPanel` receives the same `onOpenContextMenu` prop and threads it to
+  `RunSummaryRow`, exactly alongside the `onSelect`/`onDelete` callbacks it
+  already passes. Each row builds `scope: "run"`, its own address via the
+  existing `addressForRow` helper, `runDirectory` from its summary, `isFavorite`
+  from the drilled lineage's recent entry, and `isExecuting` from the `isLive`
+  flag the row already computes.
 
 One menu, one portal, one listener pair, regardless of list length.
 
@@ -328,6 +423,9 @@ Attach `onContextMenu` (with `preventDefault`) plus `useLongPress` to:
   container is already non-focusable, which is the arrangement
   `webview-react-components.instructions.md` requires; do not move the handler
   onto the primary `<button>`;
+- the outer `run-panel-row` `div` in `RunSummaryRow`, which is the same
+  arrangement — the focusable control is inside `WorkflowRowLayout`, not the
+  container;
 - the `workflow-split-button` container in `WorkflowStatus.tsx`.
 
 `Header.tsx`'s run slot (`onContextMenu` + `useLongPress(openRunDryRunMenu)`) is
@@ -351,10 +449,23 @@ Favorite and Copy should leave the list open.
 
 ### Delete
 
-Reuse `WorkflowStatus`'s existing `handleRemoveWorkflow`, which already branches
-on `globalSettings.confirmDeleteOperations` and drives the shared
-`DeleteConfirmModal`. Rows must not grow a second confirmation path. Disable
-Delete while the target lineage is executing.
+For `scope: "lineage"`, reuse `WorkflowStatus`'s existing `handleRemoveWorkflow`,
+which already branches on `globalSettings.confirmDeleteOperations` and drives the
+shared `DeleteConfirmModal`. Rows must not grow a second confirmation path.
+Disable Delete while the target lineage is executing.
+
+For `scope: "run"`, reuse `handleDeleteRunPanelRow`. Note the divergence to
+resolve while wiring: the rail's trash button in `RunSummaryRow` uses its own
+inline two-click confirm (`confirmingDelete`) and ignores
+`confirmDeleteOperations`, while `RunPanel`'s "Delete all runs" footer honours
+it. The menu item must honour the setting like every other Delete in this plan —
+route it through `WorkflowStatus`'s `DeleteConfirmModal` rather than copying the
+inline confirm. Leave the rail button as it is; changing it is not this plan's
+business.
+
+Delete is disabled for the run panel's synthetic draft row and for the live run,
+matching the `canDelete` rule `RunPanel` already computes
+(`row.kind === "run" && !isLive`).
 
 ---
 
@@ -384,57 +495,81 @@ the UI that consumes it.
 - [ ] Add `runDirectory` to `RunViewLoadedMessage` and
       `WorkflowViewIdentityMessage`; store it in `uiStore` beside
       `displayedViewAddress`, written by the same reducers that set the address.
+- [ ] Add `runDirectory` to `RunSummary`, populated in
+      `OutputHistoryManager.getRunSummaries` from the `runDirectoryPath` its
+      per-run read already holds.
+- [ ] Add `draftDirectory` to `WorkflowRunNavigationSummary`, populated beside
+      `hasDraft` in `WorkflowSerializer.getRecentWorkflows` — **not** derived
+      from the lineage's primary `runDirectory`; see above.
 - [ ] Add `useWorkflowContextMenu.tsx` over `StepContextMenu`; instantiate it
       once in `WorkflowStatus` and thread `onOpenContextMenu` through
-      `WorkflowList` to both row kinds.
-- [ ] Wire `onContextMenu` (with `preventDefault`) + `useLongPress` on both row
-      containers and the `workflow-split-button` container.
+      `WorkflowList` to both row kinds and through `RunPanel` to `RunSummaryRow`.
+- [ ] Wire `onContextMenu` (with `preventDefault`) + `useLongPress` on all three
+      row containers and the `workflow-split-button` container.
 - [ ] Give `StepContextMenu`'s root a marker class and add it to
       `WorkflowStatus`'s outside-click `closest()` test; make Delete close the
       dropdown, Favorite and Copy leave it open.
 - [ ] Extension-side tests (`src/test/**`): `runDirectory` correct for a run
       primary address and for a draft-only lineage; present on both
-      address-setting messages.
+      address-setting messages and on `RunSummary`.
 - [ ] React tests (`src/ui/webview-react/test/**`): item set and enablement per
       target kind; Copy uses the **displayed** run's directory when the header
       shows a non-latest run (the regression this plan's field placement
-      exists to prevent); Copy disabled when `runDirectory` is absent; Favorite
-      and Delete post the same messages as the rail buttons; Delete disabled
-      while executing; exactly one menu portal exists with a long recent list;
-      the dropdown survives a menu click.
+      exists to prevent); Copy on a run-panel row uses that row's directory;
+      Copy on the run-panel **draft** row of a lineage that already has runs
+      yields the draft directory, not the latest run's; Copy disabled when no
+      directory is known; Favorite and lineage Delete
+      post the same messages as the rail buttons; run Delete posts
+      `DELETE_RUN_HISTORY` and honours `confirmDeleteOperations`; Delete
+      disabled while executing and on the draft row; exactly one menu portal
+      exists with a long recent list and with the run panel open; the dropdown
+      survives a menu click; the run panel is not dismissed by one.
 
-### Phase 2 — Variants (deferred to `WORKFLOW_VARIANTS_PLAN.md`)
+### Phase 2 — Duplicate (deferred to `WORKFLOW_VARIANTS_PLAN.md`)
 
-- [ ] **Duplicate Workflow…** and **Fork as New Workflow…** join this menu once
-      that plan's shared clone service exists. This plan adds no cloning code.
+- [ ] **Duplicate Workflow…** joins this menu on all four surfaces once that
+      plan's shared clone service exists. This plan adds no cloning code.
+
+      It slots above the Copy item with its own divider, and it is the reason
+      run-panel rows are in scope here: it is the only item whose usefulness
+      depends on naming one specific historical run. Its target address is the
+      descriptor's `address` field unchanged — no new descriptor fields.
+      **Fork as New Workflow… is not coming**; that plan collapsed the two
+      commands into one.
 
 ---
 
 ## Acceptance Criteria
 
 - Right-click and long-press open the same menu on recent rows, running rows,
-  and the header split button.
+  run-panel rows, and the header split button.
 - The menu always targets the row that was right-clicked, never the displayed
   workflow, except on the header where the displayed workflow _is_ the target.
 - Copy Run Directory Path yields a directory that exists on the extension host
   for drafts, promoted runs, and running workflows alike.
 - From the header it copies the directory of the run **currently displayed**,
   not the lineage's latest run, and stays correct across a draft→run promotion.
+- From a run-panel row it copies that row's own run, whichever run the client is
+  displaying.
 - The item is disabled, never silently wrong, when no directory is known.
 - One context-menu portal and one document listener pair exist regardless of how
-  many rows the dropdown holds.
-- Favorite and Delete post exactly the messages the rail buttons post, and
-  Delete honours `confirmDeleteOperations`.
+  many rows the dropdown holds, and regardless of which dropdown view is showing.
+- Favorite posts exactly the message the rail button posts and is lineage-scoped
+  on every surface.
+- Delete reads **Delete Workflow** on lineage targets and **Delete Run** on
+  run-panel rows, posts the matching message, and honours
+  `confirmDeleteOperations` in both cases.
 - No menu item posts a run-lifecycle message at all.
-- Interacting with the menu does not close the workflow dropdown unless the
-  chosen action warrants it.
+- Interacting with the menu does not close the workflow dropdown or back out of
+  the run panel unless the chosen action warrants it.
 
 ## Non-goals
 
 - Any execution item: Run, Re-run, Restart, Continue, Resume, Pause, Stop.
 - A keyboard-invoked context menu (Shift+F10 / Menu key) — worth doing, but it
   belongs with `ACCESSIBILITY_AND_TESTABILITY_PLAN.md`.
-- Duplicate, Fork, or any cloning behaviour.
+- Duplicate or any cloning behaviour.
+- Changing `RunSummaryRow`'s existing inline delete-confirm rail button.
 - Reveal-in-OS / open-in-editor variants of Copy.
 - A path submenu (working file · run directory · `events.jsonl`).
 - Multi-select or bulk actions across rows.

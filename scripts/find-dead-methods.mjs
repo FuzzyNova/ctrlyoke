@@ -46,6 +46,20 @@
  *  - Skips methods with a leading `@keep` JSDoc/comment tag as a manual
  *    escape hatch.
  *
+ * Two reported categories, because they need different judgements:
+ *  - **Unreferenced** — zero non-declaration references anywhere. Almost
+ *    always deletable once the false-positive checks above are ruled out.
+ *  - **Test-only** — a method declared in production code whose only
+ *    references are in test files. The reference count is above zero, so the
+ *    unreferenced check structurally cannot see it. This is either a
+ *    legitimate seam (a hook or utility that exists so production behaviour
+ *    can be tested) or a method orphaned by a refactor whose own tests kept
+ *    it looking alive — `WorkingFileManager.seedDraftFromRun` was the latter,
+ *    invisible here for weeks between RUN_HEAD_MUTABILITY phase 2 removing
+ *    its only caller and its deletion on 2026-08-16. Methods *declared* in
+ *    test files are excluded: test code calling test code is not a finding,
+ *    and a wholly unused test helper already shows up as unreferenced.
+ *
  * This is a heuristic triage tool, not a source of truth: every reported
  * candidate still needs a human (or agent) to verify before deleting, the
  * same way the EndConditionHandler case was independently re-verified
@@ -213,6 +227,23 @@ function isSameDeclarationEntry(entry, candidate) {
   );
 }
 
+/**
+ * Test code: the two test roots plus any `*.test.*` / `*.spec.*` file. Test
+ * helpers under `src/test/integration/helpers/` are deliberately included —
+ * a production method reached only through a test helper is still reached only
+ * by tests, and collapsing that indirection is the entire point of the
+ * test-only category.
+ */
+function isTestFile(fileName) {
+  const resolved = path.resolve(fileName);
+  const relative = path.relative(ROOT, resolved).split(path.sep).join("/");
+  return (
+    relative.startsWith("src/test/") ||
+    relative.startsWith("src/ui/webview-react/test/") ||
+    /\.(test|spec)\.[cm]?[jt]sx?$/.test(relative)
+  );
+}
+
 function main() {
   const jsonOutput = process.argv.includes("--json");
   const projectConfig = loadCombinedProjectConfig();
@@ -233,34 +264,49 @@ function main() {
 
   let candidateCount = 0;
   const deadMethods = [];
+  const testOnlyMethods = [];
 
   for (const sourceFile of sourceFiles) {
+    const declaredInTest = isTestFile(sourceFile.fileName);
     const candidates = collectMethodCandidates(sourceFile, checker);
     for (const candidate of candidates) {
       candidateCount++;
       const refs = service.findReferences(candidate.fileName, candidate.pos);
       let externalRefCount = 0;
-      if (refs) {
-        for (const refSymbol of refs) {
-          for (const entry of refSymbol.references) {
-            if (!isSameDeclarationEntry(entry, candidate)) {
-              externalRefCount++;
-            }
-          }
+      let productionRefCount = 0;
+      for (const refSymbol of refs ?? []) {
+        for (const entry of refSymbol.references) {
+          if (isSameDeclarationEntry(entry, candidate)) continue;
+          externalRefCount++;
+          if (!isTestFile(entry.fileName)) productionRefCount++;
         }
       }
+
+      const record = {
+        location: `${path.relative(ROOT, candidate.fileName)}:${candidate.line}`,
+        className: candidate.className,
+        methodName: candidate.methodName,
+      };
+
       if (externalRefCount === 0) {
-        deadMethods.push({
-          location: `${path.relative(ROOT, candidate.fileName)}:${candidate.line}`,
-          className: candidate.className,
-          methodName: candidate.methodName,
+        deadMethods.push({ ...record, category: "unreferenced" });
+      } else if (productionRefCount === 0 && !declaredInTest) {
+        // Production declaration whose only callers are tests. Not necessarily
+        // dead — a hook or utility that exists to make production behaviour
+        // testable is legitimate — but it is the shape that hides a method
+        // orphaned by a refactor, since its own tests keep the reference count
+        // above zero. Reported separately so the judgement can be made.
+        testOnlyMethods.push({
+          ...record,
+          category: "test-only",
+          testRefCount: externalRefCount,
         });
       }
     }
   }
 
   if (jsonOutput) {
-    console.log(JSON.stringify(deadMethods, null, 2));
+    console.log(JSON.stringify([...deadMethods, ...testOnlyMethods], null, 2));
     return;
   }
 
@@ -268,19 +314,47 @@ function main() {
     `Scanned ${sourceFiles.length} files (extension + webview, combined program), ` +
       `${candidateCount} class-method candidates.\n`
   );
+
   if (deadMethods.length === 0) {
-    console.log("No zero-reference class methods found.");
-    return;
+    console.log("No zero-reference class methods found.\n");
+  } else {
+    console.log(`${deadMethods.length} candidate(s) with zero references:\n`);
+    for (const m of deadMethods) {
+      console.log(`  ${m.location}  ${m.className}.${m.methodName}()`);
+    }
+    console.log(
+      "\nThese are heuristic candidates, not confirmed dead code — verify each one " +
+        "(check for dynamic dispatch, reflection, interface implementations this " +
+        "script may have missed) before deleting.\n"
+    );
   }
-  console.log(`${deadMethods.length} candidate(s) with zero references:\n`);
-  for (const m of deadMethods) {
-    console.log(`  ${m.location}  ${m.className}.${m.methodName}()`);
+
+  if (testOnlyMethods.length > 0) {
+    console.log(
+      `${testOnlyMethods.length} candidate(s) referenced ONLY by tests:\n`
+    );
+    for (const m of testOnlyMethods) {
+      const plural = m.testRefCount === 1 ? "" : "s";
+      console.log(
+        `  ${m.location}  ${m.className}.${m.methodName}()  ` +
+          `(${m.testRefCount} test reference${plural})`
+      );
+    }
+    console.log(
+      "\nThese are production methods with no production caller — their only " +
+        "references are in test code, so the zero-reference check above cannot " +
+        "see them. Two very different things look identical here, so decide " +
+        "per method:\n" +
+        "  - Legitimate: a hook, seam, or utility that exists so production " +
+        "behaviour can be tested, or one other tests depend on.\n" +
+        "  - Dead: a method whose production caller was removed by a refactor " +
+        "while its own unit tests stayed behind (see WorkingFileManager." +
+        "seedDraftFromRun, deleted 2026-08-16 — orphaned by RUN_HEAD_MUTABILITY " +
+        "phase 2, hidden from this script for weeks by its own passing tests).\n" +
+        "Deleting a genuinely dead one means deleting its tests too; they are " +
+        "not coverage of anything shipped."
+    );
   }
-  console.log(
-    "\nThese are heuristic candidates, not confirmed dead code — verify each one " +
-      "(check for dynamic dispatch, reflection, interface implementations this " +
-      "script may have missed) before deleting."
-  );
 }
 
 main();
