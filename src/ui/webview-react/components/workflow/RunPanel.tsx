@@ -62,7 +62,8 @@ interface RunPanelProps {
   onOpenContextMenu?: (
     x: number,
     y: number,
-    target: WorkflowContextMenuTarget
+    target: WorkflowContextMenuTarget,
+    opener?: HTMLElement | null
   ) => void;
   onDeleteRun: (runRef: RunRef) => void;
   onDeleteAllRuns: () => void;

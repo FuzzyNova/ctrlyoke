@@ -31,7 +31,7 @@ import type { ExecutionState } from "../../types/messages";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import { isDrillableRunNav } from "@utils/runNavigation";
 import { isWorkflowActive } from "../../utils/status";
-import { useLongPress } from "@hooks/useLongPress";
+import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
 
 /**
@@ -92,7 +92,8 @@ interface WorkflowListProps {
   onOpenContextMenu?: (
     x: number,
     y: number,
-    target: WorkflowContextMenuTarget
+    target: WorkflowContextMenuTarget,
+    opener?: HTMLElement | null
   ) => void;
   onNewWorkflow?: () => void;
   onClose?: () => void;
@@ -119,7 +120,8 @@ interface RecentWorkflowRowProps {
   onOpenContextMenu?: (
     x: number,
     y: number,
-    target: WorkflowContextMenuTarget
+    target: WorkflowContextMenuTarget,
+    opener?: HTMLElement | null
   ) => void;
   /** List-scoped: reserve the indicator's track even on this row when a sibling row is drillable, so time/badge columns stay aligned. */
   showRunIndicatorTrack: boolean;
@@ -144,26 +146,42 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
   const timeAgo = formatRelativeTimeVerbose(
     workflow.lastModifiedAt || workflow.startedAt
   );
-  const openContextMenu = (x: number, y: number) => {
-    onOpenContextMenu?.(x, y, {
-      address: workflow.address,
-      workflowName: workflow.workflowName,
-      scope: "lineage",
-      isFavorite: workflow.isFavorite,
-      runDirectory: workflow.runDirectory,
-      isExecuting: isWorkflowActive(workflow.executionState as ExecutionState),
-    });
+  const openContextMenu = (
+    x: number,
+    y: number,
+    opener: HTMLElement | null = null
+  ) => {
+    onOpenContextMenu?.(
+      x,
+      y,
+      {
+        address: workflow.address,
+        workflowName: workflow.workflowName,
+        scope: "lineage",
+        isFavorite: workflow.isFavorite,
+        runDirectory: workflow.runDirectory,
+        isExecuting: isWorkflowActive(
+          workflow.executionState as ExecutionState
+        ),
+      },
+      opener
+    );
   };
   const longPressHandlers = useLongPress(
     onOpenContextMenu ? openContextMenu : undefined
   );
 
   return (
+    /* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the non-focusable row container owns right-click/long-press gestures; native child controls remain focusable */
     <div
       {...longPressHandlers}
       onContextMenu={(event) => {
         event.preventDefault();
-        openContextMenu(event.clientX, event.clientY);
+        openContextMenu(
+          event.clientX,
+          event.clientY,
+          getContextMenuOpener(event.currentTarget, event.target)
+        );
       }}
       title={workflow.address.workflowKey}
       className={`workflow-menu-item group flex items-center px-2 py-2 text-left text-sm transition-colors gap-2 ${

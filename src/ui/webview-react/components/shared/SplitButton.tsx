@@ -5,7 +5,8 @@ import { HEADER_BUTTON_SIZES } from "@/constants";
 export interface SplitButtonOption {
   label: string;
   value: string;
-  onClick: () => void;
+  /** The optional opener is supplied by SplitButton for focus restoration. */
+  onClick: (opener?: HTMLButtonElement | null) => void;
   icon?: React.ReactNode;
   shortcut?: string;
   disabled?: boolean;
@@ -142,7 +143,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
         case " ":
           e.preventDefault();
           if (focusedIndex >= 0 && !options[focusedIndex]?.disabled) {
-            options[focusedIndex].onClick();
+            options[focusedIndex].onClick(triggerRef.current);
             setIsOpen(false);
             setFocusedIndex(-1);
             triggerRef.current?.focus();
@@ -167,7 +168,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
 
   const handleOptionClick = (option: SplitButtonOption) => {
     if (option.disabled) return;
-    option.onClick();
+    option.onClick(triggerRef.current);
     setIsOpen(false);
     setFocusedIndex(-1);
   };

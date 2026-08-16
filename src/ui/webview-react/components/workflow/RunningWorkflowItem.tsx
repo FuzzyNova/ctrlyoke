@@ -24,7 +24,7 @@ import type { WorkflowRowTier } from "../../constants";
 import type { WorkflowRunNavigationSummary } from "@root/types/CtrlYokeTypes";
 import type { RecentWorkflow } from "../../store/uiStore";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
-import { useLongPress } from "@hooks/useLongPress";
+import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 
 interface RunningWorkflowItemProps {
   workflow: WorkflowSummary;
@@ -44,7 +44,8 @@ interface RunningWorkflowItemProps {
   onOpenContextMenu?: (
     x: number,
     y: number,
-    target: WorkflowContextMenuTarget
+    target: WorkflowContextMenuTarget,
+    opener?: HTMLElement | null
   ) => void;
   onClick: () => void;
   onPause: () => void;
@@ -152,7 +153,11 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
     workflow.startedAt,
   ]);
 
-  const openContextMenu = (x: number, y: number) => {
+  const openContextMenu = (
+    x: number,
+    y: number,
+    opener: HTMLElement | null = null
+  ) => {
     const address =
       lineage?.address ??
       (workflow.workflowKey && workflow.runRef
@@ -163,25 +168,35 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
           }
         : undefined);
     if (!address) return;
-    onOpenContextMenu?.(x, y, {
-      address,
-      workflowName: lineage?.workflowName ?? workflow.workflowName,
-      scope: "lineage",
-      isFavorite: lineage?.isFavorite,
-      runDirectory: lineage?.runDirectory,
-      isExecuting: true,
-    });
+    onOpenContextMenu?.(
+      x,
+      y,
+      {
+        address,
+        workflowName: lineage?.workflowName ?? workflow.workflowName,
+        scope: "lineage",
+        isFavorite: lineage?.isFavorite,
+        runDirectory: lineage?.runDirectory,
+        isExecuting: true,
+      },
+      opener
+    );
   };
   const longPressHandlers = useLongPress(
     onOpenContextMenu ? openContextMenu : undefined
   );
 
   return (
+    /* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the non-focusable row container owns right-click/long-press gestures; native child controls remain focusable */
     <div
       {...longPressHandlers}
       onContextMenu={(event) => {
         event.preventDefault();
-        openContextMenu(event.clientX, event.clientY);
+        openContextMenu(
+          event.clientX,
+          event.clientY,
+          getContextMenuOpener(event.currentTarget, event.target)
+        );
       }}
       // Padding matches the recent rows below exactly — the two regions are
       // separate scroll containers, so any difference in row padding offsets

@@ -46,7 +46,7 @@ import { isWorkflowActive, isWorkflowRunning } from "../../utils/status";
 import { ExecutionStateBadge } from "../shared/ExecutionStateBadge";
 import { useElementNarrow, useElementTier } from "../../hooks/useElementNarrow";
 import { useIsMobile } from "@hooks/useMediaQuery";
-import { useLongPress } from "@hooks/useLongPress";
+import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import {
   useWorkflowContextMenu,
   type WorkflowContextMenuTarget,
@@ -1088,18 +1088,13 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   );
 
   const handleDuplicateWorkflow = useCallback(
-    (target: WorkflowContextMenuTarget) => {
-      const invoker =
-        typeof document !== "undefined" &&
-        document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : null;
+    (target: WorkflowContextMenuTarget, opener: HTMLElement | null) => {
       openDuplicateWorkflowDialog(
         {
           source: target.address,
           workflowName: target.workflowName,
         },
-        invoker
+        opener
       );
     },
     [openDuplicateWorkflowDialog]
@@ -1116,20 +1111,25 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   });
 
   const openDisplayedWorkflowContextMenu = useCallback(
-    (x: number, y: number) => {
+    (x: number, y: number, opener: HTMLElement | null = null) => {
       if (!displayedViewAddress) return;
       const displayedLineage = recentWorkflows.find(
         (workflow) =>
           workflow.address.workflowKey === displayedViewAddress.workflowKey
       );
-      openWorkflowContextMenu(x, y, {
-        address: displayedViewAddress,
-        workflowName: displayName,
-        scope: "lineage",
-        isFavorite: displayedLineage?.isFavorite,
-        runDirectory: displayedRunDirectory ?? undefined,
-        isExecuting: isWorkflowActive(executionState),
-      });
+      openWorkflowContextMenu(
+        x,
+        y,
+        {
+          address: displayedViewAddress,
+          workflowName: displayName,
+          scope: "lineage",
+          isFavorite: displayedLineage?.isFavorite,
+          runDirectory: displayedRunDirectory ?? undefined,
+          isExecuting: isWorkflowActive(executionState),
+        },
+        opener
+      );
     },
     [
       displayName,
@@ -1147,7 +1147,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const handleWorkflowContextMenu = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       event.preventDefault();
-      openDisplayedWorkflowContextMenu(event.clientX, event.clientY);
+      openDisplayedWorkflowContextMenu(
+        event.clientX,
+        event.clientY,
+        getContextMenuOpener(event.currentTarget, event.target)
+      );
     },
     [openDisplayedWorkflowContextMenu]
   );

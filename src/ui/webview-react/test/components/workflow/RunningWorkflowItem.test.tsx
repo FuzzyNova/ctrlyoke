@@ -117,7 +117,8 @@ describe("RunningWorkflowItem", () => {
         scope: "lineage",
         runDirectory: undefined,
         isExecuting: true,
-      })
+      }),
+      expect.any(HTMLButtonElement)
     );
   });
 });

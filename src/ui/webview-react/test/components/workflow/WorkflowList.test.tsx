@@ -201,7 +201,8 @@ describe("WorkflowList context targets", () => {
         isFavorite: true,
         runDirectory: "/runs/wf/draft",
         isExecuting: false,
-      })
+      }),
+      expect.any(HTMLButtonElement)
     );
   });
 });

@@ -198,6 +198,28 @@ describe("FILE_SELECTED", () => {
     expect(useUiStore.getState().isViewingHistory).toBe(false);
   });
 
+  it("clears the displayed address and run directory together", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "old-workflow" as never,
+        kind: "run",
+        runRef: "old-run" as never,
+      },
+      displayedRunDirectory: "/runs/old-workflow/old-run",
+    });
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "new-workflow.ctrlyoke.json",
+        steps: [makePrompt("New workflow step")],
+      });
+    });
+
+    expect(useUiStore.getState().displayedViewAddress).toBeNull();
+    expect(useUiStore.getState().displayedRunDirectory).toBeNull();
+  });
+
   it("does not attach the previous lineage's runs to a new workflow identity", () => {
     const previousWorkflowKey = "previous-workflow" as never;
     const previousRunRef = "run-previous-2" as never;

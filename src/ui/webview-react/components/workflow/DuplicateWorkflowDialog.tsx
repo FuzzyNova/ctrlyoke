@@ -78,19 +78,30 @@ export const DuplicateWorkflowDialog: React.FC = () => {
     return () => window.clearTimeout(focusTimer);
   }, [dialogData, dialogOpen]);
 
+  const sourceMatchesDisplayedAddress =
+    dialogData !== null &&
+    isSameAddress(dialogData.source, displayedViewAddress);
   const sourceRunSummaries =
-    dialogData && isSameAddress(dialogData.source, displayedViewAddress)
+    dialogData &&
+    displayedViewAddress?.workflowKey === dialogData.source.workflowKey
       ? runSummaries
       : [];
   const sourceLabel = dialogData
     ? `${dialogData.workflowName} · ${viewedRunLabel(dialogData.source, sourceRunSummaries, false)}`
     : "";
 
-  const sourceHarness =
-    dialogData &&
-    displayedViewAddress?.workflowKey === dialogData.source.workflowKey
-      ? getEffectiveHarness()
+  const sourceAddress = dialogData?.source;
+  const sourceRunSummary =
+    sourceAddress?.kind === "run"
+      ? runSummaries.find(
+          (summary) =>
+            summary.workflowKey === sourceAddress.workflowKey &&
+            summary.runRef === sourceAddress.runRef
+        )
       : undefined;
+  const sourceHarness = sourceMatchesDisplayedAddress
+    ? getEffectiveHarness()
+    : (sourceRunSummary?.primaryHarness as HarnessId | undefined);
   const selectedHarness =
     harness === SAME_AS_SOURCE ? sourceHarness : (harness as HarnessId);
   const modelOptions = useMemo(() => {
@@ -250,7 +261,7 @@ export const DuplicateWorkflowDialog: React.FC = () => {
             value={model}
             onChange={setModel}
             options={modelOptions}
-            disabled={harness === SAME_AS_SOURCE}
+            disabled={!selectedHarness}
             triggerAriaLabel="Workflow Model"
           />
         </div>

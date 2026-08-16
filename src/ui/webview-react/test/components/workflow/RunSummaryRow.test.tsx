@@ -167,7 +167,8 @@ describe("RunSummaryRow", () => {
         isFavorite: true,
         runDirectory: "/runs/wf/run-14",
         isExecuting: false,
-      })
+      }),
+      expect.any(HTMLButtonElement)
     );
   });
 
@@ -200,7 +201,85 @@ describe("RunSummaryRow", () => {
         address: { workflowKey: "wf", kind: "draft" },
         runDirectory: "/runs/wf/draft",
         isExecuting: false,
-      })
+      }),
+      expect.any(HTMLButtonElement)
     );
+  });
+
+  it("does not fall back to the draft directory for a run without one", () => {
+    const onOpenContextMenu = vi.fn();
+    const { container } = render(
+      <RunSummaryRow
+        row={{
+          kind: "run",
+          summary: {
+            ...summary,
+            runDirectory: undefined,
+          } as unknown as RunSummary,
+        }}
+        rowKey="run:wf:run-14"
+        isViewed={false}
+        isPending={false}
+        isLive={false}
+        canDelete
+        contextMenuAddress={{
+          workflowKey: "wf" as never,
+          kind: "run",
+          runRef: "run-14" as never,
+        }}
+        draftDirectory="/runs/wf/draft"
+        onOpenContextMenu={onOpenContextMenu}
+        onSelect={vi.fn()}
+      />
+    );
+
+    fireEvent.contextMenu(container.querySelector(".run-panel-row")!, {
+      clientX: 10,
+      clientY: 20,
+    });
+
+    expect(onOpenContextMenu.mock.calls[0][2]).toEqual(
+      expect.objectContaining({ runDirectory: undefined })
+    );
+  });
+
+  it("uses the same target and opener for right-click and long-press", () => {
+    vi.useFakeTimers();
+    try {
+      const onOpenContextMenu = vi.fn();
+      const { container } = render(
+        <RunSummaryRow
+          row={{ kind: "run", summary }}
+          rowKey="run:wf:run-14"
+          isViewed={false}
+          isPending={false}
+          isLive={false}
+          canDelete
+          contextMenuAddress={{
+            workflowKey: "wf" as never,
+            kind: "run",
+            runRef: "run-14" as never,
+          }}
+          onOpenContextMenu={onOpenContextMenu}
+          onSelect={vi.fn()}
+        />
+      );
+      const row = container.querySelector(".run-panel-row")!;
+      fireEvent.touchStart(row, {
+        touches: [{ clientX: 10, clientY: 20 }],
+      });
+      vi.advanceTimersByTime(500);
+      fireEvent.contextMenu(row, { clientX: 10, clientY: 20 });
+
+      expect(onOpenContextMenu).toHaveBeenCalledTimes(2);
+      expect(onOpenContextMenu.mock.calls[0][2]).toEqual(
+        onOpenContextMenu.mock.calls[1][2]
+      );
+      expect(onOpenContextMenu.mock.calls[0][3]).toBe(
+        onOpenContextMenu.mock.calls[1][3]
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

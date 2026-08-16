@@ -27,7 +27,10 @@ export interface WorkflowContextMenuTarget {
 }
 
 interface UseWorkflowContextMenuOptions {
-  onDuplicate: (target: WorkflowContextMenuTarget) => void;
+  onDuplicate: (
+    target: WorkflowContextMenuTarget,
+    opener: HTMLElement | null
+  ) => void;
   onToggleFavorite: (address: WorkflowViewAddress) => void;
   onDelete: (target: WorkflowContextMenuTarget) => void;
   onCloseDropdown: () => void;
@@ -47,7 +50,12 @@ export function useWorkflowContextMenu({
   );
 
   const openContextMenu = useCallback(
-    (x: number, y: number, target: WorkflowContextMenuTarget) => {
+    (
+      x: number,
+      y: number,
+      target: WorkflowContextMenuTarget,
+      opener: HTMLElement | null = null
+    ) => {
       const hasRunDirectory = Boolean(target.runDirectory);
       const deleteLabel =
         target.scope === "lineage" ? "Delete Workflow" : "Delete Run";
@@ -67,7 +75,7 @@ export function useWorkflowContextMenu({
             label: "Duplicate Workflow…",
             icon: "codicon-copy",
             disabled: false,
-            onClick: () => onDuplicate(target),
+            onClick: () => onDuplicate(target, opener),
           },
           { type: "divider" },
           {

@@ -5,7 +5,7 @@ import { createMessageHandlers } from "@hooks/useMessageHandler";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { MESSAGE_TYPES } from "@/types/messages";
+import { HARNESS_IDS, MESSAGE_TYPES } from "@/types/messages";
 import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 
@@ -63,6 +63,69 @@ describe("DuplicateWorkflowDialog", () => {
     expect(screen.getByDisplayValue("Workflow 1 Copy")).toBeInTheDocument();
   });
 
+  it("names a historical source run even when another run is displayed", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: source.workflowKey,
+        kind: "run",
+        runRef: "run-2" as never,
+      },
+    });
+    render(<DuplicateWorkflowDialog />);
+    openDialog();
+
+    expect(screen.getByText("Workflow 1 · Run 3")).toBeInTheDocument();
+  });
+
+  it("allows a model-only override when the exact displayed source harness is known", () => {
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("harness", HARNESS_IDS.CLAUDE_CLI);
+    useSettingsStore.getState().setModelOptions({
+      [HARNESS_IDS.CLAUDE_CLI]: [
+        { value: "source-model", label: "Source Model" },
+      ],
+    });
+    render(<DuplicateWorkflowDialog />);
+    openDialog();
+
+    const modelTrigger = screen.getByRole("button", {
+      name: "Workflow Model",
+    });
+    expect(modelTrigger).toBeEnabled();
+    fireEvent.click(modelTrigger);
+    fireEvent.click(screen.getByRole("button", { name: "Source Model" }));
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Model Variant" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Duplicate" }));
+
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: MESSAGE_TYPES.CREATE_WORKFLOW_VARIANT,
+        workflowName: "Model Variant",
+        overrides: { model: "source-model" },
+      })
+    );
+  });
+
+  it("keeps the model control disabled when the source harness is unknown", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: source.workflowKey,
+        kind: "run",
+        runRef: "run-2" as never,
+      },
+      runSummaries: [],
+    });
+    render(<DuplicateWorkflowDialog />);
+    openDialog();
+
+    expect(
+      screen.getByRole("button", { name: "Workflow Model" })
+    ).toBeDisabled();
+  });
+
   it("blocks submit when the name is empty", () => {
     render(<DuplicateWorkflowDialog />);
     openDialog();
@@ -101,6 +164,12 @@ describe("DuplicateWorkflowDialog", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(useUiStore.getState().duplicateWorkflowRequest).toBeNull();
     expect(screen.getByRole("button", { name: "Duplicate" })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Duplicate" }));
+    expect(postMessageSpy).toHaveBeenCalledTimes(2);
+    expect(postMessageSpy.mock.calls[1][0]).toEqual(
+      expect.objectContaining({ workflowName: "Typed Variant" })
+    );
   });
 
   it("ignores a late success for a failed request", () => {

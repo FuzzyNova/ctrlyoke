@@ -85,21 +85,19 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
     postWorkflowDefinitionMutation(vscode, { type: MESSAGE_TYPES.APPEND_FILE });
   }, [vscode, hasQueue]);
 
-  const handleDuplicateWorkflow = useCallback(() => {
-    if (!displayedViewAddress) return;
-    const invoker =
-      typeof document !== "undefined" &&
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
-    openDuplicateWorkflowDialog(
-      {
-        source: displayedViewAddress,
-        workflowName: workflowName || "Untitled Workflow",
-      },
-      invoker
-    );
-  }, [displayedViewAddress, openDuplicateWorkflowDialog, workflowName]);
+  const handleDuplicateWorkflow = useCallback(
+    (invoker?: HTMLElement | null) => {
+      if (!displayedViewAddress) return;
+      openDuplicateWorkflowDialog(
+        {
+          source: displayedViewAddress,
+          workflowName: workflowName || "Untitled Workflow",
+        },
+        invoker
+      );
+    },
+    [displayedViewAddress, openDuplicateWorkflowDialog, workflowName]
+  );
 
   const handlePickerSelect = useCallback(
     (filePath: string) => {

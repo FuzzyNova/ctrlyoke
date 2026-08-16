@@ -331,6 +331,7 @@ function applyWorkflowChange(options?: {
     // follows the first write to a brand-new workflow.
     useUiStore.setState({
       displayedViewAddress: null,
+      displayedRunDirectory: null,
       appliedViewAddress: null,
       displayedDefinitionRevision: null,
       displayedDescriptorRevision: null,

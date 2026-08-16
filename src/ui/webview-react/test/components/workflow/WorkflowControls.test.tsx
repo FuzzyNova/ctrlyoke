@@ -8,7 +8,7 @@
  * Strategy: set store state before each test, assert postMessage calls.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkflowControls } from "@components/workflow/WorkflowControls";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -148,5 +148,25 @@ describe("WorkflowControls — dropdown options", () => {
         expectedDescriptorRevision: 5,
       },
     });
+  });
+
+  it("restores focus to the split-button dropdown trigger after Duplicate", async () => {
+    const user = userEvent.setup();
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-1" as never,
+        kind: "draft",
+      },
+    });
+    render(<WorkflowControls />);
+    const trigger = screen.getByRole("button", { name: /Open workflow menu/i });
+    await user.click(trigger);
+    await user.click(screen.getByText(/Duplicate Workflow/i));
+
+    expect(useUiStore.getState().duplicateWorkflowDialogData?.invoker).toBe(
+      trigger
+    );
+    act(() => useUiStore.getState().closeDuplicateWorkflowDialog());
+    expect(document.activeElement).toBe(trigger);
   });
 });

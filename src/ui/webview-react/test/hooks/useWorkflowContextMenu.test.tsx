@@ -27,11 +27,15 @@ const target: WorkflowContextMenuTarget = {
 
 function TestHarness({
   menuTarget = target,
+  onDuplicate = vi.fn(),
 }: {
   menuTarget?: WorkflowContextMenuTarget;
+  onDuplicate?: (
+    target: WorkflowContextMenuTarget,
+    opener: HTMLElement | null
+  ) => void;
 }) {
   const onToggleFavorite = vi.fn();
-  const onDuplicate = vi.fn();
   const onDelete = vi.fn();
   const onCloseDropdown = vi.fn();
   const { openContextMenu, workflowContextMenuPortal } = useWorkflowContextMenu(
@@ -45,7 +49,11 @@ function TestHarness({
 
   return (
     <>
-      <button onClick={() => openContextMenu(20, 20, menuTarget)}>
+      <button
+        onClick={(event) =>
+          openContextMenu(20, 20, menuTarget, event.currentTarget)
+        }
+      >
         Open menu
       </button>
       {workflowContextMenuPortal}
@@ -143,5 +151,17 @@ describe("useWorkflowContextMenu", () => {
         ])
       )
     );
+  });
+
+  it("passes the opener separately when Duplicate is selected", () => {
+    const onDuplicate = vi.fn();
+    render(<TestHarness onDuplicate={onDuplicate} />);
+    const opener = screen.getByRole("button", { name: "Open menu" });
+    fireEvent.click(opener);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Duplicate Workflow…" })
+    );
+
+    expect(onDuplicate).toHaveBeenCalledWith(target, opener);
   });
 });
