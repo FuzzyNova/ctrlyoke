@@ -1536,7 +1536,7 @@ export class WorkflowExecutor {
       isStreaming: true,
       cliCommand,
       cliCommandWasInjected,
-      workingDirectory: context.workspaceFolderPath,
+      workingDirectory: context.executionWorkspace.executionRoot,
       timestampMs,
       runIndex,
       attemptIndex,
@@ -1553,7 +1553,7 @@ export class WorkflowExecutor {
         prompt,
         cliCommand,
         cliCommandWasInjected,
-        context.workspaceFolderPath,
+        context.executionWorkspace.executionRoot,
         timestampMs,
         attemptIndex,
         rawTextOutput,
@@ -1569,7 +1569,7 @@ export class WorkflowExecutor {
         prompt,
         cliCommand,
         cliCommandWasInjected,
-        context.workspaceFolderPath,
+        context.executionWorkspace.executionRoot,
         timestampMs,
         attemptIndex,
         rawTextOutput,
@@ -1957,7 +1957,8 @@ export class WorkflowExecutor {
           bufferedOutput?.cliCommandWasInjected)
         : undefined,
       workingDirectory:
-        bufferedOutput?.workingDirectory ?? context.workspaceFolderPath,
+        bufferedOutput?.workingDirectory ??
+        context.executionWorkspace.executionRoot,
       timestampMs:
         bufferedOutput?.timestampMs ??
         this.getPromptPhaseStartedAt(target) ??
@@ -2910,7 +2911,7 @@ export class WorkflowExecutor {
       cliCommandWasInjected: context.shouldShowCliCommand
         ? integration.getLastCliCommandWasInjected()
         : undefined,
-      workingDirectory: context.workspaceFolderPath,
+      workingDirectory: context.executionWorkspace.executionRoot,
       timestampMs: this.getPromptPhaseStartedAt(target) ?? Date.now(),
       attemptIndex,
       runIndex,
@@ -3140,7 +3141,7 @@ export class WorkflowExecutor {
       isStreaming: false,
       cliCommand,
       cliCommandWasInjected,
-      workingDirectory: context.workspaceFolderPath,
+      workingDirectory: context.executionWorkspace.executionRoot,
       timestampMs: this.getPromptPhaseStartedAt(target) ?? Date.now(),
       runIndex,
       attemptIndex,

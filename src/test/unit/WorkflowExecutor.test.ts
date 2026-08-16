@@ -881,6 +881,32 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     ]);
   });
 
+  test("reports the execution root (not the source workspace) as the CLI working directory", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+
+    const worktreeRoot = path.join(os.tmpdir(), "ctrlyoke-worktree-root");
+    const context = makeContext(integration);
+    context.workspaceFolderPath = path.join(os.tmpdir(), "ctrlyoke-source-root");
+    context.executionWorkspace = {
+      ...context.executionWorkspace,
+      executionRoot: worktreeRoot,
+    };
+
+    const captureCalls: Array<{ stepIndex: number; output: any }> = [];
+    context.captureCompletedOutput = (stepIndex, output) => {
+      captureCalls.push({ stepIndex, output });
+    };
+
+    queue.loadPrompts({ steps: [{ prompt: "runs in a worktree" }] });
+
+    await executor.execute(integration, context);
+
+    assert.strictEqual(captureCalls.length, 1);
+    assert.strictEqual(captureCalls[0].output.workingDirectory, worktreeRoot);
+  });
+
   test("emits finalStep status and output updates to dashboard sink", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
