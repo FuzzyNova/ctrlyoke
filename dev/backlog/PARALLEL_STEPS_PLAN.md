@@ -70,8 +70,8 @@ already provides useful pieces, but it is still sequential at several less-obvio
   one `WorkflowStep`; it has no container normalization pass.
 - `WorkflowSerializer` currently serializes a flat `workingFile.steps` array. It must learn
   to reconstruct authored `parallel:` containers when exporting/saving a definition.
-- Every mutation path in `PromptQueue`, `WorkingFileManager`, `QueueOperations`, and the
-  dashboard currently assumes that inserting/reordering one step only changes the flat
+- Every mutation path in `PromptQueue`, `WorkingFileManager`, `RunContinuationService`, and
+  the dashboard currently assumes that inserting/reordering one step only changes the flat
   array. Group ranges must be updated in the same transaction.
 
 ### Execution state
@@ -627,7 +627,7 @@ state/UI primitives here rather than building a second filter mechanism.
 | Schema/settings           | `schemas/workflow-schema.json`, `schemas/settings-schema.json`, `src/types/CtrlYokeSettings.ts`, `src/config/CtrlYokeConfigService.ts`, `src/utils/ConfigurationUtils.ts`                                                                                              |
 | Shared topology/types     | `src/types/CtrlYokeTypes.ts`, `src/types/DashboardConstants.ts`, `src/types/WebviewMessageTypes.ts`, `src/types/WorkflowTimelineTypes.ts`, `src/types/OutputHistoryTypes.ts`                                                                                           |
 | Parse/serialize/revisions | `src/core/PromptFileParser.ts`, `src/core/WorkflowStepSanitizer.ts`, `src/core/WorkingFileManager.ts`, `src/ui/WorkflowSerializer.ts`                                                                                                                                  |
-| Queue/runtime             | `src/core/PromptQueue.ts`, `src/core/QueueOperations.ts`, `src/core/WorkflowStateMachine.ts`, `src/core/WorkflowExecutor.ts`, `src/core/EndConditionHandler.ts`, `src/core/EndConditionEvaluator.ts`, `src/utils/CliProcessManager.ts`                                 |
+| Queue/runtime             | `src/core/PromptQueue.ts`, `src/core/WorkflowStateMachine.ts`, `src/core/WorkflowExecutor.ts`, `src/core/EndConditionHandler.ts`, `src/core/EndConditionEvaluator.ts`, `src/utils/CliProcessManager.ts`                                 |
 | Integration ownership     | `src/core/WorkflowInstance.ts`, `src/core/OutputCaptureBuffer.ts`, integration factories, shared CLI lifecycle code                                                                                                                                                    |
 | Standalone CLI            | `src/cli.ts`, `src/cli/CliExecutionMode.ts`, CLI text/JSON result projection                                                                                                                                                                                           |
 | Timeline/output backend   | `src/core/orchestration/StreamingHistoryBuffer.ts`, `src/core/orchestration/OutputHistoryManager.ts`, `src/core/orchestration/OutputHistoryTimelineAdapter.ts`, `src/core/orchestration/RunOutputResolver.ts`, dashboard sinks/hub                                     |

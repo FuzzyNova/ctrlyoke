@@ -28,7 +28,7 @@ Keep them focused on startup/shutdown wiring, cross-subsystem handoff, and proce
    - `setPtyPostMessage(hub.postMessage)` to upgrade PTY fan-out from panel-only to all dashboard clients
 8. Register `NotificationManager` as a hub client and share the orchestrator's `OutputHistoryManager` with the webview provider.
 9. Call `workflowOrchestrator.initialize()` fire-and-forget. The webview is allowed to resolve before harness detection finishes.
-10. Only after core wiring: theme listener, completion/link providers, `initializeCompletionHelpers(context)`, LM tools, then command registration.
+10. Only after core wiring: theme listener, completion/link providers, `initializeCompletionHelpers(context)`, then command registration.
 
 Current activation assumes the **first workspace folder** is the workspace root for config backend setup, initialization, workflow discovery, and several commands. If multi-root behavior changes, update those paths together.
 </extensionActivation>
@@ -40,7 +40,7 @@ Important `extension.ts` conventions:
 - Everything VS Code should auto-dispose belongs in `context.subscriptions`. The notable exceptions are:
   - `hostedServer`, disposed manually by `disableServer` and `deactivate()`
   - `notificationManager`, owned through `DashboardBroadcastHub.addClient(...)`
-- `registerLanguageModelTools(context)` always registers the same four LM tools: queue status, append queue, capabilities, and read output. Their MCP twins live in `mcp-server.ts`; keep semantics aligned.
+- **ctrlyoke registers no `vscode.lm` tools, and should not.** Four LM tools (queue status, append queue, capabilities, read output) existed to serve the removed Copilot Chat harness and were deleted along with their shared `QueueOperations` module. `vscode.lm.registerTool` publishes to VS Code chat participants — a surface ctrlyoke no longer drives — while `mcp-server.ts` already exposes the same capabilities to every harness ctrlyoke *does* support, including Copilot CLI. Re-adding an LM twin would recreate a second tool contract that has no consumer and must be kept in sync by hand.
 - `registerCommands(context)` is the single production command-wiring point. Keep it orchestration-only:
   - context-menu commands save dirty files before delegating
   - the hosted server auto-start check runs **after** command registration
@@ -64,7 +64,7 @@ Do not duplicate cleanup already handled by `context.subscriptions`; PTY hard-ki
 
 - Never import `vscode` or extension-only helpers here. `src/utils/WorkflowPaths.ts` and `src/core/orchestration/WorkflowLineageRepository.ts` are safe to import (both are Node-only); anything they in turn import must stay that way — do not let `Log` (which imports `vscode`) leak into this dependency chain, use `console.warn`/`console.error` instead, matching `FileLockUtils`'s convention.
 - Use file logging only (`CTRLYOKE_DIAGNOSTIC_LOGS=true` or `NODE_ENV=development`). Do not write operational logs to stdout/stderr because stdout is the MCP transport and many TUIs capture stderr.
-- The first four tools mirror the LM tools from `extension.ts`; `ctrlyoke_global_status` and `ctrlyoke_submit_commit_message` are MCP-only.
+- This is ctrlyoke's **only** agent-facing tool surface. There is no VS Code Language Model twin to keep in sync — see the `extension.ts` note above.
 - **This server is blanket auto-approved and must stay scoped to the addressed run.** Harnesses grant it standing without a prompt (e.g. `ClaudeCliProvider` passes `--allowed-tools mcp__ctrlyoke`) because unattended workflows cannot stop at a tool-approval dialog. It therefore bypasses `autoApprove` config and the tool-permission mappers that gate every _user-defined_ MCP server. Two consequences bind any new tool here:
   1. **No lifecycle control.** No tool may start, cancel, pause, or resume a run. An auto-approved start is an unbounded billable-spawn primitive reachable by prompt injection; an auto-approved cancel is a DoS primitive against sibling runs. Stopping for human approval already has a deterministic, author-opted-in path (pre-condition `stopWorkflow`/`skipPrompt`, `endCondition.onFail`, script-step `onFail`) — use a sentinel file plus an end-condition script when the decision needs model judgment. Sub-workflow composition belongs in `dev/backlog/WORKFLOW_STEP_PLAN.md`, not here. External automation belongs to `ctrlyoke run --headless --json`; routing it through MCP would only bypass the harness's own shell-permission prompt. See `dev/rejected/MCP_CONTROL_SURFACE_PLAN.md`.
   2. **No unaddressed cross-workflow reach.** `ctrlyoke_global_status` is the deliberate exception — a read-only workspace listing so a step can avoid files a sibling run owns and attribute stray build errors. Every other tool answers only for this server's own run. Do not widen that.
@@ -81,6 +81,5 @@ Do not duplicate cleanup already handled by `context.subscriptions`; PTY hard-ki
 <relatedFiles>
 - `src/ui/CtrlYokeWebviewProvider.ts` — panel shell and outbound UI transport
 - `src/core/WorkflowOrchestrator.ts` — main lifecycle owner created by `activate()`
-- `src/core/QueueOperations.ts` — shared queue/read/append logic mirrored by LM tools
 - `src/scm/ScmCommitCommand.ts` — SCM command implementation registered from `extension.ts`
 </relatedFiles>

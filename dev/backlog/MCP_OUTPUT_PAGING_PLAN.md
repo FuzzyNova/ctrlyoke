@@ -43,14 +43,8 @@ second read path or materializing the JSONL history.
   `.github/instructions/extension.instructions.md`.
 - No lifecycle control of any kind.
 
-## Coordination
-
-The VS Code LM twin of this tool is registered in `src/extension.ts`
-(`registerLanguageModelTools`). Keep the two schemas aligned when this lands.
-
 ## Acceptance criteria
 
 - A caller can read a bounded slice of one step's output and resume from a cursor.
 - Omitting the new parameters reproduces today's response exactly.
 - The implementation adds no additional full traversal of the run timeline.
-- MCP and LM tool schemas stay in sync.

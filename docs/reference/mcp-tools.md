@@ -24,5 +24,4 @@ Use it when the harness discovers follow-up work during a run.
 
 ## When these tools are available
 
-- as language model tools in the extension
 - through the built-in ctrlyoke MCP server when you include `"ctrlyoke"` in `mcpServers`

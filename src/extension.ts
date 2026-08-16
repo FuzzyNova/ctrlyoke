@@ -14,16 +14,11 @@ import {
 import { ServerTokenStore } from "./platform/ServerTokenStore";
 import { CtrlYokeHostedServer } from "./server/CtrlYokeHostedServer";
 import {
-  EXECUTION_STATES,
   GIT_CHANGE_KINDS,
-  QUEUE_POSITION,
   MESSAGE_TYPES,
-  MODEL_OPTION_VALUES,
-  PANEL_CLIENT_ID,
   USER_FEEDBACK_SEVERITY,
   VSCODE_COMMANDS,
   VSCODE_GIT_COMMANDS,
-  type QueuePosition,
 } from "./types/DashboardConstants";
 import {
   getCommitDiff,
@@ -35,11 +30,6 @@ import {
   getStashFiles,
   repoToplevel,
 } from "./utils/GitUtils";
-import {
-  getQueueStatus,
-  appendToQueue,
-  readQueueOutput,
-} from "./core/QueueOperations";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
 import { AntigravityCliProvider } from "./core/harness/antigravity/AntigravityCliProvider";
@@ -83,242 +73,6 @@ let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: CtrlYokeWebviewProvider;
 let hostedServer: CtrlYokeHostedServer | undefined;
 let notificationManager: NotificationManager | undefined;
-
-/**
- * Register Language Model Tools for VS Code Chat integration
- * These tools allow AI agents in VS Code Chat to read queue status and append prompts
- */
-function registerLanguageModelTools(context: vscode.ExtensionContext) {
-  try {
-    // Tool 1: ctrlyoke_queue_status (read operation)
-    const queueStatusTool = vscode.lm.registerTool("ctrlyoke_queue_status", {
-      prepareInvocation: async (
-        _parameters: unknown,
-        _token: vscode.CancellationToken
-      ) => {
-        return {
-          invocationMessage: "Getting ctrlyoke queue status...",
-        };
-      },
-      invoke: async (
-        _parameters: unknown,
-        _token: vscode.CancellationToken
-      ) => {
-        try {
-          const promptQueue = workflowOrchestrator.getActivePromptQueue();
-
-          if (!promptQueue) {
-            throw new Error("ctrlyoke queue not initialized");
-          }
-
-          const queue = workflowOrchestrator.getQueueState(PANEL_CLIENT_ID);
-          const status = getQueueStatus(promptQueue, queue.workingFilePath);
-
-          return new vscode.LanguageModelToolResult([
-            new vscode.LanguageModelTextPart(JSON.stringify(status, null, 2)),
-          ]);
-        } catch (error) {
-          const errorMsg = getErrorMessage(error);
-          return new vscode.LanguageModelToolResult([
-            new vscode.LanguageModelTextPart(`Error: ${errorMsg}`),
-          ]);
-        }
-      },
-    });
-
-    // Tool 2: ctrlyoke_append_queue (write operation)
-    const queueAppendTool = vscode.lm.registerTool("ctrlyoke_append_queue", {
-      prepareInvocation: async (
-        _parameters: unknown,
-        _token: vscode.CancellationToken
-      ) => {
-        return {
-          invocationMessage: "Appending prompts to ctrlyoke queue...",
-        };
-      },
-      invoke: async (parameters: unknown, _token: vscode.CancellationToken) => {
-        try {
-          const promptQueue = workflowOrchestrator.getActivePromptQueue();
-
-          if (!promptQueue) {
-            throw new Error("ctrlyoke queue not initialized");
-          }
-
-          // Validate parameters shape
-          const params = parameters as Record<string, unknown> | null;
-          if (!params || typeof params !== "object") {
-            throw new Error("Invalid parameters: expected an object");
-          }
-
-          const request = {
-            steps: (Array.isArray(params.steps) ? params.steps : []) as Array<{
-              prompt: string;
-              model?: string;
-              harness?: string;
-              resumeSession?: boolean;
-              sessionId?: number;
-            }>,
-            position: (typeof params.position === "string"
-              ? params.position
-              : QUEUE_POSITION.END) as QueuePosition,
-            source: (typeof params.source === "string"
-              ? params.source
-              : "VS Code Chat") as string,
-          };
-
-          const result = await appendToQueue(promptQueue, request);
-
-          // Update dashboard with extended prompts
-          if (webviewProvider) {
-            const updatedState = promptQueue.getState();
-            webviewProvider.updateStepsExtended(
-              updatedState.steps,
-              promptQueue.getWorkflowFile().finalStep ?? null,
-              undefined,
-              updatedState.definitionRevision
-            );
-            webviewProvider.updateProgress(
-              updatedState.currentIndex,
-              updatedState.steps.length
-            );
-          }
-
-          // If queue was completed, resume execution
-          const queueState = promptQueue.getState();
-          if (queueState.status === EXECUTION_STATES.COMPLETED) {
-            await workflowOrchestrator.executeLoadedPromptFile(undefined, true);
-          }
-
-          return new vscode.LanguageModelToolResult([
-            new vscode.LanguageModelTextPart(JSON.stringify(result, null, 2)),
-          ]);
-        } catch (error) {
-          const errorMsg = getErrorMessage(error);
-          return new vscode.LanguageModelToolResult([
-            new vscode.LanguageModelTextPart(`Error: ${errorMsg}`),
-          ]);
-        }
-      },
-    });
-
-    // Tool 3: ctrlyoke_capabilities (read harness/model availability)
-    const capabilitiesTool = vscode.lm.registerTool("ctrlyoke_capabilities", {
-      prepareInvocation: async (
-        _parameters: unknown,
-        _token: vscode.CancellationToken
-      ) => {
-        return {
-          invocationMessage: "Getting ctrlyoke capabilities...",
-        };
-      },
-      invoke: async (
-        _parameters: unknown,
-        _token: vscode.CancellationToken
-      ) => {
-        try {
-          const settingsSync = webviewProvider.getSettingsSync();
-          const modelOptions = settingsSync.buildModelOptions();
-          const harnessStatus = settingsSync.getHarnessStatus();
-
-          const harnesses = Object.keys(harnessStatus)
-            .filter((id) => harnessStatus[id].available)
-            .map((id) => {
-              const options = modelOptions[id] ?? [];
-              return {
-                id,
-                available: true,
-                models: options
-                  .filter(
-                    (m: { value: string; label: string }) =>
-                      m.value !== MODEL_OPTION_VALUES.NONE
-                  )
-                  .map((m: { value: string; label: string }) => m.value),
-              };
-            });
-
-          return new vscode.LanguageModelToolResult([
-            new vscode.LanguageModelTextPart(
-              JSON.stringify({ generatedAt: Date.now(), harnesses }, null, 2)
-            ),
-          ]);
-        } catch (error) {
-          const errorMsg = getErrorMessage(error);
-          return new vscode.LanguageModelToolResult([
-            new vscode.LanguageModelTextPart(`Error: ${errorMsg}`),
-          ]);
-        }
-      },
-    });
-
-    // Tool 4: ctrlyoke_read_output (read AI response from completed prompts)
-    const readOutputTool = vscode.lm.registerTool("ctrlyoke_read_output", {
-      prepareInvocation: async (
-        _parameters: unknown,
-        _token: vscode.CancellationToken
-      ) => {
-        return {
-          invocationMessage: "Reading ctrlyoke prompt outputs...",
-        };
-      },
-      invoke: async (parameters: unknown, _token: vscode.CancellationToken) => {
-        try {
-          const promptQueue = workflowOrchestrator.getActivePromptQueue();
-
-          if (!promptQueue) {
-            throw new Error("ctrlyoke queue not initialized");
-          }
-
-          const params = parameters as Record<string, unknown> | null;
-          const indices = Array.isArray(params?.indices)
-            ? (params!.indices as number[])
-            : [];
-
-          const state = promptQueue.getState();
-          const outputHistoryManager =
-            workflowOrchestrator.getOutputHistoryManager();
-          const result = await readQueueOutput(
-            promptQueue,
-            { indices },
-            state.workflowKey && state.runRef
-              ? {
-                  manifestPath: outputHistoryManager.getHistoryFilePath(
-                    state.workflowKey,
-                    state.runRef
-                  ),
-                  resolver: outputHistoryManager.getRunOutputResolver(),
-                }
-              : undefined
-          );
-
-          return new vscode.LanguageModelToolResult([
-            new vscode.LanguageModelTextPart(JSON.stringify(result, null, 2)),
-          ]);
-        } catch (error) {
-          const errorMsg = getErrorMessage(error);
-          return new vscode.LanguageModelToolResult([
-            new vscode.LanguageModelTextPart(`Error: ${errorMsg}`),
-          ]);
-        }
-      },
-    });
-
-    context.subscriptions.push(
-      queueStatusTool,
-      queueAppendTool,
-      capabilitiesTool,
-      readOutputTool
-    );
-    Log.debug(
-      "ctrlyoke: Registered Language Model Tools (ctrlyoke_queue_status, ctrlyoke_append_queue, ctrlyoke_capabilities, ctrlyoke_read_output)"
-    );
-  } catch (error) {
-    Log.warn(
-      "ctrlyoke: Failed to register Language Model Tools (VS Code API may not be available):",
-      error
-    );
-    // Don't throw - this is optional functionality
-  }
-}
 
 // Publisher/name must match package.json; walkthrough id must match contributes.walkthroughs.
 const GETTING_STARTED_WALKTHROUGH_ID =
@@ -695,9 +449,6 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize completion helpers with config watcher
     initializeCompletionHelpers(context);
     Log.debug("ctrlyoke: Initialized completion helpers with config watcher");
-
-    // Register Language Model Tools (for VS Code Chat integration)
-    registerLanguageModelTools(context);
 
     // Register commands
     registerCommands(context);
