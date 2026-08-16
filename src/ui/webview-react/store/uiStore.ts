@@ -236,6 +236,8 @@ export interface FileBrowserRequest {
  */
 export interface RecentWorkflow {
   address: WorkflowViewAddress;
+  /** Directory containing the definition and timeline for the primary address. */
+  runDirectory?: string;
   workflowName: string;
   executionState: string;
   lastModifiedAt?: number;

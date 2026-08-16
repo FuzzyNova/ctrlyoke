@@ -5,7 +5,14 @@
  * Strategy: preset store state, render, assert what's visible and what's posted.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, act, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  act,
+  within,
+  fireEvent,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkflowStatus } from "@components/workflow/WorkflowStatus";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -92,6 +99,103 @@ describe("WorkflowStatus — loaded state", () => {
     expect(screen.getByText("My Workflow")).toBeInTheDocument();
   });
 
+  it("copies the displayed run directory from the header target", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-1" as never,
+        kind: "run",
+        runRef: "run-2" as never,
+      },
+      displayedRunDirectory: "/runs/wf-1/run-2",
+    });
+    setRecentWorkflows([
+      {
+        address: {
+          workflowKey: "wf-1" as never,
+          kind: "run",
+          runRef: "run-5" as never,
+        },
+        runDirectory: "/runs/wf-1/run-5",
+        workflowName: "My Workflow",
+        executionState: EXECUTION_STATES.IDLE,
+      },
+    ]);
+
+    render(<WorkflowStatus />);
+    fireEvent.contextMenu(document.querySelector(".workflow-split-button")!);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Copy Run Directory Path" })
+    );
+
+    expect(writeText).toHaveBeenCalledWith("/runs/wf-1/run-2");
+    await waitFor(() =>
+      expect(useUiStore.getState().toastQueue).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: "Run directory path copied to clipboard",
+          }),
+        ])
+      )
+    );
+  });
+
+  it("uses the existing favorite action for the header target", () => {
+    const address = { workflowKey: "wf-1" as never, kind: "draft" as const };
+    useUiStore.setState({ displayedViewAddress: address });
+    setRecentWorkflows([
+      {
+        address,
+        workflowName: "My Workflow",
+        executionState: EXECUTION_STATES.IDLE,
+        isFavorite: false,
+      },
+    ]);
+
+    render(<WorkflowStatus />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    fireEvent.contextMenu(document.querySelector(".workflow-split-button")!);
+    const favoriteMenuItem = screen.getByRole("button", {
+      name: "Add to Favorites",
+    });
+    fireEvent.mouseDown(favoriteMenuItem);
+    fireEvent.click(favoriteMenuItem);
+
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.TOGGLE_WORKFLOW_FAVORITE,
+      address,
+    });
+    expect(document.querySelector(".workflow-dropdown-menu")).toHaveClass(
+      "visible"
+    );
+  });
+
+  it("uses the existing lineage delete path for the header target", () => {
+    const address = { workflowKey: "wf-1" as never, kind: "draft" as const };
+    useUiStore.setState({ displayedViewAddress: address });
+    useSettingsStore.setState({
+      globalSettings: {
+        ...useSettingsStore.getState().globalSettings,
+        confirmDeleteOperations: false,
+      },
+    });
+
+    render(<WorkflowStatus />);
+    fireEvent.contextMenu(document.querySelector(".workflow-split-button")!);
+    fireEvent.click(screen.getByRole("button", { name: "Delete Workflow" }));
+
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
+      address,
+    });
+  });
+
   it("falls back to file stem when workflowName is empty", () => {
     useWorkflowStore.setState({
       fileName: "/workspace/my-workflow.ctrlyoke.yaml",
@@ -133,14 +237,14 @@ describe("WorkflowStatus — loaded state", () => {
 
     render(<WorkflowStatus />);
 
-    const indicator = screen.getByLabelText(
-      "Named worktree: feature/status"
-    );
+    const indicator = screen.getByLabelText("Named worktree: feature/status");
     expect(indicator).toHaveAttribute(
       "title",
       "Named worktree: feature/status"
     );
-    expect(indicator.querySelector(".codicon-source-control")).toBeInTheDocument();
+    expect(
+      indicator.querySelector(".codicon-source-control")
+    ).toBeInTheDocument();
     getBoundingClientRect.mockRestore();
   });
 

@@ -45,6 +45,11 @@ import { isWorkflowActive, isWorkflowRunning } from "../../utils/status";
 import { ExecutionStateBadge } from "../shared/ExecutionStateBadge";
 import { useElementNarrow, useElementTier } from "../../hooks/useElementNarrow";
 import { useIsMobile } from "@hooks/useMediaQuery";
+import { useLongPress } from "@hooks/useLongPress";
+import {
+  useWorkflowContextMenu,
+  type WorkflowContextMenuTarget,
+} from "@hooks/useWorkflowContextMenu";
 import { WebviewLog } from "@utils/logger";
 import {
   resolveWorkflowRowTier,
@@ -111,6 +116,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     activeWorkflowId,
     activeWorkflowWorkingFilePath,
     displayedViewAddress,
+    displayedRunDirectory,
     pendingRunViewSwitch,
     recentWorkflows,
     setRecentWorkflows,
@@ -643,7 +649,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target;
       const isDropdownPortalClick =
-        target instanceof Element && target.closest(".fp-dropdown-popup");
+        target instanceof Element &&
+        target.closest(".fp-dropdown-popup, .step-context-menu");
       if (
         containerRef.current &&
         !containerRef.current.contains(event.target as Node) &&
@@ -1047,6 +1054,65 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     [setRecentWorkflows, vscode]
   );
 
+  const handleWorkflowContextMenuDelete = useCallback(
+    (target: WorkflowContextMenuTarget) => {
+      if (target.scope === "lineage") {
+        handleRemoveWorkflow(target.address);
+        return;
+      }
+      if (target.address.kind === "run") {
+        handleDeleteRunPanelRow(target.address.runRef);
+      }
+    },
+    [handleDeleteRunPanelRow, handleRemoveWorkflow]
+  );
+
+  const {
+    openContextMenu: openWorkflowContextMenu,
+    workflowContextMenuPortal,
+  } = useWorkflowContextMenu({
+    onToggleFavorite: handleToggleFavorite,
+    onDelete: handleWorkflowContextMenuDelete,
+    onCloseDropdown: closeDropdown,
+  });
+
+  const openDisplayedWorkflowContextMenu = useCallback(
+    (x: number, y: number) => {
+      if (!displayedViewAddress) return;
+      const displayedLineage = recentWorkflows.find(
+        (workflow) =>
+          workflow.address.workflowKey === displayedViewAddress.workflowKey
+      );
+      openWorkflowContextMenu(x, y, {
+        address: displayedViewAddress,
+        workflowName: displayName,
+        scope: "lineage",
+        isFavorite: displayedLineage?.isFavorite,
+        runDirectory: displayedRunDirectory ?? undefined,
+        isExecuting: isWorkflowActive(executionState),
+      });
+    },
+    [
+      displayName,
+      displayedRunDirectory,
+      displayedViewAddress,
+      executionState,
+      openWorkflowContextMenu,
+      recentWorkflows,
+    ]
+  );
+
+  const workflowLongPressHandlers = useLongPress(
+    openDisplayedWorkflowContextMenu
+  );
+  const handleWorkflowContextMenu = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      openDisplayedWorkflowContextMenu(event.clientX, event.clientY);
+    },
+    [openDisplayedWorkflowContextMenu]
+  );
+
   // Runtime actions target the stable run address, never an instance UUID.
   const handlePauseWorkflow = useCallback(
     (workflow: (typeof loadedWorkflows)[number]) => {
@@ -1384,7 +1450,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         />
       ) : (
         /* Display Mode - Split Button Style */
+        /* eslint-disable-next-line jsx-a11y/no-static-element-interactions */
         <div
+          {...workflowLongPressHandlers}
+          onContextMenu={handleWorkflowContextMenu}
           className={`workflow-split-button flex border rounded-button overflow-hidden max-w-full sm:max-w-[500px] lg:max-w-none w-full min-w-0 transition-colors ${wfStatusSize.container} ${isDropdownOpen ? "border-cmd-active-border" : "border-cmd-border"}`}
         >
           {/* Main Button - Workflow Name */}
@@ -1618,6 +1687,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       </div>
 
       {/* Delete workflow history confirmation modal */}
+      {workflowContextMenuPortal}
       <DeleteConfirmModal
         isOpen={pendingDeleteAddress !== null}
         onCancel={handleRemoveWorkflowCancel}
