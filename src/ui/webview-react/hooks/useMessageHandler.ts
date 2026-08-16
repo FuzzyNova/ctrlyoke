@@ -1878,7 +1878,12 @@ export function createMessageHandlers(
   // WORKFLOW_VIEW_IDENTITY - authoritative address/revisions after a write
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY] = (message) => {
-    const { address, definitionRevision, descriptorRevision } = message;
+    const {
+      address,
+      runDirectory,
+      definitionRevision,
+      descriptorRevision,
+    } = message;
     if (!address) return;
     if (typeof definitionRevision === "number") {
       useExecutionPreviewStore
@@ -1902,7 +1907,8 @@ export function createMessageHandlers(
     ui.setDisplayedViewIdentity(
       address,
       definitionRevision ?? 1,
-      descriptorRevision ?? 1
+      descriptorRevision ?? 1,
+      runDirectory
     );
   };
 
@@ -2168,7 +2174,8 @@ export function createMessageHandlers(
         definitionRevision: workingFile.definitionRevision ?? 1,
         descriptorRevision: message.descriptorRevision,
       },
-      pendingRewind ?? runtime?.pendingRewind
+      pendingRewind ?? runtime?.pendingRewind,
+      message.runDirectory
     );
     ui.clearPendingRunViewLoad();
     // A rewind starts a new, suffix-only editing epoch. Re-baselining here

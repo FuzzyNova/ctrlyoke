@@ -34,6 +34,7 @@ function recordFor(runRef: string): RunSummaryRecord {
     summary: {
       workflowKey: "lineage" as WorkflowKey,
       runRef: runRef as RunRef,
+      runDirectory: "run-directory",
       runId: 1,
       startedAt: 1_753_000_000_000,
       executionState: EXECUTION_STATES.COMPLETED,

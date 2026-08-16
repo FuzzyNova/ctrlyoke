@@ -489,16 +489,16 @@ matching the `canDelete` rule `RunPanel` already computes
 Ordered so each step is independently verifiable; the path plumbing lands before
 the UI that consumes it.
 
-- [ ] Add `runDirectory` to `RecentWorkflowsMessage` / `RecentWorkflow`,
+- [x] Add `runDirectory` to `RecentWorkflowsMessage` / `RecentWorkflow`,
       populated from `WorkflowPaths.runDir`/`draftDir` beside the `filePath`
       `WorkflowSerializer.getRecentWorkflows` already resolves.
-- [ ] Add `runDirectory` to `RunViewLoadedMessage` and
+- [x] Add `runDirectory` to `RunViewLoadedMessage` and
       `WorkflowViewIdentityMessage`; store it in `uiStore` beside
       `displayedViewAddress`, written by the same reducers that set the address.
-- [ ] Add `runDirectory` to `RunSummary`, populated in
+- [x] Add `runDirectory` to `RunSummary`, populated in
       `OutputHistoryManager.getRunSummaries` from the `runDirectoryPath` its
       per-run read already holds.
-- [ ] Add `draftDirectory` to `WorkflowRunNavigationSummary`, populated beside
+- [x] Add `draftDirectory` to `WorkflowRunNavigationSummary`, populated beside
       `hasDraft` in `WorkflowSerializer.getRecentWorkflows` — **not** derived
       from the lineage's primary `runDirectory`; see above.
 - [ ] Add `useWorkflowContextMenu.tsx` over `StepContextMenu`; instantiate it

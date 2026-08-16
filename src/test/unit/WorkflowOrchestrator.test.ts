@@ -519,6 +519,14 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     assert.ok(announcementIndex >= 0);
     assert.strictEqual(sent[announcementIndex]?.workflowId, workflowId);
     assert.ok(snapshotIndex > announcementIndex);
+    assert.strictEqual(
+      (sent[snapshotIndex] as { runDirectory?: string }).runDirectory,
+      WorkflowPaths.runDir(
+        internal.currentWorkspaceFolder.uri.fsPath,
+        workflowKey,
+        runRef
+      )
+    );
   });
 
   test("keeps client run views independent from the execution target", () => {
@@ -4084,6 +4092,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
       assert.deepStrictEqual(identity, {
         type: MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY,
         address: { workflowKey, kind: "draft" },
+        runDirectory: WorkflowPaths.draftDir(workspace, workflowKey),
         definitionRevision: 7,
         descriptorRevision: descriptor.revision,
       });

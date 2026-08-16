@@ -873,6 +873,7 @@ export interface RecentWorkflowsMessage {
   type: typeof MESSAGE_TYPES.RECENT_WORKFLOWS;
   workflows: Array<{
     address: WorkflowViewAddress;
+    runDirectory?: string;
     workflowName: string;
     executionState: string;
     lastModifiedAt?: number;
@@ -1368,6 +1369,7 @@ export interface RunViewLoadedMessage {
   type: typeof MESSAGE_TYPES.RUN_VIEW_LOADED;
   requestId?: string;
   address: WorkflowViewAddress;
+  runDirectory?: string;
   workingFile: WorkingFile;
   history: WorkflowOutputHistory | null;
   runSummaries: RunSummary[];
@@ -1402,6 +1404,7 @@ export interface RunViewLoadedMessage {
 export interface WorkflowViewIdentityMessage {
   type: typeof MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY;
   address: WorkflowViewAddress;
+  runDirectory?: string;
   definitionRevision: number;
   descriptorRevision: number;
 }

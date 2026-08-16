@@ -1210,6 +1210,14 @@ export class WorkflowSerializer {
                   address.runRef
                 )
               : WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey);
+          const runDirectory =
+            address.kind === "run"
+              ? WorkflowPaths.runDir(
+                  workspaceRoot,
+                  address.workflowKey,
+                  address.runRef
+                )
+              : WorkflowPaths.draftDir(workspaceRoot, address.workflowKey);
 
           try {
             const workingFile = (await readJsonFile(filePath)) as WorkingFile;
@@ -1226,6 +1234,14 @@ export class WorkflowSerializer {
               primaryRunId,
               runCount,
               hasDraft,
+              ...(hasDraft
+                ? {
+                    draftDirectory: WorkflowPaths.draftDir(
+                      workspaceRoot,
+                      workflowKey
+                    ),
+                  }
+                : {}),
             };
 
             const lastModified =
@@ -1275,6 +1291,7 @@ export class WorkflowSerializer {
 
             return {
               address,
+              runDirectory,
               workflowName: workingFile.workflowName || workflowKey,
               executionState,
               startedAt: workingFile.startedAt || 0,

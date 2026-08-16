@@ -142,7 +142,10 @@ async function createPromotedRun(
   workspaceRoot: string,
   workflowKey: WorkflowKey,
   startedAt: number
-): Promise<{ runRef: string; runId: number }> {
+): Promise<{
+  runRef: ReturnType<typeof WorkflowPaths.formatRunRef>;
+  runId: number;
+}> {
   const run = await repository.allocateRun(workspaceRoot, workflowKey);
   await fs.writeFile(
     run.stagingRunFilePath,
@@ -1223,6 +1226,10 @@ suite("WorkflowSerializer", () => {
         const message = messages.pop();
         assert.strictEqual(message.type, MESSAGE_TYPES.RECENT_WORKFLOWS);
         assert.strictEqual(message.workflows.length, 1);
+        assert.strictEqual(
+          message.workflows[0].runDirectory,
+          WorkflowPaths.runDir(workspaceRoot, lineage.workflowKey, runRef)
+        );
         assert.deepStrictEqual(message.workflows[0].runNav, {
           primaryAddress: {
             workflowKey: lineage.workflowKey,
@@ -1269,6 +1276,14 @@ suite("WorkflowSerializer", () => {
         await serializer.handleGetRecentWorkflows();
 
         const message = messages.pop();
+        assert.strictEqual(
+          message.workflows[0].runDirectory,
+          WorkflowPaths.runDir(
+            workspaceRoot,
+            lineage.workflowKey,
+            latestRunRef
+          )
+        );
         assert.deepStrictEqual(message.workflows[0].runNav, {
           primaryAddress: {
             workflowKey: lineage.workflowKey,
@@ -1303,11 +1318,19 @@ suite("WorkflowSerializer", () => {
         await serializer.handleGetRecentWorkflows();
 
         const message = messages.pop();
+        assert.strictEqual(
+          message.workflows[0].runDirectory,
+          WorkflowPaths.draftDir(workspaceRoot, lineage.workflowKey)
+        );
         assert.deepStrictEqual(message.workflows[0].runNav, {
           primaryAddress: { workflowKey: lineage.workflowKey, kind: "draft" },
           primaryRunId: undefined,
           runCount: 0,
           hasDraft: true,
+          draftDirectory: WorkflowPaths.draftDir(
+            workspaceRoot,
+            lineage.workflowKey
+          ),
         });
       });
     });
@@ -1353,6 +1376,10 @@ suite("WorkflowSerializer", () => {
           await serializer.handleGetRecentWorkflows();
 
           const message = messages.pop();
+          assert.strictEqual(
+            message.workflows[0].runDirectory,
+            WorkflowPaths.runDir(workspaceRoot, lineage.workflowKey, runRef)
+          );
           // latestRunRef is still set, so the row's primary/displayed address stays
           // the run — hasDraft is what signals a separately reachable draft exists.
           assert.deepStrictEqual(message.workflows[0].runNav, {
@@ -1364,6 +1391,10 @@ suite("WorkflowSerializer", () => {
             primaryRunId: runId,
             runCount: 1,
             hasDraft: true,
+            draftDirectory: WorkflowPaths.draftDir(
+              workspaceRoot,
+              lineage.workflowKey
+            ),
           });
         }
       );

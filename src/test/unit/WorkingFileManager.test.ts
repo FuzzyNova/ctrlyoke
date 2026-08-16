@@ -531,6 +531,7 @@ suite("WorkingFileManager", () => {
         summary: {
           workflowKey: "cache-lineage" as WorkflowKey,
           runRef: "run-1" as RunRef,
+          runDirectory: runDirectoryPath,
           runId: 1,
           startedAt: 1,
           executionState: EXECUTION_STATES.COMPLETED,

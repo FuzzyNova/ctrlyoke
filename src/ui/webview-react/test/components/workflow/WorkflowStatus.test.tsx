@@ -1260,6 +1260,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-1" as never,
+          runDirectory: "/runs/wf-single/run-1",
           runId: 1,
           startedAt: 100,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1289,6 +1290,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-2" as never,
+          runDirectory: "/runs/wf-badge/run-2",
           runId: 2,
           startedAt: 200,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1300,6 +1302,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-1" as never,
+          runDirectory: "/runs/wf-badge/run-1",
           runId: 1,
           startedAt: 100,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1354,6 +1357,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-2" as never,
+          runDirectory: "/runs/wf-badge/run-2",
           runId: 2,
           startedAt: 200,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1365,6 +1369,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-1" as never,
+          runDirectory: "/runs/wf-badge/run-1",
           runId: 1,
           startedAt: 100,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1410,6 +1415,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-2" as never,
+          runDirectory: "/runs/wf-current-row/run-2",
           runId: 2,
           startedAt: 200,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1421,6 +1427,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-1" as never,
+          runDirectory: "/runs/wf-current-row/run-1",
           runId: 1,
           startedAt: 100,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1476,6 +1483,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-1" as never,
+          runDirectory: "/runs/wf-badge/run-1",
           runId: 1,
           startedAt: 100,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1487,6 +1495,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-2" as never,
+          runDirectory: "/runs/wf-badge/run-2",
           runId: 2,
           startedAt: 200,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1535,6 +1544,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-1" as never,
+          runDirectory: "/runs/wf-badge/run-1",
           runId: 1,
           startedAt: 100,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1546,6 +1556,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-2" as never,
+          runDirectory: "/runs/wf-badge/run-2",
           runId: 2,
           startedAt: 200,
           executionState: EXECUTION_STATES.COMPLETED,

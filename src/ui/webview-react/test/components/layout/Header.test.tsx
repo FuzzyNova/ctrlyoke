@@ -45,6 +45,7 @@ describe("Header execution controls", () => {
         {
           workflowKey: "workflow-a" as never,
           runRef,
+          runDirectory: "/runs/workflow-a/run",
           runId: 4,
           startedAt: 1,
           executionState: EXECUTION_STATES.IDLE,
@@ -437,6 +438,7 @@ describe("Header execution controls", () => {
         {
           workflowKey: "workflow-a" as never,
           runRef,
+          runDirectory: "/runs/workflow-a/run",
           runId: 4,
           startedAt: 1,
           executionState: EXECUTION_STATES.RUNNING,
@@ -477,6 +479,7 @@ describe("Header execution controls", () => {
         {
           workflowKey: "workflow-a" as never,
           runRef,
+          runDirectory: "/runs/workflow-a/run",
           runId: 4,
           startedAt: 1,
           executionState: EXECUTION_STATES.RUNNING,
@@ -530,6 +533,7 @@ describe("Header execution controls", () => {
         {
           workflowKey: "workflow-a" as never,
           runRef,
+          runDirectory: "/runs/workflow-a/run",
           runId: 4,
           startedAt: 1,
           executionState: EXECUTION_STATES.IDLE,

@@ -935,6 +935,7 @@ export interface WorkflowRunNavigationSummary {
   primaryRunId?: number;
   runCount: number;
   hasDraft: boolean;
+  draftDirectory?: string;
 }
 
 export interface AttemptCostEstimate {

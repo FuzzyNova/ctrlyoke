@@ -57,6 +57,7 @@ let toastSequence = 0;
  */
 export interface RunViewLoadRollback {
   displayedViewAddress: WorkflowViewAddress | null;
+  displayedRunDirectory: string | null;
   runSummaries: RunSummary[];
   executionRunRef: string | null;
   displayedDefinitionRevision: number | null;
@@ -437,6 +438,8 @@ interface UiState {
    * navigation addresses runs by `runRef`, never by position in this array. */
   runSummaries: RunSummary[];
   displayedViewAddress: WorkflowViewAddress | null;
+  /** Directory containing the definition and timeline for displayedViewAddress. */
+  displayedRunDirectory: string | null;
   /**
    * The address whose *content* is actually loaded into `workflowStore` right
    * now — set only when a RUN_VIEW_LOADED snapshot is applied, never by an
@@ -809,12 +812,14 @@ interface UiActions {
     summaries: RunSummary[],
     executionRunRef?: string,
     revisions?: { definitionRevision: number; descriptorRevision: number },
-    pendingRewind?: { fromStepIndex: number; baseDefinitionRevision: number }
+    pendingRewind?: { fromStepIndex: number; baseDefinitionRevision: number },
+    runDirectory?: string
   ) => void;
   setDisplayedViewIdentity: (
     address: WorkflowViewAddress,
     definitionRevision: number,
-    descriptorRevision: number
+    descriptorRevision: number,
+    runDirectory?: string
   ) => void;
   adoptDescriptorRevision: (
     address: WorkflowViewAddress,
@@ -955,6 +960,7 @@ const initialState: UiState = {
   isViewingHistory: false,
   runSummaries: [],
   displayedViewAddress: null,
+  displayedRunDirectory: null,
   appliedViewAddress: null,
   pendingRunViewRequestId: null,
   pendingRunViewAddress: null,
@@ -1505,10 +1511,12 @@ export const useUiStore = create<UiState & UiActions>()(
         summaries,
         executionRunRef,
         revisions,
-        pendingRewind
+        pendingRewind,
+        runDirectory
       ) =>
         set((state) => ({
           displayedViewAddress: address,
+          displayedRunDirectory: runDirectory ?? null,
           executionRunRef: executionRunRef ?? null,
           displayedDefinitionRevision: revisions?.definitionRevision ?? null,
           displayedDescriptorRevision: mergeDescriptorRevision(
@@ -1530,7 +1538,8 @@ export const useUiStore = create<UiState & UiActions>()(
       setDisplayedViewIdentity: (
         address,
         definitionRevision,
-        descriptorRevision
+        descriptorRevision,
+        runDirectory
       ) =>
         set((state) => {
           const summariesBelongToAddress = areRunSummariesForLineage(
@@ -1539,6 +1548,7 @@ export const useUiStore = create<UiState & UiActions>()(
           );
           return {
             displayedViewAddress: address,
+            displayedRunDirectory: runDirectory ?? null,
             displayedDefinitionRevision: definitionRevision,
             displayedDescriptorRevision: mergeDescriptorRevision(
               state,
@@ -1622,6 +1632,7 @@ export const useUiStore = create<UiState & UiActions>()(
         // answered can be undone rather than left half-applied.
         const rollback: RunViewLoadRollback = {
           displayedViewAddress: previous.displayedViewAddress,
+          displayedRunDirectory: previous.displayedRunDirectory,
           runSummaries: previous.runSummaries,
           executionRunRef: previous.executionRunRef,
           displayedDefinitionRevision: previous.displayedDefinitionRevision,

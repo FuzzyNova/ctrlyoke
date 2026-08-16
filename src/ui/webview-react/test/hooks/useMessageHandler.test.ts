@@ -211,6 +211,7 @@ describe("FILE_SELECTED", () => {
         {
           workflowKey: previousWorkflowKey,
           runRef: previousRunRef,
+          runDirectory: "/runs/previous/run-2",
           runId: 2,
           startedAt: 200,
           executionState: EXECUTION_STATES.RUNNING,
@@ -222,6 +223,7 @@ describe("FILE_SELECTED", () => {
         {
           workflowKey: previousWorkflowKey,
           runRef: "run-previous-1" as never,
+          runDirectory: "/runs/previous/run-1",
           runId: 1,
           startedAt: 100,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -784,6 +786,7 @@ describe("EXECUTION_COMPLETED", () => {
         {
           workflowKey: "workflow-1" as never,
           runRef: runRef as never,
+          runDirectory: "/runs/workflow-1/current",
           runId: 1,
           startedAt: 1,
           executionState: EXECUTION_STATES.RUNNING,
