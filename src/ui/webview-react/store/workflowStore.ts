@@ -102,6 +102,11 @@ import { preserveReferences } from "@utils/structuralSharing";
 import { CLI_EVENT_TYPES } from "../types/cliEvents";
 import type { WorkflowProperties } from "./settingsStore";
 import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
+import {
+  getCliEntryIdentity,
+  matchesCliEntryIdentity,
+  type CliEntryIdentity,
+} from "@utils/outputProjection";
 
 /**
  * Merge incoming structured events into an existing CliOutput array.
@@ -459,36 +464,11 @@ function targetsEqual(
   return false;
 }
 
-function getCliEntryRunIndex(entry: OrderedCliHistoryEntry): number {
-  return entry.runIndex ?? entry.cliOutput.runIndex ?? 0;
-}
-
 /**
  * The identity tuple that decides whether two CLI records describe the same
  * logical attempt output. `phase` is part of it: one step's pre-condition,
  * prompt, and end-condition all share `(target, runIndex, attemptIndex)`.
  */
-interface CliEntryIdentity {
-  target: OutputExecutionTarget;
-  runIndex: number;
-  attemptIndex: number;
-  phase?: ExecutionPhase;
-}
-
-function matchesCliEntryIdentity(
-  entry: OrderedHistoryEntry,
-  identity: CliEntryIdentity
-): entry is OrderedCliHistoryEntry {
-  return (
-    entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
-    targetsEqual(entry.target, identity.target) &&
-    getCliEntryRunIndex(entry) === identity.runIndex &&
-    entry.attemptIndex === identity.attemptIndex &&
-    (entry.phase ?? EXECUTION_PHASES.PROMPT) ===
-      (identity.phase ?? EXECUTION_PHASES.PROMPT)
-  );
-}
-
 function findCliEntryIndexByIdentity(
   entries: OrderedHistoryEntry[],
   identity: CliEntryIdentity
@@ -500,12 +480,7 @@ function findMatchingCliEntryIndex(
   entries: OrderedHistoryEntry[],
   cliEntry: OrderedCliHistoryEntry
 ): number {
-  return findCliEntryIndexByIdentity(entries, {
-    target: cliEntry.target,
-    runIndex: getCliEntryRunIndex(cliEntry),
-    attemptIndex: cliEntry.attemptIndex,
-    phase: cliEntry.phase,
-  });
+  return findCliEntryIndexByIdentity(entries, getCliEntryIdentity(cliEntry));
 }
 
 function overlayLiveHistoryEntries(

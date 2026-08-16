@@ -240,7 +240,11 @@ vi.mock("@components/layout/output-section/OutputPane", () => ({
   }: {
     outputRef: React.RefObject<HTMLDivElement | null>;
     showVirtualizationOverlay: boolean;
-    runBanner?: { runId: number; tokenTotals?: { total: number } };
+    runBanner?: {
+      runId: number;
+      executionState: string;
+      tokenTotals?: { total: number };
+    };
   }) => (
     <>
       <div
@@ -259,7 +263,11 @@ vi.mock("@components/layout/output-section/OutputPane", () => ({
         data-virtualization-overlay={showVirtualizationOverlay}
       />
       {runBanner && (
-        <span data-testid="run-banner" data-run-id={runBanner.runId}>
+        <span
+          data-testid="run-banner"
+          data-run-id={runBanner.runId}
+          data-execution-state={runBanner.executionState}
+        >
           {runBanner.tokenTotals?.total}
         </span>
       )}
@@ -553,6 +561,44 @@ describe("OutputSection", () => {
     const banner = screen.getByTestId("run-banner");
     expect(banner).toHaveAttribute("data-run-id", "7");
     expect(banner).toHaveTextContent("5000");
+  });
+
+  it("keeps the current run banner after the terminal workflow leaves the live list", () => {
+    useWorkflowStore.setState({ executionState: "completed" as never });
+    useUiStore.setState({
+      activeWorkflowId: "workflow-1",
+      loadedWorkflows: [],
+      displayedViewAddress: {
+        workflowKey: "workflow-1" as never,
+        kind: "run",
+        runRef: "run-completed" as never,
+      },
+      executionRunRef: "run-completed" as never,
+      runSummaries: [
+        {
+          workflowKey: "workflow-1" as never,
+          runRef: "run-completed" as never,
+          runId: 8,
+          startedAt: 3000,
+          executionState: "running" as never,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        },
+      ],
+    });
+
+    render(<OutputSection />);
+
+    expect(screen.getByTestId("run-banner")).toHaveAttribute(
+      "data-run-id",
+      "8"
+    );
+    expect(screen.getByTestId("run-banner")).toHaveAttribute(
+      "data-execution-state",
+      "completed"
+    );
   });
 
   it("shows the viewed historical run's totals instead of the executing run's", () => {

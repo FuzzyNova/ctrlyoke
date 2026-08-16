@@ -75,4 +75,57 @@ describe("outputProjection", () => {
 
     expect(messages.map((message) => message.runIndex)).toEqual([2, 3]);
   });
+
+  it("projects streaming and completed snapshots of one setup attempt as one message", () => {
+    const messages = mapOrderedHistoryEntriesToMessages([
+      {
+        kind: OUTPUT_HISTORY_KINDS.CLI,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        runIndex: 0,
+        attemptIndex: 0,
+        phase: "worktreeSetup",
+        cliOutput: {
+          response: "",
+          elapsed: 0,
+          isStreaming: true,
+          source: "worktreeSetup",
+          timestampMs: 1000,
+          cliCommand: "npm ci",
+          workingDirectory: "C:\\repo.worktrees\\feature",
+        },
+        timestampMs: 1000,
+        sequence: 1,
+      },
+      {
+        kind: OUTPUT_HISTORY_KINDS.CLI,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        runIndex: 0,
+        attemptIndex: 0,
+        phase: "worktreeSetup",
+        cliOutput: {
+          response: "installed packages",
+          elapsed: 22,
+          isStreaming: false,
+          source: "worktreeSetup",
+          timestampMs: 1000,
+          cliCommand: "npm ci",
+          workingDirectory: "C:\\repo.worktrees\\feature",
+          exitCode: 0,
+        },
+        timestampMs: 1022,
+        sequence: 2,
+      },
+    ]);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      timestamp: 1000,
+      sequence: 1,
+      data: {
+        response: "installed packages",
+        isStreaming: false,
+        cliCommand: "npm ci",
+      },
+    });
+  });
 });

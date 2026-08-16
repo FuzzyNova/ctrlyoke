@@ -164,9 +164,10 @@ const OutputSectionInner: React.FC = () => {
     return executionRunId === undefined ? null : `Live Run ${executionRunId}`;
   });
   // The run summary banner always tracks whatever run is actually being
-  // viewed: a historical run's own identity/totals while browsing history
-  // (even if a different run is executing live), otherwise the active
-  // lineage's live-updating identity/totals. Selectors return store
+  // viewed. The executing run uses its live-updating totals while its summary
+  // is still in loadedWorkflows; terminal runs fall back to their persisted
+  // summary because completion intentionally removes them from that live-only
+  // list. Selectors return store
   // references (not freshly built objects) so they stay referentially
   // stable — and the component doesn't re-render — while unrelated store
   // fields change; only the useMemo below allocates the combined object,
@@ -182,39 +183,51 @@ const OutputSectionInner: React.FC = () => {
   const liveWorkflowSummary = useUiStore((s) =>
     s.loadedWorkflows.find((w) => w.id === s.activeWorkflowId)
   );
-  const historyRunWorktree = useWorkflowStore(
-    (s) => s.historyOutputs?.runMetadata.worktree
+  const executionRunRef = useUiStore((s) => s.executionRunRef);
+  const historyRunMetadata = useWorkflowStore(
+    (s) => s.historyOutputs?.runMetadata
   );
   const runBannerPinned = useUiStore((s) => s.runBannerPinned);
   const toggleRunBannerPinned = useUiStore((s) => s.toggleRunBannerPinned);
   const displayedRunBanner = useMemo<RunBannerData | undefined>(() => {
     if (!displayedRunSummary || displayedAddress?.kind !== "run")
       return undefined;
-    if (isViewingHistory) {
+    const isDisplayedExecutionRun = executionRunRef === displayedAddress.runRef;
+    if (!isDisplayedExecutionRun) {
+      const matchingHistoryMetadata =
+        historyRunMetadata?.runId === displayedRunSummary.runId
+          ? historyRunMetadata
+          : undefined;
       return {
         runId: displayedRunSummary.runId,
         address: displayedAddress,
-        startedAt: displayedRunSummary.startedAt,
-        executionState: displayedRunSummary.executionState,
+        startedAt:
+          matchingHistoryMetadata?.startedAt ?? displayedRunSummary.startedAt,
+        executionState:
+          matchingHistoryMetadata?.executionState ??
+          displayedRunSummary.executionState,
         tokenTotals: displayedRunSummary.tokenTotals,
-        worktree: displayedRunSummary.worktree ?? historyRunWorktree,
+        worktree:
+          displayedRunSummary.worktree ?? matchingHistoryMetadata?.worktree,
       };
     }
-    if (!liveWorkflowSummary) return undefined;
     return {
       runId: displayedRunSummary.runId,
       address: displayedAddress,
-      startedAt: liveWorkflowSummary.startedAt ?? displayedRunSummary.startedAt,
-      executionState: liveWorkflowSummary.executionState,
-      tokenTotals: liveWorkflowSummary.tokenTotals,
+      startedAt:
+        liveWorkflowSummary?.startedAt ?? displayedRunSummary.startedAt,
+      executionState: liveWorkflowSummary?.executionState ?? executionState,
+      tokenTotals:
+        liveWorkflowSummary?.tokenTotals ?? displayedRunSummary.tokenTotals,
       // Keep this run-owned: the bound live instance may not be the run shown
       // in the banner while history navigation is in progress.
       worktree: displayedRunSummary.worktree,
     };
   }, [
     displayedRunSummary,
-    historyRunWorktree,
-    isViewingHistory,
+    executionRunRef,
+    executionState,
+    historyRunMetadata,
     liveWorkflowSummary,
     displayedAddress,
   ]);

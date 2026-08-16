@@ -1,10 +1,18 @@
 import type {
+  OrderedCliHistoryEntry,
   OrderedHistoryEntry,
   OutputExecutionTarget,
 } from "@root/types/OutputHistoryTypes";
 import type { CliOutput, OutputStatusMessage } from "../types/messages";
-import { FINAL_STEP_PHASES, type FinalStepPhase } from "../types/messages";
-import type { ExecutionPhase } from "@root/types/DashboardConstants";
+import {
+  FINAL_STEP_PHASES,
+  OUTPUT_HISTORY_KINDS,
+  type FinalStepPhase,
+} from "../types/messages";
+import {
+  EXECUTION_PHASES,
+  type ExecutionPhase,
+} from "@root/types/DashboardConstants";
 import { formatTime } from "./outputUtils";
 
 export interface OutputMessageTarget {
@@ -23,6 +31,44 @@ export interface OutputMessage {
   phase?: ExecutionPhase;
 }
 
+/** Logical identity shared by live overlays and persisted-history projection. */
+export interface CliEntryIdentity {
+  target: OutputExecutionTarget;
+  runIndex: number;
+  attemptIndex: number;
+  phase?: ExecutionPhase;
+}
+
+export function getCliEntryIdentity(
+  entry: OrderedCliHistoryEntry
+): CliEntryIdentity {
+  return {
+    target: entry.target,
+    runIndex: entry.runIndex ?? entry.cliOutput.runIndex ?? 0,
+    attemptIndex: entry.attemptIndex,
+    phase: entry.phase,
+  };
+}
+
+function cliEntryIdentityKey(identity: CliEntryIdentity): string {
+  const targetIndex =
+    identity.target.kind === FINAL_STEP_PHASES.QUEUE
+      ? identity.target.stepIndex
+      : identity.target.loopIndex;
+  return `${identity.target.kind}:${targetIndex}:${identity.runIndex}:${identity.attemptIndex}:${identity.phase ?? EXECUTION_PHASES.PROMPT}`;
+}
+
+export function matchesCliEntryIdentity(
+  entry: OrderedHistoryEntry,
+  identity: CliEntryIdentity
+): entry is OrderedCliHistoryEntry {
+  return (
+    entry.kind === OUTPUT_HISTORY_KINDS.CLI &&
+    cliEntryIdentityKey(getCliEntryIdentity(entry)) ===
+      cliEntryIdentityKey(identity)
+  );
+}
+
 function sortOutputMessages(
   messages: readonly OutputMessage[]
 ): OutputMessage[] {
@@ -37,6 +83,7 @@ export function mapOrderedHistoryEntriesToMessages(
   orderedEntries: readonly OrderedHistoryEntry[]
 ): OutputMessage[] {
   const messages: OutputMessage[] = [];
+  const cliMessageIndexByIdentity = new Map<string, number>();
 
   for (const entry of orderedEntries) {
     switch (entry.kind) {
@@ -56,18 +103,39 @@ export function mapOrderedHistoryEntriesToMessages(
         });
         break;
       }
-      case "cli":
-        messages.push({
+      case "cli": {
+        const target = toOutputMessageTarget(entry.target);
+        const entryIdentity = getCliEntryIdentity(entry);
+        const identity = cliEntryIdentityKey(entryIdentity);
+        const existingIndex = cliMessageIndexByIdentity.get(identity);
+        const message: OutputMessage = {
           type: "cli",
-          target: toOutputMessageTarget(entry.target),
+          target,
           timestamp: entry.timestampMs,
           sequence: entry.sequence,
           data: entry.cliOutput,
           attemptIndex: entry.attemptIndex,
-          runIndex: entry.runIndex ?? entry.cliOutput.runIndex ?? 0,
+          runIndex: entryIdentity.runIndex,
           phase: entry.phase,
-        });
+        };
+
+        if (existingIndex === undefined) {
+          cliMessageIndexByIdentity.set(identity, messages.length);
+          messages.push(message);
+        } else {
+          const existing = messages[existingIndex];
+          // Timeline storage records both the initial streaming shell and its
+          // final result. They are snapshots of one logical attempt, just like
+          // the live store's in-place overlays. Keep the first snapshot's
+          // chronological position while projecting the newest payload.
+          messages[existingIndex] = {
+            ...message,
+            timestamp: existing.timestamp,
+            sequence: existing.sequence,
+          };
+        }
         break;
+      }
       case "runtime":
         break;
     }
