@@ -296,21 +296,28 @@ export class CliLogMonitor {
 
         let contextPatched = false;
         if (typeof (parser as any).pollOtelContextWindow === "function") {
-          await (parser as any).pollOtelContextWindow(model);
+          await (parser as any).pollOtelContextWindow();
         }
         if (typeof (parser as any).getFinalOtelUsage === "function") {
           const otelUsage = (parser as any).getFinalOtelUsage();
           if (otelUsage) {
+            const hasExactContext =
+              otelUsage.contextWindowUsedTokens !== undefined &&
+              otelUsage.contextWindowSize !== undefined;
             response.metadata.usage = {
               ...response.metadata.usage,
               inputTokens: otelUsage.inputTokens,
               outputTokens: otelUsage.outputTokens,
               totalTokens: otelUsage.totalTokens,
-              contextWindowUsedTokens: otelUsage.contextWindowUsedTokens,
-              contextWindowSize: otelUsage.contextWindowSize,
+              ...(hasExactContext
+                ? {
+                    contextWindowUsedTokens: otelUsage.contextWindowUsedTokens,
+                    contextWindowSize: otelUsage.contextWindowSize,
+                  }
+                : {}),
               totalConfidence: otelUsage.totalConfidence,
             };
-            contextPatched = true;
+            contextPatched = hasExactContext;
           }
         }
 
@@ -698,7 +705,7 @@ export class CliLogMonitor {
           typeof (parser as any).pollOtelContextWindow === "function"
         ) {
           void (async () => {
-            const ctx = await (parser as any).pollOtelContextWindow(model);
+            const ctx = await (parser as any).pollOtelContextWindow();
             if (ctx) {
               this.deps.hostCallbacks.onContextWindowUpdate!(
                 ctx.used,

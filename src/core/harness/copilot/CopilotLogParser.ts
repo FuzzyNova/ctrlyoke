@@ -9,7 +9,6 @@ import {
 import { CopilotToolBuilder } from "./CopilotToolBuilder";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
-import { getCopilotContextWindowSize } from "../../../utils/ModelConstants";
 import {
   UniversalCliOutput,
   ThinkingBlock,
@@ -96,6 +95,15 @@ type CopilotPendingTool = {
 
 /** Copilot records injected system reminders as user.message events too. */
 const COPILOT_SYSTEM_USER_MESSAGE_SOURCE = "system";
+const COPILOT_SESSION_USAGE_INFO_EVENT_TYPE = "session.usage_info";
+
+const COPILOT_OTEL_ENTRY_TYPE_SPAN = "span";
+const COPILOT_OTEL_CHAT_SPAN_PREFIX = "chat ";
+const COPILOT_OTEL_USAGE_INFO_EVENT = "github.copilot.session.usage_info";
+const COPILOT_OTEL_INPUT_TOKENS_ATTRIBUTE = "gen_ai.usage.input_tokens";
+const COPILOT_OTEL_OUTPUT_TOKENS_ATTRIBUTE = "gen_ai.usage.output_tokens";
+const COPILOT_OTEL_TOKEN_LIMIT_ATTRIBUTE = "github.copilot.token_limit";
+const COPILOT_OTEL_CURRENT_TOKENS_ATTRIBUTE = "github.copilot.current_tokens";
 
 export class CopilotLogParser extends BaseLogParser {
   /**
@@ -117,9 +125,10 @@ export class CopilotLogParser extends BaseLogParser {
   // (`copilot help monitoring`): setting COPILOT_OTEL_ENABLED + COPILOT_OTEL_FILE_EXPORTER_PATH
   // makes Copilot write one JSON line per span/metric to that file, incrementally, DURING
   // execution (confirmed empirically — lines appear mid-run, not just at process exit).
-  // Each `chat <model>` span carries `gen_ai.usage.input_tokens` / `.output_tokens` attributes
-  // directly (no histogram math needed) — `input_tokens` is the full context size resent on
-  // that turn, i.e. exactly what session.truncation/session.shutdown used to report.
+  // Each `chat <model>` span carries billing token attributes plus a nested
+  // `github.copilot.session.usage_info` event. That event reports both the current context
+  // fill and the exact effective token limit after Copilot resolves `--context` or its
+  // persisted tier; input-token usage alone is not a reliable substitute for either value.
   //
   // This uses its own byte-offset tracker (separate from `lastReadPosition`, which
   // BaseLogParser dedicates to the harness's main events.jsonl) because both files are
@@ -129,16 +138,16 @@ export class CopilotLogParser extends BaseLogParser {
   private otelReadPosition = 0;
   /** Path set by CopilotCliProvider once it generates a per-invocation OTel export path. */
   private otelFilePath: string | undefined;
-  /** Most recent chat span's input token count (= current context window usage). */
-  private otelLastInputTokens = 0;
   /** Running total of input tokens across all chat spans seen this invocation. */
   private otelCumulativeInputTokens = 0;
   /** Running total of output tokens across all chat spans seen this invocation. */
   private otelCumulativeOutputTokens = 0;
   /** Whether at least one OTel chat span was observed this invocation. */
   private otelChatSpanSeen = false;
-  /** Model reported by the most recent chat span, used to size the context window. */
-  private otelLastModel: string | undefined;
+  /** Exact context-window usage emitted by Copilot's per-turn OTel event. */
+  private otelContextWindowUsedTokens: number | undefined;
+  /** Exact effective limit after Copilot resolves the selected context tier. */
+  private otelContextWindowSize: number | undefined;
 
   /**
    * Register (or clear) the OTel export file for this invocation.
@@ -149,11 +158,11 @@ export class CopilotLogParser extends BaseLogParser {
   setOtelFilePath(filePath: string | undefined): void {
     this.otelFilePath = filePath;
     this.otelReadPosition = 0;
-    this.otelLastInputTokens = 0;
     this.otelCumulativeInputTokens = 0;
     this.otelCumulativeOutputTokens = 0;
     this.otelChatSpanSeen = false;
-    this.otelLastModel = undefined;
+    this.otelContextWindowUsedTokens = undefined;
+    this.otelContextWindowSize = undefined;
   }
 
   /** Read new lines from the OTel export file using its own dedicated offset tracker. */
@@ -198,50 +207,73 @@ export class CopilotLogParser extends BaseLogParser {
    * running context-window state. Call repeatedly during monitoring (interactive
    * mode) for live updates, and once more at completion to catch any final spans.
    *
-   * @param modelId - Fallback model when a span doesn't report its own model
    * @returns The latest context-window reading if any new chat span arrived, else null
    */
-  async pollOtelContextWindow(
-    modelId: string
-  ): Promise<{ used: number; size: number } | null> {
+  async pollOtelContextWindow(): Promise<{
+    used: number;
+    size: number;
+  } | null> {
     if (!this.otelFilePath) {
       return null;
     }
 
     const lines = await this.readNewOtelLines();
-    let updated = false;
+    let contextUpdated = false;
 
     for (const line of lines) {
       if (
-        line.type === "span" &&
+        line.type === COPILOT_OTEL_ENTRY_TYPE_SPAN &&
         typeof line.name === "string" &&
-        line.name.startsWith("chat ") &&
+        line.name.startsWith(COPILOT_OTEL_CHAT_SPAN_PREFIX) &&
         line.attributes
       ) {
         this.otelChatSpanSeen = true;
-        const input = line.attributes["gen_ai.usage.input_tokens"];
-        const output = line.attributes["gen_ai.usage.output_tokens"];
+        const input = line.attributes[COPILOT_OTEL_INPUT_TOKENS_ATTRIBUTE];
+        const output = line.attributes[COPILOT_OTEL_OUTPUT_TOKENS_ATTRIBUTE];
         if (typeof input === "number") {
-          this.otelLastInputTokens = input;
           this.otelCumulativeInputTokens += input;
-          updated = true;
         }
         if (typeof output === "number") {
           this.otelCumulativeOutputTokens += output;
         }
-        this.otelLastModel =
-          line.attributes["gen_ai.response.model"] ??
-          line.attributes["gen_ai.request.model"] ??
-          this.otelLastModel;
+
+        const spanEvents = Array.isArray(line.events) ? line.events : [];
+        for (const spanEvent of spanEvents) {
+          if (
+            !spanEvent ||
+            typeof spanEvent !== "object" ||
+            spanEvent.name !== COPILOT_OTEL_USAGE_INFO_EVENT ||
+            !spanEvent.attributes
+          ) {
+            continue;
+          }
+          const used =
+            spanEvent.attributes[COPILOT_OTEL_CURRENT_TOKENS_ATTRIBUTE];
+          const size = spanEvent.attributes[COPILOT_OTEL_TOKEN_LIMIT_ATTRIBUTE];
+          if (
+            typeof used === "number" &&
+            used >= 0 &&
+            typeof size === "number" &&
+            size > 0
+          ) {
+            this.otelContextWindowUsedTokens = used;
+            this.otelContextWindowSize = size;
+            contextUpdated = true;
+          }
+        }
       }
     }
 
-    if (!updated) {
+    if (
+      !contextUpdated ||
+      this.otelContextWindowUsedTokens === undefined ||
+      this.otelContextWindowSize === undefined
+    ) {
       return null;
     }
     return {
-      used: this.otelLastInputTokens,
-      size: getCopilotContextWindowSize(this.otelLastModel ?? modelId),
+      used: this.otelContextWindowUsedTokens,
+      size: this.otelContextWindowSize,
     };
   }
 
@@ -254,8 +286,8 @@ export class CopilotLogParser extends BaseLogParser {
     inputTokens: number;
     outputTokens: number;
     totalTokens: number;
-    contextWindowUsedTokens: number;
-    contextWindowSize: number;
+    contextWindowUsedTokens?: number;
+    contextWindowSize?: number;
     totalConfidence: typeof TOKEN_TOTAL_CONFIDENCE.ACCUMULATED;
   } | null {
     if (!this.otelChatSpanSeen) {
@@ -266,10 +298,8 @@ export class CopilotLogParser extends BaseLogParser {
       outputTokens: this.otelCumulativeOutputTokens,
       totalTokens:
         this.otelCumulativeInputTokens + this.otelCumulativeOutputTokens,
-      contextWindowUsedTokens: this.otelLastInputTokens,
-      contextWindowSize: getCopilotContextWindowSize(
-        this.otelLastModel ?? this.resolvedModel
-      ),
+      contextWindowUsedTokens: this.otelContextWindowUsedTokens,
+      contextWindowSize: this.otelContextWindowSize,
       totalConfidence: TOKEN_TOTAL_CONFIDENCE.ACCUMULATED,
     };
   }
@@ -311,11 +341,9 @@ export class CopilotLogParser extends BaseLogParser {
     let model: string | undefined;
     let inputTokens = 0;
     let outputTokens = 0;
-    // Context window usage: pre-1.0 Copilot CLI fired session.truncation every turn as a
-    // pre-call snapshot (postTruncationTokensInMessages + tokenLimit). Versions 1.0.x+ removed
-    // that event entirely — the only remaining source is session.shutdown's currentTokens,
-    // which fires once at process exit and carries no tokenLimit, so the model's known
-    // context window size is used instead (see getCopilotContextWindowSize fallback below).
+    // Context window usage: persisted legacy logs expose session.truncation, while current
+    // Copilot emits session.usage_info only to live subscribers/OTel because it is ephemeral.
+    // session.shutdown still supplies a final used-token count, but no numeric limit.
     let contextWindowUsedTokens = 0;
     let contextWindowSize: number | undefined;
 
@@ -374,6 +402,18 @@ export class CopilotLogParser extends BaseLogParser {
               text: `[Context truncated: ${removed.toLocaleString()} tokens removed, ${post.toLocaleString()}/${limit.toLocaleString()} tokens remaining]`,
             } as TextData,
           });
+        }
+      }
+
+      // Current Copilot versions emit this every turn with the exact effective limit.
+      // It is marked ephemeral and normally reaches ctrlyoke through the equivalent OTel
+      // span event, but accepting it here keeps the parser correct for live SDK streams.
+      if (event.type === COPILOT_SESSION_USAGE_INFO_EVENT_TYPE && event.data) {
+        if (typeof event.data.currentTokens === "number") {
+          contextWindowUsedTokens = event.data.currentTokens;
+        }
+        if (typeof event.data.tokenLimit === "number") {
+          contextWindowSize = event.data.tokenLimit;
         }
       }
 
@@ -512,13 +552,10 @@ export class CopilotLogParser extends BaseLogParser {
       }
     }
 
-    // Prefer context window data from session.truncation (fires every turn, most accurate source).
-    // Fall back to metadata.usage accumulation (not seen in practice, kept as safety net).
+    // Prefer an exact context signal; fall back to metadata.usage accumulation for used tokens.
+    // The size stays absent unless Copilot reported it at runtime.
     const effectiveInputTokens =
       contextWindowUsedTokens > 0 ? contextWindowUsedTokens : inputTokens;
-    const effectiveContextWindowSize =
-      contextWindowSize ??
-      getCopilotContextWindowSize(model ?? this.resolvedModel);
 
     return {
       events: outputEvents,
@@ -531,9 +568,10 @@ export class CopilotLogParser extends BaseLogParser {
             ? {
                 inputTokens: effectiveInputTokens,
                 outputTokens,
-                // postTruncationTokensInMessages = full context sent to model on last turn
                 contextWindowUsedTokens: effectiveInputTokens,
-                contextWindowSize: effectiveContextWindowSize,
+                ...(contextWindowSize !== undefined
+                  ? { contextWindowSize }
+                  : {}),
               }
             : undefined,
       },
@@ -582,23 +620,32 @@ export class CopilotLogParser extends BaseLogParser {
 
   override extractLiveContextWindow(
     event: BaseCliEvent,
-    modelId: string
+    _modelId: string
   ): { used: number; size: number } | null {
-    if (event.type === "session.truncation") {
-      const data = (event as any).data;
-      const used = data?.postTruncationTokensInMessages;
-      const size = data?.tokenLimit ?? getCopilotContextWindowSize(modelId);
-      return used != null && used > 0 ? { used, size } : null;
-    }
-    // Copilot CLI 1.0.x+ dropped session.truncation; session.shutdown's currentTokens
-    // is the only remaining live signal, and it only arrives once at process exit.
-    if (event.type === "session.shutdown") {
-      const data = (event as any).data;
+    if (event.type === COPILOT_SESSION_USAGE_INFO_EVENT_TYPE) {
+      const data = (event as CopilotProviderEvent).data;
       const used = data?.currentTokens;
-      return used != null && used > 0
-        ? { used, size: getCopilotContextWindowSize(modelId) }
+      const size = data?.tokenLimit;
+      return typeof used === "number" &&
+        used >= 0 &&
+        typeof size === "number" &&
+        size > 0
+        ? { used, size }
         : null;
     }
+    if (event.type === "session.truncation") {
+      const data = (event as CopilotProviderEvent).data;
+      const used = data?.postTruncationTokensInMessages;
+      const size = data?.tokenLimit;
+      return typeof used === "number" &&
+        used > 0 &&
+        typeof size === "number" &&
+        size > 0
+        ? { used, size }
+        : null;
+    }
+    // session.shutdown has currentTokens but no limit. Do not invent a denominator from
+    // the model ID because the effective default/long context tier is runtime-selected.
     return null;
   }
 
@@ -1194,31 +1241,22 @@ export class CopilotLogParser extends BaseLogParser {
   }
 
   /**
-   * Extract context window data from a session log by session ID.
+   * Extract the best context-window data persisted for a session ID.
    *
-   * Reads the last `session.truncation` event from the session log, which fired
-   * once per model call turn (pre-1.0 Copilot CLI) and contains the most accurate
-   * context fill data. Returns the final (highest) values from a multi-turn session.
-   *
-   * Copilot CLI 1.0.x+ removed `session.truncation` entirely. When no truncation
-   * event is found, falls back to `session.shutdown`'s `currentTokens` — the only
-   * remaining context signal, fired once at process exit with no token-limit field,
-   * so `getCopilotContextWindowSize(modelId)` supplies the denominator.
+   * Legacy `session.truncation` and current `session.usage_info` events both carry
+   * exact limits. The latter is normally absent because Copilot marks it ephemeral,
+   * but accepting it here is forward-compatible if persistence changes. A trailing
+   * `session.shutdown` can update currentTokens but cannot supply a missing limit.
    *
    * Used by CopilotCliProvider.augmentParsedOutput() to patch missing input token
    * data in JSON-mode headless output.
    *
    * @param sessionId - Session UUID from the `result` event in JSONL stdout
-   * @param modelId - Selected model, used to size the fallback context window when
-   *   only session.shutdown data is available (no tokenLimit field in that event)
-   * @returns Truncation data if found, undefined if log unavailable or unreadable
+   * @returns Persisted context data if found, undefined if log unavailable or unreadable
    */
-  static async extractTruncationDataFromLog(
-    sessionId: string,
-    modelId?: string
-  ): Promise<
-    { postTruncationTokensInMessages: number; tokenLimit: number } | undefined
-  > {
+  static async extractContextDataFromLog(
+    sessionId: string
+  ): Promise<{ currentTokens: number; tokenLimit?: number } | undefined> {
     const logPath = await CopilotLogParser.getLogPath(sessionId);
     if (!logPath) {
       return undefined;
@@ -1226,10 +1264,8 @@ export class CopilotLogParser extends BaseLogParser {
 
     try {
       const content = fs.readFileSync(logPath, "utf-8");
-      let last:
-        | { postTruncationTokensInMessages: number; tokenLimit: number }
-        | undefined;
-      let shutdownTokens: number | undefined;
+      let currentTokens: number | undefined;
+      let tokenLimit: number | undefined;
 
       for (const line of content.split("\n")) {
         const trimmed = line.trim();
@@ -1241,30 +1277,32 @@ export class CopilotLogParser extends BaseLogParser {
             typeof event.data?.postTruncationTokensInMessages === "number" &&
             typeof event.data?.tokenLimit === "number"
           ) {
-            last = {
-              postTruncationTokensInMessages:
-                event.data.postTruncationTokensInMessages,
-              tokenLimit: event.data.tokenLimit,
-            };
+            currentTokens = event.data.postTruncationTokensInMessages;
+            tokenLimit = event.data.tokenLimit;
+          }
+          if (
+            event.type === COPILOT_SESSION_USAGE_INFO_EVENT_TYPE &&
+            typeof event.data?.currentTokens === "number" &&
+            typeof event.data?.tokenLimit === "number"
+          ) {
+            currentTokens = event.data.currentTokens;
+            tokenLimit = event.data.tokenLimit;
           }
           if (
             event.type === "session.shutdown" &&
             typeof event.data?.currentTokens === "number"
           ) {
-            shutdownTokens = event.data.currentTokens;
+            currentTokens = event.data.currentTokens;
           }
         } catch {
           // Skip malformed lines
         }
       }
 
-      if (last) {
-        return last;
-      }
-      if (shutdownTokens !== undefined) {
+      if (currentTokens !== undefined) {
         return {
-          postTruncationTokensInMessages: shutdownTokens,
-          tokenLimit: getCopilotContextWindowSize(modelId),
+          currentTokens,
+          ...(tokenLimit !== undefined ? { tokenLimit } : {}),
         };
       }
       return undefined;

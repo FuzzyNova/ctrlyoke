@@ -1027,14 +1027,12 @@ export class CopilotCliProvider implements ICliProvider {
    *    is complete — one poll picks up every span written this invocation. Most reliable:
    *    carries exact `gen_ai.usage.input_tokens` per turn, unlike the tiers below.
    *
-   * 2. **session.truncation events** (`~/.copilot/session-state/{sessionId}/events.jsonl`)
-   *    Pre-1.0 Copilot CLI only. Fired once per model turn with
-   *    postTruncationTokensInMessages + tokenLimit.
+   * 2. **Persisted session context events**
+   *    Legacy session.truncation events carry both usage and the exact limit.
    *
    * 3. **session.shutdown's currentTokens** (same events.jsonl)
-   *    Copilot CLI 1.0.x+ removed session.truncation entirely; currentTokens fires once
-   *    at process exit and is the only context signal left. No tokenLimit field, so
-   *    getCopilotContextWindowSize(model) supplies the denominator.
+   *    Current Copilot versions persist the used-token count at process exit but not the
+   *    effective limit. Preserve that numerator without inventing a model-based denominator.
    *
    * 4. **CompactionProcessor lines** (`~/.copilot/logs/process-*.log`)
    *    Legacy per-turn utilization line; observed to no longer fire reliably on
@@ -1046,13 +1044,20 @@ export class CopilotCliProvider implements ICliProvider {
   async augmentParsedOutput(
     output: UniversalCliOutput
   ): Promise<UniversalCliOutput> {
-    await this.logParser.pollOtelContextWindow(output.metadata.model ?? "");
+    await this.logParser.pollOtelContextWindow();
     const otelUsage = this.logParser.getFinalOtelUsage();
+    let enrichedOutput = output;
     if (otelUsage) {
+      const hasExactContext =
+        otelUsage.contextWindowUsedTokens !== undefined &&
+        otelUsage.contextWindowSize !== undefined;
+      const contextSummary = hasExactContext
+        ? `, context ${otelUsage.contextWindowUsedTokens}/${otelUsage.contextWindowSize}`
+        : "";
       Log.debug(
-        `[CopilotCliProvider] Context window from OTel: ${otelUsage.contextWindowUsedTokens}/${otelUsage.contextWindowSize} tokens`
+        `[CopilotCliProvider] Token usage from OTel: ${otelUsage.inputTokens} input/${otelUsage.outputTokens} output${contextSummary}`
       );
-      return {
+      enrichedOutput = {
         ...output,
         metadata: {
           ...output.metadata,
@@ -1061,69 +1066,74 @@ export class CopilotCliProvider implements ICliProvider {
             inputTokens: otelUsage.inputTokens,
             outputTokens: otelUsage.outputTokens,
             totalTokens: otelUsage.totalTokens,
-            contextWindowUsedTokens: otelUsage.contextWindowUsedTokens,
-            contextWindowSize: otelUsage.contextWindowSize,
+            ...(hasExactContext
+              ? {
+                  contextWindowUsedTokens: otelUsage.contextWindowUsedTokens,
+                  contextWindowSize: otelUsage.contextWindowSize,
+                }
+              : {}),
             totalConfidence: TOKEN_TOTAL_CONFIDENCE.ACCUMULATED,
           },
         },
       };
+      if (hasExactContext) {
+        return enrichedOutput;
+      }
     }
 
-    const sessionId = output.metadata.sessionId;
+    const sessionId = enrichedOutput.metadata.sessionId;
     if (!sessionId) {
       Log.debug(
         `[CopilotCliProvider] augmentParsedOutput: no sessionId in parsed metadata`
       );
-      return output;
+      return enrichedOutput;
     }
 
-    const truncation = await CopilotLogParser.extractTruncationDataFromLog(
-      sessionId,
-      output.metadata.model
-    );
-    const outputTokens = output.metadata.usage?.outputTokens ?? 0;
+    const contextData =
+      await CopilotLogParser.extractContextDataFromLog(sessionId);
+    const outputTokens = enrichedOutput.metadata.usage?.outputTokens ?? 0;
 
-    if (truncation) {
-      const { postTruncationTokensInMessages, tokenLimit } = truncation;
+    if (contextData) {
+      const { currentTokens, tokenLimit } = contextData;
       Log.debug(
-        `[CopilotCliProvider] Context window from session log: ${postTruncationTokensInMessages}/${tokenLimit} tokens`
+        `[CopilotCliProvider] Context window from session log: ${currentTokens}/${tokenLimit ?? "unknown"} tokens`
       );
       return {
-        ...output,
+        ...enrichedOutput,
         metadata: {
-          ...output.metadata,
+          ...enrichedOutput.metadata,
           usage: {
-            ...output.metadata.usage,
-            inputTokens: postTruncationTokensInMessages,
+            ...enrichedOutput.metadata.usage,
+            inputTokens: currentTokens,
             outputTokens,
-            contextWindowUsedTokens: postTruncationTokensInMessages,
-            contextWindowSize: tokenLimit,
+            contextWindowUsedTokens: currentTokens,
+            ...(tokenLimit !== undefined
+              ? { contextWindowSize: tokenLimit }
+              : {}),
           },
         },
       };
     }
 
-    // Fallback: session.truncation only fires when there is enough prior context
-    // (short/first prompts may not emit it). The process log always contains
-    // CompactionProcessor utilization lines which carry the same data.
+    // Final legacy fallback for versions that still write CompactionProcessor lines.
     const processCtx =
       await this.logParser.extractContextFromProcessLog(sessionId);
     if (!processCtx) {
       Log.debug(
         `[CopilotCliProvider] No context window data available for session ${sessionId}`
       );
-      return output;
+      return enrichedOutput;
     }
 
     Log.debug(
       `[CopilotCliProvider] Context window from process log: ${processCtx.used}/${processCtx.size} tokens`
     );
     return {
-      ...output,
+      ...enrichedOutput,
       metadata: {
-        ...output.metadata,
+        ...enrichedOutput.metadata,
         usage: {
-          ...output.metadata.usage,
+          ...enrichedOutput.metadata.usage,
           inputTokens: processCtx.used,
           outputTokens,
           contextWindowUsedTokens: processCtx.used,

@@ -8,6 +8,10 @@ import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvide
 suite("Copilot CLI OTel context-window enrichment", () => {
   let otelFilePath: string;
 
+  const writeOtelEntry = (entry: Record<string, unknown>): void => {
+    fs.writeFileSync(otelFilePath, `${JSON.stringify(entry)}\n`);
+  };
+
   setup(() => {
     otelFilePath = path.join(
       os.tmpdir(),
@@ -20,18 +24,24 @@ suite("Copilot CLI OTel context-window enrichment", () => {
   });
 
   test("should patch inputTokens/contextWindowUsedTokens from an OTel chat span", async () => {
-    fs.writeFileSync(
-      otelFilePath,
-      `${JSON.stringify({
-        type: "span",
-        name: "chat gpt-5-mini",
-        attributes: {
-          "gen_ai.request.model": "gpt-5-mini",
-          "gen_ai.usage.input_tokens": 23180,
-          "gen_ai.usage.output_tokens": 262,
+    writeOtelEntry({
+      type: "span",
+      name: "chat gpt-5-mini",
+      attributes: {
+        "gen_ai.request.model": "gpt-5-mini",
+        "gen_ai.usage.input_tokens": 23180,
+        "gen_ai.usage.output_tokens": 262,
+      },
+      events: [
+        {
+          name: "github.copilot.session.usage_info",
+          attributes: {
+            "github.copilot.current_tokens": 24731,
+            "github.copilot.token_limit": 128000,
+          },
         },
-      })}\n`
-    );
+      ],
+    });
 
     const provider = new CopilotCliProvider();
     provider.logParser.setOtelFilePath(otelFilePath);
@@ -42,9 +52,36 @@ suite("Copilot CLI OTel context-window enrichment", () => {
     } as any);
 
     assert.strictEqual(output.metadata.usage?.inputTokens, 23180);
-    assert.strictEqual(output.metadata.usage?.contextWindowUsedTokens, 23180);
-    assert.ok((output.metadata.usage?.contextWindowSize ?? 0) > 0);
+    assert.strictEqual(output.metadata.usage?.contextWindowUsedTokens, 24731);
+    assert.strictEqual(output.metadata.usage?.contextWindowSize, 128000);
     assert.strictEqual(output.metadata.usage?.outputTokens, 262);
+  });
+
+  test("should preserve OTel billing usage without inventing a context limit", async () => {
+    writeOtelEntry({
+      type: "span",
+      name: "chat gpt-5-mini",
+      attributes: {
+        "gen_ai.usage.input_tokens": 1000,
+        "gen_ai.usage.output_tokens": 10,
+      },
+    });
+
+    const provider = new CopilotCliProvider();
+    provider.logParser.setOtelFilePath(otelFilePath);
+
+    const output = await provider.augmentParsedOutput({
+      events: [],
+      metadata: { model: "gpt-5-mini" },
+    } as any);
+
+    assert.strictEqual(output.metadata.usage?.inputTokens, 1000);
+    assert.strictEqual(output.metadata.usage?.outputTokens, 10);
+    assert.strictEqual(
+      output.metadata.usage?.contextWindowUsedTokens,
+      undefined
+    );
+    assert.strictEqual(output.metadata.usage?.contextWindowSize, undefined);
   });
 
   test("should pass through when no OTel file or session ID is available", async () => {

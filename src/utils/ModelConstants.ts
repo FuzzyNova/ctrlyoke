@@ -178,56 +178,6 @@ export function isKnownCopilotModel(modelId: string): boolean {
 }
 
 /**
- * Context window sizes (in tokens) per Copilot CLI model ID.
- * Falls back to 128k for unknown/unlisted models via getCopilotContextWindowSize().
- */
-const COPILOT_CLI_CONTEXT_WINDOW_SIZES: Record<string, number> = {
-  // Claude models — sonnet now defaults to a 1M token window; only the
-  // sonnet-4.x line and haiku remain on the older 200k window.
-  "claude-haiku-4.5": 200_000,
-  "claude-sonnet-4": 144_000,
-  "claude-sonnet-4.5": 200_000,
-  "claude-sonnet-4.6": 200_000,
-  "claude-sonnet-5": 1_000_000,
-  "claude-opus-4.5": 200_000,
-  "claude-opus-4.6": 200_000,
-  "claude-opus-4.7": 200_000,
-  "claude-opus-4.8": 200_000,
-  "claude-opus-4.8-fast": 200_000,
-  // Gemini models
-  "gemini-2.5-pro": 173_000,
-  "gemini-3-flash-preview": 173_000,
-  "gemini-3.1-pro-preview": 173_000,
-  "gemini-3.5-flash": 173_000,
-  // GPT models
-  "gpt-4.1": 128_000,
-  "gpt-4o": 68_000,
-  "gpt-5-mini": 192_000,
-  "gpt-5.2": 192_000,
-  "gpt-5.2-codex": 400_000,
-  "gpt-5.3-codex": 400_000,
-  "gpt-5.4": 400_000,
-  "gpt-5.4-mini": 400_000,
-  // Grok models
-  "grok-code-fast-1": 173_000,
-  // Raptor mini (oswe-vscode-prime)
-  "oswe-vscode-prime": 264_000,
-};
-
-/**
- * Get the context window size for a Copilot CLI model.
- * Returns the model-specific size if known, or 128k as the fallback.
- */
-export function getCopilotContextWindowSize(
-  modelId: string | undefined
-): number {
-  if (modelId && modelId in COPILOT_CLI_CONTEXT_WINDOW_SIZES) {
-    return COPILOT_CLI_CONTEXT_WINDOW_SIZES[modelId];
-  }
-  return 128_000;
-}
-
-/**
  * Default/fallback context window size (in tokens) for the Codex CLI.
  * GPT 5.4 / 5.5 stay on 400k; GPT 5.6 variants override below.
  */

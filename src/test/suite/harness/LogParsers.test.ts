@@ -1907,8 +1907,7 @@ suite("CopilotLogParser", () => {
     });
 
     test("should extract context window usage from session.shutdown currentTokens (Copilot CLI 1.0.x+)", () => {
-      // session.truncation was removed entirely in Copilot CLI 1.0.x — session.shutdown's
-      // currentTokens is now the only context window signal available.
+      // session.shutdown persists the final used-token count but not the effective limit.
       const events = [
         {
           type: "session.start",
@@ -1939,8 +1938,22 @@ suite("CopilotLogParser", () => {
         response.metadata.usage?.contextWindowUsedTokens,
         95987
       );
-      // No tokenLimit in session.shutdown — falls back to the known model context window.
-      assert.ok((response.metadata.usage?.contextWindowSize ?? 0) > 0);
+      assert.strictEqual(response.metadata.usage?.contextWindowSize, undefined);
+    });
+
+    test("should use the exact limit from session.usage_info when available", () => {
+      const response = parser.extractResponse([
+        {
+          type: "session.usage_info",
+          data: { currentTokens: 24000, tokenLimit: 1000000 },
+        } as unknown as BaseCliEvent,
+      ]);
+
+      assert.strictEqual(
+        response.metadata.usage?.contextWindowUsedTokens,
+        24000
+      );
+      assert.strictEqual(response.metadata.usage?.contextWindowSize, 1000000);
     });
 
     test("should let a trailing session.shutdown override earlier session.truncation values", () => {
@@ -1968,6 +1981,7 @@ suite("CopilotLogParser", () => {
         response.metadata.usage?.contextWindowUsedTokens,
         9000
       );
+      assert.strictEqual(response.metadata.usage?.contextWindowSize, 128000);
     });
   });
 
@@ -1983,17 +1997,27 @@ suite("CopilotLogParser", () => {
       assert.deepStrictEqual(result, { used: 42000, size: 128000 });
     });
 
-    test("should extract from session.shutdown events (Copilot CLI 1.0.x+)", () => {
+    test("should extract exact current Copilot session.usage_info events", () => {
+      const event = {
+        type: "session.usage_info",
+        data: { currentTokens: 95987, tokenLimit: 1000000 },
+      } as unknown as BaseCliEvent;
+
+      const result = parser.extractLiveContextWindow(event, "gpt-5.4");
+
+      assert.deepStrictEqual(result, { used: 95987, size: 1000000 });
+    });
+
+    test("should not invent a limit for session.shutdown events", () => {
       const event = {
         type: "session.shutdown",
         data: { currentTokens: 95987 },
       } as unknown as BaseCliEvent;
 
-      const result = parser.extractLiveContextWindow(event, "gpt-5.4");
-
-      assert.ok(result !== null);
-      assert.strictEqual(result?.used, 95987);
-      assert.ok(result!.size > 0);
+      assert.strictEqual(
+        parser.extractLiveContextWindow(event, "gpt-5.4"),
+        null
+      );
     });
 
     test("should return null for events with no context window data", () => {
@@ -2010,8 +2034,16 @@ suite("CopilotLogParser", () => {
   });
 
   suite("OTel context window tracking", () => {
+    const usageInfoEvent = (currentTokens: number, tokenLimit: number) => ({
+      name: "github.copilot.session.usage_info",
+      attributes: {
+        "github.copilot.current_tokens": currentTokens,
+        "github.copilot.token_limit": tokenLimit,
+      },
+    });
+
     test("should return null when no OTel file path is set", async () => {
-      const result = await parser.pollOtelContextWindow("gpt-5.4");
+      const result = await parser.pollOtelContextWindow();
       assert.strictEqual(result, null);
       assert.strictEqual(parser.getFinalOtelUsage(), null);
     });
@@ -2027,20 +2059,21 @@ suite("CopilotLogParser", () => {
             "gen_ai.usage.output_tokens": 42,
             "gen_ai.response.model": "gpt-5.4",
           },
+          events: [usageInfoEvent(20692, 1000000)],
         },
       ];
       const filePath = createTempJsonlFile(otelLines);
 
       try {
         parser.setOtelFilePath(filePath);
-        const result = await parser.pollOtelContextWindow("gpt-5.4");
+        const result = await parser.pollOtelContextWindow();
 
-        assert.ok(result !== null);
-        assert.strictEqual(result?.used, 18689);
-        assert.ok(result!.size > 0);
+        assert.deepStrictEqual(result, { used: 20692, size: 1000000 });
 
         const final = parser.getFinalOtelUsage();
-        assert.strictEqual(final?.contextWindowUsedTokens, 18689);
+        assert.strictEqual(final?.inputTokens, 18689);
+        assert.strictEqual(final?.contextWindowUsedTokens, 20692);
+        assert.strictEqual(final?.contextWindowSize, 1000000);
         assert.strictEqual(final?.outputTokens, 42);
       } finally {
         cleanupTempFile(filePath);
@@ -2056,6 +2089,7 @@ suite("CopilotLogParser", () => {
             "gen_ai.usage.input_tokens": 18719,
             "gen_ai.usage.output_tokens": 147,
           },
+          events: [usageInfoEvent(20000, 1000000)],
         },
         { type: "span", name: "execute_tool powershell", attributes: {} },
         {
@@ -2065,19 +2099,20 @@ suite("CopilotLogParser", () => {
             "gen_ai.usage.input_tokens": 18894,
             "gen_ai.usage.output_tokens": 53,
           },
+          events: [usageInfoEvent(21000, 1000000)],
         },
       ];
       const filePath = createTempJsonlFile(otelLines);
 
       try {
         parser.setOtelFilePath(filePath);
-        const result = await parser.pollOtelContextWindow("gpt-5.4");
+        const result = await parser.pollOtelContextWindow();
 
         // "used" reflects the latest turn's context size, not a sum across turns.
-        assert.strictEqual(result?.used, 18894);
+        assert.strictEqual(result?.used, 21000);
 
         const final = parser.getFinalOtelUsage();
-        assert.strictEqual(final?.contextWindowUsedTokens, 18894);
+        assert.strictEqual(final?.contextWindowUsedTokens, 21000);
         // Billing input and output both accumulate across every chat span.
         assert.strictEqual(final?.inputTokens, 37613);
         assert.strictEqual(final?.outputTokens, 200);
@@ -2100,15 +2135,16 @@ suite("CopilotLogParser", () => {
             "gen_ai.usage.input_tokens": 1000,
             "gen_ai.usage.output_tokens": 10,
           },
+          events: [usageInfoEvent(1200, 128000)],
         },
       ]);
 
       try {
         parser.setOtelFilePath(filePath);
-        const first = await parser.pollOtelContextWindow("gpt-5.4");
+        const first = await parser.pollOtelContextWindow();
         assert.ok(first !== null);
 
-        const second = await parser.pollOtelContextWindow("gpt-5.4");
+        const second = await parser.pollOtelContextWindow();
         assert.strictEqual(second, null);
       } finally {
         cleanupTempFile(filePath);
@@ -2124,17 +2160,18 @@ suite("CopilotLogParser", () => {
             "gen_ai.usage.input_tokens": 5000,
             "gen_ai.usage.output_tokens": 20,
           },
+          events: [usageInfoEvent(5500, 128000)],
         },
       ]);
 
       try {
         parser.setOtelFilePath(filePath);
-        await parser.pollOtelContextWindow("gpt-5.4");
+        await parser.pollOtelContextWindow();
         assert.ok(parser.getFinalOtelUsage() !== null);
 
         // Simulate the next prompt execution with no OTel path available.
         parser.setOtelFilePath(undefined);
-        assert.strictEqual(await parser.pollOtelContextWindow("gpt-5.4"), null);
+        assert.strictEqual(await parser.pollOtelContextWindow(), null);
         assert.strictEqual(parser.getFinalOtelUsage(), null);
       } finally {
         cleanupTempFile(filePath);
