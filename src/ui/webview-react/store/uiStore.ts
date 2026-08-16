@@ -73,6 +73,10 @@ export interface ToastItem {
   id: string;
   message: string;
   detail?: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
   severity: UserFeedbackSeverity;
   createdAt: number;
   dedupeKey?: string;
@@ -83,6 +87,7 @@ export type ToastInput = Omit<ToastItem, "id" | "createdAt"> &
 
 export interface ToastOptions {
   detail?: string;
+  action?: ToastItem["action"];
   dedupeKey?: string;
 }
 

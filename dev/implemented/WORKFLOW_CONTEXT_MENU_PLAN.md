@@ -1,11 +1,11 @@
 # Workflow Context Menu
 
-> **Status:** Phase 1 delivered; Phase 2 deferred to `WORKFLOW_VARIANTS_PLAN.md`
+> **Status:** Implemented — Phases 1–2 complete; acceptance criteria verified
 >
 > **Priority:** P2 — one new affordance (Copy Run Directory Path) plus the
-> gesture infrastructure that Duplicate will land on.
+> gesture infrastructure used by Duplicate.
 >
-> **Related:** `WORKFLOW_VARIANTS_PLAN.md` (Duplicate is a future item in
+> **Related:** `WORKFLOW_VARIANTS_PLAN.md` (Duplicate's shared implementation in
 > this same menu), `MCP_RUN_PATH_FIELDS_PLAN.md` (same "where is this run?"
 > question, MCP side), `RUN_EXPORT_PLAN.md`,
 > `dev/implemented/USER_SCOPED_RUN_HISTORY_PLAN.md`
@@ -32,7 +32,7 @@ forward direction, and today the only way to answer "where is this run?" is to
 compute a SHA-256 by hand.
 
 A right-click / long-press menu gives that a home, and gives Duplicate
-(`WORKFLOW_VARIANTS_PLAN.md`) somewhere to land later.
+(`WORKFLOW_VARIANTS_PLAN.md`) a shared gesture surface.
 
 ---
 
@@ -77,6 +77,7 @@ share the single hook instance with no new portal or listener pair.
 
 | Item                           | Message                                          | Notes                                                         |
 | ------------------------------ | ------------------------------------------------ | ------------------------------------------------------------- |
+| Duplicate Workflow…            | `CREATE_WORKFLOW_VARIANT`                        | Address-scoped; opens the shared duplicate dialog              |
 | Copy Run Directory Path        | none (clipboard)                                 | New. See below                                                |
 | — divider —                    |                                                  |                                                               |
 | Add to / Remove from Favorites | `TOGGLE_WORKFLOW_FAVORITE`                       | Always lineage-scoped, on every surface                       |
@@ -101,7 +102,7 @@ carries that scope explicitly (see below). Both honour
 Pause/Stop. See the decision record below — this is the plan's main finding and
 it should not be quietly re-litigated.
 
-Be honest about the resulting size: this is a three-item menu. Its value is the
+Be honest about the resulting size: this is a compact menu. Its value is the
 Copy item, which has no alternative, plus the gesture wiring that
 `WORKFLOW_VARIANTS_PLAN.md` needs. It is not a productivity feature for
 execution.
@@ -572,7 +573,7 @@ the UI that consumes it.
 - Any execution item: Run, Re-run, Restart, Continue, Resume, Pause, Stop.
 - A keyboard-invoked context menu (Shift+F10 / Menu key) — worth doing, but it
   belongs with `ACCESSIBILITY_AND_TESTABILITY_PLAN.md`.
-- Duplicate or any cloning behaviour.
+- New cloning commands beyond **Duplicate Workflow…**.
 - Changing `RunSummaryRow`'s existing inline delete-confirm rail button.
 - Reveal-in-OS / open-in-editor variants of Copy.
 - A path submenu (working file · run directory · `events.jsonl`).

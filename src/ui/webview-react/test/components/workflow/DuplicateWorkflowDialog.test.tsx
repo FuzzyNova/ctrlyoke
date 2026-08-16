@@ -136,6 +136,48 @@ describe("DuplicateWorkflowDialog", () => {
         expect.objectContaining({ message: 'Created workflow "New Variant"' }),
       ])
     );
+    expect(
+      useUiStore
+        .getState()
+        .toastQueue.find(
+          (item) => item.message === 'Created workflow "New Variant"'
+        )?.action
+    ).toBeUndefined();
+  });
+
+  it("offers the serialized workflow address in a new browser tab", () => {
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+    render(<DuplicateWorkflowDialog />);
+    openDialog();
+    fireEvent.click(screen.getByRole("button", { name: "Duplicate" }));
+    const request = postMessageSpy.mock.calls[0][0] as { requestId: string };
+    const newAddress: WorkflowViewAddress = {
+      workflowKey: "workflow-2" as never,
+      kind: "draft",
+    };
+
+    act(() => {
+      createMessageHandlers(true)[MESSAGE_TYPES.WORKFLOW_VARIANT_CREATED]({
+        type: MESSAGE_TYPES.WORKFLOW_VARIANT_CREATED,
+        requestId: request.requestId,
+        address: newAddress,
+      });
+    });
+
+    const toast = useUiStore
+      .getState()
+      .toastQueue.find(
+        (item) => item.message === 'Created workflow "Workflow 1 Copy"'
+      );
+    expect(toast?.action?.label).toBe("Open in New Tab");
+
+    act(() => toast?.action?.onClick());
+    expect(openSpy).toHaveBeenCalledWith(
+      expect.stringContaining("workflowKey=workflow-2"),
+      "_blank",
+      "noopener,noreferrer"
+    );
+    openSpy.mockRestore();
   });
 
   it("restores focus to the invoking control when closed", () => {

@@ -82,11 +82,13 @@ import type {
   CompletionNotificationEventPayload,
   UserFeedbackMessage,
 } from "@root/types/WebviewMessageTypes";
+import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
 import { getReadyPreferredViewAddress } from "@/navigation/readyRoute";
 import { getWorkflowDefinitionMutation } from "../utils/workflowMutation";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import { navigateToWorkflowAddress } from "@utils/runNavigation";
+import { serializeRoute } from "@/navigation/route";
 
 // ============================================================================
 // Types
@@ -94,6 +96,15 @@ import { navigateToWorkflowAddress } from "@utils/runNavigation";
 
 export type MessageHandler = (message: any) => void;
 export type MessageHandlerMap = Record<string, MessageHandler>;
+
+function openWorkflowAddressInNewTab(address: WorkflowViewAddress): void {
+  if (typeof window === "undefined") return;
+  const url = `${window.location.pathname}${serializeRoute(
+    { workflow: address },
+    window.location.search
+  )}`;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 
 function isCompletionNotificationEvent(
   value: unknown
@@ -1485,7 +1496,15 @@ export function createMessageHandlers(
     navigateToWorkflowAddress(vscode, message.address, pending.workflowName);
     uiStore.showToast(
       `Created workflow "${pending.workflowName}"`,
-      USER_FEEDBACK_SEVERITY.SUCCESS
+      USER_FEEDBACK_SEVERITY.SUCCESS,
+      standalone
+        ? {
+            action: {
+              label: "Open in New Tab",
+              onClick: () => openWorkflowAddressInNewTab(message.address),
+            },
+          }
+        : undefined
     );
   };
 

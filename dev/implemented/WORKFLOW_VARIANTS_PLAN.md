@@ -1,6 +1,6 @@
 # Workflow Variants: Duplicate
 
-> **Status:** Proposed
+> **Status:** Implemented — Phases 1–3 complete; acceptance criteria verified
 >
 > **Priority:** P2 — lightweight multi-harness comparison
 >
@@ -483,10 +483,10 @@ one checkout. Parallel workflows can edit the same files and interfere.
 
 ### Phase 3 — Hosted convenience
 
-- [ ] Add **Open in New Tab** after creation, using the existing serialized
+- [x] Add **Open in New Tab** after creation, using the existing serialized
       workflow-address route.
-- [ ] Verify two tabs retain independent selected addresses during live updates.
-- [ ] Keep native split view out of scope until user evidence shows browser tabs
+- [x] Verify two tabs retain independent selected addresses during live updates.
+- [x] Keep native split view out of scope until user evidence shows browser tabs
       are insufficient.
 
 ---
