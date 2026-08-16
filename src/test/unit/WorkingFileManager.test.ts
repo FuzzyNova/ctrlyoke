@@ -1403,8 +1403,7 @@ suite("WorkingFileManager", () => {
             _runtime: { sessionId: "must-not-copy", startedAt: 1 },
           },
         ],
-        1,
-        2
+        1
       );
 
       const after = JSON.parse(
@@ -1422,8 +1421,7 @@ suite("WorkingFileManager", () => {
             workflowKey,
             promoted.runRef,
             [{ prompt: "conflict" }],
-            1,
-            3
+            1
           ),
         /Definition revision conflict/
       );
@@ -1478,7 +1476,7 @@ suite("WorkingFileManager", () => {
       };
     }
 
-    test("insertStepAtRun splices the step and shifts currentIndex, bumping the revision", async () => {
+    test("insertStepAtRun splices the step and shifts currentIndex, bumping the definition revision only", async () => {
       const { workflowKey, runRef, runFilePath } = await makeIdleRun();
 
       const result = await WorkingFileManager.insertStepAtRun(
@@ -1487,12 +1485,13 @@ suite("WorkingFileManager", () => {
         runRef,
         0,
         { prompt: "inserted" },
-        1,
-        2
+        1
       );
 
       assert.strictEqual(result.definitionRevision, 2);
-      assert.strictEqual(result.descriptorRevision, 3);
+      // The descriptor is untouched by an ordinary run-content edit: it stays
+      // at whatever it was after `promoteToNewRun` allocated this run.
+      assert.strictEqual(result.descriptorRevision, 2);
       const after = JSON.parse(
         await fs.readFile(runFilePath, "utf8")
       ) as WorkingFile;
@@ -1508,8 +1507,7 @@ suite("WorkingFileManager", () => {
             runRef,
             0,
             { prompt: "stale" },
-            1,
-            3
+            1
           ),
         /Definition revision conflict/
       );
@@ -1524,8 +1522,7 @@ suite("WorkingFileManager", () => {
         runRef,
         0,
         { updates: { prompt: "first (edited)" } },
-        1,
-        2
+        1
       );
       assert.strictEqual(
         (merged.workingFile.steps![0] as PromptStep).prompt,
@@ -1542,8 +1539,7 @@ suite("WorkingFileManager", () => {
         runRef,
         0,
         { replace: { prompt: "replaced entirely" } },
-        2,
-        3
+        2
       );
       assert.strictEqual(
         (replaced.workingFile.steps![0] as PromptStep).prompt,
@@ -1565,8 +1561,7 @@ suite("WorkingFileManager", () => {
         workflowKey,
         runRef,
         0,
-        1,
-        2
+        1
       );
 
       assert.strictEqual(result.workingFile.steps!.length, 1);
@@ -1628,8 +1623,7 @@ suite("WorkingFileManager", () => {
         workflowKey,
         promoted.runRef,
         [1, 0],
-        1,
-        2
+        1
       );
 
       assert.strictEqual(result.workingFile.steps!.length, 3);
@@ -1655,8 +1649,7 @@ suite("WorkingFileManager", () => {
         workflowKey,
         runRef,
         [{ prompt: "first" }, { prompt: "second (renamed)" }],
-        1,
-        2
+        1
       );
 
       assert.ok(result.workingFile.steps![0]._runtime?.completedAt);
@@ -1675,8 +1668,7 @@ suite("WorkingFileManager", () => {
         workflowKey,
         runRef,
         { harness: "claude-cli" },
-        1,
-        2
+        1
       );
       assert.deepStrictEqual(properties.appliedKeys, ["harness"]);
       assert.strictEqual(properties.workingFile.harness, "claude-cli");
@@ -1686,8 +1678,7 @@ suite("WorkingFileManager", () => {
         workflowKey,
         runRef,
         "Renamed run",
-        2,
-        3
+        2
       );
       assert.strictEqual(renamed.workingFile.workflowName, "Renamed run");
     });
@@ -1705,8 +1696,7 @@ suite("WorkingFileManager", () => {
             runRef,
             0,
             { prompt: "should not land" },
-            1,
-            2
+            1
           ),
         /Cannot edit while run is in state/
       );
@@ -1728,8 +1718,7 @@ suite("WorkingFileManager", () => {
         workflowKey,
         runRef,
         { harness: "codex-cli" },
-        2,
-        3
+        2
       );
       assert.strictEqual(properties.workingFile.harness, "codex-cli");
 
@@ -1741,8 +1730,7 @@ suite("WorkingFileManager", () => {
             runRef,
             0,
             { prompt: "blocked during rewind" },
-            3,
-            4
+            3
           ),
         /draft or pending continuation/
       );

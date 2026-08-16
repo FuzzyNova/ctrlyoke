@@ -602,7 +602,6 @@ export class CtrlYokeMCPServer {
         selected.runRef,
         validPrompts,
         target.definitionRevision,
-        target.descriptorRevision,
         lineageRepository,
         target.allowInterruptedRun,
         position

@@ -110,13 +110,22 @@ export class RunContinuationService {
     };
   }
 
+  /**
+   * The descriptor lock here is pure mutual exclusion against a concurrent
+   * draft-seed/rewind (the `pendingEdit` gate) — appending never writes the
+   * descriptor, since a run's own steps are not descriptor content. Only
+   * `definitionRevision` (the run file's own revision) is checked; coupling
+   * this to the lineage-wide descriptor revision would make appending to one
+   * run spuriously conflict with unrelated activity elsewhere in the lineage
+   * (another run's rewind, a favorite toggle, a second run being promoted).
+   * See `core.instructions.md`.
+   */
   static async appendStepsToRun(
     workspaceRoot: string,
     workflowKey: WorkflowKey,
     runRef: RunRef,
     tail: WorkflowStep[],
     expectedDefinitionRevision: number,
-    expectedDescriptorRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     allowInterruptedRun: boolean = false,
     position: QueuePosition = QUEUE_POSITION.END
@@ -134,75 +143,73 @@ export class RunContinuationService {
       workflowKey,
       runRef
     );
-    return lineageRepository.mutateDescriptorAtRevision(
+    const descriptorPath = WorkflowPaths.descriptorPath(
       workspaceRoot,
-      workflowKey,
-      expectedDescriptorRevision,
-      async (descriptor) => {
-        if (descriptor.pendingEdit) {
+      workflowKey
+    );
+    return withFileLock(descriptorPath, async () => {
+      const descriptor = await lineageRepository.readDescriptor(
+        workspaceRoot,
+        workflowKey
+      );
+      if (descriptor.pendingEdit) {
+        throw new Error(
+          "Cannot append while this workflow has a draft or pending continuation"
+        );
+      }
+      return withFileLock(runFilePath, async () => {
+        const source = await this.readRun(workspaceRoot, workflowKey, runRef);
+        const sourceRevision = source.definitionRevision ?? 1;
+        if (sourceRevision !== expectedDefinitionRevision) {
           throw new Error(
-            "Cannot append while this workflow has a draft or pending continuation"
+            `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${sourceRevision}`
           );
         }
-        return withFileLock(runFilePath, async () => {
-          const source = await this.readRun(workspaceRoot, workflowKey, runRef);
-          const sourceRevision = source.definitionRevision ?? 1;
-          if (sourceRevision !== expectedDefinitionRevision) {
-            throw new Error(
-              `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${sourceRevision}`
-            );
-          }
-          const sourceState = source._runtime?.executionState;
-          if (
-            !allowInterruptedRun &&
-            (sourceState === EXECUTION_STATES.RUNNING ||
-              sourceState === EXECUTION_STATES.PAUSING ||
-              sourceState === EXECUTION_STATES.CANCELLING)
-          ) {
-            throw new Error(
-              `Cannot append while run is in state ${sourceState}`
-            );
-          }
-          // Resolve the splice point from the run file read under this same
-          // lock. Reading it earlier (or from the caller's snapshot) would let
-          // the executing run advance in between and land `next` on the wrong
-          // step.
-          const sourceSteps = source.steps ?? [];
-          const insertIndex = Math.max(
-            resolveQueueInsertIndex(
-              position,
-              source._runtime?.currentIndex ?? sourceSteps.length,
-              sourceSteps.length
-            ),
-            immutablePrefixLength(sourceSteps)
-          );
-          const steps = [...sourceSteps];
-          steps.splice(
-            insertIndex,
-            0,
-            ...tail.map((step) =>
-              stripViewOnlyWorkflowStepFields(stripStepRuntime([step])[0])
-            )
-          );
-          const workingFile: WorkingFile = {
-            ...source,
-            lastModifiedAt: Date.now(),
-            definitionRevision: sourceRevision + 1,
-            steps,
-          };
-          await writeWorkingFileAtomic(runFilePath, workingFile);
-          return {
-            value: {
-              workingFile,
-              definitionRevision: workingFile.definitionRevision,
-              descriptorRevision: expectedDescriptorRevision + 1,
-              insertIndex,
-            },
-            descriptor,
-          };
-        });
-      }
-    );
+        const sourceState = source._runtime?.executionState;
+        if (
+          !allowInterruptedRun &&
+          (sourceState === EXECUTION_STATES.RUNNING ||
+            sourceState === EXECUTION_STATES.PAUSING ||
+            sourceState === EXECUTION_STATES.CANCELLING)
+        ) {
+          throw new Error(`Cannot append while run is in state ${sourceState}`);
+        }
+        // Resolve the splice point from the run file read under this same
+        // lock. Reading it earlier (or from the caller's snapshot) would let
+        // the executing run advance in between and land `next` on the wrong
+        // step.
+        const sourceSteps = source.steps ?? [];
+        const insertIndex = Math.max(
+          resolveQueueInsertIndex(
+            position,
+            source._runtime?.currentIndex ?? sourceSteps.length,
+            sourceSteps.length
+          ),
+          immutablePrefixLength(sourceSteps)
+        );
+        const steps = [...sourceSteps];
+        steps.splice(
+          insertIndex,
+          0,
+          ...tail.map((step) =>
+            stripViewOnlyWorkflowStepFields(stripStepRuntime([step])[0])
+          )
+        );
+        const workingFile: WorkingFile = {
+          ...source,
+          lastModifiedAt: Date.now(),
+          definitionRevision: sourceRevision + 1,
+          steps,
+        };
+        await writeWorkingFileAtomic(runFilePath, workingFile);
+        return {
+          workingFile,
+          definitionRevision: workingFile.definitionRevision,
+          descriptorRevision: descriptor.revision,
+          insertIndex,
+        };
+      });
+    });
   }
 
   private static async readRun(

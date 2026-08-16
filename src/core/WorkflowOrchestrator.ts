@@ -2915,15 +2915,12 @@ export class WorkflowOrchestrator {
             `Definition revision conflict: expected ${mutation.expectedDefinitionRevision}, found ${liveRevision}`
           );
         }
-        const descriptor = await this.lineageRepository.readDescriptor(
-          workspaceRoot,
-          mutation.address.workflowKey
-        );
-        if (descriptor.revision !== mutation.expectedDescriptorRevision) {
-          throw new Error(
-            `Descriptor revision conflict: expected ${mutation.expectedDescriptorRevision}, found ${descriptor.revision}`
-          );
-        }
+        // No descriptor check here: this run's own definition head is what's
+        // being edited, and the lineage descriptor is not touched by that
+        // write. Checking it would spuriously reject this edit whenever
+        // unrelated lineage activity (another run's rewind, a favorite
+        // toggle, a second run being promoted) bumps the shared descriptor
+        // revision. See `core.instructions.md`.
         resident.expectDefinitionRevision(mutation.expectedDefinitionRevision);
         return;
       }
@@ -2940,11 +2937,7 @@ export class WorkflowOrchestrator {
           `Definition revision conflict: expected ${mutation.expectedDefinitionRevision}, found ${target.definitionRevision}`
         );
       }
-      if (target.descriptorRevision !== mutation.expectedDescriptorRevision) {
-        throw new Error(
-          `Descriptor revision conflict: expected ${mutation.expectedDescriptorRevision}, found ${target.descriptorRevision}`
-        );
-      }
+      // No descriptor-revision check: see the executing-run branch above.
       // If a live instance already owns this exact run (executing/paused, or
       // simply loaded), prime its next definition write with the client's
       // observed revision — mirroring the draft-instance carve-out below.
@@ -3011,21 +3004,10 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
-    if (!workspaceRoot) {
-      throw new Error("No workspace folder is open");
-    }
-
-    const descriptor = await this.lineageRepository.readDescriptor(
-      workspaceRoot,
-      runAddress.workflowKey
-    );
-    if (descriptor.revision !== mutation.expectedDescriptorRevision) {
-      throw new Error(
-        `Descriptor revision conflict: expected ${mutation.expectedDescriptorRevision}, found ${descriptor.revision}`
-      );
-    }
-
+    // No descriptor check here: see the executing-run branch of
+    // `prepareDefinitionMutation`. This run's properties are not descriptor
+    // content, so unrelated lineage activity must not be able to reject
+    // this write.
     const instance = this.getInstanceForClient(clientId);
     const state = instance.getQueueState();
     if (
@@ -3163,7 +3145,6 @@ export class WorkflowOrchestrator {
           runAddress.runRef,
           workflowName,
           mutation.expectedDefinitionRevision,
-          mutation.expectedDescriptorRevision,
           this.lineageRepository
         );
         latest = {
@@ -3417,7 +3398,6 @@ export class WorkflowOrchestrator {
           runAddress.runRef,
           properties,
           mutation.expectedDefinitionRevision,
-          mutation.expectedDescriptorRevision,
           this.lineageRepository,
           { allowDeletes: options.allowDeletes }
         );
@@ -3470,7 +3450,6 @@ export class WorkflowOrchestrator {
           index,
           buildPromptStepChange(text, properties, promptName, clearProperties),
           mutation.expectedDefinitionRevision,
-          mutation.expectedDescriptorRevision,
           this.lineageRepository
         ).then(() => undefined)
     );
@@ -3535,7 +3514,6 @@ export class WorkflowOrchestrator {
           index,
           buildPromptStepChange(text, properties, promptName, clearProperties),
           rewind.definitionRevision,
-          rewind.descriptorRevision,
           this.lineageRepository
         );
       }
@@ -3573,7 +3551,6 @@ export class WorkflowOrchestrator {
           afterIndex,
           sanitizeClipboardWorkflowStep(step),
           mutation.expectedDefinitionRevision,
-          mutation.expectedDescriptorRevision,
           this.lineageRepository
         ).then(() => undefined)
     );
@@ -3612,7 +3589,6 @@ export class WorkflowOrchestrator {
           runAddress.runRef,
           { finalStep: normalized },
           mutation.expectedDefinitionRevision,
-          mutation.expectedDescriptorRevision,
           this.lineageRepository,
           { allowDeletes: true }
         ).then(() => undefined);
@@ -3648,7 +3624,6 @@ export class WorkflowOrchestrator {
           runAddress.runRef,
           index,
           mutation.expectedDefinitionRevision,
-          mutation.expectedDescriptorRevision,
           this.lineageRepository
         ).then(() => undefined)
     );
@@ -3675,7 +3650,6 @@ export class WorkflowOrchestrator {
           runAddress.runRef,
           newPendingOrder,
           mutation.expectedDefinitionRevision,
-          mutation.expectedDescriptorRevision,
           this.lineageRepository
         ).then(() => undefined)
     );
@@ -3723,7 +3697,6 @@ export class WorkflowOrchestrator {
           runAddress.runRef,
           steps,
           mutation.expectedDefinitionRevision,
-          mutation.expectedDescriptorRevision,
           this.lineageRepository
         );
         latest = {
@@ -3740,7 +3713,6 @@ export class WorkflowOrchestrator {
               runAddress.runRef,
               { finalStep: persistableFinalStep },
               stepsResult.definitionRevision,
-              stepsResult.descriptorRevision,
               this.lineageRepository
             );
           latest = {
@@ -4214,29 +4186,27 @@ export class WorkflowOrchestrator {
       expectedDescriptorRevision,
       clientId
     );
-    // Appending to a rewound run commits the rewind first (clearing the
-    // descriptor marker and discard snapshot), then appends the tail at the
-    // now-bumped descriptor revision. The definition revision is untouched by
-    // the commit, so the append still validates against the observed head.
-    const descriptorRevisionForAppend = pendingRewindOnThisRun
-      ? (
-          await WorkingFileManager.commitPendingRewind(
-            workspaceRoot,
-            address.workflowKey,
-            address.runRef,
-            expectedDefinitionRevision,
-            expectedDescriptorRevision,
-            this.lineageRepository
-          )
-        ).descriptorRevision
-      : expectedDescriptorRevision;
+    // Appending to a rewound run commits the rewind first, clearing the
+    // descriptor marker and discard snapshot. The definition revision is
+    // untouched by the commit, so the append still validates against the
+    // observed head; the append itself no longer checks a descriptor
+    // revision (see `RunContinuationService.appendStepsToRun`).
+    if (pendingRewindOnThisRun) {
+      await WorkingFileManager.commitPendingRewind(
+        workspaceRoot,
+        address.workflowKey,
+        address.runRef,
+        expectedDefinitionRevision,
+        expectedDescriptorRevision,
+        this.lineageRepository
+      );
+    }
     const appended = await RunContinuationService.appendStepsToRun(
       workspaceRoot,
       address.workflowKey,
       address.runRef,
       tail,
       expectedDefinitionRevision,
-      descriptorRevisionForAppend,
       this.lineageRepository,
       allowInterruptedRun
     );
@@ -4853,7 +4823,6 @@ export class WorkflowOrchestrator {
           runAddress.runRef,
           [step],
           mutation.expectedDefinitionRevision,
-          mutation.expectedDescriptorRevision,
           this.lineageRepository
         ).then(() => undefined)
     );

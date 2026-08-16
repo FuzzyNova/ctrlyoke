@@ -2787,9 +2787,12 @@ suite("WorkflowOrchestrator addressed start position", () => {
           workflowKey
         );
       assert.strictEqual(edited.definitionRevision, 3);
+      // Only the rewind (beginPendingRewind) bumps the descriptor — the
+      // subsequent step edit is an ordinary run-content write and no longer
+      // touches it.
       assert.strictEqual(
         descriptorAfter.revision,
-        descriptorBefore.revision + 2
+        descriptorBefore.revision + 1
       );
       assert.strictEqual(edited._runtime.pendingRewind.fromStepIndex, 1);
       assert.strictEqual(edited._runtime.currentIndex, 1);

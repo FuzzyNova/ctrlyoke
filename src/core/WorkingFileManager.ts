@@ -820,7 +820,6 @@ export class WorkingFileManager {
     runRef: RunRef,
     tail: WorkflowStep[],
     expectedDefinitionRevision: number,
-    expectedDescriptorRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     allowInterruptedRun: boolean = false,
     position: QueuePosition = QUEUE_POSITION.END
@@ -836,7 +835,6 @@ export class WorkingFileManager {
       runRef,
       tail,
       expectedDefinitionRevision,
-      expectedDescriptorRevision,
       lineageRepository,
       allowInterruptedRun,
       position
@@ -846,8 +844,18 @@ export class WorkingFileManager {
   /**
    * Shared shell for every addressed, in-place edit of an idle promoted run's
    * current definition head. Mirrors `beginPendingRewind`/`appendTailToRun`'s
-   * lock ordering (descriptor lock, then run-file lock) and revision/state
-   * guards so callers only supply the step/property transform itself.
+   * lock ordering (descriptor lock, then run-file lock) and state guards so
+   * callers only supply the step/property transform itself.
+   *
+   * The descriptor lock here is pure mutual exclusion against a concurrent
+   * draft-seed/rewind (via the `pendingEdit` gate) — this shell never writes
+   * the descriptor, since a run's own steps/properties/finalStep are not
+   * descriptor content. `descriptorRevision` is intentionally decoupled from
+   * `expectedDefinitionRevision`'s check: only `definitionRevision` (the run
+   * file's own revision) has to match, or every edit to any run in a lineage
+   * would spuriously conflict with unrelated lineage-level activity (another
+   * run's rewind, a favorite toggle, a second run being promoted) that never
+   * touched this run's content. See `core.instructions.md`.
    *
    * A run reaching this shell is never actively `PAUSED`: a paused run always
    * has a live `WorkflowInstance` holding the runner lock, so orchestrator
@@ -864,7 +872,6 @@ export class WorkingFileManager {
     workflowKey: WorkflowKey,
     runRef: RunRef,
     expectedDefinitionRevision: number,
-    expectedDescriptorRevision: number,
     transform: (source: WorkingFile) => { workingFile: WorkingFile; result: T },
     options: {
       lineageRepository?: WorkflowLineageRepository;
@@ -883,61 +890,61 @@ export class WorkingFileManager {
       workflowKey,
       runRef
     );
-
-    return lineageRepository.mutateDescriptorAtRevision(
+    const descriptorPath = WorkflowPaths.descriptorPath(
       workspaceFolderPath,
-      workflowKey,
-      expectedDescriptorRevision,
-      async (descriptor) => {
-        if (descriptor.pendingEdit) {
-          const pendingRewindOnThisRun =
-            descriptor.pendingEdit.kind === "rewind" &&
-            descriptor.pendingEdit.runRef === runRef;
-          if (!options.allowDuringPendingRewind || !pendingRewindOnThisRun) {
-            throw new Error(
-              "Cannot edit while this workflow has a draft or pending continuation"
-            );
-          }
-        }
-        return withFileLock(runFilePath, async () => {
-          const source = await readWorkingFileFromDisk(runFilePath);
-          const sourceRevision = source.definitionRevision ?? 1;
-          if (sourceRevision !== expectedDefinitionRevision) {
-            throw new Error(
-              `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${sourceRevision}`
-            );
-          }
-          const sourceState = source._runtime?.executionState;
-          if (
-            sourceState === EXECUTION_STATES.RUNNING ||
-            sourceState === EXECUTION_STATES.PAUSING ||
-            sourceState === EXECUTION_STATES.CANCELLING ||
-            sourceState === EXECUTION_STATES.PAUSED
-          ) {
-            throw new Error(`Cannot edit while run is in state ${sourceState}`);
-          }
-          const { workingFile: transformed, result } = transform(source);
-          const now = Date.now();
-          const workingFile: WorkingFile = {
-            ...transformed,
-            lastModifiedAt: now,
-            definitionRevision: sourceRevision + 1,
-          };
-          await writeWorkingFileAtomicTo(runFilePath, workingFile, {
-            skipLock: true,
-          });
-          return {
-            value: {
-              workingFile,
-              definitionRevision: workingFile.definitionRevision,
-              descriptorRevision: expectedDescriptorRevision + 1,
-              result,
-            },
-            descriptor,
-          };
-        });
-      }
+      workflowKey
     );
+
+    return withFileLock(descriptorPath, async () => {
+      const descriptor = await lineageRepository.readDescriptor(
+        workspaceFolderPath,
+        workflowKey
+      );
+      if (descriptor.pendingEdit) {
+        const pendingRewindOnThisRun =
+          descriptor.pendingEdit.kind === "rewind" &&
+          descriptor.pendingEdit.runRef === runRef;
+        if (!options.allowDuringPendingRewind || !pendingRewindOnThisRun) {
+          throw new Error(
+            "Cannot edit while this workflow has a draft or pending continuation"
+          );
+        }
+      }
+      return withFileLock(runFilePath, async () => {
+        const source = await readWorkingFileFromDisk(runFilePath);
+        const sourceRevision = source.definitionRevision ?? 1;
+        if (sourceRevision !== expectedDefinitionRevision) {
+          throw new Error(
+            `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${sourceRevision}`
+          );
+        }
+        const sourceState = source._runtime?.executionState;
+        if (
+          sourceState === EXECUTION_STATES.RUNNING ||
+          sourceState === EXECUTION_STATES.PAUSING ||
+          sourceState === EXECUTION_STATES.CANCELLING ||
+          sourceState === EXECUTION_STATES.PAUSED
+        ) {
+          throw new Error(`Cannot edit while run is in state ${sourceState}`);
+        }
+        const { workingFile: transformed, result } = transform(source);
+        const now = Date.now();
+        const workingFile: WorkingFile = {
+          ...transformed,
+          lastModifiedAt: now,
+          definitionRevision: sourceRevision + 1,
+        };
+        await writeWorkingFileAtomicTo(runFilePath, workingFile, {
+          skipLock: true,
+        });
+        return {
+          workingFile,
+          definitionRevision: workingFile.definitionRevision,
+          descriptorRevision: descriptor.revision,
+          result,
+        };
+      });
+    });
   }
 
   /**
@@ -952,7 +959,6 @@ export class WorkingFileManager {
     runRef: RunRef,
     properties: Record<string, unknown>,
     expectedDefinitionRevision: number,
-    expectedDescriptorRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     options: { allowDeletes?: boolean } = {}
   ): Promise<{
@@ -966,7 +972,6 @@ export class WorkingFileManager {
       workflowKey,
       runRef,
       expectedDefinitionRevision,
-      expectedDescriptorRevision,
       (source) => {
         const workingFile: WorkingFile = { ...source };
         const appliedKeys: string[] = [];
@@ -1007,7 +1012,6 @@ export class WorkingFileManager {
     runRef: RunRef,
     workflowName: string,
     expectedDefinitionRevision: number,
-    expectedDescriptorRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
   ): Promise<{
     workingFile: WorkingFile;
@@ -1019,7 +1023,6 @@ export class WorkingFileManager {
       workflowKey,
       runRef,
       expectedDefinitionRevision,
-      expectedDescriptorRevision,
       (source) => ({
         workingFile: { ...source, workflowName },
         result: undefined,
@@ -1041,7 +1044,6 @@ export class WorkingFileManager {
     afterIndex: number,
     step: WorkflowStep,
     expectedDefinitionRevision: number,
-    expectedDescriptorRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
   ): Promise<{
     workingFile: WorkingFile;
@@ -1053,7 +1055,6 @@ export class WorkingFileManager {
       workflowKey,
       runRef,
       expectedDefinitionRevision,
-      expectedDescriptorRevision,
       (source) => {
         const steps = source.steps ?? [];
         const isEmptyInsert = steps.length === 0 && afterIndex === -1;
@@ -1098,7 +1099,6 @@ export class WorkingFileManager {
     index: number,
     change: { updates: Partial<WorkflowStep> } | { replace: WorkflowStep },
     expectedDefinitionRevision: number,
-    expectedDescriptorRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
   ): Promise<{
     workingFile: WorkingFile;
@@ -1110,7 +1110,6 @@ export class WorkingFileManager {
       workflowKey,
       runRef,
       expectedDefinitionRevision,
-      expectedDescriptorRevision,
       (source) => {
         const steps = source.steps ?? [];
         if (index < 0 || index >= steps.length) {
@@ -1149,7 +1148,6 @@ export class WorkingFileManager {
     runRef: RunRef,
     index: number,
     expectedDefinitionRevision: number,
-    expectedDescriptorRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
   ): Promise<{
     workingFile: WorkingFile;
@@ -1161,7 +1159,6 @@ export class WorkingFileManager {
       workflowKey,
       runRef,
       expectedDefinitionRevision,
-      expectedDescriptorRevision,
       (source) => {
         const steps = source.steps ?? [];
         if (index < 0 || index >= steps.length) {
@@ -1200,7 +1197,6 @@ export class WorkingFileManager {
     runRef: RunRef,
     newPendingOrder: number[],
     expectedDefinitionRevision: number,
-    expectedDescriptorRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
   ): Promise<{
     workingFile: WorkingFile;
@@ -1212,7 +1208,6 @@ export class WorkingFileManager {
       workflowKey,
       runRef,
       expectedDefinitionRevision,
-      expectedDescriptorRevision,
       (source) => {
         const steps = source.steps ?? [];
         const currentIndex = source._runtime?.currentIndex ?? 0;
@@ -1245,7 +1240,6 @@ export class WorkingFileManager {
     runRef: RunRef,
     newSteps: WorkflowStep[],
     expectedDefinitionRevision: number,
-    expectedDescriptorRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
   ): Promise<{
     workingFile: WorkingFile;
@@ -1257,7 +1251,6 @@ export class WorkingFileManager {
       workflowKey,
       runRef,
       expectedDefinitionRevision,
-      expectedDescriptorRevision,
       (source) => {
         const existingSteps = source.steps ?? [];
         const nextSteps = newSteps.map((newStep, index) => {

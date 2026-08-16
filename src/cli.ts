@@ -1023,7 +1023,6 @@ async function executeAddressedCliOperation(
       runRef,
       tail,
       target.definitionRevision,
-      target.descriptorRevision,
       lineageRepository,
       target.allowInterruptedRun
     );
