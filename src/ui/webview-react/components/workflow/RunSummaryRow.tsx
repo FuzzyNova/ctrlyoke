@@ -16,6 +16,9 @@ import type { WorkflowRowTier } from "../../constants";
 import { HARNESS_INFO, type HarnessId } from "../../types/messages";
 import { formatRelativeTimeVerbose } from "../../utils/time";
 import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
+import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
+import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 
 /** One row of the run panel's flat draft+run list. */
 export type RunPanelRow =
@@ -34,6 +37,17 @@ interface RunSummaryRowProps {
   isLive: boolean;
   tier?: WorkflowRowTier;
   canDelete: boolean;
+  /** Address resolved by RunPanel's shared addressForRow helper. */
+  contextMenuAddress?: WorkflowViewAddress;
+  workflowName?: string;
+  isFavorite?: boolean;
+  draftDirectory?: string;
+  onOpenContextMenu?: (
+    x: number,
+    y: number,
+    target: WorkflowContextMenuTarget,
+    opener?: HTMLElement | null
+  ) => void;
   onSelect: () => void;
   onDelete?: () => void;
 }
@@ -59,6 +73,11 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
   isLive,
   tier = "stacked",
   canDelete,
+  contextMenuAddress,
+  workflowName,
+  isFavorite,
+  draftDirectory,
+  onOpenContextMenu,
   onSelect,
   onDelete,
 }) => {
@@ -93,9 +112,43 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
     workflowTokenTotalsAccessibleLabel(summary?.tokenTotals),
     timeAgo,
   ]);
+  const openContextMenu = (
+    x: number,
+    y: number,
+    opener: HTMLElement | null = null
+  ) => {
+    if (!contextMenuAddress) return;
+    onOpenContextMenu?.(
+      x,
+      y,
+      {
+        address: contextMenuAddress,
+        workflowName: workflowName ?? label,
+        scope: "run",
+        isFavorite,
+        runDirectory:
+          row.kind === "run" ? summary?.runDirectory : draftDirectory,
+        isExecuting: isLive,
+      },
+      opener
+    );
+  };
+  const longPressHandlers = useLongPress(
+    onOpenContextMenu && contextMenuAddress ? openContextMenu : undefined
+  );
 
   return (
+    /* eslint-disable-next-line jsx-a11y/interactive-supports-focus -- the row container owns right-click/long-press gestures; its nested WorkflowRowLayout button remains the focusable action */
     <div
+      {...longPressHandlers}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        openContextMenu(
+          event.clientX,
+          event.clientY,
+          getContextMenuOpener(event.currentTarget, event.target)
+        );
+      }}
       data-scroll-key={rowKey}
       role="option"
       aria-selected={isViewed}

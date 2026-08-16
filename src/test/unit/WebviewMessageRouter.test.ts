@@ -12,17 +12,18 @@ import * as assert from "assert";
 import * as path from "path";
 import * as vscode from "vscode";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
-import {
-  MESSAGE_TYPES,
-  VSCODE_COMMANDS,
-} from "../../types/DashboardConstants";
+import { MESSAGE_TYPES, VSCODE_COMMANDS } from "../../types/DashboardConstants";
+import { WorkflowVariantService } from "../../core/orchestration/WorkflowVariantService";
 
-function buildRouter(orchestrator: unknown): WebviewMessageRouter {
+function buildRouter(
+  orchestrator: unknown,
+  defaultPostMessage: (message: unknown) => void = () => {}
+): WebviewMessageRouter {
   const settingsSync = {
     sendWorkflowPropertiesToSettings: async () => {},
   } as any;
   return new WebviewMessageRouter(
-    () => {},
+    defaultPostMessage,
     settingsSync,
     {} as any,
     () => orchestrator as any,
@@ -188,6 +189,114 @@ suite("WebviewMessageRouter — workspace statistics", () => {
       snapshot,
     });
     assert.deepStrictEqual(calls, ["refreshWorkspaceStats"]);
+  });
+});
+
+suite("WebviewMessageRouter — workflow variant delivery", () => {
+  const originalCreateWorkflowVariant =
+    WorkflowVariantService.prototype.createWorkflowVariant;
+
+  teardown(() => {
+    WorkflowVariantService.prototype.createWorkflowVariant =
+      originalCreateWorkflowVariant;
+  });
+
+  function variantMessage(requestId: string) {
+    return {
+      type: MESSAGE_TYPES.CREATE_WORKFLOW_VARIANT,
+      requestId,
+      source: { workflowKey: "source-workflow", kind: "draft" as const },
+      workflowName: "Variant",
+    };
+  }
+
+  test("creates once and replays the same reply to identical same-client retries", async () => {
+    let createCount = 0;
+    WorkflowVariantService.prototype.createWorkflowVariant = async () => {
+      createCount += 1;
+      return { workflowKey: "created-workflow" as never, kind: "draft" };
+    };
+    const browserMessages: unknown[] = [];
+    const otherClientMessages: unknown[] = [];
+    const router = buildRouter(undefined, (reply) =>
+      otherClientMessages.push(reply)
+    );
+    const message = variantMessage("duplicate-1");
+
+    await Promise.all([
+      router.route(message, {
+        clientTag: "browser:one",
+        postMessage: (reply) => browserMessages.push(reply),
+      }),
+      router.route(
+        { ...message },
+        {
+          clientTag: "browser:one",
+          postMessage: (reply) => browserMessages.push(reply),
+        }
+      ),
+    ]);
+
+    assert.strictEqual(createCount, 1);
+    assert.strictEqual(browserMessages.length, 2);
+    assert.deepStrictEqual(browserMessages[1], browserMessages[0]);
+    assert.strictEqual(
+      otherClientMessages.length,
+      0,
+      "variant replies must not be broadcast to another client"
+    );
+  });
+
+  test("allows different request ids to create independently", async () => {
+    let createCount = 0;
+    WorkflowVariantService.prototype.createWorkflowVariant = async () => ({
+      workflowKey: `created-${++createCount}` as never,
+      kind: "draft",
+    });
+    const messages: unknown[] = [];
+    const router = buildRouter(undefined);
+
+    await router.route(variantMessage("duplicate-a"), {
+      clientTag: "browser:one",
+      postMessage: (reply) => messages.push(reply),
+    });
+    await router.route(variantMessage("duplicate-b"), {
+      clientTag: "browser:one",
+      postMessage: (reply) => messages.push(reply),
+    });
+
+    assert.strictEqual(createCount, 2);
+    assert.notDeepStrictEqual(messages[0], messages[1]);
+  });
+
+  test("replays a failed result without retrying creation", async () => {
+    let createCount = 0;
+    WorkflowVariantService.prototype.createWorkflowVariant = async () => {
+      createCount += 1;
+      throw new Error("creation failed");
+    };
+    const messages: unknown[] = [];
+    const router = buildRouter(undefined);
+    const message = variantMessage("failed-1");
+
+    await router.route(message, {
+      clientTag: "browser:one",
+      postMessage: (reply) => messages.push(reply),
+    });
+    await router.route(
+      { ...message },
+      {
+        clientTag: "browser:one",
+        postMessage: (reply) => messages.push(reply),
+      }
+    );
+
+    assert.strictEqual(createCount, 1);
+    assert.deepStrictEqual(messages[1], messages[0]);
+    assert.strictEqual(
+      (messages[0] as any).type,
+      MESSAGE_TYPES.WORKFLOW_VARIANT_FAILED
+    );
   });
 });
 

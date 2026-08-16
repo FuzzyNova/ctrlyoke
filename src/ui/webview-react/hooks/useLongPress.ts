@@ -1,5 +1,17 @@
 import { useRef, useCallback } from "react";
 
+export function getContextMenuOpener(
+  currentTarget: EventTarget | null,
+  target: EventTarget | null
+): HTMLElement | null {
+  const targetElement = target instanceof HTMLElement ? target : null;
+  const targetButton = targetElement?.closest("button");
+  if (targetButton) return targetButton;
+  return currentTarget instanceof HTMLElement
+    ? currentTarget.querySelector("button")
+    : null;
+}
+
 /** Pixels the touch point must travel before cancelling the long-press timer. */
 const MOVE_THRESHOLD = 10;
 
@@ -22,7 +34,10 @@ const MOVE_THRESHOLD = 10;
  * elements have their own long-press handlers.
  */
 export function useLongPress(
-  callback: ((x: number, y: number) => void) | null | undefined,
+  callback:
+    | ((x: number, y: number, opener: HTMLElement | null) => void)
+    | null
+    | undefined,
   delay = 500,
   requireSelf = false
 ) {
@@ -44,11 +59,12 @@ export function useLongPress(
       const touch = e.touches[0];
       const x = touch.clientX;
       const y = touch.clientY;
+      const opener = getContextMenuOpener(e.currentTarget, e.target);
       startPosRef.current = { x, y };
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
         startPosRef.current = null;
-        callback(x, y);
+        callback(x, y, opener);
       }, delay);
     },
     [callback, delay, requireSelf]

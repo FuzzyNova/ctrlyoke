@@ -85,6 +85,7 @@ const RUN_ADDRESS = {
 const RUN_SUMMARY = {
   workflowKey: RUN_ADDRESS.workflowKey,
   runRef: RUN_ADDRESS.runRef,
+  runDirectory: "/runs/wf-smoke/run",
   runId: 3,
   startedAt: 1_700_000_000_000,
   executionState: EXECUTION_STATES.COMPLETED,

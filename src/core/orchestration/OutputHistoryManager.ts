@@ -1028,6 +1028,7 @@ export class OutputHistoryManager {
         summary: {
           workflowKey,
           runRef,
+          runDirectory: runDirectoryPath,
           runId: manifest.runId,
           startedAt: manifest.startedAt,
           // The run's own working file wins over the manifest's denormalized

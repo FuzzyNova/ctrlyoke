@@ -11,6 +11,7 @@ function summary(runId: number, runRef: string): RunSummary {
   return {
     workflowKey: WORKFLOW_KEY,
     runRef: runRef as never,
+    runDirectory: "/runs/wf-1/run",
     runId,
     startedAt: runId * 1000,
     executionState: "completed" as never,

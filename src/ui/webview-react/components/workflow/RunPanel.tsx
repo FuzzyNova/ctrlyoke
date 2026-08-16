@@ -10,8 +10,10 @@ import {
 } from "../../constants";
 import type {
   WorkflowKey,
+  RunRef,
   WorkflowViewAddress,
 } from "@root/types/CtrlYokeTypes";
+import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
 
 /** Builds the stable list key for a run-panel row — draft or run:{workflowKey}:{runRef}. */
 function runPanelRowKey(workflowKey: WorkflowKey, row: RunPanelRow): string {
@@ -49,11 +51,21 @@ interface RunPanelProps {
   isViewingHistory: boolean;
   /** This lineage's executing run, if any — drives the live indicator and delete protection. */
   executionRunRef?: string | null;
+  /** Favorite state from the drilled lineage's recent entry. */
+  isFavorite?: boolean;
+  /** Always the draft directory, even when the lineage's primary address is a run. */
+  draftDirectory?: string;
   confirmDeleteOperations: boolean;
   onBack: () => void;
   onClose?: () => void;
   onSelectRow: (address: WorkflowViewAddress) => void;
-  onDeleteRun: (runRef: string) => void;
+  onOpenContextMenu?: (
+    x: number,
+    y: number,
+    target: WorkflowContextMenuTarget,
+    opener?: HTMLElement | null
+  ) => void;
+  onDeleteRun: (runRef: RunRef) => void;
   onDeleteAllRuns: () => void;
   /** Row to scroll into view once (the viewed run, when opened via the badge). */
   scrollToKey?: string | null;
@@ -76,10 +88,13 @@ export const RunPanel: React.FC<RunPanelProps> = ({
   displayedAddress,
   isViewingHistory,
   executionRunRef,
+  isFavorite,
+  draftDirectory,
   confirmDeleteOperations,
   onBack,
   onClose,
   onSelectRow,
+  onOpenContextMenu,
   onDeleteRun,
   onDeleteAllRuns,
   scrollToKey = null,
@@ -250,6 +265,11 @@ export const RunPanel: React.FC<RunPanelProps> = ({
                   isLive={isLive}
                   tier={tier}
                   canDelete={row.kind === "run" && !isLive}
+                  contextMenuAddress={addressForRow(workflowKey, row)}
+                  workflowName={workflowName}
+                  isFavorite={isFavorite}
+                  draftDirectory={draftDirectory}
+                  onOpenContextMenu={onOpenContextMenu}
                   onSelect={() => handleSelect(row)}
                   onDelete={
                     row.kind === "run"

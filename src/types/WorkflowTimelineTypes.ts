@@ -122,6 +122,7 @@ export interface WorkflowRunManifest {
 export interface RunSummary {
   workflowKey: WorkflowKey;
   runRef: RunRef;
+  runDirectory: string;
   runId: number;
   startedAt: number;
   completedAt?: number;

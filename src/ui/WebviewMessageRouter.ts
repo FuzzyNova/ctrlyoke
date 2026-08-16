@@ -46,6 +46,10 @@ import type {
   DeleteAllFromHarnessMessage,
   OpenHarnessDirMessage,
 } from "../types/WebviewMessageTypes";
+import type {
+  WorkflowVariantCreatedMessage,
+  WorkflowVariantFailedMessage,
+} from "../types/WebviewMessageTypes";
 import { UndoRedoCoordinator } from "./UndoRedoCoordinator";
 import { WorkflowMutationCoordinator } from "./WorkflowMutationCoordinator";
 import { PromptEditorSupportService } from "./PromptEditorSupportService";
@@ -58,6 +62,7 @@ import {
   type WebviewClientContext,
 } from "./WebviewClientContext";
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
+import { WorkflowVariantService } from "../core/orchestration/WorkflowVariantService";
 import { redactExecutionPreview } from "../types/PreviewRedactor";
 
 /**
@@ -70,6 +75,18 @@ type WebviewMessageHandler = (
 ) => void | Promise<void>;
 
 type DispatchTable = Map<string, WebviewMessageHandler>;
+
+type WorkflowVariantReply =
+  | WorkflowVariantCreatedMessage
+  | WorkflowVariantFailedMessage;
+
+interface WorkflowVariantRequestCacheEntry {
+  reply: Promise<WorkflowVariantReply>;
+  completedAt?: number;
+}
+
+const WORKFLOW_VARIANT_REQUEST_CACHE_TTL_MS = 10 * 60 * 1000;
+const WORKFLOW_VARIANT_REQUEST_CACHE_MAX_ENTRIES = 256;
 
 /**
  * WebviewMessageRouter
@@ -92,6 +109,10 @@ export class WebviewMessageRouter {
   private readonly mcpManager: McpManagerService;
   private readonly terminalHandlers: TerminalMessageHandlers;
   private readonly workflowStepHandlers: WorkflowStepHandlers;
+  private readonly workflowVariantRequests = new Map<
+    string,
+    WorkflowVariantRequestCacheEntry
+  >();
 
   constructor(
     private readonly defaultPostMessage: PostMessageFn,
@@ -219,6 +240,7 @@ export class WebviewMessageRouter {
     this.registerMcpManager(table);
     this.registerHarnessFiles(table);
     this.registerOutputHistory(table);
+    this.registerWorkflowVariants(table);
     this.registerWorkflowModal(table);
     this.registerWorkflowStatus(table);
     this.registerSettings(table);
@@ -972,6 +994,87 @@ export class WebviewMessageRouter {
         }
       }
     );
+  }
+
+  private registerWorkflowVariants(table: DispatchTable): void {
+    table.set(MESSAGE_TYPES.CREATE_WORKFLOW_VARIANT, async (message, ctx) => {
+      this.pruneWorkflowVariantRequests();
+      const cacheKey = `${ctx.clientId}\u0000${message.requestId}`;
+      let entry = this.workflowVariantRequests.get(cacheKey);
+      if (!entry) {
+        const reply = this.createWorkflowVariantReply(message);
+        entry = { reply };
+        this.workflowVariantRequests.set(cacheKey, entry);
+        reply.then(() => {
+          const current = this.workflowVariantRequests.get(cacheKey);
+          if (current?.reply === reply) {
+            current.completedAt = Date.now();
+            this.pruneWorkflowVariantRequests();
+          }
+        });
+      }
+
+      // Always reply through the context captured for this inbound message.
+      // Retries from a hosted client must not broadcast or follow another
+      // client's transport.
+      ctx.postMessage(await entry.reply);
+    });
+
+    // These are extension → webview replies. They are registered so the
+    // dispatch table remains complete if a transport feeds a reply back into
+    // the router; the originating handler above is the only producer.
+    table.set(MESSAGE_TYPES.WORKFLOW_VARIANT_CREATED, () => undefined);
+    table.set(MESSAGE_TYPES.WORKFLOW_VARIANT_FAILED, () => undefined);
+  }
+
+  private async createWorkflowVariantReply(
+    message: any
+  ): Promise<WorkflowVariantReply> {
+    try {
+      const address = await new WorkflowVariantService(
+        this.getWorkspaceRoot()
+      ).createWorkflowVariant({
+        source: message.source,
+        workflowName: message.workflowName,
+        overrides: message.overrides,
+      });
+      return {
+        type: MESSAGE_TYPES.WORKFLOW_VARIANT_CREATED,
+        requestId: message.requestId,
+        address,
+      };
+    } catch (error) {
+      return {
+        type: MESSAGE_TYPES.WORKFLOW_VARIANT_FAILED,
+        requestId: message.requestId,
+        error: getErrorMessage(error),
+      };
+    }
+  }
+
+  private pruneWorkflowVariantRequests(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.workflowVariantRequests) {
+      if (
+        entry.completedAt !== undefined &&
+        now - entry.completedAt >= WORKFLOW_VARIANT_REQUEST_CACHE_TTL_MS
+      ) {
+        this.workflowVariantRequests.delete(key);
+      }
+    }
+
+    const completed = [...this.workflowVariantRequests.entries()]
+      .filter(([, entry]) => entry.completedAt !== undefined)
+      .sort(([, left], [, right]) => left.completedAt! - right.completedAt!);
+    for (const [key] of completed) {
+      if (
+        this.workflowVariantRequests.size <=
+        WORKFLOW_VARIANT_REQUEST_CACHE_MAX_ENTRIES
+      ) {
+        break;
+      }
+      this.workflowVariantRequests.delete(key);
+    }
   }
 
   private registerWorkflowModal(table: DispatchTable): void {

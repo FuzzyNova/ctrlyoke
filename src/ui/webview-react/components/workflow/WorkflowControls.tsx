@@ -44,7 +44,11 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
     ? HEADER_BUTTON_SIZES.touch
     : HEADER_BUTTON_SIZES.default;
   const { fileName } = useWorkflowStore();
+  const workflowName = useWorkflowStore((state) => state.workflowName);
   const { displayedViewAddress } = useUiStore();
+  const openDuplicateWorkflowDialog = useUiStore(
+    (state) => state.openDuplicateWorkflowDialog
+  );
   const [filePickerMode, setFilePickerMode] = useState<"load" | "queue" | null>(
     null
   );
@@ -80,6 +84,20 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
     }
     postWorkflowDefinitionMutation(vscode, { type: MESSAGE_TYPES.APPEND_FILE });
   }, [vscode, hasQueue]);
+
+  const handleDuplicateWorkflow = useCallback(
+    (invoker?: HTMLElement | null) => {
+      if (!displayedViewAddress) return;
+      openDuplicateWorkflowDialog(
+        {
+          source: displayedViewAddress,
+          workflowName: workflowName || "Untitled Workflow",
+        },
+        invoker
+      );
+    },
+    [displayedViewAddress, openDuplicateWorkflowDialog, workflowName]
+  );
 
   const handlePickerSelect = useCallback(
     (filePath: string) => {
@@ -119,6 +137,15 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
       icon: <i className="custom-icon icon-queue-from-file" />,
       onClick: handleQueueFile,
       disabled: !hasQueue,
+    },
+    {
+      label: isViewingRun
+        ? "Duplicate This Run as New Workflow…"
+        : "Duplicate Workflow…",
+      value: "duplicate-workflow",
+      icon: <i className="codicon codicon-copy" />,
+      onClick: handleDuplicateWorkflow,
+      disabled: !displayedViewAddress,
     },
   ];
 

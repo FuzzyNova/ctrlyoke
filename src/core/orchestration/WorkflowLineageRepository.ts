@@ -70,7 +70,13 @@ export class WorkflowLineageRepository {
     workspaceRoot: string,
     nameHint: string,
     workflowName: string,
-    originalFile?: string
+    originalFile?: string,
+    provenance?: {
+      sourceWorkflowKey: WorkflowKey;
+      sourceRunRef?: RunRef;
+      sourceWorkflowName: string;
+      variantCreatedAt: number;
+    }
   ): Promise<CreatedLineage> {
     const workflowKey = await WorkflowPaths.allocateWorkflowKey(
       workspaceRoot,
@@ -83,6 +89,7 @@ export class WorkflowLineageRepository {
       workflowKey,
       workflowName,
       ...(originalFile ? { originalFile } : {}),
+      ...(provenance ?? {}),
       isFavorite: false,
       createdAt: now,
       lastModifiedAt: now,
@@ -101,6 +108,33 @@ export class WorkflowLineageRepository {
       descriptor,
       draftFilePath: WorkflowPaths.draftFilePath(workspaceRoot, workflowKey),
     };
+  }
+
+  /**
+   * Removes only a newly-created lineage that has not published a run. This is
+   * used to roll back a failed draft write after `createLineage` allocated its
+   * key; established lineages and any lineage with a run are never removed by
+   * this method.
+   */
+  async removeIncompleteLineage(
+    workspaceRoot: string,
+    workflowKey: WorkflowKey
+  ): Promise<void> {
+    const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
+    if (descriptor.workflowKey !== workflowKey || descriptor.latestRunRef) {
+      throw new Error(
+        `Refusing to remove published lineage "${workflowKey}" during rollback`
+      );
+    }
+    if ((await this.listRunRefs(workspaceRoot, workflowKey)).length > 0) {
+      throw new Error(
+        `Refusing to remove lineage "${workflowKey}" with published runs`
+      );
+    }
+    await fs.promises.rm(WorkflowPaths.lineageDir(workspaceRoot, workflowKey), {
+      recursive: true,
+      force: true,
+    });
   }
 
   async readDescriptor(

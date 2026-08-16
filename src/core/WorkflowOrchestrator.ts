@@ -2309,6 +2309,19 @@ export class WorkflowOrchestrator {
         );
   }
 
+  private resolveAddressDirectory(
+    workspaceRoot: string,
+    address: WorkflowViewAddress
+  ): string {
+    return address.kind === "draft"
+      ? WorkflowPaths.draftDir(workspaceRoot, address.workflowKey)
+      : WorkflowPaths.runDir(
+          workspaceRoot,
+          address.workflowKey,
+          address.runRef
+        );
+  }
+
   async getViewIdentity(
     clientId: string
   ): Promise<WorkflowViewIdentityMessage | null> {
@@ -2329,6 +2342,7 @@ export class WorkflowOrchestrator {
       return {
         type: MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY,
         address,
+        runDirectory: this.resolveAddressDirectory(workspaceRoot, address),
         definitionRevision:
           (JSON.parse(content) as WorkingFile).definitionRevision ?? 1,
         descriptorRevision: descriptor.revision,
@@ -2716,12 +2730,16 @@ export class WorkflowOrchestrator {
   ): void {
     const { workingFile } = view;
     const executionRunRef = this.findExecutionRunRef(address.workflowKey);
+    const workspaceRoot = this.currentWorkspaceFolder?.uri.fsPath;
     this.getViewAddressRegistry().set(clientId, address);
     this.getViewMessageSinks().set(clientId, send);
     const snapshot: RunViewLoadedMessage = {
       type: MESSAGE_TYPES.RUN_VIEW_LOADED,
       requestId,
       address,
+      ...(workspaceRoot
+        ? { runDirectory: this.resolveAddressDirectory(workspaceRoot, address) }
+        : {}),
       workingFile,
       history: view.history,
       runSummaries: view.runSummaries,

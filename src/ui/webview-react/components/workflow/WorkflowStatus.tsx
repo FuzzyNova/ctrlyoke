@@ -37,6 +37,7 @@ import {
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 import type {
   WorkflowKey,
+  RunRef,
   WorkflowViewAddress,
 } from "@root/types/CtrlYokeTypes";
 import { DateRangeFilterControls, MultiCheckboxDropdown } from "../shared";
@@ -45,6 +46,11 @@ import { isWorkflowActive, isWorkflowRunning } from "../../utils/status";
 import { ExecutionStateBadge } from "../shared/ExecutionStateBadge";
 import { useElementNarrow, useElementTier } from "../../hooks/useElementNarrow";
 import { useIsMobile } from "@hooks/useMediaQuery";
+import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
+import {
+  useWorkflowContextMenu,
+  type WorkflowContextMenuTarget,
+} from "@hooks/useWorkflowContextMenu";
 import { WebviewLog } from "@utils/logger";
 import {
   resolveWorkflowRowTier,
@@ -75,6 +81,11 @@ const WORKFLOW_ROW_WIDTH_CSS_VAR = "--workflow-row-usable-width";
 // slide-out-right animation so a missed animationend cannot strand the
 // dropdown in its departing run-panel state.
 const RUN_PANEL_EXIT_FALLBACK_MS = 320;
+
+type PendingDelete = {
+  address: WorkflowViewAddress;
+  scope: WorkflowContextMenuTarget["scope"];
+};
 
 function roundMetric(value: number): number {
   return Math.round(value * 10) / 10;
@@ -111,9 +122,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     activeWorkflowId,
     activeWorkflowWorkingFilePath,
     displayedViewAddress,
+    displayedRunDirectory,
     pendingRunViewSwitch,
     recentWorkflows,
     setRecentWorkflows,
+    openDuplicateWorkflowDialog,
     setActiveWorkflowWorkingFilePath,
     runSummaries,
     executionRunRef,
@@ -299,9 +312,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     DEFAULT_DATE_RANGE_FILTER
   );
   const [favoriteWorkflowsOnly, setFavoriteWorkflowsOnly] = useState(false);
-  // Pending workflow path waiting for delete confirmation
-  const [pendingDeleteAddress, setPendingDeleteAddress] =
-    useState<WorkflowViewAddress | null>(null);
+  // Pending lineage or run address waiting for delete confirmation.
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(
+    null
+  );
   const sortedRecentWorkflows = useMemo(
     () => sortRecentWorkflows(recentWorkflows),
     [recentWorkflows]
@@ -643,7 +657,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target;
       const isDropdownPortalClick =
-        target instanceof Element && target.closest(".fp-dropdown-popup");
+        target instanceof Element &&
+        target.closest(".fp-dropdown-popup, .step-context-menu");
       if (
         containerRef.current &&
         !containerRef.current.contains(event.target as Node) &&
@@ -950,18 +965,23 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   );
 
   const handleDeleteRunPanelRow = useCallback(
-    (runRef: string) => {
+    (runRef: RunRef, requestConfirmation = false) => {
       if (!drilledWorkflow) return;
+      const address: WorkflowViewAddress = {
+        workflowKey: drilledWorkflow.workflowKey,
+        kind: "run",
+        runRef,
+      };
+      if (requestConfirmation && globalSettings.confirmDeleteOperations) {
+        setPendingDelete({ address, scope: "run" });
+        return;
+      }
       vscode.postMessage({
         type: MESSAGE_TYPES.DELETE_RUN_HISTORY,
-        address: {
-          workflowKey: drilledWorkflow.workflowKey,
-          kind: "run",
-          runRef,
-        },
+        address,
       });
     },
-    [drilledWorkflow, vscode]
+    [drilledWorkflow, globalSettings.confirmDeleteOperations, vscode]
   );
 
   const handleDeleteAllRunsInPanel = useCallback(() => {
@@ -998,30 +1018,37 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         return;
       }
       // Show confirmation modal
-      setPendingDeleteAddress(address);
+      setPendingDelete({ address, scope: "lineage" });
     },
     [globalSettings.confirmDeleteOperations, setRecentWorkflows, vscode]
   );
 
   // Confirmed: actually remove the workflow history entry
   const handleRemoveWorkflowConfirm = useCallback(() => {
-    if (!pendingDeleteAddress) return;
-    vscode.postMessage({
-      type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
-      address: pendingDeleteAddress,
-    });
-    setRecentWorkflows(
-      useUiStore
-        .getState()
-        .recentWorkflows.filter(
-          (w) => w.address.workflowKey !== pendingDeleteAddress.workflowKey
-        )
-    );
-    setPendingDeleteAddress(null);
-  }, [pendingDeleteAddress, setRecentWorkflows, vscode]);
+    if (!pendingDelete) return;
+    if (pendingDelete.scope === "run") {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.DELETE_RUN_HISTORY,
+        address: pendingDelete.address,
+      });
+    } else {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
+        address: pendingDelete.address,
+      });
+      setRecentWorkflows(
+        useUiStore
+          .getState()
+          .recentWorkflows.filter(
+            (w) => w.address.workflowKey !== pendingDelete.address.workflowKey
+          )
+      );
+    }
+    setPendingDelete(null);
+  }, [pendingDelete, setRecentWorkflows, vscode]);
 
   const handleRemoveWorkflowCancel = useCallback(() => {
-    setPendingDeleteAddress(null);
+    setPendingDelete(null);
   }, []);
 
   const handleToggleFavorite = useCallback(
@@ -1045,6 +1072,88 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       );
     },
     [setRecentWorkflows, vscode]
+  );
+
+  const handleWorkflowContextMenuDelete = useCallback(
+    (target: WorkflowContextMenuTarget) => {
+      if (target.scope === "lineage") {
+        handleRemoveWorkflow(target.address);
+        return;
+      }
+      if (target.address.kind === "run") {
+        handleDeleteRunPanelRow(target.address.runRef, true);
+      }
+    },
+    [handleDeleteRunPanelRow, handleRemoveWorkflow]
+  );
+
+  const handleDuplicateWorkflow = useCallback(
+    (target: WorkflowContextMenuTarget, opener: HTMLElement | null) => {
+      openDuplicateWorkflowDialog(
+        {
+          source: target.address,
+          workflowName: target.workflowName,
+        },
+        opener
+      );
+    },
+    [openDuplicateWorkflowDialog]
+  );
+
+  const {
+    openContextMenu: openWorkflowContextMenu,
+    workflowContextMenuPortal,
+  } = useWorkflowContextMenu({
+    onDuplicate: handleDuplicateWorkflow,
+    onToggleFavorite: handleToggleFavorite,
+    onDelete: handleWorkflowContextMenuDelete,
+    onCloseDropdown: closeDropdown,
+  });
+
+  const openDisplayedWorkflowContextMenu = useCallback(
+    (x: number, y: number, opener: HTMLElement | null = null) => {
+      if (!displayedViewAddress) return;
+      const displayedLineage = recentWorkflows.find(
+        (workflow) =>
+          workflow.address.workflowKey === displayedViewAddress.workflowKey
+      );
+      openWorkflowContextMenu(
+        x,
+        y,
+        {
+          address: displayedViewAddress,
+          workflowName: displayName,
+          scope: "lineage",
+          isFavorite: displayedLineage?.isFavorite,
+          runDirectory: displayedRunDirectory ?? undefined,
+          isExecuting: isWorkflowActive(executionState),
+        },
+        opener
+      );
+    },
+    [
+      displayName,
+      displayedRunDirectory,
+      displayedViewAddress,
+      executionState,
+      openWorkflowContextMenu,
+      recentWorkflows,
+    ]
+  );
+
+  const workflowLongPressHandlers = useLongPress(
+    openDisplayedWorkflowContextMenu
+  );
+  const handleWorkflowContextMenu = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      openDisplayedWorkflowContextMenu(
+        event.clientX,
+        event.clientY,
+        getContextMenuOpener(event.currentTarget, event.target)
+      );
+    },
+    [openDisplayedWorkflowContextMenu]
   );
 
   // Runtime actions target the stable run address, never an instance UUID.
@@ -1384,7 +1493,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         />
       ) : (
         /* Display Mode - Split Button Style */
+        /* eslint-disable-next-line jsx-a11y/no-static-element-interactions */
         <div
+          {...workflowLongPressHandlers}
+          onContextMenu={handleWorkflowContextMenu}
           className={`workflow-split-button flex border rounded-button overflow-hidden max-w-full sm:max-w-[500px] lg:max-w-none w-full min-w-0 transition-colors ${wfStatusSize.container} ${isDropdownOpen ? "border-cmd-active-border" : "border-cmd-border"}`}
         >
           {/* Main Button - Workflow Name */}
@@ -1565,6 +1677,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               onClearHistory={handleClearHistory}
               onRemove={handleRemoveWorkflow}
               onToggleFavorite={handleToggleFavorite}
+              onOpenContextMenu={openWorkflowContextMenu}
               onDrillIntoRuns={handleDrillIntoRuns}
               tier={dropdownRowTier}
               onClose={closeDropdown}
@@ -1604,10 +1717,13 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                 displayedAddress={displayedViewAddress}
                 isViewingHistory={isViewingHistory}
                 executionRunRef={runPanelExecutionRunRef}
+                isFavorite={drilledRecentEntry?.isFavorite}
+                draftDirectory={drilledRecentEntry?.runNav?.draftDirectory}
                 confirmDeleteOperations={globalSettings.confirmDeleteOperations}
                 onBack={handleBackToWorkflowList}
                 onClose={closeDropdown}
                 onSelectRow={handleSelectRunPanelRow}
+                onOpenContextMenu={openWorkflowContextMenu}
                 onDeleteRun={handleDeleteRunPanelRow}
                 onDeleteAllRuns={handleDeleteAllRunsInPanel}
                 scrollToKey={runPanelScrollToKey}
@@ -1618,13 +1734,26 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       </div>
 
       {/* Delete workflow history confirmation modal */}
+      {workflowContextMenuPortal}
       <DeleteConfirmModal
-        isOpen={pendingDeleteAddress !== null}
+        isOpen={pendingDelete !== null}
         onCancel={handleRemoveWorkflowCancel}
         onConfirm={handleRemoveWorkflowConfirm}
-        title="Delete Workflow History"
-        message={`Remove "${pendingDeleteAddress ? pendingDeleteAddress.workflowKey : ""}" from history?`}
-        detail="This will permanently delete the workflow's queue files and all run history. This action cannot be undone."
+        title={
+          pendingDelete?.scope === "run"
+            ? "Delete Run History"
+            : "Delete Workflow History"
+        }
+        message={
+          pendingDelete?.scope === "run"
+            ? `Delete run "${pendingDelete.address.kind === "run" ? pendingDelete.address.runRef : ""}"?`
+            : `Remove "${pendingDelete?.address.workflowKey ?? ""}" from history?`
+        }
+        detail={
+          pendingDelete?.scope === "run"
+            ? "This will permanently delete this run's history. This action cannot be undone."
+            : "This will permanently delete the workflow's queue files and all run history. This action cannot be undone."
+        }
       />
     </div>
   );

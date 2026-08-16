@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import {
   WorkflowList,
   type UnifiedWorkflowRow,
@@ -152,4 +152,57 @@ describe("WorkflowList token totals", () => {
       ).not.toHaveAttribute("aria-label", expect.stringMatching(/tokens/));
     }
   );
+});
+
+describe("WorkflowList context targets", () => {
+  afterEach(() => cleanup());
+
+  it("builds a lineage target from a recent row", () => {
+    const onOpenContextMenu = vi.fn();
+    render(
+      <WorkflowList
+        rows={[
+          {
+            kind: "recent",
+            key: "recent:wf",
+            workflow: {
+              address: { workflowKey: "wf" as never, kind: "draft" },
+              workflowName: "Workflow",
+              executionState: EXECUTION_STATES.COMPLETED,
+              isFavorite: true,
+              runDirectory: "/runs/wf/draft",
+            },
+          },
+        ]}
+        currentAddress={null}
+        activeWorkflowId={null}
+        runningHasActiveTerminal={() => false}
+        onSelectRecent={() => undefined}
+        onSwitchRunning={() => undefined}
+        onPauseRunning={() => undefined}
+        onCancelPauseRunning={() => undefined}
+        onResumeRunning={() => undefined}
+        onStopRunning={() => undefined}
+        onClearHistory={() => undefined}
+        onOpenContextMenu={onOpenContextMenu}
+      />
+    );
+
+    fireEvent.contextMenu(document.querySelector(".workflow-menu-item")!, {
+      clientX: 10,
+      clientY: 20,
+    });
+
+    expect(onOpenContextMenu).toHaveBeenCalledWith(
+      10,
+      20,
+      expect.objectContaining({
+        scope: "lineage",
+        isFavorite: true,
+        runDirectory: "/runs/wf/draft",
+        isExecuting: false,
+      }),
+      expect.any(HTMLButtonElement)
+    );
+  });
 });

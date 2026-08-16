@@ -1494,6 +1494,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     assert.strictEqual(summaries[1]?.runId, 1);
     assert.strictEqual(summaries[1]?.runRef, runRef);
     assert.strictEqual(summaries[1]?.workflowKey, workflowKey);
+    assert.strictEqual(
+      summaries[1]?.runDirectory,
+      WorkflowPaths.runDir(tempWorkspace, workflowKey, runRef)
+    );
     assert.strictEqual(summaries[1]?.stepCount, 3);
     assert.strictEqual(summaries[1]?.definitionRevision, 1);
     assert.strictEqual(

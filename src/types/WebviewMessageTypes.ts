@@ -873,6 +873,7 @@ export interface RecentWorkflowsMessage {
   type: typeof MESSAGE_TYPES.RECENT_WORKFLOWS;
   workflows: Array<{
     address: WorkflowViewAddress;
+    runDirectory?: string;
     workflowName: string;
     executionState: string;
     lastModifiedAt?: number;
@@ -1026,6 +1027,32 @@ export interface WorkflowSavedAsTemplateMessage {
     isBuiltIn: boolean;
   }>;
   templateId?: string;
+}
+
+/** Webview → Extension: create a new lineage from an explicitly addressed definition. */
+export interface CreateWorkflowVariantRequest {
+  type: typeof MESSAGE_TYPES.CREATE_WORKFLOW_VARIANT;
+  requestId: string;
+  source: WorkflowViewAddress;
+  workflowName: string;
+  overrides?: {
+    harness?: HarnessId;
+    model?: string;
+  };
+}
+
+/** Extension → Webview: addressed workflow variant creation succeeded. */
+export interface WorkflowVariantCreatedMessage {
+  type: typeof MESSAGE_TYPES.WORKFLOW_VARIANT_CREATED;
+  requestId: string;
+  address: Extract<WorkflowViewAddress, { kind: "draft" }>;
+}
+
+/** Extension → Webview: addressed workflow variant creation failed. */
+export interface WorkflowVariantFailedMessage {
+  type: typeof MESSAGE_TYPES.WORKFLOW_VARIANT_FAILED;
+  requestId: string;
+  error: string;
 }
 
 /**
@@ -1368,6 +1395,7 @@ export interface RunViewLoadedMessage {
   type: typeof MESSAGE_TYPES.RUN_VIEW_LOADED;
   requestId?: string;
   address: WorkflowViewAddress;
+  runDirectory?: string;
   workingFile: WorkingFile;
   history: WorkflowOutputHistory | null;
   runSummaries: RunSummary[];
@@ -1402,6 +1430,7 @@ export interface RunViewLoadedMessage {
 export interface WorkflowViewIdentityMessage {
   type: typeof MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY;
   address: WorkflowViewAddress;
+  runDirectory?: string;
   definitionRevision: number;
   descriptorRevision: number;
 }
@@ -2149,6 +2178,8 @@ export type IncomingMessage =
   | WorkflowSavedMessage
   | WorkflowSaveFailedMessage
   | WorkflowSavedAsTemplateMessage
+  | WorkflowVariantCreatedMessage
+  | WorkflowVariantFailedMessage
   | WorkflowsListMessage
   | WorkflowAddedMessage
   | WorkflowDismissedMessage

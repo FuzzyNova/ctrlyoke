@@ -5,7 +5,14 @@
  * Strategy: preset store state, render, assert what's visible and what's posted.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, act, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  act,
+  within,
+  fireEvent,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkflowStatus } from "@components/workflow/WorkflowStatus";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -35,6 +42,7 @@ beforeEach(() => {
     loadedWorkflows: [],
     observedRunningWorkflowIds: new Set<string>(),
     activeWorkflowId: null,
+    executionRunRef: null,
   });
   useSettingsStore.getState().resetSettings();
   useTerminalStore.setState({
@@ -68,6 +76,68 @@ function setRecentWorkflows(
   });
 }
 
+function seedRunPanel(
+  workflowKey: string,
+  options: { executionRunRef?: string | null; hasDraft?: boolean } = {}
+): void {
+  const key = workflowKey as never;
+  useUiStore.setState({
+    displayedViewAddress: {
+      workflowKey: key,
+      kind: "run",
+      runRef: "run-2" as never,
+    },
+    executionRunRef: options.executionRunRef ?? null,
+    runSummaries: [
+      {
+        workflowKey: key,
+        runRef: "run-2" as never,
+        runDirectory: `/runs/${workflowKey}/run-2`,
+        runId: 2,
+        startedAt: 200,
+        executionState: EXECUTION_STATES.COMPLETED,
+        definitionRevision: 1,
+        stepCount: 1,
+        hasMixedHarnesses: false,
+        hasMixedModels: false,
+      },
+      {
+        workflowKey: key,
+        runRef: "run-1" as never,
+        runDirectory: `/runs/${workflowKey}/run-1`,
+        runId: 1,
+        startedAt: 100,
+        executionState: EXECUTION_STATES.COMPLETED,
+        definitionRevision: 1,
+        stepCount: 1,
+        hasMixedHarnesses: false,
+        hasMixedModels: false,
+      },
+    ],
+  });
+  useWorkflowStore.setState({
+    fileName: `/workspace/${workflowKey}.yaml`,
+    workflowName: "Menu Workflow",
+  });
+  setRecentWorkflows([
+    {
+      address: { workflowKey: key, kind: "run", runRef: "run-2" as never },
+      workflowName: "Menu Workflow",
+      executionState: EXECUTION_STATES.COMPLETED,
+      runNav: {
+        primaryAddress: {
+          workflowKey: key,
+          kind: "run",
+          runRef: "run-2" as never,
+        },
+        runCount: 2,
+        hasDraft: options.hasDraft ?? false,
+        draftDirectory: `/runs/${workflowKey}/draft`,
+      },
+    },
+  ]);
+}
+
 describe("WorkflowStatus — empty state", () => {
   it("shows 'New Workflow' when fileName is null", () => {
     render(<WorkflowStatus />);
@@ -90,6 +160,173 @@ describe("WorkflowStatus — loaded state", () => {
   it("shows workflow name", () => {
     render(<WorkflowStatus />);
     expect(screen.getByText("My Workflow")).toBeInTheDocument();
+  });
+
+  it("copies the displayed run directory from the header target", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "wf-1" as never,
+        kind: "run",
+        runRef: "run-2" as never,
+      },
+      displayedRunDirectory: "/runs/wf-1/run-2",
+    });
+    setRecentWorkflows([
+      {
+        address: {
+          workflowKey: "wf-1" as never,
+          kind: "run",
+          runRef: "run-5" as never,
+        },
+        runDirectory: "/runs/wf-1/run-5",
+        workflowName: "My Workflow",
+        executionState: EXECUTION_STATES.IDLE,
+      },
+    ]);
+
+    render(<WorkflowStatus />);
+    fireEvent.contextMenu(document.querySelector(".workflow-split-button")!);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Copy Run Directory Path" })
+    );
+
+    expect(writeText).toHaveBeenCalledWith("/runs/wf-1/run-2");
+    await waitFor(() =>
+      expect(useUiStore.getState().toastQueue).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: "Run directory path copied to clipboard",
+          }),
+        ])
+      )
+    );
+  });
+
+  it("keeps the workflow dropdown open when copying from the context menu", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const address = { workflowKey: "wf-copy" as never, kind: "draft" as const };
+    useUiStore.setState({
+      displayedViewAddress: address,
+      displayedRunDirectory: "/runs/wf-copy/draft",
+    });
+    useWorkflowStore.setState({
+      fileName: "/workspace/copy.yaml",
+      workflowName: "Copy Workflow",
+    });
+
+    render(<WorkflowStatus />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    fireEvent.contextMenu(document.querySelector(".workflow-split-button")!);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Copy Run Directory Path" })
+    );
+
+    expect(document.querySelector(".workflow-dropdown-menu")).toHaveClass(
+      "visible"
+    );
+    expect(writeText).toHaveBeenCalledWith("/runs/wf-copy/draft");
+  });
+
+  it("captures the real header control as the context-menu duplicate opener", () => {
+    const address = {
+      workflowKey: "wf-focus" as never,
+      kind: "draft" as const,
+    };
+    useUiStore.setState({ displayedViewAddress: address });
+    useWorkflowStore.setState({
+      fileName: "/workspace/focus.yaml",
+      workflowName: "Focus Workflow",
+    });
+
+    render(<WorkflowStatus />);
+    const splitButton = document.querySelector(".workflow-split-button")!;
+    fireEvent.contextMenu(splitButton);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Duplicate Workflow…" })
+    );
+
+    expect(useUiStore.getState().duplicateWorkflowDialogData?.invoker).toBe(
+      splitButton.querySelector(".workflow-button-main")
+    );
+  });
+
+  it("keeps one context-menu portal for a long recent-workflow list", () => {
+    setRecentWorkflows(
+      Array.from({ length: 30 }, (_, index) => ({
+        workflowName: `Recent ${index}`,
+        executionState: EXECUTION_STATES.COMPLETED,
+      }))
+    );
+    render(<WorkflowStatus />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    fireEvent.contextMenu(document.querySelector(".workflow-menu-item")!);
+
+    expect(document.querySelectorAll(".step-context-menu")).toHaveLength(1);
+  });
+
+  it("uses the existing favorite action for the header target", () => {
+    const address = { workflowKey: "wf-1" as never, kind: "draft" as const };
+    useUiStore.setState({ displayedViewAddress: address });
+    setRecentWorkflows([
+      {
+        address,
+        workflowName: "My Workflow",
+        executionState: EXECUTION_STATES.IDLE,
+        isFavorite: false,
+      },
+    ]);
+
+    render(<WorkflowStatus />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    fireEvent.contextMenu(document.querySelector(".workflow-split-button")!);
+    const favoriteMenuItem = screen.getByRole("button", {
+      name: "Add to Favorites",
+    });
+    fireEvent.mouseDown(favoriteMenuItem);
+    fireEvent.click(favoriteMenuItem);
+
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.TOGGLE_WORKFLOW_FAVORITE,
+      address,
+    });
+    expect(document.querySelector(".workflow-dropdown-menu")).toHaveClass(
+      "visible"
+    );
+  });
+
+  it("uses the existing lineage delete path for the header target", () => {
+    const address = { workflowKey: "wf-1" as never, kind: "draft" as const };
+    useUiStore.setState({ displayedViewAddress: address });
+    useSettingsStore.setState({
+      globalSettings: {
+        ...useSettingsStore.getState().globalSettings,
+        confirmDeleteOperations: false,
+      },
+    });
+
+    render(<WorkflowStatus />);
+    fireEvent.contextMenu(document.querySelector(".workflow-split-button")!);
+    fireEvent.click(screen.getByRole("button", { name: "Delete Workflow" }));
+
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
+      address,
+    });
   });
 
   it("falls back to file stem when workflowName is empty", () => {
@@ -133,14 +370,14 @@ describe("WorkflowStatus — loaded state", () => {
 
     render(<WorkflowStatus />);
 
-    const indicator = screen.getByLabelText(
-      "Named worktree: feature/status"
-    );
+    const indicator = screen.getByLabelText("Named worktree: feature/status");
     expect(indicator).toHaveAttribute(
       "title",
       "Named worktree: feature/status"
     );
-    expect(indicator.querySelector(".codicon-source-control")).toBeInTheDocument();
+    expect(
+      indicator.querySelector(".codicon-source-control")
+    ).toBeInTheDocument();
     getBoundingClientRect.mockRestore();
   });
 
@@ -1260,6 +1497,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-1" as never,
+          runDirectory: "/runs/wf-single/run-1",
           runId: 1,
           startedAt: 100,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1289,6 +1527,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-2" as never,
+          runDirectory: "/runs/wf-badge/run-2",
           runId: 2,
           startedAt: 200,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1300,6 +1539,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-1" as never,
+          runDirectory: "/runs/wf-badge/run-1",
           runId: 1,
           startedAt: 100,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1354,6 +1594,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-2" as never,
+          runDirectory: "/runs/wf-badge/run-2",
           runId: 2,
           startedAt: 200,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1365,6 +1606,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-1" as never,
+          runDirectory: "/runs/wf-badge/run-1",
           runId: 1,
           startedAt: 100,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1396,6 +1638,105 @@ describe("WorkflowStatus — run navigation panel", () => {
     );
   });
 
+  it("opens one context-menu portal in the run panel and deletes a run without confirmation when opted out", async () => {
+    const user = userEvent.setup();
+    seedRunPanel("wf-menu-delete");
+    useSettingsStore.setState((state) => ({
+      globalSettings: {
+        ...state.globalSettings,
+        confirmDeleteOperations: false,
+      },
+    }));
+
+    render(<WorkflowStatus />);
+    await user.click(
+      screen.getByRole("button", {
+        name: /Run 2 — browse runs of Menu Workflow/i,
+      })
+    );
+    const row = screen
+      .getByRole("button", { name: /^Run 1\b/ })
+      .closest(".run-panel-row")!;
+    fireEvent.contextMenu(row);
+
+    expect(document.querySelectorAll(".step-context-menu")).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "Delete Run" }));
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.DELETE_RUN_HISTORY,
+      address: {
+        workflowKey: "wf-menu-delete",
+        kind: "run",
+        runRef: "run-1",
+      },
+    });
+  });
+
+  it("routes run context-menu delete through the shared confirmation setting", async () => {
+    const user = userEvent.setup();
+    seedRunPanel("wf-menu-confirm");
+    useSettingsStore.setState((state) => ({
+      globalSettings: {
+        ...state.globalSettings,
+        confirmDeleteOperations: true,
+      },
+    }));
+
+    render(<WorkflowStatus />);
+    await user.click(
+      screen.getByRole("button", {
+        name: /Run 2 — browse runs of Menu Workflow/i,
+      })
+    );
+    const row = screen
+      .getByRole("button", { name: /^Run 1\b/ })
+      .closest(".run-panel-row")!;
+    fireEvent.contextMenu(row);
+    await user.click(screen.getByRole("button", { name: "Delete Run" }));
+
+    const modal = screen.getByRole("dialog");
+    expect(within(modal).getByText(/Delete run history/i)).toBeInTheDocument();
+    expect(postMessageSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: MESSAGE_TYPES.DELETE_RUN_HISTORY })
+    );
+    await user.click(within(modal).getByRole("button", { name: "Delete" }));
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.DELETE_RUN_HISTORY,
+      address: {
+        workflowKey: "wf-menu-confirm",
+        kind: "run",
+        runRef: "run-1",
+      },
+    });
+  });
+
+  it("disables run context-menu delete for draft and live rows", async () => {
+    const user = userEvent.setup();
+    seedRunPanel("wf-menu-disabled", {
+      executionRunRef: "run-2",
+      hasDraft: true,
+    });
+
+    render(<WorkflowStatus />);
+    await user.click(
+      screen.getByRole("button", {
+        name: /Run 2 — browse runs of Menu Workflow/i,
+      })
+    );
+
+    const draftRow = screen
+      .getByRole("button", { name: /^Draft$/ })
+      .closest(".run-panel-row")!;
+    fireEvent.contextMenu(draftRow);
+    expect(screen.getByRole("button", { name: "Delete Run" })).toBeDisabled();
+
+    fireEvent.pointerDown(document.body);
+    const liveRow = screen
+      .getByRole("button", { name: /^Run 2 — live\b/ })
+      .closest(".run-panel-row")!;
+    fireEvent.contextMenu(liveRow);
+    expect(screen.getByRole("button", { name: "Delete Run" })).toBeDisabled();
+  });
+
   it("closes the whole dropdown when the viewed run row is selected again", async () => {
     const user = userEvent.setup();
     const workflowKey = "wf-current-row" as never;
@@ -1410,6 +1751,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-2" as never,
+          runDirectory: "/runs/wf-current-row/run-2",
           runId: 2,
           startedAt: 200,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1421,6 +1763,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-1" as never,
+          runDirectory: "/runs/wf-current-row/run-1",
           runId: 1,
           startedAt: 100,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1476,6 +1819,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-1" as never,
+          runDirectory: "/runs/wf-badge/run-1",
           runId: 1,
           startedAt: 100,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1487,6 +1831,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-2" as never,
+          runDirectory: "/runs/wf-badge/run-2",
           runId: 2,
           startedAt: 200,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1535,6 +1880,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-1" as never,
+          runDirectory: "/runs/wf-badge/run-1",
           runId: 1,
           startedAt: 100,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -1546,6 +1892,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         {
           workflowKey,
           runRef: "run-2" as never,
+          runDirectory: "/runs/wf-badge/run-2",
           runId: 2,
           startedAt: 200,
           executionState: EXECUTION_STATES.COMPLETED,

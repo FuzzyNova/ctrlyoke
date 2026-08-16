@@ -394,10 +394,39 @@ describe("setHistoryView", () => {
 });
 
 describe("setDisplayedRunView", () => {
+  it("stores the directory alongside the address for both address-setting actions", () => {
+    const runAddress = {
+      workflowKey: "wf-1" as never,
+      kind: "run" as const,
+      runRef: "run-2026-07-20T10-30-00-000Z" as never,
+    };
+    store().setDisplayedRunView(
+      runAddress,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      "C:/runs/wf-1/run-1"
+    );
+    expect(store().displayedViewAddress).toEqual(runAddress);
+    expect(store().displayedRunDirectory).toBe("C:/runs/wf-1/run-1");
+
+    const draftAddress = { workflowKey: "wf-1" as never, kind: "draft" as const };
+    store().setDisplayedViewIdentity(
+      draftAddress,
+      2,
+      3,
+      "C:/runs/wf-1/draft"
+    );
+    expect(store().displayedViewAddress).toEqual(draftAddress);
+    expect(store().displayedRunDirectory).toBe("C:/runs/wf-1/draft");
+  });
+
   it("keeps pending rewind scoped to the addressed run and clears it on the next view", () => {
     const run = {
       workflowKey: "wf-1" as never,
       runRef: "run-2026-07-20T10-30-00-000Z" as never,
+      runDirectory: "/runs/wf-1/run",
       runId: 4,
       startedAt: 1000,
       executionState: "idle" as never,
@@ -488,6 +517,7 @@ describe("requestRunViewLoad", () => {
   const summary = {
     workflowKey: "wf-1" as never,
     runRef: "run-2026-07-20T10-30-00-000Z" as never,
+    runDirectory: "/runs/wf-1/run",
     runId: 4,
     startedAt: 1000,
     executionState: "running" as never,

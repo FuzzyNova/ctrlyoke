@@ -5,6 +5,7 @@ export type StepContextMenuItem = {
   label: string;
   icon: string;
   disabled: boolean;
+  title?: string;
   disabledTitle?: string;
   onClick: () => void;
 };
@@ -85,7 +86,7 @@ export function StepContextMenu({
         visibility: pos ? "visible" : "hidden",
       }}
       role="presentation"
-      className="bg-editor-bg border border-panel-border rounded shadow-lg py-0.5 min-w-[160px]"
+      className="step-context-menu bg-editor-bg border border-panel-border rounded shadow-lg py-0.5 min-w-[160px]"
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => {
@@ -109,7 +110,7 @@ export function StepContextMenu({
                 : "text-foreground hover:bg-toolbar-hover-bg cursor-pointer"
             }`}
             disabled={item.disabled}
-            title={item.disabled ? item.disabledTitle : undefined}
+            title={item.disabled ? item.disabledTitle : item.title}
             onClick={() => {
               if (item.disabled) return;
               onClose();

@@ -442,6 +442,7 @@ describe("OutputSection", () => {
         {
           workflowKey: "workflow-1" as never,
           runRef: "run-live" as never,
+          runDirectory: "/runs/workflow-1/run-live",
           runId: 1042,
           startedAt: 1042,
           executionState: "running" as never,
@@ -453,6 +454,7 @@ describe("OutputSection", () => {
         {
           workflowKey: "workflow-1" as never,
           runRef: "run-historical" as never,
+          runDirectory: "/runs/workflow-1/run-historical",
           runId: 1031,
           startedAt: 1031,
           executionState: "completed" as never,
@@ -483,6 +485,7 @@ describe("OutputSection", () => {
         {
           workflowKey: "workflow-1" as never,
           runRef: "run-live" as never,
+          runDirectory: "/runs/workflow-1/run-live",
           runId: 1042,
           startedAt: 1042,
           executionState: "running" as never,
@@ -534,6 +537,7 @@ describe("OutputSection", () => {
         {
           workflowKey: "workflow-1" as never,
           runRef: "run-live" as never,
+          runDirectory: "/runs/workflow-1/run-live",
           runId: 7,
           startedAt: 2000,
           executionState: "running" as never,
@@ -578,6 +582,7 @@ describe("OutputSection", () => {
         {
           workflowKey: "workflow-1" as never,
           runRef: "run-completed" as never,
+          runDirectory: "/runs/workflow-1/run-completed",
           runId: 8,
           startedAt: 3000,
           executionState: "running" as never,
@@ -633,6 +638,7 @@ describe("OutputSection", () => {
         {
           workflowKey: "workflow-1" as never,
           runRef: "run-historical" as never,
+          runDirectory: "/runs/workflow-1/run-historical",
           runId: 1031,
           startedAt: 1031,
           executionState: "completed" as never,

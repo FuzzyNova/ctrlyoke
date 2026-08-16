@@ -198,6 +198,28 @@ describe("FILE_SELECTED", () => {
     expect(useUiStore.getState().isViewingHistory).toBe(false);
   });
 
+  it("clears the displayed address and run directory together", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "old-workflow" as never,
+        kind: "run",
+        runRef: "old-run" as never,
+      },
+      displayedRunDirectory: "/runs/old-workflow/old-run",
+    });
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "new-workflow.ctrlyoke.json",
+        steps: [makePrompt("New workflow step")],
+      });
+    });
+
+    expect(useUiStore.getState().displayedViewAddress).toBeNull();
+    expect(useUiStore.getState().displayedRunDirectory).toBeNull();
+  });
+
   it("does not attach the previous lineage's runs to a new workflow identity", () => {
     const previousWorkflowKey = "previous-workflow" as never;
     const previousRunRef = "run-previous-2" as never;
@@ -211,6 +233,7 @@ describe("FILE_SELECTED", () => {
         {
           workflowKey: previousWorkflowKey,
           runRef: previousRunRef,
+          runDirectory: "/runs/previous/run-2",
           runId: 2,
           startedAt: 200,
           executionState: EXECUTION_STATES.RUNNING,
@@ -222,6 +245,7 @@ describe("FILE_SELECTED", () => {
         {
           workflowKey: previousWorkflowKey,
           runRef: "run-previous-1" as never,
+          runDirectory: "/runs/previous/run-1",
           runId: 1,
           startedAt: 100,
           executionState: EXECUTION_STATES.COMPLETED,
@@ -784,6 +808,7 @@ describe("EXECUTION_COMPLETED", () => {
         {
           workflowKey: "workflow-1" as never,
           runRef: runRef as never,
+          runDirectory: "/runs/workflow-1/current",
           runId: 1,
           startedAt: 1,
           executionState: EXECUTION_STATES.RUNNING,
@@ -2195,6 +2220,50 @@ describe("active workflow summaries", () => {
     });
 
     expect(useUiStore.getState().activeWorkflowId).toBeNull();
+  });
+
+  it("keeps live output isolated between hosted tabs with different selected runs", () => {
+    renderHook(() => useMessageHandler());
+    const executingRunRef = "run-2026-07-20T13-00-00-000Z" as never;
+    const historicalRunRef = "run-2026-07-20T12-00-00-000Z" as never;
+    useUiStore.setState({
+      activeWorkflowId: "instance-1",
+      displayedViewAddress: {
+        workflowKey: "workflow-1" as never,
+        kind: "run",
+        runRef: historicalRunRef,
+      },
+      executionRunRef: executingRunRef,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.CLI_STREAMING_CHUNK, {
+        workflowId: "instance-1",
+        stepIndex: 0,
+        chunk: "historical tab must not receive this",
+      });
+    });
+    expect(useWorkflowStore.getState().streamingChunks).toEqual({});
+
+    // The same live update is accepted by the other hosted tab, which is
+    // selected on the executing address.
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-1" as never,
+        kind: "run",
+        runRef: executingRunRef,
+      },
+    });
+    act(() => {
+      dispatch(MESSAGE_TYPES.CLI_STREAMING_CHUNK, {
+        workflowId: "instance-1",
+        stepIndex: 0,
+        chunk: "executing tab receives this",
+      });
+    });
+    expect(useWorkflowStore.getState().streamingChunks).toEqual({
+      "0:prompt": "executing tab receives this",
+    });
   });
 
   it("keeps pausing workflows in loadedWorkflows", () => {

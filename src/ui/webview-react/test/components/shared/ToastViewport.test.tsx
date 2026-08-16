@@ -61,6 +61,20 @@ describe("ToastViewport", () => {
     });
   });
 
+  it("renders and dismisses an optional action", () => {
+    const onClick = vi.fn();
+    useUiStore.getState().showToast("Created", USER_FEEDBACK_SEVERITY.SUCCESS, {
+      action: { label: "Open in New Tab", onClick },
+    });
+
+    render(<ToastViewport />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open in New Tab" }));
+
+    expect(onClick).toHaveBeenCalledOnce();
+    expect(screen.queryByText("Created")).not.toBeInTheDocument();
+  });
+
   it("pauses timeout while hovered or focused", () => {
     useUiStore.getState().showToast("Transient");
     render(<ToastViewport />);

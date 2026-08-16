@@ -19,9 +19,11 @@ function summary(
   timestamp: number,
   key: WorkflowKey = workflowKey
 ): RunSummary {
+  const runRef = WorkflowPaths.formatRunRef(timestamp);
   return {
     workflowKey: key,
-    runRef: WorkflowPaths.formatRunRef(timestamp),
+    runRef,
+    runDirectory: WorkflowPaths.runDir(".", key, runRef),
     runId,
     startedAt: timestamp,
     executionState: "completed",

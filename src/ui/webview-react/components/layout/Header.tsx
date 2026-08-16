@@ -16,6 +16,7 @@ import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { WorkflowControls } from "../workflow/WorkflowControls";
 import { WorkflowStatus } from "../workflow/WorkflowStatus";
 import { SaveWorkflowDialog } from "../workflow/SaveWorkflowDialog";
+import { DuplicateWorkflowDialog } from "../workflow/DuplicateWorkflowDialog";
 import { TemplateModal } from "../workflow/TemplateModal";
 import { FileBrowserModal } from "../workflow/FileBrowserModal";
 import { SuffixEditConfirmModal } from "../shared/SuffixEditConfirmModal";
@@ -707,6 +708,7 @@ export const Header: React.FC<{
 
         {/* Save Workflow Dialog — rendered here for co-location with SaveWorkflowButton */}
         <SaveWorkflowDialog />
+        <DuplicateWorkflowDialog />
 
         {/* Template Modal — controlled by uiStore.newWorkflowModalOpen */}
         <TemplateModal

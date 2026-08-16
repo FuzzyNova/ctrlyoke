@@ -211,97 +211,6 @@ export class WorkingFileManager {
       lineageRepository ?? new WorkflowLineageRepository();
   }
 
-  /**
-   * Forks an immutable promoted run into the lineage's one mutable draft. This
-   * holds the descriptor lock across the source revision check, draft write, and
-   * pending-edit update so a second client cannot redirect or overwrite it.
-   */
-  public static async seedDraftFromRun(
-    workspaceFolderPath: string,
-    workflowKey: WorkflowKey,
-    fromRunRef: RunRef,
-    expectedDefinitionRevision: number,
-    expectedDescriptorRevision: number,
-    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
-  ): Promise<{
-    workingFilePath: string;
-    definitionRevision: number;
-    descriptorRevision: number;
-  }> {
-    const draftFilePath = WorkflowPaths.draftFilePath(
-      workspaceFolderPath,
-      workflowKey
-    );
-    return lineageRepository.mutateDescriptorAtRevision(
-      workspaceFolderPath,
-      workflowKey,
-      expectedDescriptorRevision,
-      async (descriptor) => {
-        if (descriptor.pendingEdit) {
-          throw new Error(
-            "A draft or continuation is already being prepared for this workflow"
-          );
-        }
-        const source = await readWorkingFileFromDisk(
-          WorkflowPaths.runFilePath(
-            workspaceFolderPath,
-            workflowKey,
-            fromRunRef
-          )
-        );
-        const sourceRevision = source.definitionRevision ?? 1;
-        if (sourceRevision !== expectedDefinitionRevision) {
-          throw new Error(
-            `Definition revision conflict: expected ${expectedDefinitionRevision}, found ${sourceRevision}`
-          );
-        }
-
-        const now = Date.now();
-        const draft: WorkingFile = {
-          ...source,
-          ...(descriptor.originalFile
-            ? { originalFile: descriptor.originalFile }
-            : {}),
-          workflowName: source.workflowName ?? descriptor.workflowName,
-          startedAt: now,
-          lastModifiedAt: now,
-          isFavorite: descriptor.isFavorite,
-          definitionRevision: sourceRevision,
-          steps: stripStepRuntime(source.steps ?? []).map(
-            stripViewOnlyWorkflowStepFields
-          ),
-          ...(source.finalStep
-            ? {
-                finalStep: stripViewOnlyWorkflowStepFields(
-                  stripStepRuntime([source.finalStep])[0]
-                ),
-              }
-            : {}),
-          _runtime: {
-            currentIndex: 0,
-            executionState: EXECUTION_STATES.IDLE,
-          },
-        };
-        await fs.mkdir(
-          WorkflowPaths.draftDir(workspaceFolderPath, workflowKey),
-          {
-            recursive: true,
-          }
-        );
-        await writeWorkingFileAtomicTo(draftFilePath, draft);
-
-        return {
-          value: {
-            workingFilePath: draftFilePath,
-            definitionRevision: sourceRevision,
-            descriptorRevision: expectedDescriptorRevision + 1,
-          },
-          descriptor: { ...descriptor, pendingEdit: { kind: "draft" } },
-        };
-      }
-    );
-  }
-
   // ==================== Pure File Operations ====================
 
   /**
@@ -310,7 +219,22 @@ export class WorkingFileManager {
    * @returns Parsed working file
    */
   public async readWorkingFile(workingFilePath: string): Promise<WorkingFile> {
+    return WorkingFileManager.readWorkingFileFromDisk(workingFilePath);
+  }
+
+  /** Read any run-storage working file without requiring a live queue adapter. */
+  public static async readWorkingFileFromDisk(
+    workingFilePath: string
+  ): Promise<WorkingFile> {
     return readWorkingFileFromDisk(workingFilePath);
+  }
+
+  /** Write a run-storage working file atomically without requiring a live queue adapter. */
+  public static async writeWorkingFileAtomic(
+    workingFilePath: string,
+    workingFile: WorkingFile
+  ): Promise<void> {
+    return writeWorkingFileAtomicTo(workingFilePath, workingFile);
   }
 
   /** Applies to the next definition write only; runtime persistence remains unguarded. */
@@ -604,6 +528,11 @@ export class WorkingFileManager {
     );
 
     const startedAt = Date.now();
+    const finalStep = source.finalStep
+      ? stripViewOnlyWorkflowStepFields(
+          stripStepRuntime([source.finalStep])[0]
+        )
+      : undefined;
     const workingFile: WorkingFile = {
       ...source,
       ...(descriptor.originalFile
@@ -617,6 +546,7 @@ export class WorkingFileManager {
       steps: stripStepRuntime(source.steps ?? []).map(
         stripViewOnlyWorkflowStepFields
       ),
+      ...(finalStep ? { finalStep } : {}),
       ...(overrides.harness ? { harness: overrides.harness } : {}),
       ...(overrides.model ? { model: overrides.model } : {}),
       _runtime: {

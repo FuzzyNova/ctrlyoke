@@ -24,6 +24,7 @@ import type {
   WorkflowTokenTotals,
   WorktreeRunProjection,
 } from "@root/types/CtrlYokeTypes";
+import type { CreateWorkflowVariantRequest } from "@root/types/WebviewMessageTypes";
 import type { SaveWorkflowBundlePreview } from "../types/messages";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import { isWorkflowRunning } from "@utils/status";
@@ -57,6 +58,7 @@ let toastSequence = 0;
  */
 export interface RunViewLoadRollback {
   displayedViewAddress: WorkflowViewAddress | null;
+  displayedRunDirectory: string | null;
   runSummaries: RunSummary[];
   executionRunRef: string | null;
   displayedDefinitionRevision: number | null;
@@ -72,6 +74,10 @@ export interface ToastItem {
   id: string;
   message: string;
   detail?: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
   severity: UserFeedbackSeverity;
   createdAt: number;
   dedupeKey?: string;
@@ -82,6 +88,7 @@ export type ToastInput = Omit<ToastItem, "id" | "createdAt"> &
 
 export interface ToastOptions {
   detail?: string;
+  action?: ToastItem["action"];
   dedupeKey?: string;
 }
 
@@ -202,6 +209,17 @@ export interface SaveWorkflowDialogData {
   defaultFormat: WorkflowFileFormat;
 }
 
+export interface DuplicateWorkflowDialogData {
+  source: WorkflowViewAddress;
+  workflowName: string;
+  invoker: HTMLElement | null;
+}
+
+export type DuplicateWorkflowRequest = Omit<
+  CreateWorkflowVariantRequest,
+  "type"
+>;
+
 /** Transient, request-addressed save-path preflight state. */
 export interface SavePathCheck {
   requestId: string;
@@ -235,6 +253,8 @@ export interface FileBrowserRequest {
  */
 export interface RecentWorkflow {
   address: WorkflowViewAddress;
+  /** Directory containing the definition and timeline for the primary address. */
+  runDirectory?: string;
   workflowName: string;
   executionState: string;
   lastModifiedAt?: number;
@@ -437,6 +457,8 @@ interface UiState {
    * navigation addresses runs by `runRef`, never by position in this array. */
   runSummaries: RunSummary[];
   displayedViewAddress: WorkflowViewAddress | null;
+  /** Directory containing the definition and timeline for displayedViewAddress. */
+  displayedRunDirectory: string | null;
   /**
    * The address whose *content* is actually loaded into `workflowStore` right
    * now — set only when a RUN_VIEW_LOADED snapshot is applied, never by an
@@ -502,6 +524,12 @@ interface UiState {
   saveWorkflowDialogOpen: boolean;
   saveWorkflowDialogData: SaveWorkflowDialogData | null;
   savePathCheck: SavePathCheck | null;
+
+  // Duplicate workflow dialog state
+  duplicateWorkflowDialogOpen: boolean;
+  duplicateWorkflowDialogData: DuplicateWorkflowDialogData | null;
+  duplicateWorkflowRequest: DuplicateWorkflowRequest | null;
+  duplicateWorkflowError: string | null;
 
   // Web-native file/directory picker modal (standalone/hosted mode only) —
   // one canonical transient request shared by every caller, plus its persisted
@@ -713,6 +741,16 @@ interface UiActions {
   resolveSavePathCheck: (result: Omit<SavePathCheck, "checking">) => void;
   clearSavePathCheck: () => void;
 
+  // Duplicate workflow dialog
+  openDuplicateWorkflowDialog: (
+    data: Omit<DuplicateWorkflowDialogData, "invoker">,
+    invoker?: HTMLElement | null
+  ) => void;
+  closeDuplicateWorkflowDialog: () => void;
+  beginDuplicateWorkflowRequest: (request: DuplicateWorkflowRequest) => void;
+  retireDuplicateWorkflowRequest: (error: string) => void;
+  setDuplicateWorkflowError: (error: string | null) => void;
+
   // File browser modal (standalone/hosted mode)
   openFileBrowser: (request: FileBrowserRequest) => void;
   closeFileBrowser: () => void;
@@ -809,12 +847,14 @@ interface UiActions {
     summaries: RunSummary[],
     executionRunRef?: string,
     revisions?: { definitionRevision: number; descriptorRevision: number },
-    pendingRewind?: { fromStepIndex: number; baseDefinitionRevision: number }
+    pendingRewind?: { fromStepIndex: number; baseDefinitionRevision: number },
+    runDirectory?: string
   ) => void;
   setDisplayedViewIdentity: (
     address: WorkflowViewAddress,
     definitionRevision: number,
-    descriptorRevision: number
+    descriptorRevision: number,
+    runDirectory?: string
   ) => void;
   adoptDescriptorRevision: (
     address: WorkflowViewAddress,
@@ -900,6 +940,10 @@ const initialState: UiState = {
   saveWorkflowDialogOpen: false,
   saveWorkflowDialogData: null,
   savePathCheck: null,
+  duplicateWorkflowDialogOpen: false,
+  duplicateWorkflowDialogData: null,
+  duplicateWorkflowRequest: null,
+  duplicateWorkflowError: null,
   fileBrowserState: null,
   fileBrowserLastDirectory: null,
   saveLocationSelection: null,
@@ -955,6 +999,7 @@ const initialState: UiState = {
   isViewingHistory: false,
   runSummaries: [],
   displayedViewAddress: null,
+  displayedRunDirectory: null,
   appliedViewAddress: null,
   pendingRunViewRequestId: null,
   pendingRunViewAddress: null,
@@ -1219,6 +1264,39 @@ export const useUiStore = create<UiState & UiActions>()(
           saveWorkflowDialogData: null,
           savePathCheck: null,
         }),
+
+      openDuplicateWorkflowDialog: (data, invoker = null) =>
+        set({
+          duplicateWorkflowDialogOpen: true,
+          duplicateWorkflowDialogData: { ...data, invoker },
+          duplicateWorkflowRequest: null,
+          duplicateWorkflowError: null,
+        }),
+
+      closeDuplicateWorkflowDialog: () => {
+        const invoker = get().duplicateWorkflowDialogData?.invoker;
+        set({
+          duplicateWorkflowDialogOpen: false,
+          duplicateWorkflowDialogData: null,
+          duplicateWorkflowRequest: null,
+          duplicateWorkflowError: null,
+        });
+        if (invoker && typeof document !== "undefined") {
+          invoker.focus();
+        }
+      },
+
+      beginDuplicateWorkflowRequest: (request) =>
+        set({
+          duplicateWorkflowRequest: request,
+          duplicateWorkflowError: null,
+        }),
+
+      retireDuplicateWorkflowRequest: (error) =>
+        set({ duplicateWorkflowRequest: null, duplicateWorkflowError: error }),
+
+      setDuplicateWorkflowError: (error) =>
+        set({ duplicateWorkflowError: error }),
 
       beginSavePathCheck: (requestId, path, address) =>
         set({
@@ -1505,10 +1583,12 @@ export const useUiStore = create<UiState & UiActions>()(
         summaries,
         executionRunRef,
         revisions,
-        pendingRewind
+        pendingRewind,
+        runDirectory
       ) =>
         set((state) => ({
           displayedViewAddress: address,
+          displayedRunDirectory: runDirectory ?? null,
           executionRunRef: executionRunRef ?? null,
           displayedDefinitionRevision: revisions?.definitionRevision ?? null,
           displayedDescriptorRevision: mergeDescriptorRevision(
@@ -1530,7 +1610,8 @@ export const useUiStore = create<UiState & UiActions>()(
       setDisplayedViewIdentity: (
         address,
         definitionRevision,
-        descriptorRevision
+        descriptorRevision,
+        runDirectory
       ) =>
         set((state) => {
           const summariesBelongToAddress = areRunSummariesForLineage(
@@ -1539,6 +1620,7 @@ export const useUiStore = create<UiState & UiActions>()(
           );
           return {
             displayedViewAddress: address,
+            displayedRunDirectory: runDirectory ?? null,
             displayedDefinitionRevision: definitionRevision,
             displayedDescriptorRevision: mergeDescriptorRevision(
               state,
@@ -1622,6 +1704,7 @@ export const useUiStore = create<UiState & UiActions>()(
         // answered can be undone rather than left half-applied.
         const rollback: RunViewLoadRollback = {
           displayedViewAddress: previous.displayedViewAddress,
+          displayedRunDirectory: previous.displayedRunDirectory,
           runSummaries: previous.runSummaries,
           executionRunRef: previous.executionRunRef,
           displayedDefinitionRevision: previous.displayedDefinitionRevision,
@@ -1811,6 +1894,10 @@ export const useUiStore = create<UiState & UiActions>()(
           saveWorkflowDialogOpen: false,
           saveWorkflowDialogData: null,
           savePathCheck: null,
+          duplicateWorkflowDialogOpen: false,
+          duplicateWorkflowDialogData: null,
+          duplicateWorkflowRequest: null,
+          duplicateWorkflowError: null,
           fileBrowserState: null,
           propertiesDrawerOpen: false,
           selectedOutputStep: null,

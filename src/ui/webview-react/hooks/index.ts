@@ -26,6 +26,10 @@ export {
   usePasteToEndContextMenu,
 } from "./useStepContextMenu";
 export { useFinalStepContextMenu } from "./useFinalStepContextMenu";
+export {
+  useWorkflowContextMenu,
+  type WorkflowContextMenuTarget,
+} from "./useWorkflowContextMenu";
 export { useLongPress } from "./useLongPress";
 export { useLatestStepOutput } from "./useLatestStepOutput";
 export {
