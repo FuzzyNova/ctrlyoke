@@ -11,6 +11,7 @@ import { encode } from "gpt-tokenizer";
 import {
   ESTIMATED_CHARS_PER_TOKEN,
   MAX_CONTENT_SIZE,
+  MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES,
   MAX_PREVIEW_BODY_BYTES,
   PREVIEW_PROMPT_CATEGORIES,
   PREVIEW_TRUNCATION_REASONS,
@@ -21,6 +22,7 @@ function createSections(overrides?: Partial<PromptSections>): PromptSections {
     skillContent: null,
     agentContent: null,
     directFileRefs: [],
+    sourceRuntimeCopies: [],
     excerptContent: null,
     userPromptText: "just say hi",
     skippedReferences: [],
@@ -1246,5 +1248,187 @@ suite("CliPromptPreparer", () => {
     } finally {
       await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
     }
+  });
+
+  test("defers a source-runtime copy until preparePrompt", async () => {
+    const sourceRoot = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-source-copy-")
+    );
+    const executionRoot = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-execution-copy-")
+    );
+    const sourcePath = path.join(sourceRoot, "runtime", "large.log");
+    const destinationPath = path.join(executionRoot, "runtime", "large.log");
+    const content = Buffer.alloc(MAX_CONTENT_SIZE + 1024, 65);
+    assert.ok(content.byteLength < MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES);
+    await fs.promises.mkdir(path.dirname(sourcePath), { recursive: true });
+    await fs.promises.writeFile(sourcePath, content);
+
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({
+          directFileRefs: [destinationPath],
+          sourceRuntimeCopies: [{ sourcePath, destinationPath }],
+          userPromptText: "Review @runtime/large.log",
+        }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => executionRoot,
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    try {
+      const plan = await preparer.planPrompt(
+        { prompt: "Review @runtime/large.log" } as PromptStep,
+        undefined,
+        { harness: "claude-cli" } as any,
+        undefined
+      );
+      assert.strictEqual(fs.existsSync(destinationPath), false);
+      assert.strictEqual(plan.mutations.length, 1);
+      assert.strictEqual(plan.mutations[0].path, destinationPath);
+      assert.ok(plan.mutations[0].description?.includes(sourcePath));
+
+      await preparer.preparePrompt(
+        { prompt: "Review @runtime/large.log" } as PromptStep,
+        undefined,
+        { harness: "claude-cli" } as any,
+        undefined
+      );
+      assert.deepStrictEqual(
+        await fs.promises.readFile(destinationPath),
+        content
+      );
+    } finally {
+      await fs.promises.rm(sourceRoot, { recursive: true, force: true });
+      await fs.promises.rm(executionRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("skips identical copies and overwrites stale prompt and log destinations", async () => {
+    const sourceRoot = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-source-copy-")
+    );
+    const executionRoot = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-execution-copy-")
+    );
+    const files = [
+      {
+        name: "prompt.md",
+        source: "new prompt\n",
+        destination: "old prompt\n",
+      },
+      {
+        name: "session.log",
+        source: "new log\n",
+        destination: "old log\n",
+      },
+      {
+        name: "attachment.png",
+        source: "same attachment bytes",
+        destination: "same attachment bytes",
+      },
+    ].map((file) => ({
+      sourcePath: path.join(sourceRoot, "runtime", file.name),
+      destinationPath: path.join(executionRoot, "runtime", file.name),
+      source: file.source,
+      destination: file.destination,
+    }));
+
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({
+          directFileRefs: files.map((file) => file.destinationPath),
+          sourceRuntimeCopies: files.map(({ sourcePath, destinationPath }) => ({
+            sourcePath,
+            destinationPath,
+          })),
+          userPromptText: "Review the runtime files",
+        }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => executionRoot,
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    try {
+      for (const file of files) {
+        await fs.promises.mkdir(path.dirname(file.sourcePath), {
+          recursive: true,
+        });
+        await fs.promises.writeFile(file.sourcePath, file.source);
+        await fs.promises.mkdir(path.dirname(file.destinationPath), {
+          recursive: true,
+        });
+        await fs.promises.writeFile(file.destinationPath, file.destination);
+      }
+
+      const plan = await preparer.planPrompt(
+        { prompt: "Review the runtime files" } as PromptStep,
+        undefined,
+        { harness: "claude-cli" } as any,
+        undefined
+      );
+      assert.deepStrictEqual(
+        plan.mutations.map((mutation) => mutation.path),
+        files
+          .filter((file) => file.source !== file.destination)
+          .map((file) => file.destinationPath)
+      );
+
+      await preparer.preparePrompt(
+        { prompt: "Review the runtime files" } as PromptStep,
+        undefined,
+        { harness: "claude-cli" } as any,
+        undefined
+      );
+      for (const file of files) {
+        assert.strictEqual(
+          await fs.promises.readFile(file.destinationPath, "utf8"),
+          file.source
+        );
+      }
+    } finally {
+      await fs.promises.rm(sourceRoot, { recursive: true, force: true });
+      await fs.promises.rm(executionRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("does not plan source-runtime copies for a non-worktree prompt", async () => {
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () => createSections(),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    const plan = await preparer.planPrompt(
+      { prompt: "just say hi" } as PromptStep,
+      undefined,
+      { harness: "claude-cli" } as any,
+      undefined
+    );
+    assert.strictEqual(
+      plan.mutations.filter((mutation) =>
+        mutation.description?.startsWith("Copy ")
+      ).length,
+      0
+    );
   });
 });

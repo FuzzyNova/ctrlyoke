@@ -1260,6 +1260,9 @@ export const MAX_PASTED_IMAGE_BYTES = 15 * 1024 * 1024;
 /** Maximum UTF-8 content size captured for workspace and undo diffs (512 KB). */
 export const MAX_CONTENT_SIZE = 512 * 1024;
 
+/** Maximum size of a source-checkout artifact copied into an execution checkout (32 MB). */
+export const MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES = 32 * 1024 * 1024;
+
 /**
  * Rough token-length heuristic (OpenAI's documented "~4 characters per token
  * for English text" rule of thumb) used wherever a file/content is too large

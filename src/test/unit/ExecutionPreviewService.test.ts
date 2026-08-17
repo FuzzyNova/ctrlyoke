@@ -85,6 +85,7 @@ function createPromptPreparer(): CliPromptPreparer {
       skillContent: null,
       agentContent: null,
       directFileRefs: [],
+      sourceRuntimeCopies: [],
       excerptContent: null,
       userPromptText: prompt.prompt,
       skippedReferences: [],

@@ -5,10 +5,15 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test, afterEach } from "mocha";
 import { ContextExpander } from "../utils/ContextExpander";
+import { getGitUntrackedFiles } from "../utils/GitUtils";
 import {
   parseSelectionReferences,
   parseSymbolReferences,
 } from "../utils/FileReferenceParser";
+import {
+  MAX_CONTENT_SIZE,
+  MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES,
+} from "../types/DashboardConstants";
 
 suite("ContextExpander.expandContextSplit", () => {
   let workspaceRoot: string;
@@ -179,7 +184,103 @@ suite("ContextExpander.expandContextSplit", () => {
         `Review @runtime/source.log and @"${sourcePath}"`
       );
 
-      assert.deepStrictEqual(result.directFileRefs, [sourcePath]);
+      const destinationPath = path.join(executionRoot, "runtime", "source.log");
+      assert.deepStrictEqual(result.directFileRefs, [destinationPath]);
+      assert.deepStrictEqual(result.sourceRuntimeCopies, [
+        { sourcePath, destinationPath },
+      ]);
+    });
+
+    test("leaves a copied ref's inline token workspace-relative and unrewritten", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = freshWorkspace();
+      writeRepositoryFile(sourceRoot, "runtime/source.log");
+
+      const expander = new ContextExpander({
+        workspaceRoot: executionRoot,
+        additionalTrustedRoots: [executionRoot],
+        sourceCheckoutRoot: sourceRoot,
+        executionCheckoutRoot: executionRoot,
+        effectiveAbsolute: true,
+      });
+
+      assert.strictEqual(
+        await expander.sanitizeReferences("Review @runtime/source.log"),
+        "Review @runtime/source.log"
+      );
+    });
+
+    test("copies a multi-megabyte source log above MAX_CONTENT_SIZE under the copy ceiling", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = freshWorkspace();
+      const sourcePath = path.join(sourceRoot, "runtime", "large.log");
+      fs.mkdirSync(path.dirname(sourcePath), { recursive: true });
+      fs.writeFileSync(sourcePath, Buffer.alloc(MAX_CONTENT_SIZE + 1024, 65));
+
+      const expander = new ContextExpander({
+        workspaceRoot: executionRoot,
+        additionalTrustedRoots: [executionRoot],
+        sourceCheckoutRoot: sourceRoot,
+        executionCheckoutRoot: executionRoot,
+      });
+      const result = await expander.expandContextSplit(
+        "Review @runtime/large.log"
+      );
+
+      assert.ok(sourcePath.length > 0);
+      assert.strictEqual(result.sourceRuntimeCopies.length, 1);
+      assert.strictEqual(result.skippedReferences.length, 0);
+      assert.strictEqual(
+        result.directFileRefs[0],
+        path.join(executionRoot, "runtime", "large.log")
+      );
+    });
+
+    test("keeps copied runtime files out of getGitUntrackedFiles", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = createGitRepository();
+      const sourcePath = writeRepositoryFile(sourceRoot, "runtime/session.log");
+      const destinationPath = path.join(
+        executionRoot,
+        "runtime",
+        "session.log"
+      );
+      fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
+      fs.copyFileSync(sourcePath, destinationPath);
+
+      const untrackedFiles = await getGitUntrackedFiles(executionRoot);
+      assert.ok(!untrackedFiles.includes("runtime/session.log"));
+    });
+
+    test("refuses a source artifact over the copy ceiling by name and size", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = freshWorkspace();
+      const sourcePath = path.join(sourceRoot, "runtime", "too-large.log");
+      fs.mkdirSync(path.dirname(sourcePath), { recursive: true });
+      fs.writeFileSync(sourcePath, "x");
+      fs.truncateSync(sourcePath, MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES + 1);
+
+      const expander = new ContextExpander({
+        workspaceRoot: executionRoot,
+        additionalTrustedRoots: [executionRoot],
+        sourceCheckoutRoot: sourceRoot,
+        executionCheckoutRoot: executionRoot,
+      });
+      const result = await expander.expandContextSplit(
+        "Review @runtime/too-large.log"
+      );
+
+      assert.deepStrictEqual(result.sourceRuntimeCopies, []);
+      const skipped = result.skippedReferences.find(
+        (ref) => ref.ref === "runtime/too-large.log"
+      );
+      assert.ok(skipped);
+      assert.ok(
+        skipped.reason.includes("MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES")
+      );
+      assert.ok(
+        skipped.reason.includes(`${MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES + 1}`)
+      );
     });
 
     test("renders the same absolute source path in excerpts and sanitized references", async () => {
@@ -342,7 +443,13 @@ suite("ContextExpander.expandContextSplit", () => {
         const result = await expander.expandContextSplit(
           paths.map((_, index) => `@runtime/log-${index}.log`).join(" ")
         );
-        assert.deepStrictEqual(result.directFileRefs, paths);
+        assert.deepStrictEqual(
+          result.directFileRefs,
+          paths.map((sourcePath) =>
+            path.join(executionRoot, path.relative(sourceRoot, sourcePath))
+          )
+        );
+        assert.strictEqual(result.sourceRuntimeCopies.length, paths.length);
       } finally {
         if (previousTracePath === undefined) {
           delete process.env.GIT_TRACE2_EVENT;

@@ -440,7 +440,7 @@ step 5 is what makes `@.ctrlyoke/logs/…` and pasted images work.
 | 2 ✅ | `sourceCheckoutRoot` plumbing + `ContextExpander` precomputed tier (§4.1, §4.1.1)                | 1          |
 | 3 ✅ | Absolute-path rendering for source-store resolutions (§4.2) + directory block (§4.3)             | 2          |
 | 4 ✅ | `PromptFileResolver` source tier for lone step prompts (§4.1)                                    | 1          |
-| 5    | Copy pass as a deferred `PreparedMutation` (§5), with §5.5 guardrails                            | 2          |
+| 5 ✅ | Copy pass as a deferred `PreparedMutation` (§5), with §5.5 guardrails                            | 2          |
 | 6    | Disclosure diagnostic (§6) + Dry Run / landing-preflight / non-worktree assertions               | 5          |
 
 Step 1 lands the two pure, dependency-free pieces together so steps 2 and 4 can

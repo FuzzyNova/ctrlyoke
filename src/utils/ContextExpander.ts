@@ -35,6 +35,7 @@ import {
   ATTACHMENT_PREFIXES,
   GIT_CHANGE_KINDS,
   isImageRefPath,
+  MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES,
 } from "../types/DashboardConstants";
 import { getErrorMessage } from "./ErrorUtils";
 import { quoteReferenceField } from "../completions/ContextReferenceBuilder";
@@ -46,6 +47,8 @@ import { quoteReferenceField } from "../completions/ContextReferenceBuilder";
 export interface SplitContext {
   /** Absolute paths for full-file @path refs — no embedding, harness reads directly */
   directFileRefs: string[];
+  /** Source-only full-file refs to copy into the execution checkout before launch. */
+  sourceRuntimeCopies: SourceRuntimeCopy[];
   /** Embedded XML attachment blocks for selection/sym/git/dir content */
   excerptBlocks: string;
   /**
@@ -56,6 +59,11 @@ export interface SplitContext {
    * silently produced zero content is never mistaken for "nothing to attach."
    */
   skippedReferences: SkippedReference[];
+}
+
+export interface SourceRuntimeCopy {
+  sourcePath: string;
+  destinationPath: string;
 }
 
 export interface SkippedReference {
@@ -308,6 +316,7 @@ export class ContextExpander {
    */
   async expandContextSplit(promptText: string): Promise<SplitContext> {
     const directFileRefs: string[] = [];
+    const sourceRuntimeCopies: SourceRuntimeCopy[] = [];
     const excerptParts: string[] = [];
     const skippedReferences: SkippedReference[] = [];
 
@@ -319,7 +328,12 @@ export class ContextExpander {
       await this.prepareSourceRuntimeResolutions(fileReferences);
 
       if (fileReferences.length === 0 && gitRefs.length === 0) {
-        return { directFileRefs: [], excerptBlocks: "", skippedReferences: [] };
+        return {
+          directFileRefs: [],
+          sourceRuntimeCopies: [],
+          excerptBlocks: "",
+          skippedReferences: [],
+        };
       }
 
       for (const ref of fileReferences) {
@@ -402,11 +416,39 @@ export class ContextExpander {
             excerptParts.push(xml);
           }
         } else {
-          // Full-file ref → return absolute path for direct @-reference (only if it exists)
+          // Full-file refs normally resolve to the execution checkout. A
+          // source-only runtime artifact instead names its post-copy
+          // destination; the actual copy is deferred to CliPromptPreparer.
           try {
-            const absolutePath = this.resolveWorkspacePath(ref.path);
-            await fs.access(absolutePath);
-            directFileRefs.push(absolutePath);
+            const sourceRuntimePath = this.sourceRuntimeResolutions.get(
+              ref.path
+            )?.absolutePath;
+            if (sourceRuntimePath) {
+              const sourceStat = await fs.stat(sourceRuntimePath);
+              if (!sourceStat.isFile()) {
+                throw new Error(
+                  `Reference "${ref.path}" is not a regular file`
+                );
+              }
+              if (sourceStat.size > MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES) {
+                throw new Error(
+                  `Source runtime artifact "${ref.path}" is ${sourceStat.size} bytes, above MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES (${MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES} bytes)`
+                );
+              }
+              const destinationPath = path.resolve(
+                this.executionCheckoutRoot,
+                path.relative(this.sourceCheckoutRoot!, sourceRuntimePath)
+              );
+              directFileRefs.push(destinationPath);
+              sourceRuntimeCopies.push({
+                sourcePath: sourceRuntimePath,
+                destinationPath,
+              });
+            } else {
+              const absolutePath = this.resolveWorkspacePath(ref.path);
+              await fs.access(absolutePath);
+              directFileRefs.push(absolutePath);
+            }
           } catch (err) {
             const suggestion =
               this.namedRoots.length > 1
@@ -430,12 +472,18 @@ export class ContextExpander {
 
       return {
         directFileRefs,
+        sourceRuntimeCopies,
         excerptBlocks: excerptParts.join("\n\n"),
         skippedReferences,
       };
     } catch (error) {
       Log.error("[ContextExpander] Error in expandContextSplit:", error);
-      return { directFileRefs: [], excerptBlocks: "", skippedReferences: [] };
+      return {
+        directFileRefs: [],
+        sourceRuntimeCopies: [],
+        excerptBlocks: "",
+        skippedReferences: [],
+      };
     }
   }
 
@@ -555,6 +603,13 @@ export class ContextExpander {
       ? `"${displayPath}"`
       : displayPath;
     const isExcerptRef = !!ref.symbolName || (!!ref.startLine && !!ref.endLine);
+
+    // The source-only full-file ref will be copied to the execution checkout
+    // by the preparation pass. Preserve its workspace-relative token so the
+    // harness opens the mirrored destination after that deferred mutation.
+    if (!isExcerptRef && resolution.base === "sourceRuntimeStore") {
+      return null;
+    }
 
     if (isExcerptRef) {
       // #selection:/#sym: never carry an @ prefix, and only the resolved

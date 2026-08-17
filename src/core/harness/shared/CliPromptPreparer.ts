@@ -1,4 +1,6 @@
 import * as crypto from "crypto";
+import * as fs from "fs/promises";
+import * as path from "path";
 import type { PromptStep } from "../../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import {
@@ -274,7 +276,8 @@ export class CliPromptPreparer {
       const plan = await this.createInlinePlanWithReferences(
         outgoingSections.userPromptText,
         outgoingSections.directFileRefs,
-        harnessId
+        harnessId,
+        outgoingSections.sourceRuntimeCopies
       );
       return this.withDiagnostics(plan, promptDiagnostics);
     }
@@ -396,7 +399,8 @@ export class CliPromptPreparer {
   private async createInlinePlanWithReferences(
     promptText: string,
     directFileRefs: string[],
-    harnessId: ResolvedProperties["harness"]
+    harnessId: ResolvedProperties["harness"],
+    sourceRuntimeCopies: PromptSections["sourceRuntimeCopies"]
   ): Promise<PromptPreparationPlan> {
     const promptBody = this.createBodySection(
       PREVIEW_PROMPT_CATEGORIES.PROMPT_TEXT,
@@ -406,6 +410,8 @@ export class CliPromptPreparer {
     );
     const sections: CategorizedPromptSectionPreview[] = [];
     const diagnostics: CompatibilityDiagnostic[] = [];
+    const mutations =
+      await this.createSourceRuntimeCopyMutations(sourceRuntimeCopies);
     for (let i = 0; i < directFileRefs.length; i++) {
       sections.push(
         await this.buildFileReferenceSection(
@@ -421,7 +427,7 @@ export class CliPromptPreparer {
       tempFilePaths: [],
       promptWithInstruction: promptText,
       files: [],
-      mutations: [],
+      mutations,
       promptPreview: {
         sections,
         totalByteCount: sections.reduce(
@@ -579,6 +585,12 @@ export class CliPromptPreparer {
       );
     }
 
+    mutations.push(
+      ...(await this.createSourceRuntimeCopyMutations(
+        sections.sourceRuntimeCopies
+      ))
+    );
+
     const contextRefs: string[] = [];
     if (contextContent) {
       const split = splitter.splitContextContent(contextContent);
@@ -689,6 +701,65 @@ export class CliPromptPreparer {
       },
       diagnostics,
     };
+  }
+
+  /**
+   * Plan source-runtime copies without touching the execution checkout.
+   * Existing destinations are compared by bytes so content-addressed
+   * attachments do not create needless mutations, while prompt/log files are
+   * refreshed when their contents differ.
+   */
+  private async createSourceRuntimeCopyMutations(
+    copies: readonly PromptSections["sourceRuntimeCopies"][number][]
+  ): Promise<PreparedMutation[]> {
+    const mutations: PreparedMutation[] = [];
+    for (const copy of copies) {
+      let sourceBytes: Buffer;
+      try {
+        sourceBytes = await fs.readFile(copy.sourcePath);
+      } catch {
+        continue;
+      }
+
+      let previousBytes: Buffer | undefined;
+      try {
+        const destinationStat = await fs.stat(copy.destinationPath);
+        if (destinationStat.isFile()) {
+          previousBytes = await fs.readFile(copy.destinationPath);
+        }
+      } catch {
+        // The destination is absent, or disappeared while planning.
+      }
+
+      if (
+        previousBytes !== undefined &&
+        crypto.timingSafeEqual(
+          crypto.createHash("sha256").update(previousBytes).digest(),
+          crypto.createHash("sha256").update(sourceBytes).digest()
+        )
+      ) {
+        continue;
+      }
+
+      mutations.push({
+        path: copy.destinationPath,
+        description: `Copy ${copy.sourcePath} to ${copy.destinationPath}`,
+        apply: async () => {
+          await fs.mkdir(path.dirname(copy.destinationPath), {
+            recursive: true,
+          });
+          await fs.copyFile(copy.sourcePath, copy.destinationPath);
+        },
+        restore: async () => {
+          if (previousBytes === undefined) {
+            await fs.rm(copy.destinationPath, { force: true });
+          } else {
+            await fs.writeFile(copy.destinationPath, previousBytes);
+          }
+        },
+      });
+    }
+    return mutations;
   }
 
   /**

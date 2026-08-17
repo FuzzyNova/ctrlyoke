@@ -14,7 +14,11 @@ import {
 import { AgentExpander } from "../utils/AgentExpander";
 import { SkillExpander } from "../utils/SkillExpander";
 import { ContextExpander } from "../utils/ContextExpander";
-import type { SkippedReference, SplitContext } from "../utils/ContextExpander";
+import type {
+  SkippedReference,
+  SourceRuntimeCopy,
+  SplitContext,
+} from "../utils/ContextExpander";
 import { Log } from "../utils/Log";
 import { TempFileManager } from "../utils/TempFileManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -84,6 +88,8 @@ export interface PromptSections {
   agentContent: string | null;
   /** Absolute paths for full-file @path refs — harness reads these directly */
   directFileRefs: string[];
+  /** Source-only full-file refs copied into the execution checkout before launch. */
+  sourceRuntimeCopies: SourceRuntimeCopy[];
   /** Embedded XML attachment blocks for selection/sym/git/dir content, or null */
   excerptContent: string | null;
   /**
@@ -493,6 +499,7 @@ export abstract class HarnessIntegration {
     // Expand context into direct file refs + excerpt blocks (split, not merged)
     let splitContext: SplitContext = {
       directFileRefs: [],
+      sourceRuntimeCopies: [],
       excerptBlocks: "",
       skippedReferences: [],
     };
@@ -540,6 +547,7 @@ export abstract class HarnessIntegration {
       skillContent,
       agentContent,
       directFileRefs: splitContext.directFileRefs,
+      sourceRuntimeCopies: splitContext.sourceRuntimeCopies,
       excerptContent: splitContext.excerptBlocks || null,
       userPromptText,
       skippedReferences: splitContext.skippedReferences,
