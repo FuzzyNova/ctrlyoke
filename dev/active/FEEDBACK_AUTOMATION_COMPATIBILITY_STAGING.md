@@ -337,20 +337,27 @@ Stage 6 describes this as the same edit set and should be updated to reflect
 that it has landed, per this document's own "update both plans when it lands"
 rule above.
 
-### Stage F — Browser feedback Phase 4 — NOT STARTED
+### Stage F — Browser feedback Phase 4 — REDESIGNED 2026-08-17, NOT IMPLEMENTED
 
-Interactive choices: the 6 surviving action-bearing sites and the
-`USER_INTERACTION_REQUEST` correlation contract.
+**Redesigned 2026-08-17: the `USER_INTERACTION_REQUEST` correlation contract
+is no longer being built.** Each of the 6 surviving action-bearing sites was
+re-examined individually against the current code instead — four are cut
+outright, two relocate into existing/inline UI (`DeleteConfirmModal` for
+clear-all-workflows; a small in-app control for post-script-create; an inline
+retry affordance for harness detection). Full per-site findings and decisions
+are in `BROWSER_USER_FEEDBACK_PLAN.md` Phase 4. None of the six code changes
+have landed yet — this is a design resolution, not an implementation status
+change.
 
-**Confirmed not started (2026-08-11).** `MESSAGE_TYPES.USER_INTERACTION_REQUEST`
-does not exist anywhere in `src/`. All 6 sites still call
-`vscode.window.show*Message(...)` directly with action-button strings, exactly
-matching the plan's own file/count reconciliation: `TemplateImporter.ts:200`
-(overwrite), `TemplateImporter.ts:243` (post-import),
-`WorkflowCommandHandler.ts:99` (post-script-create),
-`WorkflowCommandHandler.ts:148` (retry harness automation),
-`WorkflowOrchestrator.ts:1325` (post-workspace-init), `WorkflowSerializer.ts:1335`
-(clear-all-workflows).
+All 6 sites still call `vscode.window.show*Message(...)` directly with
+action-button strings today, exactly matching the plan's own file/count
+reconciliation: `TemplateImporter.ts:200` (overwrite, cut),
+`TemplateImporter.ts:243` (post-import, cut),
+`WorkflowCommandHandler.ts:99` (post-script-create, moves in-app),
+`WorkflowCommandHandler.ts:148` (retry harness automation, moves inline),
+`WorkflowOrchestrator.ts:1344` (post-workspace-init, cut — and duplicated by a
+second near-identical toast in `extension.ts`, also cut), `WorkflowSerializer.ts:1375`
+(clear-all-workflows, replaced by `DeleteConfirmModal`).
 
 ### Stage G — Compatibility Phase 3, and the deferred remainder — NOT STARTED
 
@@ -411,7 +418,7 @@ may be swapped as a block.
 | 15  | C.6   | **DONE** — Executed the triage for the ui/utils group (31 sites in 8 files); reusable direct-message baseline is now 6, with the six Phase 4 interaction holds remaining                                                                            |
 | 16  | D     | **TODO — next up.** `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                                                                                                    |
 | 17  | E     | **DONE** — `WebviewClientContext` threaded through `WorkflowMutationCoordinator`, `WorkflowStepHandlers`, `UndoRedoCoordinator`, and terminal handlers (landed 2026-07-24 to 2026-08-06); two-tab isolation test in `CoreFeedbackMigration.test.ts` |
-| 18  | F     | **TODO.** `USER_INTERACTION_REQUEST` contract; migrate the 6 surviving action-bearing sites; headless fallbacks                                                                                                                                     |
+| 18  | F     | **TODO — redesigned 2026-08-17.** No `USER_INTERACTION_REQUEST` contract; instead cut 4 of the 6 action-bearing sites and relocate 2 into existing/inline UI (`DeleteConfirmModal`, `ScriptConditionEditor`, `HarnessDropdown`); none of the 6 changes implemented yet |
 | 19  | G.x   | **TODO.** Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration (dry-run sub-leg blocked on `SECRETS_AND_REDACTION_PLAN.md`)                                                                                      |
 
 **Stage B was reordered on 2026-08-02 from the plan's section numbering.** The
@@ -546,14 +553,22 @@ corrected first.
 
 ### Browser feedback Phase 4 — interactive choices (Stage F)
 
+**Redesigned 2026-08-17 — no correlated `USER_INTERACTION_REQUEST` contract.**
 The 6 surviving reusable action-bearing messages (template overwrite,
 post-import, post-script-create, retry harness automation, post-workspace-init,
-clear-all-workflows) get a correlated
-`USER_INTERACTION_REQUEST` contract: the browser returns only a request ID and a
-choice ID, the host owns what the choice means. Requires timeout, dismissal, and
-disconnect handling, a defined headless fallback per interaction, and rejection
-of duplicate/expired responses. The duplicate-running-workflow site was deleted
-in C.4 as a policy conflict and is no longer in Stage F's scope.
+clear-all-workflows) were re-examined one by one instead: template
+overwrite and post-import are the same `TemplateImporter.importWorkflowTemplates()`
+call and are both cut (superseded by `TemplateModal`'s "New template..." flow);
+post-workspace-init is cut (it's a click-through after the user already acted
+in `StartupOverlay`, and there are actually two duplicate toasts, both cut);
+post-script-create moves into a small in-app control in
+`ScriptConditionEditor.tsx`; retry harness automation moves into an inline
+affordance next to `HarnessDropdown`; clear-all-workflows is funneled through
+the existing `DeleteConfirmModal` (it was never actually using it, despite
+looking like it should have been). See `BROWSER_USER_FEEDBACK_PLAN.md` Phase 4
+for the full per-site reasoning. None of the six changes are implemented yet.
+The duplicate-running-workflow site was deleted in C.4 as a policy conflict
+and was never in Stage F's scope.
 
 ### Compatibility Phase 2 — unblocked legs (Stage D)
 

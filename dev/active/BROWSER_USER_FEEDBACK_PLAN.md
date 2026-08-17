@@ -1,12 +1,23 @@
 # Browser User Feedback Plan
 
-**Status (2026-08-02):** Phases 1 and 2 (including Phase 2.5) are complete.
+**Status (2026-08-17):** Phases 1, 2 (including 2.5), 3, and 5 are complete.
 The React dashboard renders a bounded, accessible transient toast queue in both
 hosts, operational feedback reaches connected browsers independently of
 notification settings, and the reusable direct-message migration is complete
 except for the six action-bearing interactions reserved for Phase 4. Phase 3
-(client-scoped routing) and Phase 4 (correlated interactive choices) remain
-outstanding.
+(client-scoped routing) completed per
+[`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](./FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
+Stage E, re-verified against `src/` on 2026-08-11 — this doc's Acceptance
+Criteria below previously said otherwise and is corrected in this pass. Phase 4
+was **redesigned 2026-08-17**: none of the six action-bearing sites need the
+generic `USER_INTERACTION_REQUEST` contract after all — each has a decided
+per-site disposition (four cut, two relocated into existing/inline UI) — but
+none of the six code changes have landed yet. **Phase 6 (new, 2026-08-17) is
+also outstanding**: the webview's own toast dispatch — separate from
+the backend `UserFeedbackSink` this plan already built — is not host-aware, so
+26 call sites across 9 webview-react files render an in-app toast even inside
+the VS Code panel instead of a native message. See "The webview's own toast
+calls are not host-aware" and "Phase 6" below.
 
 **Related plans:**
 
@@ -229,6 +240,83 @@ These are the correct model for a browser-initiated operation. A failure caused
 by one tab should not appear in every connected tab merely because the old
 implementation used a process-global VS Code toast.
 
+### The webview's own toast calls are not host-aware
+
+**Found 2026-08-17, while auditing a live mismatch report:** clicking "Enable
+performance profiling" in `DeveloperSection.tsx` shows an **in-app** toast even
+when running inside the VS Code panel, where it should show a **native**
+`vscode.window.showInformationMessage`. Every AST/text audit in this plan so
+far scanned for `vscode.window.show*Message` and `PlatformAdapter` calls — both
+miss this category entirely, because these call sites never call a VS Code API
+at all. They call `useUiStore.getState().showToast(...)` /
+`enqueueToast(...)` directly, and that store method has no concept of host: it
+always pushes onto the in-app `toastQueue`, whether the surface is a browser
+tab or the VS Code panel's own webview.
+
+This is the mismatch the user is describing, and it is a **different gap**
+from everything else in this plan. `UserFeedbackSink` (Phase 2) correctly
+branches by host — `VsCodeUserFeedbackSink` for the panel,
+`HostedWebSocketUserFeedbackSink` for browsers — but only for **backend**-
+initiated feedback. Nothing plays that role on the **webview** side, so every
+webview-local call to `showToast()` renders the same way regardless of host.
+
+Two call-site shapes both fall into this gap:
+
+**Group A — client-only actions with no backend round trip at all.** These
+never touch `WorkflowOrchestrator` or `UserFeedbackSink` and never can, so
+Phase 2's migration was structurally unable to reach them. 14 sites, 8 files:
+
+| File                                              | Lines               | Example                                                            |
+| -------------------------------------------------- | ------------------- | -------------------------------------------------------------------- |
+| `components/settings/DeveloperSection.tsx`         | 127-132, 195-198    | "Performance profiling enabled/disabled.", "Layout state cleared." |
+| `components/dev/UxSnapshotButton.tsx`              | 76                  | "UX snapshot capture failed"                                       |
+| `components/editor/CodeMirrorEditor.tsx`           | 1018, 1097, 2741    | Paste/drop image and invalid-reference errors                      |
+| `components/editor/PromptEditor.tsx`               | 646, 686, 693       | Prompt-file conversion busy/error toasts                           |
+| `hooks/useWorkflowContextMenu.tsx`                 | 95, 103             | Copy/duplicate context-menu result toasts                          |
+| `hooks/useStepContextMenu.tsx`                     | 174, 352            | Step context-menu result toasts                                    |
+| `hooks/useRunViewLoadWatchdog.ts`                  | 72                  | Run-view load timeout fallback                                     |
+| `utils/workflowMutation.ts`                        | 49                  | Stale-revision guard toast                                         |
+
+**Group B — scoped-reply message handlers that already do the right thing on
+the backend, then render unconditionally on arrival.** These are the Stage E
+"Convert-scoped-reply" sites from the Phase 2 triage table above:
+`WORKFLOW_ACTION_FAILED`, `WORKFLOW_SAVE_FAILED`, and similar typed replies
+already travel over `ctx.postMessage`/`ctx.emit` to only the requesting
+client — that part of the architecture is correct and complete. But the
+webview-side handler for each one calls `showToast()` unconditionally in
+`useMessageHandler.ts`, so the correctly-scoped reply still renders as an
+in-app toast inside the VS Code panel. 12 handlers in one file:
+
+| Line | Handler                                                                          |
+| ---: | --------------------------------------------------------------------------------- |
+|  603 | `DEV_BUILD_COMPLETED`                                                            |
+|  662 | `DEV_COMMAND_UNAVAILABLE`                                                        |
+|  672, 679 | `UX_SNAPSHOT_SAVED`                                                         |
+| 1529 | `WORKFLOW_VARIANT_CREATED` (already special-cases `standalone` for its action button — see Phase 6) |
+| 1742 | `OPEN_HARNESS_DIR_RESULT`                                                        |
+| 1912 | `MCP_CONFIG_PREVIEW_RESULT`                                                      |
+| 2031 | `WORKFLOW_ACTION_FAILED`                                                         |
+| 2444, 2446 | `WORKFLOW_SAVED`                                                            |
+| 2464 | `WORKFLOW_SAVE_FAILED`                                                           |
+| 2482 | `WORKFLOW_SAVED_AS_TEMPLATE`                                                     |
+
+**Two handlers in the same file already prove the fix is cheap and the pattern
+is known** — they are explicitly excluded from Groups A/B because they are
+already correct:
+
+- `NOTIFICATION_EVENT` (line ~1149) hand-writes `if (standalone) { ... showToast(...) }`.
+- `USER_FEEDBACK` (line ~1170) is safe by construction, not by a host check:
+  `HostedWebSocketUserFeedbackSink` only ever broadcasts to browser sockets
+  (`extension.ts` wires it to `hostedServer?.broadcastUserFeedback`), so the
+  panel's `postMessage` channel never receives a `USER_FEEDBACK` message to
+  begin with.
+
+Neither of these should be touched by Phase 6 — they are the reference for
+what "correct" looks like, not additional migration targets. What's missing is
+a single client-side entry point the other 26 sites can call instead of
+hand-rolling the `standalone` check (or, in 25 of the 26 cases, not writing it
+at all).
+
 ## Feedback Model
 
 ### Separate completion notifications from operational feedback
@@ -395,25 +483,29 @@ is enqueued when `isStandalone` is false.
 
 ## Action-Bearing Messages
 
-Six action-bearing calls currently live in reusable code — all six are direct:
+**Resolved 2026-08-17 — none of the six need the interaction contract below.**
+Each of the six was re-examined site by site (full discussion in "Phase 4").
+Every one either gets cut outright or relocates into a modal/inline control
+that already exists (`DeleteConfirmModal`) or is a small, self-contained
+addition next to existing UI (`ScriptConditionEditor`, `HarnessDropdown`,
+`TemplateModal`). Nothing needs a new cross-cutting correlation contract.
 
-Direct (`vscode.window.show*Message` with actions):
+Original six (all direct `vscode.window.show*Message` calls with actions):
 
-- template overwrite confirmation;
-- post-import action;
-- post-script-create action;
-- retry harness automation;
-- post-workspace-initialization action;
-- clear-all-workflows confirmation.
+- template overwrite confirmation — **cut** (same flow as the next item).
+- post-import action — **cut**.
+- post-script-create action — **moved in-app**.
+- retry harness automation — **moved inline**.
+- post-workspace-initialization action — **cut**.
+- clear-all-workflows confirmation — **replaced with `DeleteConfirmModal`**.
 
-(The two end-condition dialogs were deleted rather than migrated in Phase 2.5.)
+See "Phase 4" below for the per-site findings and decisions. (The two
+end-condition-failure dialogs were already deleted rather than migrated in
+Phase 2.5, and the duplicate-running-workflow choice was already deleted as a
+policy conflict during Phase 2 triage — neither was ever part of this six.)
 
-All six need an interaction contract. The duplicate-running-workflow choice was
-re-examined during Phase 2 triage and deleted as a policy conflict; it is no
-longer in Phase 4's scope.
-
-These must not be flattened into fire-and-forget toast. Implement them after the
-basic toast slice through a correlated interaction request:
+**Superseded design, kept only as a record of what turned out not to be
+needed — do not build this:**
 
 ```typescript
 interface UserInteractionRequest {
@@ -426,21 +518,12 @@ interface UserInteractionRequest {
 }
 ```
 
-The browser responds with only `requestId` and the selected choice ID. The host
-owns the meaning of that choice.
-
-Safety and lifecycle requirements:
-
-- never transmit an arbitrary command/callback for browser execution;
-- target the initiating/controller client, not every tab;
-- time out and resolve as dismissed when the client disconnects;
-- do not queue interaction responses across WebSocket reconnects;
-- use the existing shared modal primitives for choices that block an operation;
-- define an explicit headless fallback for every interaction;
-- reject duplicate or expired responses.
-
-Domain-specific confirmations may keep their existing typed modal/result
-messages when those are clearer than the generic interaction contract.
+The idea was: the browser responds with only `requestId` and the selected
+choice ID, the host owns the meaning of that choice, with timeout/dismissal/
+disconnect handling and a headless fallback per interaction. If a future
+seventh site ever needs a true cross-host blocking choice with no existing
+modal to reuse, this design is the starting point — but none of the six
+audited here turned out to need it.
 
 ## Migration Plan
 
@@ -537,8 +620,12 @@ The AST collector in `src/test/unit/SourceAuditCounters.test.ts`, adapted to
 print arguments and source locations, found the expected 63 calls. The table
 below is grouped by the file split used by staging steps C.5 and C.6. A
 `Port-broadcast` row marked **interaction hold** remains an action-bearing
-message for Phase 4; it must use `USER_INTERACTION_REQUEST`, not be flattened
-into a fire-and-forget toast.
+message reserved for Phase 4 — it must not be flattened into a fire-and-forget
+toast. (At the time this table was executed, Phase 4 meant
+`USER_INTERACTION_REQUEST`; Phase 4 was redesigned 2026-08-17 and no longer
+uses that contract — see "Phase 4" for each site's actual disposition. The
+"interaction hold" marker below still correctly means "do not touch this as
+part of Phase 2," which is all it needs to mean here.)
 
 The current source contains `WORKFLOW_ACTION_FAILED` and
 `WORKFLOW_SAVE_FAILED`. It does **not** contain `WORKSPACE_ACTION_FAILED`,
@@ -581,10 +668,12 @@ files are executed. Scoped UI failures use the initiating client's typed reply
 path; the unscoped terminal-restart and auto-save infrastructure paths use the
 composite `UserFeedbackSink` broadcast fallback. The AST counter is now 49
 boundary / 6 reusable direct `show*Message` calls. The six survivors are the
-intentional Phase 4 choices: template overwrite, post-import actions, end
+intentional Phase 4 sites: template overwrite, post-import actions, end
 condition script actions, harness detection retry, workspace initialization's
-Reveal Folder action, and clear-history confirmation. They survive because
-they require `USER_INTERACTION_REQUEST`, not a fire-and-forget feedback toast.
+Reveal Folder action, and clear-history confirmation. They survived Phase 2
+because they are interactions, not fire-and-forget feedback — see "Phase 4"
+for each site's actual disposition (redesigned 2026-08-17; four are cut, two
+relocate into existing/inline UI, none use `USER_INTERACTION_REQUEST`).
 
 ##### `src/core/orchestration/WorkflowCommandHandler.ts` — 13
 
@@ -846,26 +935,179 @@ current effective behavior for every workflow that does not click a button.
 4. Add two-tab tests proving one tab's validation error does not leak to the
    other.
 
-### Phase 4 — Interactive choices
+### Phase 4 — Interactive choices → resolved as six per-site dispositions
 
-1. Inventory the six surviving reusable action-bearing messages and choose generic
-   interaction requests versus existing domain modals.
-2. Add correlation, timeout, dismissal, and disconnect handling.
-3. Preserve native VS Code choices for panel/Command Palette flows.
-4. Add explicit CLI/server-headless fallback tests.
+**Resolved 2026-08-17.** Re-examined each of the six action-bearing sites
+individually against the actual code, instead of building a shared
+correlation contract for all of them. None of the six need
+`USER_INTERACTION_REQUEST` — each has a decided disposition below. None of
+this has been implemented yet; this section only records the design decision.
 
-### Phase 5 — Enforce the boundary
+1. **End-condition script created** (`WorkflowCommandHandler.ts:99`,
+   command `ctrlyoke.createEndConditionScript`). Currently two chained
+   native-only calls: `showQuickPick` (script type) then
+   `showInformationMessage` (Open Script / Show in Explorer). The generator
+   underneath, `EndConditionEvaluator.createSampleScript(type)`, copies a
+   real starter file from `src/templates/check_condition.*` into
+   `.ctrlyoke/scripts/` — genuine boilerplate generation (the exit-code/
+   stdout contract baked in), not just a doc link.
+   **Decision: move in-app.** Add a "Create Script" control to
+   `ScriptConditionEditor.tsx` with an inline type picker, backed by a new
+   webview message that calls the existing `createSampleScript()`. Delete
+   the `ctrlyoke.createEndConditionScript` VS Code command and its
+   `package.json` entry once the in-app control lands.
+
+2. **Harness detection failed** (`WorkflowCommandHandler.ts:148`, inside
+   `openPanel()`). Fires only when "Open ctrlyoke Panel" runs from the
+   Command Palette while harness status is `unavailable` — a narrow,
+   VS-Code-only trigger that duplicates status `HarnessDropdown` already
+   shows via its status dot and tooltip. `WorkflowOrchestrator.
+   retryHarnessDetection()` already exists but today is reachable only from
+   this native prompt's "Retry Detection" button — no webview message calls
+   it.
+   **Decision: cut the gate, move retry inline.** Delete the
+   `showWarningMessage` call from `openPanel()` — it opens unconditionally
+   now. Add an inline "unavailable — Retry" affordance next to
+   `HarnessDropdown`'s status indicator, wired to a new webview message that
+   calls the existing `retryHarnessDetection()`.
+
+3. **Template overwrite** (`TemplateImporter.ts:200`) and
+4. **Template import succeeded** (`TemplateImporter.ts:243`) are **the same
+   method** — one is the per-item prompt inside the import loop, the other
+   is the final summary of that same `importWorkflowTemplates()` call, so
+   they share one disposition. Checked whether `TemplateModal`'s
+   "New template..." flow needs its own overwrite handling: it doesn't —
+   `TemplateManager.createCustomTemplate()` already rejects a name collision
+   with `Error("Template already exists: X")`, which `TemplateModal.tsx`
+   already surfaces as an inline field error under the name input (no
+   dialog, and no silent overwrite either). There is a second, now-redundant
+   native-only path to that same backend call:
+   `WorkflowCommandHandler.createNewTemplate()`
+   (`ctrlyoke.createNewTemplate`, QuickPick + InputBox).
+   **Decision: cut both sites and the redundant command.** Delete
+   `TemplateImporter.ts`, the `ctrlyoke.importWorkflowTemplates` command, and
+   its `package.json` entry — this removes items 3 and 4 together, since
+   they're one flow. Repoint `ctrlyoke.createNewTemplate` to focus the
+   dashboard and open `TemplateModal` with "New template..." pre-expanded
+   instead of running its own QuickPick/InputBox sequence.
+
+5. **Post-workspace-initialization action** — actually **two**
+   near-duplicate native toasts, not one: `extension.ts` fires one at
+   activation (idempotent re-scaffold of an already-initialized workspace)
+   and `WorkflowOrchestrator.handleInitializeWorkspace()` fires another
+   immediately after the user already clicked "Initialize" inside
+   `StartupOverlay.tsx` — the dashboard's own not-yet-initialized gate.
+   **Decision: cut both.** No replacement needed; the dashboard rendering
+   normally (`StartupOverlay` clearing) is itself the confirmation.
+
+6. **Clear all workflow history** (`WorkflowSerializer.ts:1375`,
+   `{ modal: true }`). Confirmed this is **not** already funneled through
+   `DeleteConfirmModal` and is a real live gap today:
+   `WorkflowStatus.tsx`'s `handleClearHistory` posts
+   `CLEAR_WORKFLOW_HISTORY` immediately with zero local confirmation, unlike
+   its sibling `handleRemoveWorkflow` in the same file, which already does
+   the right thing (`pendingDelete` state → `DeleteConfirmModal`, gated on
+   `confirmDeleteOperations`). The backend's native `{ modal: true }` dialog
+   is the *only* confirmation today and is invisible to browser clients.
+   **Decision: funnel through `DeleteConfirmModal`.** Mirror
+   `handleRemoveWorkflow`'s exact pattern for clear-all, and delete the
+   native confirm from `WorkflowSerializer.handleClearWorkflowHistory()` —
+   trust the caller already confirmed, same as `REMOVE_WORKFLOW_HISTORY` /
+   `DELETE_RUN_HISTORY` already do.
+
+**Net effect:** four sites are cut outright (2, 5, and the merged 3/4); two
+relocate into modal/inline UI (1, 6). None need
+`USER_INTERACTION_REQUEST` — see "Action-Bearing Messages" above.
+
+### Phase 5 — Enforce the boundary — DONE, via a different mechanism than written
 
 > **Moved to Stage 0.** These rules land _before_ the migration, not after, so
 > the baseline cannot grow while the work is in flight. They are folded into
 > `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` Phase 0 alongside the `vscode`-import
 > guards and the adapter-UI counter. Retained here for traceability.
 
-1. Add a lint/import-boundary rule that disallows `vscode.window.show*Message`
-   in shared core/router/service paths.
-2. Keep a narrow allowlist for VS Code composition and UI adapter files.
+**Confirmed shipped, checked 2026-08-17.** Item 3 landed as
+`src/test/unit/SourceAuditCounters.test.ts`'s shrink-only, AST-based
+`assertShrinkOnly` counters (current baselines: 49 boundary / 6 reusable /
+0 adapter-UI) — these fail the build in *either* direction, so the boundary
+cannot silently grow. **Items 1 and 2 (a literal ESLint import-boundary rule
+and allowlist) were never built and are not planned** —
+`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` line 219-220 explicitly reasons that a
+lint rule can't catch this class of regression the way the AST test can, and
+deliberately supersedes 1 and 2 with the test-based approach rather than
+building both. Nothing outstanding here.
+
+1. ~~Add a lint/import-boundary rule that disallows `vscode.window.show*Message`
+   in shared core/router/service paths.~~ Superseded by the AST test below.
+2. ~~Keep a narrow allowlist for VS Code composition and UI adapter files.~~
+   Superseded by the same test's boundary-file allowlist.
 3. Add a source audit test so a new direct call cannot silently recreate the
-   hosted-browser gap.
+   hosted-browser gap. — **DONE.**
+
+### Phase 6 — Single-source the webview's own toast dispatch
+
+**New 2026-08-17.** Closes "The webview's own toast calls are not host-aware"
+above. This is the client-side counterpart to Phase 2's `UserFeedbackSink`:
+one function every webview-originated toast call goes through, so callers stop
+caring whether they're rendering inside the VS Code panel or a browser tab.
+
+1. Add a webview→extension message, `MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK`
+   (payload: `severity`, `message`, optional `detail` — the same shape as
+   `UserFeedback` in `src/core/UserFeedbackSink.ts`; no `id`/`dedupeKey`,
+   since native VS Code messages don't dedupe or queue).
+2. Add a handler for it in `WebviewMessageRouter.ts` that delegates to the
+   **existing** `VsCodeUserFeedbackSink` instance already constructed in
+   `extension.ts` (thread it through `WebviewRouterCallbacks`, the same
+   mechanism `handleDevAction`/`handleUxSnapshot` already use). Do not
+   construct a second instance or re-implement the severity→API mapping —
+   `VsCodeUserFeedbackSink.notify()` is the single source for that mapping and
+   already exists.
+3. Add `notifyUser(message, severity, detail?)` in `webview-react/utils`,
+   colocated near `useVsCodeApi`. Its entire job:
+   - `isStandalone` → `useUiStore.getState().showToast(message, severity, { detail })` (unchanged, in-app).
+   - otherwise → `getVsCodeApi().postMessage({ type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK, severity, message, detail })`.
+4. Migrate Group A's 14 client-only call sites (8 files) to `notifyUser()`.
+5. Migrate Group B's 12 scoped-reply call sites in `useMessageHandler.ts` to
+   `notifyUser()`. At `WORKFLOW_VARIANT_CREATED` (line 1529), keep the
+   existing `standalone ? { action: {...} } : undefined` guard around the
+   "Open in New Tab" action button rather than folding it into `notifyUser()`
+   — see the action-button non-goal below.
+6. Leave `NOTIFICATION_EVENT` and `USER_FEEDBACK` untouched; they already do
+   the right thing through a different mechanism and are not part of this
+   migration.
+7. Keep `showToast()`/`enqueueToast()` on `uiStore` as the in-app-only
+   primitives they already are. `notifyUser()` is additive — the one thing
+   that decides *which* rendering path a caller should use — not a
+   replacement for the queue API itself.
+
+**Non-goals for Phase 6:**
+
+- No native equivalent for `ToastItem.action`. A closure (`onClick`) cannot
+  cross the `postMessage` boundary to the extension host, so action buttons
+  stay in-app/browser-only, exactly as `WORKFLOW_VARIANT_CREATED` already
+  special-cases today. `notifyUser()` intentionally does not accept an
+  `action` parameter.
+- No change to `UserFeedbackSink`, `CompositeUserFeedbackSink`, or either sink
+  implementation (Phase 2, already correct/complete).
+- No change to the 49 boundary-approved direct `vscode.window.show*Message`
+  calls or the six Phase 4 action-bearing sites.
+
+**Tests:**
+
+- `notifyUser()` unit test: asserts the standalone branch calls
+  `showToast`/`enqueueToast` and never posts a message; asserts the panel
+  branch posts `SHOW_NATIVE_FEEDBACK` and never touches `toastQueue`.
+- `WebviewMessageRouter` test: `SHOW_NATIVE_FEEDBACK` with each severity calls
+  the matching `VsCodeUserFeedbackSink` API (reuse the existing
+  `VsCodeUserFeedbackSink` test's severity→API table rather than duplicating
+  it).
+- Regression test for one Group A site (`DeveloperSection` profiler toggle)
+  and one Group B site (`WORKFLOW_ACTION_FAILED`) each asserting: panel mode
+  produces zero `toastQueue` entries, standalone mode produces exactly one.
+- Extend `SourceAuditCounters.test.ts`-style shrink-only baseline to cover
+  direct `showToast(`/`enqueueToast(` calls outside `uiStore.ts`,
+  `notifyUser.ts`, `NOTIFICATION_EVENT`, and `USER_FEEDBACK`, so a new
+  unconditional call site cannot silently recreate this gap.
 
 ## Test Plan
 
@@ -926,28 +1168,32 @@ current effective behavior for every workflow that does not click a button.
   `USER_FEEDBACK` is delivered under `browser.mode: never` as well as
   `connectedOnly`.
 - **MET —** No operational feedback is incorrectly delivered as browser push.
-- **OUTSTANDING — Stage E:** Browser request failures are not yet guaranteed
-  to be scoped to the initiating client. The current fallback is broadcast for
-  the unscoped helper paths; Stage E threads `WebviewClientContext` through the
-  four planned handler modules and adds two-tab isolation tests.
+- **MET (corrected 2026-08-17) —** Browser request failures are scoped to the
+  initiating client. `WebviewClientContext` is threaded through
+  `WorkflowMutationCoordinator`, `WorkflowStepHandlers`,
+  `UndoRedoCoordinator`, and the terminal handlers, with a two-tab isolation
+  test in `CoreFeedbackMigration.test.ts`. This line previously read
+  "OUTSTANDING"; `FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md` re-verified
+  the work against `src/` on 2026-08-11 and this plan was not updated to
+  match until now.
 - **MET —** Native VS Code notifications remain native at the extension
   boundary.
 - **MET —** CLI behavior remains non-interactive unless an explicit interactive
   prompt implementation is selected.
-- **OUTSTANDING — Stage F:** Reusable code has six direct
-  `vscode.window.show*Message()` calls remaining. They are the intentional
-  action-bearing sites: template overwrite, post-import actions, end-condition
-  script actions, harness detection retry, workspace initialization's Reveal
-  Folder action, and clear-history confirmation. They survive because they need
-  the correlated `USER_INTERACTION_REQUEST` contract, not a feedback toast.
+- **OUTSTANDING — Phase 4 (redesigned 2026-08-17):** Reusable code still has
+  six direct `vscode.window.show*Message()` calls with action buttons — none
+  of the underlying code changes have landed yet. The design question is
+  resolved, though: each of the six now has a decided per-site disposition
+  (four cut, two relocated into `DeleteConfirmModal`/inline UI) instead of a
+  shared `USER_INTERACTION_REQUEST` contract. See "Action-Bearing Messages"
+  and "Phase 4" for the six decisions.
 - **MET —** `PlatformAdapter` no longer declares `log()`, `warn()`, `error()`,
   `showProgress()`, or `showChoice()`; the adapter-mediated UI baseline is 0.
-- **OUTSTANDING — Stage F:** **No workflow can block on a prompt that the
-  client driving it cannot see.** The six surviving choices still need client
-  routing, timeout/dismissal handling, disconnect handling, and safe headless
-  fallbacks.
 - **MET —** Severity strings are declared once in `DashboardConstants.ts` and
   nowhere else.
-- **OUTSTANDING — Stage F:** Action-bearing messages retain their host-side
-  choices today, but their browser interaction contract and safe dismissal
-  fallbacks remain to be implemented.
+- **OUTSTANDING — Phase 6 (new 2026-08-17):** The webview's own toast calls —
+  as opposed to `UserFeedbackSink`, which is already correct — are not
+  host-aware. 26 call sites across 9 `webview-react` files (Groups A and B
+  above) render an in-app toast unconditionally, including inside the VS Code
+  panel, where a native `vscode.window.show*Message` is expected. No
+  client-side `notifyUser()` dispatcher exists yet.
