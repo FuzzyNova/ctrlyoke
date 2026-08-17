@@ -647,12 +647,30 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const readOnlyRef = useRef(readOnly);
   // Tracks last reported signed-overflow to avoid redundant events
   const lastOverflowRef = useRef<number | null>(null);
-  const pendingCompletionResolveRef = useRef<((value: any) => void) | null>(
-    null
-  );
-  const pendingCompletionRequestRef = useRef<PendingCompletionRequest | null>(
-    null
-  );
+  // customCompletions (@/#/~/$// triggers) and pathCompletions (whole-doc
+  // "looks like a file path") are independent CodeMirror `override` sources
+  // and can legitimately be in flight at the same time — e.g. a lone "/"
+  // matches both, and both should contribute to one merged dropdown. Each
+  // in-flight extension-host round trip gets its own map entry keyed by a
+  // globally unique seq, so a response can never resolve/cache the wrong
+  // source's request. `resolve` is nulled (not deleted) once a progressive
+  // `#` partial response fires, so the entry survives to receive the full
+  // response later — see handleCompletionResponse.
+  const pendingCompletionsRef = useRef<
+    Map<
+      number,
+      {
+        resolve: ((value: CompletionResult | null) => void) | null;
+        request: PendingCompletionRequest;
+      }
+    >
+  >(new Map());
+  // Tracks each source's own latest in-flight seq so a fresh keystroke from
+  // that source cancels only its own stale request, never the other source's.
+  const inFlightCompletionSeqRef = useRef<{
+    custom: number | null;
+    path: number | null;
+  }>({ custom: null, path: null });
   // Cache for a full completion result that arrived after its (already-resolved)
   // partial response — see the progressive `#` completion flow. Keyed by
   // trigger+query so the re-triggered completion source can serve it
@@ -894,51 +912,53 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       seq?: number,
       partial?: boolean
     ) => {
-      // Discard stale responses from earlier requests
-      if (seq !== undefined && seq !== completionSeqRef.current) {
+      if (seq === undefined) {
+        return;
+      }
+      // No entry means this request was already cancelled (superseded by a
+      // newer keystroke from the same source) or already fully resolved —
+      // discard rather than resolve/cache the wrong thing.
+      const entry = pendingCompletionsRef.current.get(seq);
+      if (!entry) {
         return;
       }
 
-      const request = pendingCompletionRequestRef.current;
       const result = buildCodeMirrorCompletionResult(
         items,
         from,
-        request,
+        entry.request,
         symbolIconCacheRef.current
       );
 
       if (partial) {
-        // Deliver the instant items now, but keep the request context so the
-        // forthcoming full response can be keyed and re-applied.
-        if (pendingCompletionResolveRef.current) {
-          pendingCompletionResolveRef.current(result);
-          pendingCompletionResolveRef.current = null;
+        // Deliver the instant items now, but keep the map entry (request
+        // context) so the forthcoming full response can be keyed and re-applied.
+        if (entry.resolve) {
+          entry.resolve(result);
+          entry.resolve = null;
         }
         return;
       }
 
       // Final response. If the promise is still pending (no partial was sent,
       // e.g. there was no selection), resolve it directly.
-      if (pendingCompletionResolveRef.current) {
-        pendingCompletionResolveRef.current(result);
-        pendingCompletionResolveRef.current = null;
-        pendingCompletionRequestRef.current = null;
+      if (entry.resolve) {
+        entry.resolve(result);
+        pendingCompletionsRef.current.delete(seq);
         return;
       }
 
       // A partial already resolved the promise and the dropdown is open. Cache
       // the full result and re-trigger completion so the source can serve it
       // from cache without another round trip.
-      pendingCompletionRequestRef.current = null;
-      if (request) {
-        completionCacheRef.current = {
-          key: completionCacheKey(request.trigger, request.query),
-          result,
-        };
-        const view = viewRef.current;
-        if (view) {
-          startCompletion(view);
-        }
+      pendingCompletionsRef.current.delete(seq);
+      completionCacheRef.current = {
+        key: completionCacheKey(entry.request.trigger, entry.request.query),
+        result,
+      };
+      const view = viewRef.current;
+      if (view) {
+        startCompletion(view);
       }
     },
     []
@@ -1224,17 +1244,26 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       // stale selection snapshot from a prior dropdown that was dismissed).
       completionCacheRef.current = null;
 
+      // Cancel this source's own previous in-flight request (never the other
+      // source's — pathCompletions can be genuinely concurrent, e.g. a lone
+      // "/" matches both, and both should contribute to the merged dropdown).
+      const prevSeq = inFlightCompletionSeqRef.current.custom;
+      if (prevSeq !== null) {
+        const prevEntry = pendingCompletionsRef.current.get(prevSeq);
+        prevEntry?.resolve?.(null);
+        pendingCompletionsRef.current.delete(prevSeq);
+      }
+      inFlightCompletionSeqRef.current.custom = seq;
+
       // Request completions from extension host
       return new Promise<CompletionResult | null>((resolve) => {
-        // Cancel any pending completion that will never be fulfilled
-        if (pendingCompletionResolveRef.current) {
-          pendingCompletionResolveRef.current(null);
-        }
-        pendingCompletionResolveRef.current = resolve;
-        pendingCompletionRequestRef.current = {
-          trigger: trigger as CompletionTrigger,
-          query: afterTrigger,
-        };
+        pendingCompletionsRef.current.set(seq, {
+          resolve,
+          request: {
+            trigger: trigger as CompletionTrigger,
+            query: afterTrigger,
+          },
+        });
 
         vscode.postMessage({
           type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
@@ -1252,10 +1281,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   // Suggests .prompt.md / .md / .txt files from the workspace as replacements.
   const pathCompletions = useCallback(
     (context: any): Promise<CompletionResult | null> | null => {
-      // Match paths starting with ./ ../ / or a Windows drive letter
+      // Match paths starting with ./ ../ / or a Windows drive letter. The
+      // dot-prefixed alternative's trailing slash is optional so a lone "."
+      // (before any "/" has been typed) already activates this dropdown.
       const pathPattern = isMultiRootWorkspace
-        ? /(?:\.\.?\/|\/|[a-zA-Z]:[/\\]|[^\s/\\]+[/\\])[^\s\n]*/
-        : /(?:\.\.?\/|\/|[a-zA-Z]:[/\\])[^\s\n]*/;
+        ? /(?:\.\.?\/?|\/|[a-zA-Z]:[/\\]|[^\s/\\]+[/\\])[^\s\n]*/
+        : /(?:\.\.?\/?|\/|[a-zA-Z]:[/\\])[^\s\n]*/;
       const before = context.matchBefore(pathPattern);
       if (!before) return null;
 
@@ -1276,15 +1307,24 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
       const seq = ++completionSeqRef.current;
 
+      // Cancel this source's own previous in-flight request only — see the
+      // matching comment in customCompletions.
+      const prevSeq = inFlightCompletionSeqRef.current.path;
+      if (prevSeq !== null) {
+        const prevEntry = pendingCompletionsRef.current.get(prevSeq);
+        prevEntry?.resolve?.(null);
+        pendingCompletionsRef.current.delete(prevSeq);
+      }
+      inFlightCompletionSeqRef.current.path = seq;
+
       return new Promise<CompletionResult | null>((resolve) => {
-        if (pendingCompletionResolveRef.current) {
-          pendingCompletionResolveRef.current(null);
-        }
-        pendingCompletionResolveRef.current = resolve;
-        pendingCompletionRequestRef.current = {
-          trigger: "path",
-          query: before.text,
-        };
+        pendingCompletionsRef.current.set(seq, {
+          resolve,
+          request: {
+            trigger: "path",
+            query: before.text,
+          },
+        });
 
         vscode.postMessage({
           type: MESSAGE_TYPES.REQUEST_COMPLETIONS,

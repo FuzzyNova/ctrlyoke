@@ -587,6 +587,24 @@ suite("slash-token completions", () => {
     assert.strictEqual(mcpItems[0].insertText, "/mcp:playwright");
   });
 
+  test("filters merged skills and MCP servers by substring once typing continues past the bare slash", async () => {
+    const items = await getCtrlYokeSlashCompletions("/workspace", "/play");
+
+    assert.deepStrictEqual(
+      items.map((item) => item.label),
+      ["playwright"]
+    );
+  });
+
+  test("matches merged results anywhere in the name, not just as a prefix", async () => {
+    const items = await getCtrlYokeSlashCompletions("/workspace", "/wright");
+
+    assert.deepStrictEqual(
+      items.map((item) => item.label),
+      ["playwright"]
+    );
+  });
+
   test("does not depend on a selected harness", async () => {
     const first = await getCtrlYokeSlashCompletions("/workspace", "/");
     const second = await getCtrlYokeSlashCompletions("/workspace", "/");
