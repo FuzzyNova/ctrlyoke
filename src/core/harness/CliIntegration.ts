@@ -62,6 +62,7 @@ import { CliTransportCoordinator } from "./shared/CliTransportCoordinator";
 import { ExecutionPlanBuilder } from "./shared/ExecutionPlanBuilder";
 import type { ExecutionPreviewHarness } from "../ExecutionPreviewService";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
+import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { PtySession } from "./PtyProcessManager";
 import type { HookEvent } from "../../types/CtrlYokeTypes";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
@@ -934,8 +935,15 @@ export class CliIntegration extends HarnessIntegration {
       for (const diagnostic of prepared.diagnostics) {
         Log.warn(`[PromptPreparation] ${diagnostic.message}`);
       }
+      const promptStartedAt = session.workflowContext?.promptStartedAt;
       session.workflowContext?.reportCompatibilityDiagnostics?.(
-        prepared.diagnostics
+        this.routePromptDiagnostics(
+          prepared.diagnostics,
+          session.workflowContext
+        ),
+        promptStartedAt === undefined
+          ? undefined
+          : Math.max(0, promptStartedAt - 1)
       );
     }
 
@@ -947,6 +955,23 @@ export class CliIntegration extends HarnessIntegration {
     if (injectMode) {
       session.markInjectModePrepared();
     }
+  }
+
+  private routePromptDiagnostics(
+    diagnostics: readonly CompatibilityDiagnostic[],
+    workflowContext: WorkflowContext | undefined
+  ): CompatibilityDiagnostic[] {
+    if (!workflowContext) {
+      return [...diagnostics];
+    }
+    const consumer =
+      workflowContext.promptIndex < workflowContext.allPrompts.length
+        ? {
+            kind: FINAL_STEP_PHASES.QUEUE,
+            stepIndex: workflowContext.promptIndex,
+          }
+        : { kind: FINAL_STEP_PHASES.FINAL_STEP };
+    return diagnostics.map((diagnostic) => ({ ...diagnostic, consumer }));
   }
 
   private createUnpreparedExecutionSession(

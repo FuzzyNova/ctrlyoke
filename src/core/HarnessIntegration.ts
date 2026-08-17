@@ -90,8 +90,8 @@ export interface PromptSections {
   directFileRefs: string[];
   /** Source-only full-file refs copied into the execution checkout before launch. */
   sourceRuntimeCopies: SourceRuntimeCopy[];
-  /** Number of source-runtime references read in place as excerpts. */
-  sourceRuntimeReadCount?: number;
+  /** Source-runtime reference tokens read in place as excerpts. */
+  sourceRuntimeReadReferences: string[];
   /** Embedded XML attachment blocks for selection/sym/git/dir content, or null */
   excerptContent: string | null;
   /**
@@ -502,7 +502,7 @@ export abstract class HarnessIntegration {
     let splitContext: SplitContext = {
       directFileRefs: [],
       sourceRuntimeCopies: [],
-      sourceRuntimeReadCount: 0,
+      sourceRuntimeReadReferences: [],
       excerptBlocks: "",
       skippedReferences: [],
     };
@@ -551,7 +551,7 @@ export abstract class HarnessIntegration {
       agentContent,
       directFileRefs: splitContext.directFileRefs,
       sourceRuntimeCopies: splitContext.sourceRuntimeCopies,
-      sourceRuntimeReadCount: splitContext.sourceRuntimeReadCount ?? 0,
+      sourceRuntimeReadReferences: splitContext.sourceRuntimeReadReferences,
       excerptContent: splitContext.excerptBlocks || null,
       userPromptText,
       skippedReferences: splitContext.skippedReferences,

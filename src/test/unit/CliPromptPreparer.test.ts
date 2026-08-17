@@ -23,6 +23,7 @@ function createSections(overrides?: Partial<PromptSections>): PromptSections {
     agentContent: null,
     directFileRefs: [],
     sourceRuntimeCopies: [],
+    sourceRuntimeReadReferences: [],
     excerptContent: null,
     userPromptText: "just say hi",
     skippedReferences: [],
@@ -1269,8 +1270,13 @@ suite("CliPromptPreparer", () => {
       buildPromptSections: async () =>
         createSections({
           directFileRefs: [destinationPath],
-          sourceRuntimeCopies: [{ sourcePath, destinationPath }],
-          sourceRuntimeReadCount: 2,
+          sourceRuntimeCopies: [
+            { reference: "@runtime/large.log", sourcePath, destinationPath },
+          ],
+          sourceRuntimeReadReferences: [
+            "@runtime/other.log",
+            "@runtime/another.log",
+          ],
           userPromptText: "Review @runtime/large.log",
         }),
       extractLeadingSlashCommand: () => null,
@@ -1295,12 +1301,14 @@ suite("CliPromptPreparer", () => {
       assert.strictEqual(plan.mutations[0].path, destinationPath);
       assert.ok(plan.mutations[0].description?.includes(sourcePath));
       assert.deepStrictEqual(
-        plan.diagnostics.map(({ severity, message }) => ({ severity, message })),
+        plan.diagnostics.map(({ severity, message }) => ({
+          severity,
+          message,
+        })),
         [
           {
             severity: "info",
-            message:
-              "2 references were read from the source checkout; 1 file was copied into the worktree.",
+            message: `Read from source checkout: @runtime/other.log, @runtime/another.log; Copied into worktree: @runtime/large.log → ${destinationPath}`,
           },
         ]
       );
@@ -1346,6 +1354,7 @@ suite("CliPromptPreparer", () => {
         destination: "same attachment bytes",
       },
     ].map((file) => ({
+      name: file.name,
       sourcePath: path.join(sourceRoot, "runtime", file.name),
       destinationPath: path.join(executionRoot, "runtime", file.name),
       source: file.source,
@@ -1357,10 +1366,13 @@ suite("CliPromptPreparer", () => {
       buildPromptSections: async () =>
         createSections({
           directFileRefs: files.map((file) => file.destinationPath),
-          sourceRuntimeCopies: files.map(({ sourcePath, destinationPath }) => ({
-            sourcePath,
-            destinationPath,
-          })),
+          sourceRuntimeCopies: files.map(
+            ({ sourcePath, destinationPath, name }) => ({
+              reference: `@runtime/${name}`,
+              sourcePath,
+              destinationPath,
+            })
+          ),
           userPromptText: "Review the runtime files",
         }),
       extractLeadingSlashCommand: () => null,
@@ -1399,7 +1411,7 @@ suite("CliPromptPreparer", () => {
       );
       assert.strictEqual(
         plan.diagnostics[0]?.message,
-        "0 references were read from the source checkout; 2 files were copied into the worktree."
+        `Copied into worktree: @runtime/prompt.md → ${files[0].destinationPath}, @runtime/session.log → ${files[1].destinationPath}`
       );
 
       await preparer.preparePrompt(
@@ -1448,7 +1460,7 @@ suite("CliPromptPreparer", () => {
     );
   });
 
-  test("pluralizes disclosure counts when only source reads are present", async () => {
+  test("lists source references when only source reads are present", async () => {
     const workspaceRoot = await fs.promises.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-source-disclosure-")
     );
@@ -1457,7 +1469,7 @@ suite("CliPromptPreparer", () => {
       buildPromptSections: async () =>
         createSections({
           excerptContent: "source excerpt",
-          sourceRuntimeReadCount: 1,
+          sourceRuntimeReadReferences: ["@runtime/excerpt.log"],
           userPromptText: "Review the excerpt",
         }),
       extractLeadingSlashCommand: () => null,
@@ -1479,7 +1491,7 @@ suite("CliPromptPreparer", () => {
       );
       assert.strictEqual(
         plan.diagnostics[0]?.message,
-        "1 reference was read from the source checkout; 0 files were copied into the worktree."
+        "Read from source checkout: @runtime/excerpt.log"
       );
     } finally {
       await fs.promises.rm(workspaceRoot, { recursive: true, force: true });

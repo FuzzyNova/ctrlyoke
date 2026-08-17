@@ -97,11 +97,14 @@ export interface WorkflowContext {
   workflowFile?: PromptFile;
   /** Whether the current host can provide a PTY for this execution. */
   hostCanProvidePty?: boolean;
+  /** Extension-clock timestamp for the prompt output this context is about to start. */
+  promptStartedAt?: number;
   /** Minimal working-file persistence hook used for prompt runtime metadata. */
   workingFilePersistence?: WorkflowWorkingFilePersistence;
   /** Forward runtime compatibility diagnostics to the workflow dashboard. */
   reportCompatibilityDiagnostics?: (
-    diagnostics: readonly CompatibilityDiagnostic[]
+    diagnostics: readonly CompatibilityDiagnostic[],
+    timestampMs?: number
   ) => void;
   /**
    * Timeline-backed prior-context projection for an executing promoted run.
