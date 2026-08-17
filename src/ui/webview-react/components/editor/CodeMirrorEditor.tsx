@@ -67,10 +67,10 @@ import {
   type PromptEditorInsertRequest,
 } from "../../types/messages";
 import { WebviewLog } from "../../utils/logger";
-import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
+import { notifyUser } from "@utils/notifyUser";
 
 // Typo.js spell checker (will be loaded from window.Typo)
 declare global {
@@ -1013,9 +1013,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         WebviewLog.error(
           `[CodeMirror] Pasted image save failed: ${messageText}`
         );
-        useUiStore
-          .getState()
-          .showToast(messageText, USER_FEEDBACK_SEVERITY.ERROR);
+        notifyUser(messageText, USER_FEEDBACK_SEVERITY.ERROR);
         return;
       }
       // Trailing space terminates the @ref token so the user can keep typing.
@@ -1092,12 +1090,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       event.preventDefault();
       for (const item of imageItems) {
         if (!mimeTypeToImageExtension(item.type)) {
-          useUiStore
-            .getState()
-            .showToast(
-              `Unsupported image type: ${item.type}`,
-              USER_FEEDBACK_SEVERITY.ERROR
-            );
+          notifyUser(
+            `Unsupported image type: ${item.type}`,
+            USER_FEEDBACK_SEVERITY.ERROR
+          );
           continue;
         }
         const file = item.getAsFile();
@@ -2736,12 +2732,10 @@ function openContextReferenceLink(
   // true so the caller still consumes the event (preventDefault) rather than
   // falling through to editor cursor placement.
   if (target.getAttribute("data-invalid") === "true") {
-    useUiStore
-      .getState()
-      .showToast(
-        "Can't open — this reference doesn't resolve to an existing file",
-        USER_FEEDBACK_SEVERITY.WARNING
-      );
+    notifyUser(
+      "Can't open — this reference doesn't resolve to an existing file",
+      USER_FEEDBACK_SEVERITY.WARNING
+    );
     return true;
   }
 

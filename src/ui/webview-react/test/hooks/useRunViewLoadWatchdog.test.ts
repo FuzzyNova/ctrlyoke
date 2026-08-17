@@ -8,6 +8,11 @@ import {
   USER_FEEDBACK_SEVERITY,
 } from "@root/types/DashboardConstants";
 
+// This assertion covers the standalone queue branch of notifyUser().
+vi.hoisted(() => {
+  window.__ctrlyokeStandalone = true;
+});
+
 const RETRY_INTERVAL_MS = 15000;
 const MAX_RETRIES = 4;
 

@@ -31,6 +31,11 @@ import {
   WORKTREE_MODES,
 } from "@root/types/DashboardConstants";
 
+// The copy assertion covers the standalone queue branch of notifyUser().
+vi.hoisted(() => {
+  window.__ctrlyokeStandalone = true;
+});
+
 const postMessageSpy = vi.fn();
 
 beforeEach(() => {

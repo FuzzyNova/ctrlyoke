@@ -1,6 +1,7 @@
 # Browser User Feedback Plan
 
-**Status (2026-08-17):** Phases 1, 2 (including 2.5), 3, and 5 are complete.
+**Status (2026-08-17):** Phases 1, 2 (including 2.5), 3, and 5 are complete;
+Phase 6 infrastructure and Group A are complete, with Group B still queued.
 The React dashboard renders a bounded, accessible transient toast queue in both
 hosts, operational feedback reaches connected browsers independently of
 notification settings, and the reusable direct-message migration is complete
@@ -12,12 +13,10 @@ Criteria below previously said otherwise and is corrected in this pass. Phase 4
 was **redesigned 2026-08-17**: none of the six action-bearing sites need the
 generic `USER_INTERACTION_REQUEST` contract after all — each has a decided
 per-site disposition (four cut, two relocated into existing/inline UI) — but
-none of the six code changes have landed yet. **Phase 6 (new, 2026-08-17) is
-also outstanding**: the webview's own toast dispatch — separate from
-the backend `UserFeedbackSink` this plan already built — is not host-aware, so
-27 call sites across 9 webview-react files render an in-app toast even inside
-the VS Code panel instead of a native message. See "The webview's own toast
-calls are not host-aware" and "Phase 6" below.
+none of the six code changes have landed yet. **Phase 6 (new, 2026-08-17) is in
+progress**: its dispatcher and Group A's 15 client-only call sites are
+complete; Group B's 12 scoped-reply handlers remain. See "The webview's own
+toast calls are not host-aware" and "Phase 6" below.
 
 **Related plans:**
 
@@ -283,6 +282,9 @@ Phase 2's migration was structurally unable to reach them. 15 sites, 8 files
 | `hooks/useStepContextMenu.tsx`                     | 174, 352            | Step context-menu result toasts                                    |
 | `hooks/useRunViewLoadWatchdog.ts`                  | 72                  | Run-view load timeout fallback                                     |
 | `utils/workflowMutation.ts`                        | 49                  | Stale-revision guard toast                                         |
+
+Group A counts were re-verified against the current source on 2026-08-17:
+15 sites across these 8 files, with no action-bearing exceptions left behind.
 
 **Group B — scoped-reply message handlers that already do the right thing on
 the backend, then render unconditionally on arrival.** These are the Stage E
@@ -1107,7 +1109,9 @@ caring whether they're rendering inside the VS Code panel or a browser tab.
    colocated near `useVsCodeApi`. Its entire job:
    - `isStandalone` → `useUiStore.getState().showToast(message, severity, { detail })` (unchanged, in-app).
    - otherwise → `getVsCodeApi().postMessage({ type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK, severity, message, detail })`.
-4. Migrate Group A's 15 client-only call sites (8 files) to `notifyUser()`.
+4. **DONE (2026-08-17)** — Migrate Group A's 15 client-only call sites (8
+   files) to `notifyUser()`. The re-verified count matched the table exactly;
+   no action-bearing exceptions were left behind.
 5. Migrate Group B's 12 scoped-reply call sites in `useMessageHandler.ts` to
    `notifyUser()`. At `WORKFLOW_VARIANT_CREATED` (line 1529), keep the
    existing `standalone ? { action: {...} } : undefined` guard around the
@@ -1236,9 +1240,7 @@ caring whether they're rendering inside the VS Code panel or a browser tab.
   `showProgress()`, or `showChoice()`; the adapter-mediated UI baseline is 0.
 - **MET —** Severity strings are declared once in `DashboardConstants.ts` and
   nowhere else.
-- **OUTSTANDING — Phase 6 (new 2026-08-17):** The webview's own toast calls —
-  as opposed to `UserFeedbackSink`, which is already correct — are not
-  host-aware. 27 call sites across 9 `webview-react` files (Groups A and B
-  above) render an in-app toast unconditionally, including inside the VS Code
-  panel, where a native `vscode.window.show*Message` is expected. No
-  client-side `notifyUser()` dispatcher exists yet.
+- **PARTIAL — Phase 6 (updated 2026-08-17):** Group A's 15 client-only webview
+  toast calls now route through `notifyUser()`; panel mode therefore reaches
+  the native host and standalone mode keeps the in-app queue. Group B's 12
+  scoped-reply handlers in `useMessageHandler.ts` remain for Phase 6 step 5.

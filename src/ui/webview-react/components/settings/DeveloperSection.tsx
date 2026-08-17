@@ -11,6 +11,7 @@ import {
   setProfilingEnabled,
 } from "@utils/performanceProfiler";
 import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import { notifyUser } from "@utils/notifyUser";
 
 const TERMINATION_WARNING =
   "Reload and restart actions terminate active workflows, PTY sessions, and CLI processes.";
@@ -38,7 +39,6 @@ export function DeveloperSection() {
     (state) => state.clearDevBuildOutput
   );
   const resetLayoutState = useUiStore((s) => s.resetLayoutState);
-  const showToast = useUiStore((s) => s.showToast);
   const uxSnapshotButtonVisible = useUiStore((s) => s.uxSnapshotButtonVisible);
   const setUxSnapshotButtonVisible = useUiStore(
     (s) => s.setUxSnapshotButtonVisible
@@ -124,7 +124,7 @@ export function DeveloperSection() {
           : undefined
       )
     );
-    showToast(
+    notifyUser(
       enabled
         ? "Performance profiling enabled."
         : "Performance profiling disabled.",
@@ -192,7 +192,7 @@ export function DeveloperSection() {
           size="sm"
           onClick={() => {
             resetLayoutState();
-            showToast(
+            notifyUser(
               "Layout state cleared. Reload the window to see default panel sizes.",
               USER_FEEDBACK_SEVERITY.INFO
             );
