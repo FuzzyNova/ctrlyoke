@@ -140,6 +140,47 @@ describe("WorktreesSection", () => {
     });
   });
 
+  it("offers Remove/Force remove (not just Repair) for a stale managed entry whose directory Git never recorded as present", () => {
+    useSettingsStore.getState().setWorktreeManagement({
+      resolvedRoot: "C:/worktrees",
+      sourceCheckoutRoot: "C:/repo",
+      sourceCheckoutBranch: "main",
+      generatedAt: Date.now(),
+      staleManagedRecords: [],
+      entries: [
+        {
+          worktreePath: "C:/worktrees/ghost",
+          headCommit: "a",
+          branchName: "ctrlyoke/ghost",
+          ownership: "managed",
+          directoryState: "missing",
+          branchState: "present",
+          inUse: false,
+          leaseOwners: [],
+          stale: true,
+          branchCleanupEligible: false,
+        },
+      ],
+    });
+
+    render(
+      <WorktreesSection
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "Remove" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Force remove" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Repair entry" })
+    ).toBeInTheDocument();
+  });
+
   it("shows the effective root and locks the setting at workspace scope", () => {
     render(
       <WorktreesSection

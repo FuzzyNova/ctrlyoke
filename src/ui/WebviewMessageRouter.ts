@@ -12,6 +12,8 @@ import {
   QUEUE_POSITION,
   type WebviewLogLevel,
   VSCODE_COMMANDS,
+  WORKTREE_MANAGEMENT_ACTIONS,
+  type WorktreeManagementAction,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
@@ -87,6 +89,26 @@ interface WorkflowVariantRequestCacheEntry {
 
 const WORKFLOW_VARIANT_REQUEST_CACHE_TTL_MS = 10 * 60 * 1000;
 const WORKFLOW_VARIANT_REQUEST_CACHE_MAX_ENTRIES = 256;
+
+function describeWorktreeActionSuccess(
+  action: WorktreeManagementAction,
+  target: string
+): string {
+  switch (action) {
+    case WORKTREE_MANAGEMENT_ACTIONS.REMOVE:
+      return `Worktree removed: "${target}".`;
+    case WORKTREE_MANAGEMENT_ACTIONS.FORCE_REMOVE:
+      return `Worktree force-removed: "${target}".`;
+    case WORKTREE_MANAGEMENT_ACTIONS.PRUNE:
+      return "Stale Git worktree entries pruned.";
+    case WORKTREE_MANAGEMENT_ACTIONS.REPAIR:
+      return `Worktree entry repaired: "${target}".`;
+    case WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH:
+      return `Branch deleted: "${target}".`;
+    default:
+      return `Worktree action "${action}" completed.`;
+  }
+}
 
 /**
  * WebviewMessageRouter
@@ -1297,6 +1319,10 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) return;
+      const target = message.worktreePath ?? message.branchName ?? "";
+      Log.info(
+        `[WorktreeManagement] ${message.action} requested for "${target}"`
+      );
       try {
         await orchestrator.applyWorktreeManagementAction({
           action: message.action,
@@ -1304,10 +1330,19 @@ export class WebviewMessageRouter {
           branchName: message.branchName,
           confirmed: message.confirmed,
         });
+        const successMessage = describeWorktreeActionSuccess(
+          message.action,
+          target
+        );
+        Log.info(`[WorktreeManagement] ${message.action} succeeded: ${successMessage}`);
+        void vscode.window.showInformationMessage(successMessage);
       } catch (error) {
         // Without this, a rejected destructive action (e.g. a stale admin
         // entry that still needs `git worktree repair`) vanished into the
         // log with no feedback in the panel — the button looked like a no-op.
+        Log.error(
+          `[WorktreeManagement] ${message.action} failed for "${target}": ${getErrorMessage(error)}`
+        );
         void vscode.window.showErrorMessage(
           `Worktree action failed: ${getErrorMessage(error)}`
         );
@@ -1317,6 +1352,9 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.SYNC_NAMED_WORKTREE, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) return;
+      Log.info(
+        `[WorktreeManagement] sync requested for "${message.worktreePath}"`
+      );
       try {
         const result = await orchestrator.syncNamedWorktree(
           message.worktreePath
@@ -1336,15 +1374,20 @@ export class WebviewMessageRouter {
           describe(`"${result.worktreeBranch}":`, result.intoWorktree),
         ].join(" — ");
         if (succeeded(result.intoSource) && succeeded(result.intoWorktree)) {
+          Log.info(`[WorktreeManagement] sync succeeded: ${summary}`);
           void vscode.window.showInformationMessage(
             `Worktree synced. ${summary}`
           );
         } else {
+          Log.warn(`[WorktreeManagement] sync finished with issues: ${summary}`);
           void vscode.window.showWarningMessage(
             `Worktree sync finished with issues. ${summary}`
           );
         }
       } catch (error) {
+        Log.error(
+          `[WorktreeManagement] sync failed for "${message.worktreePath}": ${getErrorMessage(error)}`
+        );
         void vscode.window.showErrorMessage(
           `Worktree sync failed: ${getErrorMessage(error)}`
         );

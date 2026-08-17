@@ -1890,12 +1890,23 @@ export class WorktreeManager {
         )
     );
 
-    for (const record of staleManagedRecords) {
-      // A record whose directory ctrlyoke has already reconciled as removed
-      // has nothing left for Git to prune or repair — the absent Git entry
-      // is the expected end state, not staleness. Only a record that still
-      // believes its directory is present/unresolved and has no matching Git
-      // entry is a genuinely stale admin entry needing repair.
+    for (const staleRecord of staleManagedRecords) {
+      // A record with no matching Git entry is either merely prunable (the
+      // directory still exists, repair may recover it) or fully forgotten by
+      // Git (directory gone too). Reconcile the latter automatically on every
+      // load/refresh so users never have to click a button just to make a
+      // ghost entry disappear.
+      let record = staleRecord;
+      if (
+        record.directoryState !== "removed" &&
+        !(await this.pathExists(record.worktreePath))
+      ) {
+        record = await this.markRecordDirectoryReconciled(
+          sourceRoot,
+          commonDirectory,
+          record
+        );
+      }
       const reconciled = record.directoryState === "removed";
       if (reconciled && record.branchState !== "present") {
         // Both resources this record tracked are gone; drop the tombstone so
@@ -2064,18 +2075,10 @@ export class WorktreeManager {
               "The worktree admin entry is stale; repair it first."
             );
           }
-          const survivingBranchTip = await this.tryResolveLocalBranch(
+          await this.markRecordDirectoryReconciled(
             sourceRoot,
-            record.branchName
-          );
-          await this.writeRecord(
-            this.recordPath(commonDirectory, record.branchName),
-            {
-              ...record,
-              lifecycleState: "settled",
-              directoryState: "removed",
-              branchState: survivingBranchTip ? "present" : "missing",
-            }
+            commonDirectory,
+            record
           );
           return;
         }
@@ -2135,6 +2138,37 @@ export class WorktreeManager {
         );
       }
     });
+  }
+
+  /**
+   * Mark a managed record's directory as reconciled-removed once Git has
+   * fully forgotten the worktree (absent from `git worktree list`, not
+   * merely prunable) and nothing remains on disk. Callers must have already
+   * confirmed the directory is gone — this performs no existence check of
+   * its own, since the two call sites (an explicit Remove action, and the
+   * automatic sweep in `getManagementState`) need different behavior when
+   * the directory is still ambiguous.
+   */
+  private async markRecordDirectoryReconciled(
+    sourceRoot: string,
+    commonDirectory: string,
+    record: ManagedWorktreeOwnershipRecord
+  ): Promise<ManagedWorktreeOwnershipRecord> {
+    const survivingBranchTip = await this.tryResolveLocalBranch(
+      sourceRoot,
+      record.branchName
+    );
+    const updated: ManagedWorktreeOwnershipRecord = {
+      ...record,
+      lifecycleState: "settled",
+      directoryState: "removed",
+      branchState: survivingBranchTip ? "present" : "missing",
+    };
+    await this.writeRecord(
+      this.recordPath(commonDirectory, record.branchName),
+      updated
+    );
+    return updated;
   }
 
   /**

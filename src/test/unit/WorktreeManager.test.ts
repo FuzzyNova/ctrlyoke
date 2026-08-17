@@ -1759,7 +1759,7 @@ suite("WorktreeManager", function () {
     );
   });
 
-  test("Remove reconciles a record whose worktree Git has already fully forgotten", async () => {
+  test("auto-reconciles a record whose worktree Git has already fully forgotten, on plain state load", async () => {
     const { parent, repository } = await makeRepository("management-remove");
     const instance = manager(parent);
     const info = await ensureManaged(instance, repository);
@@ -1776,19 +1776,20 @@ suite("WorktreeManager", function () {
       stdio: "ignore",
     });
 
-    const stateBefore = await instance.getManagementState(repository);
-    const staleEntry = stateBefore.entries.find(
+    // A plain, read-oriented state load (mirroring what the dashboard fires
+    // on mount and on every Refresh) must reconcile this automatically —
+    // the user should never have to click a button just to make a ghost
+    // entry that Git itself has already forgotten disappear.
+    const stateAfterLoad = await instance.getManagementState(repository);
+    const reconciledOnLoad = stateAfterLoad.entries.find(
       (entry) => entry.branchName === info.branchName
     );
-    assert.ok(staleEntry, "the orphaned record should still be surfaced");
-    assert.strictEqual(staleEntry?.stale, true);
-
-    await instance.applyManagementAction({
-      sourceCheckoutRoot: repository,
-      action: WORKTREE_MANAGEMENT_ACTIONS.REMOVE,
-      branchName: info.branchName,
-      confirmed: true,
-    });
+    // The branch still exists (only the directory was cleared), so the
+    // record is retained for branch cleanup, but it must no longer read as
+    // a stale admin entry needing repair.
+    assert.ok(reconciledOnLoad, "the reconciled record stays visible");
+    assert.strictEqual(reconciledOnLoad?.stale, false);
+    assert.strictEqual(reconciledOnLoad?.directoryState, "removed");
 
     const record = await instance.readManagedWorktreeRecord(
       repository,
@@ -1796,16 +1797,22 @@ suite("WorktreeManager", function () {
     );
     assert.strictEqual(record?.directoryState, "removed");
 
-    const stateAfter = await instance.getManagementState(repository);
-    const reconciledEntry = stateAfter.entries.find(
+    // A subsequent explicit Remove on the now-reconciled record must still
+    // be a safe no-op rather than throwing.
+    await instance.applyManagementAction({
+      sourceCheckoutRoot: repository,
+      action: WORKTREE_MANAGEMENT_ACTIONS.REMOVE,
+      branchName: info.branchName,
+      confirmed: true,
+    });
+
+    const stateAfterRemove = await instance.getManagementState(repository);
+    const reconciledAfterRemove = stateAfterRemove.entries.find(
       (entry) => entry.branchName === info.branchName
     );
-    // The branch still exists (only the directory was cleared), so the
-    // record is retained for branch cleanup, but it must no longer read as
-    // a stale admin entry needing repair.
-    assert.ok(reconciledEntry, "the reconciled record stays visible");
-    assert.strictEqual(reconciledEntry?.stale, false);
-    assert.strictEqual(reconciledEntry?.directoryState, "removed");
+    assert.ok(reconciledAfterRemove, "the reconciled record stays visible");
+    assert.strictEqual(reconciledAfterRemove?.stale, false);
+    assert.strictEqual(reconciledAfterRemove?.directoryState, "removed");
   });
 
   test("drops the ownership record once both directory and branch are gone", async () => {

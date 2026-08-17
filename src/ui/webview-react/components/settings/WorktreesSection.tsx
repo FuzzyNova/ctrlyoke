@@ -246,8 +246,8 @@ function WorktreeRow({
         {canSync && <button type="button" className="fp-select-trigger text-xs" onClick={sync}>Sync with {sourceCheckoutBranch ?? "checkout"}</button>}
         {entry.branchCleanupEligible && entry.branchName && <button type="button" className="fp-select-trigger text-xs" onClick={() => sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH, entry)}>Delete merged branch</button>}
         {entry.ownership === "managed" && entry.branchName && entry.branchState === "present" && !entry.branchCleanupEligible && !entry.inUse && !entry.stale && <button type="button" className="fp-select-trigger text-xs" onClick={() => { if (window.confirm(`Delete branch ${entry.branchName}? This cannot be undone by ctrlyoke.`)) sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH, entry, true); }}>Delete branch…</button>}
-        {entry.ownership === "managed" && (entry.directoryState === "present" || entry.directoryState === "remove-failed") && <button type="button" className="fp-select-trigger text-xs" disabled={entry.inUse} onClick={remove}>Remove</button>}
-        {entry.ownership === "managed" && (entry.directoryState === "present" || entry.directoryState === "remove-failed") && <button type="button" className="fp-select-trigger text-xs" disabled={entry.inUse} onClick={forceRemove}>Force remove</button>}
+        {entry.ownership === "managed" && entry.directoryState !== "removed" && <button type="button" className="fp-select-trigger text-xs" disabled={entry.inUse} onClick={remove}>Remove</button>}
+        {entry.ownership === "managed" && entry.directoryState !== "removed" && <button type="button" className="fp-select-trigger text-xs" disabled={entry.inUse} onClick={forceRemove}>Force remove</button>}
         {entry.stale && <button type="button" className="fp-select-trigger text-xs" onClick={() => sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.REPAIR, entry)}>Repair entry</button>}
       </div>
     </div>
