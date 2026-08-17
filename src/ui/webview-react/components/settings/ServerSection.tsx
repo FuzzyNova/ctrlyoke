@@ -11,6 +11,7 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
+import { ActionButton } from "../shared/ActionButton";
 import { CustomSelect } from "../shared/CustomSelect";
 import { LocalNumberInput, LocalTextInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
@@ -55,11 +56,14 @@ export function ServerSection({
   const certFlashCount = useSettingsStore((s) => s.certFlashCount);
   const lastTokenRegenerated = useSettingsStore((s) => s.lastTokenRegenerated);
   const tokenFlashCount = useSettingsStore((s) => s.tokenFlashCount);
+  const [certPending, setCertPending] = useState(false);
   const [certFlash, setCertFlash] = useState(false);
+  const [tokenPending, setTokenPending] = useState(false);
   const [tokenFlash, setTokenFlash] = useState(false);
 
   useEffect(() => {
     if (certFlashCount === 0) return;
+    setCertPending(false);
     setCertFlash(true);
     const t = setTimeout(() => setCertFlash(false), 3000);
     return () => clearTimeout(t);
@@ -67,16 +71,32 @@ export function ServerSection({
 
   useEffect(() => {
     if (tokenFlashCount === 0) return;
+    setTokenPending(false);
     setTokenFlash(true);
     const t = setTimeout(() => setTokenFlash(false), 2000);
     return () => clearTimeout(t);
   }, [tokenFlashCount]);
+
+  // Safety fallback: clear a stuck spinner if the extension never replies
+  // (e.g. cert generation throws before it can send SERVER_CERT_GENERATED).
+  useEffect(() => {
+    if (!certPending) return;
+    const t = setTimeout(() => setCertPending(false), 10000);
+    return () => clearTimeout(t);
+  }, [certPending]);
+
+  useEffect(() => {
+    if (!tokenPending) return;
+    const t = setTimeout(() => setTokenPending(false), 10000);
+    return () => clearTimeout(t);
+  }, [tokenPending]);
 
   const certExpired =
     lastCertGenerated != null &&
     new Date(lastCertGenerated.expiresAt) < new Date();
 
   const handleGenerateCert = useCallback(() => {
+    setCertPending(true);
     vscode.postMessage({
       type: MESSAGE_TYPES.GENERATE_SERVER_CERT,
       scope: activeScope,
@@ -84,6 +104,7 @@ export function ServerSection({
   }, [vscode, activeScope]);
 
   const handleRegenerateToken = useCallback(() => {
+    setTokenPending(true);
     vscode.postMessage({ type: MESSAGE_TYPES.REGENERATE_SERVER_TOKEN });
   }, [vscode]);
 
@@ -266,22 +287,15 @@ export function ServerSection({
             </div>
 
             <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <button
-                type="button"
-                onClick={tokenFlash ? undefined : handleRegenerateToken}
-                className={`inline-flex items-center gap-1 text-xs transition-colors ${
-                  tokenFlash
-                    ? "text-indicator-success cursor-default"
-                    : "text-description-fg hover:text-foreground"
-                }`}
-              >
-                <i
-                  className={`codicon ${tokenFlash ? "codicon-check" : "codicon-shield"}`}
-                />
-                <span className={tokenFlash ? undefined : "underline"}>
-                  {tokenFlash ? "Token regenerated" : "Regenerate token"}
-                </span>
-              </button>
+              <ActionButton
+                label="Regenerate token"
+                pendingLabel="Regenerating…"
+                successLabel="Token regenerated"
+                icon="shield"
+                pending={tokenPending}
+                success={tokenFlash}
+                onClick={handleRegenerateToken}
+              />
               {lastTokenRegenerated !== null && !tokenFlash && (
                 <span className="text-xs text-description-fg">
                   Restart the server for the new token to take effect.
@@ -475,35 +489,24 @@ export function ServerSection({
                 />
               </SettingInputRow>
               <div className="flex flex-col gap-1.5">
-                <div className="flex items-baseline gap-4">
-                  <button
-                    type="button"
-                    onClick={certFlash ? undefined : handleGenerateCert}
-                    className={`inline-flex items-center gap-1 text-xs transition-colors ${
-                      certFlash
-                        ? "text-indicator-success cursor-default"
-                        : "text-description-fg hover:text-foreground"
-                    }`}
-                  >
-                    <i
-                      className={`codicon ${certFlash ? "codicon-check" : "codicon-key"}`}
-                    />
-                    <span className={certFlash ? undefined : "underline"}>
-                      {certFlash
-                        ? "Cert generated"
-                        : "Generate self-signed certificate"}
-                    </span>
-                  </button>
+                <div className="flex flex-wrap items-start gap-2">
+                  <ActionButton
+                    label="Generate self-signed certificate"
+                    pendingLabel="Generating…"
+                    successLabel="Cert generated"
+                    icon="key"
+                    pending={certPending}
+                    success={certFlash}
+                    onClick={handleGenerateCert}
+                  />
                   {certDownloadUrl && !certFlash && (
-                    <a
+                    <ActionButton
+                      label="Download certificate"
+                      icon="download"
                       href={certDownloadUrl}
                       download="ctrlyoke.cer"
-                      className="inline-flex items-center gap-1 text-xs text-description-fg hover:text-foreground"
                       title="Download the server certificate for manual installation on iOS"
-                    >
-                      <i className="codicon codicon-download" />
-                      <span className="underline">Download certificate</span>
-                    </a>
+                    />
                   )}
                 </div>
                 {lastCertGenerated && (

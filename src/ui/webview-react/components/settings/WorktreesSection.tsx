@@ -16,6 +16,7 @@ import { LocalTextInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import { ResetConfirmModal } from "../shared/ResetConfirmModal";
+import { ActionButton, type ActionFeedback } from "../shared/ActionButton";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -37,11 +38,6 @@ let requestIdCounter = 0;
 function generateRequestId(key: string): string {
   requestIdCounter += 1;
   return `${key}:${Date.now()}:${requestIdCounter}`;
-}
-
-interface ActionFeedback {
-  status: "success" | "error";
-  message: string;
 }
 
 /**
@@ -149,46 +145,6 @@ function useWorktreeActionFeedback() {
 }
 
 type WorktreeActionFeedback = ReturnType<typeof useWorktreeActionFeedback>;
-
-function ActionButton({
-  label,
-  pendingLabel,
-  onClick,
-  disabled,
-  pending,
-  feedback,
-}: {
-  label: string;
-  pendingLabel?: string;
-  onClick: () => void;
-  disabled?: boolean;
-  pending: boolean;
-  feedback?: ActionFeedback;
-}) {
-  return (
-    <div className="flex flex-col items-start gap-0.5">
-      <button
-        type="button"
-        className="fp-select-trigger text-xs inline-flex items-center gap-1"
-        disabled={disabled || pending}
-        onClick={onClick}
-      >
-        {pending && (
-          <i className="codicon codicon-loading codicon-modifier-spin text-xxs" />
-        )}
-        {pending ? (pendingLabel ?? label) : label}
-      </button>
-      {feedback && (
-        <span
-          className={`text-xxs ${feedback.status === "success" ? "text-indicator-success" : "text-error-fg"}`}
-          role="status"
-        >
-          {feedback.message}
-        </span>
-      )}
-    </div>
-  );
-}
 
 function sendAction(
   vscode: ReturnType<typeof useVsCodeApi>,

@@ -1,0 +1,118 @@
+export interface ActionFeedback {
+  status: "success" | "error";
+  message: string;
+}
+
+interface ActionButtonProps {
+  label: string;
+  pendingLabel?: string;
+  /** Label shown during an inline success flash (see `success`). Defaults to `label`. */
+  successLabel?: string;
+  /** Codicon name (without the `codicon-` prefix) shown before the label while idle. */
+  icon?: string;
+  /** Codicon name shown during an inline success flash. Defaults to "check". */
+  successIcon?: string;
+  /** Required unless `href` is set (a download link has nothing to click-handle). */
+  onClick?: () => void;
+  disabled?: boolean;
+  pending?: boolean;
+  /**
+   * Inline success flash: recolors the button itself and swaps in
+   * `successIcon`/`successLabel` instead of showing a separate feedback line.
+   * Mutually exclusive in practice with `feedback` — pick one display style
+   * per call site.
+   */
+  success?: boolean;
+  /** Below-button success/error line, cleared by the caller after a delay. */
+  feedback?: ActionFeedback;
+  /** Renders an `<a>` instead of a `<button>`, for download-style actions. */
+  href?: string;
+  download?: string;
+  title?: string;
+  ariaLabel?: string;
+}
+
+/**
+ * Single source for action buttons that report pending/success state:
+ * a spinner while pending, then either an inline success flash (icon/label
+ * swap, no click) or a feedback line below the button, depending on which
+ * props the caller supplies.
+ */
+export function ActionButton({
+  label,
+  pendingLabel,
+  successLabel,
+  icon,
+  successIcon = "check",
+  onClick,
+  disabled,
+  pending = false,
+  success = false,
+  feedback,
+  href,
+  download,
+  title,
+  ariaLabel,
+}: ActionButtonProps) {
+  const flashing = success && !pending;
+  const displayLabel = pending
+    ? (pendingLabel ?? label)
+    : flashing
+      ? (successLabel ?? label)
+      : label;
+  const iconName = pending ? "loading" : flashing ? successIcon : icon;
+
+  const className = `fp-select-trigger text-xs inline-flex items-center gap-1 w-auto transition-colors ${
+    flashing
+      ? "text-indicator-success border-indicator-success cursor-default"
+      : ""
+  }`;
+
+  const content = (
+    <>
+      {iconName && (
+        <i
+          className={`codicon codicon-${iconName} text-xxs ${
+            pending ? "codicon-modifier-spin" : ""
+          }`}
+        />
+      )}
+      {displayLabel}
+    </>
+  );
+
+  return (
+    <div className="flex flex-col items-start gap-0.5">
+      {href ? (
+        <a
+          href={href}
+          download={download}
+          title={title}
+          aria-label={ariaLabel}
+          className={className}
+        >
+          {content}
+        </a>
+      ) : (
+        <button
+          type="button"
+          className={className}
+          disabled={disabled || pending || flashing}
+          onClick={flashing ? undefined : onClick}
+          title={title}
+          aria-label={ariaLabel}
+        >
+          {content}
+        </button>
+      )}
+      {feedback && (
+        <span
+          className={`text-xxs ${feedback.status === "success" ? "text-indicator-success" : "text-error-fg"}`}
+          role="status"
+        >
+          {feedback.message}
+        </span>
+      )}
+    </div>
+  );
+}
