@@ -31,6 +31,10 @@ function atomicReferenceAriaLabel(
       return `Open git ${attrs["data-git-ref"] ?? title}`;
     case "priorContext":
       return `Open ${title}`;
+    case "skill":
+      return `Open ctrlyoke skill ${attrs["data-skill-name"] ?? title}`;
+    case "mcp":
+      return `Open ctrlyoke MCP server ${attrs["data-mcp-server-name"] ?? title} in MCP Manager`;
     case "file":
     default:
       return `Open ${attrs["data-path"] ?? title}`;

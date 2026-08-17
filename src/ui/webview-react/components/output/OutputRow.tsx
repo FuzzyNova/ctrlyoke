@@ -1268,6 +1268,10 @@ function promptReferenceTooltip(ref: ContextReferenceMatch): string {
       return `Go to ${ref.symbolName ?? ""} in ${ref.path ?? ""}:${ref.lineStart}-${ref.lineEnd}`;
     case "priorContext":
       return `Open ${ref.ref ?? "context"}`;
+    case "skill":
+      return `Open ctrlyoke skill ${ref.skillName ?? ""}`;
+    case "mcp":
+      return `Open ctrlyoke MCP server ${ref.mcpServerName ?? ""} in MCP Manager`;
     default:
       return `Open ${ref.path ?? ""}`;
   }
@@ -1308,6 +1312,8 @@ const PromptReferenceText: React.FC<{
           lineEnd: descriptor.attrs["data-line-end"],
           symbolName: descriptor.attrs["data-symbol-name"],
           ref: descriptor.attrs["data-ref"],
+          skillName: descriptor.attrs["data-skill-name"],
+          mcpServerName: descriptor.attrs["data-mcp-server-name"],
         } satisfies ContextReferenceMatch,
       })),
     [text]
@@ -1411,6 +1417,8 @@ const AtomicPromptReference: React.FC<{
           lineStart: descriptor.attrs["data-line-start"],
           lineEnd: descriptor.attrs["data-line-end"],
           ref: descriptor.attrs["data-ref"],
+          skillName: descriptor.attrs["data-skill-name"],
+          mcpServerName: descriptor.attrs["data-mcp-server-name"],
         },
         vscode
       )

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CHART_ACCENT_COLORS,
   createAtomicReferencePresentation,
   createFileReferenceChip,
   findAtomicReferences,
@@ -282,6 +283,50 @@ describe("atomic reference presentation", () => {
     });
   });
 
+  it("labels a /skill: reference with its name and the tools icon", () => {
+    const chips = findAtomicReferences("using /skill:commit here");
+    expect(chips).toEqual([
+      {
+        from: "using ".length,
+        to: "using /skill:commit".length,
+        icon: "tools",
+        label: "commit",
+        title: "/skill:commit",
+        attrs: { "data-type": "skill", "data-skill-name": "commit" },
+      },
+    ]);
+    expect(SYMBOL_ICON_COLORS[chips[0].icon]).toBe(CHART_ACCENT_COLORS.orange);
+  });
+
+  it("labels a /mcp: reference with its name and the mcp icon", () => {
+    const chips = findAtomicReferences("using /mcp:playwright here");
+    expect(chips).toEqual([
+      {
+        from: "using ".length,
+        to: "using /mcp:playwright".length,
+        icon: "mcp",
+        label: "playwright",
+        title: "/mcp:playwright",
+        attrs: { "data-type": "mcp", "data-mcp-server-name": "playwright" },
+      },
+    ]);
+    expect(SYMBOL_ICON_COLORS[chips[0].icon]).toBe(CHART_ACCENT_COLORS.orange);
+  });
+
+  it("leaves a plain native slash command alone", () => {
+    expect(findAtomicReferences("/commit and /mcp")).toEqual([]);
+  });
+
+  it("keeps multiple /mcp: references distinguishable after chipping", () => {
+    const chips = findAtomicReferences(
+      "only use /mcp:a if needed, and only use /mcp:b if needed"
+    );
+    expect(chips.map((c) => c.attrs["data-mcp-server-name"])).toEqual([
+      "a",
+      "b",
+    ]);
+  });
+
   it("returns multiple references sorted by start", () => {
     const chips = findAtomicReferences("@a/one.ts and @b/two.ts");
     expect(chips.map((c) => [c.from, c.to])).toEqual([
@@ -380,6 +425,42 @@ describe("file-operation reference chips on backslash paths", () => {
         { from: hiddenFrom, to: hiddenFrom + "ctrlyoke".length, active: true },
       ],
     });
+  });
+});
+
+describe("slash-token reference chip compaction", () => {
+  it("hides the /skill: prefix behind the compact label and expands to it on a hidden match", () => {
+    const source = "/skill:commit";
+    const chip = findAtomicReferences(source)[0];
+    const presentation = createAtomicReferencePresentation(chip, source);
+
+    expect(projectAtomicReferenceFind(presentation, [])).toMatchObject({
+      text: "commit",
+      expanded: false,
+    });
+
+    expect(
+      projectAtomicReferenceFind(presentation, [
+        { start: 0, end: "/skill".length, active: true },
+      ])
+    ).toMatchObject({ text: source, expanded: true });
+  });
+
+  it("hides the /mcp: prefix behind the compact label and expands to it on a hidden match", () => {
+    const source = "/mcp:playwright";
+    const chip = findAtomicReferences(source)[0];
+    const presentation = createAtomicReferencePresentation(chip, source);
+
+    expect(projectAtomicReferenceFind(presentation, [])).toMatchObject({
+      text: "playwright",
+      expanded: false,
+    });
+
+    expect(
+      projectAtomicReferenceFind(presentation, [
+        { start: 0, end: "/mcp".length, active: true },
+      ])
+    ).toMatchObject({ text: source, expanded: true });
   });
 });
 

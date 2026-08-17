@@ -8,6 +8,11 @@
 
 import { sliceDecorationMatches, type RowFindDecoration } from "./outputFind";
 import { SYMBOL_KIND_ICONS } from "../../../types/SymbolKindConstants";
+import {
+  scanCtrlYokeSlashTokens,
+  type CtrlYokeSlashToken,
+} from "../../../utils/CtrlYokeSlashTokens";
+import { CTRLYOKE_SLASH_TOKEN_KINDS } from "../../../types/DashboardConstants";
 
 export { SYMBOL_KIND_ICONS } from "../../../types/SymbolKindConstants";
 
@@ -137,7 +142,9 @@ export type ContextReferenceType =
   | "lineRange"
   | "symbol"
   | "git"
-  | "priorContext";
+  | "priorContext"
+  | "skill"
+  | "mcp";
 
 export interface ContextReferenceMatch {
   from: number;
@@ -150,6 +157,8 @@ export interface ContextReferenceMatch {
   symbolName?: string;
   symbolKind?: string;
   ref?: string;
+  skillName?: string;
+  mcpServerName?: string;
 }
 
 export interface AtomicReferenceChip {
@@ -222,6 +231,18 @@ export function createAtomicReferencePresentation(
         );
       case "priorContext":
         return sourceText.startsWith("$") ? 1 : 0;
+      case CTRLYOKE_SLASH_TOKEN_KINDS.SKILL:
+        return Math.max(
+          0,
+          sourceText.lastIndexOf(descriptor.attrs["data-skill-name"] ?? label)
+        );
+      case CTRLYOKE_SLASH_TOKEN_KINDS.MCP:
+        return Math.max(
+          0,
+          sourceText.lastIndexOf(
+            descriptor.attrs["data-mcp-server-name"] ?? label
+          )
+        );
       default:
         return 0;
     }
@@ -252,6 +273,7 @@ export const DEFAULT_COMPLETION_ICON = "symbol-misc";
 export const CHART_ACCENT_COLORS = {
   blue: "var(--vscode-charts-blue, #59a4f9)",
   green: "var(--vscode-charts-green, #89d185)",
+  orange: "var(--vscode-charts-orange, #cd861a)",
   purple: "var(--vscode-charts-purple, #b180d7)",
   red: "var(--vscode-charts-red, #f14c4c)",
   yellow: "var(--vscode-charts-yellow, #cca700)",
@@ -296,6 +318,11 @@ export const SYMBOL_ICON_COLORS: Record<string, string> = {
   "list-selection": CHART_ACCENT_COLORS.purple,
   "source-control": CHART_ACCENT_COLORS.green,
   book: CHART_ACCENT_COLORS.red,
+  // /skill: and /mcp: slash-token chips (see describeSlashTokenChip) share the
+  // orange accent so both read as one "ctrlyoke attachment" family, distinct
+  // from the file/symbol/git/prior-context accents above.
+  tools: CHART_ACCENT_COLORS.orange,
+  mcp: CHART_ACCENT_COLORS.orange,
 };
 
 export type SymbolIconResolver = (
@@ -433,6 +460,36 @@ export function describePriorContextChip(
   };
 }
 
+// Explicit /skill:<name> and /mcp:<name> references (see CtrlYokeSlashTokens.ts).
+// A separate parser from findContextReferenceMatches by design — the two
+// namespaces don't overlap and share no token grammar — but the resulting
+// chip follows the exact same icon/label/title/attrs shape so it renders and
+// finds identically to every other atomic reference.
+function describeSlashTokenChip(
+  token: CtrlYokeSlashToken
+): Omit<AtomicReferenceChip, "from" | "to"> {
+  if (token.kind === CTRLYOKE_SLASH_TOKEN_KINDS.MCP) {
+    return {
+      icon: "mcp",
+      label: token.name,
+      title: token.raw,
+      attrs: {
+        "data-type": CTRLYOKE_SLASH_TOKEN_KINDS.MCP,
+        "data-mcp-server-name": token.name,
+      },
+    };
+  }
+  return {
+    icon: "tools",
+    label: token.name,
+    title: token.raw,
+    attrs: {
+      "data-type": CTRLYOKE_SLASH_TOKEN_KINDS.SKILL,
+      "data-skill-name": token.name,
+    },
+  };
+}
+
 export function findAtomicReferences(
   docText: string,
   getSymbolIcon?: SymbolIconResolver,
@@ -458,6 +515,11 @@ export function findAtomicReferences(
       from: ref.from,
       to: ref.to,
       describe: () => describePriorContextChip(ref, docText),
+    })),
+    ...scanCtrlYokeSlashTokens(docText).map((token) => ({
+      from: token.index,
+      to: token.index + token.length,
+      describe: () => describeSlashTokenChip(token),
     })),
   ]
     .filter((ref) => !isInFencedBlock(ref.from, ref.to, fencedRanges))

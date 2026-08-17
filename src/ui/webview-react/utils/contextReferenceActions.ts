@@ -15,6 +15,10 @@ export interface ContextReferenceTarget {
   lineEnd?: string | number | null;
   /** priorContext ref token (e.g. "previous", "step:1,3"). */
   ref?: string | null;
+  /** /skill:<name> reference name. */
+  skillName?: string | null;
+  /** /mcp:<name> reference name. */
+  mcpServerName?: string | null;
 }
 
 interface VsCodeLike {
@@ -61,6 +65,22 @@ export function openContextReference(
       type: MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW,
       ref: target.ref,
       stepCount,
+    });
+    return true;
+  }
+
+  if (type === "skill") {
+    vscode.postMessage({
+      type: MESSAGE_TYPES.OPEN_SKILL,
+      skillName: target.skillName ?? "",
+    });
+    return true;
+  }
+
+  if (type === "mcp") {
+    vscode.postMessage({
+      type: MESSAGE_TYPES.REQUEST_MCP_CONFIG_PREVIEW,
+      mcpServerName: target.mcpServerName ?? "",
     });
     return true;
   }

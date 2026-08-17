@@ -1418,22 +1418,23 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           : []),
         createFencedBlockDecorationExtension(),
         // In atomic mode, createAtomicReferenceExtension already covers every
-        // range these two would mark (same findContextReferenceMatches /
-        // findInlinePriorContextRefs tokens) with a replace-widget decoration.
-        // Keeping both active means two decoration sources fight over the
-        // exact same range — a replace widget from one plugin and a mark from
-        // another — which is unnecessary and was implicated in clicks leaving
-        // the editor unresponsive. createFileRefDecorationExtension stays on
-        // regardless: it covers lone prompt-path prompts (no @/#/~/$ trigger),
-        // which findAtomicReferences deliberately excludes, so atomic mode
-        // never puts a chip there.
+        // range these would mark (same findContextReferenceMatches /
+        // findInlinePriorContextRefs / scanCtrlYokeSlashTokens tokens) with a
+        // replace-widget decoration. Keeping both active means two decoration
+        // sources fight over the exact same range — a replace widget from one
+        // plugin and a mark from another — which is unnecessary and was
+        // implicated in clicks leaving the editor unresponsive.
+        // createFileRefDecorationExtension stays on regardless: it covers lone
+        // prompt-path prompts (no @/#/~/$/slash trigger), which
+        // findAtomicReferences deliberately excludes, so atomic mode never
+        // puts a chip there.
         ...(atomicContextReferences
           ? []
           : [
               createLinkDecorationExtension(referenceValidityRef.current),
               createPriorContextDecorationExtension(),
+              createSlashTokenDecorationExtension(),
             ]),
-        createSlashTokenDecorationExtension(),
         createFileRefDecorationExtension(isMultiRootWorkspace),
         createPriorContextLintExtension(stepCountRef, hasFinalStepRef),
         createClickHandlerExtension(vscode, stepCountRef),
