@@ -6,6 +6,7 @@ import { findOutputMatches, type OutputFindMatch } from "@utils/outputFind";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
 import {
   FINAL_STEP_PHASES,
+  MESSAGE_TYPES,
   SCRIPT_OUTPUT_SOURCES,
   type TokenStats,
 } from "@/types/messages";
@@ -688,6 +689,75 @@ describe("OutputRow auto-expand on hidden active match", () => {
 
     fireEvent.click(chips[0]);
     expect(window.vscodeApi?.postMessage).toHaveBeenCalled();
+  });
+
+  it("renders explicit skill/mcp references as chips and opens them like other atomic references", () => {
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const row: OutputRenderRow = {
+      key: "row-prompt-slash-tokens",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: "prompt",
+      text: "using /skill:commit, commit just the changes with /mcp:playwright",
+    };
+
+    const { container } = render(
+      <OutputRow row={row} isExecutionActive={false} atomicContextReferences />
+    );
+
+    const chips = container.querySelectorAll(
+      "[data-atomic-reference-copy-text]"
+    );
+    expect(chips).toHaveLength(2);
+    expect(chips[0]).toHaveTextContent("commit");
+    expect(chips[0].querySelector(".codicon-tools")).not.toBeNull();
+    expect(chips[1]).toHaveTextContent("playwright");
+    expect(chips[1].querySelector(".codicon-mcp")).not.toBeNull();
+
+    fireEvent.click(chips[0]);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.OPEN_SKILL,
+      skillName: "commit",
+    });
+
+    fireEvent.click(chips[1]);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.REQUEST_MCP_CONFIG_PREVIEW,
+      mcpServerName: "playwright",
+    });
+  });
+
+  it("keeps skill/mcp references as selectable links when atomic formatting is off", () => {
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+    const row: OutputRenderRow = {
+      key: "row-prompt-slash-tokens-plain",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: "prompt",
+      text: "/skill:commit /mcp:playwright",
+    };
+
+    const { container } = render(
+      <OutputRow row={row} isExecutionActive={false} />
+    );
+
+    const links = container.querySelectorAll('[role="link"]');
+    expect(links).toHaveLength(2);
+    expect(links[0]).toHaveTextContent("/skill:commit");
+    expect(links[0]).toHaveAttribute("title", "Open ctrlyoke skill commit");
+    expect(links[1]).toHaveTextContent("/mcp:playwright");
+    expect(links[1]).toHaveAttribute(
+      "title",
+      "Open ctrlyoke MCP server playwright in MCP Manager"
+    );
+
+    fireEvent.click(links[0]);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.OPEN_SKILL,
+      skillName: "commit",
+    });
   });
 
   it("renders an embedded symbol kind in output without a host lookup", () => {

@@ -749,6 +749,48 @@ describe("CodeMirrorEditor atomic reference chips", () => {
     }
   });
 
+  it("renders /skill: and /mcp: references as chips and opens them on plain click", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const postMessage = vi.fn();
+    const view = new EditorView({
+      parent,
+      doc: "/skill:commit /mcp:playwright",
+      extensions: [
+        createAtomicReferenceExtension(),
+        createClickHandlerExtension({ postMessage }, { current: 0 }),
+      ],
+    });
+
+    try {
+      const chips = view.dom.querySelectorAll<HTMLElement>(".cm-atomic-ref");
+      expect(chips).toHaveLength(2);
+      expect(chips[0].querySelector(".codicon-tools")).not.toBeNull();
+      expect(chips[0]).toHaveTextContent("commit");
+      expect(chips[1].querySelector(".codicon-mcp")).not.toBeNull();
+      expect(chips[1]).toHaveTextContent("playwright");
+
+      chips[0].dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true })
+      );
+      expect(postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.OPEN_SKILL,
+        skillName: "commit",
+      });
+
+      chips[1].dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true })
+      );
+      expect(postMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.REQUEST_MCP_CONFIG_PREVIEW,
+        mcpServerName: "playwright",
+      });
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+
   it("keeps the native hover title on a resolvable reference chip", () => {
     const parent = document.createElement("div");
     document.body.appendChild(parent);

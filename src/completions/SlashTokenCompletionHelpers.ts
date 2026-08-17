@@ -108,8 +108,8 @@ export async function getMcpTokenCompletions(
 function parseSlashTokenCompletionContext(
   prefix: string
 ): SlashTokenCompletionContext | undefined {
-  if (prefix === "/") {
-    return { kind: MERGED_COMPLETION_KIND, namePrefix: "" };
+  if (!prefix.startsWith("/")) {
+    return undefined;
   }
   for (const kind of Object.values(CTRLYOKE_SLASH_TOKEN_KINDS)) {
     const namespace = tokenPrefix(kind);
@@ -117,7 +117,10 @@ function parseSlashTokenCompletionContext(
       return { kind, namePrefix: prefix.slice(namespace.length) };
     }
   }
-  return undefined;
+  // Any other `/<string>` (including the bare `/`) filters across both
+  // skills and MCP servers by substring — only an explicit `/skill:` or
+  // `/mcp:` namespace narrows to a single kind.
+  return { kind: MERGED_COMPLETION_KIND, namePrefix: prefix.slice(1) };
 }
 
 async function getDiscoveredSlashTokenSources(
@@ -157,7 +160,7 @@ function createSkillTokenCompletions(
   for (const skill of skills) {
     if (
       seenNames.has(skill.name) ||
-      !skill.name.toLowerCase().startsWith(lowerPrefix)
+      !skill.name.toLowerCase().includes(lowerPrefix)
     ) {
       continue;
     }
@@ -188,7 +191,7 @@ function createMcpTokenCompletions(
 ): McpTokenCompletionItem[] {
   const lowerPrefix = namePrefix.toLowerCase();
   return managedServers
-    .filter((server) => server.id.toLowerCase().startsWith(lowerPrefix))
+    .filter((server) => server.id.toLowerCase().includes(lowerPrefix))
     .map((server) => ({
       commandType: "ctrlyokeMcpServer" as const,
       mcpServerName: server.id,
