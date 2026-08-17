@@ -9,12 +9,14 @@ import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLine
 import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import {
   ACTION_TYPES,
   EXECUTION_STATES,
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
+  RUNNER_IDS,
 } from "../../types/DashboardConstants";
 
 function createOrchestratorHarness() {
@@ -2094,6 +2096,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
           {
             getQueueState: () => ({ workflowKey, runRef: promoted.runRef }),
             getExecutionRunRef: () => promoted.runRef,
+            ownsRunnerLock: () => false,
             expectDefinitionRevision: (revision: number) => {
               primedRevision = revision;
             },
@@ -2188,8 +2191,11 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
             getQueueState: () => ({
               workflowKey,
               runRef: promoted.runRef,
+              status: EXECUTION_STATES.RUNNING,
+              definitionRevision: 1,
             }),
             getExecutionRunRef: () => promoted.runRef,
+            ownsRunnerLock: () => true,
             expectDefinitionRevision: (revision: number) => {
               expectedRevision = revision;
             },
@@ -2218,6 +2224,107 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         runRef: promoted.runRef,
       });
     } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps completed-run property edits on the resident instance while its inject PTY retains the lock", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-retained-run-properties-")
+    );
+    const ownerToken = WorkflowLockManager.generateOwnerToken();
+    let workflowKey:
+      | import("../../types/CtrlYokeTypes").WorkflowKey
+      | undefined;
+    try {
+      const sourceManager = new WorkingFileManager({
+        getWorkingFilePath: () => undefined,
+        getSteps: () => [{ prompt: "source" }],
+        getCurrentIndex: () => 1,
+        getStatus: () => EXECUTION_STATES.COMPLETED,
+        getDefinitionRevision: () => 1,
+        setDefinitionRevision: () => undefined,
+        getWorkflowName: () => "Source",
+        mergeDiskSteps: () => [],
+        emitStateChange: () => undefined,
+        getFinalStepRuntime: () => undefined,
+        updateWorkflowProperty: () => undefined,
+      });
+      const created = await sourceManager.createWorkingFile(
+        "source",
+        [{ prompt: "source" }],
+        workspace,
+        "Source"
+      );
+      workflowKey = created.workflowKey;
+      const promoted = await sourceManager.promoteToNewRun(
+        workspace,
+        workflowKey,
+        Date.now()
+      );
+      const repository = new WorkflowLineageRepository();
+      const descriptor = await repository.readDescriptor(
+        workspace,
+        workflowKey
+      );
+      await WorkflowLockManager.acquireLock(workspace, workflowKey, {
+        workflowKey,
+        runRef: promoted.runRef,
+        runner: RUNNER_IDS.VSCODE,
+        pid: process.pid,
+        ownerToken,
+        instanceId: "retained-instance",
+        startedAt: Date.now(),
+        lastHeartbeat: Date.now(),
+      });
+
+      let primedRevision: number | undefined;
+      const retained = {
+        id: "retained-instance",
+        getQueueState: () => ({
+          workflowKey,
+          runRef: promoted.runRef,
+          status: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+        }),
+        getExecutionRunRef: () => promoted.runRef,
+        ownsRunnerLock: () => true,
+        expectDefinitionRevision: (revision: number) => {
+          primedRevision = revision;
+        },
+      };
+      const orchestrator = Object.create(
+        WorkflowOrchestrator.prototype
+      ) as WorkflowOrchestrator;
+      const internal = orchestrator as any;
+      internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+      internal.lineageRepository = repository;
+      internal.viewerRegistry = new Map([["client-a", retained.id]]);
+      internal.viewAddressRegistry = new Map([
+        ["client-a", { workflowKey, kind: "run", runRef: promoted.runRef }],
+      ]);
+      internal.instances = new Map();
+      internal.retiredInstances = new Map([[retained.id, retained]]);
+      internal.cliSessions = new Map();
+
+      await orchestrator.prepareWorkflowPropertiesMutation(
+        {
+          address: { workflowKey, kind: "run", runRef: promoted.runRef },
+          expectedDefinitionRevision: 1,
+          expectedDescriptorRevision: descriptor.revision,
+        },
+        "client-a"
+      );
+
+      assert.strictEqual(primedRevision, 1);
+    } finally {
+      if (workflowKey) {
+        await WorkflowLockManager.releaseLock(
+          workspace,
+          workflowKey,
+          ownerToken
+        );
+      }
       await fs.rm(workspace, { recursive: true, force: true });
     }
   });

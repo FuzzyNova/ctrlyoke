@@ -2912,21 +2912,21 @@ export class WorkflowOrchestrator {
     }
 
     if (mutation.address.kind === "run") {
-      // Editing the *currently executing* run is done in place against its live
-      // instance queue (which serializes edits with the executor and locks the
-      // completed/running region itself), so it must bypass the continuation
-      // validator — that validator rejects any edit while the lineage lock is
-      // held. This mirrors `prepareWorkflowPropertiesMutation`'s executing-run
-      // carve-out; only the pending tail is editable, enforced in `PromptQueue`.
+      // Editing a run whose resident instance owns the lineage lock is done in
+      // place against its live queue. This includes active execution and a
+      // completed named-worktree run retaining an injectable PTY. Both must
+      // bypass the cross-process validator, which correctly rejects a lock held
+      // by anyone except the local resident owner.
       const resident = this.findResidentInstanceForRun(
         mutation.address.workflowKey,
         mutation.address.runRef
       );
-      const isExecutingRun =
+      const isLocallyOwnedRun =
         resident !== undefined &&
-        this.findExecutionRunRef(mutation.address.workflowKey) ===
-          mutation.address.runRef;
-      if (isExecutingRun) {
+        (this.findExecutionRunRef(mutation.address.workflowKey) ===
+          mutation.address.runRef ||
+          resident.ownsRunnerLock());
+      if (isLocallyOwnedRun) {
         const liveRevision = resident.getQueueState().definitionRevision;
         if (liveRevision !== mutation.expectedDefinitionRevision) {
           throw new Error(
@@ -2997,44 +2997,16 @@ export class WorkflowOrchestrator {
   }
 
   /**
-   * Workflow-level settings on the actively executing run are part of that
-   * run's current definition head. Persist them in place so subsequent steps
-   * resolve the same settings the dashboard displays. Other addressed runs
-   * fall through to `prepareDefinitionMutation`'s validation-only "run"
-   * branch, which likewise edits the run in place.
+   * Workflow settings use the same addressed revision and resident-owner
+   * routing as every other definition mutation. Keeping this entry point as a
+   * delegate preserves the UI-facing API without maintaining a second lock
+   * policy that can drift from `prepareDefinitionMutation`.
    */
   async prepareWorkflowPropertiesMutation(
     mutation: WorkflowDefinitionMutation | undefined,
     clientId: string
   ): Promise<void> {
-    const viewed = this.getViewAddress(clientId);
-    const runAddress =
-      mutation?.address.kind === "run" ? mutation.address : undefined;
-    if (
-      !mutation ||
-      !runAddress ||
-      viewed?.kind !== "run" ||
-      viewed.workflowKey !== runAddress.workflowKey ||
-      viewed.runRef !== runAddress.runRef ||
-      this.findExecutionRunRef(runAddress.workflowKey) !== runAddress.runRef
-    ) {
-      await this.prepareDefinitionMutation(mutation, clientId);
-      return;
-    }
-
-    // No descriptor check here: see the executing-run branch of
-    // `prepareDefinitionMutation`. This run's properties are not descriptor
-    // content, so unrelated lineage activity must not be able to reject
-    // this write.
-    const instance = this.getInstanceForClient(clientId);
-    const state = instance.getQueueState();
-    if (
-      state.workflowKey !== runAddress.workflowKey ||
-      state.runRef !== runAddress.runRef
-    ) {
-      throw new Error("Workflow properties no longer target the executing run");
-    }
-    instance.expectDefinitionRevision(mutation.expectedDefinitionRevision);
+    await this.prepareDefinitionMutation(mutation, clientId);
   }
 
   /**

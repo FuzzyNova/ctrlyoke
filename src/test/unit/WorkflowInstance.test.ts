@@ -2018,6 +2018,7 @@ suite("WorkflowInstance retained integration artifacts", () => {
     class InjectableIntegration extends MockHarnessIntegration {
       disposeCalls = 0;
       gracefulCloseCalls = 0;
+      private ptyEndedCallback: (() => void) | undefined;
 
       override canReuseForInject(): boolean {
         return true;
@@ -2030,6 +2031,14 @@ suite("WorkflowInstance retained integration artifacts", () => {
       override dispose(): void {
         this.disposeCalls += 1;
         super.dispose();
+      }
+
+      override onPtySessionEnded(callback: () => void): void {
+        this.ptyEndedCallback = callback;
+      }
+
+      firePtyEnded(): void {
+        this.ptyEndedCallback?.();
       }
     }
 
@@ -2044,6 +2053,9 @@ suite("WorkflowInstance retained integration artifacts", () => {
       process.cwd()
     );
     const integration = new InjectableIntegration(undefined, false);
+    let leaseReleaseCalls = 0;
+    let runnerLockReleaseCalls = 0;
+    let runtimeTrustReleaseCalls = 0;
     (instance as any).executionIntegrations.set(
       HARNESS_IDS.CLAUDE_CLI,
       integration
@@ -2053,7 +2065,23 @@ suite("WorkflowInstance retained integration artifacts", () => {
     // must not tear down a still-injectable PTY the same way managed mode
     // does.
     (instance as any).executionWorkspace.worktree = { mode: "named" };
-    (instance as any).activeWorktree = { mode: "named" };
+    (instance as any).activeWorktree = {
+      mode: "named",
+      runtimeTrust: {
+        release: () => {
+          runtimeTrustReleaseCalls += 1;
+        },
+      },
+    };
+    (instance as any).executionLease = {
+      updateHeartbeat: async () => undefined,
+      release: async () => {
+        leaseReleaseCalls += 1;
+      },
+    };
+    (instance as any).releaseRunnerLock = async () => {
+      runnerLockReleaseCalls += 1;
+    };
 
     await (instance as any).startWorkflowExecution(
       integration,
@@ -2076,6 +2104,18 @@ suite("WorkflowInstance retained integration artifacts", () => {
       (instance as any).activeWorktree,
       "the named worktree reservation must stay live while its PTY is retained"
     );
+
+    integration.firePtyEnded();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.strictEqual(integration.disposeCalls, 1);
+    assert.strictEqual(runtimeTrustReleaseCalls, 1);
+    assert.strictEqual(leaseReleaseCalls, 1);
+    assert.strictEqual(runnerLockReleaseCalls, 1);
+    assert.strictEqual((instance as any).activeWorktree, undefined);
+    assert.strictEqual((instance as any).executionLease, undefined);
+    assert.strictEqual((instance as any).heartbeatInterval, undefined);
   });
 
   test("closes retained terminals when a different run starts", async () => {
