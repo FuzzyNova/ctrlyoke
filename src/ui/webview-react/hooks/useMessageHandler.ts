@@ -1559,6 +1559,7 @@ export function createMessageHandlers(
     uiStore.openNewWorkflowModal({
       templates: message.templates || [],
       defaultTemplateId: message.defaultTemplateId,
+      openCreateTemplateForm: message.openCreateTemplateForm,
     });
   };
 
@@ -2719,6 +2720,9 @@ export function createMessageHandlers(
     const store = useSettingsStore.getState();
     store.setLastCertDownloadSaved(!!message.saved);
     store.bumpCertDownloadFlashCount();
+    if (message.error) {
+      notifyUser(message.error, USER_FEEDBACK_SEVERITY.ERROR);
+    }
   };
 
   // --------------------------------------------------------------------------

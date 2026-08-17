@@ -855,6 +855,8 @@ export interface OpenNewWorkflowModalMessage {
     isBuiltIn: boolean;
   }>;
   defaultTemplateId?: string;
+  /** Open the inline custom-template form when the modal is first shown. */
+  openCreateTemplateForm?: boolean;
 }
 
 /** Webview → Extension: clone the selected base into a custom template. */
@@ -1366,6 +1368,7 @@ export interface DownloadServerCertMessage {
 export interface ServerCertDownloadedMessage {
   type: typeof MESSAGE_TYPES.SERVER_CERT_DOWNLOADED;
   saved: boolean;
+  error?: string;
 }
 
 /** Extension → Webview: acknowledge a setting update */

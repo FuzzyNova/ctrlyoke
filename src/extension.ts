@@ -510,14 +510,6 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
-  // Import Workflow Templates command
-  const importWorkflowTemplatesCommand = vscode.commands.registerCommand(
-    "ctrlyoke.importWorkflowTemplates",
-    async () => {
-      await workflowOrchestrator.importWorkflowTemplates();
-    }
-  );
-
   // New Workflow command (opens modal in dashboard)
   const newWorkflowCommand = vscode.commands.registerCommand(
     "ctrlyoke.newWorkflow",
@@ -529,11 +521,14 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
-  // Create New Template command (QuickPick flow)
+  // Create New Template command (opens the dashboard's inline form)
   const createNewTemplateCommand = vscode.commands.registerCommand(
     "ctrlyoke.createNewTemplate",
     async () => {
-      await workflowOrchestrator.createNewTemplate();
+      await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
+      await webviewProvider.openNewWorkflowModal({
+        openCreateTemplateForm: true,
+      });
     }
   );
 
@@ -1225,7 +1220,6 @@ function registerCommands(context: vscode.ExtensionContext) {
     resumeCommand,
     stopCommand,
     createEndConditionScriptCommand,
-    importWorkflowTemplatesCommand,
     newWorkflowCommand,
     createNewTemplateCommand,
     runFromContextCommand,

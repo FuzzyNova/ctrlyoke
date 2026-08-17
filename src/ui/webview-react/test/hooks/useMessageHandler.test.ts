@@ -469,6 +469,34 @@ describe("INIT", () => {
 });
 
 // ---------------------------------------------------------------------------
+// OPEN_NEW_WORKFLOW_MODAL
+// ---------------------------------------------------------------------------
+
+describe("OPEN_NEW_WORKFLOW_MODAL", () => {
+  it("opens the custom-template form when requested by the command", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.OPEN_NEW_WORKFLOW_MODAL, {
+        templates: [
+          {
+            id: "blank",
+            name: "Blank",
+            description: "",
+            isBuiltIn: true,
+          },
+        ],
+        defaultTemplateId: "blank",
+        openCreateTemplateForm: true,
+      });
+    });
+
+    expect(useUiStore.getState().newWorkflowModalOpen).toBe(true);
+    expect(useUiStore.getState().openCreateTemplateForm).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Restart / reconnect lifecycle
 // ---------------------------------------------------------------------------
 

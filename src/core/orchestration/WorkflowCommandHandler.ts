@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { PromptFileParser } from "../PromptFileParser";
 import { EndConditionEvaluator } from "../EndConditionEvaluator";
-import { TemplateManager, type TemplateScope } from "../TemplateManager";
 import {
   ConfigurationUtils,
 } from "../../utils/ConfigurationUtils";
@@ -11,7 +10,6 @@ import {
   USER_FEEDBACK_SEVERITY,
 } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
-import { getErrorMessage } from "../../utils/ErrorUtils";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 
 /**
@@ -25,26 +23,12 @@ import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
  * - Opening current prompt file
  */
 export class WorkflowCommandHandler {
-  private templateManager: TemplateManager;
-
   constructor(
     _context: vscode.ExtensionContext,
     _promptFileParser: PromptFileParser,
     private endConditionEvaluator: EndConditionEvaluator,
-    private currentWorkspaceFolder?: vscode.WorkspaceFolder,
     private readonly userFeedbackSink?: UserFeedbackSink
   ) {
-    this.templateManager = new TemplateManager(_context);
-  }
-
-  /**
-   * Update workspace folder reference
-   * @param workspaceFolder New workspace folder
-   */
-  setWorkspaceFolder(
-    workspaceFolder: vscode.WorkspaceFolder | undefined
-  ): void {
-    this.currentWorkspaceFolder = workspaceFolder;
   }
 
   /**
@@ -190,69 +174,6 @@ export class WorkflowCommandHandler {
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
         `ctrlyoke: Failed to open file: ${error}`
-      );
-    }
-  }
-
-  /** Create a new custom template from the built-in Template Starter. */
-  async createNewTemplate(): Promise<void> {
-    try {
-      let scope: TemplateScope = "user";
-      if (this.currentWorkspaceFolder) {
-        const scopePick = await vscode.window.showQuickPick(
-          [
-            {
-              label: "Workspace",
-              description: ".ctrlyoke/templates — this project only",
-              scope: "workspace" as const,
-            },
-            {
-              label: "User",
-              description:
-                "~/.ctrlyoke/templates — available in every workspace",
-              scope: "user" as const,
-            },
-          ],
-          { placeHolder: "Where should this template be stored?" }
-        );
-
-        if (!scopePick) {
-          return;
-        }
-        scope = scopePick.scope;
-      }
-
-      const templateName = await vscode.window.showInputBox({
-        prompt: "Enter a name for your custom template",
-        placeHolder: "my-custom-template",
-        validateInput: (value) => {
-          if (!value || !value.trim()) {
-            return "Template name is required";
-          }
-          if (/[<>:"/\\|?*\x00-\x1f]/.test(value)) {
-            return "Invalid characters in template name";
-          }
-          return undefined;
-        },
-      });
-
-      if (!templateName) {
-        return;
-      }
-
-      const templatePath = await this.templateManager.createCustomTemplate(
-        templateName.trim(),
-        scope
-      );
-
-      const doc = await vscode.workspace.openTextDocument(templatePath);
-      await vscode.window.showTextDocument(doc);
-    } catch (error) {
-      const errorMsg = getErrorMessage(error);
-      notifyUserFeedback(
-        this.userFeedbackSink,
-        USER_FEEDBACK_SEVERITY.ERROR,
-        `Failed to create template: ${errorMsg}`
       );
     }
   }

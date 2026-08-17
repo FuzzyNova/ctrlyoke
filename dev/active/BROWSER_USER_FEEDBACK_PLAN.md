@@ -5,7 +5,7 @@ complete.
 The React dashboard renders a bounded, accessible transient toast queue in both
 hosts, operational feedback reaches connected browsers independently of
 notification settings, and the reusable direct-message migration is complete
-except for the six action-bearing interactions reserved for Phase 4. Phase 3
+except for the two action-bearing interactions reserved for Phase 4. Phase 3
 (client-scoped routing) completed per
 [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](./FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
 Stage E, re-verified against `src/` on 2026-08-11 — this doc's Acceptance
@@ -13,7 +13,7 @@ Criteria below previously said otherwise and is corrected in this pass. Phase 4
 was **redesigned 2026-08-17**: none of the six action-bearing sites need the
 generic `USER_INTERACTION_REQUEST` contract after all — each has a decided
 per-site disposition (four cut, two relocated into existing/inline UI) — but
-items 5 and 6 have now landed in Stage F.4. **Phase 6 (new, 2026-08-17) is
+items 3, 4, 5, and 6 have now landed in Stage F.4/F.5. **Phase 6 (new, 2026-08-17) is
 complete**: its dispatcher, Group A's 15 client-only call sites, and Group B's
 12 scoped-reply handlers now use host-aware dispatch. See "The webview's own
 toast calls are not host-aware" and "Phase 6" below.
@@ -946,12 +946,11 @@ current effective behavior for every workflow that does not click a button.
 
 ### Phase 4 — Interactive choices → resolved as six per-site dispositions
 
-**Resolved 2026-08-17; items 5 and 6 implemented in Stage F.4.** Re-examined each of the six action-bearing sites
+**Resolved 2026-08-17; items 3, 4, 5, and 6 implemented in Stage F.4/F.5.** Re-examined each of the six action-bearing sites
 individually against the actual code, instead of building a shared
 correlation contract for all of them. None of the six need
 `USER_INTERACTION_REQUEST` — each has a decided disposition below. Items 5 and
-6 are implemented; the remaining items are still design decisions awaiting
-their later Stage F steps.
+3, 4, 5, and 6 are implemented; items 1 and 2 remain for Stage F.6/F.7.
 
 1. **End-condition script created** (`WorkflowCommandHandler.ts:99`,
    command `ctrlyoke.createEndConditionScript`). Currently two chained
@@ -999,7 +998,7 @@ retryHarnessDetection()` already exists but today is reachable only from
    its `package.json` entry — this removes items 3 and 4 together, since
    they're one flow. Repoint `ctrlyoke.createNewTemplate` to focus the
    dashboard and open `TemplateModal` with "New template..." pre-expanded
-   instead of running its own QuickPick/InputBox sequence.
+   instead of running its own QuickPick/InputBox sequence. **DONE F.5.**
 
 5. **Post-workspace-initialization action** — actually **two**
    near-duplicate native toasts, not one: `extension.ts` fires one at
@@ -1031,22 +1030,22 @@ retryHarnessDetection()` already exists but today is reachable only from
    command-palette command, "…and its .gitignore are up to date") is a
    different, action-free boundary site and is **not** cut.
 
-**Net effect:** four sites are cut outright (2, 5, and the merged 3/4); two
-relocate into modal/inline UI (1, 6). None need
+**Net effect:** the cut dispositions are complete for items 3/4 and 5, while
+items 1, 2, and 6 relocate into modal/inline UI. None need
 `USER_INTERACTION_REQUEST` — see "Action-Bearing Messages" above.
 
 #### Baseline impact of Phase 4 — both counters move
 
-After Stage F.4, the committed baselines are `directMessage.boundary: 53` and
-`directMessage.reusable: 4`. `assertShrinkOnly` fails when a count drops below its committed baseline just
+After Stage F.5, the committed baselines are `directMessage.boundary: 53` and
+`directMessage.reusable: 2`. `assertShrinkOnly` fails when a count drops below its committed baseline just
 as loudly as when it grows, so **every Phase 4 step must lower
 `FEEDBACK_SOURCE_AUDIT_BASELINES` in `src/test/unit/SourceAuditCounters.test.ts`
 in the same commit that removes call sites**, or `npm test` fails on an
 otherwise-correct change.
 
-- `directMessage.reusable` is now **4**, then goes **4 → 0** across the
-  remaining Phase 4 steps: items 3/4 remove 2 (`TemplateImporter.ts`), item 1
-  removes 1 and item 2 removes 1 (`WorkflowCommandHandler.ts`).
+- `directMessage.reusable` is now **2**, then goes **2 → 0** across the
+  remaining Phase 4 steps: items 3/4 removed 2 (`TemplateImporter.ts`), and
+  items 1/2 remove 1 each from `WorkflowCommandHandler.ts`.
 - `directMessage.boundary` goes **54 → 53**, once, in the step that deletes
   `extension.ts:177`; that move landed in F.4 and no other Phase 4 step moves
   it.

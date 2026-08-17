@@ -1024,8 +1024,16 @@ export class CtrlYokeWebviewProvider
    * and default template (same data the "From Template" dropdown button sends
    * via NEW_WORKFLOW — see WorkflowSerializer.handleNewWorkflow).
    */
-  public async openNewWorkflowModal(): Promise<void> {
-    await this.serializer.handleNewWorkflow((msg) => this.postMessage(msg));
+  public async openNewWorkflowModal(options?: {
+    openCreateTemplateForm?: boolean;
+  }): Promise<void> {
+    await this.serializer.handleNewWorkflow((message) => {
+      this.postMessage(
+        options?.openCreateTemplateForm
+          ? { ...message, openCreateTemplateForm: true }
+          : message
+      );
+    });
   }
 
   public async enqueuePromptEditorInsert(

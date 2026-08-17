@@ -542,6 +542,7 @@ interface UiState {
 
   // New workflow modal state
   newWorkflowModalOpen: boolean;
+  openCreateTemplateForm: boolean;
   templates: TemplateInfo[];
   currentTemplate: TemplateInfo | null;
   defaultTemplateId: string;
@@ -761,6 +762,7 @@ interface UiActions {
   openNewWorkflowModal: (data: {
     templates: TemplateInfo[];
     defaultTemplateId?: string;
+    openCreateTemplateForm?: boolean;
   }) => void;
   closeNewWorkflowModal: () => void;
   setCurrentTemplate: (template: TemplateInfo | null) => void;
@@ -974,6 +976,7 @@ const initialState: UiState = {
   historySearchFilters: createDefaultHistorySearchFilters(),
   pendingHistorySearchNavigation: null,
   newWorkflowModalOpen: false,
+  openCreateTemplateForm: false,
   templates: [],
   currentTemplate: null,
   defaultTemplateId: "blank",
@@ -1345,9 +1348,14 @@ export const useUiStore = create<UiState & UiActions>()(
       // NEW WORKFLOW MODAL
       // ============================================================================
 
-      openNewWorkflowModal: ({ templates, defaultTemplateId }) =>
+      openNewWorkflowModal: ({
+        templates,
+        defaultTemplateId,
+        openCreateTemplateForm,
+      }) =>
         set({
           newWorkflowModalOpen: true,
+          openCreateTemplateForm: openCreateTemplateForm ?? false,
           templates,
           defaultTemplateId: defaultTemplateId ?? "blank",
           currentTemplate:
@@ -1358,6 +1366,7 @@ export const useUiStore = create<UiState & UiActions>()(
       closeNewWorkflowModal: () =>
         set({
           newWorkflowModalOpen: false,
+          openCreateTemplateForm: false,
           currentTemplate: null,
         }),
 
@@ -1930,6 +1939,7 @@ export const useUiStore = create<UiState & UiActions>()(
           propertiesDrawerOpen: false,
           selectedOutputStep: null,
           newWorkflowModalOpen: false,
+          openCreateTemplateForm: false,
           templates: [],
           currentTemplate: null,
           isHistorySearchOpen: false,

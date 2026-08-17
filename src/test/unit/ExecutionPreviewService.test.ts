@@ -329,7 +329,7 @@ suite("ExecutionPreviewService", () => {
         (diagnostic) =>
           diagnostic.code === "prompt.reference.source-runtime-disclosure"
       )?.message,
-      "2 references were read from the source checkout; 1 file was copied into the worktree."
+      `Read from source checkout: @runtime/other.log, @runtime/another.log; Copied into worktree: @runtime/source.log → ${destinationPath}`
     );
     assert.strictEqual(
       step.prompt?.sections.find((section) => section.path === destinationPath)

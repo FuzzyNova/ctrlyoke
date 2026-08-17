@@ -94,7 +94,6 @@ import {
 } from "./harness/PtyProcessManager";
 
 // Orchestration classes that remain at orchestrator level
-import { TemplateImporter } from "./orchestration/TemplateImporter";
 import { WorkflowCommandHandler } from "./orchestration/WorkflowCommandHandler";
 import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager";
 import { WorkspaceInitializer } from "./orchestration/WorkspaceInitializer";
@@ -123,7 +122,7 @@ import {
  * are shared or orchestrator-scoped:
  *   - Four harness integrations (created once, shared for Phase 1)
  *   - StatusBarManager
- *   - TemplateImporter / WorkflowCommandHandler
+ *   - WorkflowCommandHandler
  *   - WorkspaceSessionManager (workspace-level session discovery)
  *   - dashboardReady / orchestratorInitialized gates
  *
@@ -342,7 +341,6 @@ export class WorkflowOrchestrator {
   private readonly antigravityCliIntegration: CliIntegration;
 
   // Orchestration helpers
-  private readonly templateImporter: TemplateImporter;
   private readonly workflowCommandHandler: WorkflowCommandHandler;
   private readonly workspaceSessionManager: WorkspaceSessionManager;
   private readonly promptFileParser: PromptFileParser;
@@ -459,11 +457,6 @@ export class WorkflowOrchestrator {
       this.promptFileParser,
       new VsCodeAdapter(context)
     );
-    this.templateImporter = new TemplateImporter(
-      context,
-      undefined,
-      this.userFeedbackSink
-    );
     this.endConditionEvaluatorForCommands = new EndConditionEvaluator(
       new VsCodeAdapter(context)
     );
@@ -471,12 +464,8 @@ export class WorkflowOrchestrator {
       context,
       this.promptFileParser,
       this.endConditionEvaluatorForCommands,
-      undefined,
       this.userFeedbackSink
     );
-
-    this.templateImporter.setWorkspaceFolder(this.currentWorkspaceFolder);
-    this.workflowCommandHandler.setWorkspaceFolder(this.currentWorkspaceFolder);
 
     // Wire harness status subscriptions
     const defaultIntegration = this.getDefaultIntegration();
@@ -4901,14 +4890,6 @@ export class WorkflowOrchestrator {
 
   async createEndConditionScript(): Promise<void> {
     await this.workflowCommandHandler.createEndConditionScript();
-  }
-
-  async importWorkflowTemplates(): Promise<void> {
-    await this.templateImporter.importWorkflowTemplates();
-  }
-
-  async createNewTemplate(): Promise<void> {
-    await this.workflowCommandHandler.createNewTemplate();
   }
 
   // ─────────────────────────────────────────────────────────────────────────

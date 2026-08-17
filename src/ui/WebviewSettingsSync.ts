@@ -1194,11 +1194,12 @@ export class WebviewSettingsSync {
   async handleDownloadServerCert(postMessage: PostMessageFn): Promise<void> {
     const certPath = configService.get(CONFIG_KEYS.SERVER)?.tls?.certPath;
     if (!certPath) {
-      void vscode.window.showErrorMessage(
-        "No TLS certificate is configured yet. Generate one first."
-      );
       this.emitMessage(
-        { type: MESSAGE_TYPES.SERVER_CERT_DOWNLOADED, saved: false },
+        {
+          type: MESSAGE_TYPES.SERVER_CERT_DOWNLOADED,
+          saved: false,
+          error: "No TLS certificate is configured yet. Generate one first.",
+        },
         postMessage
       );
       return;
@@ -1228,11 +1229,12 @@ export class WebviewSettingsSync {
       );
     } catch (error) {
       Log.error("Failed to save server certificate:", error);
-      void vscode.window.showErrorMessage(
-        `Failed to save certificate: ${getErrorMessage(error)}`
-      );
       this.emitMessage(
-        { type: MESSAGE_TYPES.SERVER_CERT_DOWNLOADED, saved: false },
+        {
+          type: MESSAGE_TYPES.SERVER_CERT_DOWNLOADED,
+          saved: false,
+          error: `Failed to save certificate: ${getErrorMessage(error)}`,
+        },
         postMessage
       );
     }

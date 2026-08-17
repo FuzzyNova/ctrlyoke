@@ -190,8 +190,11 @@ C landed. Current values:**
   classified as boundary rather than counted as a reusable regression.
 - **6 reusable after C.6** = `TemplateImporter` 2,
   `WorkflowCommandHandler` 2, `WorkflowOrchestrator` 1, and
-  `WorkflowSerializer` 1. These are all Phase 4 interaction holds; the
-  commented `WorkspaceSessionManager` reference is not an AST call site.
+  `WorkflowSerializer` 1. These were all Phase 4 interaction holds; F.4
+  removed the `WorkflowOrchestrator` and `WorkflowSerializer` sites, and F.5
+  removed the two `TemplateImporter` sites, leaving the current reusable
+  baseline at 2 (`WorkflowCommandHandler`). The commented
+  `WorkspaceSessionManager` reference is not an AST call site.
 - **19 adapter-UI** = `WorkflowInstance` 9, `PromptFileParser` 4, `WorkflowExecutor` 3,
   `EndConditionHandler` 1, `CliIntegration` 1 (`platform.warn`), plus the one `showChoice`.
 
@@ -340,7 +343,7 @@ Stage 6 describes this as the same edit set and should be updated to reflect
 that it has landed, per this document's own "update both plans when it lands"
 rule above.
 
-### Stage F — Browser feedback Phase 4 — REDESIGNED 2026-08-17, F.4 COMPLETE
+### Stage F — Browser feedback Phase 4 — REDESIGNED 2026-08-17, F.5 COMPLETE
 
 **Redesigned 2026-08-17: the `USER_INTERACTION_REQUEST` correlation contract
 is no longer being built.** Each of the 6 surviving action-bearing sites was
@@ -352,12 +355,13 @@ are in `BROWSER_USER_FEEDBACK_PLAN.md` Phase 4. F.4 is complete: both
 post-workspace-init toasts and the native clear-all confirmation are gone, and
 clear-all now uses `DeleteConfirmModal`.
 
-The four remaining action-bearing sites still call
+The two remaining action-bearing sites still call
 `vscode.window.show*Message(...)` directly with action-button strings:
-`TemplateImporter.ts:200` (overwrite, cut),
-`TemplateImporter.ts:243` (post-import, cut),
 `WorkflowCommandHandler.ts:99` (post-script-create, moves in-app),
 `WorkflowCommandHandler.ts:148` (retry harness automation, moves inline).
+F.5 cut the `TemplateImporter.ts:200` overwrite and `TemplateImporter.ts:243`
+post-import sites together with the import command and repointed
+`ctrlyoke.createNewTemplate` at the pre-expanded `TemplateModal` flow.
 Completed in F.4: `WorkflowOrchestrator.ts:1344` and its duplicate
 `extension.ts:177` (post-workspace-init, cut), plus `WorkflowSerializer.ts:1375`
 (clear-all-workflows, replaced by `DeleteConfirmModal`). **All locations were
@@ -437,7 +441,7 @@ may be swapped as a block.
 | 19  | F.2   | **DONE.** Phase 6 step 4: migrated Group A's 15 client-only toast call sites (8 `webview-react` files) to `notifyUser()`; the 2026-08-17 re-verification matched the table and found no action-bearing exceptions                                                                                                                                                  |
 | 20  | F.3   | **DONE.** Phase 6 steps 5–7: migrated Group B's 12 scoped-reply handlers to `notifyUser()`, retained the standalone duplicate-tab action, and added the shrink-only raw-toast audit (baseline 1)                                                                                                                                                                   |
 | 21  | F.4   | **DONE.** Phase 4 items 5 + 6: cut both duplicate workspace-init toasts; funnel clear-all-history through `DeleteConfirmModal` (`boundary` 54 → 53, `reusable` 6 → 4)                                                                                                                                                                                              |
-| 22  | F.5   | **TODO.** Phase 4 items 3 + 4: delete `TemplateImporter.ts` and `ctrlyoke.importWorkflowTemplates`; repoint `ctrlyoke.createNewTemplate` at `TemplateModal` (`reusable` 4 → 2)                                                                                                                                                                                     |
+| 22  | F.5   | **DONE.** Phase 4 items 3 + 4: deleted `TemplateImporter.ts` and `ctrlyoke.importWorkflowTemplates`; repointed `ctrlyoke.createNewTemplate` at the pre-expanded `TemplateModal` (`reusable` 4 → 2)                                                                                                                                                                                     |
 | 23  | F.6   | **TODO.** Phase 4 item 1: in-app end-condition script creation in `ScriptConditionEditor`; delete `ctrlyoke.createEndConditionScript` (`reusable` 2 → 1)                                                                                                                                                                                                           |
 | 24  | F.7   | **TODO.** Phase 4 item 2: inline harness-detection retry next to `HarnessDropdown`; cut the `openPanel()` gate (`reusable` 1 → 0)                                                                                                                                                                                                                                  |
 | 25  | G.x   | **TODO.** Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration (dry-run sub-leg blocked on `SECRETS_AND_REDACTION_PLAN.md`)                                                                                                                                                                                                     |
@@ -591,8 +595,8 @@ post-script-create moves into a small in-app control in
 affordance next to `HarnessDropdown`; clear-all-workflows is funneled through
 the existing `DeleteConfirmModal` (it was never actually using it, despite
 looking like it should have been). See `BROWSER_USER_FEEDBACK_PLAN.md` Phase 4
-for the full per-site reasoning. Items 5 and 6 are implemented in F.4; the
-remaining four sites await F.5–F.7.
+for the full per-site reasoning. Items 3, 4, 5, and 6 are implemented in
+F.4/F.5; the remaining two sites await F.6–F.7.
 The duplicate-running-workflow site was deleted in C.4 as a policy conflict
 and was never in Stage F's scope.
 
@@ -664,8 +668,8 @@ Three items stand between this document and being fully closed out:
    smallest remaining piece and reuses conventions (JSON envelope, registry
    access) that already exist in `cli.ts`.
 2. **Stage F** — self-contained, no blockers. Phase 6's host-aware webview
-   toast dispatch is done; Phase 4's four remaining action-bearing sites are
-   queued after F.4, with all file/line locations re-verified 2026-08-17. The
+   toast dispatch is done; Phase 4's two remaining action-bearing sites are
+   queued after F.5, with all file/line locations re-verified 2026-08-17. The
    work is split into the seven single-session steps 18–24 above.
 3. **Stage G** — the largest remaining piece, and the only one with an actual
    dependency chain: its dry-run leg needs
