@@ -39,6 +39,41 @@ async function execGit(
   return execFileAsync("git", args, options);
 }
 
+function execGitCheckIgnore(
+  repoRoot: string,
+  absolutePaths: readonly string[]
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      "git",
+      ["-C", repoRoot, "check-ignore", "-z", "--stdin"],
+      {
+        timeout: GIT_TIMEOUT_MS,
+        maxBuffer: GIT_MAX_BUFFER,
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          const execError = error as NodeJS.ErrnoException & {
+            stdout: string;
+            stderr: string;
+          };
+          execError.stdout = stdout;
+          execError.stderr = stderr;
+          reject(execError);
+          return;
+        }
+        resolve({ stdout, stderr });
+      }
+    );
+    if (child.stdin === null) {
+      child.kill();
+      reject(new Error("git check-ignore stdin is unavailable"));
+      return;
+    }
+    child.stdin.end(`${absolutePaths.join("\0")}\0`);
+  });
+}
+
 export interface CommitInfo {
   hash: string; // full 40-char SHA
   shortHash: string; // 7-char abbreviated SHA
@@ -490,6 +525,44 @@ export async function getGitUntrackedFiles(
     { maxBuffer: GIT_MAX_BUFFER }
   );
   return stdout.split("\0").filter(Boolean);
+}
+
+/**
+ * Return the absolute paths Git reports as ignored in one batched query.
+ *
+ * The default check-ignore mode intentionally remains in use: tracked files
+ * must not qualify as source-only runtime artifacts, even when their paths
+ * match an ignore rule.
+ */
+export async function getGitIgnoredPaths(
+  repoRoot: string,
+  absolutePaths: readonly string[]
+): Promise<Set<string>> {
+  const normalizedPaths = Array.from(
+    new Set(absolutePaths.map((absolutePath) => path.resolve(absolutePath)))
+  );
+  if (normalizedPaths.length === 0) {
+    return new Set<string>();
+  }
+
+  try {
+    const { stdout } = await execGitCheckIgnore(repoRoot, normalizedPaths);
+    return new Set(
+      stdout
+        .split("\0")
+        .filter(Boolean)
+        .map((value) => path.resolve(value))
+    );
+  } catch (error) {
+    const gitError = error as NodeJS.ErrnoException & {
+      stdout?: string | Buffer;
+    };
+    if (Number(gitError.code) !== 1) {
+      throw error;
+    }
+
+    return new Set<string>();
+  }
 }
 
 /** Return true when Git reports an in-progress operation in this checkout. */
