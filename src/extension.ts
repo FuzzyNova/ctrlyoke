@@ -169,29 +169,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
       if (WorkspaceInitializer.isInitialized(workspaceRoot)) {
         // Already initialized — idempotently ensure scaffold is up to date
-        WorkspaceInitializer.initializeIfNeeded(workspaceRoot)
-          .then((isNew) => {
-            if (isNew) {
-              vscode.window
-                .showInformationMessage(
-                  `ctrlyoke: Workspace initialized! A ${PATH_CONSTANTS.CTRLYOKE_DIR}/ directory has been created for your workflows, prompts, and scripts.`,
-                  "Reveal Folder"
-                )
-                .then((choice) => {
-                  if (choice === "Reveal Folder") {
-                    vscode.commands.executeCommand(
-                      "revealFileInOS",
-                      vscode.Uri.file(
-                        path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR)
-                      )
-                    );
-                  }
-                });
-            }
-          })
-          .catch((err) => {
-            Log.warn("ctrlyoke: Workspace initialization failed:", err);
-          });
+        WorkspaceInitializer.initializeIfNeeded(workspaceRoot).catch((err) => {
+          Log.warn("ctrlyoke: Workspace initialization failed:", err);
+        });
 
         // Clean up orphaned temp prompt files (from previous sessions)
         const tempMgr = new TempFileManager(workspaceRoot);

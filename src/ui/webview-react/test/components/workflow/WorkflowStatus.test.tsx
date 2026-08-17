@@ -373,6 +373,69 @@ describe("WorkflowStatus — loaded state", () => {
     });
   });
 
+  it("routes clear history through the confirmation modal when enabled", () => {
+    setRecentWorkflows([
+      {
+        workflowName: "History Workflow",
+        executionState: EXECUTION_STATES.COMPLETED,
+      },
+    ]);
+    useSettingsStore.setState((state) => ({
+      globalSettings: {
+        ...state.globalSettings,
+        confirmDeleteOperations: true,
+      },
+    }));
+
+    render(<WorkflowStatus />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Clear History" }));
+
+    const modal = screen.getByRole("dialog");
+    expect(
+      within(modal).getByText("Delete all workflows and their run history?")
+    ).toBeInTheDocument();
+    expect(postMessageSpy).not.toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY,
+    });
+
+    fireEvent.click(within(modal).getByRole("button", { name: "Delete" }));
+
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY,
+    });
+    expect(useUiStore.getState().recentWorkflows).toEqual([]);
+  });
+
+  it("clears history directly when delete confirmation is disabled", () => {
+    setRecentWorkflows([
+      {
+        workflowName: "History Workflow",
+        executionState: EXECUTION_STATES.COMPLETED,
+      },
+    ]);
+    useSettingsStore.setState((state) => ({
+      globalSettings: {
+        ...state.globalSettings,
+        confirmDeleteOperations: false,
+      },
+    }));
+
+    render(<WorkflowStatus />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Clear History" }));
+
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY,
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(useUiStore.getState().recentWorkflows).toEqual([]);
+  });
+
   it("falls back to file stem when workflowName is empty", () => {
     useWorkflowStore.setState({
       fileName: "/workspace/my-workflow.ctrlyoke.yaml",

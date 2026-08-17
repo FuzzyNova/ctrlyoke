@@ -77,10 +77,7 @@ import type {
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
-import {
-  ConfigurationUtils,
-  PATH_CONSTANTS,
-} from "../utils/ConfigurationUtils";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { clearRunSummaryCache } from "./orchestration/RunSummaryCache";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
@@ -1339,23 +1336,6 @@ export class WorkflowOrchestrator {
       isNew = await WorkspaceInitializer.initializeIfNeeded(workspaceRoot);
       // .ctrlyoke/ now exists — start file logging for this session.
       Log.enableWorkspaceFileLogging();
-      if (isNew) {
-        void vscode.window
-          .showInformationMessage(
-            `ctrlyoke: Workspace initialized! A ${PATH_CONSTANTS.CTRLYOKE_DIR}/ directory has been created for your workflows, prompts, and scripts.`,
-            "Reveal Folder"
-          )
-          .then((choice) => {
-            if (choice === "Reveal Folder") {
-              vscode.commands.executeCommand(
-                "revealFileInOS",
-                vscode.Uri.file(
-                  path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR)
-                )
-              );
-            }
-          });
-      }
     } catch (err) {
       Log.warn("ctrlyoke: Workspace initialization failed:", err);
     }

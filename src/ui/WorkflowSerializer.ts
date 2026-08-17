@@ -1372,17 +1372,6 @@ export class WorkflowSerializer {
     }
 
     const pm = postMessage ?? this.postMessage;
-    const confirm = await vscode.window.showWarningMessage(
-      `Delete all workflows and their history from ${path.resolve(
-        WorkflowPaths.runsRoot(workspaceRoot)
-      )}?`,
-      { modal: true },
-      "Delete All"
-    );
-
-    if (confirm !== "Delete All") {
-      return false;
-    }
 
     try {
       try {
