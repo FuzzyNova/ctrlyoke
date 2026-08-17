@@ -502,14 +502,6 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
-  // Create End Condition Script command
-  const createEndConditionScriptCommand = vscode.commands.registerCommand(
-    "ctrlyoke.createEndConditionScript",
-    async () => {
-      await workflowOrchestrator.createEndConditionScript();
-    }
-  );
-
   // New Workflow command (opens modal in dashboard)
   const newWorkflowCommand = vscode.commands.registerCommand(
     "ctrlyoke.newWorkflow",
@@ -1219,7 +1211,6 @@ function registerCommands(context: vscode.ExtensionContext) {
     pauseCommand,
     resumeCommand,
     stopCommand,
-    createEndConditionScriptCommand,
     newWorkflowCommand,
     createNewTemplateCommand,
     runFromContextCommand,

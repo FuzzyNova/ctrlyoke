@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { DrawerRow } from "./DrawerRow";
 import { CustomSelect } from "./CustomSelect";
+import { ActionButton } from "./ActionButton";
 import {
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
@@ -14,8 +15,14 @@ import { useSettingsStore } from "@store/settingsStore";
 import {
   EXECUTION_MODE_HELP_TEXT,
   EXECUTION_MODE_OPTIONS,
+  END_CONDITION_SCRIPT_TYPES,
+  MESSAGE_TYPES,
+  USER_FEEDBACK_SEVERITY,
+  type EndConditionScriptType,
   type ExecutionMode,
 } from "@root/types/DashboardConstants";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { notifyUser } from "@utils/notifyUser";
 
 const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
   Object.values(COMPARE_SOURCES) as CompareSource[]
@@ -40,6 +47,34 @@ const SCRIPT_STEP_ACTION_OPTIONS: SelectOption[] = [
   { value: CONDITION_ACTIONS.CONTINUE, label: "Continue" },
   { value: CONDITION_ACTIONS.STOP_WORKFLOW, label: "Stop Workflow" },
 ];
+
+const END_CONDITION_SCRIPT_TYPE_LABELS: Record<
+  EndConditionScriptType,
+  string
+> = {
+  [END_CONDITION_SCRIPT_TYPES.PYTHON]: "Python",
+  [END_CONDITION_SCRIPT_TYPES.JAVASCRIPT]: "JavaScript",
+  [END_CONDITION_SCRIPT_TYPES.SHELL]: "Shell Script",
+  [END_CONDITION_SCRIPT_TYPES.POWERSHELL]: "PowerShell",
+};
+
+const END_CONDITION_SCRIPT_TYPE_OPTIONS: SelectOption[] = (
+  Object.values(END_CONDITION_SCRIPT_TYPES) as EndConditionScriptType[]
+).map((value) => ({
+  value,
+  label: END_CONDITION_SCRIPT_TYPE_LABELS[value],
+}));
+
+let createScriptRequestCounter = 0;
+
+function nextCreateScriptRequestId(): string {
+  createScriptRequestCounter += 1;
+  return `end-condition-script-${Date.now()}-${createScriptRequestCounter}`;
+}
+
+function scriptFileName(scriptPath: string): string {
+  return scriptPath.split(/[\\/]/).pop() || scriptPath;
+}
 
 /**
  * Shared script config shape for both endCondition and preCondition variants.
@@ -143,6 +178,16 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   const [maxRetriesInput, setMaxRetriesInput] = useState(
     String(v.maxRetries ?? 1)
   );
+  const [scriptType, setScriptType] = useState<EndConditionScriptType>(
+    END_CONDITION_SCRIPT_TYPES.PYTHON
+  );
+  const [creatingScript, setCreatingScript] = useState(false);
+  const pendingCreateScriptRequest = useRef<string | null>(null);
+  const currentValueRef = useRef(value);
+
+  useEffect(() => {
+    currentValueRef.current = value;
+  }, [value]);
 
   useEffect(() => {
     setScriptInput(v.script ?? "");
@@ -160,8 +205,59 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
     setMaxRetriesInput(String(v.maxRetries ?? 1));
   }, [v.maxRetries]);
 
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const message = event.data;
+      if (
+        message?.requestId !== pendingCreateScriptRequest.current ||
+        (message.type !== MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATED &&
+          message.type !== MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATION_FAILED)
+      ) {
+        return;
+      }
+
+      pendingCreateScriptRequest.current = null;
+      setCreatingScript(false);
+
+      if (
+        message.type === MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATED &&
+        typeof message.scriptPath === "string"
+      ) {
+        setScriptInput(message.scriptPath);
+        onChange({
+          ...(currentValueRef.current ?? {}),
+          script: message.scriptPath,
+        });
+        notifyUser(
+          `Created end condition script: ${scriptFileName(message.scriptPath)}`,
+          USER_FEEDBACK_SEVERITY.SUCCESS
+        );
+        return;
+      }
+
+      notifyUser(
+        message.error || "Failed to create end condition script",
+        USER_FEEDBACK_SEVERITY.ERROR
+      );
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [onChange]);
+
   const update = (patch: Partial<ScriptConditionValue>) =>
     onChange({ ...v, ...patch });
+
+  const handleCreateScript = () => {
+    const requestId = nextCreateScriptRequestId();
+    pendingCreateScriptRequest.current = requestId;
+    setCreatingScript(true);
+    getVsCodeApi().postMessage({
+      type: MESSAGE_TYPES.CREATE_END_CONDITION_SCRIPT,
+      requestId,
+      scriptType,
+    });
+  };
 
   // Shared across variants: empty input inherits ctrlyoke.scriptTimeout; otherwise commit the
   // parsed number verbatim (no minimum/maximum substitution — those aren't enforced anywhere
@@ -238,6 +334,39 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
         />
       </div>
+
+      {variant === "endCondition" && (
+        <DrawerRow narrow={narrow}>
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor={`${idPrefix}-script-type`}
+              className="text-xs font-medium text-foreground"
+            >
+              Script type
+            </label>
+            <CustomSelect
+              id={`${idPrefix}-script-type`}
+              value={scriptType}
+              onChange={(value) =>
+                setScriptType(value as EndConditionScriptType)
+              }
+              options={END_CONDITION_SCRIPT_TYPE_OPTIONS}
+              triggerAriaLabel="Script type"
+              disabled={disabled || creatingScript}
+            />
+          </div>
+          <div className="flex items-end">
+            <ActionButton
+              label="Create Script"
+              pendingLabel="Creating..."
+              icon="new-file"
+              onClick={handleCreateScript}
+              disabled={disabled}
+              pending={creatingScript}
+            />
+          </div>
+        </DrawerRow>
+      )}
 
       {/* Compare Source + Expected Return */}
       <DrawerRow narrow={narrow}>

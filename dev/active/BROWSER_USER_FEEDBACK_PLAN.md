@@ -946,25 +946,27 @@ current effective behavior for every workflow that does not click a button.
 
 ### Phase 4 — Interactive choices → resolved as six per-site dispositions
 
-**Resolved 2026-08-17; items 3, 4, 5, and 6 implemented in Stage F.4/F.5.** Re-examined each of the six action-bearing sites
+**Resolved 2026-08-17; items 1, 3, 4, 5, and 6 implemented in Stage F.4/F.5/F.6.** Re-examined each of the six action-bearing sites
 individually against the actual code, instead of building a shared
 correlation contract for all of them. None of the six need
-`USER_INTERACTION_REQUEST` — each has a decided disposition below. Items 5 and
-3, 4, 5, and 6 are implemented; items 1 and 2 remain for Stage F.6/F.7.
+`USER_INTERACTION_REQUEST` — each has a decided disposition below. Items 1,
+3, 4, 5, and 6 are implemented; item 2 remains for Stage F.7.
 
-1. **End-condition script created** (`WorkflowCommandHandler.ts:99`,
-   command `ctrlyoke.createEndConditionScript`). Currently two chained
+1. **End-condition script created** (formerly
+   `WorkflowCommandHandler.ts:99`, command
+   `ctrlyoke.createEndConditionScript`). Before F.6 this used two chained
    native-only calls: `showQuickPick` (script type) then
    `showInformationMessage` (Open Script / Show in Explorer). The generator
    underneath, `EndConditionEvaluator.createSampleScript(type)`, copies a
    real starter file from `src/templates/check_condition.*` into
    `.ctrlyoke/scripts/` — genuine boilerplate generation (the exit-code/
    stdout contract baked in), not just a doc link.
-   **Decision: move in-app.** Add a "Create Script" control to
-   `ScriptConditionEditor.tsx` with an inline type picker, backed by a new
-   webview message that calls the existing `createSampleScript()`. Delete
-   the `ctrlyoke.createEndConditionScript` VS Code command and its
-   `package.json` entry once the in-app control lands.
+   **Decision: move in-app — DONE F.6.** `ScriptConditionEditor.tsx` now
+   owns the inline type picker and a scoped webview request that calls the
+   existing `createSampleScript()`. The
+   `ctrlyoke.createEndConditionScript` VS Code command and its `package.json`
+   entries are deleted; native Open Script / Show in Explorer actions are not
+   reproduced.
 
 2. **Harness detection failed** (`WorkflowCommandHandler.ts:148`, inside
    `openPanel()`). Fires only when "Open ctrlyoke Panel" runs from the
@@ -1031,21 +1033,22 @@ retryHarnessDetection()` already exists but today is reachable only from
    different, action-free boundary site and is **not** cut.
 
 **Net effect:** the cut dispositions are complete for items 3/4 and 5, while
-items 1, 2, and 6 relocate into modal/inline UI. None need
+items 1, 2, and 6 relocate into modal/inline UI. Items 1 and 6 are implemented;
+item 2 remains. None need
 `USER_INTERACTION_REQUEST` — see "Action-Bearing Messages" above.
 
 #### Baseline impact of Phase 4 — both counters move
 
-After Stage F.5, the committed baselines are `directMessage.boundary: 53` and
-`directMessage.reusable: 2`. `assertShrinkOnly` fails when a count drops below its committed baseline just
+After Stage F.6, the committed baselines are `directMessage.boundary: 53` and
+`directMessage.reusable: 1`. `assertShrinkOnly` fails when a count drops below its committed baseline just
 as loudly as when it grows, so **every Phase 4 step must lower
 `FEEDBACK_SOURCE_AUDIT_BASELINES` in `src/test/unit/SourceAuditCounters.test.ts`
 in the same commit that removes call sites**, or `npm test` fails on an
 otherwise-correct change.
 
-- `directMessage.reusable` is now **2**, then goes **2 → 0** across the
-  remaining Phase 4 steps: items 3/4 removed 2 (`TemplateImporter.ts`), and
-  items 1/2 remove 1 each from `WorkflowCommandHandler.ts`.
+- `directMessage.reusable` is now **1**: items 3/4 removed 2
+  (`TemplateImporter.ts`) and item 1 removed 1 (`WorkflowCommandHandler.ts`).
+  Item 2 removes the final 1 in the next step.
 - `directMessage.boundary` goes **54 → 53**, once, in the step that deletes
   `extension.ts:177`; that move landed in F.4 and no other Phase 4 step moves
   it.

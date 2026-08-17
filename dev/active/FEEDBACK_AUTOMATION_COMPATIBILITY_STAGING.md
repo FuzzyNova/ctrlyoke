@@ -343,7 +343,7 @@ Stage 6 describes this as the same edit set and should be updated to reflect
 that it has landed, per this document's own "update both plans when it lands"
 rule above.
 
-### Stage F — Browser feedback Phase 4 — REDESIGNED 2026-08-17, F.5 COMPLETE
+### Stage F — Browser feedback Phase 4 — REDESIGNED 2026-08-17, F.6 COMPLETE
 
 **Redesigned 2026-08-17: the `USER_INTERACTION_REQUEST` correlation contract
 is no longer being built.** Each of the 6 surviving action-bearing sites was
@@ -355,10 +355,12 @@ are in `BROWSER_USER_FEEDBACK_PLAN.md` Phase 4. F.4 is complete: both
 post-workspace-init toasts and the native clear-all confirmation are gone, and
 clear-all now uses `DeleteConfirmModal`.
 
-The two remaining action-bearing sites still call
+The one remaining action-bearing site still calls
 `vscode.window.show*Message(...)` directly with action-button strings:
-`WorkflowCommandHandler.ts:99` (post-script-create, moves in-app),
 `WorkflowCommandHandler.ts:148` (retry harness automation, moves inline).
+F.6 moved the post-script-create flow from `WorkflowCommandHandler.ts` into
+`ScriptConditionEditor` with a client-scoped router reply and deleted the
+native command.
 F.5 cut the `TemplateImporter.ts:200` overwrite and `TemplateImporter.ts:243`
 post-import sites together with the import command and repointed
 `ctrlyoke.createNewTemplate` at the pre-expanded `TemplateModal` flow.
@@ -442,7 +444,7 @@ may be swapped as a block.
 | 20  | F.3   | **DONE.** Phase 6 steps 5–7: migrated Group B's 12 scoped-reply handlers to `notifyUser()`, retained the standalone duplicate-tab action, and added the shrink-only raw-toast audit (baseline 1)                                                                                                                                                                   |
 | 21  | F.4   | **DONE.** Phase 4 items 5 + 6: cut both duplicate workspace-init toasts; funnel clear-all-history through `DeleteConfirmModal` (`boundary` 54 → 53, `reusable` 6 → 4)                                                                                                                                                                                              |
 | 22  | F.5   | **DONE.** Phase 4 items 3 + 4: deleted `TemplateImporter.ts` and `ctrlyoke.importWorkflowTemplates`; repointed `ctrlyoke.createNewTemplate` at the pre-expanded `TemplateModal` (`reusable` 4 → 2)                                                                                                                                                                                     |
-| 23  | F.6   | **TODO.** Phase 4 item 1: in-app end-condition script creation in `ScriptConditionEditor`; delete `ctrlyoke.createEndConditionScript` (`reusable` 2 → 1)                                                                                                                                                                                                           |
+| 23  | F.6   | **DONE.** Phase 4 item 1: in-app end-condition script creation in `ScriptConditionEditor`; deleted `ctrlyoke.createEndConditionScript` (`reusable` 2 → 1)                                                                                                                                                                                                         |
 | 24  | F.7   | **TODO.** Phase 4 item 2: inline harness-detection retry next to `HarnessDropdown`; cut the `openPanel()` gate (`reusable` 1 → 0)                                                                                                                                                                                                                                  |
 | 25  | G.x   | **TODO.** Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration (dry-run sub-leg blocked on `SECRETS_AND_REDACTION_PLAN.md`)                                                                                                                                                                                                     |
 

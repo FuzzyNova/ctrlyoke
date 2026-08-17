@@ -55,6 +55,7 @@ import {
   STEP_TYPES,
   TERMINAL_SESSION_STATUS,
   USER_FEEDBACK_SEVERITY,
+  type EndConditionScriptType,
   type HarnessId,
   type QueuePosition,
   type ActionType,
@@ -344,8 +345,8 @@ export class WorkflowOrchestrator {
   private readonly workflowCommandHandler: WorkflowCommandHandler;
   private readonly workspaceSessionManager: WorkspaceSessionManager;
   private readonly promptFileParser: PromptFileParser;
-  /** Dedicated evaluator for WorkflowCommandHandler (createEndConditionScript) */
-  private readonly endConditionEvaluatorForCommands: EndConditionEvaluator;
+  /** Evaluator used by the dashboard's in-app starter-script control. */
+  private readonly endConditionEvaluator: EndConditionEvaluator;
 
   // Initialization gates
   private dashboardReady: boolean = false;
@@ -457,13 +458,10 @@ export class WorkflowOrchestrator {
       this.promptFileParser,
       new VsCodeAdapter(context)
     );
-    this.endConditionEvaluatorForCommands = new EndConditionEvaluator(
+    this.endConditionEvaluator = new EndConditionEvaluator(
       new VsCodeAdapter(context)
     );
     this.workflowCommandHandler = new WorkflowCommandHandler(
-      context,
-      this.promptFileParser,
-      this.endConditionEvaluatorForCommands,
       this.userFeedbackSink
     );
 
@@ -4888,8 +4886,10 @@ export class WorkflowOrchestrator {
     await this.workflowCommandHandler.openCurrentPromptFile(filePath);
   }
 
-  async createEndConditionScript(): Promise<void> {
-    await this.workflowCommandHandler.createEndConditionScript();
+  async createSampleScript(
+    scriptType: EndConditionScriptType
+  ): Promise<string | null> {
+    return this.endConditionEvaluator.createSampleScript(scriptType);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -4953,7 +4953,7 @@ export class WorkflowOrchestrator {
     this.polledRunnerJsonMtimes.clear();
 
     this.statusBarManager.dispose();
-    this.endConditionEvaluatorForCommands.dispose();
+    this.endConditionEvaluator.dispose();
     this.compatibilityRegistry.dispose();
     // The run-summary cache is module-level, so nothing else drops it when the
     // host tears down (workspace close, extension deactivate).

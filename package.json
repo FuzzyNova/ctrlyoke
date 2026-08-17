@@ -188,12 +188,6 @@
         "icon": "$(beaker)"
       },
       {
-        "command": "ctrlyoke.createEndConditionScript",
-        "title": "Create End Condition Script",
-        "category": "ctrlyoke",
-        "icon": "$(new-file)"
-      },
-      {
         "command": "ctrlyoke.newWorkflow",
         "title": "New Workflow from Template",
         "category": "ctrlyoke",
@@ -369,9 +363,6 @@
         {
           "command": "ctrlyoke.devMenu",
           "when": "ctrlyoke.devMode"
-        },
-        {
-          "command": "ctrlyoke.createEndConditionScript"
         },
         {
           "command": "ctrlyoke.runFromContext",

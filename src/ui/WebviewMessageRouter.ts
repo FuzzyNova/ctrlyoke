@@ -11,6 +11,8 @@ import {
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
   USER_FEEDBACK_SEVERITY,
+  END_CONDITION_SCRIPT_TYPES,
+  type EndConditionScriptType,
   type UserFeedbackSeverity,
   type WebviewLogLevel,
   VSCODE_COMMANDS,
@@ -50,6 +52,7 @@ import type {
   DeleteAllFromHarnessMessage,
   OpenHarnessDirMessage,
   ShowNativeFeedbackMessage,
+  CreateEndConditionScriptMessage,
 } from "../types/WebviewMessageTypes";
 import type {
   WorkflowVariantCreatedMessage,
@@ -99,6 +102,14 @@ function isUserFeedbackSeverity(value: unknown): value is UserFeedbackSeverity {
     value === USER_FEEDBACK_SEVERITY.SUCCESS ||
     value === USER_FEEDBACK_SEVERITY.WARNING ||
     value === USER_FEEDBACK_SEVERITY.ERROR
+  );
+}
+
+function isEndConditionScriptType(
+  value: unknown
+): value is EndConditionScriptType {
+  return Object.values(END_CONDITION_SCRIPT_TYPES).includes(
+    value as EndConditionScriptType
   );
 }
 
@@ -590,6 +601,55 @@ export class WebviewMessageRouter {
 
   private registerPromptEditor(table: DispatchTable): void {
     // ── Dashboard — Prompt Editor ────────────────────────────────────────
+    table.set(
+      MESSAGE_TYPES.CREATE_END_CONDITION_SCRIPT,
+      async (message, ctx) => {
+        const request = message as CreateEndConditionScriptMessage;
+        if (typeof request.requestId !== "string") {
+          return;
+        }
+
+        if (!isEndConditionScriptType(request.scriptType)) {
+          ctx.emit({
+            type: MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATION_FAILED,
+            requestId: request.requestId,
+            error: "Unsupported end-condition script type.",
+          });
+          return;
+        }
+
+        try {
+          const orchestrator = this.getOrchestrator();
+          if (!orchestrator) {
+            throw new Error(
+              "ctrlyoke is still starting up — try again shortly"
+            );
+          }
+          const scriptPath = await orchestrator.createSampleScript(
+            request.scriptType
+          );
+          if (!scriptPath) {
+            throw new Error(
+              "Check that you have a workspace folder open and try again."
+            );
+          }
+          ctx.emit({
+            type: MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATED,
+            requestId: request.requestId,
+            scriptPath,
+          });
+        } catch (error) {
+          const errorMessage = getErrorMessage(error);
+          Log.error("Failed to create end-condition script:", errorMessage);
+          ctx.emit({
+            type: MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATION_FAILED,
+            requestId: request.requestId,
+            error: errorMessage,
+          });
+        }
+      }
+    );
+
     table.set(MESSAGE_TYPES.EXECUTE_PROMPT, (message, ctx) => {
       void this.workflowStepHandlers.handleExecutePrompt(ctx, message);
     });

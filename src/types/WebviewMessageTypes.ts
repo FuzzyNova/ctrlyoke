@@ -33,6 +33,7 @@ import {
   type UndoFileAction,
   type CompletionNotificationSeverity,
   type UserFeedbackSeverity,
+  type EndConditionScriptType,
   type HookEvent,
   type NotificationKind,
   type SettingScope,
@@ -1152,6 +1153,27 @@ export interface PromptFileCreatedMessage {
   seq?: number;
 }
 
+/** Webview → Extension: create a starter end-condition script. */
+export interface CreateEndConditionScriptMessage {
+  type: typeof MESSAGE_TYPES.CREATE_END_CONDITION_SCRIPT;
+  requestId: string;
+  scriptType: EndConditionScriptType;
+}
+
+/** Extension → Webview: starter end-condition script creation succeeded. */
+export interface EndConditionScriptCreatedMessage {
+  type: typeof MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATED;
+  requestId: string;
+  scriptPath: string;
+}
+
+/** Extension → Webview: starter end-condition script creation failed. */
+export interface EndConditionScriptCreationFailedMessage {
+  type: typeof MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATION_FAILED;
+  requestId: string;
+  error: string;
+}
+
 /** Webview → Extension: open a prompt-file reference in the editor. */
 export interface OpenPromptFileMessage {
   type: typeof MESSAGE_TYPES.OPEN_PROMPT_FILE;
@@ -2201,6 +2223,8 @@ export type IncomingMessage =
   | { type: typeof MESSAGE_TYPES.TEMPLATE_INFO; template: any }
   | { type: typeof MESSAGE_TYPES.DEFAULT_TEMPLATE_SET; templateId: string }
   | { type: typeof MESSAGE_TYPES.WORKFLOW_CREATED; filePath: string }
+  | EndConditionScriptCreatedMessage
+  | EndConditionScriptCreationFailedMessage
   | {
       type: typeof MESSAGE_TYPES.COMPLETIONS_RESPONSE;
       completions: any[];

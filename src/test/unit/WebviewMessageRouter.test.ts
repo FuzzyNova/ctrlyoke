@@ -14,6 +14,7 @@ import * as vscode from "vscode";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
 import {
   MESSAGE_TYPES,
+  END_CONDITION_SCRIPT_TYPES,
   USER_FEEDBACK_SEVERITY,
   VSCODE_COMMANDS,
 } from "../../types/DashboardConstants";
@@ -206,6 +207,79 @@ suite("WebviewMessageRouter — native feedback", () => {
     });
 
     assert.deepStrictEqual(received, []);
+  });
+});
+
+suite("WebviewMessageRouter — end-condition script creation", () => {
+  test("delegates to the evaluator and replies only to the initiating client", async () => {
+    const created: string[] = [];
+    const panelMessages: unknown[] = [];
+    const browserMessages: unknown[] = [];
+    const router = buildRouter(
+      {
+        createSampleScript: async (scriptType: string) => {
+          created.push(scriptType);
+          return ".ctrlyoke/scripts/check_condition.js";
+        },
+      },
+      (message) => panelMessages.push(message)
+    );
+
+    await router.route(
+      {
+        type: MESSAGE_TYPES.CREATE_END_CONDITION_SCRIPT,
+        requestId: "create-1",
+        scriptType: END_CONDITION_SCRIPT_TYPES.JAVASCRIPT,
+      },
+      {
+        clientTag: "browser:1",
+        postMessage: (message: unknown) => browserMessages.push(message),
+      }
+    );
+
+    assert.deepStrictEqual(created, [END_CONDITION_SCRIPT_TYPES.JAVASCRIPT]);
+    assert.deepStrictEqual(browserMessages, [
+      {
+        type: MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATED,
+        requestId: "create-1",
+        scriptPath: ".ctrlyoke/scripts/check_condition.js",
+      },
+    ]);
+    assert.deepStrictEqual(panelMessages, []);
+  });
+
+  test("returns a typed, scoped failure when generation fails", async () => {
+    const panelMessages: unknown[] = [];
+    const browserMessages: unknown[] = [];
+    const router = buildRouter(
+      {
+        createSampleScript: async () => {
+          throw new Error("permission denied");
+        },
+      },
+      (message) => panelMessages.push(message)
+    );
+
+    await router.route(
+      {
+        type: MESSAGE_TYPES.CREATE_END_CONDITION_SCRIPT,
+        requestId: "create-2",
+        scriptType: END_CONDITION_SCRIPT_TYPES.PYTHON,
+      },
+      {
+        clientTag: "browser:2",
+        postMessage: (message: unknown) => browserMessages.push(message),
+      }
+    );
+
+    assert.deepStrictEqual(browserMessages, [
+      {
+        type: MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATION_FAILED,
+        requestId: "create-2",
+        error: "permission denied",
+      },
+    ]);
+    assert.deepStrictEqual(panelMessages, []);
   });
 });
 

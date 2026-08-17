@@ -574,6 +574,12 @@ export function createMessageHandlers(
     }
   };
 
+  // Script creation replies are consumed by the ScriptConditionEditor instance
+  // that issued the request. Register them here so the central dispatcher does
+  // not report the addressed, component-local replies as unknown messages.
+  handlers[MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATED] = () => undefined;
+  handlers[MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATION_FAILED] = () => undefined;
+
   // --------------------------------------------------------------------------
   // Developer dashboard events
   // --------------------------------------------------------------------------
