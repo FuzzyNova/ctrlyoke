@@ -2090,11 +2090,30 @@ export class WorkflowInstance {
       }
     }
 
+    // A workflow paused mid-worktree-execution can reach this branch on a
+    // freshly constructed instance (e.g. after an extension/host restart)
+    // that never went through executeLoadedPromptFile for this run, so
+    // worktreeResolution/executionWorkspace are still the constructor's
+    // no-worktree defaults. Re-resolve and re-apply here — cheap and a
+    // no-op when this.activeWorktree/this.executionLease are already set
+    // from an in-process pause — or the resumed run silently executes
+    // against the main checkout instead of its configured worktree.
+    const resolvedHistoryFilePath =
+      historyFilePath ?? this.resolveHistoryFilePath();
+    const workingFilePath = this.promptQueue.getState().workingFilePath;
+    await this.ensureRunnerLock(workingFilePath);
+    this.worktreeResolution = await resolveWorktreeForWorkspace(
+      this.promptQueue.getWorkflowFile().worktree,
+      ConfigurationUtils.getDefaultWorktree(),
+      this.platform.getNamedWorkspaceRoots()
+    );
+    await this.prepareExecutionWorktree(resolvedHistoryFilePath);
+
     Log.info("▶️ Resuming workflow from paused position");
     await this.startWorkflowExecution(
       undefined,
-      historyFilePath ?? this.resolveHistoryFilePath(),
-      this.promptQueue.getState().workingFilePath,
+      resolvedHistoryFilePath,
+      workingFilePath,
       targetRunIndices
     );
   }
