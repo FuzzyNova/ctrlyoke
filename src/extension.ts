@@ -224,7 +224,11 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 
     // Register React webview provider (Phase 4 - unified provider)
-    webviewProvider = new CtrlYokeWebviewProvider(context);
+    const vscodeUserFeedbackSink = new VsCodeUserFeedbackSink();
+    webviewProvider = new CtrlYokeWebviewProvider(
+      context,
+      vscodeUserFeedbackSink
+    );
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(
         "ctrlyoke.dashboard",
@@ -258,7 +262,7 @@ export async function activate(context: vscode.ExtensionContext) {
       (message) => hostedServer?.broadcastUserFeedback(message)
     );
     const userFeedbackSink = new CompositeUserFeedbackSink([
-      new VsCodeUserFeedbackSink(),
+      vscodeUserFeedbackSink,
       browserUserFeedbackSink,
     ]);
     workflowOrchestrator = new WorkflowOrchestrator(

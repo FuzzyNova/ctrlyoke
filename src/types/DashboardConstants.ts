@@ -419,6 +419,8 @@ export const MESSAGE_TYPES = {
   NOTIFICATION_EVENT: "notificationEvent",
   /** Extension/Hosted server -> Webview: operational user feedback */
   USER_FEEDBACK: "userFeedback",
+  /** Webview -> Extension: native VS Code operational user feedback */
+  SHOW_NATIVE_FEEDBACK: "showNativeFeedback",
 } as const;
 
 // ============================================================================

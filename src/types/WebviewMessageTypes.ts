@@ -1396,6 +1396,14 @@ export interface NotificationEventMessage {
   event: CompletionNotificationEventPayload;
 }
 
+/** Webview -> Extension: display operational feedback through the native host. */
+export interface ShowNativeFeedbackMessage {
+  type: typeof MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK;
+  severity: UserFeedbackSeverity;
+  message: string;
+  detail?: string;
+}
+
 /** Extension/hosted server -> Webview: transient operational feedback. */
 export interface UserFeedbackMessage {
   type: typeof MESSAGE_TYPES.USER_FEEDBACK;

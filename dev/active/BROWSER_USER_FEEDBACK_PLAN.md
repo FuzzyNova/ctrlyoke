@@ -1084,18 +1084,26 @@ above. This is the client-side counterpart to Phase 2's `UserFeedbackSink`:
 one function every webview-originated toast call goes through, so callers stop
 caring whether they're rendering inside the VS Code panel or a browser tab.
 
-1. Add a webview→extension message, `MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK`
+1. **DONE** — Add the webview→extension message,
+   `MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK`, in
+   `src/types/DashboardConstants.ts` and its payload type in
+   `src/types/WebviewMessageTypes.ts`.
    (payload: `severity`, `message`, optional `detail` — the same shape as
    `UserFeedback` in `src/core/UserFeedbackSink.ts`; no `id`/`dedupeKey`,
    since native VS Code messages don't dedupe or queue).
-2. Add a handler for it in `WebviewMessageRouter.ts` that delegates to the
+2. **DONE** — Add the handler in `src/ui/WebviewMessageRouter.ts`, thread the
+   callback through `src/ui/CtrlYokeWebviewProvider.ts`, and wire the shared
+   sink instance from `src/extension.ts`; cover it in
+   `src/test/unit/WebviewMessageRouter.test.ts`; it delegates to the
    **existing** `VsCodeUserFeedbackSink` instance already constructed in
    `extension.ts` (thread it through `WebviewRouterCallbacks`, the same
    mechanism `handleDevAction`/`handleUxSnapshot` already use). Do not
    construct a second instance or re-implement the severity→API mapping —
    `VsCodeUserFeedbackSink.notify()` is the single source for that mapping and
    already exists.
-3. Add `notifyUser(message, severity, detail?)` in `webview-react/utils`,
+3. **DONE** — Add `notifyUser(message, severity, detail?)` in
+   `src/ui/webview-react/utils/notifyUser.ts` with coverage in
+   `src/ui/webview-react/test/utils/notifyUser.test.ts`,
    colocated near `useVsCodeApi`. Its entire job:
    - `isStandalone` → `useUiStore.getState().showToast(message, severity, { detail })` (unchanged, in-app).
    - otherwise → `getVsCodeApi().postMessage({ type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK, severity, message, detail })`.

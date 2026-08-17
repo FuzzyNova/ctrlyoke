@@ -10,6 +10,8 @@ import {
   LOG_LEVELS,
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
+  USER_FEEDBACK_SEVERITY,
+  type UserFeedbackSeverity,
   type WebviewLogLevel,
   VSCODE_COMMANDS,
   WORKTREE_MANAGEMENT_ACTIONS,
@@ -47,6 +49,7 @@ import type {
   SyncAllToHarnessMessage,
   DeleteAllFromHarnessMessage,
   OpenHarnessDirMessage,
+  ShowNativeFeedbackMessage,
 } from "../types/WebviewMessageTypes";
 import type {
   WorkflowVariantCreatedMessage,
@@ -89,6 +92,15 @@ interface WorkflowVariantRequestCacheEntry {
 
 const WORKFLOW_VARIANT_REQUEST_CACHE_TTL_MS = 10 * 60 * 1000;
 const WORKFLOW_VARIANT_REQUEST_CACHE_MAX_ENTRIES = 256;
+
+function isUserFeedbackSeverity(value: unknown): value is UserFeedbackSeverity {
+  return (
+    value === USER_FEEDBACK_SEVERITY.INFO ||
+    value === USER_FEEDBACK_SEVERITY.SUCCESS ||
+    value === USER_FEEDBACK_SEVERITY.WARNING ||
+    value === USER_FEEDBACK_SEVERITY.ERROR
+  );
+}
 
 function describeWorktreeActionSuccess(
   action: WorktreeManagementAction,
@@ -255,6 +267,7 @@ export class WebviewMessageRouter {
   private buildDispatchTable(): DispatchTable {
     const table: DispatchTable = new Map();
     this.registerLifecycle(table);
+    this.registerUserFeedback(table);
     this.registerDevActions(table);
     this.registerWorkflowControl(table);
     this.registerPromptEditor(table);
@@ -273,6 +286,27 @@ export class WebviewMessageRouter {
     this.registerTerminal(table);
     this.registerWorkspaceInit(table);
     return table;
+  }
+
+  private registerUserFeedback(table: DispatchTable): void {
+    table.set(MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK, (message) => {
+      if (!this.callbacks.handleNativeFeedback) {
+        return;
+      }
+
+      if (
+        !isUserFeedbackSeverity(message.severity) ||
+        typeof message.message !== "string"
+      ) {
+        return;
+      }
+
+      this.callbacks.handleNativeFeedback({
+        severity: message.severity,
+        message: message.message,
+        detail: typeof message.detail === "string" ? message.detail : undefined,
+      });
+    });
   }
 
   private registerLifecycle(table: DispatchTable): void {
@@ -1880,6 +1914,9 @@ export interface WebviewRouterCallbacks {
     postMessage: PostMessageFn
   ) => Promise<void>;
   handleDevStatusRequest?: (postMessage: PostMessageFn) => Promise<void>;
+  handleNativeFeedback?: (
+    feedback: Omit<ShowNativeFeedbackMessage, "type">
+  ) => void;
   /**
    * Persist a captured UX snapshot (dev builds only). Receives the payload, the
    * resolved workspace root, and a scoped send so the confirmation reply reaches

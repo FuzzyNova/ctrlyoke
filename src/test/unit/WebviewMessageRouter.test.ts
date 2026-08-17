@@ -12,8 +12,13 @@ import * as assert from "assert";
 import * as path from "path";
 import * as vscode from "vscode";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
-import { MESSAGE_TYPES, VSCODE_COMMANDS } from "../../types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  USER_FEEDBACK_SEVERITY,
+  VSCODE_COMMANDS,
+} from "../../types/DashboardConstants";
 import { WorkflowVariantService } from "../../core/orchestration/WorkflowVariantService";
+import { VsCodeUserFeedbackSink } from "../../platform/VsCodeUserFeedbackSink";
 
 function buildRouter(
   orchestrator: unknown,
@@ -134,6 +139,73 @@ suite("WebviewMessageRouter — client workflow file paths", () => {
       [absolute, absolute],
       "an already-absolute path must not be rewritten"
     );
+  });
+});
+
+suite("WebviewMessageRouter — native feedback", () => {
+  test("delegates each severity to the existing VS Code feedback sink", async () => {
+    const calls: string[] = [];
+    const sink = new VsCodeUserFeedbackSink({
+      showInformationMessage: () => calls.push("info"),
+      showWarningMessage: () => calls.push("warning"),
+      showErrorMessage: () => calls.push("error"),
+    });
+    const router = new WebviewMessageRouter(
+      () => {},
+      { sendWorkflowPropertiesToSettings: async () => {} } as any,
+      {} as any,
+      () => undefined,
+      {} as any,
+      {
+        handleClearWorkflow: async () => {},
+        updateWorkflowName: () => {},
+        handleNativeFeedback: (feedback) => sink.notify(feedback),
+      }
+    );
+
+    for (const [severity, expectedApi] of [
+      [USER_FEEDBACK_SEVERITY.INFO, "info"],
+      [USER_FEEDBACK_SEVERITY.SUCCESS, "info"],
+      [USER_FEEDBACK_SEVERITY.WARNING, "warning"],
+      [USER_FEEDBACK_SEVERITY.ERROR, "error"],
+    ] as const) {
+      await router.route({
+        type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
+        severity,
+        message: "Feedback",
+        detail: "More detail",
+      });
+      assert.strictEqual(calls.at(-1), expectedApi);
+    }
+  });
+
+  test("ignores malformed feedback payloads", async () => {
+    const received: unknown[] = [];
+    const router = new WebviewMessageRouter(
+      () => {},
+      { sendWorkflowPropertiesToSettings: async () => {} } as any,
+      {} as any,
+      () => undefined,
+      {} as any,
+      {
+        handleClearWorkflow: async () => {},
+        updateWorkflowName: () => {},
+        handleNativeFeedback: (feedback) => received.push(feedback),
+      }
+    );
+
+    await router.route({
+      type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
+      severity: "unknown",
+      message: "Feedback",
+    });
+    await router.route({
+      type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
+      severity: USER_FEEDBACK_SEVERITY.INFO,
+      message: 42,
+    });
+
+    assert.deepStrictEqual(received, []);
   });
 });
 
