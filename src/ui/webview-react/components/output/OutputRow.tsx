@@ -82,6 +82,7 @@ import {
 import { openContextReference } from "@utils/contextReferenceActions";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { formatCliCommandDisplay } from "@utils/outputCommandDisplay";
+import { renderCommandTextWithFileLinks } from "@utils/cliCommandFileLinks";
 import type {
   CliHeaderRow,
   OutputRenderRow,
@@ -1516,13 +1517,14 @@ function OutputRowComponent({
         <div
           className={`${OUTPUT_BLOCK_BASE} ${borderClass} text-[var(--fg-primary)] whitespace-pre-wrap [overflow-wrap:anywhere]`}
         >
-          {highlightText(
+          {renderCommandTextWithFileLinks(
             formatCliCommandDisplay(
               row.command,
               row.workingDirectory,
               row.wasInjected
             ),
-            getFieldMatches("command")
+            getFieldMatches("command"),
+            row.workingDirectory
           )}
         </div>
       );

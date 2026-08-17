@@ -33,24 +33,17 @@ import {
 } from "@utils/atomicReferences";
 import { AtomicReferenceChip } from "./AtomicReferenceChip";
 import type { RowFindDecoration } from "@utils/outputFind";
+import {
+  FILE_EXTENSIONS,
+  SEP,
+  normalizeCodexAbsPath,
+} from "@utils/filePathPatterns";
 
 // Ensure the shared VS Code-themed syntax/find-highlight styles are in <head>.
 injectSyntaxHighlightStyles();
 injectFindHighlightStyles();
 
 // ── File-link detection ────────────────────────────────────────────────────
-
-/**
- * Recognized file extensions for auto-linking workspace paths.
- * Conservative list to avoid false positives in prose.
- *
- * `svg` lives here (a link/`<file-ref>` extension) rather than in
- * {@link IMAGE_EXTENSIONS} (the inline-thumbnail list): an SVG can carry script,
- * so it's opened as a file in VS Code rather than rendered inline, but it's
- * still a real workspace file that should be a clickable link, not `[blocked]`.
- */
-const FILE_EXTENSIONS =
-  "ts|tsx|js|jsx|mjs|cjs|json|yaml|yml|md|py|sh|css|scss|html|svg|toml|txt|rs|go|swift|java|c|cpp|h|vue|svelte|rb|php|dart|kt|cs";
 
 /**
  * Matches workspace-relative or absolute file paths that end with a
@@ -65,11 +58,7 @@ const FILE_EXTENSIONS =
  *
  * Single-segment names like "file.ts" (no separator) are intentionally
  * excluded to avoid false positives in plain prose.
- *
- * Separators allow 1–2 consecutive slashes/backslashes so that harnesses
- * that escape their output (e.g. writing C:\\dev\\) are also matched.
  */
-const SEP = "[/\\\\]{1,2}"; // matches /  \  //  \\  (1–2 of either)
 const FILE_PATH_SOURCE =
   "(?:" +
   "[A-Za-z]:" +
@@ -119,26 +108,6 @@ function getNodeText(node: React.ReactNode): string {
   }
 
   return "";
-}
-
-/**
- * Converts web-safe absolute file-link target forms back to native Windows
- * absolute paths:
- *   /abs/path/c:/dev/repo/file.ts -> C:/dev/repo/file.ts
- *   /c:/dev/repo/file.ts          -> C:/dev/repo/file.ts
- */
-function normalizeCodexAbsPath(raw: string): string {
-  const pathWithDrive = raw.match(/^\/abs\/path\/([A-Za-z]:)(\/.*)$/);
-  if (pathWithDrive) {
-    return `${pathWithDrive[1].toUpperCase()}${pathWithDrive[2]}`;
-  }
-
-  const slashDrivePath = raw.match(/^\/([A-Za-z]:)(\/.*)$/);
-  if (slashDrivePath) {
-    return `${slashDrivePath[1].toUpperCase()}${slashDrivePath[2]}`;
-  }
-
-  return raw;
 }
 
 /**

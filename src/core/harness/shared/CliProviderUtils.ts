@@ -10,6 +10,7 @@ import {
   isRunHistoryLocationInitialized,
 } from "../../../utils/RunHistoryStoragePolicy";
 import { ctrlyokeStateHome } from "../../../utils/ProjectStatePaths";
+import { canonicalizeDriveLetter } from "../../../utils/PathCasing";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
@@ -242,7 +243,7 @@ export class CliProviderUtils {
     const directoryKeys = new Set<string>();
     const isWindows = process.platform === "win32";
     const addDirectory = (directory: string): void => {
-      const absolutePath = path.resolve(directory);
+      const absolutePath = canonicalizeDriveLetter(path.resolve(directory));
       const key = isWindows ? absolutePath.toLowerCase() : absolutePath;
       if (!directoryKeys.has(key)) {
         directoryKeys.add(key);

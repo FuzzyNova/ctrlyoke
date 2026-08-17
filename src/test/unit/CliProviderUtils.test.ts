@@ -7,6 +7,7 @@ import {
   CliProviderUtils,
   RetryableAsyncCache,
 } from "../../core/harness/shared/CliProviderUtils";
+import { canonicalizeDriveLetter } from "../../utils/PathCasing";
 
 suite("CliProviderUtils", () => {
   setup(() => {
@@ -56,6 +57,34 @@ suite("CliProviderUtils", () => {
       path.resolve(primaryRoot),
       path.resolve(externalRoot),
     ]);
+  });
+
+  test("canonicalizes a lowercase drive letter for --add-dir on Windows", function () {
+    if (process.platform !== "win32") {
+      this.skip();
+      return;
+    }
+    const root = path.join(os.tmpdir(), "ctrlyoke-workspace-primary");
+    const lowerRoot = root.charAt(0).toLowerCase() + root.slice(1);
+    const expected = canonicalizeDriveLetter(path.resolve(root));
+
+    const result = CliProviderUtils.getWorkspaceDirs(lowerRoot, []);
+
+    assert.deepStrictEqual(result, [expected]);
+  });
+
+  test("dedups a directory regardless of drive-letter casing", function () {
+    if (process.platform !== "win32") {
+      this.skip();
+      return;
+    }
+    const root = path.join(os.tmpdir(), "ctrlyoke-workspace-primary");
+    const lowerRoot = root.charAt(0).toLowerCase() + root.slice(1);
+    const expected = canonicalizeDriveLetter(path.resolve(root));
+
+    const result = CliProviderUtils.getWorkspaceDirs(root, [lowerRoot]);
+
+    assert.deepStrictEqual(result, [expected]);
   });
 
   test("shares successful probes and retries a failed probe", async () => {
