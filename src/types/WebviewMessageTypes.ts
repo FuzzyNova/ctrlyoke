@@ -1353,6 +1353,21 @@ export interface ServerCertGeneratedMessage {
   sans: string[];
 }
 
+/**
+ * Webview → Extension: save the configured TLS cert via a native VS Code
+ * Save dialog (panel only — the webview has no way to download an HTTP
+ * response through the VS Code webview host).
+ */
+export interface DownloadServerCertMessage {
+  type: typeof MESSAGE_TYPES.DOWNLOAD_SERVER_CERT;
+}
+
+/** Extension → Webview: save dialog flow finished; `saved` is false if the user cancelled or the write failed */
+export interface ServerCertDownloadedMessage {
+  type: typeof MESSAGE_TYPES.SERVER_CERT_DOWNLOADED;
+  saved: boolean;
+}
+
 /** Extension → Webview: acknowledge a setting update */
 export interface GlobalSettingUpdatedMessage {
   type: typeof MESSAGE_TYPES.GLOBAL_SETTING_UPDATED;

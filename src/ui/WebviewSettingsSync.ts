@@ -45,6 +45,7 @@ import {
   WorktreeDefaultConfig,
 } from "../types/CtrlYokeTypes";
 import { readJsonFile } from "../utils/FileSystemUtils";
+import { getErrorMessage } from "../utils/ErrorUtils";
 import {
   getVsCodeWorkspaceRoot,
   getVsCodeWorkspaceFolder,
@@ -1182,5 +1183,58 @@ export class WebviewSettingsSync {
       },
       postMessage
     );
+  }
+
+  /**
+   * Save the configured TLS cert to disk via a native VS Code Save dialog.
+   * Panel-only: the webview has no way to drive an HTTP download through the
+   * VS Code webview host, so the extension reads the cert straight off disk
+   * instead of routing through the hosted server's `/cert` endpoint.
+   */
+  async handleDownloadServerCert(postMessage: PostMessageFn): Promise<void> {
+    const certPath = configService.get(CONFIG_KEYS.SERVER)?.tls?.certPath;
+    if (!certPath) {
+      void vscode.window.showErrorMessage(
+        "No TLS certificate is configured yet. Generate one first."
+      );
+      this.emitMessage(
+        { type: MESSAGE_TYPES.SERVER_CERT_DOWNLOADED, saved: false },
+        postMessage
+      );
+      return;
+    }
+
+    try {
+      const certBytes = await fs.readFile(certPath);
+      const uri = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file("ctrlyoke.cer"),
+        filters: {
+          "Certificate Files": ["cer", "crt", "pem"],
+          "All Files": ["*"],
+        },
+      });
+      if (!uri) {
+        this.emitMessage(
+          { type: MESSAGE_TYPES.SERVER_CERT_DOWNLOADED, saved: false },
+          postMessage
+        );
+        return;
+      }
+
+      await fs.writeFile(uri.fsPath, certBytes);
+      this.emitMessage(
+        { type: MESSAGE_TYPES.SERVER_CERT_DOWNLOADED, saved: true },
+        postMessage
+      );
+    } catch (error) {
+      Log.error("Failed to save server certificate:", error);
+      void vscode.window.showErrorMessage(
+        `Failed to save certificate: ${getErrorMessage(error)}`
+      );
+      this.emitMessage(
+        { type: MESSAGE_TYPES.SERVER_CERT_DOWNLOADED, saved: false },
+        postMessage
+      );
+    }
   }
 }

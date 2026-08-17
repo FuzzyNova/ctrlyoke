@@ -1147,6 +1147,39 @@ suite("WebviewSettingsSync", () => {
     });
   });
 
+  suite("WebviewMessageRouter — DOWNLOAD_SERVER_CERT handler", () => {
+    test("should forward the requesting client's postMessage to WebviewSettingsSync", async () => {
+      let received: any;
+      const sentinelPostMessage = () => {};
+
+      const mockSettingsSync = {
+        handleDownloadServerCert: async (postMessage: any) => {
+          received = postMessage;
+        },
+      } as any;
+
+      const router = new WebviewMessageRouter(
+        () => {},
+        mockSettingsSync,
+        {} as any,
+        () => undefined,
+        {} as any,
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+      );
+
+      await router.route(
+        { type: MESSAGE_TYPES.DOWNLOAD_SERVER_CERT },
+        { postMessage: sentinelPostMessage }
+      );
+
+      assert.strictEqual(
+        received,
+        sentinelPostMessage,
+        "DOWNLOAD_SERVER_CERT should forward the requesting client's postMessage so the reply routes back to it"
+      );
+    });
+  });
+
   // ─── handleSetAsDefault ─────────────────────────────────────────────────────
 
   suite("handleSetAsDefault", () => {

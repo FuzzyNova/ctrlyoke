@@ -2716,6 +2716,17 @@ export function createMessageHandlers(
   };
 
   // --------------------------------------------------------------------------
+  // SERVER_CERT_DOWNLOADED - Native Save dialog flow finished (panel only);
+  // fires whether the user saved, cancelled, or the write failed so the
+  // download button's pending state always clears.
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SERVER_CERT_DOWNLOADED] = (message) => {
+    const store = useSettingsStore.getState();
+    store.setLastCertDownloadSaved(!!message.saved);
+    store.bumpCertDownloadFlashCount();
+  };
+
+  // --------------------------------------------------------------------------
   // CAPTURE_THEME_VARS - Extension wants the webview to capture --vscode-* CSS vars
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.CAPTURE_THEME_VARS] = (_message) => {

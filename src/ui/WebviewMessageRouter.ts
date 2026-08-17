@@ -1486,6 +1486,10 @@ export class WebviewMessageRouter {
       );
     });
 
+    table.set(MESSAGE_TYPES.DOWNLOAD_SERVER_CERT, (_message, ctx) => {
+      void this.settingsSync.handleDownloadServerCert(ctx.postMessage);
+    });
+
     table.set(MESSAGE_TYPES.THEME_VARS_CAPTURED, (message, ctx) => {
       // Only the trusted in-panel VS Code webview may update the shared theme
       // snapshot — it gets spliced into server-rendered HTML served to every

@@ -243,9 +243,11 @@ export const MESSAGE_TYPES = {
   // VS Code-hosted server — Webview → Extension
   REGENERATE_SERVER_TOKEN: "regenerateServerToken", // Request token regeneration
   GENERATE_SERVER_CERT: "generateServerCert", // Request self-signed cert generation → .ctrlyoke/certs/
+  DOWNLOAD_SERVER_CERT: "downloadServerCert", // Save the TLS cert via a native Save dialog (VS Code panel only — no HTTP client to download through)
 
   // VS Code-hosted server — Extension → Webview
   SERVER_CERT_GENERATED: "serverCertGenerated", // Cert generated; settings updated with new paths
+  SERVER_CERT_DOWNLOADED: "serverCertDownloaded", // Save dialog flow finished; saved=false if the user cancelled or the write failed
 
   // VS Code-hosted server — Extension → Webview (theme forwarding)
   CAPTURE_THEME_VARS: "captureThemeVars", // Request webview to capture --vscode-* CSS vars

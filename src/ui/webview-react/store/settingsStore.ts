@@ -220,6 +220,15 @@ interface SettingsState {
   // Incremented each time the token is regenerated — drives the flash without triggering on remount
   tokenFlashCount: number;
 
+  // Whether the last completed cert-download round trip (VS Code panel's
+  // native Save dialog flow) actually wrote a file — false if the user
+  // cancelled the dialog or the write failed.
+  lastCertDownloadSaved: boolean;
+
+  // Incremented each time a cert-download round trip finishes (saved or
+  // cancelled) — drives the download button's pending-clear.
+  certDownloadFlashCount: number;
+
   // Developer dashboard controls (dev builds only)
   dev: DevStatus | null;
   devBuild: DevBuildState;
@@ -290,6 +299,8 @@ interface SettingsActions {
   bumpCertFlashCount: () => void;
   setLastTokenRegenerated: (timestamp: number | null) => void;
   bumpTokenFlashCount: () => void;
+  setLastCertDownloadSaved: (saved: boolean) => void;
+  bumpCertDownloadFlashCount: () => void;
 
   // Developer dashboard
   setDevStatus: (dev: DevStatus | null) => void;
@@ -434,6 +445,8 @@ const initialState: SettingsState = {
   certFlashCount: 0,
   lastTokenRegenerated: null,
   tokenFlashCount: 0,
+  lastCertDownloadSaved: false,
+  certDownloadFlashCount: 0,
   dev: null,
   devBuild: {
     isBuilding: false,
@@ -560,6 +573,10 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       set({ lastTokenRegenerated: timestamp }),
     bumpTokenFlashCount: () =>
       set((s) => ({ tokenFlashCount: s.tokenFlashCount + 1 })),
+    setLastCertDownloadSaved: (saved) =>
+      set({ lastCertDownloadSaved: saved }),
+    bumpCertDownloadFlashCount: () =>
+      set((s) => ({ certDownloadFlashCount: s.certDownloadFlashCount + 1 })),
 
     setDevStatus: (dev) => set({ dev }),
 

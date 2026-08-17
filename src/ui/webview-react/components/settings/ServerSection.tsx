@@ -56,10 +56,18 @@ export function ServerSection({
   const certFlashCount = useSettingsStore((s) => s.certFlashCount);
   const lastTokenRegenerated = useSettingsStore((s) => s.lastTokenRegenerated);
   const tokenFlashCount = useSettingsStore((s) => s.tokenFlashCount);
+  const lastCertDownloadSaved = useSettingsStore(
+    (s) => s.lastCertDownloadSaved
+  );
+  const certDownloadFlashCount = useSettingsStore(
+    (s) => s.certDownloadFlashCount
+  );
   const [certPending, setCertPending] = useState(false);
   const [certFlash, setCertFlash] = useState(false);
   const [tokenPending, setTokenPending] = useState(false);
   const [tokenFlash, setTokenFlash] = useState(false);
+  const [certDownloadPending, setCertDownloadPending] = useState(false);
+  const [certDownloadFlash, setCertDownloadFlash] = useState(false);
 
   useEffect(() => {
     if (certFlashCount === 0) return;
@@ -77,6 +85,18 @@ export function ServerSection({
     return () => clearTimeout(t);
   }, [tokenFlashCount]);
 
+  // The download round trip replies whether the file was actually saved or
+  // the native dialog was cancelled/failed — either way, clear the spinner;
+  // only flash success when a file was actually written.
+  useEffect(() => {
+    if (certDownloadFlashCount === 0) return;
+    setCertDownloadPending(false);
+    if (!lastCertDownloadSaved) return;
+    setCertDownloadFlash(true);
+    const t = setTimeout(() => setCertDownloadFlash(false), 3000);
+    return () => clearTimeout(t);
+  }, [certDownloadFlashCount, lastCertDownloadSaved]);
+
   // Safety fallback: clear a stuck spinner if the extension never replies
   // (e.g. cert generation throws before it can send SERVER_CERT_GENERATED).
   useEffect(() => {
@@ -90,6 +110,12 @@ export function ServerSection({
     const t = setTimeout(() => setTokenPending(false), 10000);
     return () => clearTimeout(t);
   }, [tokenPending]);
+
+  useEffect(() => {
+    if (!certDownloadPending) return;
+    const t = setTimeout(() => setCertDownloadPending(false), 10000);
+    return () => clearTimeout(t);
+  }, [certDownloadPending]);
 
   const certExpired =
     lastCertGenerated != null &&
@@ -140,6 +166,8 @@ export function ServerSection({
     }
   }, [server.tls?.enabled, displayUrl]);
 
+  // Standalone (browser) only: the cert's own /cert endpoint is same-origin
+  // there, so a throwaway link triggers a normal browser download.
   const handleDownloadCert = useCallback(() => {
     if (!certDownloadUrl) return;
     const link = document.createElement("a");
@@ -147,6 +175,13 @@ export function ServerSection({
     link.download = "ctrlyoke.cer";
     link.click();
   }, [certDownloadUrl]);
+
+  // VS Code panel only: the webview can't drive an HTTP download through the
+  // webview host, so ask the extension to save the cert via a native dialog.
+  const handleDownloadCertInPanel = useCallback(() => {
+    setCertDownloadPending(true);
+    vscode.postMessage({ type: MESSAGE_TYPES.DOWNLOAD_SERVER_CERT });
+  }, [vscode]);
 
   const generatedCertLocation =
     activeScope === SETTING_SCOPES.USER
@@ -510,9 +545,13 @@ export function ServerSection({
                   {certDownloadUrl && !certFlash && (
                     <ActionButton
                       label="Download certificate"
+                      pendingLabel="Saving…"
+                      successLabel="Certificate saved"
                       icon="download"
-                      onClick={handleDownloadCert}
-                      title="Download the server certificate for manual installation on iOS"
+                      pending={certDownloadPending}
+                      success={certDownloadFlash}
+                      onClick={handleDownloadCertInPanel}
+                      title="Save the server certificate for manual installation on iOS"
                     />
                   )}
                 </div>
@@ -595,14 +634,12 @@ export function ServerSection({
           <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
             HTTPS / TLS
           </h3>
-          <a
-            href={certDownloadUrl}
-            download="ctrlyoke.cer"
-            className="text-xs text-description-fg hover:text-foreground underline"
+          <ActionButton
+            label="Download certificate"
+            icon="download"
+            onClick={handleDownloadCert}
             title="Download the server certificate for manual installation on iOS"
-          >
-            Download certificate
-          </a>
+          />
           <p className="text-xs text-description-fg italic mt-2">
             <strong>iOS Safari:</strong> depending on iOS version, it may be
             necessary to download the cert and install it via{" "}
