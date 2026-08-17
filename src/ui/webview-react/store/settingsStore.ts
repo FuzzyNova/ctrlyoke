@@ -225,6 +225,11 @@ interface SettingsState {
   devBuild: DevBuildState;
   lastCommitMessageGeneration: CommitMessageGenerationRecord | null;
   worktreeManagement: WorktreeManagementState | null;
+
+  // Round-trip results for worktree management actions/sync/refresh requests,
+  // keyed by the requestId the webview generated when it sent the request.
+  // Consumers clear their own entry once they've displayed it.
+  worktreeActionResults: Record<string, { success: boolean; message: string }>;
 }
 
 /**
@@ -301,6 +306,11 @@ interface SettingsActions {
     record: CommitMessageGenerationRecord | null
   ) => void;
   setWorktreeManagement: (state: WorktreeManagementState | null) => void;
+  setWorktreeActionResult: (
+    requestId: string,
+    result: { success: boolean; message: string }
+  ) => void;
+  clearWorktreeActionResult: (requestId: string) => void;
 
   // Effective value resolution (workflow > global)
   getEffectiveHarness: () => HarnessId;
@@ -434,6 +444,7 @@ const initialState: SettingsState = {
   },
   lastCommitMessageGeneration: null,
   worktreeManagement: null,
+  worktreeActionResults: {},
 };
 
 export const useSettingsStore = create<SettingsState & SettingsActions>(
@@ -592,6 +603,20 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     setLastCommitMessageGeneration: (record) =>
       set({ lastCommitMessageGeneration: record }),
     setWorktreeManagement: (state) => set({ worktreeManagement: state }),
+    setWorktreeActionResult: (requestId, result) =>
+      set((state) => ({
+        worktreeActionResults: {
+          ...state.worktreeActionResults,
+          [requestId]: result,
+        },
+      })),
+    clearWorktreeActionResult: (requestId) =>
+      set((state) => {
+        if (!(requestId in state.worktreeActionResults)) return state;
+        const next = { ...state.worktreeActionResults };
+        delete next[requestId];
+        return { worktreeActionResults: next };
+      }),
 
     // ============================================================================
     // EFFECTIVE VALUE RESOLUTION (Workflow > Global)

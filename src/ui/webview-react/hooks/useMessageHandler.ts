@@ -554,7 +554,23 @@ export function createMessageHandlers(
   };
 
   handlers[MESSAGE_TYPES.WORKTREE_MANAGEMENT_STATE] = (message) => {
-    useSettingsStore.getState().setWorktreeManagement(message.state ?? null);
+    const store = useSettingsStore.getState();
+    store.setWorktreeManagement(message.state ?? null);
+    if (message.requestId) {
+      store.setWorktreeActionResult(message.requestId, {
+        success: true,
+        message: "Refreshed.",
+      });
+    }
+  };
+
+  handlers[MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT] = (message) => {
+    if (message.requestId) {
+      useSettingsStore.getState().setWorktreeActionResult(message.requestId, {
+        success: Boolean(message.success),
+        message: message.message ?? "",
+      });
+    }
   };
 
   // --------------------------------------------------------------------------

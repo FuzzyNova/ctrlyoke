@@ -1186,6 +1186,8 @@ export interface WorktreeMergeResultMessage {
 export interface WorktreeManagementStateMessage {
   type: typeof MESSAGE_TYPES.WORKTREE_MANAGEMENT_STATE;
   state: WorktreeManagementState;
+  /** Echoed back when this state was sent in reply to a specific request, so the requester can resolve its own pending/spinner UI. */
+  requestId?: string;
 }
 
 export interface WorktreeManagementLeaseOwner {
@@ -1231,6 +1233,8 @@ export interface WorktreeManagementState {
 export interface RequestWorktreeManagementStateMessage {
   type: typeof MESSAGE_TYPES.REQUEST_WORKTREE_MANAGEMENT_STATE;
   refresh?: boolean;
+  /** Present when a UI control wants to correlate the reply for its own pending/spinner state. */
+  requestId?: string;
 }
 
 export interface OpenWorktreeOwnerMessage {
@@ -1244,11 +1248,23 @@ export interface WorktreeManagementActionMessage {
   worktreePath?: string;
   branchName?: string;
   confirmed?: boolean;
+  /** Echoed back on WorktreeManagementActionResultMessage so the requesting button can resolve its pending state. */
+  requestId?: string;
 }
 
 export interface SyncNamedWorktreeMessage {
   type: typeof MESSAGE_TYPES.SYNC_NAMED_WORKTREE;
   worktreePath: string;
+  /** Echoed back on WorktreeManagementActionResultMessage so the requesting button can resolve its pending state. */
+  requestId?: string;
+}
+
+/** Extension -> Webview: round-trip result for a worktree management action, sync, or refresh request. */
+export interface WorktreeManagementActionResultMessage {
+  type: typeof MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT;
+  requestId: string;
+  success: boolean;
+  message: string;
 }
 
 /**
@@ -2207,6 +2223,7 @@ export type IncomingMessage =
   | McpRegistrySearchResultMessage
   | GlobalSettingsLoadedMessage
   | WorktreeManagementStateMessage
+  | WorktreeManagementActionResultMessage
   | GlobalSettingUpdatedMessage
   | NotificationEventMessage
   | UserFeedbackMessage

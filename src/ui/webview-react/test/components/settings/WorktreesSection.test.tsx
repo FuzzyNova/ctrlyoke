@@ -137,6 +137,7 @@ describe("WorktreesSection", () => {
     expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.SYNC_NAMED_WORKTREE,
       worktreePath: "C:/repo.worktrees/bug-fix",
+      requestId: expect.any(String),
     });
   });
 

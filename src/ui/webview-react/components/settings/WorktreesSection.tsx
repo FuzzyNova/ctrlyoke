@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   FullGlobalSettings,
   SettingSource,
@@ -31,15 +31,156 @@ function formatAge(ageMs: number | undefined): string {
   return `${Math.max(1, Math.floor(ageMs / 60_000))}m old`;
 }
 
+let requestIdCounter = 0;
+function generateRequestId(key: string): string {
+  requestIdCounter += 1;
+  return `${key}:${Date.now()}:${requestIdCounter}`;
+}
+
+interface ActionFeedback {
+  status: "success" | "error";
+  message: string;
+}
+
+/**
+ * Tracks the round trip for worktree management buttons: a click marks a key
+ * "pending" (spinner, disabled), and once the extension's reply lands in
+ * `settingsStore.worktreeActionResults` (correlated by requestId), the button
+ * flashes success/error text below itself and clears after a delay.
+ * `begin(key, count)` supports fan-out actions like bulk cleanup, which fire
+ * one request per branch but resolve as a single button state.
+ */
+function useWorktreeActionFeedback() {
+  const results = useSettingsStore((state) => state.worktreeActionResults);
+  const clearResult = useSettingsStore((state) => state.clearWorktreeActionResult);
+  const [pending, setPending] = useState<Record<string, string[]>>({});
+  const [feedback, setFeedback] = useState<Record<string, ActionFeedback>>({});
+  const timersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  useEffect(() => {
+    for (const [key, requestIds] of Object.entries(pending)) {
+      const collected = requestIds.map((id) => results[id]);
+      if (collected.some((result) => !result)) continue;
+
+      const resolved = collected as { success: boolean; message: string }[];
+      const succeeded = resolved.filter((result) => result.success).length;
+      const success = succeeded === resolved.length;
+      const message =
+        resolved.length === 1
+          ? resolved[0].message
+          : success
+            ? `${succeeded} of ${resolved.length} succeeded.`
+            : `${succeeded} of ${resolved.length} succeeded — ${resolved
+                .filter((result) => !result.success)
+                .map((result) => result.message)
+                .join(" ")}`;
+
+      setFeedback((prev) => ({
+        ...prev,
+        [key]: { status: success ? "success" : "error", message },
+      }));
+      setPending((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      for (const id of requestIds) clearResult(id);
+
+      clearTimeout(timersRef.current[key]);
+      timersRef.current[key] = setTimeout(
+        () =>
+          setFeedback((prev) => {
+            const next = { ...prev };
+            delete next[key];
+            return next;
+          }),
+        success ? 4000 : 8000
+      );
+    }
+  }, [results, pending, clearResult]);
+
+  useEffect(
+    () => () => {
+      for (const timer of Object.values(timersRef.current)) clearTimeout(timer);
+    },
+    []
+  );
+
+  const begin = useCallback((key: string, count = 1): string[] => {
+    const requestIds = Array.from({ length: count }, () => generateRequestId(key));
+    clearTimeout(timersRef.current[key]);
+    setPending((prev) => ({ ...prev, [key]: requestIds }));
+    setFeedback((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    return requestIds;
+  }, []);
+
+  const isPending = useCallback((key: string) => key in pending, [pending]);
+  const getFeedback = useCallback(
+    (key: string): ActionFeedback | undefined => feedback[key],
+    [feedback]
+  );
+
+  return { begin, isPending, getFeedback };
+}
+
+type WorktreeActionFeedback = ReturnType<typeof useWorktreeActionFeedback>;
+
+function ActionButton({
+  label,
+  pendingLabel,
+  onClick,
+  disabled,
+  pending,
+  feedback,
+}: {
+  label: string;
+  pendingLabel?: string;
+  onClick: () => void;
+  disabled?: boolean;
+  pending: boolean;
+  feedback?: ActionFeedback;
+}) {
+  return (
+    <div className="flex flex-col items-start gap-0.5">
+      <button
+        type="button"
+        className="fp-select-trigger text-xs inline-flex items-center gap-1"
+        disabled={disabled || pending}
+        onClick={onClick}
+      >
+        {pending && (
+          <i className="codicon codicon-loading codicon-modifier-spin text-xxs" />
+        )}
+        {pending ? (pendingLabel ?? label) : label}
+      </button>
+      {feedback && (
+        <span
+          className={`text-xxs ${feedback.status === "success" ? "text-indicator-success" : "text-error-fg"}`}
+          role="status"
+        >
+          {feedback.message}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function sendAction(
   vscode: ReturnType<typeof useVsCodeApi>,
   action: string,
+  requestId: string,
   entry?: WorktreeManagementEntry,
   confirmed = false
 ): void {
   vscode.postMessage({
     type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION,
     action,
+    requestId,
     ...(entry?.worktreePath ? { worktreePath: entry.worktreePath } : {}),
     ...(entry?.branchName ? { branchName: entry.branchName } : {}),
     confirmed,
@@ -55,6 +196,7 @@ export function WorktreesSection({
 }: Props) {
   const vscode = useVsCodeApi();
   const management = useSettingsStore((state) => state.worktreeManagement);
+  const feedback = useWorktreeActionFeedback();
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const sources = settings.sources as Record<string, SettingSource>;
   const configuredRoot = settings.settings.worktrees.root.trim();
@@ -82,16 +224,31 @@ export function WorktreesSection({
     setSelectedBranches(safeBranches);
   }, [safeBranches]);
 
-  const refresh = () =>
-    vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_WORKTREE_MANAGEMENT_STATE, refresh: true });
+  const refresh = () => {
+    const [requestId] = feedback.begin("refresh");
+    vscode.postMessage({
+      type: MESSAGE_TYPES.REQUEST_WORKTREE_MANAGEMENT_STATE,
+      refresh: true,
+      requestId,
+    });
+  };
 
   const bulkCleanup = () => {
-    for (const branchName of selectedBranches) {
-      const entry = management?.entries.find(
-        (candidate) => candidate.branchName === branchName
-      );
-            if (entry) sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH, entry);
-    }
+    const targets = selectedBranches
+      .map((branchName) =>
+        management?.entries.find((candidate) => candidate.branchName === branchName)
+      )
+      .filter((entry): entry is WorktreeManagementEntry => Boolean(entry));
+    if (!targets.length) return;
+    const requestIds = feedback.begin("bulk-cleanup", targets.length);
+    targets.forEach((entry, index) =>
+      sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH, requestIds[index], entry)
+    );
+  };
+
+  const prune = () => {
+    const [requestId] = feedback.begin("prune");
+    sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.PRUNE, requestId, undefined, true);
   };
 
   return (
@@ -143,12 +300,18 @@ export function WorktreesSection({
       </div>
 
       <section aria-labelledby="manage-worktrees-heading" className="border-t border-panel-border pt-4">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-start justify-between gap-2">
           <div>
             <h4 id="manage-worktrees-heading" className="text-sm font-semibold text-foreground">Manage Worktrees</h4>
             <p className="text-xs text-description-fg">Ownership, leases, branches, and retention actions.</p>
           </div>
-          <button type="button" className="fp-select-trigger text-xs" onClick={refresh}>Refresh</button>
+          <ActionButton
+            label="Refresh"
+            pendingLabel="Refreshing…"
+            pending={feedback.isPending("refresh")}
+            feedback={feedback.getFeedback("refresh")}
+            onClick={refresh}
+          />
         </div>
 
         {management?.entries.length ? (
@@ -158,6 +321,7 @@ export function WorktreesSection({
                 key={`${entry.worktreePath}:${entry.branchName ?? "detached"}`}
                 entry={entry}
                 vscode={vscode}
+                feedback={feedback}
                 sourceCheckoutRoot={management.sourceCheckoutRoot}
                 sourceCheckoutBranch={management.sourceCheckoutBranch}
               />
@@ -168,12 +332,21 @@ export function WorktreesSection({
         )}
 
         <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" className="fp-select-trigger text-xs" disabled={!selectedBranches.length} onClick={bulkCleanup}>
-            Clean up safe merged branches ({selectedBranches.length})
-          </button>
-          <button type="button" className="fp-select-trigger text-xs" onClick={() => vscode.postMessage({ type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION, action: WORKTREE_MANAGEMENT_ACTIONS.PRUNE, confirmed: true })}>
-            Prune stale Git entries
-          </button>
+          <ActionButton
+            label={`Clean up safe merged branches (${selectedBranches.length})`}
+            pendingLabel="Cleaning up…"
+            disabled={!selectedBranches.length}
+            pending={feedback.isPending("bulk-cleanup")}
+            feedback={feedback.getFeedback("bulk-cleanup")}
+            onClick={bulkCleanup}
+          />
+          <ActionButton
+            label="Prune stale Git entries"
+            pendingLabel="Pruning…"
+            pending={feedback.isPending("prune")}
+            feedback={feedback.getFeedback("prune")}
+            onClick={prune}
+          />
         </div>
         <p className="mt-2 text-xs text-description-fg">
           Safe cleanup preselects only ctrlyoke-owned, inactive branches proven merged into their recorded target. Squash and rebase merges stay explicit.
@@ -186,24 +359,49 @@ export function WorktreesSection({
 function WorktreeRow({
   entry,
   vscode,
+  feedback,
   sourceCheckoutRoot,
   sourceCheckoutBranch,
 }: {
   entry: WorktreeManagementEntry;
   vscode: ReturnType<typeof useVsCodeApi>;
+  feedback: WorktreeActionFeedback;
   sourceCheckoutRoot?: string;
   sourceCheckoutBranch?: string | null;
 }) {
+  const rowKey = (suffix: string) => `${entry.worktreePath}::${suffix}`;
   const owner = entry.inUse
     ? `In use — ${entry.leaseOwners.map((item) => `${item.lease.workflowKey}/${item.lease.runRef}`).join(", ")}`
     : entry.ownership === "managed" ? "ctrlyoke-owned" : "user-owned";
+  const retry = () => {
+    const [requestId] = feedback.begin(rowKey("retry"));
+    vscode.postMessage({
+      type: MESSAGE_TYPES.REQUEST_WORKTREE_MANAGEMENT_STATE,
+      refresh: true,
+      requestId,
+    });
+  };
   const remove = () => {
     if (!window.confirm(`Remove worktree ${entry.worktreePath}?`)) return;
-    sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.REMOVE, entry, true);
+    const [requestId] = feedback.begin(rowKey("remove"));
+    sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.REMOVE, requestId, entry, true);
   };
   const forceRemove = () => {
     if (!window.confirm(`Force remove ${entry.worktreePath}? Uncommitted work may be lost.`)) return;
-    sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.FORCE_REMOVE, entry, true);
+    const [requestId] = feedback.begin(rowKey("force-remove"));
+    sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.FORCE_REMOVE, requestId, entry, true);
+  };
+  const cleanupBranch = (confirmed: boolean) => {
+    const [requestId] = feedback.begin(rowKey("cleanup-branch"));
+    sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH, requestId, entry, confirmed);
+  };
+  const deleteBranchWithConfirm = () => {
+    if (!window.confirm(`Delete branch ${entry.branchName}? This cannot be undone by ctrlyoke.`)) return;
+    cleanupBranch(true);
+  };
+  const repair = () => {
+    const [requestId] = feedback.begin(rowKey("repair"));
+    sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.REPAIR, requestId, entry);
   };
   const normalizePath = (value: string) => value.replace(/\\/g, "/").toLowerCase().replace(/\/$/, "");
   const isSourceCheckout =
@@ -222,9 +420,11 @@ function WorktreeRow({
       )
     )
       return;
+    const [requestId] = feedback.begin(rowKey("sync"));
     vscode.postMessage({
       type: MESSAGE_TYPES.SYNC_NAMED_WORKTREE,
       worktreePath: entry.worktreePath,
+      requestId,
     });
   };
   return (
@@ -240,15 +440,71 @@ function WorktreeRow({
       {entry.divergence && <div className="mt-1 text-description-fg">{entry.branchName} — {entry.divergence.ahead} ahead, {entry.divergence.behind} behind {entry.divergence.comparisonLabel}</div>}
       <div className="mt-2 flex flex-wrap gap-2">
         {entry.inUse && entry.leaseOwners[0] && <>
-          <button type="button" className="fp-select-trigger text-xs" onClick={() => vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_WORKTREE_MANAGEMENT_STATE, refresh: true })}>Retry</button>
+          <ActionButton
+            label="Retry"
+            pendingLabel="Retrying…"
+            pending={feedback.isPending(rowKey("retry"))}
+            feedback={feedback.getFeedback(rowKey("retry"))}
+            onClick={retry}
+          />
           <button type="button" className="fp-select-trigger text-xs" onClick={() => vscode.postMessage({ type: MESSAGE_TYPES.OPEN_WORKTREE_OWNER, stateRoot: entry.leaseOwners[0].lease.stateRoot })}>Open owning workspace</button>
         </>}
-        {canSync && <button type="button" className="fp-select-trigger text-xs" onClick={sync}>Sync with {sourceCheckoutBranch ?? "checkout"}</button>}
-        {entry.branchCleanupEligible && entry.branchName && <button type="button" className="fp-select-trigger text-xs" onClick={() => sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH, entry)}>Delete merged branch</button>}
-        {entry.ownership === "managed" && entry.branchName && entry.branchState === "present" && !entry.branchCleanupEligible && !entry.inUse && !entry.stale && <button type="button" className="fp-select-trigger text-xs" onClick={() => { if (window.confirm(`Delete branch ${entry.branchName}? This cannot be undone by ctrlyoke.`)) sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH, entry, true); }}>Delete branch…</button>}
-        {entry.ownership === "managed" && entry.directoryState !== "removed" && <button type="button" className="fp-select-trigger text-xs" disabled={entry.inUse} onClick={remove}>Remove</button>}
-        {entry.ownership === "managed" && entry.directoryState !== "removed" && <button type="button" className="fp-select-trigger text-xs" disabled={entry.inUse} onClick={forceRemove}>Force remove</button>}
-        {entry.stale && <button type="button" className="fp-select-trigger text-xs" onClick={() => sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.REPAIR, entry)}>Repair entry</button>}
+        {canSync && (
+          <ActionButton
+            label={`Sync with ${sourceCheckoutBranch ?? "checkout"}`}
+            pendingLabel="Syncing…"
+            pending={feedback.isPending(rowKey("sync"))}
+            feedback={feedback.getFeedback(rowKey("sync"))}
+            onClick={sync}
+          />
+        )}
+        {entry.branchCleanupEligible && entry.branchName && (
+          <ActionButton
+            label="Delete merged branch"
+            pendingLabel="Deleting…"
+            pending={feedback.isPending(rowKey("cleanup-branch"))}
+            feedback={feedback.getFeedback(rowKey("cleanup-branch"))}
+            onClick={() => cleanupBranch(false)}
+          />
+        )}
+        {entry.ownership === "managed" && entry.branchName && entry.branchState === "present" && !entry.branchCleanupEligible && !entry.inUse && !entry.stale && (
+          <ActionButton
+            label="Delete branch…"
+            pendingLabel="Deleting…"
+            pending={feedback.isPending(rowKey("cleanup-branch"))}
+            feedback={feedback.getFeedback(rowKey("cleanup-branch"))}
+            onClick={deleteBranchWithConfirm}
+          />
+        )}
+        {entry.ownership === "managed" && entry.directoryState !== "removed" && (
+          <ActionButton
+            label="Remove"
+            pendingLabel="Removing…"
+            disabled={entry.inUse}
+            pending={feedback.isPending(rowKey("remove"))}
+            feedback={feedback.getFeedback(rowKey("remove"))}
+            onClick={remove}
+          />
+        )}
+        {entry.ownership === "managed" && entry.directoryState !== "removed" && (
+          <ActionButton
+            label="Force remove"
+            pendingLabel="Force removing…"
+            disabled={entry.inUse}
+            pending={feedback.isPending(rowKey("force-remove"))}
+            feedback={feedback.getFeedback(rowKey("force-remove"))}
+            onClick={forceRemove}
+          />
+        )}
+        {entry.stale && (
+          <ActionButton
+            label="Repair entry"
+            pendingLabel="Repairing…"
+            pending={feedback.isPending(rowKey("repair"))}
+            feedback={feedback.getFeedback(rowKey("repair"))}
+            onClick={repair}
+          />
+        )}
       </div>
     </div>
   );
