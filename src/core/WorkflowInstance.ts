@@ -1013,6 +1013,11 @@ export class WorkflowInstance {
     return this.executionRunRef;
   }
 
+  /** Whether this resident instance still owns its lineage runner lock. */
+  ownsRunnerLock(): boolean {
+    return this.currentLockOwnerToken !== undefined;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // File loading
   // ─────────────────────────────────────────────────────────────────────────
@@ -4067,8 +4072,8 @@ export class WorkflowInstance {
       // still running, keep the lease/PTY alive for a possible follow-up prompt
       // instead of tearing everything down, mirroring how a pause preserves the
       // reservation. Only the lease/lock stay reserved this way; the per-run
-      // helpers below still exist to dispose/discard once the user actually
-      // stops the run or the process exits and the lease goes stale.
+      // callback below disposes the integration and releases both reservations
+      // once the user closes the last retained terminal or the process exits.
       const namedWorktreeInjectRetention =
         !paused &&
         this.activeWorktree?.mode === "named" &&
@@ -4143,7 +4148,10 @@ export class WorkflowInstance {
             void this.cleanupRetainedIntegrationArtifacts(
               harnessKey,
               execIntegration
-            ).finally(() => execIntegration.dispose());
+            ).finally(() => {
+              execIntegration.dispose();
+              void this.releaseNamedWorktreeRetentionAfterPtyExit();
+            });
           });
         } else {
           // A worktree-targeted terminal run cannot park a PTY or watcher:
@@ -4293,6 +4301,54 @@ export class WorkflowInstance {
       this.resolveExecutionSettled?.();
       this.resolveExecutionSettled = undefined;
     }
+  }
+
+  /**
+   * A completed named-worktree run can keep its PTY, execution-root lease, and
+   * lineage lock alive for inject reuse. Once the last retained PTY exits,
+   * those reservations no longer protect anything and must be released
+   * immediately. In particular, leaving the runner heartbeat alive makes this
+   * instance's own completed run look like a conflicting external executor.
+   */
+  private async releaseNamedWorktreeRetentionAfterPtyExit(): Promise<void> {
+    const status = this.workflowRuntime.status;
+    const executionStillOwnsReservation =
+      status === EXECUTION_STATES.RUNNING ||
+      status === EXECUTION_STATES.PAUSING ||
+      status === EXECUTION_STATES.PAUSED ||
+      status === EXECUTION_STATES.CANCELLING;
+    const worktree = this.activeWorktree;
+    if (
+      executionStillOwnsReservation ||
+      this.liveInjectIntegrations.size > 0 ||
+      worktree?.mode !== WORKTREE_MODES.NAMED
+    ) {
+      return;
+    }
+
+    this.worktreeManager.releaseRuntimeTrust(worktree);
+    this.activeWorktree = undefined;
+    if (this.heartbeatInterval !== undefined) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = undefined;
+    }
+
+    const lease = this.executionLease;
+    this.executionLease = undefined;
+    await lease
+      ?.release()
+      .catch((error) =>
+        Log.warn(
+          `[inst:${this.id.slice(0, 8)}] Failed to release retained named-worktree execution lease:`,
+          error
+        )
+      );
+    await this.releaseRunnerLock().catch((error) =>
+      Log.warn(
+        `[inst:${this.id.slice(0, 8)}] Failed to release retained named-worktree runner lock:`,
+        error
+      )
+    );
   }
 
   private async cleanupRetainedIntegrationArtifacts(
