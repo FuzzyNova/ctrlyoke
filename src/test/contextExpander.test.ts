@@ -182,6 +182,66 @@ suite("ContextExpander.expandContextSplit", () => {
       assert.deepStrictEqual(result.directFileRefs, [sourcePath]);
     });
 
+    test("renders the same absolute source path in excerpts and sanitized references", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = freshWorkspace();
+      const sourcePath = writeRepositoryFile(sourceRoot, "runtime/source.log");
+      const reference = "#selection:runtime/source.log:1-1";
+
+      const expander = new ContextExpander({
+        workspaceRoot: executionRoot,
+        additionalTrustedRoots: [executionRoot],
+        sourceCheckoutRoot: sourceRoot,
+        executionCheckoutRoot: executionRoot,
+      });
+      const expanded = await expander.expandContextSplit(reference);
+      const sanitized = await expander.sanitizeReferences(reference);
+
+      assert.ok(
+        expanded.excerptBlocks.includes(
+          `Excerpt from ${sourcePath}, lines 1 to 1`
+        )
+      );
+      assert.strictEqual(sanitized, `#selection:"${sourcePath}":1-1`);
+      assert.ok(
+        expanded.excerptBlocks.includes(sourcePath),
+        "the excerpt must name the same absolute source path as sanitizeReferences"
+      );
+      assert.ok(
+        sanitized.includes(sourcePath),
+        "sanitizeReferences must name the same absolute source path as the excerpt"
+      );
+    });
+
+    test("blocks a source-only ignored directory and reports its token", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = freshWorkspace();
+      const sourceDirectory = path.join(sourceRoot, "runtime");
+      fs.mkdirSync(sourceDirectory, { recursive: true });
+      fs.writeFileSync(path.join(sourceDirectory, "source.log"), "source\n");
+
+      const expander = new ContextExpander({
+        workspaceRoot: executionRoot,
+        additionalTrustedRoots: [executionRoot],
+        sourceCheckoutRoot: sourceRoot,
+        executionCheckoutRoot: executionRoot,
+      });
+      const result = await expander.expandContextSplit(
+        "Review @runtime/ before continuing."
+      );
+
+      assert.deepStrictEqual(result.directFileRefs, []);
+      assert.strictEqual(result.excerptBlocks, "");
+      assert.ok(
+        result.skippedReferences.some(
+          (ref) =>
+            ref.ref === "runtime/" &&
+            ref.reason.includes("@runtime/") &&
+            ref.reason.includes("blocked")
+        )
+      );
+    });
+
     test("keeps a tracked-but-absent source file unresolved", async () => {
       const sourceRoot = createGitRepository();
       const executionRoot = freshWorkspace();
@@ -1241,6 +1301,51 @@ suite("ContextExpander.sanitizeReferences", () => {
       ]),
       [[secondFile, "Foo", "class"]],
       "rewritten #sym.class: token must round-trip with its kind"
+    );
+  });
+
+  test("rewrites a source-store #sym: ref while preserving kind, symbol, and range", async () => {
+    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-source-"));
+    const sourceRoot = secondRoot;
+    const executionRoot = freshWorkspace();
+    fs.mkdirSync(path.join(sourceRoot, "runtime"), { recursive: true });
+    const sourcePath = path.join(sourceRoot, "runtime", "source.ts");
+    fs.writeFileSync(sourcePath, "export class Foo {}\n");
+    fs.writeFileSync(path.join(sourceRoot, ".gitignore"), "runtime/\n");
+    execFileSync("git", ["-C", sourceRoot, "init", "-q"]);
+    execFileSync("git", ["-C", sourceRoot, "add", ".gitignore"]);
+    execFileSync("git", [
+      "-C",
+      sourceRoot,
+      "-c",
+      "user.name=ctrlyoke-test",
+      "-c",
+      "user.email=ctrlyoke-test@example.com",
+      "commit",
+      "-m",
+      "initial commit",
+    ]);
+
+    const expander = new ContextExpander({
+      workspaceRoot: executionRoot,
+      additionalTrustedRoots: [executionRoot],
+      sourceCheckoutRoot: sourceRoot,
+      executionCheckoutRoot: executionRoot,
+    });
+    const result = await expander.sanitizeReferences(
+      "Review #sym.class:runtime/source.ts:Foo:1-1."
+    );
+
+    assert.strictEqual(result, `Review #sym.class:"${sourcePath}":Foo:1-1.`);
+    assert.deepStrictEqual(
+      parseSymbolReferences(result).map((ref) => [
+        ref.path,
+        ref.symbolKind,
+        ref.symbolName,
+        ref.startLine,
+        ref.endLine,
+      ]),
+      [[sourcePath, "class", "Foo", 1, 1]]
     );
   });
 

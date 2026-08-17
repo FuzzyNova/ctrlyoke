@@ -118,6 +118,7 @@ export class ContextExpander {
     string,
     ReferencePathResolution
   >();
+  private readonly blockedSourceRuntimeDirectories = new Set<string>();
   private readonly preparedSourceRuntimeReferences = new Set<string>();
   // Track attachment IDs to prevent duplicates
   private attachmentIds = new Set<string>();
@@ -322,6 +323,21 @@ export class ContextExpander {
       }
 
       for (const ref of fileReferences) {
+        if (
+          ref.isDirectory &&
+          this.blockedSourceRuntimeDirectories.has(ref.path)
+        ) {
+          const token =
+            ref.startOffset !== undefined && ref.endOffset !== undefined
+              ? promptText.slice(ref.startOffset, ref.endOffset)
+              : `@${ref.path}`;
+          skippedReferences.push({
+            ref: ref.path,
+            reason: `Directory reference "${token}" resolves to the source checkout runtime store and was blocked`,
+          });
+          continue;
+        }
+
         let attachmentId: string;
         try {
           attachmentId = this.getAttachmentId(ref);
@@ -526,8 +542,13 @@ export class ContextExpander {
     // Workflow-relative paths must leave ctrlyoke as absolute paths because
     // harness CLIs run from the workspace root, not the workflow directory.
     // Absolute output is unambiguous even when the workflow lives elsewhere.
+    // Read-in-place source artifacts must leave ctrlyoke as absolute paths:
+    // unlike copied references, nothing was placed at the workspace-relative
+    // path for the harness to open.
     const displayPath =
-      resolution.base === "workflow" || this.effectiveAbsolute
+      resolution.base === "workflow" ||
+      resolution.base === "sourceRuntimeStore" ||
+      this.effectiveAbsolute
         ? absolutePath
         : ref.path;
     const quotedPath = displayPath.includes(" ")
@@ -538,7 +559,11 @@ export class ContextExpander {
     if (isExcerptRef) {
       // #selection:/#sym: never carry an @ prefix, and only the resolved
       // path (not the surrounding syntax) can change.
-      if (!this.effectiveAbsolute && resolution.base !== "workflow") {
+      if (
+        !this.effectiveAbsolute &&
+        resolution.base !== "workflow" &&
+        resolution.base !== "sourceRuntimeStore"
+      ) {
         return null;
       }
       // Not `quotedPath`: these are colon-delimited fields, and effectiveAbsolute
@@ -576,10 +601,7 @@ export class ContextExpander {
 
     const candidatePathByReference = new Map<string, string>();
     for (const ref of refs) {
-      if (
-        ref.isDirectory ||
-        this.preparedSourceRuntimeReferences.has(ref.path)
-      ) {
+      if (this.preparedSourceRuntimeReferences.has(ref.path)) {
         continue;
       }
       try {
@@ -614,10 +636,17 @@ export class ContextExpander {
     for (const [referencePath, candidatePath] of candidatePathByReference) {
       const absolutePath = resolutions.get(candidatePath);
       if (absolutePath) {
-        this.sourceRuntimeResolutions.set(referencePath, {
-          absolutePath,
-          base: "sourceRuntimeStore",
-        });
+        const reference = refs.find((ref) => ref.path === referencePath);
+        if (reference?.isDirectory) {
+          // Directory refs are never read from the source runtime store: a
+          // flat shared store must not sweep unrelated runtime artifacts.
+          this.blockedSourceRuntimeDirectories.add(referencePath);
+        } else {
+          this.sourceRuntimeResolutions.set(referencePath, {
+            absolutePath,
+            base: "sourceRuntimeStore",
+          });
+        }
       }
     }
     for (const referencePath of candidatePathByReference.keys()) {
@@ -838,7 +867,11 @@ export class ContextExpander {
       `[ContextExpander] Read ${filePath} (${sizeKb} KB) in ${elapsed}ms`
     );
 
-    const displayPath = this.effectiveAbsolute ? absolutePath : filePath;
+    const resolution = this.resolveReference(filePath);
+    const displayPath =
+      resolution.base === "sourceRuntimeStore" || this.effectiveAbsolute
+        ? absolutePath
+        : filePath;
 
     // If no line range, attach entire file
     if (!startLine || !endLine) {

@@ -5,7 +5,7 @@ import { isPathWithinDirectory } from "./PathSecurity";
 import { getGitIgnoredPaths } from "./GitUtils";
 
 /**
- * Find references that exist only in the source checkout as ignored files.
+ * Find references that exist only in the source checkout as ignored artifacts.
  *
  * The returned map preserves each candidate reference as its key and stores
  * the absolute source-side path that may be read by ctrlyoke. A missing or
@@ -59,40 +59,40 @@ export async function resolveSourceRuntimeArtifacts(
     return new Map<string, string>();
   }
 
-  const existingSourceFiles = await Promise.all(
+  const existingSourceArtifacts = await Promise.all(
     sourceCandidates.map(async (candidate) => ({
       candidate,
-      isRegularFile: await isRegularFile(candidate.sourcePath),
+      exists: await pathExists(candidate.sourcePath),
     }))
   );
-  const regularSourceFiles = existingSourceFiles
-    .filter(({ isRegularFile }) => isRegularFile)
+  const existingArtifacts = existingSourceArtifacts
+    .filter(({ exists }) => exists)
     .map(({ candidate }) => candidate);
-  const containedSourceFiles = await Promise.all(
-    regularSourceFiles.map(async (candidate) => ({
+  const containedSourceArtifacts = await Promise.all(
+    existingArtifacts.map(async (candidate) => ({
       candidate,
       realSourcePath: await realpathOrUndefined(candidate.sourcePath),
     }))
   );
-  const safeSourceFiles = containedSourceFiles.filter(
+  const safeSourceArtifacts = containedSourceArtifacts.filter(
     ({ realSourcePath }) =>
       realSourcePath !== undefined &&
       isPathWithinDirectory(realSourcePath, realSourceRoot)
   );
-  if (safeSourceFiles.length === 0) {
+  if (safeSourceArtifacts.length === 0) {
     return new Map<string, string>();
   }
 
   const ignoredPaths = await getGitIgnoredPaths(
     sourceRoot,
-    safeSourceFiles.map(({ candidate }) => candidate.sourcePath)
+    safeSourceArtifacts.map(({ candidate }) => candidate.sourcePath)
   );
   const ignoredPathKeys = new Set(
     Array.from(ignoredPaths, (ignoredPath) => foldPathForCompare(ignoredPath))
   );
 
   return new Map(
-    safeSourceFiles
+    safeSourceArtifacts
       .filter(({ candidate }) =>
         ignoredPathKeys.has(foldPathForCompare(candidate.sourcePath))
       )
@@ -110,14 +110,6 @@ async function pathExists(candidatePath: string): Promise<boolean> {
   try {
     await fs.stat(candidatePath);
     return true;
-  } catch {
-    return false;
-  }
-}
-
-async function isRegularFile(candidatePath: string): Promise<boolean> {
-  try {
-    return (await fs.stat(candidatePath)).isFile();
   } catch {
     return false;
   }
