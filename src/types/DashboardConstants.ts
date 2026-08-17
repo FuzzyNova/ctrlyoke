@@ -625,6 +625,13 @@ export const HARNESS_IDS = {
   ANTIGRAVITY_CLI: "antigravity-cli",
 } as const;
 
+/** Claude tool names used by provider-specific execution state tracking. */
+export const CLAUDE_TOOL_NAMES = {
+  AGENT: "Agent",
+  MONITOR: "Monitor",
+  TASK_STOP: "TaskStop",
+} as const;
+
 /** Metrics available in the workspace harness-share breakdown. */
 export const HARNESS_SHARE_METRICS = {
   AI_STEPS: "ai-steps",
@@ -1980,6 +1987,8 @@ export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
 export type FinalStepPhase =
   (typeof FINAL_STEP_PHASES)[keyof typeof FINAL_STEP_PHASES];
 export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
+export type ClaudeToolName =
+  (typeof CLAUDE_TOOL_NAMES)[keyof typeof CLAUDE_TOOL_NAMES];
 export type HarnessShareMetric =
   (typeof HARNESS_SHARE_METRICS)[keyof typeof HARNESS_SHARE_METRICS];
 export type TokenTotalConfidence =

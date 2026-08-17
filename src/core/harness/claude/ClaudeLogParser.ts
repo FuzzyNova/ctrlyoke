@@ -21,6 +21,7 @@ import {
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
+  CLAUDE_TOOL_NAMES,
   COMPACTION_TRIGGERS,
   HARNESS_IDS,
   TOKEN_TOTAL_CONFIDENCE,
@@ -110,6 +111,8 @@ interface ClaudeProviderEvent extends BaseCliEvent {
   modelUsage?: Record<string, ProviderModelUsage>;
 }
 
+type UnconfirmedAsyncLaunch = (typeof CLAUDE_TOOL_NAMES)["AGENT" | "MONITOR"];
+
 export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   /**
    * Workspace root directory — set by CliIntegration after construction.
@@ -130,7 +133,13 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * calls without that field and Monitor calls report their async status only
    * in the correlated tool result.
    */
-  private unconfirmedAsyncLaunches = new Map<string, "Agent" | "Monitor">();
+  private unconfirmedAsyncLaunches = new Map<string, UnconfirmedAsyncLaunch>();
+
+  /** Claude task id -> the tool_use id whose launch blocks completion. */
+  private backgroundTaskLaunchToolUseIds = new Map<string, string>();
+
+  /** TaskStop tool_use id -> the Claude task id it is attempting to stop. */
+  private pendingTaskStopTargets = new Map<string, string>();
 
   /**
    * Set the workspace root directory for session log discovery.
@@ -651,6 +660,30 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         this.backgroundFollowUpState.remove(toolUseId);
       }
 
+      const resultMetadata =
+        e.toolUseResult &&
+        typeof e.toolUseResult === "object" &&
+        !Array.isArray(e.toolUseResult)
+          ? (e.toolUseResult as Record<string, unknown>)
+          : undefined;
+      const backgroundTaskId = resultMetadata?.backgroundTaskId;
+      if (block.is_error !== true && typeof backgroundTaskId === "string") {
+        this.backgroundTaskLaunchToolUseIds.set(backgroundTaskId, toolUseId);
+      }
+
+      const stoppedTaskId = this.pendingTaskStopTargets.get(toolUseId);
+      if (stoppedTaskId) {
+        this.pendingTaskStopTargets.delete(toolUseId);
+        if (block.is_error !== true) {
+          const launchToolUseId =
+            this.backgroundTaskLaunchToolUseIds.get(stoppedTaskId);
+          if (launchToolUseId) {
+            this.backgroundFollowUpState.remove(launchToolUseId);
+            this.backgroundTaskLaunchToolUseIds.delete(stoppedTaskId);
+          }
+        }
+      }
+
       const candidateType = this.unconfirmedAsyncLaunches.get(toolUseId);
       if (!candidateType) {
         continue;
@@ -659,7 +692,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
       const resultText = ClaudeToolBuilder.extractToolResultText(block.content);
       const launchConfirmed =
-        candidateType === "Agent"
+        candidateType === CLAUDE_TOOL_NAMES.AGENT
           ? resultText.includes("Async agent launched successfully")
           : resultText.includes("Monitor started");
       if (block.is_error !== true && launchConfirmed) {
@@ -677,6 +710,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    *   `PowerShell` command tools), or an Agent/Monitor result that confirms
    *   asynchronous execution. Every outstanding id is retained because Claude
    *   can run and notify several background tools concurrently.
+   * - **Cancellation:** a successful `TaskStop` result clears the launch it
+   *   targets. Claude does not emit a task notification for stopped tasks, so
+   *   the launch result's provider task id must be correlated with TaskStop.
    * - **Notification delivery:** a `user` or `attachment` event whose payload contains
    *   `<task-notification>`. It clears a matching launch id and latches
    *   resumed-turn completion: the Stop preceding delivery is intermediate,
@@ -697,12 +733,25 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           if (block.input?.run_in_background === true) {
             this.backgroundFollowUpState.launch(block.id);
           } else if (
-            block.name === "Agent" &&
+            block.name === CLAUDE_TOOL_NAMES.AGENT &&
             block.input?.run_in_background !== false
           ) {
-            this.unconfirmedAsyncLaunches.set(block.id, "Agent");
-          } else if (block.name === "Monitor") {
-            this.unconfirmedAsyncLaunches.set(block.id, "Monitor");
+            this.unconfirmedAsyncLaunches.set(
+              block.id,
+              CLAUDE_TOOL_NAMES.AGENT
+            );
+          } else if (block.name === CLAUDE_TOOL_NAMES.MONITOR) {
+            this.unconfirmedAsyncLaunches.set(
+              block.id,
+              CLAUDE_TOOL_NAMES.MONITOR
+            );
+          }
+
+          if (
+            block.name === CLAUDE_TOOL_NAMES.TASK_STOP &&
+            typeof block.input?.task_id === "string"
+          ) {
+            this.pendingTaskStopTargets.set(block.id, block.input.task_id);
           }
         }
       }
@@ -723,9 +772,13 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
     const text = this.extractTaskNotificationText(e);
     if (text.includes("<task-notification>")) {
-      const match = text.match(/<tool-use-id>([^<]+)<\/tool-use-id>/);
-      if (match) {
-        this.backgroundFollowUpState.consumeNotification(match[1]);
+      const toolUseIdMatch = text.match(/<tool-use-id>([^<]+)<\/tool-use-id>/);
+      if (toolUseIdMatch) {
+        this.backgroundFollowUpState.consumeNotification(toolUseIdMatch[1]);
+      }
+      const taskIdMatch = text.match(/<task-id>([^<]+)<\/task-id>/);
+      if (taskIdMatch) {
+        this.backgroundTaskLaunchToolUseIds.delete(taskIdMatch[1]);
       }
     }
   }
