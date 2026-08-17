@@ -1280,6 +1280,127 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
 
+    test("should clear a stopped background task without waiting for a notification", () => {
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_background_stopped",
+              name: "Bash",
+              input: { command: "npm test", run_in_background: true },
+            },
+          ],
+          stop_reason: "tool_use",
+        },
+      });
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_background_stopped",
+              content: "Command running in background with ID: task-stopped.",
+              is_error: false,
+            },
+          ],
+        },
+        toolUseResult: { backgroundTaskId: "task-stopped" },
+      });
+
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_task_stop",
+              name: "TaskStop",
+              input: { task_id: "task-stopped" },
+            },
+          ],
+          stop_reason: "tool_use",
+        },
+      });
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_task_stop",
+              content: '{"message":"Successfully stopped task"}',
+            },
+          ],
+        },
+        toolUseResult: {
+          message: "Successfully stopped task: task-stopped",
+          task_id: "task-stopped",
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
+    test("should retain background work when TaskStop fails", () => {
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_background_not_stopped",
+              name: "Bash",
+              input: { command: "npm test", run_in_background: true },
+            },
+          ],
+        },
+      });
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_background_not_stopped",
+              content: "Command running in background.",
+            },
+          ],
+        },
+        toolUseResult: { backgroundTaskId: "task-not-stopped" },
+      });
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_failed_task_stop",
+              name: "TaskStop",
+              input: { task_id: "task-not-stopped" },
+            },
+          ],
+        },
+      });
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_failed_task_stop",
+              content: "Task was not stopped",
+              is_error: true,
+            },
+          ],
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+    });
+
     test("should track concurrent PowerShell, Bash, and Monitor work through the resumed turn", () => {
       parser.trackBackgroundWorkState({
         type: "assistant",
