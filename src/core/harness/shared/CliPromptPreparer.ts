@@ -242,9 +242,7 @@ export class CliPromptPreparer {
     const resolvedPriorContext = resolvedProperties?.priorContext;
     const inlineRefs = parseInlinePriorContextRefs(
       outgoingSections.userPromptText
-    ).map(
-      (match) => match.ref
-    );
+    ).map((match) => match.ref);
     const hasPriorContext =
       (resolvedPriorContext !== undefined && resolvedPriorContext !== "none") ||
       inlineRefs.length > 0;
@@ -264,6 +262,14 @@ export class CliPromptPreparer {
       );
     }
 
+    // Built once here so the disclosure count (§6) reads the actual copy
+    // mutations rather than re-deriving them from any plan's mutation list —
+    // a categorized plan also carries temp-file mutations it must not count.
+    const sourceRuntimeCopyMutations =
+      await this.createSourceRuntimeCopyMutations(
+        outgoingSections.sourceRuntimeCopies
+      );
+
     // Preserve the live fast path: direct references remain inline when the
     // rest of the prompt is safe to send as-is.
     if (
@@ -278,13 +284,13 @@ export class CliPromptPreparer {
         outgoingSections.userPromptText,
         outgoingSections.directFileRefs,
         harnessId,
-        outgoingSections.sourceRuntimeCopies
+        sourceRuntimeCopyMutations
       );
       return this.withDiagnostics(
         this.withSourceRuntimeDisclosure(
           plan,
           outgoingSections.sourceRuntimeReadCount ?? 0,
-          plan.mutations.length,
+          sourceRuntimeCopyMutations.length,
           harnessId
         ),
         promptDiagnostics
@@ -315,15 +321,14 @@ export class CliPromptPreparer {
       workflowContext,
       resolvedContextContent,
       hasPriorContext,
-      harnessId
+      harnessId,
+      sourceRuntimeCopyMutations
     );
     const planWithDiagnostics = this.withDiagnostics(
       this.withSourceRuntimeDisclosure(
         plan,
         outgoingSections.sourceRuntimeReadCount ?? 0,
-        plan.mutations.filter((mutation) =>
-          mutation.description?.startsWith("Copy ")
-        ).length,
+        sourceRuntimeCopyMutations.length,
         harnessId
       ),
       promptDiagnostics
@@ -442,7 +447,7 @@ export class CliPromptPreparer {
     promptText: string,
     directFileRefs: string[],
     harnessId: ResolvedProperties["harness"],
-    sourceRuntimeCopies: PromptSections["sourceRuntimeCopies"]
+    mutations: readonly PreparedMutation[]
   ): Promise<PromptPreparationPlan> {
     const promptBody = this.createBodySection(
       PREVIEW_PROMPT_CATEGORIES.PROMPT_TEXT,
@@ -452,8 +457,6 @@ export class CliPromptPreparer {
     );
     const sections: CategorizedPromptSectionPreview[] = [];
     const diagnostics: CompatibilityDiagnostic[] = [];
-    const mutations =
-      await this.createSourceRuntimeCopyMutations(sourceRuntimeCopies);
     for (let i = 0; i < directFileRefs.length; i++) {
       sections.push(
         await this.buildFileReferenceSection(
@@ -488,7 +491,8 @@ export class CliPromptPreparer {
     workflowContext: WorkflowContext | undefined,
     contextContent: string | undefined,
     hasPriorContext: boolean,
-    harnessId: ResolvedProperties["harness"]
+    harnessId: ResolvedProperties["harness"],
+    sourceRuntimeCopyMutations: readonly PreparedMutation[]
   ): Promise<PromptPreparationPlan> {
     const workspaceRoot = this.deps.getWorkspaceRoot();
     if (!workspaceRoot) {
@@ -627,11 +631,7 @@ export class CliPromptPreparer {
       );
     }
 
-    mutations.push(
-      ...(await this.createSourceRuntimeCopyMutations(
-        sections.sourceRuntimeCopies
-      ))
-    );
+    mutations.push(...sourceRuntimeCopyMutations);
 
     const contextRefs: string[] = [];
     if (contextContent) {
@@ -773,13 +773,9 @@ export class CliPromptPreparer {
         // The destination is absent, or disappeared while planning.
       }
 
-      if (
-        previousBytes !== undefined &&
-        crypto.timingSafeEqual(
-          crypto.createHash("sha256").update(previousBytes).digest(),
-          crypto.createHash("sha256").update(sourceBytes).digest()
-        )
-      ) {
+      // A direct byte compare, not a digest: these are ordinary file contents,
+      // and hashing a multi-megabyte log twice per prompt buys nothing here.
+      if (previousBytes !== undefined && previousBytes.equals(sourceBytes)) {
         continue;
       }
 

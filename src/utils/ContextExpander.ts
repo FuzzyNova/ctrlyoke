@@ -692,11 +692,23 @@ export class ContextExpander {
       return;
     }
 
-    const resolutions = await resolveSourceRuntimeArtifacts(
-      this.sourceCheckoutRoot,
-      this.executionCheckoutRoot,
-      new Set(candidatePathByReference.values())
-    );
+    // A failed predicate must cost only the source tier. Letting it throw would
+    // unwind into expandContext/expandContextSplit's outer catch, which drops
+    // *every* reference in the prompt — turning one unavailable Git call into a
+    // silently context-free turn.
+    let resolutions: Map<string, string>;
+    try {
+      resolutions = await resolveSourceRuntimeArtifacts(
+        this.sourceCheckoutRoot,
+        this.executionCheckoutRoot,
+        new Set(candidatePathByReference.values())
+      );
+    } catch (error) {
+      Log.warn(
+        `[ContextExpander] Source runtime artifact resolution failed; continuing without the source tier: ${getErrorMessage(error)}`
+      );
+      return;
+    }
     for (const [referencePath, candidatePath] of candidatePathByReference) {
       const absolutePath = resolutions.get(candidatePath);
       if (absolutePath) {
@@ -919,7 +931,8 @@ export class ContextExpander {
     endLine?: number,
     symbolName?: string
   ): Promise<string> {
-    const absolutePath = this.resolveWorkspacePath(filePath);
+    const resolution = this.resolveReference(filePath);
+    const absolutePath = resolution.absolutePath;
     const language =
       path.extname(filePath).toLowerCase().slice(1) || "plaintext";
 
@@ -931,7 +944,8 @@ export class ContextExpander {
       `[ContextExpander] Read ${filePath} (${sizeKb} KB) in ${elapsed}ms`
     );
 
-    const resolution = this.resolveReference(filePath);
+    // A read-in-place source artifact has no worktree path to name, so its
+    // excerpt header must carry the absolute source path (§4.2).
     const displayPath =
       resolution.base === "sourceRuntimeStore" || this.effectiveAbsolute
         ? absolutePath

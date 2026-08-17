@@ -426,6 +426,20 @@ added alongside `prompt.reference.unresolved` in `CliPromptPreparer`:
 `ExecutionPreviewService` already builds its preview against the worktree-remapped
 `ExecutionWorkspace`, so Dry Run reflects both actions without extra work.
 
+### 6.1 Shipped gap: lone step prompts are not counted
+
+The disclosure covers inline references and copies, because both pass through
+`CliPromptPreparer`, which owns the diagnostic channel. A **lone step `prompt`
+path** read from the source store (§3.2, §4.1) does not: it is resolved in
+`WorkflowExecutor.resolveEffectivePrompt`, which returns a bare string and has
+no diagnostic seam to the prompt preparer. So that read happens, and works, but
+is not named in the disclosure line.
+
+Left as-is deliberately rather than papered over: closing it means plumbing a
+new channel out of the executor, which is a larger change than the disclosure
+warrants, and the failure mode is under-reporting rather than a silent
+isolation break. Revisit whenever the executor grows a diagnostics path.
+
 ---
 
 ## 7. Sequencing

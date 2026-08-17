@@ -122,11 +122,7 @@ export class PromptFileResolver {
     filePath: string,
     sourceDefinitionPath?: string
   ): Promise<PromptFileResolution> {
-    const candidates = this.getCandidates(
-      filePath,
-      sourceDefinitionPath,
-      true
-    );
+    const candidates = this.getCandidates(filePath, sourceDefinitionPath, true);
     const readable = await this.findReadableFile(
       candidates,
       this.getSourceRuntimeFallbackCandidate(
@@ -327,9 +323,8 @@ export class PromptFileResolver {
     }
 
     if (includeSourceRuntimeCandidate) {
-      const sourceRuntimeCandidate = this.getSourceRuntimeCandidate(
-        trimmedPath
-      );
+      const sourceRuntimeCandidate =
+        this.getSourceRuntimeCandidate(trimmedPath);
       if (
         sourceRuntimeCandidate !== undefined &&
         !candidates.includes(sourceRuntimeCandidate)
@@ -427,12 +422,19 @@ export class PromptFileResolver {
       return false;
     }
 
-    const sourceRuntimeArtifacts = await resolveSourceRuntimeArtifacts(
-      this.sourceCheckoutRoot,
-      this.workspaceRoot,
-      new Set([candidate])
-    );
-    return sourceRuntimeArtifacts.has(candidate);
+    // An unavailable predicate means "not a source runtime artifact", never a
+    // thrown resolution: callers expect PromptFileReferenceError for a prompt
+    // that cannot be resolved, not a raw Git failure.
+    try {
+      const sourceRuntimeArtifacts = await resolveSourceRuntimeArtifacts(
+        this.sourceCheckoutRoot,
+        this.workspaceRoot,
+        new Set([candidate])
+      );
+      return sourceRuntimeArtifacts.has(candidate);
+    } catch {
+      return false;
+    }
   }
 
   private isCandidateAllowed(candidate: string): boolean {
