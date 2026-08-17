@@ -2580,6 +2580,7 @@ export class WorkflowExecutor {
       workspaceRoot: executionRoot,
       namedRoots,
       trustedRoots: workspaceRoots,
+      sourceCheckoutRoot: executionWorkspace.sourceCheckoutRoot,
       approvedExternalRoots: executionWorkspace.approvedExternalRoots,
       allowWorkflowRelativeReferences:
         definitionPath.allowWorkflowRelativeReferences,

@@ -1,9 +1,11 @@
 import * as assert from "assert";
+import { execFileSync } from "child_process";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import {
   PromptFileResolver,
+  PromptFileReferenceError,
   type PromptFileResolution,
 } from "../../core/PromptFileResolver";
 import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
@@ -13,8 +15,10 @@ suite("PromptFileResolver", () => {
   let sourceDirectory: string;
   let secondaryRoot: string;
   let namedRoots: ResolverWorkspaceFolder[];
+  let temporaryDirectories: string[];
 
   setup(async () => {
+    temporaryDirectories = [];
     workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-prompt-resolver-")
     );
@@ -30,6 +34,11 @@ suite("PromptFileResolver", () => {
 
   teardown(async () => {
     await fs.rm(workspaceRoot, { recursive: true, force: true });
+    await Promise.all(
+      temporaryDirectories.map((directory) =>
+        fs.rm(directory, { recursive: true, force: true })
+      )
+    );
   });
 
   test("resolves an absolute path", async () => {
@@ -178,6 +187,135 @@ suite("PromptFileResolver", () => {
     );
   });
 
+  test("resolves an ignored source-side prompt in relative and absolute forms", async () => {
+    const sourceRoot = await createSourceRepository();
+    const sourcePrompt = path.join(sourceRoot, "runtime", "source.prompt.md");
+    await writeFile(sourcePrompt, "source content");
+    const resolver = createWorktreeResolver(sourceRoot);
+    const sourceDefinitionPath = path.join(workspaceRoot, "workflow.yaml");
+
+    assert.strictEqual(
+      await resolver.resolvePromptValue(
+        "./runtime/source.prompt.md",
+        sourceDefinitionPath
+      ),
+      "source content"
+    );
+    assert.strictEqual(
+      await resolver.resolvePromptValue(sourcePrompt, sourceDefinitionPath),
+      "source content"
+    );
+  });
+
+  test("prefers the execution checkout when both copies exist", async () => {
+    const sourceRoot = await createSourceRepository();
+    const sourcePrompt = path.join(sourceRoot, "runtime", "same.prompt.md");
+    await writeFile(sourcePrompt, "source content");
+    const executionPrompt = path.join(
+      workspaceRoot,
+      "runtime",
+      "same.prompt.md"
+    );
+    await writeFile(executionPrompt, "execution content");
+
+    const result = await createWorktreeResolver(sourceRoot).resolvePromptValue(
+      "./runtime/same.prompt.md",
+      path.join(workspaceRoot, "workflow.yaml")
+    );
+
+    assert.strictEqual(result, "execution content");
+  });
+
+  test("does not import a tracked source file that is absent from the worktree", async () => {
+    const sourceRoot = await createSourceRepository();
+    const trackedPrompt = path.join(sourceRoot, "runtime", "tracked.prompt.md");
+    await writeFile(trackedPrompt, "tracked content");
+    git(sourceRoot, "add", "-f", "runtime/tracked.prompt.md");
+    git(sourceRoot, "commit", "-m", "add tracked prompt");
+
+    await assert.rejects(
+      createWorktreeResolver(sourceRoot).resolvePromptValue(
+        "./runtime/tracked.prompt.md",
+        path.join(workspaceRoot, "workflow.yaml")
+      ),
+      (error: unknown) =>
+        error instanceof PromptFileReferenceError &&
+        /could not be found/.test(error.message)
+    );
+  });
+
+  test("keeps a source-side file outside the source checkout blocked", async () => {
+    const sourceRoot = await createSourceRepository();
+    const outsidePrompt = path.join(
+      path.dirname(sourceRoot),
+      "outside-source.prompt.md"
+    );
+    await writeFile(outsidePrompt, "outside content");
+    try {
+      await assert.rejects(
+        createWorktreeResolver(sourceRoot).resolvePromptValue(outsidePrompt),
+        /could not be found/
+      );
+    } finally {
+      await fs.rm(outsidePrompt, { force: true });
+    }
+  });
+
+  test("keeps sync candidates identical apart from the source-side entry", async () => {
+    const sourceRoot = await createSourceRepository();
+    const sourcePrompt = path.join(sourceRoot, "runtime", "candidate.prompt.md");
+    const sourceDefinitionPath = path.join(workspaceRoot, "workflow.yaml");
+    const resolver = createWorktreeResolver(sourceRoot);
+
+    const asyncResolution = await resolver.resolvePath(
+      "./runtime/candidate.prompt.md",
+      sourceDefinitionPath
+    );
+    const syncResolution = resolver.resolvePathSync(
+      "./runtime/candidate.prompt.md",
+      sourceDefinitionPath
+    );
+
+    assert.deepStrictEqual(
+      asyncResolution.candidates.filter(
+        (candidate) => candidate !== sourcePrompt
+      ),
+      syncResolution.candidates
+    );
+  });
+
+  test("does not invoke Git for a non-worktree resolution", async () => {
+    const tracePath = path.join(
+      await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-git-trace-")),
+      "git.jsonl"
+    );
+    temporaryDirectories.push(path.dirname(tracePath));
+    const previousTracePath = process.env.GIT_TRACE2_EVENT;
+    process.env.GIT_TRACE2_EVENT = tracePath;
+    try {
+      await assert.rejects(
+        new PromptFileResolver({ workspaceRoot }).resolvePromptValue(
+          "./missing.prompt.md"
+        ),
+        /could not be found/
+      );
+    } finally {
+      if (previousTracePath === undefined) {
+        delete process.env.GIT_TRACE2_EVENT;
+      } else {
+        process.env.GIT_TRACE2_EVENT = previousTracePath;
+      }
+    }
+
+    assert.strictEqual(
+      await fs
+        .access(tracePath)
+        .then(() => true)
+        .catch(() => false),
+      false
+    );
+  });
+
   test("skips directories and continues in candidate order", async () => {
     const directory = path.join(workspaceRoot, "directory.prompt.md");
     const fallback = path.join(
@@ -284,4 +422,45 @@ suite("PromptFileResolver", () => {
     assert.strictEqual(resolution.status, "missing");
     assert.deepStrictEqual(resolution.candidates, []);
   });
+
+  function createWorktreeResolver(sourceCheckoutRoot: string): PromptFileResolver {
+    return new PromptFileResolver({
+      workspaceRoot,
+      trustedRoots: [workspaceRoot],
+      sourceCheckoutRoot,
+    });
+  }
+
+  async function createSourceRepository(): Promise<string> {
+    const sourceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-source-checkout-")
+    );
+    temporaryDirectories.push(sourceRoot);
+    await writeFile(path.join(sourceRoot, ".gitignore"), "runtime/\n");
+    git(sourceRoot, "init", "-q");
+    git(sourceRoot, "add", ".gitignore");
+    git(sourceRoot, "commit", "-m", "initial commit");
+    return sourceRoot;
+  }
+
+  async function writeFile(filePath: string, content: string): Promise<void> {
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, content, "utf8");
+  }
+
+  function git(repositoryRoot: string, ...args: string[]): void {
+    const gitArgs =
+      args[0] === "commit"
+        ? [
+            "-c",
+            "user.name=ctrlyoke-test",
+            "-c",
+            "user.email=ctrlyoke-test@example.com",
+            ...args,
+          ]
+        : args;
+    execFileSync("git", ["-C", repositoryRoot, ...gitArgs], {
+      stdio: "ignore",
+    });
+  }
 });

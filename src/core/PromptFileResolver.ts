@@ -9,6 +9,7 @@ import {
 } from "../platform/WorkspaceRootResolver";
 import { evaluateFileAccess } from "../utils/FileAccessPolicy";
 import { looksLikeFilePath } from "../utils/promptPathUtils";
+import { resolveSourceRuntimeArtifacts } from "../utils/SourceRuntimeArtifactResolver";
 
 export interface PromptFileResolverOptions {
   workspaceRoot?: string;
@@ -17,6 +18,8 @@ export interface PromptFileResolverOptions {
   trustedRoots?: readonly string[];
   /** ctrlyoke-owned state roots allowed for UI prompt-file reads. */
   ownStateRoots?: readonly string[];
+  /** Source checkout used for ignored runtime-artifact reads during execution. */
+  sourceCheckoutRoot?: string;
   approvedExternalRoots?: readonly string[];
   /** Disable workflow-relative refs when the authored definition is unmappable. */
   allowWorkflowRelativeReferences?: boolean;
@@ -88,6 +91,7 @@ export class PromptFileResolver {
   private readonly namedRoots: readonly ResolverWorkspaceFolder[];
   private readonly trustedRoots?: readonly string[];
   private readonly ownStateRoots?: readonly string[];
+  private readonly sourceCheckoutRoot?: string;
   private readonly approvedExternalRoots?: readonly string[];
   private readonly allowWorkflowRelativeReferences: boolean;
 
@@ -96,6 +100,7 @@ export class PromptFileResolver {
     this.namedRoots = options.namedRoots ?? [];
     this.trustedRoots = options.trustedRoots;
     this.ownStateRoots = options.ownStateRoots;
+    this.sourceCheckoutRoot = options.sourceCheckoutRoot;
     this.approvedExternalRoots = options.approvedExternalRoots;
     this.allowWorkflowRelativeReferences =
       options.allowWorkflowRelativeReferences ?? true;
@@ -117,8 +122,19 @@ export class PromptFileResolver {
     filePath: string,
     sourceDefinitionPath?: string
   ): Promise<PromptFileResolution> {
-    const candidates = this.getCandidates(filePath, sourceDefinitionPath);
-    const readable = await this.findReadableFile(candidates);
+    const candidates = this.getCandidates(
+      filePath,
+      sourceDefinitionPath,
+      true
+    );
+    const readable = await this.findReadableFile(
+      candidates,
+      this.getSourceRuntimeFallbackCandidate(
+        filePath,
+        sourceDefinitionPath,
+        candidates
+      )
+    );
     if (readable.status !== "resolved") {
       return readable;
     }
@@ -190,17 +206,28 @@ export class PromptFileResolver {
     filePath: string,
     sourceDefinitionPath?: string
   ): Promise<PromptFilePathResolution> {
+    const candidates = this.getCandidatePaths(filePath, sourceDefinitionPath);
     return this.findReadableFile(
-      this.getCandidatePaths(filePath, sourceDefinitionPath)
+      candidates,
+      this.getSourceRuntimeFallbackCandidate(
+        filePath,
+        sourceDefinitionPath,
+        candidates
+      )
     );
   }
 
   /** Return the ordered candidates used by resolution without touching disk. */
   getCandidatePaths(
     filePath: string,
-    sourceDefinitionPath?: string
+    sourceDefinitionPath?: string,
+    includeSourceRuntimeCandidate = true
   ): readonly string[] {
-    return this.getCandidates(filePath, sourceDefinitionPath);
+    return this.getCandidates(
+      filePath,
+      sourceDefinitionPath,
+      includeSourceRuntimeCandidate
+    );
   }
 
   /** Synchronous path-only counterpart for VS Code's synchronous link API. */
@@ -208,7 +235,11 @@ export class PromptFileResolver {
     filePath: string,
     sourceDefinitionPath?: string
   ): PromptFilePathResolution {
-    const candidates = this.getCandidatePaths(filePath, sourceDefinitionPath);
+    const candidates = this.getCandidatePaths(
+      filePath,
+      sourceDefinitionPath,
+      false
+    );
 
     for (const candidate of candidates) {
       if (!this.isCandidateAllowed(candidate)) {
@@ -242,7 +273,8 @@ export class PromptFileResolver {
 
   private getCandidates(
     filePath: string,
-    sourceDefinitionPath?: string
+    sourceDefinitionPath?: string,
+    includeSourceRuntimeCandidate = false
   ): string[] {
     const trimmedPath = filePath.trim();
     if (path.isAbsolute(trimmedPath)) {
@@ -294,14 +326,31 @@ export class PromptFileResolver {
       );
     }
 
+    if (includeSourceRuntimeCandidate) {
+      const sourceRuntimeCandidate = this.getSourceRuntimeCandidate(
+        trimmedPath
+      );
+      if (
+        sourceRuntimeCandidate !== undefined &&
+        !candidates.includes(sourceRuntimeCandidate)
+      ) {
+        candidates.push(sourceRuntimeCandidate);
+      }
+    }
+
     return candidates;
   }
 
   private async findReadableFile(
-    candidates: readonly string[]
+    candidates: readonly string[],
+    sourceRuntimeFallbackCandidate?: string
   ): Promise<PromptFilePathResolution> {
     for (const candidate of candidates) {
-      if (!this.isCandidateAllowed(candidate)) {
+      const allowed = await this.isCandidateAllowedAsync(
+        candidate,
+        candidate === sourceRuntimeFallbackCandidate
+      );
+      if (!allowed) {
         continue;
       }
 
@@ -328,6 +377,62 @@ export class PromptFileResolver {
     }
 
     return { status: "missing", candidates };
+  }
+
+  private getSourceRuntimeCandidate(trimmedPath: string): string | undefined {
+    if (!this.sourceCheckoutRoot) {
+      return undefined;
+    }
+
+    return path.isAbsolute(trimmedPath)
+      ? path.resolve(trimmedPath)
+      : path.resolve(this.sourceCheckoutRoot, trimmedPath);
+  }
+
+  private getSourceRuntimeFallbackCandidate(
+    filePath: string,
+    sourceDefinitionPath: string | undefined,
+    candidates: readonly string[]
+  ): string | undefined {
+    const trimmedPath = filePath.trim();
+    if (path.isAbsolute(trimmedPath)) {
+      return undefined;
+    }
+
+    const sourceRuntimeCandidate = this.getSourceRuntimeCandidate(trimmedPath);
+    const standardCandidates = this.getCandidates(
+      filePath,
+      sourceDefinitionPath,
+      false
+    );
+    return sourceRuntimeCandidate !== undefined &&
+      candidates.includes(sourceRuntimeCandidate) &&
+      !standardCandidates.includes(sourceRuntimeCandidate)
+      ? sourceRuntimeCandidate
+      : undefined;
+  }
+
+  private async isCandidateAllowedAsync(
+    candidate: string,
+    requireSourceRuntimeQualification: boolean
+  ): Promise<boolean> {
+    if (
+      !requireSourceRuntimeQualification &&
+      this.isCandidateAllowed(candidate)
+    ) {
+      return true;
+    }
+
+    if (!this.sourceCheckoutRoot || !this.workspaceRoot) {
+      return false;
+    }
+
+    const sourceRuntimeArtifacts = await resolveSourceRuntimeArtifacts(
+      this.sourceCheckoutRoot,
+      this.workspaceRoot,
+      new Set([candidate])
+    );
+    return sourceRuntimeArtifacts.has(candidate);
   }
 
   private isCandidateAllowed(candidate: string): boolean {
