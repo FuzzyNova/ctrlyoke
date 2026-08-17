@@ -26,7 +26,10 @@ import {
   SESSION_KINDS,
   TERMINAL_SESSION_STATUS,
 } from "@/types/messages";
-import { WORKTREE_MODES } from "@root/types/DashboardConstants";
+import {
+  DEFAULT_WORKFLOW_NAME,
+  WORKTREE_MODES,
+} from "@root/types/DashboardConstants";
 
 const postMessageSpy = vi.fn();
 
@@ -166,7 +169,11 @@ describe("WorkflowStatus — loaded state", () => {
     render(<WorkflowStatus />);
 
     act(() => {
-      useWorkflowStore.setState({ fileName: null, workflowName: null });
+      useWorkflowStore.setState({
+        fileName: DEFAULT_WORKFLOW_NAME,
+        workflowName: null,
+        totalSteps: 0,
+      });
     });
 
     const input = await screen.findByPlaceholderText("Name your workflow...");
@@ -178,7 +185,11 @@ describe("WorkflowStatus — loaded state", () => {
     render(<WorkflowStatus />);
 
     act(() => {
-      useWorkflowStore.setState({ fileName: null, workflowName: null });
+      useWorkflowStore.setState({
+        fileName: DEFAULT_WORKFLOW_NAME,
+        workflowName: null,
+        totalSteps: 0,
+      });
     });
 
     const input = await screen.findByPlaceholderText("Name your workflow...");

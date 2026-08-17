@@ -367,6 +367,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     (fileName
       ? workflowName || getWorkflowNameFromPath(fileName)
       : DEFAULT_WORKFLOW_NAME);
+  const isNewWorkflow =
+    fileName === DEFAULT_WORKFLOW_NAME && !workflowName && totalSteps === 0;
 
   const isMobile = useIsMobile();
   const wfStatusSize = isMobile
@@ -386,7 +388,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
-  const previousFileNameRef = useRef(fileName);
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   // Whichever split-button segment opened the dropdown — Escape restores
@@ -697,19 +698,17 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     }
   }, [isEditing]);
 
-  // A blank workflow can be created from WorkflowControls as well as from the
-  // dropdown below. Focus the name field when an existing workflow is cleared,
-  // but do not steal focus during the initial empty render.
+  // The backend represents a fresh blank workflow as "New Workflow" with no
+  // custom name or steps. Focus it when that state arrives from the header's
+  // New button, including when the component mounts into that state.
   useEffect(() => {
-    const wasLoaded = previousFileNameRef.current !== null;
-    previousFileNameRef.current = fileName;
-    if (!wasLoaded || fileName !== null) {
+    if (!isNewWorkflow) {
       return;
     }
 
     setEditValue("");
     setIsEditing(true);
-  }, [fileName]);
+  }, [isNewWorkflow]);
 
   // Start editing workflow name
   const startEditing = useCallback(() => {
