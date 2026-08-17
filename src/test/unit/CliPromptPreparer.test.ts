@@ -1270,6 +1270,7 @@ suite("CliPromptPreparer", () => {
         createSections({
           directFileRefs: [destinationPath],
           sourceRuntimeCopies: [{ sourcePath, destinationPath }],
+          sourceRuntimeReadCount: 2,
           userPromptText: "Review @runtime/large.log",
         }),
       extractLeadingSlashCommand: () => null,
@@ -1293,13 +1294,24 @@ suite("CliPromptPreparer", () => {
       assert.strictEqual(plan.mutations.length, 1);
       assert.strictEqual(plan.mutations[0].path, destinationPath);
       assert.ok(plan.mutations[0].description?.includes(sourcePath));
+      assert.deepStrictEqual(
+        plan.diagnostics.map(({ severity, message }) => ({ severity, message })),
+        [
+          {
+            severity: "info",
+            message:
+              "2 references were read from the source checkout; 1 file was copied into the worktree.",
+          },
+        ]
+      );
 
-      await preparer.preparePrompt(
+      const prepared = await preparer.preparePrompt(
         { prompt: "Review @runtime/large.log" } as PromptStep,
         undefined,
         { harness: "claude-cli" } as any,
         undefined
       );
+      assert.deepStrictEqual(prepared.diagnostics, plan.diagnostics);
       assert.deepStrictEqual(
         await fs.promises.readFile(destinationPath),
         content
@@ -1385,6 +1397,10 @@ suite("CliPromptPreparer", () => {
           .filter((file) => file.source !== file.destination)
           .map((file) => file.destinationPath)
       );
+      assert.strictEqual(
+        plan.diagnostics[0]?.message,
+        "0 references were read from the source checkout; 2 files were copied into the worktree."
+      );
 
       await preparer.preparePrompt(
         { prompt: "Review the runtime files" } as PromptStep,
@@ -1430,5 +1446,43 @@ suite("CliPromptPreparer", () => {
       ).length,
       0
     );
+  });
+
+  test("pluralizes disclosure counts when only source reads are present", async () => {
+    const workspaceRoot = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-source-disclosure-")
+    );
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({
+          excerptContent: "source excerpt",
+          sourceRuntimeReadCount: 1,
+          userPromptText: "Review the excerpt",
+        }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => false,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => workspaceRoot,
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    try {
+      const plan = await preparer.planPrompt(
+        { prompt: "Review the excerpt" } as PromptStep,
+        undefined,
+        { harness: "claude-cli" } as any,
+        undefined
+      );
+      assert.strictEqual(
+        plan.diagnostics[0]?.message,
+        "1 reference was read from the source checkout; 0 files were copied into the worktree."
+      );
+    } finally {
+      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+    }
   });
 });

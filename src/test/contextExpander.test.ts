@@ -147,6 +147,31 @@ suite("ContextExpander.expandContextSplit", () => {
   });
 
   suite("source checkout runtime references", () => {
+    test("does not invoke Git for a non-worktree expansion", async () => {
+      const root = freshWorkspace();
+      const filePath = path.join(root, "ordinary.log");
+      fs.writeFileSync(filePath, "ordinary\n");
+      const tracePath = path.join(root, "git-trace.jsonl");
+      const previousTracePath = process.env.GIT_TRACE2_EVENT;
+      process.env.GIT_TRACE2_EVENT = tracePath;
+      try {
+        const expander = new ContextExpander({ workspaceRoot: root });
+        const result = await expander.expandContextSplit("Review @ordinary.log");
+        assert.deepStrictEqual(result.directFileRefs, [filePath]);
+      } finally {
+        if (previousTracePath === undefined) {
+          delete process.env.GIT_TRACE2_EVENT;
+        } else {
+          process.env.GIT_TRACE2_EVENT = previousTracePath;
+        }
+      }
+
+      const trace = fs.existsSync(tracePath)
+        ? fs.readFileSync(tracePath, "utf8")
+        : "";
+      assert.strictEqual(trace.includes('"name":"check-ignore"'), false);
+    });
+
     test("tier 1 wins when a file exists in both checkouts", async () => {
       const sourceRoot = createGitRepository();
       const executionRoot = freshWorkspace();
@@ -312,6 +337,7 @@ suite("ContextExpander.expandContextSplit", () => {
         sanitized.includes(sourcePath),
         "sanitizeReferences must name the same absolute source path as the excerpt"
       );
+      assert.strictEqual(expanded.sourceRuntimeReadCount, 1);
     });
 
     test("blocks a source-only ignored directory and reports its token", async () => {

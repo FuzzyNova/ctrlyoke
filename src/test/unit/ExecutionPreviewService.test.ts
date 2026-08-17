@@ -9,6 +9,7 @@ import {
   defaultCommandDisplayShell,
   type ExecutionPreviewHarness,
 } from "../../core/ExecutionPreviewService";
+import type { PromptSections } from "../../core/HarnessIntegration";
 import { renderCommandForDisplay } from "../../types/CommandDisplayFormatter";
 import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
 import { ExecutionPlanBuilder } from "../../core/harness/shared/ExecutionPlanBuilder";
@@ -21,7 +22,7 @@ import {
   WORKTREE_MODES,
 } from "../../types/DashboardConstants";
 import type { HarnessCapabilityRegistrySnapshot } from "../../types/CompatibilityTypes";
-import type { PromptFile } from "../../types/CtrlYokeTypes";
+import type { PromptFile, PromptStep } from "../../types/CtrlYokeTypes";
 import {
   resolveExecutionProperties,
   type ExecutionPropertyDefaults,
@@ -78,18 +79,24 @@ function createCapabilities(): HarnessCapabilityRegistrySnapshot {
   } as HarnessCapabilityRegistrySnapshot;
 }
 
-function createPromptPreparer(): CliPromptPreparer {
+function createPromptPreparer(
+  buildPromptSections?: (
+    prompt: PromptStep
+  ) => Promise<PromptSections>
+): CliPromptPreparer {
   return new CliPromptPreparer({
     shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
-    buildPromptSections: async (prompt) => ({
-      skillContent: null,
-      agentContent: null,
-      directFileRefs: [],
-      sourceRuntimeCopies: [],
-      excerptContent: null,
-      userPromptText: prompt.prompt,
-      skippedReferences: [],
-    }),
+    buildPromptSections:
+      buildPromptSections ??
+      (async (prompt) => ({
+        skillContent: null,
+        agentContent: null,
+        directFileRefs: [],
+        sourceRuntimeCopies: [],
+        excerptContent: null,
+        userPromptText: prompt.prompt,
+        skippedReferences: [],
+      })),
     extractLeadingSlashCommand: () => null,
     isSimplePrompt: () => true,
     buildPriorContextXmlFromItems: () => "",
@@ -108,11 +115,16 @@ function createPromptPreparer(): CliPromptPreparer {
   });
 }
 
-function createHarness(workspaceRoot?: string): ExecutionPreviewHarness {
+function createHarness(
+  workspaceRoot?: string,
+  buildPromptSections?: (
+    prompt: PromptStep
+  ) => Promise<PromptSections>
+): ExecutionPreviewHarness {
   const provider = new ClaudeCliProvider();
   return {
     provider,
-    promptPreparer: createPromptPreparer(),
+    promptPreparer: createPromptPreparer(buildPromptSections),
     executionPlanBuilder: new ExecutionPlanBuilder({
       provider,
       getWorkspaceRoot: () => workspaceRoot,
@@ -158,9 +170,12 @@ function createExecutionPlan(mutations: PreparedMutation[]): ExecutionPlan {
 function createService(
   workspaceRoot?: string,
   plannedMutations?: PreparedMutation[],
-  namedWorkspaceRoots?: readonly ResolverWorkspaceFolder[]
+  namedWorkspaceRoots?: readonly ResolverWorkspaceFolder[],
+  buildPromptSections?: (
+    prompt: PromptStep
+  ) => Promise<PromptSections>
 ): ExecutionPreviewService {
-  const harness = createHarness(workspaceRoot);
+  const harness = createHarness(workspaceRoot, buildPromptSections);
   if (plannedMutations) {
     harness.executionPlanBuilder.plan = async () =>
       createExecutionPlan(plannedMutations);
@@ -262,6 +277,58 @@ suite("ExecutionPreviewService", () => {
         sourceDefinitionPath: sourcePath,
       }),
       /could not be found/
+    );
+  });
+
+  test("previews source-runtime resolutions, copies, and disclosure without writing", async () => {
+    const executionRoot = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-preview-source-runtime-")
+    );
+    const sourceRoot = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-preview-source-runtime-source-")
+    );
+    temporaryRoots.push(executionRoot, sourceRoot);
+    const sourcePath = path.join(sourceRoot, "runtime", "session.log");
+    const destinationPath = path.join(executionRoot, "runtime", "session.log");
+    await fsPromises.mkdir(path.dirname(sourcePath), { recursive: true });
+    await fsPromises.writeFile(sourcePath, "source log\n", "utf8");
+
+    const preview = await createService(
+      executionRoot,
+      undefined,
+      undefined,
+      async (prompt) => ({
+        skillContent: null,
+        agentContent: null,
+        directFileRefs: [destinationPath],
+        sourceRuntimeCopies: [{ sourcePath, destinationPath }],
+        sourceRuntimeReadCount: 2,
+        excerptContent: null,
+        userPromptText: prompt.prompt,
+        skippedReferences: [],
+      })
+    ).build({
+      workflow: { steps: [{ prompt: "Review @runtime/session.log" }] },
+    });
+
+    const step = preview.steps[0];
+    assert.ok(
+      step.workspaceMutations.some(
+        (mutation) => mutation.path === destinationPath
+      )
+    );
+    assert.strictEqual(fs.existsSync(destinationPath), false);
+    assert.strictEqual(
+      step.diagnostics.find(
+        (diagnostic) =>
+          diagnostic.code === "prompt.reference.source-runtime-disclosure"
+      )?.message,
+      "2 references were read from the source checkout; 1 file was copied into the worktree."
+    );
+    assert.strictEqual(
+      step.prompt?.sections.find((section) => section.path === destinationPath)
+        ?.path,
+      destinationPath
     );
   });
 

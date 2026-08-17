@@ -49,6 +49,8 @@ export interface SplitContext {
   directFileRefs: string[];
   /** Source-only full-file refs to copy into the execution checkout before launch. */
   sourceRuntimeCopies: SourceRuntimeCopy[];
+  /** Number of source-runtime references read in place as excerpts. */
+  sourceRuntimeReadCount?: number;
   /** Embedded XML attachment blocks for selection/sym/git/dir content */
   excerptBlocks: string;
   /**
@@ -317,6 +319,7 @@ export class ContextExpander {
   async expandContextSplit(promptText: string): Promise<SplitContext> {
     const directFileRefs: string[] = [];
     const sourceRuntimeCopies: SourceRuntimeCopy[] = [];
+    let sourceRuntimeReadCount = 0;
     const excerptParts: string[] = [];
     const skippedReferences: SkippedReference[] = [];
 
@@ -331,6 +334,7 @@ export class ContextExpander {
         return {
           directFileRefs: [],
           sourceRuntimeCopies: [],
+          sourceRuntimeReadCount: 0,
           excerptBlocks: "",
           skippedReferences: [],
         };
@@ -414,6 +418,9 @@ export class ContextExpander {
           });
           if (xml) {
             excerptParts.push(xml);
+            if (this.sourceRuntimeResolutions.has(ref.path)) {
+              sourceRuntimeReadCount += 1;
+            }
           }
         } else {
           // Full-file refs normally resolve to the execution checkout. A
@@ -473,6 +480,7 @@ export class ContextExpander {
       return {
         directFileRefs,
         sourceRuntimeCopies,
+        sourceRuntimeReadCount,
         excerptBlocks: excerptParts.join("\n\n"),
         skippedReferences,
       };
@@ -481,6 +489,7 @@ export class ContextExpander {
       return {
         directFileRefs: [],
         sourceRuntimeCopies: [],
+        sourceRuntimeReadCount: 0,
         excerptBlocks: "",
         skippedReferences: [],
       };

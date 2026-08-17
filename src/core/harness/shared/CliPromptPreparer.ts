@@ -53,6 +53,7 @@ import type { PreparedMutation } from "./interfaces/PreparedMutation";
 const PROMPT_DIAGNOSTIC_CODES = {
   LARGE_REFERENCE: "prompt.reference.implausibly-large",
   OVER_INLINE_CAP: "prompt.content.over-inline-cap",
+  SOURCE_RUNTIME_DISCLOSURE: "prompt.reference.source-runtime-disclosure",
   UNKNOWN_SKILL_REFERENCE: "prompt.skill.unknown",
   UNRESOLVED_REFERENCE: "prompt.reference.unresolved",
 } as const;
@@ -279,7 +280,15 @@ export class CliPromptPreparer {
         harnessId,
         outgoingSections.sourceRuntimeCopies
       );
-      return this.withDiagnostics(plan, promptDiagnostics);
+      return this.withDiagnostics(
+        this.withSourceRuntimeDisclosure(
+          plan,
+          outgoingSections.sourceRuntimeReadCount ?? 0,
+          plan.mutations.length,
+          harnessId
+        ),
+        promptDiagnostics
+      );
     }
 
     const contextItems = hasPriorContext
@@ -309,7 +318,14 @@ export class CliPromptPreparer {
       harnessId
     );
     const planWithDiagnostics = this.withDiagnostics(
-      plan,
+      this.withSourceRuntimeDisclosure(
+        plan,
+        outgoingSections.sourceRuntimeReadCount ?? 0,
+        plan.mutations.filter((mutation) =>
+          mutation.description?.startsWith("Copy ")
+        ).length,
+        harnessId
+      ),
       promptDiagnostics
     );
     if (!slashCommand) {
@@ -394,6 +410,32 @@ export class CliPromptPreparer {
     return diagnostics.length === 0
       ? plan
       : { ...plan, diagnostics: [...diagnostics, ...plan.diagnostics] };
+  }
+
+  private withSourceRuntimeDisclosure(
+    plan: PromptPreparationPlan,
+    sourceReadCount: number,
+    copiedFileCount: number,
+    harnessId: ResolvedProperties["harness"]
+  ): PromptPreparationPlan {
+    if (sourceReadCount === 0 && copiedFileCount === 0) {
+      return plan;
+    }
+
+    const referenceLabel = sourceReadCount === 1 ? "reference" : "references";
+    const referenceVerb = sourceReadCount === 1 ? "was" : "were";
+    const fileLabel = copiedFileCount === 1 ? "file" : "files";
+    const fileVerb = copiedFileCount === 1 ? "was" : "were";
+    const diagnostic = this.createDiagnostic(
+      PROMPT_DIAGNOSTIC_CODES.SOURCE_RUNTIME_DISCLOSURE,
+      harnessId,
+      `${sourceReadCount} ${referenceLabel} ${referenceVerb} read from the source checkout; ${copiedFileCount} ${fileLabel} ${fileVerb} copied into the worktree.`,
+      COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
+    );
+    return {
+      ...plan,
+      diagnostics: [diagnostic, ...plan.diagnostics],
+    };
   }
 
   private async createInlinePlanWithReferences(

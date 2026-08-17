@@ -462,7 +462,12 @@ export class ExecutionPreviewService {
       diagnostics
     );
     const mcpApplication = this.toMcpPreview(properties, executionPlan);
-    const workspaceMutations = this.toWorkspaceMutations(executionPlan);
+    const workspaceMutations = [
+      ...promptPlan.mutations.map((mutation) =>
+        this.toWorkspaceMutation(mutation)
+      ),
+      ...this.toWorkspaceMutations(executionPlan),
+    ];
     return {
       stepIndex: target.stepIndex,
       ...(step.name ? { stepName: step.name } : {}),

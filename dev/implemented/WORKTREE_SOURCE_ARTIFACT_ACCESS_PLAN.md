@@ -1,6 +1,6 @@
 # Worktree Source-Artifact Access — logs, attachments, and prompt files
 
-> **Status:** Staged for implementation 2026-08-16. Written 2026-08-16 against
+> **Status:** Implemented 2026-08-17. Written 2026-08-16 against
 > current code; revised the same day after a code review found three points
 > where the original design could not be built as written (§4.1.1, §5.1, §5.6).
 >
@@ -441,7 +441,7 @@ step 5 is what makes `@.ctrlyoke/logs/…` and pasted images work.
 | 3 ✅ | Absolute-path rendering for source-store resolutions (§4.2) + directory block (§4.3)             | 2          |
 | 4 ✅ | `PromptFileResolver` source tier for lone step prompts (§4.1)                                    | 1          |
 | 5 ✅ | Copy pass as a deferred `PreparedMutation` (§5), with §5.5 guardrails                            | 2          |
-| 6    | Disclosure diagnostic (§6) + Dry Run / landing-preflight / non-worktree assertions               | 5          |
+| 6 ✅ | Disclosure diagnostic (§6) + Dry Run / landing-preflight / non-worktree assertions               | 5          |
 
 Step 1 lands the two pure, dependency-free pieces together so steps 2 and 4 can
 proceed against a stable predicate. Steps 2 and 3 are split because the tier and
