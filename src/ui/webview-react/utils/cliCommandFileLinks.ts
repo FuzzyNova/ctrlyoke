@@ -140,8 +140,13 @@ function buildSpans(
   return spans;
 }
 
+// `inline` + `text-left` override the browser's default <button> UA styles
+// (display: inline-block; text-align: center) — without them, a link whose
+// text wraps onto multiple lines gets each line centered within the
+// button's own shrink-to-fit box instead of following the surrounding
+// command text's left-aligned wrap, which reads as stray centered whitespace.
 const LINK_BUTTON_CLASS =
-  "text-link-fg hover:underline cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit]";
+  "text-link-fg hover:underline cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit] inline text-left";
 
 /**
  * Renders CLI/script command display text with any embedded file-path
