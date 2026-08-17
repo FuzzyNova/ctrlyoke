@@ -993,7 +993,7 @@ describe("USER_FEEDBACK", () => {
 // ---------------------------------------------------------------------------
 
 describe("OPEN_HARNESS_DIR_RESULT", () => {
-  it("shows a warning toast when the folder could not be opened", () => {
+  it("uses native panel feedback when the folder could not be opened", () => {
     renderHook(() => useMessageHandler());
 
     act(() => {
@@ -1004,8 +1004,9 @@ describe("OPEN_HARNESS_DIR_RESULT", () => {
       });
     });
 
-    expect(useUiStore.getState().toastQueue).toHaveLength(1);
-    expect(useUiStore.getState().toastQueue[0]).toMatchObject({
+    expect(useUiStore.getState().toastQueue).toEqual([]);
+    expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
       message:
         "The workspace skill folder does not exist yet: C:\\dev\\ctrlyoke\\.ctrlyoke\\skills",
       severity: USER_FEEDBACK_SEVERITY.WARNING,
@@ -2034,6 +2035,48 @@ describe("run view revision snapshots", () => {
     expect(useUiStore.getState().displayedDefinitionRevision).toBeNull();
     expect(useUiStore.getState().displayedDescriptorRevision).toBeNull();
   });
+});
+
+describe("WORKFLOW_ACTION_FAILED feedback host routing", () => {
+  it.each([
+    ["panel", false, 0],
+    ["standalone", true, 1],
+  ] as const)(
+    "%s mode produces the expected toast count",
+    async (_host, standalone, expectedToastCount) => {
+      vi.resetModules();
+      window.__ctrlyokeStandalone = standalone;
+
+      try {
+        const [{ createMessageHandlers }, { useUiStore }] = await Promise.all([
+          import("@hooks/useMessageHandler"),
+          import("@store/uiStore"),
+        ]);
+        useUiStore.getState().resetUi();
+        vi.mocked(window.vscodeApi?.postMessage ?? vi.fn()).mockClear();
+
+        act(() => {
+          createMessageHandlers()[MESSAGE_TYPES.WORKFLOW_ACTION_FAILED]({
+            action: "save workflow",
+            error: "The file is read-only.",
+          });
+        });
+
+        expect(useUiStore.getState().toastQueue).toHaveLength(
+          expectedToastCount
+        );
+        if (!standalone) {
+          expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+            type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
+            severity: USER_FEEDBACK_SEVERITY.ERROR,
+            message: "Failed to save workflow: The file is read-only.",
+          });
+        }
+      } finally {
+        window.__ctrlyokeStandalone = false;
+      }
+    }
+  );
 });
 
 describe("SUFFIX_EDIT_CONFIRMATION_REQUIRED", () => {
@@ -3366,7 +3409,7 @@ describe("MCP_CONFIG_PREVIEW_RESULT", () => {
     expect(modal?.content).toContain('"id": "playwright"');
   });
 
-  it("shows a warning toast instead of a modal when not found", () => {
+  it("uses native panel feedback instead of a modal when not found", () => {
     renderHook(() => useMessageHandler());
 
     act(() => {
@@ -3378,10 +3421,12 @@ describe("MCP_CONFIG_PREVIEW_RESULT", () => {
     });
 
     expect(useUiStore.getState().contentPreviewModal).toBeNull();
-    const toasts = useUiStore.getState().toastQueue;
-    expect(toasts).toHaveLength(1);
-    expect(toasts[0]?.message).toContain("unknown-server");
-    expect(toasts[0]?.severity).toBe(USER_FEEDBACK_SEVERITY.WARNING);
+    expect(useUiStore.getState().toastQueue).toEqual([]);
+    expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
+      message: expect.stringContaining("unknown-server"),
+      severity: USER_FEEDBACK_SEVERITY.WARNING,
+    });
   });
 
   it("does not warn about unknown message type", () => {

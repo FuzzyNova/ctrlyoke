@@ -1,7 +1,7 @@
 # Browser User Feedback Plan
 
-**Status (2026-08-17):** Phases 1, 2 (including 2.5), 3, and 5 are complete;
-Phase 6 infrastructure and Group A are complete, with Group B still queued.
+**Status (2026-08-17):** Phases 1, 2 (including 2.5), 3, 5, and 6 are
+complete.
 The React dashboard renders a bounded, accessible transient toast queue in both
 hosts, operational feedback reaches connected browsers independently of
 notification settings, and the reusable direct-message migration is complete
@@ -13,9 +13,9 @@ Criteria below previously said otherwise and is corrected in this pass. Phase 4
 was **redesigned 2026-08-17**: none of the six action-bearing sites need the
 generic `USER_INTERACTION_REQUEST` contract after all — each has a decided
 per-site disposition (four cut, two relocated into existing/inline UI) — but
-none of the six code changes have landed yet. **Phase 6 (new, 2026-08-17) is in
-progress**: its dispatcher and Group A's 15 client-only call sites are
-complete; Group B's 12 scoped-reply handlers remain. See "The webview's own
+none of the six code changes have landed yet. **Phase 6 (new, 2026-08-17) is
+complete**: its dispatcher, Group A's 15 client-only call sites, and Group B's
+12 scoped-reply handlers now use host-aware dispatch. See "The webview's own
 toast calls are not host-aware" and "Phase 6" below.
 
 **Related plans:**
@@ -1112,18 +1112,17 @@ caring whether they're rendering inside the VS Code panel or a browser tab.
 4. **DONE (2026-08-17)** — Migrate Group A's 15 client-only call sites (8
    files) to `notifyUser()`. The re-verified count matched the table exactly;
    no action-bearing exceptions were left behind.
-5. Migrate Group B's 12 scoped-reply call sites in `useMessageHandler.ts` to
-   `notifyUser()`. At `WORKFLOW_VARIANT_CREATED` (line 1529), keep the
-   existing `standalone ? { action: {...} } : undefined` guard around the
-   "Open in New Tab" action button rather than folding it into `notifyUser()`
-   — see the action-button non-goal below.
-6. Leave `NOTIFICATION_EVENT` and `USER_FEEDBACK` untouched; they already do
-   the right thing through a different mechanism and are not part of this
-   migration.
-7. Keep `showToast()`/`enqueueToast()` on `uiStore` as the in-app-only
-   primitives they already are. `notifyUser()` is additive — the one thing
-   that decides *which* rendering path a caller should use — not a
-   replacement for the queue API itself.
+5. **DONE (2026-08-17)** — Migrate Group B's 12 scoped-reply call sites in
+   `useMessageHandler.ts` to `notifyUser()`. At `WORKFLOW_VARIANT_CREATED`, the
+   existing standalone-only `Open in New Tab` action remains on the in-app
+   toast path rather than crossing the native-message boundary.
+6. **DONE (2026-08-17)** — Leave `NOTIFICATION_EVENT` and `USER_FEEDBACK`
+   untouched; they already do the right thing through a different mechanism
+   and are not part of this migration.
+7. **DONE (2026-08-17)** — Keep `showToast()`/`enqueueToast()` on `uiStore` as
+   the in-app-only primitives they already are. `notifyUser()` is additive —
+   the one thing that decides *which* rendering path a caller should use — not
+   a replacement for the queue API itself.
 
 **Non-goals for Phase 6:**
 
@@ -1156,7 +1155,9 @@ caring whether they're rendering inside the VS Code panel or a browser tab.
 - Extend `SourceAuditCounters.test.ts`-style shrink-only baseline to cover
   direct `showToast(`/`enqueueToast(` calls outside `uiStore.ts`,
   `notifyUser.ts`, `NOTIFICATION_EVENT`, and `USER_FEEDBACK`, so a new
-  unconditional call site cannot silently recreate this gap.
+  unconditional call site cannot silently recreate this gap. The committed
+  post-migration baseline is **1**: the standalone action-bearing
+  `WORKFLOW_VARIANT_CREATED` toast.
 
 ## Test Plan
 
@@ -1240,7 +1241,8 @@ caring whether they're rendering inside the VS Code panel or a browser tab.
   `showProgress()`, or `showChoice()`; the adapter-mediated UI baseline is 0.
 - **MET —** Severity strings are declared once in `DashboardConstants.ts` and
   nowhere else.
-- **PARTIAL — Phase 6 (updated 2026-08-17):** Group A's 15 client-only webview
-  toast calls now route through `notifyUser()`; panel mode therefore reaches
-  the native host and standalone mode keeps the in-app queue. Group B's 12
-  scoped-reply handlers in `useMessageHandler.ts` remain for Phase 6 step 5.
+- **MET — Phase 6 (2026-08-17):** All 15 Group A client-only webview toast
+  calls and all 12 Group B scoped-reply handlers route through `notifyUser()`;
+  panel mode therefore reaches the native host and standalone mode keeps the
+  in-app queue. The one deliberate standalone action-bearing toast is covered
+  by the shrink-only audit baseline recorded above.

@@ -227,18 +227,12 @@ describe("DuplicateWorkflowDialog", () => {
       address: newAddress,
       requestId: expect.any(String),
     });
-    expect(useUiStore.getState().toastQueue).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ message: 'Created workflow "New Variant"' }),
-      ])
-    );
-    expect(
-      useUiStore
-        .getState()
-        .toastQueue.find(
-          (item) => item.message === 'Created workflow "New Variant"'
-        )?.action
-    ).toBeUndefined();
+    expect(useUiStore.getState().toastQueue).toEqual([]);
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
+      message: 'Created workflow "New Variant"',
+      severity: "success",
+    });
   });
 
   it("offers the serialized workflow address in a new browser tab", () => {

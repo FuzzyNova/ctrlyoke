@@ -364,14 +364,15 @@ second near-identical toast in `extension.ts:177`, also cut), `WorkflowSerialize
 re-verified against `src/` on 2026-08-17.**
 
 **Stage F also now owns Phase 6**, added to the feedback plan on 2026-08-17 and
-not previously represented in this queue. It is a distinct gap from everything
-above: the *webview's own* toast dispatch is not host-aware, so 27 call sites
-across 9 `webview-react` files render an in-app toast even inside the VS Code
+not previously represented in this queue. It was a distinct gap from everything
+above: the *webview's own* toast dispatch was not host-aware, so 27 call sites
+across 9 `webview-react` files rendered an in-app toast even inside the VS Code
 panel. Phase 6 adds a single client-side `notifyUser()` dispatcher (the
-client-side counterpart to Phase 2's `UserFeedbackSink`) and migrates those
-sites to it. **Phase 6 is sequenced before Phase 4** — Phase 4's two relocated
-sites add new in-app UI that should report through `notifyUser()` rather than
-hand-rolling a `standalone` check that would immediately need migrating.
+client-side counterpart to Phase 2's `UserFeedbackSink`) and has migrated those
+sites to it. **Phase 6 is complete and was sequenced before Phase 4** — Phase
+4's two relocated sites will add new in-app UI that should report through
+`notifyUser()` rather than hand-rolling a `standalone` check that would
+immediately need migrating.
 
 ### Stage G — Compatibility Phase 3, and the deferred remainder — NOT STARTED
 
@@ -434,7 +435,7 @@ may be swapped as a block.
 | 17  | E     | **DONE** — `WebviewClientContext` threaded through `WorkflowMutationCoordinator`, `WorkflowStepHandlers`, `UndoRedoCoordinator`, and terminal handlers (landed 2026-07-24 to 2026-08-06); two-tab isolation test in `CoreFeedbackMigration.test.ts` |
 | 18  | F.1   | **DONE.** Phase 6 infra: `MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK` in `src/types/DashboardConstants.ts` / `src/types/WebviewMessageTypes.ts`, the `WebviewMessageRouter` handler and shared-sink wiring in `src/ui/WebviewMessageRouter.ts`, `src/ui/CtrlYokeWebviewProvider.ts`, `src/extension.ts`, plus `notifyUser()` in `src/ui/webview-react/utils/notifyUser.ts` |
 | 19  | F.2   | **DONE.** Phase 6 step 4: migrated Group A's 15 client-only toast call sites (8 `webview-react` files) to `notifyUser()`; the 2026-08-17 re-verification matched the table and found no action-bearing exceptions |
-| 20  | F.3   | **TODO.** Phase 6 step 5: migrate Group B's 12 scoped-reply handlers in `useMessageHandler.ts`; add the shrink-only raw-`showToast`/`enqueueToast` audit counter                                                                                                     |
+| 20  | F.3   | **DONE.** Phase 6 steps 5–7: migrated Group B's 12 scoped-reply handlers to `notifyUser()`, retained the standalone duplicate-tab action, and added the shrink-only raw-toast audit (baseline 1) |
 | 21  | F.4   | **TODO.** Phase 4 items 5 + 6: cut both duplicate workspace-init toasts; funnel clear-all-history through `DeleteConfirmModal` (`boundary` 54 → 53, `reusable` 6 → 4)                                                                                               |
 | 22  | F.5   | **TODO.** Phase 4 items 3 + 4: delete `TemplateImporter.ts` and `ctrlyoke.importWorkflowTemplates`; repoint `ctrlyoke.createNewTemplate` at `TemplateModal` (`reusable` 4 → 2)                                                                                      |
 | 23  | F.6   | **TODO.** Phase 4 item 1: in-app end-condition script creation in `ScriptConditionEditor`; delete `ctrlyoke.createEndConditionScript` (`reusable` 2 → 1)                                                                                                            |
@@ -653,7 +654,7 @@ Re-verified against `src/` on 2026-08-11, not read from the plans.
 | C     | Browser feedback Phases 2 and 2.5                                        | **Done**                                                                                           |
 | D     | CLI `validate --harness` / `--all-installed-harnesses --json`            | **Not started** — no dependency, smallest remaining chunk                                          |
 | E     | Client-scoped routing                                                    | **Done** (confirmed complete this pass; previously unmarked)                                       |
-| F     | Phase 6 host-aware webview toasts + Phase 4's six per-site dispositions   | **Not started** — queued as steps 18–24 (2026-08-17); no `USER_INTERACTION_REQUEST` contract       |
+| F     | Phase 6 host-aware webview toasts + Phase 4's six per-site dispositions   | **Phase 6 done** (steps 18–20); Phase 4 remains queued as steps 21–24; no `USER_INTERACTION_REQUEST` contract |
 | G     | Compatibility Phase 3 domains + docs + Codex investigation + dry-run leg | **Not started**; dry-run sub-leg waits on the Secrets plan, now scheduled as P0 outside this queue |
 
 Three items stand between this document and being fully closed out:
@@ -661,10 +662,10 @@ Three items stand between this document and being fully closed out:
 1. **Stage D** — self-contained, no blockers. Recommended next: it is the
    smallest remaining piece and reuses conventions (JSON envelope, registry
    access) that already exist in `cli.ts`.
-2. **Stage F** — self-contained, no blockers. Now two phases: Phase 6
-   (host-aware webview toast dispatch, 27 sites / 9 files) followed by Phase 4
-   (the six action-bearing sites, all file/line locations re-verified
-   2026-08-17). Split into seven single-session steps 18–24 above.
+2. **Stage F** — self-contained, no blockers. Phase 6's host-aware webview
+   toast dispatch is done; Phase 4's six action-bearing sites remain, with all
+   file/line locations re-verified 2026-08-17. The work is split into the seven
+   single-session steps 18–24 above.
 3. **Stage G** — the largest remaining piece, and the only one with an actual
    dependency chain: its dry-run leg needs
    [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md),

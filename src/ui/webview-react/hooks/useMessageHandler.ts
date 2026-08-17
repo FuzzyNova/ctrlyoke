@@ -89,6 +89,7 @@ import { getWorkflowDefinitionMutation } from "../utils/workflowMutation";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import { navigateToWorkflowAddress } from "@utils/runNavigation";
 import { serializeRoute } from "@/navigation/route";
+import { notifyUser } from "@utils/notifyUser";
 
 // ============================================================================
 // Types
@@ -598,14 +599,12 @@ export function createMessageHandlers(
       durationMs: message.durationMs ?? 0,
       errorSummary: message.errorSummary,
     });
-    useUiStore
-      .getState()
-      .showToast(
-        message.success ? "Command completed" : "Command failed",
-        message.success
-          ? USER_FEEDBACK_SEVERITY.SUCCESS
-          : USER_FEEDBACK_SEVERITY.ERROR
-      );
+    notifyUser(
+      message.success ? "Command completed" : "Command failed",
+      message.success
+        ? USER_FEEDBACK_SEVERITY.SUCCESS
+        : USER_FEEDBACK_SEVERITY.ERROR
+    );
   };
 
   handlers[MESSAGE_TYPES.DEV_RESTARTING] = (message) => {
@@ -657,26 +656,24 @@ export function createMessageHandlers(
   };
 
   handlers[MESSAGE_TYPES.DEV_COMMAND_UNAVAILABLE] = (message) => {
-    useUiStore
-      .getState()
-      .showToast(
-        message.reason ?? "Developer command unavailable",
-        USER_FEEDBACK_SEVERITY.ERROR
-      );
+    notifyUser(
+      message.reason ?? "Developer command unavailable",
+      USER_FEEDBACK_SEVERITY.ERROR
+    );
   };
 
   handlers[MESSAGE_TYPES.UX_SNAPSHOT_SAVED] = (message) => {
     const ui = useUiStore.getState();
     if (message.error) {
       ui.setUxSnapshotStatus("error");
-      ui.showToast(
+      notifyUser(
         `UX snapshot failed: ${message.error}`,
         USER_FEEDBACK_SEVERITY.ERROR
       );
       return;
     }
     ui.setUxSnapshotStatus("saved");
-    ui.showToast(
+    notifyUser(
       `UX snapshot saved to ${message.path}`,
       USER_FEEDBACK_SEVERITY.SUCCESS
     );
@@ -1526,8 +1523,13 @@ export function createMessageHandlers(
     uiStore.closeDuplicateWorkflowDialog();
     vscode.postMessage({ type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS });
     navigateToWorkflowAddress(vscode, message.address, pending.workflowName);
+    const toastMessage = `Created workflow "${pending.workflowName}"`;
+    if (!standalone) {
+      notifyUser(toastMessage, USER_FEEDBACK_SEVERITY.SUCCESS);
+      return;
+    }
     uiStore.showToast(
-      `Created workflow "${pending.workflowName}"`,
+      toastMessage,
       USER_FEEDBACK_SEVERITY.SUCCESS,
       standalone
         ? {
@@ -1737,12 +1739,10 @@ export function createMessageHandlers(
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT] = (message) => {
     if (!message.success) {
-      useUiStore
-        .getState()
-        .showToast(
-          message.error ?? "Unable to open folder",
-          USER_FEEDBACK_SEVERITY.WARNING
-        );
+      notifyUser(
+        message.error ?? "Unable to open folder",
+        USER_FEEDBACK_SEVERITY.WARNING
+      );
     }
   };
 
@@ -1907,12 +1907,10 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.MCP_CONFIG_PREVIEW_RESULT] = (message) => {
     const mcpServerName = message.mcpServerName as string;
     if (!message.found) {
-      useUiStore
-        .getState()
-        .showToast(
-          `Can't preview — no MCP server named "${mcpServerName}" was found in the ctrlyoke registry`,
-          USER_FEEDBACK_SEVERITY.WARNING
-        );
+      notifyUser(
+        `Can't preview — no MCP server named "${mcpServerName}" was found in the ctrlyoke registry`,
+        USER_FEEDBACK_SEVERITY.WARNING
+      );
       return;
     }
     useUiStore.getState().setContentPreviewModal({
@@ -2028,7 +2026,7 @@ export function createMessageHandlers(
     ) {
       uiStore.rollbackRunViewLoad();
     }
-    uiStore.showToast(
+    notifyUser(
       `Failed to ${message.action}: ${message.error}`,
       USER_FEEDBACK_SEVERITY.ERROR
     );
@@ -2441,9 +2439,9 @@ export function createMessageHandlers(
     uiStore.closeSaveWorkflowDialog();
     // Extract filename for a concise toast
     const fileName = message.filePath.split(/[/\\]/).pop() ?? message.filePath;
-    uiStore.showToast(`Saved as ${fileName}`, USER_FEEDBACK_SEVERITY.SUCCESS);
+    notifyUser(`Saved as ${fileName}`, USER_FEEDBACK_SEVERITY.SUCCESS);
     for (const warning of message.warnings ?? []) {
-      uiStore.showToast(warning, USER_FEEDBACK_SEVERITY.WARNING);
+      notifyUser(warning, USER_FEEDBACK_SEVERITY.WARNING);
     }
   };
 
@@ -2461,10 +2459,7 @@ export function createMessageHandlers(
     if (message.requestId) {
       uiStore.closeSaveWorkflowDialog();
     }
-    uiStore.showToast(
-      `Save failed: ${message.error}`,
-      USER_FEEDBACK_SEVERITY.ERROR
-    );
+    notifyUser(`Save failed: ${message.error}`, USER_FEEDBACK_SEVERITY.ERROR);
   };
 
   // --------------------------------------------------------------------------
@@ -2479,7 +2474,7 @@ export function createMessageHandlers(
     }
     uiStore.closeSaveWorkflowDialog();
     uiStore.setTemplates(message.templates || []);
-    uiStore.showToast("Saved as template", USER_FEEDBACK_SEVERITY.SUCCESS);
+    notifyUser("Saved as template", USER_FEEDBACK_SEVERITY.SUCCESS);
   };
 
   // --------------------------------------------------------------------------
