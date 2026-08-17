@@ -306,6 +306,10 @@ export class CliIntegration extends HarnessIntegration {
     return this.getExecutionRoot() || undefined;
   }
 
+  protected override getExecutionSourceCheckoutRoot(): string | undefined {
+    return this.executionWorkspace.sourceCheckoutRoot;
+  }
+
   /**
    * Override base class getWorkspaceRoots() to use the platform adapter, which
    * knows about multi-root `.code-workspace` folders in the VS Code context.

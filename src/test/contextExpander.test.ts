@@ -1,20 +1,59 @@
 import * as assert from "assert";
+import { execFileSync } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { suite, test, afterEach } from "mocha";
 import { ContextExpander } from "../utils/ContextExpander";
+import { getGitUntrackedFiles } from "../utils/GitUtils";
 import {
   parseSelectionReferences,
   parseSymbolReferences,
 } from "../utils/FileReferenceParser";
+import {
+  MAX_CONTENT_SIZE,
+  MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES,
+} from "../types/DashboardConstants";
 
 suite("ContextExpander.expandContextSplit", () => {
   let workspaceRoot: string;
+  const temporaryRoots: string[] = [];
 
   function freshWorkspace(): string {
     workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-"));
     return workspaceRoot;
+  }
+
+  function freshTemporaryRoot(label: string): string {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `fp-ctx-${label}-`));
+    temporaryRoots.push(root);
+    return root;
+  }
+
+  function createGitRepository(): string {
+    const root = freshTemporaryRoot("source");
+    execFileSync("git", ["-C", root, "init", "-q"]);
+    fs.writeFileSync(path.join(root, ".gitignore"), "runtime/\n");
+    execFileSync("git", ["-C", root, "add", ".gitignore"]);
+    execFileSync("git", [
+      "-C",
+      root,
+      "-c",
+      "user.name=ctrlyoke-test",
+      "-c",
+      "user.email=ctrlyoke-test@example.com",
+      "commit",
+      "-m",
+      "initial commit",
+    ]);
+    return root;
+  }
+
+  function writeRepositoryFile(root: string, relativePath: string): string {
+    const filePath = path.join(root, relativePath);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, `${relativePath}\n`);
+    return filePath;
   }
 
   afterEach(() => {
@@ -25,13 +64,20 @@ suite("ContextExpander.expandContextSplit", () => {
     } catch {
       // best-effort
     }
+    for (const root of temporaryRoots.splice(0)) {
+      try {
+        fs.rmSync(root, { recursive: true, force: true });
+      } catch {
+        // best-effort
+      }
+    }
   });
 
   // ──────────────────────────────────────────────────────────────────────────
   suite("no references", () => {
     test("returns empty result for prompt with no @-references", async () => {
       const root = freshWorkspace();
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         "Just a plain text prompt with no file references."
       );
@@ -41,7 +87,7 @@ suite("ContextExpander.expandContextSplit", () => {
 
     test("returns empty result for empty string", async () => {
       const root = freshWorkspace();
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit("");
       assert.deepStrictEqual(result.directFileRefs, []);
       assert.strictEqual(result.excerptBlocks, "");
@@ -57,7 +103,7 @@ suite("ContextExpander.expandContextSplit", () => {
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
       fs.writeFileSync(filePath, "export const x = 1;\n");
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         "Please look at @src/helper.ts for context."
       );
@@ -74,7 +120,7 @@ suite("ContextExpander.expandContextSplit", () => {
       fs.writeFileSync(fileA, "const a = 1;\n");
       fs.writeFileSync(fileB, "const b = 2;\n");
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         "Look at @a.ts and @b.ts please."
       );
@@ -90,13 +136,363 @@ suite("ContextExpander.expandContextSplit", () => {
       const filePath = path.join(root, "utils.ts");
       fs.writeFileSync(filePath, "export const util = () => {};\n");
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         "See @utils.ts and also @utils.ts again."
       );
 
       assert.strictEqual(result.directFileRefs.length, 1);
       assert.strictEqual(result.directFileRefs[0], filePath);
+    });
+  });
+
+  suite("source checkout runtime references", () => {
+    test("does not invoke Git for a non-worktree expansion", async () => {
+      const root = freshWorkspace();
+      const filePath = path.join(root, "ordinary.log");
+      fs.writeFileSync(filePath, "ordinary\n");
+      const tracePath = path.join(root, "git-trace.jsonl");
+      const previousTracePath = process.env.GIT_TRACE2_EVENT;
+      process.env.GIT_TRACE2_EVENT = tracePath;
+      try {
+        const expander = new ContextExpander({ workspaceRoot: root });
+        const result = await expander.expandContextSplit("Review @ordinary.log");
+        assert.deepStrictEqual(result.directFileRefs, [filePath]);
+      } finally {
+        if (previousTracePath === undefined) {
+          delete process.env.GIT_TRACE2_EVENT;
+        } else {
+          process.env.GIT_TRACE2_EVENT = previousTracePath;
+        }
+      }
+
+      const trace = fs.existsSync(tracePath)
+        ? fs.readFileSync(tracePath, "utf8")
+        : "";
+      assert.strictEqual(trace.includes('"name":"check-ignore"'), false);
+    });
+
+    test("tier 1 wins when a file exists in both checkouts", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = freshWorkspace();
+      const sourcePath = writeRepositoryFile(sourceRoot, "runtime/shared.log");
+      const executionPath = path.join(executionRoot, "runtime", "shared.log");
+      fs.mkdirSync(path.dirname(executionPath), { recursive: true });
+      fs.writeFileSync(executionPath, "execution copy\n");
+
+      const expander = new ContextExpander({
+        workspaceRoot: executionRoot,
+        additionalTrustedRoots: [executionRoot],
+        sourceCheckoutRoot: sourceRoot,
+        executionCheckoutRoot: executionRoot,
+      });
+      const result = await expander.expandContextSplit(
+        "Review @runtime/shared.log"
+      );
+
+      assert.deepStrictEqual(result.directFileRefs, [executionPath]);
+      assert.ok(!result.directFileRefs.includes(sourcePath));
+    });
+
+    test("resolves a gitignored source-only file in relative and absolute forms", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = freshWorkspace();
+      const sourcePath = writeRepositoryFile(sourceRoot, "runtime/source.log");
+
+      const expander = new ContextExpander({
+        workspaceRoot: executionRoot,
+        additionalTrustedRoots: [executionRoot],
+        sourceCheckoutRoot: sourceRoot,
+        executionCheckoutRoot: executionRoot,
+      });
+      const result = await expander.expandContextSplit(
+        `Review @runtime/source.log and @"${sourcePath}"`
+      );
+
+      const destinationPath = path.join(executionRoot, "runtime", "source.log");
+      assert.deepStrictEqual(result.directFileRefs, [destinationPath]);
+      assert.deepStrictEqual(result.sourceRuntimeCopies, [
+        { sourcePath, destinationPath },
+      ]);
+    });
+
+    test("leaves a copied ref's inline token workspace-relative and unrewritten", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = freshWorkspace();
+      writeRepositoryFile(sourceRoot, "runtime/source.log");
+
+      const expander = new ContextExpander({
+        workspaceRoot: executionRoot,
+        additionalTrustedRoots: [executionRoot],
+        sourceCheckoutRoot: sourceRoot,
+        executionCheckoutRoot: executionRoot,
+        effectiveAbsolute: true,
+      });
+
+      assert.strictEqual(
+        await expander.sanitizeReferences("Review @runtime/source.log"),
+        "Review @runtime/source.log"
+      );
+    });
+
+    test("copies a multi-megabyte source log above MAX_CONTENT_SIZE under the copy ceiling", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = freshWorkspace();
+      const sourcePath = path.join(sourceRoot, "runtime", "large.log");
+      fs.mkdirSync(path.dirname(sourcePath), { recursive: true });
+      fs.writeFileSync(sourcePath, Buffer.alloc(MAX_CONTENT_SIZE + 1024, 65));
+
+      const expander = new ContextExpander({
+        workspaceRoot: executionRoot,
+        additionalTrustedRoots: [executionRoot],
+        sourceCheckoutRoot: sourceRoot,
+        executionCheckoutRoot: executionRoot,
+      });
+      const result = await expander.expandContextSplit(
+        "Review @runtime/large.log"
+      );
+
+      assert.ok(sourcePath.length > 0);
+      assert.strictEqual(result.sourceRuntimeCopies.length, 1);
+      assert.strictEqual(result.skippedReferences.length, 0);
+      assert.strictEqual(
+        result.directFileRefs[0],
+        path.join(executionRoot, "runtime", "large.log")
+      );
+    });
+
+    test("keeps copied runtime files out of getGitUntrackedFiles", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = createGitRepository();
+      const sourcePath = writeRepositoryFile(sourceRoot, "runtime/session.log");
+      const destinationPath = path.join(
+        executionRoot,
+        "runtime",
+        "session.log"
+      );
+      fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
+      fs.copyFileSync(sourcePath, destinationPath);
+
+      const untrackedFiles = await getGitUntrackedFiles(executionRoot);
+      assert.ok(!untrackedFiles.includes("runtime/session.log"));
+    });
+
+    test("refuses a source artifact over the copy ceiling by name and size", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = freshWorkspace();
+      const sourcePath = path.join(sourceRoot, "runtime", "too-large.log");
+      fs.mkdirSync(path.dirname(sourcePath), { recursive: true });
+      fs.writeFileSync(sourcePath, "x");
+      fs.truncateSync(sourcePath, MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES + 1);
+
+      const expander = new ContextExpander({
+        workspaceRoot: executionRoot,
+        additionalTrustedRoots: [executionRoot],
+        sourceCheckoutRoot: sourceRoot,
+        executionCheckoutRoot: executionRoot,
+      });
+      const result = await expander.expandContextSplit(
+        "Review @runtime/too-large.log"
+      );
+
+      assert.deepStrictEqual(result.sourceRuntimeCopies, []);
+      const skipped = result.skippedReferences.find(
+        (ref) => ref.ref === "runtime/too-large.log"
+      );
+      assert.ok(skipped);
+      assert.ok(
+        skipped.reason.includes("MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES")
+      );
+      assert.ok(
+        skipped.reason.includes(`${MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES + 1}`)
+      );
+    });
+
+    test("renders the same absolute source path in excerpts and sanitized references", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = freshWorkspace();
+      const sourcePath = writeRepositoryFile(sourceRoot, "runtime/source.log");
+      const reference = "#selection:runtime/source.log:1-1";
+
+      const expander = new ContextExpander({
+        workspaceRoot: executionRoot,
+        additionalTrustedRoots: [executionRoot],
+        sourceCheckoutRoot: sourceRoot,
+        executionCheckoutRoot: executionRoot,
+      });
+      const expanded = await expander.expandContextSplit(reference);
+      const sanitized = await expander.sanitizeReferences(reference);
+
+      assert.ok(
+        expanded.excerptBlocks.includes(
+          `Excerpt from ${sourcePath}, lines 1 to 1`
+        )
+      );
+      assert.strictEqual(sanitized, `#selection:"${sourcePath}":1-1`);
+      assert.ok(
+        expanded.excerptBlocks.includes(sourcePath),
+        "the excerpt must name the same absolute source path as sanitizeReferences"
+      );
+      assert.ok(
+        sanitized.includes(sourcePath),
+        "sanitizeReferences must name the same absolute source path as the excerpt"
+      );
+      assert.strictEqual(expanded.sourceRuntimeReadCount, 1);
+    });
+
+    test("blocks a source-only ignored directory and reports its token", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = freshWorkspace();
+      const sourceDirectory = path.join(sourceRoot, "runtime");
+      fs.mkdirSync(sourceDirectory, { recursive: true });
+      fs.writeFileSync(path.join(sourceDirectory, "source.log"), "source\n");
+
+      const expander = new ContextExpander({
+        workspaceRoot: executionRoot,
+        additionalTrustedRoots: [executionRoot],
+        sourceCheckoutRoot: sourceRoot,
+        executionCheckoutRoot: executionRoot,
+      });
+      const result = await expander.expandContextSplit(
+        "Review @runtime/ before continuing."
+      );
+
+      assert.deepStrictEqual(result.directFileRefs, []);
+      assert.strictEqual(result.excerptBlocks, "");
+      assert.ok(
+        result.skippedReferences.some(
+          (ref) =>
+            ref.ref === "runtime/" &&
+            ref.reason.includes("@runtime/") &&
+            ref.reason.includes("blocked")
+        )
+      );
+    });
+
+    test("keeps a tracked-but-absent source file unresolved", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = freshWorkspace();
+      const sourcePath = writeRepositoryFile(sourceRoot, "tracked.log");
+      execFileSync("git", ["-C", sourceRoot, "add", "tracked.log"]);
+      execFileSync("git", [
+        "-C",
+        sourceRoot,
+        "-c",
+        "user.name=ctrlyoke-test",
+        "-c",
+        "user.email=ctrlyoke-test@example.com",
+        "commit",
+        "-m",
+        "add tracked file",
+      ]);
+
+      const expander = new ContextExpander({
+        workspaceRoot: executionRoot,
+        additionalTrustedRoots: [executionRoot],
+        sourceCheckoutRoot: sourceRoot,
+        executionCheckoutRoot: executionRoot,
+      });
+      const result = await expander.expandContextSplit("Review @tracked.log");
+
+      assert.deepStrictEqual(result.directFileRefs, []);
+      assert.ok(
+        result.skippedReferences.some((ref) => ref.ref === "tracked.log")
+      );
+      assert.ok(fs.existsSync(sourcePath));
+    });
+
+    test("keeps an ignored file outside the source checkout blocked", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = freshWorkspace();
+      const outsideRoot = freshTemporaryRoot("outside");
+      const outsidePath = writeRepositoryFile(
+        outsideRoot,
+        "runtime/outside.log"
+      );
+
+      const expander = new ContextExpander({
+        workspaceRoot: executionRoot,
+        additionalTrustedRoots: [executionRoot],
+        sourceCheckoutRoot: sourceRoot,
+        executionCheckoutRoot: executionRoot,
+      });
+      const result = await expander.expandContextSplit(
+        `Review @"${outsidePath}"`
+      );
+
+      assert.deepStrictEqual(result.directFileRefs, []);
+      assert.ok(
+        result.skippedReferences.some((ref) =>
+          ref.reason.includes("resolves outside the workspace and was blocked")
+        )
+      );
+    });
+
+    test("does not spawn check-ignore for a non-worktree expansion", async () => {
+      const root = freshWorkspace();
+      const filePath = writeRepositoryFile(root, "runtime/plain.log");
+      const tracePath = path.join(freshTemporaryRoot("trace"), "git.jsonl");
+      const previousTracePath = process.env.GIT_TRACE2_EVENT;
+      process.env.GIT_TRACE2_EVENT = tracePath;
+      try {
+        const expander = new ContextExpander({ workspaceRoot: root });
+        const result = await expander.expandContextSplit(
+          "Review @runtime/plain.log"
+        );
+        assert.deepStrictEqual(result.directFileRefs, [filePath]);
+      } finally {
+        if (previousTracePath === undefined) {
+          delete process.env.GIT_TRACE2_EVENT;
+        } else {
+          process.env.GIT_TRACE2_EVENT = previousTracePath;
+        }
+      }
+      assert.strictEqual(fs.existsSync(tracePath), false);
+    });
+
+    test("runs one check-ignore subprocess for many references", async () => {
+      const sourceRoot = createGitRepository();
+      const executionRoot = freshWorkspace();
+      const paths = [0, 1, 2].map((index) =>
+        writeRepositoryFile(sourceRoot, `runtime/log-${index}.log`)
+      );
+      const tracePath = path.join(freshTemporaryRoot("trace"), "git.jsonl");
+      const previousTracePath = process.env.GIT_TRACE2_EVENT;
+      process.env.GIT_TRACE2_EVENT = tracePath;
+      try {
+        const expander = new ContextExpander({
+          workspaceRoot: executionRoot,
+          additionalTrustedRoots: [executionRoot],
+          sourceCheckoutRoot: sourceRoot,
+          executionCheckoutRoot: executionRoot,
+        });
+        const result = await expander.expandContextSplit(
+          paths.map((_, index) => `@runtime/log-${index}.log`).join(" ")
+        );
+        assert.deepStrictEqual(
+          result.directFileRefs,
+          paths.map((sourcePath) =>
+            path.join(executionRoot, path.relative(sourceRoot, sourcePath))
+          )
+        );
+        assert.strictEqual(result.sourceRuntimeCopies.length, paths.length);
+      } finally {
+        if (previousTracePath === undefined) {
+          delete process.env.GIT_TRACE2_EVENT;
+        } else {
+          process.env.GIT_TRACE2_EVENT = previousTracePath;
+        }
+      }
+
+      const checkIgnoreCommands = fs
+        .readFileSync(tracePath, "utf8")
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as { event?: string; name?: string })
+        .filter(
+          (event) => event.event === "cmd_name" && event.name === "check-ignore"
+        );
+      assert.strictEqual(checkIgnoreCommands.length, 1);
     });
   });
 
@@ -112,7 +508,7 @@ suite("ContextExpander.expandContextSplit", () => {
         )
       );
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         "Focus on #selection:sample.ts:2-4"
       );
@@ -141,7 +537,7 @@ suite("ContextExpander.expandContextSplit", () => {
         ].join("\n")
       );
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         "Check #selection:numbered.ts:2-3"
       );
@@ -162,7 +558,7 @@ suite("ContextExpander.expandContextSplit", () => {
       const lines = Array.from({ length: 10 }, (_, i) => `line${i + 1}`);
       fs.writeFileSync(filePath, lines.join("\n"));
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         "See #selection:src.ts:5-7"
       );
@@ -196,7 +592,7 @@ suite("ContextExpander.expandContextSplit", () => {
       const lines = Array.from({ length: 8 }, (_, i) => `content${i + 1}`);
       fs.writeFileSync(filePath, lines.join("\n"));
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         "Excerpt: #selection:offset.ts:5-6"
       );
@@ -224,7 +620,7 @@ suite("ContextExpander.expandContextSplit", () => {
         ["before", "start", "middle", "end", "after"].join("\n")
       );
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         "Check #sym:symbol.ts:notARealSymbol:2-4"
       );
@@ -242,12 +638,12 @@ suite("ContextExpander.expandContextSplit", () => {
         ["before", "start", "end"].join("\n")
       );
 
-      const unkinded = await new ContextExpander(root).expandContextSplit(
-        "#sym:symbol.ts:notARealSymbol:2-3"
-      );
-      const kinded = await new ContextExpander(root).expandContextSplit(
-        "#sym.class:symbol.ts:notARealSymbol:2-3"
-      );
+      const unkinded = await new ContextExpander({
+        workspaceRoot: root,
+      }).expandContextSplit("#sym:symbol.ts:notARealSymbol:2-3");
+      const kinded = await new ContextExpander({
+        workspaceRoot: root,
+      }).expandContextSplit("#sym.class:symbol.ts:notARealSymbol:2-3");
 
       assert.deepStrictEqual(kinded, unkinded);
     });
@@ -262,7 +658,7 @@ suite("ContextExpander.expandContextSplit", () => {
       fs.writeFileSync(fullFile, "export const full = true;\n");
       fs.writeFileSync(rangeFile, ["lineA", "lineB", "lineC"].join("\n"));
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         "Use @full.ts and focus on #selection:range.ts:1-2"
       );
@@ -285,7 +681,7 @@ suite("ContextExpander.expandContextSplit", () => {
       const filePath = path.join(root, "inside.ts");
       fs.writeFileSync(filePath, "export function inside() {}\n");
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         [
           "```ts",
@@ -310,7 +706,7 @@ suite("ContextExpander.expandContextSplit", () => {
       fs.writeFileSync(insideFile, "export const inside = true;\n");
       fs.writeFileSync(rangeFile, ["one", "two", "three", "four"].join("\n"));
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         [
           "Use @outside.ts and #selection:range.ts:1-2.",
@@ -333,7 +729,7 @@ suite("ContextExpander.expandContextSplit", () => {
       fs.writeFileSync(path.join(root, "a.ts"), "export const a = 1;\n");
       fs.writeFileSync(path.join(root, "b.ts"), "export const b = 2;\n");
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         [
           "```",
@@ -356,7 +752,7 @@ suite("ContextExpander.expandContextSplit", () => {
       const filePath = path.join(root, "unclosed.ts");
       fs.writeFileSync(filePath, "export const value = 1;\n");
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         ["Here is an unclosed fence:", "```ts", "@unclosed.ts"].join("\n")
       );
@@ -370,7 +766,7 @@ suite("ContextExpander.expandContextSplit", () => {
       const filePath = path.join(root, "inline.ts");
       fs.writeFileSync(filePath, "export const inline = true;\n");
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         "Check `@inline.ts` while reviewing this change."
       );
@@ -403,7 +799,7 @@ suite("ContextExpander.expandContextSplit", () => {
         path.join(outsideDir, "secret.txt")
       );
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(`@${traversal}`);
 
       assert.deepStrictEqual(result.directFileRefs, []);
@@ -416,7 +812,7 @@ suite("ContextExpander.expandContextSplit", () => {
       const absPath = path.join(outsideDir, "secret.txt");
       fs.writeFileSync(absPath, "TOP SECRET\n");
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(`@${absPath}`);
 
       assert.deepStrictEqual(result.directFileRefs, []);
@@ -435,7 +831,7 @@ suite("ContextExpander.expandContextSplit", () => {
         path.join(outsideDir, "secret.txt")
       );
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         `#selection:${traversal}:1-2`
       );
@@ -455,7 +851,7 @@ suite("ContextExpander.expandContextSplit", () => {
       const insideFile = path.join(root, "inside.ts");
       fs.writeFileSync(insideFile, "export const inside = true;\n");
 
-      const expander = new ContextExpander(root);
+      const expander = new ContextExpander({ workspaceRoot: root });
       const result = await expander.expandContextSplit(
         `@${traversal} and @inside.ts`
       );
@@ -472,18 +868,20 @@ suite("ContextExpander.expandContextSplit", () => {
       fs.writeFileSync(workflowFile, "workflow asset\n");
       fs.writeFileSync(workspaceFile, "workspace asset\n");
 
-      const expander = new ContextExpander(
-        root,
-        [root],
-        [],
-        false,
-        workflowDir
-      );
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [root],
+        effectiveAbsolute: false,
+        sourceDefinitionDir: workflowDir,
+      });
       const result = await expander.expandContextSplit(
         "@./asset.txt and @asset.txt"
       );
 
-      assert.deepStrictEqual(result.directFileRefs, [workflowFile, workspaceFile]);
+      assert.deepStrictEqual(result.directFileRefs, [
+        workflowFile,
+        workspaceFile,
+      ]);
     });
 
     test("resolves a workflow-relative traversal before blocking it outside trusted roots", async () => {
@@ -491,13 +889,12 @@ suite("ContextExpander.expandContextSplit", () => {
       const workflowDir = path.join(root, "workflows", "deep");
       fs.mkdirSync(workflowDir, { recursive: true });
 
-      const expander = new ContextExpander(
-        root,
-        [root],
-        [],
-        false,
-        workflowDir
-      );
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [root],
+        effectiveAbsolute: false,
+        sourceDefinitionDir: workflowDir,
+      });
       const result = await expander.expandContextSplit(
         "@./../../../outside.txt"
       );
@@ -510,7 +907,10 @@ suite("ContextExpander.expandContextSplit", () => {
       const root = freshWorkspace();
       fs.writeFileSync(path.join(root, "asset.txt"), "workspace asset\n");
 
-      const expander = new ContextExpander(root, [root]);
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [root],
+      });
       const result = await expander.expandContextSplit("@./asset.txt");
 
       assert.deepStrictEqual(result.directFileRefs, []);
@@ -524,13 +924,12 @@ suite("ContextExpander.expandContextSplit", () => {
       const filePath = path.join(root, "shared.txt");
       fs.writeFileSync(filePath, "shared\n");
 
-      const expander = new ContextExpander(
-        root,
-        [root],
-        [],
-        false,
-        workflowDir
-      );
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [root],
+        effectiveAbsolute: false,
+        sourceDefinitionDir: workflowDir,
+      });
       const result = await expander.expandContextSplit(
         "@shared.txt and @./../shared.txt"
       );
@@ -562,19 +961,18 @@ suite("ContextExpander.expandContextSplit", () => {
 
       // Without the second root registered as trusted, the same reference
       // must be rejected (this is the regression the multi-root fix closes).
-      const untrustedExpander = new ContextExpander(root);
+      const untrustedExpander = new ContextExpander({ workspaceRoot: root });
       const untrustedResult = await untrustedExpander.expandContextSplit(
         `@${relativeFromPrimary}`
       );
       assert.deepStrictEqual(untrustedResult.directFileRefs, []);
 
-      const trustedExpander = new ContextExpander(
-        root,
-        [root, secondRoot],
-        [],
-        false,
-        root
-      );
+      const trustedExpander = new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [root, secondRoot],
+        effectiveAbsolute: false,
+        sourceDefinitionDir: root,
+      });
       const trustedResult = await trustedExpander.expandContextSplit(
         `@${relativeFromPrimary}`
       );
@@ -588,13 +986,12 @@ suite("ContextExpander.expandContextSplit", () => {
       fs.writeFileSync(path.join(secondRoot, "sub", "c.ts"), "// c\n");
       const relativeDir = path.relative(root, path.join(secondRoot, "sub"));
 
-      const expander = new ContextExpander(
-        root,
-        [root, secondRoot],
-        [],
-        false,
-        root
-      );
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [root, secondRoot],
+        effectiveAbsolute: false,
+        sourceDefinitionDir: root,
+      });
       const result = await expander.expandContextSplit(`@${relativeDir}/`);
 
       assert.ok(result.excerptBlocks.includes("c.ts"));
@@ -614,13 +1011,12 @@ suite("ContextExpander.expandContextSplit", () => {
       );
 
       try {
-        const expander = new ContextExpander(
-          root,
-          [root, secondRoot],
-          [],
-          false,
-          root
-        );
+        const expander = new ContextExpander({
+          workspaceRoot: root,
+          additionalTrustedRoots: [root, secondRoot],
+          effectiveAbsolute: false,
+          sourceDefinitionDir: root,
+        });
         const result = await expander.expandContextSplit(`@${traversal}`);
 
         assert.deepStrictEqual(result.directFileRefs, []);
@@ -655,7 +1051,10 @@ suite("ContextExpander.expandContextSplit", () => {
       const externalFile = path.join(externalRoot, "session.jsonl");
       fs.writeFileSync(externalFile, '{"event":"start"}\n');
 
-      const expander = new ContextExpander(root, [root, externalRoot]);
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [root, externalRoot],
+      });
       const result = await expander.expandContextSplit(`@"${externalFile}"`);
 
       assert.deepStrictEqual(result.directFileRefs, [externalFile]);
@@ -667,7 +1066,10 @@ suite("ContextExpander.expandContextSplit", () => {
       const externalFile = path.join(externalRoot, "debug.log");
       fs.writeFileSync(externalFile, "line1\nline2\nline3\n");
 
-      const expander = new ContextExpander(root, [root, externalRoot]);
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [root, externalRoot],
+      });
       const result = await expander.expandContextSplit(
         `#selection:"${externalFile}":1-2`
       );
@@ -681,7 +1083,10 @@ suite("ContextExpander.expandContextSplit", () => {
       externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-ext-"));
       fs.writeFileSync(path.join(externalRoot, "notes.txt"), "hi\n");
 
-      const expander = new ContextExpander(root, [root, externalRoot]);
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [root, externalRoot],
+      });
       const result = await expander.expandContextSplit(`@"${externalRoot}/"`);
 
       assert.ok(result.excerptBlocks.includes("notes.txt"));
@@ -696,7 +1101,10 @@ suite("ContextExpander.expandContextSplit", () => {
 
       // externalRoot intentionally NOT included in additionalTrustedRoots —
       // simulates a root that is configured but not yet approved.
-      const expander = new ContextExpander(root, [root]);
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [root],
+      });
       const result = await expander.expandContextSplit(`@"${externalFile}"`);
 
       assert.deepStrictEqual(result.directFileRefs, []);
@@ -707,7 +1115,10 @@ suite("ContextExpander.expandContextSplit", () => {
       externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-ext-"));
       fs.writeFileSync(path.join(externalRoot, "notes.txt"), "hi\n");
 
-      const expander = new ContextExpander(root, [root]);
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [root],
+      });
       const result = await expander.expandContextSplit(`@"${externalRoot}/"`);
 
       assert.ok(result.excerptBlocks.includes("blocked"));
@@ -734,14 +1145,14 @@ suite("ContextExpander.expandContextSplit", () => {
       const secondFile = path.join(secondRoot, "b.ts");
       fs.writeFileSync(secondFile, "export const b = true;\n");
 
-      const expander = new ContextExpander(
-        root,
-        [root, secondRoot],
-        [
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [root, secondRoot],
+        namedRoots: [
           { name: "root1", fsPath: root },
           { name: "root2", fsPath: secondRoot },
-        ]
-      );
+        ],
+      });
       const result = await expander.expandContextSplit("@root2/b.ts");
 
       assert.deepStrictEqual(result.directFileRefs, [secondFile]);
@@ -753,14 +1164,14 @@ suite("ContextExpander.expandContextSplit", () => {
       const primaryFile = path.join(root, "a.ts");
       fs.writeFileSync(primaryFile, "export const a = true;\n");
 
-      const expander = new ContextExpander(
-        root,
-        [root, secondRoot],
-        [
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [root, secondRoot],
+        namedRoots: [
           { name: "root1", fsPath: root },
           { name: "root2", fsPath: secondRoot },
-        ]
-      );
+        ],
+      });
       const result = await expander.expandContextSplit("@a.ts");
 
       assert.deepStrictEqual(result.directFileRefs, [primaryFile]);
@@ -774,7 +1185,11 @@ suite("ContextExpander.expandContextSplit", () => {
       const filePath = path.join(root, "a.ts");
       fs.writeFileSync(filePath, "line1\nline2\nline3\n");
 
-      const expander = new ContextExpander(root, [root], [], false);
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [root],
+        effectiveAbsolute: false,
+      });
       const result = await expander.expandContextSplit("#selection:a.ts:1-2");
 
       assert.ok(result.excerptBlocks.includes("Excerpt from a.ts"));
@@ -786,7 +1201,11 @@ suite("ContextExpander.expandContextSplit", () => {
       const filePath = path.join(root, "a.ts");
       fs.writeFileSync(filePath, "line1\nline2\nline3\n");
 
-      const expander = new ContextExpander(root, [root], [], true);
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [root],
+        effectiveAbsolute: true,
+      });
       const result = await expander.expandContextSplit("#selection:a.ts:1-2");
 
       assert.ok(result.excerptBlocks.includes(`Excerpt from ${filePath}`));
@@ -799,7 +1218,11 @@ suite("ContextExpander.expandContextSplit", () => {
       fs.mkdirSync(path.join(root, "sub"));
       fs.writeFileSync(path.join(root, "sub", "c.ts"), "// c\n");
 
-      const expander = new ContextExpander(root, [root], [], true);
+      const expander = new ContextExpander({
+        workspaceRoot: root,
+        additionalTrustedRoots: [root],
+        effectiveAbsolute: true,
+      });
       const result = await expander.expandContextSplit("@sub/");
 
       const absoluteDir = path.join(root, "sub");
@@ -838,7 +1261,7 @@ suite("ContextExpander.expandContext", () => {
       "export const inside = 2;\n"
     );
 
-    const expander = new ContextExpander(root);
+    const expander = new ContextExpander({ workspaceRoot: root });
     const result = await expander.expandContext(
       ["Review @outside.ts carefully.", "```", "@inside.ts", "```"].join("\n")
     );
@@ -874,7 +1297,11 @@ suite("ContextExpander.sanitizeReferences", () => {
 
   test("leaves text untouched when there are no references", async () => {
     const root = freshWorkspace();
-    const expander = new ContextExpander(root, [root], [], true);
+    const expander = new ContextExpander({
+      workspaceRoot: root,
+      additionalTrustedRoots: [root],
+      effectiveAbsolute: true,
+    });
     const text = "Please implement the feature described above.";
 
     assert.strictEqual(await expander.sanitizeReferences(text), text);
@@ -884,7 +1311,11 @@ suite("ContextExpander.sanitizeReferences", () => {
     const root = freshWorkspace();
     fs.writeFileSync(path.join(root, "a.ts"), "export const a = 1;\n");
 
-    const expander = new ContextExpander(root, [root], [], false);
+    const expander = new ContextExpander({
+      workspaceRoot: root,
+      additionalTrustedRoots: [root],
+      effectiveAbsolute: false,
+    });
     const result = await expander.sanitizeReferences(
       "Please review @a.ts for issues."
     );
@@ -899,13 +1330,12 @@ suite("ContextExpander.sanitizeReferences", () => {
     const filePath = path.join(workflowDir, "asset.ts");
     fs.writeFileSync(filePath, "export const asset = true;\n");
 
-    const expander = new ContextExpander(
-      root,
-      [root],
-      [],
-      false,
-      workflowDir
-    );
+    const expander = new ContextExpander({
+      workspaceRoot: root,
+      additionalTrustedRoots: [root],
+      effectiveAbsolute: false,
+      sourceDefinitionDir: workflowDir,
+    });
     const references = [
       "@./asset.ts",
       "#selection:./asset.ts:1-1",
@@ -925,15 +1355,15 @@ suite("ContextExpander.sanitizeReferences", () => {
     const secondFile = path.join(secondRoot, "b.ts");
     fs.writeFileSync(secondFile, "export const b = true;\n");
 
-    const expander = new ContextExpander(
-      root,
-      [root, secondRoot],
-      [
+    const expander = new ContextExpander({
+      workspaceRoot: root,
+      additionalTrustedRoots: [root, secondRoot],
+      namedRoots: [
         { name: "root1", fsPath: root },
         { name: "root2", fsPath: secondRoot },
       ],
-      true
-    );
+      effectiveAbsolute: true,
+    });
     const result = await expander.sanitizeReferences(
       "Please fix @root2/b.ts before merging."
     );
@@ -947,15 +1377,15 @@ suite("ContextExpander.sanitizeReferences", () => {
     const secondFile = path.join(secondRoot, "b.ts");
     fs.writeFileSync(secondFile, "export function foo() {}\n");
 
-    const expander = new ContextExpander(
-      root,
-      [root, secondRoot],
-      [
+    const expander = new ContextExpander({
+      workspaceRoot: root,
+      additionalTrustedRoots: [root, secondRoot],
+      namedRoots: [
         { name: "root1", fsPath: root },
         { name: "root2", fsPath: secondRoot },
       ],
-      true
-    );
+      effectiveAbsolute: true,
+    });
     const result = await expander.sanitizeReferences(
       "When #sym:root2/b.ts:foo:1-1 runs, log the result."
     );
@@ -979,15 +1409,15 @@ suite("ContextExpander.sanitizeReferences", () => {
     const secondFile = path.join(secondRoot, "b.ts");
     fs.writeFileSync(secondFile, "export class Foo {}\n");
 
-    const expander = new ContextExpander(
-      root,
-      [root, secondRoot],
-      [
+    const expander = new ContextExpander({
+      workspaceRoot: root,
+      additionalTrustedRoots: [root, secondRoot],
+      namedRoots: [
         { name: "root1", fsPath: root },
         { name: "root2", fsPath: secondRoot },
       ],
-      true
-    );
+      effectiveAbsolute: true,
+    });
     const result = await expander.sanitizeReferences(
       "When #sym.class:root2/b.ts:Foo:1-1 runs, log the result."
     );
@@ -1007,21 +1437,66 @@ suite("ContextExpander.sanitizeReferences", () => {
     );
   });
 
+  test("rewrites a source-store #sym: ref while preserving kind, symbol, and range", async () => {
+    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-source-"));
+    const sourceRoot = secondRoot;
+    const executionRoot = freshWorkspace();
+    fs.mkdirSync(path.join(sourceRoot, "runtime"), { recursive: true });
+    const sourcePath = path.join(sourceRoot, "runtime", "source.ts");
+    fs.writeFileSync(sourcePath, "export class Foo {}\n");
+    fs.writeFileSync(path.join(sourceRoot, ".gitignore"), "runtime/\n");
+    execFileSync("git", ["-C", sourceRoot, "init", "-q"]);
+    execFileSync("git", ["-C", sourceRoot, "add", ".gitignore"]);
+    execFileSync("git", [
+      "-C",
+      sourceRoot,
+      "-c",
+      "user.name=ctrlyoke-test",
+      "-c",
+      "user.email=ctrlyoke-test@example.com",
+      "commit",
+      "-m",
+      "initial commit",
+    ]);
+
+    const expander = new ContextExpander({
+      workspaceRoot: executionRoot,
+      additionalTrustedRoots: [executionRoot],
+      sourceCheckoutRoot: sourceRoot,
+      executionCheckoutRoot: executionRoot,
+    });
+    const result = await expander.sanitizeReferences(
+      "Review #sym.class:runtime/source.ts:Foo:1-1."
+    );
+
+    assert.strictEqual(result, `Review #sym.class:"${sourcePath}":Foo:1-1.`);
+    assert.deepStrictEqual(
+      parseSymbolReferences(result).map((ref) => [
+        ref.path,
+        ref.symbolKind,
+        ref.symbolName,
+        ref.startLine,
+        ref.endLine,
+      ]),
+      [[sourcePath, "class", "Foo", 1, 1]]
+    );
+  });
+
   test("multi-root, effectiveAbsolute true: rewrites a folder-prefixed #selection: ref to its absolute path", async () => {
     const root = freshWorkspace();
     secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
     const secondFile = path.join(secondRoot, "b.ts");
     fs.writeFileSync(secondFile, "line1\nline2\n");
 
-    const expander = new ContextExpander(
-      root,
-      [root, secondRoot],
-      [
+    const expander = new ContextExpander({
+      workspaceRoot: root,
+      additionalTrustedRoots: [root, secondRoot],
+      namedRoots: [
         { name: "root1", fsPath: root },
         { name: "root2", fsPath: secondRoot },
       ],
-      true
-    );
+      effectiveAbsolute: true,
+    });
     const result = await expander.sanitizeReferences(
       "See #selection:root2/b.ts:1-2 for context."
     );
@@ -1041,7 +1516,11 @@ suite("ContextExpander.sanitizeReferences", () => {
     const root = freshWorkspace();
     fs.writeFileSync(path.join(root, "a.ts"), "line1\nline2\n");
 
-    const expander = new ContextExpander(root, [root], [], false);
+    const expander = new ContextExpander({
+      workspaceRoot: root,
+      additionalTrustedRoots: [root],
+      effectiveAbsolute: false,
+    });
     const text = "See #selection:a.ts:1-2 and #sym:a.ts:foo:1-2 here.";
 
     assert.strictEqual(await expander.sanitizeReferences(text), text);
@@ -1051,7 +1530,11 @@ suite("ContextExpander.sanitizeReferences", () => {
     const root = freshWorkspace();
     fs.writeFileSync(path.join(root, "a.ts"), "export const a = 1;\n");
 
-    const expander = new ContextExpander(root, [root], [], false);
+    const expander = new ContextExpander({
+      workspaceRoot: root,
+      additionalTrustedRoots: [root],
+      effectiveAbsolute: false,
+    });
     const result = await expander.sanitizeReferences(
       "Please review @a.ts for issues.",
       (quotedPath) => quotedPath
@@ -1064,7 +1547,11 @@ suite("ContextExpander.sanitizeReferences", () => {
     const root = freshWorkspace();
     const text = "See @missing.ts for details.";
 
-    const expander = new ContextExpander(root, [root], [], true);
+    const expander = new ContextExpander({
+      workspaceRoot: root,
+      additionalTrustedRoots: [root],
+      effectiveAbsolute: true,
+    });
     assert.strictEqual(await expander.sanitizeReferences(text), text);
   });
 
@@ -1073,7 +1560,11 @@ suite("ContextExpander.sanitizeReferences", () => {
     fs.mkdirSync(path.join(root, "sub"));
     fs.writeFileSync(path.join(root, "sub", "c.ts"), "// c\n");
 
-    const expander = new ContextExpander(root, [root], [], true);
+    const expander = new ContextExpander({
+      workspaceRoot: root,
+      additionalTrustedRoots: [root],
+      effectiveAbsolute: true,
+    });
     const text = "List everything under @sub/ please.";
 
     assert.strictEqual(await expander.sanitizeReferences(text), text);
@@ -1085,15 +1576,15 @@ suite("ContextExpander.sanitizeReferences", () => {
     const secondFile = path.join(secondRoot, "b.ts");
     fs.writeFileSync(secondFile, "export const b = true;\n");
 
-    const expander = new ContextExpander(
-      root,
-      [root, secondRoot],
-      [
+    const expander = new ContextExpander({
+      workspaceRoot: root,
+      additionalTrustedRoots: [root, secondRoot],
+      namedRoots: [
         { name: "root1", fsPath: root },
         { name: "root2", fsPath: secondRoot },
       ],
-      true
-    );
+      effectiveAbsolute: true,
+    });
     const text = ["Example:", "```", "@root2/b.ts", "```"].join("\n");
 
     assert.strictEqual(await expander.sanitizeReferences(text), text);
@@ -1105,15 +1596,15 @@ suite("ContextExpander.sanitizeReferences", () => {
     const secondFile = path.join(secondRoot, "b.ts");
     fs.writeFileSync(secondFile, "export const b = true;\n");
 
-    const expander = new ContextExpander(
-      root,
-      [root, secondRoot],
-      [
+    const expander = new ContextExpander({
+      workspaceRoot: root,
+      additionalTrustedRoots: [root, secondRoot],
+      namedRoots: [
         { name: "root1", fsPath: root },
         { name: "root2", fsPath: secondRoot },
       ],
-      true
-    );
+      effectiveAbsolute: true,
+    });
     const result = await expander.sanitizeReferences(
       "Have a look at @root2/b.ts, then update the tests."
     );

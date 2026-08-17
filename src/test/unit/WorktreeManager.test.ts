@@ -1198,6 +1198,34 @@ suite("WorktreeManager", function () {
     );
   });
 
+  test("lands copied runtime artifacts without treating them as blocked paths", async () => {
+    const { parent, repository } = await makeRepository(
+      "managed-runtime-copy"
+    );
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    const copiedRuntimePath = path.join(
+      info.worktreePath,
+      ".ctrlyoke",
+      "logs",
+      "source.log"
+    );
+    await fs.mkdir(path.dirname(copiedRuntimePath), { recursive: true });
+    await fs.writeFile(copiedRuntimePath, "source runtime\n");
+    await fs.writeFile(path.join(info.worktreePath, "landed.txt"), "landed\n");
+
+    const result = await instance.completeManagedRun(info, { keep: true });
+
+    assert.strictEqual(result.landingOutcome, "landed");
+    assert.strictEqual(result.directoryOutcome, "kept");
+    assert.strictEqual(
+      execFileSync("git", ["-C", info.worktreePath, "status", "--porcelain"], {
+        encoding: "utf8",
+      }).trim(),
+      ""
+    );
+  });
+
   test("settles a no-change append after a landed turn without deleting its branch", async () => {
     const { parent, repository } = await makeRepository(
       "managed-no-change-append"

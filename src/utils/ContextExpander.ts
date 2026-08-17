@@ -13,7 +13,10 @@ import {
   estimateFileTokens,
   type FileTokenEstimate,
 } from "./FileTokenEstimator";
-import { isPathWithinAnyDirectory } from "./PathSecurity";
+import {
+  isPathWithinAnyDirectory,
+  isPathWithinDirectory,
+} from "./PathSecurity";
 import {
   resolveReferencePath,
   type ReferencePathResolution,
@@ -27,10 +30,12 @@ import {
   getStashDiff,
   getStashList,
 } from "./GitUtils";
+import { resolveSourceRuntimeArtifacts } from "./SourceRuntimeArtifactResolver";
 import {
   ATTACHMENT_PREFIXES,
   GIT_CHANGE_KINDS,
   isImageRefPath,
+  MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES,
 } from "../types/DashboardConstants";
 import { getErrorMessage } from "./ErrorUtils";
 import { quoteReferenceField } from "../completions/ContextReferenceBuilder";
@@ -42,6 +47,10 @@ import { quoteReferenceField } from "../completions/ContextReferenceBuilder";
 export interface SplitContext {
   /** Absolute paths for full-file @path refs — no embedding, harness reads directly */
   directFileRefs: string[];
+  /** Source-only full-file refs to copy into the execution checkout before launch. */
+  sourceRuntimeCopies: SourceRuntimeCopy[];
+  /** Number of source-runtime references read in place as excerpts. */
+  sourceRuntimeReadCount?: number;
   /** Embedded XML attachment blocks for selection/sym/git/dir content */
   excerptBlocks: string;
   /**
@@ -54,11 +63,27 @@ export interface SplitContext {
   skippedReferences: SkippedReference[];
 }
 
+export interface SourceRuntimeCopy {
+  sourcePath: string;
+  destinationPath: string;
+}
+
 export interface SkippedReference {
   /** The reference exactly as it appeared in the prompt text. */
   ref: string;
   /** Human-readable reason the reference could not be attached. */
   reason: string;
+}
+
+export interface ContextExpanderOptions {
+  workspaceRoot: string;
+  additionalTrustedRoots?: string[];
+  namedRoots?: ResolverWorkspaceFolder[];
+  effectiveAbsolute?: boolean;
+  sourceDefinitionDir?: string;
+  allowWorkflowRelativeReferences?: boolean;
+  sourceCheckoutRoot?: string;
+  executionCheckoutRoot?: string;
 }
 
 /**
@@ -97,17 +122,28 @@ export class ContextExpander {
   // resolution base. It is discarded when it is outside the trusted roots.
   private sourceDefinitionDir?: string;
   private allowWorkflowRelativeReferences: boolean;
+  private readonly sourceCheckoutRoot?: string;
+  private readonly executionCheckoutRoot: string;
+  private readonly sourceRuntimeResolutions = new Map<
+    string,
+    ReferencePathResolution
+  >();
+  private readonly blockedSourceRuntimeDirectories = new Set<string>();
+  private readonly preparedSourceRuntimeReferences = new Set<string>();
   // Track attachment IDs to prevent duplicates
   private attachmentIds = new Set<string>();
 
-  constructor(
-    workspaceRoot: string,
-    additionalTrustedRoots: string[] = [],
-    namedRoots: ResolverWorkspaceFolder[] = [],
-    effectiveAbsolute: boolean = false,
-    sourceDefinitionDir?: string,
-    allowWorkflowRelativeReferences: boolean = true
-  ) {
+  constructor(options: ContextExpanderOptions) {
+    const {
+      workspaceRoot,
+      additionalTrustedRoots = [],
+      namedRoots = [],
+      effectiveAbsolute = false,
+      sourceDefinitionDir,
+      allowWorkflowRelativeReferences = true,
+      sourceCheckoutRoot,
+      executionCheckoutRoot = workspaceRoot,
+    } = options;
     this.workspaceRoot = workspaceRoot;
     this.trustedRoots = Array.from(
       new Set(
@@ -119,6 +155,8 @@ export class ContextExpander {
     this.namedRoots = namedRoots;
     this.effectiveAbsolute = effectiveAbsolute;
     this.allowWorkflowRelativeReferences = allowWorkflowRelativeReferences;
+    this.sourceCheckoutRoot = sourceCheckoutRoot;
+    this.executionCheckoutRoot = executionCheckoutRoot;
     const resolvedSourceDefinitionDir = sourceDefinitionDir
       ? path.resolve(sourceDefinitionDir)
       : undefined;
@@ -151,6 +189,8 @@ export class ContextExpander {
       // Parse all file references from prompt
       const fileReferences = parseAllFileReferences(maskedPromptText);
       const gitRefs = parseGitChangeReferences(maskedPromptText);
+
+      await this.prepareSourceRuntimeResolutions(fileReferences);
 
       if (fileReferences.length === 0 && gitRefs.length === 0) {
         return promptText; // No attachments needed
@@ -221,6 +261,7 @@ export class ContextExpander {
       return null;
     }
     try {
+      await this.prepareSourceRuntimeResolutions([ref]);
       const absolutePath = this.resolveWorkspacePath(ref.path);
       await fs.access(absolutePath);
       return estimateImageTokens(absolutePath);
@@ -249,6 +290,7 @@ export class ContextExpander {
       return null;
     }
     try {
+      await this.prepareSourceRuntimeResolutions([ref]);
       const absolutePath = this.resolveWorkspacePath(ref.path);
       return await estimateFileTokens(absolutePath);
     } catch {
@@ -276,6 +318,8 @@ export class ContextExpander {
    */
   async expandContextSplit(promptText: string): Promise<SplitContext> {
     const directFileRefs: string[] = [];
+    const sourceRuntimeCopies: SourceRuntimeCopy[] = [];
+    let sourceRuntimeReadCount = 0;
     const excerptParts: string[] = [];
     const skippedReferences: SkippedReference[] = [];
 
@@ -284,11 +328,34 @@ export class ContextExpander {
       const fileReferences = parseAllFileReferences(maskedPromptText);
       const gitRefs = parseGitChangeReferences(maskedPromptText);
 
+      await this.prepareSourceRuntimeResolutions(fileReferences);
+
       if (fileReferences.length === 0 && gitRefs.length === 0) {
-        return { directFileRefs: [], excerptBlocks: "", skippedReferences: [] };
+        return {
+          directFileRefs: [],
+          sourceRuntimeCopies: [],
+          sourceRuntimeReadCount: 0,
+          excerptBlocks: "",
+          skippedReferences: [],
+        };
       }
 
       for (const ref of fileReferences) {
+        if (
+          ref.isDirectory &&
+          this.blockedSourceRuntimeDirectories.has(ref.path)
+        ) {
+          const token =
+            ref.startOffset !== undefined && ref.endOffset !== undefined
+              ? promptText.slice(ref.startOffset, ref.endOffset)
+              : `@${ref.path}`;
+          skippedReferences.push({
+            ref: ref.path,
+            reason: `Directory reference "${token}" resolves to the source checkout runtime store and was blocked`,
+          });
+          continue;
+        }
+
         let attachmentId: string;
         try {
           attachmentId = this.getAttachmentId(ref);
@@ -351,13 +418,44 @@ export class ContextExpander {
           });
           if (xml) {
             excerptParts.push(xml);
+            if (this.sourceRuntimeResolutions.has(ref.path)) {
+              sourceRuntimeReadCount += 1;
+            }
           }
         } else {
-          // Full-file ref → return absolute path for direct @-reference (only if it exists)
+          // Full-file refs normally resolve to the execution checkout. A
+          // source-only runtime artifact instead names its post-copy
+          // destination; the actual copy is deferred to CliPromptPreparer.
           try {
-            const absolutePath = this.resolveWorkspacePath(ref.path);
-            await fs.access(absolutePath);
-            directFileRefs.push(absolutePath);
+            const sourceRuntimePath = this.sourceRuntimeResolutions.get(
+              ref.path
+            )?.absolutePath;
+            if (sourceRuntimePath) {
+              const sourceStat = await fs.stat(sourceRuntimePath);
+              if (!sourceStat.isFile()) {
+                throw new Error(
+                  `Reference "${ref.path}" is not a regular file`
+                );
+              }
+              if (sourceStat.size > MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES) {
+                throw new Error(
+                  `Source runtime artifact "${ref.path}" is ${sourceStat.size} bytes, above MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES (${MAX_SOURCE_RUNTIME_ARTIFACT_COPY_BYTES} bytes)`
+                );
+              }
+              const destinationPath = path.resolve(
+                this.executionCheckoutRoot,
+                path.relative(this.sourceCheckoutRoot!, sourceRuntimePath)
+              );
+              directFileRefs.push(destinationPath);
+              sourceRuntimeCopies.push({
+                sourcePath: sourceRuntimePath,
+                destinationPath,
+              });
+            } else {
+              const absolutePath = this.resolveWorkspacePath(ref.path);
+              await fs.access(absolutePath);
+              directFileRefs.push(absolutePath);
+            }
           } catch (err) {
             const suggestion =
               this.namedRoots.length > 1
@@ -381,12 +479,20 @@ export class ContextExpander {
 
       return {
         directFileRefs,
+        sourceRuntimeCopies,
+        sourceRuntimeReadCount,
         excerptBlocks: excerptParts.join("\n\n"),
         skippedReferences,
       };
     } catch (error) {
       Log.error("[ContextExpander] Error in expandContextSplit:", error);
-      return { directFileRefs: [], excerptBlocks: "", skippedReferences: [] };
+      return {
+        directFileRefs: [],
+        sourceRuntimeCopies: [],
+        sourceRuntimeReadCount: 0,
+        excerptBlocks: "",
+        skippedReferences: [],
+      };
     }
   }
 
@@ -429,7 +535,9 @@ export class ContextExpander {
   ): Promise<string> {
     try {
       const maskedPromptText = this.maskBacktickBlocks(promptText);
-      const refs = parseAllFileReferences(maskedPromptText).filter(
+      const allRefs = parseAllFileReferences(maskedPromptText);
+      await this.prepareSourceRuntimeResolutions(allRefs);
+      const refs = allRefs.filter(
         (ref) =>
           !ref.isDirectory &&
           ref.startOffset !== undefined &&
@@ -491,8 +599,13 @@ export class ContextExpander {
     // Workflow-relative paths must leave ctrlyoke as absolute paths because
     // harness CLIs run from the workspace root, not the workflow directory.
     // Absolute output is unambiguous even when the workflow lives elsewhere.
+    // Read-in-place source artifacts must leave ctrlyoke as absolute paths:
+    // unlike copied references, nothing was placed at the workspace-relative
+    // path for the harness to open.
     const displayPath =
-      resolution.base === "workflow" || this.effectiveAbsolute
+      resolution.base === "workflow" ||
+      resolution.base === "sourceRuntimeStore" ||
+      this.effectiveAbsolute
         ? absolutePath
         : ref.path;
     const quotedPath = displayPath.includes(" ")
@@ -500,10 +613,21 @@ export class ContextExpander {
       : displayPath;
     const isExcerptRef = !!ref.symbolName || (!!ref.startLine && !!ref.endLine);
 
+    // The source-only full-file ref will be copied to the execution checkout
+    // by the preparation pass. Preserve its workspace-relative token so the
+    // harness opens the mirrored destination after that deferred mutation.
+    if (!isExcerptRef && resolution.base === "sourceRuntimeStore") {
+      return null;
+    }
+
     if (isExcerptRef) {
       // #selection:/#sym: never carry an @ prefix, and only the resolved
       // path (not the surrounding syntax) can change.
-      if (!this.effectiveAbsolute && resolution.base !== "workflow") {
+      if (
+        !this.effectiveAbsolute &&
+        resolution.base !== "workflow" &&
+        resolution.base !== "sourceRuntimeStore"
+      ) {
         return null;
       }
       // Not `quotedPath`: these are colon-delimited fields, and effectiveAbsolute
@@ -525,6 +649,85 @@ export class ContextExpander {
     // Full-file @ ref — always route through formatFileRef so provider-level
     // @ handling (e.g. Codex stripping it) applies even in single-root.
     return formatFileRef(quotedPath);
+  }
+
+  /**
+   * Precompute source-side runtime resolutions for one parsed prompt. The
+   * predicate is asynchronous, so resolveReference consumes this cache rather
+   * than spawning Git from any synchronous resolution path.
+   */
+  private async prepareSourceRuntimeResolutions(
+    refs: readonly FileReference[]
+  ): Promise<void> {
+    if (!this.sourceCheckoutRoot) {
+      return;
+    }
+
+    const candidatePathByReference = new Map<string, string>();
+    for (const ref of refs) {
+      if (this.preparedSourceRuntimeReferences.has(ref.path)) {
+        continue;
+      }
+      try {
+        const tier1Resolution = resolveReferencePath(ref.path, {
+          primaryRoot: this.workspaceRoot,
+          namedRoots: this.namedRoots,
+          sourceDefinitionDir: this.sourceDefinitionDir,
+        });
+        const candidatePath = isPathWithinDirectory(
+          tier1Resolution.absolutePath,
+          this.executionCheckoutRoot
+        )
+          ? path.relative(
+              this.executionCheckoutRoot,
+              tier1Resolution.absolutePath
+            )
+          : ref.path;
+        candidatePathByReference.set(ref.path, candidatePath);
+      } catch {
+        // resolveReference will preserve the existing error for this ref.
+      }
+    }
+    if (candidatePathByReference.size === 0) {
+      return;
+    }
+
+    // A failed predicate must cost only the source tier. Letting it throw would
+    // unwind into expandContext/expandContextSplit's outer catch, which drops
+    // *every* reference in the prompt — turning one unavailable Git call into a
+    // silently context-free turn.
+    let resolutions: Map<string, string>;
+    try {
+      resolutions = await resolveSourceRuntimeArtifacts(
+        this.sourceCheckoutRoot,
+        this.executionCheckoutRoot,
+        new Set(candidatePathByReference.values())
+      );
+    } catch (error) {
+      Log.warn(
+        `[ContextExpander] Source runtime artifact resolution failed; continuing without the source tier: ${getErrorMessage(error)}`
+      );
+      return;
+    }
+    for (const [referencePath, candidatePath] of candidatePathByReference) {
+      const absolutePath = resolutions.get(candidatePath);
+      if (absolutePath) {
+        const reference = refs.find((ref) => ref.path === referencePath);
+        if (reference?.isDirectory) {
+          // Directory refs are never read from the source runtime store: a
+          // flat shared store must not sweep unrelated runtime artifacts.
+          this.blockedSourceRuntimeDirectories.add(referencePath);
+        } else {
+          this.sourceRuntimeResolutions.set(referencePath, {
+            absolutePath,
+            base: "sourceRuntimeStore",
+          });
+        }
+      }
+    }
+    for (const referencePath of candidatePathByReference.keys()) {
+      this.preparedSourceRuntimeReferences.add(referencePath);
+    }
   }
 
   /**
@@ -728,7 +931,8 @@ export class ContextExpander {
     endLine?: number,
     symbolName?: string
   ): Promise<string> {
-    const absolutePath = this.resolveWorkspacePath(filePath);
+    const resolution = this.resolveReference(filePath);
+    const absolutePath = resolution.absolutePath;
     const language =
       path.extname(filePath).toLowerCase().slice(1) || "plaintext";
 
@@ -740,7 +944,12 @@ export class ContextExpander {
       `[ContextExpander] Read ${filePath} (${sizeKb} KB) in ${elapsed}ms`
     );
 
-    const displayPath = this.effectiveAbsolute ? absolutePath : filePath;
+    // A read-in-place source artifact has no worktree path to name, so its
+    // excerpt header must carry the absolute source path (§4.2).
+    const displayPath =
+      resolution.base === "sourceRuntimeStore" || this.effectiveAbsolute
+        ? absolutePath
+        : filePath;
 
     // If no line range, attach entire file
     if (!startLine || !endLine) {
@@ -821,6 +1030,11 @@ ${content}
       namedRoots: this.namedRoots,
       sourceDefinitionDir: this.sourceDefinitionDir,
     });
+    const sourceRuntimeResolution =
+      this.sourceRuntimeResolutions.get(relativePath);
+    if (sourceRuntimeResolution) {
+      return sourceRuntimeResolution;
+    }
     const resolved = resolution.absolutePath;
 
     // Reject `..` traversal and absolute-path references that escape every

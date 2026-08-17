@@ -1,4 +1,6 @@
 import * as crypto from "crypto";
+import * as fs from "fs/promises";
+import * as path from "path";
 import type { PromptStep } from "../../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import {
@@ -51,6 +53,7 @@ import type { PreparedMutation } from "./interfaces/PreparedMutation";
 const PROMPT_DIAGNOSTIC_CODES = {
   LARGE_REFERENCE: "prompt.reference.implausibly-large",
   OVER_INLINE_CAP: "prompt.content.over-inline-cap",
+  SOURCE_RUNTIME_DISCLOSURE: "prompt.reference.source-runtime-disclosure",
   UNKNOWN_SKILL_REFERENCE: "prompt.skill.unknown",
   UNRESOLVED_REFERENCE: "prompt.reference.unresolved",
 } as const;
@@ -239,9 +242,7 @@ export class CliPromptPreparer {
     const resolvedPriorContext = resolvedProperties?.priorContext;
     const inlineRefs = parseInlinePriorContextRefs(
       outgoingSections.userPromptText
-    ).map(
-      (match) => match.ref
-    );
+    ).map((match) => match.ref);
     const hasPriorContext =
       (resolvedPriorContext !== undefined && resolvedPriorContext !== "none") ||
       inlineRefs.length > 0;
@@ -261,6 +262,14 @@ export class CliPromptPreparer {
       );
     }
 
+    // Built once here so the disclosure count (§6) reads the actual copy
+    // mutations rather than re-deriving them from any plan's mutation list —
+    // a categorized plan also carries temp-file mutations it must not count.
+    const sourceRuntimeCopyMutations =
+      await this.createSourceRuntimeCopyMutations(
+        outgoingSections.sourceRuntimeCopies
+      );
+
     // Preserve the live fast path: direct references remain inline when the
     // rest of the prompt is safe to send as-is.
     if (
@@ -274,9 +283,18 @@ export class CliPromptPreparer {
       const plan = await this.createInlinePlanWithReferences(
         outgoingSections.userPromptText,
         outgoingSections.directFileRefs,
-        harnessId
+        harnessId,
+        sourceRuntimeCopyMutations
       );
-      return this.withDiagnostics(plan, promptDiagnostics);
+      return this.withDiagnostics(
+        this.withSourceRuntimeDisclosure(
+          plan,
+          outgoingSections.sourceRuntimeReadCount ?? 0,
+          sourceRuntimeCopyMutations.length,
+          harnessId
+        ),
+        promptDiagnostics
+      );
     }
 
     const contextItems = hasPriorContext
@@ -303,10 +321,16 @@ export class CliPromptPreparer {
       workflowContext,
       resolvedContextContent,
       hasPriorContext,
-      harnessId
+      harnessId,
+      sourceRuntimeCopyMutations
     );
     const planWithDiagnostics = this.withDiagnostics(
-      plan,
+      this.withSourceRuntimeDisclosure(
+        plan,
+        outgoingSections.sourceRuntimeReadCount ?? 0,
+        sourceRuntimeCopyMutations.length,
+        harnessId
+      ),
       promptDiagnostics
     );
     if (!slashCommand) {
@@ -393,10 +417,37 @@ export class CliPromptPreparer {
       : { ...plan, diagnostics: [...diagnostics, ...plan.diagnostics] };
   }
 
+  private withSourceRuntimeDisclosure(
+    plan: PromptPreparationPlan,
+    sourceReadCount: number,
+    copiedFileCount: number,
+    harnessId: ResolvedProperties["harness"]
+  ): PromptPreparationPlan {
+    if (sourceReadCount === 0 && copiedFileCount === 0) {
+      return plan;
+    }
+
+    const referenceLabel = sourceReadCount === 1 ? "reference" : "references";
+    const referenceVerb = sourceReadCount === 1 ? "was" : "were";
+    const fileLabel = copiedFileCount === 1 ? "file" : "files";
+    const fileVerb = copiedFileCount === 1 ? "was" : "were";
+    const diagnostic = this.createDiagnostic(
+      PROMPT_DIAGNOSTIC_CODES.SOURCE_RUNTIME_DISCLOSURE,
+      harnessId,
+      `${sourceReadCount} ${referenceLabel} ${referenceVerb} read from the source checkout; ${copiedFileCount} ${fileLabel} ${fileVerb} copied into the worktree.`,
+      COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
+    );
+    return {
+      ...plan,
+      diagnostics: [diagnostic, ...plan.diagnostics],
+    };
+  }
+
   private async createInlinePlanWithReferences(
     promptText: string,
     directFileRefs: string[],
-    harnessId: ResolvedProperties["harness"]
+    harnessId: ResolvedProperties["harness"],
+    mutations: readonly PreparedMutation[]
   ): Promise<PromptPreparationPlan> {
     const promptBody = this.createBodySection(
       PREVIEW_PROMPT_CATEGORIES.PROMPT_TEXT,
@@ -421,7 +472,7 @@ export class CliPromptPreparer {
       tempFilePaths: [],
       promptWithInstruction: promptText,
       files: [],
-      mutations: [],
+      mutations,
       promptPreview: {
         sections,
         totalByteCount: sections.reduce(
@@ -440,7 +491,8 @@ export class CliPromptPreparer {
     workflowContext: WorkflowContext | undefined,
     contextContent: string | undefined,
     hasPriorContext: boolean,
-    harnessId: ResolvedProperties["harness"]
+    harnessId: ResolvedProperties["harness"],
+    sourceRuntimeCopyMutations: readonly PreparedMutation[]
   ): Promise<PromptPreparationPlan> {
     const workspaceRoot = this.deps.getWorkspaceRoot();
     if (!workspaceRoot) {
@@ -579,6 +631,8 @@ export class CliPromptPreparer {
       );
     }
 
+    mutations.push(...sourceRuntimeCopyMutations);
+
     const contextRefs: string[] = [];
     if (contextContent) {
       const split = splitter.splitContextContent(contextContent);
@@ -689,6 +743,61 @@ export class CliPromptPreparer {
       },
       diagnostics,
     };
+  }
+
+  /**
+   * Plan source-runtime copies without touching the execution checkout.
+   * Existing destinations are compared by bytes so content-addressed
+   * attachments do not create needless mutations, while prompt/log files are
+   * refreshed when their contents differ.
+   */
+  private async createSourceRuntimeCopyMutations(
+    copies: readonly PromptSections["sourceRuntimeCopies"][number][]
+  ): Promise<PreparedMutation[]> {
+    const mutations: PreparedMutation[] = [];
+    for (const copy of copies) {
+      let sourceBytes: Buffer;
+      try {
+        sourceBytes = await fs.readFile(copy.sourcePath);
+      } catch {
+        continue;
+      }
+
+      let previousBytes: Buffer | undefined;
+      try {
+        const destinationStat = await fs.stat(copy.destinationPath);
+        if (destinationStat.isFile()) {
+          previousBytes = await fs.readFile(copy.destinationPath);
+        }
+      } catch {
+        // The destination is absent, or disappeared while planning.
+      }
+
+      // A direct byte compare, not a digest: these are ordinary file contents,
+      // and hashing a multi-megabyte log twice per prompt buys nothing here.
+      if (previousBytes !== undefined && previousBytes.equals(sourceBytes)) {
+        continue;
+      }
+
+      mutations.push({
+        path: copy.destinationPath,
+        description: `Copy ${copy.sourcePath} to ${copy.destinationPath}`,
+        apply: async () => {
+          await fs.mkdir(path.dirname(copy.destinationPath), {
+            recursive: true,
+          });
+          await fs.copyFile(copy.sourcePath, copy.destinationPath);
+        },
+        restore: async () => {
+          if (previousBytes === undefined) {
+            await fs.rm(copy.destinationPath, { force: true });
+          } else {
+            await fs.writeFile(copy.destinationPath, previousBytes);
+          }
+        },
+      });
+    }
+    return mutations;
   }
 
   /**

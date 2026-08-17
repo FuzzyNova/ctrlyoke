@@ -14,7 +14,11 @@ import {
 import { AgentExpander } from "../utils/AgentExpander";
 import { SkillExpander } from "../utils/SkillExpander";
 import { ContextExpander } from "../utils/ContextExpander";
-import type { SkippedReference, SplitContext } from "../utils/ContextExpander";
+import type {
+  SkippedReference,
+  SourceRuntimeCopy,
+  SplitContext,
+} from "../utils/ContextExpander";
 import { Log } from "../utils/Log";
 import { TempFileManager } from "../utils/TempFileManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -84,6 +88,10 @@ export interface PromptSections {
   agentContent: string | null;
   /** Absolute paths for full-file @path refs — harness reads these directly */
   directFileRefs: string[];
+  /** Source-only full-file refs copied into the execution checkout before launch. */
+  sourceRuntimeCopies: SourceRuntimeCopy[];
+  /** Number of source-runtime references read in place as excerpts. */
+  sourceRuntimeReadCount?: number;
   /** Embedded XML attachment blocks for selection/sym/git/dir content, or null */
   excerptContent: string | null;
   /**
@@ -493,6 +501,8 @@ export abstract class HarnessIntegration {
     // Expand context into direct file refs + excerpt blocks (split, not merged)
     let splitContext: SplitContext = {
       directFileRefs: [],
+      sourceRuntimeCopies: [],
+      sourceRuntimeReadCount: 0,
       excerptBlocks: "",
       skippedReferences: [],
     };
@@ -502,17 +512,19 @@ export abstract class HarnessIntegration {
           ConfigurationUtils.shouldUseAbsolutePathReferences(),
           this.getExecutionWorkspaceRoots().length > 1
         );
-        const expander = new ContextExpander(
+        const expander = new ContextExpander({
           workspaceRoot,
-          [
+          additionalTrustedRoots: [
             ...this.getExecutionWorkspaceRoots(),
             ...this.getApprovedExternalRoots(),
           ],
-          this.getExecutionNamedWorkspaceRoots(),
+          namedRoots: this.getExecutionNamedWorkspaceRoots(),
           effectiveAbsolute,
-          this.getSourceDefinitionDir(),
-          this.allowsWorkflowRelativeReferences()
-        );
+          sourceDefinitionDir: this.getSourceDefinitionDir(),
+          allowWorkflowRelativeReferences:
+            this.allowsWorkflowRelativeReferences(),
+          sourceCheckoutRoot: this.getExecutionSourceCheckoutRoot(),
+        });
         splitContext = await expander.expandContextSplit(rawPromptText);
         // Rewrite folder-name-prefixed refs to their resolved form inline,
         // for consumers (simple-prompt fast path, direct PTY injection) that
@@ -538,6 +550,8 @@ export abstract class HarnessIntegration {
       skillContent,
       agentContent,
       directFileRefs: splitContext.directFileRefs,
+      sourceRuntimeCopies: splitContext.sourceRuntimeCopies,
+      sourceRuntimeReadCount: splitContext.sourceRuntimeReadCount ?? 0,
       excerptContent: splitContext.excerptBlocks || null,
       userPromptText,
       skippedReferences: splitContext.skippedReferences,
@@ -801,6 +815,11 @@ export abstract class HarnessIntegration {
   /** Explicit execution root; getWorkspaceRoot retains its state-root meaning. */
   protected getExecutionWorkspaceRoot(): string | undefined {
     return this.getWorkspaceRoot();
+  }
+
+  /** Canonical source checkout used for read-only runtime artifact fallback. */
+  protected getExecutionSourceCheckoutRoot(): string | undefined {
+    return undefined;
   }
 
   /**

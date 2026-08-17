@@ -15,6 +15,7 @@ Shared CLI-harness infrastructure: provider contracts, prompt assembly, response
 <promptAndResponseFlow>
 - `CliPromptPreparer` is the single place that chooses inline prompt text vs categorized temp files. Pure slash commands bypass wrapping entirely; prompts with only direct `@file` refs stay inline when safe; resume can intentionally omit agent/skills content.
 - `CliPromptPreparer` also merges property-level prior context with inline `$...` references before splitting temp files. Keep that merge logic centralized there.
+- In worktree mode, source-runtime bytes may be read by `ContextExpander`, but harness-openable full-file paths must resolve inside the execution checkout. Copied refs keep their workspace-relative token because the deferred `PreparedMutation` makes it true; read-in-place excerpts use the absolute source path in attachment metadata and rewritten inline tokens because no worktree file exists.
 - `CliResponseCollector` is the post-parse choke point: parse raw output, then run optional provider augmentation, then fall back to log-based session discovery. Fix missing metadata here before adding ad hoc patches elsewhere.
 - Runtime persistence belongs in `CliPromptRuntimeCoordinator` / `CliExecutionSession`, not in provider classes.
 </promptAndResponseFlow>

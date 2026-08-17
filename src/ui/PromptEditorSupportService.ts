@@ -1030,13 +1030,13 @@ export class PromptEditorSupportService {
             return;
           }
 
-          const expander = new ContextExpander(
+          const expander = new ContextExpander({
             workspaceRoot,
-            trustedRoots,
+            additionalTrustedRoots: trustedRoots,
             namedRoots,
-            false,
-            sourceDefinitionDir
-          );
+            effectiveAbsolute: false,
+            sourceDefinitionDir,
+          });
 
           // Images are billed by pixel area, not raw byte content — estimate
           // them directly instead of tokenizing the binary file as text.

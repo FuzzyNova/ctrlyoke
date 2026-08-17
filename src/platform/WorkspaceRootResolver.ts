@@ -142,7 +142,8 @@ export type ReferencePathBase =
   | "absolute"
   | "workflow"
   | "namedRoot"
-  | "workspace";
+  | "workspace"
+  | "sourceRuntimeStore";
 
 export interface ReferencePathResolutionOptions {
   primaryRoot: string;
