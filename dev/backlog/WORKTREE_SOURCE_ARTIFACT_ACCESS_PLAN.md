@@ -1,6 +1,8 @@
 # Worktree Source-Artifact Access — logs, attachments, and prompt files
 
-> **Status:** Proposed — not implemented. Written 2026-08-16 against current code.
+> **Status:** Staged for implementation 2026-08-16. Written 2026-08-16 against
+> current code; revised the same day after a code review found three points
+> where the original design could not be built as written (§4.1.1, §5.1, §5.6).
 >
 > **Problem in one line:** ctrlyoke's own generated runtime artifacts
 > (`.ctrlyoke/logs/`, `attachments/`, `prompts/`) are gitignored and always
@@ -12,7 +14,7 @@
 > execution-workspace root split this plan carves a read-only exception into;
 > its isolation guarantee is about **write** access and is preserved intact
 > (§2). `WORKFLOW_PORTABILITY_PLAN.md` decided these directories are ignored
-> *because* Save As bundles what a durable workflow needs — that decision is
+> _because_ Save As bundles what a durable workflow needs — that decision is
 > unchanged here, and this plan is its execution-time analogue: the bundler
 > makes a workflow portable **across machines**, this makes a run's inputs
 > reachable **across checkouts on one machine**.
@@ -24,19 +26,22 @@
 Three directories, three different failure modes. All verified against current
 code.
 
-| Artifact                   | Written to                                                | Worktree-run outcome today                                                            |
-| -------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `.ctrlyoke/attachments/**` | source checkout (`TempFileManager.ts:69-75`)              | ref dropped; surfaces only as a `prompt.reference.unresolved` diagnostic               |
-| `.ctrlyoke/prompts/**`     | source checkout (`PromptEditorSupportService.ts:280-284`) | **lone** step prompt throws `PromptFileReferenceError`; **inline** `@ref` is dropped   |
-| `.ctrlyoke/logs/**`        | source checkout (`Log.openLogFile`, `Log.ts:133-144`)     | relative ref misses; absolute ref is **blocked** as "resolves outside the workspace"   |
+| Artifact                   | Written to                                                | Worktree-run outcome today                                                           |
+| -------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `.ctrlyoke/attachments/**` | source checkout (`TempFileManager.ts:69-75`)              | ref dropped; surfaces only as a `prompt.reference.unresolved` diagnostic             |
+| `.ctrlyoke/prompts/**`     | source checkout (`PromptEditorSupportService.ts:280-284`) | **lone** step prompt throws `PromptFileReferenceError`; **inline** `@ref` is dropped |
+| `.ctrlyoke/logs/**`        | source checkout (`Log.openLogFile`, `Log.ts:133-144`)     | relative ref misses; absolute ref is **blocked** as "resolves outside the workspace" |
 
 The common cause is one mapping. `WorktreeManager.buildExecutionWorkspace()`
 (`src/core/orchestration/WorktreeManager.ts:2817-2844`) remaps every workspace
 root onto the execution checkout:
 
 ```ts
-mapSourcePath = (p) => path.resolve(executionCheckoutRoot,
-                                    path.relative(inputs.sourceCheckoutRoot, p));
+mapSourcePath = (p) =>
+  path.resolve(
+    executionCheckoutRoot,
+    path.relative(inputs.sourceCheckoutRoot, p)
+  );
 ```
 
 That is correct and deliberate for repository content. But all three
@@ -69,10 +74,10 @@ more you use worktree mode the less any pasted context works.
 
 ## 2. The constraint this must not break
 
-`WORKTREE_SUPPORT_PLAN.md` requires that worktree preflight *"reject any
+`WORKTREE_SUPPORT_PLAN.md` requires that worktree preflight _"reject any
 approved/additional root that equals, contains, or is contained by the source
-checkout"*, to stop an old trust decision from *"silently granting write access
-back into the live checkout."*
+checkout"_, to stop an old trust decision from _"silently granting write access
+back into the live checkout."_
 
 That is not a general prohibition on reading source-side bytes — it is a
 prohibition on **handing the harness a path into the live checkout**, because
@@ -92,8 +97,8 @@ This rules out the tempting one-line fixes: adding `sourceCheckoutRoot` to
 
 ## 3. The unified rule
 
-One predicate decides *whether* a reference qualifies. The reader decides
-*what to do about it*.
+One predicate decides _whether_ a reference qualifies. The reader decides
+_what to do about it_.
 
 ### 3.1 Predicate — "source-only runtime artifact"
 
@@ -105,7 +110,7 @@ A reference qualifies when all four hold:
 3. That path is a **regular file** that exists.
 4. That path is **gitignored** in the source checkout.
 
-**Why "gitignored" and not merely "missing from the worktree."** A *tracked*
+**Why "gitignored" and not merely "missing from the worktree."** A _tracked_
 file absent from the worktree is a genuine branch difference, and importing it
 would silently serve source-side content to a run whose entire purpose is a
 different branch state — it must stay broken. A gitignored file has no branch
@@ -117,7 +122,7 @@ would need extending every time ctrlyoke adds a runtime directory.
 files in progress; pulling them into a different branch's checkout is the same
 silent-divergence hazard, just less obvious.
 
-**This grants no new exposure.** Every qualifying file is one a *non-worktree*
+**This grants no new exposure.** Every qualifying file is one a _non-worktree_
 run of the same workflow could already reference today. The rule restores
 parity between worktree and non-worktree runs; it does not widen what a prompt
 may name. (Secrets that happen to be gitignored — `.env` and friends — are in
@@ -128,16 +133,16 @@ scope for the same reason they are today in a normal run; redaction is
 
 Verified: `directFileRefs` are **never** inlined as content. `CliPromptPreparer`
 passes each one to `formatDirectFileRef` (`:569`, and on the inline fast path at
-`:266-280`) so the *harness* opens it. Embedding is therefore unavailable to
+`:266-280`) so the _harness_ opens it. Embedding is therefore unavailable to
 that category, and images cannot be embedded under any scheme.
 
-| Reference form                              | Who opens it | Action                                            |
-| ------------------------------------------- | ------------ | ------------------------------------------------- |
-| `#selection:` / `#sym:`                     | ctrlyoke     | **Read in place** from source; embed (§4)         |
-| Lone step `prompt` path                     | ctrlyoke     | **Read in place** from source; inline (§4)        |
-| Full-file `@ref` — text                     | **harness**  | **Copy** into the worktree (§5)                   |
-| Full-file `@ref` — image/binary             | **harness**  | **Copy** into the worktree (§5)                   |
-| `@dir/`                                     | ctrlyoke     | **Blocked** (§4.3)                                |
+| Reference form                  | Who opens it | Action                                     |
+| ------------------------------- | ------------ | ------------------------------------------ |
+| `#selection:` / `#sym:`         | ctrlyoke     | **Read in place** from source; embed (§4)  |
+| Lone step `prompt` path         | ctrlyoke     | **Read in place** from source; inline (§4) |
+| Full-file `@ref` — text         | **harness**  | **Copy** into the worktree (§5)            |
+| Full-file `@ref` — image/binary | **harness**  | **Copy** into the worktree (§5)            |
+| `@dir/`                         | ctrlyoke     | **Blocked** (§4.3)                         |
 
 So `@.ctrlyoke/logs/ctrlyoke-….log` is copied, while
 `#selection:"…ctrlyoke-….log":13769-14052` is not — the difference is the
@@ -165,6 +170,40 @@ Two resolvers need this, because they are separate code paths:
   source-side candidate; `isCandidateAllowed` (`:333-348`) must accept it, which
   is what the existing `ownStateRoots` escape hatch already models for UI reads.
 
+### 4.1.1 The predicate is async; both resolution seams are synchronous
+
+`ContextExpander.resolveReference` is a **synchronous** private method, and it
+is reached from four callers (`resolveWorkspacePath` → `buildAttachmentXml`,
+`buildSanitizedReferenceText`, `estimateFileReferenceTokens`,
+`estimateImageReferenceTokens`). §3.1 needs `fs.stat` **and** a `git
+check-ignore` subprocess, so the tier cannot be evaluated inside it, and making
+it async would also defeat §5.5's "one `check-ignore` per prompt" requirement by
+turning it into one subprocess per reference.
+
+**Resolve it with a precomputed map, not an async resolver.** Before the
+per-reference loop in `expandContextSplit`, run one pass that:
+
+1. parses the references once (`parseAllFileReferences` — already called there),
+2. computes each one's tier-1 absolute path and drops those that exist,
+3. issues **one** batched `check-ignore` for the survivors' source-side
+   paths (§5.6),
+4. returns a `Map<refPath, { absolutePath, base: "sourceRuntimeStore" }>`.
+
+`resolveReference` then consults that map after its own tier-1 resolution and
+before the containment check, staying synchronous. The map is per-expansion
+state, built once and reused by every caller above, so token estimation and
+attachment building can never disagree about where a reference resolved.
+
+The same precomputed-map shape serves §5: the copy pass needs exactly this
+classification, so build it once and let both actions read it.
+
+**`PromptFileResolver.resolvePathSync` is deliberately excluded.** It exists for
+VS Code's synchronous document-link API, which runs against the source checkout
+in the editor — where tier 1 already resolves, so the source tier would be dead
+code there. Only the async paths (`resolve`, `resolvePath`, `findReadableFile`)
+gain the tier. Keep the two implementations' candidate lists otherwise
+identical, and assert that in a test.
+
 ### 4.2 Rendering: absolute in **both** the excerpt and the inline token
 
 A read-in-place resolution renders its **absolute source path** in two places,
@@ -177,7 +216,7 @@ not one:
   `#sym:` is the same branch and needs no separate work.
 
 **Decision: rewrite the inline token, do not rely on the attachment header
-alone.** The harness's cwd is the *worktree*, so an as-typed
+alone.** The harness's cwd is the _worktree_, so an as-typed
 `#selection:".ctrlyoke/logs/x.log":100-200` is not a neutral hint — it is a
 valid-looking path that resolves, from the harness's position, to a worktree
 file that does not exist. Leaving it produces two contradictory paths for one
@@ -188,9 +227,9 @@ costs more than verbosity.
 
 This is also the established precedent rather than a new rule: the
 `base === "workflow"` branch exists for exactly this reason, per the comment at
-`:491-493` — *"harness CLIs run from the workspace root, not the workflow
+`:491-493` — _"harness CLIs run from the workspace root, not the workflow
 directory. Absolute output is unambiguous even when the workflow lives
-elsewhere."* Source-store refs are that case with a different base. The output
+elsewhere."_ Source-store refs are that case with a different base. The output
 shape is already proven — `quoteReferenceField` (`:513`) handles the Windows
 drive-colon form, which is why it exists, and multi-root workspaces emit the
 same shape today via `effectiveAbsolute`. Attachment IDs stay as-typed, per the
@@ -208,10 +247,10 @@ Result — attachment header and prompt body agreeing:
 Copied and read-in-place references land on opposite sides of this for the same
 underlying reason:
 
-| Action        | Relative token after the pass | Rewrite? |
-| ------------- | ----------------------------- | -------- |
-| Copy (§5)     | **true** — the file now exists at that path in the worktree | no  |
-| Read in place | **false** — nothing was copied                              | yes |
+| Action        | Relative token after the pass                               | Rewrite? |
+| ------------- | ----------------------------------------------------------- | -------- |
+| Copy (§5)     | **true** — the file now exists at that path in the worktree | no       |
+| Read in place | **false** — nothing was copied                              | yes      |
 
 The copy makes the relative path true; reading in place makes it a lie.
 
@@ -233,14 +272,48 @@ the file lives in the source checkout.
 
 ## 5. Copy (references the harness opens)
 
-### 5.1 Mechanism
+### 5.1 Mechanism — a deferred `PreparedMutation`, not an eager copy
 
-For a qualifying full-file `@` reference, copy the file to the **same relative
-path** inside the execution checkout before prompt building, then let tier 1
-resolve it normally.
+For a qualifying full-file `@` reference, the destination is the **same relative
+path** inside the execution checkout:
 
-No token rewriting. No resolution change. The ref
-`@.ctrlyoke/logs/ctrlyoke-1786917981016.log` simply starts hitting tier 1.
+```ts
+path.resolve(
+  executionCheckoutRoot,
+  path.relative(sourceCheckoutRoot, sourcePath)
+);
+```
+
+**The copy must not happen during prompt building.** `CliPromptPreparer.
+planPrompt` is contractually side-effect-free — it is what `ExecutionPreviewService`
+calls for Dry Run, and its own doc comment promises "without creating any temp
+file." An eager copy there would have Dry Run writing files into the worktree.
+
+The codebase already has the right vehicle: `PreparedMutation`
+(`src/core/harness/shared/interfaces/PreparedMutation.ts`). `planPrompt`
+collects mutations; `preparePrompt` applies them in order and rolls back on
+failure. So:
+
+- **Plan time:** classify the reference, compute the destination, push the
+  destination onto `directFileRefs`, and emit a `PreparedMutation` whose `apply`
+  performs the copy. `path`/`description` on the mutation make the copy visible
+  in the preview for free.
+- **Execute time:** `preparePrompt` applies the mutation before launch, so the
+  file exists by the time the harness opens it.
+
+This means the plan does **not** wait for tier 1 to start hitting — it names the
+post-copy destination directly, because at plan time the file is not there yet.
+That is the only deviation from "let tier 1 resolve it normally"; the observable
+result for the harness is identical, and it is what makes §6's Dry Run claim
+true rather than aspirational.
+
+`PromptSections` (`src/core/HarnessIntegration.ts:80-97`) carries the copy
+descriptors up as plain `{ sourcePath, destinationPath }` records — core must
+not import from `harness/shared`; `CliPromptPreparer` turns them into
+`PreparedMutation`s.
+
+No token rewriting, and no change to how the reference is written:
+`@.ctrlyoke/logs/ctrlyoke-1786917981016.log` stays as typed (§4.2.1).
 
 ### 5.2 Why copy rather than widen `--add-dir`
 
@@ -283,13 +356,13 @@ would turn every copy into a landing blocker.
 - **Inside the source checkout only.** A gitignored path outside it stays
   blocked by the existing containment check.
 - **Size cap — a new constant, deliberately not `MAX_CONTENT_SIZE`.** That
-  constant is 512 KB (`DashboardConstants.ts:1261`) and governs *inline content*:
+  constant is 512 KB (`DashboardConstants.ts:1261`) and governs _inline content_:
   the point above which text is no longer embedded or tokenized exactly. A copy
   embeds nothing, so the two limits answer different questions, and reusing it
   would refuse precisely the multi-megabyte session logs this plan exists to
   support. Add a separate, generous disk-safety ceiling (order of tens of MB);
   above it, refuse the copy and say so by name and size. Oversized references
-  are *already* warned about independently by the existing
+  are _already_ warned about independently by the existing
   `prompt.reference.implausibly-large` diagnostic, which fires off
   `estimateFileTokens().estimated` regardless of worktree mode — the new ceiling
   exists only to stop an unbounded file from being duplicated on every run.
@@ -303,7 +376,30 @@ would turn every copy into a landing blocker.
   stale worktree copy silently feeding an old prompt body is worse than losing a
   hand-edit inside a gitignored runtime directory nobody is expected to edit.
 
-### 5.6 Accumulation
+### 5.6 `check-ignore` mechanics — three traps
+
+The batched helper belongs in `GitUtils.ts` beside `getGitUntrackedFiles`
+(`:485-493`) and must get all three of these right:
+
+1. **Never pass `--no-index`.** Default `check-ignore` reports a _tracked_ file
+   as not-ignored, which is precisely §3.1's tracked-file exclusion. `--no-index`
+   evaluates ignore rules regardless of the index and would silently import
+   tracked-but-absent files — the exact failure §3.1 and §8 forbid.
+2. **Exit code 1 is success.** `git check-ignore` exits 1 when _nothing_ matched.
+   `execFileAsync` rejects on any non-zero exit, so the helper must treat 0 and 1
+   as normal results and only surface ≥2 as an error. A helper that lets the
+   rejection through fails closed on every prompt with no ignored references —
+   which is most of them.
+3. **Prefer arguments over `--stdin`.** A prompt carries a handful of references,
+   not thousands, so `git check-ignore -z -- <paths…>` is one subprocess and
+   needs no stdin plumbing. (`promisify(execFile)` gives no writable stdin
+   without reaching through `.child`.) Use `-z` and split on NUL, matching the
+   file-listing helpers directly above it.
+
+Return the ignored subset as a `Set` of absolute paths so callers do a lookup,
+not a scan.
+
+### 5.7 Accumulation
 
 Managed worktrees are removed at completion, so copies vanish with them. Named
 worktrees persist and accumulate copies across runs. Log filenames carry
@@ -320,7 +416,7 @@ No setting gates this. It is read-only ingestion of machine-local artifacts the
 user explicitly referenced, and requiring opt-in would leave the default broken.
 
 But it must not be silent. `WORKTREE_SUPPORT_PLAN.md` requires that isolation
-degradation be *"recorded on the run — not merely logged"*, so emit an
+degradation be _"recorded on the run — not merely logged"_, so emit an
 info-level diagnostic through the existing `CompatibilityDiagnostic` channel
 added alongside `prompt.reference.unresolved` in `CliPromptPreparer`:
 
@@ -334,18 +430,23 @@ added alongside `prompt.reference.unresolved` in `CliPromptPreparer`:
 
 ## 7. Sequencing
 
-| Phase | Scope                                                                     |
-| ----- | ------------------------------------------------------------------------- |
-| 1     | `getExecutionSourceCheckoutRoot()` accessor + `ContextExpander` plumbing   |
-| 2     | `GitUtils` batched `check-ignore` helper                                   |
-| 3     | §3.1 predicate + `"sourceRuntimeStore"` tier in both resolvers (§4.1)      |
-| 4     | Absolute-path rendering for source-store resolutions (§4.2)               |
-| 5     | Copy pass for full-file refs, with §5.5 guardrails                        |
-| 6     | Disclosure diagnostic + Dry Run assertion (§6)                            |
+Six steps, each self-contained, tested, and committed on its own. Steps 1-4 are
+independently shippable and fix excerpt references and file-backed prompt steps;
+step 5 is what makes `@.ctrlyoke/logs/…` and pasted images work.
 
-Phases 1-4 are independently shippable and fix excerpt references and
-file-backed prompt steps. Phase 5 is what makes `@.ctrlyoke/logs/…` and pasted
-images work.
+| Step | Scope                                                                                            | Depends on |
+| ---- | ------------------------------------------------------------------------------------------------ | ---------- |
+| 1    | `GitUtils` batched `check-ignore` helper (§5.6) + §3.1 predicate module + `"sourceRuntimeStore"` | —          |
+| 2    | `sourceCheckoutRoot` plumbing + `ContextExpander` precomputed tier (§4.1, §4.1.1)                | 1          |
+| 3    | Absolute-path rendering for source-store resolutions (§4.2) + directory block (§4.3)             | 2          |
+| 4    | `PromptFileResolver` source tier for lone step prompts (§4.1)                                    | 1          |
+| 5    | Copy pass as a deferred `PreparedMutation` (§5), with §5.5 guardrails                            | 2          |
+| 6    | Disclosure diagnostic (§6) + Dry Run / landing-preflight / non-worktree assertions               | 5          |
+
+Step 1 lands the two pure, dependency-free pieces together so steps 2 and 4 can
+proceed against a stable predicate. Steps 2 and 3 are split because the tier and
+its rendering have separate, substantial test surfaces, but the tier is what
+makes the rendering reachable at all.
 
 ---
 
@@ -357,12 +458,12 @@ images work.
   branch is not imported — the predicate's gitignore clause is what rejects it.
 - **Untracked-but-not-ignored stays blocked.**
 - Absolute and relative forms of a qualifying ref both resolve; a gitignored
-  path *outside* the source checkout remains blocked with the existing message.
+  path _outside_ the source checkout remains blocked with the existing message.
 - **Symlink escape:** a symlink inside the source checkout pointing outside it is
   rejected (`realpath` both sides, matching the export bundler's rule).
 - Excerpt rendering carries the absolute source path in the attachment
   description **and** in `sanitizeReferences` output — assert both, and assert
-  they name the *same* path, since the whole point is that they cannot disagree.
+  they name the _same_ path, since the whole point is that they cannot disagree.
   Windows drive-colon quoting is preserved (`quoteReferenceField`), and a
   rewritten `#sym:` keeps its kind suffix, symbol name, and line range.
 - A **copied** ref's inline token is left workspace-relative and unrewritten —
