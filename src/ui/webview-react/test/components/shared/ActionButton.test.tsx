@@ -57,18 +57,4 @@ describe("ActionButton", () => {
     );
     expect(screen.getByRole("status")).toHaveTextContent("It broke");
   });
-
-  it("renders as a link when href is provided, without a pending/success state", () => {
-    render(
-      <ActionButton
-        label="Download certificate"
-        icon="download"
-        href="https://example.test/cert"
-        download="ctrlyoke.cer"
-      />
-    );
-    const link = screen.getByRole("link", { name: "Download certificate" });
-    expect(link).toHaveAttribute("href", "https://example.test/cert");
-    expect(link).toHaveAttribute("download", "ctrlyoke.cer");
-  });
 });

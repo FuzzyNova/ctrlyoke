@@ -140,6 +140,14 @@ export function ServerSection({
     }
   }, [server.tls?.enabled, displayUrl]);
 
+  const handleDownloadCert = useCallback(() => {
+    if (!certDownloadUrl) return;
+    const link = document.createElement("a");
+    link.href = certDownloadUrl;
+    link.download = "ctrlyoke.cer";
+    link.click();
+  }, [certDownloadUrl]);
+
   const generatedCertLocation =
     activeScope === SETTING_SCOPES.USER
       ? "~/.ctrlyoke/certs/"
@@ -503,8 +511,7 @@ export function ServerSection({
                     <ActionButton
                       label="Download certificate"
                       icon="download"
-                      href={certDownloadUrl}
-                      download="ctrlyoke.cer"
+                      onClick={handleDownloadCert}
                       title="Download the server certificate for manual installation on iOS"
                     />
                   )}

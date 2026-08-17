@@ -12,8 +12,7 @@ interface ActionButtonProps {
   icon?: string;
   /** Codicon name shown during an inline success flash. Defaults to "check". */
   successIcon?: string;
-  /** Required unless `href` is set (a download link has nothing to click-handle). */
-  onClick?: () => void;
+  onClick: () => void;
   disabled?: boolean;
   pending?: boolean;
   /**
@@ -25,9 +24,6 @@ interface ActionButtonProps {
   success?: boolean;
   /** Below-button success/error line, cleared by the caller after a delay. */
   feedback?: ActionFeedback;
-  /** Renders an `<a>` instead of a `<button>`, for download-style actions. */
-  href?: string;
-  download?: string;
   title?: string;
   ariaLabel?: string;
 }
@@ -49,8 +45,6 @@ export function ActionButton({
   pending = false,
   success = false,
   feedback,
-  href,
-  download,
   title,
   ariaLabel,
 }: ActionButtonProps) {
@@ -83,28 +77,16 @@ export function ActionButton({
 
   return (
     <div className="flex flex-col items-start gap-0.5">
-      {href ? (
-        <a
-          href={href}
-          download={download}
-          title={title}
-          aria-label={ariaLabel}
-          className={className}
-        >
-          {content}
-        </a>
-      ) : (
-        <button
-          type="button"
-          className={className}
-          disabled={disabled || pending || flashing}
-          onClick={flashing ? undefined : onClick}
-          title={title}
-          aria-label={ariaLabel}
-        >
-          {content}
-        </button>
-      )}
+      <button
+        type="button"
+        className={className}
+        disabled={disabled || pending || flashing}
+        onClick={flashing ? undefined : onClick}
+        title={title}
+        aria-label={ariaLabel}
+      >
+        {content}
+      </button>
       {feedback && (
         <span
           className={`text-xxs ${feedback.status === "success" ? "text-indicator-success" : "text-error-fg"}`}
