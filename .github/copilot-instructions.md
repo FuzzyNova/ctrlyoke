@@ -132,6 +132,7 @@ NOTE: `npm run test:harness` runs real harnesses, costs money, and is very slow 
 
 <commits>
 - Do not add attribution or trailer lines to commit messages — no `Co-Authored-By:`, no "Generated with …" footers. Use plain conventional-commit messages only.
+- Git's stash stack is shared by every worktree in a repository. If stashing is unavoidable, always give the stash a globally unique message that identifies the workflow/agent and worktree, then resolve and restore that exact stash entry (prefer its commit hash). Never use an unqualified `git stash pop`/`git stash apply` or assume `stash@{0}` is yours while another agent may be running; another worktree can push between those operations and cause changes to cross worktrees.
 </commits>
 
 <codingPrinciples>
