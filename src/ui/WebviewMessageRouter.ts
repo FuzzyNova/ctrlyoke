@@ -1297,12 +1297,58 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) return;
-      await orchestrator.applyWorktreeManagementAction({
-        action: message.action,
-        worktreePath: message.worktreePath,
-        branchName: message.branchName,
-        confirmed: message.confirmed,
-      });
+      try {
+        await orchestrator.applyWorktreeManagementAction({
+          action: message.action,
+          worktreePath: message.worktreePath,
+          branchName: message.branchName,
+          confirmed: message.confirmed,
+        });
+      } catch (error) {
+        // Without this, a rejected destructive action (e.g. a stale admin
+        // entry that still needs `git worktree repair`) vanished into the
+        // log with no feedback in the panel — the button looked like a no-op.
+        void vscode.window.showErrorMessage(
+          `Worktree action failed: ${getErrorMessage(error)}`
+        );
+      }
+      await sendWorktreeManagementState(true, ctx);
+    });
+    table.set(MESSAGE_TYPES.SYNC_NAMED_WORKTREE, async (message, ctx) => {
+      const orchestrator = this.getOrchestrator();
+      if (!orchestrator) return;
+      try {
+        const result = await orchestrator.syncNamedWorktree(
+          message.worktreePath
+        );
+        const succeeded = (direction: typeof result.intoSource) =>
+          direction.mergeOutcome === "fast-forward" ||
+          direction.mergeOutcome === "merge-commit";
+        const describe = (
+          label: string,
+          direction: typeof result.intoSource
+        ): string =>
+          succeeded(direction)
+            ? `${label} up to date`
+            : `${label} ${direction.message ?? direction.mergeOutcome}`;
+        const summary = [
+          describe(`"${result.sourceBranch}":`, result.intoSource),
+          describe(`"${result.worktreeBranch}":`, result.intoWorktree),
+        ].join(" — ");
+        if (succeeded(result.intoSource) && succeeded(result.intoWorktree)) {
+          void vscode.window.showInformationMessage(
+            `Worktree synced. ${summary}`
+          );
+        } else {
+          void vscode.window.showWarningMessage(
+            `Worktree sync finished with issues. ${summary}`
+          );
+        }
+      } catch (error) {
+        void vscode.window.showErrorMessage(
+          `Worktree sync failed: ${getErrorMessage(error)}`
+        );
+      }
       await sendWorktreeManagementState(true, ctx);
     });
     table.set(MESSAGE_TYPES.OPEN_WORKTREE_OWNER, async (message) => {

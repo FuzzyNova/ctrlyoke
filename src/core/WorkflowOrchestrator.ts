@@ -104,6 +104,7 @@ import { WorkspaceInitializer } from "./orchestration/WorkspaceInitializer";
 import {
   WorktreeManager,
   type WorktreeInfo,
+  type WorktreeSyncResult,
 } from "./orchestration/WorktreeManager";
 import { PromptFileParser } from "./PromptFileParser";
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
@@ -3369,6 +3370,13 @@ export class WorkflowOrchestrator {
     await new WorktreeManager().applyManagementAction({
       sourceCheckoutRoot: this.requireWorkspaceRoot(),
       ...options,
+    });
+  }
+
+  async syncNamedWorktree(worktreePath: string): Promise<WorktreeSyncResult> {
+    return new WorktreeManager().syncNamedWorktree({
+      sourceCheckoutRoot: this.requireWorkspaceRoot(),
+      worktreePath,
     });
   }
 

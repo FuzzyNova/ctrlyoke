@@ -168,6 +168,7 @@ export const MESSAGE_TYPES = {
   REQUEST_WORKTREE_MANAGEMENT_STATE: "requestWorktreeManagementState",
   WORKTREE_MANAGEMENT_STATE: "worktreeManagementState",
   WORKTREE_MANAGEMENT_ACTION: "worktreeManagementAction",
+  SYNC_NAMED_WORKTREE: "syncNamedWorktree", // Webview -> Extension: two-way merge a named worktree's branch with the source checkout's current branch
   OPEN_WORKTREE_OWNER: "openWorktreeOwner",
   OPEN_PRIOR_CONTEXT: "openPriorContext", // Webview -> Extension: preview inline $prior-context expansion (legacy)
   // REQUEST_GIT_CHANGE_PREVIEW and GIT_CHANGE_PREVIEW_RESULT removed — browser now opens

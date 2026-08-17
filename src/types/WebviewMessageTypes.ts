@@ -1221,6 +1221,8 @@ export interface WorktreeManagementEntry {
 
 export interface WorktreeManagementState {
   resolvedRoot: string;
+  sourceCheckoutRoot: string;
+  sourceCheckoutBranch: string | null;
   entries: WorktreeManagementEntry[];
   staleManagedRecords: unknown[];
   generatedAt: number;
@@ -1242,6 +1244,11 @@ export interface WorktreeManagementActionMessage {
   worktreePath?: string;
   branchName?: string;
   confirmed?: boolean;
+}
+
+export interface SyncNamedWorktreeMessage {
+  type: typeof MESSAGE_TYPES.SYNC_NAMED_WORKTREE;
+  worktreePath: string;
 }
 
 /**

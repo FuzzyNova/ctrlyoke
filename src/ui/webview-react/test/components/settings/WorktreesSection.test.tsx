@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorktreesSection } from "@components/settings/WorktreesSection";
-import { SETTING_SCOPES } from "@root/types/DashboardConstants";
+import { MESSAGE_TYPES, SETTING_SCOPES } from "@root/types/DashboardConstants";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import { useSettingsStore } from "@store/settingsStore";
@@ -30,6 +30,8 @@ describe("WorktreesSection", () => {
     };
     useSettingsStore.getState().setWorktreeManagement({
       resolvedRoot: "C:/worktrees",
+      sourceCheckoutRoot: "C:/repo",
+      sourceCheckoutBranch: "main",
       generatedAt: Date.now(),
       staleManagedRecords: [],
       entries: [
@@ -78,6 +80,66 @@ describe("WorktreesSection", () => {
     expect(screen.getByText(/In use — wf\/run/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open owning workspace" })).toBeInTheDocument();
   });
+  it("offers Sync only for a live, non-stale named worktree, not the source checkout itself", () => {
+    const postMessage = vi.fn();
+    window.vscodeApi = {
+      postMessage,
+      getState: () => undefined,
+      setState: () => undefined,
+    };
+    window.confirm = vi.fn(() => true);
+    useSettingsStore.getState().setWorktreeManagement({
+      resolvedRoot: "C:/worktrees",
+      sourceCheckoutRoot: "C:/repo",
+      sourceCheckoutBranch: "main",
+      generatedAt: Date.now(),
+      staleManagedRecords: [],
+      entries: [
+        {
+          worktreePath: "C:/repo",
+          headCommit: "a",
+          branchName: "main",
+          ownership: "user",
+          branchState: "present",
+          inUse: false,
+          leaseOwners: [],
+          stale: false,
+          branchCleanupEligible: false,
+        },
+        {
+          worktreePath: "C:/repo.worktrees/bug-fix",
+          headCommit: "b",
+          branchName: "bug-fix",
+          ownership: "user",
+          branchState: "present",
+          inUse: false,
+          leaseOwners: [],
+          stale: false,
+          branchCleanupEligible: false,
+        },
+      ],
+    });
+
+    render(
+      <WorktreesSection
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getAllByRole("button", { name: "Sync with main" })
+    ).toHaveLength(1);
+
+    screen.getByRole("button", { name: "Sync with main" }).click();
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.SYNC_NAMED_WORKTREE,
+      worktreePath: "C:/repo.worktrees/bug-fix",
+    });
+  });
+
   it("shows the effective root and locks the setting at workspace scope", () => {
     render(
       <WorktreesSection

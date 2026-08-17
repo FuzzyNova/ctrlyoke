@@ -14,6 +14,7 @@ import { ExecutionRootLeaseManager } from "../../core/orchestration/ExecutionRoo
 import { summarizeStatusError } from "../../core/orchestration/ScriptExecutionReporter";
 import type { ScriptProcessResult } from "../../core/orchestration/ScriptProcessRunner";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
+import { WORKTREE_MANAGEMENT_ACTIONS } from "../../types/DashboardConstants";
 
 class RecordingWorktreeSetupRunner implements WorktreeSetupRunner {
   readonly calls: Array<Parameters<WorktreeSetupRunner["run"]>[0]> = [];
@@ -1727,6 +1728,185 @@ suite("WorktreeManager", function () {
     assert.strictEqual(
       await instance.isManagedBranchOwned(repository, info.branchName),
       false
+    );
+  });
+
+  test("Remove reconciles a record whose worktree Git has already fully forgotten", async () => {
+    const { parent, repository } = await makeRepository("management-remove");
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await info.lease.release();
+
+    // Simulate what the dashboard showed: the directory is gone and `git
+    // worktree prune` has already erased Git's own admin entry, but
+    // ctrlyoke's ownership record was never reconciled (e.g. a prior
+    // `removeWorktree` attempt recorded "remove-failed"). Neither
+    // `git worktree list` nor a plain `git worktree remove` can do anything
+    // further with this branch's admin entry.
+    await fs.rm(info.worktreePath, { recursive: true, force: true });
+    execFileSync("git", ["-C", repository, "worktree", "prune"], {
+      stdio: "ignore",
+    });
+
+    const stateBefore = await instance.getManagementState(repository);
+    const staleEntry = stateBefore.entries.find(
+      (entry) => entry.branchName === info.branchName
+    );
+    assert.ok(staleEntry, "the orphaned record should still be surfaced");
+    assert.strictEqual(staleEntry?.stale, true);
+
+    await instance.applyManagementAction({
+      sourceCheckoutRoot: repository,
+      action: WORKTREE_MANAGEMENT_ACTIONS.REMOVE,
+      branchName: info.branchName,
+      confirmed: true,
+    });
+
+    const record = await instance.readManagedWorktreeRecord(
+      repository,
+      info.branchName
+    );
+    assert.strictEqual(record?.directoryState, "removed");
+
+    const stateAfter = await instance.getManagementState(repository);
+    const reconciledEntry = stateAfter.entries.find(
+      (entry) => entry.branchName === info.branchName
+    );
+    // The branch still exists (only the directory was cleared), so the
+    // record is retained for branch cleanup, but it must no longer read as
+    // a stale admin entry needing repair.
+    assert.ok(reconciledEntry, "the reconciled record stays visible");
+    assert.strictEqual(reconciledEntry?.stale, false);
+    assert.strictEqual(reconciledEntry?.directoryState, "removed");
+  });
+
+  test("drops the ownership record once both directory and branch are gone", async () => {
+    const { parent, repository } = await makeRepository("management-tombstone");
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await info.lease.release();
+
+    await fs.rm(info.worktreePath, { recursive: true, force: true });
+    execFileSync("git", ["-C", repository, "worktree", "prune"], {
+      stdio: "ignore",
+    });
+    execFileSync("git", ["-C", repository, "branch", "-D", info.branchName], {
+      stdio: "ignore",
+    });
+
+    await instance.applyManagementAction({
+      sourceCheckoutRoot: repository,
+      action: WORKTREE_MANAGEMENT_ACTIONS.REMOVE,
+      branchName: info.branchName,
+      confirmed: true,
+    });
+
+    const state = await instance.getManagementState(repository);
+    assert.strictEqual(
+      state.entries.some((entry) => entry.branchName === info.branchName),
+      false
+    );
+    assert.strictEqual((await managedRecordFiles(repository)).length, 0);
+  });
+
+  test("syncs a named worktree with the source checkout in both directions", async () => {
+    const { parent, repository } = await makeRepository("sync-basic");
+    const instance = manager(parent);
+    const sourceBranchName = execFileSync(
+      "git",
+      ["-C", repository, "branch", "--show-current"],
+      { encoding: "utf8" }
+    ).trim();
+    execFileSync("git", ["-C", repository, "branch", "feature/sync"]);
+    const info = await resolve(instance, repository, "feature/sync");
+    await info.lease.release();
+
+    await fs.writeFile(
+      path.join(info.worktreePath, "worktree-file.txt"),
+      "from worktree\n"
+    );
+    execFileSync("git", ["-C", info.worktreePath, "add", "worktree-file.txt"]);
+    execFileSync(
+      "git",
+      ["-C", info.worktreePath, "commit", "-m", "worktree change"],
+      { stdio: "ignore" }
+    );
+
+    await fs.writeFile(
+      path.join(repository, "source-file.txt"),
+      "from source\n"
+    );
+    execFileSync("git", ["-C", repository, "add", "source-file.txt"]);
+    execFileSync(
+      "git",
+      ["-C", repository, "commit", "-m", "source change"],
+      { stdio: "ignore" }
+    );
+
+    const result = await instance.syncNamedWorktree({
+      sourceCheckoutRoot: repository,
+      worktreePath: info.worktreePath,
+    });
+
+    assert.strictEqual(result.sourceBranch, sourceBranchName);
+    assert.strictEqual(result.worktreeBranch, "feature/sync");
+    assert.strictEqual(result.intoSource.mergeOutcome, "merge-commit");
+    // By the time this direction runs, `intoSource` has already landed a
+    // merge commit on main containing both branches' changes, so bringing
+    // main back into the worktree branch is a trivial fast-forward rather
+    // than a second merge commit.
+    assert.strictEqual(result.intoWorktree.mergeOutcome, "fast-forward");
+
+    const exists = async (target: string) =>
+      fs.stat(target).then(
+        () => true,
+        () => false
+      );
+    assert.strictEqual(
+      await exists(path.join(repository, "worktree-file.txt")),
+      true
+    );
+    assert.strictEqual(
+      await exists(path.join(info.worktreePath, "source-file.txt")),
+      true
+    );
+  });
+
+  test("blocks sync when the named worktree has uncommitted changes", async () => {
+    const { parent, repository } = await makeRepository("sync-dirty");
+    const instance = manager(parent);
+    execFileSync("git", ["-C", repository, "branch", "feature/dirty"]);
+    const info = await resolve(instance, repository, "feature/dirty");
+    await info.lease.release();
+
+    await fs.writeFile(
+      path.join(info.worktreePath, "dirty.txt"),
+      "uncommitted\n"
+    );
+
+    const result = await instance.syncNamedWorktree({
+      sourceCheckoutRoot: repository,
+      worktreePath: info.worktreePath,
+    });
+
+    assert.strictEqual(result.intoWorktree.mergeOutcome, "blocked");
+    assert.match(result.intoWorktree.message ?? "", /uncommitted changes/);
+  });
+
+  test("refuses to sync a managed worktree", async () => {
+    const { parent, repository } = await makeRepository(
+      "sync-managed-guard"
+    );
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await info.lease.release();
+
+    await assert.rejects(
+      instance.syncNamedWorktree({
+        sourceCheckoutRoot: repository,
+        worktreePath: info.worktreePath,
+      }),
+      /workflow's own merge action/
     );
   });
 });

@@ -154,7 +154,13 @@ export function WorktreesSection({
         {management?.entries.length ? (
           <div className="mt-3 space-y-2">
             {management.entries.map((entry) => (
-              <WorktreeRow key={`${entry.worktreePath}:${entry.branchName ?? "detached"}`} entry={entry} vscode={vscode} />
+              <WorktreeRow
+                key={`${entry.worktreePath}:${entry.branchName ?? "detached"}`}
+                entry={entry}
+                vscode={vscode}
+                sourceCheckoutRoot={management.sourceCheckoutRoot}
+                sourceCheckoutBranch={management.sourceCheckoutBranch}
+              />
             ))}
           </div>
         ) : (
@@ -177,7 +183,17 @@ export function WorktreesSection({
   );
 }
 
-function WorktreeRow({ entry, vscode }: { entry: WorktreeManagementEntry; vscode: ReturnType<typeof useVsCodeApi> }) {
+function WorktreeRow({
+  entry,
+  vscode,
+  sourceCheckoutRoot,
+  sourceCheckoutBranch,
+}: {
+  entry: WorktreeManagementEntry;
+  vscode: ReturnType<typeof useVsCodeApi>;
+  sourceCheckoutRoot?: string;
+  sourceCheckoutBranch?: string | null;
+}) {
   const owner = entry.inUse
     ? `In use — ${entry.leaseOwners.map((item) => `${item.lease.workflowKey}/${item.lease.runRef}`).join(", ")}`
     : entry.ownership === "managed" ? "ctrlyoke-owned" : "user-owned";
@@ -189,6 +205,28 @@ function WorktreeRow({ entry, vscode }: { entry: WorktreeManagementEntry; vscode
     if (!window.confirm(`Force remove ${entry.worktreePath}? Uncommitted work may be lost.`)) return;
     sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.FORCE_REMOVE, entry, true);
   };
+  const normalizePath = (value: string) => value.replace(/\\/g, "/").toLowerCase().replace(/\/$/, "");
+  const isSourceCheckout =
+    !!sourceCheckoutRoot && normalizePath(entry.worktreePath) === normalizePath(sourceCheckoutRoot);
+  const canSync =
+    entry.ownership === "user" &&
+    !isSourceCheckout &&
+    !entry.inUse &&
+    !entry.stale &&
+    !!entry.branchName &&
+    entry.branchState === "present";
+  const sync = () => {
+    if (
+      !window.confirm(
+        `Sync "${entry.branchName}" with "${sourceCheckoutBranch ?? "the source checkout"}"?\n\nThis merges "${entry.branchName}" into "${sourceCheckoutBranch ?? "the checked-out branch"}", then merges that branch back into "${entry.branchName}" — the same two commands you'd otherwise run by hand.`
+      )
+    )
+      return;
+    vscode.postMessage({
+      type: MESSAGE_TYPES.SYNC_NAMED_WORKTREE,
+      worktreePath: entry.worktreePath,
+    });
+  };
   return (
     <div className={`rounded border p-2 text-xs ${entry.inUse ? "border-warning-fg" : "border-panel-border"}`}>
       <div className="font-mono break-all text-foreground">{entry.worktreePath}</div>
@@ -196,7 +234,7 @@ function WorktreeRow({ entry, vscode }: { entry: WorktreeManagementEntry; vscode
         <span>Owner: {owner}</span>
         <span>Age: {formatAge(entry.ageMs)}</span>
         <span>Branch: {entry.branchName ?? "detached"} ({entry.branchState})</span>
-        <span>{entry.prunableReason ? `Prunable: ${entry.prunableReason}` : entry.stale ? "Stale admin entry" : "Git entry present"}</span>
+        <span>{entry.prunableReason ? `Prunable: ${entry.prunableReason}` : entry.stale ? "Stale admin entry" : entry.directoryState === "removed" ? "Directory removed" : "Git entry present"}</span>
       </div>
       {entry.inUse && <div className="mt-1 text-warning-fg">Retry after the owner releases it, or open the owning workspace from its run.</div>}
       {entry.divergence && <div className="mt-1 text-description-fg">{entry.branchName} — {entry.divergence.ahead} ahead, {entry.divergence.behind} behind {entry.divergence.comparisonLabel}</div>}
@@ -205,10 +243,11 @@ function WorktreeRow({ entry, vscode }: { entry: WorktreeManagementEntry; vscode
           <button type="button" className="fp-select-trigger text-xs" onClick={() => vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_WORKTREE_MANAGEMENT_STATE, refresh: true })}>Retry</button>
           <button type="button" className="fp-select-trigger text-xs" onClick={() => vscode.postMessage({ type: MESSAGE_TYPES.OPEN_WORKTREE_OWNER, stateRoot: entry.leaseOwners[0].lease.stateRoot })}>Open owning workspace</button>
         </>}
+        {canSync && <button type="button" className="fp-select-trigger text-xs" onClick={sync}>Sync with {sourceCheckoutBranch ?? "checkout"}</button>}
         {entry.branchCleanupEligible && entry.branchName && <button type="button" className="fp-select-trigger text-xs" onClick={() => sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH, entry)}>Delete merged branch</button>}
         {entry.ownership === "managed" && entry.branchName && entry.branchState === "present" && !entry.branchCleanupEligible && !entry.inUse && !entry.stale && <button type="button" className="fp-select-trigger text-xs" onClick={() => { if (window.confirm(`Delete branch ${entry.branchName}? This cannot be undone by ctrlyoke.`)) sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH, entry, true); }}>Delete branch…</button>}
-        {entry.ownership === "managed" && entry.directoryState === "present" && <button type="button" className="fp-select-trigger text-xs" disabled={entry.inUse} onClick={remove}>Remove</button>}
-        {entry.ownership === "managed" && entry.directoryState === "present" && <button type="button" className="fp-select-trigger text-xs" disabled={entry.inUse} onClick={forceRemove}>Force remove</button>}
+        {entry.ownership === "managed" && (entry.directoryState === "present" || entry.directoryState === "remove-failed") && <button type="button" className="fp-select-trigger text-xs" disabled={entry.inUse} onClick={remove}>Remove</button>}
+        {entry.ownership === "managed" && (entry.directoryState === "present" || entry.directoryState === "remove-failed") && <button type="button" className="fp-select-trigger text-xs" disabled={entry.inUse} onClick={forceRemove}>Force remove</button>}
         {entry.stale && <button type="button" className="fp-select-trigger text-xs" onClick={() => sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.REPAIR, entry)}>Repair entry</button>}
       </div>
     </div>

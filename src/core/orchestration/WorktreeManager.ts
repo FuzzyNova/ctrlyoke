@@ -272,6 +272,9 @@ export interface WorktreeManagementEntry {
 
 export interface WorktreeManagementState {
   resolvedRoot: string;
+  /** Canonical Git toplevel entries are compared against, e.g. to hide sync/removal actions on the source checkout's own row. */
+  sourceCheckoutRoot: string;
+  sourceCheckoutBranch: string | null;
   entries: WorktreeManagementEntry[];
   staleManagedRecords: ManagedWorktreeOwnershipRecord[];
   generatedAt: number;
@@ -310,6 +313,16 @@ export interface WorktreeMergeResult {
   mergeOutcome: WorktreeMergeOutcome;
   conflictFiles?: string[];
   message?: string;
+}
+
+/** Result of a two-way named-worktree sync; see `syncNamedWorktree`. */
+export interface WorktreeSyncResult {
+  sourceBranch: string;
+  worktreeBranch: string;
+  /** The worktree's branch merged into the source checkout's current branch. */
+  intoSource: WorktreeMergeResult;
+  /** The source checkout's current branch merged into the worktree. */
+  intoWorktree: WorktreeMergeResult;
 }
 
 export interface ResolveNamedWorktreeOptions {
@@ -912,68 +925,205 @@ export class WorktreeManager {
       if (postLeaseGuardFailure) {
         return { mergeOutcome: "blocked", message: postLeaseGuardFailure };
       }
-
-      const managedBranchRef = `refs/heads/${info.branchName}`;
-      try {
-        await this.mergeOperations.fastForward(
-          info.sourceCheckoutRoot,
-          managedBranchRef
-        );
-        return { mergeOutcome: "fast-forward" };
-      } catch {
-        // A fast-forward refusal is the expected signal for a divergent
-        // source branch. The guarded non-ff attempt below handles that case.
-      }
-
-      try {
-        await this.mergeOperations.noFastForward(
-          info.sourceCheckoutRoot,
-          managedBranchRef
-        );
-        return { mergeOutcome: "merge-commit" };
-      } catch (error) {
-        const conflictFiles = await this.mergeOperations
-          .getUnmergedPaths(info.sourceCheckoutRoot)
-          .catch(() => []);
-        const mergeInProgress = await hasGitOperationInProgress(
-          info.sourceCheckoutRoot
-        );
-        const failureMessage =
-          error instanceof Error ? error.message : String(error);
-        if (!mergeInProgress && conflictFiles.length === 0) {
-          return {
-            mergeOutcome: "blocked",
-            message: `Merge blocked: ${failureMessage}`,
-          };
-        }
-
-        try {
-          await this.mergeOperations.abort(info.sourceCheckoutRoot);
-        } catch (abortError) {
-          return {
-            mergeOutcome: "abort-failed",
-            conflictFiles,
-            message: `Merge conflict abort failed: ${abortError instanceof Error ? abortError.message : String(abortError)}`,
-          };
-        }
-
-        const abortRestoredCleanState =
-          !(await hasGitOperationInProgress(info.sourceCheckoutRoot)) &&
-          !(await hasUncommittedChanges(info.sourceCheckoutRoot));
-        if (!abortRestoredCleanState) {
-          return {
-            mergeOutcome: "abort-failed",
-            conflictFiles,
-            message:
-              "Merge conflict abort did not restore a clean, non-merging source checkout.",
-          };
-        }
-
-        return { mergeOutcome: "conflict", conflictFiles };
-      }
+      return await this.attemptGuardedMerge(
+        info.sourceCheckoutRoot,
+        `refs/heads/${info.branchName}`
+      );
     } finally {
       await sourceLease.release().catch(() => undefined);
     }
+  }
+
+  /**
+   * Attempt to merge `ref` into the checkout at `dir`: fast-forward first,
+   * then a non-interactive merge commit, aborting cleanly and reporting
+   * conflict paths on failure. Callers are responsible for their own
+   * clean/branch/lease guards before calling this — it performs no guard of
+   * its own and always leaves `dir` in a well-defined, non-partial state
+   * (merged, blocked-and-untouched, cleanly-aborted, or explicitly
+   * abort-failed for manual recovery).
+   */
+  private async attemptGuardedMerge(
+    dir: string,
+    ref: string
+  ): Promise<WorktreeMergeResult> {
+    try {
+      await this.mergeOperations.fastForward(dir, ref);
+      return { mergeOutcome: "fast-forward" };
+    } catch {
+      // A fast-forward refusal is the expected signal for a divergent
+      // target. The guarded non-ff attempt below handles that case.
+    }
+
+    try {
+      await this.mergeOperations.noFastForward(dir, ref);
+      return { mergeOutcome: "merge-commit" };
+    } catch (error) {
+      const conflictFiles = await this.mergeOperations
+        .getUnmergedPaths(dir)
+        .catch(() => []);
+      const mergeInProgress = await hasGitOperationInProgress(dir);
+      const failureMessage =
+        error instanceof Error ? error.message : String(error);
+      if (!mergeInProgress && conflictFiles.length === 0) {
+        return {
+          mergeOutcome: "blocked",
+          message: `Merge blocked: ${failureMessage}`,
+        };
+      }
+
+      try {
+        await this.mergeOperations.abort(dir);
+      } catch (abortError) {
+        return {
+          mergeOutcome: "abort-failed",
+          conflictFiles,
+          message: `Merge conflict abort failed: ${abortError instanceof Error ? abortError.message : String(abortError)}`,
+        };
+      }
+
+      const abortRestoredCleanState =
+        !(await hasGitOperationInProgress(dir)) &&
+        !(await hasUncommittedChanges(dir));
+      if (!abortRestoredCleanState) {
+        return {
+          mergeOutcome: "abort-failed",
+          conflictFiles,
+          message:
+            "Merge conflict abort did not restore a clean, non-merging checkout.",
+        };
+      }
+
+      return { mergeOutcome: "conflict", conflictFiles };
+    }
+  }
+
+  /**
+   * Two-way sync for a user-owned named worktree: fast-forward (or merge)
+   * the worktree's branch into whatever branch the source checkout currently
+   * has checked out, then merge that same source branch back into the
+   * worktree. This is exactly the pair of `git merge` commands worktree
+   * users otherwise run by hand before starting new work on a named
+   * worktree; see "ctrlyoke does not automatically rebase, pull, or
+   * synchronize named branches" in WORKTREE_SUPPORT_PLAN.md for why this is
+   * an explicit, user-invoked dashboard action rather than automatic
+   * behavior — it deliberately touches the live source checkout.
+   */
+  public async syncNamedWorktree(options: {
+    sourceCheckoutRoot: string;
+    worktreePath: string;
+  }): Promise<WorktreeSyncResult> {
+    const sourceCheckoutRoot = await this.requireRepositoryRoot(
+      options.sourceCheckoutRoot
+    );
+    const entries = await listGitWorktrees(sourceCheckoutRoot);
+    const entry = entries.find((candidate) =>
+      pathsEqual(candidate.worktreePath, options.worktreePath)
+    );
+    if (!entry) {
+      throw new Error(
+        "The worktree admin entry is stale; repair or refresh first."
+      );
+    }
+    if (!entry.branchName) {
+      throw new Error("A detached worktree has no branch to sync.");
+    }
+    if (pathsEqual(entry.worktreePath, sourceCheckoutRoot)) {
+      throw new Error("The source checkout cannot be synced with itself.");
+    }
+    const worktreeBranch = entry.branchName;
+
+    // Managed worktrees already have a dedicated, lease-integrated merge
+    // path tied to their own run; sync is for user-owned named worktrees.
+    const commonDirectory = await this.requireCommonDirectory(
+      sourceCheckoutRoot
+    );
+    const records = await this.readRecords(commonDirectory);
+    if (records.some((record) => record.branchName === worktreeBranch)) {
+      throw new Error(
+        "Managed worktrees use the workflow's own merge action, not sync."
+      );
+    }
+
+    const worktreeInspections = await ExecutionRootLeaseManager.inspectLeases(
+      entry.worktreePath
+    );
+    const liveWorktreeLease = worktreeInspections.find(
+      (inspection) => !inspection.stale
+    );
+    if (liveWorktreeLease) {
+      const owner = liveWorktreeLease.lease;
+      throw new Error(
+        `Worktree is in use by workflow ${owner.workflowKey}, run ${owner.runRef}.`
+      );
+    }
+
+    const sourceBranch = await currentBranch(sourceCheckoutRoot);
+    if (!sourceBranch) {
+      throw new Error(
+        "Sync is unavailable while the source checkout is on a detached HEAD."
+      );
+    }
+
+    let sourceLease: ExecutionLeaseHandle | undefined;
+    try {
+      sourceLease = await this.leaseManager.acquire({
+        mode: "exclusive-worktree",
+        stateRoot: sourceCheckoutRoot,
+        executionRoot: sourceCheckoutRoot,
+        workflowKey: "worktree-sync" as WorkflowKey,
+        runRef: `sync-${this.now()}` as RunRef,
+        runner: "vscode",
+        instanceId: crypto.randomUUID(),
+      });
+    } catch (error) {
+      throw new Error(
+        `Sync blocked: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+
+    try {
+      const intoSource = await this.guardedSyncMerge(
+        sourceCheckoutRoot,
+        `refs/heads/${worktreeBranch}`,
+        sourceBranch
+      );
+      const intoWorktree = await this.guardedSyncMerge(
+        entry.worktreePath,
+        `refs/heads/${sourceBranch}`,
+        worktreeBranch
+      );
+      return { sourceBranch, worktreeBranch, intoSource, intoWorktree };
+    } finally {
+      await sourceLease.release().catch(() => undefined);
+    }
+  }
+
+  private async guardedSyncMerge(
+    dir: string,
+    ref: string,
+    expectedCheckedOutBranch: string
+  ): Promise<WorktreeMergeResult> {
+    const checkedOutBranch = await currentBranch(dir);
+    if (checkedOutBranch !== expectedCheckedOutBranch) {
+      return {
+        mergeOutcome: "blocked",
+        message: `Merge blocked: "${dir}" is on "${checkedOutBranch ?? "detached HEAD"}", expected "${expectedCheckedOutBranch}".`,
+      };
+    }
+    if (await hasGitOperationInProgress(dir)) {
+      return {
+        mergeOutcome: "blocked",
+        message: `Merge blocked: a Git operation is already in progress in "${dir}".`,
+      };
+    }
+    if (await hasUncommittedChanges(dir)) {
+      return {
+        mergeOutcome: "blocked",
+        message: `Merge blocked: "${dir}" has uncommitted changes.`,
+      };
+    }
+    return this.attemptGuardedMerge(dir, ref);
   }
 
   private async validateManagedCheckoutIdentity(
@@ -1741,6 +1891,32 @@ export class WorktreeManager {
     );
 
     for (const record of staleManagedRecords) {
+      // A record whose directory ctrlyoke has already reconciled as removed
+      // has nothing left for Git to prune or repair — the absent Git entry
+      // is the expected end state, not staleness. Only a record that still
+      // believes its directory is present/unresolved and has no matching Git
+      // entry is a genuinely stale admin entry needing repair.
+      const reconciled = record.directoryState === "removed";
+      if (reconciled && record.branchState !== "present") {
+        // Both resources this record tracked are gone; drop the tombstone so
+        // it stops appearing forever. Best-effort — a failure just leaves it
+        // for the next refresh to retry.
+        await fs
+          .unlink(this.recordPath(commonDirectory, record.branchName))
+          .catch(() => undefined);
+        continue;
+      }
+      const branchCleanup = reconciled
+        ? await this.getBranchCleanupEligibility(
+            sourceRoot,
+            record,
+            undefined,
+            false
+          )
+        : {
+            eligible: false,
+            reason: "The Git worktree admin entry is stale; repair is required.",
+          };
       managedEntries.push({
         worktreePath: record.worktreePath,
         headCommit: record.lastVerifiedBranchTip,
@@ -1753,16 +1929,19 @@ export class WorktreeManager {
         ageMs: now - record.createdAt,
         inUse: false,
         leaseOwners: [],
-        stale: true,
-        branchCleanupEligible: false,
-        branchCleanupReason:
-          "The Git worktree admin entry is stale; repair is required.",
+        stale: !reconciled,
+        branchCleanupEligible: branchCleanup.eligible,
+        ...(branchCleanup.reason
+          ? { branchCleanupReason: branchCleanup.reason }
+          : {}),
         ...(record.targetBranch ? { targetBranch: record.targetBranch } : {}),
       });
     }
 
     return {
       resolvedRoot: await this.resolveWorktreeRoot(sourceRoot),
+      sourceCheckoutRoot: sourceRoot,
+      sourceCheckoutBranch: await currentBranch(sourceRoot),
       entries: managedEntries,
       staleManagedRecords,
       generatedAt: now,
@@ -1873,10 +2052,33 @@ export class WorktreeManager {
         options.action === WORKTREE_MANAGEMENT_ACTIONS.REMOVE ||
         options.action === WORKTREE_MANAGEMENT_ACTIONS.FORCE_REMOVE
       ) {
-        if (!entry)
-          throw new Error(
-            "The worktree admin entry is stale; repair it first."
+        if (!entry) {
+          // Git has already fully forgotten this worktree — it is absent
+          // from `git worktree list` entirely, not merely prunable. There is
+          // nothing left for Git to remove; the stale ownership record is
+          // what "Remove" must clear. Only refuse when the directory still
+          // exists on disk, since that ambiguous state needs `git worktree
+          // repair` first, not reconciliation.
+          if (await this.pathExists(record.worktreePath)) {
+            throw new Error(
+              "The worktree admin entry is stale; repair it first."
+            );
+          }
+          const survivingBranchTip = await this.tryResolveLocalBranch(
+            sourceRoot,
+            record.branchName
           );
+          await this.writeRecord(
+            this.recordPath(commonDirectory, record.branchName),
+            {
+              ...record,
+              lifecycleState: "settled",
+              directoryState: "removed",
+              branchState: survivingBranchTip ? "present" : "missing",
+            }
+          );
+          return;
+        }
         await removeWorktree(
           sourceRoot,
           record.worktreePath,
