@@ -15,7 +15,7 @@ per-site disposition (four cut, two relocated into existing/inline UI) — but
 none of the six code changes have landed yet. **Phase 6 (new, 2026-08-17) is
 also outstanding**: the webview's own toast dispatch — separate from
 the backend `UserFeedbackSink` this plan already built — is not host-aware, so
-26 call sites across 9 webview-react files render an in-app toast even inside
+27 call sites across 9 webview-react files render an in-app toast even inside
 the VS Code panel instead of a native message. See "The webview's own toast
 calls are not host-aware" and "Phase 6" below.
 
@@ -209,7 +209,13 @@ Re-run the AST audit before the Phase 2 triage rather than trusting these
 totals. A 2026-08-02 re-measure found the reusable group at **64** across 13
 files and the boundary group at exactly **49** across 6 after the
 `VsCodeAdapter` calls moved to the feedback sink; the adapter-mediated
-table below is exact. An earlier 2026-08-01 text scan found per-file drift
+table below is exact. **The boundary group has since grown to 54 across 7
+files** (re-read from `FEEDBACK_SOURCE_AUDIT_BASELINES` on 2026-08-17:
+`extension.ts` 20, `DevCommands` 12, `ContextMenuReferenceCommands` 6,
+`ScmCommitCommand` 5, `WebviewMessageRouter` 5, `ExternalFileTrustPrompt` 3,
+`NotificationManager` 3, `VsCodeAdapter` 0). That growth is legitimate —
+these are all boundary-approved sites — but any doc or step that cites 49 as
+the live baseline is stale. An earlier 2026-08-01 text scan found per-file drift
 against the original table
 (`WorkflowCommandHandler` at 13, `showErrorMessage` at 67 /
 `showInformationMessage` at 24), and a naive `grep` both over-counts the four
@@ -264,7 +270,8 @@ Two call-site shapes both fall into this gap:
 
 **Group A — client-only actions with no backend round trip at all.** These
 never touch `WorkflowOrchestrator` or `UserFeedbackSink` and never can, so
-Phase 2's migration was structurally unable to reach them. 14 sites, 8 files:
+Phase 2's migration was structurally unable to reach them. 15 sites, 8 files
+(the per-file rows below sum to 15; earlier prose in this plan said 14):
 
 | File                                              | Lines               | Example                                                            |
 | -------------------------------------------------- | ------------------- | -------------------------------------------------------------------- |
@@ -313,7 +320,7 @@ already correct:
 
 Neither of these should be touched by Phase 6 — they are the reference for
 what "correct" looks like, not additional migration targets. What's missing is
-a single client-side entry point the other 26 sites can call instead of
+a single client-side entry point the other 27 sites can call instead of
 hand-rolling the `standalone` check (or, in 25 of the 26 cases, not writing it
 at all).
 
@@ -1015,9 +1022,34 @@ this has been implemented yet; this section only records the design decision.
    trust the caller already confirmed, same as `REMOVE_WORKFLOW_HISTORY` /
    `DELETE_RUN_HISTORY` already do.
 
+   Verified 2026-08-17: the activation toast is `extension.ts:177` and the
+   post-`StartupOverlay` one is `WorkflowOrchestrator.ts:1344`. A **third**
+   initialization message at `extension.ts:1107` (the `ctrlyoke.initWorkspace`
+   command-palette command, "…and its .gitignore are up to date") is a
+   different, action-free boundary site and is **not** cut.
+
 **Net effect:** four sites are cut outright (2, 5, and the merged 3/4); two
 relocate into modal/inline UI (1, 6). None need
 `USER_INTERACTION_REQUEST` — see "Action-Bearing Messages" above.
+
+#### Baseline impact of Phase 4 — both counters move
+
+`assertShrinkOnly` fails when a count drops below its committed baseline just
+as loudly as when it grows, so **every Phase 4 step must lower
+`FEEDBACK_SOURCE_AUDIT_BASELINES` in `src/test/unit/SourceAuditCounters.test.ts`
+in the same commit that removes call sites**, or `npm test` fails on an
+otherwise-correct change.
+
+- `directMessage.reusable` goes **6 → 0** across the Phase 4 steps: items 3/4
+  remove 2 (`TemplateImporter.ts`), item 1 removes 1 and item 2 removes 1
+  (`WorkflowCommandHandler.ts`), item 5 removes 1
+  (`WorkflowOrchestrator.ts:1344`), item 6 removes 1
+  (`WorkflowSerializer.ts:1375`).
+- `directMessage.boundary` goes **54 → 53**, once, in the step that deletes
+  `extension.ts:177`. It moves for no other Phase 4 step.
+
+Each step lowers only by what it actually removed; do not pre-lower to the end
+state.
 
 ### Phase 5 — Enforce the boundary — DONE, via a different mechanism than written
 
@@ -1028,8 +1060,9 @@ relocate into modal/inline UI (1, 6). None need
 
 **Confirmed shipped, checked 2026-08-17.** Item 3 landed as
 `src/test/unit/SourceAuditCounters.test.ts`'s shrink-only, AST-based
-`assertShrinkOnly` counters (current baselines: 49 boundary / 6 reusable /
-0 adapter-UI) — these fail the build in *either* direction, so the boundary
+`assertShrinkOnly` counters (**current baselines re-read from the test file
+2026-08-17: 54 boundary / 6 reusable / 0 adapter-UI**) — these fail the build
+in *either* direction, so the boundary
 cannot silently grow. **Items 1 and 2 (a literal ESLint import-boundary rule
 and allowlist) were never built and are not planned** —
 `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` line 219-220 explicitly reasons that a
@@ -1066,7 +1099,7 @@ caring whether they're rendering inside the VS Code panel or a browser tab.
    colocated near `useVsCodeApi`. Its entire job:
    - `isStandalone` → `useUiStore.getState().showToast(message, severity, { detail })` (unchanged, in-app).
    - otherwise → `getVsCodeApi().postMessage({ type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK, severity, message, detail })`.
-4. Migrate Group A's 14 client-only call sites (8 files) to `notifyUser()`.
+4. Migrate Group A's 15 client-only call sites (8 files) to `notifyUser()`.
 5. Migrate Group B's 12 scoped-reply call sites in `useMessageHandler.ts` to
    `notifyUser()`. At `WORKFLOW_VARIANT_CREATED` (line 1529), keep the
    existing `standalone ? { action: {...} } : undefined` guard around the
@@ -1089,8 +1122,12 @@ caring whether they're rendering inside the VS Code panel or a browser tab.
   `action` parameter.
 - No change to `UserFeedbackSink`, `CompositeUserFeedbackSink`, or either sink
   implementation (Phase 2, already correct/complete).
-- No change to the 49 boundary-approved direct `vscode.window.show*Message`
-  calls or the six Phase 4 action-bearing sites.
+- No change to the 54 boundary-approved direct `vscode.window.show*Message`
+  calls or the six Phase 4 action-bearing sites. Phase 6 adds a
+  `SHOW_NATIVE_FEEDBACK` handler to `WebviewMessageRouter.ts` (already a
+  `boundaryFiles` entry), but it delegates to `VsCodeUserFeedbackSink` rather
+  than calling `vscode.window.show*Message` directly, so the boundary baseline
+  does not move.
 
 **Tests:**
 
@@ -1193,7 +1230,7 @@ caring whether they're rendering inside the VS Code panel or a browser tab.
   nowhere else.
 - **OUTSTANDING — Phase 6 (new 2026-08-17):** The webview's own toast calls —
   as opposed to `UserFeedbackSink`, which is already correct — are not
-  host-aware. 26 call sites across 9 `webview-react` files (Groups A and B
+  host-aware. 27 call sites across 9 `webview-react` files (Groups A and B
   above) render an in-app toast unconditionally, including inside the VS Code
   panel, where a native `vscode.window.show*Message` is expected. No
   client-side `notifyUser()` dispatcher exists yet.

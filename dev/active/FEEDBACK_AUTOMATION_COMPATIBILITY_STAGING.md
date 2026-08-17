@@ -87,7 +87,7 @@ plan's own table, this section is newer.
 | Fact                                                              | Value                                                                                                  |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | Direct `show*Message` in reusable code (the parity gap)           | **6** across 6 files — the six intentional Phase 4 interaction holds; the initial Stage C count was 63 |
-| Direct `show*Message` at the VS Code boundary (correctly staying) | **49** across 6 files                                                                                  |
+| Direct `show*Message` at the VS Code boundary (correctly staying) | **54** across 7 files (was 49 across 6 when measured 2026-08-02; re-read 2026-08-17)                    |
 | Adapter-mediated host UI (`platform.log/warn/error`)              | **0** — all 18 sites now use `UserFeedbackSink`                                                        |
 | Adapter-mediated `showChoice()`                                   | **0** — the final `CliIntegration.ts` site now uses warning feedback                                   |
 | `USER_FEEDBACK_SEVERITY`                                          | Shipped in `DashboardConstants.ts:482`                                                                 |
@@ -179,8 +179,11 @@ migration target growing while the migration runs, so it must precede Stage C.
 53 boundary / 63 reusable / 19 adapter-UI; all three were then lowered as Stage
 C landed. Current values:**
 
-- **49 boundary** = `extension.ts` 20, `DevCommands` 12, `ContextMenuReferenceCommands` 6,
-  `ScmCommitCommand` 5, `ExternalFileTrustPrompt` 3, `NotificationManager` 3.
+- **49 boundary as committed by A.1** = `extension.ts` 20, `DevCommands` 12,
+  `ContextMenuReferenceCommands` 6, `ScmCommitCommand` 5,
+  `ExternalFileTrustPrompt` 3, `NotificationManager` 3. **Now 54 across 7 files**
+  (re-read from `FEEDBACK_SOURCE_AUDIT_BASELINES` 2026-08-17): boundary-approved
+  growth added `WebviewMessageRouter.ts` 5 to the allowlist.
   Down from 53: C.3 deleted the four `VsCodeAdapter` calls that implemented the
   removed `PlatformAdapter` UI methods. `VsCodeAdapter.ts` stays in the
   counter's `boundaryFiles` list at zero calls, so a future call there is
@@ -356,8 +359,19 @@ reconciliation: `TemplateImporter.ts:200` (overwrite, cut),
 `WorkflowCommandHandler.ts:99` (post-script-create, moves in-app),
 `WorkflowCommandHandler.ts:148` (retry harness automation, moves inline),
 `WorkflowOrchestrator.ts:1344` (post-workspace-init, cut — and duplicated by a
-second near-identical toast in `extension.ts`, also cut), `WorkflowSerializer.ts:1375`
-(clear-all-workflows, replaced by `DeleteConfirmModal`).
+second near-identical toast in `extension.ts:177`, also cut), `WorkflowSerializer.ts:1375`
+(clear-all-workflows, replaced by `DeleteConfirmModal`). **All six line numbers
+re-verified against `src/` on 2026-08-17.**
+
+**Stage F also now owns Phase 6**, added to the feedback plan on 2026-08-17 and
+not previously represented in this queue. It is a distinct gap from everything
+above: the *webview's own* toast dispatch is not host-aware, so 27 call sites
+across 9 `webview-react` files render an in-app toast even inside the VS Code
+panel. Phase 6 adds a single client-side `notifyUser()` dispatcher (the
+client-side counterpart to Phase 2's `UserFeedbackSink`) and migrates those
+sites to it. **Phase 6 is sequenced before Phase 4** — Phase 4's two relocated
+sites add new in-app UI that should report through `notifyUser()` rather than
+hand-rolling a `standalone` check that would immediately need migrating.
 
 ### Stage G — Compatibility Phase 3, and the deferred remainder — NOT STARTED
 
@@ -418,8 +432,14 @@ may be swapped as a block.
 | 15  | C.6   | **DONE** — Executed the triage for the ui/utils group (31 sites in 8 files); reusable direct-message baseline is now 6, with the six Phase 4 interaction holds remaining                                                                            |
 | 16  | D     | **TODO — next up.** `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                                                                                                    |
 | 17  | E     | **DONE** — `WebviewClientContext` threaded through `WorkflowMutationCoordinator`, `WorkflowStepHandlers`, `UndoRedoCoordinator`, and terminal handlers (landed 2026-07-24 to 2026-08-06); two-tab isolation test in `CoreFeedbackMigration.test.ts` |
-| 18  | F     | **TODO — redesigned 2026-08-17.** No `USER_INTERACTION_REQUEST` contract; instead cut 4 of the 6 action-bearing sites and relocate 2 into existing/inline UI (`DeleteConfirmModal`, `ScriptConditionEditor`, `HarnessDropdown`); none of the 6 changes implemented yet |
-| 19  | G.x   | **TODO.** Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration (dry-run sub-leg blocked on `SECRETS_AND_REDACTION_PLAN.md`)                                                                                      |
+| 18  | F.1   | **TODO.** Phase 6 infra: `MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK`, a `WebviewMessageRouter` handler delegating to the existing `VsCodeUserFeedbackSink`, and the `notifyUser()` client dispatcher                                                                        |
+| 19  | F.2   | **TODO.** Phase 6 step 4: migrate Group A's 15 client-only toast call sites (8 `webview-react` files) to `notifyUser()`                                                                                                                                              |
+| 20  | F.3   | **TODO.** Phase 6 step 5: migrate Group B's 12 scoped-reply handlers in `useMessageHandler.ts`; add the shrink-only raw-`showToast`/`enqueueToast` audit counter                                                                                                     |
+| 21  | F.4   | **TODO.** Phase 4 items 5 + 6: cut both duplicate workspace-init toasts; funnel clear-all-history through `DeleteConfirmModal` (`boundary` 54 → 53, `reusable` 6 → 4)                                                                                               |
+| 22  | F.5   | **TODO.** Phase 4 items 3 + 4: delete `TemplateImporter.ts` and `ctrlyoke.importWorkflowTemplates`; repoint `ctrlyoke.createNewTemplate` at `TemplateModal` (`reusable` 4 → 2)                                                                                      |
+| 23  | F.6   | **TODO.** Phase 4 item 1: in-app end-condition script creation in `ScriptConditionEditor`; delete `ctrlyoke.createEndConditionScript` (`reusable` 2 → 1)                                                                                                            |
+| 24  | F.7   | **TODO.** Phase 4 item 2: inline harness-detection retry next to `HarnessDropdown`; cut the `openPanel()` gate (`reusable` 1 → 0)                                                                                                                                    |
+| 25  | G.x   | **TODO.** Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration (dry-run sub-leg blocked on `SECRETS_AND_REDACTION_PLAN.md`)                                                                                      |
 
 **Stage B was reordered on 2026-08-02 from the plan's section numbering.** The
 plan lists the builder first, but `CliJsonResultBuilder` consumes the projection
@@ -475,7 +495,11 @@ reality — but it means every step from 12 onward **must edit
 `FEEDBACK_SOURCE_AUDIT_BASELINES` in the same commit that removes call sites**,
 or `npm test` fails on a change that is otherwise correct. Step 12 takes
 `adapterUi` to 0; steps 14 and 15 each lower `directMessage.reusable`. The
-`boundary` baseline of 49 must not move — those remaining sites are staying.
+`boundary` baseline — 49 when Stage C landed, **54 today** — must not move for
+any Stage C/D step; those sites are staying. Stage F is the one exception: it
+lowers `boundary` 54 → 53 exactly once, in the step that deletes the duplicate
+workspace-initialization toast at `extension.ts:177`, and takes
+`directMessage.reusable` 6 → 0 across its steps.
 
 ### Stage C.3 disposition — complete
 
@@ -629,7 +653,7 @@ Re-verified against `src/` on 2026-08-11, not read from the plans.
 | C     | Browser feedback Phases 2 and 2.5                                        | **Done**                                                                                           |
 | D     | CLI `validate --harness` / `--all-installed-harnesses --json`            | **Not started** — no dependency, smallest remaining chunk                                          |
 | E     | Client-scoped routing                                                    | **Done** (confirmed complete this pass; previously unmarked)                                       |
-| F     | Interactive choices / `USER_INTERACTION_REQUEST`                         | **Not started**                                                                                    |
+| F     | Phase 6 host-aware webview toasts + Phase 4's six per-site dispositions   | **Not started** — queued as steps 18–24 (2026-08-17); no `USER_INTERACTION_REQUEST` contract       |
 | G     | Compatibility Phase 3 domains + docs + Codex investigation + dry-run leg | **Not started**; dry-run sub-leg waits on the Secrets plan, now scheduled as P0 outside this queue |
 
 Three items stand between this document and being fully closed out:
@@ -637,9 +661,10 @@ Three items stand between this document and being fully closed out:
 1. **Stage D** — self-contained, no blockers. Recommended next: it is the
    smallest remaining piece and reuses conventions (JSON envelope, registry
    access) that already exist in `cli.ts`.
-2. **Stage F** — self-contained, no blockers. The 6 target sites and their
-   file/line locations are already enumerated above and were re-confirmed
-   unchanged.
+2. **Stage F** — self-contained, no blockers. Now two phases: Phase 6
+   (host-aware webview toast dispatch, 27 sites / 9 files) followed by Phase 4
+   (the six action-bearing sites, all file/line locations re-verified
+   2026-08-17). Split into seven single-session steps 18–24 above.
 3. **Stage G** — the largest remaining piece, and the only one with an actual
    dependency chain: its dry-run leg needs
    [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md),
