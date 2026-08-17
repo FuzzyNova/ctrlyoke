@@ -269,6 +269,12 @@ export class CliPromptPreparer {
       await this.createSourceRuntimeCopyMutations(
         outgoingSections.sourceRuntimeCopies
       );
+    const copiedSourceRuntimeCopies =
+      outgoingSections.sourceRuntimeCopies.filter((copy) =>
+        sourceRuntimeCopyMutations.some(
+          (mutation) => mutation.path === copy.destinationPath
+        )
+      );
 
     // Preserve the live fast path: direct references remain inline when the
     // rest of the prompt is safe to send as-is.
@@ -289,8 +295,8 @@ export class CliPromptPreparer {
       return this.withDiagnostics(
         this.withSourceRuntimeDisclosure(
           plan,
-          outgoingSections.sourceRuntimeReadCount ?? 0,
-          sourceRuntimeCopyMutations.length,
+          outgoingSections.sourceRuntimeReadReferences,
+          copiedSourceRuntimeCopies,
           harnessId
         ),
         promptDiagnostics
@@ -327,8 +333,8 @@ export class CliPromptPreparer {
     const planWithDiagnostics = this.withDiagnostics(
       this.withSourceRuntimeDisclosure(
         plan,
-        outgoingSections.sourceRuntimeReadCount ?? 0,
-        sourceRuntimeCopyMutations.length,
+        outgoingSections.sourceRuntimeReadReferences,
+        copiedSourceRuntimeCopies,
         harnessId
       ),
       promptDiagnostics
@@ -419,22 +425,31 @@ export class CliPromptPreparer {
 
   private withSourceRuntimeDisclosure(
     plan: PromptPreparationPlan,
-    sourceReadCount: number,
-    copiedFileCount: number,
+    sourceReadReferences: readonly string[],
+    copiedCopies: readonly PromptSections["sourceRuntimeCopies"][number][],
     harnessId: ResolvedProperties["harness"]
   ): PromptPreparationPlan {
-    if (sourceReadCount === 0 && copiedFileCount === 0) {
+    if (sourceReadReferences.length === 0 && copiedCopies.length === 0) {
       return plan;
     }
 
-    const referenceLabel = sourceReadCount === 1 ? "reference" : "references";
-    const referenceVerb = sourceReadCount === 1 ? "was" : "were";
-    const fileLabel = copiedFileCount === 1 ? "file" : "files";
-    const fileVerb = copiedFileCount === 1 ? "was" : "were";
+    const details: string[] = [];
+    if (sourceReadReferences.length > 0) {
+      details.push(
+        `Read from source checkout: ${sourceReadReferences.join(", ")}`
+      );
+    }
+    if (copiedCopies.length > 0) {
+      details.push(
+        `Copied into worktree: ${copiedCopies
+          .map((copy) => `${copy.reference} → ${copy.destinationPath}`)
+          .join(", ")}`
+      );
+    }
     const diagnostic = this.createDiagnostic(
       PROMPT_DIAGNOSTIC_CODES.SOURCE_RUNTIME_DISCLOSURE,
       harnessId,
-      `${sourceReadCount} ${referenceLabel} ${referenceVerb} read from the source checkout; ${copiedFileCount} ${fileLabel} ${fileVerb} copied into the worktree.`,
+      details.join("; "),
       COMPATIBILITY_DIAGNOSTIC_SEVERITIES.INFO
     );
     return {

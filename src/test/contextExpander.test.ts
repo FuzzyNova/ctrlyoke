@@ -212,7 +212,7 @@ suite("ContextExpander.expandContextSplit", () => {
       const destinationPath = path.join(executionRoot, "runtime", "source.log");
       assert.deepStrictEqual(result.directFileRefs, [destinationPath]);
       assert.deepStrictEqual(result.sourceRuntimeCopies, [
-        { sourcePath, destinationPath },
+        { reference: "@runtime/source.log", sourcePath, destinationPath },
       ]);
     });
 
@@ -337,7 +337,7 @@ suite("ContextExpander.expandContextSplit", () => {
         sanitized.includes(sourcePath),
         "sanitizeReferences must name the same absolute source path as the excerpt"
       );
-      assert.strictEqual(expanded.sourceRuntimeReadCount, 1);
+      assert.deepStrictEqual(expanded.sourceRuntimeReadReferences, [reference]);
     });
 
     test("blocks a source-only ignored directory and reports its token", async () => {

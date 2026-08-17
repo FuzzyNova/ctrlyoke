@@ -420,8 +420,13 @@ degradation be _"recorded on the run — not merely logged"_, so emit an
 info-level diagnostic through the existing `CompatibilityDiagnostic` channel
 added alongside `prompt.reference.unresolved` in `CliPromptPreparer`:
 
-> 2 references were read from the source checkout; 1 file was copied into the
-> worktree.
+> Read from source checkout: @.ctrlyoke/logs/2026-08-17/session.log; Copied into
+> worktree: @.ctrlyoke/attachments/pasted-image.png →
+> C:/worktree/.ctrlyoke/attachments/pasted-image.png
+
+The live diagnostic is stamped just before the associated prompt output starts
+and routed to that prompt's step, so chronological output rendering keeps the
+disclosure above the step while events stream in and when history is reloaded.
 
 `ExecutionPreviewService` already builds its preview against the worktree-remapped
 `ExecutionWorkspace`, so Dry Run reflects both actions without extra work.

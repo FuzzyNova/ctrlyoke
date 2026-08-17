@@ -2406,7 +2406,10 @@ export class WorkflowExecutor {
 
     this.isWaitingForResponse = true;
     context.beginSessionActivityTargetCapture?.();
-    const success = await integration.sendPrompt(promptStep, true, sendOptions);
+    const success = await integration.sendPrompt(promptStep, true, {
+      ...sendOptions,
+      promptStartedAt: initTimestampMs,
+    });
     if (!success) {
       this.isWaitingForResponse = false;
       disposeListeners();

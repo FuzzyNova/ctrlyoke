@@ -573,7 +573,8 @@ export class WorkflowInstance {
   }
 
   private reportCompatibilityDiagnostics(
-    diagnostics: readonly CompatibilityDiagnostic[]
+    diagnostics: readonly CompatibilityDiagnostic[],
+    timestampMs?: number
   ): void {
     const historyFilePath = this.resolveHistoryFilePath();
 
@@ -588,7 +589,7 @@ export class WorkflowInstance {
         diagnostic.consumer?.kind === FINAL_STEP_PHASES.QUEUE
           ? diagnostic.consumer.stepIndex
           : 0;
-      const timestampMs = Date.now();
+      const diagnosticTimestampMs = timestampMs ?? Date.now();
 
       // Same fact, live-pushed once per run regardless of how many times this
       // method fires — see `reportedCompatibilityDiagnosticKeys`.
@@ -599,7 +600,7 @@ export class WorkflowInstance {
           diagnostic.message,
           diagnostic.severity,
           this.id,
-          timestampMs
+          diagnosticTimestampMs
         );
       }
 
@@ -622,7 +623,7 @@ export class WorkflowInstance {
             {
               message: diagnostic.message,
               severity: diagnostic.severity,
-              timestamp: timestampMs,
+              timestamp: diagnosticTimestampMs,
             }
           )
           .catch((err) =>
@@ -3321,8 +3322,8 @@ export class WorkflowInstance {
       get dashboardProvider() {
         return self.dashboardSink;
       },
-      reportCompatibilityDiagnostics: (diagnostics) =>
-        this.reportCompatibilityDiagnostics(diagnostics),
+      reportCompatibilityDiagnostics: (diagnostics, timestampMs) =>
+        this.reportCompatibilityDiagnostics(diagnostics, timestampMs),
       getDefinitionRevisionContext: () => self.getDefinitionRevisionContext(),
       // In CLI mode always show the CLI command so it flows through
       // captureOutputInit and into onPromptStart events.

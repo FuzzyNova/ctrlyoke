@@ -93,6 +93,7 @@ function createPromptPreparer(
         agentContent: null,
         directFileRefs: [],
         sourceRuntimeCopies: [],
+        sourceRuntimeReadReferences: [],
         excerptContent: null,
         userPromptText: prompt.prompt,
         skippedReferences: [],
@@ -301,8 +302,13 @@ suite("ExecutionPreviewService", () => {
         skillContent: null,
         agentContent: null,
         directFileRefs: [destinationPath],
-        sourceRuntimeCopies: [{ sourcePath, destinationPath }],
-        sourceRuntimeReadCount: 2,
+        sourceRuntimeCopies: [
+          { reference: "@runtime/source.log", sourcePath, destinationPath },
+        ],
+        sourceRuntimeReadReferences: [
+          "@runtime/other.log",
+          "@runtime/another.log",
+        ],
         excerptContent: null,
         userPromptText: prompt.prompt,
         skippedReferences: [],

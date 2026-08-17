@@ -49,8 +49,8 @@ export interface SplitContext {
   directFileRefs: string[];
   /** Source-only full-file refs to copy into the execution checkout before launch. */
   sourceRuntimeCopies: SourceRuntimeCopy[];
-  /** Number of source-runtime references read in place as excerpts. */
-  sourceRuntimeReadCount?: number;
+  /** Source-runtime reference tokens read in place as excerpts. */
+  sourceRuntimeReadReferences: string[];
   /** Embedded XML attachment blocks for selection/sym/git/dir content */
   excerptBlocks: string;
   /**
@@ -64,6 +64,8 @@ export interface SplitContext {
 }
 
 export interface SourceRuntimeCopy {
+  /** The reference token that caused this source-side file to be copied. */
+  reference: string;
   sourcePath: string;
   destinationPath: string;
 }
@@ -84,6 +86,13 @@ export interface ContextExpanderOptions {
   allowWorkflowRelativeReferences?: boolean;
   sourceCheckoutRoot?: string;
   executionCheckoutRoot?: string;
+}
+
+function getReferenceToken(ref: FileReference, promptText: string): string {
+  if (ref.startOffset !== undefined && ref.endOffset !== undefined) {
+    return promptText.slice(ref.startOffset, ref.endOffset);
+  }
+  return `@${ref.path}`;
 }
 
 /**
@@ -319,7 +328,7 @@ export class ContextExpander {
   async expandContextSplit(promptText: string): Promise<SplitContext> {
     const directFileRefs: string[] = [];
     const sourceRuntimeCopies: SourceRuntimeCopy[] = [];
-    let sourceRuntimeReadCount = 0;
+    const sourceRuntimeReadReferences: string[] = [];
     const excerptParts: string[] = [];
     const skippedReferences: SkippedReference[] = [];
 
@@ -334,7 +343,7 @@ export class ContextExpander {
         return {
           directFileRefs: [],
           sourceRuntimeCopies: [],
-          sourceRuntimeReadCount: 0,
+          sourceRuntimeReadReferences: [],
           excerptBlocks: "",
           skippedReferences: [],
         };
@@ -419,7 +428,9 @@ export class ContextExpander {
           if (xml) {
             excerptParts.push(xml);
             if (this.sourceRuntimeResolutions.has(ref.path)) {
-              sourceRuntimeReadCount += 1;
+              sourceRuntimeReadReferences.push(
+                getReferenceToken(ref, promptText)
+              );
             }
           }
         } else {
@@ -448,6 +459,7 @@ export class ContextExpander {
               );
               directFileRefs.push(destinationPath);
               sourceRuntimeCopies.push({
+                reference: getReferenceToken(ref, promptText),
                 sourcePath: sourceRuntimePath,
                 destinationPath,
               });
@@ -480,7 +492,7 @@ export class ContextExpander {
       return {
         directFileRefs,
         sourceRuntimeCopies,
-        sourceRuntimeReadCount,
+        sourceRuntimeReadReferences,
         excerptBlocks: excerptParts.join("\n\n"),
         skippedReferences,
       };
@@ -489,7 +501,7 @@ export class ContextExpander {
       return {
         directFileRefs: [],
         sourceRuntimeCopies: [],
-        sourceRuntimeReadCount: 0,
+        sourceRuntimeReadReferences: [],
         excerptBlocks: "",
         skippedReferences: [],
       };
