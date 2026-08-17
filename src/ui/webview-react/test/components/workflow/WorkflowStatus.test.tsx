@@ -162,6 +162,34 @@ describe("WorkflowStatus — loaded state", () => {
     expect(screen.getByText("My Workflow")).toBeInTheDocument();
   });
 
+  it("focuses an empty name field when a new workflow is created", async () => {
+    render(<WorkflowStatus />);
+
+    act(() => {
+      useWorkflowStore.setState({ fileName: null, workflowName: null });
+    });
+
+    const input = await screen.findByPlaceholderText("Name your workflow...");
+    expect(input).toHaveValue("");
+    expect(input).toHaveFocus();
+  });
+
+  it("falls back to the default name when the empty name is blurred", async () => {
+    render(<WorkflowStatus />);
+
+    act(() => {
+      useWorkflowStore.setState({ fileName: null, workflowName: null });
+    });
+
+    const input = await screen.findByPlaceholderText("Name your workflow...");
+    fireEvent.blur(input);
+
+    expect(
+      screen.queryByPlaceholderText("Name your workflow...")
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("New Workflow").length).toBeGreaterThan(0);
+  });
+
   it("copies the displayed run directory from the header target", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {

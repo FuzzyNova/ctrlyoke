@@ -386,6 +386,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
+  const previousFileNameRef = useRef(fileName);
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   // Whichever split-button segment opened the dropdown — Escape restores
@@ -695,6 +696,20 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       inputRef.current.select();
     }
   }, [isEditing]);
+
+  // A blank workflow can be created from WorkflowControls as well as from the
+  // dropdown below. Focus the name field when an existing workflow is cleared,
+  // but do not steal focus during the initial empty render.
+  useEffect(() => {
+    const wasLoaded = previousFileNameRef.current !== null;
+    previousFileNameRef.current = fileName;
+    if (!wasLoaded || fileName !== null) {
+      return;
+    }
+
+    setEditValue("");
+    setIsEditing(true);
+  }, [fileName]);
 
   // Start editing workflow name
   const startEditing = useCallback(() => {
@@ -1495,6 +1510,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           ref={inputRef}
           type="text"
           aria-label="Edit workflow name"
+          placeholder="Name your workflow..."
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -1703,6 +1719,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               isFiltering={isFilteringWorkflows}
               onNewWorkflow={() => {
                 setActiveWorkflowWorkingFilePath(null);
+                setEditValue("");
+                setIsEditing(true);
                 vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });
                 closeDropdown();
               }}
