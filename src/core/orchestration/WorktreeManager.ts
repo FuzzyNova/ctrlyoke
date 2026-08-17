@@ -1,6 +1,8 @@
 import * as path from "path";
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
+import { Log } from "../../utils/Log";
+import { getErrorMessage } from "../../utils/ErrorUtils";
 import {
   addWorktree,
   abortMerge,
@@ -495,6 +497,45 @@ export class WorktreeManager {
     return listGitWorktrees(
       await this.requireRepositoryRoot(sourceCheckoutRoot)
     );
+  }
+
+  /**
+   * Read-only preview of the `ExecutionWorkspace` a worktree run would use
+   * once `executionCheckoutRoot` exists. Dry-run/preview only — performs no
+   * Git or filesystem mutation, and never requires `executionCheckoutRoot`
+   * to exist yet (a not-yet-created named worktree's deterministic best-guess
+   * directory is a valid input). Reuses the exact same source→execution root
+   * mapping (`resolveExecutionInputs` + `buildExecutionWorkspace`) real
+   * worktree execution uses, so preview and execution can never diverge on
+   * which roots are trusted. Returns undefined when the inputs cannot be
+   * safely mapped (e.g. an approved external root overlaps the source
+   * checkout) rather than throwing, so a preview build degrades to ordinary
+   * (non-remapped) behavior instead of failing outright.
+   */
+  public async previewExecutionWorkspace(
+    sourceCheckoutRoot: string,
+    executionCheckoutRoot: string,
+    options: {
+      stateRoot: string;
+      namedWorkspaceRoots: readonly ResolverWorkspaceFolder[];
+      workspaceRoots?: readonly string[];
+      approvedExternalRoots?: readonly string[];
+    }
+  ): Promise<ExecutionWorkspace | undefined> {
+    try {
+      const inputs = await this.resolveExecutionInputs(
+        sourceCheckoutRoot,
+        options
+      );
+      return this.buildExecutionWorkspace(inputs, executionCheckoutRoot, {
+        stateRoot: options.stateRoot,
+      });
+    } catch (error) {
+      Log.warn(
+        `[WorktreeManager] Cannot preview execution workspace for ${sourceCheckoutRoot}: ${getErrorMessage(error)}`
+      );
+      return undefined;
+    }
   }
 
   /**

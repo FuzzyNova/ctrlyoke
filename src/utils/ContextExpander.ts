@@ -44,6 +44,21 @@ export interface SplitContext {
   directFileRefs: string[];
   /** Embedded XML attachment blocks for selection/sym/git/dir content */
   excerptBlocks: string;
+  /**
+   * References that were dropped instead of embedded — unresolvable/blocked
+   * paths, unreadable files, or a failed attachment build. Every one of these
+   * previously vanished from the outgoing prompt with only a debug/warn log
+   * line; callers must surface them as a real diagnostic so a reference that
+   * silently produced zero content is never mistaken for "nothing to attach."
+   */
+  skippedReferences: SkippedReference[];
+}
+
+export interface SkippedReference {
+  /** The reference exactly as it appeared in the prompt text. */
+  ref: string;
+  /** Human-readable reason the reference could not be attached. */
+  reason: string;
 }
 
 /**
@@ -262,6 +277,7 @@ export class ContextExpander {
   async expandContextSplit(promptText: string): Promise<SplitContext> {
     const directFileRefs: string[] = [];
     const excerptParts: string[] = [];
+    const skippedReferences: SkippedReference[] = [];
 
     try {
       const maskedPromptText = this.maskBacktickBlocks(promptText);
@@ -269,7 +285,7 @@ export class ContextExpander {
       const gitRefs = parseGitChangeReferences(maskedPromptText);
 
       if (fileReferences.length === 0 && gitRefs.length === 0) {
-        return { directFileRefs: [], excerptBlocks: "" };
+        return { directFileRefs: [], excerptBlocks: "", skippedReferences: [] };
       }
 
       for (const ref of fileReferences) {
@@ -277,10 +293,12 @@ export class ContextExpander {
         try {
           attachmentId = this.getAttachmentId(ref);
         } catch (err) {
+          const reason = getErrorMessage(err);
           Log.warn(
             `[ContextExpander] Skipping unresolvable reference: ${ref.path}.`,
             err
           );
+          skippedReferences.push({ ref: ref.path, reason });
           continue;
         }
 
@@ -304,6 +322,10 @@ export class ContextExpander {
               `[ContextExpander] Failed directory attachment ${ref.path}:`,
               err
             );
+            skippedReferences.push({
+              ref: ref.path,
+              reason: getErrorMessage(err),
+            });
             return null;
           });
           if (xml) {
@@ -321,6 +343,10 @@ export class ContextExpander {
               `[ContextExpander] Failed excerpt attachment ${ref.path}:`,
               err
             );
+            skippedReferences.push({
+              ref: ref.path,
+              reason: getErrorMessage(err),
+            });
             return null;
           });
           if (xml) {
@@ -341,6 +367,10 @@ export class ContextExpander {
               `[ContextExpander] Skipping unreadable or out-of-workspace reference: ${ref.path}.${suggestion}`,
               err
             );
+            skippedReferences.push({
+              ref: ref.path,
+              reason: `${getErrorMessage(err)}${suggestion}`,
+            });
           }
         }
       }
@@ -352,10 +382,11 @@ export class ContextExpander {
       return {
         directFileRefs,
         excerptBlocks: excerptParts.join("\n\n"),
+        skippedReferences,
       };
     } catch (error) {
       Log.error("[ContextExpander] Error in expandContextSplit:", error);
-      return { directFileRefs: [], excerptBlocks: "" };
+      return { directFileRefs: [], excerptBlocks: "", skippedReferences: [] };
     }
   }
 

@@ -11,6 +11,7 @@ import {
   type ExecutionPreviewHarness,
 } from "./ExecutionPreviewService";
 import { WorkingFileManager } from "./WorkingFileManager";
+import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { createPriorContextResolver } from "./orchestration/AddressedPriorContextResolver";
 import {
@@ -2187,7 +2188,8 @@ export class WorkflowOrchestrator {
       defaults: PropertyResolver.createContext({ hostCanProvidePty: true })
         .defaults,
       capabilities: await this.compatibilityRegistry.getSnapshot(),
-      getHarness: (harnessId) => this.getExecutionPreviewHarness(harnessId),
+      getHarness: (harnessId, executionWorkspace) =>
+        this.getExecutionPreviewHarness(harnessId, executionWorkspace),
       workspaceRoot,
       workspaceRoots: platform.getWorkspaceRoots(),
       approvedExternalRoots:
@@ -2221,9 +2223,25 @@ export class WorkflowOrchestrator {
     };
   }
 
+  /**
+   * Resolve the shared planning helpers for one harness. The ordinary path
+   * reuses the long-lived per-harness singletons created at startup. When a
+   * worktree-remapped `executionWorkspace` is supplied (see
+   * `ExecutionPreviewService.buildWorktreePreview`), those singletons cannot
+   * be reused — they are bound to the default no-worktree workspace for the
+   * lifetime of the extension — so a throwaway preview-only integration is
+   * constructed for just this call via `IntegrationFactory.createForPreview`,
+   * the same no-side-effect seam the standalone CLI binary's dry run uses.
+   */
   private getExecutionPreviewHarness(
-    harnessId: HarnessId
+    harnessId: HarnessId,
+    executionWorkspace?: ExecutionWorkspace
   ): ExecutionPreviewHarness {
+    if (executionWorkspace) {
+      return this.integrationFactory
+        .createForPreview(harnessId, executionWorkspace)
+        .getExecutionPreviewHarness();
+    }
     switch (harnessId) {
       case HARNESS_IDS.CLAUDE_CLI:
         return this.claudeCliIntegration.getExecutionPreviewHarness();

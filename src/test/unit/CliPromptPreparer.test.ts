@@ -23,6 +23,7 @@ function createSections(overrides?: Partial<PromptSections>): PromptSections {
     directFileRefs: [],
     excerptContent: null,
     userPromptText: "just say hi",
+    skippedReferences: [],
     ...overrides,
   };
 }
@@ -113,6 +114,7 @@ suite("CliPromptPreparer", () => {
     assert.deepStrictEqual(result, {
       promptWithInstruction: "just say hi",
       tempFilePaths: [],
+      diagnostics: [],
     });
   });
 
@@ -145,6 +147,7 @@ suite("CliPromptPreparer", () => {
       assert.deepStrictEqual(result, {
         promptWithInstruction: command,
         tempFilePaths: [],
+        diagnostics: [],
       });
       assert.strictEqual(buildSectionsCalled, false);
     }
@@ -733,6 +736,7 @@ suite("CliPromptPreparer", () => {
     assert.deepStrictEqual(result, {
       promptWithInstruction: "fully implement @Path/To/Plan.md",
       tempFilePaths: [],
+      diagnostics: [],
     });
   });
 
@@ -765,6 +769,7 @@ suite("CliPromptPreparer", () => {
     assert.deepStrictEqual(result, {
       promptWithInstruction: "/handoff",
       tempFilePaths: [],
+      diagnostics: [],
     });
     assert.strictEqual(buildSectionsCalled, false);
   });
@@ -794,6 +799,7 @@ suite("CliPromptPreparer", () => {
     assert.deepStrictEqual(result, {
       promptWithInstruction: "/handoff summarize the session",
       tempFilePaths: [],
+      diagnostics: [],
     });
   });
 
@@ -878,6 +884,7 @@ suite("CliPromptPreparer", () => {
       assert.deepStrictEqual(result, {
         promptWithInstruction: longPrompt,
         tempFilePaths: [],
+        diagnostics: [],
       });
     });
 
@@ -896,6 +903,7 @@ suite("CliPromptPreparer", () => {
       assert.deepStrictEqual(result, {
         promptWithInstruction: prompt,
         tempFilePaths: [],
+        diagnostics: [],
       });
     });
 
@@ -947,6 +955,7 @@ suite("CliPromptPreparer", () => {
       assert.deepStrictEqual(result, {
         promptWithInstruction: prompt,
         tempFilePaths: [],
+        diagnostics: [],
       });
     });
 

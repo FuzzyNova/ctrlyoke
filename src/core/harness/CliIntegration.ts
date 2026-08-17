@@ -926,6 +926,15 @@ export class CliIntegration extends HarnessIntegration {
       injectMode
     );
 
+    if (prepared.diagnostics.length > 0) {
+      for (const diagnostic of prepared.diagnostics) {
+        Log.warn(`[PromptPreparation] ${diagnostic.message}`);
+      }
+      session.workflowContext?.reportCompatibilityDiagnostics?.(
+        prepared.diagnostics
+      );
+    }
+
     session.preparePrompt(
       prepared.promptWithInstruction,
       prepared.tempFilePaths

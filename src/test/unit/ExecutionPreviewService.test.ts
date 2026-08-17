@@ -87,6 +87,7 @@ function createPromptPreparer(): CliPromptPreparer {
       directFileRefs: [],
       excerptContent: null,
       userPromptText: prompt.prompt,
+      skippedReferences: [],
     }),
     extractLeadingSlashCommand: () => null,
     isSimplePrompt: () => true,

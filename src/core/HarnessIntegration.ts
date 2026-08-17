@@ -14,7 +14,7 @@ import {
 import { AgentExpander } from "../utils/AgentExpander";
 import { SkillExpander } from "../utils/SkillExpander";
 import { ContextExpander } from "../utils/ContextExpander";
-import type { SplitContext } from "../utils/ContextExpander";
+import type { SkippedReference, SplitContext } from "../utils/ContextExpander";
 import { Log } from "../utils/Log";
 import { TempFileManager } from "../utils/TempFileManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -92,6 +92,8 @@ export interface PromptSections {
    * handling applied) via {@link ContextExpander.sanitizeReferences}.
    */
   userPromptText: string;
+  /** References that could not be attached — see {@link SkippedReference}. */
+  skippedReferences: SkippedReference[];
 }
 
 /**
@@ -489,7 +491,11 @@ export abstract class HarnessIntegration {
     const workspaceRoot = this.getExecutionWorkspaceRoot();
 
     // Expand context into direct file refs + excerpt blocks (split, not merged)
-    let splitContext: SplitContext = { directFileRefs: [], excerptBlocks: "" };
+    let splitContext: SplitContext = {
+      directFileRefs: [],
+      excerptBlocks: "",
+      skippedReferences: [],
+    };
     if (workspaceRoot) {
       try {
         const effectiveAbsolute = resolveEffectiveAbsoluteReferences(
@@ -534,6 +540,7 @@ export abstract class HarnessIntegration {
       directFileRefs: splitContext.directFileRefs,
       excerptContent: splitContext.excerptBlocks || null,
       userPromptText,
+      skippedReferences: splitContext.skippedReferences,
     };
   }
 

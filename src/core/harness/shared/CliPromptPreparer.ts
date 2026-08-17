@@ -52,6 +52,7 @@ const PROMPT_DIAGNOSTIC_CODES = {
   LARGE_REFERENCE: "prompt.reference.implausibly-large",
   OVER_INLINE_CAP: "prompt.content.over-inline-cap",
   UNKNOWN_SKILL_REFERENCE: "prompt.skill.unknown",
+  UNRESOLVED_REFERENCE: "prompt.reference.unresolved",
 } as const;
 
 export interface PlannedPromptFile {
@@ -65,6 +66,7 @@ export interface PlannedPromptFile {
 export interface PromptFileResult {
   tempFilePaths: string[];
   promptWithInstruction: string;
+  diagnostics: readonly CompatibilityDiagnostic[];
 }
 
 /** Pure categorized prompt preparation plus deferred temp-file mutations. */
@@ -206,6 +208,22 @@ export class CliPromptPreparer {
       attachmentResolution.agent,
       effectiveSkillResolution
     );
+    // A skipped reference previously vanished from the outgoing prompt with
+    // only a debug/warn log line — surface it as a real diagnostic so
+    // "nothing to attach" and "attachment silently failed" are never
+    // indistinguishable to the user.
+    const unresolvedReferenceDiagnostics = sections.skippedReferences.map(
+      (skipped) =>
+        this.createDiagnostic(
+          PROMPT_DIAGNOSTIC_CODES.UNRESOLVED_REFERENCE,
+          harnessId,
+          `Reference "${skipped.ref}" could not be attached: ${skipped.reason}`
+        )
+    );
+    const promptDiagnostics = [
+      ...inlineSkillDiagnostics,
+      ...unresolvedReferenceDiagnostics,
+    ];
     const outgoingSections = {
       ...sections,
       userPromptText: rewriteCtrlYokeSlashTokens(
@@ -239,7 +257,7 @@ export class CliPromptPreparer {
     if (!hasExtras && inlineCheck(outgoingSections.userPromptText)) {
       return this.createInlinePlan(
         outgoingSections.userPromptText,
-        inlineSkillDiagnostics
+        promptDiagnostics
       );
     }
 
@@ -258,7 +276,7 @@ export class CliPromptPreparer {
         outgoingSections.directFileRefs,
         harnessId
       );
-      return this.withDiagnostics(plan, inlineSkillDiagnostics);
+      return this.withDiagnostics(plan, promptDiagnostics);
     }
 
     const contextItems = hasPriorContext
@@ -289,7 +307,7 @@ export class CliPromptPreparer {
     );
     const planWithDiagnostics = this.withDiagnostics(
       plan,
-      inlineSkillDiagnostics
+      promptDiagnostics
     );
     if (!slashCommand) {
       return planWithDiagnostics;
@@ -330,6 +348,7 @@ export class CliPromptPreparer {
     return {
       tempFilePaths: [...plan.tempFilePaths],
       promptWithInstruction: plan.promptWithInstruction,
+      diagnostics: plan.diagnostics,
     };
   }
 

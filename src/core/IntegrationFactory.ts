@@ -215,9 +215,21 @@ export class IntegrationFactory {
     return integration;
   }
 
-  /** Create the same planning helpers as execution without starting a harness. */
-  createForPreview(harness: HarnessId): CliIntegration {
-    const integration = this.createForHarness(harness, false);
+  /**
+   * Create the same planning helpers as execution without starting a
+   * harness. Pass `executionWorkspace` to preview a worktree-remapped
+   * workspace (see `ExecutionPreviewService.buildWorktreePreview`); omitted,
+   * this defaults to the ordinary no-worktree workspace like before.
+   */
+  createForPreview(
+    harness: HarnessId,
+    executionWorkspace?: ExecutionWorkspace
+  ): CliIntegration {
+    const integration = this.createForHarness(
+      harness,
+      false,
+      executionWorkspace
+    );
     integration.markAsReady();
     return integration;
   }

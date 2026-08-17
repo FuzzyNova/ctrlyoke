@@ -977,6 +977,7 @@ suite("CliIntegration", () => {
       return {
         promptWithInstruction: promptStep.prompt,
         tempFilePaths: [],
+        diagnostics: [],
       };
     };
 

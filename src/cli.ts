@@ -753,10 +753,10 @@ async function dryRunCommand(
     const service = new ExecutionPreviewService({
       defaults,
       capabilities,
-      getHarness: (harnessId) => {
+      getHarness: (harnessId, executionWorkspace) => {
         let integration = integrations.get(harnessId);
         if (!integration) {
-          integration = factory.createForPreview(harnessId);
+          integration = factory.createForPreview(harnessId, executionWorkspace);
           integrations.set(harnessId, integration);
         }
         return integration.getExecutionPreviewHarness();

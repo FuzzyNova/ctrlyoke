@@ -90,6 +90,8 @@ import {
   evaluateWorkspaceEligibility,
   previewWorktreePlacement,
 } from "../utils/WorktreeUtils";
+import { WorktreeManager } from "./orchestration/WorktreeManager";
+import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 
 /** The already-wired shared planners for one CLI harness. */
 export interface ExecutionPreviewHarness {
@@ -101,8 +103,19 @@ export interface ExecutionPreviewHarness {
 export interface ExecutionPreviewServiceOptions {
   readonly defaults: ExecutionPropertyDefaults;
   readonly capabilities: HarnessCapabilityRegistrySnapshot;
+  /**
+   * Resolves the shared planning helpers for one harness. When the workflow
+   * is worktree-configured and a planned execution directory is knowable
+   * (see {@link WorktreeManager.previewExecutionWorkspace}), the resolved
+   * `executionWorkspace` is passed so the caller can build/select an
+   * integration whose prompt preparation reflects the worktree's remapped
+   * roots instead of the ordinary source-checkout workspace — otherwise the
+   * preview's attachments/`--add-dir` cannot match what a worktree run will
+   * actually do.
+   */
   readonly getHarness: (
-    harnessId: HarnessId
+    harnessId: HarnessId,
+    executionWorkspace?: ExecutionWorkspace
   ) => ExecutionPreviewHarness | Promise<ExecutionPreviewHarness>;
   readonly workspaceRoot?: string;
   readonly workspaceRoots?: readonly string[];
@@ -155,6 +168,7 @@ const DEFAULT_SCOPE: ExecutionPreviewScope = { kind: PREVIEW_SCOPES.WORKFLOW };
  */
 export class ExecutionPreviewService {
   private readonly promptFileResolver: PromptFileResolver;
+  private readonly worktreeManager = new WorktreeManager();
 
   constructor(private readonly options: ExecutionPreviewServiceOptions) {
     this.promptFileResolver = new PromptFileResolver({
@@ -262,7 +276,8 @@ export class ExecutionPreviewService {
       workspace: { workspaceRoot: this.options.workspaceRoot },
     });
 
-    const worktreePreview = await this.buildWorktreePreview(preparedWorkflow);
+    const { dto: worktreePreview, executionWorkspace: worktreeExecutionWorkspace } =
+      await this.buildWorktreePreview(preparedWorkflow);
 
     const steps: StepExecutionPreview[] = [];
     for (const target of targets) {
@@ -277,7 +292,8 @@ export class ExecutionPreviewService {
           managedMcpServers,
           compatibilityDiagnostics,
           mcpNormalizationDiagnostics.get(target.stepIndex) ?? [],
-          worktreePreview
+          worktreePreview,
+          worktreeExecutionWorkspace
         )
       );
     }
@@ -341,7 +357,8 @@ export class ExecutionPreviewService {
     managedMcpServers: readonly ManagedMcpServer[],
     compatibilityDiagnostics: readonly CompatibilityDiagnostic[],
     mcpNormalizationDiagnostics: readonly CompatibilityDiagnostic[],
-    worktreePreview: WorktreeExecutionPreview | undefined
+    worktreePreview: WorktreeExecutionPreview | undefined,
+    worktreeExecutionWorkspace: ExecutionWorkspace | undefined
   ): Promise<StepExecutionPreview> {
     const step = target.step;
     const promptStep = isScriptStep(step) ? this.scriptAsPrompt(step) : step;
@@ -359,7 +376,10 @@ export class ExecutionPreviewService {
       managedMcpServers,
       promptStep.prompt
     );
-    const harness = await this.options.getHarness(properties.harness);
+    const harness = await this.options.getHarness(
+      properties.harness,
+      worktreeExecutionWorkspace
+    );
     const resolvedSessionId = isScriptStep(step)
       ? undefined
       : this.resolveSessionId(target.stepIndex, allSteps, properties);
@@ -617,18 +637,31 @@ export class ExecutionPreviewService {
 
   /**
    * Read-only preview of the workflow's worktree configuration and, where
-   * knowable without a real run identity, the directory it will execute in.
-   * Never creates a branch, worktree, or directory — dry-run/preview only.
+   * knowable without a real run identity, the directory it will execute in
+   * plus the remapped `ExecutionWorkspace` prompt preparation should use for
+   * that directory. Never creates a branch, worktree, or directory —
+   * dry-run/preview only.
+   *
+   * The `executionWorkspace` result matters beyond the displayed command: a
+   * worktree run's reference resolution (`@file`, `#selection`, `--add-dir`)
+   * is scoped to the *execution* root, not the source checkout. Without this
+   * remap, the preview would build attachments/`--add-dir` against the
+   * source checkout and silently diverge from what the actual worktree run
+   * does — see `WORKTREE_SUPPORT_PLAN.md`'s execution-workspace root split.
+   * `executionWorkspace` is only populated when `plannedDirectory` is known
+   * (always true for named mode; never for managed mode, whose directory
+   * depends on a `RunRef` a dry run never allocates).
    */
-  private async buildWorktreePreview(
-    workflow: PromptFile
-  ): Promise<WorktreeExecutionPreview | undefined> {
+  private async buildWorktreePreview(workflow: PromptFile): Promise<{
+    dto?: WorktreeExecutionPreview;
+    executionWorkspace?: ExecutionWorkspace;
+  }> {
     const selection = resolveWorktreeSelection(
       workflow.worktree,
       ConfigurationUtils.getDefaultWorktree()
     );
     if (!selection.config || selection.config.mode === WORKTREE_MODES.NONE) {
-      return undefined;
+      return {};
     }
     const { mode, branch, base } = selection.config;
     const workspaceRoot = this.options.workspaceRoot;
@@ -637,15 +670,17 @@ export class ExecutionPreviewService {
     );
     if (!eligibility.eligible || !workspaceRoot) {
       return {
-        mode,
-        origin: selection.origin,
-        branch,
-        base,
-        eligible: false,
-        eligibilityReason:
-          eligibility.reason ??
-          "No workspace root is available to place a worktree.",
-        plannedDirectoryIsExact: false,
+        dto: {
+          mode,
+          origin: selection.origin,
+          branch,
+          base,
+          eligible: false,
+          eligibilityReason:
+            eligibility.reason ??
+            "No workspace root is available to place a worktree.",
+          plannedDirectoryIsExact: false,
+        },
       };
     }
 
@@ -666,15 +701,31 @@ export class ExecutionPreviewService {
               notice: "Named worktree mode requires a branch.",
             };
 
+    const executionWorkspace = placement.directory
+      ? await this.worktreeManager.previewExecutionWorkspace(
+          workspaceRoot,
+          placement.directory,
+          {
+            stateRoot: workspaceRoot,
+            namedWorkspaceRoots: this.options.namedWorkspaceRoots ?? [],
+            workspaceRoots: this.options.workspaceRoots,
+            approvedExternalRoots: this.options.approvedExternalRoots,
+          }
+        )
+      : undefined;
+
     return {
-      mode,
-      origin: selection.origin,
-      branch,
-      base,
-      eligible: true,
-      plannedDirectory: placement.directory,
-      plannedDirectoryIsExact: placement.isExact,
-      plannedDirectoryNotice: placement.notice,
+      dto: {
+        mode,
+        origin: selection.origin,
+        branch,
+        base,
+        eligible: true,
+        plannedDirectory: placement.directory,
+        plannedDirectoryIsExact: placement.isExact,
+        plannedDirectoryNotice: placement.notice,
+      },
+      executionWorkspace,
     };
   }
 
