@@ -2694,6 +2694,53 @@ describe("EXECUTION_STARTED", () => {
     );
   });
 
+  it("syncs executionRunRef and the run's cached summary immediately on a continuation of the displayed run", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "wf.yaml",
+      steps: [makePrompt("Step 1"), makePrompt("Step 2")],
+    });
+    const runRef = "run-2026-01-01T00-00-00-000Z" as never;
+    // The client is already displaying this run, and its cached summary is
+    // still the pre-continuation "completed" snapshot — the state a client
+    // is left in immediately after Continue/Append is clicked, before the
+    // backend's own run-view refresh (which does not target a client already
+    // addressed at this run) arrives.
+    useUiStore.setState({
+      displayedViewAddress: { workflowKey: "wf-key" as never, kind: "run", runRef },
+      executionRunRef: null,
+      runSummaries: [
+        {
+          workflowKey: "wf-key",
+          runRef,
+          runDirectory: "/runs/1",
+          runId: 1,
+          startedAt: 0,
+          executionState: EXECUTION_STATES.COMPLETED,
+          definitionRevision: 1,
+          stepCount: 1,
+          hasMixedHarnesses: false,
+          hasMixedModels: false,
+        } as never,
+      ],
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_STARTED, {
+        workflowId: "workflow-1",
+        fileName: "wf.yaml",
+        totalSteps: 2,
+        isContinuation: true,
+        preserveStepCount: 1,
+      });
+    });
+
+    const ui = useUiStore.getState();
+    expect(ui.executionRunRef).toBe(runRef);
+    expect(ui.runSummaries[0]?.executionState).toBe(EXECUTION_STATES.RUNNING);
+  });
+
   it("expands the output section and shows output for headless runs when auto-focus is enabled", () => {
     renderHook(() => useMessageHandler());
 

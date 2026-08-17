@@ -7,7 +7,7 @@ import type {
   ExecutionState,
   WorkflowFileFormat,
 } from "../types/messages";
-import { type FooterPicker } from "../types/messages";
+import { EXECUTION_STATES, type FooterPicker } from "../types/messages";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type {
   HistorySearchIndexState,
@@ -861,6 +861,7 @@ interface UiActions {
     descriptorRevision: number
   ) => void;
   markExecutionRunFinished: (executionState: ExecutionState) => void;
+  markExecutionRunStarted: () => void;
   updateRunSummaryWorktree: (
     runRef: WorkflowRunAddress["runRef"],
     worktree: WorktreeRunProjection
@@ -1674,6 +1675,33 @@ export const useUiStore = create<UiState & UiActions>()(
                 ),
               }
         ),
+
+      // The mirror of markExecutionRunFinished: execution began on the run the
+      // client is already displaying (a continuation or append on an
+      // already-viewed run, not a fresh draft promotion). The backend's own
+      // run-view refresh for this transition (`syncExecutingRunViews`) only
+      // targets clients still addressed at the lineage's *draft* — a client
+      // already addressed at the run being continued is not among its
+      // targets, so `executionRunRef` and this run's cached summary would
+      // otherwise keep reading their pre-continuation values (often
+      // "completed"/"idle") until the run finishes and an unrelated refresh
+      // happens to correct them. Setting both optimistically here is what
+      // makes RunSummaryBanner and the run panel show "Running" immediately
+      // instead of lagging for the run's entire duration.
+      markExecutionRunStarted: () =>
+        set((state) => {
+          if (state.displayedViewAddress?.kind !== "run") return state;
+          const runRef = state.displayedViewAddress.runRef;
+          if (state.executionRunRef === runRef) return state;
+          return {
+            executionRunRef: runRef,
+            runSummaries: state.runSummaries.map((summary) =>
+              summary.runRef === runRef
+                ? { ...summary, executionState: EXECUTION_STATES.RUNNING }
+                : summary
+            ),
+          };
+        }),
 
       updateRunSummaryWorktree: (runRef, worktree) =>
         set((state) => ({

@@ -209,7 +209,19 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       !loadedWorkflows.some((w) => w.id === activeWorkflowId)
         ? {
             id: activeWorkflowId,
-            workflowKey: undefined,
+            // Sourced from the client's own displayed address — this
+            // component's active workflow and displayed address are always
+            // the same lineage. Without a real workflowKey here, the
+            // dropdown's "hide the recent row already represented by a
+            // running row" exclusion (keyed on workflowKey) can't recognize
+            // this placeholder, so a stale recent row for the same lineage
+            // lingers alongside it until the real WORKFLOW_ADDED broadcast
+            // replaces this placeholder.
+            workflowKey: displayedViewAddress?.workflowKey,
+            runRef:
+              displayedViewAddress?.kind === "run"
+                ? displayedViewAddress.runRef
+                : undefined,
             workflowName:
               workflowName ||
               (fileName
@@ -226,6 +238,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       activeWorkflowId,
       activeWorkflowWorkingFilePath,
       currentStep,
+      displayedViewAddress,
       executionState,
       fileName,
       loadedWorkflows,

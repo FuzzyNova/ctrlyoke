@@ -538,6 +538,50 @@ describe("WorkflowStatus — loaded state", () => {
     ).toBeNull();
   });
 
+  it("suppresses the stale recent row for a lineage the placeholder running row already represents", async () => {
+    // Regression: before the placeholder carried a real workflowKey, a
+    // lineage that both (a) had a running instance not yet reflected in
+    // loadedWorkflows (the WORKFLOW_ADDED broadcast hasn't landed yet) and
+    // (b) already had a stale "completed" entry in recentWorkflows (e.g. a
+    // continuation of a previously-finished run) rendered twice: once
+    // correctly in the pinned running region, and once stale in the recent
+    // list — until the real broadcast replaced the placeholder.
+    const user = userEvent.setup();
+    const workflowKey = "continued-lineage" as never;
+    const runRef = "run-continued" as never;
+    useWorkflowStore.setState({
+      fileName: "/workspace/continued.ctrlyoke.json",
+      workflowName: "Continued Workflow",
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 1,
+      totalSteps: 2,
+    });
+    useUiStore.setState({
+      activeWorkflowId: "workflow-continued",
+      activeWorkflowWorkingFilePath: "/workspace/continued.ctrlyoke.json",
+      loadedWorkflows: [],
+      displayedViewAddress: { workflowKey, kind: "run", runRef },
+    });
+
+    render(<WorkflowStatus />);
+    setRecentWorkflows([
+      {
+        address: { workflowKey, kind: "run", runRef },
+        workflowName: "Continued Workflow",
+        executionState: EXECUTION_STATES.COMPLETED,
+        isFavorite: false,
+      },
+    ]);
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+
+    expect(
+      document.querySelector(".running-workflow-item")
+    ).toBeInTheDocument();
+    expect(document.querySelectorAll(".workflow-menu-item")).toHaveLength(0);
+  });
+
   // The pinned region is earned by executing here, not by execution state
   // alone: `loadedWorkflows` mirrors every loaded instance, so opening a
   // lineage whose latest run was left paused on disk must not pin it.

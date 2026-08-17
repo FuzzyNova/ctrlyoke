@@ -396,6 +396,13 @@ function applyExecutionState(state: ExecutionState): void {
   useWorkflowStore.getState().setExecutionState(state);
   if (isExecutionFinished(state)) {
     useUiStore.getState().markExecutionRunFinished(state);
+  } else if (state === EXECUTION_STATES.RUNNING) {
+    // Mirrors the finished-state sync above: a continuation/append on the
+    // run the client is already displaying gets no backend-pushed run-view
+    // refresh at this transition (see markExecutionRunStarted), so this
+    // client-side nudge is what keeps the banner/run-panel from reading the
+    // pre-continuation state until the run ends.
+    useUiStore.getState().markExecutionRunStarted();
   }
 }
 
@@ -936,6 +943,14 @@ export function createMessageHandlers(
       useWorkflowStore.temporal.getState().resume();
       workflowStore.clearAllRuntimeState();
     }
+
+    // Both branches above just set executionState to RUNNING directly
+    // (not via applyExecutionState) — sync executionRunRef the same way that
+    // path does, so a continuation on the run this client is already
+    // displaying shows "Running" immediately instead of waiting on a
+    // backend run-view refresh that (for an already-viewed run) never comes
+    // until execution ends. See markExecutionRunStarted for why.
+    useUiStore.getState().markExecutionRunStarted();
 
     // Mark editor as having active queue
     editorStore.setHasActiveQueue(true);
