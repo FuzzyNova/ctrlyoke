@@ -13,7 +13,10 @@ import {
   estimateFileTokens,
   type FileTokenEstimate,
 } from "./FileTokenEstimator";
-import { isPathWithinAnyDirectory } from "./PathSecurity";
+import {
+  isPathWithinAnyDirectory,
+  isPathWithinDirectory,
+} from "./PathSecurity";
 import {
   resolveReferencePath,
   type ReferencePathResolution,
@@ -27,6 +30,7 @@ import {
   getStashDiff,
   getStashList,
 } from "./GitUtils";
+import { resolveSourceRuntimeArtifacts } from "./SourceRuntimeArtifactResolver";
 import {
   ATTACHMENT_PREFIXES,
   GIT_CHANGE_KINDS,
@@ -59,6 +63,17 @@ export interface SkippedReference {
   ref: string;
   /** Human-readable reason the reference could not be attached. */
   reason: string;
+}
+
+export interface ContextExpanderOptions {
+  workspaceRoot: string;
+  additionalTrustedRoots?: string[];
+  namedRoots?: ResolverWorkspaceFolder[];
+  effectiveAbsolute?: boolean;
+  sourceDefinitionDir?: string;
+  allowWorkflowRelativeReferences?: boolean;
+  sourceCheckoutRoot?: string;
+  executionCheckoutRoot?: string;
 }
 
 /**
@@ -97,17 +112,27 @@ export class ContextExpander {
   // resolution base. It is discarded when it is outside the trusted roots.
   private sourceDefinitionDir?: string;
   private allowWorkflowRelativeReferences: boolean;
+  private readonly sourceCheckoutRoot?: string;
+  private readonly executionCheckoutRoot: string;
+  private readonly sourceRuntimeResolutions = new Map<
+    string,
+    ReferencePathResolution
+  >();
+  private readonly preparedSourceRuntimeReferences = new Set<string>();
   // Track attachment IDs to prevent duplicates
   private attachmentIds = new Set<string>();
 
-  constructor(
-    workspaceRoot: string,
-    additionalTrustedRoots: string[] = [],
-    namedRoots: ResolverWorkspaceFolder[] = [],
-    effectiveAbsolute: boolean = false,
-    sourceDefinitionDir?: string,
-    allowWorkflowRelativeReferences: boolean = true
-  ) {
+  constructor(options: ContextExpanderOptions) {
+    const {
+      workspaceRoot,
+      additionalTrustedRoots = [],
+      namedRoots = [],
+      effectiveAbsolute = false,
+      sourceDefinitionDir,
+      allowWorkflowRelativeReferences = true,
+      sourceCheckoutRoot,
+      executionCheckoutRoot = workspaceRoot,
+    } = options;
     this.workspaceRoot = workspaceRoot;
     this.trustedRoots = Array.from(
       new Set(
@@ -119,6 +144,8 @@ export class ContextExpander {
     this.namedRoots = namedRoots;
     this.effectiveAbsolute = effectiveAbsolute;
     this.allowWorkflowRelativeReferences = allowWorkflowRelativeReferences;
+    this.sourceCheckoutRoot = sourceCheckoutRoot;
+    this.executionCheckoutRoot = executionCheckoutRoot;
     const resolvedSourceDefinitionDir = sourceDefinitionDir
       ? path.resolve(sourceDefinitionDir)
       : undefined;
@@ -151,6 +178,8 @@ export class ContextExpander {
       // Parse all file references from prompt
       const fileReferences = parseAllFileReferences(maskedPromptText);
       const gitRefs = parseGitChangeReferences(maskedPromptText);
+
+      await this.prepareSourceRuntimeResolutions(fileReferences);
 
       if (fileReferences.length === 0 && gitRefs.length === 0) {
         return promptText; // No attachments needed
@@ -221,6 +250,7 @@ export class ContextExpander {
       return null;
     }
     try {
+      await this.prepareSourceRuntimeResolutions([ref]);
       const absolutePath = this.resolveWorkspacePath(ref.path);
       await fs.access(absolutePath);
       return estimateImageTokens(absolutePath);
@@ -249,6 +279,7 @@ export class ContextExpander {
       return null;
     }
     try {
+      await this.prepareSourceRuntimeResolutions([ref]);
       const absolutePath = this.resolveWorkspacePath(ref.path);
       return await estimateFileTokens(absolutePath);
     } catch {
@@ -283,6 +314,8 @@ export class ContextExpander {
       const maskedPromptText = this.maskBacktickBlocks(promptText);
       const fileReferences = parseAllFileReferences(maskedPromptText);
       const gitRefs = parseGitChangeReferences(maskedPromptText);
+
+      await this.prepareSourceRuntimeResolutions(fileReferences);
 
       if (fileReferences.length === 0 && gitRefs.length === 0) {
         return { directFileRefs: [], excerptBlocks: "", skippedReferences: [] };
@@ -429,7 +462,9 @@ export class ContextExpander {
   ): Promise<string> {
     try {
       const maskedPromptText = this.maskBacktickBlocks(promptText);
-      const refs = parseAllFileReferences(maskedPromptText).filter(
+      const allRefs = parseAllFileReferences(maskedPromptText);
+      await this.prepareSourceRuntimeResolutions(allRefs);
+      const refs = allRefs.filter(
         (ref) =>
           !ref.isDirectory &&
           ref.startOffset !== undefined &&
@@ -525,6 +560,69 @@ export class ContextExpander {
     // Full-file @ ref — always route through formatFileRef so provider-level
     // @ handling (e.g. Codex stripping it) applies even in single-root.
     return formatFileRef(quotedPath);
+  }
+
+  /**
+   * Precompute source-side runtime resolutions for one parsed prompt. The
+   * predicate is asynchronous, so resolveReference consumes this cache rather
+   * than spawning Git from any synchronous resolution path.
+   */
+  private async prepareSourceRuntimeResolutions(
+    refs: readonly FileReference[]
+  ): Promise<void> {
+    if (!this.sourceCheckoutRoot) {
+      return;
+    }
+
+    const candidatePathByReference = new Map<string, string>();
+    for (const ref of refs) {
+      if (
+        ref.isDirectory ||
+        this.preparedSourceRuntimeReferences.has(ref.path)
+      ) {
+        continue;
+      }
+      try {
+        const tier1Resolution = resolveReferencePath(ref.path, {
+          primaryRoot: this.workspaceRoot,
+          namedRoots: this.namedRoots,
+          sourceDefinitionDir: this.sourceDefinitionDir,
+        });
+        const candidatePath = isPathWithinDirectory(
+          tier1Resolution.absolutePath,
+          this.executionCheckoutRoot
+        )
+          ? path.relative(
+              this.executionCheckoutRoot,
+              tier1Resolution.absolutePath
+            )
+          : ref.path;
+        candidatePathByReference.set(ref.path, candidatePath);
+      } catch {
+        // resolveReference will preserve the existing error for this ref.
+      }
+    }
+    if (candidatePathByReference.size === 0) {
+      return;
+    }
+
+    const resolutions = await resolveSourceRuntimeArtifacts(
+      this.sourceCheckoutRoot,
+      this.executionCheckoutRoot,
+      new Set(candidatePathByReference.values())
+    );
+    for (const [referencePath, candidatePath] of candidatePathByReference) {
+      const absolutePath = resolutions.get(candidatePath);
+      if (absolutePath) {
+        this.sourceRuntimeResolutions.set(referencePath, {
+          absolutePath,
+          base: "sourceRuntimeStore",
+        });
+      }
+    }
+    for (const referencePath of candidatePathByReference.keys()) {
+      this.preparedSourceRuntimeReferences.add(referencePath);
+    }
   }
 
   /**
@@ -821,6 +919,11 @@ ${content}
       namedRoots: this.namedRoots,
       sourceDefinitionDir: this.sourceDefinitionDir,
     });
+    const sourceRuntimeResolution =
+      this.sourceRuntimeResolutions.get(relativePath);
+    if (sourceRuntimeResolution) {
+      return sourceRuntimeResolution;
+    }
     const resolved = resolution.absolutePath;
 
     // Reject `..` traversal and absolute-path references that escape every

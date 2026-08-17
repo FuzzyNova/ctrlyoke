@@ -502,17 +502,19 @@ export abstract class HarnessIntegration {
           ConfigurationUtils.shouldUseAbsolutePathReferences(),
           this.getExecutionWorkspaceRoots().length > 1
         );
-        const expander = new ContextExpander(
+        const expander = new ContextExpander({
           workspaceRoot,
-          [
+          additionalTrustedRoots: [
             ...this.getExecutionWorkspaceRoots(),
             ...this.getApprovedExternalRoots(),
           ],
-          this.getExecutionNamedWorkspaceRoots(),
+          namedRoots: this.getExecutionNamedWorkspaceRoots(),
           effectiveAbsolute,
-          this.getSourceDefinitionDir(),
-          this.allowsWorkflowRelativeReferences()
-        );
+          sourceDefinitionDir: this.getSourceDefinitionDir(),
+          allowWorkflowRelativeReferences:
+            this.allowsWorkflowRelativeReferences(),
+          sourceCheckoutRoot: this.getExecutionSourceCheckoutRoot(),
+        });
         splitContext = await expander.expandContextSplit(rawPromptText);
         // Rewrite folder-name-prefixed refs to their resolved form inline,
         // for consumers (simple-prompt fast path, direct PTY injection) that
@@ -801,6 +803,11 @@ export abstract class HarnessIntegration {
   /** Explicit execution root; getWorkspaceRoot retains its state-root meaning. */
   protected getExecutionWorkspaceRoot(): string | undefined {
     return this.getWorkspaceRoot();
+  }
+
+  /** Canonical source checkout used for read-only runtime artifact fallback. */
+  protected getExecutionSourceCheckoutRoot(): string | undefined {
+    return undefined;
   }
 
   /**
