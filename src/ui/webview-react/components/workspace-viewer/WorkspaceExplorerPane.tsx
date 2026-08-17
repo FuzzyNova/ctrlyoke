@@ -5,6 +5,13 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { Group, Panel, Separator } from "react-resizable-panels";
+import {
+  SEPARATOR_VERTICAL,
+  WORKSPACE_VIEWER_SIDE_PANEL_DEFAULT_SIZE,
+  WORKSPACE_VIEWER_SIDE_PANEL_MAX_SIZE,
+  WORKSPACE_VIEWER_SIDE_PANEL_MIN_SIZE,
+} from "@/constants";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useIsMobile } from "@hooks/useMediaQuery";
@@ -422,7 +429,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const directoryListColumn = (
-    <div className="flex flex-col h-full w-full sm:w-64 sm:flex-shrink-0 border-r border-panel-border overflow-hidden select-none [-webkit-touch-callout:none]">
+    <div className="flex flex-col h-full w-full overflow-hidden select-none [-webkit-touch-callout:none]">
       {/* Navigation toolbar */}
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-panel-border flex-shrink-0">
         <button
@@ -760,8 +767,23 @@ export const WorkspaceExplorerPane: React.FC = () => {
 
   return (
     <div className="flex h-full overflow-hidden">
-      {directoryListColumn}
-      {fileEditorColumn}
+      <Group
+        orientation="horizontal"
+        className="flex-1 min-w-0"
+        id="workspace-explorer-layout"
+      >
+        <Panel
+          id="workspace-explorer-tree-panel"
+          defaultSize={WORKSPACE_VIEWER_SIDE_PANEL_DEFAULT_SIZE}
+          minSize={WORKSPACE_VIEWER_SIDE_PANEL_MIN_SIZE}
+          maxSize={WORKSPACE_VIEWER_SIDE_PANEL_MAX_SIZE}
+          groupResizeBehavior="preserve-pixel-size"
+        >
+          {directoryListColumn}
+        </Panel>
+        <Separator className={SEPARATOR_VERTICAL} />
+        <Panel id="workspace-explorer-editor-panel">{fileEditorColumn}</Panel>
+      </Group>
       {explorerContextMenuPortal}
       {editorContextMenuPortal}
     </div>

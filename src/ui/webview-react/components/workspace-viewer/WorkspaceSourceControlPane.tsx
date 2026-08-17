@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { Group, Panel, Separator } from "react-resizable-panels";
 import { MESSAGE_TYPES } from "@/types/messages";
+import {
+  SEPARATOR_VERTICAL,
+  WORKSPACE_VIEWER_SIDE_PANEL_DEFAULT_SIZE,
+  WORKSPACE_VIEWER_SIDE_PANEL_MAX_SIZE,
+  WORKSPACE_VIEWER_SIDE_PANEL_MIN_SIZE,
+} from "@/constants";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useSettingsStore } from "@store/settingsStore";
@@ -529,7 +536,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   );
 
   const leftColumn = (
-    <div className="w-64 flex-shrink-0 flex flex-col border-r border-panel-border overflow-hidden h-full">
+    <div className="flex flex-col overflow-hidden h-full">
       <WorkspaceCommitArea
         incomingCommitCount={incomingCommitCount}
         onRefresh={refreshAll}
@@ -660,10 +667,27 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   return (
     <>
       <div className="flex h-full overflow-hidden">
-        {leftColumn}
-        <div className="flex-1 overflow-hidden">
-          <WorkspaceDiffPane />
-        </div>
+        <Group
+          orientation="horizontal"
+          className="flex-1 min-w-0"
+          id="workspace-scm-layout"
+        >
+          <Panel
+            id="workspace-scm-files-panel"
+            defaultSize={WORKSPACE_VIEWER_SIDE_PANEL_DEFAULT_SIZE}
+            minSize={WORKSPACE_VIEWER_SIDE_PANEL_MIN_SIZE}
+            maxSize={WORKSPACE_VIEWER_SIDE_PANEL_MAX_SIZE}
+            groupResizeBehavior="preserve-pixel-size"
+          >
+            {leftColumn}
+          </Panel>
+          <Separator className={SEPARATOR_VERTICAL} />
+          <Panel id="workspace-scm-diff-panel">
+            <div className="h-full overflow-hidden">
+              <WorkspaceDiffPane />
+            </div>
+          </Panel>
+        </Group>
       </div>
 
       <Modal

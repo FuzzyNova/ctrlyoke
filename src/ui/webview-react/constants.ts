@@ -25,6 +25,15 @@ export const PANEL_MIN_SIZE_CENTER_COLUMN = "360px";
 /** Maximum panel size in pixels for sidebar panels (prompts/settings) */
 export const PANEL_MAX_SIZE_SIDEBAR = "480px";
 
+/** Default width for the workspace viewer's left-hand list panel (explorer tree / SCM file list). */
+export const WORKSPACE_VIEWER_SIDE_PANEL_DEFAULT_SIZE = "256px";
+
+/** Minimum width for the workspace viewer's left-hand list panel. */
+export const WORKSPACE_VIEWER_SIDE_PANEL_MIN_SIZE = "100px";
+
+/** Maximum width for the workspace viewer's left-hand list panel, as a percentage of the pane. */
+export const WORKSPACE_VIEWER_SIDE_PANEL_MAX_SIZE = "30%";
+
 /** Default panel sizes for desktop layout — single source of truth for initial layout.
  *  steps/settings/editor are in pixels; output is a percentage. */
 export const DEFAULT_DESKTOP_SIZES = {
