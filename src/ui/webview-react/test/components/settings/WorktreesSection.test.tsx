@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorktreesSection } from "@components/settings/WorktreesSection";
 import { MESSAGE_TYPES, SETTING_SCOPES } from "@root/types/DashboardConstants";
@@ -87,7 +87,9 @@ describe("WorktreesSection", () => {
       getState: () => undefined,
       setState: () => undefined,
     };
-    window.confirm = vi.fn(() => true);
+    useSettingsStore.setState((state) => ({
+      globalSettings: { ...state.globalSettings, confirmResetOperations: true },
+    }));
     useSettingsStore.getState().setWorktreeManagement({
       resolvedRoot: "C:/worktrees",
       sourceCheckoutRoot: "C:/repo",
@@ -133,7 +135,16 @@ describe("WorktreesSection", () => {
       screen.getAllByRole("button", { name: "Sync with main" })
     ).toHaveLength(1);
 
-    screen.getByRole("button", { name: "Sync with main" }).click();
+    // Sync is confirmed through the shared in-app modal, not window.confirm:
+    // VS Code's webview iframe sandbox omits allow-modals, so native
+    // confirm() resolves to false immediately with no dialog shown.
+    fireEvent.click(screen.getByRole("button", { name: "Sync with main" }));
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: MESSAGE_TYPES.SYNC_NAMED_WORKTREE })
+    );
+
+    const modal = screen.getByRole("dialog");
+    fireEvent.click(within(modal).getByRole("button", { name: "Sync" }));
     expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.SYNC_NAMED_WORKTREE,
       worktreePath: "C:/repo.worktrees/bug-fix",

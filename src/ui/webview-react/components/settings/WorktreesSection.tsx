@@ -14,6 +14,8 @@ import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useSettingsStore } from "@store/settingsStore";
 import { LocalTextInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
+import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
+import { ResetConfirmModal } from "../shared/ResetConfirmModal";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -41,6 +43,24 @@ interface ActionFeedback {
   status: "success" | "error";
   message: string;
 }
+
+/**
+ * A destructive/recoverable action awaiting user confirmation, rendered via
+ * `DeleteConfirmModal`/`ResetConfirmModal`. `window.confirm` is not usable
+ * here: VS Code's webview iframe sandbox omits `allow-modals`, so native
+ * `confirm()` calls resolve to `false` immediately with no dialog shown —
+ * every confirm-gated button silently no-op'd instead of prompting.
+ */
+interface PendingConfirmRequest {
+  variant: "delete" | "reset";
+  title: string;
+  message: string;
+  detail?: string;
+  confirmLabel?: string;
+  onConfirm: () => void;
+}
+
+type RequestConfirm = (request: PendingConfirmRequest) => void;
 
 /**
  * Tracks the round trip for worktree management buttons: a click marks a key
@@ -196,7 +216,14 @@ export function WorktreesSection({
 }: Props) {
   const vscode = useVsCodeApi();
   const management = useSettingsStore((state) => state.worktreeManagement);
+  const confirmDeleteOperations = useSettingsStore(
+    (state) => state.globalSettings.confirmDeleteOperations
+  );
+  const confirmResetOperations = useSettingsStore(
+    (state) => state.globalSettings.confirmResetOperations
+  );
   const feedback = useWorktreeActionFeedback();
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirmRequest | null>(null);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const sources = settings.sources as Record<string, SettingSource>;
   const configuredRoot = settings.settings.worktrees.root.trim();
@@ -322,6 +349,9 @@ export function WorktreesSection({
                 entry={entry}
                 vscode={vscode}
                 feedback={feedback}
+                confirmDeleteOperations={confirmDeleteOperations}
+                confirmResetOperations={confirmResetOperations}
+                requestConfirm={setPendingConfirm}
                 sourceCheckoutRoot={management.sourceCheckoutRoot}
                 sourceCheckoutBranch={management.sourceCheckoutBranch}
               />
@@ -352,6 +382,32 @@ export function WorktreesSection({
           Safe cleanup preselects only ctrlyoke-owned, inactive branches proven merged into their recorded target. Squash and rebase merges stay explicit.
         </p>
       </section>
+
+      <DeleteConfirmModal
+        isOpen={pendingConfirm?.variant === "delete"}
+        onCancel={() => setPendingConfirm(null)}
+        onConfirm={() => {
+          const request = pendingConfirm;
+          setPendingConfirm(null);
+          request?.onConfirm();
+        }}
+        title={pendingConfirm?.variant === "delete" ? pendingConfirm.title : ""}
+        message={pendingConfirm?.variant === "delete" ? pendingConfirm.message : ""}
+        detail={pendingConfirm?.variant === "delete" ? pendingConfirm.detail : undefined}
+      />
+      <ResetConfirmModal
+        isOpen={pendingConfirm?.variant === "reset"}
+        onCancel={() => setPendingConfirm(null)}
+        onConfirm={() => {
+          const request = pendingConfirm;
+          setPendingConfirm(null);
+          request?.onConfirm();
+        }}
+        title={pendingConfirm?.variant === "reset" ? pendingConfirm.title : ""}
+        message={pendingConfirm?.variant === "reset" ? pendingConfirm.message : ""}
+        detail={pendingConfirm?.variant === "reset" ? pendingConfirm.detail : undefined}
+        confirmLabel={pendingConfirm?.variant === "reset" ? pendingConfirm.confirmLabel : undefined}
+      />
     </div>
   );
 }
@@ -360,12 +416,18 @@ function WorktreeRow({
   entry,
   vscode,
   feedback,
+  confirmDeleteOperations,
+  confirmResetOperations,
+  requestConfirm,
   sourceCheckoutRoot,
   sourceCheckoutBranch,
 }: {
   entry: WorktreeManagementEntry;
   vscode: ReturnType<typeof useVsCodeApi>;
   feedback: WorktreeActionFeedback;
+  confirmDeleteOperations: boolean;
+  confirmResetOperations: boolean;
+  requestConfirm: RequestConfirm;
   sourceCheckoutRoot?: string;
   sourceCheckoutBranch?: string | null;
 }) {
@@ -381,23 +443,55 @@ function WorktreeRow({
       requestId,
     });
   };
-  const remove = () => {
-    if (!window.confirm(`Remove worktree ${entry.worktreePath}?`)) return;
+  const doRemove = () => {
     const [requestId] = feedback.begin(rowKey("remove"));
     sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.REMOVE, requestId, entry, true);
   };
-  const forceRemove = () => {
-    if (!window.confirm(`Force remove ${entry.worktreePath}? Uncommitted work may be lost.`)) return;
+  const remove = () => {
+    if (!confirmDeleteOperations) {
+      doRemove();
+      return;
+    }
+    requestConfirm({
+      variant: "delete",
+      title: "Remove Worktree",
+      message: `Remove worktree "${entry.worktreePath}"?`,
+      onConfirm: doRemove,
+    });
+  };
+  const doForceRemove = () => {
     const [requestId] = feedback.begin(rowKey("force-remove"));
     sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.FORCE_REMOVE, requestId, entry, true);
+  };
+  const forceRemove = () => {
+    if (!confirmDeleteOperations) {
+      doForceRemove();
+      return;
+    }
+    requestConfirm({
+      variant: "delete",
+      title: "Force Remove Worktree",
+      message: `Force remove worktree "${entry.worktreePath}"?`,
+      detail: "Uncommitted work in this worktree may be lost.",
+      onConfirm: doForceRemove,
+    });
   };
   const cleanupBranch = (confirmed: boolean) => {
     const [requestId] = feedback.begin(rowKey("cleanup-branch"));
     sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH, requestId, entry, confirmed);
   };
   const deleteBranchWithConfirm = () => {
-    if (!window.confirm(`Delete branch ${entry.branchName}? This cannot be undone by ctrlyoke.`)) return;
-    cleanupBranch(true);
+    if (!confirmDeleteOperations) {
+      cleanupBranch(true);
+      return;
+    }
+    requestConfirm({
+      variant: "delete",
+      title: "Delete Branch",
+      message: `Delete branch "${entry.branchName}"?`,
+      detail: "This cannot be undone by ctrlyoke.",
+      onConfirm: () => cleanupBranch(true),
+    });
   };
   const repair = () => {
     const [requestId] = feedback.begin(rowKey("repair"));
@@ -413,18 +507,26 @@ function WorktreeRow({
     !entry.stale &&
     !!entry.branchName &&
     entry.branchState === "present";
-  const sync = () => {
-    if (
-      !window.confirm(
-        `Sync "${entry.branchName}" with "${sourceCheckoutBranch ?? "the source checkout"}"?\n\nThis merges "${entry.branchName}" into "${sourceCheckoutBranch ?? "the checked-out branch"}", then merges that branch back into "${entry.branchName}" — the same two commands you'd otherwise run by hand.`
-      )
-    )
-      return;
+  const doSync = () => {
     const [requestId] = feedback.begin(rowKey("sync"));
     vscode.postMessage({
       type: MESSAGE_TYPES.SYNC_NAMED_WORKTREE,
       worktreePath: entry.worktreePath,
       requestId,
+    });
+  };
+  const sync = () => {
+    if (!confirmResetOperations) {
+      doSync();
+      return;
+    }
+    requestConfirm({
+      variant: "reset",
+      title: "Sync Worktree",
+      message: `Sync "${entry.branchName}" with "${sourceCheckoutBranch ?? "the source checkout"}"?`,
+      detail: `This merges "${entry.branchName}" into "${sourceCheckoutBranch ?? "the checked-out branch"}", then merges that branch back into "${entry.branchName}" — the same two commands you'd otherwise run by hand.`,
+      confirmLabel: "Sync",
+      onConfirm: doSync,
     });
   };
   return (
