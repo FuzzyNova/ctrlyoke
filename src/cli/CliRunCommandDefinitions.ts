@@ -63,7 +63,9 @@ export function registerRunCommand(
   addExecutionOptions(
     program
       .command("run [file]")
-      .description("Execute a prompt or workflow file")
+      .description(
+        "Execute a prompt or workflow file (env passthrough works without a credential backend)"
+      )
       .option(
         "-H, --harness <harness>",
         "AI harness: copilot-cli, claude-cli, codex-cli, antigravity-cli, qwen-cli, opencode-cli",

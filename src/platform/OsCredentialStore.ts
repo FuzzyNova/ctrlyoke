@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import type { SecretStore } from "./SecretStore";
+import { SecretStoreUnavailableError, type SecretStore } from "./SecretStore";
+
+export { SecretStoreUnavailableError } from "./SecretStore";
 
 const CREDENTIAL_SERVICE = "ctrlyoke";
 const CREDENTIAL_INDEX_KEY = "ctrlyoke.secret.index";
@@ -114,18 +116,6 @@ interface CredentialBackend {
   get(key: string): Promise<string | undefined>;
   store(key: string, value: string): Promise<void>;
   delete(key: string): Promise<void>;
-}
-
-export class SecretStoreUnavailableError extends Error {
-  constructor(platform: NodeJS.Platform, cause?: unknown) {
-    super(
-      `No encrypted OS credential store is available for ${platform}. ` +
-        "Use env passthrough (export the credential's environment variable) " +
-        "or install and enable the platform credential-store backend.",
-      { cause }
-    );
-    this.name = "SecretStoreUnavailableError";
-  }
 }
 
 export interface OsCredentialStoreOptions {

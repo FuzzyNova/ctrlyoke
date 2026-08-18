@@ -573,3 +573,34 @@ ctrlyoke secret check [file]   # preflight a workflow: declared vs resolvable
   already composes, so the field exists on `_runtime` with no extra schema work;
   the only requirement is that resolution writes the union rather than echoing
   the authored array.
+
+## Final acceptance audit — 2026-08-18
+
+- [x] A shared workflow references a credential by name, and the same workflow
+      runs with either a managed value or an exported environment value:
+      `SecretReferenceParser`, `SecretResolver`, `WorkflowExecutor`, and
+      `src/test/unit/SecretResolver.test.ts`.
+- [x] Extension, CLI, and server hosts use explicit platform adapters with no
+      plaintext fallback: `VsCodeSecretStore`, `OsCredentialStore`,
+      `CliAdapter`, and `ServerTokenStore`.
+- [x] Harnesses receive available names through the dedicated secrets prompt
+      category: `CliPromptPreparer`, `CliIntegration`, and
+      `formatCategorizedInstruction`.
+- [x] `!` completion lists names only and the reference grants the step:
+      `PromptCompletionProvider`, `PromptLinkProvider`, the webview atomic
+      reference helpers, and the workflow properties panel.
+- [x] Inline `!NAME` references and `secrets:` declarations share the same
+      effective grant union: `getEffectiveSecretGrants` and the execution
+      resolution path in `WorkflowExecutor`.
+- [x] Resolved values are redacted at persisted, transported, and CLI output
+      boundaries: `SecretRedactionService`, `RunSecretRedactor`, the timeline,
+      log, server, export, and CLI wrappers, with regression coverage in the
+      secret redaction and history/output tests.
+- [x] Missing names fail before harness/script execution with name and scope:
+      `preflightWorkflowSecrets`, `WorkflowInstance`, and the Phase 6
+      `secret check` command in `src/cli/SecretCommands.ts`, covered by
+      `src/test/unit/SecretResolver.test.ts` and
+      `src/test/unit/SecretCommands.test.ts`.
+
+The acceptance criteria are complete. The remaining notes in “Open questions”
+are product follow-ups rather than unmet acceptance criteria.

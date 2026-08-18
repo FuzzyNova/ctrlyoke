@@ -5,7 +5,10 @@ import {
   type WorkflowStep,
 } from "../types/CtrlYokeTypes";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
-import type { SecretStore } from "../platform/SecretStore";
+import {
+  SecretStoreUnavailableError,
+  type SecretStore,
+} from "../platform/SecretStore";
 import {
   isValidSecretName,
   userSecretKey,
@@ -24,14 +27,16 @@ export interface ResolvedSecretValue {
 
 export class MissingSecretError extends Error {
   readonly secretName: string;
+  readonly secretNames: readonly string[];
   readonly scope = "workspace/user or environment";
 
-  constructor(name: string) {
+  constructor(name: string, names: readonly string[] = [name]) {
     super(
       `Secret "${name}" is not resolvable in scope "workspace/user or environment". ` +
         "Set it in the managed secret store or provide it through the host environment."
     );
     this.secretName = name;
+    this.secretNames = [...names];
     this.name = "MissingSecretError";
   }
 }
@@ -64,18 +69,28 @@ export async function resolveSecretValues(
     }
 
     if (context.secretStore) {
-      const workspaceValue = await context.secretStore.get(
-        workspaceSecretKeyForRoot(context.workspaceRoot, name)
-      );
-      if (workspaceValue !== undefined) {
-        resolved[name] = { value: workspaceValue, source: "workspace" };
-        continue;
-      }
+      try {
+        const workspaceValue = await context.secretStore.get(
+          workspaceSecretKeyForRoot(context.workspaceRoot, name)
+        );
+        if (workspaceValue !== undefined) {
+          resolved[name] = { value: workspaceValue, source: "workspace" };
+          continue;
+        }
 
-      const userValue = await context.secretStore.get(userSecretKey(name));
-      if (userValue !== undefined) {
-        resolved[name] = { value: userValue, source: "user" };
-        continue;
+        const userValue = await context.secretStore.get(userSecretKey(name));
+        if (userValue !== undefined) {
+          resolved[name] = { value: userValue, source: "user" };
+          continue;
+        }
+      } catch (error) {
+        if (!(error instanceof SecretStoreUnavailableError)) {
+          throw error;
+        }
+        // An unavailable credential backend is equivalent to having no
+        // managed value. Environment passthrough remains the supported CI
+        // path, and a missing value still gets the normal named preflight
+        // error below.
       }
     }
 
@@ -238,7 +253,8 @@ function getProcessMaps(
 export async function preflightWorkflowSecrets(
   workflow: PromptFile,
   platform: PlatformAdapter,
-  workspaceRoot: string
+  workspaceRoot: string,
+  environment: NodeJS.ProcessEnv = process.env
 ): Promise<void> {
   const assertConditionPrompts = (
     condition: object | null | undefined
@@ -290,15 +306,18 @@ export async function preflightWorkflowSecrets(
         const missing = await findMissingSecretNames(grants, {
           workspaceRoot,
           secretStore: platform.getSecretStore?.(),
+          environment,
         });
         if (missing.length > 0) {
-          throw new MissingSecretError(missing[0]);
+          throw new MissingSecretError(missing[0], missing);
         }
       } catch (error) {
         if (error instanceof MissingSecretError) {
-          throw new Error(
-            `Secret "${error.secretName}" is missing for scope "${scope}" (${error.scope}).`
+          const missingNames = error.secretNames.map(
+            (name) =>
+              `Secret "${name}" is missing for scope "${scope}" (${error.scope}).`
           );
+          throw new Error(missingNames.join(" "));
         }
         throw error;
       }
