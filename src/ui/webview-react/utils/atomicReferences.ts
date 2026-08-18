@@ -15,6 +15,7 @@ import {
 import { CTRLYOKE_SLASH_TOKEN_KINDS } from "../../../types/DashboardConstants";
 import { parseSecretReferences } from "../../../utils/SecretReferenceParser";
 import { NOT_AFTER_BOUNDARY } from "../../../utils/ReferenceBoundary";
+import { createReferencePatterns } from "../../../utils/ReferencePatterns";
 
 export { SYMBOL_KIND_ICONS } from "../../../types/SymbolKindConstants";
 
@@ -562,44 +563,7 @@ export function findContextReferenceMatches(
   text: string,
   offset = 0
 ): ContextReferenceMatch[] {
-  const patterns = {
-    // The lookbehind rejects not just alphanumerics but every other character
-    // that's legal inside a filename (+, -, _, =, @, #, $, %, ^, &, !, ~), so
-    // `(@file.ts`/`"@file.ts` still match (punctuation isn't a filename
-    // char), but an email (nathan@gmail.com) or a filename mentioned in
-    // prose like data_file~@backup!.csv doesn't. The unquoted path bodies
-    // below allow an embedded @ so a filename like myimage@512x512.png
-    // parses as one reference rather than splitting at the inner @; must
-    // stay in lockstep with the equivalent change in FileReferenceParser.ts,
-    // PromptLinkProvider.ts, and WorkspaceFileEditor.tsx.
-    fullFileQuoted: new RegExp(
-      `${NOT_AFTER_BOUNDARY}@"([^"]+\\.[a-zA-Z0-9]+)"(?!\\/)`,
-      "g"
-    ),
-    directoryQuoted: new RegExp(
-      `${NOT_AFTER_BOUNDARY}@"([^"]+\\/)"(?![\\w])`,
-      "g"
-    ),
-    fullFile: new RegExp(
-      `${NOT_AFTER_BOUNDARY}@([^\\s#"]+\\.[a-zA-Z0-9]+)(?![a-zA-Z0-9/])`,
-      "g"
-    ),
-    directory: new RegExp(`${NOT_AFTER_BOUNDARY}@([^\\s#"]+\\/)`, "g"),
-    // Path and symbol name are colon-delimited fields: quoted, or bare with no
-    // whitespace/`:`/`"`. Must stay in lockstep with the runtime patterns in
-    // src/utils/FileReferenceParser.ts — the two parsers are separate by design
-    // (see the module header), but a reference this one chips while the runtime
-    // one ignores is a reference that renders clickable and silently expands to
-    // nothing.
-    lineRange: new RegExp(
-      `${NOT_AFTER_BOUNDARY}#selection:(?:"([^"]+)"|([^\\s:"]+)):(\\d+)-(\\d+)`,
-      "g"
-    ),
-    symbol: new RegExp(
-      `${NOT_AFTER_BOUNDARY}#sym(?:\\.([a-z-]+))?:(?:"([^"]+)"|([^\\s:"]+)):(?:"([^"]+)"|([^\\s:"]+)):(\\d+)-(\\d+)`,
-      "g"
-    ),
-  };
+  const patterns = createReferencePatterns();
   const fileMatches: ContextReferenceMatch[] = [];
   const directoryMatches: ContextReferenceMatch[] = [];
   const lineRangeMatches: ContextReferenceMatch[] = [];

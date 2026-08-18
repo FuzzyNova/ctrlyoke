@@ -31,7 +31,7 @@ import { Decoration, ViewPlugin } from "@codemirror/view";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useUiStore } from "@store/uiStore";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
-import { NOT_AFTER_BOUNDARY } from "@root/utils/ReferenceBoundary";
+import { createReferencePatterns } from "@root/utils/ReferencePatterns";
 
 export interface WorkspaceFileEditorHandle {
   undo: () => void;
@@ -320,48 +320,7 @@ function findWorkspaceReferenceMatches(
   text: string,
   offset = 0
 ): WorkspaceReferenceMatch[] {
-  const patterns = {
-    // The lookbehind rejects not just alphanumerics but every other character
-    // that's legal inside a filename (+, -, _, =, @, #, $, %, ^, &, !, ~), so
-    // `(@file.ts`/`"@file.ts` still match (punctuation isn't a filename
-    // char), but an email (nathan@gmail.com) or a filename mentioned in
-    // prose like data_file~@backup!.csv doesn't. The unquoted path bodies
-    // below allow an embedded @ so a filename like myimage@512x512.png
-    // parses as one reference rather than splitting at the inner @; must
-    // stay in lockstep with atomicReferences.ts, PromptLinkProvider.ts, and
-    // FileReferenceParser.ts.
-    fullFileQuoted: new RegExp(
-      `${NOT_AFTER_BOUNDARY}@"([^"]+\\.[a-zA-Z0-9]+)"(?!\\/)`,
-      "g"
-    ),
-    directoryQuoted: new RegExp(
-      `${NOT_AFTER_BOUNDARY}@"([^"]+\\/)"(?![\\w])`,
-      "g"
-    ),
-    fullFile: new RegExp(
-      `${NOT_AFTER_BOUNDARY}@([^\\s#"]+\\.[a-zA-Z0-9]+)(?!\\/)`,
-      "g"
-    ),
-    directory: new RegExp(`${NOT_AFTER_BOUNDARY}@([^\\s#"]+\\/)`, "g"),
-    lineRangeQuoted: new RegExp(
-      `${NOT_AFTER_BOUNDARY}#selection:"([^"]+)":(\\d+)-(\\d+)`,
-      "g"
-    ),
-    lineRange: new RegExp(
-      `${NOT_AFTER_BOUNDARY}#selection:([^\\s:"]+):(\\d+)-(\\d+)`,
-      "g"
-    ),
-    // Must stay in lockstep with the canonical symbol pattern in
-    // src/ui/webview-react/utils/atomicReferences.ts and
-    // src/utils/FileReferenceParser.ts: one regex, quoted-or-bare per field,
-    // with the optional `.kind` suffix ctrlyoke now emits. A token this parser
-    // misses renders as inert text here while every other surface links it.
-    // Groups: 1 kind, 2/3 quoted/bare path, 4/5 quoted/bare name, 6-7 range.
-    symbol: new RegExp(
-      `${NOT_AFTER_BOUNDARY}#sym(?:\\.([a-z-]+))?:(?:"([^"]+)"|([^\\s:"]+)):(?:"([^"]+)"|([^\\s:"]+)):(\\d+)-(\\d+)`,
-      "g"
-    ),
-  };
+  const patterns = createReferencePatterns();
 
   const fileMatches: WorkspaceReferenceMatch[] = [];
   const directoryMatches: WorkspaceReferenceMatch[] = [];
@@ -406,14 +365,14 @@ function findWorkspaceReferenceMatches(
         from: offset + match.index,
         to: offset + match.index + match[0].length,
         type: "lineRange",
-        path: match[1],
-        lineStart: match[2],
-        lineEnd: match[3],
+        // Group 1 is the quoted path, group 2 the bare one; exactly one is set.
+        path: match[1] ?? match[2],
+        lineStart: match[3],
+        lineEnd: match[4],
       });
     }
   };
 
-  collectLineRangeMatches(patterns.lineRangeQuoted);
   collectLineRangeMatches(patterns.lineRange);
 
   const collectSymbolMatches = (pattern: RegExp) => {
