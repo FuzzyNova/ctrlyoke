@@ -418,7 +418,9 @@ Backend half (implemented):
 - [x] Webview list/set/delete contracts and the Zustand registry store carry
       names and metadata only. Secret writes are write-only: the response is
       `{ name, scope, state: "set" }` and never echoes the submitted value.
-- [ ] The Secrets tab UI, completion triggers, properties panel, and CLI remain
+- [x] The Secrets tab UI is implemented as the global settings tab. It consumes
+      the registry store and keeps values confined to the write-only set path.
+- [ ] Completion triggers, the workflow properties panel, and the CLI remain
       later Phase 5/3/6 work.
 
 **List view.** One row per name:
