@@ -346,9 +346,9 @@ first would leave a step that cannot compile or be tested on its own.
       `package.json` dependencies plus the built bundles under `out/` — do not
       make the guard depend on running `vsce package`, which is not part of the
       normal build or test gate.
-- [ ] Convert the verified probe into `CopilotQuotaClient` with dependency
+- [x] Convert the verified probe into `CopilotQuotaClient` with dependency
       injection, cancellation, timeout, and process-tree teardown.
-- [ ] Verify Windows PowerShell proxy, Windows npm shim, and direct Unix
+- [x] Verify Windows PowerShell proxy, Windows npm shim, and direct Unix
       executable launcher shapes.
 
 ### Phase 3: Provider wiring
