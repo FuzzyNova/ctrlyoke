@@ -74,6 +74,7 @@ import {
 import { fieldValidationBorderClass } from "@utils/fieldValidation";
 import {
   diagnosticsForPermissionField,
+  diagnosticsForHookEvents,
   firstCompatibilityProperty,
   formatCompatibilitySource,
   toFieldDiagnostic,
@@ -352,6 +353,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       diagnostic.capability === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS ||
       diagnostic.capability === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
   );
+  const hookDiagnostics = diagnosticsForHookEvents(compatibility.diagnostics);
   const allowedDiagnostics = diagnosticsForPermissionField(
     compatibility.diagnostics,
     "allowedTools"
@@ -452,9 +454,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const resolvedSecretGrants = [
     ...new Set([...effectiveSecrets, ...inlineSecretNames]),
   ];
-  const unresolvedSecretNames = secretRegistryLoading && registryEntries.length === 0
-    ? []
-    : resolvedSecretGrants.filter((name) => !resolvableSecretNames.has(name));
+  const unresolvedSecretNames =
+    secretRegistryLoading && registryEntries.length === 0
+      ? []
+      : resolvedSecretGrants.filter((name) => !resolvableSecretNames.has(name));
   const unresolvedSecretDiagnostics = unresolvedSecretNames.map((name) => ({
     severity: "error" as const,
     message: `Secret "${name}" is not available from the managed registry or environment.`,
@@ -1173,7 +1176,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
     workflowProperties,
     globalSettings,
     undefined,
-    permissionDiagnostics.length > 0
+    permissionDiagnostics.length > 0,
+    hookDiagnostics.length > 0
   );
 
   const handleResetAllToDefault = useCallback(() => {
@@ -2094,7 +2098,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       property="secrets"
                       show={isDifferentFromGlobal("secrets")}
                       onSetDefault={() =>
-                        handleSetAsDefault("secrets", workflowProperties.secrets)
+                        handleSetAsDefault(
+                          "secrets",
+                          workflowProperties.secrets
+                        )
                       }
                     />
                   }
@@ -2285,6 +2292,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   value={effectiveHooks}
                   onChange={handleHooksChange}
                   showDefault={false}
+                  diagnostics={hookDiagnostics}
                 />
               </FormField>
             </>

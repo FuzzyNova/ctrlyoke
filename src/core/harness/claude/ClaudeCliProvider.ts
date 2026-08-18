@@ -120,7 +120,10 @@ export class ClaudeCliProvider implements ICliProvider {
   readonly toolPermissionMapper: IToolPermissionMapper =
     new ClaudeToolPermissionMapper();
   get capabilities(): HarnessCapabilityFacts {
-    return { permissions: this.toolPermissionMapper.capabilities };
+    return {
+      permissions: this.toolPermissionMapper.capabilities,
+      hooks: ClaudeNotificationMonitor.CAPABILITIES,
+    };
   }
   readonly logParser = new ClaudeLogParser();
   readonly headlessSource = "stdout" as const;

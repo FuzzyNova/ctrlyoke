@@ -88,7 +88,10 @@ export class CopilotCliProvider implements ICliProvider {
   readonly toolPermissionMapper: IToolPermissionMapper =
     new CopilotToolPermissionMapper();
   get capabilities(): HarnessCapabilityFacts {
-    return { permissions: this.toolPermissionMapper.capabilities };
+    return {
+      permissions: this.toolPermissionMapper.capabilities,
+      hooks: CopilotNotificationMonitor.CAPABILITIES,
+    };
   }
   readonly logParser = new CopilotLogParser();
   readonly headlessSource = "stdout" as const;

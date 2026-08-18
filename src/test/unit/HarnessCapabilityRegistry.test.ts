@@ -18,6 +18,7 @@ import type { HarnessConfig } from "../../core/harness/shared/interfaces/ICliPro
 import {
   CAPABILITY_DOMAINS,
   HARNESS_IDS,
+  HOOK_EVENT_ORDER,
   type HarnessId,
 } from "../../types/DashboardConstants";
 import type {
@@ -162,7 +163,12 @@ function allDomainFacts(harnessId: HarnessId): HarnessCapabilityFacts {
   return {
     permissions: mapperFor(harnessId).capabilities,
     promptInputs: { images: declaration("exact", "native") },
-    hooks: { stop: declaration("partial", "translated-cli") },
+    hooks: Object.fromEntries(
+      HOOK_EVENT_ORDER.map((event) => [
+        event,
+        declaration("partial", "translated-cli"),
+      ])
+    ),
     mcp: { perServerToolFiltering: declaration("exact", "workspace-config") },
   };
 }
@@ -316,6 +322,23 @@ suite("HarnessCapabilityRegistry", () => {
     assert.strictEqual(image?.verification, "verified");
     assert.strictEqual(hook?.fidelity, "partial");
     assert.strictEqual(mcp?.mechanism, "workspace-config");
+  });
+
+  test("declares every hook event for every harness", async () => {
+    const snapshot = await new HarnessCapabilityRegistry({
+      enabledDomains: [CAPABILITY_DOMAINS.HOOKS],
+    }).getSnapshot();
+
+    for (const harnessId of HARNESS_ID_LIST) {
+      const hooks = snapshot.harnesses[harnessId].descriptor.hooks;
+      assert.deepStrictEqual(
+        Object.keys(hooks ?? {}).sort(),
+        [...HOOK_EVENT_ORDER].sort()
+      );
+      for (const event of HOOK_EVENT_ORDER) {
+        assert.ok(hooks?.[event], `${harnessId} is missing ${event}`);
+      }
+    }
   });
 
   test("rejects incomplete enabled domains and invalid declarations", () => {

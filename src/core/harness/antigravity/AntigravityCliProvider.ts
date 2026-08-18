@@ -114,7 +114,10 @@ export class AntigravityCliProvider implements ICliProvider {
   readonly toolPermissionMapper: IToolPermissionMapper =
     new AntigravityToolPermissionMapper();
   get capabilities(): HarnessCapabilityFacts {
-    return { permissions: this.toolPermissionMapper.capabilities };
+    return {
+      permissions: this.toolPermissionMapper.capabilities,
+      hooks: AntigravityNotificationMonitor.CAPABILITIES,
+    };
   }
   readonly logParser = new AntigravityLogParser();
   readonly headlessSource = "log" as const;

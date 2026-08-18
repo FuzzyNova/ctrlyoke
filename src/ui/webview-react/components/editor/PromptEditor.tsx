@@ -41,6 +41,7 @@ import { getDictionaryUris } from "@utils/dictionaryUris";
 import { isWorkflowRunning } from "../../utils/status";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 import { notifyUser } from "@utils/notifyUser";
+import { diagnosticsForHookEvents } from "@utils/compatibilityDiagnostics";
 
 interface PromptEditorProps {
   /** When true, the editor is in CLI watch mode — all editing is disabled. */
@@ -145,12 +146,16 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     promptProperties: properties,
     promptTarget: selectionTarget,
   });
+  const hookCompatibilityDiagnostics = diagnosticsForHookEvents(
+    promptCompatibility.diagnostics
+  );
 
   const drawerTabOverrides = useDrawerTabOverrides(
     workflowProperties,
     globalSettings,
     properties,
-    promptCompatibility.diagnostics.length > 0
+    promptCompatibility.diagnostics.length > 0,
+    hookCompatibilityDiagnostics.length > 0
   );
 
   const vscode = getVsCodeApi();
@@ -598,13 +603,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         });
       }
     },
-    [
-      getPropertyValues,
-      isPromptCompleted,
-      promptName,
-      selectionTarget,
-      vscode,
-    ]
+    [getPropertyValues, isPromptCompleted, promptName, selectionTarget, vscode]
   );
 
   const openPromptFile = useCallback(() => {
@@ -1203,8 +1202,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
               fileRefValidation?.exists && fileRefValidation.isEmpty
                 ? "var(--vscode-editorWarning-foreground)"
                 : fileRefValidation?.exists === false
-                ? "var(--vscode-editorWarning-foreground)"
-                : "var(--vscode-textLink-foreground)",
+                  ? "var(--vscode-editorWarning-foreground)"
+                  : "var(--vscode-textLink-foreground)",
             backgroundColor: "var(--vscode-editor-background)",
             borderTop:
               "1px solid var(--vscode-widget-border, var(--vscode-panel-border))",

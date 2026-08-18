@@ -5,6 +5,11 @@ import {
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
+import type { CapabilityDeclaration } from "../../../types/CompatibilityTypes";
+import {
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+} from "../../../types/DashboardConstants";
 
 /**
  * Claude CLI Notification Monitor
@@ -25,7 +30,7 @@ export class ClaudeNotificationMonitor
   implements INotificationMonitor
 {
   /** Map logical event names to Claude's native event names. */
-  static readonly EVENT_MAP: Record<string, string> = {
+  static readonly EVENT_MAP: Record<HookEvent, string> = {
     stop: "Stop",
     error: "StopFailure",
     sessionStart: "SessionStart",
@@ -38,6 +43,23 @@ export class ClaudeNotificationMonitor
     // contract natively without ctrlyoke interception.
     permissionRequest: "PermissionRequest",
   };
+
+  static readonly CAPABILITIES: Record<HookEvent, CapabilityDeclaration> =
+    Object.fromEntries(
+      Object.keys(ClaudeNotificationMonitor.EVENT_MAP).map((event) => [
+        event,
+        {
+          fidelity: CAPABILITY_FIDELITIES.EXACT,
+          mechanism: CAPABILITY_MECHANISMS.WORKSPACE_CONFIG,
+          verification: {
+            kind: "manual",
+            reference: "src/core/harness/claude/ClaudeNotificationMonitor.ts",
+            basis: "cli-version",
+            verifiedVersions: [">=2.0.76"],
+          },
+        },
+      ])
+    ) as unknown as Record<HookEvent, CapabilityDeclaration>;
 
   /**
    * Build a user-hooks-only Claude settings JSON string (no ctrlyoke notification entries).

@@ -5,6 +5,11 @@ import {
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
+import type { CapabilityDeclaration } from "../../../types/CompatibilityTypes";
+import {
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+} from "../../../types/DashboardConstants";
 
 type AntigravityHookKey =
   | "PreToolUse"
@@ -19,14 +24,50 @@ export class AntigravityNotificationMonitor
 {
   readonly supportsSessionStart = true;
 
-  private static readonly USER_EVENT_MAP: Partial<
-    Record<HookEvent, AntigravityHookKey>
-  > = {
+  static readonly EVENT_MAP: Partial<Record<HookEvent, AntigravityHookKey>> = {
     sessionStart: "PreInvocation",
     stop: "Stop",
     preToolUse: "PreToolUse",
     postToolUse: "PostToolUse",
   };
+
+  static readonly CAPABILITIES: Record<HookEvent, CapabilityDeclaration> = {
+    stop: AntigravityNotificationMonitor.verifiedHook(),
+    sessionStart: AntigravityNotificationMonitor.verifiedHook(),
+    preToolUse: AntigravityNotificationMonitor.verifiedHook(),
+    postToolUse: AntigravityNotificationMonitor.verifiedHook(),
+    userPromptSubmit: AntigravityNotificationMonitor.unsupportedHook(),
+    permissionRequest: AntigravityNotificationMonitor.unsupportedHook(),
+    error: AntigravityNotificationMonitor.unsupportedHook(),
+  };
+
+  private static verifiedHook(): CapabilityDeclaration {
+    return {
+      fidelity: CAPABILITY_FIDELITIES.EXACT,
+      mechanism: CAPABILITY_MECHANISMS.WORKSPACE_CONFIG,
+      verification: {
+        kind: "manual",
+        reference:
+          "src/core/harness/antigravity/AntigravityNotificationMonitor.ts",
+        basis: "cli-version",
+        verifiedVersions: [">=1.1.12"],
+      },
+    };
+  }
+
+  private static unsupportedHook(): CapabilityDeclaration {
+    return {
+      fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
+      mechanism: CAPABILITY_MECHANISMS.NONE,
+      verification: {
+        kind: "manual",
+        reference:
+          "src/core/harness/antigravity/AntigravityNotificationMonitor.ts",
+        basis: "cli-version",
+        verifiedVersions: [">=1.1.12"],
+      },
+    };
+  }
 
   protected override getStartHookEvents(): string[] {
     return ["PreInvocation"];
@@ -96,8 +137,7 @@ export class AntigravityNotificationMonitor
     }
 
     for (const hook of userHooks ?? []) {
-      const nativeEvent =
-        AntigravityNotificationMonitor.USER_EVENT_MAP[hook.event];
+      const nativeEvent = AntigravityNotificationMonitor.EVENT_MAP[hook.event];
       if (!nativeEvent) {
         continue;
       }

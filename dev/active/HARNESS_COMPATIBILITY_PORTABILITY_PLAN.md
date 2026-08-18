@@ -18,9 +18,9 @@
 > Stage G.2 has since landed the provider-owned multi-domain registry foundation:
 > arbitrary enabled-domain sets, generic completeness/effective-state
 > derivation, guarded round-trip snapshots, and the removal of uniform usage
-> plus stale MCP injection vocabulary. The rollout still enables only
-> `permissions`, validates all six harnesses and all
-> three permission leaves, caches installed availability/version detection, and
+> plus stale MCP injection vocabulary. The rollout now enables `permissions`
+> and `hooks`, validates all six harnesses, all three permission leaves, and
+> all seven logical hook events, caches installed availability/version detection, and
 > derives version-aware verification independently per leaf (verified
 > 2026-08-01). The shared pure analyzer is wired into workflow validation and
 > authoritative execution preflight. The typed `HARNESS_CAPABILITY_SNAPSHOT`
@@ -40,6 +40,13 @@
 > with no safe general translation found; MCP capability serialization was cut
 > because a context-free snapshot cannot honestly describe whether a workflow
 > uses a capability.
+> Stage G.3 is now complete: hooks are enabled alongside permissions, all six
+> harness adapters declare every logical hook event with fidelity, mechanism,
+> evidence, and version ranges, and the shared analyzer reports only configured
+> events. Workflow/prompt authoring and dry-run preview consume those findings;
+> Hooks-tab warning badges preserve the configured-state icon, and the shared
+> hosted/VS Code snapshot seam remains unchanged. Hook delivery declarations do
+> not create a notification-preference model.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
@@ -361,8 +368,9 @@ fabricated CLI version or a permanent unknown state; do not add the variant
 speculatively now.
 
 `enabledDomains` is the rollout boundary. The generic registry supports any
-combination of the four modeled domains, but the shipped rollout still enables
-only `permissions` until each later domain has complete adapter declarations.
+ combination of the four modeled domains, and the shipped rollout currently
+ enables `permissions` and `hooks`; later domains remain disabled until they
+ have complete adapter declarations.
 An optional domain that is not enabled means **not modeled yet**, not
 unsupported or unknown, and the analyzer must not emit diagnostics for it. For
 every enabled domain, registry assembly fails its completeness validation if
@@ -999,7 +1007,16 @@ second speculative implementation.
 
 ### Phase 3 — Expand capability domains
 
-- Hooks and notifications.
+- **Done 2026-08-18:** Hooks and notification delivery events. The registry now
+  enables `hooks` as a complete domain across all six harnesses. Declarations
+  live beside each adapter's logical-to-native event map, including explicit
+  unsupported events and versioned manual evidence. The analyzer emits shared
+  warning diagnostics only for configured hook entries, with consumer targets,
+  RFC 6901 pointers, source tiers, and remediation. Authoring fields keep their
+  Inherit/None/Custom state and show persistent diagnostics; dry-run propagates
+  the same diagnostics to workflow and step preview DTOs; and the Hooks tab
+  overlays a warning badge without replacing its configured-state icon. No
+  notification preferences are introduced.
 - MCP per-server tool filtering, if the Codex asymmetry above proves to need its
   own declaration. Injection is uniform and is not modeled.
 - Image prompt inputs.
@@ -1047,9 +1064,9 @@ existing icon: `getPermissionTabOverride()` in
 takes a `hasCompatibilityWarning` flag and, when true, adds
 `badgeCodicon: "warning"` / `badgeColor: "text-warning-fg"` on top of the
 mode's own icon and color rather than replacing them — the permission state
-must stay legible even while flagging a compatibility issue. This is the only
-tab today with diagnostic-driven badge logic, because `permissions` is
-currently the only enabled capability domain; the other tab-override
+must stay legible even while flagging a compatibility issue. The Hooks tab now
+uses the same diagnostic-driven badge logic for the enabled `hooks` domain; the
+other tab-override
 functions in that file (`getHooksTabOverride`, `getMcpTabOverride`,
 `getValidationTabOverride`, `getContextTabOverride`) are "something
 non-default is configured" indicators, not warning/error indicators, and
@@ -1058,10 +1075,9 @@ take no diagnostics input.
 As each Phase 3 domain is enabled, give its corresponding tab the same
 overlay-badge treatment instead of inventing a new visual language:
 
-- **Hooks** — once the `hooks` domain is enabled, `getHooksTabOverride` needs
-  a diagnostics input (or a sibling warning-badge helper) so a hook-event
-  compatibility warning overlays a badge on the tab's existing configured-icon
-  state, the same way permission mode and warning coexist today.
+- **Hooks** — completed in G.3. `getHooksTabOverride` overlays a warning badge
+  on the tab's existing configured-icon state while preserving its primary
+  icon/color.
 - **MCP** — once per-server tool filtering (or another MCP capability) is
   modeled, `getMcpTabOverride` needs the equivalent overlay for a filtering
   warning, without losing the existing "servers configured" indicator.

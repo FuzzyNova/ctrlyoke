@@ -19,6 +19,7 @@ import {
   PREVIEW_MUTATION_SCOPES,
   PREVIEW_SCOPES,
   SETTING_SCOPES,
+  HOOK_EVENT_ORDER,
   WORKTREE_MODES,
 } from "../../types/DashboardConstants";
 import type { HarnessCapabilityRegistrySnapshot } from "../../types/CompatibilityTypes";
@@ -54,6 +55,7 @@ function createDefaults(): ExecutionPropertyDefaults {
 function createCapabilities(): HarnessCapabilityRegistrySnapshot {
   const provider = new ClaudeCliProvider();
   const permissions = provider.toolPermissionMapper.capabilities;
+  const hooks = provider.capabilities.hooks!;
   const state = {
     fidelity: "exact" as const,
     mechanism: "native" as const,
@@ -61,18 +63,25 @@ function createCapabilities(): HarnessCapabilityRegistrySnapshot {
   };
   return {
     schemaVersion: 1,
-    enabledDomains: ["permissions"],
+    enabledDomains: ["permissions", "hooks"],
     harnesses: {
       [HARNESS_IDS.CLAUDE_CLI]: {
         available: true,
         version: "1.0.0",
-        descriptor: { harnessId: HARNESS_IDS.CLAUDE_CLI, permissions },
+        descriptor: {
+          harnessId: HARNESS_IDS.CLAUDE_CLI,
+          permissions,
+          hooks,
+        },
         effective: {
           permissions: {
             mode: state,
             allowedTools: state,
             deniedTools: state,
           },
+          hooks: Object.fromEntries(
+            HOOK_EVENT_ORDER.map((event) => [event, state])
+          ),
         },
       },
     },
@@ -80,9 +89,7 @@ function createCapabilities(): HarnessCapabilityRegistrySnapshot {
 }
 
 function createPromptPreparer(
-  buildPromptSections?: (
-    prompt: PromptStep
-  ) => Promise<PromptSections>
+  buildPromptSections?: (prompt: PromptStep) => Promise<PromptSections>
 ): CliPromptPreparer {
   return new CliPromptPreparer({
     shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
@@ -118,9 +125,7 @@ function createPromptPreparer(
 
 function createHarness(
   workspaceRoot?: string,
-  buildPromptSections?: (
-    prompt: PromptStep
-  ) => Promise<PromptSections>
+  buildPromptSections?: (prompt: PromptStep) => Promise<PromptSections>
 ): ExecutionPreviewHarness {
   const provider = new ClaudeCliProvider();
   return {
@@ -172,9 +177,8 @@ function createService(
   workspaceRoot?: string,
   plannedMutations?: PreparedMutation[],
   namedWorkspaceRoots?: readonly ResolverWorkspaceFolder[],
-  buildPromptSections?: (
-    prompt: PromptStep
-  ) => Promise<PromptSections>
+  buildPromptSections?: (prompt: PromptStep) => Promise<PromptSections>,
+  capabilities: HarnessCapabilityRegistrySnapshot = createCapabilities()
 ): ExecutionPreviewService {
   const harness = createHarness(workspaceRoot, buildPromptSections);
   if (plannedMutations) {
@@ -183,7 +187,7 @@ function createService(
   }
   return new ExecutionPreviewService({
     defaults: createDefaults(),
-    capabilities: createCapabilities(),
+    capabilities,
     getHarness: () => harness,
     workspaceRoot,
     workspaceRoots: workspaceRoot ? [workspaceRoot] : [],
@@ -222,6 +226,51 @@ suite("ExecutionPreviewService", () => {
     for (const root of temporaryRoots.splice(0)) {
       await fsPromises.rm(root, { recursive: true, force: true });
     }
+  });
+
+  test("propagates configured hook compatibility diagnostics to workflow and step preview", async () => {
+    const capabilities = createCapabilities();
+    const installed = capabilities.harnesses[HARNESS_IDS.CLAUDE_CLI];
+    installed.descriptor.hooks!.error = {
+      ...installed.descriptor.hooks!.error,
+      fidelity: "unsupported",
+      mechanism: "none",
+    };
+    installed.effective!.hooks!.error = {
+      fidelity: "unsupported",
+      mechanism: "none",
+      verification: "verified",
+    };
+
+    const preview = await createService(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      capabilities
+    ).build({
+      workflow: {
+        steps: [
+          {
+            prompt: "uses an error hook",
+            hooks: [{ event: "error", command: "node ./hook.js" }],
+          },
+        ],
+      },
+    });
+
+    assert.ok(
+      preview.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code === "compatibility.hooks.event.unsupported"
+      )
+    );
+    assert.ok(
+      preview.steps[0].diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code === "compatibility.hooks.event.unsupported"
+      )
+    );
   });
 
   test("resolves authored prompt-file paths at preview time after substitution", async () => {

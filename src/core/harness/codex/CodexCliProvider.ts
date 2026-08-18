@@ -160,7 +160,10 @@ export class CodexCliProvider implements ICliProvider {
   readonly toolPermissionMapper: IToolPermissionMapper =
     new CodexToolPermissionMapper();
   get capabilities(): HarnessCapabilityFacts {
-    return { permissions: this.toolPermissionMapper.capabilities };
+    return {
+      permissions: this.toolPermissionMapper.capabilities,
+      hooks: CodexNotificationMonitor.CAPABILITIES,
+    };
   }
   readonly headlessSource = "log" as const;
 
@@ -573,17 +576,6 @@ export class CodexCliProvider implements ICliProvider {
     userHooks?: UserHookConfig[],
     wrappedCtrlYokeEvents: HookEvent[] = []
   ): Record<string, unknown[]> {
-    const codexEventMap: Record<string, string> = {
-      stop: "Stop",
-      sessionStart: "SessionStart",
-      preToolUse: "PreToolUse",
-      postToolUse: "PostToolUse",
-      userPromptSubmit: "UserPromptSubmit",
-      // Decision hook: Codex pipes the payload on stdin and reads stdout as the
-      // allow/deny decision. Registered as a direct hook entry so Codex handles
-      // the stdin/stdout contract natively.
-      permissionRequest: "PermissionRequest",
-    };
     const section: Record<string, unknown[]> = {};
     for (const uh of userHooks ?? []) {
       if (
@@ -592,7 +584,7 @@ export class CodexCliProvider implements ICliProvider {
       ) {
         continue;
       }
-      const nativeEvent = codexEventMap[uh.event];
+      const nativeEvent = CodexNotificationMonitor.EVENT_MAP[uh.event];
       if (!nativeEvent) continue;
       if (!section[nativeEvent]) section[nativeEvent] = [];
       section[nativeEvent].push(

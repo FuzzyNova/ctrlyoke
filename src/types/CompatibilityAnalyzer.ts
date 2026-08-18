@@ -5,10 +5,12 @@ import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   COMPATIBILITY_SOURCE_TIERS,
   FINAL_STEP_PHASES,
+  HOOK_EVENT_ORDER,
   PERMISSION_CAPABILITY_KEYS,
   PERMISSION_MODES,
   STEP_TYPES,
   type HarnessId,
+  type HookEvent,
 } from "./DashboardConstants";
 import type { PromptFile, PromptStep, WorkflowStep } from "./CtrlYokeTypes";
 import type { ResolvedExecutionTarget } from "./ExecutionPropertyResolver";
@@ -217,9 +219,124 @@ export function analyzeCompatibility({
         diagnostics.push(diagnostic);
       }
     }
+
+    analyzeConfiguredHooks(target, installed, diagnostics);
   }
 
   return diagnostics;
+}
+
+function analyzeConfiguredHooks(
+  target: CompatibilityExecutionTarget,
+  installed: NonNullable<
+    CompatibilityAnalyzerInput["capabilities"]["harnesses"][HarnessId]
+  >,
+  diagnostics: CompatibilityDiagnostic[]
+): void {
+  const hooks = target.resolved.properties.hooks;
+  if (!Array.isArray(hooks) || hooks.length === 0) {
+    return;
+  }
+
+  const effectiveHooks = installed.effective?.hooks;
+  const declarations = installed.descriptor.hooks;
+  if (!effectiveHooks) {
+    return;
+  }
+
+  const sourceTier = target.resolved.sources.hooks;
+  for (const [hookIndex, hook] of hooks.entries()) {
+    const event = hook.event as HookEvent;
+    if (!HOOK_EVENT_ORDER.includes(event)) {
+      continue;
+    }
+    const state = effectiveHooks[event];
+    if (!state) {
+      continue;
+    }
+
+    const base = {
+      harnessId: target.resolved.properties.harness,
+      capability: event,
+      consumer: target.consumer,
+      sourceTier,
+      state,
+    };
+    if (state.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED) {
+      diagnostics.push(
+        createHookDiagnostic(
+          COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED,
+          base,
+          hookIndex,
+          declarations?.[event]?.caveatCode
+        )
+      );
+    } else if (state.fidelity === CAPABILITY_FIDELITIES.PARTIAL) {
+      diagnostics.push(
+        createHookDiagnostic(
+          COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_PARTIAL,
+          base,
+          hookIndex,
+          declarations?.[event]?.caveatCode
+        )
+      );
+    }
+
+    if (
+      state.fidelity !== CAPABILITY_FIDELITIES.UNSUPPORTED &&
+      state.verification === CAPABILITY_VERIFICATION_STATUSES.UNKNOWN
+    ) {
+      diagnostics.push(
+        createHookDiagnostic(
+          COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNVERIFIED,
+          base,
+          hookIndex
+        )
+      );
+    }
+  }
+}
+
+function createHookDiagnostic(
+  code: string,
+  base: {
+    harnessId: HarnessId;
+    capability: HookEvent;
+    consumer: CompatibilityConsumerTarget;
+    sourceTier?: ResolvedExecutionTarget["sources"]["hooks"];
+    state: EffectiveCapabilityState;
+  },
+  hookIndex: number,
+  caveatCode?: string
+): CompatibilityDiagnostic {
+  const pointerBase =
+    base.consumer.kind === FINAL_STEP_PHASES.QUEUE
+      ? `/steps/${base.consumer.stepIndex}`
+      : "/finalStep";
+  const propertyPointer =
+    base.sourceTier === COMPATIBILITY_SOURCE_TIERS.PROMPT
+      ? `${pointerBase}/hooks/${hookIndex}/event`
+      : base.sourceTier === COMPATIBILITY_SOURCE_TIERS.WORKFLOW
+        ? `/hooks/${hookIndex}/event`
+        : undefined;
+  return {
+    code,
+    severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+    harnessId: base.harnessId,
+    capability: base.capability,
+    consumer: base.consumer,
+    ...(base.sourceTier ? { sourceTier: base.sourceTier } : {}),
+    ...(propertyPointer ? { propertyPointer } : {}),
+    state: base.state,
+    message: getCompatibilityDiagnosticMessage(code, {
+      harnessId: base.harnessId,
+      capability: base.capability,
+      caveatCode,
+    }),
+    ...(getCompatibilityDiagnosticRemediation(code)
+      ? { remediation: getCompatibilityDiagnosticRemediation(code) }
+      : {}),
+  };
 }
 
 function diagnosticsForPermissionField(

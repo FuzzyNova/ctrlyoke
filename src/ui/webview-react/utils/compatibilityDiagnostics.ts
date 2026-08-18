@@ -6,6 +6,8 @@ import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_SOURCE_TIERS,
+  HOOK_EVENT_ORDER,
+  type HookEvent,
   type HarnessId,
 } from "@root/types/DashboardConstants";
 import {
@@ -25,6 +27,14 @@ export function diagnosticsForPermissionField(
   field: PermissionField
 ): CompatibilityDiagnostic[] {
   return diagnostics.filter((diagnostic) => diagnostic.capability === field);
+}
+
+export function diagnosticsForHookEvents(
+  diagnostics: readonly CompatibilityDiagnostic[]
+): CompatibilityDiagnostic[] {
+  return diagnostics.filter((diagnostic) =>
+    HOOK_EVENT_ORDER.includes(diagnostic.capability as HookEvent)
+  );
 }
 
 export function permissionCapabilitySummary(

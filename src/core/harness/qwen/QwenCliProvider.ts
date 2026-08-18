@@ -95,7 +95,10 @@ export class QwenCliProvider implements ICliProvider {
   readonly toolPermissionMapper: IToolPermissionMapper =
     new QwenToolPermissionMapper();
   get capabilities(): HarnessCapabilityFacts {
-    return { permissions: this.toolPermissionMapper.capabilities };
+    return {
+      permissions: this.toolPermissionMapper.capabilities,
+      hooks: QwenNotificationMonitor.CAPABILITIES,
+    };
   }
   readonly logParser = new QwenLogParser();
 

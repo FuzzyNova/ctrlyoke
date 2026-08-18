@@ -9,6 +9,8 @@ import {
   CAPABILITY_DOMAINS,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
+  HOOK_EVENT_ORDER,
+  type HookEvent,
   type HarnessId,
 } from "../../types/DashboardConstants";
 import {
@@ -50,6 +52,12 @@ function installed(
       verifiedVersions: ["1.0.0"],
     },
   };
+  const hookState = Object.fromEntries(
+    HOOK_EVENT_ORDER.map((event) => [event, state])
+  ) as Record<HookEvent, typeof state>;
+  const hookDeclarations = Object.fromEntries(
+    HOOK_EVENT_ORDER.map((event) => [event, declaration])
+  ) as Record<HookEvent, typeof declaration>;
   return {
     available,
     version: "1.0.0",
@@ -60,6 +68,7 @@ function installed(
         allowedTools: declaration,
         deniedTools: declaration,
       },
+      hooks: hookDeclarations,
     },
     effective: {
       permissions: {
@@ -67,6 +76,7 @@ function installed(
         allowedTools: state,
         deniedTools: state,
       },
+      hooks: hookState,
     },
   };
 }
@@ -598,5 +608,61 @@ suite("CompatibilityAnalyzer", () => {
     assert.ok(
       diagnostics.every((diagnostic) => diagnostic.severity === "warning")
     );
+  });
+
+  test("warns only for configured hook events and preserves source pointers", () => {
+    const workflow = mixedWorkflow({
+      steps: [
+        {
+          prompt: "Target",
+          harness: HARNESS_IDS.CODEX_CLI,
+          hooks: [{ event: "error", command: "node ./hook.js" }],
+        },
+      ],
+    });
+    const codex = installed(HARNESS_IDS.CODEX_CLI, true, "exact", "verified");
+    codex.descriptor.hooks!.error = {
+      ...codex.descriptor.hooks!.error,
+      fidelity: "unsupported",
+      mechanism: "none",
+    };
+    codex.effective!.hooks!.error = {
+      fidelity: "unsupported",
+      mechanism: "none",
+      verification: "verified",
+    };
+    const diagnostics = analyze(
+      workflow,
+      snapshot({ [HARNESS_IDS.CODEX_CLI]: codex })
+    );
+
+    assert.deepStrictEqual(
+      diagnostics
+        .filter((diagnostic) => diagnostic.capability === "error")
+        .map(({ code, sourceTier, propertyPointer, consumer }) => ({
+          code,
+          sourceTier,
+          propertyPointer,
+          consumer,
+        })),
+      [
+        {
+          code: COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED,
+          sourceTier: "prompt",
+          propertyPointer: "/steps/0/hooks/0/event",
+          consumer: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        },
+      ]
+    );
+    assert.ok(diagnostics[0].message.includes("error"));
+    assert.ok(diagnostics[0].remediation);
+
+    const unused = analyze(
+      mixedWorkflow({
+        steps: [{ prompt: "Target", harness: HARNESS_IDS.CODEX_CLI }],
+      }),
+      snapshot({ [HARNESS_IDS.CODEX_CLI]: codex })
+    );
+    assert.ok(!unused.some((diagnostic) => diagnostic.capability === "error"));
   });
 });

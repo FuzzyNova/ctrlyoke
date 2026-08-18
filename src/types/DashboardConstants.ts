@@ -1024,6 +1024,7 @@ export const HARNESS_CHART_COLORS: Record<HarnessId, string> = {
  * | "postToolUse"       | PostToolUse      | postToolUse         | PostToolUse      | PostToolUse       | tool.execute.after      |
  * | "userPromptSubmit"  | UserPromptSubmit | userPromptSubmitted | n/a              | UserPromptSubmit  | session.status { busy } |
  * | "permissionRequest" | PermissionRequest| permissionRequest   | n/a              | PermissionRequest | permission.asked        |
+ * | "error"            | StopFailure      | errorOccurred     | n/a              | n/a               | session.error           |
  */
 export type HookEvent =
   | "stop"
@@ -1038,8 +1039,6 @@ export interface HookEventMetadata {
   event: HookEvent;
   label: string;
   description: string;
-  /** Harnesses that fire this event. */
-  supportedHarnesses: HarnessId[];
 }
 
 export const HOOK_EVENT_ORDER: HookEvent[] = [
@@ -1057,87 +1056,36 @@ export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
     event: "stop",
     label: "Stop",
     description: "Fires when the AI agent finishes responding.",
-    supportedHarnesses: [
-      HARNESS_IDS.CLAUDE_CLI,
-      HARNESS_IDS.COPILOT_CLI,
-      HARNESS_IDS.CODEX_CLI,
-      HARNESS_IDS.QWEN_CLI,
-      HARNESS_IDS.ANTIGRAVITY_CLI,
-      HARNESS_IDS.OPENCODE_CLI,
-    ],
   },
   {
     event: "sessionStart",
     label: "Session Start",
     description: "Fires when a new AI session is created.",
-    supportedHarnesses: [
-      HARNESS_IDS.CLAUDE_CLI,
-      HARNESS_IDS.COPILOT_CLI,
-      HARNESS_IDS.CODEX_CLI,
-      HARNESS_IDS.QWEN_CLI,
-      HARNESS_IDS.ANTIGRAVITY_CLI,
-      HARNESS_IDS.OPENCODE_CLI,
-    ],
   },
   {
     event: "preToolUse",
     label: "Pre Tool Use",
     description: "Fires before the AI invokes a tool.",
-    supportedHarnesses: [
-      HARNESS_IDS.CLAUDE_CLI,
-      HARNESS_IDS.COPILOT_CLI,
-      HARNESS_IDS.CODEX_CLI,
-      HARNESS_IDS.QWEN_CLI,
-      HARNESS_IDS.ANTIGRAVITY_CLI,
-      HARNESS_IDS.OPENCODE_CLI,
-    ],
   },
   {
     event: "postToolUse",
     label: "Post Tool Use",
     description: "Fires after the AI receives the result of a tool call.",
-    supportedHarnesses: [
-      HARNESS_IDS.CLAUDE_CLI,
-      HARNESS_IDS.COPILOT_CLI,
-      HARNESS_IDS.CODEX_CLI,
-      HARNESS_IDS.QWEN_CLI,
-      HARNESS_IDS.ANTIGRAVITY_CLI,
-      HARNESS_IDS.OPENCODE_CLI,
-    ],
   },
   {
     event: "userPromptSubmit",
     label: "User Prompt Submit",
     description: "Fires when a user prompt is submitted to the AI.",
-    supportedHarnesses: [
-      HARNESS_IDS.CLAUDE_CLI,
-      HARNESS_IDS.COPILOT_CLI,
-      HARNESS_IDS.CODEX_CLI,
-      HARNESS_IDS.QWEN_CLI,
-      HARNESS_IDS.OPENCODE_CLI,
-    ],
   },
   {
     event: "permissionRequest",
     label: "Permission Request",
     description: "Fires when the AI requests permission to perform an action.",
-    supportedHarnesses: [
-      HARNESS_IDS.CLAUDE_CLI,
-      HARNESS_IDS.COPILOT_CLI,
-      HARNESS_IDS.CODEX_CLI,
-      HARNESS_IDS.QWEN_CLI,
-      HARNESS_IDS.OPENCODE_CLI,
-    ],
   },
   {
     event: "error",
     label: "Error",
     description: "Fires when the harness reports a session-level error.",
-    supportedHarnesses: [
-      HARNESS_IDS.CLAUDE_CLI,
-      HARNESS_IDS.COPILOT_CLI,
-      HARNESS_IDS.OPENCODE_CLI,
-    ],
   },
 ];
 

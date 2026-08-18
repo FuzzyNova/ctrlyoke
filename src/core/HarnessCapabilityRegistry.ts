@@ -3,6 +3,7 @@ import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
   HARNESS_IDS,
+  HOOK_EVENT_ORDER,
   MCP_CAPABILITY_KEYS,
   PERMISSION_CAPABILITY_KEYS,
   PROMPT_INPUT_CAPABILITY_KEYS,
@@ -64,6 +65,7 @@ export class HarnessCapabilityRegistry {
   constructor(options: HarnessCapabilityRegistryOptions = {}) {
     this.enabledDomains = options.enabledDomains ?? [
       CAPABILITY_DOMAINS.PERMISSIONS,
+      CAPABILITY_DOMAINS.HOOKS,
     ];
     this.validateEnabledDomains();
 
@@ -435,7 +437,7 @@ function requiredLeavesForDomain(domain: CapabilityDomain): readonly string[] {
     case CAPABILITY_DOMAINS.MCP:
       return [MCP_CAPABILITY_KEYS.PER_SERVER_TOOL_FILTERING];
     case CAPABILITY_DOMAINS.HOOKS:
-      return [];
+      return HOOK_EVENT_ORDER;
   }
 }
 

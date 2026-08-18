@@ -5,6 +5,11 @@ import {
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
+import type { CapabilityDeclaration } from "../../../types/CompatibilityTypes";
+import {
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+} from "../../../types/DashboardConstants";
 
 /**
  * OpenCode CLI Notification Monitor
@@ -27,6 +32,52 @@ export class OpenCodeNotificationMonitor
   extends NotificationMonitorBase
   implements INotificationMonitor
 {
+  static readonly EVENT_MAP: Record<HookEvent, string> = {
+    stop: "session.status.idle",
+    sessionStart: "session.created",
+    preToolUse: "tool.execute.before",
+    postToolUse: "tool.execute.after",
+    userPromptSubmit: "session.status.busy",
+    permissionRequest: "permission.asked",
+    error: "session.error",
+  };
+
+  static readonly CAPABILITIES: Record<HookEvent, CapabilityDeclaration> = {
+    stop: OpenCodeNotificationMonitor.verifiedHook(),
+    sessionStart: OpenCodeNotificationMonitor.partialHook(),
+    preToolUse: OpenCodeNotificationMonitor.verifiedHook(),
+    postToolUse: OpenCodeNotificationMonitor.verifiedHook(),
+    userPromptSubmit: OpenCodeNotificationMonitor.verifiedHook(),
+    permissionRequest: OpenCodeNotificationMonitor.partialHook(),
+    error: OpenCodeNotificationMonitor.verifiedHook(),
+  };
+
+  private static verifiedHook(): CapabilityDeclaration {
+    return {
+      fidelity: CAPABILITY_FIDELITIES.EXACT,
+      mechanism: CAPABILITY_MECHANISMS.NATIVE,
+      verification: {
+        kind: "manual",
+        reference: "src/scripts/ctrlyoke-opencode-plugin.ts",
+        basis: "cli-version",
+        verifiedVersions: [">=1.1.48"],
+      },
+    };
+  }
+
+  private static partialHook(): CapabilityDeclaration {
+    return {
+      fidelity: CAPABILITY_FIDELITIES.PARTIAL,
+      mechanism: CAPABILITY_MECHANISMS.NATIVE,
+      verification: {
+        kind: "manual",
+        reference: "src/scripts/ctrlyoke-opencode-plugin.ts",
+        basis: "cli-version",
+        verifiedVersions: [">=1.1.48"],
+      },
+    };
+  }
+
   /**
    * Build hook configuration.
    *

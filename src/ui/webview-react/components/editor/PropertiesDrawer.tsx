@@ -64,6 +64,7 @@ import {
 import { fieldValidationBorderClass } from "@utils/fieldValidation";
 import {
   diagnosticsForPermissionField,
+  diagnosticsForHookEvents,
   firstCompatibilityProperty,
   formatCompatibilitySource,
   toFieldDiagnostic,
@@ -289,6 +290,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       diagnostic.capability === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS ||
       diagnostic.capability === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
   );
+  const hookDiagnostics = diagnosticsForHookEvents(compatibility.diagnostics);
   const allowedDiagnostics = diagnosticsForPermissionField(
     permissionDiagnostics,
     "allowedTools"
@@ -1198,6 +1200,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               value={properties.hooks}
               onChange={(v) => setProperty("hooks", v)}
               inheritedValue={resolvedHooks}
+              diagnostics={hookDiagnostics}
             />
           </div>
         )}

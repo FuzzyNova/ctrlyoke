@@ -9,6 +9,7 @@ import {
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   COMPATIBILITY_SOURCE_TIERS,
   FINAL_STEP_PHASES,
+  HOOK_EVENT_METADATA,
   PERMISSION_CAPABILITY_KEYS,
   type HarnessId,
   type HookEvent,
@@ -28,6 +29,9 @@ export const COMPATIBILITY_DIAGNOSTIC_CODES = {
   DENIED_TOOLS_PARTIAL: "compatibility.permissions.deniedTools.partial",
   DENIED_TOOLS_UNVERIFIED: "compatibility.permissions.deniedTools.unverified",
   PERMISSION_TRANSLATION_LOSSY: "compatibility.permissions.translation.lossy",
+  HOOK_EVENT_UNSUPPORTED: "compatibility.hooks.event.unsupported",
+  HOOK_EVENT_PARTIAL: "compatibility.hooks.event.partial",
+  HOOK_EVENT_UNVERIFIED: "compatibility.hooks.event.unverified",
   SECRETS_UNRESOLVED: "secrets.unresolved",
 } as const;
 
@@ -91,10 +95,10 @@ export interface CapabilityDomainDescriptorMap {
 }
 
 export type CapabilityDomainState<T> = {
-  [K in keyof T]: T[K] extends CapabilityDeclaration
+  [K in keyof T]: NonNullable<T[K]> extends CapabilityDeclaration
     ? EffectiveCapabilityState
-    : T[K] extends object
-      ? CapabilityDomainState<T[K]>
+    : NonNullable<T[K]> extends object
+      ? CapabilityDomainState<NonNullable<T[K]>>
       : never;
 };
 
@@ -205,7 +209,9 @@ export function getCompatibilityDiagnosticMessage(
   const capabilityLabel =
     context.capability === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS
       ? "Allowed Tools"
-      : "Denied Tools";
+      : context.capability === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
+        ? "Denied Tools"
+        : hookEventLabel(context.capability);
   // Render the display name here so no consumer has to rewrite the prose.
   const harness = HARNESS_INFO[context.harnessId]?.name ?? context.harnessId;
   const caveat = getCompatibilityCaveatMessage(context.caveatCode);
@@ -244,6 +250,12 @@ export function getCompatibilityDiagnosticMessage(
       return `${capabilityLabel} support is unverified for the installed ${harness} version.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY:
       return `${capabilityLabel} include rules that are only partially represented by the ${harness} harness.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED:
+      return `The ${harness} harness does not support the ${hookEventLabel(context.capability)} hook event.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_PARTIAL:
+      return `The ${hookEventLabel(context.capability)} hook event is only partially supported by the ${harness} harness.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNVERIFIED:
+      return `Support for the ${hookEventLabel(context.capability)} hook event is unverified for the installed ${harness} version.`;
     default:
       return `Compatibility for ${context.capability} is unavailable for the ${harness} harness.`;
   }
@@ -272,7 +284,18 @@ export function getCompatibilityDiagnosticRemediation(
       return "Install a harness version covered by the compatibility evidence or review this finding manually.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY:
       return "Use a harness with exact translation support or simplify the affected rules.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED:
+    case COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_PARTIAL:
+    case COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNVERIFIED:
+      return "Remove the affected hook event or select a harness with verified support for it.";
     default:
       return undefined;
   }
+}
+
+function hookEventLabel(capability: string): string {
+  return (
+    HOOK_EVENT_METADATA.find((metadata) => metadata.event === capability)
+      ?.label ?? capability
+  );
 }

@@ -22,7 +22,8 @@ export function useDrawerTabOverrides(
   workflowProperties: WorkflowProperties,
   globalSettings: GlobalSettings,
   promptProperties?: PropertyValues,
-  hasCompatibilityWarning = false
+  hasCompatibilityWarning = false,
+  hasHookCompatibilityWarning = false
 ): Partial<Record<DrawerPage, TabIconOverride | undefined>> {
   return useMemo(() => {
     // ── Permissions ────────────────────────────────────────────────────────
@@ -106,7 +107,7 @@ export function useDrawerTabOverrides(
         resolvedPermMode,
         hasCompatibilityWarning
       ),
-      hooks: getHooksTabOverride(resolvedHooks),
+      hooks: getHooksTabOverride(resolvedHooks, hasHookCompatibilityWarning),
       mcp: getMcpTabOverride(resolvedMcp),
       validation: getValidationTabOverride(
         resolvedEndCondition?.script
@@ -123,5 +124,6 @@ export function useDrawerTabOverrides(
     globalSettings,
     promptProperties,
     hasCompatibilityWarning,
+    hasHookCompatibilityWarning,
   ]);
 }

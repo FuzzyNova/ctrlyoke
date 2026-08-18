@@ -89,7 +89,10 @@ export class OpenCodeCliProvider implements ICliProvider {
   readonly notificationMonitor = new OpenCodeNotificationMonitor();
   readonly toolPermissionMapper = new OpenCodeToolPermissionMapper();
   get capabilities(): HarnessCapabilityFacts {
-    return { permissions: this.toolPermissionMapper.capabilities };
+    return {
+      permissions: this.toolPermissionMapper.capabilities,
+      hooks: OpenCodeNotificationMonitor.CAPABILITIES,
+    };
   }
   readonly headlessSource = "stdout" as const;
   readonly logParser = new OpenCodeLogParser(() =>
