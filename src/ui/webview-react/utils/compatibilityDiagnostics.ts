@@ -35,7 +35,8 @@ export function permissionCapabilitySummary(
   const notEnforced: string[] = [];
 
   for (const harnessId of Object.values(HARNESS_IDS) as HarnessId[]) {
-    const state = snapshot.harnesses[harnessId]?.effective?.permissions[field];
+    const state =
+      snapshot.harnesses[harnessId]?.effective?.permissions?.[field];
     const label =
       harnessId === HARNESS_IDS.CLAUDE_CLI
         ? "Claude CLI"
@@ -158,7 +159,7 @@ export function workflowPermissionDiagnostic(
     const harnessId = target.resolved.properties.harness;
     const group = grouped.get(harnessId) ?? { supported: 0, affected: 0 };
     const state =
-      capabilities.harnesses[harnessId]?.effective?.permissions[field];
+      capabilities.harnesses[harnessId]?.effective?.permissions?.[field];
     if (state && !isLossy(state)) group.supported += 1;
     else group.affected += 1;
     grouped.set(harnessId, group);

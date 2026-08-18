@@ -22,6 +22,7 @@ import type {
   WorkflowStep,
 } from "../../../types/CtrlYokeTypes";
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
+import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
   ConfigurationUtils,
@@ -112,6 +113,9 @@ export class AntigravityCliProvider implements ICliProvider {
     new AntigravityNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new AntigravityToolPermissionMapper();
+  get capabilities(): HarnessCapabilityFacts {
+    return { permissions: this.toolPermissionMapper.capabilities };
+  }
   readonly logParser = new AntigravityLogParser();
   readonly headlessSource = "log" as const;
   private readonly streamJsonUsage =

@@ -15,7 +15,11 @@
 > [`src/types/DashboardConstants.ts`](../../src/types/DashboardConstants.ts),
 > mapper descriptors in the six harness directories, and
 > [`src/core/HarnessCapabilityRegistry.ts`](../../src/core/HarnessCapabilityRegistry.ts).
-> Phase 1B(i) enables only `permissions`, validates all six harnesses and all
+> Stage G.2 has since landed the provider-owned multi-domain registry foundation:
+> arbitrary enabled-domain sets, generic completeness/effective-state
+> derivation, guarded round-trip snapshots, and the removal of uniform usage
+> plus stale MCP injection vocabulary. The rollout still enables only
+> `permissions`, validates all six harnesses and all
 > three permission leaves, caches installed availability/version detection, and
 > derives version-aware verification independently per leaf (verified
 > 2026-08-01). The shared pure analyzer is wired into workflow validation and
@@ -356,7 +360,9 @@ an explicit versionless evidence basis at that point rather than giving it a
 fabricated CLI version or a permanent unknown state; do not add the variant
 speculatively now.
 
-`enabledDomains` is the rollout boundary. Phase 1 enables only `permissions`.
+`enabledDomains` is the rollout boundary. The generic registry supports any
+combination of the four modeled domains, but the shipped rollout still enables
+only `permissions` until each later domain has complete adapter declarations.
 An optional domain that is not enabled means **not modeled yet**, not
 unsupported or unknown, and the analyzer must not emit diagnostics for it. For
 every enabled domain, registry assembly fails its completeness validation if

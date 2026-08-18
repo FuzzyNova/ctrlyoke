@@ -955,7 +955,7 @@ function createCliCapabilityRegistry(): HarnessCapabilityRegistry {
       return {
         provider: {
           config: provider.config,
-          toolPermissionMapper: provider.toolPermissionMapper,
+          capabilities: provider.capabilities,
           // Dry-run must not launch a harness, including a --version probe.
           // Static declarations are therefore intentionally unverified; the
           // shared analyzer still reports their exact fidelity diagnostics.

@@ -30,6 +30,7 @@ import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
+import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   HookEvent,
@@ -86,6 +87,9 @@ export class CopilotCliProvider implements ICliProvider {
     new CopilotNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new CopilotToolPermissionMapper();
+  get capabilities(): HarnessCapabilityFacts {
+    return { permissions: this.toolPermissionMapper.capabilities };
+  }
   readonly logParser = new CopilotLogParser();
   readonly headlessSource = "stdout" as const;
 

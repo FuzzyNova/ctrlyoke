@@ -415,7 +415,7 @@ suite("CompatibilityAnalyzer", () => {
       "partial",
       "verified"
     );
-    antigravity.effective!.permissions.deniedTools = {
+    antigravity.effective!.permissions!.deniedTools = {
       fidelity: "unsupported",
       mechanism: "none",
       verification: "verified",

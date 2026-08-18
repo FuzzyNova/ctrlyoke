@@ -125,7 +125,7 @@ export function analyzeCompatibility({
           harnessId,
           "harness",
           target,
-          installed?.effective?.permissions.mode ?? unknownCapabilityState(),
+          installed?.effective?.permissions?.mode ?? unknownCapabilityState(),
           undefined
         )
       );

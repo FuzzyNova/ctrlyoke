@@ -21,6 +21,7 @@ import type {
 import type { ResolvedProperties } from "../../../../utils/PropertyResolver";
 import type { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 import type { HarnessId } from "../../../../types/DashboardConstants";
+import type { HarnessCapabilityFacts } from "../../../../types/CompatibilityTypes";
 import type { CliEvent } from "../../../../types/CliOutputTypes";
 import type { HarnessQuotaSnapshot } from "../../../../types/UsageTypes";
 
@@ -112,6 +113,9 @@ export interface HarnessConfig {
 export interface ICliProvider {
   /** Static harness configuration */
   readonly config: HarnessConfig;
+
+  /** Harness-owned compatibility facts exposed to the shared registry. */
+  readonly capabilities: HarnessCapabilityFacts;
 
   /** Notification monitor component */
   readonly notificationMonitor: INotificationMonitor;

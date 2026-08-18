@@ -79,28 +79,40 @@ export interface PermissionCapabilityDescriptor {
 
 export type PermissionCapabilityKey = keyof PermissionCapabilityDescriptor;
 
-export type EffectivePermissionCapabilityState = Record<
-  PermissionCapabilityKey,
-  EffectiveCapabilityState
->;
-
-export interface HarnessCapabilityDescriptor {
-  harnessId: HarnessId;
-  promptInputs?: {
+export interface CapabilityDomainDescriptorMap {
+  promptInputs: {
     images: CapabilityDeclaration;
   };
-  permissions?: PermissionCapabilityDescriptor;
-  hooks?: Partial<Record<HookEvent, CapabilityDeclaration>>;
-  mcp?: {
-    injection: CapabilityDeclaration;
+  permissions: PermissionCapabilityDescriptor;
+  hooks: Partial<Record<HookEvent, CapabilityDeclaration>>;
+  mcp: {
     perServerToolFiltering: CapabilityDeclaration;
   };
-  usage?: {
-    contextWindow: CapabilityDeclaration;
-    turnTokens: CapabilityDeclaration;
-    cumulativeTokens: CapabilityDeclaration;
-  };
 }
+
+export type CapabilityDomainState<T> = {
+  [K in keyof T]: T[K] extends CapabilityDeclaration
+    ? EffectiveCapabilityState
+    : T[K] extends object
+      ? CapabilityDomainState<T[K]>
+      : never;
+};
+
+export type EffectivePermissionCapabilityState =
+  CapabilityDomainState<PermissionCapabilityDescriptor>;
+
+export type EffectiveCapabilityDomainStateMap = Partial<{
+  [D in CapabilityDomain]: CapabilityDomainState<
+    CapabilityDomainDescriptorMap[D]
+  >;
+}>;
+
+/** Harness-owned declarations exposed through the shared provider boundary. */
+export type HarnessCapabilityFacts = Partial<CapabilityDomainDescriptorMap>;
+
+export type HarnessCapabilityDescriptor = {
+  harnessId: HarnessId;
+} & HarnessCapabilityFacts;
 
 export interface HarnessCapabilityRegistrySnapshot {
   schemaVersion: number;
@@ -114,9 +126,7 @@ export interface InstalledHarnessCapabilities {
   version?: string;
   descriptor: HarnessCapabilityDescriptor;
   /** Installed-version-aware states for the enabled capability domains. */
-  effective?: {
-    permissions: EffectivePermissionCapabilityState;
-  };
+  effective: EffectiveCapabilityDomainStateMap;
 }
 
 export type CompatibilityConsumerTarget =

@@ -30,6 +30,7 @@ import type {
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
 import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
+import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
   applyPreparedMutations,
@@ -158,6 +159,9 @@ export class CodexCliProvider implements ICliProvider {
     new CodexNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new CodexToolPermissionMapper();
+  get capabilities(): HarnessCapabilityFacts {
+    return { permissions: this.toolPermissionMapper.capabilities };
+  }
   readonly headlessSource = "log" as const;
 
   /** Extract Codex's session ID from the headless JSONL clock stream. */

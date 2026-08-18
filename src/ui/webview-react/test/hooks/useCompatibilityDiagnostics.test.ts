@@ -58,8 +58,8 @@ function makeSnapshot(): HarnessCapabilityRegistrySnapshot {
     mechanism: "none" as const,
     verification: "verified" as const,
   };
-  codex.effective!.permissions.allowedTools = unsupported;
-  codex.effective!.permissions.deniedTools = unsupported;
+  codex.effective!.permissions!.allowedTools = unsupported;
+  codex.effective!.permissions!.deniedTools = unsupported;
 
   return {
     schemaVersion: 1,

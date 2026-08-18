@@ -17,6 +17,7 @@ import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
+import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   PromptStep,
@@ -87,6 +88,9 @@ export class OpenCodeCliProvider implements ICliProvider {
 
   readonly notificationMonitor = new OpenCodeNotificationMonitor();
   readonly toolPermissionMapper = new OpenCodeToolPermissionMapper();
+  get capabilities(): HarnessCapabilityFacts {
+    return { permissions: this.toolPermissionMapper.capabilities };
+  }
   readonly headlessSource = "stdout" as const;
   readonly logParser = new OpenCodeLogParser(() =>
     getOpenCodeContextWindowSize(this.resolvedCurrentModel)

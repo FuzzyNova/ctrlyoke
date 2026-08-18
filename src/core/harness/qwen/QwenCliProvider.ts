@@ -27,6 +27,7 @@ import type {
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
+import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
 import {
   applyPreparedMutations,
   type CliProviderPreparation,
@@ -93,6 +94,9 @@ export class QwenCliProvider implements ICliProvider {
     new QwenNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new QwenToolPermissionMapper();
+  get capabilities(): HarnessCapabilityFacts {
+    return { permissions: this.toolPermissionMapper.capabilities };
+  }
   readonly logParser = new QwenLogParser();
 
   /** Extract Qwen's session ID from any complete JSON object in stdout. */

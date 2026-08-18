@@ -32,6 +32,7 @@ import type {
   CliExecutionSidecarDeps,
 } from "../shared/interfaces/ICliProvider";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
+import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   HookEvent,
@@ -118,6 +119,9 @@ export class ClaudeCliProvider implements ICliProvider {
     new ClaudeNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new ClaudeToolPermissionMapper();
+  get capabilities(): HarnessCapabilityFacts {
+    return { permissions: this.toolPermissionMapper.capabilities };
+  }
   readonly logParser = new ClaudeLogParser();
   readonly headlessSource = "stdout" as const;
 

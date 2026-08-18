@@ -928,13 +928,20 @@ export const CAPABILITY_DOMAINS = {
   PROMPT_INPUTS: "promptInputs",
   HOOKS: "hooks",
   MCP: "mcp",
-  USAGE: "usage",
 } as const;
 
 export const PERMISSION_CAPABILITY_KEYS = {
   MODE: "mode",
   ALLOWED_TOOLS: "allowedTools",
   DENIED_TOOLS: "deniedTools",
+} as const;
+
+export const PROMPT_INPUT_CAPABILITY_KEYS = {
+  IMAGES: "images",
+} as const;
+
+export const MCP_CAPABILITY_KEYS = {
+  PER_SERVER_TOOL_FILTERING: "perServerToolFiltering",
 } as const;
 
 export const COMPATIBILITY_DIAGNOSTIC_SEVERITIES = {
