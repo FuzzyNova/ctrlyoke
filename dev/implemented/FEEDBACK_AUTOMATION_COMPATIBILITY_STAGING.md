@@ -7,7 +7,7 @@ plans, none of which is a 0.1.0 release gate:
   — Phases 2, 2.5 (Site 3), 3, 4, and the Phase 5 guards.
 - [`AUTOMATION_API_PLAN.md`](../implemented/AUTOMATION_API_PLAN.md)
   — the per-step `ctrlyoke run --headless --json` v1 contract, in full.
-- [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../active/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
+- [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
   — Phase 2, Phase 3, and the permission plan's post-release parity items.
 
 This document owns only **sequencing and the dependency argument**. Each plan
@@ -18,7 +18,7 @@ do not restate their content here.
 for forward-looking work. That document's queue is fully complete and it is
 retained as the record of how the 0.1.0 permission gate was sequenced.
 
-**Re-verified against `src/` on 2026-08-18.** Stage D (CLI compatibility
+**Closed 2026-08-18 after final acceptance.** Stage D (CLI compatibility
 validation) is complete: `validate` preserves parse-only behavior by default,
 supports selected/all-installed targets, shared diagnostics, strict warning
 policies, and a clean compatibility JSON v1 envelope. Stage E (client-scoped routing)
@@ -41,7 +41,10 @@ with the preview work: `ExecutionPreviewService` runs the shared analyzer and
 projects the actual provider plan, including diagnostics, permission
 translation, MCP application, command arguments, and workspace mutations. It
 therefore needs acceptance re-verification, not another implementation step.
-See "What remains" near the end of this document for the full breakdown.
+The final acceptance audit, generated-doc drift check, and project gates are
+complete. This staging record and the owning compatibility plan are now
+implemented history; future compatibility changes should open a new scoped
+plan with fresh provider evidence.
 
 **Addendum 2026-08-14 — the Secrets plan left this queue.**
 [`ROADMAP.md`](ROADMAP.md) promoted
@@ -86,7 +89,7 @@ a long migration is in flight, and that argument is independent of release date.
 
 ---
 
-## Current state (measured 2026-08-17)
+## Current state (measured 2026-08-18)
 
 Measured against `src/`, not read from the plans. Where these disagree with a
 plan's own table, this section is newer.
@@ -473,7 +476,7 @@ may be swapped as a block.
 | 13  | C.4   | **DONE** — AST-verified triage of all 63 reusable direct sites: 1 policy deletion, 7 duplicate deletions, 8 noise deletions, 39 scoped replies, 8 broadcast/interaction-held sites; no migration                                                                                                                                                                                           |
 | 14  | C.5   | **DONE** — Executed the triage for the core/orchestration group (32 sites in 4 files); retained five interaction holds for Phase 4 and recorded 23 client-scope fallbacks for Stage E                                                                                                                                                                                                      |
 | 15  | C.6   | **DONE** — Executed the triage for the ui/utils group (31 sites in 8 files); reusable direct-message baseline is now 6, with the six Phase 4 interaction holds remaining                                                                                                                                                                                                                   |
-| 16  | D     | **DONE 2026-08-18** — `ctrlyoke validate` compatibility targets, real installed-harness filtering, shared diagnostics, strict CI policies, clean JSON v1 output, human remediation output, and focused parser/command/result coverage                                                                                                                                                      |
+| 16  | D     | **DONE 2026-08-18** — `ctrlyoke validate` compatibility targets, real installed-harness filtering, shared diagnostics, strict CI policies, clean JSON v1 output, human remediation output, and focused parser/command/result coverage (`0551b3b6`)                                                                                                                                                      |
 | 17  | E     | **DONE** — `WebviewClientContext` threaded through `WorkflowMutationCoordinator`, `WorkflowStepHandlers`, `UndoRedoCoordinator`, and terminal handlers (landed 2026-07-24 to 2026-08-06); two-tab isolation test in `CoreFeedbackMigration.test.ts`                                                                                                                                        |
 | 18  | F.1   | **DONE.** Phase 6 infra: `MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK` in `src/types/DashboardConstants.ts` / `src/types/WebviewMessageTypes.ts`, the `WebviewMessageRouter` handler and shared-sink wiring in `src/ui/WebviewMessageRouter.ts`, `src/ui/CtrlYokeWebviewProvider.ts`, `src/extension.ts`, plus `notifyUser()` in `src/ui/webview-react/utils/notifyUser.ts`                         |
 | 19  | F.2   | **DONE.** Phase 6 step 4: migrated Group A's 15 client-only toast call sites (8 `webview-react` files) to `notifyUser()`; the 2026-08-17 re-verification matched the table and found no action-bearing exceptions                                                                                                                                                                          |
@@ -482,16 +485,16 @@ may be swapped as a block.
 | 22  | F.5   | **DONE.** Phase 4 items 3 + 4: deleted `TemplateImporter.ts` and `ctrlyoke.importWorkflowTemplates`; repointed `ctrlyoke.createNewTemplate` at the pre-expanded `TemplateModal` (`reusable` 4 → 2)                                                                                                                                                                                         |
 | 23  | F.6   | **DONE.** Phase 4 item 1: in-app end-condition script creation in `ScriptConditionEditor`; deleted `ctrlyoke.createEndConditionScript` (`reusable` 2 → 1)                                                                                                                                                                                                                                  |
 | 24  | F.7   | **DONE.** Phase 4 item 2: inline harness-detection retry next to `HarnessDropdown`; cut the `openPanel()` gate (`reusable` 1 → 0)                                                                                                                                                                                                                                                          |
-| 25  | G.0   | **DONE ahead of this queue.** Dry-run already runs the shared analyzer and exact provider plan; Secrets/Redaction is implemented and all preview surfaces consume the redacted projection                                                                                                                                                                                                  |
-| 26  | G.1   | **DONE 2026-08-18.** Codex 0.147.0 source/schema and local `execpolicy` evidence show no safe general mapping for arbitrary shell, MCP, or read/write tool patterns; declarations remain unsupported, diagnostics remain required, server-owned `disabled_tools` is reserved for G.4, and Antigravity 1.1.12 remains unsupported for granular lists                                        |
-| 27  | G.2   | **DONE 2026-08-18.** Generalized provider-owned registry assembly, snapshot guards, completeness, version-aware effective-state lookup, and serialization across arbitrary enabled domain sets; removed uniform `usage` and stale MCP injection vocabulary, and added six-harness/invalid/round-trip coverage                                                                              |
-| 28  | G.3   | **DONE 2026-08-18.** Enabled hooks as the first new complete domain across all six harnesses; moved event support to adapter-owned declarations, added configured-event analyzer/preview/UI coverage, and layered diagnostics over the Hooks tab without changing hook state or introducing notification preferences                                                                       |
-| 29  | G.4   | **DONE 2026-08-18.** Enabled adapter-owned MCP per-server filtering across all six harnesses; preserved translated runtime denials, Codex native `disabled_tools`, and Antigravity unsupported behavior; moved diagnostics into the MCP domain with per-server RFC 6901 pointers, dedupe-safe preview coverage, persistent editor diagnostics, and MCP warning-tab overlays                |
-| 30  | G.5   | **DONE 2026-08-18.** Enabled images across all six harnesses; propagated resolved full-file refs; added prompt-pointer diagnostics and preview/editor coverage; ordinary refs, scripts, disabled steps, and the Harness-tab badge remain untouched |
-| 31  | G.6   | **DONE 2026-08-18.** Added the pure installed-harness portability projection over the multi-domain analyzer, with ready/lossy/unsupported/workspace-side-effect rows, unverified visibility, stable diagnostic identities/remediation, side-effect drill-down, deterministic ordering, and authored-object immutability coverage                                                                                                                                                                                       |
-| 32  | G.7   | **DONE 2026-08-18.** Added the shared React workflow portability report, workflow-properties entry point, snapshot-based row drill-down, loading/empty/responsive/focus handling, and dashboard/hosted-client shared-surface coverage                                                                                                                                                        |
-| 33  | G.8   | **DONE 2026-08-18.** Added the compiled-registry compatibility-doc generator and checked-in matrix for all six harnesses and enabled leaves, with shared caveat/remediation prose, portable attachment versus optional native discovery guidance, VitePress links, and a byte-for-byte `--check` gate on `docs:build`; `.ctrlyoke/capabilities.json` remains untouched                                                                                                                                                                                  |
-| 34  | G.9   | **TODO.** Run the final acceptance audit and full project/docs gates, fix bounded review defects, update all owning plans, and move this staging plan plus the compatibility plan to `dev/implemented/`                                                                                                                                                                                    |
+| 25  | G.0   | **DONE ahead of this queue.** Dry-run already runs the shared analyzer and exact provider plan; Secrets/Redaction is implemented and all preview surfaces consume the redacted projection (`1e942605`)                                                                                                                                                                                                  |
+| 26  | G.1   | **DONE 2026-08-18 (`32ed9400`).** Codex 0.147.0 source/schema and local `execpolicy` evidence show no safe general mapping for arbitrary shell, MCP, or read/write tool patterns; declarations remain unsupported, diagnostics remain required, server-owned `disabled_tools` is reserved for G.4, and Antigravity 1.1.12 remains unsupported for granular lists                                        |
+| 27  | G.2   | **DONE 2026-08-18 (`5930fb7d`).** Generalized provider-owned registry assembly, snapshot guards, completeness, version-aware effective-state lookup, and serialization across arbitrary enabled domain sets; removed uniform `usage` and stale MCP injection vocabulary, and added six-harness/invalid/round-trip coverage                                                                              |
+| 28  | G.3   | **DONE 2026-08-18 (`3f8b5903`).** Enabled hooks as the first new complete domain across all six harnesses; moved event support to adapter-owned declarations, added configured-event analyzer/preview/UI coverage, and layered diagnostics over the Hooks tab without changing hook state or introducing notification preferences                                                                       |
+| 29  | G.4   | **DONE 2026-08-18 (`11892482`).** Enabled adapter-owned MCP per-server filtering across all six harnesses; preserved translated runtime denials, Codex native `disabled_tools`, and Antigravity unsupported behavior; moved diagnostics into the MCP domain with per-server RFC 6901 pointers, dedupe-safe preview coverage, persistent editor diagnostics, and MCP warning-tab overlays                |
+| 30  | G.5   | **DONE 2026-08-18 (`cf3c92b2`).** Enabled images across all six harnesses; propagated resolved full-file refs; added prompt-pointer diagnostics and preview/editor coverage; ordinary refs, scripts, disabled steps, and the Harness-tab badge remain untouched |
+| 31  | G.6   | **DONE 2026-08-18 (`d802b9c8`).** Added the pure installed-harness portability projection over the multi-domain analyzer, with ready/lossy/unsupported/workspace-side-effect rows, unverified visibility, stable diagnostic identities/remediation, side-effect drill-down, deterministic ordering, and authored-object immutability coverage                                                                                                                                                                                       |
+| 32  | G.7   | **DONE 2026-08-18 (`77af50e4`).** Added the shared React workflow portability report, workflow-properties entry point, snapshot-based row drill-down, loading/empty/responsive/focus handling, and dashboard/hosted-client shared-surface coverage                                                                                                                                                        |
+| 33  | G.8   | **DONE 2026-08-18 (`500d14d8`).** Added the compiled-registry compatibility-doc generator and checked-in matrix for all six harnesses and enabled leaves, with shared caveat/remediation prose, portable attachment versus optional native discovery guidance, VitePress links, and a byte-for-byte `--check` gate on `docs:build`; `.ctrlyoke/capabilities.json` remains untouched                                                                                                                                                                                  |
+| 34  | G.9   | **DONE 2026-08-18** — Final acceptance audit and full project/docs gates passed; bounded defects were fixed, owning plans updated, and both plans moved to `dev/implemented/`. The closure commit is the handoff evidence.                                                                                                                                                                                    |
 
 **Stage B was reordered on 2026-08-02 from the plan's section numbering.** The
 plan lists the builder first, but `CliJsonResultBuilder` consumes the projection
@@ -676,47 +679,28 @@ Finishes with the workflow-level portability report and generated
 customer-facing compatibility documentation from the registry instead of
 hand-maintaining parity claims.
 
-### Permission plan post-release items (Stage G)
+### Permission plan post-release items (completed)
 
-Two remaining, both research-shaped rather than build-shaped. The **Codex
-partial-support investigation** asks whether `shell(command:*)` maps to
-project-local command prefix rules, whether MCP tool patterns map to per-server
-enabled/disabled lists, and whether broad read/write patterns map to permission
-profiles — with the standing rule that `partial` is only advertised for
-categories that earn a behavioral test, and that its honest answer may be "no
-safe general mapping exists". **Antigravity** stays an explicit unsupported
-granular-list declaration until its CLI exposes a documented granular mechanism;
-notably, granular support must not be inferred from Gemini/Qwen configuration
-just because the products share history and directories.
+The Codex partial-support investigation and Antigravity re-audit are complete.
+Neither provider has a documented, behaviorally verified general granular-list
+mapping, so the registry retains honest unsupported declarations and the
+analyzer continues to disclose those requests. No parity gap remains queued;
+future changes require new provider evidence.
 
 ---
 
-## What remains before this document can move to `dev/implemented/`
+## Closure record
 
-Re-verified against `src/` on 2026-08-18, not read from the plans.
+Re-verified against `src/` on 2026-08-18, including the final acceptance audit.
+Stages A–G are complete. Stage D's CLI validation, Stage G's dry-run,
+multi-domain registry, hooks/MCP/image compatibility, portability report,
+generated documentation, and Codex/Antigravity evidence review all passed the
+required gates. The analyzer now stays silent for domains outside the snapshot
+rollout, strict CLI policies classify every enabled domain, and runtime image
+diagnostics use the actual prepared attachments.
 
-| Stage | Scope                                                                   | Status                                                                                                 |
-| ----- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| A     | Guards, baselines, three bug fixes                                      | **Done**                                                                                               |
-| B     | Automation API `--json` v1                                              | **Done**                                                                                               |
-| C     | Browser feedback Phases 2 and 2.5                                       | **Done**                                                                                               |
-| D     | CLI `validate --harness` / `--all-installed-harnesses --json`           | **Done 2026-08-18** — shared diagnostics, real installed filtering, strict policies, JSON v1           |
-| E     | Client-scoped routing                                                   | **Done** (confirmed complete this pass; previously unmarked)                                           |
-| F     | Phase 6 host-aware webview toasts + Phase 4's six per-site dispositions | **Done** (steps 18–24); no `USER_INTERACTION_REQUEST` contract                                         |
-| G     | Compatibility Phase 3 domains + report/docs + Codex investigation       | **Partially shipped** — dry-run, Secrets/Redaction, G.1–G.7, and the Codex investigation are done; remaining work is G.8–G.9 |
-
-Stage G remains between this document and being fully closed out:
-
-1. **Stage G** — the largest remaining piece, but no longer blocked. Its dry-run
-   integration and Secrets/Redaction dependency are already implemented. The
-   Codex investigation is complete with an evidence-backed negative conclusion;
-   the remaining sequence is generated docs and final acceptance/retirement.
-   `usage` is deliberately removed because it is now uniform.
-
-**Recommendation (revised 2026-08-18):** D, F, and the dry-run portion of G are
-done. Perform the Codex investigation before the MCP domain, and enable domains one at a time
-under the plan's completeness-test discipline. The shared workflow portability
-report is now shipped; generate docs and close the plans next.
+No implementation work remains in this staging sequence. New provider behavior
+or capability domains require fresh evidence and a new scoped plan.
 
 **The Secrets plan is complete and is no longer sequenced from here.** The previous
 recommendation was to pick it up only when Stage G's dry-run leg was the piece
@@ -738,9 +722,8 @@ to reorder Stage B. The practical effect is now visible in the code: the plan
 landed and dry-run already consumes its redaction contract, so that leg is
 marked complete rather than re-queued.
 
-Once D and the remaining G steps are done, this document's queue is complete and it can move to
-`dev/implemented/` — record that decision explicitly at that time rather than
-inferring it from an empty queue.
+The queue is complete and this document was moved to `dev/implemented/` on
+2026-08-18.
 
 ## What would change this recommendation
 

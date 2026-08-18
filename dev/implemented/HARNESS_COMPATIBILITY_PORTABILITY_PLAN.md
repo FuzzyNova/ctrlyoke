@@ -1,6 +1,6 @@
 # Harness Compatibility and Workflow Portability Plan
 
-> **Status:** The complete Stage 1 / 0.1.0 compatibility gate is shipped, and
+> **Status (complete 2026-08-18):** The complete Stage 1 / 0.1.0 compatibility gate is shipped, and
 > Stage D's CLI validation slice of Phase 2 is complete:
 > Phases 1A–1B and Compatibility Phase 1C are complete, as are the permission
 > plan's runtime preparation and remaining Antigravity lease stages. Shared
@@ -37,9 +37,9 @@
 > optional harness-native discovery. The dry-run leg and Stage D CLI validation
 > of Compatibility Phase 2 have shipped through the shared analyzer and exact
 > provider-plan/JSON projections. The pure workflow portability projection in
-> `src/types/PortabilityReport.ts` is now complete; the React presentation
-> remains. The remaining Phase 3 image domain is complete. The Codex partial-support investigation is complete
-> with no safe general translation found; MCP capability serialization was cut
+> `src/types/PortabilityReport.ts` and the shared React presentation are
+> complete. The Phase 3 image domain and final Codex/Antigravity evidence
+> review are complete, with no safe general translation found; MCP capability serialization was cut
 > because a context-free snapshot cannot honestly describe whether a workflow
 > uses a capability.
 > Stage G.3 is now complete: hooks are enabled alongside permissions, all six
@@ -94,7 +94,7 @@
 > **Implementation order:** completed Phase 1 sequencing is recorded in
 > [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../implemented/COMPATIBILITY_AND_FEEDBACK_STAGING.md);
 > remaining Phase 2 and Phase 3 work is sequenced by
-> [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md),
+> [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md),
 > which records the now-satisfied dry-run dependency and the ordered Stage D/G
 > implementation seams.
 >
@@ -424,10 +424,9 @@ than being copied into React components.
 
 The supported harness set is the six CLI harnesses in `HARNESS_IDS`
 (`src/types/DashboardConstants.ts`): `copilot-cli`, `claude-cli`, `codex-cli`,
-`opencode-cli`, `qwen-cli`, and `antigravity-cli`. The `copilot-chat` harness was
-deliberately and permanently removed before release; see
-`dev/implemented/COPILOT_CHAT_ARCHIVAL_REMOVAL_PLAN.md`. Do not add a Copilot
-Chat descriptor, registry entry, or capability row.
+`opencode-cli`, `qwen-cli`, and `antigravity-cli`. A previously supported
+interactive harness was deliberately and permanently removed before release;
+do not add it back as a descriptor, registry entry, or capability row.
 
 Capability facts belong beside the harness implementation that must keep them
 true:

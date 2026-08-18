@@ -256,6 +256,27 @@ suite("CompatibilityAnalyzer", () => {
     assert.deepStrictEqual(diagnostics, []);
   });
 
+  test("enumerates authored image references for compatibility consumers", () => {
+    const workflow: PromptFile = {
+      steps: [
+        { prompt: "Review @diagram.png and @notes.txt" },
+        { prompt: "Ignore ```\n@code.png\n```" },
+      ],
+      finalStep: { prompt: "Review @final.webp" },
+    };
+    const targets = enumerateCompatibilityTargets(workflow, (prompt, file) =>
+      resolveExecutionProperties(prompt, file, {
+        defaults,
+        hostCanProvidePty: false,
+      })
+    );
+
+    assert.deepStrictEqual(
+      targets.map((target) => target.imageFileRefs),
+      [["diagram.png"], undefined, ["final.webp"]]
+    );
+  });
+
   test("analyzes only resolved image attachments, including final-step consumers", () => {
     const workflow: PromptFile = {
       steps: [
@@ -397,6 +418,38 @@ suite("CompatibilityAnalyzer", () => {
     );
     assert.ok(
       !diagnostics.some((diagnostic) => diagnostic.capability === "hooks")
+    );
+  });
+
+  test("does not analyze capability domains outside the snapshot rollout", () => {
+    const workflow = mixedWorkflow({
+      steps: [
+        {
+          prompt: "Review @diagram.png",
+          hooks: [{ event: "error", command: "node hook.js" }],
+          mcpServers: [{ id: "server", deniedTools: ["blocked"] }],
+        },
+      ],
+    });
+    const capabilities = snapshot({
+      [HARNESS_IDS.CODEX_CLI]: installed(
+        HARNESS_IDS.CODEX_CLI,
+        true,
+        "unsupported",
+        "verified"
+      ),
+    });
+    capabilities.enabledDomains = [CAPABILITY_DOMAINS.PERMISSIONS];
+
+    const diagnostics = analyze(workflow, capabilities);
+
+    assert.ok(
+      diagnostics.every(
+        (diagnostic) =>
+          diagnostic.capability === "mode" ||
+          diagnostic.capability === "allowedTools" ||
+          diagnostic.capability === "deniedTools"
+      )
     );
   });
 

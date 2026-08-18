@@ -22,6 +22,7 @@ import type {
   HarnessCapabilityRegistrySnapshot,
   InstalledHarnessCapabilities,
 } from "../../types/CompatibilityTypes";
+import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../../types/CompatibilityTypes";
 import type { PromptFile, PromptStep } from "../../types/CtrlYokeTypes";
 import type { ResolvedExecutionTarget } from "../../types/ExecutionPropertyResolver";
 
@@ -226,5 +227,50 @@ suite("CliValidation", () => {
       true
     );
     assert.strictEqual(hasCliValidationFailures([error]), true);
+  });
+
+  test("strict policies classify every enabled compatibility domain", () => {
+    const state: EffectiveCapabilityState = {
+      fidelity: "unsupported",
+      mechanism: "none",
+      verification: "unknown",
+    };
+    const diagnostic = (code: string): CompatibilityDiagnostic => ({
+      code,
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+      harnessId: HARNESS_IDS.CODEX_CLI,
+      capability: "test",
+      state,
+      message: "test",
+    });
+
+    for (const code of [
+      COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED,
+      COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_UNSUPPORTED,
+      COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNSUPPORTED,
+    ]) {
+      assert.strictEqual(
+        hasCliValidationFailures(
+          [diagnostic(code)],
+          CLI_VALIDATE_STRICT_POLICIES.LOSSY
+        ),
+        true,
+        code
+      );
+    }
+    for (const code of [
+      COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNVERIFIED,
+      COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_UNVERIFIED,
+      COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNVERIFIED,
+    ]) {
+      assert.strictEqual(
+        hasCliValidationFailures(
+          [diagnostic(code)],
+          CLI_VALIDATE_STRICT_POLICIES.UNVERIFIED
+        ),
+        true,
+        code
+      );
+    }
   });
 });

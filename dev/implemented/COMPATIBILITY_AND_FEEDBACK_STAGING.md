@@ -3,13 +3,13 @@
 > **Complete as of 2026-08-01 — retained as the record of how the 0.1.0
 > permission gate was sequenced.** Every step in its queue landed. Forward-looking
 > work in these plans is sequenced by
-> [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md),
+> [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md),
 > which supersedes this document and drops its release-gate framing. Do not add
 > new steps here.
 
 **Decided 2026-08-01.** Implementation order for three interlocking plans:
 
-- [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../active/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
+- [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
   — the capability registry, analyzer, and pure effective-property resolver.
 - [`TOOL_PERMISSION_PARITY_PLAN.md`](../implemented/TOOL_PERMISSION_PARITY_PLAN.md)
   — the first consumer of that registry.

@@ -16,9 +16,9 @@ import {
 
 const ANTIGRAVITY_PERMISSION_VERIFICATION = {
   kind: "manual",
-  reference: "dev/backlog/TOOL_PERMISSION_PARITY_PLAN.md#antigravity",
+  reference: "dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#antigravity",
   basis: "cli-version",
-  verifiedVersions: [">=1.0.16"],
+  verifiedVersions: [">=1.1.12"],
 } as const;
 
 export const ANTIGRAVITY_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor =

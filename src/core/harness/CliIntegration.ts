@@ -989,6 +989,29 @@ export class CliIntegration extends HarnessIntegration {
       prepared.imageFileRefs
     );
 
+    const imageFileRefs = prepared.imageFileRefs ?? [];
+    if (
+      imageFileRefs.length > 0 &&
+      session.workflowContext?.analyzeCompatibilityForPrompt &&
+      session.resolvedProperties
+    ) {
+      const diagnostics =
+        await session.workflowContext.analyzeCompatibilityForPrompt(
+          session.workflowContext.promptIndex,
+          session.prompt,
+          session.resolvedProperties,
+          imageFileRefs
+        );
+      if (diagnostics.length > 0) {
+        session.workflowContext.reportCompatibilityDiagnostics?.(
+          diagnostics,
+          session.workflowContext.promptStartedAt === undefined
+            ? undefined
+            : Math.max(0, session.workflowContext.promptStartedAt - 1)
+        );
+      }
+    }
+
     if (injectMode) {
       session.markInjectModePrepared();
     }

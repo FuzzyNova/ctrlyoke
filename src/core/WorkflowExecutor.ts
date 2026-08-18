@@ -108,6 +108,7 @@ export interface WorkflowExecutionContext {
   sourceDefinitionPath?: string;
   dashboardProvider?: IDashboardSink;
   reportCompatibilityDiagnostics?: WorkflowContext["reportCompatibilityDiagnostics"];
+  analyzeCompatibilityForPrompt?: WorkflowContext["analyzeCompatibilityForPrompt"];
   shouldShowCliCommand: boolean;
   dynamicQueueConfig: DynamicQueueConfig;
   getIntegrationForPrompt: (
@@ -796,6 +797,7 @@ export class WorkflowExecutor {
           workingFilePersistence: this.promptQueue,
           reportCompatibilityDiagnostics:
             context.reportCompatibilityDiagnostics,
+          analyzeCompatibilityForPrompt: context.analyzeCompatibilityForPrompt,
           resolvePriorContextItems: context.resolvePriorContextItems,
           secretEnvironment: resolvedSecretValues,
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
@@ -2641,6 +2643,7 @@ export class WorkflowExecutor {
           workingFilePersistence: this.promptQueue,
           reportCompatibilityDiagnostics:
             context.reportCompatibilityDiagnostics,
+          analyzeCompatibilityForPrompt: context.analyzeCompatibilityForPrompt,
           resolvePriorContextItems: context.resolvePriorContextItems,
           secretEnvironment: retrySecretValues,
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as

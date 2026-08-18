@@ -4,6 +4,8 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   COMPATIBILITY_SOURCE_TIERS,
+  CAPABILITY_DOMAINS,
+  isImageRefPath,
   FINAL_STEP_PHASES,
   HOOK_EVENT_ORDER,
   MCP_CAPABILITY_KEYS,
@@ -15,6 +17,10 @@ import {
   type HookEvent,
 } from "./DashboardConstants";
 import type { PromptFile, PromptStep, WorkflowStep } from "./CtrlYokeTypes";
+import {
+  maskFencedCodeBlocks,
+  parseAllFileReferences,
+} from "../utils/FileReferenceParser";
 import type { ResolvedExecutionTarget } from "./ExecutionPropertyResolver";
 import type {
   CompatibilityConsumerTarget,
@@ -88,9 +94,11 @@ export function enumerateCompatibilityTargets(
     if (step.enabled === false || isScriptWorkflowStep(step)) {
       continue;
     }
+    const imageFileRefs = getPromptImageFileRefs(step.prompt);
     targets.push({
       consumer: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
       resolved: resolveTarget(step, workflow),
+      ...(imageFileRefs ? { imageFileRefs } : {}),
     });
   }
 
@@ -100,9 +108,11 @@ export function enumerateCompatibilityTargets(
     finalStep.enabled !== false &&
     !isScriptWorkflowStep(finalStep)
   ) {
+    const imageFileRefs = getPromptImageFileRefs(finalStep.prompt);
     targets.push({
       consumer: { kind: FINAL_STEP_PHASES.FINAL_STEP },
       resolved: resolveTarget(finalStep, workflow),
+      ...(imageFileRefs ? { imageFileRefs } : {}),
     });
   }
   return targets;
@@ -137,9 +147,17 @@ export function analyzeCompatibility({
       continue;
     }
 
-    analyzeConfiguredMcpFilters(target, installed, diagnostics);
-    analyzeConfiguredHooks(target, installed, diagnostics);
-    analyzeConfiguredImageInputs(target, installed, diagnostics);
+    if (capabilities.enabledDomains.includes(CAPABILITY_DOMAINS.MCP)) {
+      analyzeConfiguredMcpFilters(target, installed, diagnostics);
+    }
+    if (capabilities.enabledDomains.includes(CAPABILITY_DOMAINS.HOOKS)) {
+      analyzeConfiguredHooks(target, installed, diagnostics);
+    }
+    if (
+      capabilities.enabledDomains.includes(CAPABILITY_DOMAINS.PROMPT_INPUTS)
+    ) {
+      analyzeConfiguredImageInputs(target, installed, diagnostics);
+    }
 
     const permissions = target.resolved.properties.toolPermissions;
     if (!permissions) {
@@ -156,6 +174,9 @@ export function analyzeCompatibility({
     }
 
     const effective = installed.effective?.permissions;
+    if (!capabilities.enabledDomains.includes(CAPABILITY_DOMAINS.PERMISSIONS)) {
+      continue;
+    }
     if (!effective) {
       continue;
     }
@@ -210,6 +231,26 @@ export function analyzeCompatibility({
   }
 
   return diagnostics;
+}
+
+/**
+ * Identify image attachments in authored prompt text for synchronous callers
+ * such as CLI validation and the React analyzer. Runtime execution replaces
+ * this with the prompt preparer's resolved full-file attachment list.
+ */
+export function getPromptImageFileRefs(
+  prompt: string
+): readonly string[] | undefined {
+  const imageFileRefs = parseAllFileReferences(maskFencedCodeBlocks(prompt))
+    .filter(
+      (reference) =>
+        !reference.isDirectory &&
+        reference.startLine === undefined &&
+        reference.endLine === undefined &&
+        isImageRefPath(reference.path)
+    )
+    .map((reference) => reference.path);
+  return imageFileRefs.length > 0 ? imageFileRefs : undefined;
 }
 
 function analyzeConfiguredImageInputs(

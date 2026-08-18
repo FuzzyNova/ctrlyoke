@@ -7,7 +7,7 @@ hosts, operational feedback reaches connected browsers independently of
 notification settings, and the reusable direct-message migration is complete.
 Phase 3
 (client-scoped routing) completed per
-[`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
+[`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
 Stage E, re-verified against `src/` on 2026-08-11 — this doc's Acceptance
 Criteria below previously said otherwise and is corrected in this pass. Phase 4
 was **redesigned 2026-08-17**: none of the six action-bearing sites need the
@@ -24,14 +24,14 @@ toast calls are not host-aware" and "Phase 6" below.
 - [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)
 
 **Implementation order:**
-[`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
+[`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
 — Phases 2, 2.5 Site 3, 3, and 4 are Stages C, E, and F there; the Phase 5
 guards are Stage A. The completed Phase 1 and Phase 2.5 Site 2 sequencing is
 recorded in
 [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](./COMPATIBILITY_AND_FEEDBACK_STAGING.md).
 
 **Not a dependency of the 0.1.0 permission work.**
-[`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../active/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
+[`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
 and [`TOOL_PERMISSION_PARITY_PLAN.md`](./TOOL_PERMISSION_PARITY_PLAN.md) both
 render through persistent field diagnostics and the existing shared
 `Modal.tsx`, and both explicitly forbid routing compatibility feedback through

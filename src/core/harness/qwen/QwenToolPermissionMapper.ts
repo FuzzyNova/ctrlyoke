@@ -173,7 +173,7 @@ export class QwenToolPermissionMapper
    * spellings resolve to the same Qwen tool via its current alias table, but
    * only the former is also recognized by an older, narrower alias table Qwen
    * still consults on some code paths — see the Root Cause section of
-   * dev/backlog/TOOL_PERMISSION_PARITY_PLAN.md for the silent-deny bug this
+   * dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md for the silent-deny bug this
    * avoids.
    *
    * Deduplicates via Set so multiple shell(X:*) patterns mapping to the same

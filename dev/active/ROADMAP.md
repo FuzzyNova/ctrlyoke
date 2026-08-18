@@ -62,7 +62,7 @@ to drive.
    [`TESTING_GAPS.md`](../backlog/TESTING_GAPS.md) as generated input, not as a
    percentage target that blocks forever.
 5. Complete harness compatibility and tool-permission parity: **phase 1** of
-   [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../active/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
+   [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../implemented/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
    plus all of
    [`TOOL_PERMISSION_PARITY_PLAN.md`](../implemented/TOOL_PERMISSION_PARITY_PLAN.md).
    ctrlyoke must not ship claiming granular Allowed/Denied Tools support that a
@@ -78,7 +78,7 @@ to drive.
    is _not_ a prerequisite — was in
    [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../implemented/COMPATIBILITY_AND_FEEDBACK_STAGING.md)
    and is now carried forward by
-   [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md).
+   [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../implemented/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md).
 6. **Automation API structured results — COMPLETE (2026-08-02).** The versioned
    per-step JSON contract in
    [`AUTOMATION_API_PLAN.md`](../implemented/AUTOMATION_API_PLAN.md) shipped as
@@ -208,8 +208,8 @@ both carry is satisfied by that promotion rather than blocking them.
    serialize capability data for MCP consumers. Descoped from P0 on 2026-07-31;
    pairs with dry-run preview above. Its remaining unblocked leg is staged as
    Stage D in
-   [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md).
-   ([plan](../active/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md))
+   [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../implemented/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md).
+   ([plan](../implemented/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md))
 3. **Template required variables + Feature-Driven Loop** — fix unresolved
    optional placeholders, validate required template input, and add the
    idea-to-plan orchestrator template without arbitrary setup scripts.
@@ -225,9 +225,9 @@ both carry is satisfied by that promotion rather than blocking them.
    names/states, landmarks, and resilient role-based tests.
    ([plan](../backlog/ACCESSIBILITY_AND_TESTABILITY_PLAN.md))
 7. **Expand capability domains** — phase 3 of the compatibility plan: hooks,
-   MCP injection/tool filtering, images, and usage metadata, plus generated
-   compatibility documentation. Staged as Stage G.
-   ([plan](../active/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md))
+   MCP per-server tool filtering, images, and generated compatibility
+   documentation. Completed in Stage G.
+   ([plan](../implemented/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md))
 8. **Interactive choices over the feedback transport** — the
    `USER_INTERACTION_REQUEST` correlation contract and the six surviving
    action-bearing message sites. Staged as Stage F; self-contained and
@@ -322,7 +322,7 @@ roadmap item. `TESTING_GAPS.md` is generated engineering input, not a feature.
 
 | Gate                                                                      | Status                                        | Source                                                                                                             |
 | ------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Harness capability registry and compatibility diagnostics (phase 1)       | Implemented — Stage 1 release gate complete   | [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../active/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)                 |
+| Harness capability registry and compatibility diagnostics (phase 1)       | Implemented — Stage 1 release gate complete   | [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../implemented/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)                 |
 | Qwen/OpenCode permission parity and behavioral verification               | Implemented — pinned fixtures, run on request | [`TOOL_PERMISSION_PARITY_PLAN.md`](../implemented/TOOL_PERMISSION_PARITY_PLAN.md)                                  |
 | Tool-permission honesty UI (compatibility phase 1C)                       | Implemented — Stage 1 release gate complete   | [`TOOL_PERMISSION_PARITY_PLAN.md`](../implemented/TOOL_PERMISSION_PARITY_PLAN.md)                                  |
 | Antigravity global statusline lease safety                                | Implemented — path baselines and file locking | [`TOOL_PERMISSION_PARITY_PLAN.md`](../implemented/TOOL_PERMISSION_PARITY_PLAN.md)                                  |
@@ -461,7 +461,7 @@ criteria matter more than speculative dates.
 | [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)                                    | External cutover work remains                                                                                 |
 | [`AUTOMATION_API_PLAN.md`](../implemented/AUTOMATION_API_PLAN.md)                               | **Implemented.** Per-step JSON shipped; SDK/MCP launch rejected                                               |
 | [`BROWSER_USER_FEEDBACK_PLAN.md`](BROWSER_USER_FEEDBACK_PLAN.md)                                | Phases 1–3 shipped; Phase 4 interactive choices remain (Stage F)                                              |
-| [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)  | **Current** implementation order for feedback/automation/compatibility. Stages A–C and E done; D, F, G remain |
+| [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../implemented/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)  | **Implemented.** Stages A–G are complete; retained as the closure record |
 | [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../implemented/COMPATIBILITY_AND_FEEDBACK_STAGING.md) | Superseded record of how the 0.1.0 permission gate was sequenced                                              |
 
 ### Prioritized backlog
@@ -469,7 +469,7 @@ criteria matter more than speculative dates.
 | Plan                                                                                               | Priority                                              |
 | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | [`EXECUTION_GUARDRAILS_PLAN.md`](../backlog/EXECUTION_GUARDRAILS_PLAN.md)                          | P2 (reduced scope)                                    |
-| [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../active/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md) | P0 phase 1; P1 phases 2–3                             |
+| [`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../implemented/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md) | P0/P1 compatibility phases complete; retained as the closure record |
 | [`TOOL_PERMISSION_PARITY_PLAN.md`](../implemented/TOOL_PERMISSION_PARITY_PLAN.md)                  | P0                                                    |
 | [`USER_SCOPED_RUN_HISTORY_PLAN.md`](../implemented/USER_SCOPED_RUN_HISTORY_PLAN.md)                    | **P0** (one-way door)                                 |
 | [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md)                        | **P0** (one-way door; was P1)                         |
