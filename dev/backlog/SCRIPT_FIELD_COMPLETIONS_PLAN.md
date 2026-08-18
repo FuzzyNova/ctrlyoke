@@ -72,7 +72,7 @@ Both fields should behave like a normal single-line input:
 
 | Typed text  | Suggestions                                                                 |
 | ----------- | ---------------------------------------------------------------------------- |
-| empty field | all local branches, most-recently-committed first (current branch excluded — see Open Questions) |
+| empty field | all local branches, most-recently-committed first (no exclusions — the current branch is listed like any other; `validateBranchName`/`addWorktree` already reject unusable branches) |
 | `feat/`     | local branches whose name starts with `feat/`                                |
 | `fix-123`   | local branches matching `fix-123` anywhere convenient by prefix filter       |
 | no match    | no suggestions shown; typed text is kept as-is (a new branch name)           |
@@ -105,15 +105,35 @@ completion source once `ScriptCommandEditor` exists.
 **`src/ui/webview-react/components/shared/SingleLineCompletionEditor.tsx`** (generic, no script knowledge):
 
 - Wraps a CodeMirror 6 `EditorView` in a fixed single-line control.
-- Accepts `id`, `value`, `onChange`, `placeholder`, `disabled`, and a
+- Accepts `id`, `value`, `onChange`, `onBlur`, `placeholder`, `disabled`, `className`,
+  `aria-label`, `aria-describedby`, and a
   `completionSource: (context: CompletionContext) => Promise<CompletionResult | null>`
   prop — the caller supplies parsing/filtering/request-plumbing, this component only
   owns the editor shell and keybindings.
+- **Must reproduce the plain `<input>`'s commit semantics**, because _both_ call sites
+  today keep the typed text in local React state (`scriptInput`, `worktreeBranchInput`)
+  and commit it only on blur (and on Enter, which blurs). So `onChange` fires per
+  keystroke into local state and `onBlur` is the commit hook — do **not** collapse the
+  two into a single per-keystroke commit, or every keypress will write a workflow
+  mutation.
+- `className` passthrough is required, not optional: the two call sites use different
+  visual treatments (`text-sm` for the script field; `text-xs font-mono h-7` plus a
+  _dynamic_ `fieldValidationBorderClass(...)` border for the branch field), so the shell
+  cannot hardcode one class string.
 - Configures CodeMirror `autocompletion()` using the injected `completionSource`.
-- Prevents multi-line input by translating Enter into completion acceptance or blur/no-op.
-- Preserves the existing input accessibility contract (`id`, `aria-label` passthrough, etc.) where possible.
+- Prevents multi-line input by translating Enter into completion acceptance (when the
+  completion popup is open) and otherwise into blur — matching today's
+  `onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}`. Newlines must
+  never be insertable, including via paste (strip `\r?\n` from pasted text).
+- Preserves the existing input accessibility contract: `id` must land on the focusable
+  element so the existing `<label htmlFor>`/`FormField htmlFor` wiring still works, and
+  `aria-label` / `aria-describedby` must be forwarded to that same element.
 - Owns the shared single-line theme (height, no gutters, no active-line background,
   suggestion tooltip parented to `document.body`) so every consumer gets consistent styling for free.
+- Builds that theme on top of the existing `createThemeExtension("input")` from
+  `src/ui/webview-react/utils/codemirrorTheme.ts` (already used by `CodeMirrorEditor`'s
+  `surface="input"` mode) rather than hand-rolling input colors — only the single-line
+  specifics (fixed height, no wrap, no gutters) are new.
 
 **`src/ui/webview-react/components/shared/ScriptCommandEditor.tsx`** (script-specific):
 
@@ -127,14 +147,20 @@ completion source once `ScriptCommandEditor` exists.
 ```tsx
 <ScriptCommandEditor
   id={`${idPrefix}-script`}
-  value={v.script ?? ""}
-  onChange={(script) => update({ script })}
+  value={scriptInput}
+  onChange={setScriptInput}
+  onBlur={() => update({ script: scriptInput })}
   placeholder="npm test"
   disabled={disabled}
+  className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
 />
 ```
 
-The rest of `ScriptConditionEditor.tsx` stays unchanged.
+Note this keeps the existing `scriptInput` local state and its blur commit — the current
+`<input>` already works that way (`onChange` → `setScriptInput`, `onBlur` → `update`,
+Enter → blur), and the `useEffect` that resyncs `scriptInput` from `v.script` must keep
+working. The rest of `ScriptConditionEditor.tsx` stays unchanged, which means all three
+variants (`endCondition`, `preCondition`, `scriptStep`) pick up completions at once.
 
 **`src/ui/webview-react/components/shared/BranchNameEditor.tsx`** (branch-specific):
 
@@ -151,6 +177,7 @@ The rest of `ScriptConditionEditor.tsx` stays unchanged.
 ```tsx
 <BranchNameEditor
   id="settings-worktree-branch"
+  aria-label="Worktree branch"
   value={worktreeBranchInput}
   onChange={setWorktreeBranchInput}
   onBlur={() => handleWorktreeFieldChange("branch", worktreeBranchInput)}
@@ -159,9 +186,14 @@ The rest of `ScriptConditionEditor.tsx` stays unchanged.
       ? "settings-worktree-branch-diagnostic"
       : undefined
   }
-  disabled={false}
+  className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono h-7`}
 />
 ```
+
+The dynamic `fieldValidationBorderClass(worktreeBranchDiagnostics)` border must survive
+the swap — it is how an invalid branch name is signalled today, and it changes on every
+validation update, so it has to flow through the `className` prop rather than being
+baked into the shell.
 
 The local-state/onBlur-commit pattern (`worktreeBranchInput` state, commit on blur) and
 the `FieldDiagnostic` validation display stay exactly as they are today — only the
@@ -213,6 +245,9 @@ export interface BranchListResponseMessage {
 `src/completions/CompletionHelpers.ts` rather than introducing a new item type — branch
 completions don't need a replacement range (the whole field is always the filter/replace
 target), so `PlainCompletionItem`'s `label`/`insertText`/`detail` is a complete fit.
+Note `PlainCompletionItem.kind` is **required** (`vscode.CompletionItemKind`), so branch
+items must set one — use `vscode.CompletionItemKind.Reference`, matching how
+`getGitChangeCompletions` types its git-derived items.
 
 ### 3. Extension-Side Completion Services
 
@@ -277,26 +312,39 @@ export interface ScriptCommandCompletionItem {
 
 ### 4. Router Handlers
 
-Add handlers in `src/ui/WebviewMessageRouter.ts`:
+Register both in `registerEditorSupport()` in `src/ui/WebviewMessageRouter.ts`, right
+next to the existing `REQUEST_COMPLETIONS` entry, and delegate to
+`PromptEditorSupportService` (`src/ui/PromptEditorSupportService.ts`) — that service
+already owns `handleCompletionRequest`, so the two new sources belong there rather than
+as new inline router methods:
 
 ```typescript
-table.set(MESSAGE_TYPES.SCRIPT_COMPLETIONS_REQUEST, async (message) => {
-  await this.handleScriptCompletionRequest(
+table.set(MESSAGE_TYPES.SCRIPT_COMPLETIONS_REQUEST, async (message, ctx) => {
+  await this.promptEditorSupport.handleScriptCompletionRequest(
+    ctx,
     message.text,
     message.position,
     message.seq
   );
 });
 
-table.set(MESSAGE_TYPES.BRANCH_LIST_REQUEST, async (message) => {
-  await this.handleBranchListRequest(message.filterText, message.seq);
+table.set(MESSAGE_TYPES.BRANCH_LIST_REQUEST, async (message, ctx) => {
+  await this.promptEditorSupport.handleBranchListRequest(
+    ctx,
+    message.filterText,
+    message.seq
+  );
 });
 ```
 
-The script handler should call `getScriptCommandCompletions()` and emit:
+**There is no `this.emitMessage` on the router.** Responses go back to the *requesting
+client only*, via the `WebviewClientContext` (`src/ui/WebviewClientContext.ts`) that the
+dispatch table passes as the second handler argument — this is what makes the flow work
+for the hosted browser dashboard as well as the VS Code panel, since multiple clients can
+be connected at once. Mirror `emitCompletionsResponse` in `PromptEditorSupportService`:
 
 ```typescript
-this.emitMessage({
+ctx.emit({
   type: MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE,
   items,
   from,
@@ -308,12 +356,16 @@ The branch handler resolves the repo root (same helper `OPEN_GIT_CHANGE` uses), 
 `getBranchCompletions(repoRoot, filterText)`, and emits:
 
 ```typescript
-this.emitMessage({
+ctx.emit({
   type: MESSAGE_TYPES.BRANCH_LIST_RESPONSE,
   items,
   seq,
 });
 ```
+
+Both handlers must swallow errors and emit an empty `items` array on failure, exactly as
+`handleCompletionRequest` does today — a completion source must never surface an error
+toast or leave the dropdown hanging on an unresolved promise.
 
 Both stay separate from `REQUEST_COMPLETIONS` because prompt completions, shell command completions, and branch completions all have different parsing rules and item sources.
 
@@ -480,7 +532,10 @@ Two phases, landed as two PRs per recommendation #5 above — Phase A must merge
    - segment parsing
    - completion filtering and sorting
 
-3. Add webview router support in `src/ui/WebviewMessageRouter.ts` for `SCRIPT_COMPLETIONS_REQUEST`.
+3. Add `handleScriptCompletionRequest` to `src/ui/PromptEditorSupportService.ts` (replying
+   via `ctx.emit`, mirroring `handleCompletionRequest`/`emitCompletionsResponse`), and
+   register `SCRIPT_COMPLETIONS_REQUEST` in `registerEditorSupport()` in
+   `src/ui/WebviewMessageRouter.ts`.
 
 4. Create `src/ui/webview-react/components/shared/SingleLineCompletionEditor.tsx` (generic
    single-line CodeMirror shell: keybindings, theme, `completionSource` prop).
@@ -496,14 +551,15 @@ Two phases, landed as two PRs per recommendation #5 above — Phase A must merge
    - Webview component test for `ScriptCommandEditor` basic rendering and `onChange`
    - Existing `ScriptConditionEditor` test coverage if present, or a narrow new test proving script edits still call `onChange`
 
-8. Run:
+8. Run the gate:
 
 ```bash
 npm run typecheck
-npm run test:ui
+npm run lint
+npm test
 ```
 
-Run `npm run compile` if router/type changes touch extension-side compilation in a way not covered by `typecheck`.
+`npm test` is the full gate: its `pretest` hook runs `npm run compile` + `compile-tests`, then it runs the VS Code extension-host suite (which is where the new `src/test/unit/*` tests live) followed by `npm run test:ui`. Use `npm run test:ui` alone only for a fast inner loop on webview-only edits. Never run `npm run test:harness`.
 
 ### Phase B — Branch completions (on top of Phase A)
 
@@ -513,7 +569,8 @@ Run `npm run compile` if router/type changes touch extension-side compilation in
 
 11. Create `src/completions/BranchCompletionHelpers.ts`: resolve repo root, call `listLocalBranches`, cache with a 10s TTL (mirroring `getGitChangeCompletions`'s `gitCache`), filter by prefix, map to `PlainCompletionItem[]` with `detail: "Existing branch"`.
 
-12. Add webview router support in `src/ui/WebviewMessageRouter.ts` for `BRANCH_LIST_REQUEST`.
+12. Add `handleBranchListRequest` to `src/ui/PromptEditorSupportService.ts` and register
+    `BRANCH_LIST_REQUEST` in `registerEditorSupport()` in `src/ui/WebviewMessageRouter.ts`.
 
 13. Create `src/ui/webview-react/components/shared/BranchNameEditor.tsx` as a thin wrapper supplying the branch `completionSource` on top of `SingleLineCompletionEditor`.
 
@@ -524,14 +581,7 @@ Run `npm run compile` if router/type changes touch extension-side compilation in
     - Webview component test for `BranchNameEditor` basic rendering and `onChange`
     - A narrow `WorkflowPropertiesPanel` test proving the branch field still commits on blur and still surfaces `FieldDiagnostic` errors
 
-16. Run:
-
-```bash
-npm run typecheck
-npm run test:ui
-```
-
-Run `npm run compile` for the `GitUtils.ts`/router changes in the same way as Phase A.
+16. Run the same gate as step 8 (`npm run typecheck`, `npm run lint`, `npm test`).
 
 | File                                                                       | Action | Purpose                                               |
 | -------------------------------------------------------------------------- | ------ | ----------------------------------------------------- |
@@ -541,6 +591,8 @@ Run `npm run compile` for the `GitUtils.ts`/router changes in the same way as Ph
 | `src/completions/BranchCompletionHelpers.ts`                               | Create | Local branch discovery, caching, and filtering logic  |
 | `src/utils/GitUtils.ts`                                                    | Modify | Add `listLocalBranches(repoRoot)`                      |
 | `src/ui/WebviewMessageRouter.ts`                                           | Modify | Route script and branch completion requests from the webview |
+| `src/ui/PromptEditorSupportService.ts`                                     | Modify | Handle both requests and reply via `ctx.emit`          |
+| `src/ui/webview-react/components/shared/index.ts`                          | Modify | Barrel-export the three new components                 |
 | `src/ui/webview-react/components/shared/SingleLineCompletionEditor.tsx`    | Create | Generic single-line CodeMirror input + autocomplete shell |
 | `src/ui/webview-react/components/shared/ScriptCommandEditor.tsx`           | Create | Script-specific completion source on top of the generic editor |
 | `src/ui/webview-react/components/shared/BranchNameEditor.tsx`              | Create | Branch-specific completion source on top of the generic editor |
@@ -549,8 +601,8 @@ Run `npm run compile` for the `GitUtils.ts`/router changes in the same way as Ph
 | `src/ui/webview-react/test/components/shared/SingleLineCompletionEditor.test.tsx` | Create | Generic editor behavior tests (Enter/Escape/Blur, no multiline) |
 | `src/ui/webview-react/test/components/shared/ScriptCommandEditor.test.tsx` | Create | Script completion source tests                        |
 | `src/ui/webview-react/test/components/shared/BranchNameEditor.test.tsx`   | Create | Branch completion source tests                        |
-| `src/test/completions/ScriptCommandCompletionHelpers.test.ts`              | Create | Extension-side parser/completion tests                |
-| `src/test/completions/BranchCompletionHelpers.test.ts`                    | Create | Extension-side branch filtering/caching tests          |
+| `src/test/unit/ScriptCommandCompletionHelpers.test.ts`              | Create | Extension-side parser/completion tests                |
+| `src/test/unit/BranchCompletionHelpers.test.ts`                    | Create | Extension-side branch filtering/caching tests          |
 
 ---
 
