@@ -14,6 +14,7 @@ import {
 } from "../../core/harness/shared/usage/HarnessUsageService";
 import type { IHarnessUsageProvider } from "../../core/harness/shared/usage/IHarnessUsageProvider";
 import { providerSnapshotsPath } from "../../utils/UsagePaths";
+import { COPILOT_QUOTA_STATUS_CODES } from "../../core/harness/copilot/CopilotUsageNormalization";
 
 class LiveProvider implements IHarnessUsageProvider {
   readonly harnessId = HARNESS_IDS.CLAUDE_CLI;
@@ -46,6 +47,43 @@ class ThrowingProvider implements IHarnessUsageProvider {
 
   async refreshUsage(): Promise<HarnessQuotaSnapshot> {
     throw new Error("account details must not escape the service");
+  }
+}
+
+class CopilotProvider implements IHarnessUsageProvider {
+  readonly harnessId = HARNESS_IDS.COPILOT_CLI;
+  failed = false;
+
+  async refreshUsage(): Promise<HarnessQuotaSnapshot> {
+    if (this.failed) {
+      return {
+        harnessId: this.harnessId,
+        source: HARNESS_QUOTA_SOURCES.UNAVAILABLE,
+        staleAfterMs: 0,
+        windows: [],
+        errorCode: COPILOT_QUOTA_STATUS_CODES.TIMEOUT,
+      };
+    }
+    return {
+      harnessId: this.harnessId,
+      source: HARNESS_QUOTA_SOURCES.PROVIDER_LIVE,
+      fetchedAt: 2_000_000_000_000,
+      staleAfterMs: 300_000,
+      windows: [
+        {
+          id: "copilot:premium_interactions",
+          kind: "monthly",
+          label: "Premium interactions",
+          used: 555,
+          limit: 1_500,
+          remaining: 945,
+          percentUsed: 37,
+          resetAt: 2_000_000_100_000,
+          unit: "requests",
+          confidence: "exact",
+        },
+      ],
+    };
   }
 }
 
@@ -112,6 +150,60 @@ suite("HarnessUsageService", () => {
     assert.deepStrictEqual(
       reloaded.getHarnessUsage(HARNESS_IDS.CLAUDE_CLI).quota.windows[0],
       service.getHarnessUsage(HARNESS_IDS.CLAUDE_CLI).quota.windows[0]
+    );
+  });
+
+  test("persists and reloads a live Copilot provider snapshot", async () => {
+    const filePath = providerSnapshotsPath();
+    const provider = new CopilotProvider();
+    const service = new HarnessUsageService(
+      workspaceRoot,
+      [provider],
+      undefined,
+      undefined,
+      () => 1_000
+    );
+
+    await service.refreshHarnessUsage(HARNESS_IDS.COPILOT_CLI);
+    await waitForPersistedSnapshot(
+      filePath,
+      HARNESS_IDS.COPILOT_CLI,
+      2_000_000_000_000
+    );
+
+    const reloaded = new HarnessUsageService(workspaceRoot, []);
+    await reloaded.initialize();
+    assert.deepStrictEqual(
+      reloaded.getHarnessUsage(HARNESS_IDS.COPILOT_CLI).quota,
+      service.getHarnessUsage(HARNESS_IDS.COPILOT_CLI).quota
+    );
+  });
+
+  test("preserves the last live Copilot snapshot while annotating a failed refresh", async () => {
+    const provider = new CopilotProvider();
+    const service = new HarnessUsageService(
+      workspaceRoot,
+      [provider],
+      undefined,
+      undefined,
+      () => 1_000
+    );
+
+    await service.refreshHarnessUsage(HARNESS_IDS.COPILOT_CLI);
+    const successful = service.getHarnessUsage(HARNESS_IDS.COPILOT_CLI).quota;
+    provider.failed = true;
+
+    const afterFailure = await service.refreshHarnessUsage(
+      HARNESS_IDS.COPILOT_CLI
+    );
+    assert.deepStrictEqual(afterFailure.quota.windows, successful.windows);
+    assert.strictEqual(
+      afterFailure.quota.source,
+      HARNESS_QUOTA_SOURCES.PROVIDER_LIVE
+    );
+    assert.strictEqual(
+      afterFailure.quota.errorCode,
+      COPILOT_QUOTA_STATUS_CODES.TIMEOUT
     );
   });
 

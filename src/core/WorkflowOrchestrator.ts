@@ -5167,7 +5167,10 @@ export class WorkflowOrchestrator {
       true,
       this.compatibilityRegistry,
       this.userFeedbackSink,
-      () => this.harnessUsageService?.getHarnessUsageSnapshots() ?? []
+      () => this.harnessUsageService?.getHarnessUsageSnapshots() ?? [],
+      (harnessId) =>
+        this.harnessUsageService?.refreshHarnessUsage(harnessId) ??
+        Promise.resolve()
     );
 
     Log.debug(`buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`);

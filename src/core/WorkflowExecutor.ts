@@ -789,7 +789,8 @@ export class WorkflowExecutor {
         responseText,
         duration,
         runIndex,
-        attemptIndex
+        attemptIndex,
+        resolvedProperties.harness
       );
       // The completed response is durable in events.jsonl before it becomes
       // visible to any active-only cache or subsequent prompt construction.
@@ -2526,7 +2527,8 @@ export class WorkflowExecutor {
           effectiveRetryPrompt,
           signedStepIndex ?? this.getSignedStepIndex(target),
           runIndex,
-          retryAttemptIndex
+          retryAttemptIndex,
+          resolvedProperties
         );
         return null;
       }
@@ -2540,7 +2542,8 @@ export class WorkflowExecutor {
         result.responseText,
         result.duration,
         runIndex,
-        retryAttemptIndex
+        retryAttemptIndex,
+        resolvedProperties.harness
       );
 
       return result.responseText;
@@ -2792,7 +2795,9 @@ export class WorkflowExecutor {
         runIndex,
         attemptIndex,
         "stopped",
-        context.getDefinitionRevisionContext?.()
+        context.getDefinitionRevisionContext?.(),
+        undefined,
+        resolvedProperties?.harness
       );
 
       if (stoppedOutput.response) {
@@ -2841,7 +2846,8 @@ export class WorkflowExecutor {
         attemptIndex,
         "cancelled",
         context.getDefinitionRevisionContext?.(),
-        failureReason
+        failureReason,
+        resolvedProperties?.harness
       );
       return { outcome: "stop" };
     }
@@ -2937,7 +2943,8 @@ export class WorkflowExecutor {
       attemptIndex,
       "failed",
       context.getDefinitionRevisionContext?.(),
-      failureReason
+      failureReason,
+      resolvedProperties?.harness
     );
 
     return { outcome: "stop" };
@@ -3029,7 +3036,8 @@ export class WorkflowExecutor {
         attemptIndex,
         "failed",
         context.getDefinitionRevisionContext?.(),
-        failureReason
+        failureReason,
+        resolvedProperties?.harness
       );
 
       if (
@@ -3119,7 +3127,8 @@ export class WorkflowExecutor {
     responseText: string,
     duration: number,
     runIndex: number,
-    attemptIndex: number = 0
+    attemptIndex: number = 0,
+    harnessId?: HarnessId
   ): Promise<void> {
     const parsedOutput = integration.getLastParsedOutput?.();
     let structured: DashboardOutput | undefined;
@@ -3166,7 +3175,9 @@ export class WorkflowExecutor {
         runIndex,
         attemptIndex,
         "completed",
-        context.getDefinitionRevisionContext?.()
+        context.getDefinitionRevisionContext?.(),
+        undefined,
+        harnessId
       );
     }
   }

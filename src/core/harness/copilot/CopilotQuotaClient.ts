@@ -44,6 +44,10 @@ export interface CopilotQuotaProbeResult {
   errorCode?: string;
 }
 
+export interface CopilotQuotaReader {
+  readQuota(signal?: AbortSignal): Promise<CopilotQuotaProbeResult>;
+}
+
 export interface CopilotQuotaProcess {
   stdin: NodeJS.WritableStream;
   stdout: NodeJS.ReadableStream;
@@ -175,7 +179,7 @@ function delay(milliseconds: number): Promise<void> {
  * Short-lived, read-only stdio client for Copilot's account quota RPC.
  * It never creates a session or starts a model turn.
  */
-export class CopilotQuotaClient {
+export class CopilotQuotaClient implements CopilotQuotaReader {
   private readonly resolveCommand: (
     commandName: string,
     args: string[]

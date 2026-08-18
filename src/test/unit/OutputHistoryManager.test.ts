@@ -2191,4 +2191,36 @@ suite("OutputHistoryManager usage store feed", () => {
     assert.strictEqual(lifetime.totalActiveExecutionMs, 1500);
     assert.ok(Object.keys(observed.runs).length > 0);
   });
+
+  test("requests one Copilot refresh after terminal recording without blocking on failure", async () => {
+    const { filePath } = await initTestRun(
+      manager,
+      tempWorkspace,
+      "wf-copilot-refresh"
+    );
+    let refreshRequests = 0;
+    manager.setHarnessUsageRefreshHandler(async (harnessId) => {
+      assert.strictEqual(harnessId, HARNESS_IDS.COPILOT_CLI);
+      refreshRequests += 1;
+      throw new Error("background refresh unavailable");
+    });
+
+    await manager.recordAttemptTerminal(
+      filePath,
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      0,
+      0,
+      "failed",
+      undefined,
+      "Copilot attempt failed",
+      HARNESS_IDS.COPILOT_CLI
+    );
+
+    assert.strictEqual(refreshRequests, 1);
+    const events = await new TimelineRecorder().readEvents(filePath);
+    assert.strictEqual(
+      events[0]?.eventType,
+      TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED
+    );
+  });
 });

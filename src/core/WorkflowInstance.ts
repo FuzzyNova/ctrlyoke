@@ -438,7 +438,11 @@ export class WorkflowInstance {
     /** Destination for future operational feedback migrations. */
     private readonly userFeedbackSink?: UserFeedbackSink,
     /** Synchronous cache reader; must never refresh providers during launch. */
-    private readonly getHarnessUsageSnapshots?: () => readonly HarnessUsageSnapshot[]
+    private readonly getHarnessUsageSnapshots?: () => readonly HarnessUsageSnapshot[],
+    /** Fire-and-forget provider refresh after a terminal Copilot attempt. */
+    private readonly refreshHarnessUsage?: (
+      harnessId: HarnessId
+    ) => Promise<unknown> | void
   ) {
     this.id = crypto.randomUUID();
     this.createdAt = Date.now();
@@ -473,6 +477,11 @@ export class WorkflowInstance {
         await this.promptQueue.updateWorkingFile(true);
       }
     );
+    if (this.refreshHarnessUsage) {
+      this.outputHistoryManager.setHarnessUsageRefreshHandler(
+        this.refreshHarnessUsage
+      );
+    }
 
     this.endConditionEvaluator = new EndConditionEvaluator(
       this.platform,

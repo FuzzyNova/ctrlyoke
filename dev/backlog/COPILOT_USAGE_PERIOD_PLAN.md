@@ -353,14 +353,22 @@ first would leave a step that cannot compile or be tested on its own.
 
 ### Phase 3: Provider wiring
 
-- [ ] Replace `CopilotUsageProvider`'s observed-only inheritance with the live
-      pull provider.
-- [ ] Retain shared observed token rollups unchanged.
-- [ ] Refresh once after a completed/stopped/error Copilot attempt through the
-      usage service's existing debounce/single-flight path
-      (`HarnessUsageService.refreshHarnessUsage` already debounces and
-      single-flights per harness, so the seam only needs to call it once per
-      terminal attempt).
+- [x] Replace `CopilotUsageProvider`'s observed-only inheritance with the live
+  pull provider.
+- [x] Retain shared observed token rollups unchanged.
+- [x] Refresh once after a completed/stopped/error Copilot attempt through the
+  usage service's existing debounce/single-flight path
+  (`HarnessUsageService.refreshHarnessUsage` already debounces and
+  single-flights per harness, so the seam only needs to call it once per
+  terminal attempt).
+
+Refresh seam: `OutputHistoryManager.recordAttemptTerminal` schedules the
+fire-and-forget request after the terminal event is durable. `WorkflowExecutor`
+passes the already-resolved harness into this single history boundary, so only
+Copilot attempts request the refresh; this covers completed, stopped, and error
+paths without probing on OTel events or model calls. The handler is injected
+from `WorkflowOrchestrator` through `WorkflowInstance`, while queue launch
+continues to read only the synchronous cached snapshot.
 
 ### Phase 4: Display and selection assist
 

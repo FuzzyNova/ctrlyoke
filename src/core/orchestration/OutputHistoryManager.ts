@@ -23,7 +23,9 @@ import { CliOutput, StatusMessage } from "../../types/WebviewMessageTypes";
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  HARNESS_IDS,
   LOCK_STATUS,
+  type HarnessId,
   type ExecutionState,
   type ExecutionPhase,
 } from "../../types/DashboardConstants";
@@ -160,6 +162,9 @@ export class OutputHistoryManager {
     historyFilePath: string,
     tokenTotals: WorkflowTokenTotals
   ) => Promise<void> | void;
+  private harnessUsageRefreshHandler?: (
+    harnessId: HarnessId
+  ) => Promise<unknown> | void;
 
   constructor(private _workspaceFolderPath: string) {
     this.observedHarnessUsageStore = new ObservedHarnessUsageStore(
@@ -176,6 +181,13 @@ export class OutputHistoryManager {
     ) => Promise<void> | void
   ): void {
     this.tokenTotalsChangedHandler = handler;
+  }
+
+  /** Configure the non-blocking provider refresh used after terminal attempts. */
+  setHarnessUsageRefreshHandler(
+    handler: (harnessId: HarnessId) => Promise<unknown> | void
+  ): void {
+    this.harnessUsageRefreshHandler = handler;
   }
 
   /** Hydrate a run aggregate once from its durable timeline and repair its manifest copy. */
@@ -478,7 +490,8 @@ export class OutputHistoryManager {
     attemptIndex: number,
     terminalState: TimelineAttemptTerminalState,
     definitionContext?: DefinitionRevisionContext,
-    reason?: string
+    reason?: string,
+    harnessId?: HarnessId
   ): Promise<void> {
     if (!historyFilePath) {
       return;
@@ -494,6 +507,25 @@ export class OutputHistoryManager {
         payload: { terminalState, reason },
       },
     ]);
+    this.scheduleTerminalHarnessUsageRefresh(harnessId);
+  }
+
+  private scheduleTerminalHarnessUsageRefresh(
+    harnessId: HarnessId | undefined
+  ): void {
+    if (
+      harnessId !== HARNESS_IDS.COPILOT_CLI ||
+      !this.harnessUsageRefreshHandler
+    ) {
+      return;
+    }
+    try {
+      Promise.resolve(this.harnessUsageRefreshHandler(harnessId)).catch(() => {
+        Log.debug("[OutputHistoryManager] post-attempt usage refresh failed");
+      });
+    } catch {
+      Log.debug("[OutputHistoryManager] post-attempt usage refresh failed");
+    }
   }
 
   /** Persist lossless script process data before runtime metadata can be replaced. */
