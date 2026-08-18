@@ -183,14 +183,14 @@ dependency-correct order is 1 → 2 → 4 → 5 → 3 → 6.
 ## Phase 1 — Store, declaration, and resolution
 
 - [x] Promote the existing `SecretStore` interface in `src/platform/ServerTokenStore.ts`
-  into a first-class platform contract (`get`/`store`/`delete`/`keys`) and keep
-  `ServerTokenStore` as one consumer of it.
+      into a first-class platform contract (`get`/`store`/`delete`/`keys`) and keep
+      `ServerTokenStore` as one consumer of it.
 - [x] Extension host: back it with VS Code `SecretStorage`, keyed by scope
-  (`ctrlyoke.secret.user.<NAME>` vs `ctrlyoke.secret.ws.<hash>.<NAME>`).
+      (`ctrlyoke.secret.user.<NAME>` vs `ctrlyoke.secret.ws.<hash>.<NAME>`).
 - [x] CLI/server host: back it with an OS credential-store adapter (macOS
-  `security`, Linux `secret-tool`/libsecret, Windows DPAPI via CredMan). If no
-  backend is available, **fail and direct the user to env passthrough** — never
-  fall back to a plaintext file.
+      `security`, Linux `secret-tool`/libsecret, Windows DPAPI via CredMan). If no
+      backend is available, **fail and direct the user to env passthrough** — never
+      fall back to a plaintext file.
 
 Store-half implementation decisions:
 
@@ -207,18 +207,18 @@ Store-half implementation decisions:
   actionable env-passthrough message. There is intentionally no plaintext
   file fallback.
 - [x] Add `secrets` to `#/definitions/executionProperties` in
-  `schemas/workflow-schema.json`, mirrored in `src/types/CtrlYokeTypes.ts`.
-  Placing it there — not on `promptStep` alone — gets `_runtime` capture and
-  `scriptStep` coverage for free, since `executionProperties` is already shared
-  by all of them (`promptRuntimeMetadata` `allOf`-refs it, so `_runtime` needs
-  no extra schema work).
+      `schemas/workflow-schema.json`, mirrored in `src/types/CtrlYokeTypes.ts`.
+      Placing it there — not on `promptStep` alone — gets `_runtime` capture and
+      `scriptStep` coverage for free, since `executionProperties` is already shared
+      by all of them (`promptRuntimeMetadata` `allOf`-refs it, so `_runtime` needs
+      no extra schema work).
 - [x] **Precedence is not free — it is four explicit edits, not one.**
-  `EXECUTION_PROPERTY_KEYS` in `src/types/CtrlYokeTypes.ts` only drives
-  `PromptFileParser.copyExecutionProperties()` and `WorkflowSerializer`; it does
-  not feed resolution. `PropertyResolver` (at `src/utils/PropertyResolver.ts`,
-  not `src/core/`) is a thin VS Code adapter that delegates to
-  `resolveExecutionProperties()` in `src/types/ExecutionPropertyResolver.ts`,
-  which resolves every property by hand. Adding `secrets` therefore means:
+      `EXECUTION_PROPERTY_KEYS` in `src/types/CtrlYokeTypes.ts` only drives
+      `PromptFileParser.copyExecutionProperties()` and `WorkflowSerializer`; it does
+      not feed resolution. `PropertyResolver` (at `src/utils/PropertyResolver.ts`,
+      not `src/core/`) is a thin VS Code adapter that delegates to
+      `resolveExecutionProperties()` in `src/types/ExecutionPropertyResolver.ts`,
+      which resolves every property by hand. Adding `secrets` therefore means:
   1. `EXECUTION_PROPERTY_KEYS` (parse/serialize round-trip),
   2. a `resolveSecrets()` in `ExecutionPropertyResolver.ts` copied from
      `resolveSkills()` — the exact replace-not-merge + `null`-clears precedent —
@@ -228,23 +228,23 @@ Store-half implementation decisions:
      `src/types/ExecutionPropertyTypes.ts`,
   4. a `secrets` default in `PropertyResolver.createDefaults()`.
 - [x] Shape it like `skills`: `oneOf [ array of ^[A-Z][A-Z0-9_]*$ strings, null ]`,
-  where prompt-level replaces workflow-level with no merging and `null`
-  explicitly disables an inherited grant. Note the asymmetry to document: an
-  inline `!NAME` reference still grants, because it is an authoritative input
-  like `/mcp:` — `null` clears the inherited _array_, not what the prompt says.
+      where prompt-level replaces workflow-level with no merging and `null`
+      explicitly disables an inherited grant. Note the asymmetry to document: an
+      inline `!NAME` reference still grants, because it is an authoritative input
+      like `/mcp:` — `null` clears the inherited _array_, not what the prompt says.
 - [x] `scriptStep` has `"additionalProperties": false`, so its `secrets` entry must
-  be added explicitly alongside `errorBehavior` rather than inherited.
+      be added explicitly alongside `errorBehavior` rather than inherited.
 - [x] Parse inline `!NAME` references in `src/utils/SecretReferenceParser.ts`
-  using the shared secret-name validator and filename-boundary convention, and
-  expose the effective inline-plus-array grant union. This declaration step
-  intentionally does not yet validate unknown inline names or inject values.
+      using the shared secret-name validator and filename-boundary convention, and
+      expose the effective inline-plus-array grant union. This declaration step
+      intentionally does not yet validate unknown inline names or inject values.
 - [x] Resolve at spawn: extend `CliTransportCoordinator`'s existing env plumbing
-  (`withProcessEnvOverrides` and the `env` passed to the child) and the
-  `EndConditionEvaluator` script env with the granted set. Restrict
-  `${secret:...}` expansion to MCP/hook/script env and header maps only.
+      (`withProcessEnvOverrides` and the `env` passed to the child) and the
+      `EndConditionEvaluator` script env with the granted set. Restrict
+      `${secret:...}` expansion to MCP/hook/script env and header maps only.
 - [x] **Preflight before the harness starts.** A declared name that resolves to
-  neither a managed secret nor a present env var fails the run with the name and
-  scope, before any process spawns, before any billable harness turn.
+      neither a managed secret nor a present env var fails the run with the name and
+      scope, before any process spawns, before any billable harness turn.
 
 ## Phase 2 — Telling the model the names
 
@@ -262,17 +262,17 @@ ctrlyoke-generated instructions indistinguishable in every downstream surface.
 Neither is recoverable later.
 
 - [x] Add `TEMP_FILE_CATEGORIES.SECRETS` and a matching `PREVIEW_PROMPT_CATEGORIES`
-  entry with a `PREVIEW_PROMPT_CATEGORY_LABELS` label, both in
-  `src/types/DashboardConstants.ts`.
+      entry with a `PREVIEW_PROMPT_CATEGORY_LABELS` label, both in
+      `src/types/DashboardConstants.ts`.
 - [x] Thread a `secretRefs: string[]` parameter through
-  `formatCategorizedInstruction()`, `CliIntegration.formatCategorizedReferences()`,
-  and `CliPromptPreparer`'s `addChunkFiles` call sites, following the shape the
-  agent and skills categories already use.
+      `formatCategorizedInstruction()`, `CliIntegration.formatCategorizedReferences()`,
+      and `CliPromptPreparer`'s `addChunkFiles` call sites, following the shape the
+      agent and skills categories already use.
 - [x] **Clause position: immediately after agent instructions.** It is a behavioral
-  constraint, like agent instructions, rather than reference material. It also
-  keeps excerpts as the last optional clause, so the existing
-  `excerptPrefix = clauses.length === 0 ? "using" : "and"` logic is untouched —
-  appending secrets after excerpts would strand that `and` mid-sentence.
+      constraint, like agent instructions, rather than reference material. It also
+      keeps excerpts as the last optional clause, so the existing
+      `excerptPrefix = clauses.length === 0 ? "using" : "and"` logic is untouched —
+      appending secrets after excerpts would strand that `and` mid-sentence.
 
   ```
   Following these agent instructions @agent.md, using these secrets @secrets.md,
@@ -280,17 +280,17 @@ Neither is recoverable later.
   ```
 
 - [x] **Leave it out of `isTierTwoCategory()`.** Tier two (agent, skills, excerpts)
-  caps the preview body at `MAX_CONTENT_SIZE`. The secrets block is bounded and
-  small, and it is exactly the content a user will want to read in full in
-  dry-run preview to confirm what the model was told.
+      caps the preview body at `MAX_CONTENT_SIZE`. The secrets block is bounded and
+      small, and it is exactly the content a user will want to read in full in
+      dry-run preview to confirm what the model was told.
 - [x] The block is derived from the grant list, so it is deterministic, reviewable,
-  and safe to write to a temp file — names are not secret, and `TempFileManager`
-  deletes the file when the turn completes like every other category.
+      and safe to write to a temp file — names are not secret, and `TempFileManager`
+      deletes the file when the turn completes like every other category.
 - [x] An unknown `!NAME` is a validation error, not a silent pass-through. Shipping
-  an unexplained `!SUPABASE_PAT` with no block to resolve it reads as neither
-  prose nor a variable.
+      an unexplained `!SUPABASE_PAT` with no block to resolve it reads as neither
+      prose nor a variable.
 - [x] No grants means no category, no file, and no clause — same as every other
-  optional category.
+      optional category.
 
 ## Phase 3 — Authoring UX
 
@@ -363,8 +363,8 @@ Two additions specific to secrets:
 
 `src/types/PreviewRedactor.ts` already exists as the annotated swap point, with
 heuristic `REDACTION_RULES` and an unused-in-production `exactSecrets`
-parameter. Today it covers **preview only**; runtime redaction is a
-per-provider `redactHeadlessStderr` hook on opencode and qwen.
+parameter. It is now also the matching core used by the runtime redaction
+service; runtime output no longer depends on provider-specific hooks.
 
 - Build a per-run redactor from the values actually resolved for that run and
   feed them through the existing `exactSecrets` path.
@@ -379,6 +379,23 @@ per-provider `redactHeadlessStderr` hook on opencode and qwen.
 - Keep the heuristic rules as a separate layer from exact-value matching — the
   heuristics also catch credentials ctrlyoke was never told about, which is the
   main protection for users who paste a key into a prompt.
+
+Phase 4 coverage (implemented):
+
+- `RunSecretRedactor` is populated only from values resolved during execution;
+  `SecretRedactionService` applies those exact values through
+  `redactPreviewText()`'s existing `exactSecrets` path and keeps heuristic
+  matching independent. Deterministic JSON escaping is covered; broad
+  base64/URL guessing is intentionally omitted to avoid false positives.
+- Log output/session logs, timeline `events.jsonl` and `manifest.json`, CLI
+  JSON/terminal output, dashboard/webview messages, notifications, hosted
+  HTTP/WebSocket transports, Web Push payloads, and Markdown export are wrapped.
+- The former OpenCode stderr hook was removed; shared response collection and
+  transport boundaries now use the same service for all harnesses.
+- Harness-native session logs and third-party telemetry files are deliberately
+  not rewritten in place: ctrlyoke redacts what it reads, persists, logs, or
+  transports, while modifying vendor-owned files would corrupt their session
+  history and exceed ctrlyoke's ownership boundary.
 
 ## Phase 5 — Settings UX (the secret registry)
 

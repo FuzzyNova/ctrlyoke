@@ -20,6 +20,7 @@ import type {
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import type { CtrlYokeNotificationEvent } from "./notifications/CompletionNotificationFactory";
 import type { HarnessUsageSnapshot } from "../types/UsageTypes";
+import { secretRedactionService } from "../utils/SecretRedactionService";
 
 /**
  * PostMessageDashboardSink
@@ -33,7 +34,11 @@ import type { HarnessUsageSnapshot } from "../types/UsageTypes";
  * the VS Code sidebar).
  */
 export class PostMessageDashboardSink implements IDashboardSink {
-  constructor(private readonly send: (msg: unknown) => void) {}
+  private readonly send: (msg: unknown) => void;
+
+  constructor(send: (msg: unknown) => void) {
+    this.send = (message) => send(secretRedactionService.redactValue(message));
+  }
 
   updateHarnessUsage(snapshots: HarnessUsageSnapshot[]): void {
     this.send({

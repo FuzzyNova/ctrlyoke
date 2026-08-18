@@ -9,6 +9,7 @@ import type { ResolvedProperties } from "../utils/PropertyResolver";
 import type { PriorContextItem } from "../core/HarnessIntegration";
 import type { CompatibilityDiagnostic } from "./CompatibilityTypes";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
+import type { RunSecretRedactor } from "../utils/SecretRedactionService";
 
 /**
  * Immutable roots used by one workflow execution.
@@ -127,4 +128,6 @@ export interface WorkflowContext {
    * persisted or included in workflow/runtime serialization.
    */
   secretEnvironment?: Readonly<Record<string, string>>;
+  /** Run-owned redactor populated only with values resolved during execution. */
+  secretRedactor?: RunSecretRedactor;
 }

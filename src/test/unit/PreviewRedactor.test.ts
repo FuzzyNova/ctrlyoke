@@ -5,6 +5,7 @@ import { HARNESS_IDS } from "../../types/DashboardConstants";
 import type { WorkflowExecutionPreview } from "../../types/ExecutionPreviewTypes";
 import {
   REDACTION_MARKER,
+  redactPreviewText,
   redactExecutionPreview,
 } from "../../types/PreviewRedactor";
 
@@ -91,6 +92,19 @@ suite("PreviewRedactor", () => {
 
     assert.strictEqual(result.value, `api_key=${REDACTION_MARKER}`);
     assert.strictEqual(result.redactions[0].ruleId, "credential-assignment");
+  });
+
+  test("masks exact resolved values, including deterministic JSON escaping", () => {
+    const secret = 'value-with-"quotes"';
+    const result = redactPreviewText(
+      `config=${JSON.stringify(secret)}`,
+      [],
+      [secret, JSON.stringify(secret).slice(1, -1)]
+    );
+
+    assert.strictEqual(result.text, `config="${REDACTION_MARKER}"`);
+    assert.ok(result.spans.some((span) => span.ruleId === "exact-secret"));
+    assert.ok(!result.text.includes(secret));
   });
 
   test("masks hook commands and inline MCP config fragments", () => {

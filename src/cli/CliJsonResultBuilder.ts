@@ -37,12 +37,13 @@ import {
 } from "../types/WorkflowTimelineTypes";
 import type { WorkflowExecutionPreview } from "../types/ExecutionPreviewTypes";
 import { redactExecutionPreview } from "../types/PreviewRedactor";
+import { secretRedactionService } from "../utils/SecretRedactionService";
 
 /** Redact again at the standalone CLI serialization boundary. */
 export function buildCliPreviewJsonResult(
   preview: WorkflowExecutionPreview
 ): WorkflowExecutionPreview {
-  return redactExecutionPreview(preview);
+  return secretRedactionService.redactValue(redactExecutionPreview(preview));
 }
 
 export interface CliJsonCondition {
@@ -199,7 +200,7 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
   };
 
   if (!state || input.error !== undefined) {
-    return {
+    return secretRedactionService.redactValue({
       ...base,
       success: false,
       status: EXECUTION_STATES.ERROR,
@@ -210,7 +211,7 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
       steps: [],
       finalStep: null,
       error: createSetupError(input.error),
-    };
+    });
   }
 
   const steps = state.steps.map((step, index) =>
@@ -231,7 +232,7 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
   const startedAt = toIso(state.startTime);
   const completedAt = toIso(state.executionEndTime);
 
-  return {
+  return secretRedactionService.redactValue({
     ...base,
     success: state.status === EXECUTION_STATES.COMPLETED,
     status: state.status,
@@ -242,7 +243,7 @@ export function buildCliJsonResult(input: CliJsonResultInput): CliJsonResult {
     steps,
     finalStep,
     error: selectTopLevelError(state, steps, finalStep),
-  };
+  });
 }
 
 function buildStepResult(

@@ -29,6 +29,7 @@ import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import { TemplateManager } from "../core/TemplateManager";
 import { Log } from "../utils/Log";
+import { secretRedactionService } from "../utils/SecretRedactionService";
 import { onModelsLoaded } from "../utils/ModelRegistry";
 import { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { UserFeedbackSink } from "../core/UserFeedbackSink";
@@ -1251,7 +1252,7 @@ export class CtrlYokeWebviewProvider
   }
 
   public postMessage(message: unknown): void {
-    this.view?.webview.postMessage(message);
+    this.view?.webview.postMessage(secretRedactionService.redactValue(message));
   }
 
   /** Public postMessage for use by PtyProcessManager (terminal output routing) */

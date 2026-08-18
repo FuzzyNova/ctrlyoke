@@ -6,6 +6,7 @@ import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { ctrlyokeStateHome } from "../utils/ProjectStatePaths";
 import { withFileLock } from "../utils/FileLockUtils";
 import { Log } from "../utils/Log";
+import { secretRedactionService } from "../utils/SecretRedactionService";
 import type { CompletionNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
 
 const PRIVATE_DIRECTORY_MODE = 0o700;
@@ -189,15 +190,17 @@ export class WebPushService {
         }
 
         const keys = await this.getOrCreateVapidKeys();
-        const payload = JSON.stringify({
-          id: event.id,
-          title: event.title,
-          body: event.body,
-          tag: event.tag,
-          severity: event.severity,
-          kind: event.kind,
-          url: event.url,
-        });
+        const payload = JSON.stringify(
+          secretRedactionService.redactValue({
+            id: event.id,
+            title: event.title,
+            body: event.body,
+            tag: event.tag,
+            severity: event.severity,
+            kind: event.kind,
+            url: event.url,
+          })
+        );
 
         let sent = 0;
         let removed = 0;

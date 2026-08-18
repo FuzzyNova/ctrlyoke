@@ -14,6 +14,7 @@ import {
 import type { ExecutionState } from "../../types/DashboardConstants";
 import { withFileLock } from "../../utils/FileLockUtils";
 import { invalidateRunSummaryFor } from "./RunSummaryCache";
+import { secretRedactionService } from "../../utils/SecretRedactionService";
 
 export class TimelineRecorder {
   static readonly MANIFEST_FILE_NAME = TIMELINE_STORAGE_FILES.MANIFEST;
@@ -99,7 +100,7 @@ export class TimelineRecorder {
     try {
       await fs.promises.writeFile(
         manifestPath,
-        JSON.stringify(manifest, null, 2),
+        JSON.stringify(secretRedactionService.redactValue(manifest), null, 2),
         "utf8"
       );
     } finally {
@@ -215,10 +216,11 @@ export class TimelineRecorder {
           runId: manifest.runId,
           sequence: nextSequence++,
         }));
+        const redactedEvents = secretRedactionService.redactValue(events);
 
         await fs.promises.appendFile(
           TimelineRecorder.getEventsPathFromManifestPath(manifestPath),
-          `${events.map((event) => JSON.stringify(event)).join("\n")}\n`,
+          `${redactedEvents.map((event) => JSON.stringify(event)).join("\n")}\n`,
           "utf8"
         );
 
@@ -230,7 +232,7 @@ export class TimelineRecorder {
           lastUpdatedAt: Math.max(manifest.lastUpdatedAt, lastEventTimestamp),
         });
 
-        return events;
+        return redactedEvents;
       })
     );
   }
@@ -276,9 +278,10 @@ export class TimelineRecorder {
           },
         };
 
+        const redactedEvent = secretRedactionService.redactValue(event);
         await fs.promises.appendFile(
           TimelineRecorder.getEventsPathFromManifestPath(manifestPath),
-          `${JSON.stringify(event)}\n`,
+          `${JSON.stringify(redactedEvent)}\n`,
           "utf8"
         );
 
@@ -290,7 +293,7 @@ export class TimelineRecorder {
           lastUpdatedAt: Math.max(manifest.lastUpdatedAt, timestampMs),
         });
 
-        return { committed: true, event };
+        return { committed: true, event: redactedEvent };
       })
     );
   }

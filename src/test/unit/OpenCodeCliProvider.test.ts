@@ -11,6 +11,10 @@ import {
 import { OpenCodeLogParser } from "../../core/harness/opencode/OpenCodeLogParser";
 import { CliResponseCollector } from "../../core/harness/shared/CliResponseCollector";
 import { Log } from "../../utils/Log";
+import {
+  RunSecretRedactor,
+  secretRedactionService,
+} from "../../utils/SecretRedactionService";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
 
 suite("OpenCodeCliProvider", () => {
@@ -344,10 +348,17 @@ suite("OpenCodeCliProvider", () => {
       const configContent =
         provider.getHeadlessSpawnEnv().OPENCODE_CONFIG_CONTENT!;
 
-      const redacted = provider.redactHeadlessStderr(
+      const redactor = new RunSecretRedactor();
+      const release = secretRedactionService.register(redactor);
+      redactor.addResolvedValues({
+        API_KEY: "sk-super-secret-value",
+        AUTHORIZATION: "Bearer remote-secret",
+      });
+      const redacted = secretRedactionService.redactText(
         `JSONC parse error in OPENCODE_CONFIG_CONTENT\n${configContent}\n` +
           `env leak: sk-super-secret-value / Bearer remote-secret`
       );
+      release();
 
       assert.ok(!redacted.includes("sk-super-secret-value"));
       assert.ok(!redacted.includes("Bearer remote-secret"));
@@ -360,12 +371,6 @@ suite("OpenCodeCliProvider", () => {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
       assert.ok(extensionPath);
     }
-  });
-
-  test("leaves ordinary OpenCode stderr untouched", () => {
-    const provider = new OpenCodeCliProvider();
-    const stderr = "error: unknown option '--bogus'\nTry 'opencode --help'.";
-    assert.strictEqual(provider.redactHeadlessStderr(stderr), stderr);
   });
 
   test("maps headless stdout like interactive export output without invoking export", async () => {

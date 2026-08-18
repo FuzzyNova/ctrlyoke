@@ -122,16 +122,32 @@ export function redactPreviewText(
 }
 
 function redactVariable(
-  variable: VariableResolutionPreview
+  variable: VariableResolutionPreview,
+  exactSecrets: readonly string[]
 ): VariableResolutionPreview {
-  const redacted = redactPreviewText(variable.value, variable.redactions);
+  const redacted = redactPreviewText(
+    variable.value,
+    variable.redactions,
+    exactSecrets
+  );
   return { ...variable, value: redacted.text, redactions: redacted.spans };
 }
 
-function redactHook(hook: HookPreview): HookPreview {
-  const command = redactPreviewText(hook.command, hook.redactions);
+function redactHook(
+  hook: HookPreview,
+  exactSecrets: readonly string[]
+): HookPreview {
+  const command = redactPreviewText(
+    hook.command,
+    hook.redactions,
+    exactSecrets
+  );
   const inlineConfig = hook.inlineConfigFragment
-    ? redactPreviewText(hook.inlineConfigFragment, hook.inlineConfigRedactions)
+    ? redactPreviewText(
+        hook.inlineConfigFragment,
+        hook.inlineConfigRedactions,
+        exactSecrets
+      )
     : undefined;
   const redactedHook: HookPreview = {
     ...hook,
@@ -147,11 +163,15 @@ function redactHook(hook: HookPreview): HookPreview {
     : redactedHook;
 }
 
-function redactMcpServer(server: McpServerPreview): McpServerPreview {
+function redactMcpServer(
+  server: McpServerPreview,
+  exactSecrets: readonly string[]
+): McpServerPreview {
   const inlineConfig = server.inlineConfigFragment
     ? redactPreviewText(
         server.inlineConfigFragment,
-        server.inlineConfigRedactions
+        server.inlineConfigRedactions,
+        exactSecrets
       )
     : undefined;
   const redactedServer: McpServerPreview = {
@@ -167,26 +187,45 @@ function redactMcpServer(server: McpServerPreview): McpServerPreview {
 }
 
 function redactSection(
-  section: CategorizedPromptSectionPreview
+  section: CategorizedPromptSectionPreview,
+  exactSecrets: readonly string[]
 ): CategorizedPromptSectionPreview {
-  return { ...section };
+  return {
+    ...section,
+    ...(section.body !== undefined
+      ? { body: redactPreviewText(section.body, [], exactSecrets).text }
+      : {}),
+  };
 }
 
-function redactStep(step: StepExecutionPreview): StepExecutionPreview {
+function redactStep(
+  step: StepExecutionPreview,
+  exactSecrets: readonly string[]
+): StepExecutionPreview {
   const redactedCommand = step.command
     ? {
         ...step.command,
-        args: step.command.args.map((arg) => redactPreviewText(arg).text),
-        displayCommand: redactPreviewText(step.command.displayCommand).text,
+        args: step.command.args.map(
+          (arg) => redactPreviewText(arg, [], exactSecrets).text
+        ),
+        displayCommand: redactPreviewText(
+          step.command.displayCommand,
+          [],
+          exactSecrets
+        ).text,
       }
     : undefined;
   const redactedStep: StepExecutionPreview = {
     ...step,
     resolvedProperties: {
       ...step.resolvedProperties,
-      hooks: step.resolvedProperties.hooks.map(redactHook),
+      hooks: step.resolvedProperties.hooks.map((hook) =>
+        redactHook(hook, exactSecrets)
+      ),
     },
-    variables: step.variables.map(redactVariable),
+    variables: step.variables.map((variable) =>
+      redactVariable(variable, exactSecrets)
+    ),
   };
   return {
     ...redactedStep,
@@ -194,7 +233,9 @@ function redactStep(step: StepExecutionPreview): StepExecutionPreview {
       ? {
           prompt: {
             ...step.prompt,
-            sections: step.prompt.sections.map(redactSection),
+            sections: step.prompt.sections.map((section) =>
+              redactSection(section, exactSecrets)
+            ),
           },
         }
       : {}),
@@ -203,7 +244,9 @@ function redactStep(step: StepExecutionPreview): StepExecutionPreview {
       ? {
           mcpApplication: {
             ...step.mcpApplication,
-            servers: step.mcpApplication.servers.map(redactMcpServer),
+            servers: step.mcpApplication.servers.map((server) =>
+              redactMcpServer(server, exactSecrets)
+            ),
           },
         }
       : {}),
@@ -212,10 +255,11 @@ function redactStep(step: StepExecutionPreview): StepExecutionPreview {
 
 /** Return a redacted snapshot without mutating the supplied preview. */
 export function redactExecutionPreview(
-  preview: WorkflowExecutionPreview
+  preview: WorkflowExecutionPreview,
+  exactSecrets: readonly string[] = []
 ): WorkflowExecutionPreview {
   return {
     ...preview,
-    steps: preview.steps.map(redactStep),
+    steps: preview.steps.map((step) => redactStep(step, exactSecrets)),
   };
 }

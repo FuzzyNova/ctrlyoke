@@ -79,6 +79,7 @@ import {
   OutputExecutionTarget,
 } from "../types/OutputHistoryTypes";
 import type { IDashboardSink } from "../types/IDashboardSink";
+import type { RunSecretRedactor } from "../utils/SecretRedactionService";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import { mapSourceDefinitionPathToExecution } from "../platform/WorkspaceRootResolver";
 import { pathsEqual } from "../utils/PathCasing";
@@ -125,6 +126,8 @@ export interface WorkflowExecutionContext {
     severity: string
   ) => void;
   outputHistoryManager?: OutputHistoryManager;
+  /** Run-owned redactor populated only with values resolved during execution. */
+  secretRedactor?: RunSecretRedactor;
   /**
    * Always-on callback to capture the init state for a queue step's output (called even when
    * the workflow is inactive/backgrounded). Used to buffer output for replay when switching
@@ -547,6 +550,7 @@ export class WorkflowExecutor {
         prompt,
         preResolvedProperties.secrets
       );
+      await this.registerResolvedSecrets(preSecretNames, context);
       await this.promptQueue.persistRuntimeMetadata(
         target.kind === FINAL_STEP_PHASES.QUEUE
           ? target.stepIndex
@@ -699,6 +703,7 @@ export class WorkflowExecutor {
         workspaceRoot: this.platform.getWorkspaceRoot(),
         secretStore: this.platform.getSecretStore?.(),
       });
+      context.secretRedactor?.addResolvedValues(resolvedSecretValues);
       resolvedProperties = {
         ...resolvedProperties,
         secrets: secretNames,
@@ -1027,6 +1032,7 @@ export class WorkflowExecutor {
       step,
       this.promptQueue.getWorkflowFile()
     );
+    await this.registerResolvedSecrets(secretNames, context);
     Log.info(`Executing script step: ${stepLabel}`);
 
     // Mark step as running in the dashboard
@@ -1099,7 +1105,11 @@ export class WorkflowExecutor {
             stepIndex: signedStepIndex,
             script: step.script,
             cwd: context.executionWorkspace.executionRoot,
-            env: await this.resolveScriptEnvironment(step.env, secretNames),
+            env: await this.resolveScriptEnvironment(
+              step.env,
+              secretNames,
+              context
+            ),
             onOutput: (chunk) => {
               outputChunks.push(sanitizeTerminalOutput(chunk));
               onOutput(chunk);
@@ -1773,17 +1783,33 @@ export class WorkflowExecutor {
 
   private async resolveScriptEnvironment(
     processEnv: Record<string, string> | undefined,
-    secretNames: readonly string[]
+    secretNames: readonly string[],
+    context: WorkflowExecutionContext
   ): Promise<Record<string, string> | undefined> {
     const resolvedSecrets = await resolveSecretEnvironment(secretNames, {
       workspaceRoot: this.platform.getWorkspaceRoot(),
       secretStore: this.platform.getSecretStore?.(),
     });
+    context.secretRedactor?.addResolvedValues(resolvedSecrets);
     return buildSecretProcessEnvironment(
       processEnv,
       resolvedSecrets,
       secretNames
     );
+  }
+
+  private async registerResolvedSecrets(
+    names: readonly string[],
+    context: WorkflowExecutionContext
+  ): Promise<void> {
+    if (names.length === 0) {
+      return;
+    }
+    const values = await resolveSecretEnvironment(names, {
+      workspaceRoot: this.platform.getWorkspaceRoot(),
+      secretStore: this.platform.getSecretStore?.(),
+    });
+    context.secretRedactor?.addResolvedValues(values);
   }
 
   /**
@@ -2564,6 +2590,7 @@ export class WorkflowExecutor {
           secretStore: this.platform.getSecretStore?.(),
         }
       );
+      context.secretRedactor?.addResolvedValues(retrySecretValues);
       resolvedProperties = {
         ...resolvedProperties,
         secrets: retrySecretNames,

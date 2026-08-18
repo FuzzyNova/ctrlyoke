@@ -8,6 +8,7 @@ import { Log } from "../../../utils/Log";
 import { sanitizeTerminalOutput } from "../../../utils/TerminalOutputSanitizer";
 import { CliOutputFormatter } from "./CliOutputFormatter";
 import { extractTextFromEvents } from "./CliResponseTextExtractor";
+import { secretRedactionService } from "../../../utils/SecretRedactionService";
 import {
   resolveHeadlessSourceMode,
   type HeadlessLogTail,
@@ -22,7 +23,6 @@ export interface CliResponseCollectorDeps {
     | "extractSessionIdFromLogs"
     | "extractSessionIdFromStdout"
     | "headlessSource"
-    | "redactHeadlessStderr"
     | "parseHeadlessStdout"
     | "logParser"
   >;
@@ -91,6 +91,7 @@ export class CliResponseCollector {
     if (this.deps.provider.augmentParsedOutput) {
       parsedOutput = await this.deps.provider.augmentParsedOutput(parsedOutput);
     }
+    parsedOutput = secretRedactionService.redactValue(parsedOutput);
 
     const responseText = extractTextFromEvents(parsedOutput);
     const statistics = CliOutputFormatter.formatStatistics(
@@ -183,11 +184,9 @@ export class CliResponseCollector {
     params: { stdout: string; stderr: string; exitCode: number },
     parsedOutput: UniversalCliOutput
   ): { kind: FailureKind; message: string } | undefined {
-    const redact = this.deps.provider.redactHeadlessStderr;
-    const rawStderr = redact
-      ? redact.call(this.deps.provider, params.stderr)
-      : params.stderr;
-    const stderr = sanitizeTerminalOutput(rawStderr).trim();
+    const stderr = sanitizeTerminalOutput(
+      secretRedactionService.redactText(params.stderr)
+    ).trim();
 
     if (params.exitCode !== 0) {
       return {

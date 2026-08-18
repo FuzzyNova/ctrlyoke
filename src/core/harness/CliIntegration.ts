@@ -67,6 +67,10 @@ import type { PtySession } from "./PtyProcessManager";
 import type { HookEvent } from "../../types/CtrlYokeTypes";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import { resolveSecretEnvironment } from "../../utils/SecretResolver";
+import {
+  secretRedactionService,
+  type RunSecretRedactor,
+} from "../../utils/SecretRedactionService";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
 /**
@@ -148,6 +152,7 @@ export class CliIntegration extends HarnessIntegration {
 
   /** Active per-prompt session while sendPrompt() is running. */
   private activeSession?: CliExecutionSession;
+  private activeSecretRedactor?: RunSecretRedactor;
 
   // NOTE: currentProcess field removed — the child process lives in processManager,
   // not on this class. See processManager.isActive() for process state.
@@ -637,11 +642,13 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   private emitStreamingChunk(chunk: string): void {
-    this.streamingChunkEmitter.fire(chunk);
+    this.streamingChunkEmitter.fire(secretRedactionService.redactText(chunk));
   }
 
   private emitStreamingEvents(events: CliEvent[]): void {
-    this.streamingEventsEmitter.fire(events);
+    this.streamingEventsEmitter.fire(
+      secretRedactionService.redactValue(events)
+    );
   }
 
   private emitContextWindowUpdate(used: number, size: number): void {
@@ -649,7 +656,9 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   private emitResponseComplete(response: string): void {
-    this.responseCompleteEmitter.fire(response);
+    this.responseCompleteEmitter.fire(
+      secretRedactionService.redactText(response)
+    );
   }
 
   private emitSessionActivityResumed(events: CliEvent[]): void {
@@ -796,6 +805,7 @@ export class CliIntegration extends HarnessIntegration {
     resolvedSessionId: string | undefined
   ): CliExecutionSession {
     this.lastExecutionSnapshot = undefined;
+    this.activeSecretRedactor = workflowContext?.secretRedactor;
     return new CliExecutionSession({
       prompt,
       workflowContext: workflowContext
@@ -882,11 +892,14 @@ export class CliIntegration extends HarnessIntegration {
         cleanupTempFiles: (tempFilePaths) =>
           this.cleanupTempFiles(tempFilePaths),
       },
-      resolveSecretEnvironment: (names) =>
-        resolveSecretEnvironment(names, {
+      resolveSecretEnvironment: async (names) => {
+        const values = await resolveSecretEnvironment(names, {
           workspaceRoot: this.platform.getWorkspaceRoot(),
           secretStore: this.platform.getSecretStore?.(),
-        }),
+        });
+        this.activeSecretRedactor?.addResolvedValues(values);
+        return values;
+      },
     });
 
     const executionPlanBuilder = new ExecutionPlanBuilder({
@@ -1685,7 +1698,9 @@ export class CliIntegration extends HarnessIntegration {
     for (const artifactPath of paths) {
       try {
         await fs.promises.access(artifactPath);
-        failures.push(`Provider artifact remains after cleanup: ${artifactPath}`);
+        failures.push(
+          `Provider artifact remains after cleanup: ${artifactPath}`
+        );
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
           failures.push(

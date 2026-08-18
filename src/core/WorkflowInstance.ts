@@ -75,7 +75,10 @@ import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { PropertyResolver } from "../utils/PropertyResolver";
-import { resolveWorktreeForWorkspace, type WorkspaceWorktreeResolution } from "../utils/WorktreeResolution";
+import {
+  resolveWorktreeForWorkspace,
+  type WorkspaceWorktreeResolution,
+} from "../utils/WorktreeResolution";
 import { isCli } from "../utils/RuntimeMode";
 import {
   createNoWorktreeExecutionWorkspace,
@@ -119,6 +122,10 @@ import { IntegrationFactory } from "./IntegrationFactory";
 import { HarnessCapabilityRegistry } from "./HarnessCapabilityRegistry";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
 import { preflightWorkflowSecrets } from "../utils/SecretResolver";
+import {
+  RunSecretRedactor,
+  secretRedactionService,
+} from "../utils/SecretRedactionService";
 import {
   analyzeCompatibility,
   enumerateCompatibilityTargets,
@@ -284,6 +291,8 @@ export class WorkflowInstance {
   private readonly promptFileWatcher: PromptFileWatcher;
   readonly outputHistoryManager: OutputHistoryManager;
   private activeHistoryFilePath: string = "";
+  private activeRunRedactor?: RunSecretRedactor;
+  private releaseActiveRunRedactor?: () => void;
   private pendingRuntimeTransitionHistoryWrite: Promise<void> =
     Promise.resolve();
 
@@ -1947,10 +1956,7 @@ export class WorkflowInstance {
       // history startup fails. That path never enters startWorkflowExecution's
       // finally block, so settle it here or setup/early-run edits would be
       // stranded outside the managed landing barrier.
-      if (
-        !this.startPending &&
-        this.activeWorktree?.mode === "managed"
-      ) {
+      if (!this.startPending && this.activeWorktree?.mode === "managed") {
         const worktree = this.activeWorktree;
         this.worktreeManager.releaseRuntimeTrust(worktree);
         await this.worktreeManager
@@ -1973,7 +1979,10 @@ export class WorkflowInstance {
       // explicitly by the user.
       if (!this.startPending) {
         await this.releaseRunnerLock().catch((lockError) =>
-          Log.warn("Failed to release runner lock after setup failure:", lockError)
+          Log.warn(
+            "Failed to release runner lock after setup failure:",
+            lockError
+          )
         );
       }
       // Finalize the history run if it was initialized before the error occurred
@@ -3341,6 +3350,7 @@ export class WorkflowInstance {
       instanceTag: `[inst:${this.id.slice(0, 8)}]`,
       instanceId: this.id,
       outputHistoryManager: this.outputHistoryManager,
+      secretRedactor: this.activeRunRedactor,
       resolvePriorContextItems: createPriorContextResolver({
         workspaceRoot:
           this.workspaceFolderPath ?? this.platform.getWorkspaceRoot(),
@@ -3770,9 +3780,8 @@ export class WorkflowInstance {
       return 0;
     }
     try {
-      const history = await this.outputHistoryManager.loadHistory(
-        historyFilePath
-      );
+      const history =
+        await this.outputHistoryManager.loadHistory(historyFilePath);
       let nextAttemptIndex = 0;
       for (const entry of history.orderedEntries) {
         if (
@@ -3825,7 +3834,8 @@ export class WorkflowInstance {
     const ownerDescriptor = await this.lineageRepository
       .tryReadDescriptor(owner.stateRoot, owner.workflowKey as WorkflowKey)
       .catch(() => undefined);
-    const ownerName = ownerDescriptor?.workflowName?.trim() || owner.workflowKey;
+    const ownerName =
+      ownerDescriptor?.workflowName?.trim() || owner.workflowKey;
 
     const config = this.worktreeResolution.config;
     const target =
@@ -3915,20 +3925,29 @@ export class WorkflowInstance {
     const state = this.promptQueue.getState();
     const lockWorkspaceRoot =
       this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
-    if (!workingFilePath || !state.workflowKey || !state.runRef || !lockWorkspaceRoot) {
+    if (
+      !workingFilePath ||
+      !state.workflowKey ||
+      !state.runRef ||
+      !lockWorkspaceRoot
+    ) {
       return;
     }
     const ownerToken = WorkflowLockManager.generateOwnerToken();
-    await WorkflowLockManager.acquireLock(lockWorkspaceRoot, state.workflowKey, {
-      workflowKey: state.workflowKey,
-      runRef: state.runRef,
-      runner: isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE,
-      pid: process.pid,
-      ownerToken,
-      instanceId: this.id,
-      startedAt: Date.now(),
-      lastHeartbeat: Date.now(),
-    });
+    await WorkflowLockManager.acquireLock(
+      lockWorkspaceRoot,
+      state.workflowKey,
+      {
+        workflowKey: state.workflowKey,
+        runRef: state.runRef,
+        runner: isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE,
+        pid: process.pid,
+        ownerToken,
+        instanceId: this.id,
+        startedAt: Date.now(),
+        lastHeartbeat: Date.now(),
+      }
+    );
     this.currentLockOwnerToken = ownerToken;
   }
 
@@ -3965,6 +3984,11 @@ export class WorkflowInstance {
     });
     this.startedAt = Date.now();
     this.activeHistoryFilePath = historyFilePath;
+    this.activeRunRedactor = new RunSecretRedactor();
+    this.releaseActiveRunRedactor?.();
+    this.releaseActiveRunRedactor = secretRedactionService.register(
+      this.activeRunRedactor
+    );
 
     // Close any terminals left open from the previous run. With
     // closeTerminalWhenPromptCompletes=false, dispose() only kills the process
@@ -4274,11 +4298,18 @@ export class WorkflowInstance {
       // sidecar, and workspace artifact owned by the run is gone. Otherwise a
       // retained integration could still mutate a directory after its lease
       // was handed to another run.
-      if (!preserveWorktreeReservation && this.heartbeatInterval !== undefined) {
+      if (
+        !preserveWorktreeReservation &&
+        this.heartbeatInterval !== undefined
+      ) {
         clearInterval(this.heartbeatInterval);
         this.heartbeatInterval = undefined;
       }
-      if (!preserveWorktreeReservation && !managedTerminalRun && this.executionLease) {
+      if (
+        !preserveWorktreeReservation &&
+        !managedTerminalRun &&
+        this.executionLease
+      ) {
         const lease = this.executionLease;
         this.executionLease = undefined;
         await lease
@@ -4325,6 +4356,9 @@ export class WorkflowInstance {
           )
           .catch((err) => Log.warn("Failed to finalize history run:", err));
       }
+      this.releaseActiveRunRedactor?.();
+      this.releaseActiveRunRedactor = undefined;
+      this.activeRunRedactor = undefined;
       this.startPending = false;
       this.resolveExecutionSettled?.();
       this.resolveExecutionSettled = undefined;

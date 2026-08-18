@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 import { IS_DEV_MODE } from "./BuildConfig";
 import { ConfigurationUtils, PATH_CONSTANTS } from "./ConfigurationUtils";
 import { getErrorMessage } from "./ErrorUtils";
+import { secretRedactionService } from "./SecretRedactionService";
 
 /**
  * Log levels in order from most verbose (TRACE) to least verbose (ERROR), plus OFF.
@@ -280,6 +281,7 @@ export class Log {
    * Use for formatted output like logPrompt/logResponse that need custom formatting.
    */
   static appendLine(message: string): void {
+    message = secretRedactionService.redactText(message);
     if (this.outputChannel) {
       this.outputChannel.appendLine(message);
     }
@@ -298,8 +300,9 @@ export class Log {
     ...args: any[]
   ): void {
     const timestamp = new Date().toISOString();
-    const formattedMessage =
-      args.length > 0 ? `${message} ${JSON.stringify(args)}` : message;
+    const formattedMessage = secretRedactionService.redactText(
+      args.length > 0 ? `${message} ${JSON.stringify(args)}` : message
+    );
     const logEntry = `[${timestamp}] ${level}: ${formattedMessage}`;
 
     if (this.cliMode) {
