@@ -138,13 +138,19 @@ substitution (below).
 ### MCP servers: write the reference, inject the value
 
 For MCP `env`, do not write the resolved value into a harness-native config
-file on disk. Write `"${SERVICE_API_TOKEN}"` into the generated config and put
-the real value in the harness process env, so the file on disk carries only a
-name. Several harnesses expand `${VAR}` in their MCP config natively; this must
-be **verified per harness** across `CliMcpConfigGenerator`, `CliProviderUtils`,
-and `OpenCodeInlineConfig` before relying on it, because the fallbacks differ:
+file on disk. Write a **reference token** into the generated config and put the
+real value in the harness process env, so the file on disk carries only a name.
 
-- Harness expands `${VAR}` → write the reference, inject to process env.
+**The token is per harness — there is no universal `${VAR}`.** OpenCode already
+proves this: `OPENCODE_CONFIG_SUBSTITUTION_PATTERN` in
+`src/core/harness/opencode/OpenCodeInlineConfig.ts` is `/\{(?:env|file):/iu`, so
+OpenCode's form is `{env:NAME}`, and `containsOpenCodeConfigSubstitution()`
+already exists to detect it. Model the token as a per-provider hook (alongside
+the existing config-generation seams in `CliMcpConfigGenerator` and
+`CliProviderUtils`) rather than hardcoding one syntax, and **verify the
+remaining five harnesses empirically** before relying on expansion:
+
+- Harness expands a reference → write the reference, inject to process env.
 - Harness does not expand → substitute the value into the config, and treat
   that config file as a secret artifact (0600 where the platform supports it,
   deleted on run completion by `TempFileManager`, never included in exports or
@@ -166,6 +172,14 @@ user's own shell — but it means the grant must be narrow and explicit:
 - Treat "harness step declares a secret" as a meaningful trust event worth
   surfacing in the run preview alongside external-root approvals.
 
+## Implementation order
+
+Phases are numbered by topic, not by build order. **Build Phase 5 before
+Phase 3**: both Phase 3 surfaces (the `!` completion source and the properties
+panel's known-name dropdown) read the secret registry that Phase 5 introduces,
+so shipping Phase 3 first means inventing a throwaway listing path. The
+dependency-correct order is 1 → 2 → 4 → 5 → 3 → 6.
+
 ## Phase 1 — Store, declaration, and resolution
 
 - Promote the existing `SecretStore` interface in `src/platform/ServerTokenStore.ts`
@@ -179,10 +193,25 @@ user's own shell — but it means the grant must be narrow and explicit:
   fall back to a plaintext file.
 - Add `secrets` to `#/definitions/executionProperties` in
   `schemas/workflow-schema.json`, mirrored in `src/types/CtrlYokeTypes.ts`.
-  Placing it there — not on `promptStep` alone — gets the three-tier
-  prompt → workflow → settings precedence, `_runtime` capture, and `scriptStep`
-  coverage for free, since `executionProperties` is already shared by all of
-  them. Add it to `EXECUTION_PROPERTY_KEYS` so `PropertyResolver` picks it up.
+  Placing it there — not on `promptStep` alone — gets `_runtime` capture and
+  `scriptStep` coverage for free, since `executionProperties` is already shared
+  by all of them (`promptRuntimeMetadata` `allOf`-refs it, so `_runtime` needs
+  no extra schema work).
+- **Precedence is not free — it is four explicit edits, not one.**
+  `EXECUTION_PROPERTY_KEYS` in `src/types/CtrlYokeTypes.ts` only drives
+  `PromptFileParser.copyExecutionProperties()` and `WorkflowSerializer`; it does
+  not feed resolution. `PropertyResolver` (at `src/utils/PropertyResolver.ts`,
+  not `src/core/`) is a thin VS Code adapter that delegates to
+  `resolveExecutionProperties()` in `src/types/ExecutionPropertyResolver.ts`,
+  which resolves every property by hand. Adding `secrets` therefore means:
+  1. `EXECUTION_PROPERTY_KEYS` (parse/serialize round-trip),
+  2. a `resolveSecrets()` in `ExecutionPropertyResolver.ts` copied from
+     `resolveSkills()` — the exact replace-not-merge + `null`-clears precedent —
+     wired into the returned `properties` and `sources` objects,
+  3. `secrets?: string[] | null` on `ExecutionPropertyDefaults` and
+     `secrets?: string[]` on `ResolvedProperties` in
+     `src/types/ExecutionPropertyTypes.ts`,
+  4. a `secrets` default in `PropertyResolver.createDefaults()`.
 - Shape it like `skills`: `oneOf [ array of ^[A-Z][A-Z0-9_]*$ strings, null ]`,
   where prompt-level replaces workflow-level with no merging and `null`
   explicitly disables an inherited grant. Note the asymmetry to document: an
@@ -205,7 +234,7 @@ registering anything.
 
 The `<availableSecrets>` block is **its own prompt category**, not part of the
 excerpt or prompt files. Every other category in
-`HarnessIntegration.formatCategorizedInstruction()` names a distinct kind of
+`formatCategorizedInstruction()` (`src/core/HarnessIntegration.ts`) names a distinct kind of
 input, and the dashboard's preview, token accounting, and truncation reporting
 all key off that category. Folding secrets into excerpts would label them
 "Excerpts" in the preview and make them share the excerpt inline-content cap;
@@ -258,10 +287,13 @@ duplicated across layers, and the boundary regex `[A-Za-z0-9_+=@#$%^&!~-]` is
 copy-pasted in several files. All of these need the new trigger:
 
 - `CodeMirrorEditor.tsx` — `customCompletions`, `CompletionTrigger` union
-- `src/completions/PromptCompletionProvider.ts` — `TriggerChar` union and the
-  `findWordStartTriggerIndex` chain (its header comment already says to keep it
-  in sync with the webview copy)
-- `src/completions/CompletionHelpers.ts` — the `_triggerChar` union
+- `src/completions/PromptCompletionProvider.ts` — `TriggerChar` union (currently
+  `"@" | "#" | "~" | "$"`; it has no `/`, so `!` is the fifth here even though it
+  is the sixth in the editor) and the `findWordStartTriggerIndex` /
+  `maxIndex` chain (its header comment already says to keep it in sync with the
+  webview copy)
+- `src/completions/CompletionHelpers.ts` — the `_triggerChar` union (this one
+  does include `/`)
 - `src/completions/PromptLinkProvider.ts` — a `!NAME` pattern so the reference
   is clickable and navigates to the Secrets settings page
 - `src/ui/webview-react/utils/atomicReferences.ts` — chip rendering, so a
@@ -379,8 +411,13 @@ the scope model — the Secrets tab reads `activeScope` like every other section
 
 ## Phase 6 — CLI
 
-Follow the `trust-external-roots` precedent: a `secret` command group in
-`src/cli.ts` with definitions factored into `src/cli/SecretCommandDefinitions.ts`.
+A `secret` command group registered from `src/cli.ts`. Note that
+`trust-external-roots` is defined **inline** in `src/cli.ts` (~line 140) and is
+the precedent only for the confirm/report UX; the structural precedent for a
+multi-subcommand group is `src/cli/HistoryCommandDefinitions.ts` +
+`src/cli/HistoryCommands.ts` (`registerHistoryCommands`). Follow that pair:
+`src/cli/SecretCommandDefinitions.ts` for option/argument shapes and
+`src/cli/SecretCommands.ts` for the handlers.
 
 ```
 ctrlyoke secret set <NAME>     # hidden TTY prompt; --stdin to pipe; --scope user|workspace
@@ -439,8 +476,12 @@ ctrlyoke secret check [file]   # preflight a workflow: declared vs resolvable
 
 ## Open questions
 
-- Which of the six harnesses expand `${VAR}` inside their MCP config env values?
-  This decides reference-vs-substitute per harness and needs empirical checks.
+- Which of the six harnesses expand a reference inside their MCP config env
+  values, and with what token? This decides reference-vs-substitute per harness
+  and needs empirical checks. **OpenCode is already answered in the codebase**:
+  it substitutes `{env:NAME}` (and `{file:...}`), per
+  `OPENCODE_CONFIG_SUBSTITUTION_PATTERN`. The other five are open, and the
+  answer is a token per harness, not a single `${VAR}`.
 - Should workspace-scoped managed secrets require the same one-time trust
   approval that `permissions.allowedExternalFileRoots` does, given a cloned
   repo can declare grants? Leaning yes for grants, no for values the user set
