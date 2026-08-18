@@ -29,7 +29,7 @@ import {
 } from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { CliProcessManager } from "../../utils/CliProcessManager";
-import type { TempFileManager } from "../../utils/TempFileManager";
+import { TempFileManager } from "../../utils/TempFileManager";
 import { Log } from "../../utils/Log";
 import {
   CLI_EVENT_TYPES,
@@ -1627,18 +1627,19 @@ export class CliIntegration extends HarnessIntegration {
     workingFilePath: string | undefined,
     workspaceRoot: string
   ): Promise<void> {
+    const tempMgr = new TempFileManager(workspaceRoot);
     const configPath = this.provider.getMcpConfigFilePath?.(
       workingFilePath,
       workspaceRoot
     );
     if (configPath) {
-      await fs.promises.unlink(configPath).catch(() => {});
+      await tempMgr.deleteFile(configPath);
     }
     // Clean up provider-specific interactive setup files (e.g., OpenCode plugin)
     const additionalPaths =
       this.provider.getAdditionalCleanupFilePaths?.(workspaceRoot) ?? [];
     for (const p of additionalPaths) {
-      await fs.promises.unlink(p).catch(() => {});
+      await tempMgr.deleteFile(p);
     }
     // Restore workspace config files modified during interactive hook setup (e.g., Qwen)
     await this.provider.cleanupWorkspaceArtifacts?.(

@@ -149,6 +149,7 @@ export class AntigravityCliProvider implements ICliProvider {
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
       stateRoot?: string;
+      secretEnvironment?: Readonly<Record<string, string>>;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -180,6 +181,7 @@ export class AntigravityCliProvider implements ICliProvider {
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
       stateRoot?: string;
+      secretEnvironment?: Readonly<Record<string, string>>;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -205,7 +207,8 @@ export class AntigravityCliProvider implements ICliProvider {
           workingFile,
           additionalEnv,
           userServers,
-          workflowContext?.stateRoot
+          workflowContext?.stateRoot,
+          workflowContext?.secretEnvironment
         )
     );
     if (
@@ -682,7 +685,8 @@ export class AntigravityCliProvider implements ICliProvider {
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[],
-    stateRoot?: string
+    stateRoot?: string,
+    secretEnvironment?: Readonly<Record<string, string>>
   ): Promise<string[] | null> {
     const preparation = await this.planMcpConfigArgs(
       mcpServerPath,
@@ -690,7 +694,8 @@ export class AntigravityCliProvider implements ICliProvider {
       workingFilePath,
       additionalEnv,
       userServers,
-      stateRoot
+      stateRoot,
+      secretEnvironment
     );
     await applyPreparedMutations(preparation.mutations);
     return preparation.mutations.length > 0 ? preparation.cliArgs : null;
@@ -702,7 +707,8 @@ export class AntigravityCliProvider implements ICliProvider {
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[],
-    stateRoot?: string
+    stateRoot?: string,
+    secretEnvironment?: Readonly<Record<string, string>>
   ): Promise<CliProviderPreparation> {
     if (!mcpServerPath && (!userServers || userServers.length === 0)) {
       return { cliArgs: [], mutations: [], diagnostics: [] };
@@ -722,7 +728,18 @@ export class AntigravityCliProvider implements ICliProvider {
           includeRemoteType: false,
           includeTrust: false,
         },
-        stateRoot
+        stateRoot,
+        CliProviderUtils.createMcpSecretConfigOptions(
+          undefined,
+          secretEnvironment
+        )
+      );
+
+      const hasSecretMcpValues = (userServers ?? []).some((server) =>
+        Object.values({
+          ...(server.env ?? {}),
+          ...(server.headers ?? {}),
+        }).some((value) => /\$\{secret:[^}]+\}/u.test(value))
       );
 
       const workflowKey = workingFilePath ?? workspaceRoot;
@@ -736,7 +753,8 @@ export class AntigravityCliProvider implements ICliProvider {
               await AntigravityCliProvider.mcpTracker.registerServers(
                 workflowKey,
                 workspaceRoot,
-                mcpEntries
+                mcpEntries,
+                hasSecretMcpValues ? { fileMode: 0o600 } : undefined
               );
               Log.debug(
                 "🔧 Antigravity MCP servers written to .agents/mcp_config.json"

@@ -61,6 +61,7 @@ type ProviderWorkflowContext = {
   resolvedProperties?: ResolvedProperties;
   workingFilePath?: string;
   stateRoot?: string;
+  secretEnvironment?: Readonly<Record<string, string>>;
 };
 
 function asProviderWorkflowContext(

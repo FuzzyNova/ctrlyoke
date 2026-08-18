@@ -702,24 +702,6 @@ export class WorkflowExecutor {
       resolvedProperties = {
         ...resolvedProperties,
         secrets: secretNames,
-        mcpServers:
-          resolvedProperties.mcpServers?.map((server) =>
-            typeof server === "string"
-              ? server
-              : {
-                  ...server,
-                  env: expandSecretInterpolations(
-                    server.env,
-                    resolvedSecretValues,
-                    secretNames
-                  ),
-                  headers: expandSecretInterpolations(
-                    server.headers,
-                    resolvedSecretValues,
-                    secretNames
-                  ),
-                }
-          ) ?? null,
         hooks:
           resolvedProperties.hooks === null
             ? null
@@ -810,6 +792,7 @@ export class WorkflowExecutor {
           reportCompatibilityDiagnostics:
             context.reportCompatibilityDiagnostics,
           resolvePriorContextItems: context.resolvePriorContextItems,
+          secretEnvironment: resolvedSecretValues,
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
             | string
             | undefined,
@@ -2584,24 +2567,6 @@ export class WorkflowExecutor {
       resolvedProperties = {
         ...resolvedProperties,
         secrets: retrySecretNames,
-        mcpServers:
-          resolvedProperties.mcpServers?.map((server) =>
-            typeof server === "string"
-              ? server
-              : {
-                  ...server,
-                  env: expandSecretInterpolations(
-                    server.env,
-                    retrySecretValues,
-                    retrySecretNames
-                  ),
-                  headers: expandSecretInterpolations(
-                    server.headers,
-                    retrySecretValues,
-                    retrySecretNames
-                  ),
-                }
-          ) ?? null,
         hooks:
           resolvedProperties.hooks === null
             ? null
@@ -2649,6 +2614,7 @@ export class WorkflowExecutor {
           reportCompatibilityDiagnostics:
             context.reportCompatibilityDiagnostics,
           resolvePriorContextItems: context.resolvePriorContextItems,
+          secretEnvironment: retrySecretValues,
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
             | string
             | undefined,

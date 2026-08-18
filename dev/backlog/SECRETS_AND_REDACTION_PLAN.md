@@ -496,11 +496,28 @@ ctrlyoke secret check [file]   # preflight a workflow: declared vs resolvable
 ## Open questions
 
 - Which of the six harnesses expand a reference inside their MCP config env
-  values, and with what token? This decides reference-vs-substitute per harness
-  and needs empirical checks. **OpenCode is already answered in the codebase**:
-  it substitutes `{env:NAME}` (and `{file:...}`), per
-  `OPENCODE_CONFIG_SUBSTITUTION_PATTERN`. The other five are open, and the
-  answer is a token per harness, not a single `${VAR}`.
+  values and headers? **Answered from each harness's documented config format
+  and the checked-in OpenCode implementation; no billable harness runs were
+  used.** The generator owns the provider hook, and the existing spawn-time
+  environment injection supplies the real value under the referenced name.
+
+  | Harness           | Native env reference                                                                       | Native header reference                                                                        | Handling                                                                                                                                                              |
+  | ----------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `copilot-cli`     | `$NAME`, `${NAME}`, or `${NAME:-default}`                                                  | Same forms                                                                                     | Write `${NAME}` into the temp JSON config; inject `NAME` into the Copilot process environment.                                                                        |
+  | `claude-cli`      | `${NAME}` or `${NAME:-default}`                                                            | Same forms                                                                                     | Write `${NAME}` into the temp JSON config; inject `NAME` into the Claude process environment.                                                                         |
+  | `codex-cli`       | `env_vars = ["NAME"]` (named parent-env forwarding; static `env` values are not templates) | `env_http_headers = { Header = "NAME" }`, or `bearer_token_env_var = "NAME"` for Authorization | Emit Codex's native named forwarding fields. Composite `${secret:NAME}` values are rejected because Codex has no safe equivalent.                                     |
+  | `opencode-cli`    | `{env:NAME}`                                                                               | `{env:NAME}`                                                                                   | Preserve `OPENCODE_CONFIG_CONTENT` as process-env-only inline JSON; never write it to disk.                                                                           |
+  | `qwen-cli`        | `$NAME` or `${NAME}` in settings strings                                                   | Same settings-string expansion                                                                 | Write `${NAME}` into the inline JSON config; inject `NAME` into the Qwen process environment.                                                                         |
+  | `antigravity-cli` | No substitution syntax in the inspected `.agents/mcp_config.json` format                   | No substitution syntax                                                                         | Substitute from the already-resolved run environment, chmod the generated config to 0600 where supported, and remove/restore it through the existing tracker cleanup. |
+
+  References: [Copilot CLI MCP configuration](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference#local-server-configuration-fields), [Claude Code MCP configuration](https://docs.anthropic.com/en/docs/claude-code/mcp), [Codex MCP configuration](https://developers.openai.com/codex/mcp), and [Qwen Code settings](https://qwenlm.github.io/qwen-code-docs/en/users/configuration/settings/). OpenCode is answered in `src/core/harness/opencode/OpenCodeInlineConfig.ts` by `OPENCODE_CONFIG_SUBSTITUTION_PATTERN` (`/\{(?:env|file):/iu`) and `containsOpenCodeConfigSubstitution()`.
+
+  The Antigravity path is the only substituted artifact. Its workspace config is
+  restored to the pre-run baseline (or deleted when ctrlyoke created it), so a
+  generated plaintext credential does not remain after cleanup. Existing
+  user-authored plaintext in a pre-existing baseline is outside this step's
+  ownership and is not rewritten or exported by ctrlyoke.
+
 - Should workspace-scoped managed secrets require the same one-time trust
   approval that `permissions.allowedExternalFileRoots` does, given a cloned
   repo can declare grants? Leaning yes for grants, no for values the user set

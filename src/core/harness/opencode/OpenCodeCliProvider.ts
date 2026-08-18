@@ -122,7 +122,8 @@ export class OpenCodeCliProvider implements ICliProvider {
       options.workingFilePath,
       options.additionalEnv,
       options.userServers,
-      options.stateRoot
+      options.stateRoot,
+      options.secretOptions
     );
     const pluginPath = path.resolve(
       options.extensionPath,
@@ -212,6 +213,7 @@ export class OpenCodeCliProvider implements ICliProvider {
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
       stateRoot?: string;
+      secretEnvironment?: Readonly<Record<string, string>>;
     },
     _workspaceRoots?: readonly string[],
     _approvedExternalRoots?: readonly string[]
@@ -242,7 +244,8 @@ export class OpenCodeCliProvider implements ICliProvider {
           workingFile,
           additionalEnv,
           userServers,
-          workflowContext?.stateRoot
+          workflowContext?.stateRoot,
+          workflowContext?.secretEnvironment
         )
     );
     if (
@@ -416,7 +419,8 @@ export class OpenCodeCliProvider implements ICliProvider {
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[],
-    stateRoot?: string
+    stateRoot?: string,
+    secretEnvironment?: Readonly<Record<string, string>>
   ): Promise<string[] | null> {
     const hasMcp =
       !!mcpServerPath || (userServers !== undefined && userServers.length > 0);
@@ -426,7 +430,8 @@ export class OpenCodeCliProvider implements ICliProvider {
       workingFilePath,
       additionalEnv,
       userServers,
-      stateRoot
+      stateRoot,
+      secretEnvironment
     );
     await applyPreparedMutations(preparation.mutations);
     return hasMcp ? preparation.cliArgs : null;
@@ -438,7 +443,8 @@ export class OpenCodeCliProvider implements ICliProvider {
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[],
-    _stateRoot?: string
+    _stateRoot?: string,
+    secretEnvironment?: Readonly<Record<string, string>>
   ): Promise<CliProviderPreparation> {
     const hasUserServers = userServers && userServers.length > 0;
     if (!mcpServerPath && !hasUserServers) {
@@ -461,7 +467,11 @@ export class OpenCodeCliProvider implements ICliProvider {
       workingFilePath,
       additionalEnv,
       userServers,
-      _stateRoot
+      _stateRoot,
+      CliProviderUtils.createMcpSecretConfigOptions(
+        (name) => `{env:${name}}`,
+        secretEnvironment
+      )
     );
     return {
       cliArgs: [],

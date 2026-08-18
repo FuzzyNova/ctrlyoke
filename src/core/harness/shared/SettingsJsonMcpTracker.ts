@@ -26,6 +26,11 @@ export interface SettingsJsonMcpTrackerOptions {
   schemaUrl?: string;
 }
 
+export interface SettingsJsonMcpRegisterOptions {
+  /** File mode for secret-bearing generated settings (POSIX: 0600). */
+  fileMode?: number;
+}
+
 export type SettingsJsonPermissionDecision = "allow" | "ask" | "deny";
 export type SettingsJsonPermissionPolicy = Record<
   string,
@@ -315,7 +320,8 @@ export class SettingsJsonMcpTracker {
   async registerServers(
     workflowKey: string,
     workspaceRoot: string,
-    servers: Record<string, unknown>
+    servers: Record<string, unknown>,
+    options?: SettingsJsonMcpRegisterOptions
   ): Promise<string[]> {
     await this.captureBaseline(workspaceRoot);
 
@@ -370,6 +376,9 @@ export class SettingsJsonMcpTracker {
           recursive: true,
         });
         await writeFileAtomic(settingsPath, JSON.stringify(settings, null, 2));
+        if (options?.fileMode !== undefined) {
+          await fs.chmod(settingsPath, options.fileMode).catch(() => undefined);
+        }
         Log.debug(
           `🔧 ${this.toolName} MCP servers added to settings.json: [${serverNames.join(", ")}]`
         );
@@ -378,6 +387,9 @@ export class SettingsJsonMcpTracker {
           await this.writeGitignore(settingsPath);
         }
       } else {
+        if (options?.fileMode !== undefined) {
+          await fs.chmod(settingsPath, options.fileMode).catch(() => undefined);
+        }
         Log.debug(
           `♻️ ${this.toolName} MCP servers already in settings.json: [${serverNames.join(", ")}]`
         );

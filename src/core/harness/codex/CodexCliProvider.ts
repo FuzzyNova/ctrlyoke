@@ -45,6 +45,57 @@ const CODEX_SKIP_UPDATE_CHECK_ARGS = [
   "check_for_update_on_startup=false",
 ] as const;
 
+const CODEX_SECRET_REFERENCE_PATTERN = /^\$\{secret:([A-Z][A-Z0-9_]*)\}$/u;
+
+function splitCodexEnvironment(env: Record<string, string> | undefined): {
+  staticValues: Record<string, string>;
+  envVars: string[];
+} {
+  const staticValues: Record<string, string> = {};
+  const envVars: string[] = [];
+  for (const [key, value] of Object.entries(env ?? {})) {
+    const reference = CODEX_SECRET_REFERENCE_PATTERN.exec(value);
+    if (reference) {
+      envVars.push(reference[1]);
+    } else if (value.includes("${secret:")) {
+      throw new Error(
+        `Codex cannot represent a composite secret interpolation for MCP env "${key}"`
+      );
+    } else {
+      staticValues[key] = value;
+    }
+  }
+  return { staticValues, envVars };
+}
+
+function splitCodexHeaders(headers: Record<string, string> | undefined): {
+  staticValues: Record<string, string>;
+  envHttpHeaders: Record<string, string>;
+  bearerTokenEnvVar?: string;
+} {
+  const staticValues: Record<string, string> = {};
+  const envHttpHeaders: Record<string, string> = {};
+  let bearerTokenEnvVar: string | undefined;
+  for (const [key, value] of Object.entries(headers ?? {})) {
+    const bearerReference = /^Bearer \$\{secret:([A-Z][A-Z0-9_]*)\}$/u.exec(
+      value
+    );
+    const reference = CODEX_SECRET_REFERENCE_PATTERN.exec(value);
+    if (bearerReference && key.toLowerCase() === "authorization") {
+      bearerTokenEnvVar = bearerReference[1];
+    } else if (reference) {
+      envHttpHeaders[key] = reference[1];
+    } else if (value.includes("${secret:")) {
+      throw new Error(
+        `Codex cannot represent a composite secret interpolation for MCP header "${key}"`
+      );
+    } else {
+      staticValues[key] = value;
+    }
+  }
+  return { staticValues, envHttpHeaders, bearerTokenEnvVar };
+}
+
 /**
  * Codex CLI Harness
  *
@@ -163,6 +214,7 @@ export class CodexCliProvider implements ICliProvider {
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
       stateRoot?: string;
+      secretEnvironment?: Readonly<Record<string, string>>;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -194,6 +246,7 @@ export class CodexCliProvider implements ICliProvider {
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
       stateRoot?: string;
+      secretEnvironment?: Readonly<Record<string, string>>;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -221,7 +274,8 @@ export class CodexCliProvider implements ICliProvider {
           workingFile,
           additionalEnv,
           userServers,
-          workflowContext?.stateRoot
+          workflowContext?.stateRoot,
+          workflowContext?.secretEnvironment
         )
     );
     if (
@@ -646,7 +700,8 @@ export class CodexCliProvider implements ICliProvider {
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[],
-    stateRoot?: string
+    stateRoot?: string,
+    secretEnvironment?: Readonly<Record<string, string>>
   ): Promise<string[] | null> {
     const preparation = await this.planMcpConfigArgs(
       mcpServerPath,
@@ -654,7 +709,8 @@ export class CodexCliProvider implements ICliProvider {
       workingFilePath,
       additionalEnv,
       userServers,
-      stateRoot
+      stateRoot,
+      secretEnvironment
     );
     await applyPreparedMutations(preparation.mutations);
     return preparation.cliArgs.length > 0 ? preparation.cliArgs : null;
@@ -666,7 +722,8 @@ export class CodexCliProvider implements ICliProvider {
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[],
-    stateRoot?: string
+    stateRoot?: string,
+    _secretEnvironment?: Readonly<Record<string, string>>
   ): Promise<CliProviderPreparation> {
     if (!mcpServerPath && (!userServers || userServers.length === 0)) {
       return { cliArgs: [], mutations: [], diagnostics: [] };
@@ -710,16 +767,19 @@ export class CodexCliProvider implements ICliProvider {
         }
 
         if (server.url) {
+          const headers = splitCodexHeaders(server.headers);
           configArgs.push(
             "-c",
             CliMcpConfigGenerator.generateInlineTomlRemoteServerConfig(
               server.id,
               server.url,
-              server.headers,
+              headers.staticValues,
               {
                 defaultToolsApprovalMode:
                   server.autoApprove === true ? "approve" : undefined,
                 disabledTools: server.deniedTools,
+                envHttpHeaders: headers.envHttpHeaders,
+                bearerTokenEnvVar: headers.bearerTokenEnvVar,
               }
             )
           );
@@ -727,11 +787,11 @@ export class CodexCliProvider implements ICliProvider {
           const normalizedArgs = server.args?.map((arg) =>
             arg.replace(/\\/g, "/")
           );
+          const codexEnvironment = splitCodexEnvironment(server.env);
           const normalizedEnv = Object.fromEntries(
-            Object.entries(server.env ?? {}).map(([key, value]) => [
-              key,
-              value.replace(/\\/g, "/"),
-            ])
+            Object.entries(codexEnvironment.staticValues).map(
+              ([key, value]) => [key, value.replace(/\\/g, "/")]
+            )
           );
 
           configArgs.push(
@@ -745,6 +805,7 @@ export class CodexCliProvider implements ICliProvider {
                 defaultToolsApprovalMode:
                   server.autoApprove === true ? "approve" : undefined,
                 disabledTools: server.deniedTools,
+                envVars: codexEnvironment.envVars,
               }
             )
           );

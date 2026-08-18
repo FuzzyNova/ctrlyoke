@@ -1,12 +1,52 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { CliMcpConfigGenerator } from "../../core/harness/shared/CliMcpConfigGenerator";
+import type { McpServerConfig } from "../../types/CtrlYokeTypes";
 
 suite("CliMcpConfigGenerator", () => {
   // ──────────────────────────────────────────────────────────────────────────
   suite("generateJsonConfig", () => {
+    test("writes provider references instead of secret values in env and headers", () => {
+      const server: McpServerConfig = {
+        id: "remote",
+        url: "https://example.test/mcp",
+        headers: { Authorization: "Bearer ${secret:API_TOKEN}" },
+      };
+      const json = CliMcpConfigGenerator.generateUserServersOnlyConfig(
+        [server],
+        undefined,
+        {
+          mode: "reference",
+          referenceToken: (name) => `\${${name}}`,
+        }
+      );
+      const config = JSON.parse(json);
+      assert.strictEqual(
+        config.mcpServers.remote.headers.Authorization,
+        "Bearer ${API_TOKEN}"
+      );
+      assert.ok(!json.includes("secret-value"));
+    });
+
+    test("substitutes non-expanding values without leaving the reference", () => {
+      const server: McpServerConfig = {
+        id: "local",
+        command: "node",
+        env: { API_TOKEN: "${secret:API_TOKEN}" },
+      };
+      const json = CliMcpConfigGenerator.generateUserServersOnlyConfig(
+        [server],
+        undefined,
+        { mode: "substitute", resolvedValues: { API_TOKEN: "secret-value" } }
+      );
+      const config = JSON.parse(json);
+      assert.strictEqual(config.mcpServers.local.env.API_TOKEN, "secret-value");
+      assert.ok(!json.includes("${secret:API_TOKEN}"));
+    });
+
     test("produces valid JSON string", () => {
       const json = CliMcpConfigGenerator.generateJsonConfig(
         "out/mcp-server.js",
@@ -187,6 +227,34 @@ suite("CliMcpConfigGenerator", () => {
         config.mcpServers.ctrlyoke.env.CTRLYOKE_WORKING_FILE,
         workingFile.replace(/\\/g, "/")
       );
+    });
+
+    test("restrictive MCP artifacts are deleted by their cleanup mutation", async () => {
+      const root = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-mcp-secret-artifact-")
+      );
+      const filePath = path.join(root, "mcp-config.json");
+      const mutation = CliMcpConfigGenerator.createFileMutation(
+        filePath,
+        '{"secret":"secret-value"}',
+        "Write secret MCP configuration",
+        { restrictivePermissions: true }
+      );
+
+      try {
+        await mutation.apply();
+        assert.strictEqual(
+          await fs.readFile(filePath, "utf8"),
+          '{"secret":"secret-value"}'
+        );
+        if (process.platform !== "win32") {
+          assert.strictEqual((await fs.stat(filePath)).mode & 0o777, 0o600);
+        }
+        await mutation.restore?.();
+        await assert.rejects(fs.access(filePath));
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
     });
   });
 

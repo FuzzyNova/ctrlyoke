@@ -20,6 +20,8 @@ import {
   applyPreparedMutations,
   type CliProviderPreparation,
 } from "./interfaces/PreparedMutation";
+import type { McpSecretConfigOptions } from "./CliMcpConfigGenerator";
+import { transformMcpSecretMap } from "./CliMcpConfigGenerator";
 
 const execFileAsync = promisify(execFile);
 
@@ -95,6 +97,24 @@ export interface SettingsJsonMcpEntryOptions {
  * - Shell-aware CLI version checks (`checkCliAvailability`, `getCliVersion`)
  */
 export class CliProviderUtils {
+  /** Build the per-provider MCP secret strategy at the shared config seam. */
+  static createMcpSecretConfigOptions(
+    referenceToken: ((name: string) => string) | undefined,
+    resolvedValues?: Readonly<Record<string, string>>
+  ): McpSecretConfigOptions | undefined {
+    if (referenceToken) {
+      return { mode: "reference", referenceToken };
+    }
+    if (resolvedValues) {
+      return {
+        mode: "substitute",
+        resolvedValues,
+        restrictivePermissions: true,
+      };
+    }
+    return undefined;
+  }
+
   /**
    * One extension-host session needs only one successful `--version` probe per
    * command. The cache also coalesces simultaneous detector and capability
@@ -292,6 +312,7 @@ export class CliProviderUtils {
           resolvedProperties?: ResolvedProperties;
           workingFilePath?: string;
           stateRoot?: string;
+          secretEnvironment?: Readonly<Record<string, string>>;
         }
       | undefined,
     workspaceRoot: string | undefined,
@@ -302,7 +323,8 @@ export class CliProviderUtils {
       workingFilePath?: string,
       additionalEnv?: Record<string, string>,
       userServers?: McpServerConfig[],
-      stateRoot?: string
+      stateRoot?: string,
+      secretEnvironment?: Readonly<Record<string, string>>
     ) => Promise<string[] | null>
   ): Promise<string[]> {
     const preparation = await CliProviderUtils.planMcpConfigBlock(
@@ -315,7 +337,8 @@ export class CliProviderUtils {
         workingFilePath,
         additionalEnv,
         userServers,
-        stateRoot
+        stateRoot,
+        secretEnvironment
       ) => ({
         cliArgs:
           (await getMcpConfigArgs(
@@ -324,7 +347,8 @@ export class CliProviderUtils {
             workingFilePath,
             additionalEnv,
             userServers,
-            stateRoot
+            stateRoot,
+            secretEnvironment
           )) ?? [],
         mutations: [],
         diagnostics: [],
@@ -348,6 +372,7 @@ export class CliProviderUtils {
           resolvedProperties?: ResolvedProperties;
           workingFilePath?: string;
           stateRoot?: string;
+          secretEnvironment?: Readonly<Record<string, string>>;
         }
       | undefined,
     workspaceRoot: string | undefined,
@@ -358,7 +383,8 @@ export class CliProviderUtils {
       workingFilePath?: string,
       additionalEnv?: Record<string, string>,
       userServers?: McpServerConfig[],
-      stateRoot?: string
+      stateRoot?: string,
+      secretEnvironment?: Readonly<Record<string, string>>
     ) => Promise<CliProviderPreparation>
   ): Promise<CliProviderPreparation> {
     if (!workflowContext || !workspaceRoot) {
@@ -415,7 +441,8 @@ export class CliProviderUtils {
       workflowContext.workingFilePath,
       additionalEnv,
       userServers.length > 0 ? userServers : undefined,
-      workflowContext.stateRoot
+      workflowContext.stateRoot,
+      workflowContext.secretEnvironment
     );
   }
 
@@ -459,7 +486,8 @@ export class CliProviderUtils {
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[],
     options?: SettingsJsonMcpEntryOptions,
-    stateRoot?: string
+    stateRoot?: string,
+    secretOptions?: McpSecretConfigOptions
   ): Record<string, unknown> {
     // Defaults reproduce Qwen semantics; Antigravity overrides the
     // remote-URL key (serverUrl) and drops the type/trust fields its schema
@@ -509,11 +537,18 @@ export class CliProviderUtils {
           if (includeRemoteType) {
             entry.type = server.transport ?? "streamable-http";
           }
-          if (server.headers) entry.headers = server.headers;
+          if (server.headers) {
+            entry.headers = transformMcpSecretMap(
+              server.headers,
+              secretOptions
+            );
+          }
         } else {
           entry.command = server.command;
           if (server.args) entry.args = server.args;
-          if (server.env) entry.env = server.env;
+          if (server.env) {
+            entry.env = transformMcpSecretMap(server.env, secretOptions);
+          }
         }
         if (includeTrust && server.autoApprove === true) {
           entry.trust = true;

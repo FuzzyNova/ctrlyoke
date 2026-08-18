@@ -164,6 +164,7 @@ export class QwenCliProvider implements ICliProvider {
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
       stateRoot?: string;
+      secretEnvironment?: Readonly<Record<string, string>>;
     },
     _workspaceRoots?: readonly string[],
     _approvedExternalRoots?: readonly string[]
@@ -187,7 +188,8 @@ export class QwenCliProvider implements ICliProvider {
           workingFile,
           additionalEnv,
           userServers,
-          workflowContext?.stateRoot
+          workflowContext?.stateRoot,
+          workflowContext?.secretEnvironment
         )
     );
     if (
@@ -663,7 +665,8 @@ export class QwenCliProvider implements ICliProvider {
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[],
-    stateRoot?: string
+    stateRoot?: string,
+    secretEnvironment?: Readonly<Record<string, string>>
   ): Promise<string[] | null> {
     const preparation = await this.planMcpConfigArgs(
       mcpServerPath,
@@ -671,7 +674,8 @@ export class QwenCliProvider implements ICliProvider {
       workingFilePath,
       additionalEnv,
       userServers,
-      stateRoot
+      stateRoot,
+      secretEnvironment
     );
     await applyPreparedMutations(preparation.mutations);
     return preparation.cliArgs.length > 0 ? preparation.cliArgs : null;
@@ -683,7 +687,8 @@ export class QwenCliProvider implements ICliProvider {
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[],
-    stateRoot?: string
+    stateRoot?: string,
+    secretEnvironment?: Readonly<Record<string, string>>
   ): Promise<CliProviderPreparation> {
     if (!mcpServerPath && (!userServers || userServers.length === 0)) {
       return { cliArgs: [], mutations: [], diagnostics: [] };
@@ -696,7 +701,11 @@ export class QwenCliProvider implements ICliProvider {
       additionalEnv,
       userServers,
       undefined,
-      stateRoot
+      stateRoot,
+      CliProviderUtils.createMcpSecretConfigOptions(
+        (name) => `\${${name}}`,
+        secretEnvironment
+      )
     );
 
     return {

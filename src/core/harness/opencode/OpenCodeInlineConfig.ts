@@ -5,6 +5,10 @@ import { parse, type ParseError } from "jsonc-parser";
 import type { McpServerConfig } from "../../../types/CtrlYokeTypes";
 import type { ToolPermissionConfig } from "../shared/interfaces/IToolPermissionMapper";
 import type { SettingsJsonPermissionPolicy } from "../shared/SettingsJsonMcpTracker";
+import {
+  transformMcpSecretMap,
+  type McpSecretConfigOptions,
+} from "../shared/CliMcpConfigGenerator";
 import { Log } from "../../../utils/Log";
 
 export interface OpenCodeLocalMcpServer {
@@ -138,9 +142,16 @@ function warnAndDropSubstitution(location: string): undefined {
 
 function sanitizeMcpString(
   value: string,
-  location: string
+  location: string,
+  allowSecretReference = false
 ): string | undefined {
-  return containsOpenCodeConfigSubstitution(value)
+  if (!containsOpenCodeConfigSubstitution(value)) return value;
+  if (!allowSecretReference) return warnAndDropSubstitution(location);
+  const withoutSecretReferences = value.replace(
+    /\{env:[A-Z][A-Z0-9_]*\}/gu,
+    ""
+  );
+  return withoutSecretReferences.includes("{")
     ? warnAndDropSubstitution(location)
     : value;
 }
@@ -154,11 +165,16 @@ function sanitizeMcpStringArray(values: string[], location: string): string[] {
 
 function sanitizeMcpStringRecord(
   values: Record<string, string>,
-  location: string
+  location: string,
+  allowSecretReference = false
 ): Record<string, string> {
   const sanitized: Record<string, string> = {};
   for (const [key, value] of Object.entries(values)) {
-    const safeValue = sanitizeMcpString(value, `${location}.${key}`);
+    const safeValue = sanitizeMcpString(
+      value,
+      `${location}.${key}`,
+      allowSecretReference
+    );
     if (safeValue !== undefined) {
       sanitized[key] = safeValue;
     }
@@ -183,6 +199,7 @@ export interface OpenCodeInlineConfigBuildOptions {
   additionalEnv?: Record<string, string>;
   userServers?: McpServerConfig[];
   stateRoot?: string;
+  secretOptions?: McpSecretConfigOptions;
 }
 
 /**
@@ -197,7 +214,8 @@ export function buildOpenCodeMcpEntries(
   workingFilePath?: string,
   additionalEnv?: Record<string, string>,
   userServers: McpServerConfig[] = [],
-  stateRoot?: string
+  stateRoot?: string,
+  secretOptions?: McpSecretConfigOptions
 ): OpenCodeMcpEntries {
   if (mcpServerPath && !workspaceRoot) {
     throw new Error(
@@ -251,7 +269,16 @@ export function buildOpenCodeMcpEntries(
     }
   }
 
-  for (const server of userServers) {
+  for (const rawServer of userServers) {
+    const server = {
+      ...rawServer,
+      env: rawServer.env
+        ? transformMcpSecretMap(rawServer.env, secretOptions)
+        : undefined,
+      headers: rawServer.headers
+        ? transformMcpSecretMap(rawServer.headers, secretOptions)
+        : undefined,
+    };
     const serverId = sanitizeMcpString(server.id, "MCP server id");
     if (serverId === undefined) {
       continue;
@@ -268,7 +295,8 @@ export function buildOpenCodeMcpEntries(
       if (server.headers) {
         entry.headers = sanitizeMcpStringRecord(
           server.headers,
-          `MCP server ${serverId} headers`
+          `MCP server ${serverId} headers`,
+          secretOptions?.mode === "reference"
         );
       }
       mcpEntries[serverId] = entry;
@@ -295,7 +323,8 @@ export function buildOpenCodeMcpEntries(
     if (server.env) {
       entry.environment = sanitizeMcpStringRecord(
         server.env,
-        `MCP server ${serverId} environment`
+        `MCP server ${serverId} environment`,
+        secretOptions?.mode === "reference"
       );
     }
     mcpEntries[serverId] = entry;

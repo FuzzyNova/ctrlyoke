@@ -154,6 +154,7 @@ export class CopilotCliProvider implements ICliProvider {
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
       stateRoot?: string;
+      secretEnvironment?: Readonly<Record<string, string>>;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -185,6 +186,7 @@ export class CopilotCliProvider implements ICliProvider {
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
       stateRoot?: string;
+      secretEnvironment?: Readonly<Record<string, string>>;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -223,7 +225,8 @@ export class CopilotCliProvider implements ICliProvider {
           workingFile,
           additionalEnv,
           userServers,
-          workflowContext?.stateRoot
+          workflowContext?.stateRoot,
+          workflowContext?.secretEnvironment
         )
     );
     if (
@@ -868,7 +871,8 @@ export class CopilotCliProvider implements ICliProvider {
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[],
-    stateRoot?: string
+    stateRoot?: string,
+    secretEnvironment?: Readonly<Record<string, string>>
   ): Promise<string[] | null> {
     const preparation = await this.planMcpConfigArgs(
       mcpServerPath,
@@ -876,7 +880,8 @@ export class CopilotCliProvider implements ICliProvider {
       workingFilePath,
       additionalEnv,
       userServers,
-      stateRoot
+      stateRoot,
+      secretEnvironment
     );
     await applyPreparedMutations(preparation.mutations);
     return preparation.cliArgs.length > 0 ? preparation.cliArgs : null;
@@ -888,7 +893,8 @@ export class CopilotCliProvider implements ICliProvider {
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[],
-    stateRoot?: string
+    stateRoot?: string,
+    secretEnvironment?: Readonly<Record<string, string>>
   ): Promise<CliProviderPreparation> {
     try {
       // Generate MCP config JSON using shared utility
@@ -899,6 +905,10 @@ export class CopilotCliProvider implements ICliProvider {
         remoteTypeMap: { "streamable-http": "http", sse: "sse" },
         tools: ["*"] as string[],
       };
+      const secretOptions = CliProviderUtils.createMcpSecretConfigOptions(
+        (name) => `\${${name}}`,
+        secretEnvironment
+      );
       let configJson: string;
       if (mcpServerPath && userServers && userServers.length > 0) {
         configJson = CliMcpConfigGenerator.generateJsonConfigWithUserServers(
@@ -909,7 +919,8 @@ export class CopilotCliProvider implements ICliProvider {
           workingFilePath,
           additionalEnv,
           copilotUserServerConfig,
-          stateRoot
+          stateRoot,
+          secretOptions
         );
       } else if (mcpServerPath) {
         configJson = CliMcpConfigGenerator.generateJsonConfig(
@@ -918,12 +929,14 @@ export class CopilotCliProvider implements ICliProvider {
           { type: "local", tools: ["*"] },
           workingFilePath,
           additionalEnv,
-          stateRoot
+          stateRoot,
+          secretOptions
         );
       } else if (userServers && userServers.length > 0) {
         configJson = CliMcpConfigGenerator.generateUserServersOnlyConfig(
           userServers,
-          copilotUserServerConfig
+          copilotUserServerConfig,
+          secretOptions
         );
       } else {
         return { cliArgs: [], mutations: [], diagnostics: [] };

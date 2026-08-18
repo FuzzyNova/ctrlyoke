@@ -121,4 +121,10 @@ export interface WorkflowContext {
   finalStepSessionId?: string;
   /** State root exported to MCP by an execution integration. */
   stateRoot?: string;
+  /**
+   * Resolved values for this prompt's secret grants. This is execution-only
+   * state used by providers that cannot expand MCP references; it is never
+   * persisted or included in workflow/runtime serialization.
+   */
+  secretEnvironment?: Readonly<Record<string, string>>;
 }
