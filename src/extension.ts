@@ -12,6 +12,7 @@ import {
   getVsCodeNamedWorkspaceRoots,
 } from "./platform/VsCodeWorkspaceRoot";
 import { ServerTokenStore } from "./platform/ServerTokenStore";
+import { VsCodeAdapter } from "./platform/VsCodeAdapter";
 import { CtrlYokeHostedServer } from "./server/CtrlYokeHostedServer";
 import {
   GIT_CHANGE_KINDS,
@@ -1094,7 +1095,9 @@ function registerCommands(context: vscode.ExtensionContext) {
       const port = configService.get("server")?.port ?? 3000;
       const workspaceRoot = getVsCodeWorkspaceRoot();
       const namedWorkspaceRoots = getVsCodeNamedWorkspaceRoots();
-      const token = await new ServerTokenStore(context.secrets).getOrCreate();
+      const token = await new ServerTokenStore(
+        new VsCodeAdapter(context).getSecretStore()
+      ).getOrCreate();
       const bindAddress =
         configService.get("server")?.bindAddress ?? "127.0.0.1";
       const tlsCfg = configService.get("server")?.tls;
@@ -1160,7 +1163,9 @@ function registerCommands(context: vscode.ExtensionContext) {
   const regenerateServerTokenCommand = vscode.commands.registerCommand(
     "ctrlyoke.regenerateServerToken",
     async () => {
-      await new ServerTokenStore(context.secrets).regenerate();
+      await new ServerTokenStore(
+        new VsCodeAdapter(context).getSecretStore()
+      ).regenerate();
       webviewProvider.postMessage({
         type: MESSAGE_TYPES.SERVER_TOKEN_REGENERATED,
       });

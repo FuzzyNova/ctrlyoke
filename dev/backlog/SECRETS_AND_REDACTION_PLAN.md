@@ -182,15 +182,30 @@ dependency-correct order is 1 → 2 → 4 → 5 → 3 → 6.
 
 ## Phase 1 — Store, declaration, and resolution
 
-- Promote the existing `SecretStore` interface in `src/platform/ServerTokenStore.ts`
+- [x] Promote the existing `SecretStore` interface in `src/platform/ServerTokenStore.ts`
   into a first-class platform contract (`get`/`store`/`delete`/`keys`) and keep
   `ServerTokenStore` as one consumer of it.
-- Extension host: back it with VS Code `SecretStorage`, keyed by scope
+- [x] Extension host: back it with VS Code `SecretStorage`, keyed by scope
   (`ctrlyoke.secret.user.<NAME>` vs `ctrlyoke.secret.ws.<hash>.<NAME>`).
-- CLI/server host: back it with an OS credential-store adapter (macOS
+- [x] CLI/server host: back it with an OS credential-store adapter (macOS
   `security`, Linux `secret-tool`/libsecret, Windows DPAPI via CredMan). If no
   backend is available, **fail and direct the user to env passthrough** — never
   fall back to a plaintext file.
+
+Store-half implementation decisions:
+
+- Workspace `<hash>` is the first 12 hexadecimal characters of SHA-256 over
+  the resolved workspace root in the platform-aware path-comparison form. This
+  matches the existing project identity length while keeping equivalent
+  Windows path casing in one scope.
+- macOS and Linux adapters maintain a small encrypted credential-store index
+  for `keys()`, because safe generic enumeration through `security` and
+  `secret-tool` would otherwise require dumping credential contents. Windows
+  uses CredMan through DPAPI-backed generic credentials, with the same index
+  contract.
+- Unsupported platforms and missing credential-store executables fail with an
+  actionable env-passthrough message. There is intentionally no plaintext
+  file fallback.
 - Add `secrets` to `#/definitions/executionProperties` in
   `schemas/workflow-schema.json`, mirrored in `src/types/CtrlYokeTypes.ts`.
   Placing it there — not on `promptStep` alone — gets `_runtime` capture and

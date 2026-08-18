@@ -1,0 +1,62 @@
+import { createHash } from "node:crypto";
+import * as path from "node:path";
+import { foldPathForCompare } from "../utils/PathCasing";
+
+export const SECRET_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
+
+const USER_SECRET_PREFIX = "ctrlyoke.secret.user";
+const WORKSPACE_SECRET_PREFIX = "ctrlyoke.secret.ws";
+const WORKSPACE_HASH_LENGTH = 12;
+
+export type SecretName = string & { readonly __secretName: unique symbol };
+
+/** Return whether a value is a legal managed secret name. */
+export function isValidSecretName(value: string): value is SecretName {
+  return SECRET_NAME_PATTERN.test(value);
+}
+
+/** Validate a managed secret name and throw an actionable error if invalid. */
+export function validateSecretName(value: string): asserts value is SecretName {
+  if (!isValidSecretName(value)) {
+    throw new Error(
+      `Invalid secret name "${value}". Secret names must match ${SECRET_NAME_PATTERN.source}.`
+    );
+  }
+}
+
+/** Build the user-scoped key for a managed secret. */
+export function userSecretKey(name: string): string {
+  validateSecretName(name);
+  return `${USER_SECRET_PREFIX}.${name}`;
+}
+
+/** Build a workspace-scoped key from the stable workspace hash. */
+export function workspaceSecretKey(
+  workspaceHash: string,
+  name: string
+): string {
+  validateSecretName(name);
+  if (!/^[0-9a-f]{12}$/i.test(workspaceHash)) {
+    throw new Error(
+      `Invalid workspace secret hash "${workspaceHash}". Expected 12 hexadecimal characters.`
+    );
+  }
+  return `${WORKSPACE_SECRET_PREFIX}.${workspaceHash.toLowerCase()}.${name}`;
+}
+
+/** Hash a workspace root for use with workspace-scoped secret keys. */
+export function workspaceSecretHash(workspaceRoot: string): string {
+  const canonicalRoot = foldPathForCompare(path.resolve(workspaceRoot));
+  return createHash("sha256")
+    .update(canonicalRoot, "utf8")
+    .digest("hex")
+    .slice(0, WORKSPACE_HASH_LENGTH);
+}
+
+/** Build a workspace-scoped key directly from a workspace root. */
+export function workspaceSecretKeyForRoot(
+  workspaceRoot: string,
+  name: string
+): string {
+  return workspaceSecretKey(workspaceSecretHash(workspaceRoot), name);
+}

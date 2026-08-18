@@ -8,6 +8,8 @@ import {
 import type { ResolverWorkspaceFolder } from "./WorkspaceRootResolver";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
+import type { SecretStore } from "./SecretStore";
+import { VsCodeSecretStore } from "./VsCodeSecretStore";
 
 /**
  * VS Code implementation of PlatformAdapter.
@@ -15,7 +17,15 @@ import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
  * Used exclusively in the VS Code extension context.
  */
 export class VsCodeAdapter implements PlatformAdapter {
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  private readonly secretStore: SecretStore;
+
+  constructor(private readonly context: vscode.ExtensionContext) {
+    this.secretStore = new VsCodeSecretStore(context.secrets);
+  }
+
+  getSecretStore(): SecretStore {
+    return this.secretStore;
+  }
 
   getWorkspaceRoot(): string {
     return getVsCodeWorkspaceRoot();
