@@ -12,12 +12,13 @@ import { getActiveOutputNavigationController } from "@utils/outputNavigation";
  * Callers can add their own guards (e.g. isCLIManaged) before invoking it.
  */
 export function useStepClickHandler() {
-  const { steps: prompts } = useWorkflowStore();
-  const { selectPrompt } = useEditorStore();
+  const selectPrompt = useEditorStore((state) => state.selectPrompt);
 
   return useCallback(
     (index: number) => {
-      const prompt = prompts[index];
+      // Read the current step at event time so status/runtime updates do not
+      // invalidate this callback and every memoized workflow row.
+      const prompt = useWorkflowStore.getState().steps[index];
       if (!prompt) return;
       selectPrompt({ kind: FINAL_STEP_PHASES.QUEUE, index }, prompt);
       const target = { kind: FINAL_STEP_PHASES.QUEUE, index } as const;
@@ -37,6 +38,6 @@ export function useStepClickHandler() {
         });
       });
     },
-    [prompts, selectPrompt]
+    [selectPrompt]
   );
 }
