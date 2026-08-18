@@ -37,6 +37,7 @@ import { AntigravityCliProvider } from "./core/harness/antigravity/AntigravityCl
 import { ClaudeCliProvider } from "./core/harness/claude/ClaudeCliProvider";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
 import { Log } from "./utils/Log";
+import { secretRedactionService } from "./utils/SecretRedactionService";
 import { saveIfDirty } from "./utils/FileSystemUtils";
 import { getErrorMessage } from "./utils/ErrorUtils";
 import { findWorkflowFilesInWorkspace } from "./utils/WorkflowFileDiscovery";
@@ -74,6 +75,10 @@ let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: CtrlYokeWebviewProvider;
 let hostedServer: CtrlYokeHostedServer | undefined;
 let notificationManager: NotificationManager | undefined;
+// Exempts the running server's own connection token from heuristic secret
+// redaction (see secretRedactionService.protectValue) for as long as the
+// server is up; cleared on stop/regenerate/deactivate.
+let unprotectServerToken: (() => void) | undefined;
 
 // Publisher/name must match package.json; walkthrough id must match contributes.walkthroughs.
 const GETTING_STARTED_WALKTHROUGH_ID =
@@ -1118,6 +1123,8 @@ function registerCommands(context: vscode.ExtensionContext) {
       const token = await new ServerTokenStore(
         new VsCodeAdapter(context).getSecretStore()
       ).getOrCreate();
+      unprotectServerToken?.();
+      unprotectServerToken = secretRedactionService.protectValue(token);
       const bindAddress =
         configService.get("server")?.bindAddress ?? "127.0.0.1";
       const tlsCfg = configService.get("server")?.tls;
@@ -1138,6 +1145,8 @@ function registerCommands(context: vscode.ExtensionContext) {
           tlsConfig
         );
       } catch (err) {
+        unprotectServerToken?.();
+        unprotectServerToken = undefined;
         vscode.window.showErrorMessage(
           `ctrlyoke: Failed to start server — ${err instanceof Error ? err.message : String(err)}`
         );
@@ -1148,6 +1157,8 @@ function registerCommands(context: vscode.ExtensionContext) {
         url = await hostedServer.listen();
       } catch (err) {
         hostedServer = undefined;
+        unprotectServerToken?.();
+        unprotectServerToken = undefined;
         vscode.window.showErrorMessage(
           `ctrlyoke: Failed to bind server — ${err instanceof Error ? err.message : String(err)}`
         );
@@ -1173,6 +1184,8 @@ function registerCommands(context: vscode.ExtensionContext) {
     () => {
       hostedServer?.dispose();
       hostedServer = undefined;
+      unprotectServerToken?.();
+      unprotectServerToken = undefined;
       webviewProvider.setRunningServerUrl(undefined);
       webviewProvider.setThemeVarsCapturedCallback(undefined);
       webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STOPPED });
@@ -1308,6 +1321,8 @@ export async function deactivate(): Promise<void> {
 
   hostedServer?.dispose();
   hostedServer = undefined;
+  unprotectServerToken?.();
+  unprotectServerToken = undefined;
 
   if (workflowOrchestrator) {
     workflowOrchestrator.dispose();

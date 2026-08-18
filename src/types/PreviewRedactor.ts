@@ -53,13 +53,17 @@ interface RedactedText {
 export function redactPreviewText(
   text: string,
   existing: RedactionSpan[] = [],
-  exactSecrets: readonly string[] = []
+  exactSecrets: readonly string[] = [],
+  protectedValues: readonly string[] = []
 ): RedactedText {
   let currentText = text;
   let spans = [...existing];
+  const protectedSet = new Set(
+    protectedValues.filter((value) => value.length > 0)
+  );
 
   for (const secret of [...exactSecrets]
-    .filter((value) => value.length > 0)
+    .filter((value) => value.length > 0 && !protectedSet.has(value))
     .sort((left, right) => right.length - left.length)) {
     let start = currentText.indexOf(secret);
     while (start >= 0) {
@@ -89,7 +93,7 @@ export function redactPreviewText(
       const matchStart = match.index ?? 0;
       const matchText = match[0];
       const value = rule.valueGroup ? match[rule.valueGroup] : matchText;
-      if (!value) {
+      if (!value || protectedSet.has(value)) {
         continue;
       }
       const valueOffset = rule.valueGroup ? matchText.indexOf(value) : 0;

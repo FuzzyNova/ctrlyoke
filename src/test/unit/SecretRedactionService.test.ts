@@ -43,4 +43,25 @@ suite("SecretRedactionService", () => {
       "run-only-value"
     );
   });
+
+  test("protectValue exempts a value from heuristic credential-assignment matching", () => {
+    // Regression: the hosted server's own connection token legitimately
+    // appears as `?token=<hex>` in its manifest link and in the settings
+    // "copy URL" payload. Without this exemption the credential-assignment
+    // heuristic corrupts both, breaking auth (401) and the copied link.
+    const token =
+      "ce5edcba9641f1bd799e8a1d0c3a792019ea05e84bc0bee59021db1ee19c3517";
+    const release = secretRedactionService.protectValue(token);
+
+    assert.strictEqual(
+      secretRedactionService.redactText(`/?token=${token}`),
+      `/?token=${token}`
+    );
+
+    release();
+    assert.notStrictEqual(
+      secretRedactionService.redactText(`/?token=${token}`),
+      `/?token=${token}`
+    );
+  });
 });

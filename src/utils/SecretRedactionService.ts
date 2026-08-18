@@ -33,6 +33,7 @@ export class RunSecretRedactor {
  */
 export class SecretRedactionService {
   private readonly activeRuns = new Set<RunSecretRedactor>();
+  private readonly protectedValues = new Set<string>();
 
   register(redactor: RunSecretRedactor): () => void {
     this.activeRuns.add(redactor);
@@ -42,6 +43,22 @@ export class SecretRedactionService {
     };
   }
 
+  /**
+   * Exempt a value from redaction — e.g. the hosted server's own connection
+   * token, which legitimately appears shaped like `token=<hex>` in URLs
+   * ctrlyoke generates itself (the manifest link, the settings "copy URL"
+   * button). Those are not leaked user credentials; the client needs the
+   * value verbatim to keep using the app. This is independent from
+   * `RunSecretRedactor` (actual resolved managed-secret values) — a value
+   * would only ever land in both sets by coincidence.
+   */
+  protectValue(value: string): () => void {
+    if (value.length > 0) {
+      this.protectedValues.add(value);
+    }
+    return () => this.protectedValues.delete(value);
+  }
+
   redactText(text: string): string {
     const exactSecrets = new Set<string>();
     for (const redactor of this.activeRuns) {
@@ -49,7 +66,12 @@ export class SecretRedactionService {
         exactSecrets.add(secret);
       }
     }
-    return redactPreviewText(text, [], [...exactSecrets]).text;
+    return redactPreviewText(
+      text,
+      [],
+      [...exactSecrets],
+      [...this.protectedValues]
+    ).text;
   }
 
   /** Redact a transport/persistence DTO without mutating the caller's object. */
