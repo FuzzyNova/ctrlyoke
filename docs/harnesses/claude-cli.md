@@ -1,5 +1,8 @@
 # Claude CLI
 
+See the [generated compatibility matrix](/harnesses/compatibility) for
+capability details and version-scoped evidence.
+
 `claude-cli` runs ctrlyoke workflows through Claude Code while keeping the same workflow file format used elsewhere.
 
 ## Why use it

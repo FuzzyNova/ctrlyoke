@@ -1,5 +1,8 @@
 # Qwen CLI
 
+See the [generated compatibility matrix](/harnesses/compatibility) for
+capability details and version-scoped evidence.
+
 `qwen-cli` runs ctrlyoke workflows against Qwen Code while preserving the same step model, session controls, and validation hooks.
 
 ## Good fit

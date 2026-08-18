@@ -24,6 +24,22 @@ import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
 
 export const HARNESS_CAPABILITY_SNAPSHOT_SCHEMA_VERSION = 1;
 
+export const DEFAULT_ENABLED_CAPABILITY_DOMAINS: readonly CapabilityDomain[] = [
+  CAPABILITY_DOMAINS.PERMISSIONS,
+  CAPABILITY_DOMAINS.PROMPT_INPUTS,
+  CAPABILITY_DOMAINS.HOOKS,
+  CAPABILITY_DOMAINS.MCP,
+];
+
+export interface HarnessCapabilityDocumentationFacts {
+  readonly enabledDomains: readonly CapabilityDomain[];
+  readonly harnesses: readonly {
+    readonly harnessId: HarnessId;
+    readonly displayName: string;
+    readonly capabilities: HarnessCapabilityFacts;
+  }[];
+}
+
 export interface HarnessCapabilitySource {
   readonly provider: Pick<ICliProvider, "config" | "capabilities"> & {
     checkAvailability(): Promise<boolean>;
@@ -64,10 +80,7 @@ export class HarnessCapabilityRegistry {
 
   constructor(options: HarnessCapabilityRegistryOptions = {}) {
     this.enabledDomains = options.enabledDomains ?? [
-      CAPABILITY_DOMAINS.PERMISSIONS,
-      CAPABILITY_DOMAINS.PROMPT_INPUTS,
-      CAPABILITY_DOMAINS.HOOKS,
-      CAPABILITY_DOMAINS.MCP,
+      ...DEFAULT_ENABLED_CAPABILITY_DOMAINS,
     ];
     this.validateEnabledDomains();
 
@@ -188,6 +201,24 @@ export class HarnessCapabilityRegistry {
       );
     }
     return snapshot;
+  }
+
+  /**
+   * Return the adapter-owned declarations used by customer documentation.
+   * This intentionally performs no availability or version probes.
+   */
+  static getDocumentationFacts(): HarnessCapabilityDocumentationFacts {
+    return {
+      enabledDomains: DEFAULT_ENABLED_CAPABILITY_DOMAINS,
+      harnesses: HARNESS_ID_LIST.map((harnessId) => {
+        const provider = IntegrationFactory.createCapabilityProvider(harnessId);
+        return {
+          harnessId,
+          displayName: provider.config.displayName,
+          capabilities: provider.capabilities,
+        };
+      }),
+    };
   }
 
   /**

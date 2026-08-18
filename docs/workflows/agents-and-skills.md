@@ -9,6 +9,10 @@ categorized prompt references; agent content is wrapped in
 These fields are supported independently of any harness-native discovery
 feature.
 
+For the full conditional-capability boundary, see the [generated harness
+compatibility matrix](/harnesses/compatibility). It excludes these portable
+attachments and explains how they differ from optional native discovery.
+
 ## Agent
 
 `agent` selects one custom agent by name.

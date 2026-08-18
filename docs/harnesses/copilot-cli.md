@@ -1,5 +1,8 @@
 # Copilot CLI
 
+See the [generated compatibility matrix](/harnesses/compatibility) for
+capability details and version-scoped evidence.
+
 `copilot-cli` is the default ctrlyoke harness and the easiest place to start if you already use GitHub Copilot.
 
 ## Why use it

@@ -1,5 +1,8 @@
 # OpenCode CLI
 
+See the [generated compatibility matrix](/harnesses/compatibility) for
+capability details and version-scoped evidence.
+
 `opencode-cli` is the OpenCode-backed harness for teams that already rely on OpenCode as their command-line assistant layer.
 
 ## Good fit

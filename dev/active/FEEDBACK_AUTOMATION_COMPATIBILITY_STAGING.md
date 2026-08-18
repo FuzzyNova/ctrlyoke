@@ -29,11 +29,10 @@ and the terminal handlers, and a two-tab isolation test exists
 (2026-07-24), `aad4be61` (2026-08-02), and `effbc9be` (2026-08-06) — all
 before this document's last grooming pass — but was never marked done in the
 queue below; that is corrected here. **Stage F has since been completed
-(2026-08-17, steps 18-24), and Stage D is now complete; Stage G.5 is now
-complete and its remaining report/docs work is underway.** **Stage G**
-(compatibility domains and portability reporting) is underway. Stage G.6's
-platform-neutral portability projection is now complete; the remaining work is
-the React report surface and generated documentation. The dependency that
+(2026-08-17, steps 18-24), Stage D is complete, and Stage G.8 is now complete.**
+**Stage G** (compatibility domains and portability reporting) now has its
+multi-domain registry, portability projection, React report surface, and
+generated customer documentation shipped. The dependency that
 formerly split Stage G has now landed: both
 [`SECRETS_AND_REDACTION_PLAN.md`](../implemented/SECRETS_AND_REDACTION_PLAN.md)
 and [`DRY_RUN_PREVIEW_PLAN.md`](../implemented/DRY_RUN_PREVIEW_PLAN.md) are
@@ -491,7 +490,7 @@ may be swapped as a block.
 | 30  | G.5   | **DONE 2026-08-18.** Enabled images across all six harnesses; propagated resolved full-file refs; added prompt-pointer diagnostics and preview/editor coverage; ordinary refs, scripts, disabled steps, and the Harness-tab badge remain untouched |
 | 31  | G.6   | **DONE 2026-08-18.** Added the pure installed-harness portability projection over the multi-domain analyzer, with ready/lossy/unsupported/workspace-side-effect rows, unverified visibility, stable diagnostic identities/remediation, side-effect drill-down, deterministic ordering, and authored-object immutability coverage                                                                                                                                                                                       |
 | 32  | G.7   | **DONE 2026-08-18.** Added the shared React workflow portability report, workflow-properties entry point, snapshot-based row drill-down, loading/empty/responsive/focus handling, and dashboard/hosted-client shared-surface coverage                                                                                                                                                        |
-| 33  | G.8   | **TODO.** Generate customer-facing compatibility documentation from the registry declarations, including a drift check and the portable workflow-attachment versus optional harness-discovery distinction                                                                                                                                                                                  |
+| 33  | G.8   | **DONE 2026-08-18.** Added the compiled-registry compatibility-doc generator and checked-in matrix for all six harnesses and enabled leaves, with shared caveat/remediation prose, portable attachment versus optional native discovery guidance, VitePress links, and a byte-for-byte `--check` gate on `docs:build`; `.ctrlyoke/capabilities.json` remains untouched                                                                                                                                                                                  |
 | 34  | G.9   | **TODO.** Run the final acceptance audit and full project/docs gates, fix bounded review defects, update all owning plans, and move this staging plan plus the compatibility plan to `dev/implemented/`                                                                                                                                                                                    |
 
 **Stage B was reordered on 2026-08-02 from the plan's section numbering.** The

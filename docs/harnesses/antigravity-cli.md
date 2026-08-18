@@ -1,5 +1,8 @@
 # Antigravity CLI
 
+See the [generated compatibility matrix](/harnesses/compatibility) for
+capability details and version-scoped evidence.
+
 `antigravity-cli` integrates Google's Antigravity CLI (`agy`) into ctrlyoke.
 
 Use it when:

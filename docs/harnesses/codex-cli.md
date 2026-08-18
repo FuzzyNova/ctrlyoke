@@ -1,5 +1,8 @@
 # Codex CLI
 
+See the [generated compatibility matrix](/harnesses/compatibility) for
+capability details and version-scoped evidence.
+
 `codex-cli` lets ctrlyoke drive Codex-based workflows from the same schema used by the other CLI harnesses.
 
 ## Good fit

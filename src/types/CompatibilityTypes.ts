@@ -357,6 +357,69 @@ export function getCompatibilityDiagnosticRemediation(
   }
 }
 
+/**
+ * Resolve the shared remediation for a static capability declaration.
+ *
+ * Documentation and other registry-level consumers need the same guidance as
+ * authored-workflow diagnostics, but do not have an installed version or a
+ * workflow consumer from which to build a diagnostic. Keep that mapping here
+ * so those consumers do not grow a second capability taxonomy.
+ */
+export function getCompatibilityDeclarationRemediation(
+  domain: CapabilityDomain,
+  capability: string,
+  declaration: CapabilityDeclaration
+): string | undefined {
+  const code = getDeclarationDiagnosticCode(
+    domain,
+    capability,
+    declaration.fidelity
+  );
+  return code ? getCompatibilityDiagnosticRemediation(code) : undefined;
+}
+
+function getDeclarationDiagnosticCode(
+  domain: CapabilityDomain,
+  capability: string,
+  fidelity: CapabilityFidelity
+): string | undefined {
+  if (fidelity === CAPABILITY_FIDELITIES.EXACT) {
+    return undefined;
+  }
+
+  switch (domain) {
+    case CAPABILITY_DOMAINS.PERMISSIONS:
+      switch (capability) {
+        case PERMISSION_CAPABILITY_KEYS.MODE:
+          return fidelity === CAPABILITY_FIDELITIES.PARTIAL
+            ? COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL
+            : COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNSUPPORTED;
+        case PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS:
+          return fidelity === CAPABILITY_FIDELITIES.PARTIAL
+            ? COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL
+            : COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED;
+        case PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS:
+          return fidelity === CAPABILITY_FIDELITIES.PARTIAL
+            ? COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL
+            : COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED;
+        default:
+          return undefined;
+      }
+    case CAPABILITY_DOMAINS.MCP:
+      return fidelity === CAPABILITY_FIDELITIES.PARTIAL
+        ? COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_PARTIAL
+        : COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_UNSUPPORTED;
+    case CAPABILITY_DOMAINS.PROMPT_INPUTS:
+      return fidelity === CAPABILITY_FIDELITIES.PARTIAL
+        ? COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_PARTIAL
+        : COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNSUPPORTED;
+    case CAPABILITY_DOMAINS.HOOKS:
+      return fidelity === CAPABILITY_FIDELITIES.PARTIAL
+        ? COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_PARTIAL
+        : COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED;
+  }
+}
+
 function hookEventLabel(capability: string): string {
   return (
     HOOK_EVENT_METADATA.find((metadata) => metadata.event === capability)
