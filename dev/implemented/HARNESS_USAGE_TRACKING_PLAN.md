@@ -8,7 +8,7 @@ enterprise/admin integrations remain explicitly deferred.
 **Revised:** August 18, 2026 — Copilot account-quota research superseded the
 August 9 negative personal-quota conclusion; the OTel findings remain current
 **Related:** [`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`](PROMPT_TOTAL_TOKEN_USAGE_PLAN.md);
-[`COPILOT_USAGE_PERIOD_PLAN.md`](../backlog/COPILOT_USAGE_PERIOD_PLAN.md)
+[`COPILOT_USAGE_PERIOD_PLAN.md`](./COPILOT_USAGE_PERIOD_PLAN.md)
 
 ---
 

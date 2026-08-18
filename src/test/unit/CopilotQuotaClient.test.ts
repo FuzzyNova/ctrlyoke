@@ -8,9 +8,7 @@ import {
   type CopilotQuotaProcess,
   type CopilotQuotaSpawnOptions,
 } from "../../core/harness/copilot/CopilotQuotaClient";
-import {
-  COPILOT_QUOTA_STATUS_CODES,
-} from "../../core/harness/copilot/CopilotUsageNormalization";
+import { COPILOT_QUOTA_STATUS_CODES } from "../../core/harness/copilot/CopilotUsageNormalization";
 import type { CliResolvedCommand } from "../../core/harness/shared/CliLauncherResolver";
 import { HARNESS_USAGE_STATUS_CODES } from "../../types/DashboardConstants";
 
@@ -24,10 +22,7 @@ interface FakeCopilotProcessOptions {
   stderr?: string;
 }
 
-class FakeCopilotProcess
-  extends EventEmitter
-  implements CopilotQuotaProcess
-{
+class FakeCopilotProcess extends EventEmitter implements CopilotQuotaProcess {
   readonly stdout = new PassThrough();
   readonly stderr = new PassThrough();
   readonly stdin: NodeJS.WritableStream;
@@ -65,7 +60,10 @@ class FakeCopilotProcess
       if (!Number.isFinite(length)) return;
       const contentStart = separator + 4;
       if (this.inputBuffer.length < contentStart + length) return;
-      const content = this.inputBuffer.slice(contentStart, contentStart + length);
+      const content = this.inputBuffer.slice(
+        contentStart,
+        contentStart + length
+      );
       this.inputBuffer = this.inputBuffer.slice(contentStart + length);
       const request = JSON.parse(content) as {
         id: number;
@@ -156,9 +154,7 @@ function resolvedCommand(
     args,
     displayCommand: [command, ...args].join(" "),
     launcherKind,
-    ...(requiresShellVerbatimArgs
-      ? { requiresShellVerbatimArgs: true }
-      : {}),
+    ...(requiresShellVerbatimArgs ? { requiresShellVerbatimArgs: true } : {}),
   };
 }
 
@@ -227,9 +223,18 @@ suite("Copilot quota client", () => {
   test("uses the resolved launcher command, args, and hidden piped flags", async () => {
     const cases = [
       resolvedCommand("direct", "/usr/local/bin/copilot", ["--server"]),
-      resolvedCommand("powershell-file", "powershell.exe", ["-NoProfile", "-File", "copilot.ps1"]),
+      resolvedCommand("powershell-file", "powershell.exe", [
+        "-NoProfile",
+        "-File",
+        "copilot.ps1",
+      ]),
       resolvedCommand("node-shim", "node.exe", ["copilot.js"]),
-      resolvedCommand("cmd-file", "cmd.exe", ["/c", "copilot.cmd", "--stdio"], true),
+      resolvedCommand(
+        "cmd-file",
+        "cmd.exe",
+        ["/c", "copilot.cmd", "--stdio"],
+        true
+      ),
     ] as const;
 
     for (const expected of cases) {
@@ -276,17 +281,29 @@ suite("Copilot quota client", () => {
   test("issues no session or auth RPCs and maps authentication errors safely", async () => {
     const probe = makeClient({ quota: "error" });
     const result = await probe.client.readQuota();
-    assert.strictEqual(result.errorCode, HARNESS_USAGE_STATUS_CODES.AUTH_REQUIRED);
+    assert.strictEqual(
+      result.errorCode,
+      HARNESS_USAGE_STATUS_CODES.AUTH_REQUIRED
+    );
     assert.strictEqual(
       probe.process.methods.some((method) => method.startsWith("session.")),
       false
     );
-    assert.strictEqual(probe.process.methods.includes("account.getCurrentAuth"), false);
-    assert.strictEqual(JSON.stringify(result).includes("not authenticated"), false);
+    assert.strictEqual(
+      probe.process.methods.includes("account.getCurrentAuth"),
+      false
+    );
+    assert.strictEqual(
+      JSON.stringify(result).includes("not authenticated"),
+      false
+    );
   });
 
   test("maps malformed frames, RPC failures, process errors, and early exits", async () => {
-    const malformed = makeClient({ quota: "malformed-frame", closeOnShutdown: false });
+    const malformed = makeClient({
+      quota: "malformed-frame",
+      closeOnShutdown: false,
+    });
     assert.strictEqual(
       (await malformed.client.readQuota()).errorCode,
       COPILOT_QUOTA_STATUS_CODES.PROBE_FAILED
@@ -298,7 +315,10 @@ suite("Copilot quota client", () => {
       COPILOT_QUOTA_STATUS_CODES.PROBE_FAILED
     );
 
-    const processError = makeClient({ quota: "no-response", closeOnShutdown: false });
+    const processError = makeClient({
+      quota: "no-response",
+      closeOnShutdown: false,
+    });
     const processErrorRead = processError.client.readQuota();
     await new Promise((resolve) => setTimeout(resolve, 0));
     processError.process.emit("error", new Error("private process detail"));
@@ -307,7 +327,10 @@ suite("Copilot quota client", () => {
       COPILOT_QUOTA_STATUS_CODES.PROBE_FAILED
     );
 
-    const earlyExit = makeClient({ quota: "no-response", closeOnShutdown: false });
+    const earlyExit = makeClient({
+      quota: "no-response",
+      closeOnShutdown: false,
+    });
     const earlyExitRead = earlyExit.client.readQuota();
     await new Promise((resolve) => setTimeout(resolve, 0));
     earlyExit.process.emitEarlyExit();
@@ -318,7 +341,10 @@ suite("Copilot quota client", () => {
   });
 
   test("maps timeout and abort without throwing", async () => {
-    const timeout = makeClient({ quota: "no-response", closeOnShutdown: false });
+    const timeout = makeClient({
+      quota: "no-response",
+      closeOnShutdown: false,
+    });
     const timeoutResult = await timeout.client.readQuota();
     assert.strictEqual(
       timeoutResult.errorCode,
@@ -357,5 +383,58 @@ suite("Copilot quota client", () => {
     const result = await probe.client.readQuota();
     assert.strictEqual(result.errorCode, COPILOT_QUOTA_STATUS_CODES.TIMEOUT);
     assert.strictEqual(JSON.stringify(result).includes(secret), false);
+  });
+
+  test("does not orphan a child when aborted while the launcher is still resolving", async () => {
+    // readQuota races the probe against the abort signal, so it can settle and
+    // run teardown while resolveCliCommand is still pending. A spawn after that
+    // point would leave a Copilot runtime nothing is left to reap.
+    let releaseResolution: (() => void) | undefined;
+    const resolutionGate = new Promise<void>((resolve) => {
+      releaseResolution = resolve;
+    });
+    const process = new FakeCopilotProcess({
+      connect: "success",
+      quota: "success",
+      closeOnShutdown: false,
+      splitResponses: false,
+    });
+    let spawnCount = 0;
+    const killedTrees: number[] = [];
+    const client = new CopilotQuotaClient({
+      resolveCliCommand: async () => {
+        await resolutionGate;
+        return resolvedCommand("direct", "copilot", ["--stdio"]);
+      },
+      spawnProcess: () => {
+        spawnCount += 1;
+        return process;
+      },
+      killProcessTree: (pid) => killedTrees.push(pid),
+      timeoutMs: 5_000,
+      teardownGracePeriodMs: 5,
+      now: () => FETCHED_AT,
+    });
+
+    const controller = new AbortController();
+    const pending = client.readQuota(controller.signal);
+    controller.abort();
+    const result = await pending;
+    assert.strictEqual(
+      result.errorCode,
+      COPILOT_QUOTA_STATUS_CODES.PROBE_FAILED
+    );
+
+    releaseResolution?.();
+    // Give the resumed probe a chance to reach its spawn guard.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.strictEqual(
+      spawnCount,
+      0,
+      "the abort guard must stop the spawn once the probe has already settled"
+    );
+    const orphaned =
+      spawnCount > 0 && process.killCount === 0 && !killedTrees.includes(4242);
+    assert.strictEqual(orphaned, false, "no Copilot child may be left running");
   });
 });

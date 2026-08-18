@@ -4952,6 +4952,9 @@ export class WorkflowOrchestrator {
     this.statusBarManager.dispose();
     this.endConditionEvaluator.dispose();
     this.compatibilityRegistry.dispose();
+    // Cancels any in-flight provider quota probe so its subprocess cannot
+    // outlive the host (workspace close, extension deactivate).
+    this.harnessUsageService?.dispose();
     // The run-summary cache is module-level, so nothing else drops it when the
     // host tears down (workspace close, extension deactivate).
     clearRunSummaryCache();

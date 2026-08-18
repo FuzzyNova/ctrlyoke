@@ -87,6 +87,33 @@ class CopilotProvider implements IHarnessUsageProvider {
   }
 }
 
+class CancellableProvider implements IHarnessUsageProvider {
+  readonly harnessId = HARNESS_IDS.COPILOT_CLI;
+  sawSignal: AbortSignal | undefined;
+  aborted = false;
+
+  async refreshUsage(signal?: AbortSignal): Promise<HarnessQuotaSnapshot> {
+    this.sawSignal = signal;
+    await new Promise<void>((resolve) => {
+      signal?.addEventListener(
+        "abort",
+        () => {
+          this.aborted = true;
+          resolve();
+        },
+        { once: true }
+      );
+    });
+    return {
+      harnessId: this.harnessId,
+      source: HARNESS_QUOTA_SOURCES.UNAVAILABLE,
+      staleAfterMs: 0,
+      windows: [],
+      errorCode: COPILOT_QUOTA_STATUS_CODES.PROBE_FAILED,
+    };
+  }
+}
+
 suite("HarnessUsageService", () => {
   let workspaceRoot: string;
   let originalCtrlyokeHome: string | undefined;
@@ -221,7 +248,10 @@ suite("HarnessUsageService", () => {
       snapshot.quota.errorCode,
       HARNESS_USAGE_ERROR_CODES.PROVIDER_REFRESH_FAILED
     );
-    assert.strictEqual(snapshot.quota.source, HARNESS_QUOTA_SOURCES.UNAVAILABLE);
+    assert.strictEqual(
+      snapshot.quota.source,
+      HARNESS_QUOTA_SOURCES.UNAVAILABLE
+    );
     assert.strictEqual(snapshot.quota.message, undefined);
   });
 
@@ -262,6 +292,36 @@ suite("HarnessUsageService", () => {
       newerFetchedAt
     );
   });
+
+  test("cancels an in-flight provider probe on disposal", async () => {
+    // Providers can own a short-lived subprocess, so host teardown has to be
+    // able to cancel one rather than let it outlive the extension.
+    const provider = new CancellableProvider();
+    const service = new HarnessUsageService(workspaceRoot, [provider]);
+
+    const pending = service.refreshHarnessUsage(HARNESS_IDS.COPILOT_CLI);
+    // Let the debounce timer fire so the probe is genuinely in flight.
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    assert.ok(provider.sawSignal, "the provider must receive an AbortSignal");
+    assert.strictEqual(provider.aborted, false);
+
+    service.dispose();
+    await pending;
+    assert.strictEqual(provider.aborted, true);
+  });
+
+  test("stops starting new provider probes once disposed", async () => {
+    const provider = new CancellableProvider();
+    const service = new HarnessUsageService(workspaceRoot, [provider]);
+    service.dispose();
+
+    await service.refreshHarnessUsage(HARNESS_IDS.COPILOT_CLI);
+    assert.strictEqual(
+      provider.sawSignal,
+      undefined,
+      "a disposed service must not launch another probe"
+    );
+  });
 });
 
 async function waitForPersistedSnapshot(
@@ -279,7 +339,7 @@ async function waitForPersistedSnapshot(
       };
       if (
         parsed.snapshots[harnessId]?.fetchedAt === fetchedAt &&
-        raw.includes("\n  \"schemaVersion\": 1")
+        raw.includes('\n  "schemaVersion": 1')
       ) {
         return parsed;
       }

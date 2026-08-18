@@ -165,6 +165,14 @@ export class HarnessUsageService {
     HarnessId,
     ReturnType<typeof setTimeout>
   >();
+  /**
+   * Abort handles for provider probes that are currently running. Providers may
+   * own a short-lived subprocess (Copilot's quota RPC, Codex's app-server), so
+   * host teardown has to be able to cancel them rather than leave a child
+   * running past extension deactivation.
+   */
+  private readonly inFlightProbes = new Set<AbortController>();
+  private disposed = false;
   private readonly providerSnapshotsFile: string;
   private readonly observedStore: ObservedHarnessUsageStore;
   private readonly emit?: (snapshots: HarnessUsageSnapshot[]) => void;
@@ -235,7 +243,11 @@ export class HarnessUsageService {
   }
 
   refreshHarnessUsage(harnessId: HarnessId): Promise<HarnessUsageSnapshot> {
-    if (!this.options.isEnabled() || !this.options.isProviderRefreshEnabled()) {
+    if (
+      this.disposed ||
+      !this.options.isEnabled() ||
+      !this.options.isProviderRefreshEnabled()
+    ) {
       return Promise.resolve(this.buildSnapshot(harnessId));
     }
     const existing = this.refreshPromises.get(harnessId);
@@ -263,6 +275,23 @@ export class HarnessUsageService {
     return this.getHarnessUsageSnapshots();
   }
 
+  /**
+   * Cancel every pending and in-flight provider refresh. Called on host
+   * teardown so a provider subprocess cannot outlive the extension; already
+   * cached snapshots stay readable, and later refresh requests are no-ops.
+   */
+  dispose(): void {
+    this.disposed = true;
+    for (const timer of this.refreshTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.refreshTimers.clear();
+    for (const probe of this.inFlightProbes) {
+      probe.abort();
+    }
+    this.inFlightProbes.clear();
+  }
+
   isQuotaStale(harnessId: HarnessId, now: number = this.now()): boolean {
     return isHarnessQuotaStale(
       this.quotaCache.get(harnessId) ?? this.createUnavailableQuota(harnessId),
@@ -283,8 +312,10 @@ export class HarnessUsageService {
         this.createUnavailableQuota(harnessId, "provider-not-registered")
       );
     } else {
+      const probe = new AbortController();
+      this.inFlightProbes.add(probe);
       try {
-        const quota = await provider.refreshUsage();
+        const quota = await provider.refreshUsage(probe.signal);
         if (quota.harnessId !== harnessId) {
           throw new Error(HARNESS_USAGE_ERROR_CODES.MALFORMED_PROVIDER_DATA);
         }
@@ -318,6 +349,8 @@ export class HarnessUsageService {
             ? { ...previous, errorCode: safeErrorCode(error) }
             : this.createUnavailableQuota(harnessId, safeErrorCode(error))
         );
+      } finally {
+        this.inFlightProbes.delete(probe);
       }
     }
     this.publish();
@@ -426,8 +459,7 @@ export class HarnessUsageService {
         const persisted = await readPersistedProviderUsage(
           this.providerSnapshotsFile
         );
-        const snapshots: Partial<Record<HarnessId, HarnessQuotaSnapshot>> =
-          {};
+        const snapshots: Partial<Record<HarnessId, HarnessQuotaSnapshot>> = {};
         for (const harnessId of HARNESS_ID_LIST) {
           const current = this.quotaCache.get(harnessId);
           const foreign = persisted?.snapshots[harnessId];

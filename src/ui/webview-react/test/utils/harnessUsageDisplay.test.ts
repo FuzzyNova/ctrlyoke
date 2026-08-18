@@ -57,7 +57,11 @@ describe("getHarnessUsageDisplay", () => {
   });
 
   it("annotates only the window whose own reset has passed, not a fresh sibling window", () => {
-    const fiveHour = { ...window, id: "five-hour", resetAt: fetchedAt + 60_000 };
+    const fiveHour = {
+      ...window,
+      id: "five-hour",
+      resetAt: fetchedAt + 60_000,
+    };
     const sevenDay = {
       ...window,
       id: "seven-day",
@@ -102,6 +106,8 @@ describe("getHarnessUsageDisplay", () => {
       percentUsed: 37,
       used: 555,
       limit: 1_500,
+      // Copilot's account quota is counted in requests, not percent.
+      unit: HARNESS_USAGE_UNITS.REQUESTS,
       resetAt: fetchedAt + 60 * 60 * 1000,
     };
     const display = getHarnessUsageDisplay(
@@ -143,6 +149,7 @@ describe("getHarnessUsageDisplay", () => {
       percentUsed: 37,
       used: 555,
       limit: 1_500,
+      unit: HARNESS_USAGE_UNITS.REQUESTS,
     };
     const usage = snapshot([monthly], fetchedAt);
     usage.observed = {
@@ -169,8 +176,25 @@ describe("getHarnessUsageDisplay", () => {
     expect(display.quotaPhrase).toBe("63% 5-hour (stale)");
   });
 
+  it("leaves percent-unit windows unchanged, even though they carry used/limit", () => {
+    // Claude and Codex both encode a percentage as `used: pct, limit: 100`.
+    // Those are not spendable provider counts, so the tooltip must not gain a
+    // "(63 / 100)" fragment or the "Provider quota:" prefix.
+    const percentWindow = { ...window, used: 63, limit: 100, remaining: 37 };
+    const display = getHarnessUsageDisplay(
+      snapshot([percentWindow], fetchedAt),
+      fetchedAt + 60_000
+    );
+    expect(display.percentOnly).toBe("63%");
+    expect(display.quotaPhrase).toBe("63% 5-hour");
+  });
+
   it("gives each window its own independent reset time when joined", () => {
-    const fiveHour = { ...window, id: "five-hour", resetAt: fetchedAt + 60_000 };
+    const fiveHour = {
+      ...window,
+      id: "five-hour",
+      resetAt: fetchedAt + 60_000,
+    };
     const sevenDay = {
       ...window,
       id: "seven-day",

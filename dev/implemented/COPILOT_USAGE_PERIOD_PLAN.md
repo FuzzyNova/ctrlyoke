@@ -1,11 +1,11 @@
 # Copilot Usage-Period Quota Plan
 
-**Status:** Phase 5 incomplete — August 18, 2026
+**Status:** Implemented — August 18, 2026  
 **Priority:** P1  
 **Researched:** August 16, 2026  
 **Verified locally:** GitHub Copilot CLI `1.0.80`; `@github/copilot-sdk`
 `1.0.11` contract and package layout  
-**Related:** [`HARNESS_USAGE_TRACKING_PLAN.md`](../implemented/HARNESS_USAGE_TRACKING_PLAN.md)
+**Related:** [`HARNESS_USAGE_TRACKING_PLAN.md`](./HARNESS_USAGE_TRACKING_PLAN.md)
 
 ## Outcome
 
@@ -387,9 +387,12 @@ continues to read only the synchronous cached snapshot.
       replace "no collector" with the server-scoped quota RPC.
 - [x] Update harness-provider instructions with the account quota/context/OTel
       separation.
-- [ ] Move this plan to `dev/implemented/` after all acceptance criteria pass.
-      The current implementation lacks extension-lifecycle cancellation or
-      disposal for an in-flight quota probe.
+- [x] Move this plan to `dev/implemented/` after all acceptance criteria pass.
+      The extension-lifecycle gap noted during review is closed:
+      `HarnessUsageService.dispose()` clears pending debounce timers and aborts
+      every in-flight probe, `refreshOne` now passes an `AbortSignal` into
+      `IHarnessUsageProvider.refreshUsage`, and `WorkflowOrchestrator.dispose()`
+      calls it on host teardown.
 
 ## Tests
 
@@ -417,6 +420,24 @@ continues to read only the synchronous cached snapshot.
   non-object payloads are rejected per bucket without crashing the refresh;
 - all-invalid results become unavailable instead of a successful empty quota.
 
+### Review-pass corrections
+
+Two defects were found and fixed during the final review rather than by the
+implementation steps:
+
+- `getHarnessUsageDisplay` gated its new totals fragment and `Provider quota:`
+  prefix on `used`/`limit` merely being finite. Claude and Codex encode a
+  percentage as `used: pct, limit: 100`, so both harnesses regressed to
+  `Provider quota: 63% 5-hour (63 / 100)`. The gate is now also conditioned on
+  the window's unit not being `PERCENT`. The suite missed this because its
+  fixtures omitted `used`/`limit` entirely, and its Copilot monthly fixtures
+  used `unit: PERCENT`, which the provider never emits — both are corrected.
+- `CopilotQuotaClient.readQuota` races the probe against abort/timeout, so it
+  could settle and run teardown while `resolveCliCommand` was still pending;
+  the probe then spawned a child nothing was left to reap. The client now
+  re-checks abort/teardown state before the spawn and force-terminates if
+  teardown interleaved immediately after it.
+
 ### Service/UI tests
 
 - live snapshots persist and reload through the existing provider snapshot
@@ -435,11 +456,15 @@ continues to read only the synchronous cached snapshot.
   entitlement, and reset time; covered by `CopilotUsageNormalization.test.ts`.
 - [x] Met — `CopilotQuotaClient.test.ts` verifies no session/auth RPCs, no
   prompt, and no model turn.
-- [ ] Unmet — `CopilotQuotaClient` uses one bounded probe and best-effort
+- [x] Met — `CopilotQuotaClient` uses one bounded probe and best-effort
   `runtime.shutdown`, then waits and falls back to process-tree termination on
-  success, error, timeout, cancellation, or teardown failure, but the shipped
-  `HarnessUsageService` has no extension-lifecycle cancellation/disposal hook
-  for an in-flight probe. Add that lifecycle path before moving this plan.
+  success, error, timeout, cancellation, or teardown failure.
+  `HarnessUsageService.dispose()` supplies the extension-lifecycle path: it
+  aborts in-flight probes and refuses new ones, and is called from
+  `WorkflowOrchestrator.dispose()` (reached via `extension.ts` deactivation).
+  The client additionally re-checks abort/teardown state immediately before and
+  after spawning, so an abort landing while the launcher is still resolving
+  cannot leave an orphaned Copilot child.
 - [x] Met — launcher resolution uses the same installed `copilot` command as
   the harness, and `assert-no-copilot-runtime.mjs` guards dependencies and
   production bundles against a duplicate runtime.

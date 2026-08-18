@@ -9,9 +9,7 @@ import {
 } from "vscode-jsonrpc/node";
 import type { CliResolvedCommand } from "../shared/CliLauncherResolver";
 import { resolveCliCommand } from "../shared/CliLauncherResolver";
-import {
-  HARNESS_USAGE_STATUS_CODES,
-} from "../../../types/DashboardConstants";
+import { HARNESS_USAGE_STATUS_CODES } from "../../../types/DashboardConstants";
 import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 import { Log } from "../../../utils/Log";
 import {
@@ -53,14 +51,8 @@ export interface CopilotQuotaProcess {
   stdout: NodeJS.ReadableStream;
   stderr: NodeJS.ReadableStream;
   pid?: number;
-  on(
-    event: "error" | "close",
-    listener: (...args: unknown[]) => void
-  ): this;
-  once(
-    event: "error" | "close",
-    listener: (...args: unknown[]) => void
-  ): this;
+  on(event: "error" | "close", listener: (...args: unknown[]) => void): this;
+  once(event: "error" | "close", listener: (...args: unknown[]) => void): this;
   removeListener(
     event: "error" | "close",
     listener: (...args: unknown[]) => void
@@ -144,11 +136,12 @@ function getRpcErrorCode(error: unknown): number | undefined {
 }
 
 function isAuthenticationRpcError(error: unknown): boolean {
-  const message = isRecord(error) && typeof error.message === "string"
-    ? error.message
-    : error instanceof Error
+  const message =
+    isRecord(error) && typeof error.message === "string"
       ? error.message
-      : "";
+      : error instanceof Error
+        ? error.message
+        : "";
   return /auth|log.?in|credential|unauthori[sz]ed|forbidden|\b401\b/i.test(
     message
   );
@@ -239,7 +232,8 @@ export class CopilotQuotaClient implements CopilotQuotaReader {
         resources,
         processFailure,
         rejectProcessFailure,
-        deadline
+        deadline,
+        signal
       );
       return await Promise.race([operation, interruption, processFailure]);
     } catch (error) {
@@ -273,13 +267,20 @@ export class CopilotQuotaClient implements CopilotQuotaReader {
     resources: ProbeResources,
     processFailure: Promise<never>,
     rejectProcessFailure: ((error: unknown) => void) | undefined,
-    deadline: number
+    deadline: number,
+    signal?: AbortSignal
   ): Promise<CopilotQuotaProbeResult> {
     const resolved = await this.withDeadline(
       this.resolveCommand("copilot", [...COPILOT_SERVER_ARGS]),
       deadline
     );
+    // `readQuota` races this probe against abort/timeout, so it can settle and
+    // run teardown while launcher resolution is still pending. Spawning after
+    // that point would leave a child nothing is left to reap.
     if (this.remaining(deadline) <= 0) throw new CopilotProbeTimeoutError();
+    if (signal?.aborted || resources.probeFinished) {
+      throw new CopilotProbeAbortError();
+    }
 
     const process = this.spawnProcess(resolved.command, resolved.args, {
       stdio: ["pipe", "pipe", "pipe"],
@@ -290,6 +291,12 @@ export class CopilotQuotaClient implements CopilotQuotaReader {
     });
     resources.process = process;
     this.attachProcessListeners(resources, rejectProcessFailure);
+
+    // Teardown may have interleaved between the guard above and the spawn.
+    if (resources.probeFinished) {
+      this.forceTerminate(process);
+      throw new CopilotProbeAbortError();
+    }
 
     const reader = new StreamMessageReader(process.stdout);
     const writer = new StreamMessageWriter(process.stdin);
@@ -312,7 +319,8 @@ export class CopilotQuotaClient implements CopilotQuotaReader {
       );
     } catch (error) {
       if (error instanceof CopilotProbeError) throw error;
-      if (!isMethodNotFound(error)) throw new CopilotProbeError(mapRpcError(error));
+      if (!isMethodNotFound(error))
+        throw new CopilotProbeError(mapRpcError(error));
       try {
         await this.request(
           connection,
@@ -416,7 +424,10 @@ export class CopilotQuotaClient implements CopilotQuotaReader {
     if (remaining <= 0) throw new CopilotProbeTimeoutError();
     let timerId: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
-      timerId = setTimeout(() => reject(new CopilotProbeTimeoutError()), remaining);
+      timerId = setTimeout(
+        () => reject(new CopilotProbeTimeoutError()),
+        remaining
+      );
     });
     try {
       return await Promise.race([operation, timeout]);
@@ -467,17 +478,17 @@ export class CopilotQuotaClient implements CopilotQuotaReader {
       this.teardownGracePeriodMs,
       Math.max(0, this.remaining(deadline))
     );
-    const exitedGracefully = await this.waitForClose(
-      resources,
-      gracefulBudget
-    );
+    const exitedGracefully = await this.waitForClose(resources, gracefulBudget);
     if (exitedGracefully || resources.processClosed) return;
 
     this.forceTerminate(process);
     await this.waitForClose(resources, Math.max(0, this.remaining(deadline)));
   }
 
-  private async withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
+  private async withTimeout<T>(
+    operation: Promise<T>,
+    timeoutMs: number
+  ): Promise<T> {
     if (timeoutMs <= 0) {
       await Promise.race([operation.catch(() => undefined), delay(0)]);
       throw new CopilotProbeTimeoutError();

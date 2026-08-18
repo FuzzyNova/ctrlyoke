@@ -1,5 +1,6 @@
 import {
   HARNESS_USAGE_STATUS_CODES,
+  HARNESS_USAGE_UNITS,
   HARNESS_USAGE_WINDOW_KINDS,
 } from "@root/types/DashboardConstants";
 import {
@@ -8,11 +9,24 @@ import {
   type HarnessUsageSnapshot,
   type HarnessUsageWindow,
 } from "@root/types/UsageTypes";
-import { HARNESS_STATUS_STRINGS, type HarnessStatusString } from "../types/messages";
+import {
+  HARNESS_STATUS_STRINGS,
+  type HarnessStatusString,
+} from "../types/messages";
 import { formatFutureTime } from "./time";
 
+/**
+ * True only for a window whose `used`/`limit` are real provider counts worth
+ * spelling out. Claude and Codex encode a percentage as `used: pct, limit: 100`
+ * with `unit: PERCENT`, so the unit check is what stops their tooltips from
+ * gaining a meaningless "(37 / 100)" fragment.
+ */
 function hasFiniteQuotaTotals(window: HarnessUsageWindow): boolean {
-  return Number.isFinite(window.used) && Number.isFinite(window.limit);
+  return (
+    window.unit !== HARNESS_USAGE_UNITS.PERCENT &&
+    Number.isFinite(window.used) &&
+    Number.isFinite(window.limit)
+  );
 }
 
 function formatQuotaNumber(value: number): string {
