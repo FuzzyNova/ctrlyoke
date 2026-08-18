@@ -1,6 +1,7 @@
 import { MESSAGE_TYPES } from "@/types/messages";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { useUiStore } from "@store/uiStore";
 
 /**
  * Shape of a context reference to act on, independent of where it came from
@@ -19,6 +20,8 @@ export interface ContextReferenceTarget {
   skillName?: string | null;
   /** /mcp:<name> reference name. */
   mcpServerName?: string | null;
+  /** Managed secret reference name. */
+  secretName?: string | null;
 }
 
 interface VsCodeLike {
@@ -82,6 +85,13 @@ export function openContextReference(
       type: MESSAGE_TYPES.REQUEST_MCP_CONFIG_PREVIEW,
       mcpServerName: target.mcpServerName ?? "",
     });
+    return true;
+  }
+
+  if (type === "secret") {
+    const ui = useUiStore.getState();
+    ui.setGlobalSettingsTab("secrets");
+    if (!ui.globalSettingsOpen) ui.toggleGlobalSettings();
     return true;
   }
 

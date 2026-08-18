@@ -100,6 +100,7 @@ export class CtrlYokeWebviewProvider
   private readonly settingsSync: WebviewSettingsSync;
   private readonly serializer: WorkflowSerializer;
   private readonly router: WebviewMessageRouter;
+  private readonly secretRegistry: SecretRegistryService;
   private readonly historySearchService = new HistorySearchService();
   // IDashboardSink message shapes are single-sourced here. Pure sink methods
   // delegate to it; methods with extra VS Code logic call it then do more work.
@@ -140,7 +141,7 @@ export class CtrlYokeWebviewProvider
     const postMessage = (message: any) => this.postMessage(message);
     const getOrchestrator = () => this.workflowOrchestrator;
     const getOutputHistoryManager = () => this.outputHistoryManager;
-    const secretRegistry = new SecretRegistryService({
+    this.secretRegistry = new SecretRegistryService({
       secretStore: new VsCodeAdapter(context).getSecretStore(),
       getWorkspaceRoot: getVsCodeWorkspaceRoot,
     });
@@ -185,7 +186,7 @@ export class CtrlYokeWebviewProvider
         getAvailableIps: () => this.runningServerAvailableIps,
         onPanelReady: () => this.handlePanelReady(),
       },
-      secretRegistry
+      this.secretRegistry
     );
 
     // Listen for model registry updates
@@ -1261,6 +1262,17 @@ export class CtrlYokeWebviewProvider
 
   public postMessage(message: unknown): void {
     this.view?.webview.postMessage(secretRedactionService.redactValue(message));
+  }
+
+  public getSecretRegistryService(): SecretRegistryService {
+    return this.secretRegistry;
+  }
+
+  public openGlobalSettingsTab(tab: "secrets"): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.OPEN_GLOBAL_SETTINGS_TAB,
+      tab,
+    });
   }
 
   /** Public postMessage for use by PtyProcessManager (terminal output routing) */

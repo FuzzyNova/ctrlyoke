@@ -7,13 +7,15 @@ import {
   getHashCompletions,
   getGitChangeCompletions,
   getPriorContextCompletions,
+  getSecretCompletions,
   toVSCodeCompletionItem,
 } from "./CompletionHelpers";
+import type { SecretRegistryService } from "../ui/SecretRegistryService";
 
 /**
  * Trigger character types for context-aware completions
  */
-type TriggerChar = "@" | "#" | "~" | "$";
+type TriggerChar = "@" | "#" | "~" | "$" | "!";
 
 /**
  * Find the rightmost occurrence of `triggerChar` in `text` that isn't
@@ -54,6 +56,10 @@ function findWordStartTriggerIndex(text: string, triggerChar: string): number {
 export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   // No local cache - using shared cache from CompletionHelpers
 
+  constructor(
+    private readonly getSecretRegistry?: () => SecretRegistryService | undefined
+  ) {}
+
   /**
    * Provide completion items for prompt files (JSON and Markdown)
    */
@@ -82,6 +88,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     const lastHashIndex = findWordStartTriggerIndex(textBeforeCursor, "#");
     const lastTildeIndex = findWordStartTriggerIndex(textBeforeCursor, "~");
     const lastDollarIndex = findWordStartTriggerIndex(textBeforeCursor, "$");
+    const lastBangIndex = findWordStartTriggerIndex(textBeforeCursor, "!");
 
     // Determine which trigger is most recent (closest to cursor)
     let triggerChar: TriggerChar | undefined;
@@ -91,7 +98,8 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       lastAtIndex,
       lastHashIndex,
       lastTildeIndex,
-      lastDollarIndex
+      lastDollarIndex,
+      lastBangIndex
     );
 
     if (maxIndex === -1) {
@@ -107,9 +115,12 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     } else if (maxIndex === lastTildeIndex) {
       triggerChar = "~";
       afterTrigger = textBeforeCursor.substring(lastTildeIndex + 1);
-    } else {
+    } else if (maxIndex === lastDollarIndex) {
       triggerChar = "$";
       afterTrigger = textBeforeCursor.substring(lastDollarIndex + 1);
+    } else {
+      triggerChar = "!";
+      afterTrigger = textBeforeCursor.substring(lastBangIndex + 1);
     }
 
     // Don't provide completions if there's a space after trigger
@@ -124,6 +135,9 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     if (triggerChar === "$" && !/^[a-zA-Z0-9:,\-]*$/.test(afterTrigger)) {
       return undefined;
     }
+    if (triggerChar === "!" && !/^[A-Z0-9_]*$/.test(afterTrigger)) {
+      return undefined;
+    }
 
     // Route to appropriate handler based on trigger
     if (triggerChar === "@") {
@@ -132,6 +146,8 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       return this.getHashCompletions(afterTrigger);
     } else if (triggerChar === "~") {
       return this.getTildeCompletions(afterTrigger);
+    } else if (triggerChar === "!") {
+      return this.getSecretCompletions(afterTrigger);
     } else {
       return this.getDollarCompletions(afterTrigger);
     }
@@ -215,6 +231,23 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       toVSCodeCompletionItem(item, "$", range)
     );
 
+    return new vscode.CompletionList(items, true);
+  }
+
+  private async getSecretCompletions(
+    filterText: string
+  ): Promise<vscode.CompletionList> {
+    const registry = this.getSecretRegistry?.();
+    if (!registry || !vscode.workspace.workspaceFolders?.length) {
+      return new vscode.CompletionList([], true);
+    }
+
+    const names = await registry.getCompletionNames();
+    const plainItems = getSecretCompletions(names, filterText);
+    const range = this.calculateCompletionRange("!");
+    const items = plainItems.map((item) =>
+      toVSCodeCompletionItem(item, "!", range)
+    );
     return new vscode.CompletionList(items, true);
   }
 

@@ -520,6 +520,12 @@ export function createMessageHandlers(
     }
   };
 
+  handlers[MESSAGE_TYPES.OPEN_GLOBAL_SETTINGS_TAB] = (message) => {
+    const uiStore = useUiStore.getState();
+    uiStore.setGlobalSettingsTab(message.tab);
+    if (!uiStore.globalSettingsOpen) uiStore.toggleGlobalSettings();
+  };
+
   // --------------------------------------------------------------------------
   // GLOBAL_SETTINGS_LOADED - Full global settings from configService
   // --------------------------------------------------------------------------

@@ -137,7 +137,7 @@ export interface ContextReferenceValidationResult {
   suggestions?: string[];
 }
 
-type CompletionTrigger = "/" | "@" | "#" | "~" | "$" | "path";
+export type CompletionTrigger = "/" | "@" | "#" | "~" | "$" | "!" | "path";
 
 interface ExtensionCompletionItem {
   label: string;
@@ -505,6 +505,66 @@ export function findSlashCompletionContext(
   if (!/^[a-zA-Z0-9:._-]*$/.test(query)) return null;
 
   return { from: lineFrom + slashIndex, query };
+}
+
+/** Resolve the trigger/query immediately before a CodeMirror completion cursor. */
+export function findCustomCompletionContext(
+  textBefore: string,
+  lineFrom = 0
+): { trigger: CompletionTrigger; query: string; from: number } | null {
+  const lastAtIndex = findWordStartTriggerIndex(textBefore, "@");
+  const lastHashIndex = findWordStartTriggerIndex(textBefore, "#");
+  const lastTildeIndex = findWordStartTriggerIndex(textBefore, "~");
+  const lastDollarIndex = findWordStartTriggerIndex(textBefore, "$");
+  const lastBangIndex = findWordStartTriggerIndex(textBefore, "!");
+  const slashContext = findSlashCompletionContext(textBefore, lineFrom);
+  const lastSlashIndex = slashContext
+    ? slashContext.from - lineFrom
+    : -1;
+
+  const maxIndex = Math.max(
+    lastSlashIndex,
+    lastAtIndex,
+    lastHashIndex,
+    lastTildeIndex,
+    lastDollarIndex,
+    lastBangIndex
+  );
+  if (maxIndex === -1) return null;
+
+  let trigger: CompletionTrigger;
+  let query: string;
+  if (maxIndex === lastSlashIndex) {
+    trigger = "/";
+    query = slashContext!.query;
+  } else if (maxIndex === lastAtIndex) {
+    trigger = "@";
+    query = textBefore.slice(lastAtIndex + 1);
+  } else if (maxIndex === lastHashIndex) {
+    trigger = "#";
+    query = textBefore.slice(lastHashIndex + 1);
+  } else if (maxIndex === lastTildeIndex) {
+    trigger = "~";
+    query = textBefore.slice(lastTildeIndex + 1);
+  } else if (maxIndex === lastDollarIndex) {
+    trigger = "$";
+    query = textBefore.slice(lastDollarIndex + 1);
+  } else {
+    trigger = "!";
+    query = textBefore.slice(lastBangIndex + 1);
+  }
+
+  const isInsideQuotedPath =
+    trigger === "@" && query.startsWith('"') && !query.slice(1).includes('"');
+  if (query.includes(" ") && !isInsideQuotedPath) return null;
+  if (trigger === "#" && !/^[a-zA-Z0-9_/:.-]*$/.test(query)) return null;
+  if (trigger === "~" && !/^[a-zA-Z0-9:_]*$/.test(query)) return null;
+  if (trigger === "$" && !/^[a-zA-Z0-9:,\-]*$/.test(query)) return null;
+  // Secret names intentionally stay uppercase-only. This also rejects `![` so
+  // Markdown image syntax never opens the secret dropdown.
+  if (trigger === "!" && !/^[A-Z0-9_]*$/.test(query)) return null;
+
+  return { trigger, query, from: lineFrom + maxIndex };
 }
 
 export function buildPromptReferenceInsertion(
@@ -1160,62 +1220,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       const lineObj = context.state.doc.lineAt(context.pos);
       const textBefore = lineObj.text.slice(0, context.pos - lineObj.from);
 
-      const lastAtIndex = findWordStartTriggerIndex(textBefore, "@");
-      const lastHashIndex = findWordStartTriggerIndex(textBefore, "#");
-      const lastTildeIndex = findWordStartTriggerIndex(textBefore, "~");
-      const lastDollarIndex = findWordStartTriggerIndex(textBefore, "$");
-      const slashContext = findSlashCompletionContext(textBefore, lineObj.from);
-      const lastSlashIndex = slashContext
-        ? slashContext.from - lineObj.from
-        : -1;
-
-      const maxIndex = Math.max(
-        lastSlashIndex,
-        lastAtIndex,
-        lastHashIndex,
-        lastTildeIndex,
-        lastDollarIndex
+      const completionContext = findCustomCompletionContext(
+        textBefore,
+        lineObj.from
       );
-      if (maxIndex === -1) return null;
-
-      let trigger: string;
-      let afterTrigger: string;
-
-      if (maxIndex === lastSlashIndex) {
-        trigger = "/";
-        afterTrigger = slashContext!.query;
-      } else if (maxIndex === lastAtIndex) {
-        trigger = "@";
-        afterTrigger = textBefore.slice(lastAtIndex + 1);
-      } else if (maxIndex === lastHashIndex) {
-        trigger = "#";
-        afterTrigger = textBefore.slice(lastHashIndex + 1);
-      } else if (maxIndex === lastTildeIndex) {
-        trigger = "~";
-        afterTrigger = textBefore.slice(lastTildeIndex + 1);
-      } else {
-        trigger = "$";
-        afterTrigger = textBefore.slice(lastDollarIndex + 1);
-      }
-
-      // For @: allow spaces inside a quoted path (@"path with spaces/..."),
-      // otherwise bail out if there's a space (no partial match mid-sentence).
-      const isInsideQuotedPath =
-        trigger === "@" &&
-        afterTrigger.startsWith('"') &&
-        !afterTrigger.slice(1).includes('"');
-
-      if (afterTrigger.includes(" ") && !isInsideQuotedPath) return null;
-
-      // For # and ~: validate character class (neither supports quoted paths)
-      if (trigger === "#" && !/^[a-zA-Z0-9_/:.-]*$/.test(afterTrigger))
-        return null;
-      if (trigger === "~" && !/^[a-zA-Z0-9:_]*$/.test(afterTrigger))
-        return null;
-      if (trigger === "$" && !/^[a-zA-Z0-9:,\-]*$/.test(afterTrigger))
-        return null;
-
-      const from = lineObj.from + maxIndex; // absolute position of trigger char
+      if (!completionContext) return null;
+      const { trigger, query: afterTrigger, from } = completionContext;
 
       // Serve a full result cached by a progressive (partial→full) response for
       // this exact trigger+query synchronously — no second round trip. Checked
@@ -2428,6 +2438,9 @@ function createLinkDecorationExtension(
             if (linkMatch.symbolName) {
               attrs["data-symbol-name"] = linkMatch.symbolName;
             }
+            if (linkMatch.secretName) {
+              attrs["data-secret-name"] = linkMatch.secretName;
+            }
             // Keyed by the exact reference token, matching the validity map the
             // lint pass populates; blocks opening a nonexistent target (see
             // openContextReferenceLink). Undefined until validated → no flag.
@@ -2749,6 +2762,7 @@ function openContextReferenceLink(
       lineStart: target.getAttribute("data-line-start"),
       lineEnd: target.getAttribute("data-line-end"),
       ref: target.getAttribute("data-ref"),
+      secretName: target.getAttribute("data-secret-name"),
     },
     vscode,
     stepCountRef.current

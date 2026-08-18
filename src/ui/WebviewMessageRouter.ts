@@ -178,7 +178,8 @@ export class WebviewMessageRouter {
     this.promptEditorSupport = new PromptEditorSupportService(
       () => this.getWorkspaceRoot(),
       getOrchestrator,
-      (absolutePath) => this.callbacks.resolveImageWebviewUri?.(absolutePath)
+      (absolutePath) => this.callbacks.resolveImageWebviewUri?.(absolutePath),
+      secretRegistry
     );
     this.harnessFiles = new HarnessFileMessageService(() =>
       this.getWorkspaceRoot()

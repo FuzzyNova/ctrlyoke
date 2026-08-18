@@ -72,4 +72,28 @@ suite("PromptLinkProvider slash-token links", () => {
     assert.strictEqual(links[0].range.start.character, 0);
     assert.strictEqual(links[0].range.end.character, "/skill:commit".length);
   });
+
+  test("links secret references to the Secrets settings page", async () => {
+    const text = "Use !SERVICE_TOKEN here";
+    const document = {
+      fileName: path.join(workspaceRoot, "prompt.prompt.md"),
+      languageId: "markdown",
+      getText: () => text,
+      positionAt: (offset: number) => new vscode.Position(0, offset),
+    } as unknown as vscode.TextDocument;
+
+    const links = await new PromptLinkProvider().provideDocumentLinks(
+      document,
+      {} as vscode.CancellationToken
+    );
+
+    assert.ok(links);
+    assert.strictEqual(links.length, 1);
+    assert.strictEqual(links[0].target?.scheme, "command");
+    assert.strictEqual(
+      links[0].target?.path,
+      "ctrlyoke.openSecretsSettings"
+    );
+    assert.strictEqual(links[0].tooltip, "Open ctrlyoke Secrets settings");
+  });
 });

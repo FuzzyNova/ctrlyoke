@@ -1366,6 +1366,12 @@ export interface GlobalSettingsLoadRequestMessage {
   type: typeof MESSAGE_TYPES.GLOBAL_SETTINGS_LOAD_REQUEST;
 }
 
+/** Extension -> Webview: open the global settings drawer on a named tab. */
+export interface OpenGlobalSettingsTabMessage {
+  type: typeof MESSAGE_TYPES.OPEN_GLOBAL_SETTINGS_TAB;
+  tab: "secrets";
+}
+
 /** Extension → Webview: full settings payload + sources */
 export interface GlobalSettingsLoadedMessage {
   type: typeof MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED;
@@ -2269,6 +2275,7 @@ export interface OpenHarnessDirResultMessage {
  */
 export type IncomingMessage =
   | { type: typeof MESSAGE_TYPES.INIT; data: InitMessageData }
+  | OpenGlobalSettingsTabMessage
   | FileSelectedMessage
   | SessionRestoredMessage
   | ExecutionStartedMessage

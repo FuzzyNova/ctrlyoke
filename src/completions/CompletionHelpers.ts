@@ -51,6 +51,22 @@ export interface PlainCompletionItem {
   filterText?: string;
 }
 
+/** Build value-free completion items for managed or declared secret names. */
+export function getSecretCompletions(
+  secretNames: readonly string[],
+  filterText: string
+): PlainCompletionItem[] {
+  return [...new Set(secretNames)]
+    .filter((name) => matchesFuzzyQuery(name, filterText))
+    .sort()
+    .map((name) => ({
+      label: name,
+      kind: vscode.CompletionItemKind.Variable,
+      insertText: name,
+      detail: "Secret name (value is never shown)",
+    }));
+}
+
 /**
  * Map VS Code SymbolKind to CompletionItemKind
  * SymbolKind and CompletionItemKind are different enums with different values
@@ -1145,7 +1161,7 @@ export function getPriorContextCompletions(
  */
 export function toVSCodeCompletionItem(
   item: PlainCompletionItem,
-  _triggerChar: "@" | "#" | "~" | "$" | "/",
+  _triggerChar: "@" | "#" | "~" | "$" | "/" | "!",
   range?: vscode.Range
 ): vscode.CompletionItem {
   const vscodeItem = new vscode.CompletionItem(item.label, item.kind);

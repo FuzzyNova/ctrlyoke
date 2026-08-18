@@ -34,6 +34,21 @@ describe("CodeMirrorEditor context reference parsing", () => {
     ]);
   });
 
+  it("keeps a filename containing ! as a single file reference", () => {
+    expect(findContextReferenceMatches("Review @data!file.csv")).toEqual([
+      {
+        from: "Review ".length,
+        to: "Review @data!file.csv".length,
+        type: "file",
+        path: "data!file.csv",
+      },
+    ]);
+  });
+
+  it("does not parse Markdown image syntax as a secret reference", () => {
+    expect(findContextReferenceMatches("![alt](url)")).toEqual([]);
+  });
+
   // These must agree with parseSymbolReferences in src/utils/FileReferenceParser.ts.
   // The two parsers are separate by design, but a reference this one chips while
   // the runtime one ignores renders clickable and silently expands to nothing.
@@ -273,6 +288,31 @@ describe("atomic reference presentation", () => {
         attrs: { "data-type": "priorContext", "data-ref": "previous" },
       },
     ]);
+  });
+
+  it("renders a secret reference as an atomic key chip", () => {
+    expect(findAtomicReferences("Use !SERVICE_TOKEN here")).toEqual([
+      {
+        from: "Use ".length,
+        to: "Use !SERVICE_TOKEN".length,
+        icon: "key",
+        label: "SERVICE_TOKEN",
+        title: "!SERVICE_TOKEN",
+        attrs: {
+          "data-type": "secret",
+          "data-secret-name": "SERVICE_TOKEN",
+        },
+      },
+    ]);
+  });
+
+  it("uses the shared warning-border validity path for an unknown secret", () => {
+    const token = "!UNKNOWN_TOKEN";
+    expect(
+      findAtomicReferences(token, undefined, (reference) =>
+        reference === token ? false : undefined
+      )[0]
+    ).toMatchObject({ invalid: true });
   });
 
   it("labels a $step range reference", () => {

@@ -6,6 +6,7 @@ import {
   type WorkspaceFileEditorHandle,
 } from "@components/workspace-viewer/WorkspaceFileEditor";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { useUiStore } from "@store/uiStore";
 
 describe("WorkspaceFileEditor link navigation", () => {
   beforeAll(() => {
@@ -19,6 +20,34 @@ describe("WorkspaceFileEditor link navigation", () => {
 
   beforeEach(() => {
     useWorkspaceViewerStore.getState().reset();
+    useUiStore.setState({ globalSettingsOpen: false });
+  });
+
+  it("decorates and opens secret references in the Secrets settings page", async () => {
+    const { container } = render(
+      <WorkspaceFileEditor
+        filePath="notes.prompt.md"
+        content="Use !SERVICE_TOKEN here"
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+
+    const link = await waitFor(() => {
+      const el = container.querySelector(".cm-link");
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+    expect(link).toHaveAttribute("data-type", "secret");
+    expect(link).toHaveAttribute("data-secret-name", "SERVICE_TOKEN");
+
+    fireEvent.touchStart(link, {
+      touches: [{ clientX: 10, clientY: 10 }],
+    });
+    fireEvent.touchEnd(link);
+
+    expect(useUiStore.getState().globalSettingsOpen).toBe(true);
+    expect(useUiStore.getState().globalSettingsActiveTab).toBe("secrets");
   });
 
   it("opens #selection links with the selected line range on touch tap", async () => {

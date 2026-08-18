@@ -107,6 +107,7 @@ export const MESSAGE_TYPES = {
   CHANGE_MCP_SERVERS: "changeMcpServers",
   CHANGE_RESUME_SESSION: "changeResumeSession",
   OPEN_SETTINGS: "openSettings", // Open VS Code settings for ctrlyoke
+  OPEN_GLOBAL_SETTINGS_TAB: "openGlobalSettingsTab", // Extension/webview navigation to a settings tab
   OPEN_VSCODE_MCP_BROWSER: "openVscodeMcpBrowser", // Webview -> Extension: Open VS Code's native MCP server browser
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   HARNESS_STATUS_UPDATE: "harnessStatusUpdate", // Update harness availability
@@ -2180,6 +2181,7 @@ export type RetryPromptPlaceholder =
 
 // VS Code command IDs registered by the extension
 export const VSCODE_COMMANDS = {
+  OPEN_SECRETS_SETTINGS: "ctrlyoke.openSecretsSettings",
   ENABLE_SERVER: "ctrlyoke.enableServer",
   DISABLE_SERVER: "ctrlyoke.disableServer",
   REGENERATE_SERVER_TOKEN: "ctrlyoke.regenerateServerToken",

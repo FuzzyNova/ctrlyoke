@@ -23,7 +23,11 @@ import { getFrozenRunHistoryLocation } from "../utils/RunHistoryStoragePolicy";
 import { projectStateRoot } from "../utils/ProjectStatePaths";
 import { scanCtrlYokeSlashTokens } from "../utils/CtrlYokeSlashTokens";
 import { SkillDiscovery } from "../utils/SkillDiscovery";
-import { CTRLYOKE_SLASH_TOKEN_KINDS } from "../types/DashboardConstants";
+import {
+  CTRLYOKE_SLASH_TOKEN_KINDS,
+  VSCODE_COMMANDS,
+} from "../types/DashboardConstants";
+import { parseSecretReferences } from "../utils/SecretReferenceParser";
 
 /**
  * Provides clickable links for ctrlyoke context references
@@ -97,8 +101,10 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     const text = document.getText();
     const workspaceRoot = this.getWorkspaceRoot();
 
+    links.push(...this.findSecretLinks(document, text));
+
     if (!workspaceRoot) {
-      return undefined; // No workspace, can't resolve relative paths
+      return links.length > 0 ? links : undefined;
     }
 
     const namedRoots = getVsCodeNamedWorkspaceRoots();
@@ -199,6 +205,26 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     );
 
     return links;
+  }
+
+  private findSecretLinks(
+    document: vscode.TextDocument,
+    text: string
+  ): vscode.DocumentLink[] {
+    const target = vscode.Uri.parse(
+      `command:${VSCODE_COMMANDS.OPEN_SECRETS_SETTINGS}`
+    );
+    return parseSecretReferences(text).map((reference) => {
+      const link = new vscode.DocumentLink(
+        new vscode.Range(
+          document.positionAt(reference.startOffset),
+          document.positionAt(reference.endOffset)
+        ),
+        target
+      );
+      link.tooltip = "Open ctrlyoke Secrets settings";
+      return link;
+    });
   }
 
   /** Resolve explicit ctrlyoke skill references using runtime discovery order. */

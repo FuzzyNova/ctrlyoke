@@ -354,7 +354,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Register completion provider for prompt files (JSON, YAML, and Markdown)
     // Two triggers: @ for full file references, # for snippets (line ranges, selections)
-    const promptCompletionProvider = new PromptCompletionProvider();
+    const promptCompletionProvider = new PromptCompletionProvider(() =>
+      webviewProvider.getSecretRegistryService()
+    );
     const promptFilePatterns = [
       { pattern: "**/*.{prompt,ctrlyoke}.json" },
       { pattern: "**/*.ctrlyoke.{yaml,yml}" },
@@ -368,6 +370,16 @@ export async function activate(context: vscode.ExtensionContext) {
         promptFilePatterns,
         promptCompletionProvider,
         "@" // Trigger on @ character for full file references
+      )
+    );
+
+    // Register ! trigger for secret-name references. The registry supplies
+    // names only; managed values never enter the completion payload.
+    context.subscriptions.push(
+      vscode.languages.registerCompletionItemProvider(
+        promptFilePatterns,
+        promptCompletionProvider,
+        "!"
       )
     );
 
@@ -398,7 +410,7 @@ export async function activate(context: vscode.ExtensionContext) {
       )
     );
     Log.debug(
-      "ctrlyoke: Registered completion provider for prompt files (.json, .yaml, .md, and prompt language) with @, #, ~, and $ triggers"
+      "ctrlyoke: Registered completion provider for prompt files (.json, .yaml, .md, and prompt language) with @, #, ~, $, and ! triggers"
     );
 
     // Register property key completion provider for YAML workflow files.
@@ -468,6 +480,14 @@ function registerCommands(context: vscode.ExtensionContext) {
     "ctrlyoke.openPanel",
     async () => {
       await workflowOrchestrator.openPanel();
+    }
+  );
+
+  const openSecretsSettingsCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.OPEN_SECRETS_SETTINGS,
+    async () => {
+      await workflowOrchestrator.openPanel();
+      webviewProvider.openGlobalSettingsTab("secrets");
     }
   );
 
@@ -1212,6 +1232,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   // Add all production commands to subscriptions
   context.subscriptions.push(
     openPanelCommand,
+    openSecretsSettingsCommand,
     showGettingStartedCommand,
     pauseCommand,
     resumeCommand,

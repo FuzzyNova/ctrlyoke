@@ -13,6 +13,7 @@ import {
   type CtrlYokeSlashToken,
 } from "../../../utils/CtrlYokeSlashTokens";
 import { CTRLYOKE_SLASH_TOKEN_KINDS } from "../../../types/DashboardConstants";
+import { parseSecretReferences } from "../../../utils/SecretReferenceParser";
 
 export { SYMBOL_KIND_ICONS } from "../../../types/SymbolKindConstants";
 
@@ -143,6 +144,7 @@ export type ContextReferenceType =
   | "symbol"
   | "git"
   | "priorContext"
+  | "secret"
   | "skill"
   | "mcp";
 
@@ -159,6 +161,7 @@ export interface ContextReferenceMatch {
   ref?: string;
   skillName?: string;
   mcpServerName?: string;
+  secretName?: string;
 }
 
 export interface AtomicReferenceChip {
@@ -231,6 +234,11 @@ export function createAtomicReferencePresentation(
         );
       case "priorContext":
         return sourceText.startsWith("$") ? 1 : 0;
+      case "secret":
+        return Math.max(
+          0,
+          sourceText.lastIndexOf(descriptor.attrs["data-secret-name"] ?? label)
+        );
       case CTRLYOKE_SLASH_TOKEN_KINDS.SKILL:
         return Math.max(
           0,
@@ -323,6 +331,7 @@ export const SYMBOL_ICON_COLORS: Record<string, string> = {
   // from the file/symbol/git/prior-context accents above.
   tools: CHART_ACCENT_COLORS.orange,
   mcp: CHART_ACCENT_COLORS.orange,
+  key: CHART_ACCENT_COLORS.purple,
 };
 
 export type SymbolIconResolver = (
@@ -426,6 +435,14 @@ function describeContextReferenceChip(
       return {
         icon: "source-control",
         label: gitReferenceLabel(ref.gitRef ?? ""),
+        title,
+        attrs,
+      };
+    case "secret":
+      attrs["data-secret-name"] = ref.secretName ?? "";
+      return {
+        icon: "key",
+        label: ref.secretName ?? "",
         title,
         attrs,
       };
@@ -572,6 +589,14 @@ export function findContextReferenceMatches(
   const directoryMatches: ContextReferenceMatch[] = [];
   const lineRangeMatches: ContextReferenceMatch[] = [];
   const symbolMatches: ContextReferenceMatch[] = [];
+  const secretMatches: ContextReferenceMatch[] = parseSecretReferences(text).map(
+    (reference) => ({
+      from: offset + reference.startOffset,
+      to: offset + reference.endOffset,
+      type: "secret",
+      secretName: reference.name,
+    })
+  );
   const gitMatches: ContextReferenceMatch[] = [];
   let match: RegExpExecArray | null;
   const collectPathMatches = (
@@ -658,6 +683,7 @@ export function findContextReferenceMatches(
     ...filteredDirectoryMatches,
     ...lineRangeMatches,
     ...symbolMatches,
+    ...secretMatches,
     ...gitMatches,
   ].sort((a, b) => a.from - b.from);
 }

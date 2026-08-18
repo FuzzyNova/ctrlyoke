@@ -244,6 +244,29 @@ function usageForName(
 export class SecretRegistryService {
   constructor(private readonly options: SecretRegistryServiceOptions) {}
 
+  /** Return registry names only; secret values never cross this boundary. */
+  async getCompletionNames(): Promise<string[]> {
+    const entries = await Promise.all([
+      this.list(SETTING_SCOPES.USER),
+      this.list(SETTING_SCOPES.WORKSPACE),
+    ]);
+    return uniqueValidNames(entries.flat().map((entry) => entry.name));
+  }
+
+  /** Check whether a name can resolve from the environment or managed store. */
+  async isResolvable(name: string): Promise<boolean> {
+    if (!isValidSecretName(name)) return false;
+    if (this.hasEnvironmentValue(name)) return true;
+
+    const [workspaceValue, userValue] = await Promise.all([
+      this.options.secretStore.get(
+        workspaceSecretKeyForRoot(this.options.getWorkspaceRoot(), name)
+      ),
+      this.options.secretStore.get(userSecretKey(name)),
+    ]);
+    return workspaceValue !== undefined || userValue !== undefined;
+  }
+
   async list(
     scope: SettingWriteScope,
     additionalKnownNames: readonly string[] = []
