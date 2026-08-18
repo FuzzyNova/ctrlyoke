@@ -1,5 +1,20 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
+import { EditorView } from "@codemirror/view";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { WorkflowPropertiesPanel } from "@components/layout/WorkflowPropertiesPanel";
 import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -26,6 +41,15 @@ function resetStores(): void {
 }
 
 describe("WorkflowPropertiesPanel permissions", () => {
+  beforeAll(() => {
+    if (!Range.prototype.getClientRects) {
+      Object.defineProperty(Range.prototype, "getClientRects", {
+        configurable: true,
+        value: () => [],
+      });
+    }
+  });
+
   beforeEach(() => {
     resetStores();
     postMessage.mockClear();
@@ -268,7 +292,9 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     render(<WorkflowPropertiesPanel />);
     chooseWorktreeMode("Named");
 
-    expect(screen.getByLabelText("Worktree branch")).toHaveValue("ui-work");
+    expect(screen.getByLabelText("Worktree branch")).toHaveTextContent(
+      "ui-work"
+    );
     expect(screen.getByLabelText("Worktree base")).toHaveValue("main");
     expect(screen.getByLabelText("Worktree setup")).toHaveValue("npm ci");
     expect(screen.queryByText(/Keep directory/i)).not.toBeInTheDocument();
@@ -335,8 +361,57 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     expect(
       screen.getByText("Branch is required for named worktree mode.")
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Worktree branch")).toHaveClass(
+    const branch = screen.getByLabelText("Worktree branch");
+    expect(branch.parentElement?.parentElement?.parentElement).toHaveClass(
       "border-input-error-border"
+    );
+  });
+
+  it("commits branch edits on blur and links its diagnostic", () => {
+    useSettingsStore.getState().updateWorkflowProperty("worktree", {
+      mode: WORKTREE_MODES.NAMED,
+      branch: "",
+    });
+
+    render(<WorkflowPropertiesPanel />);
+
+    const branch = screen.getByLabelText("Worktree branch");
+    expect(branch).toHaveAttribute(
+      "aria-describedby",
+      "settings-worktree-branch-diagnostic"
+    );
+    expect(
+      screen.getByText("Branch is required for named worktree mode.")
+    ).toBeInTheDocument();
+
+    const view = EditorView.findFromDOM(branch);
+    if (!view) throw new Error("Branch CodeMirror view was not rendered");
+    act(() => {
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: view.state.doc.length,
+          insert: "feature/new",
+        },
+      });
+    });
+    fireEvent.blur(branch);
+
+    expect(
+      useSettingsStore.getState().workflowProperties.worktree
+    ).toMatchObject({
+      mode: WORKTREE_MODES.NAMED,
+      branch: "feature/new",
+    });
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "updateWorkflowProperty",
+        property: "worktree",
+        value: expect.objectContaining({
+          mode: WORKTREE_MODES.NAMED,
+          branch: "feature/new",
+        }),
+      })
     );
   });
 

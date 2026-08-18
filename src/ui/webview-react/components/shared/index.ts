@@ -69,6 +69,7 @@ export {
   type SingleLineCompletionEditorProps,
 } from "./SingleLineCompletionEditor";
 export { ScriptCommandEditor } from "./ScriptCommandEditor";
+export { BranchNameEditor } from "./BranchNameEditor";
 export { ErrorBehaviorEditor } from "./ErrorBehaviorEditor";
 export { AnimatedSection } from "./AnimatedSection";
 export { SettingSourceBadge } from "./SettingSourceBadge";

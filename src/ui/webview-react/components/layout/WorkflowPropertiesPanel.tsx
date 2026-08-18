@@ -43,6 +43,7 @@ import {
   ErrorBehaviorEditor,
   ScriptConditionEditor,
   type ScriptConditionValue,
+  BranchNameEditor,
   AnimatedSection,
   AutoResumeStatusRow,
   ExitButton,
@@ -1547,24 +1548,21 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       htmlFor="settings-worktree-branch"
                       description="Existing or new local Git branch for the named worktree."
                     >
-                      <input
-                        type="text"
+                      <BranchNameEditor
                         id="settings-worktree-branch"
                         aria-label="Worktree branch"
-                        aria-describedby={
-                          worktreeBranchDiagnostics.length > 0
-                            ? "settings-worktree-branch-diagnostic"
-                            : undefined
-                        }
                         value={worktreeBranchInput}
-                        onChange={(event) =>
-                          setWorktreeBranchInput(event.target.value)
-                        }
+                        onChange={setWorktreeBranchInput}
                         onBlur={() =>
                           handleWorktreeFieldChange(
                             "branch",
                             worktreeBranchInput
                           )
+                        }
+                        aria-describedby={
+                          worktreeBranchDiagnostics.length > 0
+                            ? "settings-worktree-branch-diagnostic"
+                            : undefined
                         }
                         className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono h-7`}
                       />
