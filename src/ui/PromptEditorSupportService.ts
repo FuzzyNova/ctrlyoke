@@ -61,6 +61,7 @@ import {
   getScriptCommandCompletions,
   parseScriptCompletionContext,
 } from "../completions/ScriptCommandCompletionHelpers";
+import { getBranchCompletions } from "../completions/BranchCompletionHelpers";
 import { getStashList, gitRefExists } from "../utils/GitUtils";
 import { ContextExpander } from "../utils/ContextExpander";
 import { decodePriorContextTokenRef } from "../utils/FileReferenceParser";
@@ -174,6 +175,31 @@ export class PromptEditorSupportService {
         type: MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE,
         items: [],
         from: position,
+        seq,
+      });
+    }
+  }
+
+  async handleBranchListRequest(
+    ctx: WebviewClientContext,
+    filterText: string,
+    seq: number
+  ): Promise<void> {
+    try {
+      const repoRoot = vscode.workspace.workspaceFolders?.length
+        ? getVsCodeWorkspaceRoot()
+        : undefined;
+      const items = await getBranchCompletions(repoRoot, filterText);
+      ctx.emit({
+        type: MESSAGE_TYPES.BRANCH_LIST_RESPONSE,
+        items,
+        seq,
+      });
+    } catch (error) {
+      Log.error("Failed to get branch completions:", error);
+      ctx.emit({
+        type: MESSAGE_TYPES.BRANCH_LIST_RESPONSE,
+        items: [],
         seq,
       });
     }

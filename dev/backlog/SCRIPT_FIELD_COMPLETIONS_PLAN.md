@@ -564,16 +564,20 @@ npm test
 
 `npm test` is the full gate: its `pretest` hook runs `npm run compile` + `compile-tests`, then it runs the VS Code extension-host suite (which is where the new `src/test/unit/*` tests live) followed by `npm run test:ui`. Use `npm run test:ui` alone only for a fast inner loop on webview-only edits. Never run `npm run test:harness`.
 
-### Phase B — Branch completions (on top of Phase A)
+### Phase B — Branch completions (extension side complete; webview consumer remains)
 
-9. Add `listLocalBranches(repoRoot)` to `src/utils/GitUtils.ts` (read-only `for-each-ref`, following the `execGit`/`currentBranch` conventions already in that file).
+The extension-side half of Phase B (Implementation Steps 9–12) is complete. The
+webview `BranchNameEditor` consumer and its UI-focused tests remain for a later
+follow-up.
 
-10. Add `BRANCH_LIST_REQUEST` and `BRANCH_LIST_RESPONSE` in `src/types/DashboardConstants.ts`.
+9. ~~Add `listLocalBranches(repoRoot)` to `src/utils/GitUtils.ts` (read-only `for-each-ref`, following the `execGit`/`currentBranch` conventions already in that file).~~
 
-11. Create `src/completions/BranchCompletionHelpers.ts`: resolve repo root, call `listLocalBranches`, cache with a 10s TTL (mirroring `getGitChangeCompletions`'s `gitCache`), filter by prefix, map to `PlainCompletionItem[]` with `detail: "Existing branch"`.
+10. ~~Add `BRANCH_LIST_REQUEST` and `BRANCH_LIST_RESPONSE` in `src/types/DashboardConstants.ts`.~~
 
-12. Add `handleBranchListRequest` to `src/ui/PromptEditorSupportService.ts` and register
-    `BRANCH_LIST_REQUEST` in `registerEditorSupport()` in `src/ui/WebviewMessageRouter.ts`.
+11. ~~Create `src/completions/BranchCompletionHelpers.ts`: resolve repo root, call `listLocalBranches`, cache with a 10s TTL (mirroring `getGitChangeCompletions`'s `gitCache`), filter by prefix, map to `PlainCompletionItem[]` with `detail: "Existing branch"`.~~
+
+12. ~~Add `handleBranchListRequest` to `src/ui/PromptEditorSupportService.ts` and register
+    `BRANCH_LIST_REQUEST` in `registerEditorSupport()` in `src/ui/WebviewMessageRouter.ts`.~~
 
 13. Create `src/ui/webview-react/components/shared/BranchNameEditor.tsx` as a thin wrapper supplying the branch `completionSource` on top of `SingleLineCompletionEditor`.
 

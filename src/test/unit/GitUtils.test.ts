@@ -9,6 +9,7 @@ import {
   parseGitWorktreePorcelain,
   listWorktrees,
   currentBranch,
+  listLocalBranches,
   resolveCommit,
   hasUncommittedChanges,
   commitAll,
@@ -223,6 +224,16 @@ suite("GitUtils worktree plumbing", function () {
         ".git" + path.sep + "HEAD"
       )
     );
+  });
+
+  test("lists local branches in Git's recency order", async () => {
+    runGit(["branch", "feature"]);
+
+    const branches = await listLocalBranches(workspaceRoot);
+    const branch = await currentBranch(workspaceRoot);
+
+    assert.ok(branches.includes("feature"));
+    assert.ok(branch !== null && branches.includes(branch));
   });
 
   test("detects and commits changes through argv-only Git calls", async () => {

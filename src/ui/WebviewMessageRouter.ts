@@ -734,6 +734,14 @@ export class WebviewMessageRouter {
       }
     );
 
+    table.set(MESSAGE_TYPES.BRANCH_LIST_REQUEST, async (message, ctx) => {
+      await this.promptEditorSupport.handleBranchListRequest(
+        ctx,
+        message.filterText,
+        message.seq
+      );
+    });
+
     table.set(MESSAGE_TYPES.OPEN_FILE, (message, ctx) => {
       this.promptEditorSupport.handleOpenFile(
         ctx,

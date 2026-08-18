@@ -289,4 +289,30 @@ suite("PromptEditorSupportService", () => {
     assert.strictEqual(response.from, 4);
     assert.strictEqual(response.seq, 102);
   });
+
+  test("emits branch completions through the requesting client context", async () => {
+    const emitted: unknown[] = [];
+    const service = new PromptEditorSupportService(
+      () => workspaceRoot,
+      () => undefined,
+      () => undefined
+    );
+
+    await service.handleBranchListRequest(
+      createWebviewClientContext("browser:1", (message) => {
+        emitted.push(message);
+      }),
+      "feat/",
+      103
+    );
+
+    const response = emitted[0] as {
+      type: string;
+      items: unknown[];
+      seq: number;
+    };
+    assert.strictEqual(response.type, MESSAGE_TYPES.BRANCH_LIST_RESPONSE);
+    assert.deepStrictEqual(response.items, []);
+    assert.strictEqual(response.seq, 103);
+  });
 });

@@ -925,6 +925,26 @@ export async function currentBranch(dir: string): Promise<string | null> {
   }
 }
 
+/** Return local branch names, sorted by most recent commit. */
+export async function listLocalBranches(repoRoot: string): Promise<string[]> {
+  try {
+    const { stdout } = await execGit([
+      "-C",
+      repoRoot,
+      "for-each-ref",
+      "--sort=-committerdate",
+      "--format=%(refname:short)",
+      "refs/heads",
+    ]);
+    return stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 export async function resolveCommit(dir: string, ref: string): Promise<string> {
   if (!ref || ref.includes("\0")) throw new Error("Invalid Git ref.");
   const { stdout } = await execGit([

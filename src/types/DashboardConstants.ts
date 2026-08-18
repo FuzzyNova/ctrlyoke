@@ -164,6 +164,8 @@ export const MESSAGE_TYPES = {
   COMPLETIONS_RESPONSE: "completionsResponse", // Return autocomplete suggestions
   SCRIPT_COMPLETIONS_REQUEST: "scriptCompletionsRequest",
   SCRIPT_COMPLETIONS_RESPONSE: "scriptCompletionsResponse",
+  BRANCH_LIST_REQUEST: "branchListRequest",
+  BRANCH_LIST_RESPONSE: "branchListResponse",
   OPEN_FILE: "openFile", // Open file from an @file / #selection: / #sym: link
   OPEN_SKILL: "openSkill", // Open a resolved ctrlyoke SKILL.md link
   OPEN_PROMPT_FILE: "openPromptFile", // Open a lone prompt-file reference

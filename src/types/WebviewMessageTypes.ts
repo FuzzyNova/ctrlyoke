@@ -82,6 +82,7 @@ import type {
 } from "./WorkflowTimelineTypes";
 import type { WorkflowOutputHistory } from "./OutputHistoryTypes";
 import type { ScriptCompletionItem } from "../completions/ScriptCommandCompletionHelpers";
+import type { PlainCompletionItem } from "../completions/CompletionHelpers";
 import type { HarnessCapabilityRegistrySnapshot } from "./CompatibilityTypes";
 import type { WorkflowExecutionPreview } from "./ExecutionPreviewTypes";
 import type {
@@ -1132,6 +1133,20 @@ export interface ScriptCompletionsResponseMessage {
   type: typeof MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE;
   items: ScriptCompletionItem[];
   from: number;
+  seq: number;
+}
+
+/** Webview -> Extension: request local Git branch completions. */
+export interface BranchListRequestMessage {
+  type: typeof MESSAGE_TYPES.BRANCH_LIST_REQUEST;
+  filterText: string;
+  seq: number;
+}
+
+/** Extension -> Webview: local Git branch completion results. */
+export interface BranchListResponseMessage {
+  type: typeof MESSAGE_TYPES.BRANCH_LIST_RESPONSE;
+  items: PlainCompletionItem[];
   seq: number;
 }
 
@@ -2263,6 +2278,7 @@ export type IncomingMessage =
       trigger: string;
     }
   | ScriptCompletionsResponseMessage
+  | BranchListResponseMessage
   | {
       type: typeof MESSAGE_TYPES.CONTEXT_REFS_VALIDATION;
       results: Array<{
