@@ -17,7 +17,8 @@ import {
 
 const CODEX_PERMISSION_VERIFICATION = {
   kind: "manual",
-  reference: "dev/backlog/TOOL_PERMISSION_PARITY_PLAN.md#current-baseline",
+  reference:
+    "dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#codex-partial-support-investigation",
   basis: "cli-version",
   verifiedVersions: [">=0.146.0"],
 } as const;
@@ -52,8 +53,9 @@ export const CODEX_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
  * - allowAll → Auto preset (= workspace-write sandbox + on-request approval)
  * - custom → -s <sandboxMode> -a <approvalPolicy>
  *
- * Note: Codex does NOT support granular tool patterns like Copilot/Claude.
- * Tool permissions are controlled via sandbox modes and approval policies.
+ * Note: Codex does not expose ctrlyoke's general tool-pattern contract.
+ * Its command rules, MCP filters, and permission profiles are separate
+ * mechanisms and are not substituted here for arbitrary tool patterns.
  *
  * Sandbox modes (-s / --sandbox):
  * - "read-only": Read-only filesystem access
@@ -65,8 +67,8 @@ export const CODEX_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
  * - "on-request": Model decides when to ask (Auto preset)
  * - "never": Never ask for approval (dangerous)
  *
- * If allowedTools or deniedTools are configured, a warning is logged
- * since Codex doesn't support them.
+ * If allowedTools or deniedTools are configured, the shared compatibility
+ * diagnostics report that Codex does not enforce them.
  */
 export class CodexToolPermissionMapper
   extends ToolPermissionMapperBase

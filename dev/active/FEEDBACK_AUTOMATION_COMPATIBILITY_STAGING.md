@@ -30,8 +30,8 @@ and the terminal handlers, and a two-tab isolation test exists
 before this document's last grooming pass — but was never marked done in the
 queue below; that is corrected here. **Stage F has since been completed
 (2026-08-17, steps 18-24), and Stage D is now complete; Stage G's remaining
-domain/report/docs work remains genuinely unstarted.** **Stage G**
-(compatibility domains and portability reporting) is next. The dependency that
+domain/report/docs work is underway.** **Stage G**
+(compatibility domains and portability reporting) is underway. The dependency that
 formerly split Stage G has now landed: both
 [`SECRETS_AND_REDACTION_PLAN.md`](../implemented/SECRETS_AND_REDACTION_PLAN.md)
 and [`DRY_RUN_PREVIEW_PLAN.md`](../implemented/DRY_RUN_PREVIEW_PLAN.md) are
@@ -479,7 +479,7 @@ may be swapped as a block.
 | 23  | F.6   | **DONE.** Phase 4 item 1: in-app end-condition script creation in `ScriptConditionEditor`; deleted `ctrlyoke.createEndConditionScript` (`reusable` 2 → 1)                                                                                                                                                                                                          |
 | 24  | F.7   | **DONE.** Phase 4 item 2: inline harness-detection retry next to `HarnessDropdown`; cut the `openPanel()` gate (`reusable` 1 → 0)                                                                                                                                                                                                                                  |
 | 25  | G.0   | **DONE ahead of this queue.** Dry-run already runs the shared analyzer and exact provider plan; Secrets/Redaction is implemented and all preview surfaces consume the redacted projection                                                                                                                                                                          |
-| 26  | G.1   | **TODO.** Investigate Codex granular permission translations; advertise and implement only behaviorally evidenced partial mappings, or record the evidence-backed conclusion that no safe general mapping exists                                                                                                                                                   |
+| 26  | G.1   | **DONE 2026-08-18.** Codex 0.147.0 source/schema and local `execpolicy` evidence show no safe general mapping for arbitrary shell, MCP, or read/write tool patterns; declarations remain unsupported, diagnostics remain required, server-owned `disabled_tools` is reserved for G.4, and Antigravity 1.1.12 remains unsupported for granular lists                                                                                                                                 |
 | 27  | G.2   | **TODO.** Generalize registry assembly/deserialization/effective-state lookup for multiple enabled domains; remove the uniform `usage` and stale `mcp.injection` vocabulary while preserving the shipped permission slice                                                                                                                                          |
 | 28  | G.3   | **TODO.** Enable hooks as the first new complete domain across all six harnesses; replace hardcoded support lists with adapter-owned declarations, add analyzer/preview/UI coverage, and overlay diagnostics on the Hooks tab                                                                                                                                      |
 | 29  | G.4   | **TODO.** Enable MCP per-server tool filtering after the Codex investigation; model the proven Codex asymmetry, remove permission-domain false positives for server filters, and add analyzer/preview/UI coverage plus the MCP tab diagnostic badge                                                                                                                |
@@ -699,13 +699,14 @@ Re-verified against `src/` on 2026-08-18, not read from the plans.
 | D     | CLI `validate --harness` / `--all-installed-harnesses --json`           | **Done 2026-08-18** — shared diagnostics, real installed filtering, strict policies, JSON v1 |
 | E     | Client-scoped routing                                                   | **Done** (confirmed complete this pass; previously unmarked)                                 |
 | F     | Phase 6 host-aware webview toasts + Phase 4's six per-site dispositions | **Done** (steps 18–24); no `USER_INTERACTION_REQUEST` contract                               |
-| G     | Compatibility Phase 3 domains + report/docs + Codex investigation       | **Partially shipped** — dry-run and Secrets/Redaction are done; remaining work is G.1–G.9    |
+| G     | Compatibility Phase 3 domains + report/docs + Codex investigation       | **Partially shipped** — dry-run and Secrets/Redaction are done; G.1 is complete; remaining work is G.2–G.9    |
 
-One item stands between this document and being fully closed out:
+Stage G remains between this document and being fully closed out:
 
 1. **Stage G** — the largest remaining piece, but no longer blocked. Its dry-run
    integration and Secrets/Redaction dependency are already implemented. The
-   remaining sequence is the Codex investigation; multi-domain registry
+   Codex investigation is complete with an evidence-backed negative conclusion;
+   the remaining sequence is the multi-domain registry
    foundation; `hooks`, `mcp`, and `promptInputs` one at a time; the now-useful
    workflow portability report; generated docs; and final acceptance/retirement.
    `usage` is deliberately removed because it is now uniform.

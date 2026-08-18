@@ -32,7 +32,8 @@
 > optional harness-native discovery. The dry-run leg and Stage D CLI validation
 > of Compatibility Phase 2 have shipped through the shared analyzer and exact
 > provider-plan/JSON projections. The workflow portability report and Phase 3
-> capability domains remain. MCP capability serialization was cut
+> capability domains remain. The Codex partial-support investigation is complete
+> with no safe general translation found; MCP capability serialization was cut
 > because a context-free snapshot cannot honestly describe whether a workflow
 > uses a capability.
 >
@@ -180,9 +181,39 @@ server's `deniedTools` into ordinary `mcp__<id>__<tool>` deny patterns appended
 to `toolPermissions.deniedTools`, so on most harnesses it rides the existing
 `permissions.deniedTools` capability. Codex is the exception: it additionally
 emits native `disabled_tools` in its generated TOML
-(`CodexCliProvider.ts:592`), so it enforces per-server filtering even though its
+(`CodexCliProvider.ts:780,807`), so it enforces per-server filtering even though its
 general granular-list capability is unsupported. Model this domain only if that
 asymmetry proves to need its own declaration.
+
+### Codex G.1 partial-support investigation — complete
+
+The installed Codex CLI is 0.147.0. Its source-visible contract exposes
+token-based `prefix_rule` command policies, exact per-server MCP
+`enabled_tools`/`disabled_tools` lists, and filesystem/network permission
+profiles. None is a safe general translation for ctrlyoke's arbitrary
+`shell(command:*)`, MCP, or broad `read`/`write` tool patterns:
+
+- command rules match ordered command-token prefixes, not ctrlyoke's arbitrary
+  shell-pattern language; translating an allow or denial would change its
+  scope for wrappers, quoting, and non-prefix patterns;
+- MCP filters are server-local exact tool-name sets. Codex's shipped
+  `disabled_tools` output remains valid for server-owned `mcpServers[].deniedTools`
+  and is input to G.4, but it does not establish a mapping for general
+  `allowedTools`/`deniedTools` patterns;
+- permission profiles govern filesystem/network access, not harness tool names.
+  Mapping a broad tool denial to a wider sandbox grant could weaken the denial.
+
+Therefore G.1 changes no Codex fidelity declaration: `allowedTools` and
+`deniedTools` remain honestly `unsupported`. Existing mapper and analyzer
+coverage emits the not-enforced diagnostic for every configured list in the
+applicable modes. No Codex partial capability is advertised until a future
+general translation has both a safety argument and behavioral enforcement plus
+diagnostic coverage.
+
+The same audit re-confirmed Antigravity 1.1.12's position: its own help exposes
+only coarse `--sandbox` and dangerous bypass controls, not a documented
+granular allow/deny mechanism. Its granular declarations remain `unsupported`;
+no Gemini/Qwen ancestry or shared configuration path is evidence of support.
 
 ### When a temporary difference becomes invariant
 

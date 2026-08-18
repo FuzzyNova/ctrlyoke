@@ -124,7 +124,7 @@ otherwise:
 | Claude CLI      | Supported                                   | Supported through translation     | Retain and integration-test                                                                  |
 | Qwen Code       | Supported                                   | Supported inline                  | Retain canonical inline mapping; re-verify the pinned fixture on CLI upgrade                 |
 | OpenCode        | Supported                                   | Supported inline                  | Retain collision-safe inline mapping; re-verify the pinned fixture on CLI upgrade            |
-| Codex CLI       | Supported through sandbox/approval controls | No general equivalent             | Mode-only summary derived from the three capabilities; investigate safe partial translations |
+| Codex CLI       | Supported through sandbox/approval controls | No safe general equivalent        | Mode-only summary derived from the three capabilities; G.1 concluded no safe general partial translation |
 | Antigravity CLI | Supported                                   | No documented granular equivalent | Mode-only summary derived from the three capabilities                                        |
 
 These six CLI harnesses are the complete supported set (`HARNESS_IDS` in
@@ -263,8 +263,8 @@ Why nothing warns:
   in status/output.
 
 Scope is one harness: Copilot/Claude/Qwen/OpenCode enforce the pattern normally,
-and Codex enforces it through its own native `disabled_tools`
-(`CodexCliProvider.ts:592`) despite its mode-only summary. Fix both halves —
+and Codex enforces server-owned MCP denials through its native `disabled_tools`
+(`CodexCliProvider.ts:780,807`) despite its mode-only summary. Fix both halves —
 teach the analyzer about attached-server denials so author time matches runtime,
 and route `permissionApplication.diagnostics` to status/output. Note that the
 RFC 6901 `propertyPointer` must address the ctrlyoke MCP entry rather than
@@ -833,32 +833,43 @@ real-harness regression fixture additionally covers collision rewriting, MCP,
 and external-plugin completion in headless and TUI modes; it is intentionally
 not run by `npm test`.
 
-## Codex Partial Support Investigation
+## Codex Partial Support Investigation — COMPLETE (2026-08-18)
 
 > Post-release. Not part of the 0.1.0 gate — see the release-gate boundary in
 > the staging section above.
 
-Codex has useful security primitives, but they do not form a general mapping for
-ctrlyoke tool names:
+The installed Codex CLI is 0.147.0. Codex has useful security primitives, but
+they do not form a safe general mapping for ctrlyoke tool names:
 
 - project `.codex/config.toml`;
 - project-local command rules;
 - sandbox/approval settings and permission profiles;
 - MCP server `enabled_tools` and `disabled_tools`.
 
-Investigate translations by category:
+The three requested categories were checked against the installed CLI's
+source-visible contract and local behavior:
 
-- `shell(command:*)` may map to project-local command prefix rules;
-- MCP tool patterns may map to per-server enabled/disabled tool lists;
-- broad read/write patterns may map only approximately to permission profiles.
+- `shell(command:*)` does not safely map to project-local `prefix_rule` entries:
+  Codex matches ordered command-token prefixes, while ctrlyoke accepts arbitrary
+  shell patterns and wrappers. A translation could broaden an allow or denial.
+- General MCP patterns do not safely map to per-server `enabled_tools` or
+  `disabled_tools`: Codex applies those as exact server-local tool-name sets.
+  The already-shipped server-owned `disabled_tools` output is reserved as input
+  to Stage G.4 and is not evidence that general lists are supported.
+- Broad `read`/`write` patterns do not map to Codex permission profiles:
+  profiles govern filesystem/network paths and isolation, not tool names.
+  Translating a broad denial to a sandbox profile could weaken enforcement.
 
-Only advertise `partial` for categories with behavioral tests. A partial mapping
-must emit diagnostics for every untranslatable rule. Never translate a broad
-denial into a weaker rule silently.
+This is an evidence-backed negative conclusion. No Codex capability declaration
+changes: `allowedTools` and `deniedTools` remain `unsupported`, and the existing
+mapper/analyzer tests continue to prove not-enforced diagnostics for every
+configured list in the applicable modes. No partial mapping is advertised
+without a future safety argument plus behavioral enforcement and diagnostic
+coverage.
 
-Until this investigation lands, the analyzer derives Codex's mode-only summary
-from supported coarse mode plus unsupported Allowed Tools and Denied Tools
-capabilities. Harness mappers do not store `mode-only` as a capability value.
+The analyzer continues to derive Codex's mode-only summary from supported coarse
+mode plus unsupported Allowed Tools and Denied Tools capabilities. Harness
+mappers do not store `mode-only` as a capability value.
 
 ## Antigravity
 
@@ -869,6 +880,11 @@ adapters do not store that summary as a capability value.
 Do not infer granular support from Gemini/Qwen configuration merely because the
 products share history or directories. Antigravity needs its own verified
 contract.
+
+The 2026-08-18 G.1 audit re-confirmed that contract is still absent in
+Antigravity 1.1.12: its own help exposes only coarse sandbox and dangerous
+bypass controls. Keep Antigravity's granular declarations unsupported until an
+Antigravity-specific documented and behaviorally verified mechanism exists.
 
 ## Interface Changes
 
