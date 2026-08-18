@@ -1,6 +1,13 @@
 const ANSI_ESCAPE_SEQUENCE_PATTERN =
   /\x1B(?:\[[0-?]*[ -/]*[@-~]|\][\s\S]*?(?:\x07|\x1B\\)|[@-Z\\-_])/g;
-const NON_PRINTABLE_CONTROL_PATTERN = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g;
+// Single-pass replacement for the three line-ending/control-char cleanup
+// steps that used to be sequential .replace() calls, each of which rescans
+// the whole string. \r\n is listed before the lone \r alternative so the
+// alternation still collapses a CRLF pair to one \n instead of leaving a
+// stray \n behind; \x0D is intentionally absent from the character class
+// below since it is already handled by the first two alternatives.
+const CRLF_CR_OR_CONTROL_PATTERN =
+  /\r\n|\r|[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g;
 
 /**
  * Remove ANSI escape sequences from terminal output.
@@ -14,13 +21,78 @@ export function stripAnsiCodes(text: string): string {
 }
 
 /**
+ * Bounded cache of sanitizeTerminalOutput() results, keyed by the raw input
+ * string.
+ *
+ * The same raw command/output/error text for one visible dashboard row is
+ * independently re-sanitized in several places — row-height estimation,
+ * find-in-page search indexing, and the row's own render — every time any of
+ * them runs, even though the underlying string never changes until the step
+ * re-runs. Caching by input string turns all but the first of those calls
+ * into a Map lookup instead of a fresh multi-pass regex scan.
+ *
+ * Bounded (LRU by insertion order) and size-gated because this module is
+ * also used on the Node/extension-host side to sanitize streaming script
+ * output, where each chunk is typically unique — caching those would only
+ * hold extra strings in memory for no reuse benefit. `MAX_CACHEABLE_LENGTH`
+ * keeps large one-off blobs (e.g. accumulated stdout) out of the cache
+ * entirely, and `MAX_CACHE_ENTRIES` bounds the rest.
+ */
+const MAX_CACHE_ENTRIES = 300;
+const MAX_CACHEABLE_LENGTH = 50_000;
+const sanitizedCache = new Map<string, string>();
+
+function getCachedSanitized(text: string): string | undefined {
+  const cached = sanitizedCache.get(text);
+  if (cached === undefined) {
+    return undefined;
+  }
+  // Re-insert so the most recently used entries are evicted last.
+  sanitizedCache.delete(text);
+  sanitizedCache.set(text, cached);
+  return cached;
+}
+
+function setCachedSanitized(text: string, sanitized: string): void {
+  sanitizedCache.set(text, sanitized);
+  if (sanitizedCache.size > MAX_CACHE_ENTRIES) {
+    const oldestKey = sanitizedCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      sanitizedCache.delete(oldestKey);
+    }
+  }
+}
+
+/** Test-only seam for verifying eviction/bounding behavior. */
+export function clearSanitizeTerminalOutputCacheForTests(): void {
+  sanitizedCache.clear();
+}
+
+/**
  * Normalize terminal output for logs and UI rendering.
  * Keeps line feeds and tabs, but removes ANSI/control bytes that render as
  * unreadable glyphs in the dashboard.
  */
 export function sanitizeTerminalOutput(text: string): string {
-  return stripAnsiCodes(text)
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "")
-    .replace(NON_PRINTABLE_CONTROL_PATTERN, "");
+  if (typeof text !== "string" || text.length === 0) {
+    return "";
+  }
+
+  const isCacheable = text.length <= MAX_CACHEABLE_LENGTH;
+  if (isCacheable) {
+    const cached = getCachedSanitized(text);
+    if (cached !== undefined) {
+      return cached;
+    }
+  }
+
+  const sanitized = stripAnsiCodes(text).replace(
+    CRLF_CR_OR_CONTROL_PATTERN,
+    (match) => (match === "\r\n" ? "\n" : "")
+  );
+
+  if (isCacheable) {
+    setCachedSanitized(text, sanitized);
+  }
+  return sanitized;
 }
