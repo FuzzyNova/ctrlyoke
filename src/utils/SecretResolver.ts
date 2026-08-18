@@ -95,6 +95,26 @@ export async function resolveSecretEnvironment(
   );
 }
 
+/** Return names that cannot currently resolve without exposing any values. */
+export async function findMissingSecretNames(
+  names: readonly string[],
+  context: SecretResolutionContext
+): Promise<string[]> {
+  const missing: string[] = [];
+  for (const name of new Set(names)) {
+    try {
+      await resolveSecretValues([name], context);
+    } catch (error) {
+      if (error instanceof MissingSecretError) {
+        missing.push(name);
+        continue;
+      }
+      throw error;
+    }
+  }
+  return missing;
+}
+
 /** Prompt bodies are never a resolution boundary. */
 export function assertNoSecretInterpolationInPrompt(prompt: string): void {
   SECRET_INTERPOLATION_PATTERN.lastIndex = 0;
@@ -267,10 +287,13 @@ export async function preflightWorkflowSecrets(
     }
     if (grants.length > 0) {
       try {
-        await resolveSecretValues(grants, {
+        const missing = await findMissingSecretNames(grants, {
           workspaceRoot,
           secretStore: platform.getSecretStore?.(),
         });
+        if (missing.length > 0) {
+          throw new MissingSecretError(missing[0]);
+        }
       } catch (error) {
         if (error instanceof MissingSecretError) {
           throw new Error(

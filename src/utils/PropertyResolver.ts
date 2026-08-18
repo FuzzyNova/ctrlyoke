@@ -50,7 +50,7 @@ export class PropertyResolver {
       executionMode: ConfigurationUtils.getCliExecutionMode() as ExecutionMode,
       agent: ConfigurationUtils.getDefaultAgent(),
       skills: ConfigurationUtils.getDefaultSkills(),
-      secrets: [],
+      secrets: ConfigurationUtils.getDefaultSecrets(),
       resumeSession: ConfigurationUtils.shouldResumeExistingSession(),
       mcpServers: ConfigurationUtils.getDefaultMcpServers(),
       priorContext:

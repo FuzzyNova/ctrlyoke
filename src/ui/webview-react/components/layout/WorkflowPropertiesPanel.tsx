@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import type { ErrorBehavior, WorktreeConfig } from "@root/types/CtrlYokeTypes";
 import {
   useSettingsStore,
@@ -11,11 +11,14 @@ import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
 import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
+import { useSecretRegistryStore } from "../../store/secretRegistryStore";
 import {
   MESSAGE_TYPES,
   SESSION_ID_SENTINELS,
   RUNNER_IDS,
   CONDITION_ACTIONS,
+  SETTING_SCOPES,
+  SECRET_REGISTRY_STATES,
   type PriorContext,
   type HarnessId,
   type ToolPermissionMode,
@@ -60,6 +63,7 @@ import {
   PERMISSION_CAPABILITY_KEYS,
 } from "../../../../types/DashboardConstants";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
+import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 import {
   agentWarning,
@@ -223,6 +227,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
     getEffectiveWorktree,
     getEffectiveAgent,
     getEffectiveSkills,
+    getEffectiveSecrets,
     getEffectiveResumeSession,
     getEffectiveMcpServers,
     getEffectiveHooks,
@@ -299,6 +304,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       : false;
   const effectiveAgent = getEffectiveAgent();
   const effectiveSkills = getEffectiveSkills();
+  const effectiveSecrets = getEffectiveSecrets();
   const effectiveResumeSession = getEffectiveResumeSession();
   const effectiveMcpServers = getEffectiveMcpServers();
   const effectiveHooks = getEffectiveHooks();
@@ -392,6 +398,66 @@ const WorkflowPropertiesPanelInner: React.FC<{
   // Preview of what auto-resume would do for a new step appended to the
   // queue, shown when the Session ID field is blank.
   const steps = useWorkflowStore((s) => s.steps);
+  const finalStep = useWorkflowStore((s) => s.finalStep);
+  const secretEntriesByScope = useSecretRegistryStore(
+    (state) => state.entriesByScope
+  );
+  const secretRegistryLoading = useSecretRegistryStore(
+    (state) =>
+      state.loadingByScope[SETTING_SCOPES.USER] ||
+      state.loadingByScope[SETTING_SCOPES.WORKSPACE]
+  );
+  const requestSecretEntries = useSecretRegistryStore(
+    (state) => state.requestEntries
+  );
+  useEffect(() => {
+    requestSecretEntries(SETTING_SCOPES.USER);
+    requestSecretEntries(SETTING_SCOPES.WORKSPACE);
+  }, [requestSecretEntries]);
+  const inlineSecretNames = useMemo(
+    () => [
+      ...new Set(
+        [...steps, ...(finalStep ? [finalStep] : [])].flatMap((step) =>
+          "prompt" in step
+            ? parseSecretReferences(step.prompt).map(
+                (reference) => reference.name
+              )
+            : []
+        )
+      ),
+    ],
+    [finalStep, steps]
+  );
+  const registryEntries = [
+    ...secretEntriesByScope.user,
+    ...secretEntriesByScope.workspace,
+  ];
+  const secretNames = [
+    ...new Set([
+      ...registryEntries.map((entry) => entry.name),
+      ...effectiveSecrets,
+      ...inlineSecretNames,
+    ]),
+  ].sort();
+  const resolvableSecretNames = new Set(
+    registryEntries
+      .filter(
+        (entry) =>
+          entry.state === SECRET_REGISTRY_STATES.MANAGED_AND_SET ||
+          entry.state === SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_DETECTED
+      )
+      .map((entry) => entry.name)
+  );
+  const resolvedSecretGrants = [
+    ...new Set([...effectiveSecrets, ...inlineSecretNames]),
+  ];
+  const unresolvedSecretNames = secretRegistryLoading && registryEntries.length === 0
+    ? []
+    : resolvedSecretGrants.filter((name) => !resolvableSecretNames.has(name));
+  const unresolvedSecretDiagnostics = unresolvedSecretNames.map((name) => ({
+    severity: "error" as const,
+    message: `Secret "${name}" is not available from the managed registry or environment.`,
+  }));
   const autoResumePreview = getAutoResumePreview(
     steps,
     steps.length,
@@ -479,6 +545,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
         return (
           JSON.stringify(workflowValue) !==
           JSON.stringify(globalSettings.skills ?? [])
+        );
+      }
+      // Secret grants use the same replace-not-merge array semantics as skills.
+      if (property === "secrets") {
+        return (
+          JSON.stringify(workflowValue ?? []) !==
+          JSON.stringify(globalSettings.secrets ?? [])
         );
       }
       // JSON comparison for priorContext — value can be a string or number[]
@@ -787,6 +860,26 @@ const WorkflowPropertiesPanelInner: React.FC<{
     [syncWorkflowPropertiesForUndo, vscode]
   );
 
+  const handleSecretsChange = useCallback(
+    (secrets: string[]) => {
+      // Inline !NAME references are authoritative and are represented as
+      // locked selections, but remain prompt text rather than declarations.
+      const explicitSecrets = secrets.filter(
+        (name) => !inlineSecretNames.includes(name)
+      );
+      const settingsStore = useSettingsStore.getState();
+      settingsStore.updateWorkflowProperty("secrets", explicitSecrets);
+      syncWorkflowPropertiesForUndo();
+
+      postWorkflowDefinitionMutation(vscode, {
+        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+        property: "secrets",
+        value: explicitSecrets,
+      });
+    },
+    [inlineSecretNames, syncWorkflowPropertiesForUndo, vscode]
+  );
+
   const handleResumeSessionChange = useCallback(
     (v: string) => {
       if (v === SESSION_ID_SENTINELS.FINAL_STEP) {
@@ -1090,6 +1183,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       model: globalSettings.harnessDefaultModels[globalHarness],
       agent: globalSettings.agent,
       skills: globalSettings.skills ?? [],
+      secrets: globalSettings.secrets ?? [],
       additionalArgs:
         globalSettings.harnessDefaultAdditionalArgs[globalHarness] ?? "",
       executionMode: globalSettings.executionMode,
@@ -1990,6 +2084,51 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     options={PERMISSION_MODE_OPTIONS}
                     warning={modeDiagnostics[0]?.message}
                     warningId="settings-permission-mode-diagnostic"
+                  />
+                </FormField>
+
+                <FormField
+                  label="Secrets"
+                  htmlFor="settings-secrets"
+                  description="Grant named credentials to this workflow. Inline !NAME references in prompt text are always granted."
+                  setAsDefaultButton={
+                    <SetAsDefaultButton
+                      property="secrets"
+                      show={isDifferentFromGlobal("secrets")}
+                      onSetDefault={() =>
+                        handleSetAsDefault("secrets", workflowProperties.secrets)
+                      }
+                    />
+                  }
+                >
+                  <MultiCheckboxDropdown
+                    id="settings-secrets"
+                    selectedValues={resolvedSecretGrants}
+                    onChange={handleSecretsChange}
+                    options={secretNames.map((name) => ({
+                      value: name,
+                      label: name,
+                      description: inlineSecretNames.includes(name)
+                        ? "Granted by prompt text"
+                        : undefined,
+                    }))}
+                    placeholder="No secrets granted"
+                    lockedValues={inlineSecretNames}
+                    nonHideableValues={secretNames}
+                    warning={
+                      unresolvedSecretNames.length > 0
+                        ? `${unresolvedSecretNames.length} unresolved secret${unresolvedSecretNames.length === 1 ? "" : "s"}`
+                        : undefined
+                    }
+                  />
+                  {resolvedSecretGrants.length > 0 && (
+                    <p className="mt-0.5 text-xxs text-description-fg">
+                      Active: {resolvedSecretGrants.join(", ")}
+                    </p>
+                  )}
+                  <FieldDiagnostic
+                    id="settings-secrets-diagnostic"
+                    diagnostics={unresolvedSecretDiagnostics}
                   />
                 </FormField>
 

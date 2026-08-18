@@ -594,6 +594,8 @@ export class WebviewSettingsSync {
       await ConfigurationUtils.setDefaultAgent(value || "");
     } else if (property === PROMPT_PROPERTIES.SKILLS) {
       await ConfigurationUtils.setDefaultSkills(value || []);
+    } else if (property === PROMPT_PROPERTIES.SECRETS) {
+      await ConfigurationUtils.setDefaultSecrets(value || []);
     } else if (property === PROMPT_PROPERTIES.EXECUTION_MODE) {
       await ConfigurationUtils.setCliExecutionMode(value);
     } else if (property === PROMPT_PROPERTIES.RESUME_SESSION) {
@@ -734,6 +736,7 @@ export class WebviewSettingsSync {
     const model = this.getModelForHarness(harness);
     const agent = ConfigurationUtils.getDefaultAgent();
     const skills = ConfigurationUtils.getDefaultSkills();
+    const secrets = ConfigurationUtils.getDefaultSecrets();
     const executionMode = ConfigurationUtils.getCliExecutionMode();
     const resumeExistingSession =
       ConfigurationUtils.shouldResumeExistingSession();
@@ -790,6 +793,7 @@ export class WebviewSettingsSync {
       harnessDefaultAdditionalArgs,
       agent,
       skills,
+      secrets,
       executionMode,
       resumeSession: resumeExistingSession,
       mcpServers: defaultMcpServers,

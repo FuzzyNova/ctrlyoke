@@ -632,6 +632,14 @@ function SummaryPanel({
             ["Continuation", properties.continuationMode ?? "Default"],
             ["Session", properties.session.present ? "Present" : "Not present"],
             ["Permission mode", permissionMode],
+            [
+              "Granted secrets",
+              properties.secrets && properties.secrets.length > 0
+                ? properties.secrets
+                    .map((name) => `${name} [REDACTED]`)
+                    .join(", ")
+                : "None",
+            ],
             ["MCP servers", properties.mcpServerIds.join(", ") || "None"],
             ["Token contribution", formatMagnitude(getTokenContribution(step))],
           ]}

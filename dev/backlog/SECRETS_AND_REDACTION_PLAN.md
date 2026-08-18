@@ -335,6 +335,11 @@ Chip treatment should distinguish a resolvable name from an unknown one, reusing
 the existing `referenceValidityRef` warning-border path rather than a new
 mechanism.
 
+Phase 3 status: prompt-editor completion/chips/links and the workflow properties
+secret grant list are implemented. The workflow panel keeps inline `!NAME`
+grants checked and locked, shares the unresolved-name diagnostic path, and
+supports the global-default affordance. CLI authoring remains Phase 6.
+
 ### Workflow Properties panel: the grant list
 
 `WorkflowPropertiesPanel` is a paged drawer (`DRAWER_PAGES`), and secrets belong
@@ -420,8 +425,8 @@ Backend half (implemented):
       `{ name, scope, state: "set" }` and never echoes the submitted value.
 - [x] The Secrets tab UI is implemented as the global settings tab. It consumes
       the registry store and keeps values confined to the write-only set path.
-- [x] Prompt-editor completion triggers, links, and atomic chips are implemented;
-      the workflow properties panel and CLI remain later Phase 3/6 work.
+- [x] Prompt-editor completion triggers, links, atomic chips, and the workflow
+      properties secret grant list are implemented; CLI authoring remains Phase 6.
 
 **List view.** One row per name:
 
@@ -451,13 +456,13 @@ Backend half (implemented):
 - On submit, post the value once and clear component state immediately; the
   store confirms with `{ name, scope, state: "set" }` and never echoes back.
 
-**Other surfaces that consume the registry** (workflow authoring is Phase 3).
+**Other surfaces that consume the registry.**
 
-- MCP Manager env editor offers a picker inserting `${secret:NAME}` and warns
-  when a field looks like a pasted literal credential.
-- Dry-run preview shows granted names and `[REDACTED]`, never the value, and
-  surfaces unresolved names as a blocking diagnostic in the same place
-  `PermissionCapabilitySummary` diagnostics appear.
+- [x] MCP Manager env editor offers a picker inserting `${secret:NAME}` and warns
+      when a field looks like a pasted literal credential.
+- [x] Dry-run preview shows granted names and `[REDACTED]`, never the value, and
+      surfaces unresolved names as a blocking diagnostic in the same place
+      `PermissionCapabilitySummary` diagnostics appear.
 
 ## Phase 6 — CLI
 

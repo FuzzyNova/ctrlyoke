@@ -28,6 +28,7 @@ export const COMPATIBILITY_DIAGNOSTIC_CODES = {
   DENIED_TOOLS_PARTIAL: "compatibility.permissions.deniedTools.partial",
   DENIED_TOOLS_UNVERIFIED: "compatibility.permissions.deniedTools.unverified",
   PERMISSION_TRANSLATION_LOSSY: "compatibility.permissions.translation.lossy",
+  SECRETS_UNRESOLVED: "secrets.unresolved",
 } as const;
 
 export type CapabilityFidelity =

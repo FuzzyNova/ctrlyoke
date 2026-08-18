@@ -49,6 +49,7 @@ const preview: WorkflowExecutionPreview = {
         harnessId: "claude-cli",
         session: { present: false },
         skills: [],
+        secrets: ["API_TOKEN"],
         mcpServerIds: [],
         hooks: [],
         permissions: { mode: "custom", allowedRules: [], deniedRules: [] },
@@ -214,6 +215,15 @@ describe("DryRunModal", () => {
     ).toBeInTheDocument();
     expect(screen.getByTitle("Prepare")).toBeInTheDocument();
     expect(screen.getByText("Workflow timeline")).toBeInTheDocument();
+  });
+
+  it("shows granted secret names with a redacted marker and never a value", () => {
+    openPreview({ kind: "step", stepIndex: 0 });
+
+    render(<DryRunModal scope={{ kind: "step", stepIndex: 0 }} />);
+
+    expect(screen.getByText("API_TOKEN [REDACTED]")).toBeInTheDocument();
+    expect(screen.queryByText("super-secret-value")).not.toBeInTheDocument();
   });
 
   it("collapses the workflow rail into CustomSelect below the narrow breakpoint", () => {

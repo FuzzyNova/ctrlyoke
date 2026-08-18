@@ -1,6 +1,8 @@
-import { useId } from "react";
+import { useEffect, useId, useMemo } from "react";
 import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import { CustomSelect } from "./CustomSelect";
+import { useSecretRegistryStore } from "@store/secretRegistryStore";
+import { SETTING_SCOPES } from "@root/types/DashboardConstants";
 
 export type McpServerFormTab = "stdio" | "remote";
 export type McpServerTransport = "streamable-http" | "sse";
@@ -75,6 +77,30 @@ function mcpEnvStringToObject(raw: string): Record<string, string> | undefined {
   }
 
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+const SECRET_REFERENCE_PATTERN = /^\$\{secret:[A-Z][A-Z0-9_]*\}$/;
+const SENSITIVE_ENV_KEY_PATTERN = /(api|access|auth|credential|key|password|secret|token)/i;
+
+/** Identify env entries that look like pasted credentials rather than references. */
+export function findLiteralCredentialEnvKeys(
+  env: Record<string, string> | undefined
+): string[] {
+  if (!env) return [];
+  return Object.entries(env)
+    .filter(([key, value]) => {
+      const trimmed = value.trim();
+      if (!trimmed || SECRET_REFERENCE_PATTERN.test(trimmed)) return false;
+      return (
+        (SENSITIVE_ENV_KEY_PATTERN.test(key) && trimmed.length >= 12) ||
+        /^Bearer\s+\S{8,}$/i.test(trimmed) ||
+        /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/i.test(trimmed) ||
+        /^(?:sk-|ghp_|github_pat_|xox[baprs]-|AKIA)[A-Za-z0-9_-]{12,}$/.test(
+          trimmed
+        )
+      );
+    })
+    .map(([key]) => key);
 }
 
 export function serverToMcpServerFormState(
@@ -201,6 +227,38 @@ export function McpServerForm({
 }: McpServerFormProps) {
   const isValid = isMcpServerFormValid(value);
   const autoApproveId = useId();
+  const secretEntriesByScope = useSecretRegistryStore(
+    (state) => state.entriesByScope
+  );
+  const requestSecretEntries = useSecretRegistryStore(
+    (state) => state.requestEntries
+  );
+  useEffect(() => {
+    requestSecretEntries(SETTING_SCOPES.USER);
+    requestSecretEntries(SETTING_SCOPES.WORKSPACE);
+  }, [requestSecretEntries]);
+  const secretNames = useMemo(
+    () =>
+      [
+        ...new Set([
+          ...secretEntriesByScope[SETTING_SCOPES.USER].map((entry) => entry.name),
+          ...secretEntriesByScope[SETTING_SCOPES.WORKSPACE].map(
+            (entry) => entry.name
+          ),
+        ]),
+      ].sort(),
+    [secretEntriesByScope]
+  );
+  const literalCredentialKeys = findLiteralCredentialEnvKeys(
+    mcpEnvStringToObject(value.env)
+  );
+  const insertSecretReference = (name: string) => {
+    if (!name) return;
+    const reference = `\${secret:${name}}`;
+    const line = `${name}=${reference}`;
+    const current = value.env.trim();
+    onChange({ ...value, env: current ? `${current}\n${line}` : line });
+  };
 
   return (
     <div
@@ -291,6 +349,29 @@ export function McpServerForm({
               rows={3}
               className="w-full resize-none rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none"
             />
+            {secretNames.length > 0 && (
+              <select
+                aria-label="Insert secret reference"
+                value=""
+                onChange={(event) => insertSecretReference(event.target.value)}
+                className="w-full rounded border border-input-border bg-input-bg px-2 py-1 text-xxs text-input-fg focus:border-focus-border focus:outline-none"
+              >
+                <option value="">Insert secret reference…</option>
+                {secretNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name} → $&#123;secret:{name}&#125;
+                  </option>
+                ))}
+              </select>
+            )}
+            {literalCredentialKeys.length > 0 && (
+              <p className="flex items-start gap-1 text-xxs text-warning-fg" role="alert">
+                <i className="codicon codicon-warning mt-px" aria-hidden="true" />
+                <span>
+                  {literalCredentialKeys.join(", ")} looks like a pasted credential. Use the secret picker so the value is resolved at run time.
+                </span>
+              </p>
+            )}
           </div>
         </>
       ) : (
