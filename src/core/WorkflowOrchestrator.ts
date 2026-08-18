@@ -4875,10 +4875,7 @@ export class WorkflowOrchestrator {
   }
 
   async openPanel(): Promise<void> {
-    await this.workflowCommandHandler.openPanel(
-      () => this.getDefaultIntegration().getDetailedStatus(),
-      async () => await this.retryHarnessDetection()
-    );
+    await this.workflowCommandHandler.openPanel();
   }
 
   async openCurrentPromptFile(): Promise<void> {

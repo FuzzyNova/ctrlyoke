@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { DropdownPortal } from "./DropdownPortal";
@@ -6,10 +6,15 @@ import { DropdownHiddenToggle } from "./DropdownHiddenToggle";
 import {
   HARNESS_IDS,
   HARNESS_STATUS_STRINGS,
+  MESSAGE_TYPES,
   type HarnessId,
   type HarnessStatusString,
 } from "../../types/messages";
+import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { notifyUser } from "@utils/notifyUser";
+import { useUiStore } from "@store/uiStore";
 import { HarnessIcon } from "./HarnessIcon";
 import { useHarnessUsageStore } from "@store/harnessUsageStore";
 import {
@@ -42,6 +47,12 @@ export const SUPPORTED_HARNESSES: HarnessId[] = [
 
 // The selected harness can never be hidden (canHide enforces this).
 const NON_HIDEABLE: HarnessId[] = [];
+let retryRequestCounter = 0;
+
+function nextRetryRequestId(): string {
+  retryRequestCounter += 1;
+  return `harness-detection-retry-${Date.now()}-${retryRequestCounter}`;
+}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -244,6 +255,9 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const pendingRetryRequest = useRef<string | null>(null);
+  const retryResult = useUiStore((state) => state.harnessDetectionRetryResult);
   const [narrowRef, isNarrow] = useElementNarrow<HTMLDivElement>(180);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -257,6 +271,41 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     value !== "default" ? s.snapshotsByHarness[value as HarnessId] : undefined
   );
   const triggerUsageDisplay = getHarnessUsageDisplay(triggerUsageSnapshot);
+
+  useEffect(() => {
+    if (!retryResult || retryResult.requestId !== pendingRetryRequest.current) {
+      return;
+    }
+
+    pendingRetryRequest.current = null;
+    setRetrying(false);
+    useUiStore.getState().setHarnessDetectionRetryResult(null);
+    if (retryResult.success) {
+      notifyUser(
+        "Harness detection retry completed",
+        USER_FEEDBACK_SEVERITY.SUCCESS
+      );
+    } else {
+      notifyUser(
+        retryResult.error || "Harness detection retry failed",
+        USER_FEEDBACK_SEVERITY.ERROR
+      );
+    }
+  }, [retryResult]);
+
+  const handleRetry = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (retrying) return;
+
+    const requestId = nextRetryRequestId();
+    pendingRetryRequest.current = requestId;
+    setRetrying(true);
+    getVsCodeApi().postMessage({
+      type: MESSAGE_TYPES.RETRY_HARNESS_DETECTION,
+      requestId,
+    });
+  };
+
   useClickOutside(
     [buttonRef, popupRef],
     isOpen,
@@ -363,41 +412,63 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   return (
     <div className="relative inline-block w-full" ref={narrowRef}>
       {/* Trigger button */}
-      <button
-        ref={buttonRef}
-        id={id}
-        type="button"
-        onClick={() =>
-          setIsOpen((prev) => {
-            if (prev) setShowHidden(false);
-            return !prev;
-          })
-        }
-        aria-expanded={isOpen}
-        aria-haspopup="listbox"
-        aria-label={triggerAriaLabel}
-        title={
-          triggerTitle ??
-          (!triggerStatus?.available &&
-          triggerStatus?.status !== HARNESS_STATUS_STRINGS.CHECKING
-            ? (triggerStatus?.installHint ?? "Harness is not available")
-            : undefined)
-        }
-        className="fp-select-trigger fp-dropdown-row"
-      >
-        <span>{triggerLabel}</span>
-        <div className="flex items-center gap-1">
-          {!isNarrow && triggerUsageDisplay.percentOnly && (
-            <span className="text-xxs text-description-fg">
-              {triggerUsageDisplay.percentOnly}
-            </span>
-          )}
-          {triggerStatus && <StatusIndicator status={triggerStatus.status} />}
-          <i
-            className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs`}
-          />
-        </div>
-      </button>
+      <div className="flex items-center gap-1">
+        <button
+          ref={buttonRef}
+          id={id}
+          type="button"
+          onClick={() =>
+            setIsOpen((prev) => {
+              if (prev) setShowHidden(false);
+              return !prev;
+            })
+          }
+          aria-expanded={isOpen}
+          aria-haspopup="listbox"
+          aria-label={triggerAriaLabel}
+          title={
+            triggerTitle ??
+            (!triggerStatus?.available &&
+            triggerStatus?.status !== HARNESS_STATUS_STRINGS.CHECKING
+              ? (triggerStatus?.installHint ?? "Harness is not available")
+              : undefined)
+          }
+          className="fp-select-trigger fp-dropdown-row flex-1 min-w-0"
+        >
+          <span>{triggerLabel}</span>
+          <div className="flex items-center gap-1">
+            {!isNarrow && triggerUsageDisplay.percentOnly && (
+              <span className="text-xxs text-description-fg">
+                {triggerUsageDisplay.percentOnly}
+              </span>
+            )}
+            {triggerStatus && <StatusIndicator status={triggerStatus.status} />}
+            <i
+              className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs`}
+            />
+          </div>
+        </button>
+        {triggerStatus?.status === HARNESS_STATUS_STRINGS.UNAVAILABLE && (
+          <button
+            type="button"
+            onClick={handleRetry}
+            disabled={retrying}
+            aria-label={
+              retrying
+                ? "Retrying harness detection"
+                : "Retry harness detection"
+            }
+            title="Retry harness detection"
+            className="flex-shrink-0 px-1.5 py-1 text-xxs text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent disabled:cursor-wait"
+          >
+            {retrying ? (
+              <i className="codicon codicon-loading animate-spin" />
+            ) : (
+              "Retry"
+            )}
+          </button>
+        )}
+      </div>
 
       <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
         {scrollableList}

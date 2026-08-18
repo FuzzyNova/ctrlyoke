@@ -283,6 +283,43 @@ suite("WebviewMessageRouter — end-condition script creation", () => {
   });
 });
 
+suite("WebviewMessageRouter — harness detection retry", () => {
+  test("retries detection and replies only to the initiating client", async () => {
+    const panelMessages: unknown[] = [];
+    const browserMessages: unknown[] = [];
+    let retryCount = 0;
+    const router = buildRouter(
+      {
+        retryHarnessDetection: async () => {
+          retryCount += 1;
+        },
+      },
+      (message) => panelMessages.push(message)
+    );
+
+    await router.route(
+      {
+        type: MESSAGE_TYPES.RETRY_HARNESS_DETECTION,
+        requestId: "retry-1",
+      },
+      {
+        clientTag: "browser:retry",
+        postMessage: (message: unknown) => browserMessages.push(message),
+      }
+    );
+
+    assert.strictEqual(retryCount, 1);
+    assert.deepStrictEqual(browserMessages, [
+      {
+        type: MESSAGE_TYPES.HARNESS_DETECTION_RETRY_RESULT,
+        requestId: "retry-1",
+        success: true,
+      },
+    ]);
+    assert.deepStrictEqual(panelMessages, []);
+  });
+});
+
 suite("WebviewMessageRouter — workspace statistics", () => {
   const snapshot = { workflowCount: 2 } as any;
 

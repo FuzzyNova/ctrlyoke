@@ -136,6 +136,8 @@ export {
   type CreateEndConditionScriptMessage,
   type EndConditionScriptCreatedMessage,
   type EndConditionScriptCreationFailedMessage,
+  type RetryHarnessDetectionMessage,
+  type HarnessDetectionRetryResultMessage,
   type OpenPromptFileMessage,
   type OpenWorktreeMessage,
   type ViewWorktreeDiffMessage,

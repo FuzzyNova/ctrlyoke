@@ -80,6 +80,7 @@ export const MESSAGE_TYPES = {
   SHOW_OUTPUT: "showOutput",
   EXPORT_OUTPUT: "exportOutput",
   CHANGE_HARNESS: "changeHarness",
+  RETRY_HARNESS_DETECTION: "retryHarnessDetection",
 
   // Prompt Editor - Webview -> Extension
   EXECUTE_PROMPT: "executePrompt", // Send/Add with properties
@@ -109,6 +110,7 @@ export const MESSAGE_TYPES = {
   OPEN_VSCODE_MCP_BROWSER: "openVscodeMcpBrowser", // Webview -> Extension: Open VS Code's native MCP server browser
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   HARNESS_STATUS_UPDATE: "harnessStatusUpdate", // Update harness availability
+  HARNESS_DETECTION_RETRY_RESULT: "harnessDetectionRetryResult", // Result of a client-scoped detection retry
   HARNESS_CAPABILITY_SNAPSHOT: "harnessCapabilitySnapshot", // Installed-version-aware harness facts
   AGENTS_UPDATE: "agentsUpdate", // Update available agents list
   SKILLS_UPDATE: "skillsUpdate", // Update available skills list

@@ -3,7 +3,6 @@ import {
   ConfigurationUtils,
 } from "../../utils/ConfigurationUtils";
 import {
-  HARNESS_STATUS_STRINGS,
   USER_FEEDBACK_SEVERITY,
 } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
@@ -26,33 +25,8 @@ export class WorkflowCommandHandler {
 
   /**
    * Open ctrlyoke panel/dashboard
-   * Shows warning and retry if harness is unavailable
-   *
-   * @param getHarnessStatus Callback to get current harness status
-   * @param onRetry Callback to retry harness detection
    */
-  async openPanel(
-    getHarnessStatus: () => { initializationStatus: string },
-    onRetry: () => Promise<void>
-  ): Promise<void> {
-    // Check if harness is unavailable and offer retry
-    const harnessStatus = getHarnessStatus();
-
-    if (
-      harnessStatus.initializationStatus === HARNESS_STATUS_STRINGS.UNAVAILABLE
-    ) {
-      const action = await vscode.window.showWarningMessage(
-        "ctrlyoke: HarnessId automation is unavailable. Would you like to retry detection?",
-        "Retry Detection",
-        "Continue Anyway"
-      );
-
-      if (action === "Retry Detection") {
-        await onRetry();
-        return;
-      }
-    }
-
+  async openPanel(): Promise<void> {
     // Focus the ctrlyoke dashboard panel
     try {
       await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");

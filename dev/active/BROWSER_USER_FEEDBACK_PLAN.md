@@ -1,19 +1,19 @@
 # Browser User Feedback Plan
 
-**Status (2026-08-17):** Phases 1, 2 (including 2.5), 3, 5, and 6 are
+**Status (2026-08-17):** Phases 1, 2 (including 2.5), 3, 4, 5, and 6 are
 complete.
 The React dashboard renders a bounded, accessible transient toast queue in both
 hosts, operational feedback reaches connected browsers independently of
-notification settings, and the reusable direct-message migration is complete
-except for the two action-bearing interactions reserved for Phase 4. Phase 3
+notification settings, and the reusable direct-message migration is complete.
+Phase 3
 (client-scoped routing) completed per
 [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](./FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
 Stage E, re-verified against `src/` on 2026-08-11 — this doc's Acceptance
 Criteria below previously said otherwise and is corrected in this pass. Phase 4
 was **redesigned 2026-08-17**: none of the six action-bearing sites need the
 generic `USER_INTERACTION_REQUEST` contract after all — each has a decided
-per-site disposition (four cut, two relocated into existing/inline UI) — but
-items 3, 4, 5, and 6 have now landed in Stage F.4/F.5. **Phase 6 (new, 2026-08-17) is
+per-site disposition (four cut, two relocated into existing/inline UI) — all
+six Phase 4 items have landed in Stage F.4–F.7. **Phase 6 (new, 2026-08-17) is
 complete**: its dispatcher, Group A's 15 client-only call sites, and Group B's
 12 scoped-reply handlers now use host-aware dispatch. See "The webview's own
 toast calls are not host-aware" and "Phase 6" below.
@@ -946,11 +946,11 @@ current effective behavior for every workflow that does not click a button.
 
 ### Phase 4 — Interactive choices → resolved as six per-site dispositions
 
-**Resolved 2026-08-17; items 1, 3, 4, 5, and 6 implemented in Stage F.4/F.5/F.6.** Re-examined each of the six action-bearing sites
+**Resolved 2026-08-17; items 1–6 implemented in Stage F.4–F.7.** Re-examined each of the six action-bearing sites
 individually against the actual code, instead of building a shared
 correlation contract for all of them. None of the six need
 `USER_INTERACTION_REQUEST` — each has a decided disposition below. Items 1,
-3, 4, 5, and 6 are implemented; item 2 remains for Stage F.7.
+3, 4, 5, and 6 are implemented; item 2 is implemented in Stage F.7.
 
 1. **End-condition script created** (formerly
    `WorkflowCommandHandler.ts:99`, command
@@ -976,7 +976,7 @@ correlation contract for all of them. None of the six need
 retryHarnessDetection()` already exists but today is reachable only from
    this native prompt's "Retry Detection" button — no webview message calls
    it.
-   **Decision: cut the gate, move retry inline.** Delete the
+   **Decision: cut the gate, move retry inline — DONE F.7.** Delete the
    `showWarningMessage` call from `openPanel()` — it opens unconditionally
    now. Add an inline "unavailable — Retry" affordance next to
    `HarnessDropdown`'s status indicator, wired to a new webview message that
@@ -1033,22 +1033,22 @@ retryHarnessDetection()` already exists but today is reachable only from
    different, action-free boundary site and is **not** cut.
 
 **Net effect:** the cut dispositions are complete for items 3/4 and 5, while
-items 1, 2, and 6 relocate into modal/inline UI. Items 1 and 6 are implemented;
-item 2 remains. None need
+items 1, 2, and 6 relocate into modal/inline UI. All six items are implemented.
+None need
 `USER_INTERACTION_REQUEST` — see "Action-Bearing Messages" above.
 
 #### Baseline impact of Phase 4 — both counters move
 
-After Stage F.6, the committed baselines are `directMessage.boundary: 53` and
-`directMessage.reusable: 1`. `assertShrinkOnly` fails when a count drops below its committed baseline just
+After Stage F.7, the committed baselines are `directMessage.boundary: 53` and
+`directMessage.reusable: 0`. `assertShrinkOnly` fails when a count drops below its committed baseline just
 as loudly as when it grows, so **every Phase 4 step must lower
 `FEEDBACK_SOURCE_AUDIT_BASELINES` in `src/test/unit/SourceAuditCounters.test.ts`
 in the same commit that removes call sites**, or `npm test` fails on an
 otherwise-correct change.
 
-- `directMessage.reusable` is now **1**: items 3/4 removed 2
-  (`TemplateImporter.ts`) and item 1 removed 1 (`WorkflowCommandHandler.ts`).
-  Item 2 removes the final 1 in the next step.
+- `directMessage.reusable` is now **0**: items 3/4 removed 2
+  (`TemplateImporter.ts`), item 1 removed 1 (`WorkflowCommandHandler.ts`),
+  and item 2 removed the final 1 (`WorkflowCommandHandler.ts`).
 - `directMessage.boundary` goes **54 → 53**, once, in the step that deletes
   `extension.ts:177`; that move landed in F.4 and no other Phase 4 step moves
   it.
@@ -1137,7 +1137,7 @@ caring whether they're rendering inside the VS Code panel or a browser tab.
 - No change to `UserFeedbackSink`, `CompositeUserFeedbackSink`, or either sink
   implementation (Phase 2, already correct/complete).
 - No change to the 53 boundary-approved direct `vscode.window.show*Message`
-  calls or the remaining four Phase 4 action-bearing sites. Phase 6 adds a
+  calls or the completed Phase 4 action-bearing sites. Phase 6 adds a
   `SHOW_NATIVE_FEEDBACK` handler to `WebviewMessageRouter.ts` (already a
   `boundaryFiles` entry), but it delegates to `VsCodeUserFeedbackSink` rather
   than calling `vscode.window.show*Message` directly, so the boundary baseline
@@ -1233,12 +1233,11 @@ caring whether they're rendering inside the VS Code panel or a browser tab.
   boundary.
 - **MET —** CLI behavior remains non-interactive unless an explicit interactive
   prompt implementation is selected.
-- **OUTSTANDING — Phase 4 (redesigned 2026-08-17):** Reusable code still has
-  four direct `vscode.window.show*Message()` calls with action buttons; items 5
-  and 6 are **DONE F.4**, and the remaining four sites have decided
-  dispositions (two cut, two relocated into inline UI) instead of a shared
-  `USER_INTERACTION_REQUEST` contract. See "Action-Bearing Messages" and
-  "Phase 4" for the six decisions.
+- **MET — Phase 4 (redesigned 2026-08-17):** Reusable direct
+  `vscode.window.show*Message()` calls are now **0**. All six action-bearing
+  sites have decided per-site dispositions (four cut, two relocated into
+  modal/inline UI) without a shared `USER_INTERACTION_REQUEST` contract. See
+  "Action-Bearing Messages" and "Phase 4" for the six decisions.
 - **MET —** `PlatformAdapter` no longer declares `log()`, `warn()`, `error()`,
   `showProgress()`, or `showChoice()`; the adapter-mediated UI baseline is 0.
 - **MET —** Severity strings are declared once in `DashboardConstants.ts` and

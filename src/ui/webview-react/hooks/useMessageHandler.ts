@@ -578,7 +578,18 @@ export function createMessageHandlers(
   // that issued the request. Register them here so the central dispatcher does
   // not report the addressed, component-local replies as unknown messages.
   handlers[MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATED] = () => undefined;
-  handlers[MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATION_FAILED] = () => undefined;
+  handlers[MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATION_FAILED] = () =>
+    undefined;
+  handlers[MESSAGE_TYPES.HARNESS_DETECTION_RETRY_RESULT] = (message) => {
+    if (typeof message.requestId !== "string") {
+      return;
+    }
+    useUiStore.getState().setHarnessDetectionRetryResult({
+      requestId: message.requestId,
+      success: message.success === true,
+      ...(typeof message.error === "string" ? { error: message.error } : {}),
+    });
+  };
 
   // --------------------------------------------------------------------------
   // Developer dashboard events

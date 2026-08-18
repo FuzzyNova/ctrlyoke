@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { HarnessDropdown } from "@components/shared/HarnessDropdown";
 import {
   HARNESS_IDS,
@@ -7,15 +7,22 @@ import {
   HARNESS_USAGE_CONFIDENCE,
   HARNESS_USAGE_UNITS,
   HARNESS_USAGE_WINDOW_KINDS,
+  HARNESS_STATUS_STRINGS,
+  MESSAGE_TYPES,
 } from "@root/types/DashboardConstants";
 import { HarnessPreflightPanel } from "@components/layout/HarnessPreflightPanel";
 import { useSettingsStore } from "@store/settingsStore";
+import { useUiStore } from "@store/uiStore";
 import { useHarnessUsageStore } from "@store/harnessUsageStore";
 
 const originalHarnessStatus = useSettingsStore.getState().harnessStatus;
+const { notifyUserMock } = vi.hoisted(() => ({ notifyUserMock: vi.fn() }));
+
+vi.mock("@utils/notifyUser", () => ({ notifyUser: notifyUserMock }));
 
 afterEach(() => {
   useSettingsStore.setState({ harnessStatus: originalHarnessStatus });
+  useUiStore.getState().setHarnessDetectionRetryResult(null);
   useHarnessUsageStore.setState({ snapshotsByHarness: {} });
 });
 
@@ -42,7 +49,7 @@ describe("HarnessDropdown", () => {
         harnessStatus={{
           [HARNESS_IDS.COPILOT_CLI]: {
             available: false,
-            status: "unavailable",
+            status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
             installHint: "Install via: npm install -g @github/copilot",
           },
         }}
@@ -52,6 +59,122 @@ describe("HarnessDropdown", () => {
     expect(
       screen.getByTitle("Install via: npm install -g @github/copilot")
     ).toBeInTheDocument();
+  });
+
+  it("shows retry only for an unavailable selected harness", () => {
+    const { rerender } = render(
+      <HarnessDropdown
+        value={HARNESS_IDS.COPILOT_CLI}
+        onChange={vi.fn()}
+        harnessStatus={{
+          [HARNESS_IDS.COPILOT_CLI]: {
+            available: true,
+            status: HARNESS_STATUS_STRINGS.AVAILABLE,
+          },
+        }}
+      />
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Retry harness detection" })
+    ).toBeNull();
+
+    rerender(
+      <HarnessDropdown
+        value={HARNESS_IDS.COPILOT_CLI}
+        onChange={vi.fn()}
+        harnessStatus={{
+          [HARNESS_IDS.COPILOT_CLI]: {
+            available: false,
+            status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
+          },
+        }}
+      />
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Retry harness detection" })
+    ).toBeInTheDocument();
+  });
+
+  it("shows pending state and reports a successful retry", async () => {
+    render(
+      <HarnessDropdown
+        value={HARNESS_IDS.COPILOT_CLI}
+        onChange={vi.fn()}
+        harnessStatus={{
+          [HARNESS_IDS.COPILOT_CLI]: {
+            available: false,
+            status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
+          },
+        }}
+      />
+    );
+
+    const retryButton = screen.getByRole("button", {
+      name: "Retry harness detection",
+    });
+    fireEvent.click(retryButton);
+
+    expect(
+      screen.getByRole("button", { name: "Retrying harness detection" })
+    ).toBeDisabled();
+    const calls = vi.mocked(window.vscodeApi!.postMessage).mock.calls;
+    const request = calls[calls.length - 1]?.[0] as {
+      type: string;
+      requestId: string;
+    };
+    expect(request.type).toBe(MESSAGE_TYPES.RETRY_HARNESS_DETECTION);
+
+    useUiStore.getState().setHarnessDetectionRetryResult({
+      requestId: request.requestId,
+      success: true,
+    });
+
+    await waitFor(() => {
+      expect(notifyUserMock).toHaveBeenCalledWith(
+        "Harness detection retry completed",
+        "success"
+      );
+    });
+    expect(
+      screen.getByRole("button", { name: "Retry harness detection" })
+    ).toBeEnabled();
+  });
+
+  it("reports a failed retry and clears pending state", async () => {
+    render(
+      <HarnessDropdown
+        value={HARNESS_IDS.COPILOT_CLI}
+        onChange={vi.fn()}
+        harnessStatus={{
+          [HARNESS_IDS.COPILOT_CLI]: {
+            available: false,
+            status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
+          },
+        }}
+      />
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry harness detection" })
+    );
+    const calls = vi.mocked(window.vscodeApi!.postMessage).mock.calls;
+    const request = calls[calls.length - 1]?.[0] as {
+      requestId: string;
+    };
+    useUiStore.getState().setHarnessDetectionRetryResult({
+      requestId: request.requestId,
+      success: false,
+      error: "CLI not installed",
+    });
+
+    await waitFor(() => {
+      expect(notifyUserMock).toHaveBeenCalledWith("CLI not installed", "error");
+    });
+    expect(
+      screen.getByRole("button", { name: "Retry harness detection" })
+    ).toBeEnabled();
   });
 
   it("shows no status text, just a combined tooltip, when a harness is available with no usage data", () => {
@@ -120,9 +243,7 @@ describe("HarnessDropdown", () => {
       );
 
       expect(screen.getByText("25%")).toBeInTheDocument();
-      expect(
-        screen.getByTitle("Available | 25% 5-hour")
-      ).toBeInTheDocument();
+      expect(screen.getByTitle("Available | 25% 5-hour")).toBeInTheDocument();
     } finally {
       Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
     }

@@ -1160,6 +1160,20 @@ export interface CreateEndConditionScriptMessage {
   scriptType: EndConditionScriptType;
 }
 
+/** Webview → Extension: retry detection of the installed harness CLIs. */
+export interface RetryHarnessDetectionMessage {
+  type: typeof MESSAGE_TYPES.RETRY_HARNESS_DETECTION;
+  requestId: string;
+}
+
+/** Extension → Webview: result of a client-scoped harness detection retry. */
+export interface HarnessDetectionRetryResultMessage {
+  type: typeof MESSAGE_TYPES.HARNESS_DETECTION_RETRY_RESULT;
+  requestId: string;
+  success: boolean;
+  error?: string;
+}
+
 /** Extension → Webview: starter end-condition script creation succeeded. */
 export interface EndConditionScriptCreatedMessage {
   type: typeof MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATED;
@@ -2225,6 +2239,7 @@ export type IncomingMessage =
   | { type: typeof MESSAGE_TYPES.WORKFLOW_CREATED; filePath: string }
   | EndConditionScriptCreatedMessage
   | EndConditionScriptCreationFailedMessage
+  | HarnessDetectionRetryResultMessage
   | {
       type: typeof MESSAGE_TYPES.COMPLETIONS_RESPONSE;
       completions: any[];

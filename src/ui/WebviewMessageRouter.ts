@@ -53,6 +53,7 @@ import type {
   OpenHarnessDirMessage,
   ShowNativeFeedbackMessage,
   CreateEndConditionScriptMessage,
+  RetryHarnessDetectionMessage,
 } from "../types/WebviewMessageTypes";
 import type {
   WorkflowVariantCreatedMessage,
@@ -1348,6 +1349,35 @@ export class WebviewMessageRouter {
   }
 
   private registerSettings(table: DispatchTable): void {
+    table.set(MESSAGE_TYPES.RETRY_HARNESS_DETECTION, async (message, ctx) => {
+      const request = message as RetryHarnessDetectionMessage;
+      if (typeof request.requestId !== "string") {
+        return;
+      }
+
+      try {
+        const orchestrator = this.getOrchestrator();
+        if (!orchestrator) {
+          throw new Error("ctrlyoke is still starting up — try again shortly");
+        }
+        await orchestrator.retryHarnessDetection();
+        ctx.emit({
+          type: MESSAGE_TYPES.HARNESS_DETECTION_RETRY_RESULT,
+          requestId: request.requestId,
+          success: true,
+        });
+      } catch (error) {
+        const errorMessage = getErrorMessage(error);
+        Log.error("Failed to retry harness detection:", errorMessage);
+        ctx.emit({
+          type: MESSAGE_TYPES.HARNESS_DETECTION_RETRY_RESULT,
+          requestId: request.requestId,
+          success: false,
+          error: errorMessage,
+        });
+      }
+    });
+
     // ── Settings — Harness & Model Selection ─────────────────────────────
     table.set(MESSAGE_TYPES.CHANGE_HARNESS, (message) => {
       this.settingsSync.handleHarnessChange(message.harness);

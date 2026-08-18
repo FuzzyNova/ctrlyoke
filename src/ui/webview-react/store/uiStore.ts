@@ -83,6 +83,12 @@ export interface ToastItem {
   dedupeKey?: string;
 }
 
+export interface HarnessDetectionRetryResult {
+  requestId: string;
+  success: boolean;
+  error?: string;
+}
+
 export type ToastInput = Omit<ToastItem, "id" | "createdAt"> &
   Partial<Pick<ToastItem, "id" | "createdAt">>;
 
@@ -608,6 +614,8 @@ interface UiState {
 
   // Notification toast queue (transient, not persisted)
   toastQueue: ToastItem[];
+  // Result for the component-local harness detection retry control.
+  harnessDetectionRetryResult: HarnessDetectionRetryResult | null;
 
   // Content preview modal (git diff / prior-context XML / mcp config JSON) — transient, not persisted
   contentPreviewModal: {
@@ -812,6 +820,9 @@ interface UiActions {
     options?: ToastOptions
   ) => void;
   hideToast: () => void;
+  setHarnessDetectionRetryResult: (
+    result: HarnessDetectionRetryResult | null
+  ) => void;
 
   // Content preview modal
   setContentPreviewModal: (
@@ -994,6 +1005,7 @@ const initialState: UiState = {
   terminalFontSize: 14,
   runBannerPinned: true,
   toastQueue: [],
+  harnessDetectionRetryResult: null,
   contentPreviewModal: null,
   suffixEditConfirmation: null,
   activeOutputTabs: {},
@@ -1542,6 +1554,8 @@ export const useUiStore = create<UiState & UiActions>()(
 
       // Kept for existing callers while the queue API is adopted incrementally.
       hideToast: () => set({ toastQueue: [] }),
+      setHarnessDetectionRetryResult: (result) =>
+        set({ harnessDetectionRetryResult: result }),
 
       setContentPreviewModal: (modal) => set({ contentPreviewModal: modal }),
       setSuffixEditConfirmation: (confirmation) =>
@@ -1964,6 +1978,7 @@ export const useUiStore = create<UiState & UiActions>()(
           horizontalPanelResizeActive: false,
           suffixEditConfirmation: null,
           contentPreviewModal: null,
+          harnessDetectionRetryResult: null,
         }),
 
       resetLayoutState: () => {

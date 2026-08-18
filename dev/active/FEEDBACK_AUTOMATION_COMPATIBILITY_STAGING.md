@@ -79,14 +79,14 @@ a long migration is in flight, and that argument is independent of release date.
 
 ---
 
-## Current state (measured 2026-08-02)
+## Current state (measured 2026-08-17)
 
 Measured against `src/`, not read from the plans. Where these disagree with a
 plan's own table, this section is newer.
 
 | Fact                                                              | Value                                                                                                  |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Direct `show*Message` in reusable code (the parity gap)           | **4** across 4 remaining Phase 4 sites — the initial Stage C count was 63 |
+| Direct `show*Message` in reusable code (the parity gap)           | **0** — all six Phase 4 action-bearing sites are resolved; the initial Stage C count was 63 |
 | Direct `show*Message` at the VS Code boundary (correctly staying) | **53** across 7 files after F.4 (was 49 across 6 when measured 2026-08-02; 54 before F.4)                   |
 | Adapter-mediated host UI (`platform.log/warn/error`)              | **0** — all 18 sites now use `UserFeedbackSink`                                                        |
 | Adapter-mediated `showChoice()`                                   | **0** — the final `CliIntegration.ts` site now uses warning feedback                                   |
@@ -100,7 +100,7 @@ Two consequences worth naming up front:
 
 1. **The feedback plan's Phases 1 and 2 are genuinely done.** The severity
    constant, rendered queue, transport, sink, and reusable-call migration are
-   shipped; only the six action-bearing Phase 4 holds remain.
+   shipped; all six action-bearing Phase 4 holds are now resolved in Stage F.
 2. **The adapter-UI baseline of 19 in
    [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
    Phase 0 is exactly right** (18 + 1). That number is still accurate and can be
@@ -343,7 +343,7 @@ Stage 6 describes this as the same edit set and should be updated to reflect
 that it has landed, per this document's own "update both plans when it lands"
 rule above.
 
-### Stage F — Browser feedback Phase 4 — REDESIGNED 2026-08-17, F.6 COMPLETE
+### Stage F — Browser feedback Phase 4 + Phase 6 — COMPLETE 2026-08-17
 
 **Redesigned 2026-08-17: the `USER_INTERACTION_REQUEST` correlation contract
 is no longer being built.** Each of the 6 surviving action-bearing sites was
@@ -355,9 +355,11 @@ are in `BROWSER_USER_FEEDBACK_PLAN.md` Phase 4. F.4 is complete: both
 post-workspace-init toasts and the native clear-all confirmation are gone, and
 clear-all now uses `DeleteConfirmModal`.
 
-The one remaining action-bearing site still calls
+The final action-bearing site previously called
 `vscode.window.show*Message(...)` directly with action-button strings:
-`WorkflowCommandHandler.ts:148` (retry harness automation, moves inline).
+`WorkflowCommandHandler.ts:148` (retry harness automation). F.7 removed that
+gate and added the inline retry affordance next to `HarnessDropdown`, with a
+client-scoped result and host-aware feedback.
 F.6 moved the post-script-create flow from `WorkflowCommandHandler.ts` into
 `ScriptConditionEditor` with a client-scoped router reply and deleted the
 native command.
@@ -376,9 +378,8 @@ across 9 `webview-react` files rendered an in-app toast even inside the VS Code
 panel. Phase 6 adds a single client-side `notifyUser()` dispatcher (the
 client-side counterpart to Phase 2's `UserFeedbackSink`) and has migrated those
 sites to it. **Phase 6 is complete and was sequenced before Phase 4** — Phase
-4's two relocated sites will add new in-app UI that should report through
-`notifyUser()` rather than hand-rolling a `standalone` check that would
-immediately need migrating.
+4's two relocated sites report through `notifyUser()` rather than hand-rolling
+a `standalone` check that would immediately need migrating.
 
 ### Stage G — Compatibility Phase 3, and the deferred remainder — NOT STARTED
 
@@ -445,7 +446,7 @@ may be swapped as a block.
 | 21  | F.4   | **DONE.** Phase 4 items 5 + 6: cut both duplicate workspace-init toasts; funnel clear-all-history through `DeleteConfirmModal` (`boundary` 54 → 53, `reusable` 6 → 4)                                                                                                                                                                                              |
 | 22  | F.5   | **DONE.** Phase 4 items 3 + 4: deleted `TemplateImporter.ts` and `ctrlyoke.importWorkflowTemplates`; repointed `ctrlyoke.createNewTemplate` at the pre-expanded `TemplateModal` (`reusable` 4 → 2)                                                                                                                                                                                     |
 | 23  | F.6   | **DONE.** Phase 4 item 1: in-app end-condition script creation in `ScriptConditionEditor`; deleted `ctrlyoke.createEndConditionScript` (`reusable` 2 → 1)                                                                                                                                                                                                         |
-| 24  | F.7   | **TODO.** Phase 4 item 2: inline harness-detection retry next to `HarnessDropdown`; cut the `openPanel()` gate (`reusable` 1 → 0)                                                                                                                                                                                                                                  |
+| 24  | F.7   | **DONE.** Phase 4 item 2: inline harness-detection retry next to `HarnessDropdown`; cut the `openPanel()` gate (`reusable` 1 → 0)                                                                                                                                                                                                                                  |
 | 25  | G.x   | **TODO.** Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration (dry-run sub-leg blocked on `SECRETS_AND_REDACTION_PLAN.md`)                                                                                                                                                                                                     |
 
 **Stage B was reordered on 2026-08-02 from the plan's section numbering.** The
@@ -597,8 +598,7 @@ post-script-create moves into a small in-app control in
 affordance next to `HarnessDropdown`; clear-all-workflows is funneled through
 the existing `DeleteConfirmModal` (it was never actually using it, despite
 looking like it should have been). See `BROWSER_USER_FEEDBACK_PLAN.md` Phase 4
-for the full per-site reasoning. Items 3, 4, 5, and 6 are implemented in
-F.4/F.5; the remaining two sites await F.6–F.7.
+for the full per-site reasoning. All six items are implemented in F.4–F.7.
 The duplicate-running-workflow site was deleted in C.4 as a policy conflict
 and was never in Stage F's scope.
 
@@ -661,19 +661,15 @@ Re-verified against `src/` on 2026-08-11, not read from the plans.
 | C     | Browser feedback Phases 2 and 2.5                                        | **Done**                                                                                                      |
 | D     | CLI `validate --harness` / `--all-installed-harnesses --json`            | **Not started** — no dependency, smallest remaining chunk                                                     |
 | E     | Client-scoped routing                                                    | **Done** (confirmed complete this pass; previously unmarked)                                                  |
-| F     | Phase 6 host-aware webview toasts + Phase 4's six per-site dispositions  | **Phase 6 done** (steps 18–20); Phase 4 remains queued as steps 21–24; no `USER_INTERACTION_REQUEST` contract |
+| F     | Phase 6 host-aware webview toasts + Phase 4's six per-site dispositions  | **Done** (steps 18–24); no `USER_INTERACTION_REQUEST` contract |
 | G     | Compatibility Phase 3 domains + docs + Codex investigation + dry-run leg | **Not started**; dry-run sub-leg waits on the Secrets plan, now scheduled as P0 outside this queue            |
 
-Three items stand between this document and being fully closed out:
+Two items stand between this document and being fully closed out:
 
 1. **Stage D** — self-contained, no blockers. Recommended next: it is the
    smallest remaining piece and reuses conventions (JSON envelope, registry
    access) that already exist in `cli.ts`.
-2. **Stage F** — self-contained, no blockers. Phase 6's host-aware webview
-   toast dispatch is done; Phase 4's two remaining action-bearing sites are
-   queued after F.5, with all file/line locations re-verified 2026-08-17. The
-   work is split into the seven single-session steps 18–24 above.
-3. **Stage G** — the largest remaining piece, and the only one with an actual
+2. **Stage G** — the largest remaining piece, and the only one with an actual
    dependency chain: its dry-run leg needs
    [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md),
    which is still **Proposed** with none of its Phase 1 (`SecretStore`) or
