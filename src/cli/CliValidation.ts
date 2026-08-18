@@ -12,6 +12,7 @@ import {
   retargetCompatibilityTargets,
   type CompatibilityTargetResolver,
 } from "../types/CompatibilityAnalyzer";
+import { buildPortabilityReport } from "../types/PortabilityReport";
 import type {
   CompatibilityDiagnostic,
   HarnessCapabilityRegistrySnapshot,
@@ -32,6 +33,11 @@ export type CliValidationTarget =
 export interface CliCompatibilityAnalysis {
   diagnostics: CompatibilityDiagnostic[];
   consumerCount: number;
+}
+
+export interface CliCompatibilityAnalysisOptions {
+  /** Use the installed-harness projection for the all-installed target. */
+  allInstalled?: boolean;
 }
 
 const LOSSY_DIAGNOSTIC_CODES = new Set<string>([
@@ -89,9 +95,26 @@ export function analyzeCliCompatibility(
   capabilities: HarnessCapabilityRegistrySnapshot,
   harnesses: readonly HarnessId[],
   resolveTarget: CompatibilityTargetResolver = (prompt, file) =>
-    PropertyResolver.resolveTarget(prompt, file)
+    PropertyResolver.resolveTarget(prompt, file),
+  options: CliCompatibilityAnalysisOptions = {}
 ): CliCompatibilityAnalysis {
   const consumers = enumerateCompatibilityTargets(workflow, resolveTarget);
+  if (options.allInstalled) {
+    const report = buildPortabilityReport({
+      workflow,
+      capabilities,
+      resolveTarget,
+    });
+    return {
+      diagnostics: report.rows.flatMap((row) =>
+        row.diagnostics.map(
+          ({ identity: _identity, ...diagnostic }) => diagnostic
+        )
+      ),
+      consumerCount: consumers.length,
+    };
+  }
+
   const executionTargets = harnesses.flatMap((harnessId) =>
     retargetCompatibilityTargets(consumers, harnessId)
   );

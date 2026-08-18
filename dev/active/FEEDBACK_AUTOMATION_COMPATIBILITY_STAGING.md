@@ -31,7 +31,9 @@ before this document's last grooming pass — but was never marked done in the
 queue below; that is corrected here. **Stage F has since been completed
 (2026-08-17, steps 18-24), and Stage D is now complete; Stage G.5 is now
 complete and its remaining report/docs work is underway.** **Stage G**
-(compatibility domains and portability reporting) is underway. The dependency that
+(compatibility domains and portability reporting) is underway. Stage G.6's
+platform-neutral portability projection is now complete; the remaining work is
+the React report surface and generated documentation. The dependency that
 formerly split Stage G has now landed: both
 [`SECRETS_AND_REDACTION_PLAN.md`](../implemented/SECRETS_AND_REDACTION_PLAN.md)
 and [`DRY_RUN_PREVIEW_PLAN.md`](../implemented/DRY_RUN_PREVIEW_PLAN.md) are
@@ -487,7 +489,7 @@ may be swapped as a block.
 | 28  | G.3   | **DONE 2026-08-18.** Enabled hooks as the first new complete domain across all six harnesses; moved event support to adapter-owned declarations, added configured-event analyzer/preview/UI coverage, and layered diagnostics over the Hooks tab without changing hook state or introducing notification preferences                                                                       |
 | 29  | G.4   | **DONE 2026-08-18.** Enabled adapter-owned MCP per-server filtering across all six harnesses; preserved translated runtime denials, Codex native `disabled_tools`, and Antigravity unsupported behavior; moved diagnostics into the MCP domain with per-server RFC 6901 pointers, dedupe-safe preview coverage, persistent editor diagnostics, and MCP warning-tab overlays                |
 | 30  | G.5   | **DONE 2026-08-18.** Enabled images across all six harnesses; propagated resolved full-file refs; added prompt-pointer diagnostics and preview/editor coverage; ordinary refs, scripts, disabled steps, and the Harness-tab badge remain untouched |
-| 31  | G.6   | **TODO.** Add the pure installed-harness portability-report projection over the now multi-domain analyzer, with ready/lossy/unsupported/workspace-side-effect rows and step/property drill-down data                                                                                                                                                                                       |
+| 31  | G.6   | **DONE 2026-08-18.** Added the pure installed-harness portability projection over the multi-domain analyzer, with ready/lossy/unsupported/workspace-side-effect rows, unverified visibility, stable diagnostic identities/remediation, side-effect drill-down, deterministic ordering, and authored-object immutability coverage                                                                                                                                                                                       |
 | 32  | G.7   | **TODO.** Add the shared React portability-report surface and entry point, with accessible row drill-down and VS Code/hosted-browser parity tests                                                                                                                                                                                                                                          |
 | 33  | G.8   | **TODO.** Generate customer-facing compatibility documentation from the registry declarations, including a drift check and the portable workflow-attachment versus optional harness-discovery distinction                                                                                                                                                                                  |
 | 34  | G.9   | **TODO.** Run the final acceptance audit and full project/docs gates, fix bounded review defects, update all owning plans, and move this staging plan plus the compatibility plan to `dev/implemented/`                                                                                                                                                                                    |
@@ -702,15 +704,15 @@ Re-verified against `src/` on 2026-08-18, not read from the plans.
 | D     | CLI `validate --harness` / `--all-installed-harnesses --json`           | **Done 2026-08-18** — shared diagnostics, real installed filtering, strict policies, JSON v1           |
 | E     | Client-scoped routing                                                   | **Done** (confirmed complete this pass; previously unmarked)                                           |
 | F     | Phase 6 host-aware webview toasts + Phase 4's six per-site dispositions | **Done** (steps 18–24); no `USER_INTERACTION_REQUEST` contract                                         |
-| G     | Compatibility Phase 3 domains + report/docs + Codex investigation       | **Partially shipped** — dry-run and Secrets/Redaction plus G.1–G.4 are done; remaining work is G.5–G.9 |
+| G     | Compatibility Phase 3 domains + report/docs + Codex investigation       | **Partially shipped** — dry-run, Secrets/Redaction, G.1–G.6, and the Codex investigation are done; remaining work is G.7–G.9 |
 
 Stage G remains between this document and being fully closed out:
 
 1. **Stage G** — the largest remaining piece, but no longer blocked. Its dry-run
    integration and Secrets/Redaction dependency are already implemented. The
    Codex investigation is complete with an evidence-backed negative conclusion;
-   the remaining sequence is `promptInputs`, the now-useful
-   workflow portability report; generated docs; and final acceptance/retirement.
+   the remaining sequence is the shared React report surface, generated docs,
+   and final acceptance/retirement.
    `usage` is deliberately removed because it is now uniform.
 
 **Recommendation (revised 2026-08-18):** D, F, and the dry-run portion of G are

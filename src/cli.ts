@@ -1366,7 +1366,16 @@ async function validateCommand(
     try {
       const capabilities = await capabilityRegistry.getSnapshot();
       const harnesses = selectCliValidationHarnesses(target!, capabilities);
-      const analysis = analyzeCliCompatibility(result, capabilities, harnesses);
+      const analysis = analyzeCliCompatibility(
+        result,
+        capabilities,
+        harnesses,
+        undefined,
+        {
+          allInstalled:
+            target!.kind === CLI_VALIDATE_TARGET_KINDS.ALL_INSTALLED_HARNESSES,
+        }
+      );
       const failed = hasCliValidationFailures(
         analysis.diagnostics,
         strictPolicy

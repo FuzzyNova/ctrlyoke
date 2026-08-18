@@ -36,8 +36,9 @@
 > shim tests. Customer docs distinguish portable workflow attachments from
 > optional harness-native discovery. The dry-run leg and Stage D CLI validation
 > of Compatibility Phase 2 have shipped through the shared analyzer and exact
-> provider-plan/JSON projections. The workflow portability report and the
-> remaining Phase 3 image domain remain. The Codex partial-support investigation is complete
+> provider-plan/JSON projections. The pure workflow portability projection in
+> `src/types/PortabilityReport.ts` is now complete; the React presentation
+> remains. The remaining Phase 3 image domain is complete. The Codex partial-support investigation is complete
 > with no safe general translation found; MCP capability serialization was cut
 > because a context-free snapshot cannot honestly describe whether a workflow
 > uses a capability.
@@ -66,6 +67,13 @@
 > provider references, and render persistently beside the prompt editor. No
 > Harness-tab badge plumbing was added because images have no tab-scoped
 > diagnostic consumer.
+> Stage G.6 is now complete: `src/types/PortabilityReport.ts` projects each
+> parsed workflow onto every available harness using the shared analyzer
+> target/provenance path. Rows exclude unavailable harnesses, distinguish
+> ready, lossy, unsupported, workspace-side-effecting, and unverified results,
+> and retain stable step/property diagnostics, remediation, and side-effect
+> drill-down data. The CLI all-installed path consumes this projection while
+> preserving its JSON v1 envelope; React presentation remains G.7.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
@@ -1022,7 +1030,11 @@ second speculative implementation.
   with dry-run preview.
 - **Done 2026-08-18:** integrate the Phase 1 shared analyzer with CLI validation,
   including selected/all-installed targets, strict CI policies, and JSON v1.
-- Add the installed-harness portability report.
+- **Done 2026-08-18:** add the pure installed-harness portability report. It
+  reuses shared consumer enumeration/retargeting, excludes unavailable
+  harnesses, classifies structured fidelity/severity, exposes unverified state,
+  preserves diagnostic identities/remediation, and discloses workspace-config
+  or mixed mechanisms without changing CLI JSON v1.
 
 ### Phase 3 — Expand capability domains
 
