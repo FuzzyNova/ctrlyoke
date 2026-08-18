@@ -4169,7 +4169,8 @@ export class WorkflowInstance {
         execIntegration,
       ] of this.executionIntegrations.entries()) {
         const retainIntegration =
-          preserveWorktreeReservation ||
+          (preserveWorktreeReservation &&
+            execIntegration.canReuseForInject()) ||
           (!this.executionWorkspace.worktree &&
             (execIntegration.canReuseForInject() ||
               execIntegration.shouldPersistForSessionActivity()));
@@ -4389,9 +4390,12 @@ export class WorkflowInstance {
       status === EXECUTION_STATES.PAUSED ||
       status === EXECUTION_STATES.CANCELLING;
     const worktree = this.activeWorktree;
+    const hasReusableInjectIntegration = Array.from(
+      this.liveInjectIntegrations.values()
+    ).some((integration) => integration.canReuseForInject());
     if (
       executionStillOwnsReservation ||
-      this.liveInjectIntegrations.size > 0 ||
+      hasReusableInjectIntegration ||
       worktree?.mode !== WORKTREE_MODES.NAMED
     ) {
       return;

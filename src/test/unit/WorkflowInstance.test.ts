@@ -2118,6 +2118,97 @@ suite("WorkflowInstance retained integration artifacts", () => {
     assert.strictEqual((instance as any).heartbeatInterval, undefined);
   });
 
+  test("does not let a non-reusable integration strand a named-worktree lease", async () => {
+    class DisposableIntegration extends MockHarnessIntegration {
+      disposeCalls = 0;
+
+      override dispose(): void {
+        this.disposeCalls += 1;
+        super.dispose();
+      }
+    }
+
+    class InjectableIntegration extends MockHarnessIntegration {
+      private ptyEndedCallback: (() => void) | undefined;
+
+      override canReuseForInject(): boolean {
+        return true;
+      }
+
+      override onPtySessionEnded(callback: () => void): void {
+        this.ptyEndedCallback = callback;
+      }
+
+      firePtyEnded(): void {
+        this.ptyEndedCallback?.();
+      }
+    }
+
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const injectable = new InjectableIntegration(undefined, false);
+    const ordinary = new DisposableIntegration(undefined, false);
+    let leaseReleaseCalls = 0;
+    let runnerLockReleaseCalls = 0;
+    (instance as any).executionIntegrations.set(
+      HARNESS_IDS.CLAUDE_CLI,
+      injectable
+    );
+    (instance as any).executionIntegrations.set(
+      HARNESS_IDS.CODEX_CLI,
+      ordinary
+    );
+    (instance as any).workflowExecutor.execute = async () => {};
+    (instance as any).executionWorkspace.worktree = { mode: "named" };
+    (instance as any).activeWorktree = {
+      mode: "named",
+      runtimeTrust: { release: () => {} },
+    };
+    (instance as any).executionLease = {
+      updateHeartbeat: async () => undefined,
+      release: async () => {
+        leaseReleaseCalls += 1;
+      },
+    };
+    (instance as any).releaseRunnerLock = async () => {
+      runnerLockReleaseCalls += 1;
+    };
+
+    await (instance as any).startWorkflowExecution(
+      injectable,
+      "",
+      "workflow.ctrlyoke.json"
+    );
+
+    assert.strictEqual(
+      ordinary.disposeCalls,
+      1,
+      "a non-reusable integration must be disposed at worktree settlement"
+    );
+    assert.strictEqual(
+      (instance as any).liveInjectIntegrations.size,
+      1,
+      "only the reusable PTY may remain parked"
+    );
+
+    injectable.firePtyEnded();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.strictEqual(leaseReleaseCalls, 1);
+    assert.strictEqual(runnerLockReleaseCalls, 1);
+    assert.strictEqual((instance as any).activeWorktree, undefined);
+    assert.strictEqual((instance as any).executionLease, undefined);
+  });
+
   test("closes retained terminals when a different run starts", async () => {
     class RetainedTerminalIntegration extends MockHarnessIntegration {
       closeCalls = 0;
