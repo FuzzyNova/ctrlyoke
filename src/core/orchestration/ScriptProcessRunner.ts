@@ -11,6 +11,8 @@ export interface ScriptProcessRunnerOptions {
   argv: readonly string[];
   /** Optional workflow variables exposed as CTRLYOKE_VAR_<KEY>. */
   vars?: Record<string, string>;
+  /** Environment overrides for the script process. */
+  env?: Record<string, string>;
   /** Receives stdout chunks as they arrive. */
   onOutput?: (chunk: string) => void;
   /** Run the command through the platform shell. */
@@ -75,6 +77,10 @@ export class ScriptProcessRunner {
       for (const [key, value] of Object.entries(options.vars)) {
         cleanEnv[`CTRLYOKE_VAR_${key.toUpperCase()}`] = value;
       }
+    }
+
+    if (options.env) {
+      Object.assign(cleanEnv, options.env);
     }
 
     try {

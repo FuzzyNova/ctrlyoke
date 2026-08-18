@@ -37,6 +37,7 @@ export class CliPromptRuntimeCoordinator {
     const actualExecutionMode = params.resolvedProperties?.executionMode;
     const actualAgent = params.resolvedProperties?.agent;
     const actualSkills = params.resolvedProperties?.skills;
+    const actualSecrets = params.resolvedProperties?.secrets;
 
     if (!params.prompt._runtime) {
       params.prompt._runtime = {
@@ -53,6 +54,9 @@ export class CliPromptRuntimeCoordinator {
       params.prompt._runtime.agent = actualAgent;
     }
     params.prompt._runtime.skills = actualSkills;
+    if (actualSecrets !== undefined) {
+      params.prompt._runtime.secrets = actualSecrets;
+    }
 
     const sessionId =
       params.extractedSessionId || params.parsedOutput?.metadata.sessionId;
@@ -83,6 +87,7 @@ export class CliPromptRuntimeCoordinator {
     const actualExecutionMode = params.resolvedProperties?.executionMode;
     const actualAgent = params.resolvedProperties?.agent;
     const actualSkills = params.resolvedProperties?.skills;
+    const actualSecrets = params.resolvedProperties?.secrets;
 
     if (!params.prompt._runtime) {
       params.prompt._runtime = {
@@ -93,12 +98,18 @@ export class CliPromptRuntimeCoordinator {
         skills: actualSkills,
         startedAt: this.now(),
       };
+      if (actualSecrets !== undefined) {
+        params.prompt._runtime.secrets = actualSecrets;
+      }
     } else {
       params.prompt._runtime.harness = actualHarness;
       params.prompt._runtime.model = actualModel;
       params.prompt._runtime.executionMode = actualExecutionMode;
       params.prompt._runtime.agent = actualAgent;
       params.prompt._runtime.skills = actualSkills;
+      if (actualSecrets !== undefined) {
+        params.prompt._runtime.secrets = actualSecrets;
+      }
     }
 
     let parsedOutput = params.parsedOutput;

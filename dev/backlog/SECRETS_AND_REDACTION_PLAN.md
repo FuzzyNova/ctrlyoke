@@ -238,11 +238,11 @@ Store-half implementation decisions:
   using the shared secret-name validator and filename-boundary convention, and
   expose the effective inline-plus-array grant union. This declaration step
   intentionally does not yet validate unknown inline names or inject values.
-- Resolve at spawn: extend `CliTransportCoordinator`'s existing env plumbing
+- [x] Resolve at spawn: extend `CliTransportCoordinator`'s existing env plumbing
   (`withProcessEnvOverrides` and the `env` passed to the child) and the
   `EndConditionEvaluator` script env with the granted set. Restrict
   `${secret:...}` expansion to MCP/hook/script env and header maps only.
-- **Preflight before the harness starts.** A declared name that resolves to
+- [x] **Preflight before the harness starts.** A declared name that resolves to
   neither a managed secret nor a present env var fails the run with the name and
   scope, before any process spawns, before any billable harness turn.
 

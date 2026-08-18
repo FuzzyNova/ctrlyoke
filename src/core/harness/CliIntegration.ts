@@ -66,6 +66,7 @@ import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { PtySession } from "./PtyProcessManager";
 import type { HookEvent } from "../../types/CtrlYokeTypes";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
+import { resolveSecretEnvironment } from "../../utils/SecretResolver";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
 /**
@@ -864,6 +865,11 @@ export class CliIntegration extends HarnessIntegration {
         cleanupTempFiles: (tempFilePaths) =>
           this.cleanupTempFiles(tempFilePaths),
       },
+      resolveSecretEnvironment: (names) =>
+        resolveSecretEnvironment(names, {
+          workspaceRoot: this.platform.getWorkspaceRoot(),
+          secretStore: this.platform.getSecretStore?.(),
+        }),
     });
 
     const executionPlanBuilder = new ExecutionPlanBuilder({

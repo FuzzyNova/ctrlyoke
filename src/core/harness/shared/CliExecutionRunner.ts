@@ -345,6 +345,7 @@ export class CliExecutionRunner {
     const headlessEnv: Record<string, string> = {
       CTRLYOKE_RUN_ID: runId,
       ...hookEnv,
+      ...this.buildHookProcessEnv(session),
     };
     if (notifyDir) {
       headlessEnv.CTRLYOKE_NOTIFY_DIR = notifyDir;
@@ -383,7 +384,8 @@ export class CliExecutionRunner {
           activeCallback,
           headlessEnv,
           activeSource,
-          command
+          command,
+          session.resolvedProperties?.secrets
         );
       } catch (error) {
         if (this.deps.provider.isRecoverableSessionError?.(error) ?? false) {
@@ -422,7 +424,9 @@ export class CliExecutionRunner {
               session.tempFilePaths,
               retryCallback,
               headlessEnv,
-              retrySource
+              retrySource,
+              undefined,
+              session.resolvedProperties?.secrets
             );
           }
         }
@@ -470,7 +474,9 @@ export class CliExecutionRunner {
         session.promptArgument,
         session.tempFilePaths,
         session.resolvedSessionId,
-        resolvedCommand
+        resolvedCommand,
+        this.buildHookProcessEnv(session),
+        session.resolvedProperties?.secrets
       );
     } catch (error) {
       Log.error("❌ CLI interactive execution error", error);
@@ -516,6 +522,16 @@ export class CliExecutionRunner {
     }
     env.CTRLYOKE_HARNESS_ID = this.deps.provider.config.harnessId;
     return env;
+  }
+
+  private buildHookProcessEnv(
+    session: CliExecutionSession
+  ): Record<string, string> {
+    return Object.fromEntries(
+      (session.resolvedProperties?.hooks ?? []).flatMap((hook) =>
+        Object.entries(hook.env ?? {})
+      )
+    );
   }
 
   private async executeInTerminal(
@@ -564,6 +580,7 @@ export class CliExecutionRunner {
       const terminalEnv: Record<string, string> = {
         CTRLYOKE_RUN_ID: runId,
         ...this.buildHookEnvVars(session),
+        ...this.buildHookProcessEnv(session),
       };
       if (ConfigurationUtils.isDiagnosticLogsEnabled()) {
         terminalEnv.CTRLYOKE_DIAGNOSTIC_LOGS = "true";

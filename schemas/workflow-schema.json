@@ -331,6 +331,9 @@
         "script": {
           "$ref": "#/definitions/scriptStep/properties/script"
         },
+        "env": {
+          "$ref": "#/definitions/scriptStep/properties/env"
+        },
         "compareSource": {
           "$ref": "#/definitions/scriptStep/properties/compareSource"
         },
@@ -743,6 +746,13 @@
           "type": "string",
           "description": "Shell command or path to script. Resolved relative to workspace root or .ctrlyoke/."
         },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values."
+        },
         "compareSource": {
           "type": "string",
           "enum": ["auto", "stdout", "stderr", "exitCode"],
@@ -862,6 +872,13 @@
         "script": {
           "type": "string",
           "description": "Shell command or path to script. Resolved relative to workspace root or .ctrlyoke/."
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values."
         },
         "compareSource": {
           "type": "string",
@@ -1265,6 +1282,13 @@
         "command": {
           "type": "string",
           "description": "Command to execute. Resolved relative to workspace root if not absolute."
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Environment map consumed by the hook process. Secret references are allowed only as ${secret:NAME} values."
         },
         "timeoutSec": {
           "type": "number",

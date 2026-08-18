@@ -91,7 +91,18 @@ export class VarSubstitutor {
     hook: UserHookConfig,
     vars: Record<string, string>
   ): UserHookConfig {
-    return { ...hook, command: this.substitute(hook.command, vars) };
+    return {
+      ...hook,
+      command: this.substitute(hook.command, vars),
+      ...(hook.env !== undefined && {
+        env: Object.fromEntries(
+          Object.entries(hook.env).map(([key, value]) => [
+            key,
+            this.substitute(value, vars),
+          ])
+        ),
+      }),
+    };
   }
 
   private static applyToEndCondition(
@@ -101,6 +112,14 @@ export class VarSubstitutor {
     return {
       ...cond,
       script: this.substitute(cond.script, vars),
+      ...(cond.env !== undefined && {
+        env: Object.fromEntries(
+          Object.entries(cond.env).map(([key, value]) => [
+            key,
+            this.substitute(value, vars),
+          ])
+        ),
+      }),
       retryPrompt:
         cond.retryPrompt !== undefined
           ? this.substitute(cond.retryPrompt, vars)

@@ -1653,6 +1653,7 @@ export const PROMPT_PROPERTIES = {
 
   // Script step properties
   SCRIPT: "script",
+  ENV: "env",
   TIMEOUT: "timeout",
   COMPARE_SOURCE: "compareSource",
   RETURNS: "returns",

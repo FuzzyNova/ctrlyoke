@@ -118,6 +118,7 @@ import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageReposi
 import { IntegrationFactory } from "./IntegrationFactory";
 import { HarnessCapabilityRegistry } from "./HarnessCapabilityRegistry";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
+import { preflightWorkflowSecrets } from "../utils/SecretResolver";
 import {
   analyzeCompatibility,
   enumerateCompatibilityTargets,
@@ -1495,6 +1496,12 @@ export class WorkflowInstance {
 
     try {
       Log.info(`ctrlyoke: Executing loaded prompt file: ${filePath}`);
+
+      await preflightWorkflowSecrets(
+        this.promptQueue.getWorkflowFile(),
+        this.platform,
+        this.platform.getWorkspaceRoot()
+      );
 
       this.worktreeResolution = await resolveWorktreeForWorkspace(
         this.promptQueue.getWorkflowFile().worktree,
@@ -3511,6 +3518,7 @@ export class WorkflowInstance {
                   command: shell,
                   args: shellArgs,
                   cwd: options.cwd,
+                  env: { ...process.env, ...(options.env ?? {}) },
                   onData: (ptySession, chunk) => {
                     ptyPostMessage({
                       type: MESSAGE_TYPES.TERMINAL_OUTPUT,

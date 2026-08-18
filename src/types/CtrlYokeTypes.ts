@@ -102,6 +102,8 @@ export interface UserHookConfig {
   event: HookEvent;
   /** Command to run. Resolved relative to workspace root if not absolute. */
   command: string;
+  /** Environment map consumed by the hook process. */
+  env?: Record<string, string>;
   /** Optional timeout in seconds (only respected by CLIs that support per-hook timeouts). */
   timeoutSec?: number;
 }
@@ -858,6 +860,8 @@ export type ScriptStepAction = Exclude<ConditionAction, "retry" | "skipPrompt">;
  */
 export interface ScriptProperties {
   script: string;
+  /** Environment map consumed by the script process. */
+  env?: Record<string, string>;
   /** Controls which output source is compared against `returns`. Default: `"auto"`. */
   compareSource?: EndConditionCompareSource;
   /** Expected result to compare against. When absent, exit code 0 = pass. */

@@ -231,10 +231,12 @@ function cloneHooks(value: unknown): UserHookConfig[] | null | undefined {
       return undefined;
     }
 
+    const env = cloneStringRecord(item.env);
     return typeof item.event === "string" && typeof item.command === "string"
       ? {
           event: item.event as UserHookConfig["event"],
           command: item.command,
+          ...(env && { env }),
           ...(typeof item.timeoutSec === "number" && {
             timeoutSec: item.timeoutSec,
           }),
@@ -294,8 +296,10 @@ function cloneEndCondition(value: unknown): EndCondition | null | undefined {
     return undefined;
   }
 
+  const env = cloneStringRecord(value.env);
   return {
     script: value.script,
+    ...(env && { env }),
     returns: value.returns,
     ...(typeof value.compareSource === "string" && {
       compareSource: value.compareSource as EndCondition["compareSource"],
@@ -330,8 +334,10 @@ function clonePreCondition(value: unknown): PreCondition | null | undefined {
     return undefined;
   }
 
+  const env = cloneStringRecord(value.env);
   return {
     script: value.script,
+    ...(env && { env }),
     ...(typeof value.compareSource === "string" && {
       compareSource: value.compareSource as PreCondition["compareSource"],
     }),
@@ -446,6 +452,9 @@ export function sanitizeClipboardWorkflowStep(step: unknown): WorkflowStep {
       type: STEP_TYPES.SCRIPT,
       script: step.script,
       ...commonFields,
+      ...(cloneStringRecord(step.env) && {
+        env: cloneStringRecord(step.env),
+      }),
       ...((step.executionMode === EXECUTION_MODES.INTERACTIVE ||
         step.executionMode === EXECUTION_MODES.HEADLESS) && {
         executionMode: step.executionMode,
@@ -531,6 +540,7 @@ export function buildScriptStepFromProperties(
   return {
     type: STEP_TYPES.SCRIPT,
     script,
+    ...(cloneStringRecord(props.env) && { env: cloneStringRecord(props.env) }),
     ...((props.executionMode === EXECUTION_MODES.INTERACTIVE ||
       props.executionMode === EXECUTION_MODES.HEADLESS) && {
       executionMode: props.executionMode as ExecutionMode,
