@@ -16,6 +16,10 @@ import {
   analyzeCompatibility,
   enumerateCompatibilityTargets,
 } from "@root/types/CompatibilityAnalyzer";
+import {
+  buildPortabilityReport,
+  type PortabilityReport,
+} from "@root/types/PortabilityReport";
 import { resolveExecutionProperties } from "@root/types/ExecutionPropertyResolver";
 import type {
   PromptFile,
@@ -31,6 +35,7 @@ import { isImageRefPath } from "@root/types/DashboardConstants";
 export interface UseCompatibilityDiagnosticsResult {
   diagnostics: CompatibilityDiagnostic[];
   executionTargets: CompatibilityExecutionTarget[];
+  portabilityReport: PortabilityReport | null;
   capabilitySnapshot: ReturnType<
     typeof useCompatibilityStore.getState
   >["capabilitySnapshot"];
@@ -42,6 +47,8 @@ export interface UseCompatibilityDiagnosticsOptions {
   /** Unsaved prompt properties to evaluate for the selected target. */
   promptProperties?: PropertyValues;
   promptTarget?: EditorSelectionTarget;
+  /** Build the workflow-level projection only for the report surface. */
+  includePortabilityReport?: boolean;
 }
 
 function toCorePromptStep(
@@ -179,6 +186,7 @@ export function useCompatibilityDiagnostics(
   );
   const promptProperties = options.promptProperties;
   const promptTarget = options.promptTarget;
+  const includePortabilityReport = options.includePortabilityReport ?? false;
   const capabilitySnapshot = useCompatibilityStore(
     (state) => state.capabilitySnapshot
   );
@@ -188,7 +196,11 @@ export function useCompatibilityDiagnostics(
 
   const analysis = useMemo(() => {
     if (snapshotStatus !== "ready" || !capabilitySnapshot) {
-      return { diagnostics: [], executionTargets: [] };
+      return {
+        diagnostics: [],
+        executionTargets: [],
+        portabilityReport: null,
+      };
     }
 
     let workflow = toCoreWorkflow(steps, finalStep, workflowProperties);
@@ -220,13 +232,12 @@ export function useCompatibilityDiagnostics(
       defaults: createDefaults(globalSettings),
       hostCanProvidePty: !isStandalone,
     };
-    const executionTargets = enumerateCompatibilityTargets(
-      workflow,
-      (prompt, resolvedWorkflow) =>
-        resolveExecutionProperties(prompt, resolvedWorkflow, context)
-    ).map((target) => ({
-      ...target,
-      imageFileRefs: authoredImageRefs(
+    const resolveTarget = (
+      prompt: CorePromptStep,
+      resolvedWorkflow: PromptFile
+    ) => resolveExecutionProperties(prompt, resolvedWorkflow, context);
+    const imageFileRefsForTarget = (target: CompatibilityExecutionTarget) =>
+      authoredImageRefs(
         (() => {
           const step =
             target.consumer.kind === FINAL_STEP_PHASES.QUEUE
@@ -234,7 +245,13 @@ export function useCompatibilityDiagnostics(
               : workflow.finalStep;
           return step && step.type !== STEP_TYPES.SCRIPT ? step.prompt : "";
         })()
-      ),
+      );
+    const executionTargets = enumerateCompatibilityTargets(
+      workflow,
+      resolveTarget
+    ).map((target) => ({
+      ...target,
+      imageFileRefs: imageFileRefsForTarget(target),
     }));
 
     return {
@@ -245,6 +262,15 @@ export function useCompatibilityDiagnostics(
         workspace: { workspaceRoot: globalSettings.workspaceRoot },
       }),
       executionTargets,
+      portabilityReport: includePortabilityReport
+        ? buildPortabilityReport({
+            workflow,
+            capabilities: capabilitySnapshot,
+            resolveTarget,
+            imageFileRefs: imageFileRefsForTarget,
+            workspace: { workspaceRoot: globalSettings.workspaceRoot },
+          })
+        : null,
     };
   }, [
     capabilitySnapshot,
@@ -255,12 +281,14 @@ export function useCompatibilityDiagnostics(
     steps,
     promptProperties,
     promptTarget,
+    includePortabilityReport,
     workflowProperties,
   ]);
 
   return {
     diagnostics: analysis.diagnostics,
     executionTargets: analysis.executionTargets,
+    portabilityReport: analysis.portabilityReport,
     capabilitySnapshot,
     isChecking: snapshotStatus === "checking",
     snapshotStatus,

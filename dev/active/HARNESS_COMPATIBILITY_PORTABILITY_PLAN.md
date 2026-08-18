@@ -73,7 +73,10 @@
 > ready, lossy, unsupported, workspace-side-effecting, and unverified results,
 > and retain stable step/property diagnostics, remediation, and side-effect
 > drill-down data. The CLI all-installed path consumes this projection while
-> preserving its JSON v1 envelope; React presentation remains G.7.
+> preserving its JSON v1 envelope. Stage G.7 now supplies the shared React
+> presentation with a workflow-properties entry point, snapshot-based
+> drill-down, neutral loading/empty states, and VS Code/hosted-browser parity
+> through the shared dashboard bundle.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
@@ -102,7 +105,8 @@ Phases 2 and 3 are post-release (decided 2026-07-31). Phase 2 (dry run,
 portability report, CLI validation) makes existing truth more visible; it does
 not prevent a dishonest support claim or an unsafe workspace mutation, so it
 does not gate the release. Its dry-run leg and CLI validation are implemented;
-the report remains. Phase 3 adds new capability domains.
+the React report surface is now implemented. Phase 3 adds new capability
+domains.
 
 Acceptance criteria below that describe dry-run output or the portability
 report therefore belong to Phase 2 and are not release gates. Criteria covering

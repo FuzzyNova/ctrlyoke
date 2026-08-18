@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { ExitButton } from "./ExitButton";
 
@@ -23,6 +23,8 @@ interface ModalProps {
    * otherwise the default modal layer renders behind it and stays invisible.
    */
   elevated?: boolean;
+  /** Restore focus to the control that opened the modal when it closes. */
+  restoreFocusOnClose?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -37,8 +39,11 @@ export const Modal: React.FC<ModalProps> = ({
   fullWidthOnNarrow = false,
   bodyClassName = "px-6 py-4",
   elevated = false,
+  restoreFocusOnClose = false,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
   const backdropZ = elevated ? "z-viewer-modal-backdrop" : "z-modal-backdrop";
   const contentZ = elevated ? "z-viewer-modal" : "z-modal";
 
@@ -55,10 +60,18 @@ export const Modal: React.FC<ModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      // Focus trap
+      if (
+        restoreFocusOnClose &&
+        document.activeElement instanceof HTMLElement
+      ) {
+        previousFocusRef.current = document.activeElement;
+      }
       modalRef.current?.focus();
+    } else if (restoreFocusOnClose) {
+      previousFocusRef.current?.focus();
+      previousFocusRef.current = null;
     }
-  }, [isOpen]);
+  }, [isOpen, restoreFocusOnClose]);
 
   if (!isOpen) return null;
 
@@ -92,11 +105,17 @@ export const Modal: React.FC<ModalProps> = ({
           tabIndex={-1}
           role="dialog"
           aria-modal="true"
+          aria-labelledby={titleId}
         >
           {/* Header */}
           <div className="flex-shrink-0 px-6 py-4 border-b border-panel-border">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-foreground">{title}</h2>
+              <h2
+                id={titleId}
+                className="text-xl font-semibold text-foreground"
+              >
+                {title}
+              </h2>
               <div className="flex items-center gap-2">
                 {headerActions}
                 <ExitButton onClick={onClose} aria-label="Close modal" />
