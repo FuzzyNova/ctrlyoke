@@ -17,6 +17,7 @@ export {
   END_CONDITION_DEFAULTS,
 } from "./editorStore";
 export { useSettingsStore } from "./settingsStore";
+export { useSecretRegistryStore } from "./secretRegistryStore";
 export { useCompatibilityStore } from "./compatibilityStore";
 export { useExecutionPreviewStore } from "./executionPreviewStore";
 export { useTerminalStore } from "./terminalStore";
@@ -56,6 +57,7 @@ export type {
   GlobalSettings,
   WorkflowProperties,
 } from "./settingsStore";
+export type { SecretRegistryAction } from "./secretRegistryStore";
 export type {
   CapabilitySnapshotStatus,
   CompatibilityState,

@@ -52,6 +52,7 @@ import {
   getGitChangeCompletions,
   getPromptFileCompletions,
   getPriorContextCompletions,
+  getSecretCompletions,
   getCtrlYokeSlashCompletions,
   findSymbolKindForReference,
   getPathSuggestions,
@@ -72,6 +73,7 @@ import * as WorkflowPaths from "../utils/WorkflowPaths";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import type { WebviewClientContext } from "./WebviewClientContext";
+import type { SecretRegistryService } from "./SecretRegistryService";
 
 /**
  * Editor-support message handlers for the dashboard's CodeMirror prompt editor:
@@ -95,7 +97,8 @@ export class PromptEditorSupportService {
      */
     private readonly resolveImageWebviewUri: (
       absolutePath: string
-    ) => string | undefined
+    ) => string | undefined,
+    private readonly secretRegistry?: SecretRegistryService
   ) {}
 
   private getTrustedWorkspaceRoots(): string[] {
@@ -253,6 +256,12 @@ export class PromptEditorSupportService {
       return await getGitChangeCompletions(workspaceRoot, prefix.substring(1)); // Remove ~
     } else if (trigger === "$") {
       return getPriorContextCompletions(prefix.substring(1)); // Remove $
+    } else if (trigger === "!") {
+      if (!vscode.workspace.workspaceFolders?.length || !this.secretRegistry) {
+        return [];
+      }
+      const names = await this.secretRegistry.getCompletionNames();
+      return getSecretCompletions(names, prefix.substring(1));
     } else if (trigger === "path") {
       return await getPromptFileCompletions(prefix);
     }
@@ -602,12 +611,19 @@ export class PromptEditorSupportService {
     ctx: WebviewClientContext,
     references: Array<{
       id: string;
-      type: "file" | "directory" | "lineRange" | "symbol" | "git";
+      type:
+        | "file"
+        | "directory"
+        | "lineRange"
+        | "symbol"
+        | "git"
+        | "secret";
       path?: string;
       gitRef?: string;
       lineStart?: string;
       lineEnd?: string;
       symbolName?: string;
+      secretName?: string;
     }>,
     seq?: number
   ): Promise<void> {
@@ -644,12 +660,19 @@ export class PromptEditorSupportService {
 
   private async validateContextReference(
     reference: {
-      type: "file" | "directory" | "lineRange" | "symbol" | "git";
+      type:
+        | "file"
+        | "directory"
+        | "lineRange"
+        | "symbol"
+        | "git"
+        | "secret";
       path?: string;
       gitRef?: string;
       lineStart?: string;
       lineEnd?: string;
       symbolName?: string;
+      secretName?: string;
     },
     workspaceRoot: string | null,
     namedRoots: readonly ResolverWorkspaceFolder[],
@@ -660,6 +683,15 @@ export class PromptEditorSupportService {
     symbolKind?: number;
     suggestions?: string[];
   }> {
+    if (reference.type === "secret") {
+      const name = reference.secretName ?? "";
+      const exists =
+        !!this.secretRegistry && (await this.secretRegistry.isResolvable(name));
+      return exists
+        ? { exists: true }
+        : { exists: false, message: "secret not found" };
+    }
+
     if (reference.type === "git") {
       return this.validateGitContextReference(reference.gitRef, workspaceRoot);
     }

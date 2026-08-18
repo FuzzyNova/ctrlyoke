@@ -2,39 +2,21 @@ import * as vscode from "vscode";
 import { getAvailableModelsSync } from "../utils/ModelRegistry";
 import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
+import { findWordStartTriggerIndex } from "../utils/ReferenceBoundary";
 import {
   getFileCompletions,
   getHashCompletions,
   getGitChangeCompletions,
   getPriorContextCompletions,
+  getSecretCompletions,
   toVSCodeCompletionItem,
 } from "./CompletionHelpers";
+import type { SecretRegistryService } from "../ui/SecretRegistryService";
 
 /**
  * Trigger character types for context-aware completions
  */
-type TriggerChar = "@" | "#" | "~" | "$";
-
-/**
- * Find the rightmost occurrence of `triggerChar` in `text` that isn't
- * preceded by a character that's legal inside a filename — letters, digits,
- * or `_ + - = @ # $ % ^ & ! ~`. It can start right after whitespace,
- * punctuation like `(`/`"`, or the start of the string, but not mid-word or
- * mid-filename. This keeps an email address (nathan@gmail.com) or a filename
- * mentioned in prose (data_file~@backup!.csv, myimage@512x512.png) from
- * being treated as the start of a new @/#/~/$ reference, while still
- * resolving to the earlier, legitimate trigger when one exists (so
- * `@src/myimage@512x512.p` still resolves to the leading @, keeping the
- * embedded @ in the query).
- * Mirrored in CodeMirrorEditor.tsx's `customCompletions` — keep both in sync.
- */
-function findWordStartTriggerIndex(text: string, triggerChar: string): number {
-  let index = text.lastIndexOf(triggerChar);
-  while (index > 0 && /[A-Za-z0-9_+=@#$%^&!~-]/.test(text[index - 1])) {
-    index = text.lastIndexOf(triggerChar, index - 1);
-  }
-  return index;
-}
+type TriggerChar = "@" | "#" | "~" | "$" | "!";
 
 /**
  * Provides context-aware completions for ctrlyoke prompt files
@@ -53,6 +35,10 @@ function findWordStartTriggerIndex(text: string, triggerChar: string): number {
  */
 export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   // No local cache - using shared cache from CompletionHelpers
+
+  constructor(
+    private readonly getSecretRegistry?: () => SecretRegistryService | undefined
+  ) {}
 
   /**
    * Provide completion items for prompt files (JSON and Markdown)
@@ -82,6 +68,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     const lastHashIndex = findWordStartTriggerIndex(textBeforeCursor, "#");
     const lastTildeIndex = findWordStartTriggerIndex(textBeforeCursor, "~");
     const lastDollarIndex = findWordStartTriggerIndex(textBeforeCursor, "$");
+    const lastBangIndex = findWordStartTriggerIndex(textBeforeCursor, "!");
 
     // Determine which trigger is most recent (closest to cursor)
     let triggerChar: TriggerChar | undefined;
@@ -91,7 +78,8 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       lastAtIndex,
       lastHashIndex,
       lastTildeIndex,
-      lastDollarIndex
+      lastDollarIndex,
+      lastBangIndex
     );
 
     if (maxIndex === -1) {
@@ -107,9 +95,12 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     } else if (maxIndex === lastTildeIndex) {
       triggerChar = "~";
       afterTrigger = textBeforeCursor.substring(lastTildeIndex + 1);
-    } else {
+    } else if (maxIndex === lastDollarIndex) {
       triggerChar = "$";
       afterTrigger = textBeforeCursor.substring(lastDollarIndex + 1);
+    } else {
+      triggerChar = "!";
+      afterTrigger = textBeforeCursor.substring(lastBangIndex + 1);
     }
 
     // Don't provide completions if there's a space after trigger
@@ -124,6 +115,9 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     if (triggerChar === "$" && !/^[a-zA-Z0-9:,\-]*$/.test(afterTrigger)) {
       return undefined;
     }
+    if (triggerChar === "!" && !/^[A-Z0-9_]*$/.test(afterTrigger)) {
+      return undefined;
+    }
 
     // Route to appropriate handler based on trigger
     if (triggerChar === "@") {
@@ -132,6 +126,8 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       return this.getHashCompletions(afterTrigger);
     } else if (triggerChar === "~") {
       return this.getTildeCompletions(afterTrigger);
+    } else if (triggerChar === "!") {
+      return this.getSecretCompletions(afterTrigger);
     } else {
       return this.getDollarCompletions(afterTrigger);
     }
@@ -215,6 +211,23 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       toVSCodeCompletionItem(item, "$", range)
     );
 
+    return new vscode.CompletionList(items, true);
+  }
+
+  private async getSecretCompletions(
+    filterText: string
+  ): Promise<vscode.CompletionList> {
+    const registry = this.getSecretRegistry?.();
+    if (!registry || !vscode.workspace.workspaceFolders?.length) {
+      return new vscode.CompletionList([], true);
+    }
+
+    const names = await registry.getCompletionNames();
+    const plainItems = getSecretCompletions(names, filterText);
+    const range = this.calculateCompletionRange("!");
+    const items = plainItems.map((item) =>
+      toVSCodeCompletionItem(item, "!", range)
+    );
     return new vscode.CompletionList(items, true);
   }
 

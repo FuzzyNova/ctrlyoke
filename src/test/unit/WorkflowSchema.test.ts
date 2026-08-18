@@ -50,6 +50,27 @@ suite("Workflow template schema", () => {
     assert.strictEqual(valid, true, JSON.stringify(validate.errors));
   });
 
+  test("accepts valid secret grants on prompt and script steps", () => {
+    const valid = validate({
+      secrets: ["SUPABASE_PAT", "API_2"],
+      steps: [
+        { prompt: "Use !SUPABASE_PAT", secrets: ["PROMPT_SECRET"] },
+        { type: "script", script: "npm test", secrets: ["SCRIPT_SECRET"] },
+      ],
+    });
+
+    assert.strictEqual(valid, true, JSON.stringify(validate.errors));
+  });
+
+  test("rejects secret grants with invalid names", () => {
+    for (const name of ["lowercase", "1START", "HAS-DASH", ""] ) {
+      const valid = validate({
+        steps: [{ prompt: "prompt", secrets: [name] }],
+      });
+      assert.strictEqual(valid, false, name);
+    }
+  });
+
   test("keeps ordinary workflows restricted to real harness IDs", () => {
     const invalidWorkflows = [
       {

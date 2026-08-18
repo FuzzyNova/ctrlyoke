@@ -29,6 +29,10 @@ import {
   ScriptProcessRunner,
   type ScriptProcessResult,
 } from "./orchestration/ScriptProcessRunner";
+import {
+  buildSecretProcessEnvironment,
+  resolveSecretEnvironment,
+} from "../utils/SecretResolver";
 
 export interface EvaluationResult {
   /** Whether the script evaluation passed. Use onPass/onFail from the condition config to branch on this. */
@@ -156,7 +160,8 @@ export class EndConditionEvaluator {
     condition: ScriptProperties,
     workingDirectory?: string,
     vars?: Record<string, string>,
-    onOutput?: (chunk: string) => void
+    onOutput?: (chunk: string) => void,
+    secretNames: readonly string[] = []
   ): Promise<EvaluationResult> {
     const startTime = Date.now();
     const executionRoot =
@@ -225,7 +230,9 @@ export class EndConditionEvaluator {
         timeout,
         vars,
         onOutput,
-        command.viaShell ?? false
+        command.viaShell ?? false,
+        secretNames,
+        condition.env
       );
 
       if (result.errored) {
@@ -579,13 +586,25 @@ export class EndConditionEvaluator {
     timeout: number = ConfigurationUtils.getScriptTimeoutMs(),
     vars?: Record<string, string>,
     onOutput?: (chunk: string) => void,
-    viaShell: boolean = false
+    viaShell: boolean = false,
+    secretNames: readonly string[] = [],
+    processEnv?: Record<string, string>
   ): Promise<ScriptProcessResult> {
+    const resolvedSecrets = await resolveSecretEnvironment(secretNames, {
+      workspaceRoot: this.platform.getWorkspaceRoot(),
+      secretStore: this.platform.getSecretStore?.(),
+    });
+    const env = buildSecretProcessEnvironment(
+      processEnv,
+      resolvedSecrets,
+      secretNames
+    );
     return this.scriptProcessRunner.run({
       cwd: workingDirectory ?? this.executionWorkspace.executionRoot,
       timeout,
       argv: [executable, ...args],
       vars,
+      env,
       onOutput,
       viaShell,
     });

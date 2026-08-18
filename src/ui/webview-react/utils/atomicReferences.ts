@@ -13,6 +13,9 @@ import {
   type CtrlYokeSlashToken,
 } from "../../../utils/CtrlYokeSlashTokens";
 import { CTRLYOKE_SLASH_TOKEN_KINDS } from "../../../types/DashboardConstants";
+import { parseSecretReferences } from "../../../utils/SecretReferenceParser";
+import { NOT_AFTER_BOUNDARY } from "../../../utils/ReferenceBoundary";
+import { createReferencePatterns } from "../../../utils/ReferencePatterns";
 
 export { SYMBOL_KIND_ICONS } from "../../../types/SymbolKindConstants";
 
@@ -143,6 +146,7 @@ export type ContextReferenceType =
   | "symbol"
   | "git"
   | "priorContext"
+  | "secret"
   | "skill"
   | "mcp";
 
@@ -159,6 +163,7 @@ export interface ContextReferenceMatch {
   ref?: string;
   skillName?: string;
   mcpServerName?: string;
+  secretName?: string;
 }
 
 export interface AtomicReferenceChip {
@@ -231,6 +236,11 @@ export function createAtomicReferencePresentation(
         );
       case "priorContext":
         return sourceText.startsWith("$") ? 1 : 0;
+      case "secret":
+        return Math.max(
+          0,
+          sourceText.lastIndexOf(descriptor.attrs["data-secret-name"] ?? label)
+        );
       case CTRLYOKE_SLASH_TOKEN_KINDS.SKILL:
         return Math.max(
           0,
@@ -323,6 +333,7 @@ export const SYMBOL_ICON_COLORS: Record<string, string> = {
   // from the file/symbol/git/prior-context accents above.
   tools: CHART_ACCENT_COLORS.orange,
   mcp: CHART_ACCENT_COLORS.orange,
+  key: CHART_ACCENT_COLORS.purple,
 };
 
 export type SymbolIconResolver = (
@@ -426,6 +437,14 @@ function describeContextReferenceChip(
       return {
         icon: "source-control",
         label: gitReferenceLabel(ref.gitRef ?? ""),
+        title,
+        attrs,
+      };
+    case "secret":
+      attrs["data-secret-name"] = ref.secretName ?? "";
+      return {
+        icon: "key",
+        label: ref.secretName ?? "",
         title,
         attrs,
       };
@@ -544,34 +563,19 @@ export function findContextReferenceMatches(
   text: string,
   offset = 0
 ): ContextReferenceMatch[] {
-  const patterns = {
-    // The lookbehind rejects not just alphanumerics but every other character
-    // that's legal inside a filename (+, -, _, =, @, #, $, %, ^, &, !, ~), so
-    // `(@file.ts`/`"@file.ts` still match (punctuation isn't a filename
-    // char), but an email (nathan@gmail.com) or a filename mentioned in
-    // prose like data_file~@backup!.csv doesn't. The unquoted path bodies
-    // below allow an embedded @ so a filename like myimage@512x512.png
-    // parses as one reference rather than splitting at the inner @; must
-    // stay in lockstep with the equivalent change in FileReferenceParser.ts,
-    // PromptLinkProvider.ts, and WorkspaceFileEditor.tsx.
-    fullFileQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])@"([^"]+\.[a-zA-Z0-9]+)"(?!\/)/g,
-    directoryQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])@"([^"]+\/)"(?![\w])/g,
-    fullFile: /(?<![A-Za-z0-9_+=@#$%^&!~-])@([^\s#"]+\.[a-zA-Z0-9]+)(?![a-zA-Z0-9/])/g,
-    directory: /(?<![A-Za-z0-9_+=@#$%^&!~-])@([^\s#"]+\/)/g,
-    // Path and symbol name are colon-delimited fields: quoted, or bare with no
-    // whitespace/`:`/`"`. Must stay in lockstep with the runtime patterns in
-    // src/utils/FileReferenceParser.ts — the two parsers are separate by design
-    // (see the module header), but a reference this one chips while the runtime
-    // one ignores is a reference that renders clickable and silently expands to
-    // nothing.
-    lineRange: /(?<![A-Za-z0-9_+=@#$%^&!~-])#selection:(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
-    symbol:
-      /(?<![A-Za-z0-9_+=@#$%^&!~-])#sym(?:\.([a-z-]+))?:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
-  };
+  const patterns = createReferencePatterns();
   const fileMatches: ContextReferenceMatch[] = [];
   const directoryMatches: ContextReferenceMatch[] = [];
   const lineRangeMatches: ContextReferenceMatch[] = [];
   const symbolMatches: ContextReferenceMatch[] = [];
+  const secretMatches: ContextReferenceMatch[] = parseSecretReferences(
+    text
+  ).map((reference) => ({
+    from: offset + reference.startOffset,
+    to: offset + reference.endOffset,
+    type: "secret",
+    secretName: reference.name,
+  }));
   const gitMatches: ContextReferenceMatch[] = [];
   let match: RegExpExecArray | null;
   const collectPathMatches = (
@@ -647,10 +651,16 @@ export function findContextReferenceMatches(
       }
     }
   };
-  collectGitMatches(/(?<![A-Za-z0-9_+=@#$%^&!~-])~(diff|staged)/g, (m) => m[1]);
-  collectGitMatches(/(?<![A-Za-z0-9_+=@#$%^&!~-])~(stash:\d+)/g, (m) => m[1]);
   collectGitMatches(
-    /(?<![A-Za-z0-9_+=@#$%^&!~-])~([0-9a-f]{7,40})/gi,
+    new RegExp(`${NOT_AFTER_BOUNDARY}~(diff|staged)`, "g"),
+    (m) => m[1]
+  );
+  collectGitMatches(
+    new RegExp(`${NOT_AFTER_BOUNDARY}~(stash:\\d+)`, "g"),
+    (m) => m[1]
+  );
+  collectGitMatches(
+    new RegExp(`${NOT_AFTER_BOUNDARY}~([0-9a-f]{7,40})`, "gi"),
     (m) => m[1].toLowerCase()
   );
   return [
@@ -658,6 +668,7 @@ export function findContextReferenceMatches(
     ...filteredDirectoryMatches,
     ...lineRangeMatches,
     ...symbolMatches,
+    ...secretMatches,
     ...gitMatches,
   ].sort((a, b) => a.from - b.from);
 }
@@ -703,7 +714,10 @@ export function findInlinePriorContextRefs(
 ): InlinePriorContextRef[] {
   const results: InlinePriorContextRef[] = [];
   // Same word-boundary rationale as the @/#/~ patterns above.
-  const regex = /(?<![A-Za-z0-9_+=@#$%^&!~-])\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\-]*)?)/g;
+  const regex = new RegExp(
+    `${NOT_AFTER_BOUNDARY}\\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\\-]*)?)`,
+    "g"
+  );
   let match: RegExpExecArray | null;
   while ((match = regex.exec(text)) !== null) {
     const body = match[1];

@@ -6,6 +6,7 @@ import type {
   CompatibilityDiagnostic,
   HarnessCapabilityRegistrySnapshot,
 } from "../types/CompatibilityTypes";
+import { COMPATIBILITY_DIAGNOSTIC_CODES } from "../types/CompatibilityTypes";
 import {
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
@@ -16,6 +17,9 @@ import {
   PREVIEW_PROPERTY_SOURCES,
   PREVIEW_SCOPES,
   PREVIEW_STEP_TYPES,
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+  CAPABILITY_VERIFICATION_STATUSES,
   WORKTREE_MODES,
   type HarnessId,
   type PreviewPermissionAction,
@@ -92,6 +96,11 @@ import {
 } from "../utils/WorktreeUtils";
 import { WorktreeManager } from "./orchestration/WorktreeManager";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
+import type { SecretStore } from "../platform/SecretStore";
+import {
+  findMissingSecretNames,
+} from "../utils/SecretResolver";
+import { getEffectiveSecretGrants } from "../utils/SecretReferenceParser";
 
 /** The already-wired shared planners for one CLI harness. */
 export interface ExecutionPreviewHarness {
@@ -128,6 +137,8 @@ export interface ExecutionPreviewServiceOptions {
   readonly cwd?: string;
   readonly platform?: NodeJS.Platform;
   readonly dynamicQueueConfig?: DynamicQueueConfig;
+  readonly secretStore?: SecretStore;
+  readonly environment?: NodeJS.ProcessEnv;
   readonly enabledHookNotificationEvents?: readonly import("../types/CtrlYokeTypes").HookEvent[];
   readonly resolvePriorContextItems?: (
     contexts: readonly import("../types/CtrlYokeTypes").PriorContext[],
@@ -376,6 +387,27 @@ export class ExecutionPreviewService {
       managedMcpServers,
       promptStep.prompt
     );
+    const secretNames = getEffectiveSecretGrants(promptStep, properties.secrets);
+    const missingSecretNames = await findMissingSecretNames(secretNames, {
+      workspaceRoot: this.options.workspaceRoot ?? "",
+      secretStore: this.options.secretStore,
+      environment: this.options.environment,
+    });
+    const secretDiagnostics: CompatibilityDiagnostic[] = missingSecretNames.map(
+      (name) => ({
+        code: COMPATIBILITY_DIAGNOSTIC_CODES.SECRETS_UNRESOLVED,
+        severity: "error",
+        harnessId: properties.harness,
+        capability: "secrets",
+        state: {
+          fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
+          mechanism: CAPABILITY_MECHANISMS.NONE,
+          verification: CAPABILITY_VERIFICATION_STATUSES.VERIFIED,
+        },
+        message: `Secret "${name}" is missing for this step. Set it in the managed secret store or provide it through the host environment.`,
+        remediation: "Resolve the secret before running this workflow.",
+      })
+    );
     const harness = await this.options.getHarness(
       properties.harness,
       worktreeExecutionWorkspace
@@ -392,12 +424,14 @@ export class ExecutionPreviewService {
       properties,
       targetResolution,
       conditionPreview,
-      Boolean(resolvedSessionId)
+      Boolean(resolvedSessionId),
+      secretNames
     );
     const variablesPreview = this.buildVariablesPreview(variables, request);
     const diagnostics = [
       ...this.stepDiagnostics(target, compatibilityDiagnostics),
       ...mcpNormalizationDiagnostics,
+      ...secretDiagnostics,
     ];
 
     if (isScriptStep(step)) {
@@ -596,7 +630,8 @@ export class ExecutionPreviewService {
     properties: ResolvedProperties,
     target: ResolvedExecutionTarget,
     conditions: ConditionPreview,
-    sessionPresent: boolean
+    sessionPresent: boolean,
+    secretNames: readonly string[]
   ) {
     const version =
       this.options.capabilities.harnesses[properties.harness]?.version;
@@ -620,6 +655,7 @@ export class ExecutionPreviewService {
       },
       ...(properties.agent ? { agent: properties.agent } : {}),
       skills: [...(properties.skills ?? [])],
+      secrets: [...secretNames],
       mcpServerIds: (properties.mcpServers ?? []).map((server) =>
         typeof server === "string" ? server : server.id
       ),

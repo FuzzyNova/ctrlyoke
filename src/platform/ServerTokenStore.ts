@@ -1,11 +1,9 @@
 import { randomBytes } from "crypto";
+import type { SecretStore } from "./SecretStore";
+
+export type { SecretStore } from "./SecretStore";
 
 export const SERVER_TOKEN_SECRET_KEY = "ctrlyoke.server.token";
-
-export interface SecretStore {
-  get(key: string): Thenable<string | undefined>;
-  store(key: string, value: string): Thenable<void>;
-}
 
 export class ServerTokenStore {
   constructor(

@@ -70,6 +70,10 @@ import { WebviewLog } from "../../utils/logger";
 import { useSettingsStore } from "../../store/settingsStore";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { scanCtrlYokeSlashTokens } from "@root/utils/CtrlYokeSlashTokens";
+import {
+  REFERENCE_BOUNDARY_CHAR_RE,
+  findWordStartTriggerIndex,
+} from "@root/utils/ReferenceBoundary";
 import { notifyUser } from "@utils/notifyUser";
 
 // Typo.js spell checker (will be loaded from window.Typo)
@@ -137,7 +141,7 @@ export interface ContextReferenceValidationResult {
   suggestions?: string[];
 }
 
-type CompletionTrigger = "/" | "@" | "#" | "~" | "$" | "path";
+export type CompletionTrigger = "/" | "@" | "#" | "~" | "$" | "!" | "path";
 
 interface ExtensionCompletionItem {
   label: string;
@@ -463,32 +467,6 @@ function completionCacheKey(trigger: CompletionTrigger, query: string): string {
   return `${trigger} ${query}`;
 }
 
-// Characters that are legal inside a filename — letters, digits, or
-// `_ + - = @ # $ % ^ & ! ~`. A trigger char (@/#/~/$) immediately preceded by
-// one of these is treated as mid-word/mid-filename, not the start of a new
-// reference — see the word-boundary lookbehind shared by
-// PromptLinkProvider.ts, atomicReferences.ts, WorkspaceFileEditor.tsx, and
-// FileReferenceParser.ts.
-const FILENAME_BOUNDARY_CHAR_RE = /[A-Za-z0-9_+=@#$%^&!~-]/;
-
-// Find the rightmost occurrence of `triggerChar` in `text` that isn't
-// preceded by a character that's legal inside a filename. It can start right
-// after whitespace, punctuation like `(`/`"`, or the start of the string, but
-// not mid-word or mid-filename. This keeps an email address
-// (nathan@gmail.com) or a filename mentioned in prose
-// (data_file~@backup!.csv, myimage@512x512.png) from being treated as the
-// start of a new @/#/~/$ reference, while still resolving to the earlier,
-// legitimate trigger when one exists (so `@src/myimage@512x512.p` still
-// resolves to the leading @, keeping the embedded @ in the query).
-// Mirrored in PromptCompletionProvider.ts — keep both in sync.
-function findWordStartTriggerIndex(text: string, triggerChar: string): number {
-  let index = text.lastIndexOf(triggerChar);
-  while (index > 0 && FILENAME_BOUNDARY_CHAR_RE.test(text[index - 1])) {
-    index = text.lastIndexOf(triggerChar, index - 1);
-  }
-  return index;
-}
-
 /**
  * Find the slash-token completion context immediately before the cursor.
  * Native slash commands are intentionally still eligible for the merged
@@ -505,6 +483,64 @@ export function findSlashCompletionContext(
   if (!/^[a-zA-Z0-9:._-]*$/.test(query)) return null;
 
   return { from: lineFrom + slashIndex, query };
+}
+
+/** Resolve the trigger/query immediately before a CodeMirror completion cursor. */
+export function findCustomCompletionContext(
+  textBefore: string,
+  lineFrom = 0
+): { trigger: CompletionTrigger; query: string; from: number } | null {
+  const lastAtIndex = findWordStartTriggerIndex(textBefore, "@");
+  const lastHashIndex = findWordStartTriggerIndex(textBefore, "#");
+  const lastTildeIndex = findWordStartTriggerIndex(textBefore, "~");
+  const lastDollarIndex = findWordStartTriggerIndex(textBefore, "$");
+  const lastBangIndex = findWordStartTriggerIndex(textBefore, "!");
+  const slashContext = findSlashCompletionContext(textBefore, lineFrom);
+  const lastSlashIndex = slashContext ? slashContext.from - lineFrom : -1;
+
+  const maxIndex = Math.max(
+    lastSlashIndex,
+    lastAtIndex,
+    lastHashIndex,
+    lastTildeIndex,
+    lastDollarIndex,
+    lastBangIndex
+  );
+  if (maxIndex === -1) return null;
+
+  let trigger: CompletionTrigger;
+  let query: string;
+  if (maxIndex === lastSlashIndex) {
+    trigger = "/";
+    query = slashContext!.query;
+  } else if (maxIndex === lastAtIndex) {
+    trigger = "@";
+    query = textBefore.slice(lastAtIndex + 1);
+  } else if (maxIndex === lastHashIndex) {
+    trigger = "#";
+    query = textBefore.slice(lastHashIndex + 1);
+  } else if (maxIndex === lastTildeIndex) {
+    trigger = "~";
+    query = textBefore.slice(lastTildeIndex + 1);
+  } else if (maxIndex === lastDollarIndex) {
+    trigger = "$";
+    query = textBefore.slice(lastDollarIndex + 1);
+  } else {
+    trigger = "!";
+    query = textBefore.slice(lastBangIndex + 1);
+  }
+
+  const isInsideQuotedPath =
+    trigger === "@" && query.startsWith('"') && !query.slice(1).includes('"');
+  if (query.includes(" ") && !isInsideQuotedPath) return null;
+  if (trigger === "#" && !/^[a-zA-Z0-9_/:.-]*$/.test(query)) return null;
+  if (trigger === "~" && !/^[a-zA-Z0-9:_]*$/.test(query)) return null;
+  if (trigger === "$" && !/^[a-zA-Z0-9:,\-]*$/.test(query)) return null;
+  // Secret names intentionally stay uppercase-only. This also rejects `![` so
+  // Markdown image syntax never opens the secret dropdown.
+  if (trigger === "!" && !/^[A-Z0-9_]*$/.test(query)) return null;
+
+  return { trigger, query, from: lineFrom + maxIndex };
 }
 
 export function buildPromptReferenceInsertion(
@@ -540,12 +576,12 @@ export function buildPromptReferenceInsertion(
   // Without surrounding newlines, the reference lands directly against
   // whatever precedes the cursor/selection. If that character is legal
   // inside a filename (e.g. the trailing char of a word), the trigger
-  // char's word-boundary lookbehind (see FILENAME_BOUNDARY_CHAR_RE) would
+  // char's word-boundary lookbehind (see REFERENCE_BOUNDARY_CHAR_RE) would
   // reject it as mid-word and the reference would silently fail to parse —
   // insert a leading space to keep it a real trigger.
   if (!shouldSurroundWithNewlines && selection.from > 0) {
     const charBefore = docText[selection.from - 1];
-    if (FILENAME_BOUNDARY_CHAR_RE.test(charBefore)) {
+    if (REFERENCE_BOUNDARY_CHAR_RE.test(charBefore)) {
       text = ` ${text}`;
     }
   }
@@ -1160,62 +1196,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       const lineObj = context.state.doc.lineAt(context.pos);
       const textBefore = lineObj.text.slice(0, context.pos - lineObj.from);
 
-      const lastAtIndex = findWordStartTriggerIndex(textBefore, "@");
-      const lastHashIndex = findWordStartTriggerIndex(textBefore, "#");
-      const lastTildeIndex = findWordStartTriggerIndex(textBefore, "~");
-      const lastDollarIndex = findWordStartTriggerIndex(textBefore, "$");
-      const slashContext = findSlashCompletionContext(textBefore, lineObj.from);
-      const lastSlashIndex = slashContext
-        ? slashContext.from - lineObj.from
-        : -1;
-
-      const maxIndex = Math.max(
-        lastSlashIndex,
-        lastAtIndex,
-        lastHashIndex,
-        lastTildeIndex,
-        lastDollarIndex
+      const completionContext = findCustomCompletionContext(
+        textBefore,
+        lineObj.from
       );
-      if (maxIndex === -1) return null;
-
-      let trigger: string;
-      let afterTrigger: string;
-
-      if (maxIndex === lastSlashIndex) {
-        trigger = "/";
-        afterTrigger = slashContext!.query;
-      } else if (maxIndex === lastAtIndex) {
-        trigger = "@";
-        afterTrigger = textBefore.slice(lastAtIndex + 1);
-      } else if (maxIndex === lastHashIndex) {
-        trigger = "#";
-        afterTrigger = textBefore.slice(lastHashIndex + 1);
-      } else if (maxIndex === lastTildeIndex) {
-        trigger = "~";
-        afterTrigger = textBefore.slice(lastTildeIndex + 1);
-      } else {
-        trigger = "$";
-        afterTrigger = textBefore.slice(lastDollarIndex + 1);
-      }
-
-      // For @: allow spaces inside a quoted path (@"path with spaces/..."),
-      // otherwise bail out if there's a space (no partial match mid-sentence).
-      const isInsideQuotedPath =
-        trigger === "@" &&
-        afterTrigger.startsWith('"') &&
-        !afterTrigger.slice(1).includes('"');
-
-      if (afterTrigger.includes(" ") && !isInsideQuotedPath) return null;
-
-      // For # and ~: validate character class (neither supports quoted paths)
-      if (trigger === "#" && !/^[a-zA-Z0-9_/:.-]*$/.test(afterTrigger))
-        return null;
-      if (trigger === "~" && !/^[a-zA-Z0-9:_]*$/.test(afterTrigger))
-        return null;
-      if (trigger === "$" && !/^[a-zA-Z0-9:,\-]*$/.test(afterTrigger))
-        return null;
-
-      const from = lineObj.from + maxIndex; // absolute position of trigger char
+      if (!completionContext) return null;
+      const { trigger, query: afterTrigger, from } = completionContext;
 
       // Serve a full result cached by a progressive (partial→full) response for
       // this exact trigger+query synchronously — no second round trip. Checked
@@ -2428,6 +2414,9 @@ function createLinkDecorationExtension(
             if (linkMatch.symbolName) {
               attrs["data-symbol-name"] = linkMatch.symbolName;
             }
+            if (linkMatch.secretName) {
+              attrs["data-secret-name"] = linkMatch.secretName;
+            }
             // Keyed by the exact reference token, matching the validity map the
             // lint pass populates; blocks opening a nonexistent target (see
             // openContextReferenceLink). Undefined until validated → no flag.
@@ -2701,9 +2690,7 @@ function openContextReferenceLink(
   vscode: any,
   stepCountRef: React.RefObject<number>
 ): boolean {
-  if (
-    target.getAttribute("data-type") === CTRLYOKE_SLASH_TOKEN_KINDS.SKILL
-  ) {
+  if (target.getAttribute("data-type") === CTRLYOKE_SLASH_TOKEN_KINDS.SKILL) {
     const skillName = target.getAttribute("data-skill-name");
     if (!skillName) return false;
 
@@ -2749,6 +2736,7 @@ function openContextReferenceLink(
       lineStart: target.getAttribute("data-line-start"),
       lineEnd: target.getAttribute("data-line-end"),
       ref: target.getAttribute("data-ref"),
+      secretName: target.getAttribute("data-secret-name"),
     },
     vscode,
     stepCountRef.current

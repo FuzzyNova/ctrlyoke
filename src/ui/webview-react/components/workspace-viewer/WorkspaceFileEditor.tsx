@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useCallback,
   useRef,
   useMemo,
   useImperativeHandle,
@@ -28,6 +29,9 @@ import {
 } from "@utils/codemirrorLanguage";
 import { Decoration, ViewPlugin } from "@codemirror/view";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { useUiStore } from "@store/uiStore";
+import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
+import { createReferencePatterns } from "@root/utils/ReferencePatterns";
 
 export interface WorkspaceFileEditorHandle {
   undo: () => void;
@@ -55,7 +59,12 @@ interface WorkspaceFileEditorProps {
   onPendingSelectionApplied?: (requestId: number) => void;
 }
 
-type WorkspaceReferenceType = "file" | "directory" | "lineRange" | "symbol";
+type WorkspaceReferenceType =
+  | "file"
+  | "directory"
+  | "lineRange"
+  | "symbol"
+  | "secret";
 
 export interface WorkspaceFileEditorPendingSelection {
   requestId: number;
@@ -68,6 +77,7 @@ interface WorkspaceReferenceMatch {
   to: number;
   type: WorkspaceReferenceType;
   path: string;
+  secretName?: string;
   lineStart?: string;
   lineEnd?: string;
 }
@@ -102,6 +112,11 @@ export const WorkspaceFileEditor = forwardRef<
     const ignoreUpdateRef = useRef(false);
     const openToFile = useWorkspaceViewerStore((s) => s.openToFile);
     const openToDirectory = useWorkspaceViewerStore((s) => s.openToDirectory);
+    const openSecretsSettings = useCallback(() => {
+      const ui = useUiStore.getState();
+      ui.setGlobalSettingsTab("secrets");
+      if (!ui.globalSettingsOpen) ui.toggleGlobalSettings();
+    }, []);
 
     // Keep callback refs current without triggering re-creation of the editor
     useEffect(() => {
@@ -161,7 +176,8 @@ export const WorkspaceFileEditor = forwardRef<
         createWorkspaceReferenceDecorationExtension(),
         createWorkspaceReferenceClickHandlerExtension(
           openToFile,
-          openToDirectory
+          openToDirectory,
+          openSecretsSettings
         ),
         ...(langExt ? [langExt] : []),
         keymap.of([
@@ -188,7 +204,7 @@ export const WorkspaceFileEditor = forwardRef<
         }),
         ...(readOnly ? [EditorState.readOnly.of(true)] : []),
       ];
-    }, [filePath, openToDirectory, openToFile, readOnly]);
+    }, [filePath, openSecretsSettings, openToDirectory, openToFile, readOnly]);
 
     // Create / recreate the editor when extensions change (filePath or readOnly changed)
     useEffect(() => {
@@ -304,36 +320,21 @@ function findWorkspaceReferenceMatches(
   text: string,
   offset = 0
 ): WorkspaceReferenceMatch[] {
-  const patterns = {
-    // The lookbehind rejects not just alphanumerics but every other character
-    // that's legal inside a filename (+, -, _, =, @, #, $, %, ^, &, !, ~), so
-    // `(@file.ts`/`"@file.ts` still match (punctuation isn't a filename
-    // char), but an email (nathan@gmail.com) or a filename mentioned in
-    // prose like data_file~@backup!.csv doesn't. The unquoted path bodies
-    // below allow an embedded @ so a filename like myimage@512x512.png
-    // parses as one reference rather than splitting at the inner @; must
-    // stay in lockstep with atomicReferences.ts, PromptLinkProvider.ts, and
-    // FileReferenceParser.ts.
-    fullFileQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])@"([^"]+\.[a-zA-Z0-9]+)"(?!\/)/g,
-    directoryQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])@"([^"]+\/)"(?![\w])/g,
-    fullFile: /(?<![A-Za-z0-9_+=@#$%^&!~-])@([^\s#"]+\.[a-zA-Z0-9]+)(?!\/)/g,
-    directory: /(?<![A-Za-z0-9_+=@#$%^&!~-])@([^\s#"]+\/)/g,
-    lineRangeQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])#selection:"([^"]+)":(\d+)-(\d+)/g,
-    lineRange: /(?<![A-Za-z0-9_+=@#$%^&!~-])#selection:([^\s:"]+):(\d+)-(\d+)/g,
-    // Must stay in lockstep with the canonical symbol pattern in
-    // src/ui/webview-react/utils/atomicReferences.ts and
-    // src/utils/FileReferenceParser.ts: one regex, quoted-or-bare per field,
-    // with the optional `.kind` suffix ctrlyoke now emits. A token this parser
-    // misses renders as inert text here while every other surface links it.
-    // Groups: 1 kind, 2/3 quoted/bare path, 4/5 quoted/bare name, 6-7 range.
-    symbol:
-      /(?<![A-Za-z0-9_+=@#$%^&!~-])#sym(?:\.([a-z-]+))?:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
-  };
+  const patterns = createReferencePatterns();
 
   const fileMatches: WorkspaceReferenceMatch[] = [];
   const directoryMatches: WorkspaceReferenceMatch[] = [];
   const lineRangeMatches: WorkspaceReferenceMatch[] = [];
   const symbolMatches: WorkspaceReferenceMatch[] = [];
+  const secretMatches: WorkspaceReferenceMatch[] = parseSecretReferences(
+    text
+  ).map((reference) => ({
+    from: offset + reference.startOffset,
+    to: offset + reference.endOffset,
+    type: "secret",
+    path: "",
+    secretName: reference.name,
+  }));
   let match: RegExpExecArray | null;
 
   const collectPathMatches = (
@@ -364,14 +365,14 @@ function findWorkspaceReferenceMatches(
         from: offset + match.index,
         to: offset + match.index + match[0].length,
         type: "lineRange",
-        path: match[1],
-        lineStart: match[2],
-        lineEnd: match[3],
+        // Group 1 is the quoted path, group 2 the bare one; exactly one is set.
+        path: match[1] ?? match[2],
+        lineStart: match[3],
+        lineEnd: match[4],
       });
     }
   };
 
-  collectLineRangeMatches(patterns.lineRangeQuoted);
   collectLineRangeMatches(patterns.lineRange);
 
   const collectSymbolMatches = (pattern: RegExp) => {
@@ -402,6 +403,7 @@ function findWorkspaceReferenceMatches(
     ...filteredDirectoryMatches,
     ...lineRangeMatches,
     ...symbolMatches,
+    ...secretMatches,
   ].sort((a, b) => a.from - b.from);
 }
 
@@ -443,6 +445,9 @@ function createWorkspaceReferenceDecorationExtension() {
             if (linkMatch.lineEnd) {
               attrs["data-line-end"] = linkMatch.lineEnd;
             }
+            if (linkMatch.secretName) {
+              attrs["data-secret-name"] = linkMatch.secretName;
+            }
 
             builder.add(
               linkMatch.from,
@@ -471,9 +476,14 @@ function getLinkElement(target: EventTarget | null): HTMLElement | null {
 function openWorkspaceReferenceLink(
   target: HTMLElement,
   openToFile: (filePath: string, startLine?: number, endLine?: number) => void,
-  openToDirectory: (dirPath: string) => void
+  openToDirectory: (dirPath: string) => void,
+  openSecretsSettings: () => void
 ): boolean {
   const type = target.getAttribute("data-type");
+  if (type === "secret") {
+    openSecretsSettings();
+    return true;
+  }
   const path = target.getAttribute("data-path");
   if (!type || !path) return false;
 
@@ -514,7 +524,8 @@ function openWorkspaceReferenceLink(
 
 function createWorkspaceReferenceClickHandlerExtension(
   openToFile: (filePath: string, startLine?: number, endLine?: number) => void,
-  openToDirectory: (dirPath: string) => void
+  openToDirectory: (dirPath: string) => void,
+  openSecretsSettings: () => void
 ) {
   let touchStart: {
     x: number;
@@ -581,7 +592,12 @@ function createWorkspaceReferenceClickHandlerExtension(
       }
 
       if (
-        !openWorkspaceReferenceLink(start.target, openToFile, openToDirectory)
+        !openWorkspaceReferenceLink(
+          start.target,
+          openToFile,
+          openToDirectory,
+          openSecretsSettings
+        )
       ) {
         return false;
       }
@@ -597,7 +613,14 @@ function createWorkspaceReferenceClickHandlerExtension(
       const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
       if (pos === null) return false;
 
-      if (!openWorkspaceReferenceLink(target, openToFile, openToDirectory)) {
+      if (
+        !openWorkspaceReferenceLink(
+          target,
+          openToFile,
+          openToDirectory,
+          openSecretsSettings
+        )
+      ) {
         return false;
       }
 

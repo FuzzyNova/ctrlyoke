@@ -8,6 +8,8 @@ import type {
 import { configService } from "../config/CtrlYokeConfigService";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
+import type { SecretStore } from "./SecretStore";
+import { OsCredentialStore } from "./OsCredentialStore";
 
 export interface ResolvedCliConfig {
   harness: string;
@@ -58,7 +60,18 @@ export interface ResolvedCliConfig {
  * Used by the standalone ctrlyoke CLI binary.
  */
 export class CliAdapter implements PlatformAdapter {
-  constructor(private readonly config: ResolvedCliConfig) {}
+  private readonly secretStore: SecretStore;
+
+  constructor(
+    private readonly config: ResolvedCliConfig,
+    secretStore: SecretStore = new OsCredentialStore()
+  ) {
+    this.secretStore = secretStore;
+  }
+
+  getSecretStore(): SecretStore {
+    return this.secretStore;
+  }
 
   getConfig<T>(key: string, defaultValue: T): T {
     switch (key) {

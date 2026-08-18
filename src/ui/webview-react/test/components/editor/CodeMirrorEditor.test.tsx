@@ -11,6 +11,7 @@ import {
   createSlashTokenDecorationExtension,
   destroyOrphanedMouseSelection,
   findSlashCompletionContext,
+  findCustomCompletionContext,
   getRetryPlaceholderCompletions,
   keyboardTooltipSpace,
   type CodeMirrorEditorMode,
@@ -71,6 +72,26 @@ describe("CodeMirrorEditor retry placeholder completions", () => {
 });
 
 describe("CodeMirrorEditor external reference completions", () => {
+  it("opens ! completion only at a word boundary with an uppercase name query", () => {
+    expect(findCustomCompletionContext("use !", 0)).toEqual({
+      trigger: "!",
+      query: "",
+      from: 4,
+    });
+    expect(findCustomCompletionContext("use !API_", 0)).toEqual({
+      trigger: "!",
+      query: "API_",
+      from: 4,
+    });
+  });
+
+  it("does not open ! completion for Markdown images, prose, filenames, or lowercase text", () => {
+    expect(findCustomCompletionContext("![alt](url)")).toBeNull();
+    expect(findCustomCompletionContext("Done!")).toBeNull();
+    expect(findCustomCompletionContext("data!file.csv")).toBeNull();
+    expect(findCustomCompletionContext("Done!token")).toBeNull();
+  });
+
   it("finds slash-token completion contexts and allows namespace punctuation", () => {
     expect(findSlashCompletionContext("/", 4)).toEqual({ from: 4, query: "" });
     expect(findSlashCompletionContext("use /skill:code-review", 0)).toEqual({

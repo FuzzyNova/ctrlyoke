@@ -187,6 +187,7 @@ export class ClaudeCliProvider implements ICliProvider {
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
       stateRoot?: string;
+      secretEnvironment?: Readonly<Record<string, string>>;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -218,6 +219,7 @@ export class ClaudeCliProvider implements ICliProvider {
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
       stateRoot?: string;
+      secretEnvironment?: Readonly<Record<string, string>>;
     },
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
@@ -242,7 +244,8 @@ export class ClaudeCliProvider implements ICliProvider {
           workingFile,
           additionalEnv,
           userServers,
-          workflowContext?.stateRoot
+          workflowContext?.stateRoot,
+          workflowContext?.secretEnvironment
         )
     );
     if (
@@ -751,7 +754,8 @@ export class ClaudeCliProvider implements ICliProvider {
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[],
-    stateRoot?: string
+    stateRoot?: string,
+    secretEnvironment?: Readonly<Record<string, string>>
   ): Promise<string[] | null> {
     const preparation = await this.planMcpConfigArgs(
       mcpServerPath,
@@ -759,7 +763,8 @@ export class ClaudeCliProvider implements ICliProvider {
       workingFilePath,
       additionalEnv,
       userServers,
-      stateRoot
+      stateRoot,
+      secretEnvironment
     );
     await applyPreparedMutations(preparation.mutations);
     return preparation.cliArgs.length > 0 ? preparation.cliArgs : null;
@@ -771,11 +776,16 @@ export class ClaudeCliProvider implements ICliProvider {
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[],
-    stateRoot?: string
+    stateRoot?: string,
+    secretEnvironment?: Readonly<Record<string, string>>
   ): Promise<CliProviderPreparation> {
     try {
       // Generate MCP config JSON using shared utility
       // Claude CLI requires "type": "stdio"
+      const secretOptions = CliProviderUtils.createMcpSecretConfigOptions(
+        (name) => `\${${name}}`,
+        secretEnvironment
+      );
       let configJson: string;
       if (mcpServerPath && userServers && userServers.length > 0) {
         // ctrlyoke server + user-defined servers
@@ -787,7 +797,8 @@ export class ClaudeCliProvider implements ICliProvider {
           workingFilePath,
           additionalEnv,
           undefined,
-          stateRoot
+          stateRoot,
+          secretOptions
         );
       } else if (mcpServerPath) {
         // ctrlyoke server only
@@ -797,12 +808,16 @@ export class ClaudeCliProvider implements ICliProvider {
           { type: "stdio" },
           workingFilePath,
           additionalEnv,
-          stateRoot
+          stateRoot,
+          secretOptions
         );
       } else if (userServers && userServers.length > 0) {
         // User-defined servers only (no ctrlyoke server)
-        configJson =
-          CliMcpConfigGenerator.generateUserServersOnlyConfig(userServers);
+        configJson = CliMcpConfigGenerator.generateUserServersOnlyConfig(
+          userServers,
+          undefined,
+          secretOptions
+        );
       } else {
         return { cliArgs: [], mutations: [], diagnostics: [] };
       }

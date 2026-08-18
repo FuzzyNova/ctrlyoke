@@ -29,7 +29,7 @@ import {
 } from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { CliProcessManager } from "../../utils/CliProcessManager";
-import type { TempFileManager } from "../../utils/TempFileManager";
+import { TempFileManager } from "../../utils/TempFileManager";
 import { Log } from "../../utils/Log";
 import {
   CLI_EVENT_TYPES,
@@ -66,6 +66,11 @@ import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { PtySession } from "./PtyProcessManager";
 import type { HookEvent } from "../../types/CtrlYokeTypes";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
+import { resolveSecretEnvironment } from "../../utils/SecretResolver";
+import {
+  secretRedactionService,
+  type RunSecretRedactor,
+} from "../../utils/SecretRedactionService";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
 /**
@@ -147,6 +152,7 @@ export class CliIntegration extends HarnessIntegration {
 
   /** Active per-prompt session while sendPrompt() is running. */
   private activeSession?: CliExecutionSession;
+  private activeSecretRedactor?: RunSecretRedactor;
 
   // NOTE: currentProcess field removed — the child process lives in processManager,
   // not on this class. See processManager.isActive() for process state.
@@ -482,6 +488,7 @@ export class CliIntegration extends HarnessIntegration {
    *
    * Format (absent categories omitted):
    *   Following these agent instructions @agent.1.md[, @agent.2.md],
+   *   using these secrets @secrets.md,
    *   using these available skills @skills.md,
    *   using these file references @src/foo.ts, @src/bar.ts,
    *   with this prior conversation context @context.md,
@@ -496,6 +503,7 @@ export class CliIntegration extends HarnessIntegration {
    * @param contextRefs Formatted file refs for prior context files (split on step boundaries)
    * @param excerptRefs Formatted file refs for excerpt files
    * @param promptRefs Formatted file refs for prompt files
+   * @param secretRefs Formatted file refs for the available-secrets block
    */
   protected formatCategorizedReferences(
     agentRefs: string[],
@@ -503,7 +511,8 @@ export class CliIntegration extends HarnessIntegration {
     directRefs: string[],
     contextRefs: string[],
     excerptRefs: string[],
-    promptRefs: string[]
+    promptRefs: string[],
+    secretRefs: string[] = []
   ): string {
     return CliIntegration.formatCategorizedInstruction(
       agentRefs,
@@ -512,7 +521,8 @@ export class CliIntegration extends HarnessIntegration {
       contextRefs,
       excerptRefs,
       promptRefs,
-      ", "
+      ", ",
+      secretRefs
     );
   }
 
@@ -632,11 +642,13 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   private emitStreamingChunk(chunk: string): void {
-    this.streamingChunkEmitter.fire(chunk);
+    this.streamingChunkEmitter.fire(secretRedactionService.redactText(chunk));
   }
 
   private emitStreamingEvents(events: CliEvent[]): void {
-    this.streamingEventsEmitter.fire(events);
+    this.streamingEventsEmitter.fire(
+      secretRedactionService.redactValue(events)
+    );
   }
 
   private emitContextWindowUpdate(used: number, size: number): void {
@@ -644,7 +656,9 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   private emitResponseComplete(response: string): void {
-    this.responseCompleteEmitter.fire(response);
+    this.responseCompleteEmitter.fire(
+      secretRedactionService.redactText(response)
+    );
   }
 
   private emitSessionActivityResumed(events: CliEvent[]): void {
@@ -791,6 +805,7 @@ export class CliIntegration extends HarnessIntegration {
     resolvedSessionId: string | undefined
   ): CliExecutionSession {
     this.lastExecutionSnapshot = undefined;
+    this.activeSecretRedactor = workflowContext?.secretRedactor;
     return new CliExecutionSession({
       prompt,
       workflowContext: workflowContext
@@ -825,7 +840,8 @@ export class CliIntegration extends HarnessIntegration {
         directRefs,
         contextRefs,
         excerptRefs,
-        promptRefs
+        promptRefs,
+        secretRefs
       ) =>
         this.formatCategorizedReferences(
           agentRefs,
@@ -833,8 +849,20 @@ export class CliIntegration extends HarnessIntegration {
           directRefs,
           contextRefs,
           excerptRefs,
-          promptRefs
+          promptRefs,
+          secretRefs
         ),
+      isSecretAvailable: async (name) => {
+        try {
+          await resolveSecretEnvironment([name], {
+            workspaceRoot: this.platform.getWorkspaceRoot(),
+            secretStore: this.platform.getSecretStore?.(),
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      },
     });
 
     const sessionResolverAdapter = new CliSessionResolverAdapter({
@@ -863,6 +891,14 @@ export class CliIntegration extends HarnessIntegration {
         onPtyExit: (session, exitCode) => this.handlePtyExit(session, exitCode),
         cleanupTempFiles: (tempFilePaths) =>
           this.cleanupTempFiles(tempFilePaths),
+      },
+      resolveSecretEnvironment: async (names) => {
+        const values = await resolveSecretEnvironment(names, {
+          workspaceRoot: this.platform.getWorkspaceRoot(),
+          secretStore: this.platform.getSecretStore?.(),
+        });
+        this.activeSecretRedactor?.addResolvedValues(values);
+        return values;
       },
     });
 
@@ -1621,18 +1657,19 @@ export class CliIntegration extends HarnessIntegration {
     workingFilePath: string | undefined,
     workspaceRoot: string
   ): Promise<void> {
+    const tempMgr = new TempFileManager(workspaceRoot);
     const configPath = this.provider.getMcpConfigFilePath?.(
       workingFilePath,
       workspaceRoot
     );
     if (configPath) {
-      await fs.promises.unlink(configPath).catch(() => {});
+      await tempMgr.deleteFile(configPath);
     }
     // Clean up provider-specific interactive setup files (e.g., OpenCode plugin)
     const additionalPaths =
       this.provider.getAdditionalCleanupFilePaths?.(workspaceRoot) ?? [];
     for (const p of additionalPaths) {
-      await fs.promises.unlink(p).catch(() => {});
+      await tempMgr.deleteFile(p);
     }
     // Restore workspace config files modified during interactive hook setup (e.g., Qwen)
     await this.provider.cleanupWorkspaceArtifacts?.(
@@ -1661,7 +1698,9 @@ export class CliIntegration extends HarnessIntegration {
     for (const artifactPath of paths) {
       try {
         await fs.promises.access(artifactPath);
-        failures.push(`Provider artifact remains after cleanup: ${artifactPath}`);
+        failures.push(
+          `Provider artifact remains after cleanup: ${artifactPath}`
+        );
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
           failures.push(

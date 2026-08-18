@@ -61,6 +61,7 @@ import { useCompatibilityStore } from "../store/compatibilityStore";
 import { useExecutionPreviewStore } from "../store/executionPreviewStore";
 import { useHarnessUsageStore } from "../store/harnessUsageStore";
 import { useWorkspaceStatsStore } from "../store/workspaceStatsStore";
+import { useSecretRegistryStore } from "../store/secretRegistryStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { registerTerminalHandlers } from "./terminalMessageHandlers";
 import { rememberUndoRedoRuntime } from "@hooks/useUndoRedoKeyHandler";
@@ -517,6 +518,12 @@ export function createMessageHandlers(
     if (message.modelOptions) {
       settingsStore.setModelOptions(message.modelOptions);
     }
+  };
+
+  handlers[MESSAGE_TYPES.OPEN_GLOBAL_SETTINGS_TAB] = (message) => {
+    const uiStore = useUiStore.getState();
+    uiStore.setGlobalSettingsTab(message.tab);
+    if (!uiStore.globalSettingsOpen) uiStore.toggleGlobalSettings();
   };
 
   // --------------------------------------------------------------------------
@@ -1698,6 +1705,25 @@ export function createMessageHandlers(
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.MCP_REGISTRY_SERVERS_UPDATE] = (message) => {
     useMcpManagerStore.getState().setManagedServers(message.servers ?? []);
+  };
+
+  // --------------------------------------------------------------------------
+  // SECRET_REGISTRY_UPDATE - Safe secret names and metadata only
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SECRET_REGISTRY_UPDATE] = (message) => {
+    useSecretRegistryStore
+      .getState()
+      .setEntries(message.scope, message.secrets ?? []);
+  };
+
+  // Write confirmations intentionally carry no value and are not merged into
+  // the registry until the next explicit list request.
+  handlers[MESSAGE_TYPES.SECRET_SET] = (message) => {
+    useSecretRegistryStore.getState().setLastAction(message);
+  };
+
+  handlers[MESSAGE_TYPES.SECRET_DELETED] = (message) => {
+    useSecretRegistryStore.getState().setLastAction(message);
   };
 
   // --------------------------------------------------------------------------

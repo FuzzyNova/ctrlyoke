@@ -87,8 +87,6 @@ export class OpenCodeCliProvider implements ICliProvider {
 
   readonly notificationMonitor = new OpenCodeNotificationMonitor();
   readonly toolPermissionMapper = new OpenCodeToolPermissionMapper();
-  /** Placeholder substituted for secret-bearing text removed from stderr. */
-  private static readonly REDACTED = "[ctrlyoke redacted]";
   readonly headlessSource = "stdout" as const;
   readonly logParser = new OpenCodeLogParser(() =>
     getOpenCodeContextWindowSize(this.resolvedCurrentModel)
@@ -122,7 +120,8 @@ export class OpenCodeCliProvider implements ICliProvider {
       options.workingFilePath,
       options.additionalEnv,
       options.userServers,
-      options.stateRoot
+      options.stateRoot,
+      options.secretOptions
     );
     const pluginPath = path.resolve(
       options.extensionPath,
@@ -212,6 +211,7 @@ export class OpenCodeCliProvider implements ICliProvider {
       resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
       stateRoot?: string;
+      secretEnvironment?: Readonly<Record<string, string>>;
     },
     _workspaceRoots?: readonly string[],
     _approvedExternalRoots?: readonly string[]
@@ -242,7 +242,8 @@ export class OpenCodeCliProvider implements ICliProvider {
           workingFile,
           additionalEnv,
           userServers,
-          workflowContext?.stateRoot
+          workflowContext?.stateRoot,
+          workflowContext?.secretEnvironment
         )
     );
     if (
@@ -416,7 +417,8 @@ export class OpenCodeCliProvider implements ICliProvider {
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[],
-    stateRoot?: string
+    stateRoot?: string,
+    secretEnvironment?: Readonly<Record<string, string>>
   ): Promise<string[] | null> {
     const hasMcp =
       !!mcpServerPath || (userServers !== undefined && userServers.length > 0);
@@ -426,7 +428,8 @@ export class OpenCodeCliProvider implements ICliProvider {
       workingFilePath,
       additionalEnv,
       userServers,
-      stateRoot
+      stateRoot,
+      secretEnvironment
     );
     await applyPreparedMutations(preparation.mutations);
     return hasMcp ? preparation.cliArgs : null;
@@ -438,7 +441,8 @@ export class OpenCodeCliProvider implements ICliProvider {
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServers?: McpServerConfig[],
-    _stateRoot?: string
+    _stateRoot?: string,
+    secretEnvironment?: Readonly<Record<string, string>>
   ): Promise<CliProviderPreparation> {
     const hasUserServers = userServers && userServers.length > 0;
     if (!mcpServerPath && !hasUserServers) {
@@ -461,7 +465,11 @@ export class OpenCodeCliProvider implements ICliProvider {
       workingFilePath,
       additionalEnv,
       userServers,
-      _stateRoot
+      _stateRoot,
+      CliProviderUtils.createMcpSecretConfigOptions(
+        (name) => `{env:${name}}`,
+        secretEnvironment
+      )
     );
     return {
       cliArgs: [],
@@ -655,52 +663,6 @@ export class OpenCodeCliProvider implements ICliProvider {
         ? { CTRLYOKE_OPENCODE_HOOKS: this.pendingUserHooksEnv }
         : {}),
     };
-  }
-
-  /**
-   * Remove secret-bearing text from headless stderr while keeping the rest of
-   * the diagnostic intact.
-   *
-   * A malformed `OPENCODE_CONFIG_CONTENT` makes OpenCode abort and echo the
-   * offending content, which carries MCP `environment` credentials. ctrlyoke
-   * always emits `JSON.stringify` output so it should never trigger that path,
-   * but the echo must not reach logs or output history if it ever does.
-   * Dropping stderr wholesale is the wrong trade — it would erase the message
-   * for every ordinary OpenCode failure too — so redact only what is sensitive:
-   * the serialized config itself and each MCP environment value.
-   */
-  redactHeadlessStderr(stderr: string): string {
-    if (!stderr) {
-      return stderr;
-    }
-    let redacted = stderr;
-    for (const secret of this.collectInlineConfigSecrets()) {
-      if (secret && redacted.includes(secret)) {
-        redacted = redacted.split(secret).join(OpenCodeCliProvider.REDACTED);
-      }
-    }
-    return redacted;
-  }
-
-  /**
-   * Secret-bearing strings from the current inline config, longest first so a
-   * value nested inside the serialized config is not left behind by a
-   * shorter replacement that already consumed part of it.
-   */
-  private collectInlineConfigSecrets(): string[] {
-    const secrets: string[] = [JSON.stringify(this.pendingInlineConfig)];
-    for (const entry of Object.values(this.pendingInlineConfig.mcp ?? {})) {
-      // Discriminated union: local servers carry credentials in `environment`,
-      // remote servers in `headers`.
-      const credentialValues =
-        entry.type === "local" ? entry.environment : entry.headers;
-      for (const value of Object.values(credentialValues ?? {})) {
-        if (value.length > 0) {
-          secrets.push(value);
-        }
-      }
-    }
-    return secrets.sort((left, right) => right.length - left.length);
   }
 
   private getInlineConfigContent(): string {

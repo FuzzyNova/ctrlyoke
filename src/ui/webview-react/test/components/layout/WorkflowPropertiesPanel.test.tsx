@@ -20,6 +20,7 @@ import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
+import { useSecretRegistryStore } from "@store/secretRegistryStore";
 import {
   EXECUTION_MODES,
   HARNESS_IDS,
@@ -38,6 +39,7 @@ function resetStores(): void {
   useSettingsStore.getState().resetSettings();
   useUiStore.getState().resetUi();
   useUiStore.setState({ settingsCollapsed: false });
+  useSecretRegistryStore.getState().resetSecretRegistry();
 }
 
 describe("WorkflowPropertiesPanel permissions", () => {
@@ -91,6 +93,102 @@ describe("WorkflowPropertiesPanel permissions", () => {
 
     expect(screen.getByLabelText("Allowed Tools")).not.toBeDisabled();
     expect(screen.getByLabelText("Denied Tools")).not.toBeDisabled();
+  });
+
+  it("reflects effective secret grants and shows the active summary", () => {
+    useSecretRegistryStore.getState().setEntries("workspace", [
+      {
+        name: "API_TOKEN",
+        scope: "workspace",
+        state: "managed-and-set",
+        usedBy: { mcpServers: [], workflows: [] },
+      },
+      {
+        name: "OTHER_TOKEN",
+        scope: "workspace",
+        state: "from-environment-and-detected",
+        usedBy: { mcpServers: [], workflows: [] },
+      },
+    ]);
+    useSettingsStore.getState().updateWorkflowProperty("secrets", ["API_TOKEN"]);
+
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByTitle("Permissions"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
+
+    expect(screen.getByRole("button", { name: "API_TOKEN" })).toBeInTheDocument();
+    expect(screen.getByText("Active: API_TOKEN")).toBeInTheDocument();
+  });
+
+  it("locks inline-referenced names and keeps them granted after null clears inheritance", () => {
+    useSecretRegistryStore.getState().setEntries("workspace", [
+      {
+        name: "INLINE_TOKEN",
+        scope: "workspace",
+        state: "managed-and-set",
+        usedBy: { mcpServers: [], workflows: [] },
+      },
+    ]);
+    useSettingsStore.getState().updateWorkflowProperty("secrets", null);
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "workflow.ctrlyoke.yaml",
+      workflowName: "Inline secret workflow",
+      steps: [{ prompt: "Use !INLINE_TOKEN", secrets: null }],
+    });
+
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByTitle("Permissions"));
+    fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "INLINE_TOKENGranted by prompt text" })
+    );
+
+    expect(screen.getByText("Granted by prompt text")).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("button", { name: "INLINE_TOKENGranted by prompt text" })
+        .querySelector("input")
+    ).toBeDisabled();
+    expect(screen.getByText("Active: INLINE_TOKEN")).toBeInTheDocument();
+    expect(useSettingsStore.getState().getEffectiveSecrets()).toEqual([]);
+  });
+
+  it("shows the default affordance when secret arrays differ", () => {
+    useSettingsStore.getState().updateGlobalSetting("secrets", ["DEFAULT_TOKEN"]);
+    useSettingsStore
+      .getState()
+      .updateWorkflowProperty("secrets", ["WORKFLOW_TOKEN"]);
+
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByTitle("Permissions"));
+
+    expect(
+      screen.getByTitle("Set this as the default for new workflows")
+    ).toBeInTheDocument();
+  });
+
+  it("surfaces an unresolved granted secret as a field diagnostic", () => {
+    useSecretRegistryStore.getState().setEntries("workspace", [
+      {
+        name: "MISSING_TOKEN",
+        scope: "workspace",
+        state: "from-environment-and-not-found",
+        usedBy: { mcpServers: [], workflows: [] },
+      },
+    ]);
+    useSettingsStore
+      .getState()
+      .updateWorkflowProperty("secrets", ["MISSING_TOKEN"]);
+
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByTitle("Permissions"));
+
+    expect(
+      screen.getByText(
+        'Secret "MISSING_TOKEN" is not available from the managed registry or environment.'
+      )
+    ).toBeInTheDocument();
   });
 
   it("preserves authored lists when the workflow harness changes", () => {

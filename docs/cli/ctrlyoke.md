@@ -7,7 +7,30 @@ ctrlyoke run [file]
 ctrlyoke validate <file>
 ctrlyoke history prune [--yes]
 ctrlyoke history relink <oldPath> <newPath> [--yes]
+ctrlyoke secret set <NAME> [--stdin] [--scope user|workspace]
+ctrlyoke secret list
+ctrlyoke secret rm <NAME> [--yes] [--scope user|workspace]
+ctrlyoke secret check [file]
 ```
+
+The `secret` commands never accept a value as an argument. `secret set` reads
+from a hidden TTY prompt by default, or from stdin with `--stdin`; `secret list`
+prints names and safe state metadata only. There is intentionally no
+`secret get` command.
+
+Managed secrets use the host OS credential store and are never written to a
+plaintext fallback file. The CI-friendly path does not require a credential
+backend: export the declared names in the environment and run the workflow as
+usual. For example:
+
+```bash
+export DEPLOY_TOKEN="..."
+ctrlyoke run deploy.ctrlyoke.yaml --headless
+```
+
+`secret check` performs the same declared-secret preflight as `run` without
+starting a harness. It exits non-zero when a declared name cannot resolve and
+reports the name and resolution scope.
 
 ## `ctrlyoke run`
 

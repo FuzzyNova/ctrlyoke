@@ -73,6 +73,7 @@ export interface ScriptExecutionReportRequest {
   statusLabel?: string;
   timeoutMs?: number;
   vars?: Record<string, string>;
+  secretNames?: readonly string[];
   /** Conditions let their caller place the verdict summary beside the timeline row. */
   emitStatus?: boolean;
   evaluate?: (onOutput: (chunk: string) => void) => Promise<EvaluationResult>;
@@ -241,7 +242,8 @@ export class ScriptExecutionReporter {
             context.executionWorkspace?.executionRoot ??
               context.workspaceFolderPath,
             request.vars,
-            onOutput
+            onOutput,
+            request.secretNames
           );
     } finally {
       // The buffered tail must land before the completed output replaces the

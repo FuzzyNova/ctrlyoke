@@ -29,6 +29,7 @@ import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import { TemplateManager } from "../core/TemplateManager";
 import { Log } from "../utils/Log";
+import { secretRedactionService } from "../utils/SecretRedactionService";
 import { onModelsLoaded } from "../utils/ModelRegistry";
 import { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { UserFeedbackSink } from "../core/UserFeedbackSink";
@@ -55,6 +56,9 @@ import { DashboardBroadcastHub } from "./DashboardBroadcastHub";
 import { IS_DEV_MODE } from "../utils/BuildConfig";
 import { retryWithBackoff } from "../utils/RetryUtils";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
+import { VsCodeAdapter } from "../platform/VsCodeAdapter";
+import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
+import { SecretRegistryService } from "./SecretRegistryService";
 
 // Re-export CliOutput for external use
 export type { CliOutput } from "../types/WebviewMessageTypes";
@@ -96,6 +100,7 @@ export class CtrlYokeWebviewProvider
   private readonly settingsSync: WebviewSettingsSync;
   private readonly serializer: WorkflowSerializer;
   private readonly router: WebviewMessageRouter;
+  private readonly secretRegistry: SecretRegistryService;
   private readonly historySearchService = new HistorySearchService();
   // IDashboardSink message shapes are single-sourced here. Pure sink methods
   // delegate to it; methods with extra VS Code logic call it then do more work.
@@ -136,6 +141,10 @@ export class CtrlYokeWebviewProvider
     const postMessage = (message: any) => this.postMessage(message);
     const getOrchestrator = () => this.workflowOrchestrator;
     const getOutputHistoryManager = () => this.outputHistoryManager;
+    this.secretRegistry = new SecretRegistryService({
+      secretStore: new VsCodeAdapter(context).getSecretStore(),
+      getWorkspaceRoot: getVsCodeWorkspaceRoot,
+    });
 
     // Create delegate classes
     this.settingsSync = new WebviewSettingsSync(
@@ -176,7 +185,8 @@ export class CtrlYokeWebviewProvider
         getServerUrl: () => this.runningServerUrl,
         getAvailableIps: () => this.runningServerAvailableIps,
         onPanelReady: () => this.handlePanelReady(),
-      }
+      },
+      this.secretRegistry
     );
 
     // Listen for model registry updates
@@ -1251,7 +1261,18 @@ export class CtrlYokeWebviewProvider
   }
 
   public postMessage(message: unknown): void {
-    this.view?.webview.postMessage(message);
+    this.view?.webview.postMessage(secretRedactionService.redactValue(message));
+  }
+
+  public getSecretRegistryService(): SecretRegistryService {
+    return this.secretRegistry;
+  }
+
+  public openGlobalSettingsTab(tab: "secrets"): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.OPEN_GLOBAL_SETTINGS_TAB,
+      tab,
+    });
   }
 
   /** Public postMessage for use by PtyProcessManager (terminal output routing) */

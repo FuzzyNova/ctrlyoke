@@ -61,6 +61,7 @@ export const CONFIG_KEYS = {
   DEFAULTS_ADDITIONAL_ARGS: "defaults.additionalArgs",
   DEFAULTS_AGENT: "defaults.agent",
   DEFAULTS_SKILLS: "defaults.skills",
+  DEFAULTS_SECRETS: "defaults.secrets",
   DEFAULTS_RESUME_SESSION: "defaults.resumeSession",
   DEFAULTS_PRIOR_CONTEXT: "defaults.priorContext",
   DEFAULTS_END_CONDITION: "defaults.endCondition",
@@ -888,6 +889,11 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.DEFAULTS).skills ?? [];
   },
 
+  /** Get the default secret grants for new workflows. */
+  getDefaultSecrets(): string[] {
+    return configService.get(CONFIG_KEYS.DEFAULTS).secrets ?? [];
+  },
+
   /**
    * Check if agent and skill instructions should be omitted when resuming a session.
    * When true (default), agent/skill blocks are skipped for prompts that resume an existing
@@ -1007,6 +1013,15 @@ export const ConfigurationUtils = {
     await configService.set(
       CONFIG_KEYS.DEFAULTS_SKILLS,
       skills,
+      CONFIG_SCOPE.USER
+    );
+  },
+
+  /** Set the default secret grants for new workflows. */
+  async setDefaultSecrets(secrets: string[]): Promise<void> {
+    await configService.set(
+      CONFIG_KEYS.DEFAULTS_SECRETS,
+      secrets,
       CONFIG_SCOPE.USER
     );
   },

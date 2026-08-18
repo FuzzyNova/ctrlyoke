@@ -60,6 +60,8 @@ export interface CtrlYokeGlobalSettings {
     additionalArgs: Partial<Record<HarnessId, string>>;
     agent: string;
     skills: string[];
+    /** Secret names granted to newly created workflows. */
+    secrets?: string[];
     executionMode: ExecutionMode;
     resumeSession: boolean;
     priorContext: string;
@@ -298,6 +300,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     additionalArgs: {},
     agent: "",
     skills: [],
+    secrets: [],
     executionMode: "interactive",
     resumeSession: false,
     priorContext: "none",

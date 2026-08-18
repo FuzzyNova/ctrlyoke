@@ -14,6 +14,10 @@ import {
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { buildTestNotificationEvent } from "../../ui/notifications/CompletionNotificationFactory";
+import {
+  RunSecretRedactor,
+  secretRedactionService,
+} from "../../utils/SecretRedactionService";
 
 suite("sanitizeBrowserClientId", () => {
   test("passes through a well-formed tabId", () => {
@@ -214,6 +218,38 @@ suite("CtrlYokeHostedServer feedback transport", () => {
     } finally {
       configService.setCliOverlay({});
     }
+  });
+
+  test("redacts exact values before the WebSocket transport", () => {
+    const redactor = new RunSecretRedactor();
+    redactor.addResolvedValues({ TOKEN: "remote-dashboard-secret" });
+    const release = secretRedactionService.register(redactor);
+    const socket: FakeHostedSocket = {
+      readyState: 1,
+      pingCalls: 0,
+      sent: [],
+      terminated: false,
+      ping() {},
+      send(message) {
+        this.sent.push(message);
+      },
+      terminate() {},
+    };
+    const server = Object.create(
+      CtrlYokeHostedServer.prototype
+    ) as HostedServerFeedbackInternals;
+    server.connections = new Set([socket]);
+
+    server.broadcastUserFeedback({
+      type: MESSAGE_TYPES.USER_FEEDBACK,
+      id: "feedback-secret",
+      severity: "error",
+      message: "remote-dashboard-secret",
+    });
+    release();
+
+    assert.ok(!socket.sent[0]?.includes("remote-dashboard-secret"));
+    assert.ok(socket.sent[0]?.includes("[REDACTED]"));
   });
 
   test("suppresses NOTIFICATION_EVENT in never mode but delivers it when connected", async () => {

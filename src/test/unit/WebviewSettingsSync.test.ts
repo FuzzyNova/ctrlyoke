@@ -1189,6 +1189,7 @@ suite("WebviewSettingsSync", () => {
       "additionalArgs.*",
       "agent",
       "skills",
+      "secrets",
       "executionMode",
       "resumeSession",
       "priorContext",
@@ -1312,6 +1313,12 @@ suite("WebviewSettingsSync", () => {
           value: ["refactor", "test"],
           expectedKey: CONFIG_KEYS.DEFAULTS_SKILLS,
           expectedValue: ["refactor", "test"],
+        },
+        {
+          property: PROMPT_PROPERTIES.SECRETS,
+          value: ["API_TOKEN", "DATABASE_PASSWORD"],
+          expectedKey: CONFIG_KEYS.DEFAULTS_SECRETS,
+          expectedValue: ["API_TOKEN", "DATABASE_PASSWORD"],
         },
         {
           property: PROMPT_PROPERTIES.EXECUTION_MODE,

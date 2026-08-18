@@ -12,6 +12,11 @@ import {
   TIMELINE_EVENT_TYPES,
   type WorkflowTimelineEventDraft,
 } from "../../types/WorkflowTimelineTypes";
+import { Log } from "../../utils/Log";
+import {
+  RunSecretRedactor,
+  secretRedactionService,
+} from "../../utils/SecretRedactionService";
 
 function createStatusEventDraft(
   timestampMs: number,
@@ -149,5 +154,40 @@ suite("TimelineRecorder", () => {
     assert.strictEqual(manifest.eventCount, 2);
     assert.strictEqual(manifest.nextSequence, 3);
     assert.strictEqual(manifest.lastUpdatedAt, 210);
+  });
+
+  test("never persists a resolved value in events, manifest, or the session log", async () => {
+    const secret = "resolved-value-that-must-not-leak";
+    const redactor = new RunSecretRedactor();
+    redactor.addResolvedValues({ SERVICE_TOKEN: secret });
+    const release = secretRedactionService.register(redactor);
+
+    await recorder.appendEvents(manifestPath, [
+      createStatusEventDraft(110, `failure output: ${secret}`),
+    ]);
+    await recorder.updateManifest(manifestPath, (manifest) => ({
+      ...manifest,
+      workflowId: secret,
+    }));
+    Log.initializeCli(tempDir, true);
+    Log.error(`session log failure: ${secret}`);
+    release();
+
+    const events = await fs.readFile(
+      path.join(tempDir, "events.jsonl"),
+      "utf8"
+    );
+    const manifest = await fs.readFile(manifestPath, "utf8");
+    const logPath = (await fs.readdir(path.join(tempDir, ".ctrlyoke", "logs")))
+      .map((file) => path.join(tempDir, ".ctrlyoke", "logs", file))
+      .find((file) => file.endsWith(".log"));
+    const sessionLog = logPath ? await fs.readFile(logPath, "utf8") : "";
+
+    assert.ok(!events.includes(secret));
+    assert.ok(!manifest.includes(secret));
+    assert.ok(!sessionLog.includes(secret));
+    assert.ok(events.includes("[REDACTED]"));
+    assert.ok(manifest.includes("[REDACTED]"));
+    assert.ok(sessionLog.includes("[REDACTED]"));
   });
 });

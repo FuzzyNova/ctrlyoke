@@ -231,10 +231,12 @@ function cloneHooks(value: unknown): UserHookConfig[] | null | undefined {
       return undefined;
     }
 
+    const env = cloneStringRecord(item.env);
     return typeof item.event === "string" && typeof item.command === "string"
       ? {
           event: item.event as UserHookConfig["event"],
           command: item.command,
+          ...(env && { env }),
           ...(typeof item.timeoutSec === "number" && {
             timeoutSec: item.timeoutSec,
           }),
@@ -294,8 +296,10 @@ function cloneEndCondition(value: unknown): EndCondition | null | undefined {
     return undefined;
   }
 
+  const env = cloneStringRecord(value.env);
   return {
     script: value.script,
+    ...(env && { env }),
     returns: value.returns,
     ...(typeof value.compareSource === "string" && {
       compareSource: value.compareSource as EndCondition["compareSource"],
@@ -330,8 +334,10 @@ function clonePreCondition(value: unknown): PreCondition | null | undefined {
     return undefined;
   }
 
+  const env = cloneStringRecord(value.env);
   return {
     script: value.script,
+    ...(env && { env }),
     ...(typeof value.compareSource === "string" && {
       compareSource: value.compareSource as PreCondition["compareSource"],
     }),
@@ -369,6 +375,7 @@ function buildClipboardExecutionProperties(
   step: Record<string, unknown>
 ): Partial<PromptStep> {
   const skills = cloneStringArray(step.skills);
+  const secrets = cloneStringArray(step.secrets);
   const mcpServers = cloneMcpServers(step.mcpServers);
   const hooks = cloneHooks(step.hooks);
   const endCondition = cloneEndCondition(step.endCondition);
@@ -391,6 +398,9 @@ function buildClipboardExecutionProperties(
     }),
     ...((skills !== undefined || step.skills === null) && {
       skills: skills ?? null,
+    }),
+    ...((secrets !== undefined || step.secrets === null) && {
+      secrets: secrets ?? null,
     }),
     ...(typeof step.resumeSession === "boolean" && {
       resumeSession: step.resumeSession,
@@ -442,6 +452,9 @@ export function sanitizeClipboardWorkflowStep(step: unknown): WorkflowStep {
       type: STEP_TYPES.SCRIPT,
       script: step.script,
       ...commonFields,
+      ...(cloneStringRecord(step.env) && {
+        env: cloneStringRecord(step.env),
+      }),
       ...((step.executionMode === EXECUTION_MODES.INTERACTIVE ||
         step.executionMode === EXECUTION_MODES.HEADLESS) && {
         executionMode: step.executionMode,
@@ -522,14 +535,20 @@ export function buildScriptStepFromProperties(
   props: Record<string, unknown>,
   name?: string
 ): ScriptStep {
+  const secrets = cloneStringArray(props.secrets);
+
   return {
     type: STEP_TYPES.SCRIPT,
     script,
+    ...(cloneStringRecord(props.env) && { env: cloneStringRecord(props.env) }),
     ...((props.executionMode === EXECUTION_MODES.INTERACTIVE ||
       props.executionMode === EXECUTION_MODES.HEADLESS) && {
       executionMode: props.executionMode as ExecutionMode,
     }),
     ...(name?.trim() ? { name: name.trim() } : {}),
+    ...((secrets !== undefined || props.secrets === null) && {
+      secrets: secrets ?? null,
+    }),
     ...(props.enabled !== undefined && {
       enabled: props.enabled as boolean,
     }),

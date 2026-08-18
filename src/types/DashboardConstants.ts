@@ -107,6 +107,7 @@ export const MESSAGE_TYPES = {
   CHANGE_MCP_SERVERS: "changeMcpServers",
   CHANGE_RESUME_SESSION: "changeResumeSession",
   OPEN_SETTINGS: "openSettings", // Open VS Code settings for ctrlyoke
+  OPEN_GLOBAL_SETTINGS_TAB: "openGlobalSettingsTab", // Extension/webview navigation to a settings tab
   OPEN_VSCODE_MCP_BROWSER: "openVscodeMcpBrowser", // Webview -> Extension: Open VS Code's native MCP server browser
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   HARNESS_STATUS_UPDATE: "harnessStatusUpdate", // Update harness availability
@@ -131,6 +132,14 @@ export const MESSAGE_TYPES = {
   UPDATE_CONFIG: "updateConfig", // Webview -> Extension: Update config value
   CONFIG_VALUE: "configValue", // Extension -> Webview: Send config value
   BROWSE_AND_ADD_EXTERNAL_ROOT: "browseAndAddExternalRoot", // Webview -> Extension: { scope } OS folder picker, appends result to permissions.allowedExternalFileRoots for that scope
+
+  // Secret registry - Webview <-> Extension
+  REQUEST_SECRET_REGISTRY: "requestSecretRegistry",
+  SECRET_REGISTRY_UPDATE: "secretRegistryUpdate",
+  SET_SECRET: "setSecret",
+  SECRET_SET: "secretSet",
+  DELETE_SECRET: "deleteSecret",
+  SECRET_DELETED: "secretDeleted",
 
   // Workflow Properties - Settings Panel <-> Extension
   UPDATE_WORKFLOW_PROPERTY: "updateWorkflowProperty", // Webview -> Extension: Save workflow property (to working file or pending)
@@ -833,6 +842,7 @@ export const PREVIEW_PROPERTY_SOURCES = {
 
 export const PREVIEW_PROMPT_CATEGORIES = {
   AGENT_INSTRUCTIONS: "agent-instructions",
+  SECRETS: "secrets",
   SKILL_CONTENT: "skill-content",
   PROMPT_TEXT: "prompt-text",
   PRIOR_CONTEXT: "prior-context",
@@ -846,6 +856,7 @@ export const PREVIEW_PROMPT_CATEGORY_LABELS: Record<
   string
 > = {
   "agent-instructions": "Agent instructions",
+  secrets: "Available secrets",
   "skill-content": "Skill content",
   "prompt-text": "Prompt text",
   "prior-context": "Prior context",
@@ -1657,6 +1668,7 @@ export const PROMPT_PROPERTIES = {
 
   // Script step properties
   SCRIPT: "script",
+  ENV: "env",
   TIMEOUT: "timeout",
   COMPARE_SOURCE: "compareSource",
   RETURNS: "returns",
@@ -1668,6 +1680,7 @@ export const PROMPT_PROPERTIES = {
   MODEL: "model",
   AGENT: "agent",
   SKILLS: "skills",
+  SECRETS: "secrets",
 
   // Session properties
   RESUME_SESSION: "resumeSession",
@@ -1705,6 +1718,7 @@ export const WORKFLOW_PROPERTY_KEYS = [
   PROMPT_PROPERTIES.EXECUTION_MODE,
   PROMPT_PROPERTIES.AGENT,
   PROMPT_PROPERTIES.SKILLS,
+  PROMPT_PROPERTIES.SECRETS,
   PROMPT_PROPERTIES.RESUME_SESSION,
   PROMPT_PROPERTIES.SESSION_ID,
   PROMPT_PROPERTIES.MCP_SERVERS,
@@ -1901,6 +1915,7 @@ export const UNDO_FILE_ACTIONS = {
 // ============================================================================
 export const TEMP_FILE_CATEGORIES = {
   AGENT: "agent",
+  SECRETS: "secrets",
   SKILLS: "skills",
   CONTEXT: "context",
   EXCERPTS: "excerpts",
@@ -1941,6 +1956,25 @@ export type SettingWriteScope = Exclude<
   SettingScope,
   typeof SETTING_SCOPES.DEFAULT
 >;
+
+/** States exposed by the secret registry. Values are never part of these states. */
+export const SECRET_REGISTRY_STATES = {
+  MANAGED_AND_SET: "managed-and-set",
+  FROM_ENVIRONMENT_AND_DETECTED: "from-environment-and-detected",
+  FROM_ENVIRONMENT_AND_NOT_FOUND: "from-environment-and-not-found",
+} as const;
+
+export type SecretRegistryState =
+  (typeof SECRET_REGISTRY_STATES)[keyof typeof SECRET_REGISTRY_STATES];
+
+/** Results acknowledged by write-only secret registry operations. */
+export const SECRET_REGISTRY_ACTION_STATES = {
+  SET: "set",
+  DELETED: "deleted",
+} as const;
+
+export type SecretRegistryActionState =
+  (typeof SECRET_REGISTRY_ACTION_STATES)[keyof typeof SECRET_REGISTRY_ACTION_STATES];
 
 // ============================================================================
 // DISCOVERY SOURCES - Origin labels for discovered agent/skill files
@@ -2151,6 +2185,7 @@ export type RetryPromptPlaceholder =
 
 // VS Code command IDs registered by the extension
 export const VSCODE_COMMANDS = {
+  OPEN_SECRETS_SETTINGS: "ctrlyoke.openSecretsSettings",
   ENABLE_SERVER: "ctrlyoke.enableServer",
   DISABLE_SERVER: "ctrlyoke.disableServer",
   REGENERATE_SERVER_TOKEN: "ctrlyoke.regenerateServerToken",

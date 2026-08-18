@@ -94,6 +94,8 @@ export interface ResolvedPropertiesPreview {
   session: SessionPreview;
   agent?: string;
   skills: string[];
+  /** Granted names only; values are intentionally never part of a preview DTO. */
+  secrets?: string[];
   mcpServerIds: string[];
   hooks: HookPreview[];
   permissions: PermissionSettingsPreview;

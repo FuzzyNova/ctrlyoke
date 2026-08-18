@@ -18,6 +18,7 @@ import {
   resolveCtrlYokeMcpInvocation,
 } from "../utils/McpRegistryFileManager";
 import { Log } from "../utils/Log";
+import { REDACTION_MARKER } from "../types/PreviewRedactor";
 import type { WebviewClientContext } from "./WebviewClientContext";
 
 /**
@@ -33,6 +34,32 @@ const CTRLYOKE_BUILTIN_MCP_SERVER_PREVIEW = {
     "ctrlyoke's built-in MCP server. Gives the model queue-status and append-queue tools scoped to the current workflow run.",
   tools: ["ctrlyoke_queue_status", "ctrlyoke_append_queue"],
 };
+
+/** Never send literal MCP env/header values back through the preview modal. */
+function redactMcpConfigPreview(config: unknown): string {
+  const redacted = JSON.parse(
+    JSON.stringify(config, (key, value: unknown) => {
+      if (
+        (key === "env" || key === "headers") &&
+        value &&
+        typeof value === "object"
+      ) {
+        return Object.fromEntries(
+          Object.entries(value as Record<string, unknown>).map(
+            ([name, entry]) => [
+              name,
+              typeof entry === "string" && entry.includes("${secret:")
+                ? entry
+                : REDACTION_MARKER,
+            ]
+          )
+        );
+      }
+      return value;
+    })
+  );
+  return JSON.stringify(redacted, null, 2);
+}
 
 /**
  * MCP manager message handlers: manage ctrlyoke's MCP registry, discover MCP
@@ -226,7 +253,7 @@ export class McpManagerService {
     ctx.emit({
       type: MESSAGE_TYPES.MCP_CONFIG_PREVIEW_RESULT,
       mcpServerName,
-      content: config ? JSON.stringify(config, null, 2) : "",
+      content: config ? redactMcpConfigPreview(config) : "",
       found: Boolean(config),
     });
   }

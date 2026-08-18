@@ -1,5 +1,6 @@
 import type { ResolverWorkspaceFolder } from "./WorkspaceRootResolver";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
+import type { SecretStore } from "./SecretStore";
 
 /**
  * Abstraction layer for platform-specific APIs.
@@ -9,6 +10,8 @@ import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
  * importing the `vscode` module directly.
  */
 export interface PlatformAdapter {
+  /** Encrypted managed-secret storage for runtime resolution. */
+  getSecretStore?(): SecretStore;
   /**
    * Read a configuration value when the platform provides a resolved config
    * surface, such as the standalone CLI adapter.

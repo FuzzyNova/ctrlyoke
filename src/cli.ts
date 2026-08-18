@@ -68,10 +68,19 @@ import {
   type RunCommandOptions,
 } from "./cli/CliRunCommandDefinitions";
 import { registerHistoryCommands } from "./cli/HistoryCommandDefinitions";
+import { registerSecretCommands } from "./cli/SecretCommandDefinitions";
 import {
   pruneHistoryCommand,
   relinkHistoryCommand,
 } from "./cli/HistoryCommands";
+import {
+  checkSecretsCommand,
+  createCliSecretCommandDependencies,
+  createSecretCommandIo,
+  listSecretsCommand,
+  removeSecretCommand,
+  setSecretCommand,
+} from "./cli/SecretCommands";
 import { resolveCliExecutionMode } from "./cli/CliExecutionMode";
 import { ExecutionPreviewService } from "./core/ExecutionPreviewService";
 import { HarnessCapabilityRegistry } from "./core/HarnessCapabilityRegistry";
@@ -85,6 +94,7 @@ import {
 } from "./utils/ProjectStateRegistry";
 import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
 import { initializeRunHistoryLocation } from "./utils/RunHistoryStoragePolicy";
+import { secretRedactionService } from "./utils/SecretRedactionService";
 
 // Mark this process as the standalone CLI binary before anything else runs.
 setRuntimeMode(RUNNER_IDS.CLI);
@@ -97,7 +107,9 @@ const program = new Command();
 
 program
   .name("ctrlyoke")
-  .description("Execute AI-powered workflow automation from the command line")
+  .description(
+    "Execute AI-powered workflow automation from the command line. `run` works with env passthrough even when no credential backend is available."
+  )
   .version(version);
 
 registerRunCommand(program, runCommand);
@@ -126,6 +138,52 @@ registerHistoryCommands(program, {
         isInteractive: !!process.stdin.isTTY && !!process.stdout.isTTY,
         confirm: promptYesNo,
       })
+    ),
+});
+
+registerSecretCommands(program, {
+  set: (name, options) =>
+    handleSecretCommand(
+      setSecretCommand(
+        name,
+        options,
+        createCliSecretCommandDependencies(
+          path.resolve(options.cwd ?? process.cwd())
+        ),
+        createSecretCommandIo()
+      )
+    ),
+  list: (options) =>
+    handleSecretCommand(
+      listSecretsCommand(
+        options,
+        createCliSecretCommandDependencies(
+          path.resolve(options.cwd ?? process.cwd())
+        ),
+        createSecretCommandIo()
+      )
+    ),
+  remove: (name, options) =>
+    handleSecretCommand(
+      removeSecretCommand(
+        name,
+        options,
+        createCliSecretCommandDependencies(
+          path.resolve(options.cwd ?? process.cwd())
+        ),
+        createSecretCommandIo()
+      )
+    ),
+  check: (file, options) =>
+    handleSecretCommand(
+      checkSecretsCommand(
+        file,
+        options,
+        createCliSecretCommandDependencies(
+          path.resolve(options.cwd ?? process.cwd())
+        ),
+        createSecretCommandIo()
+      )
     ),
 });
 
@@ -693,6 +751,22 @@ function handleHistoryCommand(operation: Promise<void>): Promise<void> {
     console.error(chalk.red(`Error: ${message}`));
     process.exit(2);
   });
+}
+
+function handleSecretCommand(operation: Promise<void | number>): Promise<void> {
+  return operation
+    .then((exitCode) => {
+      if (typeof exitCode === "number") {
+        process.exit(exitCode);
+      }
+    })
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        chalk.red(secretRedactionService.redactText(`Error: ${message}`))
+      );
+      process.exit(2);
+    });
 }
 
 async function dryRunCommand(

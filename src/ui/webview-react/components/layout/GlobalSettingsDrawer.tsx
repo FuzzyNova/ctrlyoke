@@ -23,6 +23,7 @@ import {
   AgentSkillsManagerSection,
   McpManagerSection,
   CommitSection,
+  SecretsSection,
 } from "../settings";
 import { StatsUsageSection } from "../settings/stats/StatsUsageSection";
 import { ExitButton, ScopeToggle } from "../shared";
@@ -31,6 +32,7 @@ const ALL_TABS = [
   { id: "general", label: "General", icon: "codicon-settings" },
   { id: "workflow", label: "Workflow Defaults", icon: "codicon-globe" },
   { id: "permissions", label: "Advanced Permissions", icon: "codicon-shield" },
+  { id: "secrets", label: "Secrets", icon: "codicon-key" },
   { id: "execution", label: "Execution", icon: "codicon-play" },
   { id: "worktrees", label: "Worktrees", icon: "codicon-source-control" },
   { id: "notifications", label: "Notifications", icon: "codicon-bell" },
@@ -232,6 +234,9 @@ export function GlobalSettingsDrawer() {
                   settings={fullSettings}
                   {...sectionProps}
                 />
+              )}
+              {effectiveActiveTab === "secrets" && (
+                <SecretsSection activeScope={activeScope} />
               )}
               {fullSettings && effectiveActiveTab === "execution" && (
                 <ExecutionSection settings={fullSettings} {...sectionProps} />

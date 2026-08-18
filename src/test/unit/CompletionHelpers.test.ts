@@ -14,6 +14,7 @@ import {
   findDocumentSymbolByNameAndRange,
   findWorkspaceSymbolByUriNameAndRange,
   mapSymbolKindToReferenceKind,
+  getSecretCompletions,
 } from "../../completions/CompletionHelpers";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { SYMBOL_KIND_ICONS } from "../../types/SymbolKindConstants";
@@ -29,6 +30,22 @@ suite("CompletionHelpers", () => {
   const originalVisibleTextEditors = vscode.window.visibleTextEditors;
   const originalShouldRespectGitignore =
     ConfigurationUtils.shouldRespectGitignoreForCompletions;
+
+  test("returns secret names only and never a secret value", () => {
+    const items = getSecretCompletions(
+      ["ZETA_TOKEN", "ALPHA_TOKEN", "ZETA_TOKEN"],
+      "token"
+    );
+
+    assert.deepStrictEqual(
+      items.map(({ label, insertText }) => ({ label, insertText })),
+      [
+        { label: "ALPHA_TOKEN", insertText: "ALPHA_TOKEN" },
+        { label: "ZETA_TOKEN", insertText: "ZETA_TOKEN" },
+      ]
+    );
+    assert.ok(items.every((item) => !("value" in item)));
+  });
 
   // Install fake visible editors whose selections drive getHashSelectionCompletions.
   function mockSelections(

@@ -35,6 +35,8 @@ function atomicReferenceAriaLabel(
       return `Open ctrlyoke skill ${attrs["data-skill-name"] ?? title}`;
     case "mcp":
       return `Open ctrlyoke MCP server ${attrs["data-mcp-server-name"] ?? title} in MCP Manager`;
+    case "secret":
+      return `Open ctrlyoke Secrets settings for ${attrs["data-secret-name"] ?? title}`;
     case "file":
     default:
       return `Open ${attrs["data-path"] ?? title}`;

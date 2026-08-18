@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as fs from "fs/promises";
 import type { McpServerConfig } from "../../../types/CtrlYokeTypes";
+import { isValidSecretName } from "../../../platform/SecretKey";
 import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 import type { PreparedMutation } from "./interfaces/PreparedMutation";
 
@@ -60,10 +61,58 @@ export interface McpConfigResult {
   configPath?: string;
 }
 
+/**
+ * Provider-owned handling for `${secret:NAME}` values in process-consumed MCP
+ * maps. The provider chooses its native reference syntax; the generator only
+ * applies that strategy consistently to env and header values.
+ */
+export type McpSecretConfigOptions =
+  | {
+      mode: "reference";
+      referenceToken: (name: string) => string;
+    }
+  | {
+      mode: "substitute";
+      resolvedValues: Readonly<Record<string, string>>;
+      restrictivePermissions?: boolean;
+    };
+
+export function transformMcpSecretMap(
+  values: Record<string, string>,
+  options?: McpSecretConfigOptions
+): Record<string, string> {
+  if (!options) return values;
+
+  return Object.fromEntries(
+    Object.entries(values).map(([key, value]) => [
+      key,
+      value.replace(/\$\{secret:([^}]+)\}/gu, (_match, name: string) => {
+        if (!isValidSecretName(name)) {
+          throw new Error(`Invalid secret interpolation name "${name}"`);
+        }
+        if (options.mode === "reference") {
+          return options.referenceToken(name);
+        }
+        const resolved = options.resolvedValues[name];
+        if (resolved === undefined) {
+          throw new Error(`Missing resolved secret "${name}"`);
+        }
+        return resolved;
+      }),
+    ])
+  );
+}
+
 export interface InlineTomlMcpServerOptions {
   defaultToolsApprovalMode?: "auto" | "prompt" | "approve";
   enabledTools?: string[];
   disabledTools?: string[];
+  /** Codex-native environment names forwarded from the parent process. */
+  envVars?: string[];
+  /** Codex-native remote header-to-environment mapping. */
+  envHttpHeaders?: Record<string, string>;
+  /** Codex-native Authorization bearer-token environment name. */
+  bearerTokenEnvVar?: string;
 }
 
 /**
@@ -80,7 +129,8 @@ export class CliMcpConfigGenerator {
   static createFileMutation(
     filePath: string,
     content: string,
-    description = "Write generated MCP configuration"
+    description = "Write generated MCP configuration",
+    options?: { restrictivePermissions?: boolean }
   ): PreparedMutation {
     return {
       path: filePath,
@@ -88,7 +138,17 @@ export class CliMcpConfigGenerator {
       description,
       apply: async () => {
         await fs.mkdir(path.dirname(filePath), { recursive: true });
-        await fs.writeFile(filePath, content, "utf-8");
+        await fs.writeFile(
+          filePath,
+          content,
+          options?.restrictivePermissions
+            ? { encoding: "utf-8", mode: 0o600 }
+            : "utf-8"
+        );
+        if (options?.restrictivePermissions) {
+          // chmod is meaningful on POSIX and harmlessly best-effort on Windows.
+          await fs.chmod(filePath, 0o600).catch(() => undefined);
+        }
       },
       restore: async () => {
         await fs.unlink(filePath).catch(() => undefined);
@@ -120,7 +180,8 @@ export class CliMcpConfigGenerator {
     command: string,
     args?: string[],
     env?: Record<string, string>,
-    options?: InlineTomlMcpServerOptions
+    options?: InlineTomlMcpServerOptions,
+    secretOptions?: McpSecretConfigOptions
   ): string {
     const parts = [`command=${this.quoteInlineTomlString(command)}`];
 
@@ -129,7 +190,17 @@ export class CliMcpConfigGenerator {
     }
 
     if (env && Object.keys(env).length > 0) {
-      parts.push(`env=${this.formatInlineTomlEnv(env)}`);
+      parts.push(
+        `env=${this.formatInlineTomlEnv(
+          this.transformSecretMap(env, secretOptions)
+        )}`
+      );
+    }
+
+    if (options?.envVars && options.envVars.length > 0) {
+      parts.push(
+        `env_vars=${this.formatInlineTomlStringArray(options.envVars)}`
+      );
     }
 
     if (options?.defaultToolsApprovalMode) {
@@ -162,12 +233,17 @@ export class CliMcpConfigGenerator {
     serverName: string,
     url: string,
     headers?: Record<string, string>,
-    options?: InlineTomlMcpServerOptions
+    options?: InlineTomlMcpServerOptions,
+    secretOptions?: McpSecretConfigOptions
   ): string {
     const parts = [`url=${this.quoteInlineTomlString(url)}`];
 
     if (headers && Object.keys(headers).length > 0) {
-      parts.push(`http_headers=${this.formatInlineTomlEnv(headers)}`);
+      parts.push(
+        `http_headers=${this.formatInlineTomlEnv(
+          this.transformSecretMap(headers, secretOptions)
+        )}`
+      );
     }
 
     if (options?.defaultToolsApprovalMode) {
@@ -185,6 +261,20 @@ export class CliMcpConfigGenerator {
     if (options?.disabledTools && options.disabledTools.length > 0) {
       parts.push(
         `disabled_tools=${this.formatInlineTomlStringArray(options.disabledTools)}`
+      );
+    }
+
+    if (
+      options?.envHttpHeaders &&
+      Object.keys(options.envHttpHeaders).length > 0
+    ) {
+      parts.push(
+        `env_http_headers=${this.formatInlineTomlEnv(options.envHttpHeaders)}`
+      );
+    }
+    if (options?.bearerTokenEnvVar) {
+      parts.push(
+        `bearer_token_env_var=${this.quoteInlineTomlString(options.bearerTokenEnvVar)}`
       );
     }
 
@@ -234,7 +324,8 @@ export class CliMcpConfigGenerator {
     serverConfig?: McpHarnessServerConfig,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    stateRoot?: string
+    stateRoot?: string,
+    _secretOptions?: McpSecretConfigOptions
   ): string {
     // Normalize paths (forward slashes work on Windows and Unix)
     const normalizedServerPath = serverPath.replace(/\\/g, "/");
@@ -297,7 +388,8 @@ export class CliMcpConfigGenerator {
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
     userServerConfig?: McpUserServerHarnessConfig,
-    stateRoot?: string
+    stateRoot?: string,
+    secretOptions?: McpSecretConfigOptions
   ): string {
     // Parse the base config with the ctrlyoke server
     const baseConfig = JSON.parse(
@@ -315,7 +407,8 @@ export class CliMcpConfigGenerator {
     for (const server of userServers) {
       baseConfig.mcpServers[server.id] = this.buildUserServerEntry(
         server,
-        userServerConfig
+        userServerConfig,
+        secretOptions
       );
     }
 
@@ -334,13 +427,15 @@ export class CliMcpConfigGenerator {
    */
   static generateUserServersOnlyConfig(
     userServers: McpServerConfig[],
-    userServerConfig?: McpUserServerHarnessConfig
+    userServerConfig?: McpUserServerHarnessConfig,
+    secretOptions?: McpSecretConfigOptions
   ): string {
     const mcpServers: any = {};
     for (const server of userServers) {
       mcpServers[server.id] = this.buildUserServerEntry(
         server,
-        userServerConfig
+        userServerConfig,
+        secretOptions
       );
     }
     return JSON.stringify({ mcpServers }, null, 2);
@@ -353,7 +448,8 @@ export class CliMcpConfigGenerator {
    */
   private static buildUserServerEntry(
     server: McpServerConfig,
-    userServerConfig?: McpUserServerHarnessConfig
+    userServerConfig?: McpUserServerHarnessConfig,
+    secretOptions?: McpSecretConfigOptions
   ): Record<string, unknown> {
     const entry: Record<string, unknown> = {};
 
@@ -363,13 +459,17 @@ export class CliMcpConfigGenerator {
       const rawTransport = server.transport ?? "streamable-http";
       entry.type =
         userServerConfig?.remoteTypeMap?.[rawTransport] ?? rawTransport;
-      if (server.headers) entry.headers = server.headers;
+      if (server.headers) {
+        entry.headers = this.transformSecretMap(server.headers, secretOptions);
+      }
     } else {
       // stdio server
       entry.command = server.command;
       if (userServerConfig?.stdioType) entry.type = userServerConfig.stdioType;
       if (server.args) entry.args = server.args;
-      if (server.env) entry.env = server.env;
+      if (server.env) {
+        entry.env = this.transformSecretMap(server.env, secretOptions);
+      }
     }
 
     if (userServerConfig?.tools) entry.tools = userServerConfig.tools;
@@ -401,7 +501,8 @@ export class CliMcpConfigGenerator {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    stateRoot?: string
+    stateRoot?: string,
+    secretOptions?: McpSecretConfigOptions
   ): string {
     // Normalize paths (forward slashes)
     const escapedServerPath = serverPath.replace(/\\/g, "/");
@@ -424,7 +525,16 @@ export class CliMcpConfigGenerator {
       serverName,
       "node",
       [escapedServerPath],
-      env
+      env,
+      undefined,
+      secretOptions
     );
+  }
+
+  private static transformSecretMap(
+    values: Record<string, string>,
+    options?: McpSecretConfigOptions
+  ): Record<string, string> {
+    return transformMcpSecretMap(values, options);
   }
 }

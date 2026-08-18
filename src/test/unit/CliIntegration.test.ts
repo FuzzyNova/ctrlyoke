@@ -67,7 +67,8 @@ class TestCliIntegration extends CliIntegration {
     directRefs: string[],
     contextRefs: string[],
     excerptRefs: string[],
-    promptRefs: string[]
+    promptRefs: string[],
+    secretRefs: string[] = []
   ): string {
     return this.formatCategorizedReferences(
       agentRefs,
@@ -75,7 +76,8 @@ class TestCliIntegration extends CliIntegration {
       directRefs,
       contextRefs,
       excerptRefs,
-      promptRefs
+      promptRefs,
+      secretRefs
     );
   }
 }
@@ -816,6 +818,34 @@ suite("CliIntegration", () => {
       "using these file references @src/ui/webview-react/components/output/CliOutput.tsx, follow the instructions in @.ctrlyoke/temp/example.prompt.md "
     );
     assert.strictEqual(/[\r\n]/u.test(formatted), false);
+  });
+
+  test("places available secrets after agents and before skills", () => {
+    const integration = createTestIntegration();
+
+    const formatted = integration.formatRefs(
+      ["@agent.md"],
+      ["@skills.md"],
+      ["@src/file.ts"],
+      [],
+      ["@excerpt.md"],
+      ["@prompt.md"],
+      ["@secrets.md"]
+    );
+
+    assert.strictEqual(
+      formatted,
+      "Following these agent instructions @agent.md, using these secrets @secrets.md, using these available skills @skills.md, using these file references @src/file.ts, and these attachment excerpts @excerpt.md, follow the instructions in @prompt.md "
+    );
+  });
+
+  test("keeps excerpt prefix as using when it is the first optional clause", () => {
+    const integration = createTestIntegration();
+
+    assert.strictEqual(
+      integration.formatRefs([], [], [], [], ["@excerpt.md"], ["@prompt.md"]),
+      "using these attachment excerpts @excerpt.md, follow the instructions in @prompt.md "
+    );
   });
 
   test("should reuse resolved session IDs when the runner does not extract a new one", async () => {

@@ -2,9 +2,9 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
   SERVER_TOKEN_SECRET_KEY,
-  SecretStore,
   ServerTokenStore,
 } from "../../platform/ServerTokenStore";
+import type { SecretStore } from "../../platform/SecretStore";
 
 class InMemorySecretStore implements SecretStore {
   readonly values = new Map<string, string>();
@@ -15,6 +15,14 @@ class InMemorySecretStore implements SecretStore {
 
   async store(key: string, value: string): Promise<void> {
     this.values.set(key, value);
+  }
+
+  async delete(key: string): Promise<void> {
+    this.values.delete(key);
+  }
+
+  async keys(): Promise<string[]> {
+    return [...this.values.keys()];
   }
 }
 

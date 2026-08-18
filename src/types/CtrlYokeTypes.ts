@@ -102,6 +102,8 @@ export interface UserHookConfig {
   event: HookEvent;
   /** Command to run. Resolved relative to workspace root if not absolute. */
   command: string;
+  /** Environment map consumed by the hook process. */
+  env?: Record<string, string>;
   /** Optional timeout in seconds (only respected by CLIs that support per-hook timeouts). */
   timeoutSec?: number;
 }
@@ -211,6 +213,17 @@ export interface ExecutionProperties {
    */
   skills?: string[] | null;
 
+  /**
+   * Secret environment-variable names granted to this step.
+   * - string[]: explicit grant list
+   * - null: explicitly disable inherited secret grants
+   * - undefined: inherit from workflow/settings
+   *
+   * Inline !NAME references in the prompt remain authoritative grants even
+   * when this array is explicitly cleared.
+   */
+  secrets?: string[] | null;
+
   /** Resume existing chat session (default: false, start new session) */
   resumeSession?: boolean;
 
@@ -295,6 +308,7 @@ export const EXECUTION_PROPERTY_KEYS = [
   "executionMode",
   "agent",
   "skills",
+  "secrets",
   "resumeSession",
   "mcpServers",
   "sessionId",
@@ -696,6 +710,8 @@ export interface ScriptStep extends ScriptProperties {
   name?: string;
   /** Execution mode for this script step; undefined inherits from settings. */
   executionMode?: ExecutionMode;
+  /** Secret environment-variable names granted to this script step. */
+  secrets?: string[] | null;
   /** When false, the step remains in the workflow but never executes. */
   enabled?: boolean;
   /** Internal-error policy; undefined inherits the workflow policy. */
@@ -844,6 +860,8 @@ export type ScriptStepAction = Exclude<ConditionAction, "retry" | "skipPrompt">;
  */
 export interface ScriptProperties {
   script: string;
+  /** Environment map consumed by the script process. */
+  env?: Record<string, string>;
   /** Controls which output source is compared against `returns`. Default: `"auto"`. */
   compareSource?: EndConditionCompareSource;
   /** Expected result to compare against. When absent, exit code 0 = pass. */

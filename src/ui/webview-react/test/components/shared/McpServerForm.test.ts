@@ -1,10 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createElement } from "react";
 import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import {
   EMPTY_MCP_SERVER_FORM_STATE,
+  findLiteralCredentialEnvKeys,
+  McpServerForm,
   mcpServerFormStateToServer,
   serverToMcpServerFormState,
 } from "@components/shared/McpServerForm";
+import { useSecretRegistryStore } from "@store/secretRegistryStore";
+
+afterEach(() => {
+  cleanup();
+  useSecretRegistryStore.getState().resetSecretRegistry();
+});
 
 describe("McpServerForm round trips", () => {
   it("preserves remote headers, denied tools, and auto-approve allowlists", () => {
@@ -90,5 +100,66 @@ describe("McpServerForm round trips", () => {
       env: { TOKEN: "secret" },
       autoApprove: true,
     });
+  });
+
+  it("offers a picker that inserts a secret interpolation", () => {
+    useSecretRegistryStore.getState().setEntries("workspace", [
+      {
+        name: "API_TOKEN",
+        scope: "workspace",
+        state: "managed-and-set",
+        usedBy: { mcpServers: [], workflows: [] },
+      },
+    ]);
+    const onChange = vi.fn();
+    render(
+      createElement(McpServerForm, {
+        value: {
+          ...EMPTY_MCP_SERVER_FORM_STATE,
+          id: "server",
+          command: "node",
+        },
+        onChange,
+        onSubmit: vi.fn(),
+        onCancel: vi.fn(),
+        submitLabel: "Save",
+      })
+    );
+
+    fireEvent.change(screen.getByLabelText("Insert secret reference"), {
+      target: { value: "API_TOKEN" },
+    });
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ env: "API_TOKEN=${secret:API_TOKEN}" })
+    );
+  });
+
+  it("warns when an env field looks like a pasted literal credential", () => {
+    expect(
+      findLiteralCredentialEnvKeys({
+        API_TOKEN: "ghp_12345678901234567890",
+        SAFE_VALUE: "ordinary text",
+      })
+    ).toEqual(["API_TOKEN"]);
+
+    render(
+      createElement(McpServerForm, {
+        value: {
+          ...EMPTY_MCP_SERVER_FORM_STATE,
+          id: "server",
+          command: "node",
+          env: "API_TOKEN=ghp_12345678901234567890",
+        },
+        onChange: vi.fn(),
+        onSubmit: vi.fn(),
+        onCancel: vi.fn(),
+        submitLabel: "Save",
+      })
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "looks like a pasted credential"
+    );
   });
 });

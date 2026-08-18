@@ -17,11 +17,9 @@ import type { WorkflowSummary, WorkflowStep } from "../types/CtrlYokeTypes";
 import type {
   CliEvent,
   CliOutput,
-  ExecutionPreviewResultMessage,
   UndoExecutionTarget,
   UserFeedbackMessage,
 } from "../types/WebviewMessageTypes";
-import { redactExecutionPreview } from "../types/PreviewRedactor";
 import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
 import type { CtrlYokeWebviewProvider } from "../ui/CtrlYokeWebviewProvider";
 import {
@@ -72,25 +70,12 @@ import type {
   WorkspaceGitRefDiffResponse,
 } from "../types/HostedWorkspaceViewerTypes";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
+import { secretRedactionService } from "../utils/SecretRedactionService";
 
 const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
 
-/** Final hosted-socket guard for the one DTO that can contain sensitive text. */
 function redactHostedTransportMessage(message: unknown): unknown {
-  if (
-    !message ||
-    typeof message !== "object" ||
-    !("type" in message) ||
-    message.type !== MESSAGE_TYPES.EXECUTION_PREVIEW_RESULT ||
-    !("preview" in message)
-  ) {
-    return message;
-  }
-  const previewMessage = message as ExecutionPreviewResultMessage;
-  return {
-    ...previewMessage,
-    preview: redactExecutionPreview(previewMessage.preview),
-  };
+  return secretRedactionService.redactValue(message);
 }
 
 /**
@@ -217,6 +202,21 @@ export class CtrlYokeHostedServer
       Log.warn(`ctrlyoke WebSocket server error: ${err.message}`);
     });
     this.app.use(express.json({ limit: "64kb" }));
+    this.app.use((_req, res, next) => {
+      const originalJson = res.json.bind(res);
+      const originalSend = res.send.bind(res);
+      res.json = ((body: unknown) =>
+        originalJson(
+          secretRedactionService.redactValue(body)
+        )) as typeof res.json;
+      res.send = ((body: unknown) =>
+        originalSend(
+          typeof body === "string"
+            ? secretRedactionService.redactText(body)
+            : body
+        )) as typeof res.send;
+      next();
+    });
     this.setupRoutes();
     this.setupWebSocket();
     this.setupHeartbeat();

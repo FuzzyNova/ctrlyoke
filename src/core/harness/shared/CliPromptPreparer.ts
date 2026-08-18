@@ -25,6 +25,10 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { TempFileManager } from "../../../utils/TempFileManager";
 import { Log } from "../../../utils/Log";
 import { parseInlinePriorContextRefs } from "../../../utils/FileReferenceParser";
+import {
+  getEffectiveSecretGrants,
+  parseSecretReferences,
+} from "../../../utils/SecretReferenceParser";
 import { ResumeAttachmentResolver } from "../../../utils/ResumeAttachmentResolver";
 import {
   scanCtrlYokeSlashTokens,
@@ -55,6 +59,7 @@ const PROMPT_DIAGNOSTIC_CODES = {
   OVER_INLINE_CAP: "prompt.content.over-inline-cap",
   SOURCE_RUNTIME_DISCLOSURE: "prompt.reference.source-runtime-disclosure",
   UNKNOWN_SKILL_REFERENCE: "prompt.skill.unknown",
+  UNKNOWN_SECRET_REFERENCE: "prompt.secret.unknown",
   UNRESOLVED_REFERENCE: "prompt.reference.unresolved",
 } as const;
 
@@ -103,8 +108,11 @@ export interface CliPromptPreparerDeps {
     directRefs: string[],
     contextRefs: string[],
     excerptRefs: string[],
-    promptRefs: string[]
+    promptRefs: string[],
+    secretRefs: string[]
   ) => string;
+  /** Resolve a name without exposing its value to prompt preparation. */
+  isSecretAvailable?: (name: string) => Promise<boolean>;
 }
 
 export class CliPromptPreparer {
@@ -197,6 +205,21 @@ export class CliPromptPreparer {
       ),
     ];
     const harnessId = resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI;
+    const inlineSecretNames = [
+      ...new Set(
+        parseSecretReferences(originalPromptText).map(
+          (reference) => reference.name
+        )
+      ),
+    ];
+    const secretNames = getEffectiveSecretGrants(
+      prompt,
+      resolvedProperties?.secrets
+    );
+    const unknownSecretNames = await this.findUnknownSecretNames(
+      inlineSecretNames,
+      resolvedProperties?.secrets
+    );
     const inlineSkillDiagnostics = skillTokens
       .filter((token) => !inlineSkillNames.includes(token.name))
       .map((token) =>
@@ -225,6 +248,14 @@ export class CliPromptPreparer {
     );
     const promptDiagnostics = [
       ...inlineSkillDiagnostics,
+      ...unknownSecretNames.map((name) =>
+        this.createDiagnostic(
+          PROMPT_DIAGNOSTIC_CODES.UNKNOWN_SECRET_REFERENCE,
+          harnessId,
+          `Secret "${name}" referenced by !${name} is not available as a managed secret or environment variable.`,
+          COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+        )
+      ),
       ...unresolvedReferenceDiagnostics,
     ];
     const outgoingSections = {
@@ -252,7 +283,8 @@ export class CliPromptPreparer {
       sections.directFileRefs.length > 0 ||
       !!sections.excerptContent ||
       hasPriorContext ||
-      inlineSkillNames.length > 0;
+      inlineSkillNames.length > 0 ||
+      secretNames.length > 0;
     const inlineCheck = this.makeInlineCheck(injectMode);
 
     if (!hasExtras && inlineCheck(outgoingSections.userPromptText)) {
@@ -284,6 +316,7 @@ export class CliPromptPreparer {
       !outgoingSections.skillContent &&
       !outgoingSections.excerptContent &&
       !hasPriorContext &&
+      secretNames.length === 0 &&
       inlineCheck(outgoingSections.userPromptText)
     ) {
       const plan = await this.createInlinePlanWithReferences(
@@ -328,7 +361,8 @@ export class CliPromptPreparer {
       resolvedContextContent,
       hasPriorContext,
       harnessId,
-      sourceRuntimeCopyMutations
+      sourceRuntimeCopyMutations,
+      secretNames
     );
     const planWithDiagnostics = this.withDiagnostics(
       this.withSourceRuntimeDisclosure(
@@ -507,7 +541,8 @@ export class CliPromptPreparer {
     contextContent: string | undefined,
     hasPriorContext: boolean,
     harnessId: ResolvedProperties["harness"],
-    sourceRuntimeCopyMutations: readonly PreparedMutation[]
+    sourceRuntimeCopyMutations: readonly PreparedMutation[],
+    secretNames: readonly string[]
   ): Promise<PromptPreparationPlan> {
     const workspaceRoot = this.deps.getWorkspaceRoot();
     if (!workspaceRoot) {
@@ -611,6 +646,22 @@ export class CliPromptPreparer {
           split.tokenCounts,
           split.lineCounts,
           Buffer.byteLength(content, "utf8")
+        )
+      );
+    }
+
+    const secretRefs: string[] = [];
+    if (secretNames.length > 0) {
+      const secretContent = createAvailableSecretsBlock(secretNames);
+      const split = splitter.split(secretContent);
+      secretRefs.push(
+        ...addChunkFiles(
+          TEMP_FILE_CATEGORIES.SECRETS,
+          PREVIEW_PROMPT_CATEGORIES.SECRETS,
+          split.chunks,
+          split.tokenCounts,
+          split.lineCounts,
+          Buffer.byteLength(secretContent, "utf8")
         )
       );
     }
@@ -735,7 +786,8 @@ export class CliPromptPreparer {
       directRefs,
       contextRefs,
       excerptRefs,
-      promptRefs
+      promptRefs,
+      secretRefs
     );
 
     return {
@@ -903,6 +955,31 @@ export class CliPromptPreparer {
     );
   }
 
+  private async findUnknownSecretNames(
+    inlineNames: readonly string[],
+    resolvedSecretNames: readonly string[] | undefined
+  ): Promise<string[]> {
+    const resolved = new Set(resolvedSecretNames ?? []);
+    const unknown: string[] = [];
+    for (const name of inlineNames) {
+      if (resolved.has(name)) {
+        continue;
+      }
+      const environmentValue = process.env[name];
+      if (environmentValue !== undefined) {
+        continue;
+      }
+      if (
+        this.deps.isSecretAvailable &&
+        (await this.deps.isSecretAvailable(name))
+      ) {
+        continue;
+      }
+      unknown.push(name);
+    }
+    return unknown;
+  }
+
   private createDiagnostic(
     code: string,
     harnessId: ResolvedProperties["harness"],
@@ -926,6 +1003,14 @@ export class CliPromptPreparer {
 
 function countLines(content: string): number {
   return content ? content.split("\n").length : 0;
+}
+
+function createAvailableSecretsBlock(secretNames: readonly string[]): string {
+  const entries = secretNames.map(
+    (name) =>
+      `!${name} refers to ${name}, a credential available to you as an environment variable in this shell. Read it by name (POSIX: $${name}, PowerShell: $env:${name}). Never print, echo, log, or inline its value.`
+  );
+  return `<availableSecrets>\n${entries.join("\n")}\n</availableSecrets>`;
 }
 
 /** Truncate by UTF-8 bytes without splitting a multi-byte code point. */

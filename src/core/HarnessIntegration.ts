@@ -565,6 +565,7 @@ export abstract class HarnessIntegration {
    *
    * Format (absent categories omitted):
    *   Following these agent instructions <agentRefs>,
+   *   using these secrets <secretRefs>,
    *   using these available skills <skillRefs>,
    *   using these file references <directRefs>,
    *   with this prior conversation context <contextRefs>,
@@ -585,7 +586,8 @@ export abstract class HarnessIntegration {
     contextRefs: string[],
     excerptRefs: string[],
     promptRefs: string[],
-    joinSeparator = ",\n"
+    joinSeparator = ",\n",
+    secretRefs: string[] = []
   ): string {
     const clauses: string[] = [];
 
@@ -593,6 +595,9 @@ export abstract class HarnessIntegration {
       clauses.push(
         `Following these agent instructions ${agentRefs.join(", ")}`
       );
+    }
+    if (secretRefs.length > 0) {
+      clauses.push(`using these secrets ${secretRefs.join(", ")}`);
     }
     if (skillRefs.length > 0) {
       clauses.push(`using these available skills ${skillRefs.join(", ")}`);

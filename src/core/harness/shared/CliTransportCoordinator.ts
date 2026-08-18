@@ -54,6 +54,9 @@ export interface CliTransportCoordinatorDeps {
   hostCallbacks: CliTransportCoordinatorHostCallbacks;
   getPtyManager?: () => PtyProcessManager | null;
   postTerminalMessage?: (message: unknown) => void;
+  resolveSecretEnvironment?: (
+    names: readonly string[]
+  ) => Promise<Record<string, string>>;
 }
 
 export interface CliExecutionTransportCoordinator {
@@ -62,7 +65,9 @@ export interface CliExecutionTransportCoordinator {
     promptArgument: string,
     tempFilePaths: string[],
     resolvedSessionId?: string,
-    resolvedCommand?: CliResolvedCommand
+    resolvedCommand?: CliResolvedCommand,
+    env?: Record<string, string>,
+    secretNames?: readonly string[]
   ): Promise<{ success: boolean; sessionId?: string }>;
   startInteractiveProcess(
     args: string[],
@@ -83,7 +88,8 @@ export interface CliExecutionTransportCoordinator {
     }) => Promise<boolean>,
     env?: Record<string, string>,
     source?: HeadlessStreamingSource,
-    resolvedCommand?: CliResolvedCommand
+    resolvedCommand?: CliResolvedCommand,
+    secretNames?: readonly string[]
   ): Promise<boolean>;
   /** Write text to the currently active PTY session. Returns false if no session is active. */
   writeToCurrentPtySession(text: string): boolean;
@@ -108,7 +114,9 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     promptArgument: string,
     tempFilePaths: string[],
     resolvedSessionId?: string,
-    resolvedCommand?: CliResolvedCommand
+    resolvedCommand?: CliResolvedCommand,
+    env?: Record<string, string>,
+    secretNames?: readonly string[]
   ): Promise<{ success: boolean; sessionId?: string }> {
     try {
       const command =
@@ -128,21 +136,22 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       const interactiveEnv =
         this.deps.provider.getInteractiveSpawnEnv?.() ??
         CliProviderUtils.buildProcessEnv();
+      const secretEnv = await this.resolveSecretEnvironment(secretNames);
 
       let processExited = false;
       let hookSessionId: string | undefined;
 
-      const spawnPromise = this.deps.processManager
-        .spawnInteractive(
+      const spawnPromise = this.withProcessEnvOverrides(secretEnv, () =>
+        this.deps.processManager.spawnInteractive(
           command.command,
           command.args,
           workingDir,
-          interactiveEnv,
+          { ...interactiveEnv, ...env, ...secretEnv },
           command.requiresShellVerbatimArgs
         )
-        .finally(() => {
-          processExited = true;
-        });
+      ).finally(() => {
+        processExited = true;
+      });
 
       const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
       if (
@@ -229,10 +238,14 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       // this is the VS Code PTY spawn path, a separate call site from
       // executeStandaloneInteractiveProcess() above, which already does this.
       const providerEnv = this.deps.provider.getInteractiveSpawnEnv?.();
+      const secretEnv = await this.resolveSecretEnvironment(
+        workflowContext?.resolvedProperties?.secrets ?? []
+      );
       const mergedEnv = {
         ...process.env,
         ...providerEnv,
         ...env,
+        ...secretEnv,
       };
       const preSessionId = `ai-cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const harnessId = this.deps.provider.config.harnessId;
@@ -255,43 +268,45 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
 
       let session: PtySession;
       try {
-        session = ptyManager.spawnPty({
-          workflowId,
-          stepName,
-          kind: SESSION_KINDS.AI_CLI,
-          promptNumber,
-          harnessId,
-          sessionId: preSessionId,
-          command: command.command,
-          // A verbatim payload must reach node-pty as a single pre-escaped
-          // string, not an array — see SpawnPtyOptions.args.
-          args: command.requiresShellVerbatimArgs
-            ? command.args.join(" ")
-            : command.args,
-          cwd,
-          env: mergedEnv,
-          onData: (ptySession, chunk) => {
-            postMessage({
-              type: MESSAGE_TYPES.TERMINAL_OUTPUT,
-              workflowId: ptySession.workflowId,
-              sessionId: ptySession.id,
-              data: chunk,
-            });
-          },
-          onExit: (ptySession, exitCode) => {
-            postMessage({
-              type: MESSAGE_TYPES.TERMINAL_ENDED,
-              workflowId: ptySession.workflowId,
-              sessionId: ptySession.id,
-              kind: ptySession.kind,
-              exitCode,
-            });
-            if (this.currentPtySession === ptySession) {
-              this.currentPtySession = undefined;
-            }
-            this.deps.hostCallbacks.onPtyExit(ptySession, exitCode);
-          },
-        });
+        session = await this.withProcessEnvOverrides(secretEnv, async () =>
+          ptyManager.spawnPty({
+            workflowId,
+            stepName,
+            kind: SESSION_KINDS.AI_CLI,
+            promptNumber,
+            harnessId,
+            sessionId: preSessionId,
+            command: command.command,
+            // A verbatim payload must reach node-pty as a single pre-escaped
+            // string, not an array — see SpawnPtyOptions.args.
+            args: command.requiresShellVerbatimArgs
+              ? command.args.join(" ")
+              : command.args,
+            cwd,
+            env: mergedEnv,
+            onData: (ptySession, chunk) => {
+              postMessage({
+                type: MESSAGE_TYPES.TERMINAL_OUTPUT,
+                workflowId: ptySession.workflowId,
+                sessionId: ptySession.id,
+                data: chunk,
+              });
+            },
+            onExit: (ptySession, exitCode) => {
+              postMessage({
+                type: MESSAGE_TYPES.TERMINAL_ENDED,
+                workflowId: ptySession.workflowId,
+                sessionId: ptySession.id,
+                kind: ptySession.kind,
+                exitCode,
+              });
+              if (this.currentPtySession === ptySession) {
+                this.currentPtySession = undefined;
+              }
+              this.deps.hostCallbacks.onPtyExit(ptySession, exitCode);
+            },
+          })
+        );
       } catch (error) {
         const message = getErrorMessage(error);
         Log.warn(`Failed to start embedded terminal: ${message}`);
@@ -367,7 +382,8 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     }) => Promise<boolean>,
     env?: Record<string, string>,
     source?: HeadlessStreamingSource,
-    resolvedCommand?: CliResolvedCommand
+    resolvedCommand?: CliResolvedCommand,
+    secretNames?: readonly string[]
   ): Promise<boolean> {
     try {
       if (tempFilePaths.length > 0) {
@@ -407,6 +423,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       const result = await this.spawnProcess(command.command, command.args, {
         timeout: ConfigurationUtils.getMaxPromptExecutionTimeMs(),
         env,
+        secretNames,
         windowsVerbatimArguments: command.requiresShellVerbatimArgs,
         onStdout: shouldStream
           ? (chunk) => {
@@ -576,6 +593,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
     options: {
       timeout?: number;
       env?: Record<string, string>;
+      secretNames?: readonly string[];
       onStdout?: (chunk: string) => void;
       windowsVerbatimArguments?: boolean;
     } = {}
@@ -585,10 +603,13 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
       ...CliProviderUtils.buildProcessEnv(),
       ...headlessEnvOverrides,
     };
-    const env = options.env ? { ...baseEnv, ...options.env } : baseEnv;
+    const secretEnv = await this.resolveSecretEnvironment(
+      options.secretNames ?? []
+    );
+    const env = { ...baseEnv, ...options.env, ...secretEnv };
 
     const result = await this.withProcessEnvOverrides(
-      headlessEnvOverrides,
+      { ...headlessEnvOverrides, ...secretEnv },
       async () =>
         this.deps.processManager.spawn(command, args, {
           cwd: this.deps.runtimeState.getWorkspaceRoot() || "",
@@ -633,6 +654,12 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         }
       }
     }
+  }
+
+  private async resolveSecretEnvironment(
+    names: readonly string[] | undefined
+  ): Promise<Record<string, string>> {
+    return (await this.deps.resolveSecretEnvironment?.(names ?? [])) ?? {};
   }
 
   private getWorkflowStepMetadata(

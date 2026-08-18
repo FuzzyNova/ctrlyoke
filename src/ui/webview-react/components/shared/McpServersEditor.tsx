@@ -4,6 +4,7 @@ import type { ManagedMcpServer } from "@root/types/WebviewMessageTypes";
 import { SETTING_SCOPES, type SettingWriteScope } from "@/types/messages";
 import { useMcpManagerStore } from "../../store/useMcpManagerStore";
 import { useUiStore } from "@store/uiStore";
+import { findLiteralCredentialEnvKeys } from "./McpServerForm";
 
 type McpServerEntry = string | McpServerConfig;
 
@@ -236,6 +237,12 @@ function ServerDetails({ server }: { server: ListedServer }) {
           This server is currently configured but is not installed in MCP
           Manager.
         </div>
+      )}
+      {findLiteralCredentialEnvKeys(server.config.env).length > 0 && (
+        <p className="flex items-start gap-1 text-xxs text-warning-fg" role="alert">
+          <i className="codicon codicon-warning mt-px" aria-hidden="true" />
+          <span>Environment values look like pasted credentials. Use ${"${secret:NAME}"} references in MCP Manager.</span>
+        </p>
       )}
     </div>
   );

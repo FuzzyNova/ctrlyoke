@@ -2168,6 +2168,7 @@ export class WorkflowOrchestrator {
       cwd: workspaceRoot,
       platform: process.platform,
       dynamicQueueConfig: ConfigurationUtils.getDynamicQueueConfig(),
+      secretStore: platform.getSecretStore?.(),
       resolvePriorContextItems: createPriorContextResolver({
         workspaceRoot,
         historyFilePath,

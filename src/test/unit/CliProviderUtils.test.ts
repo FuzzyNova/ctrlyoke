@@ -120,4 +120,49 @@ suite("CliProviderUtils", () => {
     assert.strictEqual(retryResult, "1.0.0");
     assert.strictEqual(calls, 3);
   });
+
+  test("keeps provider-specific references in settings MCP env and headers", () => {
+    const entries = CliProviderUtils.buildSettingsJsonMcpEntries(
+      undefined,
+      "/workspace",
+      undefined,
+      undefined,
+      [
+        {
+          id: "api",
+          command: "node",
+          env: { API_TOKEN: "${secret:API_TOKEN}" },
+        },
+        {
+          id: "remote",
+          url: "https://example.test/mcp",
+          headers: { Authorization: "Bearer ${secret:API_TOKEN}" },
+        },
+      ],
+      undefined,
+      undefined,
+      CliProviderUtils.createMcpSecretConfigOptions((name) => `{env:${name}}`)
+    );
+
+    assert.strictEqual(
+      (entries.api as { env: Record<string, string> }).env.API_TOKEN,
+      "{env:API_TOKEN}"
+    );
+    assert.strictEqual(
+      (entries.remote as { headers: Record<string, string> }).headers
+        .Authorization,
+      "Bearer {env:API_TOKEN}"
+    );
+  });
+
+  test("creates a restrictive substitution strategy for non-expanding providers", () => {
+    const options = CliProviderUtils.createMcpSecretConfigOptions(undefined, {
+      API_TOKEN: "secret-value",
+    });
+    assert.deepStrictEqual(options, {
+      mode: "substitute",
+      resolvedValues: { API_TOKEN: "secret-value" },
+      restrictivePermissions: true,
+    });
+  });
 });

@@ -98,6 +98,7 @@ export interface GlobalSettings {
   harnessDefaultAdditionalArgs: Record<string, string>;
   agent: string;
   skills: string[];
+  secrets?: string[];
   executionMode: ExecutionMode;
   resumeSession: boolean;
   mcpServers: (string | object)[];
@@ -138,6 +139,7 @@ export interface WorkflowProperties {
   executionMode?: ExecutionMode;
   agent?: string | null;
   skills?: string[] | null;
+  secrets?: string[] | null;
   resumeSession?: boolean;
   sessionId?: string | number; // UUID string or prompt number reference
   mcpServers?: (string | object)[] | null;
@@ -255,6 +257,7 @@ interface SettingsActions {
   // Skills
   setAvailableSkills: (skills: SkillOption[]) => void;
   getEffectiveSkills: () => string[];
+  getEffectiveSecrets: () => string[];
 
   // Harness status
   setHarnessStatus: (harness: HarnessId, status: HarnessStatus) => void;
@@ -352,6 +355,7 @@ const initialGlobalSettings: GlobalSettings = {
   harnessDefaultAdditionalArgs: {},
   agent: "",
   skills: [],
+  secrets: [],
   executionMode: EXECUTION_MODES.INTERACTIVE,
   resumeSession: false,
   mcpServers: [],
@@ -498,6 +502,13 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       return workflowProperties.skills === undefined
         ? (globalSettings.skills ?? [])
         : (workflowProperties.skills ?? []);
+    },
+
+    getEffectiveSecrets: () => {
+      const { workflowProperties, globalSettings } = get();
+      return workflowProperties.secrets === undefined
+        ? (globalSettings.secrets ?? [])
+        : (workflowProperties.secrets ?? []);
     },
 
     // ============================================================================

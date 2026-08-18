@@ -38,6 +38,8 @@ export interface MultiCheckboxDropdownProps extends HideableProps {
   dropdownMinWidth?: number;
   /** Soft validation message for values unavailable in the current workspace. */
   warning?: string;
+  /** Values granted by another authoring surface and therefore not toggleable here. */
+  lockedValues?: readonly string[];
 }
 
 /**
@@ -66,6 +68,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   dropdownMaxHeight = "60vh",
   dropdownMinWidth,
   warning,
+  lockedValues = [],
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -73,6 +76,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   const popupRef = useRef<HTMLDivElement>(null);
 
   const nonHideable = nonHideableValues ?? DEFAULT_NON_HIDEABLE;
+  const locked = new Set(lockedValues);
   const {
     hideEnabled,
     visible: visibleOptions,
@@ -122,6 +126,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   }, [isOpen]);
 
   const toggleValue = (value: string) => {
+    if (locked.has(value)) return;
     if (selectedValues.includes(value)) {
       onChange(selectedValues.filter((v) => v !== value));
     } else {
@@ -130,6 +135,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   };
 
   const handleHide = (value: string) => {
+    if (locked.has(value)) return;
     // Auto-uncheck if currently selected
     if (selectedValues.includes(value)) {
       onChange(selectedValues.filter((v) => v !== value));
@@ -150,6 +156,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
 
   const renderVisibleOption = (option: MultiCheckboxDropdownOption) => {
     const isSelected = selectedValues.includes(option.value);
+    const isLocked = locked.has(option.value);
     return (
       <div
         key={option.value}
@@ -162,11 +169,14 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
         <button
           type="button"
           onClick={() => toggleValue(option.value)}
-          className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
+          disabled={isLocked}
+          aria-disabled={isLocked}
+          className={`flex-1 min-w-0 px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent ${isLocked ? "cursor-not-allowed opacity-80" : "cursor-pointer"}`}
         >
           <input
             type="checkbox"
             checked={isSelected}
+            disabled={isLocked}
             onChange={() => {}}
             aria-hidden={true}
             className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
@@ -181,8 +191,15 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
             )}
           </span>
         </button>
+        {isLocked && (
+          <i
+            className="codicon codicon-lock self-center px-1.5 text-xxs text-description-fg"
+            title="Granted by prompt text"
+            aria-label="Granted by prompt text"
+          />
+        )}
         {/* Eye-closed hide button — hover-only */}
-        {canHide(option.value) && (
+        {canHide(option.value) && !isLocked && (
           <button
             type="button"
             title="Hide this option"
@@ -232,7 +249,9 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   const toggleAll = () => {
     if (isAllSelected) {
       onChange(
-        selectedValues.filter((value) => !allVisibleValues.includes(value))
+        selectedValues.filter(
+          (value) => !allVisibleValues.includes(value) || locked.has(value)
+        )
       );
     } else {
       onChange([
@@ -371,14 +390,16 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                   if (isFullySelected) {
                     onChange(
                       selectedValues.filter(
-                        (value) => !groupValues.includes(value)
+                        (value) =>
+                          !groupValues.includes(value) || locked.has(value)
                       )
                     );
                   } else {
                     onChange([
                       ...selectedValues,
                       ...groupValues.filter(
-                        (value) => !selectedValues.includes(value)
+                        (value) =>
+                          !selectedValues.includes(value) && !locked.has(value)
                       ),
                     ]);
                   }

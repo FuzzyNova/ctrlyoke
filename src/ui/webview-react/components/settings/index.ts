@@ -2,6 +2,7 @@ export { GeneralSection } from "./GeneralSection";
 export { WorkflowDefaultsSection } from "./WorkflowDefaultsSection";
 export { HarnessesSection } from "./HarnessesSection";
 export { AdvancedPermissionsSection } from "./AdvancedPermissionsSection";
+export { SecretsSection } from "./SecretsSection";
 export { ExecutionSection } from "./ExecutionSection";
 export { WorktreesSection } from "./WorktreesSection";
 export { TerminalSection } from "./TerminalSection";

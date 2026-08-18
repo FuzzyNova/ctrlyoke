@@ -204,6 +204,56 @@ suite("PropertyResolver Tests", () => {
   });
 
   suite("execution property precedence contracts", () => {
+    test("resolves secrets with replacement and null-clearing semantics", () => {
+      const context = PropertyResolver.createContext();
+      context.defaults.secrets = ["DEFAULT_SECRET"];
+
+      const workflow: PromptFile = {
+        steps: [],
+        secrets: ["WORKFLOW_SECRET"],
+      };
+
+      const fromPrompt = resolveExecutionProperties(
+        { prompt: "prompt", secrets: ["PROMPT_SECRET"] },
+        workflow,
+        context
+      );
+      assert.deepStrictEqual(fromPrompt.properties.secrets, ["PROMPT_SECRET"]);
+      assert.strictEqual(fromPrompt.sources.secrets, "prompt");
+
+      const fromWorkflow = resolveExecutionProperties(
+        { prompt: "prompt" },
+        workflow,
+        context
+      );
+      assert.deepStrictEqual(fromWorkflow.properties.secrets, ["WORKFLOW_SECRET"]);
+      assert.strictEqual(fromWorkflow.sources.secrets, "workflow");
+
+      const fromDefaults = resolveExecutionProperties(
+        { prompt: "prompt" },
+        { steps: [] },
+        context
+      );
+      assert.deepStrictEqual(fromDefaults.properties.secrets, ["DEFAULT_SECRET"]);
+      assert.strictEqual(fromDefaults.sources.secrets, "defaults");
+
+      const clearedAtPrompt = resolveExecutionProperties(
+        { prompt: "prompt", secrets: null },
+        workflow,
+        context
+      );
+      assert.strictEqual(clearedAtPrompt.properties.secrets, undefined);
+      assert.strictEqual(clearedAtPrompt.sources.secrets, "prompt");
+
+      const clearedAtWorkflow = resolveExecutionProperties(
+        { prompt: "prompt" },
+        { steps: [], secrets: null },
+        context
+      );
+      assert.strictEqual(clearedAtWorkflow.properties.secrets, undefined);
+      assert.strictEqual(clearedAtWorkflow.sources.secrets, "workflow");
+    });
+
     test("runtime-fallback properties resolve prompt, then workflow, then settings", () => {
       configService.setCliOverlay({
         defaults: {

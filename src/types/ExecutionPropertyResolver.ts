@@ -31,6 +31,7 @@ export interface ExecutionPropertyDefaults {
   executionMode: ExecutionMode;
   agent?: string | null;
   skills?: string[] | null;
+  secrets?: string[] | null;
   resumeSession: boolean;
   mcpServers?: (string | McpServerConfig)[] | null;
   hooks?: UserHookConfig[] | null;
@@ -81,6 +82,21 @@ function resolveSkills(
   defaults: ExecutionPropertyDefaults
 ): { value: string[] | undefined; source: ResolutionSource } {
   const selected = select(prompt.skills, workflow.skills, defaults.skills);
+  return {
+    value:
+      Array.isArray(selected.value) && selected.value.length > 0
+        ? selected.value
+        : undefined,
+    source: selected.source,
+  };
+}
+
+function resolveSecrets(
+  prompt: PromptStep,
+  workflow: PromptFile,
+  defaults: ExecutionPropertyDefaults
+): { value: string[] | undefined; source: ResolutionSource } {
+  const selected = select(prompt.secrets, workflow.secrets, defaults.secrets);
   return {
     value:
       Array.isArray(selected.value) && selected.value.length > 0
@@ -232,6 +248,7 @@ export function resolveExecutionProperties(
   );
   const agent = resolveAgent(prompt, workflow, defaults);
   const skills = resolveSkills(prompt, workflow, defaults);
+  const secrets = resolveSecrets(prompt, workflow, defaults);
   const resumeSession = select(
     prompt.resumeSession,
     workflow.resumeSession,
@@ -287,6 +304,7 @@ export function resolveExecutionProperties(
     executionMode: resolvedExecutionMode,
     agent: agent.value,
     skills: skills.value,
+    secrets: secrets.value,
     resumeSession: resumeSession.value,
     mcpServers: mcpServers.value,
     hooks: hooks.value,
@@ -307,6 +325,7 @@ export function resolveExecutionProperties(
       executionMode: executionMode.source,
       agent: agent.source,
       skills: skills.source,
+      secrets: secrets.source,
       resumeSession: resumeSession.source,
       mcpServers: mcpServers.source,
       hooks: hooks.source,

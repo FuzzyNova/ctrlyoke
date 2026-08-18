@@ -51,6 +51,14 @@ import {
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { sanitizeTerminalOutput } from "../utils/TerminalOutputSanitizer";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
+import {
+  assertNoSecretInterpolationInPrompt,
+  buildSecretProcessEnvironment,
+  expandSecretInterpolations,
+  getDeclaredSecretGrants,
+  resolveSecretEnvironment,
+} from "../utils/SecretResolver";
+import { getEffectiveSecretGrants } from "../utils/SecretReferenceParser";
 import { McpServerNormalizer } from "../utils/McpServerNormalizer";
 import { PromptFileResolver } from "./PromptFileResolver";
 import {
@@ -71,6 +79,7 @@ import {
   OutputExecutionTarget,
 } from "../types/OutputHistoryTypes";
 import type { IDashboardSink } from "../types/IDashboardSink";
+import type { RunSecretRedactor } from "../utils/SecretRedactionService";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import { mapSourceDefinitionPathToExecution } from "../platform/WorkspaceRootResolver";
 import { pathsEqual } from "../utils/PathCasing";
@@ -117,6 +126,8 @@ export interface WorkflowExecutionContext {
     severity: string
   ) => void;
   outputHistoryManager?: OutputHistoryManager;
+  /** Run-owned redactor populated only with values resolved during execution. */
+  secretRedactor?: RunSecretRedactor;
   /**
    * Always-on callback to capture the init state for a queue step's output (called even when
    * the workflow is inactive/backgrounded). Used to buffer output for replay when switching
@@ -192,6 +203,8 @@ export interface WorkflowExecutionContext {
     script: string;
     /** Working directory for the script process. */
     cwd: string;
+    /** Environment overrides for the script process. */
+    env?: Record<string, string>;
     /** Called for each output chunk — used to stream text to the CliOutput panel. */
     onOutput: (chunk: string) => void;
     /** Maximum runtime in milliseconds before the PTY is killed. */
@@ -533,6 +546,17 @@ export class WorkflowExecutor {
       );
       const resolvedPreCondition = preResolvedProperties.preCondition;
       const preErrorBehavior = preResolvedProperties.errorBehavior;
+      const preSecretNames = getEffectiveSecretGrants(
+        prompt,
+        preResolvedProperties.secrets
+      );
+      await this.registerResolvedSecrets(preSecretNames, context);
+      await this.promptQueue.persistRuntimeMetadata(
+        target.kind === FINAL_STEP_PHASES.QUEUE
+          ? target.stepIndex
+          : this.promptQueue.getState().steps.length,
+        { secrets: preSecretNames }
+      );
 
       if (
         resolvedPreCondition !== null &&
@@ -552,6 +576,7 @@ export class WorkflowExecutor {
           source: SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
           properties: {
             script: resolvedPreCondition.script,
+            env: resolvedPreCondition.env,
             compareSource:
               resolvedPreCondition.compareSource ?? COMPARE_SOURCES.AUTO,
             returns: resolvedPreCondition.returns,
@@ -568,6 +593,7 @@ export class WorkflowExecutor {
           statusLabel: "Pre-condition",
           timeoutMs: resolvedPreCondition.timeout,
           vars: workflowFileForPre.vars,
+          secretNames: preSecretNames,
           emitStatus: false,
           actionForErrored: this.getErrorConditionAction(preErrorBehavior),
         });
@@ -659,6 +685,7 @@ export class WorkflowExecutor {
       if (!effectivePromptText.trim()) {
         throw new Error("Prompt is empty after resolving its prompt file");
       }
+      assertNoSecretInterpolationInPrompt(effectivePromptText);
 
       const mcpNormalization =
         await McpServerNormalizer.applyFromRegistryWithDiagnostics(
@@ -668,6 +695,30 @@ export class WorkflowExecutor {
           effectivePromptText
         );
       resolvedProperties = mcpNormalization.properties;
+      const secretNames = getEffectiveSecretGrants(
+        prompt,
+        resolvedProperties.secrets
+      );
+      const resolvedSecretValues = await resolveSecretEnvironment(secretNames, {
+        workspaceRoot: this.platform.getWorkspaceRoot(),
+        secretStore: this.platform.getSecretStore?.(),
+      });
+      context.secretRedactor?.addResolvedValues(resolvedSecretValues);
+      resolvedProperties = {
+        ...resolvedProperties,
+        secrets: secretNames,
+        hooks:
+          resolvedProperties.hooks === null
+            ? null
+            : resolvedProperties.hooks?.map((hook) => ({
+                ...hook,
+                env: expandSecretInterpolations(
+                  hook.env,
+                  resolvedSecretValues,
+                  secretNames
+                ),
+              })),
+      };
       context.reportCompatibilityDiagnostics?.(mcpNormalization.diagnostics);
 
       const integration = context.getIntegrationForPrompt(
@@ -685,6 +736,7 @@ export class WorkflowExecutor {
         executionMode: resolvedProperties.executionMode,
         agent: resolvedProperties.agent,
         skills: resolvedProperties.skills,
+        secrets: resolvedProperties.secrets,
       });
 
       // Preserve the queue-owned _runtime object added above. Harness runtime
@@ -745,6 +797,7 @@ export class WorkflowExecutor {
           reportCompatibilityDiagnostics:
             context.reportCompatibilityDiagnostics,
           resolvePriorContextItems: context.resolvePriorContextItems,
+          secretEnvironment: resolvedSecretValues,
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
             | string
             | undefined,
@@ -822,7 +875,8 @@ export class WorkflowExecutor {
           attemptIndex,
           duration,
           vars && Object.keys(vars).length > 0 ? vars : undefined,
-          resolvedProperties.errorBehavior
+          resolvedProperties.errorBehavior,
+          resolvedProperties.secrets
         );
 
         if (endDisposition.outcome === "retry") {
@@ -975,6 +1029,11 @@ export class WorkflowExecutor {
     const runtime = this.getRuntime();
     const stepLabel = step.name ?? step.script.split(/\s+/)[0];
     const runIndex = this.getRunIndexForTarget(context, target);
+    const secretNames = getDeclaredSecretGrants(
+      step,
+      this.promptQueue.getWorkflowFile()
+    );
+    await this.registerResolvedSecrets(secretNames, context);
     Log.info(`Executing script step: ${stepLabel}`);
 
     // Mark step as running in the dashboard
@@ -989,7 +1048,7 @@ export class WorkflowExecutor {
       target.kind === FINAL_STEP_PHASES.QUEUE
         ? stepIndex
         : this.promptQueue.getState().steps.length,
-      { startedAt: Date.now() }
+      { startedAt: Date.now(), secrets: secretNames }
     );
 
     // Begin each whole-step attempt before the script executes. An evaluator
@@ -1030,6 +1089,7 @@ export class WorkflowExecutor {
       }
       const resolvedProperties = {
         script: step.script,
+        env: step.env,
         compareSource: step.compareSource ?? COMPARE_SOURCES.EXIT_CODE,
         returns: step.returns ?? "0",
         timeout,
@@ -1046,6 +1106,11 @@ export class WorkflowExecutor {
             stepIndex: signedStepIndex,
             script: step.script,
             cwd: context.executionWorkspace.executionRoot,
+            env: await this.resolveScriptEnvironment(
+              step.env,
+              secretNames,
+              context
+            ),
             onOutput: (chunk) => {
               outputChunks.push(sanitizeTerminalOutput(chunk));
               onOutput(chunk);
@@ -1062,7 +1127,8 @@ export class WorkflowExecutor {
             resolvedProperties,
             context.executionWorkspace.executionRoot,
             this.promptQueue.getWorkflowFile().vars,
-            onOutput
+            onOutput,
+            secretNames
           );
         }
 
@@ -1107,6 +1173,7 @@ export class WorkflowExecutor {
         statusLabel: "Script step",
         timeoutMs: timeout,
         vars: this.promptQueue.getWorkflowFile().vars,
+        secretNames,
         evaluate: evaluation,
         emitStatus: false,
         actionForErrored: this.getErrorConditionAction(
@@ -1715,6 +1782,37 @@ export class WorkflowExecutor {
     return script.split(/[\\/]/).pop() || script;
   }
 
+  private async resolveScriptEnvironment(
+    processEnv: Record<string, string> | undefined,
+    secretNames: readonly string[],
+    context: WorkflowExecutionContext
+  ): Promise<Record<string, string> | undefined> {
+    const resolvedSecrets = await resolveSecretEnvironment(secretNames, {
+      workspaceRoot: this.platform.getWorkspaceRoot(),
+      secretStore: this.platform.getSecretStore?.(),
+    });
+    context.secretRedactor?.addResolvedValues(resolvedSecrets);
+    return buildSecretProcessEnvironment(
+      processEnv,
+      resolvedSecrets,
+      secretNames
+    );
+  }
+
+  private async registerResolvedSecrets(
+    names: readonly string[],
+    context: WorkflowExecutionContext
+  ): Promise<void> {
+    if (names.length === 0) {
+      return;
+    }
+    const values = await resolveSecretEnvironment(names, {
+      workspaceRoot: this.platform.getWorkspaceRoot(),
+      secretStore: this.platform.getSecretStore?.(),
+    });
+    context.secretRedactor?.addResolvedValues(values);
+  }
+
   /**
    * Publishes the one-line condition verdict beside the CLI output group.
    */
@@ -1984,7 +2082,8 @@ export class WorkflowExecutor {
     attemptIndex: number,
     duration: number,
     vars?: Record<string, string>,
-    errorBehavior?: ErrorBehavior
+    errorBehavior?: ErrorBehavior,
+    secretNames: readonly string[] = []
   ): Promise<PhaseDisposition> {
     Log.debug(
       `Evaluating end condition for ${this.describeExecutionTarget(target)}...`
@@ -2049,6 +2148,7 @@ export class WorkflowExecutor {
       source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
       properties: {
         script: endCondition.script,
+        env: endCondition.env,
         compareSource: endCondition.compareSource ?? COMPARE_SOURCES.AUTO,
         returns: endCondition.returns,
         timeout: endCondition.timeout,
@@ -2065,6 +2165,7 @@ export class WorkflowExecutor {
       statusLabel: "End condition",
       timeoutMs: endCondition.timeout,
       vars,
+      secretNames,
       actionDetail: endConditionActionDetail,
       emitStatus: false,
     });
@@ -2111,6 +2212,7 @@ export class WorkflowExecutor {
           source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
           properties: {
             script: condition.script,
+            env: condition.env,
             compareSource: condition.compareSource ?? COMPARE_SOURCES.AUTO,
             returns: condition.returns,
             timeout: condition.timeout,
@@ -2127,6 +2229,7 @@ export class WorkflowExecutor {
           statusLabel: "End condition",
           timeoutMs: condition.timeout,
           vars,
+          secretNames,
           actionDetail: endConditionActionDetail,
           emitStatus: false,
         }),
@@ -2467,6 +2570,7 @@ export class WorkflowExecutor {
           "Retry prompt is empty after resolving its prompt file"
         );
       }
+      assertNoSecretInterpolationInPrompt(effectiveRetryPrompt.prompt);
 
       const mcpNormalization =
         await McpServerNormalizer.applyFromRegistryWithDiagnostics(
@@ -2476,6 +2580,33 @@ export class WorkflowExecutor {
           effectiveRetryPrompt.prompt
         );
       resolvedProperties = mcpNormalization.properties;
+      const retrySecretNames = getEffectiveSecretGrants(
+        retryPromptStep,
+        resolvedProperties.secrets
+      );
+      const retrySecretValues = await resolveSecretEnvironment(
+        retrySecretNames,
+        {
+          workspaceRoot: this.platform.getWorkspaceRoot(),
+          secretStore: this.platform.getSecretStore?.(),
+        }
+      );
+      context.secretRedactor?.addResolvedValues(retrySecretValues);
+      resolvedProperties = {
+        ...resolvedProperties,
+        secrets: retrySecretNames,
+        hooks:
+          resolvedProperties.hooks === null
+            ? null
+            : resolvedProperties.hooks?.map((hook) => ({
+                ...hook,
+                env: expandSecretInterpolations(
+                  hook.env,
+                  retrySecretValues,
+                  retrySecretNames
+                ),
+              })),
+      };
       context.reportCompatibilityDiagnostics?.(mcpNormalization.diagnostics);
 
       if (context.historyFilePath && context.outputHistoryManager) {
@@ -2511,6 +2642,7 @@ export class WorkflowExecutor {
           reportCompatibilityDiagnostics:
             context.reportCompatibilityDiagnostics,
           resolvePriorContextItems: context.resolvePriorContextItems,
+          secretEnvironment: retrySecretValues,
           finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
             | string
             | undefined,

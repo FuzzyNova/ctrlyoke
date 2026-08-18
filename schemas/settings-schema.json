@@ -85,6 +85,11 @@
           "items": { "type": "string" },
           "description": "Default portable ctrlyoke workflow skill attachments for new workflows. Native harness skill discovery is managed separately by the Agents & Skills settings page and does not determine workflow skill support."
         },
+        "secrets": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+          "description": "Default secret environment-variable names granted to new workflows. Values are resolved by the execution host and never stored in workflow definitions."
+        },
         "executionMode": {
           "type": "string",
           "enum": ["interactive", "headless"],

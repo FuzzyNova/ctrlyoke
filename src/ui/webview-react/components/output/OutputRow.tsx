@@ -1273,6 +1273,8 @@ function promptReferenceTooltip(ref: ContextReferenceMatch): string {
       return `Open ctrlyoke skill ${ref.skillName ?? ""}`;
     case "mcp":
       return `Open ctrlyoke MCP server ${ref.mcpServerName ?? ""} in MCP Manager`;
+    case "secret":
+      return `Open ctrlyoke Secrets settings for ${ref.secretName ?? ""}`;
     default:
       return `Open ${ref.path ?? ""}`;
   }
@@ -1315,6 +1317,7 @@ const PromptReferenceText: React.FC<{
           ref: descriptor.attrs["data-ref"],
           skillName: descriptor.attrs["data-skill-name"],
           mcpServerName: descriptor.attrs["data-mcp-server-name"],
+          secretName: descriptor.attrs["data-secret-name"],
         } satisfies ContextReferenceMatch,
       })),
     [text]

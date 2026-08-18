@@ -30,6 +30,7 @@ import {
 import { mapOrderedHistoryEntriesToMessages } from "./outputProjection";
 import { truncate } from "./string";
 import { generateDiffLines } from "./diffUtils";
+import { secretRedactionService } from "@root/utils/SecretRedactionService";
 import {
   extractKeyParameters,
   formatExecutionBadge,
@@ -377,7 +378,7 @@ export function generateMarkdownExport(
 
   if (filteredOutputs.length === 0) {
     lines.push("*No output captured*");
-    return lines.join("\n");
+    return secretRedactionService.redactText(lines.join("\n"));
   }
 
   filteredOutputs.forEach((item) => {
@@ -522,5 +523,5 @@ export function generateMarkdownExport(
     }
   });
 
-  return lines.join("\n");
+  return secretRedactionService.redactText(lines.join("\n"));
 }

@@ -2,6 +2,7 @@ import { execSync } from "child_process";
 import type { IPty } from "node-pty";
 import { Log } from "../../utils/Log";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { secretRedactionService } from "../../utils/SecretRedactionService";
 import { canonicalizeDriveLetter } from "../../utils/PathCasing";
 import {
   SESSION_KINDS,
@@ -797,7 +798,7 @@ export function getPtyProcessManager(): PtyProcessManager | null {
  * Post a message to the webview from the PTY layer.
  */
 export function ptyPostMessage(msg: unknown): void {
-  _postMessage?.(msg);
+  _postMessage?.(secretRedactionService.redactValue(msg));
 }
 
 /**

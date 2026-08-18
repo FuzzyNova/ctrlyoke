@@ -1,6 +1,6 @@
 # Secrets and Sensitive-Value Redaction Plan
 
-**Status:** Proposed  
+**Status:** Implemented — all six phases landed; see "Final acceptance audit" below
 **Priority:** High — before broader remote and automation APIs
 
 ## Problem
@@ -138,13 +138,19 @@ substitution (below).
 ### MCP servers: write the reference, inject the value
 
 For MCP `env`, do not write the resolved value into a harness-native config
-file on disk. Write `"${SERVICE_API_TOKEN}"` into the generated config and put
-the real value in the harness process env, so the file on disk carries only a
-name. Several harnesses expand `${VAR}` in their MCP config natively; this must
-be **verified per harness** across `CliMcpConfigGenerator`, `CliProviderUtils`,
-and `OpenCodeInlineConfig` before relying on it, because the fallbacks differ:
+file on disk. Write a **reference token** into the generated config and put the
+real value in the harness process env, so the file on disk carries only a name.
 
-- Harness expands `${VAR}` → write the reference, inject to process env.
+**The token is per harness — there is no universal `${VAR}`.** OpenCode already
+proves this: `OPENCODE_CONFIG_SUBSTITUTION_PATTERN` in
+`src/core/harness/opencode/OpenCodeInlineConfig.ts` is `/\{(?:env|file):/iu`, so
+OpenCode's form is `{env:NAME}`, and `containsOpenCodeConfigSubstitution()`
+already exists to detect it. Model the token as a per-provider hook (alongside
+the existing config-generation seams in `CliMcpConfigGenerator` and
+`CliProviderUtils`) rather than hardcoding one syntax, and **verify the
+remaining five harnesses empirically** before relying on expansion:
+
+- Harness expands a reference → write the reference, inject to process env.
 - Harness does not expand → substitute the value into the config, and treat
   that config file as a secret artifact (0600 where the platform supports it,
   deleted on run completion by `TempFileManager`, never included in exports or
@@ -166,37 +172,79 @@ user's own shell — but it means the grant must be narrow and explicit:
 - Treat "harness step declares a secret" as a meaningful trust event worth
   surfacing in the run preview alongside external-root approvals.
 
+## Implementation order
+
+Phases are numbered by topic, not by build order. **Build Phase 5 before
+Phase 3**: both Phase 3 surfaces (the `!` completion source and the properties
+panel's known-name dropdown) read the secret registry that Phase 5 introduces,
+so shipping Phase 3 first means inventing a throwaway listing path. The
+dependency-correct order is 1 → 2 → 4 → 5 → 3 → 6.
+
 ## Phase 1 — Store, declaration, and resolution
 
-- Promote the existing `SecretStore` interface in `src/platform/ServerTokenStore.ts`
-  into a first-class platform contract (`get`/`store`/`delete`/`keys`) and keep
-  `ServerTokenStore` as one consumer of it.
-- Extension host: back it with VS Code `SecretStorage`, keyed by scope
-  (`ctrlyoke.secret.user.<NAME>` vs `ctrlyoke.secret.ws.<hash>.<NAME>`).
-- CLI/server host: back it with an OS credential-store adapter (macOS
-  `security`, Linux `secret-tool`/libsecret, Windows DPAPI via CredMan). If no
-  backend is available, **fail and direct the user to env passthrough** — never
-  fall back to a plaintext file.
-- Add `secrets` to `#/definitions/executionProperties` in
-  `schemas/workflow-schema.json`, mirrored in `src/types/CtrlYokeTypes.ts`.
-  Placing it there — not on `promptStep` alone — gets the three-tier
-  prompt → workflow → settings precedence, `_runtime` capture, and `scriptStep`
-  coverage for free, since `executionProperties` is already shared by all of
-  them. Add it to `EXECUTION_PROPERTY_KEYS` so `PropertyResolver` picks it up.
-- Shape it like `skills`: `oneOf [ array of ^[A-Z][A-Z0-9_]*$ strings, null ]`,
-  where prompt-level replaces workflow-level with no merging and `null`
-  explicitly disables an inherited grant. Note the asymmetry to document: an
-  inline `!NAME` reference still grants, because it is an authoritative input
-  like `/mcp:` — `null` clears the inherited _array_, not what the prompt says.
-- `scriptStep` has `"additionalProperties": false`, so its `secrets` entry must
-  be added explicitly alongside `errorBehavior` rather than inherited.
-- Resolve at spawn: extend `CliTransportCoordinator`'s existing env plumbing
-  (`withProcessEnvOverrides` and the `env` passed to the child) and the
-  `EndConditionEvaluator` script env with the granted set. Restrict
-  `${secret:...}` expansion to MCP/hook/script env and header maps only.
-- **Preflight before the harness starts.** A declared name that resolves to
-  neither a managed secret nor a present env var fails the run with the name and
-  scope, before any process spawns, before any billable harness turn.
+- [x] Promote the existing `SecretStore` interface in `src/platform/ServerTokenStore.ts`
+      into a first-class platform contract (`get`/`store`/`delete`/`keys`) and keep
+      `ServerTokenStore` as one consumer of it.
+- [x] Extension host: back it with VS Code `SecretStorage`, keyed by scope
+      (`ctrlyoke.secret.user.<NAME>` vs `ctrlyoke.secret.ws.<hash>.<NAME>`).
+- [x] CLI/server host: back it with an OS credential-store adapter (macOS
+      `security`, Linux `secret-tool`/libsecret, Windows DPAPI via CredMan). If no
+      backend is available, **fail and direct the user to env passthrough** — never
+      fall back to a plaintext file.
+
+Store-half implementation decisions:
+
+- Workspace `<hash>` is the first 12 hexadecimal characters of SHA-256 over
+  the resolved workspace root in the platform-aware path-comparison form. This
+  matches the existing project identity length while keeping equivalent
+  Windows path casing in one scope.
+- macOS and Linux adapters maintain a small encrypted credential-store index
+  for `keys()`, because safe generic enumeration through `security` and
+  `secret-tool` would otherwise require dumping credential contents. Windows
+  uses CredMan through DPAPI-backed generic credentials, with the same index
+  contract.
+- Unsupported platforms and missing credential-store executables fail with an
+  actionable env-passthrough message. There is intentionally no plaintext
+  file fallback.
+- [x] Add `secrets` to `#/definitions/executionProperties` in
+      `schemas/workflow-schema.json`, mirrored in `src/types/CtrlYokeTypes.ts`.
+      Placing it there — not on `promptStep` alone — gets `_runtime` capture and
+      `scriptStep` coverage for free, since `executionProperties` is already shared
+      by all of them (`promptRuntimeMetadata` `allOf`-refs it, so `_runtime` needs
+      no extra schema work).
+- [x] **Precedence is not free — it is four explicit edits, not one.**
+      `EXECUTION_PROPERTY_KEYS` in `src/types/CtrlYokeTypes.ts` only drives
+      `PromptFileParser.copyExecutionProperties()` and `WorkflowSerializer`; it does
+      not feed resolution. `PropertyResolver` (at `src/utils/PropertyResolver.ts`,
+      not `src/core/`) is a thin VS Code adapter that delegates to
+      `resolveExecutionProperties()` in `src/types/ExecutionPropertyResolver.ts`,
+      which resolves every property by hand. Adding `secrets` therefore means:
+  1. `EXECUTION_PROPERTY_KEYS` (parse/serialize round-trip),
+  2. a `resolveSecrets()` in `ExecutionPropertyResolver.ts` copied from
+     `resolveSkills()` — the exact replace-not-merge + `null`-clears precedent —
+     wired into the returned `properties` and `sources` objects,
+  3. `secrets?: string[] | null` on `ExecutionPropertyDefaults` and
+     `secrets?: string[]` on `ResolvedProperties` in
+     `src/types/ExecutionPropertyTypes.ts`,
+  4. a `secrets` default in `PropertyResolver.createDefaults()`.
+- [x] Shape it like `skills`: `oneOf [ array of ^[A-Z][A-Z0-9_]*$ strings, null ]`,
+      where prompt-level replaces workflow-level with no merging and `null`
+      explicitly disables an inherited grant. Note the asymmetry to document: an
+      inline `!NAME` reference still grants, because it is an authoritative input
+      like `/mcp:` — `null` clears the inherited _array_, not what the prompt says.
+- [x] `scriptStep` has `"additionalProperties": false`, so its `secrets` entry must
+      be added explicitly alongside `errorBehavior` rather than inherited.
+- [x] Parse inline `!NAME` references in `src/utils/SecretReferenceParser.ts`
+      using the shared secret-name validator and filename-boundary convention, and
+      expose the effective inline-plus-array grant union. This declaration step
+      intentionally does not yet validate unknown inline names or inject values.
+- [x] Resolve at spawn: extend `CliTransportCoordinator`'s existing env plumbing
+      (`withProcessEnvOverrides` and the `env` passed to the child) and the
+      `EndConditionEvaluator` script env with the granted set. Restrict
+      `${secret:...}` expansion to MCP/hook/script env and header maps only.
+- [x] **Preflight before the harness starts.** A declared name that resolves to
+      neither a managed secret nor a present env var fails the run with the name and
+      scope, before any process spawns, before any billable harness turn.
 
 ## Phase 2 — Telling the model the names
 
@@ -205,7 +253,7 @@ registering anything.
 
 The `<availableSecrets>` block is **its own prompt category**, not part of the
 excerpt or prompt files. Every other category in
-`HarnessIntegration.formatCategorizedInstruction()` names a distinct kind of
+`formatCategorizedInstruction()` (`src/core/HarnessIntegration.ts`) names a distinct kind of
 input, and the dashboard's preview, token accounting, and truncation reporting
 all key off that category. Folding secrets into excerpts would label them
 "Excerpts" in the preview and make them share the excerpt inline-content cap;
@@ -213,36 +261,36 @@ folding them into the prompt file would make user-authored text and
 ctrlyoke-generated instructions indistinguishable in every downstream surface.
 Neither is recoverable later.
 
-- Add `TEMP_FILE_CATEGORIES.SECRETS` and a matching `PREVIEW_PROMPT_CATEGORIES`
-  entry with a `PREVIEW_PROMPT_CATEGORY_LABELS` label, both in
-  `src/types/DashboardConstants.ts`.
-- Thread a `secretRefs: string[]` parameter through
-  `formatCategorizedInstruction()`, `CliIntegration.formatCategorizedReferences()`,
-  and `CliPromptPreparer`'s `addChunkFiles` call sites, following the shape the
-  agent and skills categories already use.
-- **Clause position: immediately after agent instructions.** It is a behavioral
-  constraint, like agent instructions, rather than reference material. It also
-  keeps excerpts as the last optional clause, so the existing
-  `excerptPrefix = clauses.length === 0 ? "using" : "and"` logic is untouched —
-  appending secrets after excerpts would strand that `and` mid-sentence.
+- [x] Add `TEMP_FILE_CATEGORIES.SECRETS` and a matching `PREVIEW_PROMPT_CATEGORIES`
+      entry with a `PREVIEW_PROMPT_CATEGORY_LABELS` label, both in
+      `src/types/DashboardConstants.ts`.
+- [x] Thread a `secretRefs: string[]` parameter through
+      `formatCategorizedInstruction()`, `CliIntegration.formatCategorizedReferences()`,
+      and `CliPromptPreparer`'s `addChunkFiles` call sites, following the shape the
+      agent and skills categories already use.
+- [x] **Clause position: immediately after agent instructions.** It is a behavioral
+      constraint, like agent instructions, rather than reference material. It also
+      keeps excerpts as the last optional clause, so the existing
+      `excerptPrefix = clauses.length === 0 ? "using" : "and"` logic is untouched —
+      appending secrets after excerpts would strand that `and` mid-sentence.
 
   ```
   Following these agent instructions @agent.md, using these secrets @secrets.md,
   using these available skills @skills.md, … follow the instructions in @prompt.md
   ```
 
-- **Leave it out of `isTierTwoCategory()`.** Tier two (agent, skills, excerpts)
-  caps the preview body at `MAX_CONTENT_SIZE`. The secrets block is bounded and
-  small, and it is exactly the content a user will want to read in full in
-  dry-run preview to confirm what the model was told.
-- The block is derived from the grant list, so it is deterministic, reviewable,
-  and safe to write to a temp file — names are not secret, and `TempFileManager`
-  deletes the file when the turn completes like every other category.
-- An unknown `!NAME` is a validation error, not a silent pass-through. Shipping
-  an unexplained `!SUPABASE_PAT` with no block to resolve it reads as neither
-  prose nor a variable.
-- No grants means no category, no file, and no clause — same as every other
-  optional category.
+- [x] **Leave it out of `isTierTwoCategory()`.** Tier two (agent, skills, excerpts)
+      caps the preview body at `MAX_CONTENT_SIZE`. The secrets block is bounded and
+      small, and it is exactly the content a user will want to read in full in
+      dry-run preview to confirm what the model was told.
+- [x] The block is derived from the grant list, so it is deterministic, reviewable,
+      and safe to write to a temp file — names are not secret, and `TempFileManager`
+      deletes the file when the turn completes like every other category.
+- [x] An unknown `!NAME` is a validation error, not a silent pass-through. Shipping
+      an unexplained `!SUPABASE_PAT` with no block to resolve it reads as neither
+      prose nor a variable.
+- [x] No grants means no category, no file, and no clause — same as every other
+      optional category.
 
 ## Phase 3 — Authoring UX
 
@@ -258,10 +306,13 @@ duplicated across layers, and the boundary regex `[A-Za-z0-9_+=@#$%^&!~-]` is
 copy-pasted in several files. All of these need the new trigger:
 
 - `CodeMirrorEditor.tsx` — `customCompletions`, `CompletionTrigger` union
-- `src/completions/PromptCompletionProvider.ts` — `TriggerChar` union and the
-  `findWordStartTriggerIndex` chain (its header comment already says to keep it
-  in sync with the webview copy)
-- `src/completions/CompletionHelpers.ts` — the `_triggerChar` union
+- `src/completions/PromptCompletionProvider.ts` — `TriggerChar` union (currently
+  `"@" | "#" | "~" | "$"`; it has no `/`, so `!` is the fifth here even though it
+  is the sixth in the editor) and the `findWordStartTriggerIndex` /
+  `maxIndex` chain (its header comment already says to keep it in sync with the
+  webview copy)
+- `src/completions/CompletionHelpers.ts` — the `_triggerChar` union (this one
+  does include `/`)
 - `src/completions/PromptLinkProvider.ts` — a `!NAME` pattern so the reference
   is clickable and navigates to the Secrets settings page
 - `src/ui/webview-react/utils/atomicReferences.ts` — chip rendering, so a
@@ -283,6 +334,11 @@ Two gotchas specific to `!`:
 Chip treatment should distinguish a resolvable name from an unknown one, reusing
 the existing `referenceValidityRef` warning-border path rather than a new
 mechanism.
+
+Phase 3 status: prompt-editor completion/chips/links and the workflow properties
+secret grant list are implemented. The workflow panel keeps inline `!NAME`
+grants checked and locked, shares the unresolved-name diagnostic path, and
+supports the global-default affordance. CLI authoring remains Phase 6.
 
 ### Workflow Properties panel: the grant list
 
@@ -312,8 +368,8 @@ Two additions specific to secrets:
 
 `src/types/PreviewRedactor.ts` already exists as the annotated swap point, with
 heuristic `REDACTION_RULES` and an unused-in-production `exactSecrets`
-parameter. Today it covers **preview only**; runtime redaction is a
-per-provider `redactHeadlessStderr` hook on opencode and qwen.
+parameter. It is now also the matching core used by the runtime redaction
+service; runtime output no longer depends on provider-specific hooks.
 
 - Build a per-run redactor from the values actually resolved for that run and
   feed them through the existing `exactSecrets` path.
@@ -329,6 +385,23 @@ per-provider `redactHeadlessStderr` hook on opencode and qwen.
   heuristics also catch credentials ctrlyoke was never told about, which is the
   main protection for users who paste a key into a prompt.
 
+Phase 4 coverage (implemented):
+
+- `RunSecretRedactor` is populated only from values resolved during execution;
+  `SecretRedactionService` applies those exact values through
+  `redactPreviewText()`'s existing `exactSecrets` path and keeps heuristic
+  matching independent. Deterministic JSON escaping is covered; broad
+  base64/URL guessing is intentionally omitted to avoid false positives.
+- Log output/session logs, timeline `events.jsonl` and `manifest.json`, CLI
+  JSON/terminal output, dashboard/webview messages, notifications, hosted
+  HTTP/WebSocket transports, Web Push payloads, and Markdown export are wrapped.
+- The former OpenCode stderr hook was removed; shared response collection and
+  transport boundaries now use the same service for all harnesses.
+- Harness-native session logs and third-party telemetry files are deliberately
+  not rewritten in place: ctrlyoke redacts what it reads, persists, logs, or
+  transports, while modifying vendor-owned files would corrupt their session
+  history and exceed ctrlyoke's ownership boundary.
+
 ## Phase 5 — Settings UX (the secret registry)
 
 **A new top-level "Secrets" tab in `GlobalSettingsDrawer`, not a subsection of
@@ -340,6 +413,20 @@ destination to link to. Place it after `permissions` with `codicon-key`;
 
 The drawer's existing header `ScopeToggle` (User/Workspace) already provides
 the scope model — the Secrets tab reads `activeScope` like every other section.
+
+Backend half (implemented):
+
+- [x] Extension-host `SecretRegistryService` lists managed names and declared
+      environment names per scope, classifies their safe state, persists only
+      description/timestamp metadata beside the encrypted value, and computes
+      MCP/workflow usage.
+- [x] Webview list/set/delete contracts and the Zustand registry store carry
+      names and metadata only. Secret writes are write-only: the response is
+      `{ name, scope, state: "set" }` and never echoes the submitted value.
+- [x] The Secrets tab UI is implemented as the global settings tab. It consumes
+      the registry store and keeps values confined to the write-only set path.
+- [x] Prompt-editor completion triggers, links, atomic chips, and the workflow
+      properties secret grant list are implemented; CLI authoring remains Phase 6.
 
 **List view.** One row per name:
 
@@ -369,18 +456,23 @@ the scope model — the Secrets tab reads `activeScope` like every other section
 - On submit, post the value once and clear component state immediately; the
   store confirms with `{ name, scope, state: "set" }` and never echoes back.
 
-**Other surfaces that consume the registry** (workflow authoring is Phase 3).
+**Other surfaces that consume the registry.**
 
-- MCP Manager env editor offers a picker inserting `${secret:NAME}` and warns
-  when a field looks like a pasted literal credential.
-- Dry-run preview shows granted names and `[REDACTED]`, never the value, and
-  surfaces unresolved names as a blocking diagnostic in the same place
-  `PermissionCapabilitySummary` diagnostics appear.
+- [x] MCP Manager env editor offers a picker inserting `${secret:NAME}` and warns
+      when a field looks like a pasted literal credential.
+- [x] Dry-run preview shows granted names and `[REDACTED]`, never the value, and
+      surfaces unresolved names as a blocking diagnostic in the same place
+      `PermissionCapabilitySummary` diagnostics appear.
 
 ## Phase 6 — CLI
 
-Follow the `trust-external-roots` precedent: a `secret` command group in
-`src/cli.ts` with definitions factored into `src/cli/SecretCommandDefinitions.ts`.
+A `secret` command group registered from `src/cli.ts`. Note that
+`trust-external-roots` is defined **inline** in `src/cli.ts` (~line 140) and is
+the precedent only for the confirm/report UX; the structural precedent for a
+multi-subcommand group is `src/cli/HistoryCommandDefinitions.ts` +
+`src/cli/HistoryCommands.ts` (`registerHistoryCommands`). Follow that pair:
+`src/cli/SecretCommandDefinitions.ts` for option/argument shapes and
+`src/cli/SecretCommands.ts` for the handlers.
 
 ```
 ctrlyoke secret set <NAME>     # hidden TTY prompt; --stdin to pipe; --scope user|workspace
@@ -439,8 +531,29 @@ ctrlyoke secret check [file]   # preflight a workflow: declared vs resolvable
 
 ## Open questions
 
-- Which of the six harnesses expand `${VAR}` inside their MCP config env values?
-  This decides reference-vs-substitute per harness and needs empirical checks.
+- Which of the six harnesses expand a reference inside their MCP config env
+  values and headers? **Answered from each harness's documented config format
+  and the checked-in OpenCode implementation; no billable harness runs were
+  used.** The generator owns the provider hook, and the existing spawn-time
+  environment injection supplies the real value under the referenced name.
+
+  | Harness           | Native env reference                                                                       | Native header reference                                                                        | Handling                                                                                                                                                              |
+  | ----------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `copilot-cli`     | `$NAME`, `${NAME}`, or `${NAME:-default}`                                                  | Same forms                                                                                     | Write `${NAME}` into the temp JSON config; inject `NAME` into the Copilot process environment.                                                                        |
+  | `claude-cli`      | `${NAME}` or `${NAME:-default}`                                                            | Same forms                                                                                     | Write `${NAME}` into the temp JSON config; inject `NAME` into the Claude process environment.                                                                         |
+  | `codex-cli`       | `env_vars = ["NAME"]` (named parent-env forwarding; static `env` values are not templates) | `env_http_headers = { Header = "NAME" }`, or `bearer_token_env_var = "NAME"` for Authorization | Emit Codex's native named forwarding fields. Composite `${secret:NAME}` values are rejected because Codex has no safe equivalent.                                     |
+  | `opencode-cli`    | `{env:NAME}`                                                                               | `{env:NAME}`                                                                                   | Preserve `OPENCODE_CONFIG_CONTENT` as process-env-only inline JSON; never write it to disk.                                                                           |
+  | `qwen-cli`        | `$NAME` or `${NAME}` in settings strings                                                   | Same settings-string expansion                                                                 | Write `${NAME}` into the inline JSON config; inject `NAME` into the Qwen process environment.                                                                         |
+  | `antigravity-cli` | No substitution syntax in the inspected `.agents/mcp_config.json` format                   | No substitution syntax                                                                         | Substitute from the already-resolved run environment, chmod the generated config to 0600 where supported, and remove/restore it through the existing tracker cleanup. |
+
+  References: [Copilot CLI MCP configuration](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference#local-server-configuration-fields), [Claude Code MCP configuration](https://docs.anthropic.com/en/docs/claude-code/mcp), [Codex MCP configuration](https://developers.openai.com/codex/mcp), and [Qwen Code settings](https://qwenlm.github.io/qwen-code-docs/en/users/configuration/settings/). OpenCode is answered in `src/core/harness/opencode/OpenCodeInlineConfig.ts` by `OPENCODE_CONFIG_SUBSTITUTION_PATTERN` (`/\{(?:env|file):/iu`) and `containsOpenCodeConfigSubstitution()`.
+
+  The Antigravity path is the only substituted artifact. Its workspace config is
+  restored to the pre-run baseline (or deleted when ctrlyoke created it), so a
+  generated plaintext credential does not remain after cleanup. Existing
+  user-authored plaintext in a pre-existing baseline is outside this step's
+  ownership and is not rewritten or exported by ctrlyoke.
+
 - Should workspace-scoped managed secrets require the same one-time trust
   approval that `permissions.allowedExternalFileRoots` does, given a cloned
   repo can declare grants? Leaning yes for grants, no for values the user set
@@ -460,3 +573,34 @@ ctrlyoke secret check [file]   # preflight a workflow: declared vs resolvable
   already composes, so the field exists on `_runtime` with no extra schema work;
   the only requirement is that resolution writes the union rather than echoing
   the authored array.
+
+## Final acceptance audit — 2026-08-18
+
+- [x] A shared workflow references a credential by name, and the same workflow
+      runs with either a managed value or an exported environment value:
+      `SecretReferenceParser`, `SecretResolver`, `WorkflowExecutor`, and
+      `src/test/unit/SecretResolver.test.ts`.
+- [x] Extension, CLI, and server hosts use explicit platform adapters with no
+      plaintext fallback: `VsCodeSecretStore`, `OsCredentialStore`,
+      `CliAdapter`, and `ServerTokenStore`.
+- [x] Harnesses receive available names through the dedicated secrets prompt
+      category: `CliPromptPreparer`, `CliIntegration`, and
+      `formatCategorizedInstruction`.
+- [x] `!` completion lists names only and the reference grants the step:
+      `PromptCompletionProvider`, `PromptLinkProvider`, the webview atomic
+      reference helpers, and the workflow properties panel.
+- [x] Inline `!NAME` references and `secrets:` declarations share the same
+      effective grant union: `getEffectiveSecretGrants` and the execution
+      resolution path in `WorkflowExecutor`.
+- [x] Resolved values are redacted at persisted, transported, and CLI output
+      boundaries: `SecretRedactionService`, `RunSecretRedactor`, the timeline,
+      log, server, export, and CLI wrappers, with regression coverage in the
+      secret redaction and history/output tests.
+- [x] Missing names fail before harness/script execution with name and scope:
+      `preflightWorkflowSecrets`, `WorkflowInstance`, and the Phase 6
+      `secret check` command in `src/cli/SecretCommands.ts`, covered by
+      `src/test/unit/SecretResolver.test.ts` and
+      `src/test/unit/SecretCommands.test.ts`.
+
+The acceptance criteria are complete. The remaining notes in “Open questions”
+are product follow-ups rather than unmet acceptance criteria.

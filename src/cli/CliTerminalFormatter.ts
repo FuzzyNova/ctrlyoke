@@ -37,6 +37,7 @@ import {
   formatTokenCount,
   resolveTokenTotal,
 } from "../utils/TokenFormatting";
+import { secretRedactionService } from "../utils/SecretRedactionService";
 
 /** Maximum diff lines shown before truncating with a "… N more" message. */
 const MAX_DIFF_LINES = 60;
@@ -164,6 +165,7 @@ export class CliTerminalFormatter {
     preview: WorkflowExecutionPreview,
     writeLine: (line: string) => void = (line) => console.log(line)
   ): void {
+    preview = secretRedactionService.redactValue(preview);
     writeLine(chalk.bold(`Dry run: ${preview.workflow.name}`));
     writeLine(
       chalk.dim(
@@ -277,6 +279,7 @@ export class CliTerminalFormatter {
   }
 
   static renderEvent(event: CliEvent): void {
+    event = secretRedactionService.redactValue(event);
     switch (event.type) {
       case CLI_EVENT_TYPES.TEXT: {
         const data = event.data as TextData;

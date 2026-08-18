@@ -23,6 +23,7 @@ import {
   type GitChangeKind,
 } from "../types/DashboardConstants";
 import { parseRangeNotation } from "./RangeNotationParser";
+import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
 
 /**
  * Mask reference trigger characters inside triple-backtick fenced blocks.
@@ -92,7 +93,10 @@ export function parseAtReferences(prompt: string): FileReference[] {
   // `(@file.ts` or `"@file.ts` still match, since `(`/`"` aren't filename
   // characters. The unquoted body still permits an embedded @ so a path like
   // src/myimage@512x512.png parses as one reference, not split at the inner @.
-  const regex = /(?<![A-Za-z0-9_+=@#$%^&!~-])@(?:"([^"]+)"|([^\s:]+))/g;
+  const regex = new RegExp(
+    `${NOT_AFTER_BOUNDARY}@(?:"([^"]+)"|([^\\s:]+))`,
+    "g"
+  );
   let match;
 
   while ((match = regex.exec(prompt)) !== null) {
@@ -158,7 +162,10 @@ export function parseSelectionReferences(prompt: string): FileReference[] {
   // Group 1: quoted path, Group 2: unquoted path, Group 3: startLine, Group 4: endLine
   // Same word-boundary rationale as parseAtReferences: rejects filename-legal
   // characters immediately before #, not just alphanumerics.
-  const regex = /(?<![A-Za-z0-9_+=@#$%^&!~-])#selection:(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g;
+  const regex = new RegExp(
+    `${NOT_AFTER_BOUNDARY}#selection:(?:"([^"]+)"|([^\\s:"]+)):(\\d+)-(\\d+)`,
+    "g"
+  );
   let match;
 
   while ((match = regex.exec(prompt)) !== null) {
@@ -208,8 +215,10 @@ export function parseSymbolReferences(prompt: string): FileReference[] {
   // legal bare name and needs no quoting.
   // Same word-boundary rationale as parseAtReferences: rejects filename-legal
   // characters immediately before #, not just alphanumerics.
-  const regex =
-    /(?<![A-Za-z0-9_+=@#$%^&!~-])#sym(?:\.([a-z-]+))?:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g;
+  const regex = new RegExp(
+    `${NOT_AFTER_BOUNDARY}#sym(?:\\.([a-z-]+))?:(?:"([^"]+)"|([^\\s:"]+)):(?:"([^"]+)"|([^\\s:"]+)):(\\d+)-(\\d+)`,
+    "g"
+  );
   let match;
 
   while ((match = regex.exec(prompt)) !== null) {
@@ -277,7 +286,10 @@ export function parseInlinePriorContextRefs(
   // characters immediately before $, not just alphanumerics — e.g. a
   // shell/env-style "price$previous" or a filename containing "$" shouldn't
   // expand.
-  const regex = /(?<![A-Za-z0-9_+=@#$%^&!~-])\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\-]*)?)/g;
+  const regex = new RegExp(
+    `${NOT_AFTER_BOUNDARY}\\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\\-]*)?)`,
+    "g"
+  );
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {
@@ -329,7 +341,7 @@ export function parseInlinePriorContextRefs(
 // (never parsed back out of prompt text), so it can't collide with a real ref.
 // Single-sourced here so the hook and the extension-host counter stay in sync.
 
-const PRIOR_CONTEXT_TOKEN_PREFIX = "PRIOR ";
+const PRIOR_CONTEXT_TOKEN_PREFIX = "PRIOR\x00";
 
 /**
  * Encode a prior-context ref body (e.g. "previous", "step:1,3") plus the
@@ -339,7 +351,7 @@ export function encodePriorContextTokenRef(
   body: string,
   stepCount: number
 ): string {
-  return `${PRIOR_CONTEXT_TOKEN_PREFIX}${stepCount} ${body}`;
+  return `${PRIOR_CONTEXT_TOKEN_PREFIX}${stepCount}\x00${body}`;
 }
 
 /**
@@ -353,7 +365,7 @@ export function decodePriorContextTokenRef(
     return null;
   }
   const rest = ref.slice(PRIOR_CONTEXT_TOKEN_PREFIX.length);
-  const separator = rest.indexOf(" ");
+  const separator = rest.indexOf("\x00");
   if (separator < 0) {
     return null;
   }
@@ -397,7 +409,10 @@ export function parseGitChangeReferences(text: string): GitChangeReference[] {
   // characters immediately before ~, not just alphanumerics (e.g. a word
   // ending in a hex-looking suffix like "abc123~stale" or a filename like
   // "data_file~@backup!.csv" shouldn't be mistaken for a commit-hash ref).
-  const regex = /(?<![A-Za-z0-9_+=@#$%^&!~-])~(diff|staged|stash:(\d+)|([0-9a-f]{7,40}))/gi;
+  const regex = new RegExp(
+    `${NOT_AFTER_BOUNDARY}~(diff|staged|stash:(\\d+)|([0-9a-f]{7,40}))`,
+    "gi"
+  );
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {

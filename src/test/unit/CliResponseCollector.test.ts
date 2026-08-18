@@ -5,6 +5,10 @@ import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { CliResponseCollector } from "../../core/harness/shared/CliResponseCollector";
 import type { BaseCliEvent } from "../../core/harness/shared/interfaces/ILogParser";
 import { Log } from "../../utils/Log";
+import {
+  RunSecretRedactor,
+  secretRedactionService,
+} from "../../utils/SecretRedactionService";
 
 function createParsedOutput(
   overrides?: Partial<UniversalCliOutput>
@@ -229,12 +233,11 @@ suite("CliResponseCollector", () => {
   test("should redact secret-bearing stderr while keeping the diagnostic", async () => {
     const secret = "Bearer super-secret-token";
     const loggedResponses: string[] = [];
+    const redactor = new RunSecretRedactor();
+    redactor.addResolvedValues({ TOKEN: secret });
+    const release = secretRedactionService.register(redactor);
     const result = await new CliResponseCollector({
-      provider: {
-        ...createProvider({ events: [], metadata: {} }),
-        redactHeadlessStderr: (stderr: string) =>
-          stderr.split(secret).join("[redacted]"),
-      },
+      provider: createProvider({ events: [], metadata: {} }),
       hostCallbacks: {
         logResponse: (response) => loggedResponses.push(response),
         onResponseComplete: (response) => loggedResponses.push(response),
@@ -246,13 +249,14 @@ suite("CliResponseCollector", () => {
       promptForSessionLog: "prompt",
       executionStartTime: new Date(),
     });
+    release();
 
     // The secret is gone, but the reason for the failure survives — a bare
     // "Process exited with code 1" would be undiagnosable.
     assert.ok(!result.failureMessage?.includes(secret));
     assert.strictEqual(
       result.failureMessage,
-      "Failed to parse config: [redacted]"
+      "Failed to parse config: [REDACTED]"
     );
     assert.ok(loggedResponses.every((response) => !response.includes(secret)));
   });

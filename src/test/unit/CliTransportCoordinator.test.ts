@@ -842,6 +842,9 @@ line two`,
   test("should run standalone interactive launch and stop-hook monitor", async () => {
     let disposedProcess = false;
     let responseCompleted: string | undefined;
+    const secretName = "CTRLYOKE_TEST_COORDINATOR_SECRET";
+    const previousSecret = process.env[secretName];
+    delete process.env[secretName];
 
     const coordinator = new CliTransportCoordinator({
       provider: {
@@ -878,8 +881,16 @@ line two`,
         checkAvailability: async () => true,
       } as unknown as ICliProvider,
       processManager: {
-        spawnInteractive: async (_command: string, args: string[]) => {
+        spawnInteractive: async (
+          _command: string,
+          args: string[],
+          _cwd: string,
+          env: Record<string, string>
+        ) => {
           assert.deepStrictEqual(args, ["--interactive", "prompt"]);
+          assert.strictEqual(env[secretName], "secret-value");
+          assert.strictEqual(env.HOOK_TOKEN, "hook-value");
+          assert.strictEqual(process.env[secretName], "secret-value");
           await new Promise((resolve) => setTimeout(resolve, 10));
         },
         disposeProcess: () => {
@@ -887,6 +898,10 @@ line two`,
         },
       } as any,
       resolveCliCommand: resolveCommand,
+      resolveSecretEnvironment: async (names) => {
+        assert.deepStrictEqual(names, [secretName]);
+        return { [secretName]: "secret-value" };
+      },
       runtimeState: {
         getWorkspaceRoot: () => process.cwd(),
 
@@ -909,10 +924,17 @@ line two`,
       [],
       "prompt",
       [],
-      undefined
+      undefined,
+      undefined,
+      { HOOK_TOKEN: "hook-value" },
+      [secretName]
     );
 
     assert.strictEqual(result.success, true);
+    assert.strictEqual(process.env[secretName], undefined);
+    if (previousSecret !== undefined) {
+      process.env[secretName] = previousSecret;
+    }
     assert.strictEqual(disposedProcess, true);
     assert.strictEqual(responseCompleted, "Interactive session ended");
   });

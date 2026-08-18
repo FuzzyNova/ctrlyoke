@@ -64,6 +64,9 @@ export function AdvancedPermissionsSection({
           and does not write a workspace{" "}
           <code className="font-mono">opencode.json</code>.
         </p>
+        <p className="text-xs text-description-fg mb-2">
+          Manage secret values and declarations in the separate Secrets tab.
+        </p>
         <PermissionCapabilitySummary
           id="advanced-allowed-tools-diagnostic"
           field="allowedTools"

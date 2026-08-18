@@ -38,6 +38,8 @@ import {
   type NotificationKind,
   type SettingScope,
   type SettingWriteScope,
+  type SecretRegistryActionState,
+  type SecretRegistryState,
   type WorktreeManagementAction,
   type WorkflowFileFormat,
 } from "./DashboardConstants";
@@ -115,6 +117,8 @@ export {
   type AnyTargetId,
   type SettingScope,
   type SettingWriteScope,
+  type SecretRegistryActionState,
+  type SecretRegistryState,
 } from "./DashboardConstants";
 
 // Re-export WorkflowSummary, WorkflowStep, and PreCondition for webview consumers
@@ -1394,6 +1398,12 @@ export interface GlobalSettingsLoadRequestMessage {
   type: typeof MESSAGE_TYPES.GLOBAL_SETTINGS_LOAD_REQUEST;
 }
 
+/** Extension -> Webview: open the global settings drawer on a named tab. */
+export interface OpenGlobalSettingsTabMessage {
+  type: typeof MESSAGE_TYPES.OPEN_GLOBAL_SETTINGS_TAB;
+  tab: "secrets";
+}
+
 /** Extension → Webview: full settings payload + sources */
 export interface GlobalSettingsLoadedMessage {
   type: typeof MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED;
@@ -2110,6 +2120,71 @@ export interface McpConfigPreviewResultMessage {
 }
 
 // ============================================================================
+// SECRET REGISTRY TYPES
+// ============================================================================
+
+/** Names of MCP servers and workflows that reference a secret name. */
+export interface SecretRegistryUsage {
+  mcpServers: string[];
+  workflows: string[];
+}
+
+/** Safe-to-send secret metadata. This type intentionally has no value field. */
+export interface SecretRegistryEntry {
+  name: string;
+  scope: SettingWriteScope;
+  state: SecretRegistryState;
+  description?: string;
+  lastUpdated?: number;
+  usedBy: SecretRegistryUsage;
+}
+
+/** Webview -> Extension: request names and metadata for one scope. */
+export interface RequestSecretRegistryMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_SECRET_REGISTRY;
+  scope: SettingWriteScope;
+}
+
+/** Webview -> Extension: write-only secret value submission. */
+export interface SetSecretMessage {
+  type: typeof MESSAGE_TYPES.SET_SECRET;
+  name: string;
+  scope: SettingWriteScope;
+  value: string;
+  description?: string;
+}
+
+/** Webview -> Extension: delete one managed secret. */
+export interface DeleteSecretMessage {
+  type: typeof MESSAGE_TYPES.DELETE_SECRET;
+  name: string;
+  scope: SettingWriteScope;
+}
+
+/** Extension -> Webview: safe registry listing; never contains a secret value. */
+export interface SecretRegistryUpdateMessage {
+  type: typeof MESSAGE_TYPES.SECRET_REGISTRY_UPDATE;
+  scope: SettingWriteScope;
+  secrets: SecretRegistryEntry[];
+}
+
+/** Extension -> Webview: write-only confirmation; intentionally no value/metadata echo. */
+export interface SecretSetMessage {
+  type: typeof MESSAGE_TYPES.SECRET_SET;
+  name: string;
+  scope: SettingWriteScope;
+  state: Extract<SecretRegistryActionState, "set">;
+}
+
+/** Extension -> Webview: deletion confirmation; intentionally no value echo. */
+export interface SecretDeletedMessage {
+  type: typeof MESSAGE_TYPES.SECRET_DELETED;
+  name: string;
+  scope: SettingWriteScope;
+  state: Extract<SecretRegistryActionState, "deleted">;
+}
+
+// ============================================================================
 // HARNESS FILE MANAGER TYPES
 // ============================================================================
 
@@ -2232,6 +2307,7 @@ export interface OpenHarnessDirResultMessage {
  */
 export type IncomingMessage =
   | { type: typeof MESSAGE_TYPES.INIT; data: InitMessageData }
+  | OpenGlobalSettingsTabMessage
   | FileSelectedMessage
   | SessionRestoredMessage
   | ExecutionStartedMessage
@@ -2317,6 +2393,9 @@ export type IncomingMessage =
   | StepUndoDataUpdatedMessage
   | UndoPromptResultMessage
   | UndoRecordUpdatedMessage
+  | SecretRegistryUpdateMessage
+  | SecretSetMessage
+  | SecretDeletedMessage
   | McpRegistryServersUpdateMessage
   | McpLocalScanResultMessage
   | McpRegistrySearchResultMessage
