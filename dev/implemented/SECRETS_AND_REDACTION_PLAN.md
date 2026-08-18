@@ -1,6 +1,6 @@
 # Secrets and Sensitive-Value Redaction Plan
 
-**Status:** In progress — Phases 1–2 declaration and prompt disclosure landed
+**Status:** Implemented — all six phases landed; see "Final acceptance audit" below
 **Priority:** High — before broader remote and automation APIs
 
 ## Problem

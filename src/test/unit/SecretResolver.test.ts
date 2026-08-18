@@ -13,6 +13,7 @@ import {
   MissingSecretError,
   assertNoSecretInterpolationInPrompt,
   expandSecretInterpolations,
+  getDeclaredSecretGrants,
   preflightWorkflowSecrets,
   resolveSecretEnvironment,
 } from "../../utils/SecretResolver";
@@ -178,5 +179,67 @@ suite("SecretResolver", () => {
     );
 
     assert.strictEqual(result.passed, true, JSON.stringify(result));
+  });
+
+  suite("getDeclaredSecretGrants", () => {
+    test("inherits the workflow array when the step declares nothing", () => {
+      const workflow: PromptFile = {
+        secrets: ["WORKFLOW_TOKEN"],
+        steps: [{ prompt: "no inline reference" }],
+      };
+
+      assert.deepStrictEqual(
+        getDeclaredSecretGrants(workflow.steps![0], workflow),
+        ["WORKFLOW_TOKEN"]
+      );
+    });
+
+    test("step-level null clears the inherited workflow grant", () => {
+      const workflow: PromptFile = {
+        secrets: ["WORKFLOW_TOKEN"],
+        steps: [{ prompt: "no inline reference", secrets: null }],
+      };
+
+      assert.deepStrictEqual(
+        getDeclaredSecretGrants(workflow.steps![0], workflow),
+        []
+      );
+    });
+
+    test("workflow-level null grants nothing", () => {
+      const workflow: PromptFile = {
+        secrets: null,
+        steps: [{ prompt: "no inline reference" }],
+      };
+
+      assert.deepStrictEqual(
+        getDeclaredSecretGrants(workflow.steps![0], workflow),
+        []
+      );
+    });
+
+    test("step array replaces the workflow array without merging", () => {
+      const workflow: PromptFile = {
+        secrets: ["WORKFLOW_TOKEN"],
+        steps: [{ prompt: "no inline reference", secrets: ["STEP_TOKEN"] }],
+      };
+
+      assert.deepStrictEqual(
+        getDeclaredSecretGrants(workflow.steps![0], workflow),
+        ["STEP_TOKEN"]
+      );
+    });
+
+    test("an inline reference still grants when the array is cleared", () => {
+      const workflow: PromptFile = {
+        secrets: ["WORKFLOW_TOKEN"],
+        steps: [{ prompt: "use !INLINE_TOKEN here", secrets: null }],
+      };
+
+      assert.deepStrictEqual(
+        getDeclaredSecretGrants(workflow.steps![0], workflow),
+        ["INLINE_TOKEN"]
+      );
+    });
   });
 });

@@ -214,8 +214,13 @@ export function getDeclaredSecretGrants(
   step: WorkflowStep,
   workflow: PromptFile
 ): string[] {
-  const inherited = step.secrets ?? workflow.secrets ?? [];
-  return getEffectiveSecretGrants(step, inherited);
+  // Mirror `select()` in ExecutionPropertyResolver: a step-level value wins
+  // whenever it is present, and an explicit `null` clears the inherited array
+  // rather than falling back to it. `??` would treat that `null` as "absent"
+  // and re-inherit the workflow grants, injecting a secret the step opted out
+  // of. Inline `!NAME` references still grant — that asymmetry is deliberate.
+  const declared = step.secrets !== undefined ? step.secrets : workflow.secrets;
+  return getEffectiveSecretGrants(step, declared ?? []);
 }
 
 function getProcessMaps(
