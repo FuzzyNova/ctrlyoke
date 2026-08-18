@@ -121,7 +121,9 @@ describe("SecretsSection", () => {
     const nameInput = screen.getByLabelText("Name");
     await user.type(nameInput, "bad-name");
     await user.tab();
-    expect(screen.getByRole("alert")).toHaveTextContent("^[A-Z][A-Z0-9_]*$");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Secret name must start with a capital letter and contain only capital letters, numbers, or underscores."
+    );
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     await user.click(

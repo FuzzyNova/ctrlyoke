@@ -15,6 +15,7 @@ import {
   isValidSecretName,
   userSecretKey,
   userSecretMetadataKey,
+  validateSecretName,
   workspaceSecretKeyForRoot,
   workspaceSecretMetadataKeyForRoot,
 } from "../platform/SecretKey";
@@ -331,11 +332,7 @@ export class SecretRegistryService {
     description?: string
   ): Promise<void> {
     assertWriteScope(scope);
-    if (!isValidSecretName(name)) {
-      throw new Error(
-        `Invalid secret name "${name}". Secret names must match ^[A-Z][A-Z0-9_]*$.`
-      );
-    }
+    validateSecretName(name);
     if (typeof value !== "string") {
       throw new Error("Secret value must be a string.");
     }
@@ -353,11 +350,7 @@ export class SecretRegistryService {
 
   async delete(name: string, scope: SettingWriteScope): Promise<void> {
     assertWriteScope(scope);
-    if (!isValidSecretName(name)) {
-      throw new Error(
-        `Invalid secret name "${name}". Secret names must match ^[A-Z][A-Z0-9_]*$.`
-      );
-    }
+    validateSecretName(name);
     await this.options.secretStore.delete(this.secretKey(scope, name));
     await this.options.secretStore.delete(this.metadataKey(scope, name));
   }

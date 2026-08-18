@@ -24,7 +24,11 @@ interface SecretDialogState {
 }
 
 const SECRET_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
-const SECRET_NAME_PATTERN_TEXT = "^[A-Z][A-Z0-9_]*$";
+// Names are restricted to this shape so a declaration is always a legal env var name and so
+// the `!NAME` prompt-completion trigger never fires on ordinary lowercase prose or Markdown
+// `![alt]` image syntax after a `!` (see SECRETS_AND_REDACTION_PLAN.md).
+const SECRET_NAME_REQUIREMENT_TEXT =
+  "Secret name must start with a capital letter and contain only capital letters, numbers, or underscores.";
 
 const SCOPE_OPTIONS = [
   { value: SETTING_SCOPES.USER, label: "User" },
@@ -226,7 +230,7 @@ function SecretDialog({ dialog, activeScope, onClose }: SecretDialogProps) {
   const isReplace = dialog.mode === "replace";
   const validateName = (candidate: string): string | null => {
     if (!SECRET_NAME_PATTERN.test(candidate)) {
-      return `Secret names must match ${SECRET_NAME_PATTERN_TEXT}`;
+      return SECRET_NAME_REQUIREMENT_TEXT;
     }
     return null;
   };

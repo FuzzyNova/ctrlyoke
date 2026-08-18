@@ -4,6 +4,15 @@ import { foldPathForCompare } from "../utils/PathCasing";
 
 export const SECRET_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 
+/**
+ * Human-readable description of `SECRET_NAME_PATTERN`, shown to users instead of the raw
+ * regex. Names are restricted to this shape so a declaration is always a legal env var name
+ * and so the `!NAME` prompt-completion trigger (`PromptCompletionProvider`/`CodeMirrorEditor`)
+ * never fires on ordinary lowercase prose or Markdown `![alt]` image syntax after a `!`.
+ */
+export const SECRET_NAME_REQUIREMENT_TEXT =
+  "Secret name must start with a capital letter and contain only capital letters, numbers, or underscores.";
+
 const USER_SECRET_PREFIX = "ctrlyoke.secret.user";
 const WORKSPACE_SECRET_PREFIX = "ctrlyoke.secret.ws";
 const USER_SECRET_METADATA_PREFIX = "ctrlyoke.secret.meta.user";
@@ -20,9 +29,7 @@ export function isValidSecretName(value: string): value is SecretName {
 /** Validate a managed secret name and throw an actionable error if invalid. */
 export function validateSecretName(value: string): asserts value is SecretName {
   if (!isValidSecretName(value)) {
-    throw new Error(
-      `Invalid secret name "${value}". Secret names must match ${SECRET_NAME_PATTERN.source}.`
-    );
+    throw new Error(`Invalid secret name "${value}". ${SECRET_NAME_REQUIREMENT_TEXT}`);
   }
 }
 
