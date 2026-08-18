@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { ScriptConditionEditor } from "@components/shared/ScriptConditionEditor";
 import { CONDITION_ACTIONS, MESSAGE_TYPES } from "@/types/messages";
 import { END_CONDITION_SCRIPT_TYPES } from "@root/types/DashboardConstants";
@@ -42,7 +43,47 @@ vi.mock("@components/editor/CodeMirrorEditor", () => ({
   ),
 }));
 
+vi.mock("@components/shared/ScriptCommandEditor", () => ({
+  ScriptCommandEditor: ({
+    id,
+    value,
+    onChange,
+    onBlur,
+    placeholder,
+    disabled,
+    className,
+  }: {
+    id: string;
+    value: string;
+    onChange: (value: string) => void;
+    onBlur?: () => void;
+    placeholder?: string;
+    disabled?: boolean;
+    className?: string;
+  }) => (
+    <input
+      type="text"
+      id={id}
+      value={value}
+      onChange={(event) => onChange(event.currentTarget.value)}
+      onBlur={onBlur}
+      placeholder={placeholder}
+      disabled={disabled}
+      className={className}
+    />
+  ),
+}));
+
 describe("ScriptConditionEditor", () => {
+  beforeAll(() => {
+    if (!Range.prototype.getClientRects) {
+      Object.defineProperty(Range.prototype, "getClientRects", {
+        configurable: true,
+        value: () => [],
+      });
+    }
+  });
+
   it("offers the shared script types and creates a starter script", async () => {
     const onChange = vi.fn();
     const postMessage = vi.fn();
@@ -133,6 +174,38 @@ describe("ScriptConditionEditor", () => {
       );
     });
   });
+
+  it.each(["endCondition", "preCondition", "scriptStep"] as const)(
+    "%s commits script edits on blur instead of every keystroke",
+    async (variant) => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+
+      render(
+        <ScriptConditionEditor
+          variant={variant}
+          value={{ script: "" }}
+          onChange={onChange}
+          idPrefix={`test-${variant}`}
+        />
+      );
+
+      const script = document.getElementById(`test-${variant}-script`);
+      if (!script) throw new Error("Script editor was not rendered");
+      await user.click(script);
+      await user.type(script, "npm test && npm run lint");
+
+      expect(onChange).not.toHaveBeenCalled();
+
+      fireEvent.blur(script);
+
+      await waitFor(() => {
+        expect(onChange).toHaveBeenCalledWith(
+          expect.objectContaining({ script: "npm test && npm run lint" })
+        );
+      });
+    }
+  );
 
   it("shows and edits passRetryPrompt only for pass retries", () => {
     const onChange = vi.fn();

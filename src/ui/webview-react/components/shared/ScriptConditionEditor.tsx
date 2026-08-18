@@ -10,6 +10,7 @@ import {
 } from "../../types/messages";
 import type { SelectOption } from "./CustomSelect";
 import { CodeMirrorEditor } from "@components/editor/CodeMirrorEditor";
+import { ScriptCommandEditor } from "./ScriptCommandEditor";
 import { getDictionaryUris } from "@utils/dictionaryUris";
 import { useSettingsStore } from "@store/settingsStore";
 import {
@@ -316,21 +317,13 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         >
           {scriptLabel}
         </label>
-        <input
-          type="text"
+        <ScriptCommandEditor
           id={`${idPrefix}-script`}
           value={scriptInput}
-          onChange={(e) => setScriptInput(e.target.value)}
-          onBlur={(e) => update({ script: e.target.value })}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") e.currentTarget.blur();
-          }}
+          onChange={setScriptInput}
+          onBlur={() => update({ script: scriptInput })}
           placeholder="npm test"
           disabled={disabled}
-          autoCorrect="off"
-          autoCapitalize="off"
-          autoComplete="off"
-          spellCheck={false}
           className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
         />
       </div>

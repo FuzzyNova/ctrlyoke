@@ -68,6 +68,7 @@ export {
   SingleLineCompletionEditor,
   type SingleLineCompletionEditorProps,
 } from "./SingleLineCompletionEditor";
+export { ScriptCommandEditor } from "./ScriptCommandEditor";
 export { ErrorBehaviorEditor } from "./ErrorBehaviorEditor";
 export { AnimatedSection } from "./AnimatedSection";
 export { SettingSourceBadge } from "./SettingSourceBadge";

@@ -522,7 +522,10 @@ If any of these recommendations don't match your intent, say so before implement
 
 Two phases, landed as two PRs per recommendation #5 above — Phase A must merge before Phase B starts, since Phase B only adds a second thin consumer of the shell Phase A builds.
 
-### Phase A — Shared shell + Script completions
+### Phase A — Shared shell + Script completions (complete)
+
+Phase A is complete. Implementation Steps 1–8 are landed; Phase B remains the
+follow-up for local branch completions.
 
 1. Add `SCRIPT_COMPLETIONS_REQUEST` and `SCRIPT_COMPLETIONS_RESPONSE` in `src/types/DashboardConstants.ts`.
 

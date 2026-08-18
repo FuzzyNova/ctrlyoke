@@ -133,10 +133,12 @@ describe("WorkflowPropertiesPanel inherited defaults", () => {
     fireEvent.click(screen.getByTitle("Validation"));
     expect(screen.getByLabelText("Enable Pre-Condition")).toBeChecked();
     expect(screen.getByLabelText("Enable End Condition")).toBeChecked();
-    expect(
-      screen.getByDisplayValue("test -f package.json")
-    ).toBeInTheDocument();
-    expect(screen.getByDisplayValue("npm test")).toBeInTheDocument();
+    expect(document.getElementById("settings-pre-script")).toHaveTextContent(
+      "test -f package.json"
+    );
+    expect(document.getElementById("settings-end-script")).toHaveTextContent(
+      "npm test"
+    );
   });
 
   it("persists null to explicitly disable inherited conditions", () => {
