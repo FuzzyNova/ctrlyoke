@@ -71,6 +71,7 @@ import type {
 } from "../types/HostedWorkspaceViewerTypes";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import { secretRedactionService } from "../utils/SecretRedactionService";
+import { installSecretRedactionMiddleware } from "./SecretRedactionMiddleware";
 
 const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
 
@@ -202,21 +203,7 @@ export class CtrlYokeHostedServer
       Log.warn(`ctrlyoke WebSocket server error: ${err.message}`);
     });
     this.app.use(express.json({ limit: "64kb" }));
-    this.app.use((_req, res, next) => {
-      const originalJson = res.json.bind(res);
-      const originalSend = res.send.bind(res);
-      res.json = ((body: unknown) =>
-        originalJson(
-          secretRedactionService.redactValue(body)
-        )) as typeof res.json;
-      res.send = ((body: unknown) =>
-        originalSend(
-          typeof body === "string"
-            ? secretRedactionService.redactText(body)
-            : body
-        )) as typeof res.send;
-      next();
-    });
+    installSecretRedactionMiddleware(this.app);
     this.setupRoutes();
     this.setupWebSocket();
     this.setupHeartbeat();
@@ -645,6 +632,7 @@ export class CtrlYokeHostedServer
     // the browser fetches them without query params after loading the entry HTML.
     this.app.get("/standalone-shim.js", (_req, res) => {
       this.setNoStore(res);
+      res.locals.skipSecretRedaction = true;
       res
         .type("application/javascript")
         .send(buildHostedStandaloneShimScript());
@@ -671,6 +659,7 @@ export class CtrlYokeHostedServer
     });
     this.app.get("/ctrlyoke-service-worker.js", (_req, res) => {
       this.setNoStore(res);
+      res.locals.skipSecretRedaction = true;
       res.type("application/javascript").send(buildHostedServiceWorkerScript());
     });
     // Dynamic SVG icon routes — apply configurable background/foreground colors to the
