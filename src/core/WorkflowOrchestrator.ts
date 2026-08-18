@@ -4885,9 +4885,13 @@ export class WorkflowOrchestrator {
   }
 
   async createSampleScript(
-    scriptType: EndConditionScriptType
+    scriptType: EndConditionScriptType,
+    scriptName?: string
   ): Promise<string | null> {
-    return this.endConditionEvaluator.createSampleScript(scriptType);
+    return this.endConditionEvaluator.createSampleScript(
+      scriptType,
+      scriptName
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────

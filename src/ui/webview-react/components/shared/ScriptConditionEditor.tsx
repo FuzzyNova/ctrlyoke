@@ -11,12 +11,12 @@ import {
 import type { SelectOption } from "./CustomSelect";
 import { CodeMirrorEditor } from "@components/editor/CodeMirrorEditor";
 import { ScriptCommandEditor } from "./ScriptCommandEditor";
+import { CreateScriptModal } from "./CreateScriptModal";
 import { getDictionaryUris } from "@utils/dictionaryUris";
 import { useSettingsStore } from "@store/settingsStore";
 import {
   EXECUTION_MODE_HELP_TEXT,
   EXECUTION_MODE_OPTIONS,
-  END_CONDITION_SCRIPT_TYPES,
   MESSAGE_TYPES,
   USER_FEEDBACK_SEVERITY,
   type EndConditionScriptType,
@@ -48,23 +48,6 @@ const SCRIPT_STEP_ACTION_OPTIONS: SelectOption[] = [
   { value: CONDITION_ACTIONS.CONTINUE, label: "Continue" },
   { value: CONDITION_ACTIONS.STOP_WORKFLOW, label: "Stop Workflow" },
 ];
-
-const END_CONDITION_SCRIPT_TYPE_LABELS: Record<
-  EndConditionScriptType,
-  string
-> = {
-  [END_CONDITION_SCRIPT_TYPES.PYTHON]: "Python",
-  [END_CONDITION_SCRIPT_TYPES.JAVASCRIPT]: "JavaScript",
-  [END_CONDITION_SCRIPT_TYPES.SHELL]: "Shell Script",
-  [END_CONDITION_SCRIPT_TYPES.POWERSHELL]: "PowerShell",
-};
-
-const END_CONDITION_SCRIPT_TYPE_OPTIONS: SelectOption[] = (
-  Object.values(END_CONDITION_SCRIPT_TYPES) as EndConditionScriptType[]
-).map((value) => ({
-  value,
-  label: END_CONDITION_SCRIPT_TYPE_LABELS[value],
-}));
 
 let createScriptRequestCounter = 0;
 
@@ -179,9 +162,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   const [maxRetriesInput, setMaxRetriesInput] = useState(
     String(v.maxRetries ?? 1)
   );
-  const [scriptType, setScriptType] = useState<EndConditionScriptType>(
-    END_CONDITION_SCRIPT_TYPES.PYTHON
-  );
+  const [createScriptModalOpen, setCreateScriptModalOpen] = useState(false);
   const [creatingScript, setCreatingScript] = useState(false);
   const pendingCreateScriptRequest = useRef<string | null>(null);
   const currentValueRef = useRef(value);
@@ -225,6 +206,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         typeof message.scriptPath === "string"
       ) {
         setScriptInput(message.scriptPath);
+        setCreateScriptModalOpen(false);
         onChange({
           ...(currentValueRef.current ?? {}),
           script: message.scriptPath,
@@ -249,7 +231,10 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   const update = (patch: Partial<ScriptConditionValue>) =>
     onChange({ ...v, ...patch });
 
-  const handleCreateScript = () => {
+  const handleCreateScript = (
+    scriptType: EndConditionScriptType,
+    scriptName: string
+  ) => {
     const requestId = nextCreateScriptRequestId();
     pendingCreateScriptRequest.current = requestId;
     setCreatingScript(true);
@@ -257,6 +242,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
       type: MESSAGE_TYPES.CREATE_END_CONDITION_SCRIPT,
       requestId,
       scriptType,
+      scriptName,
     });
   };
 
@@ -287,8 +273,9 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
     (s) => s.workflowProperties.executionMode ?? s.globalSettings.executionMode
   );
   const defaultExecutionModeLabel = `Inherit (${
-    EXECUTION_MODE_OPTIONS.find((option) => option.value === resolvedExecutionMode)
-      ?.label ?? resolvedExecutionMode
+    EXECUTION_MODE_OPTIONS.find(
+      (option) => option.value === resolvedExecutionMode
+    )?.label ?? resolvedExecutionMode
   })`;
   const compareSourceHint =
     compareSource === COMPARE_SOURCES.AUTO
@@ -330,32 +317,13 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
 
       {variant === "endCondition" && (
         <DrawerRow narrow={narrow}>
-          <div className="flex flex-col gap-1">
-            <label
-              htmlFor={`${idPrefix}-script-type`}
-              className="text-xs font-medium text-foreground"
-            >
-              Script type
-            </label>
-            <CustomSelect
-              id={`${idPrefix}-script-type`}
-              value={scriptType}
-              onChange={(value) =>
-                setScriptType(value as EndConditionScriptType)
-              }
-              options={END_CONDITION_SCRIPT_TYPE_OPTIONS}
-              triggerAriaLabel="Script type"
-              disabled={disabled || creatingScript}
-            />
-          </div>
-          <div className="flex items-end">
+          <div className="flex items-end w-full">
             <ActionButton
-              label="Create Script"
-              pendingLabel="Creating..."
+              label="Create New Script"
               icon="new-file"
-              onClick={handleCreateScript}
-              disabled={disabled}
-              pending={creatingScript}
+              onClick={() => setCreateScriptModalOpen(true)}
+              disabled={disabled || creatingScript}
+              className="w-full"
             />
           </div>
         </DrawerRow>
@@ -452,7 +420,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
       {/* Timeout + Max Retries (Max Retries shares row with Timeout in wide view when retry is active) */}
       {variant === "endCondition" && hasRetry ? (
         <DrawerRow narrow={narrow}>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 w-full">
             <label
               htmlFor={`${idPrefix}-timeout`}
               className="text-xs font-medium text-foreground"
@@ -468,7 +436,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
               min={0}
               placeholder="Default (from settings)"
               disabled={disabled}
-              className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+              className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -492,7 +460,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
               min={-1}
               max={100}
               disabled={disabled}
-              className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+              className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
             />
             <span className="text-xxs text-description-fg">
               Use -1 for unlimited retries
@@ -501,7 +469,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         </DrawerRow>
       ) : variant === "scriptStep" ? (
         <DrawerRow narrow={narrow}>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 w-full">
             <label
               htmlFor={`${idPrefix}-timeout`}
               className="text-xs font-medium text-foreground"
@@ -517,7 +485,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
               min={0}
               placeholder="Default (from settings)"
               disabled={disabled}
-              className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+              className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -546,25 +514,27 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           </div>
         </DrawerRow>
       ) : (
-        <div className="flex flex-col gap-1 w-1/2">
-          <label
-            htmlFor={`${idPrefix}-timeout`}
-            className="text-xs font-medium text-foreground"
-          >
-            Timeout (ms)
-          </label>
-          <input
-            type="number"
-            id={`${idPrefix}-timeout`}
-            value={timeoutInput}
-            onChange={(e) => setTimeoutInput(e.target.value)}
-            onBlur={commitTimeout}
-            min={0}
-            placeholder="Default (from settings)"
-            disabled={disabled}
-            className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
-          />
-        </div>
+        <DrawerRow narrow={narrow}>
+          <div className="flex flex-col gap-1 w-full">
+            <label
+              htmlFor={`${idPrefix}-timeout`}
+              className="text-xs font-medium text-foreground"
+            >
+              Timeout (ms)
+            </label>
+            <input
+              type="number"
+              id={`${idPrefix}-timeout`}
+              value={timeoutInput}
+              onChange={(e) => setTimeoutInput(e.target.value)}
+              onBlur={commitTimeout}
+              min={0}
+              placeholder="Default (from settings)"
+              disabled={disabled}
+              className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+            />
+          </div>
+        </DrawerRow>
       )}
 
       {/* endCondition-only: retry fields (shown when retry is an action) */}
@@ -653,6 +623,13 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           </div>
         </>
       )}
+      <CreateScriptModal
+        isOpen={variant === "endCondition" && createScriptModalOpen}
+        onClose={() => setCreateScriptModalOpen(false)}
+        onCreate={handleCreateScript}
+        pending={creatingScript}
+        idPrefix={`${idPrefix}-create-script`}
+      />
     </div>
   );
 };

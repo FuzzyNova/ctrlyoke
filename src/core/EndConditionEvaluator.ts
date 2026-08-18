@@ -872,6 +872,7 @@ export class EndConditionEvaluator {
    */
   async createSampleScript(
     scriptType: EndConditionScriptType,
+    scriptName?: string,
     workingDirectory?: string
   ): Promise<string | null> {
     const workspaceRoot = this.platform.getWorkspaceRoot();
@@ -892,17 +893,17 @@ export class EndConditionEvaluator {
 
     // Determine template file name and destination file name
     let templateFileName: string;
-    let destinationFileName: string;
+    let defaultDestinationFileName: string;
 
     switch (scriptType) {
       case END_CONDITION_SCRIPT_TYPES.PYTHON:
         templateFileName = "check_condition.py";
-        destinationFileName = "check_condition.py";
+        defaultDestinationFileName = "check_condition.py";
         break;
 
       case END_CONDITION_SCRIPT_TYPES.JAVASCRIPT:
         templateFileName = "check_condition.js";
-        destinationFileName = "check_condition.js";
+        defaultDestinationFileName = "check_condition.js";
         break;
 
       case END_CONDITION_SCRIPT_TYPES.SHELL:
@@ -910,16 +911,29 @@ export class EndConditionEvaluator {
           process.platform === "win32"
             ? "check_condition.bat"
             : "check_condition.sh";
-        destinationFileName = templateFileName;
+        defaultDestinationFileName = templateFileName;
         break;
 
       case END_CONDITION_SCRIPT_TYPES.POWERSHELL:
         templateFileName = "check_condition.ps1";
-        destinationFileName = "check_condition.ps1";
+        defaultDestinationFileName = "check_condition.ps1";
         break;
 
       default:
         return null;
+    }
+
+    const destinationFileName =
+      scriptName?.trim() || defaultDestinationFileName;
+    if (
+      destinationFileName === "." ||
+      destinationFileName === ".." ||
+      /[\\/\0]/.test(destinationFileName) ||
+      destinationFileName.includes("..")
+    ) {
+      throw new Error(
+        "Script name must be a file name inside .ctrlyoke/scripts."
+      );
     }
 
     // Get template file path from extension directory

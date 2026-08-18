@@ -1194,6 +1194,8 @@ export interface CreateEndConditionScriptMessage {
   type: typeof MESSAGE_TYPES.CREATE_END_CONDITION_SCRIPT;
   requestId: string;
   scriptType: EndConditionScriptType;
+  /** Workspace-relative filename to use for the new script. */
+  scriptName?: string;
 }
 
 /** Webview → Extension: retry detection of the installed harness CLIs. */

@@ -626,6 +626,18 @@ export class WebviewMessageRouter {
           return;
         }
 
+        if (
+          request.scriptName !== undefined &&
+          typeof request.scriptName !== "string"
+        ) {
+          ctx.emit({
+            type: MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATION_FAILED,
+            requestId: request.requestId,
+            error: "Script name must be a file name inside .ctrlyoke/scripts.",
+          });
+          return;
+        }
+
         try {
           const orchestrator = this.getOrchestrator();
           if (!orchestrator) {
@@ -634,7 +646,8 @@ export class WebviewMessageRouter {
             );
           }
           const scriptPath = await orchestrator.createSampleScript(
-            request.scriptType
+            request.scriptType,
+            request.scriptName
           );
           if (!scriptPath) {
             throw new Error(

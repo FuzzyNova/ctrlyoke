@@ -217,8 +217,8 @@ suite("WebviewMessageRouter — end-condition script creation", () => {
     const browserMessages: unknown[] = [];
     const router = buildRouter(
       {
-        createSampleScript: async (scriptType: string) => {
-          created.push(scriptType);
+        createSampleScript: async (scriptType: string, scriptName: string) => {
+          created.push(`${scriptType}:${scriptName}`);
           return ".ctrlyoke/scripts/check_condition.js";
         },
       },
@@ -230,6 +230,7 @@ suite("WebviewMessageRouter — end-condition script creation", () => {
         type: MESSAGE_TYPES.CREATE_END_CONDITION_SCRIPT,
         requestId: "create-1",
         scriptType: END_CONDITION_SCRIPT_TYPES.JAVASCRIPT,
+        scriptName: "custom-check.js",
       },
       {
         clientTag: "browser:1",
@@ -237,7 +238,10 @@ suite("WebviewMessageRouter — end-condition script creation", () => {
       }
     );
 
-    assert.deepStrictEqual(created, [END_CONDITION_SCRIPT_TYPES.JAVASCRIPT]);
+    assert.deepStrictEqual(
+      created,
+      [`${END_CONDITION_SCRIPT_TYPES.JAVASCRIPT}:custom-check.js`]
+    );
     assert.deepStrictEqual(browserMessages, [
       {
         type: MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATED,

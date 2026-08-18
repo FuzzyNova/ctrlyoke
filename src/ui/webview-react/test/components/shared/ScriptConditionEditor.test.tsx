@@ -84,7 +84,7 @@ describe("ScriptConditionEditor", () => {
     }
   });
 
-  it("offers the shared script types and creates a starter script", async () => {
+  it("opens the script creation modal and creates a named starter script", async () => {
     const onChange = vi.fn();
     const postMessage = vi.fn();
     (window.vscodeApi as any).postMessage = postMessage;
@@ -98,6 +98,8 @@ describe("ScriptConditionEditor", () => {
       />
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Create New Script" }));
+
     const picker = screen.getByRole("button", { name: "Script type" });
     fireEvent.click(picker);
     const javascriptOption = screen.getByText("JavaScript").closest("button");
@@ -105,12 +107,16 @@ describe("ScriptConditionEditor", () => {
     fireEvent.click(javascriptOption!);
 
     expect(picker).toHaveTextContent("JavaScript");
+    expect(screen.getByLabelText("Script name")).toHaveValue(
+      "check_condition.js"
+    );
     fireEvent.click(screen.getByRole("button", { name: "Create Script" }));
 
     expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.CREATE_END_CONDITION_SCRIPT,
       requestId: expect.any(String),
       scriptType: END_CONDITION_SCRIPT_TYPES.JAVASCRIPT,
+      scriptName: "check_condition.js",
     });
 
     const requestId = postMessage.mock.calls[0][0].requestId;
@@ -154,6 +160,7 @@ describe("ScriptConditionEditor", () => {
       />
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Create New Script" }));
     fireEvent.click(screen.getByRole("button", { name: "Create Script" }));
     const requestId = postMessage.mock.calls[0][0].requestId;
     fireEvent(
@@ -173,6 +180,26 @@ describe("ScriptConditionEditor", () => {
         "error"
       );
     });
+  });
+
+  it("does not create a script when the modal is cancelled", () => {
+    const postMessage = vi.fn();
+    (window.vscodeApi as any).postMessage = postMessage;
+
+    render(
+      <ScriptConditionEditor
+        variant="endCondition"
+        value={{}}
+        onChange={vi.fn()}
+        idPrefix="test-condition"
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Create New Script" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(postMessage).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it.each(["endCondition", "preCondition", "scriptStep"] as const)(

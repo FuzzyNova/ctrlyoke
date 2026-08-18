@@ -26,6 +26,7 @@ interface ActionButtonProps {
   feedback?: ActionFeedback;
   title?: string;
   ariaLabel?: string;
+  className?: string;
 }
 
 /**
@@ -47,6 +48,7 @@ export function ActionButton({
   feedback,
   title,
   ariaLabel,
+  className: customClassName = "",
 }: ActionButtonProps) {
   const flashing = success && !pending;
   const displayLabel = pending
@@ -79,7 +81,7 @@ export function ActionButton({
     <div className="flex flex-col items-start gap-0.5">
       <button
         type="button"
-        className={className}
+        className={`${className} ${customClassName}`}
         disabled={disabled || pending || flashing}
         onClick={flashing ? undefined : onClick}
         title={title}
