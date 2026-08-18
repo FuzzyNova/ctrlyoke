@@ -17,6 +17,7 @@ import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
+import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   PromptStep,
@@ -37,6 +38,28 @@ import {
   type OpenCodeInlineConfig,
   type OpenCodeInlineConfigBuildOptions,
 } from "./OpenCodeInlineConfig";
+
+const OPENCODE_MCP_FILTERING_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "translated-cli",
+  verification: {
+    kind: "behavioral-test",
+    reference: "src/test/harness/inline-config.harness.test.ts",
+    basis: "cli-version",
+    verifiedVersions: [">=1.18.10"],
+  },
+} as const;
+
+const OPENCODE_IMAGE_INPUT_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "native",
+  verification: {
+    kind: "manual",
+    reference: "https://dev.opencode.ai/docs/cli/",
+    basis: "cli-version",
+    verifiedVersions: [">=1.18.10"],
+  },
+} as const;
 
 /**
  * OpenCode CLI Harness
@@ -87,6 +110,16 @@ export class OpenCodeCliProvider implements ICliProvider {
 
   readonly notificationMonitor = new OpenCodeNotificationMonitor();
   readonly toolPermissionMapper = new OpenCodeToolPermissionMapper();
+  get capabilities(): HarnessCapabilityFacts {
+    return {
+      permissions: this.toolPermissionMapper.capabilities,
+      hooks: OpenCodeNotificationMonitor.CAPABILITIES,
+      mcp: {
+        perServerToolFiltering: OPENCODE_MCP_FILTERING_CAPABILITY,
+      },
+      promptInputs: { images: OPENCODE_IMAGE_INPUT_CAPABILITY },
+    };
+  }
   readonly headlessSource = "stdout" as const;
   readonly logParser = new OpenCodeLogParser(() =>
     getOpenCodeContextWindowSize(this.resolvedCurrentModel)
@@ -379,6 +412,10 @@ export class OpenCodeCliProvider implements ICliProvider {
    */
   formatFileReference(relativeFilePath: string): string {
     return relativeFilePath;
+  }
+
+  buildImageAttachmentArgs(imageFilePaths: readonly string[]): string[] {
+    return imageFilePaths.flatMap((filePath) => ["--file", filePath]);
   }
 
   /**

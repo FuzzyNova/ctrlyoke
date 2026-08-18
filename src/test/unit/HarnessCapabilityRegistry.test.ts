@@ -2,6 +2,7 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import { HarnessCapabilityRegistry } from "../../core/HarnessCapabilityRegistry";
 import type { HarnessCapabilitySource } from "../../core/HarnessCapabilityRegistry";
+import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { AntigravityToolPermissionMapper } from "../../core/harness/antigravity/AntigravityToolPermissionMapper";
 import { ClaudeToolPermissionMapper } from "../../core/harness/claude/ClaudeToolPermissionMapper";
 import { CodexToolPermissionMapper } from "../../core/harness/codex/CodexToolPermissionMapper";
@@ -18,9 +19,14 @@ import type { HarnessConfig } from "../../core/harness/shared/interfaces/ICliPro
 import {
   CAPABILITY_DOMAINS,
   HARNESS_IDS,
+  HOOK_EVENT_ORDER,
   type HarnessId,
 } from "../../types/DashboardConstants";
-import type { PermissionCapabilityDescriptor } from "../../types/CompatibilityTypes";
+import type {
+  CapabilityDeclaration,
+  HarnessCapabilityFacts,
+  PermissionCapabilityDescriptor,
+} from "../../types/CompatibilityTypes";
 
 const HARNESS_ID_LIST = Object.values(HARNESS_IDS) as HarnessId[];
 type CapabilityProvider = HarnessCapabilitySource["provider"];
@@ -50,7 +56,10 @@ class StubProvider implements CapabilityProvider {
     harnessId: HarnessId,
     mapper: IToolPermissionMapper,
     version: string | undefined,
-    available = true
+    available = true,
+    readonly capabilityFacts: HarnessCapabilityFacts = {
+      permissions: mapper.capabilities,
+    }
   ) {
     this.config = {
       name: harnessId,
@@ -71,6 +80,10 @@ class StubProvider implements CapabilityProvider {
 
   async getVersion(): Promise<string | undefined> {
     return this.versionReader();
+  }
+
+  get capabilities() {
+    return this.capabilityFacts;
   }
 }
 
@@ -97,9 +110,14 @@ function makeRegistry(
   versionByHarness: Partial<Record<HarnessId, string | undefined>> = {},
   descriptorOverrides: Partial<
     Record<HarnessId, PermissionCapabilityDescriptor>
-  > = {}
+  > = {},
+  capabilityOverrides: Partial<Record<HarnessId, HarnessCapabilityFacts>> = {},
+  enabledDomains: readonly (typeof CAPABILITY_DOMAINS)[keyof typeof CAPABILITY_DOMAINS][] = [
+    CAPABILITY_DOMAINS.PERMISSIONS,
+  ]
 ): HarnessCapabilityRegistry {
   return new HarnessCapabilityRegistry({
+    enabledDomains,
     sourceFactory: (harnessId) => {
       const mapper = mapperFor(harnessId);
       const effectiveMapper = descriptorOverrides[harnessId]
@@ -112,10 +130,56 @@ function makeRegistry(
         ? versionByHarness[harnessId]
         : "1.0.0";
       return {
-        provider: new StubProvider(harnessId, effectiveMapper, version),
+        provider: new StubProvider(
+          harnessId,
+          effectiveMapper,
+          version,
+          true,
+          capabilityOverrides[harnessId] ?? {
+            permissions: effectiveMapper.capabilities,
+          }
+        ),
       };
     },
   });
+}
+
+function declaration(
+  fidelity: CapabilityDeclaration["fidelity"],
+  mechanism: CapabilityDeclaration["mechanism"]
+): CapabilityDeclaration {
+  return {
+    fidelity,
+    mechanism,
+    verification: {
+      kind: "manual",
+      reference: "registry-test",
+      basis: "cli-version",
+      verifiedVersions: ["*"],
+    },
+  };
+}
+
+function allDomainFacts(harnessId: HarnessId): HarnessCapabilityFacts {
+  return {
+    permissions: mapperFor(harnessId).capabilities,
+    promptInputs: { images: declaration("exact", "native") },
+    hooks: Object.fromEntries(
+      HOOK_EVENT_ORDER.map((event) => [
+        event,
+        declaration("partial", "translated-cli"),
+      ])
+    ),
+    mcp: { perServerToolFiltering: declaration("exact", "workspace-config") },
+  };
+}
+
+function allHarnessDomainFacts(): Partial<
+  Record<HarnessId, HarnessCapabilityFacts>
+> {
+  return Object.fromEntries(
+    HARNESS_ID_LIST.map((harnessId) => [harnessId, allDomainFacts(harnessId)])
+  ) as Partial<Record<HarnessId, HarnessCapabilityFacts>>;
 }
 
 suite("HarnessCapabilityRegistry", () => {
@@ -128,6 +192,17 @@ suite("HarnessCapabilityRegistry", () => {
         mapperFor(harnessId).capabilities
       );
     }
+  });
+
+  test("enables prompt-input compatibility for every registered harness", async () => {
+    const registry = new HarnessCapabilityRegistry();
+    const snapshot = await registry.getSnapshot();
+    assert.deepStrictEqual(snapshot.enabledDomains, [
+      CAPABILITY_DOMAINS.PERMISSIONS,
+      CAPABILITY_DOMAINS.PROMPT_INPUTS,
+      CAPABILITY_DOMAINS.HOOKS,
+      CAPABILITY_DOMAINS.MCP,
+    ]);
   });
 
   test("requires all three permission leaves for every HarnessId", async () => {
@@ -153,7 +228,7 @@ suite("HarnessCapabilityRegistry", () => {
       [HARNESS_IDS.QWEN_CLI]: "0.20.1",
     }).getInstalledCapabilities(HARNESS_IDS.QWEN_CLI);
     assert.strictEqual(
-      verified.effective?.permissions.allowedTools.verification,
+      verified.effective?.permissions?.allowedTools.verification,
       "verified"
     );
 
@@ -162,7 +237,7 @@ suite("HarnessCapabilityRegistry", () => {
     }).getInstalledCapabilities(HARNESS_IDS.QWEN_CLI);
     assert.strictEqual(missingVersion.version, undefined);
     assert.strictEqual(
-      missingVersion.effective?.permissions.allowedTools.verification,
+      missingVersion.effective?.permissions?.allowedTools.verification,
       "unknown"
     );
   });
@@ -199,19 +274,19 @@ suite("HarnessCapabilityRegistry", () => {
     ).getInstalledCapabilities(HARNESS_IDS.QWEN_CLI);
 
     assert.strictEqual(
-      snapshot.effective?.permissions.mode.verification,
+      snapshot.effective?.permissions?.mode.verification,
       "verified"
     );
     assert.strictEqual(
-      snapshot.effective?.permissions.allowedTools.verification,
+      snapshot.effective?.permissions?.allowedTools.verification,
       "verified"
     );
     assert.strictEqual(
-      snapshot.effective?.permissions.deniedTools.verification,
+      snapshot.effective?.permissions?.deniedTools.verification,
       "unknown"
     );
     assert.strictEqual(
-      snapshot.effective?.permissions.deniedTools.fidelity,
+      snapshot.effective?.permissions?.deniedTools.fidelity,
       "exact"
     );
   });
@@ -232,8 +307,147 @@ suite("HarnessCapabilityRegistry", () => {
     ]);
   });
 
+  test("supports an arbitrary enabled domain set and typed leaf dispatch", async () => {
+    const registry = makeRegistry(
+      {},
+      {},
+      allHarnessDomainFacts(),
+      Object.values(CAPABILITY_DOMAINS)
+    );
+
+    const image = await registry.getEffectiveCapabilityState(
+      HARNESS_IDS.COPILOT_CLI,
+      CAPABILITY_DOMAINS.PROMPT_INPUTS,
+      "images"
+    );
+    const hook = await registry.getEffectiveCapabilityState(
+      HARNESS_IDS.COPILOT_CLI,
+      CAPABILITY_DOMAINS.HOOKS,
+      "stop"
+    );
+    const mcp = await registry.getEffectiveCapabilityState(
+      HARNESS_IDS.COPILOT_CLI,
+      CAPABILITY_DOMAINS.MCP,
+      "perServerToolFiltering"
+    );
+
+    assert.strictEqual(image?.verification, "verified");
+    assert.strictEqual(hook?.fidelity, "partial");
+    assert.strictEqual(mcp?.mechanism, "workspace-config");
+  });
+
+  test("assembles adapter-owned MCP filtering declarations for every harness", async () => {
+    const registry = new HarnessCapabilityRegistry({
+      enabledDomains: [CAPABILITY_DOMAINS.MCP],
+      sourceFactory: (harnessId) => {
+        const provider = IntegrationFactory.createCapabilityProvider(harnessId);
+        return {
+          provider: {
+            config: provider.config,
+            capabilities: provider.capabilities,
+            checkAvailability: async () => true,
+            getVersion: async () => "1.0.0",
+          },
+        };
+      },
+    });
+    const snapshot = await registry.getSnapshot();
+
+    for (const harnessId of HARNESS_ID_LIST) {
+      const filtering =
+        snapshot.harnesses[harnessId].descriptor.mcp?.perServerToolFiltering;
+      assert.ok(filtering);
+      assert.ok(filtering.verification);
+      assert.ok(filtering.mechanism);
+    }
+  });
+
+  test("declares every hook event for every harness", async () => {
+    const snapshot = await new HarnessCapabilityRegistry({
+      enabledDomains: [CAPABILITY_DOMAINS.HOOKS],
+    }).getSnapshot();
+
+    for (const harnessId of HARNESS_ID_LIST) {
+      const hooks = snapshot.harnesses[harnessId].descriptor.hooks;
+      assert.deepStrictEqual(
+        Object.keys(hooks ?? {}).sort(),
+        [...HOOK_EVENT_ORDER].sort()
+      );
+      for (const event of HOOK_EVENT_ORDER) {
+        assert.ok(hooks?.[event], `${harnessId} is missing ${event}`);
+      }
+    }
+  });
+
+  test("rejects incomplete enabled domains and invalid declarations", () => {
+    assert.throws(
+      () =>
+        makeRegistry({}, {}, {}, [
+          CAPABILITY_DOMAINS.PERMISSIONS,
+          CAPABILITY_DOMAINS.PROMPT_INPUTS,
+        ]),
+      /Missing capability domain/
+    );
+
+    const incomplete = {
+      ...mapperFor(HARNESS_IDS.QWEN_CLI).capabilities,
+    } as Partial<PermissionCapabilityDescriptor>;
+    delete incomplete.deniedTools;
+    assert.throws(
+      () =>
+        makeRegistry(
+          {},
+          {
+            [HARNESS_IDS.QWEN_CLI]:
+              incomplete as PermissionCapabilityDescriptor,
+          }
+        ),
+      /Missing capability qwen-cli.permissions.deniedTools/
+    );
+
+    const base = mapperFor(HARNESS_IDS.QWEN_CLI).capabilities;
+    assert.throws(
+      () =>
+        makeRegistry(
+          {},
+          {
+            [HARNESS_IDS.QWEN_CLI]: {
+              ...base,
+              mode: { ...base.mode, fidelity: "unsupported" },
+            },
+          }
+        ),
+      /must use mechanism none/
+    );
+    assert.throws(
+      () =>
+        makeRegistry(
+          {},
+          {
+            [HARNESS_IDS.QWEN_CLI]: {
+              ...base,
+              mode: { mechanism: "native" } as unknown as CapabilityDeclaration,
+            },
+          }
+        ),
+      /Invalid capability declaration/
+    );
+    assert.throws(
+      () =>
+        HarnessCapabilityRegistry.deserializeSnapshot(
+          JSON.stringify({ schemaVersion: 1, enabledDomains: ["unknown"] })
+        ),
+      /Invalid harness capability snapshot shape|Unknown capability domain/
+    );
+  });
+
   test("round-trips the schema-versioned snapshot with independent dimensions", async () => {
-    const registry = makeRegistry({ [HARNESS_IDS.QWEN_CLI]: "0.20.1" });
+    const registry = makeRegistry(
+      { [HARNESS_IDS.QWEN_CLI]: "0.20.1" },
+      {},
+      allHarnessDomainFacts(),
+      Object.values(CAPABILITY_DOMAINS)
+    );
     const serialized = await registry.serializeSnapshot();
     const snapshot = HarnessCapabilityRegistry.deserializeSnapshot(serialized);
     const qwen = snapshot.harnesses[HARNESS_IDS.QWEN_CLI];
@@ -245,8 +459,16 @@ suite("HarnessCapabilityRegistry", () => {
       "translated-cli"
     );
     assert.strictEqual(
-      qwen.effective?.permissions.mode.verification,
+      qwen.effective?.permissions?.mode.verification,
       "verified"
+    );
+    assert.strictEqual(
+      qwen.effective?.promptInputs?.images.verification,
+      "verified"
+    );
+    assert.strictEqual(
+      qwen.effective?.mcp?.perServerToolFiltering.mechanism,
+      "workspace-config"
     );
   });
 });

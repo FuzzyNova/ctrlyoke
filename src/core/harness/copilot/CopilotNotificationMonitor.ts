@@ -5,6 +5,11 @@ import {
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
+import type { CapabilityDeclaration } from "../../../types/CompatibilityTypes";
+import {
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+} from "../../../types/DashboardConstants";
 import { lowercaseDriveLetter } from "../../../utils/PathCasing";
 
 /**
@@ -26,7 +31,7 @@ export class CopilotNotificationMonitor
   implements INotificationMonitor
 {
   /** Logical → Copilot native event name mapping. */
-  static readonly EVENT_MAP: Record<string, string> = {
+  static readonly EVENT_MAP: Record<HookEvent, string> = {
     stop: "agentStop",
     error: "errorOccurred",
     sessionStart: "sessionStart",
@@ -35,6 +40,23 @@ export class CopilotNotificationMonitor
     userPromptSubmit: "userPromptSubmitted",
     permissionRequest: "permissionRequest",
   };
+
+  static readonly CAPABILITIES: Record<HookEvent, CapabilityDeclaration> =
+    Object.fromEntries(
+      Object.keys(CopilotNotificationMonitor.EVENT_MAP).map((event) => [
+        event,
+        {
+          fidelity: CAPABILITY_FIDELITIES.EXACT,
+          mechanism: CAPABILITY_MECHANISMS.WORKSPACE_CONFIG,
+          verification: {
+            kind: "manual",
+            reference: "src/core/harness/copilot/CopilotNotificationMonitor.ts",
+            basis: "cli-version",
+            verifiedVersions: [">=0.0.384"],
+          },
+        },
+      ])
+    ) as unknown as Record<HookEvent, CapabilityDeclaration>;
 
   /**
    * Build a user-hooks-only Copilot hook config object (no ctrlyoke notification entries).

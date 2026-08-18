@@ -10,6 +10,7 @@ import {
   FINAL_STEP_PHASES,
   HARNESS_IDS,
   PERMISSION_MODES,
+  PROMPT_INPUT_CAPABILITY_KEYS,
 } from "@root/types/DashboardConstants";
 import {
   analyzeCompatibility,
@@ -41,6 +42,8 @@ function makeSnapshot(): HarnessCapabilityRegistrySnapshot {
           allowedTools: declaration,
           deniedTools: declaration,
         },
+        mcp: { perServerToolFiltering: declaration },
+        promptInputs: { images: declaration },
       },
       effective: {
         permissions: {
@@ -48,6 +51,8 @@ function makeSnapshot(): HarnessCapabilityRegistrySnapshot {
           allowedTools: state,
           deniedTools: state,
         },
+        mcp: { perServerToolFiltering: state },
+        promptInputs: { images: state },
       },
     };
   }
@@ -58,12 +63,16 @@ function makeSnapshot(): HarnessCapabilityRegistrySnapshot {
     mechanism: "none" as const,
     verification: "verified" as const,
   };
-  codex.effective!.permissions.allowedTools = unsupported;
-  codex.effective!.permissions.deniedTools = unsupported;
+  codex.effective!.permissions!.allowedTools = unsupported;
+  codex.effective!.permissions!.deniedTools = unsupported;
 
   return {
     schemaVersion: 1,
-    enabledDomains: [CAPABILITY_DOMAINS.PERMISSIONS],
+    enabledDomains: [
+      CAPABILITY_DOMAINS.PERMISSIONS,
+      CAPABILITY_DOMAINS.PROMPT_INPUTS,
+      CAPABILITY_DOMAINS.MCP,
+    ],
     harnesses,
   };
 }
@@ -98,6 +107,48 @@ describe("useCompatibilityDiagnostics", () => {
 
     expect(result.current.isChecking).toBe(true);
     expect(result.current.diagnostics).toEqual([]);
+  });
+
+  it("keeps image diagnostics tied to authored image references", () => {
+    const snapshot = makeSnapshot();
+    const unsupported = {
+      fidelity: "unsupported" as const,
+      mechanism: "none" as const,
+      verification: "verified" as const,
+    };
+    snapshot.harnesses[HARNESS_IDS.CODEX_CLI].effective!.promptInputs = {
+      images: unsupported,
+    };
+    snapshot.harnesses[HARNESS_IDS.CODEX_CLI].descriptor.promptInputs = {
+      images: {
+        fidelity: "unsupported",
+        mechanism: "none",
+      },
+    };
+    useSettingsStore.getState().setGlobalSettings({
+      ...useSettingsStore.getState().globalSettings,
+      harness: HARNESS_IDS.CODEX_CLI,
+    });
+    useWorkflowStore.setState({
+      steps: [{ prompt: "Review @screen.png", harness: HARNESS_IDS.CODEX_CLI }],
+    });
+    useCompatibilityStore.getState().setCapabilitySnapshot(snapshot);
+
+    const { result } = renderHook(() => useCompatibilityDiagnostics());
+    expect(result.current.diagnostics.map((item) => item.capability)).toContain(
+      PROMPT_INPUT_CAPABILITY_KEYS.IMAGES
+    );
+
+    act(() => {
+      useWorkflowStore.getState().updatePrompt(0, {
+        prompt: "Review screen.png as ordinary text",
+      });
+    });
+    expect(
+      result.current.diagnostics.some(
+        (item) => item.capability === PROMPT_INPUT_CAPABILITY_KEYS.IMAGES
+      )
+    ).toBe(false);
   });
 
   it("recalculates immediately when the effective harness changes", () => {
@@ -205,6 +256,9 @@ describe("useCompatibilityDiagnostics", () => {
       },
       deniedTools: unsupported,
     };
+    snapshot.harnesses[
+      HARNESS_IDS.ANTIGRAVITY_CLI
+    ].effective!.mcp!.perServerToolFiltering = unsupported;
     useSettingsStore.getState().setGlobalSettings({
       ...useSettingsStore.getState().globalSettings,
       harness: HARNESS_IDS.ANTIGRAVITY_CLI,
@@ -224,9 +278,9 @@ describe("useCompatibilityDiagnostics", () => {
     const { result } = renderHook(() => useCompatibilityDiagnostics());
     expect(result.current.diagnostics.map(projectDiagnostic)).toEqual([
       {
-        code: "compatibility.permissions.deniedTools.notEnforced",
+        code: "compatibility.mcp.perServerToolFiltering.unsupported",
         harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,
-        capability: "deniedTools",
+        capability: "perServerToolFiltering",
         consumer: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         propertyPointer: "/mcpServers/0/deniedTools",
         sourceTier: "workflow",

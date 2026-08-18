@@ -6,6 +6,9 @@ import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_SOURCE_TIERS,
+  HOOK_EVENT_ORDER,
+  MCP_CAPABILITY_KEYS,
+  type HookEvent,
   type HarnessId,
 } from "@root/types/DashboardConstants";
 import {
@@ -27,6 +30,23 @@ export function diagnosticsForPermissionField(
   return diagnostics.filter((diagnostic) => diagnostic.capability === field);
 }
 
+export function diagnosticsForHookEvents(
+  diagnostics: readonly CompatibilityDiagnostic[]
+): CompatibilityDiagnostic[] {
+  return diagnostics.filter((diagnostic) =>
+    HOOK_EVENT_ORDER.includes(diagnostic.capability as HookEvent)
+  );
+}
+
+export function diagnosticsForMcpFiltering(
+  diagnostics: readonly CompatibilityDiagnostic[]
+): CompatibilityDiagnostic[] {
+  return diagnostics.filter(
+    (diagnostic) =>
+      diagnostic.capability === MCP_CAPABILITY_KEYS.PER_SERVER_TOOL_FILTERING
+  );
+}
+
 export function permissionCapabilitySummary(
   snapshot: HarnessCapabilityRegistrySnapshot,
   field: Exclude<PermissionField, "mode">
@@ -35,7 +55,8 @@ export function permissionCapabilitySummary(
   const notEnforced: string[] = [];
 
   for (const harnessId of Object.values(HARNESS_IDS) as HarnessId[]) {
-    const state = snapshot.harnesses[harnessId]?.effective?.permissions[field];
+    const state =
+      snapshot.harnesses[harnessId]?.effective?.permissions?.[field];
     const label =
       harnessId === HARNESS_IDS.CLAUDE_CLI
         ? "Claude CLI"
@@ -158,7 +179,7 @@ export function workflowPermissionDiagnostic(
     const harnessId = target.resolved.properties.harness;
     const group = grouped.get(harnessId) ?? { supported: 0, affected: 0 };
     const state =
-      capabilities.harnesses[harnessId]?.effective?.permissions[field];
+      capabilities.harnesses[harnessId]?.effective?.permissions?.[field];
     if (state && !isLossy(state)) group.supported += 1;
     else group.affected += 1;
     grouped.set(harnessId, group);

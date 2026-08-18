@@ -107,6 +107,13 @@ export interface WorkflowContext {
     diagnostics: readonly CompatibilityDiagnostic[],
     timestampMs?: number
   ) => void;
+  /** Analyze resolved prompt attachments at the final execution boundary. */
+  analyzeCompatibilityForPrompt?: (
+    promptIndex: number,
+    prompt: import("./CtrlYokeTypes").PromptStep,
+    resolvedProperties: ResolvedProperties,
+    imageFileRefs: readonly string[]
+  ) => Promise<readonly CompatibilityDiagnostic[]>;
   /**
    * Timeline-backed prior-context projection for an executing promoted run.
    * The timeline is the only response source; execution caches are in-memory only.

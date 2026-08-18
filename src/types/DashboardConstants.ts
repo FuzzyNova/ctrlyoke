@@ -928,13 +928,20 @@ export const CAPABILITY_DOMAINS = {
   PROMPT_INPUTS: "promptInputs",
   HOOKS: "hooks",
   MCP: "mcp",
-  USAGE: "usage",
 } as const;
 
 export const PERMISSION_CAPABILITY_KEYS = {
   MODE: "mode",
   ALLOWED_TOOLS: "allowedTools",
   DENIED_TOOLS: "deniedTools",
+} as const;
+
+export const PROMPT_INPUT_CAPABILITY_KEYS = {
+  IMAGES: "images",
+} as const;
+
+export const MCP_CAPABILITY_KEYS = {
+  PER_SERVER_TOOL_FILTERING: "perServerToolFiltering",
 } as const;
 
 export const COMPATIBILITY_DIAGNOSTIC_SEVERITIES = {
@@ -948,6 +955,25 @@ export const COMPATIBILITY_SOURCE_TIERS = {
   WORKFLOW: "workflow",
   DEFAULTS: "defaults",
 } as const;
+
+/** Target selectors supported by `ctrlyoke validate`. */
+export const CLI_VALIDATE_TARGET_KINDS = {
+  HARNESS: "harness",
+  ALL_INSTALLED_HARNESSES: "allInstalledHarnesses",
+} as const;
+
+export type CliValidateTargetKind =
+  (typeof CLI_VALIDATE_TARGET_KINDS)[keyof typeof CLI_VALIDATE_TARGET_KINDS];
+
+/** Optional CI policies for treating compatibility warnings as failures. */
+export const CLI_VALIDATE_STRICT_POLICIES = {
+  LOSSY: "lossy",
+  UNVERIFIED: "unverified",
+  ALL: "all",
+} as const;
+
+export type CliValidateStrictPolicy =
+  (typeof CLI_VALIDATE_STRICT_POLICIES)[keyof typeof CLI_VALIDATE_STRICT_POLICIES];
 
 /** Shared dot-notation paths for settings consumed across the extension and webview. */
 export const SETTING_PATHS = {
@@ -998,6 +1024,7 @@ export const HARNESS_CHART_COLORS: Record<HarnessId, string> = {
  * | "postToolUse"       | PostToolUse      | postToolUse         | PostToolUse      | PostToolUse       | tool.execute.after      |
  * | "userPromptSubmit"  | UserPromptSubmit | userPromptSubmitted | n/a              | UserPromptSubmit  | session.status { busy } |
  * | "permissionRequest" | PermissionRequest| permissionRequest   | n/a              | PermissionRequest | permission.asked        |
+ * | "error"            | StopFailure      | errorOccurred     | n/a              | n/a               | session.error           |
  */
 export type HookEvent =
   | "stop"
@@ -1012,8 +1039,6 @@ export interface HookEventMetadata {
   event: HookEvent;
   label: string;
   description: string;
-  /** Harnesses that fire this event. */
-  supportedHarnesses: HarnessId[];
 }
 
 export const HOOK_EVENT_ORDER: HookEvent[] = [
@@ -1031,87 +1056,36 @@ export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
     event: "stop",
     label: "Stop",
     description: "Fires when the AI agent finishes responding.",
-    supportedHarnesses: [
-      HARNESS_IDS.CLAUDE_CLI,
-      HARNESS_IDS.COPILOT_CLI,
-      HARNESS_IDS.CODEX_CLI,
-      HARNESS_IDS.QWEN_CLI,
-      HARNESS_IDS.ANTIGRAVITY_CLI,
-      HARNESS_IDS.OPENCODE_CLI,
-    ],
   },
   {
     event: "sessionStart",
     label: "Session Start",
     description: "Fires when a new AI session is created.",
-    supportedHarnesses: [
-      HARNESS_IDS.CLAUDE_CLI,
-      HARNESS_IDS.COPILOT_CLI,
-      HARNESS_IDS.CODEX_CLI,
-      HARNESS_IDS.QWEN_CLI,
-      HARNESS_IDS.ANTIGRAVITY_CLI,
-      HARNESS_IDS.OPENCODE_CLI,
-    ],
   },
   {
     event: "preToolUse",
     label: "Pre Tool Use",
     description: "Fires before the AI invokes a tool.",
-    supportedHarnesses: [
-      HARNESS_IDS.CLAUDE_CLI,
-      HARNESS_IDS.COPILOT_CLI,
-      HARNESS_IDS.CODEX_CLI,
-      HARNESS_IDS.QWEN_CLI,
-      HARNESS_IDS.ANTIGRAVITY_CLI,
-      HARNESS_IDS.OPENCODE_CLI,
-    ],
   },
   {
     event: "postToolUse",
     label: "Post Tool Use",
     description: "Fires after the AI receives the result of a tool call.",
-    supportedHarnesses: [
-      HARNESS_IDS.CLAUDE_CLI,
-      HARNESS_IDS.COPILOT_CLI,
-      HARNESS_IDS.CODEX_CLI,
-      HARNESS_IDS.QWEN_CLI,
-      HARNESS_IDS.ANTIGRAVITY_CLI,
-      HARNESS_IDS.OPENCODE_CLI,
-    ],
   },
   {
     event: "userPromptSubmit",
     label: "User Prompt Submit",
     description: "Fires when a user prompt is submitted to the AI.",
-    supportedHarnesses: [
-      HARNESS_IDS.CLAUDE_CLI,
-      HARNESS_IDS.COPILOT_CLI,
-      HARNESS_IDS.CODEX_CLI,
-      HARNESS_IDS.QWEN_CLI,
-      HARNESS_IDS.OPENCODE_CLI,
-    ],
   },
   {
     event: "permissionRequest",
     label: "Permission Request",
     description: "Fires when the AI requests permission to perform an action.",
-    supportedHarnesses: [
-      HARNESS_IDS.CLAUDE_CLI,
-      HARNESS_IDS.COPILOT_CLI,
-      HARNESS_IDS.CODEX_CLI,
-      HARNESS_IDS.QWEN_CLI,
-      HARNESS_IDS.OPENCODE_CLI,
-    ],
   },
   {
     event: "error",
     label: "Error",
     description: "Fires when the harness reports a session-level error.",
-    supportedHarnesses: [
-      HARNESS_IDS.CLAUDE_CLI,
-      HARNESS_IDS.COPILOT_CLI,
-      HARNESS_IDS.OPENCODE_CLI,
-    ],
   },
 ];
 

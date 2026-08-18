@@ -53,6 +53,7 @@ import {
   SESSION_KINDS,
   STATUS_MESSAGE_SEVERITY,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  PROMPT_INPUT_CAPABILITY_KEYS,
   EXECUTION_PHASES,
   SCRIPT_OUTPUT_SOURCES,
   STEP_STATUS,
@@ -131,6 +132,7 @@ import {
   enumerateCompatibilityTargets,
 } from "../types/CompatibilityAnalyzer";
 import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
+import type { ResolvedProperties } from "../types/ExecutionPropertyTypes";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
 import type {
   OutputExecutionTarget,
@@ -589,6 +591,44 @@ export class WorkflowInstance {
         workspaceRoot: this.workspaceFolderPath,
       },
     });
+  }
+
+  private async analyzePromptCompatibility(
+    promptIndex: number,
+    prompt: PromptStep,
+    resolvedProperties: ResolvedProperties,
+    imageFileRefs: readonly string[]
+  ): Promise<readonly CompatibilityDiagnostic[]> {
+    if (!this.compatibilityRegistry || imageFileRefs.length === 0) {
+      return [];
+    }
+
+    const workflow = {
+      ...this.promptQueue.getWorkflowFile(),
+      steps: this.promptQueue.getWorkflowFile().steps ?? [],
+    };
+    const resolvedTarget = PropertyResolver.resolveTarget(prompt, workflow, {
+      hostCanProvidePty: this.hostCanProvidePty,
+    });
+    const diagnostics = analyzeCompatibility({
+      workflow,
+      executionTargets: [
+        {
+          consumer:
+            promptIndex < workflow.steps.length
+              ? { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: promptIndex }
+              : { kind: FINAL_STEP_PHASES.FINAL_STEP },
+          resolved: { ...resolvedTarget, properties: resolvedProperties },
+          imageFileRefs,
+        },
+      ],
+      capabilities: await this.compatibilityRegistry.getSnapshot(),
+      workspace: { workspaceRoot: this.workspaceFolderPath },
+    });
+    return diagnostics.filter(
+      (diagnostic) =>
+        diagnostic.capability === PROMPT_INPUT_CAPABILITY_KEYS.IMAGES
+    );
   }
 
   private reportCompatibilityDiagnostics(
@@ -1556,7 +1596,7 @@ export class WorkflowInstance {
 
       // Pre-flight: use the DETECTOR singleton (already initialized at startup).
       // If the harness is still initializing or polling, wait until it settles
-      // (up to 35 s — enough to cover CopilotChat's 6 × 5 s polling window).
+      // (up to 35 s — enough to cover the six-provider polling window).
       // If it ends up unavailable, surface the error in the webview and bail.
       const preflightHarness = PropertyResolver.resolveHarnessValue(
         modeOverride,
@@ -3349,6 +3389,18 @@ export class WorkflowInstance {
       },
       reportCompatibilityDiagnostics: (diagnostics, timestampMs) =>
         this.reportCompatibilityDiagnostics(diagnostics, timestampMs),
+      analyzeCompatibilityForPrompt: (
+        promptIndex,
+        prompt,
+        resolvedProperties,
+        imageFileRefs
+      ) =>
+        this.analyzePromptCompatibility(
+          promptIndex,
+          prompt,
+          resolvedProperties,
+          imageFileRefs
+        ),
       getDefinitionRevisionContext: () => self.getDefinitionRevisionContext(),
       // In CLI mode always show the CLI command so it flows through
       // captureOutputInit and into onPromptStart events.

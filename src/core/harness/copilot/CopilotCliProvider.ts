@@ -30,6 +30,7 @@ import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
+import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   HookEvent,
@@ -44,6 +45,30 @@ import {
   type CliProviderPreparation,
   type PreparedMutation,
 } from "../shared/interfaces/PreparedMutation";
+
+const COPILOT_MCP_FILTERING_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "translated-cli",
+  verification: {
+    kind: "manual",
+    reference:
+      "dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping",
+    basis: "cli-version",
+    verifiedVersions: [">=0.0.384"],
+  },
+} as const;
+
+const COPILOT_IMAGE_INPUT_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "native",
+  verification: {
+    kind: "manual",
+    reference:
+      "https://docs.github.com/en/copilot/github-copilot-in-the-cli/using-github-copilot-in-the-cli#adding-files-to-your-prompt",
+    basis: "cli-version",
+    verifiedVersions: [">=0.0.384"],
+  },
+} as const;
 
 /**
  * Copilot CLI Harness
@@ -86,6 +111,16 @@ export class CopilotCliProvider implements ICliProvider {
     new CopilotNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new CopilotToolPermissionMapper();
+  get capabilities(): HarnessCapabilityFacts {
+    return {
+      permissions: this.toolPermissionMapper.capabilities,
+      hooks: CopilotNotificationMonitor.CAPABILITIES,
+      mcp: {
+        perServerToolFiltering: COPILOT_MCP_FILTERING_CAPABILITY,
+      },
+      promptInputs: { images: COPILOT_IMAGE_INPUT_CAPABILITY },
+    };
+  }
   readonly logParser = new CopilotLogParser();
   readonly headlessSource = "stdout" as const;
 

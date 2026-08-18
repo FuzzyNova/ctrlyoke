@@ -74,6 +74,8 @@ import {
 import { fieldValidationBorderClass } from "@utils/fieldValidation";
 import {
   diagnosticsForPermissionField,
+  diagnosticsForHookEvents,
+  diagnosticsForMcpFiltering,
   firstCompatibilityProperty,
   formatCompatibilitySource,
   toFieldDiagnostic,
@@ -209,6 +211,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
     loadedWorkflows,
     activeWorkflowId,
     horizontalPanelResizeActive,
+    setWorkflowPortabilityReportOpen,
   } = useUiStore();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
@@ -352,6 +355,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
       diagnostic.capability === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS ||
       diagnostic.capability === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
   );
+  const hookDiagnostics = diagnosticsForHookEvents(compatibility.diagnostics);
+  const mcpDiagnostics = diagnosticsForMcpFiltering(compatibility.diagnostics);
   const allowedDiagnostics = diagnosticsForPermissionField(
     compatibility.diagnostics,
     "allowedTools"
@@ -452,9 +457,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const resolvedSecretGrants = [
     ...new Set([...effectiveSecrets, ...inlineSecretNames]),
   ];
-  const unresolvedSecretNames = secretRegistryLoading && registryEntries.length === 0
-    ? []
-    : resolvedSecretGrants.filter((name) => !resolvableSecretNames.has(name));
+  const unresolvedSecretNames =
+    secretRegistryLoading && registryEntries.length === 0
+      ? []
+      : resolvedSecretGrants.filter((name) => !resolvableSecretNames.has(name));
   const unresolvedSecretDiagnostics = unresolvedSecretNames.map((name) => ({
     severity: "error" as const,
     message: `Secret "${name}" is not available from the managed registry or environment.`,
@@ -1173,7 +1179,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
     workflowProperties,
     globalSettings,
     undefined,
-    permissionDiagnostics.length > 0
+    permissionDiagnostics.length > 0,
+    hookDiagnostics.length > 0,
+    mcpDiagnostics.length > 0
   );
 
   const handleResetAllToDefault = useCallback(() => {
@@ -1354,6 +1362,18 @@ const WorkflowPropertiesPanelInner: React.FC<{
             aria-label="Reset all to defaults"
           >
             <i className="codicon codicon-debug-restart text-xs" />
+          </button>
+          <button
+            type="button"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-60 transition-all hover:bg-toolbar-hover-bg hover:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation();
+              setWorkflowPortabilityReportOpen(true);
+            }}
+            title="Review workflow portability"
+            aria-label="Review workflow portability"
+          >
+            <i className="codicon codicon-inspect text-xs" />
           </button>
         </div>
         {onRequestClose && (
@@ -2043,6 +2063,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   onChange={handleMcpServersChange}
                   showDefault={false}
                   fillHeight={true}
+                  diagnostics={mcpDiagnostics}
                 />
               </FormField>
             </div>
@@ -2094,7 +2115,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       property="secrets"
                       show={isDifferentFromGlobal("secrets")}
                       onSetDefault={() =>
-                        handleSetAsDefault("secrets", workflowProperties.secrets)
+                        handleSetAsDefault(
+                          "secrets",
+                          workflowProperties.secrets
+                        )
                       }
                     />
                   }
@@ -2285,6 +2309,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   value={effectiveHooks}
                   onChange={handleHooksChange}
                   showDefault={false}
+                  diagnostics={hookDiagnostics}
                 />
               </FormField>
             </>

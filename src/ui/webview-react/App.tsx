@@ -53,6 +53,7 @@ import {
 } from "./components/layout";
 import { WorkspaceViewerModal } from "./components/workspace-viewer/WorkspaceViewerModal";
 import { ContentPreviewModal } from "./components/shared/ContentPreviewModal";
+import { WorkflowPortabilityReportModal } from "./components/shared/WorkflowPortabilityReportModal";
 import { UxSnapshotButton } from "./components/dev/UxSnapshotButton";
 import { useNavigationSync } from "./navigation/useNavigationSync";
 import { getReadyPreferredViewAddress } from "./navigation/readyRoute";
@@ -990,6 +991,9 @@ function App() {
         {/* Content preview modal — git diff / prior-context XML */}
         <ContentPreviewModal />
 
+        {/* Workflow portability report — shared by VS Code and hosted clients */}
+        <WorkflowPortabilityReportModal />
+
         {/* Dev-only floating UX snapshot capture button */}
         <UxSnapshotButton />
 
@@ -1255,6 +1259,9 @@ function App() {
 
       {/* Content preview modal — git diff / prior-context XML */}
       <ContentPreviewModal />
+
+      {/* Workflow portability report — shared by VS Code and hosted clients */}
+      <WorkflowPortabilityReportModal />
 
       {/* Dev-only floating UX snapshot capture button */}
       <UxSnapshotButton />

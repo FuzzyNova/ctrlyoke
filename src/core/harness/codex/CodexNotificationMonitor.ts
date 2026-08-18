@@ -6,6 +6,11 @@ import {
 import { createCodexCommandHookGroup } from "../shared/CodexHookUtils";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
+import type { CapabilityDeclaration } from "../../../types/CompatibilityTypes";
+import {
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+} from "../../../types/DashboardConstants";
 
 /**
  * Codex CLI Notification Monitor
@@ -36,11 +41,58 @@ import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
  * | preToolUse         | PreToolUse         |
  * | postToolUse        | PostToolUse        |
  * | userPromptSubmit   | UserPromptSubmit   |
+ * | permissionRequest  | PermissionRequest  |
+ * | error              | n/a                |
  */
 export class CodexNotificationMonitor
   extends NotificationMonitorBase
   implements INotificationMonitor
 {
+  static readonly EVENT_MAP: Partial<Record<HookEvent, string>> = {
+    stop: "Stop",
+    sessionStart: "SessionStart",
+    preToolUse: "PreToolUse",
+    postToolUse: "PostToolUse",
+    userPromptSubmit: "UserPromptSubmit",
+    permissionRequest: "PermissionRequest",
+  };
+
+  static readonly CAPABILITIES: Record<HookEvent, CapabilityDeclaration> = {
+    stop: CodexNotificationMonitor.verifiedHook(),
+    sessionStart: CodexNotificationMonitor.verifiedHook(),
+    preToolUse: CodexNotificationMonitor.verifiedHook(),
+    postToolUse: CodexNotificationMonitor.verifiedHook(),
+    userPromptSubmit: CodexNotificationMonitor.verifiedHook(),
+    permissionRequest: CodexNotificationMonitor.verifiedHook(),
+    error: CodexNotificationMonitor.unsupportedHook(),
+  };
+
+  private static verifiedHook(): CapabilityDeclaration {
+    return {
+      fidelity: CAPABILITY_FIDELITIES.EXACT,
+      mechanism: CAPABILITY_MECHANISMS.TRANSLATED_CLI,
+      verification: {
+        kind: "manual",
+        reference: "src/core/harness/codex/CodexNotificationMonitor.ts",
+        basis: "cli-version",
+        verifiedVersions: [">=0.146.0"],
+      },
+    };
+  }
+
+  private static unsupportedHook(): CapabilityDeclaration {
+    return {
+      fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
+      mechanism: CAPABILITY_MECHANISMS.NONE,
+      verification: {
+        kind: "manual",
+        reference: "src/core/harness/codex/CodexNotificationMonitor.ts",
+        basis: "cli-version",
+        verifiedVersions: [">=0.146.0"],
+      },
+    };
+  }
+
   /**
    * Build hook configuration for Codex CLI.
    *
@@ -65,18 +117,10 @@ export class CodexNotificationMonitor
       notifyDir
     );
     const selectedEvents = ctrlyokeEvents ?? ["sessionStart", "stop"];
-    const eventMap: Partial<Record<HookEvent, string>> = {
-      stop: "Stop",
-      sessionStart: "SessionStart",
-      preToolUse: "PreToolUse",
-      postToolUse: "PostToolUse",
-      userPromptSubmit: "UserPromptSubmit",
-      permissionRequest: "PermissionRequest",
-    };
     const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
     const hooks = this.buildCommandHooks(
       command,
-      eventMap,
+      CodexNotificationMonitor.EVENT_MAP,
       selectedEvents,
       undefined, // user hooks are merged by CodexCliProvider via SettingsJsonHooksTracker, not here
       encodedDecisionHook,

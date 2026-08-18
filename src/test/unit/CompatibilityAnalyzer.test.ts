@@ -9,6 +9,9 @@ import {
   CAPABILITY_DOMAINS,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
+  HOOK_EVENT_ORDER,
+  PROMPT_INPUT_CAPABILITY_KEYS,
+  type HookEvent,
   type HarnessId,
 } from "../../types/DashboardConstants";
 import {
@@ -50,6 +53,12 @@ function installed(
       verifiedVersions: ["1.0.0"],
     },
   };
+  const hookState = Object.fromEntries(
+    HOOK_EVENT_ORDER.map((event) => [event, state])
+  ) as Record<HookEvent, typeof state>;
+  const hookDeclarations = Object.fromEntries(
+    HOOK_EVENT_ORDER.map((event) => [event, declaration])
+  ) as Record<HookEvent, typeof declaration>;
   return {
     available,
     version: "1.0.0",
@@ -60,6 +69,9 @@ function installed(
         allowedTools: declaration,
         deniedTools: declaration,
       },
+      hooks: hookDeclarations,
+      mcp: { perServerToolFiltering: declaration },
+      promptInputs: { images: declaration },
     },
     effective: {
       permissions: {
@@ -67,6 +79,9 @@ function installed(
         allowedTools: state,
         deniedTools: state,
       },
+      hooks: hookState,
+      mcp: { perServerToolFiltering: state },
+      promptInputs: { images: state },
     },
   };
 }
@@ -81,8 +96,46 @@ function snapshot(
   }
   return {
     schemaVersion: 1,
-    enabledDomains: [CAPABILITY_DOMAINS.PERMISSIONS],
+    enabledDomains: [
+      CAPABILITY_DOMAINS.PERMISSIONS,
+      CAPABILITY_DOMAINS.PROMPT_INPUTS,
+      CAPABILITY_DOMAINS.HOOKS,
+      CAPABILITY_DOMAINS.MCP,
+    ],
     harnesses,
+  };
+}
+
+function withImageCapability(
+  base: InstalledHarnessCapabilities,
+  fidelity: "exact" | "partial" | "unsupported",
+  verification: "verified" | "unknown" = "verified"
+): InstalledHarnessCapabilities {
+  const state = {
+    fidelity,
+    mechanism: fidelity === "unsupported" ? "none" : "native",
+    verification,
+  } as const;
+  const declaration = {
+    fidelity,
+    mechanism: state.mechanism,
+    verification: {
+      kind: "manual" as const,
+      reference: "test",
+      basis: "cli-version" as const,
+      verifiedVersions: ["1.0.0"],
+    },
+  };
+  return {
+    ...base,
+    descriptor: {
+      ...base.descriptor,
+      promptInputs: { images: declaration },
+    },
+    effective: {
+      ...base.effective,
+      promptInputs: { images: state },
+    },
   };
 }
 
@@ -203,6 +256,98 @@ suite("CompatibilityAnalyzer", () => {
     assert.deepStrictEqual(diagnostics, []);
   });
 
+  test("enumerates authored image references for compatibility consumers", () => {
+    const workflow: PromptFile = {
+      steps: [
+        { prompt: "Review @diagram.png and @notes.txt" },
+        { prompt: "Ignore ```\n@code.png\n```" },
+      ],
+      finalStep: { prompt: "Review @final.webp" },
+    };
+    const targets = enumerateCompatibilityTargets(workflow, (prompt, file) =>
+      resolveExecutionProperties(prompt, file, {
+        defaults,
+        hostCanProvidePty: false,
+      })
+    );
+
+    assert.deepStrictEqual(
+      targets.map((target) => target.imageFileRefs),
+      [["diagram.png"], undefined, ["final.webp"]]
+    );
+  });
+
+  test("analyzes only resolved image attachments, including final-step consumers", () => {
+    const workflow: PromptFile = {
+      steps: [
+        { prompt: "Review @shot.png", harness: HARNESS_IDS.CODEX_CLI },
+        {
+          prompt: "Ignore @disabled.png",
+          harness: HARNESS_IDS.CODEX_CLI,
+          enabled: false,
+        },
+        { type: "script", script: "echo @script.png" },
+      ],
+      finalStep: {
+        prompt: "Review @final.webp",
+        harness: HARNESS_IDS.CODEX_CLI,
+      },
+    };
+    const base = snapshot();
+    const capabilities = {
+      ...base,
+      harnesses: {
+        ...base.harnesses,
+        [HARNESS_IDS.CODEX_CLI]: withImageCapability(
+          base.harnesses[HARNESS_IDS.CODEX_CLI],
+          "unsupported"
+        ),
+      },
+    };
+    const targets = enumerateCompatibilityTargets(workflow, (prompt, file) =>
+      resolveExecutionProperties(prompt, file, {
+        defaults,
+        hostCanProvidePty: false,
+      })
+    ).map((target) => ({
+      ...target,
+      imageFileRefs:
+        target.consumer.kind === FINAL_STEP_PHASES.QUEUE
+          ? target.consumer.stepIndex === 0
+            ? ["shot.png"]
+            : []
+          : ["final.webp"],
+    }));
+
+    const diagnostics = analyzeCompatibility({
+      workflow,
+      executionTargets: targets,
+      capabilities,
+    });
+    assert.deepStrictEqual(
+      diagnostics.map((diagnostic) => ({
+        code: diagnostic.code,
+        consumer: diagnostic.consumer,
+        capability: diagnostic.capability,
+        propertyPointer: diagnostic.propertyPointer,
+      })),
+      [
+        {
+          code: COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNSUPPORTED,
+          consumer: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          capability: PROMPT_INPUT_CAPABILITY_KEYS.IMAGES,
+          propertyPointer: "/steps/0/prompt",
+        },
+        {
+          code: COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNSUPPORTED,
+          consumer: { kind: FINAL_STEP_PHASES.FINAL_STEP },
+          capability: PROMPT_INPUT_CAPABILITY_KEYS.IMAGES,
+          propertyPointer: "/finalStep/prompt",
+        },
+      ]
+    );
+  });
+
   test("emits a blocking unavailable error only for an actual consumer", () => {
     const unavailableCodex = installed(
       HARNESS_IDS.CODEX_CLI,
@@ -276,7 +421,39 @@ suite("CompatibilityAnalyzer", () => {
     );
   });
 
-  test("uses the shared MCP denial merge and points workflow-authored denials at mcpServers", () => {
+  test("does not analyze capability domains outside the snapshot rollout", () => {
+    const workflow = mixedWorkflow({
+      steps: [
+        {
+          prompt: "Review @diagram.png",
+          hooks: [{ event: "error", command: "node hook.js" }],
+          mcpServers: [{ id: "server", deniedTools: ["blocked"] }],
+        },
+      ],
+    });
+    const capabilities = snapshot({
+      [HARNESS_IDS.CODEX_CLI]: installed(
+        HARNESS_IDS.CODEX_CLI,
+        true,
+        "unsupported",
+        "verified"
+      ),
+    });
+    capabilities.enabledDomains = [CAPABILITY_DOMAINS.PERMISSIONS];
+
+    const diagnostics = analyze(workflow, capabilities);
+
+    assert.ok(
+      diagnostics.every(
+        (diagnostic) =>
+          diagnostic.capability === "mode" ||
+          diagnostic.capability === "allowedTools" ||
+          diagnostic.capability === "deniedTools"
+      )
+    );
+  });
+
+  test("analyzes unsupported MCP denials in the MCP domain", () => {
     const toolPermissions = {
       mode: "custom" as const,
       allowedTools: [],
@@ -306,7 +483,9 @@ suite("CompatibilityAnalyzer", () => {
     );
     assert.deepStrictEqual(
       diagnostics
-        .filter((diagnostic) => diagnostic.capability === "deniedTools")
+        .filter(
+          (diagnostic) => diagnostic.capability === "perServerToolFiltering"
+        )
         .map(({ code, capability, sourceTier, propertyPointer }) => ({
           code,
           capability,
@@ -315,12 +494,16 @@ suite("CompatibilityAnalyzer", () => {
         })),
       [
         {
-          code: "compatibility.permissions.deniedTools.notEnforced",
-          capability: "deniedTools",
+          code: "compatibility.mcp.perServerToolFiltering.unsupported",
+          capability: "perServerToolFiltering",
           sourceTier: "workflow",
           propertyPointer: "/mcpServers/0/deniedTools",
         },
       ]
+    );
+    assert.strictEqual(
+      diagnostics.some((diagnostic) => diagnostic.capability === "deniedTools"),
+      false
     );
   });
 
@@ -351,7 +534,7 @@ suite("CompatibilityAnalyzer", () => {
       })
     );
     const denial = diagnostics.find(
-      (diagnostic) => diagnostic.capability === "deniedTools"
+      (diagnostic) => diagnostic.capability === "perServerToolFiltering"
     );
     assert.ok(denial);
     assert.strictEqual(denial.sourceTier, "prompt");
@@ -359,6 +542,105 @@ suite("CompatibilityAnalyzer", () => {
       denial.propertyPointer,
       "/steps/0/mcpServers/0/deniedTools"
     );
+  });
+
+  test("diagnoses every server filter with its authored pointer", () => {
+    const workflow = mixedWorkflow({
+      harness: HARNESS_IDS.ANTIGRAVITY_CLI,
+      toolPermissions: undefined,
+      mcpServers: [
+        { id: "first", deniedTools: ["one"] },
+        { id: "second", deniedTools: ["two"] },
+      ],
+      steps: [{ prompt: "Antigravity target" }],
+    });
+    const diagnostics = analyze(
+      workflow,
+      snapshot({
+        [HARNESS_IDS.ANTIGRAVITY_CLI]: installed(
+          HARNESS_IDS.ANTIGRAVITY_CLI,
+          true,
+          "unsupported",
+          "verified"
+        ),
+      })
+    ).filter(
+      (diagnostic) => diagnostic.capability === "perServerToolFiltering"
+    );
+
+    assert.deepStrictEqual(
+      diagnostics.map((diagnostic) => ({
+        sourceTier: diagnostic.sourceTier,
+        propertyPointer: diagnostic.propertyPointer,
+      })),
+      [
+        {
+          sourceTier: "workflow",
+          propertyPointer: "/mcpServers/0/deniedTools",
+        },
+        {
+          sourceTier: "workflow",
+          propertyPointer: "/mcpServers/1/deniedTools",
+        },
+      ]
+    );
+  });
+
+  test("does not turn Codex native server denials into a general permission warning", () => {
+    const codex = installed(
+      HARNESS_IDS.CODEX_CLI,
+      true,
+      "unsupported",
+      "verified"
+    );
+    const exactMcp = codex.descriptor.mcp!.perServerToolFiltering;
+    codex.descriptor.mcp = { perServerToolFiltering: exactMcp };
+    codex.effective.mcp = {
+      perServerToolFiltering: {
+        fidelity: "exact",
+        mechanism: "native",
+        verification: "verified",
+      },
+    };
+    const diagnostics = analyze(
+      mixedWorkflow({
+        harness: HARNESS_IDS.CODEX_CLI,
+        mcpServers: [{ id: "codex", deniedTools: ["server_tool"] }],
+        steps: [{ prompt: "Codex target" }],
+      }),
+      snapshot({ [HARNESS_IDS.CODEX_CLI]: codex })
+    );
+
+    assert.strictEqual(
+      diagnostics.some(
+        (diagnostic) => diagnostic.capability === "perServerToolFiltering"
+      ),
+      false
+    );
+    assert.deepStrictEqual(
+      diagnostics.map((diagnostic) => diagnostic.capability),
+      ["mode", "allowedTools", "deniedTools"]
+    );
+  });
+
+  test("is silent when no server filter is authored", () => {
+    const diagnostics = analyze(
+      mixedWorkflow({
+        harness: HARNESS_IDS.ANTIGRAVITY_CLI,
+        toolPermissions: undefined,
+        mcpServers: [{ id: "server" }],
+        steps: [{ prompt: "Antigravity target" }],
+      }),
+      snapshot({
+        [HARNESS_IDS.ANTIGRAVITY_CLI]: installed(
+          HARNESS_IDS.ANTIGRAVITY_CLI,
+          true,
+          "unsupported",
+          "verified"
+        ),
+      })
+    );
+    assert.deepStrictEqual(diagnostics, []);
   });
 
   test("warns that Antigravity allowAll is only partially translated", () => {
@@ -415,7 +697,7 @@ suite("CompatibilityAnalyzer", () => {
       "partial",
       "verified"
     );
-    antigravity.effective!.permissions.deniedTools = {
+    antigravity.effective!.permissions!.deniedTools = {
       fidelity: "unsupported",
       mechanism: "none",
       verification: "verified",
@@ -487,7 +769,6 @@ suite("CompatibilityAnalyzer", () => {
         allowedTools: ["shell(git:*)"],
         deniedTools: ["shell(rm:*)"],
       },
-      mcpServers: [{ id: "ctrlyoke", deniedTools: ["append_queue"] }],
       steps: [{ prompt: "Codex target" }],
     });
     const diagnostics = analyze(
@@ -598,5 +879,66 @@ suite("CompatibilityAnalyzer", () => {
     assert.ok(
       diagnostics.every((diagnostic) => diagnostic.severity === "warning")
     );
+  });
+
+  test("warns only for configured hook events and preserves source pointers", () => {
+    const workflow = mixedWorkflow({
+      steps: [
+        {
+          prompt: "Target",
+          harness: HARNESS_IDS.CODEX_CLI,
+          hooks: [{ event: "error", command: "node ./hook.js" }],
+        },
+      ],
+    });
+    const codex = installed(HARNESS_IDS.CODEX_CLI, true, "exact", "verified");
+    codex.descriptor.hooks!.error = {
+      ...codex.descriptor.hooks!.error,
+      fidelity: "unsupported",
+      mechanism: "none",
+    };
+    codex.effective!.hooks!.error = {
+      fidelity: "unsupported",
+      mechanism: "none",
+      verification: "verified",
+    };
+    const diagnostics = analyze(
+      workflow,
+      snapshot({ [HARNESS_IDS.CODEX_CLI]: codex })
+    );
+
+    assert.deepStrictEqual(
+      diagnostics
+        .filter((diagnostic) => diagnostic.capability === "error")
+        .map(({ code, sourceTier, propertyPointer, consumer }) => ({
+          code,
+          sourceTier,
+          propertyPointer,
+          consumer,
+        })),
+      [
+        {
+          code: COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED,
+          sourceTier: "prompt",
+          propertyPointer: "/steps/0/hooks/0/event",
+          consumer: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        },
+      ]
+    );
+    assert.ok(
+      diagnostics
+        .find((diagnostic) => diagnostic.capability === "error")
+        ?.message.toLowerCase()
+        .includes("error")
+    );
+    assert.ok(diagnostics[0].remediation);
+
+    const unused = analyze(
+      mixedWorkflow({
+        steps: [{ prompt: "Target", harness: HARNESS_IDS.CODEX_CLI }],
+      }),
+      snapshot({ [HARNESS_IDS.CODEX_CLI]: codex })
+    );
+    assert.ok(!unused.some((diagnostic) => diagnostic.capability === "error"));
   });
 });

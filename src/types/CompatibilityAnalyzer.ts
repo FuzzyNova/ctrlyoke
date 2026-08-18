@@ -4,13 +4,23 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   COMPATIBILITY_SOURCE_TIERS,
+  CAPABILITY_DOMAINS,
+  isImageRefPath,
   FINAL_STEP_PHASES,
+  HOOK_EVENT_ORDER,
+  MCP_CAPABILITY_KEYS,
   PERMISSION_CAPABILITY_KEYS,
   PERMISSION_MODES,
+  PROMPT_INPUT_CAPABILITY_KEYS,
   STEP_TYPES,
   type HarnessId,
+  type HookEvent,
 } from "./DashboardConstants";
 import type { PromptFile, PromptStep, WorkflowStep } from "./CtrlYokeTypes";
+import {
+  maskFencedCodeBlocks,
+  parseAllFileReferences,
+} from "../utils/FileReferenceParser";
 import type { ResolvedExecutionTarget } from "./ExecutionPropertyResolver";
 import type {
   CompatibilityConsumerTarget,
@@ -21,12 +31,14 @@ import type {
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   getCompatibilityDiagnosticMessage,
+  getCompatibilityDiagnosticRemediation,
 } from "./CompatibilityTypes";
-import { mergeServerDeniedTools } from "./ToolPermissionUtils";
 
 export interface CompatibilityExecutionTarget {
   consumer: CompatibilityConsumerTarget;
   resolved: ResolvedExecutionTarget;
+  /** Full-file image attachments that survived shared reference resolution. */
+  imageFileRefs?: readonly string[];
 }
 
 /** Reserved for future workspace-scoped compatibility domains. */
@@ -47,6 +59,28 @@ export type CompatibilityTargetResolver = (
 ) => ResolvedExecutionTarget;
 
 /**
+ * Re-target existing consumers at a selected harness without re-resolving
+ * their inherited properties. Compatibility validation uses this to answer
+ * "what if this workflow ran on X?" while keeping the shared resolver's
+ * property provenance intact.
+ */
+export function retargetCompatibilityTargets(
+  executionTargets: readonly CompatibilityExecutionTarget[],
+  harnessId: HarnessId
+): CompatibilityExecutionTarget[] {
+  return executionTargets.map((target) => ({
+    ...target,
+    resolved: {
+      ...target.resolved,
+      properties: {
+        ...target.resolved.properties,
+        harness: harnessId,
+      },
+    },
+  }));
+}
+
+/**
  * Enumerate only the AI consumers that currently exist in the definition.
  * The caller supplies the shared resolver; this helper owns no precedence
  * rules and therefore cannot drift from execution.
@@ -60,9 +94,11 @@ export function enumerateCompatibilityTargets(
     if (step.enabled === false || isScriptWorkflowStep(step)) {
       continue;
     }
+    const imageFileRefs = getPromptImageFileRefs(step.prompt);
     targets.push({
       consumer: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
       resolved: resolveTarget(step, workflow),
+      ...(imageFileRefs ? { imageFileRefs } : {}),
     });
   }
 
@@ -72,9 +108,11 @@ export function enumerateCompatibilityTargets(
     finalStep.enabled !== false &&
     !isScriptWorkflowStep(finalStep)
   ) {
+    const imageFileRefs = getPromptImageFileRefs(finalStep.prompt);
     targets.push({
       consumer: { kind: FINAL_STEP_PHASES.FINAL_STEP },
       resolved: resolveTarget(finalStep, workflow),
+      ...(imageFileRefs ? { imageFileRefs } : {}),
     });
   }
   return targets;
@@ -102,11 +140,23 @@ export function analyzeCompatibility({
           harnessId,
           "harness",
           target,
-          installed?.effective?.permissions.mode ?? unknownCapabilityState(),
+          installed?.effective?.permissions?.mode ?? unknownCapabilityState(),
           undefined
         )
       );
       continue;
+    }
+
+    if (capabilities.enabledDomains.includes(CAPABILITY_DOMAINS.MCP)) {
+      analyzeConfiguredMcpFilters(target, installed, diagnostics);
+    }
+    if (capabilities.enabledDomains.includes(CAPABILITY_DOMAINS.HOOKS)) {
+      analyzeConfiguredHooks(target, installed, diagnostics);
+    }
+    if (
+      capabilities.enabledDomains.includes(CAPABILITY_DOMAINS.PROMPT_INPUTS)
+    ) {
+      analyzeConfiguredImageInputs(target, installed, diagnostics);
     }
 
     const permissions = target.resolved.properties.toolPermissions;
@@ -123,23 +173,10 @@ export function analyzeCompatibility({
       continue;
     }
 
-    const effectivePermissions = mergeServerDeniedTools(
-      permissions,
-      target.resolved.properties.mcpServers
-    );
-    const hasAttachedServerDenials =
-      effectivePermissions !== permissions &&
-      target.resolved.properties.mcpServers?.some(
-        (server) =>
-          typeof server === "object" &&
-          server !== null &&
-          (server.deniedTools?.length ?? 0) > 0
-      ) === true;
-    const serverDenialPointer = hasAttachedServerDenials
-      ? getMcpServerDenialPointer(target)
-      : undefined;
-
     const effective = installed.effective?.permissions;
+    if (!capabilities.enabledDomains.includes(CAPABILITY_DOMAINS.PERMISSIONS)) {
+      continue;
+    }
     if (!effective) {
       continue;
     }
@@ -168,13 +205,10 @@ export function analyzeCompatibility({
       },
       {
         key: PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS,
-        used: Boolean(effectivePermissions?.deniedTools?.length),
+        used: permissions.deniedTools.length > 0,
         state: effective.deniedTools,
         caveatCode: declarations?.deniedTools.caveatCode,
-        sourceTier: hasAttachedServerDenials
-          ? target.resolved.sources.mcpServers
-          : sourceTier,
-        propertyPointer: serverDenialPointer,
+        sourceTier,
       },
     ];
 
@@ -197,6 +231,254 @@ export function analyzeCompatibility({
   }
 
   return diagnostics;
+}
+
+/**
+ * Identify image attachments in authored prompt text for synchronous callers
+ * such as CLI validation and the React analyzer. Runtime execution replaces
+ * this with the prompt preparer's resolved full-file attachment list.
+ */
+export function getPromptImageFileRefs(
+  prompt: string
+): readonly string[] | undefined {
+  const imageFileRefs = parseAllFileReferences(maskFencedCodeBlocks(prompt))
+    .filter(
+      (reference) =>
+        !reference.isDirectory &&
+        reference.startLine === undefined &&
+        reference.endLine === undefined &&
+        isImageRefPath(reference.path)
+    )
+    .map((reference) => reference.path);
+  return imageFileRefs.length > 0 ? imageFileRefs : undefined;
+}
+
+function analyzeConfiguredImageInputs(
+  target: CompatibilityExecutionTarget,
+  installed: NonNullable<
+    CompatibilityAnalyzerInput["capabilities"]["harnesses"][HarnessId]
+  >,
+  diagnostics: CompatibilityDiagnostic[]
+): void {
+  if (!target.imageFileRefs || target.imageFileRefs.length === 0) {
+    return;
+  }
+
+  const state = installed.effective?.promptInputs?.images;
+  const declaration = installed.descriptor.promptInputs?.images;
+  if (!state || !declaration) {
+    return;
+  }
+
+  const code =
+    state.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED
+      ? COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNSUPPORTED
+      : state.fidelity === CAPABILITY_FIDELITIES.PARTIAL
+        ? COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_PARTIAL
+        : state.verification === CAPABILITY_VERIFICATION_STATUSES.UNKNOWN
+          ? COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNVERIFIED
+          : undefined;
+  if (!code) {
+    return;
+  }
+
+  const propertyPointer =
+    target.consumer.kind === FINAL_STEP_PHASES.QUEUE
+      ? `/steps/${target.consumer.stepIndex}/prompt`
+      : "/finalStep/prompt";
+  const harnessId = target.resolved.properties.harness;
+  diagnostics.push({
+    code,
+    severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+    harnessId,
+    capability: PROMPT_INPUT_CAPABILITY_KEYS.IMAGES,
+    consumer: target.consumer,
+    propertyPointer,
+    sourceTier: COMPATIBILITY_SOURCE_TIERS.PROMPT,
+    state,
+    message: getCompatibilityDiagnosticMessage(code, {
+      harnessId,
+      capability: PROMPT_INPUT_CAPABILITY_KEYS.IMAGES,
+      caveatCode: declaration.caveatCode,
+    }),
+    ...(getCompatibilityDiagnosticRemediation(code)
+      ? { remediation: getCompatibilityDiagnosticRemediation(code) }
+      : {}),
+  });
+}
+
+function analyzeConfiguredMcpFilters(
+  target: CompatibilityExecutionTarget,
+  installed: NonNullable<
+    CompatibilityAnalyzerInput["capabilities"]["harnesses"][HarnessId]
+  >,
+  diagnostics: CompatibilityDiagnostic[]
+): void {
+  const servers = target.resolved.properties.mcpServers;
+  if (!Array.isArray(servers)) {
+    return;
+  }
+
+  const state = installed.effective?.mcp?.perServerToolFiltering;
+  const declaration = installed.descriptor.mcp?.perServerToolFiltering;
+  if (!state || !declaration) {
+    return;
+  }
+
+  const sourceTier = target.resolved.sources.mcpServers;
+  for (const [serverIndex, server] of servers.entries()) {
+    if (
+      typeof server !== "object" ||
+      server === null ||
+      (server.deniedTools?.length ?? 0) === 0
+    ) {
+      continue;
+    }
+
+    const code =
+      state.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED
+        ? COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_UNSUPPORTED
+        : state.fidelity === CAPABILITY_FIDELITIES.PARTIAL
+          ? COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_PARTIAL
+          : state.verification === CAPABILITY_VERIFICATION_STATUSES.UNKNOWN
+            ? COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_UNVERIFIED
+            : undefined;
+    if (!code) {
+      continue;
+    }
+    const propertyPointer = getMcpServerFilterPointer(target, serverIndex);
+    const remediation = getCompatibilityDiagnosticRemediation(code);
+
+    diagnostics.push({
+      code,
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+      harnessId: target.resolved.properties.harness,
+      capability: MCP_CAPABILITY_KEYS.PER_SERVER_TOOL_FILTERING,
+      consumer: target.consumer,
+      ...(sourceTier ? { sourceTier } : {}),
+      ...(propertyPointer ? { propertyPointer } : {}),
+      state,
+      message: getCompatibilityDiagnosticMessage(code, {
+        harnessId: target.resolved.properties.harness,
+        capability: MCP_CAPABILITY_KEYS.PER_SERVER_TOOL_FILTERING,
+        caveatCode: declaration.caveatCode,
+      }),
+      ...(remediation ? { remediation } : {}),
+    });
+  }
+}
+
+function analyzeConfiguredHooks(
+  target: CompatibilityExecutionTarget,
+  installed: NonNullable<
+    CompatibilityAnalyzerInput["capabilities"]["harnesses"][HarnessId]
+  >,
+  diagnostics: CompatibilityDiagnostic[]
+): void {
+  const hooks = target.resolved.properties.hooks;
+  if (!Array.isArray(hooks) || hooks.length === 0) {
+    return;
+  }
+
+  const effectiveHooks = installed.effective?.hooks;
+  const declarations = installed.descriptor.hooks;
+  if (!effectiveHooks) {
+    return;
+  }
+
+  const sourceTier = target.resolved.sources.hooks;
+  for (const [hookIndex, hook] of hooks.entries()) {
+    const event = hook.event as HookEvent;
+    if (!HOOK_EVENT_ORDER.includes(event)) {
+      continue;
+    }
+    const state = effectiveHooks[event];
+    if (!state) {
+      continue;
+    }
+
+    const base = {
+      harnessId: target.resolved.properties.harness,
+      capability: event,
+      consumer: target.consumer,
+      sourceTier,
+      state,
+    };
+    if (state.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED) {
+      diagnostics.push(
+        createHookDiagnostic(
+          COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED,
+          base,
+          hookIndex,
+          declarations?.[event]?.caveatCode
+        )
+      );
+    } else if (state.fidelity === CAPABILITY_FIDELITIES.PARTIAL) {
+      diagnostics.push(
+        createHookDiagnostic(
+          COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_PARTIAL,
+          base,
+          hookIndex,
+          declarations?.[event]?.caveatCode
+        )
+      );
+    }
+
+    if (
+      state.fidelity !== CAPABILITY_FIDELITIES.UNSUPPORTED &&
+      state.verification === CAPABILITY_VERIFICATION_STATUSES.UNKNOWN
+    ) {
+      diagnostics.push(
+        createHookDiagnostic(
+          COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNVERIFIED,
+          base,
+          hookIndex
+        )
+      );
+    }
+  }
+}
+
+function createHookDiagnostic(
+  code: string,
+  base: {
+    harnessId: HarnessId;
+    capability: HookEvent;
+    consumer: CompatibilityConsumerTarget;
+    sourceTier?: ResolvedExecutionTarget["sources"]["hooks"];
+    state: EffectiveCapabilityState;
+  },
+  hookIndex: number,
+  caveatCode?: string
+): CompatibilityDiagnostic {
+  const pointerBase =
+    base.consumer.kind === FINAL_STEP_PHASES.QUEUE
+      ? `/steps/${base.consumer.stepIndex}`
+      : "/finalStep";
+  const propertyPointer =
+    base.sourceTier === COMPATIBILITY_SOURCE_TIERS.PROMPT
+      ? `${pointerBase}/hooks/${hookIndex}/event`
+      : base.sourceTier === COMPATIBILITY_SOURCE_TIERS.WORKFLOW
+        ? `/hooks/${hookIndex}/event`
+        : undefined;
+  return {
+    code,
+    severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+    harnessId: base.harnessId,
+    capability: base.capability,
+    consumer: base.consumer,
+    ...(base.sourceTier ? { sourceTier: base.sourceTier } : {}),
+    ...(propertyPointer ? { propertyPointer } : {}),
+    state: base.state,
+    message: getCompatibilityDiagnosticMessage(code, {
+      harnessId: base.harnessId,
+      capability: base.capability,
+      caveatCode,
+    }),
+    ...(getCompatibilityDiagnosticRemediation(code)
+      ? { remediation: getCompatibilityDiagnosticRemediation(code) }
+      : {}),
+  };
 }
 
 function diagnosticsForPermissionField(
@@ -305,6 +587,7 @@ function createDiagnostic(
     target.consumer.kind === FINAL_STEP_PHASES.QUEUE
       ? `/steps/${target.consumer.stepIndex}`
       : "/finalStep";
+  const remediation = getCompatibilityDiagnosticRemediation(code);
   return {
     code,
     severity,
@@ -330,24 +613,16 @@ function createDiagnostic(
       capability,
       caveatCode,
     }),
+    ...(remediation ? { remediation } : {}),
   };
 }
 
-function getMcpServerDenialPointer(
-  target: CompatibilityExecutionTarget
+function getMcpServerFilterPointer(
+  target: CompatibilityExecutionTarget,
+  serverIndex: number
 ): string | undefined {
   const sourceTier = target.resolved.sources.mcpServers;
   if (!sourceTier || sourceTier === COMPATIBILITY_SOURCE_TIERS.DEFAULTS) {
-    return undefined;
-  }
-
-  const serverIndex = target.resolved.properties.mcpServers?.findIndex(
-    (server) =>
-      typeof server === "object" &&
-      server !== null &&
-      (server.deniedTools?.length ?? 0) > 0
-  );
-  if (serverIndex === undefined || serverIndex < 0) {
     return undefined;
   }
 

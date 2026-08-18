@@ -32,6 +32,7 @@ import type {
   CliExecutionSidecarDeps,
 } from "../shared/interfaces/ICliProvider";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
+import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   HookEvent,
@@ -46,6 +47,30 @@ import {
   type CliProviderPreparation,
   type PreparedMutation,
 } from "../shared/interfaces/PreparedMutation";
+
+const CLAUDE_MCP_FILTERING_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "translated-cli",
+  verification: {
+    kind: "manual",
+    reference:
+      "dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping",
+    basis: "cli-version",
+    verifiedVersions: [">=2.1.17"],
+  },
+} as const;
+
+const CLAUDE_IMAGE_INPUT_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "native",
+  verification: {
+    kind: "manual",
+    reference:
+      "https://support.claude.com/en/articles/14554922-claude-code-user-faq",
+    basis: "cli-version",
+    verifiedVersions: [">=2.1.17"],
+  },
+} as const;
 
 /**
  * Claude CLI Harness
@@ -118,6 +143,16 @@ export class ClaudeCliProvider implements ICliProvider {
     new ClaudeNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new ClaudeToolPermissionMapper();
+  get capabilities(): HarnessCapabilityFacts {
+    return {
+      permissions: this.toolPermissionMapper.capabilities,
+      hooks: ClaudeNotificationMonitor.CAPABILITIES,
+      mcp: {
+        perServerToolFiltering: CLAUDE_MCP_FILTERING_CAPABILITY,
+      },
+      promptInputs: { images: CLAUDE_IMAGE_INPUT_CAPABILITY },
+    };
+  }
   readonly logParser = new ClaudeLogParser();
   readonly headlessSource = "stdout" as const;
 

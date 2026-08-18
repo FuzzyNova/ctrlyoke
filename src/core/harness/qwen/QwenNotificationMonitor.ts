@@ -5,6 +5,11 @@ import {
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
+import type { CapabilityDeclaration } from "../../../types/CompatibilityTypes";
+import {
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+} from "../../../types/DashboardConstants";
 
 /**
  * Qwen Code CLI Notification Monitor
@@ -32,6 +37,42 @@ export class QwenNotificationMonitor
     userPromptSubmit: "UserPromptSubmit",
     permissionRequest: "PermissionRequest",
   };
+
+  static readonly CAPABILITIES: Record<HookEvent, CapabilityDeclaration> = {
+    stop: QwenNotificationMonitor.verifiedHook(),
+    sessionStart: QwenNotificationMonitor.verifiedHook(),
+    preToolUse: QwenNotificationMonitor.verifiedHook(),
+    postToolUse: QwenNotificationMonitor.verifiedHook(),
+    userPromptSubmit: QwenNotificationMonitor.verifiedHook(),
+    permissionRequest: QwenNotificationMonitor.verifiedHook(),
+    error: QwenNotificationMonitor.unsupportedHook(),
+  };
+
+  private static verifiedHook(): CapabilityDeclaration {
+    return {
+      fidelity: CAPABILITY_FIDELITIES.EXACT,
+      mechanism: CAPABILITY_MECHANISMS.WORKSPACE_CONFIG,
+      verification: {
+        kind: "manual",
+        reference: "src/core/harness/qwen/QwenNotificationMonitor.ts",
+        basis: "cli-version",
+        verifiedVersions: [">=0.20.1"],
+      },
+    };
+  }
+
+  private static unsupportedHook(): CapabilityDeclaration {
+    return {
+      fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
+      mechanism: CAPABILITY_MECHANISMS.NONE,
+      verification: {
+        kind: "manual",
+        reference: "src/core/harness/qwen/QwenNotificationMonitor.ts",
+        basis: "cli-version",
+        verifiedVersions: [">=0.20.1"],
+      },
+    };
+  }
 
   /**
    * Qwen's reliable session-start signal is UserPromptSubmit, not SessionStart.

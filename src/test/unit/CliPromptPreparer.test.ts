@@ -23,6 +23,7 @@ function createSections(overrides?: Partial<PromptSections>): PromptSections {
     skillContent: null,
     agentContent: null,
     directFileRefs: [],
+    imageFileRefs: [],
     sourceRuntimeCopies: [],
     sourceRuntimeReadReferences: [],
     excerptContent: null,
@@ -62,9 +63,12 @@ suite("CliPromptPreparer", () => {
         promptRefs
       ) => {
         formattedExcerptRefs = [...excerptRefs];
-        return [...directRefs, ...contextRefs, ...excerptRefs, ...promptRefs].join(
-          " | "
-        );
+        return [
+          ...directRefs,
+          ...contextRefs,
+          ...excerptRefs,
+          ...promptRefs,
+        ].join(" | ");
       },
     });
 
@@ -119,6 +123,7 @@ suite("CliPromptPreparer", () => {
       promptWithInstruction: "just say hi",
       tempFilePaths: [],
       diagnostics: [],
+      imageFileRefs: [],
     });
   });
 
@@ -152,6 +157,7 @@ suite("CliPromptPreparer", () => {
         promptWithInstruction: command,
         tempFilePaths: [],
         diagnostics: [],
+        imageFileRefs: [],
       });
       assert.strictEqual(buildSectionsCalled, false);
     }
@@ -169,7 +175,11 @@ suite("CliPromptPreparer", () => {
       "SKILL.md"
     );
     await fs.promises.mkdir(path.dirname(skillPath), { recursive: true });
-    await fs.promises.writeFile(skillPath, "---\ndescription: Commit changes\n---\n", "utf8");
+    await fs.promises.writeFile(
+      skillPath,
+      "---\ndescription: Commit changes\n---\n",
+      "utf8"
+    );
 
     let capturedSkills: string[] | undefined;
     const prompt = {
@@ -780,8 +790,7 @@ suite("CliPromptPreparer", () => {
     );
 
     const priorSections = plan.promptPreview.sections.filter(
-      (section) =>
-        section.category === PREVIEW_PROMPT_CATEGORIES.PRIOR_CONTEXT
+      (section) => section.category === PREVIEW_PROMPT_CATEGORIES.PRIOR_CONTEXT
     );
     assert.strictEqual(priorSections.length, 1);
     assert.deepStrictEqual(priorSections[0], {
@@ -857,8 +866,7 @@ suite("CliPromptPreparer", () => {
     );
 
     const priorSection = plan.promptPreview.sections.find(
-      (section) =>
-        section.category === PREVIEW_PROMPT_CATEGORIES.PRIOR_CONTEXT
+      (section) => section.category === PREVIEW_PROMPT_CATEGORIES.PRIOR_CONTEXT
     );
     assert.ok(priorSection);
     assert.strictEqual(priorSection.body, priorContextXml);
@@ -907,6 +915,7 @@ suite("CliPromptPreparer", () => {
       promptWithInstruction: "fully implement @Path/To/Plan.md",
       tempFilePaths: [],
       diagnostics: [],
+      imageFileRefs: [],
     });
   });
 
@@ -940,6 +949,7 @@ suite("CliPromptPreparer", () => {
       promptWithInstruction: "/handoff",
       tempFilePaths: [],
       diagnostics: [],
+      imageFileRefs: [],
     });
     assert.strictEqual(buildSectionsCalled, false);
   });
@@ -970,6 +980,7 @@ suite("CliPromptPreparer", () => {
       promptWithInstruction: "/handoff summarize the session",
       tempFilePaths: [],
       diagnostics: [],
+      imageFileRefs: [],
     });
   });
 
@@ -1055,6 +1066,7 @@ suite("CliPromptPreparer", () => {
         promptWithInstruction: longPrompt,
         tempFilePaths: [],
         diagnostics: [],
+        imageFileRefs: [],
       });
     });
 
@@ -1074,6 +1086,7 @@ suite("CliPromptPreparer", () => {
         promptWithInstruction: prompt,
         tempFilePaths: [],
         diagnostics: [],
+        imageFileRefs: [],
       });
     });
 
@@ -1126,6 +1139,7 @@ suite("CliPromptPreparer", () => {
         promptWithInstruction: prompt,
         tempFilePaths: [],
         diagnostics: [],
+        imageFileRefs: [],
       });
     });
 
@@ -1172,7 +1186,9 @@ suite("CliPromptPreparer", () => {
       ..._args: Parameters<typeof originalReadFile>
     ) => {
       readFileCalls++;
-      throw new Error("Tier 1 references over MAX_CONTENT_SIZE must never be read");
+      throw new Error(
+        "Tier 1 references over MAX_CONTENT_SIZE must never be read"
+      );
     }) as typeof originalReadFile;
 
     try {

@@ -60,7 +60,7 @@ export interface ToolPermissionApplication {
  * Example conversions:
  * - Copilot: `shell(git:*)` → `--allow-tools shell(git:*)`
  * - Claude: `shell(git:*)` → `--tools "default"` (plus deny list)
- * - Codex: `shell(git:*)` → MCP tool configuration
+ * - Codex: tool patterns → compatibility diagnostics; mode → sandbox/approval args
  */
 export interface IToolPermissionMapper {
   /**

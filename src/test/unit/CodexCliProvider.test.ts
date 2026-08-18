@@ -22,6 +22,26 @@ function makeWorkflowContext(resumeSession?: boolean): {
 // ============================================================================
 
 suite("CodexCliProvider", () => {
+  suite("MCP capability declaration", () => {
+    test("declares native per-server filtering for server-owned denials", () => {
+      const filtering = new CodexCliProvider().capabilities.mcp
+        ?.perServerToolFiltering;
+
+      assert.deepStrictEqual(
+        {
+          fidelity: filtering?.fidelity,
+          mechanism: filtering?.mechanism,
+          verificationKind: filtering?.verification?.kind,
+        },
+        {
+          fidelity: "exact",
+          mechanism: "native",
+          verificationKind: "manual",
+        }
+      );
+    });
+  });
+
   suite("buildCliSuffix", () => {
     const provider = new CodexCliProvider();
 
@@ -165,6 +185,13 @@ suite("CodexCliProvider", () => {
         "hooks",
         "start work",
       ]);
+    });
+
+    test("builds native image arguments for resolved attachments", () => {
+      assert.deepStrictEqual(
+        provider.buildImageAttachmentArgs(["shots/one.png", "shots/two.jpg"]),
+        ["--image", "shots/one.png", "--image", "shots/two.jpg"]
+      );
     });
   });
 

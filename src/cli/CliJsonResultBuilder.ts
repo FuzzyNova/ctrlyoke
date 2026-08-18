@@ -8,10 +8,12 @@ import {
   type ExecutionMode,
   type ExecutionState,
   type FailureKind,
-  type HarnessId,
   type ConditionAction,
   type StepStatus,
   type StepType,
+  type CliValidateStrictPolicy,
+  type CliValidateTargetKind,
+  type HarnessId,
 } from "../types/DashboardConstants";
 import type {
   ConditionEvaluationSummary,
@@ -36,6 +38,7 @@ import {
   type TimelineAttemptTerminalState,
 } from "../types/WorkflowTimelineTypes";
 import type { WorkflowExecutionPreview } from "../types/ExecutionPreviewTypes";
+import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import { redactExecutionPreview } from "../types/PreviewRedactor";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 
@@ -44,6 +47,56 @@ export function buildCliPreviewJsonResult(
   preview: WorkflowExecutionPreview
 ): WorkflowExecutionPreview {
   return secretRedactionService.redactValue(redactExecutionPreview(preview));
+}
+
+export const CLI_VALIDATE_JSON_SCHEMA_VERSION = 1 as const;
+
+export interface CliValidationJsonHarness {
+  harnessId: HarnessId;
+  available: boolean;
+  version: string | null;
+}
+
+export interface CliValidationJsonResult {
+  schemaVersion: typeof CLI_VALIDATE_JSON_SCHEMA_VERSION;
+  success: boolean;
+  parsed: boolean;
+  workflowFile: string;
+  target: {
+    kind: CliValidateTargetKind;
+    harnesses: CliValidationJsonHarness[];
+  } | null;
+  strict: CliValidateStrictPolicy | null;
+  consumerCount: number;
+  diagnostics: CompatibilityDiagnostic[];
+  error: string | null;
+}
+
+export interface CliValidationJsonResultInput {
+  success: boolean;
+  parsed: boolean;
+  workflowFile: string;
+  target?: CliValidationJsonResult["target"];
+  strict?: CliValidateStrictPolicy;
+  consumerCount?: number;
+  diagnostics?: readonly CompatibilityDiagnostic[];
+  error?: string;
+}
+
+export function buildCliValidationJsonResult(
+  input: CliValidationJsonResultInput
+): CliValidationJsonResult {
+  return {
+    schemaVersion: CLI_VALIDATE_JSON_SCHEMA_VERSION,
+    success: input.success,
+    parsed: input.parsed,
+    workflowFile: input.workflowFile,
+    target: input.target ?? null,
+    strict: input.strict ?? null,
+    consumerCount: input.consumerCount ?? 0,
+    diagnostics: [...(input.diagnostics ?? [])],
+    error: input.error ?? null,
+  };
 }
 
 export interface CliJsonCondition {

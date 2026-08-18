@@ -183,7 +183,7 @@ the ordinary human response. Encode exactly that: never re-run a succeeded
 setup, always re-run a failed one.
 
 **Do not route this through
-[`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
+[`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
 Stage F.** That stage has a closed scope — 6 enumerated action-bearing
 `show*Message` sites plus the `USER_INTERACTION_REQUEST` correlation contract
 (timeouts, dismissal, disconnect, headless fallbacks). Retry Setup is not one of

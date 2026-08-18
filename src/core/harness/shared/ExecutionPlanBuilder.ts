@@ -8,6 +8,10 @@ import type { WorkflowStep } from "../../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import { mergeServerDeniedTools } from "../../../types/ToolPermissionUtils";
 import {
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+} from "../../../types/DashboardConstants";
+import {
   resolveCliCommand,
   type CliResolvedCommand,
 } from "./CliLauncherResolver";
@@ -120,6 +124,14 @@ export class ExecutionPlanBuilder {
           diagnostics: [],
         };
     const baseArgs = [...providerPreparation.cliArgs];
+    if (
+      session.imageFileRefs.length > 0 &&
+      this.deps.provider.buildImageAttachmentArgs
+    ) {
+      baseArgs.push(
+        ...this.deps.provider.buildImageAttachmentArgs(session.imageFileRefs)
+      );
+    }
     const mutations = [...providerPreparation.mutations];
     const hookPreparations: CliProviderPreparation[] = [];
 
@@ -208,10 +220,17 @@ export class ExecutionPlanBuilder {
       hookPreparations.push(hookPreparation);
     }
 
-    const effectiveToolPermissions = mergeServerDeniedTools(
-      session.resolvedProperties?.toolPermissions,
-      session.resolvedProperties?.mcpServers
-    );
+    const mcpFiltering =
+      this.deps.provider.capabilities?.mcp?.perServerToolFiltering;
+    const translatesServerDenials =
+      mcpFiltering?.fidelity === CAPABILITY_FIDELITIES.EXACT &&
+      mcpFiltering.mechanism === CAPABILITY_MECHANISMS.TRANSLATED_CLI;
+    const effectiveToolPermissions = translatesServerDenials
+      ? mergeServerDeniedTools(
+          session.resolvedProperties?.toolPermissions,
+          session.resolvedProperties?.mcpServers
+        )
+      : session.resolvedProperties?.toolPermissions;
     const permissionContext: PermissionContext = {
       isInteractive,
       workspaceRoot,

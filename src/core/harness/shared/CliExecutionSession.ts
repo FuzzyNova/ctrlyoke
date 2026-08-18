@@ -32,6 +32,7 @@ export class CliExecutionSession {
 
   private promptText: string;
   private tempFiles: string[] = [];
+  private imageFiles: string[] = [];
   private actualPromptSentText?: string;
   private command?: string;
   private commandWasInjected = false;
@@ -51,9 +52,14 @@ export class CliExecutionSession {
     this.promptText = params.prompt.prompt;
   }
 
-  preparePrompt(promptArgument: string, tempFilePaths: string[]): void {
+  preparePrompt(
+    promptArgument: string,
+    tempFilePaths: string[],
+    imageFileRefs: readonly string[] = []
+  ): void {
     this.promptText = promptArgument;
     this.tempFiles = [...tempFilePaths];
+    this.imageFiles = [...imageFileRefs];
     this.injectModePrepared = false;
   }
 
@@ -118,6 +124,10 @@ export class CliExecutionSession {
 
   get tempFilePaths(): string[] {
     return [...this.tempFiles];
+  }
+
+  get imageFileRefs(): readonly string[] {
+    return [...this.imageFiles];
   }
 
   get promptForSessionLog(): string {

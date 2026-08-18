@@ -6,7 +6,7 @@
 > of this implementation.
 >
 > **Implementation order:**
-> [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
+> [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
 > — Stage B, whole plan, five steps. Its `schemaVersion` envelope is the
 > convention `ctrlyoke validate --json` follows in Stage D.
 

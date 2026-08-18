@@ -2,6 +2,9 @@
 
 Harnesses are the reason ctrlyoke can keep one workflow model while talking to very different AI assistants.
 
+See the [generated harness compatibility matrix](/harnesses/compatibility) for
+capability fidelity, evidence, version scope, caveats, and remediation guidance.
+
 ## At a glance
 
 | Harness           | Runs where | Best for                          | Notes                                         |

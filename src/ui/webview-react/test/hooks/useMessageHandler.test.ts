@@ -47,6 +47,7 @@ import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { useTerminalStore } from "@store/terminalStore";
 import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
+import { useCompatibilityStore } from "@store/compatibilityStore";
 import { getWorkflowDefinitionMutation } from "@utils/workflowMutation";
 import {
   MESSAGE_TYPES,
@@ -96,6 +97,7 @@ beforeEach(() => {
   useEditorStore.getState().resetEditor();
   useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
   useWorkspaceStatsStore.setState({ snapshot: undefined });
+  useCompatibilityStore.getState().resetCapabilitySnapshot();
   handleCompletionNotificationEventMock.mockReset();
   webviewWarnMock.mockReset();
   sessionStorage.clear();
@@ -130,6 +132,26 @@ describe("WORKSPACE_STATS_UPDATED", () => {
     });
 
     expect(useWorkspaceStatsStore.getState().snapshot).toBe(snapshot);
+  });
+});
+
+describe("HARNESS_CAPABILITY_SNAPSHOT", () => {
+  it("uses the same snapshot seam for hosted panel and standalone delivery", () => {
+    const snapshot = {
+      schemaVersion: 1,
+      enabledDomains: ["hooks"],
+      harnesses: {},
+    } as any;
+
+    for (const standalone of [false, true]) {
+      useCompatibilityStore.getState().resetCapabilitySnapshot();
+      createMessageHandlers(standalone)[
+        MESSAGE_TYPES.HARNESS_CAPABILITY_SNAPSHOT
+      ]({ data: { snapshot } } as any);
+      expect(useCompatibilityStore.getState().capabilitySnapshot).toBe(
+        snapshot
+      );
+    }
   });
 });
 
@@ -2779,7 +2801,11 @@ describe("EXECUTION_STARTED", () => {
     // backend's own run-view refresh (which does not target a client already
     // addressed at this run) arrives.
     useUiStore.setState({
-      displayedViewAddress: { workflowKey: "wf-key" as never, kind: "run", runRef },
+      displayedViewAddress: {
+        workflowKey: "wf-key" as never,
+        kind: "run",
+        runRef,
+      },
       executionRunRef: null,
       runSummaries: [
         {

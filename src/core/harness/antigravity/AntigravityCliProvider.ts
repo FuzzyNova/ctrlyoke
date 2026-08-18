@@ -22,6 +22,11 @@ import type {
   WorkflowStep,
 } from "../../../types/CtrlYokeTypes";
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
+import {
+  MCP_CAVEAT_CODES,
+  PROMPT_INPUT_CAVEAT_CODES,
+  type HarnessCapabilityFacts,
+} from "../../../types/CompatibilityTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
   ConfigurationUtils,
@@ -43,6 +48,24 @@ import {
   applyPreparedMutations,
   type CliProviderPreparation,
 } from "../shared/interfaces/PreparedMutation";
+
+const ANTIGRAVITY_MCP_FILTERING_CAPABILITY = {
+  fidelity: "unsupported",
+  mechanism: "none",
+  verification: {
+    kind: "manual",
+    reference: "dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#antigravity",
+    basis: "cli-version",
+    verifiedVersions: [">=1.1.12"],
+  },
+  caveatCode: MCP_CAVEAT_CODES.NO_PER_SERVER_FILTERING,
+} as const;
+
+const ANTIGRAVITY_IMAGE_INPUT_CAPABILITY = {
+  fidelity: "unsupported",
+  mechanism: "none",
+  caveatCode: PROMPT_INPUT_CAVEAT_CODES.NO_NATIVE_IMAGE_ATTACHMENT,
+} as const;
 
 const ANTIGRAVITY_MIN_VERSION = "1.0.15";
 
@@ -112,6 +135,16 @@ export class AntigravityCliProvider implements ICliProvider {
     new AntigravityNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new AntigravityToolPermissionMapper();
+  get capabilities(): HarnessCapabilityFacts {
+    return {
+      permissions: this.toolPermissionMapper.capabilities,
+      hooks: AntigravityNotificationMonitor.CAPABILITIES,
+      mcp: {
+        perServerToolFiltering: ANTIGRAVITY_MCP_FILTERING_CAPABILITY,
+      },
+      promptInputs: { images: ANTIGRAVITY_IMAGE_INPUT_CAPABILITY },
+    };
+  }
   readonly logParser = new AntigravityLogParser();
   readonly headlessSource = "log" as const;
   private readonly streamJsonUsage =

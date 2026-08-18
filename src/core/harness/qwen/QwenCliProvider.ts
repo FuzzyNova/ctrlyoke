@@ -28,9 +28,30 @@ import type {
 } from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
+  PROMPT_INPUT_CAVEAT_CODES,
+  type HarnessCapabilityFacts,
+} from "../../../types/CompatibilityTypes";
+import {
   applyPreparedMutations,
   type CliProviderPreparation,
 } from "../shared/interfaces/PreparedMutation";
+
+const QWEN_MCP_FILTERING_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "translated-cli",
+  verification: {
+    kind: "behavioral-test",
+    reference: "src/test/harness/inline-config.harness.test.ts",
+    basis: "cli-version",
+    verifiedVersions: [">=0.20.1"],
+  },
+} as const;
+
+const QWEN_IMAGE_INPUT_CAPABILITY = {
+  fidelity: "unsupported",
+  mechanism: "none",
+  caveatCode: PROMPT_INPUT_CAVEAT_CODES.NO_NATIVE_IMAGE_ATTACHMENT,
+} as const;
 
 /**
  * Qwen Code CLI Harness
@@ -93,6 +114,16 @@ export class QwenCliProvider implements ICliProvider {
     new QwenNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new QwenToolPermissionMapper();
+  get capabilities(): HarnessCapabilityFacts {
+    return {
+      permissions: this.toolPermissionMapper.capabilities,
+      hooks: QwenNotificationMonitor.CAPABILITIES,
+      mcp: {
+        perServerToolFiltering: QWEN_MCP_FILTERING_CAPABILITY,
+      },
+      promptInputs: { images: QWEN_IMAGE_INPUT_CAPABILITY },
+    };
+  }
   readonly logParser = new QwenLogParser();
 
   /** Extract Qwen's session ID from any complete JSON object in stdout. */

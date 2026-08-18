@@ -1,6 +1,7 @@
 # Harness Compatibility and Workflow Portability Plan
 
-> **Status:** The complete Stage 1 / 0.1.0 compatibility gate is shipped:
+> **Status (complete 2026-08-18):** The complete Stage 1 / 0.1.0 compatibility gate is shipped, and
+> Stage D's CLI validation slice of Phase 2 is complete:
 > Phases 1A–1B and Compatibility Phase 1C are complete, as are the permission
 > plan's runtime preparation and remaining Antigravity lease stages. Shared
 > contracts, the pure effective-property resolver, harness-owned permission
@@ -14,8 +15,13 @@
 > [`src/types/DashboardConstants.ts`](../../src/types/DashboardConstants.ts),
 > mapper descriptors in the six harness directories, and
 > [`src/core/HarnessCapabilityRegistry.ts`](../../src/core/HarnessCapabilityRegistry.ts).
-> Phase 1B(i) enables only `permissions`, validates all six harnesses and all
-> three permission leaves, caches installed availability/version detection, and
+> Stage G.2 has since landed the provider-owned multi-domain registry foundation:
+> arbitrary enabled-domain sets, generic completeness/effective-state
+> derivation, guarded round-trip snapshots, and the removal of uniform usage
+> plus stale MCP injection vocabulary. The rollout now enables `permissions`,
+> `promptInputs`, `hooks`, and `mcp`, validates all six harnesses, all three permission leaves,
+> all seven logical hook events, and per-server MCP tool filtering, caches installed
+> availability/version detection, and
 > derives version-aware verification independently per leaf (verified
 > 2026-08-01). The shared pure analyzer is wired into workflow validation and
 > authoritative execution preflight. The typed `HARNESS_CAPABILITY_SNAPSHOT`
@@ -28,9 +34,57 @@
 > Defaults and advanced permission settings now render the same capability
 > summary, and hosted-browser transport parity is covered by the standalone
 > shim tests. Customer docs distinguish portable workflow attachments from
-> optional harness-native discovery. Compatibility Phase 2 (dry run, portability
-> reporting, and CLI/MCP serialization) and Phase 3 capability domains remain
-> post-release.
+> optional harness-native discovery. The dry-run leg and Stage D CLI validation
+> of Compatibility Phase 2 have shipped through the shared analyzer and exact
+> provider-plan/JSON projections. The pure workflow portability projection in
+> `src/types/PortabilityReport.ts` and the shared React presentation are
+> complete. The Phase 3 image domain and final Codex/Antigravity evidence
+> review are complete, with no safe general translation found; MCP capability serialization was cut
+> because a context-free snapshot cannot honestly describe whether a workflow
+> uses a capability.
+> Stage G.3 is now complete: hooks are enabled alongside permissions, all six
+> harness adapters declare every logical hook event with fidelity, mechanism,
+> evidence, and version ranges, and the shared analyzer reports only configured
+> events. Workflow/prompt authoring and dry-run preview consume those findings;
+> Hooks-tab warning badges preserve the configured-state icon, and the shared
+> hosted/VS Code snapshot seam remains unchanged. Hook delivery declarations do
+> not create a notification-preference model.
+> Stage G.4 is now complete: MCP per-server `deniedTools` is an enabled,
+> adapter-owned capability. Translated CLI adapters retain runtime mapping;
+> Codex uses its native `disabled_tools` path; Antigravity remains explicitly
+> unsupported. The analyzer diagnoses every unsupported, partial, or unverified
+> authored server filter with an RFC 6901 pointer and MCP source tier, while
+> native verified filters stay silent. Preview continues to expose the actual
+> MCP/provider plan, and the MCP tab overlays warnings without disabling edits.
+> Stage G.5 is now complete: image prompt inputs are enabled across all six
+> harnesses with adapter-owned evidence. Copilot and Claude retain verified
+> native path-based image attachment; Codex and OpenCode use their native
+> `--image`/`--file` arguments; Qwen and Antigravity are explicitly unsupported
+> in the current adapter contract. The shared attachment
+> pipeline carries only resolved full-file image refs into compatibility analysis,
+> so ordinary text/file refs, disabled steps, scripts, and unused defaults remain
+> silent. Diagnostics point at the authored prompt field, flow through dry-run
+> provider references, and render persistently beside the prompt editor. No
+> Harness-tab badge plumbing was added because images have no tab-scoped
+> diagnostic consumer.
+> Stage G.6 is now complete: `src/types/PortabilityReport.ts` projects each
+> parsed workflow onto every available harness using the shared analyzer
+> target/provenance path. Rows exclude unavailable harnesses, distinguish
+> ready, lossy, unsupported, workspace-side-effecting, and unverified results,
+> and retain stable step/property diagnostics, remediation, and side-effect
+> drill-down data. The CLI all-installed path consumes this projection while
+> preserving its JSON v1 envelope. Stage G.7 now supplies the shared React
+> presentation with a workflow-properties entry point, snapshot-based
+> drill-down, neutral loading/empty states, and VS Code/hosted-browser parity
+> through the shared dashboard bundle.
+> Stage G.8 is now complete: `scripts/generate-compatibility-docs.mjs` reads
+> the compiled registry seam and writes the checked-in customer matrix for all
+> enabled domains and leaves. `npm run check:compatibility-docs` compares the
+> generated bytes, and `docs:build` runs that drift gate. The matrix links from
+> the harness index, every harness page, and the workflow agents/skills page;
+> portable workflow attachments remain distinct from optional harness-native
+> discovery. No context-free capability snapshot was added to
+> `.ctrlyoke/capabilities.json`.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
@@ -40,11 +94,12 @@
 > **Implementation order:** completed Phase 1 sequencing is recorded in
 > [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../implemented/COMPATIBILITY_AND_FEEDBACK_STAGING.md);
 > remaining Phase 2 and Phase 3 work is sequenced by
-> [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md),
-> which splits Phase 2 because only its dry-run leg has an unbuilt dependency.
+> [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md),
+> which records the now-satisfied dry-run dependency and the ordered Stage D/G
+> implementation seams.
 >
 > **No dependency on**
-> [`BROWSER_USER_FEEDBACK_PLAN.md`](BROWSER_USER_FEEDBACK_PLAN.md) — see
+> [`BROWSER_USER_FEEDBACK_PLAN.md`](../implemented/BROWSER_USER_FEEDBACK_PLAN.md) — see
 > "Toasts are not the authoring surface". The two plans touch disjoint UI:
 > compatibility renders persistent field diagnostics and (for blocking
 > preflight results) the existing `components/shared/Modal.tsx`; the feedback
@@ -55,14 +110,16 @@
 Phase 1 is what prevents ctrlyoke from claiming enforcement it does not perform.
 
 Phases 2 and 3 are post-release (decided 2026-07-31). Phase 2 (dry run,
-portability report, CLI/MCP serialization) makes existing truth more visible; it
-does not prevent a dishonest support claim or an unsafe workspace mutation, so it
-does not gate the release. Phase 3 adds new capability domains.
+portability report, CLI validation) makes existing truth more visible; it does
+not prevent a dishonest support claim or an unsafe workspace mutation, so it
+does not gate the release. Its dry-run leg and CLI validation are implemented;
+the React report surface is now implemented. Phase 3 adds new capability
+domains.
 
-Acceptance criteria below that describe dry-run output, the portability report,
-or MCP capability serialization therefore belong to Phase 2 and are not release
-gates. Criteria covering the registry, analyzer, effective-property resolution,
-authoring diagnostics, and behavioral permission verification are.
+Acceptance criteria below that describe dry-run output or the portability
+report therefore belong to Phase 2 and are not release gates. Criteria covering
+the registry, analyzer, effective-property resolution, authoring diagnostics,
+and behavioral permission verification are.
 
 ---
 
@@ -174,17 +231,48 @@ server's `deniedTools` into ordinary `mcp__<id>__<tool>` deny patterns appended
 to `toolPermissions.deniedTools`, so on most harnesses it rides the existing
 `permissions.deniedTools` capability. Codex is the exception: it additionally
 emits native `disabled_tools` in its generated TOML
-(`CodexCliProvider.ts:592`), so it enforces per-server filtering even though its
+(`CodexCliProvider.ts:780,807`), so it enforces per-server filtering even though its
 general granular-list capability is unsupported. Model this domain only if that
 asymmetry proves to need its own declaration.
 
+### Codex G.1 partial-support investigation — complete
+
+The installed Codex CLI is 0.147.0. Its source-visible contract exposes
+token-based `prefix_rule` command policies, exact per-server MCP
+`enabled_tools`/`disabled_tools` lists, and filesystem/network permission
+profiles. None is a safe general translation for ctrlyoke's arbitrary
+`shell(command:*)`, MCP, or broad `read`/`write` tool patterns:
+
+- command rules match ordered command-token prefixes, not ctrlyoke's arbitrary
+  shell-pattern language; translating an allow or denial would change its
+  scope for wrappers, quoting, and non-prefix patterns;
+- MCP filters are server-local exact tool-name sets. Codex's shipped
+  `disabled_tools` output remains valid for server-owned `mcpServers[].deniedTools`
+  and was input to G.4, but it does not establish a mapping for general
+  `allowedTools`/`deniedTools` patterns;
+- permission profiles govern filesystem/network access, not harness tool names.
+  Mapping a broad tool denial to a wider sandbox grant could weaken the denial.
+
+Therefore G.1 changes no Codex fidelity declaration: `allowedTools` and
+`deniedTools` remain honestly `unsupported`. Existing mapper and analyzer
+coverage emits the not-enforced diagnostic for every configured list in the
+applicable modes. No Codex partial capability is advertised until a future
+general translation has both a safety argument and behavioral enforcement plus
+diagnostic coverage.
+
+The same audit re-confirmed Antigravity 1.1.12's position: its own help exposes
+only coarse `--sandbox` and dangerous bypass controls, not a documented
+granular allow/deny mechanism. Its granular declarations remain `unsupported`;
+no Gemini/Qwen ancestry or shared configuration path is evidence of support.
+
 ### When a temporary difference becomes invariant
 
-Usage reporting remains in the registry for now because Antigravity does not
-currently provide the normalized usage data exposed by the other harnesses. If
-Antigravity reaches the same reporting contract before this plan is
-implemented, remove the entire usage domain rather than shipping a compatibility
-dimension whose entries are all identical.
+**Usage reporting is now a product invariant and is removed from the registry.**
+The required re-audit completed 2026-08-18: `AntigravityUsageProvider` now
+participates in the same six-provider `HarnessUsageService`, and Antigravity's
+statusline/log parser supplies the normalized turn and context-window data that
+was previously missing. Do not ship a compatibility dimension whose entries
+are all identical.
 
 ## Capability Vocabulary
 
@@ -272,12 +360,7 @@ interface EffectiveCapabilityState {
   verification: CapabilityVerificationStatus;
 }
 
-type CapabilityDomain =
-  | "permissions"
-  | "promptInputs"
-  | "hooks"
-  | "mcp"
-  | "usage";
+type CapabilityDomain = "permissions" | "promptInputs" | "hooks" | "mcp";
 
 interface PermissionCapabilityDescriptor {
   mode: CapabilityDeclaration;
@@ -294,11 +377,6 @@ interface HarnessCapabilityDescriptor {
   hooks?: Partial<Record<HookEvent, CapabilityDeclaration>>;
   mcp?: {
     perServerToolFiltering: CapabilityDeclaration;
-  };
-  usage?: {
-    contextWindow: CapabilityDeclaration;
-    turnTokens: CapabilityDeclaration;
-    cumulativeTokens: CapabilityDeclaration;
   };
 }
 
@@ -328,7 +406,10 @@ an explicit versionless evidence basis at that point rather than giving it a
 fabricated CLI version or a permanent unknown state; do not add the variant
 speculatively now.
 
-`enabledDomains` is the rollout boundary. Phase 1 enables only `permissions`.
+`enabledDomains` is the rollout boundary. The generic registry supports any
+combination of the four modeled domains, and the shipped rollout currently
+enables `permissions`, `hooks`, and `mcp`; later domains remain disabled until they
+have complete adapter declarations.
 An optional domain that is not enabled means **not modeled yet**, not
 unsupported or unknown, and the analyzer must not emit diagnostics for it. For
 every enabled domain, registry assembly fails its completeness validation if
@@ -343,10 +424,9 @@ than being copied into React components.
 
 The supported harness set is the six CLI harnesses in `HARNESS_IDS`
 (`src/types/DashboardConstants.ts`): `copilot-cli`, `claude-cli`, `codex-cli`,
-`opencode-cli`, `qwen-cli`, and `antigravity-cli`. The `copilot-chat` harness was
-deliberately and permanently removed before release; see
-`dev/implemented/COPILOT_CHAT_ARCHIVAL_REMOVAL_PLAN.md`. Do not add a Copilot
-Chat descriptor, registry entry, or capability row.
+`opencode-cli`, `qwen-cli`, and `antigravity-cli`. A previously supported
+interactive harness was deliberately and permanently removed before release;
+do not add it back as a descriptor, registry entry, or capability row.
 
 Capability facts belong beside the harness implementation that must keep them
 true:
@@ -418,7 +498,6 @@ Initial checks:
 - requested hook events;
 - MCP per-server tool filtering;
 - image inputs;
-- context/usage reporting;
 - required workspace configuration and its side effects.
 
 Do not warn merely because a harness lacks a native `--agent`/`--skill`
@@ -767,13 +846,18 @@ ctrlyoke validate workflow.ctrlyoke.yaml --all-installed-harnesses --json
 ```
 
 Use stable diagnostic codes and structured JSON. CI must be able to fail on
-errors and optionally on lossy or unverified behavior.
+errors and optionally on lossy or unverified behavior. Stage D implements this
+as `--strict lossy`, `--strict unverified`, or `--strict all`; parse-only
+validation remains the default, and JSON output uses a one-line v1 envelope.
 
 ### MCP capabilities
 
-Evolve `.ctrlyoke/capabilities.json` without making it the source of truth. It
-should serialize the installed-version-aware subset of the shared registry for
-external tools while retaining the existing availability/model data.
+No capability serialization is added to `.ctrlyoke/capabilities.json`. A static
+per-harness snapshot is context-free and cannot say whether the current
+workflow actually uses a field, so it can turn an honest analyzer result into a
+misleading support claim. The file retains its existing availability/model data
+and existence-validation role; external workflow compatibility remains a
+validation/report concern.
 
 ## Browser and Hosted-Server Parity
 
@@ -944,7 +1028,7 @@ After Phase 1C, continue with the permission plan in this order:
 3. implement and behaviorally verify Qwen;
 4. implement OpenCode and coordinate its writes with the existing MCP writer.
 
-### Phase 2 — Dry run and complete workflow report
+### Phase 2 — Validation and complete workflow report
 
 > **Post-release (P1).** Not a 0.1.0 gate — see the status note at the top of
 > this plan.
@@ -953,22 +1037,44 @@ Begin this phase after the permission plan's Qwen/OpenCode preparation paths
 exist, so preview reports the actual translation and side effects rather than a
 second speculative implementation.
 
-- Integrate the Phase 1 shared analyzer with dry-run preview and CLI validation.
-- Add the installed-harness portability report.
-- Serialize the relevant capability data for MCP consumers.
+- **Done:** integrate the Phase 1 shared analyzer and exact provider translation
+  with dry-run preview.
+- **Done 2026-08-18:** integrate the Phase 1 shared analyzer with CLI validation,
+  including selected/all-installed targets, strict CI policies, and JSON v1.
+- **Done 2026-08-18:** add the pure installed-harness portability report. It
+  reuses shared consumer enumeration/retargeting, excludes unavailable
+  harnesses, classifies structured fidelity/severity, exposes unverified state,
+  preserves diagnostic identities/remediation, and discloses workspace-config
+  or mixed mechanisms without changing CLI JSON v1.
 
 ### Phase 3 — Expand capability domains
 
-- Hooks and notifications.
-- MCP per-server tool filtering, if the Codex asymmetry above proves to need its
-  own declaration. Injection is uniform and is not modeled.
-- Images and usage metadata.
-- Generate customer-facing compatibility documentation from the registry.
+- **Done 2026-08-18:** Hooks and notification delivery events. The registry now
+  enables `hooks` as a complete domain across all six harnesses. Declarations
+  live beside each adapter's logical-to-native event map, including explicit
+  unsupported events and versioned manual evidence. The analyzer emits shared
+  warning diagnostics only for configured hook entries, with consumer targets,
+  RFC 6901 pointers, source tiers, and remediation. Authoring fields keep their
+  Inherit/None/Custom state and show persistent diagnostics; dry-run propagates
+  the same diagnostics to workflow and step preview DTOs; and the Hooks tab
+  overlays a warning badge without replacing its configured-state icon. No
+  notification preferences are introduced.
+- MCP per-server tool filtering, now enabled in G.4 with an adapter-owned
+  declaration. Injection is uniform and is not modeled.
+- **Done 2026-08-18:** Image prompt inputs. All six adapters declare the domain;
+  the shared resolver marks only attached full-file image refs, the analyzer
+  emits stable unsupported/partial/unverified findings with RFC 6901 prompt
+  pointers, dry-run keeps the actual categorized/provider reference, and the
+  prompt editor preserves editable references while showing persistent feedback.
+- **Done 2026-08-18:** Generate customer-facing compatibility documentation from
+  the compiled registry seam, including all enabled leaves, evidence/version
+  scope, shared caveat/remediation prose, a byte-for-byte drift check, and the
+  portable workflow-attachment versus optional harness-native discovery
+  distinction. The VitePress docs build runs the drift check.
 - Extend the tab warning-badge overlay to every domain enabled in this phase.
 
-Before implementing usage metadata as a capability domain, re-audit
-Antigravity. If every supported harness then supplies the same normalized usage
-contract, remove usage from this phase and from the registry.
+The usage re-audit is complete and removed that uniform domain; see "When a
+temporary difference becomes invariant" above.
 
 #### Tab warning badges
 
@@ -1008,9 +1114,9 @@ existing icon: `getPermissionTabOverride()` in
 takes a `hasCompatibilityWarning` flag and, when true, adds
 `badgeCodicon: "warning"` / `badgeColor: "text-warning-fg"` on top of the
 mode's own icon and color rather than replacing them — the permission state
-must stay legible even while flagging a compatibility issue. This is the only
-tab today with diagnostic-driven badge logic, because `permissions` is
-currently the only enabled capability domain; the other tab-override
+must stay legible even while flagging a compatibility issue. The Hooks tab now
+uses the same diagnostic-driven badge logic for the enabled `hooks` domain; the
+other tab-override
 functions in that file (`getHooksTabOverride`, `getMcpTabOverride`,
 `getValidationTabOverride`, `getContextTabOverride`) are "something
 non-default is configured" indicators, not warning/error indicators, and
@@ -1019,16 +1125,14 @@ take no diagnostics input.
 As each Phase 3 domain is enabled, give its corresponding tab the same
 overlay-badge treatment instead of inventing a new visual language:
 
-- **Hooks** — once the `hooks` domain is enabled, `getHooksTabOverride` needs
-  a diagnostics input (or a sibling warning-badge helper) so a hook-event
-  compatibility warning overlays a badge on the tab's existing configured-icon
-  state, the same way permission mode and warning coexist today.
-- **MCP** — once per-server tool filtering (or another MCP capability) is
-  modeled, `getMcpTabOverride` needs the equivalent overlay for a filtering
-  warning, without losing the existing "servers configured" indicator.
-- **Images / usage** — if either becomes a tab-scoped domain with its own
-  authoring surface, give that surface the same warning-badge overlay rather
-  than a bespoke treatment.
+- **Hooks** — completed in G.3. `getHooksTabOverride` overlays a warning badge
+  on the tab's existing configured-icon state while preserving its primary
+  icon/color.
+- **MCP** — completed in G.4. `getMcpTabOverride` overlays a filtering warning
+  without losing the existing "servers configured" indicator.
+- **Images** — the prompt editor is the authoring surface, so image findings
+  render persistently there. Do not add a Harness-tab badge: the image domain
+  has no tab-scoped diagnostic consumer.
 
 Do not replace a tab's base icon/color to signal a compatibility warning; add
 the badge overlay on top, consistent with the Permissions tab precedent. Do

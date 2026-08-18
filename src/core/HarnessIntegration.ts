@@ -88,6 +88,8 @@ export interface PromptSections {
   agentContent: string | null;
   /** Absolute paths for full-file @path refs — harness reads these directly */
   directFileRefs: string[];
+  /** Resolved image files among directFileRefs. */
+  imageFileRefs: string[];
   /** Source-only full-file refs copied into the execution checkout before launch. */
   sourceRuntimeCopies: SourceRuntimeCopy[];
   /** Source-runtime reference tokens read in place as excerpts. */
@@ -501,6 +503,7 @@ export abstract class HarnessIntegration {
     // Expand context into direct file refs + excerpt blocks (split, not merged)
     let splitContext: SplitContext = {
       directFileRefs: [],
+      imageFileRefs: [],
       sourceRuntimeCopies: [],
       sourceRuntimeReadReferences: [],
       excerptBlocks: "",
@@ -550,6 +553,7 @@ export abstract class HarnessIntegration {
       skillContent,
       agentContent,
       directFileRefs: splitContext.directFileRefs,
+      imageFileRefs: splitContext.imageFileRefs,
       sourceRuntimeCopies: splitContext.sourceRuntimeCopies,
       sourceRuntimeReadReferences: splitContext.sourceRuntimeReadReferences,
       excerptContent: splitContext.excerptBlocks || null,

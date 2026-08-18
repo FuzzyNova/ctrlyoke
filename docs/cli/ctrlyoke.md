@@ -74,11 +74,30 @@ ctrlyoke run build.ctrlyoke.json --json --quiet
 
 ## `ctrlyoke validate`
 
-Validate a workflow file without running it:
+Validate a workflow file without starting a harness or executing a workflow:
 
 ```bash
 ctrlyoke validate my-workflow.ctrlyoke.yaml
 ```
+
+The command remains parse-only by default. Compatibility analysis is opt-in:
+
+```bash
+ctrlyoke validate my-workflow.ctrlyoke.yaml --harness claude-cli
+ctrlyoke validate my-workflow.ctrlyoke.yaml --all-installed-harnesses --json
+```
+
+`--harness <id>` analyzes every enabled AI consumer as the selected harness.
+`--all-installed-harnesses` probes the supported harness CLIs and analyzes only
+those currently available. The two target options are mutually exclusive;
+neither starts a workflow or an AI session. `--json` emits one JSON line with a
+versioned `schemaVersion: 1` envelope and the shared compatibility diagnostics.
+
+Compatibility errors fail validation by default. CI can additionally fail on
+warnings with `--strict lossy`, `--strict unverified`, or `--strict all`.
+Lossy findings include unsupported and partial translations; unverified findings
+mean the installed version is outside the compatibility evidence. Invalid
+harness IDs, strict policies, or conflicting target options are usage errors.
 
 ## `ctrlyoke history prune`
 

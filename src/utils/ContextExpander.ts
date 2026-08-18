@@ -47,6 +47,8 @@ import { quoteReferenceField } from "../completions/ContextReferenceBuilder";
 export interface SplitContext {
   /** Absolute paths for full-file @path refs — no embedding, harness reads directly */
   directFileRefs: string[];
+  /** Resolved full-file image refs that will be passed to the harness. */
+  imageFileRefs: string[];
   /** Source-only full-file refs to copy into the execution checkout before launch. */
   sourceRuntimeCopies: SourceRuntimeCopy[];
   /** Source-runtime reference tokens read in place as excerpts. */
@@ -327,6 +329,7 @@ export class ContextExpander {
    */
   async expandContextSplit(promptText: string): Promise<SplitContext> {
     const directFileRefs: string[] = [];
+    const imageFileRefs: string[] = [];
     const sourceRuntimeCopies: SourceRuntimeCopy[] = [];
     const sourceRuntimeReadReferences: string[] = [];
     const excerptParts: string[] = [];
@@ -342,6 +345,7 @@ export class ContextExpander {
       if (fileReferences.length === 0 && gitRefs.length === 0) {
         return {
           directFileRefs: [],
+          imageFileRefs: [],
           sourceRuntimeCopies: [],
           sourceRuntimeReadReferences: [],
           excerptBlocks: "",
@@ -458,6 +462,9 @@ export class ContextExpander {
                 path.relative(this.sourceCheckoutRoot!, sourceRuntimePath)
               );
               directFileRefs.push(destinationPath);
+              if (isImageRefPath(ref.path)) {
+                imageFileRefs.push(destinationPath);
+              }
               sourceRuntimeCopies.push({
                 reference: getReferenceToken(ref, promptText),
                 sourcePath: sourceRuntimePath,
@@ -467,6 +474,9 @@ export class ContextExpander {
               const absolutePath = this.resolveWorkspacePath(ref.path);
               await fs.access(absolutePath);
               directFileRefs.push(absolutePath);
+              if (isImageRefPath(ref.path)) {
+                imageFileRefs.push(absolutePath);
+              }
             }
           } catch (err) {
             const suggestion =
@@ -491,6 +501,7 @@ export class ContextExpander {
 
       return {
         directFileRefs,
+        imageFileRefs,
         sourceRuntimeCopies,
         sourceRuntimeReadReferences,
         excerptBlocks: excerptParts.join("\n\n"),
@@ -500,6 +511,7 @@ export class ContextExpander {
       Log.error("[ContextExpander] Error in expandContextSplit:", error);
       return {
         directFileRefs: [],
+        imageFileRefs: [],
         sourceRuntimeCopies: [],
         sourceRuntimeReadReferences: [],
         excerptBlocks: "",

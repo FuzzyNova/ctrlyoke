@@ -3,26 +3,45 @@ import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
   HARNESS_IDS,
+  HOOK_EVENT_ORDER,
+  MCP_CAPABILITY_KEYS,
   PERMISSION_CAPABILITY_KEYS,
+  PROMPT_INPUT_CAPABILITY_KEYS,
   type HarnessId,
 } from "../types/DashboardConstants";
 import type {
   CapabilityDeclaration,
   CapabilityDomain,
   EffectiveCapabilityState,
+  HarnessCapabilityFacts,
   HarnessCapabilityRegistrySnapshot,
+  HarnessCapabilityDescriptor,
   HarnessVersionRange,
   InstalledHarnessCapabilities,
-  PermissionCapabilityDescriptor,
-  PermissionCapabilityKey,
 } from "../types/CompatibilityTypes";
 import { IntegrationFactory } from "./IntegrationFactory";
 import type { ICliProvider } from "./harness/shared/interfaces/ICliProvider";
 
 export const HARNESS_CAPABILITY_SNAPSHOT_SCHEMA_VERSION = 1;
 
+export const DEFAULT_ENABLED_CAPABILITY_DOMAINS: readonly CapabilityDomain[] = [
+  CAPABILITY_DOMAINS.PERMISSIONS,
+  CAPABILITY_DOMAINS.PROMPT_INPUTS,
+  CAPABILITY_DOMAINS.HOOKS,
+  CAPABILITY_DOMAINS.MCP,
+];
+
+export interface HarnessCapabilityDocumentationFacts {
+  readonly enabledDomains: readonly CapabilityDomain[];
+  readonly harnesses: readonly {
+    readonly harnessId: HarnessId;
+    readonly displayName: string;
+    readonly capabilities: HarnessCapabilityFacts;
+  }[];
+}
+
 export interface HarnessCapabilitySource {
-  readonly provider: Pick<ICliProvider, "config" | "toolPermissionMapper"> & {
+  readonly provider: Pick<ICliProvider, "config" | "capabilities"> & {
     checkAvailability(): Promise<boolean>;
     getVersion?(): Promise<string | undefined>;
   };
@@ -61,7 +80,7 @@ export class HarnessCapabilityRegistry {
 
   constructor(options: HarnessCapabilityRegistryOptions = {}) {
     this.enabledDomains = options.enabledDomains ?? [
-      CAPABILITY_DOMAINS.PERMISSIONS,
+      ...DEFAULT_ENABLED_CAPABILITY_DOMAINS,
     ];
     this.validateEnabledDomains();
 
@@ -96,8 +115,11 @@ export class HarnessCapabilityRegistry {
         );
       }
 
-      const descriptor = source.provider.toolPermissionMapper.capabilities;
-      this.validatePermissionDescriptor(harnessId, descriptor);
+      HarnessCapabilityRegistry.validateDescriptor(
+        harnessId,
+        source.provider.capabilities,
+        this.enabledDomains
+      );
     }
   }
 
@@ -142,25 +164,61 @@ export class HarnessCapabilityRegistry {
   static deserializeSnapshot(
     serialized: string
   ): HarnessCapabilityRegistrySnapshot {
-    const snapshot = JSON.parse(
-      serialized
-    ) as HarnessCapabilityRegistrySnapshot;
-    if (snapshot.schemaVersion !== HARNESS_CAPABILITY_SNAPSHOT_SCHEMA_VERSION) {
+    const parsed: unknown = JSON.parse(serialized);
+    if (!isRecord(parsed)) {
+      throw new Error("Invalid harness capability snapshot");
+    }
+    if (parsed.schemaVersion !== HARNESS_CAPABILITY_SNAPSHOT_SCHEMA_VERSION) {
       throw new Error(
         `Unsupported harness capability snapshot schema: ${String(
-          snapshot.schemaVersion
+          parsed.schemaVersion
         )}`
       );
     }
-    if (
-      snapshot.enabledDomains.length !== 1 ||
-      snapshot.enabledDomains[0] !== CAPABILITY_DOMAINS.PERMISSIONS
-    ) {
-      throw new Error(
-        "Harness capability snapshots must enable permissions only"
+    if (!Array.isArray(parsed.enabledDomains) || !isRecord(parsed.harnesses)) {
+      throw new Error("Invalid harness capability snapshot shape");
+    }
+    const snapshot = parsed as unknown as HarnessCapabilityRegistrySnapshot;
+    HarnessCapabilityRegistry.validateEnabledDomainList(
+      snapshot.enabledDomains
+    );
+    for (const harnessId of HARNESS_ID_LIST) {
+      const installed = snapshot.harnesses[harnessId];
+      if (!isRecord(installed) || !isRecord(installed.descriptor)) {
+        throw new Error(`Missing capability snapshot for harness ${harnessId}`);
+      }
+      const descriptor =
+        installed.descriptor as unknown as HarnessCapabilityDescriptor;
+      if (descriptor.harnessId !== harnessId) {
+        throw new Error(
+          `Capability snapshot ${String(descriptor.harnessId)} is mapped to ${harnessId}`
+        );
+      }
+      HarnessCapabilityRegistry.validateDescriptor(
+        harnessId,
+        descriptor,
+        snapshot.enabledDomains
       );
     }
     return snapshot;
+  }
+
+  /**
+   * Return the adapter-owned declarations used by customer documentation.
+   * This intentionally performs no availability or version probes.
+   */
+  static getDocumentationFacts(): HarnessCapabilityDocumentationFacts {
+    return {
+      enabledDomains: DEFAULT_ENABLED_CAPABILITY_DOMAINS,
+      harnesses: HARNESS_ID_LIST.map((harnessId) => {
+        const provider = IntegrationFactory.createCapabilityProvider(harnessId);
+        return {
+          harnessId,
+          displayName: provider.config.displayName,
+          capabilities: provider.capabilities,
+        };
+      }),
+    };
   }
 
   /**
@@ -172,16 +230,17 @@ export class HarnessCapabilityRegistry {
     domain: CapabilityDomain,
     capability: string
   ): Promise<EffectiveCapabilityState | undefined> {
-    if (
-      domain !== CAPABILITY_DOMAINS.PERMISSIONS ||
-      !this.enabledDomains.includes(domain)
-    ) {
+    if (!this.enabledDomains.includes(domain)) {
       return undefined;
     }
 
     const installed = await this.getInstalledCapabilities(harnessId);
-    const key = capability as PermissionCapabilityKey;
-    return installed.effective?.permissions[key];
+    const domainState = installed.effective[domain];
+    if (!domainState || typeof domainState !== "object") {
+      return undefined;
+    }
+    const state = getCapabilityLeaf(domainState, capability);
+    return isEffectiveCapabilityState(state) ? state : undefined;
   }
 
   /** Re-run availability/version detection for one harness or the full set. */
@@ -220,31 +279,52 @@ export class HarnessCapabilityRegistry {
     const version = available
       ? await source.provider.getVersion?.()
       : undefined;
-    const permissionCapabilities =
-      source.provider.toolPermissionMapper.capabilities;
+    const facts = source.provider.capabilities;
     const descriptor = {
       harnessId: source.provider.config.harnessId,
-      permissions: permissionCapabilities,
+      ...facts,
     };
 
     return {
       available,
       ...(version ? { version } : {}),
       descriptor,
-      effective: {
-        permissions: {
-          mode: this.resolveDeclaration(permissionCapabilities.mode, version),
-          allowedTools: this.resolveDeclaration(
-            permissionCapabilities.allowedTools,
-            version
-          ),
-          deniedTools: this.resolveDeclaration(
-            permissionCapabilities.deniedTools,
-            version
-          ),
-        },
-      },
+      effective: this.resolveEnabledDomains(descriptor, version),
     };
+  }
+
+  private resolveEnabledDomains(
+    descriptor: HarnessCapabilityDescriptor,
+    installedVersion: string | undefined
+  ): InstalledHarnessCapabilities["effective"] {
+    const effective: Record<string, unknown> = {};
+    for (const domain of this.enabledDomains) {
+      const domainDescriptor = descriptor[domain];
+      if (!domainDescriptor) {
+        continue;
+      }
+      effective[domain] = this.resolveCapabilityValue(
+        domainDescriptor,
+        installedVersion
+      );
+    }
+    return effective as InstalledHarnessCapabilities["effective"];
+  }
+
+  private resolveCapabilityValue(
+    value: CapabilityDeclaration | object,
+    installedVersion: string | undefined
+  ): EffectiveCapabilityState | Record<string, unknown> {
+    if (isCapabilityDeclaration(value)) {
+      return this.resolveDeclaration(value, installedVersion);
+    }
+    const resolved: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value)) {
+      if (child !== undefined) {
+        resolved[key] = this.resolveCapabilityValue(child, installedVersion);
+      }
+    }
+    return resolved;
   }
 
   private resolveDeclaration(
@@ -266,44 +346,88 @@ export class HarnessCapabilityRegistry {
   }
 
   private validateEnabledDomains(): void {
-    if (
-      this.enabledDomains.length !== 1 ||
-      this.enabledDomains[0] !== CAPABILITY_DOMAINS.PERMISSIONS
-    ) {
-      throw new Error("Only the permissions capability domain is modeled");
+    HarnessCapabilityRegistry.validateEnabledDomainList(this.enabledDomains);
+  }
+
+  private static validateEnabledDomainList(
+    enabledDomains: readonly CapabilityDomain[]
+  ): void {
+    const knownDomains = Object.values(
+      CAPABILITY_DOMAINS
+    ) as CapabilityDomain[];
+    if (new Set(enabledDomains).size !== enabledDomains.length) {
+      throw new Error("Harness capability domains must be unique");
+    }
+    for (const domain of enabledDomains) {
+      if (!knownDomains.includes(domain)) {
+        throw new Error(`Unknown capability domain ${String(domain)}`);
+      }
     }
   }
 
-  private validatePermissionDescriptor(
+  private static validateDescriptor(
     harnessId: HarnessId,
-    descriptor: PermissionCapabilityDescriptor
+    facts: HarnessCapabilityFacts | HarnessCapabilityDescriptor,
+    enabledDomains: readonly CapabilityDomain[]
   ): void {
-    const capabilities = Object.values(
-      PERMISSION_CAPABILITY_KEYS
-    ) as PermissionCapabilityKey[];
-    for (const capability of capabilities) {
-      const declaration = descriptor[capability];
-      if (!declaration) {
-        throw new Error(
-          `Missing permission capability ${harnessId}.${capability}`
+    for (const domain of enabledDomains) {
+      const descriptor = facts[domain];
+      if (!descriptor) {
+        throw new Error(`Missing capability domain ${harnessId}.${domain}`);
+      }
+      for (const leaf of requiredLeavesForDomain(domain)) {
+        if (
+          !isRecord(descriptor) ||
+          !Object.prototype.hasOwnProperty.call(descriptor, leaf)
+        ) {
+          throw new Error(`Missing capability ${harnessId}.${domain}.${leaf}`);
+        }
+      }
+      for (const [path, value] of findCapabilityLeaves(descriptor)) {
+        if (!isCapabilityDeclaration(value)) {
+          throw new Error(
+            `Invalid capability declaration ${harnessId}.${domain}.${path}`
+          );
+        }
+        HarnessCapabilityRegistry.validateDeclaration(
+          harnessId,
+          `${domain}.${path}`,
+          value
         );
       }
-      if (
-        declaration.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED &&
-        declaration.mechanism !== CAPABILITY_MECHANISMS.NONE
-      ) {
-        throw new Error(
-          `Unsupported capability ${harnessId}.${capability} must use mechanism none`
-        );
-      }
-      if (
-        declaration.fidelity !== CAPABILITY_FIDELITIES.UNSUPPORTED &&
-        declaration.mechanism === CAPABILITY_MECHANISMS.NONE
-      ) {
-        throw new Error(
-          `Supported capability ${harnessId}.${capability} cannot use mechanism none`
-        );
-      }
+    }
+  }
+
+  private static validateDeclaration(
+    harnessId: HarnessId,
+    capability: string,
+    declaration: CapabilityDeclaration
+  ): void {
+    if (
+      declaration.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED &&
+      declaration.mechanism !== CAPABILITY_MECHANISMS.NONE
+    ) {
+      throw new Error(
+        `Unsupported capability ${harnessId}.${capability} must use mechanism none`
+      );
+    }
+    if (
+      declaration.fidelity !== CAPABILITY_FIDELITIES.UNSUPPORTED &&
+      declaration.mechanism === CAPABILITY_MECHANISMS.NONE
+    ) {
+      throw new Error(
+        `Supported capability ${harnessId}.${capability} cannot use mechanism none`
+      );
+    }
+    if (
+      declaration.fidelity !== CAPABILITY_FIDELITIES.UNSUPPORTED &&
+      (!declaration.verification ||
+        declaration.verification.verifiedVersions.length === 0 ||
+        !declaration.verification.reference)
+    ) {
+      throw new Error(
+        `Supported capability ${harnessId}.${capability} must include verification evidence`
+      );
     }
   }
 
@@ -320,6 +444,72 @@ export class HarnessCapabilityRegistry {
   ): HarnessCapabilitySource {
     return { provider: IntegrationFactory.createCapabilityProvider(harnessId) };
   }
+}
+
+function isCapabilityDeclaration(
+  value: unknown
+): value is CapabilityDeclaration {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "fidelity" in value &&
+    "mechanism" in value
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function requiredLeavesForDomain(domain: CapabilityDomain): readonly string[] {
+  switch (domain) {
+    case CAPABILITY_DOMAINS.PERMISSIONS:
+      return Object.values(PERMISSION_CAPABILITY_KEYS);
+    case CAPABILITY_DOMAINS.PROMPT_INPUTS:
+      return [PROMPT_INPUT_CAPABILITY_KEYS.IMAGES];
+    case CAPABILITY_DOMAINS.MCP:
+      return [MCP_CAPABILITY_KEYS.PER_SERVER_TOOL_FILTERING];
+    case CAPABILITY_DOMAINS.HOOKS:
+      return HOOK_EVENT_ORDER;
+  }
+}
+
+function findCapabilityLeaves(
+  value: object,
+  prefix = ""
+): Array<[string, unknown]> {
+  const declarations: Array<[string, unknown]> = [];
+  const entries = Object.entries(value);
+  if (entries.length === 0) {
+    return prefix ? [[prefix, value]] : declarations;
+  }
+  for (const [key, child] of entries) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (isCapabilityDeclaration(child)) {
+      declarations.push([path, child]);
+    } else if (isRecord(child)) {
+      declarations.push(...findCapabilityLeaves(child, path));
+    } else {
+      declarations.push([path, child]);
+    }
+  }
+  return declarations;
+}
+
+function isEffectiveCapabilityState(
+  value: unknown
+): value is EffectiveCapabilityState {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "fidelity" in value &&
+    "mechanism" in value &&
+    "verification" in value
+  );
+}
+
+function getCapabilityLeaf(value: object, capability: string): unknown {
+  return Object.entries(value).find(([key]) => key === capability)?.[1];
 }
 
 function parseVersion(version: string): ParsedVersion | undefined {

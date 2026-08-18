@@ -37,6 +37,10 @@ export default defineConfig({
           text: "Harnesses",
           items: [
             { text: "Overview", link: "/harnesses/" },
+            {
+              text: "Compatibility matrix",
+              link: "/harnesses/compatibility",
+            },
             { text: "Copilot CLI", link: "/harnesses/copilot-cli" },
             { text: "Claude CLI", link: "/harnesses/claude-cli" },
             { text: "Codex CLI", link: "/harnesses/codex-cli" },

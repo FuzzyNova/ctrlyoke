@@ -8,6 +8,7 @@ export {
   type AgentSelectEntry,
 } from "./agentSelectOptions";
 export { Modal } from "./Modal";
+export { WorkflowPortabilityReportModal } from "./WorkflowPortabilityReportModal";
 export {
   SplitButton,
   type SplitButtonOption,

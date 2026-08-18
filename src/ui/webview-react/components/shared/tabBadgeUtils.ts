@@ -94,20 +94,41 @@ export function getPermissionModeBadge(
 
 /** Focus-border (blue) icon if any hooks are configured in the resolved value */
 export function getHooksTabOverride(
-  hooks: object[] | null | undefined
+  hooks: object[] | null | undefined,
+  hasCompatibilityWarning = false
 ): TabIconOverride | undefined {
   if (Array.isArray(hooks) && hooks.length > 0) {
-    return FOCUS_TAB_OVERRIDE;
+    return hasCompatibilityWarning
+      ? {
+          ...FOCUS_TAB_OVERRIDE,
+          badgeCodicon: "warning",
+          badgeColor: "text-warning-fg",
+        }
+      : FOCUS_TAB_OVERRIDE;
   }
-  return undefined;
+  return hasCompatibilityWarning
+    ? { badgeCodicon: "warning", badgeColor: "text-warning-fg" }
+    : undefined;
 }
 
 /** Focus-border (blue) icon if any MCP servers are configured */
 export function getMcpTabOverride(
-  mcpServers: (string | object)[] | null | undefined
+  mcpServers: (string | object)[] | null | undefined,
+  hasCompatibilityWarning = false
 ): TabIconOverride | undefined {
-  if (Array.isArray(mcpServers) && mcpServers.length > 0) {
+  const configured = Array.isArray(mcpServers) && mcpServers.length > 0;
+  if (configured && hasCompatibilityWarning) {
+    return {
+      ...FOCUS_TAB_OVERRIDE,
+      badgeCodicon: "warning",
+      badgeColor: "text-warning-fg",
+    };
+  }
+  if (configured) {
     return FOCUS_TAB_OVERRIDE;
+  }
+  if (hasCompatibilityWarning) {
+    return { badgeCodicon: "warning", badgeColor: "text-warning-fg" };
   }
   return undefined;
 }

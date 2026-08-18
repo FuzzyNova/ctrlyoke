@@ -30,11 +30,35 @@ import type {
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
 import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
+import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import {
   applyPreparedMutations,
   type CliProviderPreparation,
 } from "../shared/interfaces/PreparedMutation";
+
+const CODEX_MCP_FILTERING_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "native",
+  verification: {
+    kind: "manual",
+    reference:
+      "dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#codex-partial-support-investigation",
+    basis: "cli-version",
+    verifiedVersions: [">=0.146.0"],
+  },
+} as const;
+
+const CODEX_IMAGE_INPUT_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "native",
+  verification: {
+    kind: "manual",
+    reference: "https://developers.openai.com/codex/cli/reference/",
+    basis: "cli-version",
+    verifiedVersions: [">=0.146.0"],
+  },
+} as const;
 
 const CODEX_HOOK_ARGS = ["--enable", "hooks"] as const;
 const CODEX_NOTIFICATION_SCRIPT_NAME = "ctrlyoke-codex-notify.js";
@@ -158,6 +182,16 @@ export class CodexCliProvider implements ICliProvider {
     new CodexNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new CodexToolPermissionMapper();
+  get capabilities(): HarnessCapabilityFacts {
+    return {
+      permissions: this.toolPermissionMapper.capabilities,
+      hooks: CodexNotificationMonitor.CAPABILITIES,
+      mcp: {
+        perServerToolFiltering: CODEX_MCP_FILTERING_CAPABILITY,
+      },
+      promptInputs: { images: CODEX_IMAGE_INPUT_CAPABILITY },
+    };
+  }
   readonly headlessSource = "log" as const;
 
   /** Extract Codex's session ID from the headless JSONL clock stream. */
@@ -569,17 +603,6 @@ export class CodexCliProvider implements ICliProvider {
     userHooks?: UserHookConfig[],
     wrappedCtrlYokeEvents: HookEvent[] = []
   ): Record<string, unknown[]> {
-    const codexEventMap: Record<string, string> = {
-      stop: "Stop",
-      sessionStart: "SessionStart",
-      preToolUse: "PreToolUse",
-      postToolUse: "PostToolUse",
-      userPromptSubmit: "UserPromptSubmit",
-      // Decision hook: Codex pipes the payload on stdin and reads stdout as the
-      // allow/deny decision. Registered as a direct hook entry so Codex handles
-      // the stdin/stdout contract natively.
-      permissionRequest: "PermissionRequest",
-    };
     const section: Record<string, unknown[]> = {};
     for (const uh of userHooks ?? []) {
       if (
@@ -588,7 +611,7 @@ export class CodexCliProvider implements ICliProvider {
       ) {
         continue;
       }
-      const nativeEvent = codexEventMap[uh.event];
+      const nativeEvent = CodexNotificationMonitor.EVENT_MAP[uh.event];
       if (!nativeEvent) continue;
       if (!section[nativeEvent]) section[nativeEvent] = [];
       section[nativeEvent].push(
@@ -681,6 +704,10 @@ export class CodexCliProvider implements ICliProvider {
   formatFileReference(relativeFilePath: string): string {
     // Codex CLI doesn't support @ prefix - just return the path as-is
     return relativeFilePath;
+  }
+
+  buildImageAttachmentArgs(imageFilePaths: readonly string[]): string[] {
+    return imageFilePaths.flatMap((filePath) => ["--image", filePath]);
   }
 
   /**

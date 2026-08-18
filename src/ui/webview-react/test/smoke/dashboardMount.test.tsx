@@ -26,6 +26,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useTerminalStore } from "@store/terminalStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
+import { useCompatibilityStore } from "@store/compatibilityStore";
 import { EXECUTION_STATES } from "@/types/messages";
 
 /**
@@ -197,5 +198,13 @@ describe("dashboard mount smoke", () => {
     useUiStore.setState({ globalSettingsOpen: true, editorCollapsed: false });
 
     mountDashboard("settings drawer mount");
+  });
+
+  it("mounts the workflow portability report surface", () => {
+    useUiStore.setState({ workflowPortabilityReportOpen: true });
+    mountDashboard("workflow portability report mount");
+    expect(useCompatibilityStore.getState().capabilitySnapshotStatus).toBe(
+      "checking"
+    );
   });
 });

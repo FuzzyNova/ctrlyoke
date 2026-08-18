@@ -625,6 +625,9 @@ interface UiState {
     ref: string;
   } | null;
 
+  // Workflow portability report — transient, shared by VS Code and hosted clients.
+  workflowPortabilityReportOpen: boolean;
+
   /**
    * Discard-continuation/start-new-run-instead hit unsaved edits to the
    * rewound suffix and needs the user to confirm losing them. Rendered as an
@@ -834,6 +837,9 @@ interface UiActions {
     } | null
   ) => void;
 
+  // Workflow portability report
+  setWorkflowPortabilityReportOpen: (open: boolean) => void;
+
   // Suffix-edit discard confirmation modal
   setSuffixEditConfirmation: (
     confirmation: {
@@ -1007,6 +1013,7 @@ const initialState: UiState = {
   toastQueue: [],
   harnessDetectionRetryResult: null,
   contentPreviewModal: null,
+  workflowPortabilityReportOpen: false,
   suffixEditConfirmation: null,
   activeOutputTabs: {},
   terminalActiveWorkflows: new Set<string>(),
@@ -1558,6 +1565,9 @@ export const useUiStore = create<UiState & UiActions>()(
         set({ harnessDetectionRetryResult: result }),
 
       setContentPreviewModal: (modal) => set({ contentPreviewModal: modal }),
+
+      setWorkflowPortabilityReportOpen: (open) =>
+        set({ workflowPortabilityReportOpen: open }),
       setSuffixEditConfirmation: (confirmation) =>
         set({ suffixEditConfirmation: confirmation }),
 
@@ -1978,6 +1988,7 @@ export const useUiStore = create<UiState & UiActions>()(
           horizontalPanelResizeActive: false,
           suffixEditConfirmation: null,
           contentPreviewModal: null,
+          workflowPortabilityReportOpen: false,
           harnessDetectionRetryResult: null,
         }),
 

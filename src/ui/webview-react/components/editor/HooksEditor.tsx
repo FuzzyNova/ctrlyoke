@@ -1,5 +1,8 @@
 import React, { useCallback, useMemo } from "react";
 import { HOOK_EVENT_METADATA } from "@root/types/DashboardConstants";
+import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
+import { toFieldDiagnostic } from "@utils/compatibilityDiagnostics";
+import { FieldDiagnostic } from "../shared/FieldDiagnostic";
 
 interface HookEntry {
   event: string;
@@ -16,6 +19,8 @@ interface HooksEditorProps {
   inheritedValue?: object[];
   /** When true, hides the Default/None/Custom mode selector (for WorkflowPropertiesPanel global level) */
   showDefault?: boolean;
+  /** Compatibility findings for configured hook events. */
+  diagnostics?: readonly CompatibilityDiagnostic[];
 }
 
 type EditorMode = "default" | "none" | "custom";
@@ -32,6 +37,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
   onChange,
   inheritedValue = [],
   showDefault = true,
+  diagnostics = [],
 }) => {
   const mode = getMode(value);
   const hooks = useMemo<HookEntry[]>(
@@ -97,6 +103,16 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
       ))}
     </div>
   ) : null;
+  const fieldDiagnostics = diagnostics.map((diagnostic) =>
+    toFieldDiagnostic(diagnostic)
+  );
+  const diagnosticsView = (
+    <FieldDiagnostic
+      id="hooks-compatibility-diagnostics"
+      diagnostics={fieldDiagnostics}
+      className="mt-2"
+    />
+  );
 
   // Default mode — show inherited preview
   if (mode === "default" && showDefault) {
@@ -117,6 +133,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
             No hooks inherited
           </p>
         )}
+        {diagnosticsView}
       </div>
     );
   }
@@ -129,6 +146,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
         <p className="text-xs text-description-fg italic">
           No hooks — inherited hooks suppressed
         </p>
+        {diagnosticsView}
       </div>
     );
   }
@@ -178,6 +196,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
       >
         + Add Hook
       </button>
+      {diagnosticsView}
     </div>
   );
 };

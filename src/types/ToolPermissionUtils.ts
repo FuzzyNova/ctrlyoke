@@ -5,9 +5,11 @@ import type { ToolPermissionConfig } from "./ExecutionPropertyTypes";
 /**
  * Merge per-server MCP denials into the unified tool permission configuration.
  *
- * This is the single permission rule shared by author-time compatibility
- * analysis and runtime harness preparation. Server-level tool names are bare;
- * harness permission patterns use the `mcp__<server>__<tool>` form.
+ * This is the runtime permission rule for harness preparation. Server-level
+ * tool names are bare; harness permission patterns use the
+ * `mcp__<server>__<tool>` form. Author-time compatibility analysis owns its
+ * MCP diagnostics separately so native and unsupported adapters do not look
+ * like general permission failures.
  */
 export function mergeServerDeniedTools(
   toolPermissions: ToolPermissionConfig | null | undefined,
