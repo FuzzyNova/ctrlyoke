@@ -1182,6 +1182,41 @@ export class CtrlYokeHostedServer
       }
     );
 
+    this.app.get(
+      "/api/workspace-viewer/worktree-diff",
+      requireToken,
+      async (req, res) => {
+        const sourceCheckoutRoot = req.query.sourceCheckoutRoot;
+        const baseCommit = req.query.baseCommit;
+        const branchName = req.query.branchName;
+        if (
+          typeof sourceCheckoutRoot !== "string" ||
+          !sourceCheckoutRoot ||
+          typeof baseCommit !== "string" ||
+          !baseCommit ||
+          typeof branchName !== "string" ||
+          !branchName
+        ) {
+          res.status(400).json({
+            error:
+              "sourceCheckoutRoot, baseCommit, and branchName are required",
+          });
+          return;
+        }
+        try {
+          const result = await this.viewerService.getWorktreeDiff(
+            sourceCheckoutRoot,
+            baseCommit,
+            branchName
+          );
+          res.json(result satisfies WorkspaceGitRefDiffResponse);
+        } catch (err) {
+          Log.error(`workspace-viewer /worktree-diff error: ${String(err)}`);
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
     this.app.post(
       "/api/workspace-viewer/checkout-commit",
       requireToken,

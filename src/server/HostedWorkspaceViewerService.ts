@@ -52,6 +52,7 @@ import {
   getCommitDiff,
   getCommitInfo,
   getIgnoredEntryNames,
+  getDiffBetweenRefs,
 } from "../utils/GitUtils";
 import {
   isImageRefPath,
@@ -1298,5 +1299,29 @@ export class HostedWorkspaceViewerService {
       getCommitInfo(repoRoot, hash),
     ]);
     return { unifiedDiff, commitInfo };
+  }
+
+  /**
+   * Diff a recorded worktree run's branch against its recorded base commit —
+   * the browser equivalent of the VS Code `ctrlyoke.viewWorktreeDiff` command.
+   * `sourceCheckoutRoot` is server-recorded `_runtime.worktree` data echoed
+   * back by the client, not a viewer-relative path, so it is validated the
+   * same way other path-carrying ops are: it must resolve inside a discovered
+   * repo (`requireRepoRootForPath`) rather than being trusted directly.
+   */
+  async getWorktreeDiff(
+    sourceCheckoutRoot: string,
+    baseCommit: string,
+    branchName: string
+  ): Promise<WorkspaceGitRefDiffResponse> {
+    const repoRoot = await this.requireRepoRootForPath(
+      path.resolve(sourceCheckoutRoot)
+    );
+    const unifiedDiff = await getDiffBetweenRefs(
+      repoRoot,
+      baseCommit,
+      `refs/heads/${branchName}`
+    );
+    return { unifiedDiff };
   }
 }

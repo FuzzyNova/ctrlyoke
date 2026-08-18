@@ -854,4 +854,43 @@ suite("HostedWorkspaceViewerService", function () {
       }
     });
   });
+
+  // ── getWorktreeDiff ─────────────────────────────────────────────────────────
+
+  suite("getWorktreeDiff", () => {
+    test("diffs a recorded worktree branch against its recorded base commit", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "base.txt", "base\n", "base commit");
+      const baseCommit = runGit(root, "rev-parse", "HEAD");
+      runGit(root, "checkout", "-b", "feature/worktree-test");
+      commitFile(root, "feature.txt", "feature\n", "feature commit");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.getWorktreeDiff(
+        root,
+        baseCommit,
+        "feature/worktree-test"
+      );
+
+      assert.ok(result.unifiedDiff.includes("feature.txt"));
+    });
+
+    test("rejects a sourceCheckoutRoot outside every discovered repo", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "base.txt", "base\n", "base commit");
+      const baseCommit = runGit(root, "rev-parse", "HEAD");
+      const outside = createWorkspace();
+
+      const svc = new HostedWorkspaceViewerService(root);
+
+      await assert.rejects(
+        () => svc.getWorktreeDiff(outside, baseCommit, "main"),
+        /not inside a git repository/
+      );
+    });
+  });
 });

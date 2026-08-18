@@ -13,6 +13,8 @@ import type {
   WorkflowTokenTotals,
 } from "@root/types/CtrlYokeTypes";
 import { sendMessage } from "@hooks/useMessageHandler";
+import { isStandalone } from "@hooks/useVsCodeApi";
+import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 
 /** Bordered pill styling shared by the worktree row's action buttons, so two adjacent buttons never read as one run-together label. */
 const WORKTREE_BUTTON_CLASS =
@@ -183,7 +185,10 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
 
   const hasDiffButton = Boolean(worktree?.baseCommit && branchName);
   const hasOpenButton = Boolean(
-    worktree?.baseCommit && branchName && worktree.directoryState === "present"
+    !isStandalone &&
+      worktree?.baseCommit &&
+      branchName &&
+      worktree.directoryState === "present"
   );
   const hasMergeButton = Boolean(
     address &&
@@ -294,13 +299,25 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
                   {hasDiffButton && (
                     <button
                       type="button"
-                      onClick={() =>
-                        sendMessage(MESSAGE_TYPES.VIEW_WORKTREE_DIFF, {
-                          sourceCheckoutRoot: worktree.sourceCheckoutRoot,
-                          baseCommit: worktree.baseCommit,
-                          branchName: worktree.branchName,
-                        })
-                      }
+                      onClick={() => {
+                        const baseCommit = worktree.baseCommit;
+                        if (!baseCommit) return;
+                        if (isStandalone) {
+                          void useWorkspaceViewerStore
+                            .getState()
+                            .openToWorktreeDiff(
+                              worktree.sourceCheckoutRoot,
+                              baseCommit,
+                              worktree.branchName
+                            );
+                        } else {
+                          sendMessage(MESSAGE_TYPES.VIEW_WORKTREE_DIFF, {
+                            sourceCheckoutRoot: worktree.sourceCheckoutRoot,
+                            baseCommit,
+                            branchName: worktree.branchName,
+                          });
+                        }
+                      }}
                       title="View the recorded branch against its recorded base commit"
                       className={WORKTREE_BUTTON_CLASS}
                     >

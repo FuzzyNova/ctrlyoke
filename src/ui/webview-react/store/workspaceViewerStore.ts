@@ -10,7 +10,7 @@ import type {
   WorkspaceRepo,
 } from "@root/types/HostedWorkspaceViewerTypes";
 import type { ParsedDiffFile } from "@utils/rdvAdapter";
-import { workspaceGitRefDiff } from "@utils/hostedApi";
+import { workspaceGitRefDiff, workspaceWorktreeDiff } from "@utils/hostedApi";
 import { parseUnifiedDiffToFiles } from "@utils/rdvAdapter";
 
 // ============================================================================
@@ -209,6 +209,12 @@ interface WorkspaceViewerActions {
 
   // Git-ref diff (browser multi-file pane)
   openToGitRef(ref: string): Promise<void>;
+  /** Diff a recorded worktree run's branch against its recorded base commit. */
+  openToWorktreeDiff(
+    sourceCheckoutRoot: string,
+    baseCommit: string,
+    branchName: string
+  ): Promise<void>;
 
   // Pending navigation
   openToFile(filePath: string, startLine?: number, endLine?: number): void;
@@ -675,6 +681,34 @@ export const useWorkspaceViewerStore = create<
             diffRefLabel,
             diffRefLoading: false,
             diffCommitInfo: commitInfo ?? null,
+          });
+        } catch {
+          set({ diffRefLoading: false });
+        }
+      },
+
+      async openToWorktreeDiff(sourceCheckoutRoot, baseCommit, branchName) {
+        set({
+          isOpen: true,
+          activeTab: "sourceControl",
+          selectedDiffPath: null,
+          diffFiles: null,
+          diffRefLabel: null,
+          diffRefLoading: true,
+          diffCommitInfo: null,
+          diffRef: null,
+          pendingDiff: null,
+        });
+        try {
+          const { unifiedDiff } = await workspaceWorktreeDiff(
+            sourceCheckoutRoot,
+            baseCommit,
+            branchName
+          );
+          set({
+            diffFiles: parseUnifiedDiffToFiles(unifiedDiff),
+            diffRefLabel: `Branch ${branchName}`,
+            diffRefLoading: false,
           });
         } catch {
           set({ diffRefLoading: false });

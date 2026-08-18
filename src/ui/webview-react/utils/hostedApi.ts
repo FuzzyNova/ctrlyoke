@@ -241,6 +241,22 @@ export async function workspaceGitRefDiff(
   );
 }
 
+/** Diff a recorded worktree run's branch against its recorded base commit. */
+export async function workspaceWorktreeDiff(
+  sourceCheckoutRoot: string,
+  baseCommit: string,
+  branchName: string
+): Promise<WorkspaceGitRefDiffResponse> {
+  const params = new URLSearchParams({
+    sourceCheckoutRoot,
+    baseCommit,
+    branchName,
+  });
+  return hostedFetch<WorkspaceGitRefDiffResponse>(
+    `/api/workspace-viewer/worktree-diff?${params.toString()}`
+  );
+}
+
 export async function workspaceCheckoutCommit(
   req: WorkspaceCheckoutCommitRequest
 ): Promise<{ detached: boolean }> {
