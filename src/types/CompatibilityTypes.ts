@@ -10,6 +10,7 @@ import {
   COMPATIBILITY_SOURCE_TIERS,
   FINAL_STEP_PHASES,
   HOOK_EVENT_METADATA,
+  MCP_CAPABILITY_KEYS,
   PERMISSION_CAPABILITY_KEYS,
   type HarnessId,
   type HookEvent,
@@ -28,6 +29,11 @@ export const COMPATIBILITY_DIAGNOSTIC_CODES = {
     "compatibility.permissions.deniedTools.notEnforced",
   DENIED_TOOLS_PARTIAL: "compatibility.permissions.deniedTools.partial",
   DENIED_TOOLS_UNVERIFIED: "compatibility.permissions.deniedTools.unverified",
+  MCP_FILTERING_UNSUPPORTED:
+    "compatibility.mcp.perServerToolFiltering.unsupported",
+  MCP_FILTERING_PARTIAL: "compatibility.mcp.perServerToolFiltering.partial",
+  MCP_FILTERING_UNVERIFIED:
+    "compatibility.mcp.perServerToolFiltering.unverified",
   PERMISSION_TRANSLATION_LOSSY: "compatibility.permissions.translation.lossy",
   HOOK_EVENT_UNSUPPORTED: "compatibility.hooks.event.unsupported",
   HOOK_EVENT_PARTIAL: "compatibility.hooks.event.partial",
@@ -180,8 +186,15 @@ export const PERMISSION_CAVEAT_CODES = {
   COARSE_PERMISSION_MODES: "permissions.coarsePermissionModes",
 } as const;
 
+export const MCP_CAVEAT_CODES = {
+  NO_PER_SERVER_FILTERING: "mcp.noPerServerFiltering",
+} as const;
+
 export type PermissionCaveatCode =
   (typeof PERMISSION_CAVEAT_CODES)[keyof typeof PERMISSION_CAVEAT_CODES];
+
+export type McpCaveatCode =
+  (typeof MCP_CAVEAT_CODES)[keyof typeof MCP_CAVEAT_CODES];
 
 /**
  * Resolve a declaration's `caveatCode` into a trailing "because ..." clause.
@@ -196,6 +209,8 @@ export function getCompatibilityCaveatMessage(
       return "because this harness uses sandbox/approval modes instead of individual tool patterns";
     case PERMISSION_CAVEAT_CODES.COARSE_PERMISSION_MODES:
       return "because this harness uses coarse permission modes instead of individual tool patterns";
+    case MCP_CAVEAT_CODES.NO_PER_SERVER_FILTERING:
+      return "because this harness exposes no documented per-server tool filtering mechanism";
     default:
       return undefined;
   }
@@ -211,7 +226,9 @@ export function getCompatibilityDiagnosticMessage(
       ? "Allowed Tools"
       : context.capability === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
         ? "Denied Tools"
-        : hookEventLabel(context.capability);
+        : context.capability === MCP_CAPABILITY_KEYS.PER_SERVER_TOOL_FILTERING
+          ? "Per-server MCP tool filters"
+          : hookEventLabel(context.capability);
   // Render the display name here so no consumer has to rewrite the prose.
   const harness = HARNESS_INFO[context.harnessId]?.name ?? context.harnessId;
   const caveat = getCompatibilityCaveatMessage(context.caveatCode);
@@ -248,6 +265,16 @@ export function getCompatibilityDiagnosticMessage(
     case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_UNVERIFIED:
     case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_UNVERIFIED:
       return `${capabilityLabel} support is unverified for the installed ${harness} version.`;
+    case COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_UNSUPPORTED:
+      return withCaveat(
+        `Per-server MCP tool filters are NOT ENFORCED by the ${harness} harness`
+      );
+    case COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_PARTIAL:
+      return withCaveat(
+        `Per-server MCP tool filters are only partially translated by the ${harness} harness`
+      );
+    case COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_UNVERIFIED:
+      return `Per-server MCP tool filter support is unverified for the installed ${harness} version.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY:
       return `${capabilityLabel} include rules that are only partially represented by the ${harness} harness.`;
     case COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED:
@@ -282,6 +309,12 @@ export function getCompatibilityDiagnosticRemediation(
     case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_UNVERIFIED:
     case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_UNVERIFIED:
       return "Install a harness version covered by the compatibility evidence or review this finding manually.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_UNSUPPORTED:
+      return "Remove the server filter or select a harness with verified per-server MCP filtering.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_PARTIAL:
+      return "Use only the supported server filter subset or select a harness with exact per-server MCP filtering.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_UNVERIFIED:
+      return "Install a harness version covered by the MCP filtering evidence or review this finding manually.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY:
       return "Use a harness with exact translation support or simplify the affected rules.";
     case COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED:

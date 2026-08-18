@@ -41,6 +41,7 @@ function makeSnapshot(): HarnessCapabilityRegistrySnapshot {
           allowedTools: declaration,
           deniedTools: declaration,
         },
+        mcp: { perServerToolFiltering: declaration },
       },
       effective: {
         permissions: {
@@ -48,6 +49,7 @@ function makeSnapshot(): HarnessCapabilityRegistrySnapshot {
           allowedTools: state,
           deniedTools: state,
         },
+        mcp: { perServerToolFiltering: state },
       },
     };
   }
@@ -63,7 +65,7 @@ function makeSnapshot(): HarnessCapabilityRegistrySnapshot {
 
   return {
     schemaVersion: 1,
-    enabledDomains: [CAPABILITY_DOMAINS.PERMISSIONS],
+    enabledDomains: [CAPABILITY_DOMAINS.PERMISSIONS, CAPABILITY_DOMAINS.MCP],
     harnesses,
   };
 }
@@ -205,6 +207,9 @@ describe("useCompatibilityDiagnostics", () => {
       },
       deniedTools: unsupported,
     };
+    snapshot.harnesses[
+      HARNESS_IDS.ANTIGRAVITY_CLI
+    ].effective!.mcp!.perServerToolFiltering = unsupported;
     useSettingsStore.getState().setGlobalSettings({
       ...useSettingsStore.getState().globalSettings,
       harness: HARNESS_IDS.ANTIGRAVITY_CLI,
@@ -224,9 +229,9 @@ describe("useCompatibilityDiagnostics", () => {
     const { result } = renderHook(() => useCompatibilityDiagnostics());
     expect(result.current.diagnostics.map(projectDiagnostic)).toEqual([
       {
-        code: "compatibility.permissions.deniedTools.notEnforced",
+        code: "compatibility.mcp.perServerToolFiltering.unsupported",
         harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,
-        capability: "deniedTools",
+        capability: "perServerToolFiltering",
         consumer: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
         propertyPointer: "/mcpServers/0/deniedTools",
         sourceTier: "workflow",

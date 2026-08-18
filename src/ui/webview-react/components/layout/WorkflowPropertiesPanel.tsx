@@ -75,6 +75,7 @@ import { fieldValidationBorderClass } from "@utils/fieldValidation";
 import {
   diagnosticsForPermissionField,
   diagnosticsForHookEvents,
+  diagnosticsForMcpFiltering,
   firstCompatibilityProperty,
   formatCompatibilitySource,
   toFieldDiagnostic,
@@ -354,6 +355,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       diagnostic.capability === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
   );
   const hookDiagnostics = diagnosticsForHookEvents(compatibility.diagnostics);
+  const mcpDiagnostics = diagnosticsForMcpFiltering(compatibility.diagnostics);
   const allowedDiagnostics = diagnosticsForPermissionField(
     compatibility.diagnostics,
     "allowedTools"
@@ -1177,7 +1179,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
     globalSettings,
     undefined,
     permissionDiagnostics.length > 0,
-    hookDiagnostics.length > 0
+    hookDiagnostics.length > 0,
+    mcpDiagnostics.length > 0
   );
 
   const handleResetAllToDefault = useCallback(() => {
@@ -2047,6 +2050,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   onChange={handleMcpServersChange}
                   showDefault={false}
                   fillHeight={true}
+                  diagnostics={mcpDiagnostics}
                 />
               </FormField>
             </div>

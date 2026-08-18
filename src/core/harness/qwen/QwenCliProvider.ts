@@ -33,6 +33,17 @@ import {
   type CliProviderPreparation,
 } from "../shared/interfaces/PreparedMutation";
 
+const QWEN_MCP_FILTERING_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "translated-cli",
+  verification: {
+    kind: "behavioral-test",
+    reference: "src/test/harness/inline-config.harness.test.ts",
+    basis: "cli-version",
+    verifiedVersions: [">=0.20.1"],
+  },
+} as const;
+
 /**
  * Qwen Code CLI Harness
  *
@@ -98,6 +109,9 @@ export class QwenCliProvider implements ICliProvider {
     return {
       permissions: this.toolPermissionMapper.capabilities,
       hooks: QwenNotificationMonitor.CAPABILITIES,
+      mcp: {
+        perServerToolFiltering: QWEN_MCP_FILTERING_CAPABILITY,
+      },
     };
   }
   readonly logParser = new QwenLogParser();

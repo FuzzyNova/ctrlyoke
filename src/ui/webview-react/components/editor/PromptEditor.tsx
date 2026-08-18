@@ -34,6 +34,7 @@ import {
 } from "../../types/messages";
 import {
   STEP_TYPES,
+  PERMISSION_CAPABILITY_KEYS,
   USER_FEEDBACK_SEVERITY,
 } from "@root/types/DashboardConstants";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
@@ -41,7 +42,10 @@ import { getDictionaryUris } from "@utils/dictionaryUris";
 import { isWorkflowRunning } from "../../utils/status";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 import { notifyUser } from "@utils/notifyUser";
-import { diagnosticsForHookEvents } from "@utils/compatibilityDiagnostics";
+import {
+  diagnosticsForHookEvents,
+  diagnosticsForMcpFiltering,
+} from "@utils/compatibilityDiagnostics";
 
 interface PromptEditorProps {
   /** When true, the editor is in CLI watch mode — all editing is disabled. */
@@ -149,13 +153,24 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const hookCompatibilityDiagnostics = diagnosticsForHookEvents(
     promptCompatibility.diagnostics
   );
+  const mcpCompatibilityDiagnostics = diagnosticsForMcpFiltering(
+    promptCompatibility.diagnostics
+  );
+  const permissionCompatibilityDiagnostics =
+    promptCompatibility.diagnostics.filter(
+      (diagnostic) =>
+        diagnostic.capability === PERMISSION_CAPABILITY_KEYS.MODE ||
+        diagnostic.capability === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS ||
+        diagnostic.capability === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
+    );
 
   const drawerTabOverrides = useDrawerTabOverrides(
     workflowProperties,
     globalSettings,
     properties,
-    promptCompatibility.diagnostics.length > 0,
-    hookCompatibilityDiagnostics.length > 0
+    permissionCompatibilityDiagnostics.length > 0,
+    hookCompatibilityDiagnostics.length > 0,
+    mcpCompatibilityDiagnostics.length > 0
   );
 
   const vscode = getVsCodeApi();

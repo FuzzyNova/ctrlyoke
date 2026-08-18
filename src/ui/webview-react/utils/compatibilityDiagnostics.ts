@@ -7,6 +7,7 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_SOURCE_TIERS,
   HOOK_EVENT_ORDER,
+  MCP_CAPABILITY_KEYS,
   type HookEvent,
   type HarnessId,
 } from "@root/types/DashboardConstants";
@@ -34,6 +35,15 @@ export function diagnosticsForHookEvents(
 ): CompatibilityDiagnostic[] {
   return diagnostics.filter((diagnostic) =>
     HOOK_EVENT_ORDER.includes(diagnostic.capability as HookEvent)
+  );
+}
+
+export function diagnosticsForMcpFiltering(
+  diagnostics: readonly CompatibilityDiagnostic[]
+): CompatibilityDiagnostic[] {
+  return diagnostics.filter(
+    (diagnostic) =>
+      diagnostic.capability === MCP_CAPABILITY_KEYS.PER_SERVER_TOOL_FILTERING
   );
 }
 

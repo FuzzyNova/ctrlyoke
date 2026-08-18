@@ -39,6 +39,17 @@ import {
   type OpenCodeInlineConfigBuildOptions,
 } from "./OpenCodeInlineConfig";
 
+const OPENCODE_MCP_FILTERING_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "translated-cli",
+  verification: {
+    kind: "behavioral-test",
+    reference: "src/test/harness/inline-config.harness.test.ts",
+    basis: "cli-version",
+    verifiedVersions: [">=1.18.10"],
+  },
+} as const;
+
 /**
  * OpenCode CLI Harness
  *
@@ -92,6 +103,9 @@ export class OpenCodeCliProvider implements ICliProvider {
     return {
       permissions: this.toolPermissionMapper.capabilities,
       hooks: OpenCodeNotificationMonitor.CAPABILITIES,
+      mcp: {
+        perServerToolFiltering: OPENCODE_MCP_FILTERING_CAPABILITY,
+      },
     };
   }
   readonly headlessSource = "stdout" as const;

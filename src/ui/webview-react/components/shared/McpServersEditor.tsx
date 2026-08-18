@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import type { ManagedMcpServer } from "@root/types/WebviewMessageTypes";
+import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
 import { SETTING_SCOPES, type SettingWriteScope } from "@/types/messages";
 import { useMcpManagerStore } from "../../store/useMcpManagerStore";
 import { useUiStore } from "@store/uiStore";
 import { findLiteralCredentialEnvKeys } from "./McpServerForm";
+import { FieldDiagnostic } from "./FieldDiagnostic";
+import { toFieldDiagnostic } from "@utils/compatibilityDiagnostics";
 
 type McpServerEntry = string | McpServerConfig;
 
@@ -239,9 +242,15 @@ function ServerDetails({ server }: { server: ListedServer }) {
         </div>
       )}
       {findLiteralCredentialEnvKeys(server.config.env).length > 0 && (
-        <p className="flex items-start gap-1 text-xxs text-warning-fg" role="alert">
+        <p
+          className="flex items-start gap-1 text-xxs text-warning-fg"
+          role="alert"
+        >
           <i className="codicon codicon-warning mt-px" aria-hidden="true" />
-          <span>Environment values look like pasted credentials. Use ${"${secret:NAME}"} references in MCP Manager.</span>
+          <span>
+            Environment values look like pasted credentials. Use $
+            {"${secret:NAME}"} references in MCP Manager.
+          </span>
         </p>
       )}
     </div>
@@ -555,6 +564,8 @@ export const McpServersEditor: React.FC<{
   inheritedValue?: McpServersValue;
   /** When true, the installed server list expands to fill available vertical space. */
   fillHeight?: boolean;
+  /** Persistent compatibility findings for authored server filters. */
+  diagnostics?: readonly CompatibilityDiagnostic[];
 }> = ({
   value,
   onChange,
@@ -562,6 +573,7 @@ export const McpServersEditor: React.FC<{
   showDefault = true,
   inheritedValue,
   fillHeight = false,
+  diagnostics = [],
 }) => {
   const managedServers = useMcpManagerStore((state) => state.managedServers);
   const isLoadingManagedServers = useMcpManagerStore(
@@ -687,6 +699,12 @@ export const McpServersEditor: React.FC<{
     <div
       className={`flex min-w-0 flex-col gap-2${fillHeight ? " flex-1 min-h-0" : ""}`}
     >
+      <FieldDiagnostic
+        id="mcp-filtering-diagnostic"
+        diagnostics={diagnostics.map((diagnostic) =>
+          toFieldDiagnostic(diagnostic)
+        )}
+      />
       {showDefault && (
         <div className="flex gap-1">
           {(["default", "custom"] as const).map((option) => (

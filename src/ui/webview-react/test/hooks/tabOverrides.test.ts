@@ -65,4 +65,22 @@ describe("drawer permission tab override callers", () => {
       getPermissionTabOverride(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
     );
   });
+
+  it("keeps the configured MCP icon while adding a compatibility badge", () => {
+    const { result } = renderHook(() =>
+      useDrawerTabOverrides(
+        { mcpServers: ["ctrlyoke"] },
+        globalSettings,
+        undefined,
+        false,
+        false,
+        true
+      )
+    );
+
+    expect(result.current.mcp).toMatchObject({
+      color: "text-focus-border",
+      badgeCodicon: "warning",
+    });
+  });
 });

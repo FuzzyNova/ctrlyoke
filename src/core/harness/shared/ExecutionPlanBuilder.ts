@@ -8,6 +8,10 @@ import type { WorkflowStep } from "../../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import { mergeServerDeniedTools } from "../../../types/ToolPermissionUtils";
 import {
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+} from "../../../types/DashboardConstants";
+import {
   resolveCliCommand,
   type CliResolvedCommand,
 } from "./CliLauncherResolver";
@@ -208,10 +212,17 @@ export class ExecutionPlanBuilder {
       hookPreparations.push(hookPreparation);
     }
 
-    const effectiveToolPermissions = mergeServerDeniedTools(
-      session.resolvedProperties?.toolPermissions,
-      session.resolvedProperties?.mcpServers
-    );
+    const mcpFiltering =
+      this.deps.provider.capabilities?.mcp?.perServerToolFiltering;
+    const translatesServerDenials =
+      mcpFiltering?.fidelity === CAPABILITY_FIDELITIES.EXACT &&
+      mcpFiltering.mechanism === CAPABILITY_MECHANISMS.TRANSLATED_CLI;
+    const effectiveToolPermissions = translatesServerDenials
+      ? mergeServerDeniedTools(
+          session.resolvedProperties?.toolPermissions,
+          session.resolvedProperties?.mcpServers
+        )
+      : session.resolvedProperties?.toolPermissions;
     const permissionContext: PermissionContext = {
       isInteractive,
       workspaceRoot,

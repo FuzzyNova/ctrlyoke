@@ -37,6 +37,18 @@ import {
   type CliProviderPreparation,
 } from "../shared/interfaces/PreparedMutation";
 
+const CODEX_MCP_FILTERING_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "native",
+  verification: {
+    kind: "manual",
+    reference:
+      "dev/implemented/TOOL_PERMISSION_PARITY_PLAN.md#codex-partial-support-investigation",
+    basis: "cli-version",
+    verifiedVersions: [">=0.146.0"],
+  },
+} as const;
+
 const CODEX_HOOK_ARGS = ["--enable", "hooks"] as const;
 const CODEX_NOTIFICATION_SCRIPT_NAME = "ctrlyoke-codex-notify.js";
 // Without this override, interactive Codex sessions hang waiting for an update
@@ -163,6 +175,9 @@ export class CodexCliProvider implements ICliProvider {
     return {
       permissions: this.toolPermissionMapper.capabilities,
       hooks: CodexNotificationMonitor.CAPABILITIES,
+      mcp: {
+        perServerToolFiltering: CODEX_MCP_FILTERING_CAPABILITY,
+      },
     };
   }
   readonly headlessSource = "log" as const;

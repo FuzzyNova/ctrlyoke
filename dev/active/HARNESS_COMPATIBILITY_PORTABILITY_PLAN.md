@@ -18,9 +18,10 @@
 > Stage G.2 has since landed the provider-owned multi-domain registry foundation:
 > arbitrary enabled-domain sets, generic completeness/effective-state
 > derivation, guarded round-trip snapshots, and the removal of uniform usage
-> plus stale MCP injection vocabulary. The rollout now enables `permissions`
-> and `hooks`, validates all six harnesses, all three permission leaves, and
-> all seven logical hook events, caches installed availability/version detection, and
+> plus stale MCP injection vocabulary. The rollout now enables `permissions`,
+> `hooks`, and `mcp`, validates all six harnesses, all three permission leaves,
+> all seven logical hook events, and per-server MCP tool filtering, caches installed
+> availability/version detection, and
 > derives version-aware verification independently per leaf (verified
 > 2026-08-01). The shared pure analyzer is wired into workflow validation and
 > authoritative execution preflight. The typed `HARNESS_CAPABILITY_SNAPSHOT`
@@ -35,8 +36,8 @@
 > shim tests. Customer docs distinguish portable workflow attachments from
 > optional harness-native discovery. The dry-run leg and Stage D CLI validation
 > of Compatibility Phase 2 have shipped through the shared analyzer and exact
-> provider-plan/JSON projections. The workflow portability report and Phase 3
-> capability domains remain. The Codex partial-support investigation is complete
+> provider-plan/JSON projections. The workflow portability report and the
+> remaining Phase 3 image domain remain. The Codex partial-support investigation is complete
 > with no safe general translation found; MCP capability serialization was cut
 > because a context-free snapshot cannot honestly describe whether a workflow
 > uses a capability.
@@ -47,6 +48,13 @@
 > Hooks-tab warning badges preserve the configured-state icon, and the shared
 > hosted/VS Code snapshot seam remains unchanged. Hook delivery declarations do
 > not create a notification-preference model.
+> Stage G.4 is now complete: MCP per-server `deniedTools` is an enabled,
+> adapter-owned capability. Translated CLI adapters retain runtime mapping;
+> Codex uses its native `disabled_tools` path; Antigravity remains explicitly
+> unsupported. The analyzer diagnoses every unsupported, partial, or unverified
+> authored server filter with an RFC 6901 pointer and MCP source tier, while
+> native verified filters stay silent. Preview continues to expose the actual
+> MCP/provider plan, and the MCP tab overlays warnings without disabling edits.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
@@ -209,7 +217,7 @@ profiles. None is a safe general translation for ctrlyoke's arbitrary
   scope for wrappers, quoting, and non-prefix patterns;
 - MCP filters are server-local exact tool-name sets. Codex's shipped
   `disabled_tools` output remains valid for server-owned `mcpServers[].deniedTools`
-  and is input to G.4, but it does not establish a mapping for general
+  and was input to G.4, but it does not establish a mapping for general
   `allowedTools`/`deniedTools` patterns;
 - permission profiles govern filesystem/network access, not harness tool names.
   Mapping a broad tool denial to a wider sandbox grant could weaken the denial.
@@ -368,9 +376,9 @@ fabricated CLI version or a permanent unknown state; do not add the variant
 speculatively now.
 
 `enabledDomains` is the rollout boundary. The generic registry supports any
- combination of the four modeled domains, and the shipped rollout currently
- enables `permissions` and `hooks`; later domains remain disabled until they
- have complete adapter declarations.
+combination of the four modeled domains, and the shipped rollout currently
+enables `permissions`, `hooks`, and `mcp`; later domains remain disabled until they
+have complete adapter declarations.
 An optional domain that is not enabled means **not modeled yet**, not
 unsupported or unknown, and the analyzer must not emit diagnostics for it. For
 every enabled domain, registry assembly fails its completeness validation if
@@ -1017,8 +1025,8 @@ second speculative implementation.
   the same diagnostics to workflow and step preview DTOs; and the Hooks tab
   overlays a warning badge without replacing its configured-state icon. No
   notification preferences are introduced.
-- MCP per-server tool filtering, if the Codex asymmetry above proves to need its
-  own declaration. Injection is uniform and is not modeled.
+- MCP per-server tool filtering, now enabled in G.4 with an adapter-owned
+  declaration. Injection is uniform and is not modeled.
 - Image prompt inputs.
 - Generate customer-facing compatibility documentation from the registry.
 - Extend the tab warning-badge overlay to every domain enabled in this phase.
@@ -1078,9 +1086,8 @@ overlay-badge treatment instead of inventing a new visual language:
 - **Hooks** — completed in G.3. `getHooksTabOverride` overlays a warning badge
   on the tab's existing configured-icon state while preserving its primary
   icon/color.
-- **MCP** — once per-server tool filtering (or another MCP capability) is
-  modeled, `getMcpTabOverride` needs the equivalent overlay for a filtering
-  warning, without losing the existing "servers configured" indicator.
+- **MCP** — completed in G.4. `getMcpTabOverride` overlays a filtering warning
+  without losing the existing "servers configured" indicator.
 - **Images** — if image inputs become a tab-scoped domain with their own
   authoring surface, give that surface the same warning-badge overlay rather
   than a bespoke treatment.

@@ -46,6 +46,18 @@ import {
   type PreparedMutation,
 } from "../shared/interfaces/PreparedMutation";
 
+const COPILOT_MCP_FILTERING_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "translated-cli",
+  verification: {
+    kind: "manual",
+    reference:
+      "dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping",
+    basis: "cli-version",
+    verifiedVersions: [">=0.0.384"],
+  },
+} as const;
+
 /**
  * Copilot CLI Harness
  *
@@ -91,6 +103,9 @@ export class CopilotCliProvider implements ICliProvider {
     return {
       permissions: this.toolPermissionMapper.capabilities,
       hooks: CopilotNotificationMonitor.CAPABILITIES,
+      mcp: {
+        perServerToolFiltering: COPILOT_MCP_FILTERING_CAPABILITY,
+      },
     };
   }
   readonly logParser = new CopilotLogParser();

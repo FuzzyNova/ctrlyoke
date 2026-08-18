@@ -48,6 +48,18 @@ import {
   type PreparedMutation,
 } from "../shared/interfaces/PreparedMutation";
 
+const CLAUDE_MCP_FILTERING_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "translated-cli",
+  verification: {
+    kind: "manual",
+    reference:
+      "dev/implemented/PERMISSIONS_PER_WORKFLOW_PLAN.md#actual-flag-mapping",
+    basis: "cli-version",
+    verifiedVersions: [">=2.1.17"],
+  },
+} as const;
+
 /**
  * Claude CLI Harness
  *
@@ -123,6 +135,9 @@ export class ClaudeCliProvider implements ICliProvider {
     return {
       permissions: this.toolPermissionMapper.capabilities,
       hooks: ClaudeNotificationMonitor.CAPABILITIES,
+      mcp: {
+        perServerToolFiltering: CLAUDE_MCP_FILTERING_CAPABILITY,
+      },
     };
   }
   readonly logParser = new ClaudeLogParser();

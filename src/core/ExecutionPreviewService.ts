@@ -1177,27 +1177,35 @@ export class ExecutionPreviewService {
   }
 
   /**
-   * Collapse diagnostics that state the same fact in the same words. Keyed on
-   * the rendered message rather than `consumer`/`propertyPointer` so that two
-   * independent emitters of an identical fact — the compatibility analyzer's
-   * per-step diagnostic and a provider mapper's own translation diagnostic
-   * (see `ToolPermissionMapperBase.getToolTranslationDiagnostics`), or the
-   * same analyzer fact repeated across several Codex/Antigravity steps —
-   * collapse into a single entry instead of repeating the same sentence.
+   * Collapse diagnostics that state the same fact in the same words while
+   * retaining distinct authored locations. Analyzer diagnostics carry the
+   * RFC 6901 pointer needed by the editor; a provider mapper's equivalent
+   * location-less diagnostic is suppressed when that richer fact exists.
    */
   private dedupeDiagnostics(
     diagnostics: readonly CompatibilityDiagnostic[]
   ): CompatibilityDiagnostic[] {
-    const seen = new Set<string>();
-    return diagnostics.filter((diagnostic) => {
-      const key = JSON.stringify([
+    const baseKey = (diagnostic: CompatibilityDiagnostic): string =>
+      JSON.stringify([
         diagnostic.code,
         diagnostic.harnessId,
         diagnostic.capability,
         diagnostic.message,
       ]);
-      if (seen.has(key)) return false;
-      seen.add(key);
+    const locatedKeys = new Set(
+      diagnostics
+        .filter((diagnostic) => diagnostic.propertyPointer)
+        .map(baseKey)
+    );
+    const seen = new Set<string>();
+    return diagnostics.filter((diagnostic) => {
+      const key = baseKey(diagnostic);
+      if (!diagnostic.propertyPointer && locatedKeys.has(key)) return false;
+      const locationKey = diagnostic.propertyPointer
+        ? `${key}:${diagnostic.propertyPointer}`
+        : key;
+      if (seen.has(locationKey)) return false;
+      seen.add(locationKey);
       return true;
     });
   }

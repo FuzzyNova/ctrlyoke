@@ -56,6 +56,7 @@ function createCapabilities(): HarnessCapabilityRegistrySnapshot {
   const provider = new ClaudeCliProvider();
   const permissions = provider.toolPermissionMapper.capabilities;
   const hooks = provider.capabilities.hooks!;
+  const mcp = provider.capabilities.mcp!;
   const state = {
     fidelity: "exact" as const,
     mechanism: "native" as const,
@@ -63,7 +64,7 @@ function createCapabilities(): HarnessCapabilityRegistrySnapshot {
   };
   return {
     schemaVersion: 1,
-    enabledDomains: ["permissions", "hooks"],
+    enabledDomains: ["permissions", "hooks", "mcp"],
     harnesses: {
       [HARNESS_IDS.CLAUDE_CLI]: {
         available: true,
@@ -72,6 +73,7 @@ function createCapabilities(): HarnessCapabilityRegistrySnapshot {
           harnessId: HARNESS_IDS.CLAUDE_CLI,
           permissions,
           hooks,
+          mcp,
         },
         effective: {
           permissions: {
@@ -82,6 +84,7 @@ function createCapabilities(): HarnessCapabilityRegistrySnapshot {
           hooks: Object.fromEntries(
             HOOK_EVENT_ORDER.map((event) => [event, state])
           ),
+          mcp: { perServerToolFiltering: state },
         },
       },
     },
@@ -270,6 +273,42 @@ suite("ExecutionPreviewService", () => {
         (diagnostic) =>
           diagnostic.code === "compatibility.hooks.event.unsupported"
       )
+    );
+  });
+
+  test("keeps translated MCP denials in the provider plan without duplicating analyzer diagnostics", async () => {
+    const preview = await createService().build({
+      workflow: {
+        steps: [
+          {
+            prompt: "use the filtered server",
+            toolPermissions: {
+              mode: "custom",
+              allowedTools: [],
+              deniedTools: [],
+            },
+            mcpServers: [
+              { id: "filtered", command: "node", deniedTools: ["blocked"] },
+            ],
+          },
+        ],
+      },
+    });
+
+    const step = preview.steps[0];
+    assert.deepStrictEqual(step.mcpApplication?.servers[0].toolFilters, [
+      "!blocked",
+    ]);
+    assert.ok(
+      step.permissionApplication?.rules.some(
+        (rule) => rule.rule === "mcp__filtered__blocked"
+      )
+    );
+    assert.strictEqual(
+      step.diagnostics.some(
+        (diagnostic) => diagnostic.capability === "perServerToolFiltering"
+      ),
+      false
     );
   });
 

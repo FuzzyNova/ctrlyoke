@@ -66,6 +66,7 @@ export class HarnessCapabilityRegistry {
     this.enabledDomains = options.enabledDomains ?? [
       CAPABILITY_DOMAINS.PERMISSIONS,
       CAPABILITY_DOMAINS.HOOKS,
+      CAPABILITY_DOMAINS.MCP,
     ];
     this.validateEnabledDomains();
 

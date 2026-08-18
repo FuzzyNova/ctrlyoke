@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PERMISSION_MODES } from "@root/types/DashboardConstants";
 import {
+  getMcpTabOverride,
   getHooksTabOverride,
   getPermissionModeBadge,
   getPermissionTabOverride,
@@ -62,6 +63,16 @@ describe("permission tab badges", () => {
 
   it("layers a warning badge over the configured hooks state", () => {
     expect(getHooksTabOverride([{ event: "error" }], true)).toEqual({
+      color: "text-focus-border",
+      hoverColor: "hover:text-focus-highlight",
+      activeColor: "text-focus-highlight",
+      badgeCodicon: "warning",
+      badgeColor: "text-warning-fg",
+    });
+  });
+
+  it("layers a warning badge over the configured MCP icon", () => {
+    expect(getMcpTabOverride(["ctrlyoke"], true)).toEqual({
       color: "text-focus-border",
       hoverColor: "hover:text-focus-highlight",
       activeColor: "text-focus-highlight",

@@ -2,6 +2,7 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import { HarnessCapabilityRegistry } from "../../core/HarnessCapabilityRegistry";
 import type { HarnessCapabilitySource } from "../../core/HarnessCapabilityRegistry";
+import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { AntigravityToolPermissionMapper } from "../../core/harness/antigravity/AntigravityToolPermissionMapper";
 import { ClaudeToolPermissionMapper } from "../../core/harness/claude/ClaudeToolPermissionMapper";
 import { CodexToolPermissionMapper } from "../../core/harness/codex/CodexToolPermissionMapper";
@@ -322,6 +323,32 @@ suite("HarnessCapabilityRegistry", () => {
     assert.strictEqual(image?.verification, "verified");
     assert.strictEqual(hook?.fidelity, "partial");
     assert.strictEqual(mcp?.mechanism, "workspace-config");
+  });
+
+  test("assembles adapter-owned MCP filtering declarations for every harness", async () => {
+    const registry = new HarnessCapabilityRegistry({
+      enabledDomains: [CAPABILITY_DOMAINS.MCP],
+      sourceFactory: (harnessId) => {
+        const provider = IntegrationFactory.createCapabilityProvider(harnessId);
+        return {
+          provider: {
+            config: provider.config,
+            capabilities: provider.capabilities,
+            checkAvailability: async () => true,
+            getVersion: async () => "1.0.0",
+          },
+        };
+      },
+    });
+    const snapshot = await registry.getSnapshot();
+
+    for (const harnessId of HARNESS_ID_LIST) {
+      const filtering =
+        snapshot.harnesses[harnessId].descriptor.mcp?.perServerToolFiltering;
+      assert.ok(filtering);
+      assert.ok(filtering.verification);
+      assert.ok(filtering.mechanism);
+    }
   });
 
   test("declares every hook event for every harness", async () => {

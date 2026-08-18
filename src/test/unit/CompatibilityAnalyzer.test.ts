@@ -69,6 +69,7 @@ function installed(
         deniedTools: declaration,
       },
       hooks: hookDeclarations,
+      mcp: { perServerToolFiltering: declaration },
     },
     effective: {
       permissions: {
@@ -77,6 +78,7 @@ function installed(
         deniedTools: state,
       },
       hooks: hookState,
+      mcp: { perServerToolFiltering: state },
     },
   };
 }
@@ -91,7 +93,11 @@ function snapshot(
   }
   return {
     schemaVersion: 1,
-    enabledDomains: [CAPABILITY_DOMAINS.PERMISSIONS],
+    enabledDomains: [
+      CAPABILITY_DOMAINS.PERMISSIONS,
+      CAPABILITY_DOMAINS.HOOKS,
+      CAPABILITY_DOMAINS.MCP,
+    ],
     harnesses,
   };
 }
@@ -286,7 +292,7 @@ suite("CompatibilityAnalyzer", () => {
     );
   });
 
-  test("uses the shared MCP denial merge and points workflow-authored denials at mcpServers", () => {
+  test("analyzes unsupported MCP denials in the MCP domain", () => {
     const toolPermissions = {
       mode: "custom" as const,
       allowedTools: [],
@@ -316,7 +322,9 @@ suite("CompatibilityAnalyzer", () => {
     );
     assert.deepStrictEqual(
       diagnostics
-        .filter((diagnostic) => diagnostic.capability === "deniedTools")
+        .filter(
+          (diagnostic) => diagnostic.capability === "perServerToolFiltering"
+        )
         .map(({ code, capability, sourceTier, propertyPointer }) => ({
           code,
           capability,
@@ -325,12 +333,16 @@ suite("CompatibilityAnalyzer", () => {
         })),
       [
         {
-          code: "compatibility.permissions.deniedTools.notEnforced",
-          capability: "deniedTools",
+          code: "compatibility.mcp.perServerToolFiltering.unsupported",
+          capability: "perServerToolFiltering",
           sourceTier: "workflow",
           propertyPointer: "/mcpServers/0/deniedTools",
         },
       ]
+    );
+    assert.strictEqual(
+      diagnostics.some((diagnostic) => diagnostic.capability === "deniedTools"),
+      false
     );
   });
 
@@ -361,7 +373,7 @@ suite("CompatibilityAnalyzer", () => {
       })
     );
     const denial = diagnostics.find(
-      (diagnostic) => diagnostic.capability === "deniedTools"
+      (diagnostic) => diagnostic.capability === "perServerToolFiltering"
     );
     assert.ok(denial);
     assert.strictEqual(denial.sourceTier, "prompt");
@@ -369,6 +381,105 @@ suite("CompatibilityAnalyzer", () => {
       denial.propertyPointer,
       "/steps/0/mcpServers/0/deniedTools"
     );
+  });
+
+  test("diagnoses every server filter with its authored pointer", () => {
+    const workflow = mixedWorkflow({
+      harness: HARNESS_IDS.ANTIGRAVITY_CLI,
+      toolPermissions: undefined,
+      mcpServers: [
+        { id: "first", deniedTools: ["one"] },
+        { id: "second", deniedTools: ["two"] },
+      ],
+      steps: [{ prompt: "Antigravity target" }],
+    });
+    const diagnostics = analyze(
+      workflow,
+      snapshot({
+        [HARNESS_IDS.ANTIGRAVITY_CLI]: installed(
+          HARNESS_IDS.ANTIGRAVITY_CLI,
+          true,
+          "unsupported",
+          "verified"
+        ),
+      })
+    ).filter(
+      (diagnostic) => diagnostic.capability === "perServerToolFiltering"
+    );
+
+    assert.deepStrictEqual(
+      diagnostics.map((diagnostic) => ({
+        sourceTier: diagnostic.sourceTier,
+        propertyPointer: diagnostic.propertyPointer,
+      })),
+      [
+        {
+          sourceTier: "workflow",
+          propertyPointer: "/mcpServers/0/deniedTools",
+        },
+        {
+          sourceTier: "workflow",
+          propertyPointer: "/mcpServers/1/deniedTools",
+        },
+      ]
+    );
+  });
+
+  test("does not turn Codex native server denials into a general permission warning", () => {
+    const codex = installed(
+      HARNESS_IDS.CODEX_CLI,
+      true,
+      "unsupported",
+      "verified"
+    );
+    const exactMcp = codex.descriptor.mcp!.perServerToolFiltering;
+    codex.descriptor.mcp = { perServerToolFiltering: exactMcp };
+    codex.effective.mcp = {
+      perServerToolFiltering: {
+        fidelity: "exact",
+        mechanism: "native",
+        verification: "verified",
+      },
+    };
+    const diagnostics = analyze(
+      mixedWorkflow({
+        harness: HARNESS_IDS.CODEX_CLI,
+        mcpServers: [{ id: "codex", deniedTools: ["server_tool"] }],
+        steps: [{ prompt: "Codex target" }],
+      }),
+      snapshot({ [HARNESS_IDS.CODEX_CLI]: codex })
+    );
+
+    assert.strictEqual(
+      diagnostics.some(
+        (diagnostic) => diagnostic.capability === "perServerToolFiltering"
+      ),
+      false
+    );
+    assert.deepStrictEqual(
+      diagnostics.map((diagnostic) => diagnostic.capability),
+      ["mode", "allowedTools", "deniedTools"]
+    );
+  });
+
+  test("is silent when no server filter is authored", () => {
+    const diagnostics = analyze(
+      mixedWorkflow({
+        harness: HARNESS_IDS.ANTIGRAVITY_CLI,
+        toolPermissions: undefined,
+        mcpServers: [{ id: "server" }],
+        steps: [{ prompt: "Antigravity target" }],
+      }),
+      snapshot({
+        [HARNESS_IDS.ANTIGRAVITY_CLI]: installed(
+          HARNESS_IDS.ANTIGRAVITY_CLI,
+          true,
+          "unsupported",
+          "verified"
+        ),
+      })
+    );
+    assert.deepStrictEqual(diagnostics, []);
   });
 
   test("warns that Antigravity allowAll is only partially translated", () => {
@@ -497,7 +608,6 @@ suite("CompatibilityAnalyzer", () => {
         allowedTools: ["shell(git:*)"],
         deniedTools: ["shell(rm:*)"],
       },
-      mcpServers: [{ id: "ctrlyoke", deniedTools: ["append_queue"] }],
       steps: [{ prompt: "Codex target" }],
     });
     const diagnostics = analyze(
@@ -654,7 +764,12 @@ suite("CompatibilityAnalyzer", () => {
         },
       ]
     );
-    assert.ok(diagnostics[0].message.includes("error"));
+    assert.ok(
+      diagnostics
+        .find((diagnostic) => diagnostic.capability === "error")
+        ?.message.toLowerCase()
+        .includes("error")
+    );
     assert.ok(diagnostics[0].remediation);
 
     const unused = analyze(

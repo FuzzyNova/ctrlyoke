@@ -6,6 +6,7 @@ import {
   COMPATIBILITY_SOURCE_TIERS,
   FINAL_STEP_PHASES,
   HOOK_EVENT_ORDER,
+  MCP_CAPABILITY_KEYS,
   PERMISSION_CAPABILITY_KEYS,
   PERMISSION_MODES,
   STEP_TYPES,
@@ -25,7 +26,6 @@ import {
   getCompatibilityDiagnosticMessage,
   getCompatibilityDiagnosticRemediation,
 } from "./CompatibilityTypes";
-import { mergeServerDeniedTools } from "./ToolPermissionUtils";
 
 export interface CompatibilityExecutionTarget {
   consumer: CompatibilityConsumerTarget;
@@ -134,6 +134,9 @@ export function analyzeCompatibility({
       continue;
     }
 
+    analyzeConfiguredMcpFilters(target, installed, diagnostics);
+    analyzeConfiguredHooks(target, installed, diagnostics);
+
     const permissions = target.resolved.properties.toolPermissions;
     if (!permissions) {
       // `none` mode already resolves to `null` upstream in
@@ -147,22 +150,6 @@ export function analyzeCompatibility({
       // lists have anything to diagnose.
       continue;
     }
-
-    const effectivePermissions = mergeServerDeniedTools(
-      permissions,
-      target.resolved.properties.mcpServers
-    );
-    const hasAttachedServerDenials =
-      effectivePermissions !== permissions &&
-      target.resolved.properties.mcpServers?.some(
-        (server) =>
-          typeof server === "object" &&
-          server !== null &&
-          (server.deniedTools?.length ?? 0) > 0
-      ) === true;
-    const serverDenialPointer = hasAttachedServerDenials
-      ? getMcpServerDenialPointer(target)
-      : undefined;
 
     const effective = installed.effective?.permissions;
     if (!effective) {
@@ -193,13 +180,10 @@ export function analyzeCompatibility({
       },
       {
         key: PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS,
-        used: Boolean(effectivePermissions?.deniedTools?.length),
+        used: permissions.deniedTools.length > 0,
         state: effective.deniedTools,
         caveatCode: declarations?.deniedTools.caveatCode,
-        sourceTier: hasAttachedServerDenials
-          ? target.resolved.sources.mcpServers
-          : sourceTier,
-        propertyPointer: serverDenialPointer,
+        sourceTier,
       },
     ];
 
@@ -219,11 +203,70 @@ export function analyzeCompatibility({
         diagnostics.push(diagnostic);
       }
     }
-
-    analyzeConfiguredHooks(target, installed, diagnostics);
   }
 
   return diagnostics;
+}
+
+function analyzeConfiguredMcpFilters(
+  target: CompatibilityExecutionTarget,
+  installed: NonNullable<
+    CompatibilityAnalyzerInput["capabilities"]["harnesses"][HarnessId]
+  >,
+  diagnostics: CompatibilityDiagnostic[]
+): void {
+  const servers = target.resolved.properties.mcpServers;
+  if (!Array.isArray(servers)) {
+    return;
+  }
+
+  const state = installed.effective?.mcp?.perServerToolFiltering;
+  const declaration = installed.descriptor.mcp?.perServerToolFiltering;
+  if (!state || !declaration) {
+    return;
+  }
+
+  const sourceTier = target.resolved.sources.mcpServers;
+  for (const [serverIndex, server] of servers.entries()) {
+    if (
+      typeof server !== "object" ||
+      server === null ||
+      (server.deniedTools?.length ?? 0) === 0
+    ) {
+      continue;
+    }
+
+    const code =
+      state.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED
+        ? COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_UNSUPPORTED
+        : state.fidelity === CAPABILITY_FIDELITIES.PARTIAL
+          ? COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_PARTIAL
+          : state.verification === CAPABILITY_VERIFICATION_STATUSES.UNKNOWN
+            ? COMPATIBILITY_DIAGNOSTIC_CODES.MCP_FILTERING_UNVERIFIED
+            : undefined;
+    if (!code) {
+      continue;
+    }
+    const propertyPointer = getMcpServerFilterPointer(target, serverIndex);
+    const remediation = getCompatibilityDiagnosticRemediation(code);
+
+    diagnostics.push({
+      code,
+      severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+      harnessId: target.resolved.properties.harness,
+      capability: MCP_CAPABILITY_KEYS.PER_SERVER_TOOL_FILTERING,
+      consumer: target.consumer,
+      ...(sourceTier ? { sourceTier } : {}),
+      ...(propertyPointer ? { propertyPointer } : {}),
+      state,
+      message: getCompatibilityDiagnosticMessage(code, {
+        harnessId: target.resolved.properties.harness,
+        capability: MCP_CAPABILITY_KEYS.PER_SERVER_TOOL_FILTERING,
+        caveatCode: declaration.caveatCode,
+      }),
+      ...(remediation ? { remediation } : {}),
+    });
+  }
 }
 
 function analyzeConfiguredHooks(
@@ -475,21 +518,12 @@ function createDiagnostic(
   };
 }
 
-function getMcpServerDenialPointer(
-  target: CompatibilityExecutionTarget
+function getMcpServerFilterPointer(
+  target: CompatibilityExecutionTarget,
+  serverIndex: number
 ): string | undefined {
   const sourceTier = target.resolved.sources.mcpServers;
   if (!sourceTier || sourceTier === COMPATIBILITY_SOURCE_TIERS.DEFAULTS) {
-    return undefined;
-  }
-
-  const serverIndex = target.resolved.properties.mcpServers?.findIndex(
-    (server) =>
-      typeof server === "object" &&
-      server !== null &&
-      (server.deniedTools?.length ?? 0) > 0
-  );
-  if (serverIndex === undefined || serverIndex < 0) {
     return undefined;
   }
 
