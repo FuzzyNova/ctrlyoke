@@ -208,7 +208,7 @@ export class TempFileManager {
    *   → "1234567890-my-flow-1.skills.prompt.md"
    *
    * @param content File content to write
-   * @param category Content category ('agent' | 'skills' | 'excerpts' | 'prompt')
+   * @param category Content category ('agent' | 'secrets' | 'skills' | 'excerpts' | 'prompt')
    * @param originalFilePath Optional path to original workflow file (for meaningful names)
    * @param stepNumber Optional 1-based step number
    * @param partNumber Optional 1-based part number for split files

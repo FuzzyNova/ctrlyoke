@@ -15,6 +15,7 @@ import {
   MAX_PREVIEW_BODY_BYTES,
   PREVIEW_PROMPT_CATEGORIES,
   PREVIEW_TRUNCATION_REASONS,
+  TEMP_FILE_CATEGORIES,
 } from "../../types/DashboardConstants";
 
 function createSections(overrides?: Partial<PromptSections>): PromptSections {
@@ -358,6 +359,172 @@ suite("CliPromptPreparer", () => {
     } finally {
       await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
     }
+  });
+
+  test("should create an available-secrets category and preserve !NAME verbatim", async () => {
+    let capturedSecretRefs: string[] = [];
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (prompt) =>
+        createSections({ userPromptText: prompt.prompt }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (
+        _agentRefs,
+        _skillRefs,
+        _directRefs,
+        _contextRefs,
+        _excerptRefs,
+        promptRefs,
+        secretRefs
+      ) => {
+        capturedSecretRefs = [...(secretRefs ?? [])];
+        return [...(secretRefs ?? []), ...promptRefs].join(" ");
+      },
+    });
+
+    const result = await preparer.planPrompt(
+      { prompt: "Use !API_TOKEN to authenticate" } as PromptStep,
+      undefined,
+      { harness: "claude-cli", secrets: ["API_TOKEN"] } as any,
+      undefined
+    );
+
+    const secretFile = result.files.find(
+      (file) => file.category === TEMP_FILE_CATEGORIES.SECRETS
+    );
+    assert.ok(secretFile);
+    assert.strictEqual(
+      secretFile.content,
+      "<availableSecrets>\n" +
+        "!API_TOKEN refers to API_TOKEN, a credential available to you as an environment variable in this shell. Read it by name (POSIX: $API_TOKEN, PowerShell: $env:API_TOKEN). Never print, echo, log, or inline its value.\n" +
+        "</availableSecrets>"
+    );
+    assert.ok(capturedSecretRefs.length > 0);
+    assert.strictEqual(
+      result.files.find((file) => file.category === TEMP_FILE_CATEGORIES.PROMPT)
+        ?.content,
+      "Use !API_TOKEN to authenticate"
+    );
+  });
+
+  test("should omit the secrets category and clause when there are no grants", async () => {
+    let capturedSecretRefs: string[] | undefined;
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({ agentContent: "agent instructions" }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (
+        _agentRefs,
+        _skillRefs,
+        _directRefs,
+        _contextRefs,
+        _excerptRefs,
+        promptRefs,
+        secretRefs
+      ) => {
+        capturedSecretRefs = secretRefs;
+        return promptRefs.join(" ");
+      },
+    });
+
+    const result = await preparer.planPrompt(
+      { prompt: "No credential needed" } as PromptStep,
+      undefined,
+      { harness: "claude-cli", secrets: [] } as any,
+      undefined
+    );
+
+    assert.deepStrictEqual(capturedSecretRefs, []);
+    assert.ok(
+      result.files.every(
+        (file) => file.category !== TEMP_FILE_CATEGORIES.SECRETS
+      )
+    );
+  });
+
+  test("should report an unknown inline secret as an error diagnostic", async () => {
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (prompt) =>
+        createSections({ userPromptText: prompt.prompt }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    const result = await preparer.planPrompt(
+      { prompt: "Use !CTRLYOKE_PHASE2_UNKNOWN_SECRET_9F7A" } as PromptStep,
+      undefined,
+      { harness: "claude-cli", secrets: [] } as any,
+      undefined
+    );
+
+    assert.strictEqual(result.diagnostics.length, 1);
+    assert.strictEqual(result.diagnostics[0].code, "prompt.secret.unknown");
+    assert.strictEqual(result.diagnostics[0].severity, "error");
+  });
+
+  test("should not cap the available-secrets category as tier two content", async () => {
+    const secretNames = Array.from(
+      { length: 4000 },
+      (_, index) => `PHASE2_SECRET_${index}`
+    );
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (prompt) =>
+        createSections({ userPromptText: prompt.prompt }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: (absolutePath) => `@${absolutePath}`,
+      formatTempFileRef: (_tempMgr, absolutePath) => `@${absolutePath}`,
+      formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+    });
+
+    const result = await preparer.planPrompt(
+      { prompt: "Use the granted credentials" } as PromptStep,
+      undefined,
+      { harness: "claude-cli", secrets: secretNames } as any,
+      undefined
+    );
+
+    assert.ok(
+      result.promptPreview.sections
+        .filter(
+          (section) => section.category === PREVIEW_PROMPT_CATEGORIES.SECRETS
+        )
+        .every(
+          (section) =>
+            section.truncationReason !==
+            PREVIEW_TRUNCATION_REASONS.OVER_INLINE_CAP
+        )
+    );
+    assert.ok(
+      !result.diagnostics.some(
+        (diagnostic) => diagnostic.code === "prompt.content.over-inline-cap"
+      )
+    );
+    assert.ok(MAX_CONTENT_SIZE > 0);
   });
 
   test("should keep attaching agents and skills that were not previously attached on resume", async () => {

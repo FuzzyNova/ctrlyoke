@@ -483,6 +483,7 @@ export class CliIntegration extends HarnessIntegration {
    *
    * Format (absent categories omitted):
    *   Following these agent instructions @agent.1.md[, @agent.2.md],
+   *   using these secrets @secrets.md,
    *   using these available skills @skills.md,
    *   using these file references @src/foo.ts, @src/bar.ts,
    *   with this prior conversation context @context.md,
@@ -497,6 +498,7 @@ export class CliIntegration extends HarnessIntegration {
    * @param contextRefs Formatted file refs for prior context files (split on step boundaries)
    * @param excerptRefs Formatted file refs for excerpt files
    * @param promptRefs Formatted file refs for prompt files
+   * @param secretRefs Formatted file refs for the available-secrets block
    */
   protected formatCategorizedReferences(
     agentRefs: string[],
@@ -504,7 +506,8 @@ export class CliIntegration extends HarnessIntegration {
     directRefs: string[],
     contextRefs: string[],
     excerptRefs: string[],
-    promptRefs: string[]
+    promptRefs: string[],
+    secretRefs: string[] = []
   ): string {
     return CliIntegration.formatCategorizedInstruction(
       agentRefs,
@@ -513,7 +516,8 @@ export class CliIntegration extends HarnessIntegration {
       contextRefs,
       excerptRefs,
       promptRefs,
-      ", "
+      ", ",
+      secretRefs
     );
   }
 
@@ -826,7 +830,8 @@ export class CliIntegration extends HarnessIntegration {
         directRefs,
         contextRefs,
         excerptRefs,
-        promptRefs
+        promptRefs,
+        secretRefs
       ) =>
         this.formatCategorizedReferences(
           agentRefs,
@@ -834,8 +839,20 @@ export class CliIntegration extends HarnessIntegration {
           directRefs,
           contextRefs,
           excerptRefs,
-          promptRefs
+          promptRefs,
+          secretRefs
         ),
+      isSecretAvailable: async (name) => {
+        try {
+          await resolveSecretEnvironment([name], {
+            workspaceRoot: this.platform.getWorkspaceRoot(),
+            secretStore: this.platform.getSecretStore?.(),
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      },
     });
 
     const sessionResolverAdapter = new CliSessionResolverAdapter({

@@ -829,6 +829,7 @@ export const PREVIEW_PROPERTY_SOURCES = {
 
 export const PREVIEW_PROMPT_CATEGORIES = {
   AGENT_INSTRUCTIONS: "agent-instructions",
+  SECRETS: "secrets",
   SKILL_CONTENT: "skill-content",
   PROMPT_TEXT: "prompt-text",
   PRIOR_CONTEXT: "prior-context",
@@ -842,6 +843,7 @@ export const PREVIEW_PROMPT_CATEGORY_LABELS: Record<
   string
 > = {
   "agent-instructions": "Agent instructions",
+  secrets: "Available secrets",
   "skill-content": "Skill content",
   "prompt-text": "Prompt text",
   "prior-context": "Prior context",
@@ -1900,6 +1902,7 @@ export const UNDO_FILE_ACTIONS = {
 // ============================================================================
 export const TEMP_FILE_CATEGORIES = {
   AGENT: "agent",
+  SECRETS: "secrets",
   SKILLS: "skills",
   CONTEXT: "context",
   EXCERPTS: "excerpts",

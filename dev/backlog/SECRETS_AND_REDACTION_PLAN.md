@@ -1,6 +1,6 @@
 # Secrets and Sensitive-Value Redaction Plan
 
-**Status:** In progress — Phase 1 declaration half landed
+**Status:** In progress — Phases 1–2 declaration and prompt disclosure landed
 **Priority:** High — before broader remote and automation APIs
 
 ## Problem
@@ -261,14 +261,14 @@ folding them into the prompt file would make user-authored text and
 ctrlyoke-generated instructions indistinguishable in every downstream surface.
 Neither is recoverable later.
 
-- Add `TEMP_FILE_CATEGORIES.SECRETS` and a matching `PREVIEW_PROMPT_CATEGORIES`
+- [x] Add `TEMP_FILE_CATEGORIES.SECRETS` and a matching `PREVIEW_PROMPT_CATEGORIES`
   entry with a `PREVIEW_PROMPT_CATEGORY_LABELS` label, both in
   `src/types/DashboardConstants.ts`.
-- Thread a `secretRefs: string[]` parameter through
+- [x] Thread a `secretRefs: string[]` parameter through
   `formatCategorizedInstruction()`, `CliIntegration.formatCategorizedReferences()`,
   and `CliPromptPreparer`'s `addChunkFiles` call sites, following the shape the
   agent and skills categories already use.
-- **Clause position: immediately after agent instructions.** It is a behavioral
+- [x] **Clause position: immediately after agent instructions.** It is a behavioral
   constraint, like agent instructions, rather than reference material. It also
   keeps excerpts as the last optional clause, so the existing
   `excerptPrefix = clauses.length === 0 ? "using" : "and"` logic is untouched —
@@ -279,17 +279,17 @@ Neither is recoverable later.
   using these available skills @skills.md, … follow the instructions in @prompt.md
   ```
 
-- **Leave it out of `isTierTwoCategory()`.** Tier two (agent, skills, excerpts)
+- [x] **Leave it out of `isTierTwoCategory()`.** Tier two (agent, skills, excerpts)
   caps the preview body at `MAX_CONTENT_SIZE`. The secrets block is bounded and
   small, and it is exactly the content a user will want to read in full in
   dry-run preview to confirm what the model was told.
-- The block is derived from the grant list, so it is deterministic, reviewable,
+- [x] The block is derived from the grant list, so it is deterministic, reviewable,
   and safe to write to a temp file — names are not secret, and `TempFileManager`
   deletes the file when the turn completes like every other category.
-- An unknown `!NAME` is a validation error, not a silent pass-through. Shipping
+- [x] An unknown `!NAME` is a validation error, not a silent pass-through. Shipping
   an unexplained `!SUPABASE_PAT` with no block to resolve it reads as neither
   prose nor a variable.
-- No grants means no category, no file, and no clause — same as every other
+- [x] No grants means no category, no file, and no clause — same as every other
   optional category.
 
 ## Phase 3 — Authoring UX
