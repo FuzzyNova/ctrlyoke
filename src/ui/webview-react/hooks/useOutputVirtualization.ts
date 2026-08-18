@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { RefObject } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { VirtualItem } from "@tanstack/react-virtual";
@@ -183,7 +190,7 @@ export function useOutputVirtualization({
   const lastVirtualRangeRef = useRef<string>("");
   const isBulkRemeasureInProgressRef = useRef(false);
   const pendingMeasurementCacheRef = useRef<Map<string, number>>(new Map());
-  const mountedRowElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const mountedRowElementsRef = useRef<Set<HTMLDivElement>>(new Set());
   const pendingMeasurementFlushTimerRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
@@ -553,12 +560,10 @@ export function useOutputVirtualization({
   const measureRowElement = useCallback(
     (element: HTMLDivElement | null): void | (() => void) => {
       if (!element) return;
-      const index = Number(element.dataset.index ?? -1);
-      const row = rowsRef.current[index];
-      if (row) mountedRowElementsRef.current.set(row.key, element);
+      mountedRowElementsRef.current.add(element);
       rowVirtualizer.measureElement(element);
       return () => {
-        if (row) mountedRowElementsRef.current.delete(row.key);
+        mountedRowElementsRef.current.delete(element);
         rowVirtualizer.measureElement(null);
       };
     },
@@ -568,9 +573,7 @@ export function useOutputVirtualization({
   const measureStaticRowElement = useCallback(
     (element: HTMLDivElement | null): void | (() => void) => {
       if (!element) return;
-      const index = Number(element.dataset.index ?? -1);
-      const row = rowsRef.current[index];
-      if (row) mountedRowElementsRef.current.set(row.key, element);
+      mountedRowElementsRef.current.add(element);
 
       const measure = (entry?: ResizeObserverEntry) => {
         const measuredHeight =
@@ -590,7 +593,7 @@ export function useOutputVirtualization({
       resizeObserver.observer.observe(element);
 
       return () => {
-        if (row) mountedRowElementsRef.current.delete(row.key);
+        mountedRowElementsRef.current.delete(element);
         resizeObserver.disconnect();
       };
     },
@@ -613,7 +616,9 @@ export function useOutputVirtualization({
     }
 
     for (const [key, height] of pendingMeasurementCacheRef.current) {
-      const element = mountedRowElementsRef.current.get(key);
+      const element = Array.from(mountedRowElementsRef.current).find(
+        (candidate) => candidate.dataset.rowKey === key
+      );
       if (element) {
         rowVirtualizer.measureElement(element);
       } else {
@@ -679,6 +684,41 @@ export function useOutputVirtualization({
     }, OUTPUT_USER_SCROLL_INPUT_GRACE_MS + 50);
   }, [flushPendingScrollMeasurements]);
   schedulePendingMeasurementFlushRef.current = schedulePendingMeasurementFlush;
+
+  useLayoutEffect(() => {
+    if (outputCollapsed || !isOutputVirtualized) {
+      return;
+    }
+
+    // A displayed historical run gets a post-load sweep below, but a live run
+    // keeps the same render identity while stable-key rows receive new content.
+    // Those rows do not remount, so their ref callback cannot provide the
+    // deterministic post-commit measurement that newly realized rows get.
+    //
+    // Measure only the mounted set and feed the result directly to TanStack.
+    // This keeps live and historical rows on the same measured-size path
+    // without restoring the old per-append bulk sweep, whose forced scroll
+    // target reconciliation caused the streaming snap-back regression.
+    for (const element of mountedRowElementsRef.current) {
+      if (!element.isConnected) {
+        mountedRowElementsRef.current.delete(element);
+        continue;
+      }
+
+      const index = Number(element.dataset.index ?? -1);
+      if (index < 0 || index >= rows.length) {
+        continue;
+      }
+
+      rowVirtualizer.resizeItem(index, measureOutputRowElement(element));
+    }
+  }, [
+    isOutputVirtualized,
+    measureOutputRowElement,
+    outputCollapsed,
+    rowVirtualizer,
+    rows,
+  ]);
 
   const measureMountedRowsAndRestoreTarget = useCallback(
     (phase: string) => {
