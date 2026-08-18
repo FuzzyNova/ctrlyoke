@@ -88,24 +88,27 @@ export const CreateScriptModal: React.FC<CreateScriptModalProps> = ({
       title="Create New Script"
       size="sm"
       footer={
-        <>
+        <div className="flex w-full items-center justify-end gap-2">
           <button
             type="button"
-            className="fp-select-trigger text-xs hover:bg-list-hover-bg hover:text-foreground disabled:opacity-50"
+            className="fp-select-trigger w-auto shrink-0 px-3 text-xs hover:bg-list-hover-bg hover:text-foreground disabled:opacity-50"
             onClick={onClose}
             disabled={pending}
           >
             Cancel
           </button>
-          <ActionButton
-            label="Create Script"
-            pendingLabel="Creating..."
-            icon="new-file"
-            onClick={handleCreate}
-            disabled={pending || !scriptName.trim()}
-            pending={pending}
-          />
-        </>
+          <div className="shrink-0">
+            <ActionButton
+              label="Create Script"
+              pendingLabel="Creating..."
+              icon="new-file"
+              onClick={handleCreate}
+              disabled={pending || !scriptName.trim()}
+              pending={pending}
+              className="min-w-28 justify-center whitespace-nowrap"
+            />
+          </div>
+        </div>
       }
     >
       <div className="space-y-4">
