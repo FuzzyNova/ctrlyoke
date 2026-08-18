@@ -162,6 +162,8 @@ export const MESSAGE_TYPES = {
   // CodeMirror editor - Webview <-> Extension
   REQUEST_COMPLETIONS: "requestCompletions", // Request autocomplete suggestions
   COMPLETIONS_RESPONSE: "completionsResponse", // Return autocomplete suggestions
+  SCRIPT_COMPLETIONS_REQUEST: "scriptCompletionsRequest",
+  SCRIPT_COMPLETIONS_RESPONSE: "scriptCompletionsResponse",
   OPEN_FILE: "openFile", // Open file from an @file / #selection: / #sym: link
   OPEN_SKILL: "openSkill", // Open a resolved ctrlyoke SKILL.md link
   OPEN_PROMPT_FILE: "openPromptFile", // Open a lone prompt-file reference

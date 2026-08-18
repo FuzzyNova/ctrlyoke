@@ -81,6 +81,7 @@ import type {
   RunSummary,
 } from "./WorkflowTimelineTypes";
 import type { WorkflowOutputHistory } from "./OutputHistoryTypes";
+import type { ScriptCompletionItem } from "../completions/ScriptCommandCompletionHelpers";
 import type { HarnessCapabilityRegistrySnapshot } from "./CompatibilityTypes";
 import type { WorkflowExecutionPreview } from "./ExecutionPreviewTypes";
 import type {
@@ -1116,6 +1117,22 @@ export interface PromptEditorInsertRequest {
 export interface PromptEditorInsertMessage {
   type: typeof MESSAGE_TYPES.INSERT_PROMPT_REFERENCES;
   data: PromptEditorInsertRequest;
+}
+
+/** Webview -> Extension: request completions for a script command field. */
+export interface ScriptCompletionsRequestMessage {
+  type: typeof MESSAGE_TYPES.SCRIPT_COMPLETIONS_REQUEST;
+  text: string;
+  position: number;
+  seq: number;
+}
+
+/** Extension -> Webview: script command field completion results. */
+export interface ScriptCompletionsResponseMessage {
+  type: typeof MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE;
+  items: ScriptCompletionItem[];
+  from: number;
+  seq: number;
 }
 
 /** Webview → Extension: validate a lone prompt-file reference. */
@@ -2245,6 +2262,7 @@ export type IncomingMessage =
       completions: any[];
       trigger: string;
     }
+  | ScriptCompletionsResponseMessage
   | {
       type: typeof MESSAGE_TYPES.CONTEXT_REFS_VALIDATION;
       results: Array<{

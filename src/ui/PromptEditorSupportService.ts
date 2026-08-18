@@ -57,6 +57,10 @@ import {
   getPathSuggestions,
   type PlainCompletionItem,
 } from "../completions/CompletionHelpers";
+import {
+  getScriptCommandCompletions,
+  parseScriptCompletionContext,
+} from "../completions/ScriptCommandCompletionHelpers";
 import { getStashList, gitRefExists } from "../utils/GitUtils";
 import { ContextExpander } from "../utils/ContextExpander";
 import { decodePriorContextTokenRef } from "../utils/FileReferenceParser";
@@ -138,6 +142,40 @@ export class PromptEditorSupportService {
     } catch (error) {
       Log.error("Failed to get completions:", error);
       this.emitCompletionsResponse(ctx, [], position, seq, false);
+    }
+  }
+
+  async handleScriptCompletionRequest(
+    ctx: WebviewClientContext,
+    text: string,
+    position: number,
+    seq: number
+  ): Promise<void> {
+    try {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const items = await getScriptCommandCompletions(
+        workspaceRoot,
+        text,
+        position
+      );
+      const from = parseScriptCompletionContext(
+        text,
+        position
+      ).replacementStart;
+      ctx.emit({
+        type: MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE,
+        items,
+        from,
+        seq,
+      });
+    } catch (error) {
+      Log.error("Failed to get script completions:", error);
+      ctx.emit({
+        type: MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE,
+        items: [],
+        from: position,
+        seq,
+      });
     }
   }
 

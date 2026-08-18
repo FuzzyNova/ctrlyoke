@@ -722,6 +722,18 @@ export class WebviewMessageRouter {
       );
     });
 
+    table.set(
+      MESSAGE_TYPES.SCRIPT_COMPLETIONS_REQUEST,
+      async (message, ctx) => {
+        await this.promptEditorSupport.handleScriptCompletionRequest(
+          ctx,
+          message.text,
+          message.position,
+          message.seq
+        );
+      }
+    );
+
     table.set(MESSAGE_TYPES.OPEN_FILE, (message, ctx) => {
       this.promptEditorSupport.handleOpenFile(
         ctx,

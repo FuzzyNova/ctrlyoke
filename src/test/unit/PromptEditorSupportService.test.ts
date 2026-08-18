@@ -205,4 +205,88 @@ suite("PromptEditorSupportService", () => {
     assert.match(result.results[0].message ?? "", /workflowKey/);
     assert.match(result.results[0].message ?? "", /runRef/);
   });
+
+  test("emits script completions through the requesting client context", async () => {
+    const emitted: unknown[] = [];
+    const service = new PromptEditorSupportService(
+      () => workspaceRoot,
+      () => undefined,
+      () => undefined
+    );
+
+    await service.handleScriptCompletionRequest(
+      createWebviewClientContext("browser:1", (message) => {
+        emitted.push(message);
+      }),
+      "git st",
+      6,
+      101
+    );
+
+    const response = emitted[0] as {
+      type: string;
+      items: Array<{ insertText: string }>;
+      from: number;
+      seq: number;
+    };
+    assert.strictEqual(
+      response.type,
+      MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE
+    );
+    assert.strictEqual(response.from, 0);
+    assert.strictEqual(response.seq, 101);
+    assert.ok(response.items.some((item) => item.insertText === "git status"));
+  });
+
+  test("emits empty script items when the completion source fails", async () => {
+    const emitted: unknown[] = [];
+    const originalDescriptor = Object.getOwnPropertyDescriptor(
+      vscode.workspace,
+      "workspaceFolders"
+    );
+    Object.defineProperty(vscode.workspace, "workspaceFolders", {
+      configurable: true,
+      get: () => {
+        throw new Error("workspace lookup failed");
+      },
+    });
+
+    try {
+      const service = new PromptEditorSupportService(
+        () => workspaceRoot,
+        () => undefined,
+        () => undefined
+      );
+      await service.handleScriptCompletionRequest(
+        createWebviewClientContext("test-client", (message) => {
+          emitted.push(message);
+        }),
+        "npm ",
+        4,
+        102
+      );
+    } finally {
+      if (originalDescriptor) {
+        Object.defineProperty(
+          vscode.workspace,
+          "workspaceFolders",
+          originalDescriptor
+        );
+      }
+    }
+
+    const response = emitted[0] as {
+      type: string;
+      items: unknown[];
+      from: number;
+      seq: number;
+    };
+    assert.strictEqual(
+      response.type,
+      MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE
+    );
+    assert.deepStrictEqual(response.items, []);
+    assert.strictEqual(response.from, 4);
+    assert.strictEqual(response.seq, 102);
+  });
 });
