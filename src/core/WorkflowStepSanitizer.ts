@@ -369,6 +369,7 @@ function buildClipboardExecutionProperties(
   step: Record<string, unknown>
 ): Partial<PromptStep> {
   const skills = cloneStringArray(step.skills);
+  const secrets = cloneStringArray(step.secrets);
   const mcpServers = cloneMcpServers(step.mcpServers);
   const hooks = cloneHooks(step.hooks);
   const endCondition = cloneEndCondition(step.endCondition);
@@ -391,6 +392,9 @@ function buildClipboardExecutionProperties(
     }),
     ...((skills !== undefined || step.skills === null) && {
       skills: skills ?? null,
+    }),
+    ...((secrets !== undefined || step.secrets === null) && {
+      secrets: secrets ?? null,
     }),
     ...(typeof step.resumeSession === "boolean" && {
       resumeSession: step.resumeSession,
@@ -522,6 +526,8 @@ export function buildScriptStepFromProperties(
   props: Record<string, unknown>,
   name?: string
 ): ScriptStep {
+  const secrets = cloneStringArray(props.secrets);
+
   return {
     type: STEP_TYPES.SCRIPT,
     script,
@@ -530,6 +536,9 @@ export function buildScriptStepFromProperties(
       executionMode: props.executionMode as ExecutionMode,
     }),
     ...(name?.trim() ? { name: name.trim() } : {}),
+    ...((secrets !== undefined || props.secrets === null) && {
+      secrets: secrets ?? null,
+    }),
     ...(props.enabled !== undefined && {
       enabled: props.enabled as boolean,
     }),

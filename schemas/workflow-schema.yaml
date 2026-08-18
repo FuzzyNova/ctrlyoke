@@ -459,6 +459,17 @@ definitions:
           whose behavior varies by harness; native discovery does not determine workflow skills
           support. Prompt-level skills replace workflow-level skills (no merging). Use null to
           explicitly disable inherited skills.
+      secrets:
+        oneOf:
+          - type: array
+            items:
+              type: string
+              pattern: ^[A-Z][A-Z0-9_]*$
+          - type: 'null'
+        description: >-
+          Secret environment-variable names granted to this prompt or workflow. Prompt-level secrets
+          replace workflow-level secrets (no merging). Use null to explicitly disable an inherited
+          grant array; inline !NAME references in prompt text remain authoritative grants.
       endCondition:
         oneOf:
           - $ref: '#/definitions/endCondition'
@@ -680,6 +691,16 @@ definitions:
         description: >-
           Internal-error policy for this script step when it cannot run or evaluation breaks. Use
           null to explicitly disable an inherited workflow policy.
+      secrets:
+        oneOf:
+          - type: array
+            items:
+              type: string
+              pattern: ^[A-Z][A-Z0-9_]*$
+          - type: 'null'
+        description: >-
+          Secret environment-variable names granted to this script step. Use null to explicitly
+          disable an inherited grant array.
       onPass:
         type: string
         enum:

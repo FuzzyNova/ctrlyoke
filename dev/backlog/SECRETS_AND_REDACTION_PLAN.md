@@ -1,6 +1,6 @@
 # Secrets and Sensitive-Value Redaction Plan
 
-**Status:** Proposed  
+**Status:** In progress — Phase 1 declaration half landed
 **Priority:** High — before broader remote and automation APIs
 
 ## Problem
@@ -206,13 +206,13 @@ Store-half implementation decisions:
 - Unsupported platforms and missing credential-store executables fail with an
   actionable env-passthrough message. There is intentionally no plaintext
   file fallback.
-- Add `secrets` to `#/definitions/executionProperties` in
+- [x] Add `secrets` to `#/definitions/executionProperties` in
   `schemas/workflow-schema.json`, mirrored in `src/types/CtrlYokeTypes.ts`.
   Placing it there — not on `promptStep` alone — gets `_runtime` capture and
   `scriptStep` coverage for free, since `executionProperties` is already shared
   by all of them (`promptRuntimeMetadata` `allOf`-refs it, so `_runtime` needs
   no extra schema work).
-- **Precedence is not free — it is four explicit edits, not one.**
+- [x] **Precedence is not free — it is four explicit edits, not one.**
   `EXECUTION_PROPERTY_KEYS` in `src/types/CtrlYokeTypes.ts` only drives
   `PromptFileParser.copyExecutionProperties()` and `WorkflowSerializer`; it does
   not feed resolution. `PropertyResolver` (at `src/utils/PropertyResolver.ts`,
@@ -227,13 +227,17 @@ Store-half implementation decisions:
      `secrets?: string[]` on `ResolvedProperties` in
      `src/types/ExecutionPropertyTypes.ts`,
   4. a `secrets` default in `PropertyResolver.createDefaults()`.
-- Shape it like `skills`: `oneOf [ array of ^[A-Z][A-Z0-9_]*$ strings, null ]`,
+- [x] Shape it like `skills`: `oneOf [ array of ^[A-Z][A-Z0-9_]*$ strings, null ]`,
   where prompt-level replaces workflow-level with no merging and `null`
   explicitly disables an inherited grant. Note the asymmetry to document: an
   inline `!NAME` reference still grants, because it is an authoritative input
   like `/mcp:` — `null` clears the inherited _array_, not what the prompt says.
-- `scriptStep` has `"additionalProperties": false`, so its `secrets` entry must
+- [x] `scriptStep` has `"additionalProperties": false`, so its `secrets` entry must
   be added explicitly alongside `errorBehavior` rather than inherited.
+- [x] Parse inline `!NAME` references in `src/utils/SecretReferenceParser.ts`
+  using the shared secret-name validator and filename-boundary convention, and
+  expose the effective inline-plus-array grant union. This declaration step
+  intentionally does not yet validate unknown inline names or inject values.
 - Resolve at spawn: extend `CliTransportCoordinator`'s existing env plumbing
   (`withProcessEnvOverrides` and the `env` passed to the child) and the
   `EndConditionEvaluator` script env with the granted set. Restrict

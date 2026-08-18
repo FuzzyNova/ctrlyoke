@@ -222,6 +222,7 @@ export class PromptFileParser {
     if (source.enabled !== undefined) step.enabled = source.enabled;
     if (source.executionMode !== undefined)
       step.executionMode = source.executionMode;
+    if (source.secrets !== undefined) step.secrets = source.secrets;
     if (source.timeout !== undefined) step.timeout = source.timeout;
     if (source.compareSource !== undefined)
       step.compareSource = source.compareSource;

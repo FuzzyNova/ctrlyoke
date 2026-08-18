@@ -138,6 +138,7 @@ export interface WorkflowProperties {
   executionMode?: ExecutionMode;
   agent?: string | null;
   skills?: string[] | null;
+  secrets?: string[] | null;
   resumeSession?: boolean;
   sessionId?: string | number; // UUID string or prompt number reference
   mcpServers?: (string | object)[] | null;

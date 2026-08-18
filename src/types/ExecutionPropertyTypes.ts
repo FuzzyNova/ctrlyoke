@@ -29,6 +29,7 @@ export interface ResolvedProperties {
   executionMode: ExecutionMode;
   agent?: string;
   skills?: string[];
+  secrets?: string[];
   resumeSession: boolean;
   mcpServers: (string | McpServerConfig)[] | null;
   hooks: UserHookConfig[] | null;
