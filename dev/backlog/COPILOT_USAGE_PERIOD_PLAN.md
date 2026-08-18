@@ -321,11 +321,27 @@ first would leave a step that cannot compile or be tested on its own.
 
 ### Phase 2: Transport and packaging guard
 
-- [ ] Add `vscode-jsonrpc` as the minimal runtime dependency and verify it
+- [x] Add `vscode-jsonrpc` as the minimal runtime dependency and verify it
       bundles cleanly into the extension, MCP binary, and standalone CLI build.
-- [ ] Record pre/post `out/extension.js`, `out/mcp-server.js`, and `out/cli.js`
+- [x] Record pre/post `out/extension.js`, `out/mcp-server.js`, and `out/cli.js`
       sizes in this document.
-- [ ] Add a production-build assertion that no `@github/copilot-*` platform
+
+      Production bundle sizes (bytes; measured after a clean production build):
+
+      | Bundle | Before dependency | After dependency | Temporary proof import |
+      | --- | ---: | ---: | ---: |
+      | `out/extension.js` | 5,364,924 | 5,364,924 | 5,421,181 |
+      | `out/mcp-server.js` | 827,129 | 827,129 | 882,994 |
+      | `out/cli.js` | 3,920,897 | 3,920,897 | 3,976,691 |
+
+      “Before dependency” was measured with `npm run build:extension` at the
+      Phase 2 starting commit. “After dependency” was measured with the
+      throwaway import removed. The temporary proof build retained the import
+      so the transport implementation was present in every target; the
+      development `npm run compile:extension` also succeeded and included all
+      three transport symbols in all three bundles. The temporary import was
+      then removed.
+- [x] Add a production-build assertion that no `@github/copilot-*` platform
       runtime or native Copilot binary is packaged. Assert against
       `package.json` dependencies plus the built bundles under `out/` — do not
       make the guard depend on running `vsce package`, which is not part of the
