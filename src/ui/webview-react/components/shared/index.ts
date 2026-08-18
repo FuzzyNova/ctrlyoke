@@ -64,6 +64,10 @@ export {
   ScriptConditionEditor,
   type ScriptConditionValue,
 } from "./ScriptConditionEditor";
+export {
+  SingleLineCompletionEditor,
+  type SingleLineCompletionEditorProps,
+} from "./SingleLineCompletionEditor";
 export { ErrorBehaviorEditor } from "./ErrorBehaviorEditor";
 export { AnimatedSection } from "./AnimatedSection";
 export { SettingSourceBadge } from "./SettingSourceBadge";
