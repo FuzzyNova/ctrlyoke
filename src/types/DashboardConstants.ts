@@ -949,6 +949,25 @@ export const COMPATIBILITY_SOURCE_TIERS = {
   DEFAULTS: "defaults",
 } as const;
 
+/** Target selectors supported by `ctrlyoke validate`. */
+export const CLI_VALIDATE_TARGET_KINDS = {
+  HARNESS: "harness",
+  ALL_INSTALLED_HARNESSES: "allInstalledHarnesses",
+} as const;
+
+export type CliValidateTargetKind =
+  (typeof CLI_VALIDATE_TARGET_KINDS)[keyof typeof CLI_VALIDATE_TARGET_KINDS];
+
+/** Optional CI policies for treating compatibility warnings as failures. */
+export const CLI_VALIDATE_STRICT_POLICIES = {
+  LOSSY: "lossy",
+  UNVERIFIED: "unverified",
+  ALL: "all",
+} as const;
+
+export type CliValidateStrictPolicy =
+  (typeof CLI_VALIDATE_STRICT_POLICIES)[keyof typeof CLI_VALIDATE_STRICT_POLICIES];
+
 /** Shared dot-notation paths for settings consumed across the extension and webview. */
 export const SETTING_PATHS = {
   STORAGE: "storage",

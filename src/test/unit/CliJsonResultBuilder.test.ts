@@ -4,6 +4,7 @@ import { suite, test } from "mocha";
 
 import {
   buildCliJsonResult,
+  buildCliValidationJsonResult,
   type CliJsonResultInput,
 } from "../../cli/CliJsonResultBuilder";
 import {
@@ -37,6 +38,41 @@ const workflowKey = "fixture-workflow" as WorkflowKey;
 const runRef = "run-fixture" as RunRef;
 
 suite("CliJsonResultBuilder", () => {
+  test("builds the versioned compatibility validation envelope", () => {
+    const output = buildCliValidationJsonResult({
+      success: false,
+      parsed: true,
+      workflowFile: "workflow.ctrlyoke.yaml",
+      target: {
+        kind: "harness",
+        harnesses: [
+          { harnessId: "codex-cli", available: true, version: "1.0.0" },
+        ],
+      },
+      strict: "lossy",
+      consumerCount: 2,
+      diagnostics: [],
+    });
+
+    assert.deepStrictEqual(output, {
+      schemaVersion: 1,
+      success: false,
+      parsed: true,
+      workflowFile: "workflow.ctrlyoke.yaml",
+      target: {
+        kind: "harness",
+        harnesses: [
+          { harnessId: "codex-cli", available: true, version: "1.0.0" },
+        ],
+      },
+      strict: "lossy",
+      consumerCount: 2,
+      diagnostics: [],
+      error: null,
+    });
+    assert.strictEqual(JSON.stringify(output).split("\n").length, 1);
+  });
+
   test("builds a completed prompt with conditions, attempts, and file changes", () => {
     const step: WorkflowStep = {
       name: "scan",

@@ -1,6 +1,7 @@
 # Harness Compatibility and Workflow Portability Plan
 
-> **Status:** The complete Stage 1 / 0.1.0 compatibility gate is shipped:
+> **Status:** The complete Stage 1 / 0.1.0 compatibility gate is shipped, and
+> Stage D's CLI validation slice of Phase 2 is complete:
 > Phases 1A–1B and Compatibility Phase 1C are complete, as are the permission
 > plan's runtime preparation and remaining Antigravity lease stages. Shared
 > contracts, the pure effective-property resolver, harness-owned permission
@@ -28,10 +29,10 @@
 > Defaults and advanced permission settings now render the same capability
 > summary, and hosted-browser transport parity is covered by the standalone
 > shim tests. Customer docs distinguish portable workflow attachments from
-> optional harness-native discovery. The dry-run leg of Compatibility Phase 2
-> has since shipped through the shared analyzer and exact provider-plan
-> projection. CLI compatibility validation, the workflow portability report,
-> and Phase 3 capability domains remain. MCP capability serialization was cut
+> optional harness-native discovery. The dry-run leg and Stage D CLI validation
+> of Compatibility Phase 2 have shipped through the shared analyzer and exact
+> provider-plan/JSON projections. The workflow portability report and Phase 3
+> capability domains remain. MCP capability serialization was cut
 > because a context-free snapshot cannot honestly describe whether a workflow
 > uses a capability.
 >
@@ -61,8 +62,8 @@ Phase 1 is what prevents ctrlyoke from claiming enforcement it does not perform.
 Phases 2 and 3 are post-release (decided 2026-07-31). Phase 2 (dry run,
 portability report, CLI validation) makes existing truth more visible; it does
 not prevent a dishonest support claim or an unsafe workspace mutation, so it
-does not gate the release. Its dry-run leg is implemented; CLI validation and
-the report remain. Phase 3 adds new capability domains.
+does not gate the release. Its dry-run leg and CLI validation are implemented;
+the report remains. Phase 3 adds new capability domains.
 
 Acceptance criteria below that describe dry-run output or the portability
 report therefore belong to Phase 2 and are not release gates. Criteria covering
@@ -762,7 +763,9 @@ ctrlyoke validate workflow.ctrlyoke.yaml --all-installed-harnesses --json
 ```
 
 Use stable diagnostic codes and structured JSON. CI must be able to fail on
-errors and optionally on lossy or unverified behavior.
+errors and optionally on lossy or unverified behavior. Stage D implements this
+as `--strict lossy`, `--strict unverified`, or `--strict all`; parse-only
+validation remains the default, and JSON output uses a one-line v1 envelope.
 
 ### MCP capabilities
 
@@ -953,7 +956,8 @@ second speculative implementation.
 
 - **Done:** integrate the Phase 1 shared analyzer and exact provider translation
   with dry-run preview.
-- Integrate the Phase 1 shared analyzer with CLI validation.
+- **Done 2026-08-18:** integrate the Phase 1 shared analyzer with CLI validation,
+  including selected/all-installed targets, strict CI policies, and JSON v1.
 - Add the installed-harness portability report.
 
 ### Phase 3 — Expand capability domains

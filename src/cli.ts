@@ -19,8 +19,15 @@ import {
   PERMISSION_MODES,
   RUNNER_IDS,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  CLI_VALIDATE_TARGET_KINDS,
+  HARNESS_INFO,
 } from "./types/DashboardConstants";
-import type { HarnessId, PermissionMode } from "./types/DashboardConstants";
+import type {
+  CliValidateStrictPolicy,
+  HarnessId,
+  PermissionMode,
+} from "./types/DashboardConstants";
+import type { CompatibilityDiagnostic } from "./types/CompatibilityTypes";
 import {
   isScriptStep,
   type PromptFile,
@@ -41,6 +48,8 @@ import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
 import {
   buildCliJsonResult,
   buildCliPreviewJsonResult,
+  buildCliValidationJsonResult,
+  type CliValidationJsonHarness,
 } from "./cli/CliJsonResultBuilder";
 import { Log } from "./utils/Log";
 import { setRuntimeMode } from "./utils/RuntimeMode";
@@ -95,6 +104,14 @@ import {
 import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
 import { initializeRunHistoryLocation } from "./utils/RunHistoryStoragePolicy";
 import { secretRedactionService } from "./utils/SecretRedactionService";
+import {
+  analyzeCliCompatibility,
+  assertCliValidateHarnessId as assertHarnessId,
+  hasCliValidationFailures,
+  parseCliValidateStrictPolicy,
+  selectCliValidationHarnesses,
+  type CliValidationTarget,
+} from "./cli/CliValidation";
 
 // Mark this process as the standalone CLI binary before anything else runs.
 setRuntimeMode(RUNNER_IDS.CLI);
@@ -190,8 +207,21 @@ registerSecretCommands(program, {
 program
   .command("validate <file>")
   .description("Validate a prompt file without executing it")
-  .action(async (file: string) => {
-    await validateCommand(file);
+  .option(
+    "-H, --harness <harness>",
+    "Analyze every AI consumer as this harness"
+  )
+  .option(
+    "--all-installed-harnesses",
+    "Analyze every AI consumer on each installed harness"
+  )
+  .option(
+    "--strict <policy>",
+    "Fail on compatibility warnings: lossy, unverified, or all"
+  )
+  .option("--json", "Emit one versioned JSON result line")
+  .action(async (file: string, options: ValidateCommandOptions) => {
+    await validateCommand(file, options);
   });
 
 program
@@ -228,6 +258,13 @@ program.parse();
 // ---- Types ----
 
 type RunOptions = RunCommandOptions;
+
+interface ValidateCommandOptions {
+  harness?: string;
+  allInstalledHarnesses?: boolean;
+  strict?: string;
+  json?: boolean;
+}
 
 type CliRunOperation =
   | { kind: "run" }
@@ -885,12 +922,6 @@ async function dryRunCommand(
   }
 }
 
-function assertHarnessId(value: string): asserts value is HarnessId {
-  if (!(Object.values(HARNESS_IDS) as string[]).includes(value)) {
-    throw new Error(`Invalid harness: ${value}`);
-  }
-}
-
 function collectWorkflowHarnesses(
   workflow: PromptFile,
   defaultHarness: HarnessId
@@ -1189,14 +1220,77 @@ async function readRunDefinition(
   }
 }
 
-async function validateCommand(file: string): Promise<void> {
+async function validateCommand(
+  file: string,
+  options: ValidateCommandOptions = {}
+): Promise<void> {
   const resolvedFile = path.resolve(file);
+  const compatibilityRequested =
+    options.harness !== undefined || options.allInstalledHarnesses === true;
+
+  let strictPolicy: CliValidateStrictPolicy | undefined;
+  let target: CliValidationTarget | undefined;
+  try {
+    if (options.harness && options.allInstalledHarnesses) {
+      throw new Error(
+        "--harness and --all-installed-harnesses cannot be used together"
+      );
+    }
+    if (options.harness) {
+      assertHarnessId(options.harness);
+      target = {
+        kind: CLI_VALIDATE_TARGET_KINDS.HARNESS,
+        harness: options.harness,
+      };
+    } else if (options.allInstalledHarnesses) {
+      target = { kind: CLI_VALIDATE_TARGET_KINDS.ALL_INSTALLED_HARNESSES };
+    }
+    if (options.strict !== undefined) {
+      if (!compatibilityRequested) {
+        throw new Error(
+          "--strict requires --harness or --all-installed-harnesses"
+        );
+      }
+      strictPolicy = parseCliValidateStrictPolicy(options.strict);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (options.json) {
+      process.stdout.write(
+        JSON.stringify(
+          buildCliValidationJsonResult({
+            success: false,
+            parsed: false,
+            workflowFile: resolvedFile,
+            error: message,
+          })
+        ) + "\n"
+      );
+    } else {
+      console.error(chalk.red(`Error: ${message}`));
+    }
+    process.exit(2);
+    return;
+  }
 
   // Check file existence before invoking the parser to avoid internal Log.error() noise.
   try {
     await access(resolvedFile);
   } catch {
-    console.error(chalk.red(`Error: File not found: ${resolvedFile}`));
+    if (options.json) {
+      process.stdout.write(
+        JSON.stringify(
+          buildCliValidationJsonResult({
+            success: false,
+            parsed: false,
+            workflowFile: resolvedFile,
+            error: `File not found: ${resolvedFile}`,
+          })
+        ) + "\n"
+      );
+    } else {
+      console.error(chalk.red(`Error: File not found: ${resolvedFile}`));
+    }
     process.exit(2);
     return;
   }
@@ -1205,21 +1299,211 @@ async function validateCommand(file: string): Promise<void> {
     const { PromptFileParser } = await import("./core/PromptFileParser");
     const parser = new PromptFileParser();
     const result = await parser.parsePromptFile(resolvedFile);
-    if (result) {
-      console.log(chalk.green(`✓ ${path.basename(resolvedFile)} is valid`));
-      console.log(chalk.dim(`  ${result.steps?.length ?? 1} prompt(s)`));
-      process.exit(0);
-    } else {
-      console.error(
-        chalk.red(`✗ ${path.basename(resolvedFile)} failed validation`)
-      );
+    if (!result) {
+      const message = `${path.basename(resolvedFile)} failed validation`;
+      if (options.json) {
+        process.stdout.write(
+          JSON.stringify(
+            buildCliValidationJsonResult({
+              success: false,
+              parsed: false,
+              workflowFile: resolvedFile,
+              error: message,
+            })
+          ) + "\n"
+        );
+      } else {
+        console.error(chalk.red(`✗ ${message}`));
+      }
       process.exit(2);
+      return;
+    }
+
+    if (!compatibilityRequested) {
+      if (options.json) {
+        process.stdout.write(
+          JSON.stringify(
+            buildCliValidationJsonResult({
+              success: true,
+              parsed: true,
+              workflowFile: resolvedFile,
+              consumerCount: 0,
+            })
+          ) + "\n"
+        );
+      } else {
+        console.log(chalk.green(`✓ ${path.basename(resolvedFile)} is valid`));
+        console.log(chalk.dim(`  ${result.steps?.length ?? 1} prompt(s)`));
+      }
+      process.exit(0);
+      return;
+    }
+
+    const workingDir = process.cwd();
+    Log.initializeCli(workingDir, false);
+    const validationAdapter = new CliAdapter({
+      harness: HARNESS_IDS.COPILOT_CLI,
+      cwd: workingDir,
+      timeout: 3600 * 1000,
+      scriptTimeout: 30 * 1000,
+      permissionMode: PERMISSION_MODES.ALLOW_ALL,
+      allowedTools: [],
+      deniedTools: [],
+      additionalDirs: [],
+      vars: {},
+      verbose: false,
+      quiet: true,
+      json: options.json === true,
+      color: false,
+      cliExecutionMode: EXECUTION_MODES.HEADLESS,
+    });
+    configService.setUserBackend(createUserConfigBackend());
+    configService.setWorkspaceBackend(createWorkspaceConfigBackend(workingDir));
+    configService.setCliOverlay({});
+    registerCliAdapter(validationAdapter);
+
+    const capabilityRegistry = new HarnessCapabilityRegistry();
+    try {
+      const capabilities = await capabilityRegistry.getSnapshot();
+      const harnesses = selectCliValidationHarnesses(target!, capabilities);
+      const analysis = analyzeCliCompatibility(result, capabilities, harnesses);
+      const failed = hasCliValidationFailures(
+        analysis.diagnostics,
+        strictPolicy
+      );
+      const jsonTarget = createCliValidationJsonTarget(
+        target!,
+        harnesses,
+        capabilities
+      );
+
+      if (options.json) {
+        process.stdout.write(
+          JSON.stringify(
+            buildCliValidationJsonResult({
+              success: !failed,
+              parsed: true,
+              workflowFile: resolvedFile,
+              target: jsonTarget,
+              strict: strictPolicy,
+              consumerCount: analysis.consumerCount,
+              diagnostics: analysis.diagnostics,
+            })
+          ) + "\n"
+        );
+      } else {
+        renderCliCompatibilityValidation(
+          resolvedFile,
+          result,
+          target!,
+          harnesses,
+          capabilities,
+          strictPolicy,
+          analysis.consumerCount,
+          analysis.diagnostics
+        );
+      }
+      process.exit(failed ? 1 : 0);
+    } finally {
+      capabilityRegistry.dispose();
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(chalk.red("Error: " + message));
+    if (options.json) {
+      process.stdout.write(
+        JSON.stringify(
+          buildCliValidationJsonResult({
+            success: false,
+            parsed: true,
+            workflowFile: resolvedFile,
+            error: message,
+          })
+        ) + "\n"
+      );
+    } else {
+      console.error(chalk.red("Error: " + message));
+    }
     process.exit(2);
   }
+}
+
+function createCliValidationJsonTarget(
+  target: CliValidationTarget,
+  harnesses: readonly HarnessId[],
+  capabilities: Awaited<ReturnType<HarnessCapabilityRegistry["getSnapshot"]>>
+): NonNullable<ReturnType<typeof buildCliValidationJsonResult>["target"]> {
+  const selectedHarnesses: CliValidationJsonHarness[] = harnesses.map(
+    (harnessId) => ({
+      harnessId,
+      available: capabilities.harnesses[harnessId]?.available === true,
+      version: capabilities.harnesses[harnessId]?.version ?? null,
+    })
+  );
+  return { kind: target.kind, harnesses: selectedHarnesses };
+}
+
+function renderCliCompatibilityValidation(
+  resolvedFile: string,
+  workflow: PromptFile,
+  target: CliValidationTarget,
+  harnesses: readonly HarnessId[],
+  capabilities: Awaited<ReturnType<HarnessCapabilityRegistry["getSnapshot"]>>,
+  strictPolicy: CliValidateStrictPolicy | undefined,
+  consumerCount: number,
+  diagnostics: readonly CompatibilityDiagnostic[]
+): void {
+  console.log(chalk.green(`✓ ${path.basename(resolvedFile)} is valid`));
+  const targetLabel =
+    target.kind === CLI_VALIDATE_TARGET_KINDS.HARNESS
+      ? `target harness ${getHarnessDisplayName(target.harness!)}`
+      : `all installed harnesses (${harnesses.length})`;
+  console.log(chalk.dim(`  Compatibility: ${targetLabel}`));
+  if (strictPolicy) {
+    console.log(chalk.dim(`  Strict policy: ${strictPolicy}`));
+  }
+  console.log(chalk.dim(`  AI consumers: ${consumerCount}`));
+  if (target.kind === CLI_VALIDATE_TARGET_KINDS.ALL_INSTALLED_HARNESSES) {
+    const versions = harnesses.map((harnessId) => {
+      const version = capabilities.harnesses[harnessId]?.version;
+      return `${getHarnessDisplayName(harnessId)}${version ? ` ${version}` : ""}`;
+    });
+    console.log(chalk.dim(`  Installed: ${versions.join(", ") || "none"}`));
+  }
+
+  for (const diagnostic of diagnostics) {
+    const consumer = formatCompatibilityConsumer(workflow, diagnostic);
+    const property = diagnostic.propertyPointer ?? diagnostic.capability;
+    console.log(
+      chalk.yellow(
+        `  [${diagnostic.severity}] ${getHarnessDisplayName(diagnostic.harnessId)} — ${consumer} — ${property}`
+      )
+    );
+    console.log(`    ${diagnostic.message}`);
+    if (diagnostic.remediation) {
+      console.log(chalk.dim(`    Remediation: ${diagnostic.remediation}`));
+    }
+  }
+  if (diagnostics.length === 0) {
+    console.log(chalk.green("  Compatibility: no findings"));
+  }
+}
+
+function formatCompatibilityConsumer(
+  workflow: PromptFile,
+  diagnostic: CompatibilityDiagnostic
+): string {
+  if (!diagnostic.consumer) {
+    return "workflow";
+  }
+  if (diagnostic.consumer.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+    return workflow.finalStep?.name?.trim() || "finalStep";
+  }
+  const step = workflow.steps?.[diagnostic.consumer.stepIndex];
+  return step?.name?.trim() || `step ${diagnostic.consumer.stepIndex + 1}`;
+}
+
+function getHarnessDisplayName(harnessId: HarnessId): string {
+  return HARNESS_INFO[harnessId]?.name ?? harnessId;
 }
 
 /** Ask a y/N question on stderr (keeps stdout pipe-friendly). */

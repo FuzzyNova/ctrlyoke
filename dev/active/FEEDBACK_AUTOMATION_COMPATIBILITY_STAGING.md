@@ -18,7 +18,10 @@ do not restate their content here.
 for forward-looking work. That document's queue is fully complete and it is
 retained as the record of how the 0.1.0 permission gate was sequenced.
 
-**Re-verified against `src/` on 2026-08-18.** Stage E (client-scoped routing)
+**Re-verified against `src/` on 2026-08-18.** Stage D (CLI compatibility
+validation) is complete: `validate` preserves parse-only behavior by default,
+supports selected/all-installed targets, shared diagnostics, strict warning
+policies, and a clean compatibility JSON v1 envelope. Stage E (client-scoped routing)
 is complete — `WebviewClientContext` is threaded through
 `WorkflowMutationCoordinator`, `WorkflowStepHandlers`, `UndoRedoCoordinator`,
 and the terminal handlers, and a two-tab isolation test exists
@@ -26,10 +29,10 @@ and the terminal handlers, and a two-tab isolation test exists
 (2026-07-24), `aad4be61` (2026-08-02), and `effbc9be` (2026-08-06) — all
 before this document's last grooming pass — but was never marked done in the
 queue below; that is corrected here. **Stage F has since been completed
-(2026-08-17, steps 18-24); Stage D and Stage G's remaining domain/report/docs
-work remain genuinely unstarted.** The next step is **Stage D** (CLI
-validation): it is small, self-contained, and depends on nothing else
-outstanding. The dependency that formerly split Stage G has now landed: both
+(2026-08-17, steps 18-24), and Stage D is now complete; Stage G's remaining
+domain/report/docs work remains genuinely unstarted.** **Stage G**
+(compatibility domains and portability reporting) is next. The dependency that
+formerly split Stage G has now landed: both
 [`SECRETS_AND_REDACTION_PLAN.md`](../implemented/SECRETS_AND_REDACTION_PLAN.md)
 and [`DRY_RUN_PREVIEW_PLAN.md`](../implemented/DRY_RUN_PREVIEW_PLAN.md) are
 implemented. Re-verification also found that the dry-run leg itself shipped
@@ -280,20 +283,20 @@ pre-condition skip, and parse-error verification against the built CLI.
 
 The largest single chunk across all three plans. Split by seam, below.
 
-### Stage D — Compatibility Phase 2, CLI validation only — NOT STARTED
+### Stage D — Compatibility Phase 2, CLI validation only — COMPLETE 2026-08-18
 
 `ctrlyoke validate --harness` / `--all-installed-harnesses --json`. Small,
 because the registry and analyzer already exist and this is projection work over
 them.
 
-**Confirmed not started (2026-08-11).** `src/cli.ts`'s `validate <file>` only
-runs `PromptFileParser` for syntactic validity — no `--harness` or
-`--all-installed-harnesses` option, no `--json` mode, and `CompatibilityAnalyzer`
-is never imported anywhere under `src/cli.ts` or `src/cli/`.
-`HarnessCapabilityRegistry` is already used in `cli.ts` (`createCliCapabilityRegistry()`),
-but only inside the `--dry-run` preview path for one selected harness — not by
-`validate`. This is the cleanest next step: no missing dependency, and it
-reuses step 9's JSON envelope convention plus the existing registry wiring.
+`src/cli.ts` keeps the existing parse-only path intact and now adds mutually
+exclusive `--harness` and `--all-installed-harnesses` targets, real cached
+availability/version probing, shared consumer-level diagnostics, typed
+`--strict lossy|unverified|all` policies, and a one-line compatibility JSON v1
+envelope. The analyzer retargets each enabled AI consumer without bypassing
+the shared resolver's inheritance/provenance; scripts and `finalStep` handling
+remain covered by focused parser/command/result tests. Validation never creates
+`WorkflowInstance` or starts a harness.
 
 **The other two legs of Phase 2 left Stage D on 2026-08-02**, leaving CLI
 validation as the whole stage:
@@ -466,7 +469,7 @@ may be swapped as a block.
 | 13  | C.4   | **DONE** — AST-verified triage of all 63 reusable direct sites: 1 policy deletion, 7 duplicate deletions, 8 noise deletions, 39 scoped replies, 8 broadcast/interaction-held sites; no migration                                                                                                                                                                   |
 | 14  | C.5   | **DONE** — Executed the triage for the core/orchestration group (32 sites in 4 files); retained five interaction holds for Phase 4 and recorded 23 client-scope fallbacks for Stage E                                                                                                                                                                              |
 | 15  | C.6   | **DONE** — Executed the triage for the ui/utils group (31 sites in 8 files); reusable direct-message baseline is now 6, with the six Phase 4 interaction holds remaining                                                                                                                                                                                           |
-| 16  | D     | **TODO — next up.** `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                                                                                                                                                                                                                   |
+| 16  | D     | **DONE 2026-08-18** — `ctrlyoke validate` compatibility targets, real installed-harness filtering, shared diagnostics, strict CI policies, clean JSON v1 output, human remediation output, and focused parser/command/result coverage                                                                                                                              |
 | 17  | E     | **DONE** — `WebviewClientContext` threaded through `WorkflowMutationCoordinator`, `WorkflowStepHandlers`, `UndoRedoCoordinator`, and terminal handlers (landed 2026-07-24 to 2026-08-06); two-tab isolation test in `CoreFeedbackMigration.test.ts`                                                                                                                |
 | 18  | F.1   | **DONE.** Phase 6 infra: `MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK` in `src/types/DashboardConstants.ts` / `src/types/WebviewMessageTypes.ts`, the `WebviewMessageRouter` handler and shared-sink wiring in `src/ui/WebviewMessageRouter.ts`, `src/ui/CtrlYokeWebviewProvider.ts`, `src/extension.ts`, plus `notifyUser()` in `src/ui/webview-react/utils/notifyUser.ts` |
 | 19  | F.2   | **DONE.** Phase 6 step 4: migrated Group A's 15 client-only toast call sites (8 `webview-react` files) to `notifyUser()`; the 2026-08-17 re-verification matched the table and found no action-bearing exceptions                                                                                                                                                  |
@@ -688,31 +691,28 @@ just because the products share history and directories.
 
 Re-verified against `src/` on 2026-08-18, not read from the plans.
 
-| Stage | Scope                                                                   | Status                                                                                    |
-| ----- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| A     | Guards, baselines, three bug fixes                                      | **Done**                                                                                  |
-| B     | Automation API `--json` v1                                              | **Done**                                                                                  |
-| C     | Browser feedback Phases 2 and 2.5                                       | **Done**                                                                                  |
-| D     | CLI `validate --harness` / `--all-installed-harnesses --json`           | **Not started** — no dependency, smallest remaining chunk                                 |
-| E     | Client-scoped routing                                                   | **Done** (confirmed complete this pass; previously unmarked)                              |
-| F     | Phase 6 host-aware webview toasts + Phase 4's six per-site dispositions | **Done** (steps 18–24); no `USER_INTERACTION_REQUEST` contract                            |
-| G     | Compatibility Phase 3 domains + report/docs + Codex investigation       | **Partially shipped** — dry-run and Secrets/Redaction are done; remaining work is G.1–G.9 |
+| Stage | Scope                                                                   | Status                                                                                       |
+| ----- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| A     | Guards, baselines, three bug fixes                                      | **Done**                                                                                     |
+| B     | Automation API `--json` v1                                              | **Done**                                                                                     |
+| C     | Browser feedback Phases 2 and 2.5                                       | **Done**                                                                                     |
+| D     | CLI `validate --harness` / `--all-installed-harnesses --json`           | **Done 2026-08-18** — shared diagnostics, real installed filtering, strict policies, JSON v1 |
+| E     | Client-scoped routing                                                   | **Done** (confirmed complete this pass; previously unmarked)                                 |
+| F     | Phase 6 host-aware webview toasts + Phase 4's six per-site dispositions | **Done** (steps 18–24); no `USER_INTERACTION_REQUEST` contract                               |
+| G     | Compatibility Phase 3 domains + report/docs + Codex investigation       | **Partially shipped** — dry-run and Secrets/Redaction are done; remaining work is G.1–G.9    |
 
-Two items stand between this document and being fully closed out:
+One item stands between this document and being fully closed out:
 
-1. **Stage D** — self-contained, no blockers. Recommended next: it is the
-   smallest remaining piece and reuses conventions (JSON envelope, registry
-   access) that already exist in `cli.ts`.
-2. **Stage G** — the largest remaining piece, but no longer blocked. Its dry-run
+1. **Stage G** — the largest remaining piece, but no longer blocked. Its dry-run
    integration and Secrets/Redaction dependency are already implemented. The
    remaining sequence is the Codex investigation; multi-domain registry
    foundation; `hooks`, `mcp`, and `promptInputs` one at a time; the now-useful
    workflow portability report; generated docs; and final acceptance/retirement.
    `usage` is deliberately removed because it is now uniform.
 
-**Recommendation (revised 2026-08-18):** F and the dry-run portion of G are
-done. Start with D, then perform the Codex investigation before the MCP domain,
-land the generic multi-domain registry seam, and enable domains one at a time
+**Recommendation (revised 2026-08-18):** D, F, and the dry-run portion of G are
+done. Perform the Codex investigation before the MCP domain, land the generic
+multi-domain registry seam, and enable domains one at a time
 under the plan's completeness-test discipline. Build the workflow portability
 report only after all domains exist, then generate docs and close the plans.
 

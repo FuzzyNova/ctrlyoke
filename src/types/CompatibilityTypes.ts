@@ -238,3 +238,31 @@ export function getCompatibilityDiagnosticMessage(
       return `Compatibility for ${context.capability} is unavailable for the ${harness} harness.`;
   }
 }
+
+/** Shared remediation prose for compatibility diagnostics. */
+export function getCompatibilityDiagnosticRemediation(
+  code: string
+): string | undefined {
+  switch (code) {
+    case COMPATIBILITY_DIAGNOSTIC_CODES.HARNESS_UNAVAILABLE:
+      return "Install the harness, make it available on PATH, or select an installed harness.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNSUPPORTED:
+      return "Choose a supported permission mode for this harness or select another harness.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_PARTIAL:
+      return "Use a harness with exact permission-mode support when the distinction matters.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_NOT_ENFORCED:
+    case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_NOT_ENFORCED:
+      return "Remove the rule or select a harness that enforces individual tool patterns.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_PARTIAL:
+    case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_PARTIAL:
+      return "Narrow the rule to the supported subset or select a harness with exact list support.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_MODE_UNVERIFIED:
+    case COMPATIBILITY_DIAGNOSTIC_CODES.ALLOWED_TOOLS_UNVERIFIED:
+    case COMPATIBILITY_DIAGNOSTIC_CODES.DENIED_TOOLS_UNVERIFIED:
+      return "Install a harness version covered by the compatibility evidence or review this finding manually.";
+    case COMPATIBILITY_DIAGNOSTIC_CODES.PERMISSION_TRANSLATION_LOSSY:
+      return "Use a harness with exact translation support or simplify the affected rules.";
+    default:
+      return undefined;
+  }
+}

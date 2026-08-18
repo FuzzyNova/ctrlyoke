@@ -21,6 +21,7 @@ import type {
 import {
   COMPATIBILITY_DIAGNOSTIC_CODES,
   getCompatibilityDiagnosticMessage,
+  getCompatibilityDiagnosticRemediation,
 } from "./CompatibilityTypes";
 import { mergeServerDeniedTools } from "./ToolPermissionUtils";
 
@@ -45,6 +46,28 @@ export type CompatibilityTargetResolver = (
   prompt: PromptStep,
   workflow: PromptFile
 ) => ResolvedExecutionTarget;
+
+/**
+ * Re-target existing consumers at a selected harness without re-resolving
+ * their inherited properties. Compatibility validation uses this to answer
+ * "what if this workflow ran on X?" while keeping the shared resolver's
+ * property provenance intact.
+ */
+export function retargetCompatibilityTargets(
+  executionTargets: readonly CompatibilityExecutionTarget[],
+  harnessId: HarnessId
+): CompatibilityExecutionTarget[] {
+  return executionTargets.map((target) => ({
+    ...target,
+    resolved: {
+      ...target.resolved,
+      properties: {
+        ...target.resolved.properties,
+        harness: harnessId,
+      },
+    },
+  }));
+}
 
 /**
  * Enumerate only the AI consumers that currently exist in the definition.
@@ -305,6 +328,7 @@ function createDiagnostic(
     target.consumer.kind === FINAL_STEP_PHASES.QUEUE
       ? `/steps/${target.consumer.stepIndex}`
       : "/finalStep";
+  const remediation = getCompatibilityDiagnosticRemediation(code);
   return {
     code,
     severity,
@@ -330,6 +354,7 @@ function createDiagnostic(
       capability,
       caveatCode,
     }),
+    ...(remediation ? { remediation } : {}),
   };
 }
 
