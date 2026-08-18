@@ -29,6 +29,9 @@ class LiveProvider implements IHarnessUsageProvider {
           id: "five-hour",
           kind: "rolling",
           label: "5 hours",
+          isUnlimited: true,
+          overage: 3,
+          usageAllowedAfterLimit: true,
           resetAt: 1_000_000_200_000,
           unit: "tokens",
           confidence: "exact",
@@ -84,6 +87,31 @@ suite("HarnessUsageService", () => {
         1_000_000_000_000 + 5 * 60 * 1000
       ),
       true
+    );
+  });
+
+  test("persists and reloads provider-neutral window fields", async () => {
+    const filePath = providerSnapshotsPath();
+    const service = new HarnessUsageService(
+      workspaceRoot,
+      [new LiveProvider()],
+      undefined,
+      undefined,
+      () => 1_000
+    );
+
+    await service.refreshHarnessUsage(HARNESS_IDS.CLAUDE_CLI);
+    await waitForPersistedSnapshot(
+      filePath,
+      HARNESS_IDS.CLAUDE_CLI,
+      1_000_000_000_000
+    );
+
+    const reloaded = new HarnessUsageService(workspaceRoot, []);
+    await reloaded.initialize();
+    assert.deepStrictEqual(
+      reloaded.getHarnessUsage(HARNESS_IDS.CLAUDE_CLI).quota.windows[0],
+      service.getHarnessUsage(HARNESS_IDS.CLAUDE_CLI).quota.windows[0]
     );
   });
 
@@ -145,7 +173,9 @@ suite("HarnessUsageService", () => {
 });
 
 async function waitForPersistedSnapshot(
-  filePath: string
+  filePath: string,
+  harnessId: string = HARNESS_IDS.CLAUDE_CLI,
+  fetchedAt: number = 2_000_000_000_000
 ): Promise<{
   snapshots: Partial<Record<string, HarnessQuotaSnapshot>>;
 }> {
@@ -156,8 +186,7 @@ async function waitForPersistedSnapshot(
         snapshots: Partial<Record<string, HarnessQuotaSnapshot>>;
       };
       if (
-        parsed.snapshots[HARNESS_IDS.CLAUDE_CLI]?.fetchedAt ===
-          2_000_000_000_000 &&
+        parsed.snapshots[harnessId]?.fetchedAt === fetchedAt &&
         raw.includes("\n  \"schemaVersion\": 1")
       ) {
         return parsed;

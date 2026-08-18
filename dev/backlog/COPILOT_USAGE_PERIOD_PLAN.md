@@ -310,14 +310,14 @@ first would leave a step that cannot compile or be tested on its own.
 
 ### Phase 1: Contract and normalization
 
-- [ ] Add `isUnlimited` / `overage` / `usageAllowedAfterLimit` to
+- [x] Add `isUnlimited` / `overage` / `usageAllowedAfterLimit` to
       `HarnessUsageWindow` in `src/types/UsageTypes.ts`.
-- [ ] Add `src/core/harness/copilot/CopilotUsageNormalization.ts` with defensive
+- [x] Add `src/core/harness/copilot/CopilotUsageNormalization.ts` with defensive
       account-quota wire guards, normalization, and the exported status codes.
-- [ ] Normalize known and unknown buckets in stable order.
-- [ ] Handle finite, unlimited, exhausted, overage-enabled, missing-reset, and
+- [x] Normalize known and unknown buckets in stable order.
+- [x] Handle finite, unlimited, exhausted, overage-enabled, missing-reset, and
       partially malformed snapshots.
-- [ ] Cover the persistence round-trip for the new optional window fields.
+- [x] Cover the persistence round-trip for the new optional window fields.
 
 ### Phase 2: Transport and packaging guard
 

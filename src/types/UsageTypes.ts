@@ -75,6 +75,12 @@ export interface HarnessUsageWindow {
   limit?: number;
   remaining?: number;
   percentUsed?: number;
+  /** True when the provider reports no finite entitlement limit. */
+  isUnlimited?: boolean;
+  /** Provider-reported usage beyond the finite entitlement. */
+  overage?: number;
+  /** Whether the provider permits usage after the entitlement is exhausted. */
+  usageAllowedAfterLimit?: boolean;
   /** Normalized Unix epoch milliseconds. */
   resetAt?: number;
   windowMinutes?: number;
