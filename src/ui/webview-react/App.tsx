@@ -11,6 +11,7 @@ import {
   captureAndSendThemeVars,
 } from "@hooks/useMessageHandler";
 import { useUndoRedoKeyHandler } from "@hooks/useUndoRedoKeyHandler";
+import { useNewWorkflowKeyHandler } from "@hooks/useNewWorkflowKeyHandler";
 import { useRunViewLoadWatchdog } from "@hooks/useRunViewLoadWatchdog";
 import { useDuplicateWorkflowWatchdog } from "@hooks/useDuplicateWorkflowWatchdog";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
@@ -579,6 +580,7 @@ function App() {
   // Message handlers with full implementations
   useMessageHandler();
   useUndoRedoKeyHandler();
+  useNewWorkflowKeyHandler();
   // Bounds how long a run-view request may stay outstanding — a lost one
   // suppresses every server-initiated view update until it is retired.
   useRunViewLoadWatchdog();

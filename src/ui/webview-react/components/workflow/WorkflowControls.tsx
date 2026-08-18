@@ -28,11 +28,12 @@ interface WorkflowControlsProps {
  *   - Load from File
  *   - Queue File - only when queue exists
  *
- * Keyboard shortcuts are registered as VS Code keybindings (active when this panel is focused):
- *   - Ctrl+Shift+N: New blank workflow
- *   - Ctrl+Shift+T: From template
- *   - Ctrl+Shift+L: Load from file
- *   - Ctrl+Shift+Q: Queue file
+ * Ctrl+N (new blank workflow) and Ctrl+Shift+N (new workflow from template)
+ * are handled by the webview-level `useNewWorkflowKeyHandler` hook — see
+ * dev/reference/KEYBOARD_SHORTCUTS.md for why webview-level handlers are used
+ * instead of package.json keybindings, which don't fire while the webview has
+ * focus. Ctrl+Shift+L (load from file) and Ctrl+Shift+Q (queue file) remain
+ * registered only as package.json keybindings.
  */
 export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
   className = "",

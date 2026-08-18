@@ -48,10 +48,11 @@ The Prompt Editor's `Ctrl+Enter` (Run) and `Ctrl+Shift+Enter` (Queue) are wired 
 ### Known VS Code built-in conflicts to watch (for future `package.json` bindings)
 
 | Key            | Built-in use                      | Our `when` clause avoids it?                                                         |
-| -------------- | --------------------------------- | ------------------------------------------------------------------------------------ |
-| `Ctrl+Shift+N` | New window (global)               | Yes — our `focusedView` clause wins in context                                       |
+| -------------- | ---------------------------------- | ------------------------------------------------------------------------------------ |
+| `Ctrl+Shift+N` | New window (global)               | Declared with a `focusedView` clause in `package.json`, but confirmed non-functional in practice — see the caveat below the "Existing VS Code keybindings" table. The working `Ctrl+Shift+N` (new workflow from template) is implemented webview-only via `useNewWorkflowKeyHandler`, same as `Ctrl+Enter` below. |
+| `Ctrl+N`       | New file (global)                 | N/A — ctrlyoke's `Ctrl+N` (new blank workflow) is webview-only via `useNewWorkflowKeyHandler`, never reaches VS Code's command layer |
 | `Ctrl+Enter`   | Copilot Chat send (`inChatInput`) | N/A — ctrlyoke's `Ctrl+Enter` is webview-only, never reaches VS Code's command layer |
-| `Ctrl+Shift+T` | Reopen closed tab (global)        | Yes — our `focusedView` clause wins in context                                       |
+| `Ctrl+Shift+T` | Reopen closed tab (global)        | Declared with a `focusedView` clause in `package.json`, but confirmed non-functional in practice — same caveat as `Ctrl+Shift+N` above.                                       |
 
 ### Key combos with low VS Code occupancy (safe to use for new `package.json` bindings)
 
@@ -103,6 +104,8 @@ Use for shortcuts that should work when the ctrlyoke panel is focused **but focu
 | `Ctrl+Shift+Q`  | `Cmd+Shift+Q` | `ctrlyoke.appendFromDashboard` | Append from dashboard |
 
 All scoped to `when: focusedView == 'ctrlyoke.dashboard'`. Source: `package.json` `contributes.keybindings`.
+
+**Confirmed non-functional in practice (2026-08):** none of the four fire, because the ctrlyoke dashboard is always a webview and, per the note above, `focusedView`/`activeWebviewPanelId` keybindings never fire while focus is inside the webview iframe — which is effectively always, since there's no non-webview part of the panel to focus. Treat this table as a record of what's declared in `package.json`, not as a description of working shortcuts. New shortcuts (e.g. `Ctrl+N` / `Ctrl+Shift+N`, added below) are implemented as Layer 2 webview-level handlers instead — see the pattern already proven out by `Ctrl+Z`/`Ctrl+F`/etc. in the inventory further down.
 
 ---
 
@@ -193,6 +196,8 @@ When a webview shortcut needs to trigger extension host logic, use `postMessage`
 | `Ctrl+Z` / `Cmd+Z`                       | `useUndoRedoKeyHandler` (window)  | Undo the last workflow edit. Ignored when a text input, textarea, or CodeMirror editor has focus (they get their own undo), and blocked while a workflow is actively running. |
 | `Ctrl+Y` or `Ctrl+Shift+Z` / `Cmd` equiv | `useUndoRedoKeyHandler` (window)  | Redo — same focus/active-workflow guards as undo.                                                                                                                             |
 | `Ctrl+F` / `Cmd+F`                       | `OutputSection` (window, capture) | Open the output-pane find bar — only when focus is **not** inside a CodeMirror editor (which handles its own `Ctrl+F` first).                                                 |
+| `Ctrl+N` / `Cmd+N`                       | `useNewWorkflowKeyHandler` (window, capture) | New blank workflow — same action as the "New" split button's main click (posts `CLEAR_WORKFLOW`). Ignored when a text input, textarea, or CodeMirror editor has focus.       |
+| `Ctrl+Shift+N` / `Cmd+Shift+N`           | `useNewWorkflowKeyHandler` (window, capture) | New workflow from template — same action as "New From Template..." in the split button dropdown (posts `NEW_WORKFLOW`, which opens the template modal). Same focus guard.    |
 | `Escape`                                 | `Modal`                           | Close the open modal                                                                                                                                                          |
 | `Escape`                                 | `GlobalSettingsDrawer`            | Close the global settings drawer                                                                                                                                              |
 | `Escape`                                 | `PromptEditor`                    | Close the properties drawer                                                                                                                                                   |

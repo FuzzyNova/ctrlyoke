@@ -5,7 +5,7 @@
 
 increase size of custom select a bit on mobile at least
 
-fork a draft
+☑️ fork a draft
 
 ☑️ terminal follow up not always working, and definitely not working in pause mode
 
@@ -21,7 +21,7 @@ in "more run dropdown" step 6 context didnt get read by claude automatically bec
 
 ☑️ do a follow up for agy and see if we can get better context window stats
 
-render all references as chips in output history
+☑️ render all references as chips in output history
 
 ☑️ fix formatting of pre / post condition
 
@@ -29,7 +29,7 @@ commit message generation should use CLI ouput and display the raw output of the
 
 ☑️ template doesn't load final step only templates correctly
 
-codex hook cleanup
+☑️ codex hook cleanup
 
 ☑️ opencode.json gitignore
 
@@ -37,14 +37,20 @@ fix where ctrlyoke right click menu shortcuts show up in vs code (currently does
 
 Add more context menus to the app, specifically workspace explorer (copy/move files)
 
-Add file link to diff views so it opens the full file
+☑️ Add file link to diff views so it opens the full file
 
-Make undo modal take up full window space and use diff view used by workspace
+☑️ Make undo modal take up full window space and use diff view used by workspace
 
 Add animation for output window new messages and fix scroll lock behavior and glitchiness when live events are coming in
 
-add find to output window and make icons bigger
+☑️ add find to output window and make icons bigger
 
-script result string doesn't wrap properly in the OutputSection
+☑️ script result string doesn't wrap properly in the OutputSection
 
-FOUND THE EDITOR SHIFT CAUSE: it happens when you drag to select - so figure out why dragging to select drags the whole editor down and brings the propery drawer up.
+☑️ FOUND THE EDITOR SHIFT CAUSE: it happens when you drag to select - so figure out why dragging to select drags the whole editor down and brings the propery drawer up.
+
+research translation and localization
+
+fix tab navigation and keyboard shortcuts
+
+fix commit message generation
