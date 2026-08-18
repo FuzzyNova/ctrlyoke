@@ -27,7 +27,10 @@ import type {
   UserHookConfig,
 } from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
-import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
+import {
+  PROMPT_INPUT_CAVEAT_CODES,
+  type HarnessCapabilityFacts,
+} from "../../../types/CompatibilityTypes";
 import {
   applyPreparedMutations,
   type CliProviderPreparation,
@@ -42,6 +45,12 @@ const QWEN_MCP_FILTERING_CAPABILITY = {
     basis: "cli-version",
     verifiedVersions: [">=0.20.1"],
   },
+} as const;
+
+const QWEN_IMAGE_INPUT_CAPABILITY = {
+  fidelity: "unsupported",
+  mechanism: "none",
+  caveatCode: PROMPT_INPUT_CAVEAT_CODES.NO_NATIVE_IMAGE_ATTACHMENT,
 } as const;
 
 /**
@@ -112,6 +121,7 @@ export class QwenCliProvider implements ICliProvider {
       mcp: {
         perServerToolFiltering: QWEN_MCP_FILTERING_CAPABILITY,
       },
+      promptInputs: { images: QWEN_IMAGE_INPUT_CAPABILITY },
     };
   }
   readonly logParser = new QwenLogParser();

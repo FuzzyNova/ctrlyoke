@@ -35,6 +35,7 @@ import {
 import {
   STEP_TYPES,
   PERMISSION_CAPABILITY_KEYS,
+  PROMPT_INPUT_CAPABILITY_KEYS,
   USER_FEEDBACK_SEVERITY,
 } from "@root/types/DashboardConstants";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
@@ -45,7 +46,9 @@ import { notifyUser } from "@utils/notifyUser";
 import {
   diagnosticsForHookEvents,
   diagnosticsForMcpFiltering,
+  toFieldDiagnostic,
 } from "@utils/compatibilityDiagnostics";
+import { FieldDiagnostic } from "../shared/FieldDiagnostic";
 
 interface PromptEditorProps {
   /** When true, the editor is in CLI watch mode — all editing is disabled. */
@@ -163,6 +166,16 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         diagnostic.capability === PERMISSION_CAPABILITY_KEYS.ALLOWED_TOOLS ||
         diagnostic.capability === PERMISSION_CAPABILITY_KEYS.DENIED_TOOLS
     );
+  const imageCompatibilityDiagnostics = promptCompatibility.diagnostics
+    .filter(
+      (diagnostic) =>
+        diagnostic.capability === PROMPT_INPUT_CAPABILITY_KEYS.IMAGES &&
+        (selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+          ? diagnostic.consumer?.kind === FINAL_STEP_PHASES.QUEUE &&
+            diagnostic.consumer.stepIndex === selectionTarget.index
+          : diagnostic.consumer?.kind === FINAL_STEP_PHASES.FINAL_STEP)
+    )
+    .map((diagnostic) => toFieldDiagnostic(diagnostic));
 
   const drawerTabOverrides = useDrawerTabOverrides(
     workflowProperties,
@@ -1254,6 +1267,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             </>
           )}
         </div>
+      )}
+
+      {!isScriptMode && (
+        <FieldDiagnostic
+          id="prompt-image-compatibility"
+          diagnostics={imageCompatibilityDiagnostics}
+          className="border-t border-[var(--vscode-widget-border,var(--vscode-panel-border))] px-2 py-1"
+        />
       )}
 
       {/* Editor Footer with actions (outside wrapper, not covered by drawer) */}

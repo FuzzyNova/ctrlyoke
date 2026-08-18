@@ -10,6 +10,7 @@ import {
   FINAL_STEP_PHASES,
   HARNESS_IDS,
   PERMISSION_MODES,
+  PROMPT_INPUT_CAPABILITY_KEYS,
 } from "@root/types/DashboardConstants";
 import {
   analyzeCompatibility,
@@ -42,6 +43,7 @@ function makeSnapshot(): HarnessCapabilityRegistrySnapshot {
           deniedTools: declaration,
         },
         mcp: { perServerToolFiltering: declaration },
+        promptInputs: { images: declaration },
       },
       effective: {
         permissions: {
@@ -50,6 +52,7 @@ function makeSnapshot(): HarnessCapabilityRegistrySnapshot {
           deniedTools: state,
         },
         mcp: { perServerToolFiltering: state },
+        promptInputs: { images: state },
       },
     };
   }
@@ -65,7 +68,11 @@ function makeSnapshot(): HarnessCapabilityRegistrySnapshot {
 
   return {
     schemaVersion: 1,
-    enabledDomains: [CAPABILITY_DOMAINS.PERMISSIONS, CAPABILITY_DOMAINS.MCP],
+    enabledDomains: [
+      CAPABILITY_DOMAINS.PERMISSIONS,
+      CAPABILITY_DOMAINS.PROMPT_INPUTS,
+      CAPABILITY_DOMAINS.MCP,
+    ],
     harnesses,
   };
 }
@@ -100,6 +107,48 @@ describe("useCompatibilityDiagnostics", () => {
 
     expect(result.current.isChecking).toBe(true);
     expect(result.current.diagnostics).toEqual([]);
+  });
+
+  it("keeps image diagnostics tied to authored image references", () => {
+    const snapshot = makeSnapshot();
+    const unsupported = {
+      fidelity: "unsupported" as const,
+      mechanism: "none" as const,
+      verification: "verified" as const,
+    };
+    snapshot.harnesses[HARNESS_IDS.CODEX_CLI].effective!.promptInputs = {
+      images: unsupported,
+    };
+    snapshot.harnesses[HARNESS_IDS.CODEX_CLI].descriptor.promptInputs = {
+      images: {
+        fidelity: "unsupported",
+        mechanism: "none",
+      },
+    };
+    useSettingsStore.getState().setGlobalSettings({
+      ...useSettingsStore.getState().globalSettings,
+      harness: HARNESS_IDS.CODEX_CLI,
+    });
+    useWorkflowStore.setState({
+      steps: [{ prompt: "Review @screen.png", harness: HARNESS_IDS.CODEX_CLI }],
+    });
+    useCompatibilityStore.getState().setCapabilitySnapshot(snapshot);
+
+    const { result } = renderHook(() => useCompatibilityDiagnostics());
+    expect(result.current.diagnostics.map((item) => item.capability)).toContain(
+      PROMPT_INPUT_CAPABILITY_KEYS.IMAGES
+    );
+
+    act(() => {
+      useWorkflowStore.getState().updatePrompt(0, {
+        prompt: "Review screen.png as ordinary text",
+      });
+    });
+    expect(
+      result.current.diagnostics.some(
+        (item) => item.capability === PROMPT_INPUT_CAPABILITY_KEYS.IMAGES
+      )
+    ).toBe(false);
   });
 
   it("recalculates immediately when the effective harness changes", () => {

@@ -19,7 +19,7 @@
 > arbitrary enabled-domain sets, generic completeness/effective-state
 > derivation, guarded round-trip snapshots, and the removal of uniform usage
 > plus stale MCP injection vocabulary. The rollout now enables `permissions`,
-> `hooks`, and `mcp`, validates all six harnesses, all three permission leaves,
+> `promptInputs`, `hooks`, and `mcp`, validates all six harnesses, all three permission leaves,
 > all seven logical hook events, and per-server MCP tool filtering, caches installed
 > availability/version detection, and
 > derives version-aware verification independently per leaf (verified
@@ -55,6 +55,17 @@
 > authored server filter with an RFC 6901 pointer and MCP source tier, while
 > native verified filters stay silent. Preview continues to expose the actual
 > MCP/provider plan, and the MCP tab overlays warnings without disabling edits.
+> Stage G.5 is now complete: image prompt inputs are enabled across all six
+> harnesses with adapter-owned evidence. Copilot and Claude retain verified
+> native path-based image attachment; Codex and OpenCode use their native
+> `--image`/`--file` arguments; Qwen and Antigravity are explicitly unsupported
+> in the current adapter contract. The shared attachment
+> pipeline carries only resolved full-file image refs into compatibility analysis,
+> so ordinary text/file refs, disabled steps, scripts, and unused defaults remain
+> silent. Diagnostics point at the authored prompt field, flow through dry-run
+> provider references, and render persistently beside the prompt editor. No
+> Harness-tab badge plumbing was added because images have no tab-scoped
+> diagnostic consumer.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
@@ -1027,7 +1038,11 @@ second speculative implementation.
   notification preferences are introduced.
 - MCP per-server tool filtering, now enabled in G.4 with an adapter-owned
   declaration. Injection is uniform and is not modeled.
-- Image prompt inputs.
+- **Done 2026-08-18:** Image prompt inputs. All six adapters declare the domain;
+  the shared resolver marks only attached full-file image refs, the analyzer
+  emits stable unsupported/partial/unverified findings with RFC 6901 prompt
+  pointers, dry-run keeps the actual categorized/provider reference, and the
+  prompt editor preserves editable references while showing persistent feedback.
 - Generate customer-facing compatibility documentation from the registry.
 - Extend the tab warning-badge overlay to every domain enabled in this phase.
 
@@ -1088,9 +1103,9 @@ overlay-badge treatment instead of inventing a new visual language:
   icon/color.
 - **MCP** — completed in G.4. `getMcpTabOverride` overlays a filtering warning
   without losing the existing "servers configured" indicator.
-- **Images** — if image inputs become a tab-scoped domain with their own
-  authoring surface, give that surface the same warning-badge overlay rather
-  than a bespoke treatment.
+- **Images** — the prompt editor is the authoring surface, so image findings
+  render persistently there. Do not add a Harness-tab badge: the image domain
+  has no tab-scoped diagnostic consumer.
 
 Do not replace a tab's base icon/color to signal a compatibility warning; add
 the badge overlay on top, consistent with the Permissions tab precedent. Do

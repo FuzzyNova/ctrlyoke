@@ -50,6 +50,17 @@ const OPENCODE_MCP_FILTERING_CAPABILITY = {
   },
 } as const;
 
+const OPENCODE_IMAGE_INPUT_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "native",
+  verification: {
+    kind: "manual",
+    reference: "https://dev.opencode.ai/docs/cli/",
+    basis: "cli-version",
+    verifiedVersions: [">=1.18.10"],
+  },
+} as const;
+
 /**
  * OpenCode CLI Harness
  *
@@ -106,6 +117,7 @@ export class OpenCodeCliProvider implements ICliProvider {
       mcp: {
         perServerToolFiltering: OPENCODE_MCP_FILTERING_CAPABILITY,
       },
+      promptInputs: { images: OPENCODE_IMAGE_INPUT_CAPABILITY },
     };
   }
   readonly headlessSource = "stdout" as const;
@@ -400,6 +412,10 @@ export class OpenCodeCliProvider implements ICliProvider {
    */
   formatFileReference(relativeFilePath: string): string {
     return relativeFilePath;
+  }
+
+  buildImageAttachmentArgs(imageFilePaths: readonly string[]): string[] {
+    return imageFilePaths.flatMap((filePath) => ["--file", filePath]);
   }
 
   /**

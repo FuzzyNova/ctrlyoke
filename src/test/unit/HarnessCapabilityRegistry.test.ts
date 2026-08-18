@@ -194,6 +194,17 @@ suite("HarnessCapabilityRegistry", () => {
     }
   });
 
+  test("enables prompt-input compatibility for every registered harness", async () => {
+    const registry = new HarnessCapabilityRegistry();
+    const snapshot = await registry.getSnapshot();
+    assert.deepStrictEqual(snapshot.enabledDomains, [
+      CAPABILITY_DOMAINS.PERMISSIONS,
+      CAPABILITY_DOMAINS.PROMPT_INPUTS,
+      CAPABILITY_DOMAINS.HOOKS,
+      CAPABILITY_DOMAINS.MCP,
+    ]);
+  });
+
   test("requires all three permission leaves for every HarnessId", async () => {
     const snapshot = await makeRegistry().getSnapshot();
 

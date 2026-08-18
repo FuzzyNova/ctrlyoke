@@ -186,6 +186,13 @@ suite("CodexCliProvider", () => {
         "start work",
       ]);
     });
+
+    test("builds native image arguments for resolved attachments", () => {
+      assert.deepStrictEqual(
+        provider.buildImageAttachmentArgs(["shots/one.png", "shots/two.jpg"]),
+        ["--image", "shots/one.png", "--image", "shots/two.jpg"]
+      );
+    });
   });
 
   suite("buildNotificationHookArgs", () => {

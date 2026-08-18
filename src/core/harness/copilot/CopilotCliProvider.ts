@@ -58,6 +58,18 @@ const COPILOT_MCP_FILTERING_CAPABILITY = {
   },
 } as const;
 
+const COPILOT_IMAGE_INPUT_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "native",
+  verification: {
+    kind: "manual",
+    reference:
+      "https://docs.github.com/en/copilot/github-copilot-in-the-cli/using-github-copilot-in-the-cli#adding-files-to-your-prompt",
+    basis: "cli-version",
+    verifiedVersions: [">=0.0.384"],
+  },
+} as const;
+
 /**
  * Copilot CLI Harness
  *
@@ -106,6 +118,7 @@ export class CopilotCliProvider implements ICliProvider {
       mcp: {
         perServerToolFiltering: COPILOT_MCP_FILTERING_CAPABILITY,
       },
+      promptInputs: { images: COPILOT_IMAGE_INPUT_CAPABILITY },
     };
   }
   readonly logParser = new CopilotLogParser();

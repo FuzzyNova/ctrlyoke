@@ -830,4 +830,12 @@ suite("OpenCodeCliProvider", () => {
       '"path with space/a.ts"'
     );
   });
+
+  test("builds native file arguments for resolved image attachments", () => {
+    const provider = new OpenCodeCliProvider();
+    assert.deepStrictEqual(
+      provider.buildImageAttachmentArgs(["shots/one.png", "shots/two.jpg"]),
+      ["--file", "shots/one.png", "--file", "shots/two.jpg"]
+    );
+  });
 });

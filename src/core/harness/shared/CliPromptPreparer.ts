@@ -75,6 +75,7 @@ export interface PromptFileResult {
   tempFilePaths: string[];
   promptWithInstruction: string;
   diagnostics: readonly CompatibilityDiagnostic[];
+  imageFileRefs: readonly string[];
 }
 
 /** Pure categorized prompt preparation plus deferred temp-file mutations. */
@@ -85,6 +86,8 @@ export interface PromptPreparationPlan {
   readonly mutations: readonly PreparedMutation[];
   readonly promptPreview: CategorizedPromptPreview;
   readonly diagnostics: readonly CompatibilityDiagnostic[];
+  /** Resolved images included in the outgoing prompt. */
+  readonly imageFileRefs: readonly string[];
 }
 
 export interface CliPromptPreparerDeps {
@@ -322,6 +325,7 @@ export class CliPromptPreparer {
       const plan = await this.createInlinePlanWithReferences(
         outgoingSections.userPromptText,
         outgoingSections.directFileRefs,
+        outgoingSections.imageFileRefs,
         harnessId,
         sourceRuntimeCopyMutations
       );
@@ -413,6 +417,7 @@ export class CliPromptPreparer {
       tempFilePaths: [...plan.tempFilePaths],
       promptWithInstruction: plan.promptWithInstruction,
       diagnostics: plan.diagnostics,
+      imageFileRefs: plan.imageFileRefs,
     };
   }
 
@@ -445,6 +450,7 @@ export class CliPromptPreparer {
         bodyBudgetBytes: MAX_PREVIEW_BODY_BYTES,
       },
       diagnostics: [...diagnostics],
+      imageFileRefs: [],
     };
   }
 
@@ -495,6 +501,7 @@ export class CliPromptPreparer {
   private async createInlinePlanWithReferences(
     promptText: string,
     directFileRefs: string[],
+    imageFileRefs: readonly string[],
     harnessId: ResolvedProperties["harness"],
     mutations: readonly PreparedMutation[]
   ): Promise<PromptPreparationPlan> {
@@ -532,6 +539,7 @@ export class CliPromptPreparer {
         bodyBudgetBytes: MAX_PREVIEW_BODY_BYTES,
       },
       diagnostics,
+      imageFileRefs: [...imageFileRefs],
     };
   }
 
@@ -809,6 +817,7 @@ export class CliPromptPreparer {
         bodyBudgetBytes: MAX_PREVIEW_BODY_BYTES,
       },
       diagnostics,
+      imageFileRefs: [...sections.imageFileRefs],
     };
   }
 

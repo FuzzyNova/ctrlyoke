@@ -60,6 +60,18 @@ const CLAUDE_MCP_FILTERING_CAPABILITY = {
   },
 } as const;
 
+const CLAUDE_IMAGE_INPUT_CAPABILITY = {
+  fidelity: "exact",
+  mechanism: "native",
+  verification: {
+    kind: "manual",
+    reference:
+      "https://support.claude.com/en/articles/14554922-claude-code-user-faq",
+    basis: "cli-version",
+    verifiedVersions: [">=2.1.17"],
+  },
+} as const;
+
 /**
  * Claude CLI Harness
  *
@@ -138,6 +150,7 @@ export class ClaudeCliProvider implements ICliProvider {
       mcp: {
         perServerToolFiltering: CLAUDE_MCP_FILTERING_CAPABILITY,
       },
+      promptInputs: { images: CLAUDE_IMAGE_INPUT_CAPABILITY },
     };
   }
   readonly logParser = new ClaudeLogParser();

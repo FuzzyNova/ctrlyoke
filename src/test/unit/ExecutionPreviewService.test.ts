@@ -57,6 +57,7 @@ function createCapabilities(): HarnessCapabilityRegistrySnapshot {
   const permissions = provider.toolPermissionMapper.capabilities;
   const hooks = provider.capabilities.hooks!;
   const mcp = provider.capabilities.mcp!;
+  const promptInputs = provider.capabilities.promptInputs!;
   const state = {
     fidelity: "exact" as const,
     mechanism: "native" as const,
@@ -64,7 +65,7 @@ function createCapabilities(): HarnessCapabilityRegistrySnapshot {
   };
   return {
     schemaVersion: 1,
-    enabledDomains: ["permissions", "hooks", "mcp"],
+    enabledDomains: ["permissions", "promptInputs", "hooks", "mcp"],
     harnesses: {
       [HARNESS_IDS.CLAUDE_CLI]: {
         available: true,
@@ -72,6 +73,7 @@ function createCapabilities(): HarnessCapabilityRegistrySnapshot {
         descriptor: {
           harnessId: HARNESS_IDS.CLAUDE_CLI,
           permissions,
+          promptInputs,
           hooks,
           mcp,
         },
@@ -81,6 +83,7 @@ function createCapabilities(): HarnessCapabilityRegistrySnapshot {
             allowedTools: state,
             deniedTools: state,
           },
+          promptInputs: { images: state },
           hooks: Object.fromEntries(
             HOOK_EVENT_ORDER.map((event) => [event, state])
           ),
@@ -102,6 +105,7 @@ function createPromptPreparer(
         skillContent: null,
         agentContent: null,
         directFileRefs: [],
+        imageFileRefs: [],
         sourceRuntimeCopies: [],
         sourceRuntimeReadReferences: [],
         excerptContent: null,
@@ -276,6 +280,52 @@ suite("ExecutionPreviewService", () => {
     );
   });
 
+  test("propagates resolved image compatibility diagnostics to workflow and step preview", async () => {
+    const capabilities = createCapabilities();
+    const installed = capabilities.harnesses[HARNESS_IDS.CLAUDE_CLI];
+    installed.descriptor.promptInputs!.images = {
+      fidelity: "unsupported",
+      mechanism: "none",
+      caveatCode: "promptInputs.noNativeImageAttachment",
+    };
+    installed.effective!.promptInputs!.images = {
+      fidelity: "unsupported",
+      mechanism: "none",
+      verification: "verified",
+    };
+    const imagePath = path.join(os.tmpdir(), "preview-image.png");
+
+    const preview = await createService(
+      undefined,
+      undefined,
+      undefined,
+      async (prompt) => ({
+        skillContent: null,
+        agentContent: null,
+        directFileRefs: [imagePath],
+        imageFileRefs: [imagePath],
+        sourceRuntimeCopies: [],
+        sourceRuntimeReadReferences: [],
+        excerptContent: null,
+        userPromptText: prompt.prompt,
+        skippedReferences: [],
+      }),
+      capabilities
+    ).build({
+      workflow: { steps: [{ prompt: `Review @${imagePath}` }] },
+    });
+
+    const diagnostic = preview.steps[0].diagnostics.find(
+      (item) => item.code === "compatibility.promptInputs.images.unsupported"
+    );
+    assert.ok(diagnostic);
+    assert.strictEqual(diagnostic.propertyPointer, "/steps/0/prompt");
+    assert.strictEqual(diagnostic.sourceTier, "prompt");
+    assert.ok(
+      preview.diagnostics.some((item) => item.code === diagnostic.code)
+    );
+  });
+
   test("keeps translated MCP denials in the provider plan without duplicating analyzer diagnostics", async () => {
     const preview = await createService().build({
       workflow: {
@@ -390,6 +440,7 @@ suite("ExecutionPreviewService", () => {
         skillContent: null,
         agentContent: null,
         directFileRefs: [destinationPath],
+        imageFileRefs: [],
         sourceRuntimeCopies: [
           { reference: "@runtime/source.log", sourcePath, destinationPath },
         ],

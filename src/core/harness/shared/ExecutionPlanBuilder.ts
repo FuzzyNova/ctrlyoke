@@ -124,6 +124,14 @@ export class ExecutionPlanBuilder {
           diagnostics: [],
         };
     const baseArgs = [...providerPreparation.cliArgs];
+    if (
+      session.imageFileRefs.length > 0 &&
+      this.deps.provider.buildImageAttachmentArgs
+    ) {
+      baseArgs.push(
+        ...this.deps.provider.buildImageAttachmentArgs(session.imageFileRefs)
+      );
+    }
     const mutations = [...providerPreparation.mutations];
     const hookPreparations: CliProviderPreparation[] = [];
 

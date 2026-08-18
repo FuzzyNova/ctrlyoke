@@ -9,6 +9,7 @@ import {
   MCP_CAPABILITY_KEYS,
   PERMISSION_CAPABILITY_KEYS,
   PERMISSION_MODES,
+  PROMPT_INPUT_CAPABILITY_KEYS,
   STEP_TYPES,
   type HarnessId,
   type HookEvent,
@@ -30,6 +31,8 @@ import {
 export interface CompatibilityExecutionTarget {
   consumer: CompatibilityConsumerTarget;
   resolved: ResolvedExecutionTarget;
+  /** Full-file image attachments that survived shared reference resolution. */
+  imageFileRefs?: readonly string[];
 }
 
 /** Reserved for future workspace-scoped compatibility domains. */
@@ -136,6 +139,7 @@ export function analyzeCompatibility({
 
     analyzeConfiguredMcpFilters(target, installed, diagnostics);
     analyzeConfiguredHooks(target, installed, diagnostics);
+    analyzeConfiguredImageInputs(target, installed, diagnostics);
 
     const permissions = target.resolved.properties.toolPermissions;
     if (!permissions) {
@@ -206,6 +210,60 @@ export function analyzeCompatibility({
   }
 
   return diagnostics;
+}
+
+function analyzeConfiguredImageInputs(
+  target: CompatibilityExecutionTarget,
+  installed: NonNullable<
+    CompatibilityAnalyzerInput["capabilities"]["harnesses"][HarnessId]
+  >,
+  diagnostics: CompatibilityDiagnostic[]
+): void {
+  if (!target.imageFileRefs || target.imageFileRefs.length === 0) {
+    return;
+  }
+
+  const state = installed.effective?.promptInputs?.images;
+  const declaration = installed.descriptor.promptInputs?.images;
+  if (!state || !declaration) {
+    return;
+  }
+
+  const code =
+    state.fidelity === CAPABILITY_FIDELITIES.UNSUPPORTED
+      ? COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNSUPPORTED
+      : state.fidelity === CAPABILITY_FIDELITIES.PARTIAL
+        ? COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_PARTIAL
+        : state.verification === CAPABILITY_VERIFICATION_STATUSES.UNKNOWN
+          ? COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNVERIFIED
+          : undefined;
+  if (!code) {
+    return;
+  }
+
+  const propertyPointer =
+    target.consumer.kind === FINAL_STEP_PHASES.QUEUE
+      ? `/steps/${target.consumer.stepIndex}/prompt`
+      : "/finalStep/prompt";
+  const harnessId = target.resolved.properties.harness;
+  diagnostics.push({
+    code,
+    severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+    harnessId,
+    capability: PROMPT_INPUT_CAPABILITY_KEYS.IMAGES,
+    consumer: target.consumer,
+    propertyPointer,
+    sourceTier: COMPATIBILITY_SOURCE_TIERS.PROMPT,
+    state,
+    message: getCompatibilityDiagnosticMessage(code, {
+      harnessId,
+      capability: PROMPT_INPUT_CAPABILITY_KEYS.IMAGES,
+      caveatCode: declaration.caveatCode,
+    }),
+    ...(getCompatibilityDiagnosticRemediation(code)
+      ? { remediation: getCompatibilityDiagnosticRemediation(code) }
+      : {}),
+  });
 }
 
 function analyzeConfiguredMcpFilters(

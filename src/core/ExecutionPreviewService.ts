@@ -479,9 +479,33 @@ export class ExecutionPreviewService {
       properties,
       resolvedSessionId
     );
+    const imageCompatibilityDiagnostics = analyzeCompatibility({
+      workflow,
+      executionTargets:
+        promptPlan.imageFileRefs.length > 0
+          ? [
+              {
+                consumer: target.isFinalStep
+                  ? { kind: FINAL_STEP_PHASES.FINAL_STEP }
+                  : {
+                      kind: FINAL_STEP_PHASES.QUEUE,
+                      stepIndex: target.stepIndex,
+                    },
+                resolved: {
+                  ...targetResolution,
+                  properties,
+                },
+                imageFileRefs: promptPlan.imageFileRefs,
+              },
+            ]
+          : [],
+      capabilities: this.options.capabilities,
+      workspace: { workspaceRoot: this.options.workspaceRoot },
+    });
     session.preparePrompt(
       promptPlan.promptWithInstruction,
-      promptPlan.tempFilePaths
+      promptPlan.tempFilePaths,
+      promptPlan.imageFileRefs
     );
     const executionPlan = await harness.executionPlanBuilder.plan(session);
     const command = this.toCommandPreview(
@@ -518,6 +542,7 @@ export class ExecutionPreviewService {
         ...promptPlan.diagnostics,
         ...executionPlan.diagnostics,
         ...diagnostics,
+        ...imageCompatibilityDiagnostics,
       ]),
     };
   }

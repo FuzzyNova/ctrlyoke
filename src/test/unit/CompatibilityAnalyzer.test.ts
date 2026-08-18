@@ -10,6 +10,7 @@ import {
   FINAL_STEP_PHASES,
   HARNESS_IDS,
   HOOK_EVENT_ORDER,
+  PROMPT_INPUT_CAPABILITY_KEYS,
   type HookEvent,
   type HarnessId,
 } from "../../types/DashboardConstants";
@@ -70,6 +71,7 @@ function installed(
       },
       hooks: hookDeclarations,
       mcp: { perServerToolFiltering: declaration },
+      promptInputs: { images: declaration },
     },
     effective: {
       permissions: {
@@ -79,6 +81,7 @@ function installed(
       },
       hooks: hookState,
       mcp: { perServerToolFiltering: state },
+      promptInputs: { images: state },
     },
   };
 }
@@ -95,10 +98,44 @@ function snapshot(
     schemaVersion: 1,
     enabledDomains: [
       CAPABILITY_DOMAINS.PERMISSIONS,
+      CAPABILITY_DOMAINS.PROMPT_INPUTS,
       CAPABILITY_DOMAINS.HOOKS,
       CAPABILITY_DOMAINS.MCP,
     ],
     harnesses,
+  };
+}
+
+function withImageCapability(
+  base: InstalledHarnessCapabilities,
+  fidelity: "exact" | "partial" | "unsupported",
+  verification: "verified" | "unknown" = "verified"
+): InstalledHarnessCapabilities {
+  const state = {
+    fidelity,
+    mechanism: fidelity === "unsupported" ? "none" : "native",
+    verification,
+  } as const;
+  const declaration = {
+    fidelity,
+    mechanism: state.mechanism,
+    verification: {
+      kind: "manual" as const,
+      reference: "test",
+      basis: "cli-version" as const,
+      verifiedVersions: ["1.0.0"],
+    },
+  };
+  return {
+    ...base,
+    descriptor: {
+      ...base.descriptor,
+      promptInputs: { images: declaration },
+    },
+    effective: {
+      ...base.effective,
+      promptInputs: { images: state },
+    },
   };
 }
 
@@ -217,6 +254,77 @@ suite("CompatibilityAnalyzer", () => {
       })
     );
     assert.deepStrictEqual(diagnostics, []);
+  });
+
+  test("analyzes only resolved image attachments, including final-step consumers", () => {
+    const workflow: PromptFile = {
+      steps: [
+        { prompt: "Review @shot.png", harness: HARNESS_IDS.CODEX_CLI },
+        {
+          prompt: "Ignore @disabled.png",
+          harness: HARNESS_IDS.CODEX_CLI,
+          enabled: false,
+        },
+        { type: "script", script: "echo @script.png" },
+      ],
+      finalStep: {
+        prompt: "Review @final.webp",
+        harness: HARNESS_IDS.CODEX_CLI,
+      },
+    };
+    const base = snapshot();
+    const capabilities = {
+      ...base,
+      harnesses: {
+        ...base.harnesses,
+        [HARNESS_IDS.CODEX_CLI]: withImageCapability(
+          base.harnesses[HARNESS_IDS.CODEX_CLI],
+          "unsupported"
+        ),
+      },
+    };
+    const targets = enumerateCompatibilityTargets(workflow, (prompt, file) =>
+      resolveExecutionProperties(prompt, file, {
+        defaults,
+        hostCanProvidePty: false,
+      })
+    ).map((target) => ({
+      ...target,
+      imageFileRefs:
+        target.consumer.kind === FINAL_STEP_PHASES.QUEUE
+          ? target.consumer.stepIndex === 0
+            ? ["shot.png"]
+            : []
+          : ["final.webp"],
+    }));
+
+    const diagnostics = analyzeCompatibility({
+      workflow,
+      executionTargets: targets,
+      capabilities,
+    });
+    assert.deepStrictEqual(
+      diagnostics.map((diagnostic) => ({
+        code: diagnostic.code,
+        consumer: diagnostic.consumer,
+        capability: diagnostic.capability,
+        propertyPointer: diagnostic.propertyPointer,
+      })),
+      [
+        {
+          code: COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNSUPPORTED,
+          consumer: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          capability: PROMPT_INPUT_CAPABILITY_KEYS.IMAGES,
+          propertyPointer: "/steps/0/prompt",
+        },
+        {
+          code: COMPATIBILITY_DIAGNOSTIC_CODES.IMAGE_INPUT_UNSUPPORTED,
+          consumer: { kind: FINAL_STEP_PHASES.FINAL_STEP },
+          capability: PROMPT_INPUT_CAPABILITY_KEYS.IMAGES,
+          propertyPointer: "/finalStep/prompt",
+        },
+      ]
+    );
   });
 
   test("emits a blocking unavailable error only for an actual consumer", () => {

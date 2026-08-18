@@ -25,6 +25,8 @@ import type {
 } from "@root/types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
 import type { CompatibilityExecutionTarget } from "@root/types/CompatibilityAnalyzer";
+import { parseAllFileReferences } from "@root/utils/FileReferenceParser";
+import { isImageRefPath } from "@root/types/DashboardConstants";
 
 export interface UseCompatibilityDiagnosticsResult {
   diagnostics: CompatibilityDiagnostic[];
@@ -72,6 +74,18 @@ function toCoreStep(step: WorkflowStep): CoreWorkflowStep {
   return step.type === STEP_TYPES.SCRIPT
     ? (step as CoreScriptStep)
     : toCorePromptStep(step);
+}
+
+function authoredImageRefs(prompt: string): readonly string[] {
+  return parseAllFileReferences(prompt)
+    .filter(
+      (reference) =>
+        !reference.isDirectory &&
+        reference.startLine === undefined &&
+        reference.endLine === undefined &&
+        isImageRefPath(reference.path)
+    )
+    .map((reference) => reference.path);
 }
 
 function applyPromptProperties(
@@ -210,7 +224,18 @@ export function useCompatibilityDiagnostics(
       workflow,
       (prompt, resolvedWorkflow) =>
         resolveExecutionProperties(prompt, resolvedWorkflow, context)
-    );
+    ).map((target) => ({
+      ...target,
+      imageFileRefs: authoredImageRefs(
+        (() => {
+          const step =
+            target.consumer.kind === FINAL_STEP_PHASES.QUEUE
+              ? workflow.steps?.[target.consumer.stepIndex]
+              : workflow.finalStep;
+          return step && step.type !== STEP_TYPES.SCRIPT ? step.prompt : "";
+        })()
+      ),
+    }));
 
     return {
       diagnostics: analyzeCompatibility({

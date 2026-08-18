@@ -985,7 +985,8 @@ export class CliIntegration extends HarnessIntegration {
 
     session.preparePrompt(
       prepared.promptWithInstruction,
-      prepared.tempFilePaths
+      prepared.tempFilePaths,
+      prepared.imageFileRefs
     );
 
     if (injectMode) {

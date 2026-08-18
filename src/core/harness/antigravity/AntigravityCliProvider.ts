@@ -24,6 +24,7 @@ import type {
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import {
   MCP_CAVEAT_CODES,
+  PROMPT_INPUT_CAVEAT_CODES,
   type HarnessCapabilityFacts,
 } from "../../../types/CompatibilityTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
@@ -58,6 +59,12 @@ const ANTIGRAVITY_MCP_FILTERING_CAPABILITY = {
     verifiedVersions: [">=1.1.12"],
   },
   caveatCode: MCP_CAVEAT_CODES.NO_PER_SERVER_FILTERING,
+} as const;
+
+const ANTIGRAVITY_IMAGE_INPUT_CAPABILITY = {
+  fidelity: "unsupported",
+  mechanism: "none",
+  caveatCode: PROMPT_INPUT_CAVEAT_CODES.NO_NATIVE_IMAGE_ATTACHMENT,
 } as const;
 
 const ANTIGRAVITY_MIN_VERSION = "1.0.15";
@@ -135,6 +142,7 @@ export class AntigravityCliProvider implements ICliProvider {
       mcp: {
         perServerToolFiltering: ANTIGRAVITY_MCP_FILTERING_CAPABILITY,
       },
+      promptInputs: { images: ANTIGRAVITY_IMAGE_INPUT_CAPABILITY },
     };
   }
   readonly logParser = new AntigravityLogParser();

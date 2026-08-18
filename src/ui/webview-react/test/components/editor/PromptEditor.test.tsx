@@ -19,6 +19,28 @@ vi.mock("@components/shared/HarnessIcon", () => ({
   HarnessIcon: () => null,
 }));
 
+vi.mock("../../../hooks/useCompatibilityDiagnostics", () => ({
+  useCompatibilityDiagnostics: () => ({
+    isChecking: false,
+    diagnostics: [
+      {
+        code: "compatibility.promptInputs.images.unsupported",
+        severity: "warning",
+        harnessId: "codex-cli",
+        capability: "images",
+        consumer: { kind: "queue", stepIndex: 0 },
+        state: {
+          fidelity: "unsupported",
+          mechanism: "none",
+          verification: "verified",
+        },
+        message: "Image prompt inputs are not supported by Codex CLI.",
+        remediation: "Choose a harness with native image attachment support.",
+      },
+    ],
+  }),
+}));
+
 import {
   PromptEditor,
   type PromptFileAction,
@@ -33,7 +55,7 @@ import {
   EXECUTION_STATES,
   STEP_STATUS,
 } from "@/types/messages";
-import { STEP_TYPES } from "@root/types/DashboardConstants";
+import { HARNESS_IDS, STEP_TYPES } from "@root/types/DashboardConstants";
 
 // The vscode mock is set up in test/setup.ts (window.vscodeApi).
 const postMessageSpy = vi.fn();
@@ -339,5 +361,26 @@ describe("PromptEditor — prompt-file action", () => {
       type: MESSAGE_TYPES.OPEN_PROMPT_FILE,
       path: "C:/workspace/.ctrlyoke/prompts/draft.prompt.md",
     });
+  });
+});
+
+describe("PromptEditor — image compatibility feedback", () => {
+  it("keeps image compatibility feedback beside the editable prompt", () => {
+    useEditorStore.getState().selectPrompt(
+      { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+      { prompt: "Review @screen.png", harness: HARNESS_IDS.CODEX_CLI }
+    );
+
+    render(<PromptEditor />);
+
+    expect(
+      screen.getByText(/Image prompt inputs are not supported/)
+    ).toBeVisible();
+    expect(
+      screen.getByText(/Image prompt inputs are not supported/)
+    ).toHaveTextContent("Codex CLI");
+    expect(
+      document.getElementById("prompt-image-compatibility")
+    ).not.toBeNull();
   });
 });
