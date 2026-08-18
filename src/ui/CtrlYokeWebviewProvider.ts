@@ -56,6 +56,9 @@ import { DashboardBroadcastHub } from "./DashboardBroadcastHub";
 import { IS_DEV_MODE } from "../utils/BuildConfig";
 import { retryWithBackoff } from "../utils/RetryUtils";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
+import { VsCodeAdapter } from "../platform/VsCodeAdapter";
+import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
+import { SecretRegistryService } from "./SecretRegistryService";
 
 // Re-export CliOutput for external use
 export type { CliOutput } from "../types/WebviewMessageTypes";
@@ -137,6 +140,10 @@ export class CtrlYokeWebviewProvider
     const postMessage = (message: any) => this.postMessage(message);
     const getOrchestrator = () => this.workflowOrchestrator;
     const getOutputHistoryManager = () => this.outputHistoryManager;
+    const secretRegistry = new SecretRegistryService({
+      secretStore: new VsCodeAdapter(context).getSecretStore(),
+      getWorkspaceRoot: getVsCodeWorkspaceRoot,
+    });
 
     // Create delegate classes
     this.settingsSync = new WebviewSettingsSync(
@@ -177,7 +184,8 @@ export class CtrlYokeWebviewProvider
         getServerUrl: () => this.runningServerUrl,
         getAvailableIps: () => this.runningServerAvailableIps,
         onPanelReady: () => this.handlePanelReady(),
-      }
+      },
+      secretRegistry
     );
 
     // Listen for model registry updates

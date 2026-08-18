@@ -409,6 +409,18 @@ destination to link to. Place it after `permissions` with `codicon-key`;
 The drawer's existing header `ScopeToggle` (User/Workspace) already provides
 the scope model — the Secrets tab reads `activeScope` like every other section.
 
+Backend half (implemented):
+
+- [x] Extension-host `SecretRegistryService` lists managed names and declared
+      environment names per scope, classifies their safe state, persists only
+      description/timestamp metadata beside the encrypted value, and computes
+      MCP/workflow usage.
+- [x] Webview list/set/delete contracts and the Zustand registry store carry
+      names and metadata only. Secret writes are write-only: the response is
+      `{ name, scope, state: "set" }` and never echoes the submitted value.
+- [ ] The Secrets tab UI, completion triggers, properties panel, and CLI remain
+      later Phase 5/3/6 work.
+
 **List view.** One row per name:
 
 | Name                | State                            | Actions                                |

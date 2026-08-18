@@ -7,6 +7,7 @@ import {
 import { resolveNamedRelativePath } from "../platform/WorkspaceRootResolver";
 import {
   MESSAGE_TYPES,
+  SECRET_REGISTRY_ACTION_STATES,
   LOG_LEVELS,
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
@@ -54,6 +55,8 @@ import type {
   ShowNativeFeedbackMessage,
   CreateEndConditionScriptMessage,
   RetryHarnessDetectionMessage,
+  DeleteSecretMessage,
+  SetSecretMessage,
 } from "../types/WebviewMessageTypes";
 import type {
   WorkflowVariantCreatedMessage,
@@ -64,6 +67,7 @@ import { WorkflowMutationCoordinator } from "./WorkflowMutationCoordinator";
 import { PromptEditorSupportService } from "./PromptEditorSupportService";
 import { HarnessFileMessageService } from "./HarnessFileMessageService";
 import { McpManagerService } from "./McpManagerService";
+import { SecretRegistryService } from "./SecretRegistryService";
 import { TerminalMessageHandlers } from "./TerminalMessageHandlers";
 import { WorkflowStepHandlers } from "./WorkflowStepHandlers";
 import {
@@ -166,7 +170,8 @@ export class WebviewMessageRouter {
     private readonly serializer: WorkflowSerializer,
     private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
     private readonly historySearchService: HistorySearchService,
-    private readonly callbacks: WebviewRouterCallbacks
+    private readonly callbacks: WebviewRouterCallbacks,
+    private readonly secretRegistry?: SecretRegistryService
   ) {
     this.undoRedoCoordinator = new UndoRedoCoordinator(getOrchestrator);
     this.mutationCoordinator = new WorkflowMutationCoordinator(getOrchestrator);
@@ -285,6 +290,7 @@ export class WebviewMessageRouter {
     this.registerPromptEditor(table);
     this.registerEditorSupport(table);
     this.registerMcpManager(table);
+    this.registerSecretRegistry(table);
     this.registerHarnessFiles(table);
     this.registerOutputHistory(table);
     this.registerWorkflowVariants(table);
@@ -907,6 +913,80 @@ export class WebviewMessageRouter {
         ctx,
         message as RequestMcpConfigPreviewMessage
       );
+    });
+  }
+
+  private registerSecretRegistry(table: DispatchTable): void {
+    if (!this.secretRegistry) return;
+
+    table.set(MESSAGE_TYPES.REQUEST_SECRET_REGISTRY, async (message, ctx) => {
+      try {
+        ctx.emit({
+          type: MESSAGE_TYPES.SECRET_REGISTRY_UPDATE,
+          scope: message.scope,
+          secrets: await this.secretRegistry!.list(message.scope),
+        });
+      } catch (error) {
+        this.emitSecretRegistryFailure(ctx, "load secret registry", error);
+      }
+    });
+
+    table.set(MESSAGE_TYPES.SET_SECRET, async (message, ctx) => {
+      try {
+        const request = message as SetSecretMessage;
+        await this.secretRegistry!.set(
+          request.name,
+          request.scope,
+          request.value,
+          request.description
+        );
+        ctx.emit({
+          type: MESSAGE_TYPES.SECRET_SET,
+          name: request.name,
+          scope: request.scope,
+          state: SECRET_REGISTRY_ACTION_STATES.SET,
+        });
+      } catch (error) {
+        // A credential-store implementation must not be able to put the
+        // submitted value into an error that crosses this transport boundary.
+        this.emitSecretRegistryFailure(ctx, "set secret", error, true);
+      }
+    });
+
+    table.set(MESSAGE_TYPES.DELETE_SECRET, async (message, ctx) => {
+      try {
+        const request = message as DeleteSecretMessage;
+        await this.secretRegistry!.delete(request.name, request.scope);
+        ctx.emit({
+          type: MESSAGE_TYPES.SECRET_DELETED,
+          name: request.name,
+          scope: request.scope,
+          state: SECRET_REGISTRY_ACTION_STATES.DELETED,
+        });
+      } catch (error) {
+        this.emitSecretRegistryFailure(ctx, "delete secret", error);
+      }
+    });
+  }
+
+  private emitSecretRegistryFailure(
+    ctx: WebviewClientContext,
+    action: string,
+    error: unknown,
+    hideDetails = false
+  ): void {
+    const message = hideDetails
+      ? `${action} failed.`
+      : `${action} failed: ${getErrorMessage(error)}`;
+    Log.error(
+      hideDetails
+        ? `[WebviewMessageRouter] ${action} failed while writing secret data.`
+        : `[WebviewMessageRouter] ${message}`
+    );
+    ctx.emit({
+      type: MESSAGE_TYPES.WORKFLOW_ACTION_FAILED,
+      action,
+      error: message,
     });
   }
 

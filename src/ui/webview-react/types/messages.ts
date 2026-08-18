@@ -47,6 +47,8 @@ export {
   getExecutionPhaseForScriptOutputSource,
   getStreamingChunkKey,
   SETTING_SCOPES,
+  SECRET_REGISTRY_STATES,
+  SECRET_REGISTRY_ACTION_STATES,
   DISCOVERY_SOURCES,
   HARNESS_FILE_TYPES,
   FOOTER_PICKERS,
@@ -87,6 +89,8 @@ export {
   type ShellKind,
   type SettingScope,
   type SettingWriteScope,
+  type SecretRegistryState,
+  type SecretRegistryActionState,
   type DiscoverySource,
   type HarnessFileType,
   type FooterPicker,
@@ -193,6 +197,14 @@ export {
   type McpRegistryServersUpdateMessage,
   type McpLocalScanResultMessage,
   type McpRegistrySearchResultMessage,
+  type SecretRegistryUsage,
+  type SecretRegistryEntry,
+  type RequestSecretRegistryMessage,
+  type SetSecretMessage,
+  type DeleteSecretMessage,
+  type SecretRegistryUpdateMessage,
+  type SecretSetMessage,
+  type SecretDeletedMessage,
 } from "@root/types/WebviewMessageTypes";
 
 // Re-export WorkflowSummary, PriorContext, McpServerConfig, ToolPermissionsOverride, PreCondition, and helpers from CtrlYokeTypes

@@ -132,6 +132,14 @@ export const MESSAGE_TYPES = {
   CONFIG_VALUE: "configValue", // Extension -> Webview: Send config value
   BROWSE_AND_ADD_EXTERNAL_ROOT: "browseAndAddExternalRoot", // Webview -> Extension: { scope } OS folder picker, appends result to permissions.allowedExternalFileRoots for that scope
 
+  // Secret registry - Webview <-> Extension
+  REQUEST_SECRET_REGISTRY: "requestSecretRegistry",
+  SECRET_REGISTRY_UPDATE: "secretRegistryUpdate",
+  SET_SECRET: "setSecret",
+  SECRET_SET: "secretSet",
+  DELETE_SECRET: "deleteSecret",
+  SECRET_DELETED: "secretDeleted",
+
   // Workflow Properties - Settings Panel <-> Extension
   UPDATE_WORKFLOW_PROPERTY: "updateWorkflowProperty", // Webview -> Extension: Save workflow property (to working file or pending)
   UPDATE_WORKFLOW_PROPERTIES: "updateWorkflowProperties", // Webview -> Extension: Save multiple workflow properties atomically
@@ -1943,6 +1951,25 @@ export type SettingWriteScope = Exclude<
   SettingScope,
   typeof SETTING_SCOPES.DEFAULT
 >;
+
+/** States exposed by the secret registry. Values are never part of these states. */
+export const SECRET_REGISTRY_STATES = {
+  MANAGED_AND_SET: "managed-and-set",
+  FROM_ENVIRONMENT_AND_DETECTED: "from-environment-and-detected",
+  FROM_ENVIRONMENT_AND_NOT_FOUND: "from-environment-and-not-found",
+} as const;
+
+export type SecretRegistryState =
+  (typeof SECRET_REGISTRY_STATES)[keyof typeof SECRET_REGISTRY_STATES];
+
+/** Results acknowledged by write-only secret registry operations. */
+export const SECRET_REGISTRY_ACTION_STATES = {
+  SET: "set",
+  DELETED: "deleted",
+} as const;
+
+export type SecretRegistryActionState =
+  (typeof SECRET_REGISTRY_ACTION_STATES)[keyof typeof SECRET_REGISTRY_ACTION_STATES];
 
 // ============================================================================
 // DISCOVERY SOURCES - Origin labels for discovered agent/skill files

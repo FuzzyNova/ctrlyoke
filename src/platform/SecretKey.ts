@@ -6,6 +6,8 @@ export const SECRET_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 
 const USER_SECRET_PREFIX = "ctrlyoke.secret.user";
 const WORKSPACE_SECRET_PREFIX = "ctrlyoke.secret.ws";
+const USER_SECRET_METADATA_PREFIX = "ctrlyoke.secret.meta.user";
+const WORKSPACE_SECRET_METADATA_PREFIX = "ctrlyoke.secret.meta.ws";
 const WORKSPACE_HASH_LENGTH = 12;
 
 export type SecretName = string & { readonly __secretName: unique symbol };
@@ -59,4 +61,32 @@ export function workspaceSecretKeyForRoot(
   name: string
 ): string {
   return workspaceSecretKey(workspaceSecretHash(workspaceRoot), name);
+}
+
+/** Build the user-scoped metadata key for a managed secret. */
+export function userSecretMetadataKey(name: string): string {
+  validateSecretName(name);
+  return `${USER_SECRET_METADATA_PREFIX}.${name}`;
+}
+
+/** Build a workspace-scoped metadata key from the stable workspace hash. */
+export function workspaceSecretMetadataKey(
+  workspaceHash: string,
+  name: string
+): string {
+  validateSecretName(name);
+  if (!/^[0-9a-f]{12}$/i.test(workspaceHash)) {
+    throw new Error(
+      `Invalid workspace secret hash "${workspaceHash}". Expected 12 hexadecimal characters.`
+    );
+  }
+  return `${WORKSPACE_SECRET_METADATA_PREFIX}.${workspaceHash.toLowerCase()}.${name}`;
+}
+
+/** Build a workspace-scoped metadata key directly from a workspace root. */
+export function workspaceSecretMetadataKeyForRoot(
+  workspaceRoot: string,
+  name: string
+): string {
+  return workspaceSecretMetadataKey(workspaceSecretHash(workspaceRoot), name);
 }
