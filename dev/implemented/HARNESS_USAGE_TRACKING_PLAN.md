@@ -1,13 +1,14 @@
 # Harness Usage Tracking Plan
 
 **Status:** Stage 9 optional-provider research complete; stages 1–8 are
-implemented. Enterprise/admin integrations remain explicitly deferred.
+implemented. Copilot account-quota collection was added August 18, 2026;
+enterprise/admin integrations remain explicitly deferred.
 **Provider research:** June 15, 2026; local CLI surfaces rechecked August 9,
 2026 (Claude Code `2.1.225`, Codex CLI `0.146.0`, GitHub Copilot CLI `1.0.78`)
-**Revised:** August 9, 2026 — final codebase pass; Codex app-server source,
-idempotent per-harness rollups, normalized snapshot persistence, combined
-staging order, and Stage 9 research closeout added
-**Related:** `PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`
+**Revised:** August 18, 2026 — Copilot account-quota research superseded the
+August 9 negative personal-quota conclusion; the OTel findings remain current
+**Related:** [`PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`](PROMPT_TOTAL_TOKEN_USAGE_PLAN.md);
+[`COPILOT_USAGE_PERIOD_PLAN.md`](../backlog/COPILOT_USAGE_PERIOD_PLAN.md)
 
 ---
 
@@ -24,9 +25,10 @@ should use different collection strategies per harness:
    `account/rateLimits/read` JSON-RPC method for live ChatGPT quota, with local
    session JSONL `token_count.rate_limits` as a defensive last-known fallback.
    No standalone top-level `codex status` command exists in the rechecked CLI.
-3. **GitHub Copilot CLI:** OTel spans (already wired in ctrlyoke) for observed
-   token usage; personal monthly AI credit balance appears only in GitHub UI and
-   the CLI TUI — no documented personal REST/GraphQL quota API was found.
+3. **GitHub Copilot CLI:** the server-scoped `account.getQuota` RPC over the
+   installed CLI's JSON-RPC stdio boundary provides authenticated monthly quota;
+   OTel spans (already wired in ctrlyoke) remain the source for observed token
+   totals and live context-window usage. These are separate measurements.
 4. **Antigravity, OpenCode, Qwen:** ctrlyoke-observed usage only.
 
 The MVP is **observed usage plus last-known provider quota**. Do not fabricate
@@ -211,6 +213,17 @@ internal rollout fallback.
 
 ### GitHub Copilot CLI
 
+The August 9, 2026 local research below is retained as historical evidence: it
+correctly found no documented personal REST/GraphQL quota API, but its broader
+"no collector" conclusion was superseded on August 18, 2026. The installed
+CLI/SDK contract and GitHub's usage documentation now expose the experimental,
+server-scoped `account.getQuota` RPC. `CopilotQuotaClient` uses that RPC over a
+short-lived stdio process, with the same installed launcher and authenticated
+runtime as the harness. It performs the handshake, sends one quota request,
+and shuts down without `session.create`, a prompt, or a model turn; a
+method-not-found response is treated as an unsupported capability rather than
+as a hardcoded CLI-version failure.
+
 Confirmed surfaces:
 
 - `copilot --help` lists a `billing` help topic.
@@ -246,20 +259,22 @@ Implementation implications:
   `CopilotLogParser` emits per-`chat` span `gen_ai.usage.*` attributes during
   execution. Feed that through the shared attempt totals rather than adding a
   Copilot-specific usage parser.
-- The structured-quota spike is closed negatively: use the existing
-  `WorkflowTokenTotals.byLocalDay` → observed rollup, plus the GitHub personal
-  usage-dashboard link. Do not add a Copilot quota collector and do not
-  implement the stale `ai-credits` item name.
-- Copilot is the one harness where **tokens are not the billing unit**. Its usage
-  card should show AI credits (or premium requests on legacy billing) as the
-  headline and tokens as secondary. Do not synthesize a dollar figure from token
-  counts for Copilot.
+- The structured-quota spike was closed negatively on August 9 because no
+  documented personal REST/GraphQL endpoint was found. That conclusion was
+  superseded on August 18 by the server-scoped `account.getQuota` RPC:
+  `CopilotQuotaClient` now supplies normalized provider-live quota while the
+  existing `WorkflowTokenTotals.byLocalDay` rollup remains the observed-usage
+  source. Do not implement the stale `ai-credits` item name.
+- Copilot is the one harness where **observed tokens are not the billing unit**.
+  The provider-live `account.getQuota` windows currently expose GitHub's
+  request-based quantities as `REQUESTS`; OTel observed tokens remain secondary
+  context. Do not synthesize AI credits or a dollar figure from token counts.
 - Investigate a **Copilot status-line collector** only if `/statusline quota
 ai-used` can emit structured data. The help topic confirms item
   names, not a public JSON schema.
-- For personal account quota, prefer: an "Open GitHub usage dashboard" link;
-  local/session usage; last-known CLI TUI data when available. Avoid undocumented
-  GitHub private endpoints.
+- For personal account quota, use the CLI `account.getQuota` capability and its
+  normalized last-known snapshot; retain the "Open GitHub usage dashboard"
+  link as a user-facing reference. Avoid undocumented GitHub private endpoints.
 - Add optional enterprise/org metrics integration only when a user supplies an
   authorized token and explicitly chooses org/enterprise scope.
 
@@ -580,10 +595,21 @@ exact duplication both plans warn against.
       data or only TUI text — `quota` and `ai-used` are TUI-only in the
       installed 1.0.78 CLI; retain OTel-derived observed totals and the GitHub
       dashboard link
-- [x] Show AI credits (not dollars) as Copilot's headline unit
+- [x] Keep observed token totals separate from the provider-live request-based
+      quota and do not synthesize AI credits or dollars from token counts
 - [x] Add a GitHub usage dashboard link for personal accounts
+- [x] Add the server-scoped `account.getQuota` collector over the installed
+      Copilot CLI JSON-RPC boundary; it uses no session or model turn and treats
+      method-not-found as an unsupported capability
 - [ ] Optional enterprise/org metrics integration behind explicit auth + scope
       prompts
+
+Phase 3 conclusion: Copilot now has a provider-live account-quota path in
+addition to its existing OTel path. `account.getQuota` supplies authenticated
+monthly entitlement and reset data; OTel `session.usage_info` supplies the live
+context-window numerator/denominator and OTel billing attributes supply
+observed per-call token totals. The three measurements remain independent and
+are not combined. Enterprise/org metrics remain explicitly deferred.
 
 ### Phase 4: Antigravity Research
 

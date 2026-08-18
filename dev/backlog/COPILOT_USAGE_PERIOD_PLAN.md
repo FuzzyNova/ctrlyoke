@@ -1,6 +1,6 @@
 # Copilot Usage-Period Quota Plan
 
-**Status:** Proposed  
+**Status:** Phase 5 incomplete — August 18, 2026
 **Priority:** P1  
 **Researched:** August 16, 2026  
 **Verified locally:** GitHub Copilot CLI `1.0.80`; `@github/copilot-sdk`
@@ -382,12 +382,14 @@ continues to read only the synchronous cached snapshot.
 
 ### Phase 5: Documentation cleanup
 
-- [ ] Update the Copilot research/findings and Phase 3 conclusion in
+- [x] Update the Copilot research/findings and Phase 3 conclusion in
       `HARNESS_USAGE_TRACKING_PLAN.md`; retain the historical OTel finding but
       replace "no collector" with the server-scoped quota RPC.
-- [ ] Update harness-provider instructions with the account quota/context/OTel
+- [x] Update harness-provider instructions with the account quota/context/OTel
       separation.
-- [ ] Move this plan to `dev/implemented/` when acceptance criteria pass.
+- [ ] Move this plan to `dev/implemented/` after all acceptance criteria pass.
+      The current implementation lacks extension-lifecycle cancellation or
+      disposal for an in-flight quota probe.
 
 ## Tests
 
@@ -428,22 +430,34 @@ continues to read only the synchronous cached snapshot.
 
 ## Acceptance Criteria
 
-- A refresh against an authenticated supported Copilot CLI returns an exact
-  provider-live monthly percentage, used amount, entitlement, and reset time.
-- The collector starts no session, sends no prompt, and consumes no model turn.
-- The subprocess is short-lived and is reaped on success, error, timeout,
-  cancellation, and extension teardown.
-- The default implementation queries the same installed/authenticated Copilot
-  CLI used by the harness and does not ship a duplicate Copilot runtime.
-- Unknown quota keys and additive fields do not break known buckets.
-- Unlimited and overage states are not misrepresented as ordinary finite
-  remaining quota.
-- Raw quota/auth payloads and credentials never enter logs or durable storage.
-- Provider failure cannot block a workflow or erase a last-known good snapshot.
-- Copilot's compact usage badge and pre-launch warning use provider quota;
-  observed token totals remain separately labelled.
-- Production bundle/VSIX checks prove no platform-specific Copilot binary was
-  accidentally packaged.
+- [x] Met — an authenticated supported CLI response is normalized by
+  `normalizeCopilotAccountQuota` into provider-live percentage, used amount,
+  entitlement, and reset time; covered by `CopilotUsageNormalization.test.ts`.
+- [x] Met — `CopilotQuotaClient.test.ts` verifies no session/auth RPCs, no
+  prompt, and no model turn.
+- [ ] Unmet — `CopilotQuotaClient` uses one bounded probe and best-effort
+  `runtime.shutdown`, then waits and falls back to process-tree termination on
+  success, error, timeout, cancellation, or teardown failure, but the shipped
+  `HarnessUsageService` has no extension-lifecycle cancellation/disposal hook
+  for an in-flight probe. Add that lifecycle path before moving this plan.
+- [x] Met — launcher resolution uses the same installed `copilot` command as
+  the harness, and `assert-no-copilot-runtime.mjs` guards dependencies and
+  production bundles against a duplicate runtime.
+- [x] Met — normalization preserves valid unknown bucket keys and ignores
+  additive fields while retaining known buckets.
+- [x] Met — unlimited buckets omit finite `limit`/`percentUsed`, and overage
+  state is preserved; display and selection-assist tests cover the behavior.
+- [x] Met — only normalized quota fields are persisted; bounded stderr and
+  safe error-code tests ensure raw quota/auth data and credentials do not leak.
+- [x] Met — provider failures are non-throwing and
+  `HarnessUsageService.test.ts` verifies last-known snapshot preservation.
+- [x] Met — provider quota drives the compact badge and pre-launch warning;
+  observed OTel token totals remain separately labelled, covered by display and
+  selection-assist tests.
+- [x] Met — the production-build assertion checks all three bundles and
+  package dependencies for platform-specific Copilot runtime/binary content;
+  VSIX packaging is intentionally outside the normal gate per the Phase 2
+  packaging decision.
 
 ## References
 
