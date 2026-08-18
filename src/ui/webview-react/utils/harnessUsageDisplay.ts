@@ -1,11 +1,23 @@
-import { HARNESS_USAGE_STATUS_CODES } from "@root/types/DashboardConstants";
+import {
+  HARNESS_USAGE_STATUS_CODES,
+  HARNESS_USAGE_WINDOW_KINDS,
+} from "@root/types/DashboardConstants";
 import {
   isHarnessQuotaStale,
   isHarnessUsageWindowStale,
   type HarnessUsageSnapshot,
+  type HarnessUsageWindow,
 } from "@root/types/UsageTypes";
 import { HARNESS_STATUS_STRINGS, type HarnessStatusString } from "../types/messages";
 import { formatFutureTime } from "./time";
+
+function hasFiniteQuotaTotals(window: HarnessUsageWindow): boolean {
+  return Number.isFinite(window.used) && Number.isFinite(window.limit);
+}
+
+function formatQuotaNumber(value: number): string {
+  return value.toLocaleString();
+}
 
 export interface HarnessUsageDisplay {
   /** Bare percentage for compact badges, e.g. "25%". Undefined when no usable percentage exists. */
@@ -40,7 +52,7 @@ export function getHarnessUsageDisplay(
     return { quotaPhrase: "Needs auth" };
   }
   const windows = snapshot.quota.windows.filter(
-    (window) => window.percentUsed !== undefined
+    (window) => window.percentUsed !== undefined || window.isUnlimited === true
   );
   if (windows.length === 0) {
     return {
@@ -49,23 +61,46 @@ export function getHarnessUsageDisplay(
         : "No usage data",
     };
   }
-  const primaryPercent = Math.round(windows[0].percentUsed ?? 0);
+  const primaryPercentWindow = windows.find(
+    (window) => window.percentUsed !== undefined
+  );
+  const hasExplicitProviderQuotaDetails = windows.some(
+    (window) => window.isUnlimited === true || hasFiniteQuotaTotals(window)
+  );
+  const quotaPhrase = windows
+    .map((window) => {
+      const stale = isHarnessUsageWindowStale(snapshot.quota, window, now);
+      const finiteTotals = hasFiniteQuotaTotals(window);
+      const label = window.isUnlimited
+        ? "Unlimited"
+        : `${Math.round(window.percentUsed ?? 0)}% ${window.label}${
+            finiteTotals && window.kind === HARNESS_USAGE_WINDOW_KINDS.MONTHLY
+              ? " used"
+              : ""
+          }`;
+      const totals = finiteTotals
+        ? ` (${formatQuotaNumber(window.used!)} / ${formatQuotaNumber(window.limit!)})`
+        : "";
+      // A reset time only means something for a window that's still live —
+      // once stale (including a window whose own resetAt has already
+      // passed) the timestamp would just show a reset that already happened.
+      const resetSuffix =
+        !stale && window.resetAt !== undefined
+          ? `, resets ${formatFutureTime(window.resetAt, now)}`
+          : "";
+      const detail = `${label}${totals}${resetSuffix}`;
+      return stale ? `${detail} (stale)` : detail;
+    })
+    .join(" | ");
   return {
-    percentOnly: `${primaryPercent}%`,
-    quotaPhrase: windows
-      .map((window) => {
-        const label = `${Math.round(window.percentUsed ?? 0)}% ${window.label}`;
-        const stale = isHarnessUsageWindowStale(snapshot.quota, window, now);
-        // A reset time only means something for a window that's still live —
-        // once stale (including a window whose own resetAt has already
-        // passed) the timestamp would just show a reset that already happened.
-        const resetSuffix =
-          !stale && window.resetAt !== undefined
-            ? `, resets ${formatFutureTime(window.resetAt, now)}`
-            : "";
-        return stale ? `${label}${resetSuffix} (stale)` : `${label}${resetSuffix}`;
-      })
-      .join(" | "),
+    ...(primaryPercentWindow
+      ? {
+          percentOnly: `${Math.round(primaryPercentWindow.percentUsed ?? 0)}%`,
+        }
+      : {}),
+    quotaPhrase: hasExplicitProviderQuotaDetails
+      ? `Provider quota: ${quotaPhrase}`
+      : quotaPhrase,
   };
 }
 

@@ -372,12 +372,12 @@ continues to read only the synchronous cached snapshot.
 
 ### Phase 4: Display and selection assist
 
-- [ ] Show exact monthly percentage and reset time in current quota surfaces.
-- [ ] Show finite `used / limit` totals in the tooltip/details without changing
+- [x] Show exact monthly percentage and reset time in current quota surfaces.
+- [x] Show finite `used / limit` totals in the tooltip/details without changing
       the compact badge contract.
-- [ ] Represent unlimited quota truthfully and exclude it from near-limit
+- [x] Represent unlimited quota truthfully and exclude it from near-limit
       warnings.
-- [ ] Confirm fresh Copilot quota participates in selection assist and stale or
+- [x] Confirm fresh Copilot quota participates in selection assist and stale or
       unavailable data does not.
 
 ### Phase 5: Documentation cleanup

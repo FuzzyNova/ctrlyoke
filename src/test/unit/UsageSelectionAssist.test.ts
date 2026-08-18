@@ -5,6 +5,7 @@ import {
   HARNESS_USAGE_CONFIDENCE,
   HARNESS_USAGE_UNITS,
   HARNESS_USAGE_WINDOW_KINDS,
+  type HarnessId,
 } from "../../types/DashboardConstants";
 import type {
   HarnessQuotaSnapshot,
@@ -53,7 +54,7 @@ suite("UsageSelectionAssist", () => {
 
   function input(
     snapshots: readonly HarnessUsageSnapshot[],
-    queuedHarness = HARNESS_IDS.CLAUDE_CLI
+    queuedHarness: HarnessId = HARNESS_IDS.CLAUDE_CLI
   ) {
     return {
       queuedAttempts: [{ harnessId: queuedHarness }],
@@ -94,6 +95,77 @@ suite("UsageSelectionAssist", () => {
             fetchedAt: now - 6 * 60 * 1000,
           }),
         ])
+      ),
+      undefined
+    );
+  });
+
+  test("warns for a fresh finite Copilot monthly window, but not stale or unlimited data", () => {
+    const copilotSnapshot = snapshot(HARNESS_IDS.COPILOT_CLI, 95, {
+      windowMinutes: undefined,
+    });
+    copilotSnapshot.quota.windows[0] = {
+      ...copilotSnapshot.quota.windows[0],
+      id: "copilot:premium_interactions",
+      kind: HARNESS_USAGE_WINDOW_KINDS.MONTHLY,
+      label: "Premium interactions",
+      windowMinutes: undefined,
+      used: 1_425,
+      limit: 1_500,
+    };
+    assert.ok(
+      buildUsageSelectionWarning(
+        input([copilotSnapshot], HARNESS_IDS.COPILOT_CLI)
+      )
+    );
+
+    const stale = snapshot(HARNESS_IDS.COPILOT_CLI, 95, {
+      fetchedAt: now - 6 * 60 * 1000,
+      windowMinutes: undefined,
+    });
+    stale.quota.windows[0] = {
+      ...stale.quota.windows[0],
+      kind: HARNESS_USAGE_WINDOW_KINDS.MONTHLY,
+      windowMinutes: undefined,
+    };
+    assert.strictEqual(
+      buildUsageSelectionWarning(
+        input([stale], HARNESS_IDS.COPILOT_CLI)
+      ),
+      undefined
+    );
+
+    const unavailable = snapshot(HARNESS_IDS.COPILOT_CLI, 95, {
+      source: HARNESS_QUOTA_SOURCES.UNAVAILABLE,
+      windowMinutes: undefined,
+    });
+    unavailable.quota.windows[0] = {
+      ...unavailable.quota.windows[0],
+      kind: HARNESS_USAGE_WINDOW_KINDS.MONTHLY,
+      windowMinutes: undefined,
+    };
+    assert.strictEqual(
+      buildUsageSelectionWarning(
+        input([unavailable], HARNESS_IDS.COPILOT_CLI)
+      ),
+      undefined
+    );
+
+    const unlimited = snapshot(HARNESS_IDS.COPILOT_CLI, 95, {
+      windowMinutes: undefined,
+    });
+    unlimited.quota.windows[0] = {
+      ...unlimited.quota.windows[0],
+      kind: HARNESS_USAGE_WINDOW_KINDS.MONTHLY,
+      windowMinutes: undefined,
+      percentUsed: undefined,
+      used: 1_425,
+      limit: undefined,
+      isUnlimited: true,
+    };
+    assert.strictEqual(
+      buildUsageSelectionWarning(
+        input([unlimited], HARNESS_IDS.COPILOT_CLI)
       ),
       undefined
     );

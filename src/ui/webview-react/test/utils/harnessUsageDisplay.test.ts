@@ -94,6 +94,72 @@ describe("getHarnessUsageDisplay", () => {
     expect(display.quotaPhrase).toMatch(/^63% 5-hour, resets .+$/);
   });
 
+  it("shows provider monthly totals while keeping the compact badge percentage-only", () => {
+    const monthly = {
+      ...window,
+      kind: HARNESS_USAGE_WINDOW_KINDS.MONTHLY,
+      label: "monthly",
+      percentUsed: 37,
+      used: 555,
+      limit: 1_500,
+      resetAt: fetchedAt + 60 * 60 * 1000,
+    };
+    const display = getHarnessUsageDisplay(
+      snapshot([monthly], fetchedAt),
+      fetchedAt + 60_000
+    );
+    expect(display.percentOnly).toBe("37%");
+    expect(display.quotaPhrase).toMatch(
+      /^Provider quota: 37% monthly used \(555 \/ 1,500\), resets .+$/
+    );
+    expect(display.quotaPhrase).not.toContain("tokens");
+  });
+
+  it("renders an unlimited provider window without inventing a percentage or limit", () => {
+    const display = getHarnessUsageDisplay(
+      snapshot(
+        [
+          {
+            ...window,
+            percentUsed: undefined,
+            used: 12,
+            limit: undefined,
+            isUnlimited: true,
+          },
+        ],
+        fetchedAt
+      ),
+      fetchedAt + 60_000
+    );
+    expect(display.percentOnly).toBeUndefined();
+    expect(display.quotaPhrase).toBe("Provider quota: Unlimited");
+  });
+
+  it("does not combine observed token totals with provider quota totals", () => {
+    const monthly = {
+      ...window,
+      kind: HARNESS_USAGE_WINDOW_KINDS.MONTHLY,
+      label: "monthly",
+      percentUsed: 37,
+      used: 555,
+      limit: 1_500,
+    };
+    const usage = snapshot([monthly], fetchedAt);
+    usage.observed = {
+      monthly: {
+        input: 100_000,
+        output: 2_000,
+        total: 102_000,
+        since: fetchedAt,
+      },
+    };
+    const display = getHarnessUsageDisplay(usage, fetchedAt + 60_000);
+    expect(display.quotaPhrase).toContain("Provider quota");
+    expect(display.quotaPhrase).toContain("555 / 1,500");
+    expect(display.quotaPhrase).not.toContain("102,000");
+    expect(display.quotaPhrase).not.toContain("tokens");
+  });
+
   it("omits the reset time once the window itself is stale, rather than showing a past reset", () => {
     const fiveHour = { ...window, resetAt: fetchedAt + 60_000 };
     const display = getHarnessUsageDisplay(
