@@ -142,6 +142,13 @@ In particular, do not call `account.getCurrentAuth`: its generated types can
 contain tokens for some auth variants. Authentication failure should be inferred
 from the quota RPC error and normalized to a safe status code.
 
+Keep the transport comparison with `CodexAppServerClient` honest: Codex speaks
+newline-delimited JSON with a hand-rolled request matcher, while Copilot speaks
+`Content-Length`-framed JSON-RPC through `vscode-jsonrpc`. Reuse the shared
+*shape* (injected spawn, one bounded deadline, abort race, best-effort teardown)
+and factor out only what genuinely single-sources — do not force two different
+framings behind one abstraction just to satisfy DRY.
+
 Suggested narrow result:
 
 ```typescript
@@ -192,8 +199,20 @@ usageAllowedAfterLimit?: boolean;
 ```
 
 An unlimited bucket must never become `limit: -1`, `percentUsed: 0`, or a false
-"100% available" claim. Preserve its unlimited state explicitly or omit it from
-percentage-based warnings until the display supports that state.
+"100% available" claim. Represent it concretely as `isUnlimited: true` with
+`percentUsed` and `limit` **omitted**. That single choice is what makes the
+existing code behave correctly with no extra gating: `buildUsageSelectionWarning`
+(`UsageSelectionAssist.ts`) and `getHarnessUsageDisplay`
+(`webview-react/utils/harnessUsageDisplay.ts`) both already filter on
+`percentUsed !== undefined`, so an unlimited bucket is automatically excluded
+from near-limit warnings and from the compact badge. The display layer must then
+render "Unlimited" for such a window instead of falling through to
+"No usage data".
+
+The new optional fields survive persistence without further work —
+`normalizeWindow` and `stripPersistedQuota` in `HarnessUsageService.ts` spread
+the window/quota objects rather than allow-listing keys — but that is incidental,
+so lock it in with a round-trip test rather than assuming it.
 
 Do not assume `usedRequests / entitlementRequests` is a better percentage than
 the provider's `remainingPercentage`. The latter is authoritative, especially
@@ -265,45 +284,69 @@ provider quota, separate from ctrlyoke-observed tokens.
 - Do not use the undocumented private GitHub HTTP endpoint behind the runtime;
   the CLI JSON-RPC boundary owns auth, endpoint changes, and response decoding.
 
-Suggested safe error codes:
+Safe error codes:
 
+- `HARNESS_USAGE_STATUS_CODES.AUTH_REQUIRED` (the existing `"auth-required"`) for
+  the authentication case — **not** a `copilot-quota-auth-required` variant.
+  `getHarnessUsageDisplay` special-cases exactly that shared constant to render
+  "Needs auth"; a Copilot-prefixed code would silently fall through to the
+  generic phrase, and Codex already reuses the shared constant the same way.
 - `copilot-quota-unsupported`
-- `copilot-quota-auth-required`
 - `copilot-quota-timeout`
 - `copilot-quota-malformed-response`
 - `copilot-quota-probe-failed`
 
-Single-source these constants in the Copilot provider module or a shared status
-constant object; do not duplicate string literals across client, provider, and
-tests.
+Single-source the Copilot-specific codes as one exported `as const` object in
+`CopilotUsageNormalization.ts` — a leaf module both the client and the provider
+can import without a cycle (the provider imports the client). Do not duplicate
+string literals across client, provider, and tests.
 
 ## Implementation Phases
 
-### Phase 1: Transport spike and packaging guard
+Phase order note: normalization now lands **before** the transport client.
+`CopilotQuotaClient` returns `{ quota?: HarnessQuotaSnapshot }` and therefore
+depends on the normalizer and on the shared status codes, so building the client
+first would leave a step that cannot compile or be tested on its own.
+
+### Phase 1: Contract and normalization
+
+- [ ] Add `isUnlimited` / `overage` / `usageAllowedAfterLimit` to
+      `HarnessUsageWindow` in `src/types/UsageTypes.ts`.
+- [ ] Add `src/core/harness/copilot/CopilotUsageNormalization.ts` with defensive
+      account-quota wire guards, normalization, and the exported status codes.
+- [ ] Normalize known and unknown buckets in stable order.
+- [ ] Handle finite, unlimited, exhausted, overage-enabled, missing-reset, and
+      partially malformed snapshots.
+- [ ] Cover the persistence round-trip for the new optional window fields.
+
+### Phase 2: Transport and packaging guard
 
 - [ ] Add `vscode-jsonrpc` as the minimal runtime dependency and verify it
       bundles cleanly into the extension, MCP binary, and standalone CLI build.
-- [ ] Record pre/post `out/extension.js` and VSIX sizes.
+- [ ] Record pre/post `out/extension.js`, `out/mcp-server.js`, and `out/cli.js`
+      sizes in this document.
 - [ ] Add a production-build assertion that no `@github/copilot-*` platform
-      runtime or native Copilot binary is included in the VSIX.
+      runtime or native Copilot binary is packaged. Assert against
+      `package.json` dependencies plus the built bundles under `out/` — do not
+      make the guard depend on running `vsce package`, which is not part of the
+      normal build or test gate.
 - [ ] Convert the verified probe into `CopilotQuotaClient` with dependency
       injection, cancellation, timeout, and process-tree teardown.
 - [ ] Verify Windows PowerShell proxy, Windows npm shim, and direct Unix
       executable launcher shapes.
 
-### Phase 2: Normalization and provider wiring
+### Phase 3: Provider wiring
 
-- [ ] Add defensive account-quota wire guards and normalization.
-- [ ] Normalize known and unknown buckets in stable order.
-- [ ] Handle finite, unlimited, exhausted, overage-enabled, missing-reset, and
-      partially malformed snapshots.
 - [ ] Replace `CopilotUsageProvider`'s observed-only inheritance with the live
       pull provider.
 - [ ] Retain shared observed token rollups unchanged.
 - [ ] Refresh once after a completed/stopped/error Copilot attempt through the
-      usage service's existing debounce/single-flight path.
+      usage service's existing debounce/single-flight path
+      (`HarnessUsageService.refreshHarnessUsage` already debounces and
+      single-flights per harness, so the seam only needs to call it once per
+      terminal attempt).
 
-### Phase 3: Display and selection assist
+### Phase 4: Display and selection assist
 
 - [ ] Show exact monthly percentage and reset time in current quota surfaces.
 - [ ] Show finite `used / limit` totals in the tooltip/details without changing
@@ -313,7 +356,7 @@ tests.
 - [ ] Confirm fresh Copilot quota participates in selection assist and stale or
       unavailable data does not.
 
-### Phase 4: Documentation cleanup
+### Phase 5: Documentation cleanup
 
 - [ ] Update the Copilot research/findings and Phase 3 conclusion in
       `HARNESS_USAGE_TRACKING_PLAN.md`; retain the historical OTel finding but
