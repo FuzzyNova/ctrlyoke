@@ -1658,7 +1658,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                             ? "settings-worktree-branch-diagnostic"
                             : undefined
                         }
-                        className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono h-7`}
+                        className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono`}
                       />
                       <FieldDiagnostic
                         id="settings-worktree-branch-diagnostic"
