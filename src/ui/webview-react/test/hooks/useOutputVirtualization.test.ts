@@ -1,4 +1,4 @@
-import { renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { useOutputVirtualization } from "@hooks/useOutputVirtualization";
 import type { OutputRenderRow } from "@utils/outputRows";
@@ -114,5 +114,97 @@ describe("useOutputVirtualization scroll compensation", () => {
         result.current.rowVirtualizer as never
       )
     ).toBe(false);
+  });
+});
+
+describe("useOutputVirtualization live row measurement", () => {
+  it("remeasures an already-mounted row when its live render model changes", async () => {
+    let measuredHeight = 100;
+    const scrollElement = document.createElement("div");
+    const rowElement = document.createElement("div");
+    rowElement.dataset.index = "0";
+    rowElement.dataset.rowKey = "row-0";
+    scrollElement.appendChild(rowElement);
+    document.body.appendChild(scrollElement);
+
+    Object.defineProperties(scrollElement, {
+      clientHeight: { configurable: true, value: 600 },
+      scrollHeight: { configurable: true, value: 1000 },
+      scrollTop: { configurable: true, writable: true, value: 0 },
+    });
+    Object.defineProperties(rowElement, {
+      offsetHeight: {
+        configurable: true,
+        get: () => measuredHeight,
+      },
+      scrollHeight: {
+        configurable: true,
+        get: () => measuredHeight,
+      },
+    });
+    rowElement.getBoundingClientRect = () =>
+      ({
+        bottom: measuredHeight,
+        height: measuredHeight,
+        left: 0,
+        right: 360,
+        top: 0,
+        width: 360,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    const initialRow = {
+      key: "row-0",
+      rowKind: "plain-response",
+      target: { kind: "queue", index: 0 },
+      text: "initial response",
+      rawTextOutput: true,
+      animated: false,
+      estimateSize: 100,
+    } satisfies OutputRenderRow;
+    const initialRows: OutputRenderRow[] = [initialRow];
+    const { result, rerender, unmount } = renderHook(
+      ({ rows }: { rows: OutputRenderRow[] }) =>
+        useOutputVirtualization({
+          applyScrollTargetRef: {
+            current: () => ({ resolved: false, appliedDelta: 0 }),
+          },
+          getVirtualItemsRef: { current: () => [] },
+          isProgrammaticScrollRef: { current: false },
+          isMeasurementFlushInProgressRef: { current: false },
+          lastScrollEventAtRef: { current: null },
+          outputCollapsed: false,
+          outputContentWidth: 360,
+          outputFontSize: 13,
+          outputOverscan: 2,
+          outputOverscanRef: { current: 2 },
+          outputRef: { current: scrollElement },
+          outputVirtualizationRowThreshold: 0,
+          rowRenderIdentity: "live",
+          rows,
+          scrollSeekPlaceholderActive: false,
+          scrollSeekRestoreRequestedAtRef: { current: null },
+          scrollTargetRef: { current: { kind: "bottom" } },
+        }),
+      { initialProps: { rows: initialRows } }
+    );
+
+    act(() => {
+      result.current.measureRowElement(rowElement);
+    });
+
+    measuredHeight = 180;
+    rerender({
+      rows: [{ ...initialRow, text: "updated live response" }],
+    });
+
+    await waitFor(() => {
+      expect(result.current.rowLayout.rowSizesByKey.get("row-0")).toBe(180);
+    });
+
+    unmount();
+    scrollElement.remove();
   });
 });
