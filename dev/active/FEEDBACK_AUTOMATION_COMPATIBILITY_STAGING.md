@@ -3,7 +3,7 @@
 **Decided 2026-08-02.** Implementation order for the remaining work in three
 plans, none of which is a 0.1.0 release gate:
 
-- [`BROWSER_USER_FEEDBACK_PLAN.md`](../active/BROWSER_USER_FEEDBACK_PLAN.md)
+- [`BROWSER_USER_FEEDBACK_PLAN.md`](../implemented/BROWSER_USER_FEEDBACK_PLAN.md)
   — Phases 2, 2.5 (Site 3), 3, 4, and the Phase 5 guards.
 - [`AUTOMATION_API_PLAN.md`](../implemented/AUTOMATION_API_PLAN.md)
   — the per-step `ctrlyoke run --headless --json` v1 contract, in full.
@@ -25,9 +25,10 @@ and the terminal handlers, and a two-tab isolation test exists
 (`CoreFeedbackMigration.test.ts`). It landed across commits `6b1e8040`
 (2026-07-24), `aad4be61` (2026-08-02), and `effbc9be` (2026-08-06) — all
 before this document's last grooming pass — but was never marked done in the
-queue below; that is corrected here. **Stages D, F, and G remain genuinely
-unstarted.** The next unblocked step is **Stage D** (CLI validation): it is
-small, self-contained, and depends on nothing else outstanding. Stage G's
+queue below; that is corrected here. **Stage F has since been completed
+(2026-08-17, steps 18-24); Stages D and G remain genuinely unstarted.** The
+next unblocked step is **Stage D** (CLI validation): it is small,
+self-contained, and depends on nothing else outstanding. Stage G's
 dry-run leg is still the only item in either plan with a real unbuilt
 dependency — [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md)
 remains **Proposed**, with no `SecretStore`, no `${secret:...}` interpolation,
@@ -45,8 +46,8 @@ dependency grounds this document reasons from: unredacted run artifacts already
 written cannot be retracted, and Stage B shipped a writer whose v1 contract
 promises verbatim condition stdout/stderr. Stage G's dry-run leg is therefore no
 longer waiting on an unscheduled plan — it is waiting on P0 work with an owner.
-Nothing else in this queue changes; D and F remain the next unblocked steps. See
-the revised recommendation at the end.
+Nothing else in this queue changes; D and F were the next unblocked steps at the
+time (F has since landed, leaving D). See the revised recommendation at the end.
 
 ---
 
@@ -678,8 +679,8 @@ Two items stand between this document and being fully closed out:
    compatibility docs, the Codex partial-support investigation — has no such
    dependency and can proceed without the Secrets plan.
 
-**Recommendation (revised 2026-08-14):** do D and F next, in either order — both
-are small, independent, and fully unblocked. Then start G's non-dry-run work
+**Recommendation (revised 2026-08-17):** F is done. **Stage D is now the only
+small, fully unblocked piece left.** Then start G's non-dry-run work
 (capability domains one at a time, per the plan's own completeness-test
 discipline).
 

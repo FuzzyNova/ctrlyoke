@@ -1545,18 +1545,14 @@ export function createMessageHandlers(
       notifyUser(toastMessage, USER_FEEDBACK_SEVERITY.SUCCESS);
       return;
     }
-    uiStore.showToast(
-      toastMessage,
-      USER_FEEDBACK_SEVERITY.SUCCESS,
-      standalone
-        ? {
-            action: {
-              label: "Open in New Tab",
-              onClick: () => openWorkflowAddressInNewTab(message.address),
-            },
-          }
-        : undefined
-    );
+    // Standalone-only: an action's onClick closure cannot cross the postMessage
+    // boundary to the extension host, so the panel took the notifyUser() path above.
+    uiStore.showToast(toastMessage, USER_FEEDBACK_SEVERITY.SUCCESS, {
+      action: {
+        label: "Open in New Tab",
+        onClick: () => openWorkflowAddressInNewTab(message.address),
+      },
+    });
   };
 
   // WORKFLOW_VARIANT_FAILED - keep the dialog and its typed name open
