@@ -10,6 +10,10 @@ import {
   LOG_LEVELS,
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
+  USER_FEEDBACK_SEVERITY,
+  END_CONDITION_SCRIPT_TYPES,
+  type EndConditionScriptType,
+  type UserFeedbackSeverity,
   type WebviewLogLevel,
   VSCODE_COMMANDS,
   WORKTREE_MANAGEMENT_ACTIONS,
@@ -47,6 +51,9 @@ import type {
   SyncAllToHarnessMessage,
   DeleteAllFromHarnessMessage,
   OpenHarnessDirMessage,
+  ShowNativeFeedbackMessage,
+  CreateEndConditionScriptMessage,
+  RetryHarnessDetectionMessage,
 } from "../types/WebviewMessageTypes";
 import type {
   WorkflowVariantCreatedMessage,
@@ -89,6 +96,23 @@ interface WorkflowVariantRequestCacheEntry {
 
 const WORKFLOW_VARIANT_REQUEST_CACHE_TTL_MS = 10 * 60 * 1000;
 const WORKFLOW_VARIANT_REQUEST_CACHE_MAX_ENTRIES = 256;
+
+function isUserFeedbackSeverity(value: unknown): value is UserFeedbackSeverity {
+  return (
+    value === USER_FEEDBACK_SEVERITY.INFO ||
+    value === USER_FEEDBACK_SEVERITY.SUCCESS ||
+    value === USER_FEEDBACK_SEVERITY.WARNING ||
+    value === USER_FEEDBACK_SEVERITY.ERROR
+  );
+}
+
+function isEndConditionScriptType(
+  value: unknown
+): value is EndConditionScriptType {
+  return Object.values(END_CONDITION_SCRIPT_TYPES).includes(
+    value as EndConditionScriptType
+  );
+}
 
 function describeWorktreeActionSuccess(
   action: WorktreeManagementAction,
@@ -255,6 +279,7 @@ export class WebviewMessageRouter {
   private buildDispatchTable(): DispatchTable {
     const table: DispatchTable = new Map();
     this.registerLifecycle(table);
+    this.registerUserFeedback(table);
     this.registerDevActions(table);
     this.registerWorkflowControl(table);
     this.registerPromptEditor(table);
@@ -273,6 +298,27 @@ export class WebviewMessageRouter {
     this.registerTerminal(table);
     this.registerWorkspaceInit(table);
     return table;
+  }
+
+  private registerUserFeedback(table: DispatchTable): void {
+    table.set(MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK, (message) => {
+      if (!this.callbacks.handleNativeFeedback) {
+        return;
+      }
+
+      if (
+        !isUserFeedbackSeverity(message.severity) ||
+        typeof message.message !== "string"
+      ) {
+        return;
+      }
+
+      this.callbacks.handleNativeFeedback({
+        severity: message.severity,
+        message: message.message,
+        detail: typeof message.detail === "string" ? message.detail : undefined,
+      });
+    });
   }
 
   private registerLifecycle(table: DispatchTable): void {
@@ -556,6 +602,55 @@ export class WebviewMessageRouter {
 
   private registerPromptEditor(table: DispatchTable): void {
     // ── Dashboard — Prompt Editor ────────────────────────────────────────
+    table.set(
+      MESSAGE_TYPES.CREATE_END_CONDITION_SCRIPT,
+      async (message, ctx) => {
+        const request = message as CreateEndConditionScriptMessage;
+        if (typeof request.requestId !== "string") {
+          return;
+        }
+
+        if (!isEndConditionScriptType(request.scriptType)) {
+          ctx.emit({
+            type: MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATION_FAILED,
+            requestId: request.requestId,
+            error: "Unsupported end-condition script type.",
+          });
+          return;
+        }
+
+        try {
+          const orchestrator = this.getOrchestrator();
+          if (!orchestrator) {
+            throw new Error(
+              "ctrlyoke is still starting up — try again shortly"
+            );
+          }
+          const scriptPath = await orchestrator.createSampleScript(
+            request.scriptType
+          );
+          if (!scriptPath) {
+            throw new Error(
+              "Check that you have a workspace folder open and try again."
+            );
+          }
+          ctx.emit({
+            type: MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATED,
+            requestId: request.requestId,
+            scriptPath,
+          });
+        } catch (error) {
+          const errorMessage = getErrorMessage(error);
+          Log.error("Failed to create end-condition script:", errorMessage);
+          ctx.emit({
+            type: MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATION_FAILED,
+            requestId: request.requestId,
+            error: errorMessage,
+          });
+        }
+      }
+    );
+
     table.set(MESSAGE_TYPES.EXECUTE_PROMPT, (message, ctx) => {
       void this.workflowStepHandlers.handleExecutePrompt(ctx, message);
     });
@@ -1254,6 +1349,35 @@ export class WebviewMessageRouter {
   }
 
   private registerSettings(table: DispatchTable): void {
+    table.set(MESSAGE_TYPES.RETRY_HARNESS_DETECTION, async (message, ctx) => {
+      const request = message as RetryHarnessDetectionMessage;
+      if (typeof request.requestId !== "string") {
+        return;
+      }
+
+      try {
+        const orchestrator = this.getOrchestrator();
+        if (!orchestrator) {
+          throw new Error("ctrlyoke is still starting up — try again shortly");
+        }
+        await orchestrator.retryHarnessDetection();
+        ctx.emit({
+          type: MESSAGE_TYPES.HARNESS_DETECTION_RETRY_RESULT,
+          requestId: request.requestId,
+          success: true,
+        });
+      } catch (error) {
+        const errorMessage = getErrorMessage(error);
+        Log.error("Failed to retry harness detection:", errorMessage);
+        ctx.emit({
+          type: MESSAGE_TYPES.HARNESS_DETECTION_RETRY_RESULT,
+          requestId: request.requestId,
+          success: false,
+          error: errorMessage,
+        });
+      }
+    });
+
     // ── Settings — Harness & Model Selection ─────────────────────────────
     table.set(MESSAGE_TYPES.CHANGE_HARNESS, (message) => {
       this.settingsSync.handleHarnessChange(message.harness);
@@ -1880,6 +2004,9 @@ export interface WebviewRouterCallbacks {
     postMessage: PostMessageFn
   ) => Promise<void>;
   handleDevStatusRequest?: (postMessage: PostMessageFn) => Promise<void>;
+  handleNativeFeedback?: (
+    feedback: Omit<ShowNativeFeedbackMessage, "type">
+  ) => void;
   /**
    * Persist a captured UX snapshot (dev builds only). Receives the payload, the
    * resolved workspace root, and a scoped send so the confirmation reply reaches

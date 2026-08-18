@@ -74,7 +74,7 @@ to drive.
    (dry run, portability report, CLI/MCP serialization) was descoped to P1 on
    2026-07-31: it makes existing truth more visible rather than preventing a
    dishonest claim or an unsafe mutation. Implementation order — including why
-   [`BROWSER_USER_FEEDBACK_PLAN.md`](../active/BROWSER_USER_FEEDBACK_PLAN.md)
+   [`BROWSER_USER_FEEDBACK_PLAN.md`](../implemented/BROWSER_USER_FEEDBACK_PLAN.md)
    is _not_ a prerequisite — was in
    [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../implemented/COMPATIBILITY_AND_FEEDBACK_STAGING.md)
    and is now carried forward by

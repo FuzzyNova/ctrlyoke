@@ -939,8 +939,8 @@ export class WorkflowSerializer {
    * Create a custom template entirely from webview-supplied input — no native VS
    * Code dialogs. This is what the "New template..." accordion in TemplateModal
    * posts; it must work identically for the VS Code webview and hosted browser
-   * clients, unlike the Command Palette's `ctrlyoke.createNewTemplate` command
-   * (which still uses QuickPick/InputBox — that command is desktop-only anyway).
+   * clients, including the Command Palette's `ctrlyoke.createNewTemplate`
+   * command, which opens this same modal path.
    */
   async handleCreateCustomTemplate(
     name: string,
@@ -1372,17 +1372,6 @@ export class WorkflowSerializer {
     }
 
     const pm = postMessage ?? this.postMessage;
-    const confirm = await vscode.window.showWarningMessage(
-      `Delete all workflows and their history from ${path.resolve(
-        WorkflowPaths.runsRoot(workspaceRoot)
-      )}?`,
-      { modal: true },
-      "Delete All"
-    );
-
-    if (confirm !== "Delete All") {
-      return false;
-    }
 
     try {
       try {

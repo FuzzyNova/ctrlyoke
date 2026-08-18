@@ -6,8 +6,8 @@ import { suite, test } from "mocha";
 
 export const FEEDBACK_SOURCE_AUDIT_BASELINES = {
   directMessage: {
-    boundary: 54,
-    reusable: 6,
+    boundary: 53,
+    reusable: 0,
     boundaryFiles: [
       "src/completions/ContextMenuReferenceCommands.ts",
       "src/dev/DevCommands.ts",
@@ -20,6 +20,7 @@ export const FEEDBACK_SOURCE_AUDIT_BASELINES = {
     ] as readonly string[],
   },
   adapterUi: 0,
+  webviewToast: 1,
 } as const;
 
 const DIRECT_MESSAGE_NAMES = new Set([
@@ -35,6 +36,8 @@ const ADAPTER_UI_NAMES = new Set([
   "showProgress",
   "showChoice",
 ]);
+
+const TOAST_NAMES = new Set(["showToast", "enqueueToast"]);
 
 interface SourceAuditSite {
   file: string;
@@ -103,9 +106,64 @@ function isAdapterUiCall(node: ts.CallExpression): boolean {
   );
 }
 
+function isDirectToastCall(node: ts.CallExpression): boolean {
+  const toastAccess = node.expression;
+  return (
+    ts.isPropertyAccessExpression(toastAccess) &&
+    TOAST_NAMES.has(toastAccess.name.text)
+  );
+}
+
+function isMessageHandlerAssignment(
+  node: ts.Node,
+  messageType: string
+): boolean {
+  let current: ts.Node | undefined = node.parent;
+  while (current) {
+    if (
+      ts.isBinaryExpression(current) &&
+      current.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isElementAccessExpression(current.left) &&
+      ts.isIdentifier(current.left.expression) &&
+      current.left.expression.text === "handlers" &&
+      ts.isPropertyAccessExpression(current.left.argumentExpression) &&
+      ts.isIdentifier(current.left.argumentExpression.expression) &&
+      current.left.argumentExpression.expression.text === "MESSAGE_TYPES" &&
+      current.left.argumentExpression.name.text === messageType
+    ) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+}
+
+function isAllowedWebviewToastCall(
+  node: ts.CallExpression,
+  file: string
+): boolean {
+  if (
+    file === "src/ui/webview-react/store/uiStore.ts" ||
+    file === "src/ui/webview-react/utils/notifyUser.ts"
+  ) {
+    return true;
+  }
+
+  return (
+    file === "src/ui/webview-react/hooks/useMessageHandler.ts" &&
+    (isMessageHandlerAssignment(node, "NOTIFICATION_EVENT") ||
+      isMessageHandlerAssignment(node, "USER_FEEDBACK"))
+  );
+}
+
 function collectCallSites(
   repoRoot: string,
-  predicate: (node: ts.CallExpression) => boolean
+  predicate: (node: ts.CallExpression) => boolean,
+  includeCallSite: (
+    node: ts.CallExpression,
+    sourceFile: ts.SourceFile,
+    file: string
+  ) => boolean = () => true
 ): SourceAuditSite[] {
   const sites: SourceAuditSite[] = [];
 
@@ -119,10 +177,19 @@ function collectCallSites(
       filePath.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS
     );
 
+    const relativeFile = path
+      .relative(repoRoot, filePath)
+      .split(path.sep)
+      .join("/");
+
     function visit(node: ts.Node): void {
-      if (ts.isCallExpression(node) && predicate(node)) {
+      if (
+        ts.isCallExpression(node) &&
+        predicate(node) &&
+        includeCallSite(node, sourceFile, relativeFile)
+      ) {
         sites.push({
-          file: path.relative(repoRoot, filePath).split(path.sep).join("/"),
+          file: relativeFile,
           line:
             sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
               .line + 1,
@@ -203,6 +270,23 @@ suite("source audit counters", () => {
       "Adapter-mediated host UI",
       sites,
       FEEDBACK_SOURCE_AUDIT_BASELINES.adapterUi
+    );
+  });
+
+  test("holds the host-aware webview toast baseline", function () {
+    this.timeout(10_000);
+    const sites = collectCallSites(
+      repoRoot,
+      isDirectToastCall,
+      (_node, _sourceFile, file) =>
+        file.startsWith("src/ui/webview-react/") &&
+        !file.startsWith("src/ui/webview-react/test/") &&
+        !isAllowedWebviewToastCall(_node, file)
+    );
+    assertShrinkOnly(
+      "Unallowlisted webview showToast/enqueueToast",
+      sites,
+      FEEDBACK_SOURCE_AUDIT_BASELINES.webviewToast
     );
   });
 });

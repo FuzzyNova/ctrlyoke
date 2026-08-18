@@ -73,6 +73,9 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
 
   // Data from uiStore (populated by useMessageHandler on OPEN_NEW_WORKFLOW_MODAL)
   const templates = useUiStore((s) => s.templates);
+  const openCreateTemplateForm = useUiStore(
+    (s) => s.openCreateTemplateForm
+  );
   const defaultTemplateId = useUiStore((s) => s.defaultTemplateId);
   const currentTemplate = useUiStore((s) => s.currentTemplate);
   const setCurrentTemplate = useUiStore((s) => s.setCurrentTemplate);
@@ -127,7 +130,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       setFilename("");
       setFilenameError(null);
       setDefaultConfirmation(false);
-      setShowCreateTemplateForm(false);
+      setShowCreateTemplateForm(openCreateTemplateForm);
       setNewTemplateName("");
       setNewTemplateNameError(null);
       setNewTemplateScope("workspace");
@@ -140,7 +143,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     }
     prevIsOpenRef.current = isOpen;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, openCreateTemplateForm]);
 
   // Focus filename input when modal opens
   useEffect(() => {

@@ -13,7 +13,7 @@
   — the capability registry, analyzer, and pure effective-property resolver.
 - [`TOOL_PERMISSION_PARITY_PLAN.md`](../implemented/TOOL_PERMISSION_PARITY_PLAN.md)
   — the first consumer of that registry.
-- [`BROWSER_USER_FEEDBACK_PLAN.md`](../active/BROWSER_USER_FEEDBACK_PLAN.md)
+- [`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md)
   — the toast queue, feedback sink, and interaction contract.
 
 This document owns only **sequencing and the dependency argument**. Each plan

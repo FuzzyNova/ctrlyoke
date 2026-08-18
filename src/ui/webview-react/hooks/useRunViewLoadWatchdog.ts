@@ -6,6 +6,7 @@ import {
   USER_FEEDBACK_SEVERITY,
 } from "@root/types/DashboardConstants";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { notifyUser } from "@utils/notifyUser";
 
 /** How long to wait for a RUN_VIEW_LOADED before reissuing the request. */
 const RUN_VIEW_RETRY_INTERVAL_MS = 15000;
@@ -69,7 +70,7 @@ export function useRunViewLoadWatchdog(): void {
         // previous one, with every addressed control aimed at the wrong
         // lineage. A failed navigation must end somewhere coherent.
         ui.rollbackRunViewLoad();
-        ui.showToast(
+        notifyUser(
           "Couldn't load that workflow — check the connection and try again.",
           USER_FEEDBACK_SEVERITY.ERROR
         );

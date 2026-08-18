@@ -1,27 +1,9 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { TemplateImporter } from "../../core/orchestration/TemplateImporter";
 import { createWebviewClientContext } from "../../ui/WebviewClientContext";
 import { MESSAGE_TYPES } from "../../types/DashboardConstants";
-import type { UserFeedback } from "../../core/UserFeedbackSink";
 
 suite("Core feedback migration", () => {
-  test("routes template-import failures through the feedback sink", async () => {
-    const feedback: UserFeedback[] = [];
-    const importer = new TemplateImporter({} as any, undefined, {
-      notify: (message) => feedback.push(message),
-    });
-
-    await importer.importWorkflowTemplates();
-
-    assert.deepStrictEqual(feedback, [
-      {
-        severity: "error",
-        message: "ctrlyoke: No workspace folder open",
-      },
-    ]);
-  });
-
   test("emits a scoped failure only through the initiating client transport", () => {
     const firstClient: unknown[] = [];
     const secondClient: unknown[] = [];

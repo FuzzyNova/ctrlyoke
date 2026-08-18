@@ -3,7 +3,7 @@
 **Decided 2026-08-02.** Implementation order for the remaining work in three
 plans, none of which is a 0.1.0 release gate:
 
-- [`BROWSER_USER_FEEDBACK_PLAN.md`](../active/BROWSER_USER_FEEDBACK_PLAN.md)
+- [`BROWSER_USER_FEEDBACK_PLAN.md`](../implemented/BROWSER_USER_FEEDBACK_PLAN.md)
   — Phases 2, 2.5 (Site 3), 3, 4, and the Phase 5 guards.
 - [`AUTOMATION_API_PLAN.md`](../implemented/AUTOMATION_API_PLAN.md)
   — the per-step `ctrlyoke run --headless --json` v1 contract, in full.
@@ -25,9 +25,10 @@ and the terminal handlers, and a two-tab isolation test exists
 (`CoreFeedbackMigration.test.ts`). It landed across commits `6b1e8040`
 (2026-07-24), `aad4be61` (2026-08-02), and `effbc9be` (2026-08-06) — all
 before this document's last grooming pass — but was never marked done in the
-queue below; that is corrected here. **Stages D, F, and G remain genuinely
-unstarted.** The next unblocked step is **Stage D** (CLI validation): it is
-small, self-contained, and depends on nothing else outstanding. Stage G's
+queue below; that is corrected here. **Stage F has since been completed
+(2026-08-17, steps 18-24); Stages D and G remain genuinely unstarted.** The
+next unblocked step is **Stage D** (CLI validation): it is small,
+self-contained, and depends on nothing else outstanding. Stage G's
 dry-run leg is still the only item in either plan with a real unbuilt
 dependency — [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md)
 remains **Proposed**, with no `SecretStore`, no `${secret:...}` interpolation,
@@ -45,8 +46,8 @@ dependency grounds this document reasons from: unredacted run artifacts already
 written cannot be retracted, and Stage B shipped a writer whose v1 contract
 promises verbatim condition stdout/stderr. Stage G's dry-run leg is therefore no
 longer waiting on an unscheduled plan — it is waiting on P0 work with an owner.
-Nothing else in this queue changes; D and F remain the next unblocked steps. See
-the revised recommendation at the end.
+Nothing else in this queue changes; D and F were the next unblocked steps at the
+time (F has since landed, leaving D). See the revised recommendation at the end.
 
 ---
 
@@ -79,15 +80,15 @@ a long migration is in flight, and that argument is independent of release date.
 
 ---
 
-## Current state (measured 2026-08-02)
+## Current state (measured 2026-08-17)
 
 Measured against `src/`, not read from the plans. Where these disagree with a
 plan's own table, this section is newer.
 
 | Fact                                                              | Value                                                                                                  |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Direct `show*Message` in reusable code (the parity gap)           | **6** across 6 files — the six intentional Phase 4 interaction holds; the initial Stage C count was 63 |
-| Direct `show*Message` at the VS Code boundary (correctly staying) | **49** across 6 files                                                                                  |
+| Direct `show*Message` in reusable code (the parity gap)           | **0** — all six Phase 4 action-bearing sites are resolved; the initial Stage C count was 63 |
+| Direct `show*Message` at the VS Code boundary (correctly staying) | **53** across 7 files after F.4 (was 49 across 6 when measured 2026-08-02; 54 before F.4)                   |
 | Adapter-mediated host UI (`platform.log/warn/error`)              | **0** — all 18 sites now use `UserFeedbackSink`                                                        |
 | Adapter-mediated `showChoice()`                                   | **0** — the final `CliIntegration.ts` site now uses warning feedback                                   |
 | `USER_FEEDBACK_SEVERITY`                                          | Shipped in `DashboardConstants.ts:482`                                                                 |
@@ -100,7 +101,7 @@ Two consequences worth naming up front:
 
 1. **The feedback plan's Phases 1 and 2 are genuinely done.** The severity
    constant, rendered queue, transport, sink, and reusable-call migration are
-   shipped; only the six action-bearing Phase 4 holds remain.
+   shipped; all six action-bearing Phase 4 holds are now resolved in Stage F.
 2. **The adapter-UI baseline of 19 in
    [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
    Phase 0 is exactly right** (18 + 1). That number is still accurate and can be
@@ -179,16 +180,22 @@ migration target growing while the migration runs, so it must precede Stage C.
 53 boundary / 63 reusable / 19 adapter-UI; all three were then lowered as Stage
 C landed. Current values:**
 
-- **49 boundary** = `extension.ts` 20, `DevCommands` 12, `ContextMenuReferenceCommands` 6,
-  `ScmCommitCommand` 5, `ExternalFileTrustPrompt` 3, `NotificationManager` 3.
+- **49 boundary as committed by A.1** = `extension.ts` 20, `DevCommands` 12,
+  `ContextMenuReferenceCommands` 6, `ScmCommitCommand` 5,
+  `ExternalFileTrustPrompt` 3, `NotificationManager` 3. **Now 54 across 7 files**
+  (re-read from `FEEDBACK_SOURCE_AUDIT_BASELINES` 2026-08-17): boundary-approved
+  growth added `WebviewMessageRouter.ts` 5 to the allowlist.
   Down from 53: C.3 deleted the four `VsCodeAdapter` calls that implemented the
   removed `PlatformAdapter` UI methods. `VsCodeAdapter.ts` stays in the
   counter's `boundaryFiles` list at zero calls, so a future call there is
   classified as boundary rather than counted as a reusable regression.
 - **6 reusable after C.6** = `TemplateImporter` 2,
   `WorkflowCommandHandler` 2, `WorkflowOrchestrator` 1, and
-  `WorkflowSerializer` 1. These are all Phase 4 interaction holds; the
-  commented `WorkspaceSessionManager` reference is not an AST call site.
+  `WorkflowSerializer` 1. These were all Phase 4 interaction holds; F.4
+  removed the `WorkflowOrchestrator` and `WorkflowSerializer` sites, and F.5
+  removed the two `TemplateImporter` sites, leaving the current reusable
+  baseline at 2 (`WorkflowCommandHandler`). The commented
+  `WorkspaceSessionManager` reference is not an AST call site.
 - **19 adapter-UI** = `WorkflowInstance` 9, `PromptFileParser` 4, `WorkflowExecutor` 3,
   `EndConditionHandler` 1, `CliIntegration` 1 (`platform.warn`), plus the one `showChoice`.
 
@@ -337,7 +344,7 @@ Stage 6 describes this as the same edit set and should be updated to reflect
 that it has landed, per this document's own "update both plans when it lands"
 rule above.
 
-### Stage F — Browser feedback Phase 4 — REDESIGNED 2026-08-17, NOT IMPLEMENTED
+### Stage F — Browser feedback Phase 4 + Phase 6 — COMPLETE 2026-08-17
 
 **Redesigned 2026-08-17: the `USER_INTERACTION_REQUEST` correlation contract
 is no longer being built.** Each of the 6 surviving action-bearing sites was
@@ -345,19 +352,35 @@ re-examined individually against the current code instead — four are cut
 outright, two relocate into existing/inline UI (`DeleteConfirmModal` for
 clear-all-workflows; a small in-app control for post-script-create; an inline
 retry affordance for harness detection). Full per-site findings and decisions
-are in `BROWSER_USER_FEEDBACK_PLAN.md` Phase 4. None of the six code changes
-have landed yet — this is a design resolution, not an implementation status
-change.
+are in `BROWSER_USER_FEEDBACK_PLAN.md` Phase 4. F.4 is complete: both
+post-workspace-init toasts and the native clear-all confirmation are gone, and
+clear-all now uses `DeleteConfirmModal`.
 
-All 6 sites still call `vscode.window.show*Message(...)` directly with
-action-button strings today, exactly matching the plan's own file/count
-reconciliation: `TemplateImporter.ts:200` (overwrite, cut),
-`TemplateImporter.ts:243` (post-import, cut),
-`WorkflowCommandHandler.ts:99` (post-script-create, moves in-app),
-`WorkflowCommandHandler.ts:148` (retry harness automation, moves inline),
-`WorkflowOrchestrator.ts:1344` (post-workspace-init, cut — and duplicated by a
-second near-identical toast in `extension.ts`, also cut), `WorkflowSerializer.ts:1375`
-(clear-all-workflows, replaced by `DeleteConfirmModal`).
+The final action-bearing site previously called
+`vscode.window.show*Message(...)` directly with action-button strings:
+`WorkflowCommandHandler.ts:148` (retry harness automation). F.7 removed that
+gate and added the inline retry affordance next to `HarnessDropdown`, with a
+client-scoped result and host-aware feedback.
+F.6 moved the post-script-create flow from `WorkflowCommandHandler.ts` into
+`ScriptConditionEditor` with a client-scoped router reply and deleted the
+native command.
+F.5 cut the `TemplateImporter.ts:200` overwrite and `TemplateImporter.ts:243`
+post-import sites together with the import command and repointed
+`ctrlyoke.createNewTemplate` at the pre-expanded `TemplateModal` flow.
+Completed in F.4: `WorkflowOrchestrator.ts:1344` and its duplicate
+`extension.ts:177` (post-workspace-init, cut), plus `WorkflowSerializer.ts:1375`
+(clear-all-workflows, replaced by `DeleteConfirmModal`). **All locations were
+re-verified against `src/` on 2026-08-17.**
+
+**Stage F also now owns Phase 6**, added to the feedback plan on 2026-08-17 and
+not previously represented in this queue. It was a distinct gap from everything
+above: the _webview's own_ toast dispatch was not host-aware, so 27 call sites
+across 9 `webview-react` files rendered an in-app toast even inside the VS Code
+panel. Phase 6 adds a single client-side `notifyUser()` dispatcher (the
+client-side counterpart to Phase 2's `UserFeedbackSink`) and has migrated those
+sites to it. **Phase 6 is complete and was sequenced before Phase 4** — Phase
+4's two relocated sites report through `notifyUser()` rather than hand-rolling
+a `standalone` check that would immediately need migrating.
 
 ### Stage G — Compatibility Phase 3, and the deferred remainder — NOT STARTED
 
@@ -399,27 +422,33 @@ Single-session steps. Each commits its own work and leaves this document and its
 owning plan current. Steps are strictly ordered within a stage; stages B and C
 may be swapped as a block.
 
-| #   | Stage | Scope                                                                                                                                                                                                                                               |
-| --- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | A.1   | **DONE** — Shrink-only `show*Message` and adapter-UI counters, with baselines committed as measured above                                                                                                                                           |
-| 2   | A.2   | **DONE** — Author-time diagnostic for ctrlyoke MCP tool denials; route `permissionApplication.diagnostics` off `Log.warn`                                                                                                                           |
-| 3   | A.3   | **DONE** — Antigravity `allowAll` no longer uses the dangerous bypass; mode fidelity is partial and author-time compatibility remains honest                                                                                                        |
-| 4   | A.4   | **DONE** — Preserve `headers` (and other unmodelled fields) across the `McpServerForm` edit round trip with transport-aware invalidation                                                                                                            |
-| 5   | B.1   | **DONE** — Typed pre/end-condition summaries are queue-owned and recorded through final verdict/error/retry paths; effective `executionMode` persists in `_runtime` (plan §3)                                                                       |
-| 6   | B.2   | **DONE** — `RunOutputResolver` one-pass attempt/file-event/loop projection with focused streaming/history coverage (plan §2)                                                                                                                        |
-| 7   | B.3   | **DONE** — CLI-local result contract + `CliJsonResultBuilder`, consuming steps 5–6 (plan §1)                                                                                                                                                        |
-| 8   | B.4   | **DONE** — Wire the builder into `cli.ts` success and `catch` paths; single-line stdout (plan §4)                                                                                                                                                   |
-| 9   | B.5   | **DONE** — Live end-to-end CLI verification on `opencode-cli`; fixed defects; moved the plan to `dev/implemented/`                                                                                                                                  |
-| 10  | C.1   | **DONE** — Added the `USER_FEEDBACK` contract, payload type, unconditional browser toast handler, and focused Vitest coverage                                                                                                                       |
-| 11  | C.2   | **DONE** — Added the injectable feedback sink contract and VS Code/console/hosted-WebSocket implementations, with browser-only broadcast and focused Mocha coverage                                                                                 |
-| 12  | C.3   | **DONE** — Migrated all 19 adapter-UI calls incl. `CliIntegration.ts:1380` `showChoice` (Phase 2.5 Site 3); deleted the five `PlatformAdapter` UI methods and updated all impls                                                                     |
-| 13  | C.4   | **DONE** — AST-verified triage of all 63 reusable direct sites: 1 policy deletion, 7 duplicate deletions, 8 noise deletions, 39 scoped replies, 8 broadcast/interaction-held sites; no migration                                                    |
-| 14  | C.5   | **DONE** — Executed the triage for the core/orchestration group (32 sites in 4 files); retained five interaction holds for Phase 4 and recorded 23 client-scope fallbacks for Stage E                                                               |
-| 15  | C.6   | **DONE** — Executed the triage for the ui/utils group (31 sites in 8 files); reusable direct-message baseline is now 6, with the six Phase 4 interaction holds remaining                                                                            |
-| 16  | D     | **TODO — next up.** `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                                                                                                    |
-| 17  | E     | **DONE** — `WebviewClientContext` threaded through `WorkflowMutationCoordinator`, `WorkflowStepHandlers`, `UndoRedoCoordinator`, and terminal handlers (landed 2026-07-24 to 2026-08-06); two-tab isolation test in `CoreFeedbackMigration.test.ts` |
-| 18  | F     | **TODO — redesigned 2026-08-17.** No `USER_INTERACTION_REQUEST` contract; instead cut 4 of the 6 action-bearing sites and relocate 2 into existing/inline UI (`DeleteConfirmModal`, `ScriptConditionEditor`, `HarnessDropdown`); none of the 6 changes implemented yet |
-| 19  | G.x   | **TODO.** Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration (dry-run sub-leg blocked on `SECRETS_AND_REDACTION_PLAN.md`)                                                                                      |
+| #   | Stage | Scope                                                                                                                                                                                                                                                                                                                                                              |
+| --- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | A.1   | **DONE** — Shrink-only `show*Message` and adapter-UI counters, with baselines committed as measured above                                                                                                                                                                                                                                                          |
+| 2   | A.2   | **DONE** — Author-time diagnostic for ctrlyoke MCP tool denials; route `permissionApplication.diagnostics` off `Log.warn`                                                                                                                                                                                                                                          |
+| 3   | A.3   | **DONE** — Antigravity `allowAll` no longer uses the dangerous bypass; mode fidelity is partial and author-time compatibility remains honest                                                                                                                                                                                                                       |
+| 4   | A.4   | **DONE** — Preserve `headers` (and other unmodelled fields) across the `McpServerForm` edit round trip with transport-aware invalidation                                                                                                                                                                                                                           |
+| 5   | B.1   | **DONE** — Typed pre/end-condition summaries are queue-owned and recorded through final verdict/error/retry paths; effective `executionMode` persists in `_runtime` (plan §3)                                                                                                                                                                                      |
+| 6   | B.2   | **DONE** — `RunOutputResolver` one-pass attempt/file-event/loop projection with focused streaming/history coverage (plan §2)                                                                                                                                                                                                                                       |
+| 7   | B.3   | **DONE** — CLI-local result contract + `CliJsonResultBuilder`, consuming steps 5–6 (plan §1)                                                                                                                                                                                                                                                                       |
+| 8   | B.4   | **DONE** — Wire the builder into `cli.ts` success and `catch` paths; single-line stdout (plan §4)                                                                                                                                                                                                                                                                  |
+| 9   | B.5   | **DONE** — Live end-to-end CLI verification on `opencode-cli`; fixed defects; moved the plan to `dev/implemented/`                                                                                                                                                                                                                                                 |
+| 10  | C.1   | **DONE** — Added the `USER_FEEDBACK` contract, payload type, unconditional browser toast handler, and focused Vitest coverage                                                                                                                                                                                                                                      |
+| 11  | C.2   | **DONE** — Added the injectable feedback sink contract and VS Code/console/hosted-WebSocket implementations, with browser-only broadcast and focused Mocha coverage                                                                                                                                                                                                |
+| 12  | C.3   | **DONE** — Migrated all 19 adapter-UI calls incl. `CliIntegration.ts:1380` `showChoice` (Phase 2.5 Site 3); deleted the five `PlatformAdapter` UI methods and updated all impls                                                                                                                                                                                    |
+| 13  | C.4   | **DONE** — AST-verified triage of all 63 reusable direct sites: 1 policy deletion, 7 duplicate deletions, 8 noise deletions, 39 scoped replies, 8 broadcast/interaction-held sites; no migration                                                                                                                                                                   |
+| 14  | C.5   | **DONE** — Executed the triage for the core/orchestration group (32 sites in 4 files); retained five interaction holds for Phase 4 and recorded 23 client-scope fallbacks for Stage E                                                                                                                                                                              |
+| 15  | C.6   | **DONE** — Executed the triage for the ui/utils group (31 sites in 8 files); reusable direct-message baseline is now 6, with the six Phase 4 interaction holds remaining                                                                                                                                                                                           |
+| 16  | D     | **TODO — next up.** `ctrlyoke validate --harness` / `--all-installed-harnesses --json`, following the step-9 envelope convention                                                                                                                                                                                                                                   |
+| 17  | E     | **DONE** — `WebviewClientContext` threaded through `WorkflowMutationCoordinator`, `WorkflowStepHandlers`, `UndoRedoCoordinator`, and terminal handlers (landed 2026-07-24 to 2026-08-06); two-tab isolation test in `CoreFeedbackMigration.test.ts`                                                                                                                |
+| 18  | F.1   | **DONE.** Phase 6 infra: `MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK` in `src/types/DashboardConstants.ts` / `src/types/WebviewMessageTypes.ts`, the `WebviewMessageRouter` handler and shared-sink wiring in `src/ui/WebviewMessageRouter.ts`, `src/ui/CtrlYokeWebviewProvider.ts`, `src/extension.ts`, plus `notifyUser()` in `src/ui/webview-react/utils/notifyUser.ts` |
+| 19  | F.2   | **DONE.** Phase 6 step 4: migrated Group A's 15 client-only toast call sites (8 `webview-react` files) to `notifyUser()`; the 2026-08-17 re-verification matched the table and found no action-bearing exceptions                                                                                                                                                  |
+| 20  | F.3   | **DONE.** Phase 6 steps 5–7: migrated Group B's 12 scoped-reply handlers to `notifyUser()`, retained the standalone duplicate-tab action, and added the shrink-only raw-toast audit (baseline 1)                                                                                                                                                                   |
+| 21  | F.4   | **DONE.** Phase 4 items 5 + 6: cut both duplicate workspace-init toasts; funnel clear-all-history through `DeleteConfirmModal` (`boundary` 54 → 53, `reusable` 6 → 4)                                                                                                                                                                                              |
+| 22  | F.5   | **DONE.** Phase 4 items 3 + 4: deleted `TemplateImporter.ts` and `ctrlyoke.importWorkflowTemplates`; repointed `ctrlyoke.createNewTemplate` at the pre-expanded `TemplateModal` (`reusable` 4 → 2)                                                                                                                                                                                     |
+| 23  | F.6   | **DONE.** Phase 4 item 1: in-app end-condition script creation in `ScriptConditionEditor`; deleted `ctrlyoke.createEndConditionScript` (`reusable` 2 → 1)                                                                                                                                                                                                         |
+| 24  | F.7   | **DONE.** Phase 4 item 2: inline harness-detection retry next to `HarnessDropdown`; cut the `openPanel()` gate (`reusable` 1 → 0)                                                                                                                                                                                                                                  |
+| 25  | G.x   | **TODO.** Compatibility Phase 3 domains, generated docs, Codex investigation, dry-run integration (dry-run sub-leg blocked on `SECRETS_AND_REDACTION_PLAN.md`)                                                                                                                                                                                                     |
 
 **Stage B was reordered on 2026-08-02 from the plan's section numbering.** The
 plan lists the builder first, but `CliJsonResultBuilder` consumes the projection
@@ -475,7 +504,11 @@ reality — but it means every step from 12 onward **must edit
 `FEEDBACK_SOURCE_AUDIT_BASELINES` in the same commit that removes call sites**,
 or `npm test` fails on a change that is otherwise correct. Step 12 takes
 `adapterUi` to 0; steps 14 and 15 each lower `directMessage.reusable`. The
-`boundary` baseline of 49 must not move — those remaining sites are staying.
+`boundary` baseline — 49 when Stage C landed, **53 after F.4** — must not move for
+any Stage C/D step; those sites are staying. Stage F is the one exception: it
+lowers `boundary` 54 → 53 exactly once, in the step that deletes the duplicate
+workspace-initialization toast at `extension.ts:177`, and takes
+`directMessage.reusable` 6 → 4 in F.4, then 4 → 0 across its remaining steps.
 
 ### Stage C.3 disposition — complete
 
@@ -566,7 +599,7 @@ post-script-create moves into a small in-app control in
 affordance next to `HarnessDropdown`; clear-all-workflows is funneled through
 the existing `DeleteConfirmModal` (it was never actually using it, despite
 looking like it should have been). See `BROWSER_USER_FEEDBACK_PLAN.md` Phase 4
-for the full per-site reasoning. None of the six changes are implemented yet.
+for the full per-site reasoning. All six items are implemented in F.4–F.7.
 The duplicate-running-workflow site was deleted in C.4 as a policy conflict
 and was never in Stage F's scope.
 
@@ -622,25 +655,22 @@ just because the products share history and directories.
 
 Re-verified against `src/` on 2026-08-11, not read from the plans.
 
-| Stage | Scope                                                                    | Status                                                                                             |
-| ----- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| A     | Guards, baselines, three bug fixes                                       | **Done**                                                                                           |
-| B     | Automation API `--json` v1                                               | **Done**                                                                                           |
-| C     | Browser feedback Phases 2 and 2.5                                        | **Done**                                                                                           |
-| D     | CLI `validate --harness` / `--all-installed-harnesses --json`            | **Not started** — no dependency, smallest remaining chunk                                          |
-| E     | Client-scoped routing                                                    | **Done** (confirmed complete this pass; previously unmarked)                                       |
-| F     | Interactive choices / `USER_INTERACTION_REQUEST`                         | **Not started**                                                                                    |
-| G     | Compatibility Phase 3 domains + docs + Codex investigation + dry-run leg | **Not started**; dry-run sub-leg waits on the Secrets plan, now scheduled as P0 outside this queue |
+| Stage | Scope                                                                    | Status                                                                                                        |
+| ----- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| A     | Guards, baselines, three bug fixes                                       | **Done**                                                                                                      |
+| B     | Automation API `--json` v1                                               | **Done**                                                                                                      |
+| C     | Browser feedback Phases 2 and 2.5                                        | **Done**                                                                                                      |
+| D     | CLI `validate --harness` / `--all-installed-harnesses --json`            | **Not started** — no dependency, smallest remaining chunk                                                     |
+| E     | Client-scoped routing                                                    | **Done** (confirmed complete this pass; previously unmarked)                                                  |
+| F     | Phase 6 host-aware webview toasts + Phase 4's six per-site dispositions  | **Done** (steps 18–24); no `USER_INTERACTION_REQUEST` contract |
+| G     | Compatibility Phase 3 domains + docs + Codex investigation + dry-run leg | **Not started**; dry-run sub-leg waits on the Secrets plan, now scheduled as P0 outside this queue            |
 
-Three items stand between this document and being fully closed out:
+Two items stand between this document and being fully closed out:
 
 1. **Stage D** — self-contained, no blockers. Recommended next: it is the
    smallest remaining piece and reuses conventions (JSON envelope, registry
    access) that already exist in `cli.ts`.
-2. **Stage F** — self-contained, no blockers. The 6 target sites and their
-   file/line locations are already enumerated above and were re-confirmed
-   unchanged.
-3. **Stage G** — the largest remaining piece, and the only one with an actual
+2. **Stage G** — the largest remaining piece, and the only one with an actual
    dependency chain: its dry-run leg needs
    [`SECRETS_AND_REDACTION_PLAN.md`](../backlog/SECRETS_AND_REDACTION_PLAN.md),
    which is still **Proposed** with none of its Phase 1 (`SecretStore`) or
@@ -649,8 +679,8 @@ Three items stand between this document and being fully closed out:
    compatibility docs, the Codex partial-support investigation — has no such
    dependency and can proceed without the Secrets plan.
 
-**Recommendation (revised 2026-08-14):** do D and F next, in either order — both
-are small, independent, and fully unblocked. Then start G's non-dry-run work
+**Recommendation (revised 2026-08-17):** F is done. **Stage D is now the only
+small, fully unblocked piece left.** Then start G's non-dry-run work
 (capability domains one at a time, per the plan's own completeness-test
 discipline).
 

@@ -12,7 +12,7 @@ The shared prerequisites are now specified in two focused plans:
 - [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
   is the exhaustive `vscode` audit and the authoritative plan for composition,
   watchers, shared routing, services, utilities, and retiring the Node-side shim.
-- [`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md) covers
+- [`BROWSER_USER_FEEDBACK_PLAN.md`](../implemented/BROWSER_USER_FEEDBACK_PLAN.md) covers
   hosted/standalone operational toast and interaction parity.
 
 Where older sketches in this document propose a duplicate standalone router or

@@ -20,7 +20,7 @@ import {
   PROMPT_EDITOR_INSERT_MODES,
   RETRY_PROMPT_PLACEHOLDERS,
 } from "@/types/messages";
-import { useUiStore } from "@store/uiStore";
+import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
 
 function getCompletions(
   doc: string,
@@ -640,7 +640,10 @@ describe("CodeMirrorEditor atomic reference chips", () => {
     const parent = document.createElement("div");
     document.body.appendChild(parent);
     const postMessage = vi.fn();
-    const toastSpy = vi.spyOn(useUiStore.getState(), "showToast");
+    const nativePostMessage = window.vscodeApi!.postMessage as ReturnType<
+      typeof vi.fn
+    >;
+    nativePostMessage.mockClear();
     const validity = new Map<string, boolean>([["@b/missing.ts", false]]);
     const view = new EditorView({
       parent,
@@ -664,10 +667,15 @@ describe("CodeMirrorEditor atomic reference chips", () => {
 
       // ...so the click is consumed with a warning, never an open attempt.
       expect(postMessage).not.toHaveBeenCalled();
-      expect(toastSpy).toHaveBeenCalledOnce();
+      expect(nativePostMessage).toHaveBeenCalledWith({
+        type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
+        severity: USER_FEEDBACK_SEVERITY.WARNING,
+        message:
+          "Can't open — this reference doesn't resolve to an existing file",
+        detail: undefined,
+      });
       expect(click.defaultPrevented).toBe(true);
     } finally {
-      toastSpy.mockRestore();
       view.destroy();
       parent.remove();
     }

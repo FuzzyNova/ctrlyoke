@@ -40,6 +40,7 @@ import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { getDictionaryUris } from "@utils/dictionaryUris";
 import { isWorkflowRunning } from "../../utils/status";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
+import { notifyUser } from "@utils/notifyUser";
 
 interface PromptEditorProps {
   /** When true, the editor is in CLI watch mode — all editing is disabled. */
@@ -112,7 +113,6 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     propertiesDrawerOpen,
     togglePropertiesDrawer,
     closePropertiesDrawer,
-    showToast,
   } = useUiStore();
   useSettingsStore(); // Keep store initialized for reactive updates
   const { globalSettings, workflowProperties } = useSettingsStore();
@@ -643,7 +643,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       conversionSeqRef.current = 0;
       conversionTimeoutRef.current = null;
       setIsPromptFileConversionBusy(false);
-      showToast(
+      notifyUser(
         "Timed out converting prompt to a file",
         USER_FEEDBACK_SEVERITY.ERROR
       );
@@ -663,7 +663,6 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     isScriptMode,
     promptName,
     promptText,
-    showToast,
     vscode,
   ]);
 
@@ -683,14 +682,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       setIsPromptFileConversionBusy(false);
 
       if (typeof message.error === "string" || !message.reference) {
-        showToast(
+        notifyUser(
           message.error || "Failed to convert prompt to a file",
           USER_FEEDBACK_SEVERITY.ERROR
         );
         return;
       }
       if (typeof message.resolvedPath !== "string") {
-        showToast(
+        notifyUser(
           "Prompt file conversion returned no resolved path",
           USER_FEEDBACK_SEVERITY.ERROR
         );
@@ -706,7 +705,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [persistPromptFileReference, setPromptText, showToast, vscode]);
+  }, [persistPromptFileReference, setPromptText, vscode]);
 
   useEffect(() => {
     return () => {

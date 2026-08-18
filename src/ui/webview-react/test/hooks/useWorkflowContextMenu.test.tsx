@@ -12,6 +12,11 @@ import {
 } from "@hooks/useWorkflowContextMenu";
 import { useUiStore } from "@store/uiStore";
 
+// These assertions cover the standalone queue branch of notifyUser().
+vi.hoisted(() => {
+  window.__ctrlyokeStandalone = true;
+});
+
 const target: WorkflowContextMenuTarget = {
   address: {
     workflowKey: "workflow-1" as never,

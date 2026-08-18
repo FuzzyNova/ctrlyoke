@@ -33,6 +33,7 @@ import {
   type UndoFileAction,
   type CompletionNotificationSeverity,
   type UserFeedbackSeverity,
+  type EndConditionScriptType,
   type HookEvent,
   type NotificationKind,
   type SettingScope,
@@ -855,6 +856,8 @@ export interface OpenNewWorkflowModalMessage {
     isBuiltIn: boolean;
   }>;
   defaultTemplateId?: string;
+  /** Open the inline custom-template form when the modal is first shown. */
+  openCreateTemplateForm?: boolean;
 }
 
 /** Webview → Extension: clone the selected base into a custom template. */
@@ -1150,6 +1153,41 @@ export interface PromptFileCreatedMessage {
   seq?: number;
 }
 
+/** Webview → Extension: create a starter end-condition script. */
+export interface CreateEndConditionScriptMessage {
+  type: typeof MESSAGE_TYPES.CREATE_END_CONDITION_SCRIPT;
+  requestId: string;
+  scriptType: EndConditionScriptType;
+}
+
+/** Webview → Extension: retry detection of the installed harness CLIs. */
+export interface RetryHarnessDetectionMessage {
+  type: typeof MESSAGE_TYPES.RETRY_HARNESS_DETECTION;
+  requestId: string;
+}
+
+/** Extension → Webview: result of a client-scoped harness detection retry. */
+export interface HarnessDetectionRetryResultMessage {
+  type: typeof MESSAGE_TYPES.HARNESS_DETECTION_RETRY_RESULT;
+  requestId: string;
+  success: boolean;
+  error?: string;
+}
+
+/** Extension → Webview: starter end-condition script creation succeeded. */
+export interface EndConditionScriptCreatedMessage {
+  type: typeof MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATED;
+  requestId: string;
+  scriptPath: string;
+}
+
+/** Extension → Webview: starter end-condition script creation failed. */
+export interface EndConditionScriptCreationFailedMessage {
+  type: typeof MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATION_FAILED;
+  requestId: string;
+  error: string;
+}
+
 /** Webview → Extension: open a prompt-file reference in the editor. */
 export interface OpenPromptFileMessage {
   type: typeof MESSAGE_TYPES.OPEN_PROMPT_FILE;
@@ -1366,6 +1404,7 @@ export interface DownloadServerCertMessage {
 export interface ServerCertDownloadedMessage {
   type: typeof MESSAGE_TYPES.SERVER_CERT_DOWNLOADED;
   saved: boolean;
+  error?: string;
 }
 
 /** Extension → Webview: acknowledge a setting update */
@@ -1394,6 +1433,14 @@ export interface CompletionNotificationEventPayload {
 export interface NotificationEventMessage {
   type: typeof MESSAGE_TYPES.NOTIFICATION_EVENT;
   event: CompletionNotificationEventPayload;
+}
+
+/** Webview -> Extension: display operational feedback through the native host. */
+export interface ShowNativeFeedbackMessage {
+  type: typeof MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK;
+  severity: UserFeedbackSeverity;
+  message: string;
+  detail?: string;
 }
 
 /** Extension/hosted server -> Webview: transient operational feedback. */
@@ -2190,6 +2237,9 @@ export type IncomingMessage =
   | { type: typeof MESSAGE_TYPES.TEMPLATE_INFO; template: any }
   | { type: typeof MESSAGE_TYPES.DEFAULT_TEMPLATE_SET; templateId: string }
   | { type: typeof MESSAGE_TYPES.WORKFLOW_CREATED; filePath: string }
+  | EndConditionScriptCreatedMessage
+  | EndConditionScriptCreationFailedMessage
+  | HarnessDetectionRetryResultMessage
   | {
       type: typeof MESSAGE_TYPES.COMPLETIONS_RESPONSE;
       completions: any[];

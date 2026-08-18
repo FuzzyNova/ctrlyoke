@@ -63,6 +63,56 @@ describe("template saving", () => {
     });
   });
 
+  it("renders the New template form pre-expanded when requested", () => {
+    const base = {
+      id: "simple-feature",
+      name: "Simple Feature",
+      description: "A base template",
+      variables: [],
+      isBuiltIn: true,
+    };
+    useUiStore.setState({
+      templates: [base],
+      defaultTemplateId: base.id,
+      currentTemplate: base,
+      openCreateTemplateForm: true,
+    });
+
+    render(<TemplateModal isOpen onClose={vi.fn()} />);
+
+    expect(screen.getByLabelText("Template Name")).toBeInTheDocument();
+    expect(screen.getByText(/Starts from Simple Feature/)).toBeInTheDocument();
+  });
+
+  it("shows a template collision as an inline name error", () => {
+    const base = {
+      id: "simple-feature",
+      name: "Simple Feature",
+      description: "A base template",
+      variables: [],
+      isBuiltIn: true,
+    };
+    useUiStore.setState({
+      templates: [base],
+      defaultTemplateId: base.id,
+      currentTemplate: base,
+      openCreateTemplateForm: true,
+    });
+
+    render(<TemplateModal isOpen onClose={vi.fn()} />);
+
+    act(() => {
+      useUiStore.getState().setCustomTemplateCreated({
+        templates: [base],
+        error: "Template already exists: feature-copy",
+      });
+    });
+
+    expect(
+      screen.getByText("Template already exists: feature-copy")
+    ).toBeInTheDocument();
+  });
+
   it("sends the selected template format when saving a workflow snapshot", () => {
     useUiStore.getState().openSaveWorkflowDialog({
       requestId: "save-1",

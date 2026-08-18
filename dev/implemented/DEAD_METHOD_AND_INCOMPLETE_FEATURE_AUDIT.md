@@ -30,7 +30,7 @@ surface 21 new webview-side candidates — see "Sweep 1b" below.
 
 **Related plans:**
 
-- [`BROWSER_USER_FEEDBACK_PLAN.md`](../active/BROWSER_USER_FEEDBACK_PLAN.md) — Site 1
+- [`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md) — Site 1
   is the `handleExecutionError` precedent for how to verify-then-delete a
   candidate from this audit.
 - [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md) — several

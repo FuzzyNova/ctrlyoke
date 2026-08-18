@@ -21,7 +21,7 @@
 > [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md).
 >
 > **No dependency on**
-> [`BROWSER_USER_FEEDBACK_PLAN.md`](../active/BROWSER_USER_FEEDBACK_PLAN.md). Every user
+> [`BROWSER_USER_FEEDBACK_PLAN.md`](./BROWSER_USER_FEEDBACK_PLAN.md). Every user
 > surface this plan needs already exists: `components/shared/Modal.tsx` for
 > blocking results, and the `warning` prop / `dropdownValidation.ts` helpers
 > shipped by `DROPDOWN_VALIDATION_STYLING_PLAN.md` for field diagnostics.

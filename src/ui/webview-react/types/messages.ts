@@ -57,6 +57,7 @@ export {
   PASTING_IMAGE_PLACEHOLDER,
   PASTED_IMAGE_SAVE_TIMEOUT_MS,
   PROMPT_FILE_CONVERSION_TIMEOUT_MS,
+  END_CONDITION_SCRIPT_TYPES,
   mimeTypeToImageExtension,
   isImageRefPath,
   type WorkflowPropertyKey,
@@ -90,6 +91,7 @@ export {
   type HarnessFileType,
   type FooterPicker,
   type WorkflowFileFormat,
+  type EndConditionScriptType,
 } from "@root/types/DashboardConstants";
 
 // Re-export all message and data types from WebviewMessageTypes
@@ -131,6 +133,11 @@ export {
   type FileRefValidationMessage,
   type ConvertPromptToFileMessage,
   type PromptFileCreatedMessage,
+  type CreateEndConditionScriptMessage,
+  type EndConditionScriptCreatedMessage,
+  type EndConditionScriptCreationFailedMessage,
+  type RetryHarnessDetectionMessage,
+  type HarnessDetectionRetryResultMessage,
   type OpenPromptFileMessage,
   type OpenWorktreeMessage,
   type ViewWorktreeDiffMessage,

@@ -1,6 +1,7 @@
 import { useUiStore } from "../store/uiStore";
 import type { WorkflowDefinitionMutation } from "@root/types/WebviewMessageTypes";
 import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import { notifyUser } from "@utils/notifyUser";
 
 interface MessageTarget {
   postMessage: (message: unknown) => void;
@@ -46,7 +47,7 @@ export function postRunLifecycleMutation(
     state.displayedDefinitionRevision === null ||
     state.displayedDescriptorRevision === null
   ) {
-    state.showToast(
+    notifyUser(
       "Select a saved run before changing its start position",
       USER_FEEDBACK_SEVERITY.WARNING
     );

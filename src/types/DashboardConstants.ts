@@ -59,6 +59,8 @@ export const MESSAGE_TYPES = {
   FINAL_PROMPT_STREAMING_EVENTS: "finalStepStreamingEvents", // Structured streaming events for finalStep
   QUEUE_SIZE_LIMIT_REACHED: "queueSizeLimitReached",
   EXECUTION_TIME_LIMIT_REACHED: "executionTimeLimitReached",
+  END_CONDITION_SCRIPT_CREATED: "endConditionScriptCreated",
+  END_CONDITION_SCRIPT_CREATION_FAILED: "endConditionScriptCreationFailed",
 
   // Webview -> Extension (Logging)
   LOG_MESSAGE: "logMessage", // Forward webview log entries to extension Log class (payload: { level: LogLevel, message: string })
@@ -78,6 +80,7 @@ export const MESSAGE_TYPES = {
   SHOW_OUTPUT: "showOutput",
   EXPORT_OUTPUT: "exportOutput",
   CHANGE_HARNESS: "changeHarness",
+  RETRY_HARNESS_DETECTION: "retryHarnessDetection",
 
   // Prompt Editor - Webview -> Extension
   EXECUTE_PROMPT: "executePrompt", // Send/Add with properties
@@ -87,6 +90,7 @@ export const MESSAGE_TYPES = {
   CANCEL_EDIT: "cancelEdit", // Exit edit mode
   SELECT_PROMPT_FOR_EDIT: "selectPromptForEdit", // Load prompt into editor
   DELETE_PROMPT: "deletePrompt", // Delete prompt from queue
+  CREATE_END_CONDITION_SCRIPT: "createEndConditionScript",
 
   // Workflow Status - Webview <-> Extension
   UPDATE_WORKFLOW_NAME: "updateWorkflowName", // Webview -> Extension: Save new workflow name
@@ -106,6 +110,7 @@ export const MESSAGE_TYPES = {
   OPEN_VSCODE_MCP_BROWSER: "openVscodeMcpBrowser", // Webview -> Extension: Open VS Code's native MCP server browser
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   HARNESS_STATUS_UPDATE: "harnessStatusUpdate", // Update harness availability
+  HARNESS_DETECTION_RETRY_RESULT: "harnessDetectionRetryResult", // Result of a client-scoped detection retry
   HARNESS_CAPABILITY_SNAPSHOT: "harnessCapabilitySnapshot", // Installed-version-aware harness facts
   AGENTS_UPDATE: "agentsUpdate", // Update available agents list
   SKILLS_UPDATE: "skillsUpdate", // Update available skills list
@@ -419,6 +424,8 @@ export const MESSAGE_TYPES = {
   NOTIFICATION_EVENT: "notificationEvent",
   /** Extension/Hosted server -> Webview: operational user feedback */
   USER_FEEDBACK: "userFeedback",
+  /** Webview -> Extension: native VS Code operational user feedback */
+  SHOW_NATIVE_FEEDBACK: "showNativeFeedback",
 } as const;
 
 // ============================================================================
@@ -528,6 +535,17 @@ export const USER_FEEDBACK_SEVERITY = {
   WARNING: "warning",
   ERROR: "error",
 } as const;
+
+/** Script languages supported by the built-in end-condition starter templates. */
+export const END_CONDITION_SCRIPT_TYPES = {
+  PYTHON: "python",
+  JAVASCRIPT: "javascript",
+  SHELL: "shell",
+  POWERSHELL: "powershell",
+} as const;
+
+export type EndConditionScriptType =
+  (typeof END_CONDITION_SCRIPT_TYPES)[keyof typeof END_CONDITION_SCRIPT_TYPES];
 
 export type UserFeedbackSeverity =
   (typeof USER_FEEDBACK_SEVERITY)[keyof typeof USER_FEEDBACK_SEVERITY];

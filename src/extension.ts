@@ -169,29 +169,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
       if (WorkspaceInitializer.isInitialized(workspaceRoot)) {
         // Already initialized — idempotently ensure scaffold is up to date
-        WorkspaceInitializer.initializeIfNeeded(workspaceRoot)
-          .then((isNew) => {
-            if (isNew) {
-              vscode.window
-                .showInformationMessage(
-                  `ctrlyoke: Workspace initialized! A ${PATH_CONSTANTS.CTRLYOKE_DIR}/ directory has been created for your workflows, prompts, and scripts.`,
-                  "Reveal Folder"
-                )
-                .then((choice) => {
-                  if (choice === "Reveal Folder") {
-                    vscode.commands.executeCommand(
-                      "revealFileInOS",
-                      vscode.Uri.file(
-                        path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR)
-                      )
-                    );
-                  }
-                });
-            }
-          })
-          .catch((err) => {
-            Log.warn("ctrlyoke: Workspace initialization failed:", err);
-          });
+        WorkspaceInitializer.initializeIfNeeded(workspaceRoot).catch((err) => {
+          Log.warn("ctrlyoke: Workspace initialization failed:", err);
+        });
 
         // Clean up orphaned temp prompt files (from previous sessions)
         const tempMgr = new TempFileManager(workspaceRoot);
@@ -224,7 +204,11 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 
     // Register React webview provider (Phase 4 - unified provider)
-    webviewProvider = new CtrlYokeWebviewProvider(context);
+    const vscodeUserFeedbackSink = new VsCodeUserFeedbackSink();
+    webviewProvider = new CtrlYokeWebviewProvider(
+      context,
+      vscodeUserFeedbackSink
+    );
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(
         "ctrlyoke.dashboard",
@@ -258,7 +242,7 @@ export async function activate(context: vscode.ExtensionContext) {
       (message) => hostedServer?.broadcastUserFeedback(message)
     );
     const userFeedbackSink = new CompositeUserFeedbackSink([
-      new VsCodeUserFeedbackSink(),
+      vscodeUserFeedbackSink,
       browserUserFeedbackSink,
     ]);
     workflowOrchestrator = new WorkflowOrchestrator(
@@ -518,22 +502,6 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
-  // Create End Condition Script command
-  const createEndConditionScriptCommand = vscode.commands.registerCommand(
-    "ctrlyoke.createEndConditionScript",
-    async () => {
-      await workflowOrchestrator.createEndConditionScript();
-    }
-  );
-
-  // Import Workflow Templates command
-  const importWorkflowTemplatesCommand = vscode.commands.registerCommand(
-    "ctrlyoke.importWorkflowTemplates",
-    async () => {
-      await workflowOrchestrator.importWorkflowTemplates();
-    }
-  );
-
   // New Workflow command (opens modal in dashboard)
   const newWorkflowCommand = vscode.commands.registerCommand(
     "ctrlyoke.newWorkflow",
@@ -545,11 +513,14 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
-  // Create New Template command (QuickPick flow)
+  // Create New Template command (opens the dashboard's inline form)
   const createNewTemplateCommand = vscode.commands.registerCommand(
     "ctrlyoke.createNewTemplate",
     async () => {
-      await workflowOrchestrator.createNewTemplate();
+      await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
+      await webviewProvider.openNewWorkflowModal({
+        openCreateTemplateForm: true,
+      });
     }
   );
 
@@ -1240,8 +1211,6 @@ function registerCommands(context: vscode.ExtensionContext) {
     pauseCommand,
     resumeCommand,
     stopCommand,
-    createEndConditionScriptCommand,
-    importWorkflowTemplatesCommand,
     newWorkflowCommand,
     createNewTemplateCommand,
     runFromContextCommand,

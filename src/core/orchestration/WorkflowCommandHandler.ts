@@ -1,17 +1,11 @@
 import * as vscode from "vscode";
-import * as path from "path";
-import { PromptFileParser } from "../PromptFileParser";
-import { EndConditionEvaluator } from "../EndConditionEvaluator";
-import { TemplateManager, type TemplateScope } from "../TemplateManager";
 import {
   ConfigurationUtils,
 } from "../../utils/ConfigurationUtils";
 import {
-  HARNESS_STATUS_STRINGS,
   USER_FEEDBACK_SEVERITY,
 } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
-import { getErrorMessage } from "../../utils/ErrorUtils";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 
 /**
@@ -20,143 +14,19 @@ import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
  * RESPONSIBILITY: Command Routing & UI Interactions
  *
  * Handles all user-facing commands including:
- * - Creating end condition scripts
  * - Opening files and panels
  * - Opening current prompt file
  */
 export class WorkflowCommandHandler {
-  private templateManager: TemplateManager;
-
   constructor(
-    _context: vscode.ExtensionContext,
-    _promptFileParser: PromptFileParser,
-    private endConditionEvaluator: EndConditionEvaluator,
-    private currentWorkspaceFolder?: vscode.WorkspaceFolder,
     private readonly userFeedbackSink?: UserFeedbackSink
   ) {
-    this.templateManager = new TemplateManager(_context);
-  }
-
-  /**
-   * Update workspace folder reference
-   * @param workspaceFolder New workspace folder
-   */
-  setWorkspaceFolder(
-    workspaceFolder: vscode.WorkspaceFolder | undefined
-  ): void {
-    this.currentWorkspaceFolder = workspaceFolder;
-  }
-
-  /**
-   * Create an end condition script from templates
-   */
-  async createEndConditionScript(): Promise<void> {
-    try {
-      // Ask user which type of script to create
-      const scriptType = await vscode.window.showQuickPick(
-        [
-          {
-            label: "$(file-code) Python",
-            description: "Create a Python end condition script",
-            value: "python" as const,
-          },
-          {
-            label: "$(file-code) JavaScript",
-            description: "Create a JavaScript/Node.js end condition script",
-            value: "javascript" as const,
-          },
-          {
-            label: "$(terminal) Shell Script",
-            description:
-              process.platform === "win32"
-                ? "Create a Windows batch script"
-                : "Create a bash shell script",
-            value: "shell" as const,
-          },
-          {
-            label: "$(terminal-powershell) PowerShell",
-            description: "Create a PowerShell script (.ps1)",
-            value: "powershell" as const,
-          },
-        ],
-        {
-          placeHolder: "Select the type of end condition script to create",
-          title: "ctrlyoke: Create End Condition Script",
-        }
-      );
-
-      if (!scriptType) {
-        return; // User cancelled
-      }
-
-      // Create the script
-      const scriptPath = await this.endConditionEvaluator.createSampleScript(
-        scriptType.value
-      );
-
-      if (scriptPath) {
-        // Show success message with option to open
-        const action = await vscode.window.showInformationMessage(
-          `✅ Created end condition script: ${path.basename(scriptPath)}`,
-          "Open Script",
-          "Show in Explorer"
-        );
-
-        if (action === "Open Script") {
-          const doc = await vscode.workspace.openTextDocument(scriptPath);
-          await vscode.window.showTextDocument(doc);
-        } else if (action === "Show in Explorer") {
-          await vscode.commands.executeCommand(
-            "revealFileInOS",
-            vscode.Uri.file(scriptPath)
-          );
-        }
-      } else {
-        notifyUserFeedback(
-          this.userFeedbackSink,
-          USER_FEEDBACK_SEVERITY.ERROR,
-          "❌ Failed to create end condition script. Check that you have a workspace folder open."
-        );
-      }
-    } catch (error) {
-      Log.error("ctrlyoke: Error creating end condition script:", error);
-      notifyUserFeedback(
-        this.userFeedbackSink,
-        USER_FEEDBACK_SEVERITY.ERROR,
-        `❌ Failed to create end condition script: ${error}`
-      );
-    }
   }
 
   /**
    * Open ctrlyoke panel/dashboard
-   * Shows warning and retry if harness is unavailable
-   *
-   * @param getHarnessStatus Callback to get current harness status
-   * @param onRetry Callback to retry harness detection
    */
-  async openPanel(
-    getHarnessStatus: () => { initializationStatus: string },
-    onRetry: () => Promise<void>
-  ): Promise<void> {
-    // Check if harness is unavailable and offer retry
-    const harnessStatus = getHarnessStatus();
-
-    if (
-      harnessStatus.initializationStatus === HARNESS_STATUS_STRINGS.UNAVAILABLE
-    ) {
-      const action = await vscode.window.showWarningMessage(
-        "ctrlyoke: HarnessId automation is unavailable. Would you like to retry detection?",
-        "Retry Detection",
-        "Continue Anyway"
-      );
-
-      if (action === "Retry Detection") {
-        await onRetry();
-        return;
-      }
-    }
-
+  async openPanel(): Promise<void> {
     // Focus the ctrlyoke dashboard panel
     try {
       await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
@@ -190,69 +60,6 @@ export class WorkflowCommandHandler {
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.ERROR,
         `ctrlyoke: Failed to open file: ${error}`
-      );
-    }
-  }
-
-  /** Create a new custom template from the built-in Template Starter. */
-  async createNewTemplate(): Promise<void> {
-    try {
-      let scope: TemplateScope = "user";
-      if (this.currentWorkspaceFolder) {
-        const scopePick = await vscode.window.showQuickPick(
-          [
-            {
-              label: "Workspace",
-              description: ".ctrlyoke/templates — this project only",
-              scope: "workspace" as const,
-            },
-            {
-              label: "User",
-              description:
-                "~/.ctrlyoke/templates — available in every workspace",
-              scope: "user" as const,
-            },
-          ],
-          { placeHolder: "Where should this template be stored?" }
-        );
-
-        if (!scopePick) {
-          return;
-        }
-        scope = scopePick.scope;
-      }
-
-      const templateName = await vscode.window.showInputBox({
-        prompt: "Enter a name for your custom template",
-        placeHolder: "my-custom-template",
-        validateInput: (value) => {
-          if (!value || !value.trim()) {
-            return "Template name is required";
-          }
-          if (/[<>:"/\\|?*\x00-\x1f]/.test(value)) {
-            return "Invalid characters in template name";
-          }
-          return undefined;
-        },
-      });
-
-      if (!templateName) {
-        return;
-      }
-
-      const templatePath = await this.templateManager.createCustomTemplate(
-        templateName.trim(),
-        scope
-      );
-
-      const doc = await vscode.workspace.openTextDocument(templatePath);
-      await vscode.window.showTextDocument(doc);
-    } catch (error) {
-      const errorMsg = getErrorMessage(error);
-      notifyUserFeedback(
-        this.userFeedbackSink,
-        USER_FEEDBACK_SEVERITY.ERROR,
-        `Failed to create template: ${errorMsg}`
       );
     }
   }

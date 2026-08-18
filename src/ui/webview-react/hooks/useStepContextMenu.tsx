@@ -19,11 +19,11 @@ import {
   serializeWorkflowStepText,
   writeClipboardText,
 } from "@utils/stepClipboard";
-import { useUiStore } from "@store/uiStore";
 import { postRunLifecycleMutation } from "../utils/workflowMutation";
 import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
+import { notifyUser } from "@utils/notifyUser";
 
 interface UseStepContextMenuOptions {
   isCLIManaged: boolean;
@@ -169,12 +169,10 @@ export function useStepContextMenu({
                   });
                 })
                 .catch(() => {
-                  useUiStore
-                    .getState()
-                    .showToast(
-                      "Clipboard does not contain a workflow step",
-                      USER_FEEDBACK_SEVERITY.WARNING
-                    );
+                  notifyUser(
+                    "Clipboard does not contain a workflow step",
+                    USER_FEEDBACK_SEVERITY.WARNING
+                  );
                 });
             },
           },
@@ -347,12 +345,10 @@ export function usePasteToEndContextMenu({
                   });
                 })
                 .catch(() => {
-                  useUiStore
-                    .getState()
-                    .showToast(
-                      "Clipboard does not contain a workflow step",
-                      USER_FEEDBACK_SEVERITY.WARNING
-                    );
+                  notifyUser(
+                    "Clipboard does not contain a workflow step",
+                    USER_FEEDBACK_SEVERITY.WARNING
+                  );
                 });
             },
           },

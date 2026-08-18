@@ -31,6 +31,7 @@ import { TemplateManager } from "../core/TemplateManager";
 import { Log } from "../utils/Log";
 import { onModelsLoaded } from "../utils/ModelRegistry";
 import { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
+import type { UserFeedbackSink } from "../core/UserFeedbackSink";
 import type { WorkflowSummary } from "../types/CtrlYokeTypes";
 import { PostMessageDashboardSink } from "./PostMessageDashboardSink";
 import { workflowDisplayStep } from "../types/CtrlYokeTypes";
@@ -125,7 +126,10 @@ export class CtrlYokeWebviewProvider
     );
   }
 
-  constructor(private readonly context: vscode.ExtensionContext) {
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    nativeFeedbackSink?: UserFeedbackSink
+  ) {
     const templateManager = new TemplateManager(context);
 
     // Bind postMessage to use the view reference
@@ -159,6 +163,8 @@ export class CtrlYokeWebviewProvider
           this.handleDevAction(action, scopedPostMessage),
         handleDevStatusRequest: (scopedPostMessage) =>
           this.sendDevStatus(scopedPostMessage),
+        handleNativeFeedback: (feedback) =>
+          nativeFeedbackSink?.notify(feedback),
         handleUxSnapshot: (payload, workspaceRoot, scopedPostMessage) =>
           this.handleUxSnapshot(payload, workspaceRoot, scopedPostMessage),
         resolveImageWebviewUri: (absolutePath: string) =>
@@ -1018,8 +1024,16 @@ export class CtrlYokeWebviewProvider
    * and default template (same data the "From Template" dropdown button sends
    * via NEW_WORKFLOW — see WorkflowSerializer.handleNewWorkflow).
    */
-  public async openNewWorkflowModal(): Promise<void> {
-    await this.serializer.handleNewWorkflow((msg) => this.postMessage(msg));
+  public async openNewWorkflowModal(options?: {
+    openCreateTemplateForm?: boolean;
+  }): Promise<void> {
+    await this.serializer.handleNewWorkflow((message) => {
+      this.postMessage(
+        options?.openCreateTemplateForm
+          ? { ...message, openCreateTemplateForm: true }
+          : message
+      );
+    });
   }
 
   public async enqueuePromptEditorInsert(

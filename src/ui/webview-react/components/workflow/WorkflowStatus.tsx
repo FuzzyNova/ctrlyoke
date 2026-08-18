@@ -82,10 +82,18 @@ const WORKFLOW_ROW_WIDTH_CSS_VAR = "--workflow-row-usable-width";
 // dropdown in its departing run-panel state.
 const RUN_PANEL_EXIT_FALLBACK_MS = 320;
 
-type PendingDelete = {
-  address: WorkflowViewAddress;
-  scope: WorkflowContextMenuTarget["scope"];
-};
+type PendingDelete =
+  | {
+      address: WorkflowViewAddress;
+      scope: WorkflowContextMenuTarget["scope"];
+    }
+  | {
+      scope: "all";
+    };
+
+function assertNever(value: never): never {
+  throw new Error(`Unexpected pending delete scope: ${String(value)}`);
+}
 
 function roundMetric(value: number): number {
   return Math.round(value * 10) / 10;
@@ -1021,10 +1029,19 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
   // Clear workflow history
   const handleClearHistory = useCallback(() => {
-    vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY });
-    setRecentWorkflows([]);
-    closeDropdown();
-  }, [closeDropdown, setRecentWorkflows, vscode]);
+    if (!globalSettings.confirmDeleteOperations) {
+      vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY });
+      setRecentWorkflows([]);
+      closeDropdown();
+      return;
+    }
+    setPendingDelete({ scope: "all" });
+  }, [
+    closeDropdown,
+    globalSettings.confirmDeleteOperations,
+    setRecentWorkflows,
+    vscode,
+  ]);
 
   // Remove a single entry from recent workflow history — shows confirm modal or deletes directly
   const handleRemoveWorkflow = useCallback(
@@ -1053,26 +1070,36 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Confirmed: actually remove the workflow history entry
   const handleRemoveWorkflowConfirm = useCallback(() => {
     if (!pendingDelete) return;
-    if (pendingDelete.scope === "run") {
-      vscode.postMessage({
-        type: MESSAGE_TYPES.DELETE_RUN_HISTORY,
-        address: pendingDelete.address,
-      });
-    } else {
-      vscode.postMessage({
-        type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
-        address: pendingDelete.address,
-      });
-      setRecentWorkflows(
-        useUiStore
-          .getState()
-          .recentWorkflows.filter(
-            (w) => w.address.workflowKey !== pendingDelete.address.workflowKey
-          )
-      );
+    switch (pendingDelete.scope) {
+      case "run":
+        vscode.postMessage({
+          type: MESSAGE_TYPES.DELETE_RUN_HISTORY,
+          address: pendingDelete.address,
+        });
+        break;
+      case "lineage":
+        vscode.postMessage({
+          type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
+          address: pendingDelete.address,
+        });
+        setRecentWorkflows(
+          useUiStore
+            .getState()
+            .recentWorkflows.filter(
+              (w) => w.address.workflowKey !== pendingDelete.address.workflowKey
+            )
+        );
+        break;
+      case "all":
+        vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY });
+        setRecentWorkflows([]);
+        closeDropdown();
+        break;
+      default:
+        assertNever(pendingDelete);
     }
     setPendingDelete(null);
-  }, [pendingDelete, setRecentWorkflows, vscode]);
+  }, [closeDropdown, pendingDelete, setRecentWorkflows, vscode]);
 
   const handleRemoveWorkflowCancel = useCallback(() => {
     setPendingDelete(null);
@@ -1770,19 +1797,25 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         onCancel={handleRemoveWorkflowCancel}
         onConfirm={handleRemoveWorkflowConfirm}
         title={
-          pendingDelete?.scope === "run"
-            ? "Delete Run History"
-            : "Delete Workflow History"
+          pendingDelete?.scope === "all"
+            ? "Delete All Workflow History"
+            : pendingDelete?.scope === "run"
+              ? "Delete Run History"
+              : "Delete Workflow History"
         }
         message={
-          pendingDelete?.scope === "run"
-            ? `Delete run "${pendingDelete.address.kind === "run" ? pendingDelete.address.runRef : ""}"?`
-            : `Remove "${pendingDelete?.address.workflowKey ?? ""}" from history?`
+          pendingDelete?.scope === "all"
+            ? "Delete all workflows and their run history?"
+            : pendingDelete?.scope === "run"
+              ? `Delete run "${pendingDelete.address.kind === "run" ? pendingDelete.address.runRef : ""}"?`
+              : `Remove "${pendingDelete?.address.workflowKey ?? ""}" from history?`
         }
         detail={
-          pendingDelete?.scope === "run"
-            ? "This will permanently delete this run's history. This action cannot be undone."
-            : "This will permanently delete the workflow's queue files and all run history. This action cannot be undone."
+          pendingDelete?.scope === "all"
+            ? "This will permanently delete all workflow queue files and run history. This action cannot be undone."
+            : pendingDelete?.scope === "run"
+              ? "This will permanently delete this run's history. This action cannot be undone."
+              : "This will permanently delete the workflow's queue files and all run history. This action cannot be undone."
         }
       />
     </div>

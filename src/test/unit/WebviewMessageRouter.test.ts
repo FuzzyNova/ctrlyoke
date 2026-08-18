@@ -12,8 +12,14 @@ import * as assert from "assert";
 import * as path from "path";
 import * as vscode from "vscode";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
-import { MESSAGE_TYPES, VSCODE_COMMANDS } from "../../types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  END_CONDITION_SCRIPT_TYPES,
+  USER_FEEDBACK_SEVERITY,
+  VSCODE_COMMANDS,
+} from "../../types/DashboardConstants";
 import { WorkflowVariantService } from "../../core/orchestration/WorkflowVariantService";
+import { VsCodeUserFeedbackSink } from "../../platform/VsCodeUserFeedbackSink";
 
 function buildRouter(
   orchestrator: unknown,
@@ -134,6 +140,183 @@ suite("WebviewMessageRouter — client workflow file paths", () => {
       [absolute, absolute],
       "an already-absolute path must not be rewritten"
     );
+  });
+});
+
+suite("WebviewMessageRouter — native feedback", () => {
+  test("delegates each severity to the existing VS Code feedback sink", async () => {
+    const calls: string[] = [];
+    const sink = new VsCodeUserFeedbackSink({
+      showInformationMessage: () => calls.push("info"),
+      showWarningMessage: () => calls.push("warning"),
+      showErrorMessage: () => calls.push("error"),
+    });
+    const router = new WebviewMessageRouter(
+      () => {},
+      { sendWorkflowPropertiesToSettings: async () => {} } as any,
+      {} as any,
+      () => undefined,
+      {} as any,
+      {
+        handleClearWorkflow: async () => {},
+        updateWorkflowName: () => {},
+        handleNativeFeedback: (feedback) => sink.notify(feedback),
+      }
+    );
+
+    for (const [severity, expectedApi] of [
+      [USER_FEEDBACK_SEVERITY.INFO, "info"],
+      [USER_FEEDBACK_SEVERITY.SUCCESS, "info"],
+      [USER_FEEDBACK_SEVERITY.WARNING, "warning"],
+      [USER_FEEDBACK_SEVERITY.ERROR, "error"],
+    ] as const) {
+      await router.route({
+        type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
+        severity,
+        message: "Feedback",
+        detail: "More detail",
+      });
+      assert.strictEqual(calls.at(-1), expectedApi);
+    }
+  });
+
+  test("ignores malformed feedback payloads", async () => {
+    const received: unknown[] = [];
+    const router = new WebviewMessageRouter(
+      () => {},
+      { sendWorkflowPropertiesToSettings: async () => {} } as any,
+      {} as any,
+      () => undefined,
+      {} as any,
+      {
+        handleClearWorkflow: async () => {},
+        updateWorkflowName: () => {},
+        handleNativeFeedback: (feedback) => received.push(feedback),
+      }
+    );
+
+    await router.route({
+      type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
+      severity: "unknown",
+      message: "Feedback",
+    });
+    await router.route({
+      type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK,
+      severity: USER_FEEDBACK_SEVERITY.INFO,
+      message: 42,
+    });
+
+    assert.deepStrictEqual(received, []);
+  });
+});
+
+suite("WebviewMessageRouter — end-condition script creation", () => {
+  test("delegates to the evaluator and replies only to the initiating client", async () => {
+    const created: string[] = [];
+    const panelMessages: unknown[] = [];
+    const browserMessages: unknown[] = [];
+    const router = buildRouter(
+      {
+        createSampleScript: async (scriptType: string) => {
+          created.push(scriptType);
+          return ".ctrlyoke/scripts/check_condition.js";
+        },
+      },
+      (message) => panelMessages.push(message)
+    );
+
+    await router.route(
+      {
+        type: MESSAGE_TYPES.CREATE_END_CONDITION_SCRIPT,
+        requestId: "create-1",
+        scriptType: END_CONDITION_SCRIPT_TYPES.JAVASCRIPT,
+      },
+      {
+        clientTag: "browser:1",
+        postMessage: (message: unknown) => browserMessages.push(message),
+      }
+    );
+
+    assert.deepStrictEqual(created, [END_CONDITION_SCRIPT_TYPES.JAVASCRIPT]);
+    assert.deepStrictEqual(browserMessages, [
+      {
+        type: MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATED,
+        requestId: "create-1",
+        scriptPath: ".ctrlyoke/scripts/check_condition.js",
+      },
+    ]);
+    assert.deepStrictEqual(panelMessages, []);
+  });
+
+  test("returns a typed, scoped failure when generation fails", async () => {
+    const panelMessages: unknown[] = [];
+    const browserMessages: unknown[] = [];
+    const router = buildRouter(
+      {
+        createSampleScript: async () => {
+          throw new Error("permission denied");
+        },
+      },
+      (message) => panelMessages.push(message)
+    );
+
+    await router.route(
+      {
+        type: MESSAGE_TYPES.CREATE_END_CONDITION_SCRIPT,
+        requestId: "create-2",
+        scriptType: END_CONDITION_SCRIPT_TYPES.PYTHON,
+      },
+      {
+        clientTag: "browser:2",
+        postMessage: (message: unknown) => browserMessages.push(message),
+      }
+    );
+
+    assert.deepStrictEqual(browserMessages, [
+      {
+        type: MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATION_FAILED,
+        requestId: "create-2",
+        error: "permission denied",
+      },
+    ]);
+    assert.deepStrictEqual(panelMessages, []);
+  });
+});
+
+suite("WebviewMessageRouter — harness detection retry", () => {
+  test("retries detection and replies only to the initiating client", async () => {
+    const panelMessages: unknown[] = [];
+    const browserMessages: unknown[] = [];
+    let retryCount = 0;
+    const router = buildRouter(
+      {
+        retryHarnessDetection: async () => {
+          retryCount += 1;
+        },
+      },
+      (message) => panelMessages.push(message)
+    );
+
+    await router.route(
+      {
+        type: MESSAGE_TYPES.RETRY_HARNESS_DETECTION,
+        requestId: "retry-1",
+      },
+      {
+        clientTag: "browser:retry",
+        postMessage: (message: unknown) => browserMessages.push(message),
+      }
+    );
+
+    assert.strictEqual(retryCount, 1);
+    assert.deepStrictEqual(browserMessages, [
+      {
+        type: MESSAGE_TYPES.HARNESS_DETECTION_RETRY_RESULT,
+        requestId: "retry-1",
+        success: true,
+      },
+    ]);
+    assert.deepStrictEqual(panelMessages, []);
   });
 });
 

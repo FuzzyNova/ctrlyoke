@@ -5,8 +5,8 @@ import {
 } from "@components/shared/StepContextMenu";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
-import { useUiStore } from "@store/uiStore";
 import { writeClipboardText } from "@utils/stepClipboard";
+import { notifyUser } from "@utils/notifyUser";
 
 export interface WorkflowContextMenuTarget {
   address: WorkflowViewAddress;
@@ -90,20 +90,16 @@ export function useWorkflowContextMenu({
               if (!target.runDirectory) return;
               void writeClipboardText(target.runDirectory)
                 .then(() => {
-                  useUiStore
-                    .getState()
-                    .showToast(
-                      "Run directory path copied to clipboard",
-                      USER_FEEDBACK_SEVERITY.SUCCESS
-                    );
+                  notifyUser(
+                    "Run directory path copied to clipboard",
+                    USER_FEEDBACK_SEVERITY.SUCCESS
+                  );
                 })
                 .catch(() => {
-                  useUiStore
-                    .getState()
-                    .showToast(
-                      "Failed to copy run directory path",
-                      USER_FEEDBACK_SEVERITY.ERROR
-                    );
+                  notifyUser(
+                    "Failed to copy run directory path",
+                    USER_FEEDBACK_SEVERITY.ERROR
+                  );
                 });
             },
           },

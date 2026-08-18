@@ -55,6 +55,7 @@ import {
   STEP_TYPES,
   TERMINAL_SESSION_STATUS,
   USER_FEEDBACK_SEVERITY,
+  type EndConditionScriptType,
   type HarnessId,
   type QueuePosition,
   type ActionType,
@@ -77,10 +78,7 @@ import type {
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
-import {
-  ConfigurationUtils,
-  PATH_CONSTANTS,
-} from "../utils/ConfigurationUtils";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { clearRunSummaryCache } from "./orchestration/RunSummaryCache";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
@@ -97,7 +95,6 @@ import {
 } from "./harness/PtyProcessManager";
 
 // Orchestration classes that remain at orchestrator level
-import { TemplateImporter } from "./orchestration/TemplateImporter";
 import { WorkflowCommandHandler } from "./orchestration/WorkflowCommandHandler";
 import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager";
 import { WorkspaceInitializer } from "./orchestration/WorkspaceInitializer";
@@ -126,7 +123,7 @@ import {
  * are shared or orchestrator-scoped:
  *   - Four harness integrations (created once, shared for Phase 1)
  *   - StatusBarManager
- *   - TemplateImporter / WorkflowCommandHandler
+ *   - WorkflowCommandHandler
  *   - WorkspaceSessionManager (workspace-level session discovery)
  *   - dashboardReady / orchestratorInitialized gates
  *
@@ -345,12 +342,11 @@ export class WorkflowOrchestrator {
   private readonly antigravityCliIntegration: CliIntegration;
 
   // Orchestration helpers
-  private readonly templateImporter: TemplateImporter;
   private readonly workflowCommandHandler: WorkflowCommandHandler;
   private readonly workspaceSessionManager: WorkspaceSessionManager;
   private readonly promptFileParser: PromptFileParser;
-  /** Dedicated evaluator for WorkflowCommandHandler (createEndConditionScript) */
-  private readonly endConditionEvaluatorForCommands: EndConditionEvaluator;
+  /** Evaluator used by the dashboard's in-app starter-script control. */
+  private readonly endConditionEvaluator: EndConditionEvaluator;
 
   // Initialization gates
   private dashboardReady: boolean = false;
@@ -462,24 +458,12 @@ export class WorkflowOrchestrator {
       this.promptFileParser,
       new VsCodeAdapter(context)
     );
-    this.templateImporter = new TemplateImporter(
-      context,
-      undefined,
-      this.userFeedbackSink
-    );
-    this.endConditionEvaluatorForCommands = new EndConditionEvaluator(
+    this.endConditionEvaluator = new EndConditionEvaluator(
       new VsCodeAdapter(context)
     );
     this.workflowCommandHandler = new WorkflowCommandHandler(
-      context,
-      this.promptFileParser,
-      this.endConditionEvaluatorForCommands,
-      undefined,
       this.userFeedbackSink
     );
-
-    this.templateImporter.setWorkspaceFolder(this.currentWorkspaceFolder);
-    this.workflowCommandHandler.setWorkspaceFolder(this.currentWorkspaceFolder);
 
     // Wire harness status subscriptions
     const defaultIntegration = this.getDefaultIntegration();
@@ -1339,23 +1323,6 @@ export class WorkflowOrchestrator {
       isNew = await WorkspaceInitializer.initializeIfNeeded(workspaceRoot);
       // .ctrlyoke/ now exists — start file logging for this session.
       Log.enableWorkspaceFileLogging();
-      if (isNew) {
-        void vscode.window
-          .showInformationMessage(
-            `ctrlyoke: Workspace initialized! A ${PATH_CONSTANTS.CTRLYOKE_DIR}/ directory has been created for your workflows, prompts, and scripts.`,
-            "Reveal Folder"
-          )
-          .then((choice) => {
-            if (choice === "Reveal Folder") {
-              vscode.commands.executeCommand(
-                "revealFileInOS",
-                vscode.Uri.file(
-                  path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR)
-                )
-              );
-            }
-          });
-      }
     } catch (err) {
       Log.warn("ctrlyoke: Workspace initialization failed:", err);
     }
@@ -4908,10 +4875,7 @@ export class WorkflowOrchestrator {
   }
 
   async openPanel(): Promise<void> {
-    await this.workflowCommandHandler.openPanel(
-      () => this.getDefaultIntegration().getDetailedStatus(),
-      async () => await this.retryHarnessDetection()
-    );
+    await this.workflowCommandHandler.openPanel();
   }
 
   async openCurrentPromptFile(): Promise<void> {
@@ -4919,16 +4883,10 @@ export class WorkflowOrchestrator {
     await this.workflowCommandHandler.openCurrentPromptFile(filePath);
   }
 
-  async createEndConditionScript(): Promise<void> {
-    await this.workflowCommandHandler.createEndConditionScript();
-  }
-
-  async importWorkflowTemplates(): Promise<void> {
-    await this.templateImporter.importWorkflowTemplates();
-  }
-
-  async createNewTemplate(): Promise<void> {
-    await this.workflowCommandHandler.createNewTemplate();
+  async createSampleScript(
+    scriptType: EndConditionScriptType
+  ): Promise<string | null> {
+    return this.endConditionEvaluator.createSampleScript(scriptType);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -4992,7 +4950,7 @@ export class WorkflowOrchestrator {
     this.polledRunnerJsonMtimes.clear();
 
     this.statusBarManager.dispose();
-    this.endConditionEvaluatorForCommands.dispose();
+    this.endConditionEvaluator.dispose();
     this.compatibilityRegistry.dispose();
     // The run-summary cache is module-level, so nothing else drops it when the
     // host tears down (workspace close, extension deactivate).

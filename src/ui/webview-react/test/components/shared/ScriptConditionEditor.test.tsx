@@ -1,7 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ScriptConditionEditor } from "@components/shared/ScriptConditionEditor";
-import { CONDITION_ACTIONS } from "@/types/messages";
+import { CONDITION_ACTIONS, MESSAGE_TYPES } from "@/types/messages";
+import { END_CONDITION_SCRIPT_TYPES } from "@root/types/DashboardConstants";
+
+const { notifyUserMock } = vi.hoisted(() => ({ notifyUserMock: vi.fn() }));
+
+vi.mock("@utils/notifyUser", () => ({ notifyUser: notifyUserMock }));
 
 vi.mock("@components/editor/CodeMirrorEditor", () => ({
   CodeMirrorEditor: ({
@@ -38,6 +43,97 @@ vi.mock("@components/editor/CodeMirrorEditor", () => ({
 }));
 
 describe("ScriptConditionEditor", () => {
+  it("offers the shared script types and creates a starter script", async () => {
+    const onChange = vi.fn();
+    const postMessage = vi.fn();
+    (window.vscodeApi as any).postMessage = postMessage;
+
+    render(
+      <ScriptConditionEditor
+        variant="endCondition"
+        value={{ returns: "true" }}
+        onChange={onChange}
+        idPrefix="test-condition"
+      />
+    );
+
+    const picker = screen.getByRole("button", { name: "Script type" });
+    fireEvent.click(picker);
+    const javascriptOption = screen.getByText("JavaScript").closest("button");
+    expect(javascriptOption).not.toBeNull();
+    fireEvent.click(javascriptOption!);
+
+    expect(picker).toHaveTextContent("JavaScript");
+    fireEvent.click(screen.getByRole("button", { name: "Create Script" }));
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.CREATE_END_CONDITION_SCRIPT,
+      requestId: expect.any(String),
+      scriptType: END_CONDITION_SCRIPT_TYPES.JAVASCRIPT,
+    });
+
+    const requestId = postMessage.mock.calls[0][0].requestId;
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATED,
+          requestId,
+          scriptPath: "C:\\workspace\\.ctrlyoke\\scripts\\check_condition.js",
+        },
+      })
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Script")).toHaveValue(
+        "C:\\workspace\\.ctrlyoke\\scripts\\check_condition.js"
+      );
+    });
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        script: "C:\\workspace\\.ctrlyoke\\scripts\\check_condition.js",
+      })
+    );
+    expect(notifyUserMock).toHaveBeenCalledWith(
+      "Created end condition script: check_condition.js",
+      "success"
+    );
+  });
+
+  it("surfaces a scoped creation failure through notifyUser", async () => {
+    const postMessage = vi.fn();
+    (window.vscodeApi as any).postMessage = postMessage;
+
+    render(
+      <ScriptConditionEditor
+        variant="endCondition"
+        value={{ script: "npm test" }}
+        onChange={vi.fn()}
+        idPrefix="test-condition"
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Create Script" }));
+    const requestId = postMessage.mock.calls[0][0].requestId;
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        data: {
+          type: MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATION_FAILED,
+          requestId,
+          error: "No workspace is open.",
+        },
+      })
+    );
+
+    await waitFor(() => {
+      expect(notifyUserMock).toHaveBeenCalledWith(
+        "No workspace is open.",
+        "error"
+      );
+    });
+  });
+
   it("shows and edits passRetryPrompt only for pass retries", () => {
     const onChange = vi.fn();
 

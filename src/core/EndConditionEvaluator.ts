@@ -11,7 +11,9 @@ import {
 } from "../types/CtrlYokeTypes";
 import {
   COMPARE_SOURCES,
+  END_CONDITION_SCRIPT_TYPES,
   RETRY_PROMPT_PLACEHOLDERS,
+  type EndConditionScriptType,
 } from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
@@ -850,7 +852,7 @@ export class EndConditionEvaluator {
    * Create a sample end condition script by copying from templates
    */
   async createSampleScript(
-    scriptType: "python" | "javascript" | "shell" | "powershell",
+    scriptType: EndConditionScriptType,
     workingDirectory?: string
   ): Promise<string | null> {
     const workspaceRoot = this.platform.getWorkspaceRoot();
@@ -874,17 +876,17 @@ export class EndConditionEvaluator {
     let destinationFileName: string;
 
     switch (scriptType) {
-      case "python":
+      case END_CONDITION_SCRIPT_TYPES.PYTHON:
         templateFileName = "check_condition.py";
         destinationFileName = "check_condition.py";
         break;
 
-      case "javascript":
+      case END_CONDITION_SCRIPT_TYPES.JAVASCRIPT:
         templateFileName = "check_condition.js";
         destinationFileName = "check_condition.js";
         break;
 
-      case "shell":
+      case END_CONDITION_SCRIPT_TYPES.SHELL:
         templateFileName =
           process.platform === "win32"
             ? "check_condition.bat"
@@ -892,7 +894,7 @@ export class EndConditionEvaluator {
         destinationFileName = templateFileName;
         break;
 
-      case "powershell":
+      case END_CONDITION_SCRIPT_TYPES.POWERSHELL:
         templateFileName = "check_condition.ps1";
         destinationFileName = "check_condition.ps1";
         break;

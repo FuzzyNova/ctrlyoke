@@ -1,39 +1,38 @@
 # Browser User Feedback Plan
 
-**Status (2026-08-17):** Phases 1, 2 (including 2.5), 3, and 5 are complete.
+**Status (2026-08-17):** Phases 1, 2 (including 2.5), 3, 4, 5, and 6 are
+complete.
 The React dashboard renders a bounded, accessible transient toast queue in both
 hosts, operational feedback reaches connected browsers independently of
-notification settings, and the reusable direct-message migration is complete
-except for the six action-bearing interactions reserved for Phase 4. Phase 3
+notification settings, and the reusable direct-message migration is complete.
+Phase 3
 (client-scoped routing) completed per
-[`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](./FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
+[`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
 Stage E, re-verified against `src/` on 2026-08-11 — this doc's Acceptance
 Criteria below previously said otherwise and is corrected in this pass. Phase 4
 was **redesigned 2026-08-17**: none of the six action-bearing sites need the
 generic `USER_INTERACTION_REQUEST` contract after all — each has a decided
-per-site disposition (four cut, two relocated into existing/inline UI) — but
-none of the six code changes have landed yet. **Phase 6 (new, 2026-08-17) is
-also outstanding**: the webview's own toast dispatch — separate from
-the backend `UserFeedbackSink` this plan already built — is not host-aware, so
-26 call sites across 9 webview-react files render an in-app toast even inside
-the VS Code panel instead of a native message. See "The webview's own toast
-calls are not host-aware" and "Phase 6" below.
+per-site disposition (four cut, two relocated into existing/inline UI) — all
+six Phase 4 items have landed in Stage F.4–F.7. **Phase 6 (new, 2026-08-17) is
+complete**: its dispatcher, Group A's 15 client-only call sites, and Group B's
+12 scoped-reply handlers now use host-aware dispatch. See "The webview's own
+toast calls are not host-aware" and "Phase 6" below.
 
 **Related plans:**
 
 - [`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md)
-- [`STANDALONE_SERVER_PLAN.md`](./STANDALONE_SERVER_PLAN.md)
+- [`STANDALONE_SERVER_PLAN.md`](../active/STANDALONE_SERVER_PLAN.md)
 
 **Implementation order:**
 [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md)
 — Phases 2, 2.5 Site 3, 3, and 4 are Stages C, E, and F there; the Phase 5
 guards are Stage A. The completed Phase 1 and Phase 2.5 Site 2 sequencing is
 recorded in
-[`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../implemented/COMPATIBILITY_AND_FEEDBACK_STAGING.md).
+[`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](./COMPATIBILITY_AND_FEEDBACK_STAGING.md).
 
 **Not a dependency of the 0.1.0 permission work.**
-[`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](./HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
-and [`TOOL_PERMISSION_PARITY_PLAN.md`](../implemented/TOOL_PERMISSION_PARITY_PLAN.md) both
+[`HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md`](../active/HARNESS_COMPATIBILITY_PORTABILITY_PLAN.md)
+and [`TOOL_PERMISSION_PARITY_PLAN.md`](./TOOL_PERMISSION_PARITY_PLAN.md) both
 render through persistent field diagnostics and the existing shared
 `Modal.tsx`, and both explicitly forbid routing compatibility feedback through
 toast. This plan can land before or after them without changing their scope.
@@ -209,7 +208,13 @@ Re-run the AST audit before the Phase 2 triage rather than trusting these
 totals. A 2026-08-02 re-measure found the reusable group at **64** across 13
 files and the boundary group at exactly **49** across 6 after the
 `VsCodeAdapter` calls moved to the feedback sink; the adapter-mediated
-table below is exact. An earlier 2026-08-01 text scan found per-file drift
+table below is exact. **The boundary group has since grown to 54 across 7
+files** (re-read from `FEEDBACK_SOURCE_AUDIT_BASELINES` on 2026-08-17:
+`extension.ts` 20, `DevCommands` 12, `ContextMenuReferenceCommands` 6,
+`ScmCommitCommand` 5, `WebviewMessageRouter` 5, `ExternalFileTrustPrompt` 3,
+`NotificationManager` 3, `VsCodeAdapter` 0). That growth is legitimate —
+these are all boundary-approved sites — but any doc or step that cites 49 as
+the live baseline is stale. An earlier 2026-08-01 text scan found per-file drift
 against the original table
 (`WorkflowCommandHandler` at 13, `showErrorMessage` at 67 /
 `showInformationMessage` at 24), and a naive `grep` both over-counts the four
@@ -225,7 +230,7 @@ The calls split into two architectural groups:
 | Remove from reusable/core/router services           |    63 | `WorkflowOrchestrator`, orchestration helpers, shared webview services, and `FileSystemUtils`                              |
 
 The exhaustive file-level dependency audit is in
-[`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](./VSCODE_DEPENDENCY_DECOUPLING_PLAN.md).
+[`VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`](../backlog/VSCODE_DEPENDENCY_DECOUPLING_PLAN.md).
 
 ### Existing request-scoped precedent
 
@@ -264,18 +269,22 @@ Two call-site shapes both fall into this gap:
 
 **Group A — client-only actions with no backend round trip at all.** These
 never touch `WorkflowOrchestrator` or `UserFeedbackSink` and never can, so
-Phase 2's migration was structurally unable to reach them. 14 sites, 8 files:
+Phase 2's migration was structurally unable to reach them. 15 sites, 8 files
+(the per-file rows below sum to 15; earlier prose in this plan said 14):
 
-| File                                              | Lines               | Example                                                            |
-| -------------------------------------------------- | ------------------- | -------------------------------------------------------------------- |
-| `components/settings/DeveloperSection.tsx`         | 127-132, 195-198    | "Performance profiling enabled/disabled.", "Layout state cleared." |
-| `components/dev/UxSnapshotButton.tsx`              | 76                  | "UX snapshot capture failed"                                       |
-| `components/editor/CodeMirrorEditor.tsx`           | 1018, 1097, 2741    | Paste/drop image and invalid-reference errors                      |
-| `components/editor/PromptEditor.tsx`               | 646, 686, 693       | Prompt-file conversion busy/error toasts                           |
-| `hooks/useWorkflowContextMenu.tsx`                 | 95, 103             | Copy/duplicate context-menu result toasts                          |
-| `hooks/useStepContextMenu.tsx`                     | 174, 352            | Step context-menu result toasts                                    |
-| `hooks/useRunViewLoadWatchdog.ts`                  | 72                  | Run-view load timeout fallback                                     |
-| `utils/workflowMutation.ts`                        | 49                  | Stale-revision guard toast                                         |
+| File                                       | Lines            | Example                                                            |
+| ------------------------------------------ | ---------------- | ------------------------------------------------------------------ |
+| `components/settings/DeveloperSection.tsx` | 127-132, 195-198 | "Performance profiling enabled/disabled.", "Layout state cleared." |
+| `components/dev/UxSnapshotButton.tsx`      | 76               | "UX snapshot capture failed"                                       |
+| `components/editor/CodeMirrorEditor.tsx`   | 1018, 1097, 2741 | Paste/drop image and invalid-reference errors                      |
+| `components/editor/PromptEditor.tsx`       | 646, 686, 693    | Prompt-file conversion busy/error toasts                           |
+| `hooks/useWorkflowContextMenu.tsx`         | 95, 103          | Copy/duplicate context-menu result toasts                          |
+| `hooks/useStepContextMenu.tsx`             | 174, 352         | Step context-menu result toasts                                    |
+| `hooks/useRunViewLoadWatchdog.ts`          | 72               | Run-view load timeout fallback                                     |
+| `utils/workflowMutation.ts`                | 49               | Stale-revision guard toast                                         |
+
+Group A counts were re-verified against the current source on 2026-08-17:
+15 sites across these 8 files, with no action-bearing exceptions left behind.
 
 **Group B — scoped-reply message handlers that already do the right thing on
 the backend, then render unconditionally on arrival.** These are the Stage E
@@ -287,18 +296,18 @@ webview-side handler for each one calls `showToast()` unconditionally in
 `useMessageHandler.ts`, so the correctly-scoped reply still renders as an
 in-app toast inside the VS Code panel. 12 handlers in one file:
 
-| Line | Handler                                                                          |
-| ---: | --------------------------------------------------------------------------------- |
-|  603 | `DEV_BUILD_COMPLETED`                                                            |
-|  662 | `DEV_COMMAND_UNAVAILABLE`                                                        |
-|  672, 679 | `UX_SNAPSHOT_SAVED`                                                         |
-| 1529 | `WORKFLOW_VARIANT_CREATED` (already special-cases `standalone` for its action button — see Phase 6) |
-| 1742 | `OPEN_HARNESS_DIR_RESULT`                                                        |
-| 1912 | `MCP_CONFIG_PREVIEW_RESULT`                                                      |
-| 2031 | `WORKFLOW_ACTION_FAILED`                                                         |
-| 2444, 2446 | `WORKFLOW_SAVED`                                                            |
-| 2464 | `WORKFLOW_SAVE_FAILED`                                                           |
-| 2482 | `WORKFLOW_SAVED_AS_TEMPLATE`                                                     |
+|       Line | Handler                                                                                             |
+| ---------: | --------------------------------------------------------------------------------------------------- |
+|        603 | `DEV_BUILD_COMPLETED`                                                                               |
+|        662 | `DEV_COMMAND_UNAVAILABLE`                                                                           |
+|   672, 679 | `UX_SNAPSHOT_SAVED`                                                                                 |
+|       1529 | `WORKFLOW_VARIANT_CREATED` (already special-cases `standalone` for its action button — see Phase 6) |
+|       1742 | `OPEN_HARNESS_DIR_RESULT`                                                                           |
+|       1912 | `MCP_CONFIG_PREVIEW_RESULT`                                                                         |
+|       2031 | `WORKFLOW_ACTION_FAILED`                                                                            |
+| 2444, 2446 | `WORKFLOW_SAVED`                                                                                    |
+|       2464 | `WORKFLOW_SAVE_FAILED`                                                                              |
+|       2482 | `WORKFLOW_SAVED_AS_TEMPLATE`                                                                        |
 
 **Two handlers in the same file already prove the fix is cheap and the pattern
 is known** — they are explicitly excluded from Groups A/B because they are
@@ -313,7 +322,7 @@ already correct:
 
 Neither of these should be touched by Phase 6 — they are the reference for
 what "correct" looks like, not additional migration targets. What's missing is
-a single client-side entry point the other 26 sites can call instead of
+a single client-side entry point the other 27 sites can call instead of
 hand-rolling the `standalone` check (or, in 25 of the 26 cases, not writing it
 at all).
 
@@ -937,35 +946,37 @@ current effective behavior for every workflow that does not click a button.
 
 ### Phase 4 — Interactive choices → resolved as six per-site dispositions
 
-**Resolved 2026-08-17.** Re-examined each of the six action-bearing sites
+**Resolved 2026-08-17; items 1–6 implemented in Stage F.4–F.7.** Re-examined each of the six action-bearing sites
 individually against the actual code, instead of building a shared
 correlation contract for all of them. None of the six need
-`USER_INTERACTION_REQUEST` — each has a decided disposition below. None of
-this has been implemented yet; this section only records the design decision.
+`USER_INTERACTION_REQUEST` — each has a decided disposition below. Items 1,
+3, 4, 5, and 6 are implemented; item 2 is implemented in Stage F.7.
 
-1. **End-condition script created** (`WorkflowCommandHandler.ts:99`,
-   command `ctrlyoke.createEndConditionScript`). Currently two chained
+1. **End-condition script created** (formerly
+   `WorkflowCommandHandler.ts:99`, command
+   `ctrlyoke.createEndConditionScript`). Before F.6 this used two chained
    native-only calls: `showQuickPick` (script type) then
    `showInformationMessage` (Open Script / Show in Explorer). The generator
    underneath, `EndConditionEvaluator.createSampleScript(type)`, copies a
    real starter file from `src/templates/check_condition.*` into
    `.ctrlyoke/scripts/` — genuine boilerplate generation (the exit-code/
    stdout contract baked in), not just a doc link.
-   **Decision: move in-app.** Add a "Create Script" control to
-   `ScriptConditionEditor.tsx` with an inline type picker, backed by a new
-   webview message that calls the existing `createSampleScript()`. Delete
-   the `ctrlyoke.createEndConditionScript` VS Code command and its
-   `package.json` entry once the in-app control lands.
+   **Decision: move in-app — DONE F.6.** `ScriptConditionEditor.tsx` now
+   owns the inline type picker and a scoped webview request that calls the
+   existing `createSampleScript()`. The
+   `ctrlyoke.createEndConditionScript` VS Code command and its `package.json`
+   entries are deleted; native Open Script / Show in Explorer actions are not
+   reproduced.
 
 2. **Harness detection failed** (`WorkflowCommandHandler.ts:148`, inside
    `openPanel()`). Fires only when "Open ctrlyoke Panel" runs from the
    Command Palette while harness status is `unavailable` — a narrow,
    VS-Code-only trigger that duplicates status `HarnessDropdown` already
    shows via its status dot and tooltip. `WorkflowOrchestrator.
-   retryHarnessDetection()` already exists but today is reachable only from
+retryHarnessDetection()` already exists but today is reachable only from
    this native prompt's "Retry Detection" button — no webview message calls
    it.
-   **Decision: cut the gate, move retry inline.** Delete the
+   **Decision: cut the gate, move retry inline — DONE F.7.** Delete the
    `showWarningMessage` call from `openPanel()` — it opens unconditionally
    now. Add an inline "unavailable — Retry" affordance next to
    `HarnessDropdown`'s status indicator, wired to a new webview message that
@@ -989,7 +1000,7 @@ this has been implemented yet; this section only records the design decision.
    its `package.json` entry — this removes items 3 and 4 together, since
    they're one flow. Repoint `ctrlyoke.createNewTemplate` to focus the
    dashboard and open `TemplateModal` with "New template..." pre-expanded
-   instead of running its own QuickPick/InputBox sequence.
+   instead of running its own QuickPick/InputBox sequence. **DONE F.5.**
 
 5. **Post-workspace-initialization action** — actually **two**
    near-duplicate native toasts, not one: `extension.ts` fires one at
@@ -998,7 +1009,7 @@ this has been implemented yet; this section only records the design decision.
    immediately after the user already clicked "Initialize" inside
    `StartupOverlay.tsx` — the dashboard's own not-yet-initialized gate.
    **Decision: cut both.** No replacement needed; the dashboard rendering
-   normally (`StartupOverlay` clearing) is itself the confirmation.
+   normally (`StartupOverlay` clearing) is itself the confirmation. **DONE F.4.**
 
 6. **Clear all workflow history** (`WorkflowSerializer.ts:1375`,
    `{ modal: true }`). Confirmed this is **not** already funneled through
@@ -1008,16 +1019,42 @@ this has been implemented yet; this section only records the design decision.
    its sibling `handleRemoveWorkflow` in the same file, which already does
    the right thing (`pendingDelete` state → `DeleteConfirmModal`, gated on
    `confirmDeleteOperations`). The backend's native `{ modal: true }` dialog
-   is the *only* confirmation today and is invisible to browser clients.
+   is the _only_ confirmation today and is invisible to browser clients.
    **Decision: funnel through `DeleteConfirmModal`.** Mirror
    `handleRemoveWorkflow`'s exact pattern for clear-all, and delete the
    native confirm from `WorkflowSerializer.handleClearWorkflowHistory()` —
    trust the caller already confirmed, same as `REMOVE_WORKFLOW_HISTORY` /
-   `DELETE_RUN_HISTORY` already do.
+   `DELETE_RUN_HISTORY` already do. **DONE F.4.**
 
-**Net effect:** four sites are cut outright (2, 5, and the merged 3/4); two
-relocate into modal/inline UI (1, 6). None need
+   Verified 2026-08-17: the activation toast is `extension.ts:177` and the
+   post-`StartupOverlay` one is `WorkflowOrchestrator.ts:1344`. A **third**
+   initialization message at `extension.ts:1107` (the `ctrlyoke.initWorkspace`
+   command-palette command, "…and its .gitignore are up to date") is a
+   different, action-free boundary site and is **not** cut.
+
+**Net effect:** the cut dispositions are complete for items 3/4 and 5, while
+items 1, 2, and 6 relocate into modal/inline UI. All six items are implemented.
+None need
 `USER_INTERACTION_REQUEST` — see "Action-Bearing Messages" above.
+
+#### Baseline impact of Phase 4 — both counters move
+
+After Stage F.7, the committed baselines are `directMessage.boundary: 53` and
+`directMessage.reusable: 0`. `assertShrinkOnly` fails when a count drops below its committed baseline just
+as loudly as when it grows, so **every Phase 4 step must lower
+`FEEDBACK_SOURCE_AUDIT_BASELINES` in `src/test/unit/SourceAuditCounters.test.ts`
+in the same commit that removes call sites**, or `npm test` fails on an
+otherwise-correct change.
+
+- `directMessage.reusable` is now **0**: items 3/4 removed 2
+  (`TemplateImporter.ts`), item 1 removed 1 (`WorkflowCommandHandler.ts`),
+  and item 2 removed the final 1 (`WorkflowCommandHandler.ts`).
+- `directMessage.boundary` goes **54 → 53**, once, in the step that deletes
+  `extension.ts:177`; that move landed in F.4 and no other Phase 4 step moves
+  it.
+
+Each step lowers only by what it actually removed; do not pre-lower to the end
+state.
 
 ### Phase 5 — Enforce the boundary — DONE, via a different mechanism than written
 
@@ -1028,8 +1065,9 @@ relocate into modal/inline UI (1, 6). None need
 
 **Confirmed shipped, checked 2026-08-17.** Item 3 landed as
 `src/test/unit/SourceAuditCounters.test.ts`'s shrink-only, AST-based
-`assertShrinkOnly` counters (current baselines: 49 boundary / 6 reusable /
-0 adapter-UI) — these fail the build in *either* direction, so the boundary
+`assertShrinkOnly` counters (**current baselines re-read from the test file
+2026-08-17: 53 boundary / 4 reusable / 0 adapter-UI**) — these fail the build
+in _either_ direction, so the boundary
 cannot silently grow. **Items 1 and 2 (a literal ESLint import-boundary rule
 and allowlist) were never built and are not planned** —
 `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md` line 219-220 explicitly reasons that a
@@ -1051,34 +1089,43 @@ above. This is the client-side counterpart to Phase 2's `UserFeedbackSink`:
 one function every webview-originated toast call goes through, so callers stop
 caring whether they're rendering inside the VS Code panel or a browser tab.
 
-1. Add a webview→extension message, `MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK`
+1. **DONE** — Add the webview→extension message,
+   `MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK`, in
+   `src/types/DashboardConstants.ts` and its payload type in
+   `src/types/WebviewMessageTypes.ts`.
    (payload: `severity`, `message`, optional `detail` — the same shape as
    `UserFeedback` in `src/core/UserFeedbackSink.ts`; no `id`/`dedupeKey`,
    since native VS Code messages don't dedupe or queue).
-2. Add a handler for it in `WebviewMessageRouter.ts` that delegates to the
+2. **DONE** — Add the handler in `src/ui/WebviewMessageRouter.ts`, thread the
+   callback through `src/ui/CtrlYokeWebviewProvider.ts`, and wire the shared
+   sink instance from `src/extension.ts`; cover it in
+   `src/test/unit/WebviewMessageRouter.test.ts`; it delegates to the
    **existing** `VsCodeUserFeedbackSink` instance already constructed in
    `extension.ts` (thread it through `WebviewRouterCallbacks`, the same
    mechanism `handleDevAction`/`handleUxSnapshot` already use). Do not
    construct a second instance or re-implement the severity→API mapping —
    `VsCodeUserFeedbackSink.notify()` is the single source for that mapping and
    already exists.
-3. Add `notifyUser(message, severity, detail?)` in `webview-react/utils`,
+3. **DONE** — Add `notifyUser(message, severity, detail?)` in
+   `src/ui/webview-react/utils/notifyUser.ts` with coverage in
+   `src/ui/webview-react/test/utils/notifyUser.test.ts`,
    colocated near `useVsCodeApi`. Its entire job:
    - `isStandalone` → `useUiStore.getState().showToast(message, severity, { detail })` (unchanged, in-app).
    - otherwise → `getVsCodeApi().postMessage({ type: MESSAGE_TYPES.SHOW_NATIVE_FEEDBACK, severity, message, detail })`.
-4. Migrate Group A's 14 client-only call sites (8 files) to `notifyUser()`.
-5. Migrate Group B's 12 scoped-reply call sites in `useMessageHandler.ts` to
-   `notifyUser()`. At `WORKFLOW_VARIANT_CREATED` (line 1529), keep the
-   existing `standalone ? { action: {...} } : undefined` guard around the
-   "Open in New Tab" action button rather than folding it into `notifyUser()`
-   — see the action-button non-goal below.
-6. Leave `NOTIFICATION_EVENT` and `USER_FEEDBACK` untouched; they already do
-   the right thing through a different mechanism and are not part of this
-   migration.
-7. Keep `showToast()`/`enqueueToast()` on `uiStore` as the in-app-only
-   primitives they already are. `notifyUser()` is additive — the one thing
-   that decides *which* rendering path a caller should use — not a
-   replacement for the queue API itself.
+4. **DONE (2026-08-17)** — Migrate Group A's 15 client-only call sites (8
+   files) to `notifyUser()`. The re-verified count matched the table exactly;
+   no action-bearing exceptions were left behind.
+5. **DONE (2026-08-17)** — Migrate Group B's 12 scoped-reply call sites in
+   `useMessageHandler.ts` to `notifyUser()`. At `WORKFLOW_VARIANT_CREATED`, the
+   existing standalone-only `Open in New Tab` action remains on the in-app
+   toast path rather than crossing the native-message boundary.
+6. **DONE (2026-08-17)** — Leave `NOTIFICATION_EVENT` and `USER_FEEDBACK`
+   untouched; they already do the right thing through a different mechanism
+   and are not part of this migration.
+7. **DONE (2026-08-17)** — Keep `showToast()`/`enqueueToast()` on `uiStore` as
+   the in-app-only primitives they already are. `notifyUser()` is additive —
+   the one thing that decides _which_ rendering path a caller should use — not
+   a replacement for the queue API itself.
 
 **Non-goals for Phase 6:**
 
@@ -1089,8 +1136,12 @@ caring whether they're rendering inside the VS Code panel or a browser tab.
   `action` parameter.
 - No change to `UserFeedbackSink`, `CompositeUserFeedbackSink`, or either sink
   implementation (Phase 2, already correct/complete).
-- No change to the 49 boundary-approved direct `vscode.window.show*Message`
-  calls or the six Phase 4 action-bearing sites.
+- No change to the 53 boundary-approved direct `vscode.window.show*Message`
+  calls or the completed Phase 4 action-bearing sites. Phase 6 adds a
+  `SHOW_NATIVE_FEEDBACK` handler to `WebviewMessageRouter.ts` (already a
+  `boundaryFiles` entry), but it delegates to `VsCodeUserFeedbackSink` rather
+  than calling `vscode.window.show*Message` directly, so the boundary baseline
+  does not move.
 
 **Tests:**
 
@@ -1107,7 +1158,9 @@ caring whether they're rendering inside the VS Code panel or a browser tab.
 - Extend `SourceAuditCounters.test.ts`-style shrink-only baseline to cover
   direct `showToast(`/`enqueueToast(` calls outside `uiStore.ts`,
   `notifyUser.ts`, `NOTIFICATION_EVENT`, and `USER_FEEDBACK`, so a new
-  unconditional call site cannot silently recreate this gap.
+  unconditional call site cannot silently recreate this gap. The committed
+  post-migration baseline is **1**: the standalone action-bearing
+  `WORKFLOW_VARIANT_CREATED` toast.
 
 ## Test Plan
 
@@ -1180,20 +1233,17 @@ caring whether they're rendering inside the VS Code panel or a browser tab.
   boundary.
 - **MET —** CLI behavior remains non-interactive unless an explicit interactive
   prompt implementation is selected.
-- **OUTSTANDING — Phase 4 (redesigned 2026-08-17):** Reusable code still has
-  six direct `vscode.window.show*Message()` calls with action buttons — none
-  of the underlying code changes have landed yet. The design question is
-  resolved, though: each of the six now has a decided per-site disposition
-  (four cut, two relocated into `DeleteConfirmModal`/inline UI) instead of a
-  shared `USER_INTERACTION_REQUEST` contract. See "Action-Bearing Messages"
-  and "Phase 4" for the six decisions.
+- **MET — Phase 4 (redesigned 2026-08-17):** Reusable direct
+  `vscode.window.show*Message()` calls are now **0**. All six action-bearing
+  sites have decided per-site dispositions (four cut, two relocated into
+  modal/inline UI) without a shared `USER_INTERACTION_REQUEST` contract. See
+  "Action-Bearing Messages" and "Phase 4" for the six decisions.
 - **MET —** `PlatformAdapter` no longer declares `log()`, `warn()`, `error()`,
   `showProgress()`, or `showChoice()`; the adapter-mediated UI baseline is 0.
 - **MET —** Severity strings are declared once in `DashboardConstants.ts` and
   nowhere else.
-- **OUTSTANDING — Phase 6 (new 2026-08-17):** The webview's own toast calls —
-  as opposed to `UserFeedbackSink`, which is already correct — are not
-  host-aware. 26 call sites across 9 `webview-react` files (Groups A and B
-  above) render an in-app toast unconditionally, including inside the VS Code
-  panel, where a native `vscode.window.show*Message` is expected. No
-  client-side `notifyUser()` dispatcher exists yet.
+- **MET — Phase 6 (2026-08-17):** All 15 Group A client-only webview toast
+  calls and all 12 Group B scoped-reply handlers route through `notifyUser()`;
+  panel mode therefore reaches the native host and standalone mode keeps the
+  in-app queue. The one deliberate standalone action-bearing toast is covered
+  by the shrink-only audit baseline recorded above.
