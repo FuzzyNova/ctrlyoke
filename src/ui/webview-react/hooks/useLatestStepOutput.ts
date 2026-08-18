@@ -1,4 +1,5 @@
-import { useWorkflowStore } from "@store/workflowStore";
+import { useCallback, useMemo } from "react";
+import { useWorkflowStore, type CliOutput } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { OUTPUT_HISTORY_KINDS, FINAL_STEP_PHASES } from "../types/messages";
 
@@ -14,20 +15,27 @@ export function useLatestStepOutput() {
   const { liveOrderedEntries, historyOutputs } = useWorkflowStore();
   const { isViewingHistory } = useUiStore();
 
-  return function getLatestOutput(index: number) {
-    const entries =
-      isViewingHistory && historyOutputs
-        ? historyOutputs.orderedEntries
-        : liveOrderedEntries;
+  const entries =
+    isViewingHistory && historyOutputs
+      ? historyOutputs.orderedEntries
+      : liveOrderedEntries;
+  const latestOutputs = useMemo(() => {
+    const result = new Map<number, CliOutput>();
+    for (const entry of entries) {
+      if (
+        entry.kind !== OUTPUT_HISTORY_KINDS.CLI ||
+        !("target" in entry) ||
+        entry.target.kind !== FINAL_STEP_PHASES.QUEUE
+      ) {
+        continue;
+      }
+      result.set(entry.target.stepIndex, entry.cliOutput);
+    }
+    return result;
+  }, [entries]);
 
-    const cliEntries = entries.filter(
-      (e) =>
-        e.kind === OUTPUT_HISTORY_KINDS.CLI &&
-        "target" in e &&
-        (e as any).target.kind === FINAL_STEP_PHASES.QUEUE &&
-        (e as any).target.stepIndex === index
-    );
-    if (cliEntries.length === 0) return null;
-    return (cliEntries[cliEntries.length - 1] as any).cliOutput as any;
-  };
+  return useCallback(
+    (index: number) => latestOutputs.get(index) ?? null,
+    [latestOutputs]
+  );
 }

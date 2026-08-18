@@ -80,10 +80,163 @@ function getStepText(step: WorkflowStep): string {
 }
 
 type WorkflowStepComponentProps = React.ComponentProps<typeof WorkflowStepItem>;
-type SortableWrapperProps = Omit<
+type WorkflowStepDragHandleProps =
+  WorkflowStepComponentProps["dragHandleProps"];
+
+type StepHarnessModel = Pick<
   WorkflowStepComponentProps,
-  "dragHandleProps"
-> & {
+  "harnessLabel" | "harnessIsDefault" | "modelLabel" | "modelIsDefault"
+>;
+
+type StepContextMenuRequest = {
+  step: WorkflowStep;
+  setPositionTarget: number;
+  deleteIndex: number;
+  isCurrentStep: boolean;
+  isExecutionTargetLocked: boolean;
+  direction: "rewind" | "forward";
+  outputText?: string;
+};
+
+type WorkflowStepRowProps = {
+  step: WorkflowStep;
+  index: number;
+  slotNumber: number;
+  currentStep: number;
+  status: StepStatus;
+  retryState?: WorkflowStepComponentProps["retryState"];
+  latestOutput?: WorkflowStepComponentProps["latestOutput"];
+  liveContextWindow?: WorkflowStepComponentProps["liveContextWindow"];
+  isCurrent: boolean;
+  isSelected: boolean;
+  canSetStartPosition: boolean;
+  startPositionDirection: "rewind" | "forward";
+  setPositionTarget: number;
+  isExecutionTargetLocked: boolean;
+  hideBorderBottom?: boolean;
+  dimmed?: boolean;
+  dragHandleProps?: WorkflowStepDragHandleProps;
+  getStepHarnessModel: (
+    step: WorkflowStep,
+    status: StepStatus
+  ) => StepHarnessModel;
+  getStepOverrides: (step: WorkflowStep) => PromptOverride[];
+  onStepClick: (index: number) => void;
+  onSetStartPosition: (index: number) => void;
+  onOpenContextMenu: (
+    x: number,
+    y: number,
+    request: StepContextMenuRequest
+  ) => void;
+};
+
+/**
+ * Keeps live output/context telemetry updates local to the affected row.
+ * The panel itself must still re-render for workflow-level layout changes, but
+ * unchanged rows should not repeat token formatting and DOM reconciliation.
+ */
+const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
+  ({
+    step,
+    index,
+    slotNumber,
+    currentStep,
+    status,
+    retryState,
+    latestOutput,
+    liveContextWindow,
+    isCurrent,
+    isSelected,
+    canSetStartPosition,
+    startPositionDirection,
+    setPositionTarget,
+    isExecutionTargetLocked,
+    hideBorderBottom = false,
+    dimmed = false,
+    dragHandleProps,
+    getStepHarnessModel,
+    getStepOverrides,
+    onStepClick,
+    onSetStartPosition,
+    onOpenContextMenu,
+  }) => {
+    const harnessModel = getStepHarnessModel(step, status);
+    const overrides = getStepOverrides(step);
+    const details: StepDetails = {};
+
+    if (latestOutput?.elapsed) {
+      details.duration = latestOutput.elapsed;
+    }
+    if (status === STEP_STATUS.FAILED && index < currentStep) {
+      const failureMessage = !isScriptStep(step)
+        ? step._runtime?.failureMessage
+        : undefined;
+      details.message = failureMessage
+        ? `Workflow continued after failure: ${failureMessage}`
+        : "Workflow continued after this step failed.";
+    }
+
+    const outputText = latestOutput?.response as string | undefined;
+    const handleContextMenu = useCallback(
+      (x: number, y: number) =>
+        onOpenContextMenu(x, y, {
+          step,
+          setPositionTarget,
+          deleteIndex: index,
+          isCurrentStep: isCurrent,
+          isExecutionTargetLocked,
+          direction: startPositionDirection,
+          outputText,
+        }),
+      [
+        index,
+        isCurrent,
+        isExecutionTargetLocked,
+        onOpenContextMenu,
+        outputText,
+        setPositionTarget,
+        startPositionDirection,
+        step,
+      ]
+    );
+
+    return (
+      <WorkflowStepItem
+        text={getStepText(step)}
+        index={index}
+        displayNumber={slotNumber}
+        name={step.name}
+        status={status}
+        retryState={retryState}
+        details={details}
+        latestOutput={latestOutput}
+        liveContextWindow={liveContextWindow}
+        runtimeMeta={step._runtime}
+        isDisabled={step.enabled === false}
+        isCurrent={isCurrent}
+        isSelected={isSelected}
+        onClick={() => onStepClick(index)}
+        harnessLabel={harnessModel.harnessLabel}
+        harnessIsDefault={harnessModel.harnessIsDefault}
+        modelLabel={harnessModel.modelLabel}
+        modelIsDefault={harnessModel.modelIsDefault}
+        overrides={overrides}
+        canSetStartPosition={canSetStartPosition}
+        startPositionDirection={startPositionDirection}
+        onSetStartPosition={() => onSetStartPosition(setPositionTarget)}
+        onContextMenu={handleContextMenu}
+        hideBorderBottom={hideBorderBottom}
+        dimmed={dimmed}
+        isScript={isScriptStep(step)}
+        dragHandleProps={dragHandleProps}
+      />
+    );
+  }
+);
+
+WorkflowStepRow.displayName = "WorkflowStepRow";
+
+type SortableWrapperProps = Omit<WorkflowStepRowProps, "dragHandleProps"> & {
   id: string;
   disabled: boolean;
   /** Visual 1-based slot number rendered outside the draggable area */
@@ -91,50 +244,54 @@ type SortableWrapperProps = Omit<
   showPauseBoundaryBefore?: boolean;
 };
 
-function SortableWorkflowStepWrapper({
-  id,
-  disabled,
-  slotNumber,
-  showPauseBoundaryBefore = false,
-  ...stepItemProps
-}: SortableWrapperProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id, disabled });
-  const style = {
-    // Restrict to vertical axis only — prevent horizontal drift during drag
-    transform: transform ? `translate3d(0, ${transform.y}px, 0)` : undefined,
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-  return (
-    // Number column sits outside setNodeRef so it stays anchored to the DOM
-    // slot position while the content transforms during drag.
-    <div
-      className="relative flex items-stretch"
-      data-workflow-step-index={stepItemProps.index}
-    >
-      {showPauseBoundaryBefore && <PauseBoundary />}
-      <div className="w-[2px] flex-shrink-0 self-stretch" />
-      <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
-        {slotNumber}
+const SortableWorkflowStepWrapper = React.memo(
+  function SortableWorkflowStepWrapper({
+    id,
+    disabled,
+    slotNumber,
+    showPauseBoundaryBefore = false,
+    ...stepItemProps
+  }: SortableWrapperProps) {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id, disabled });
+    const style = {
+      // Restrict to vertical axis only — prevent horizontal drift during drag
+      transform: transform ? `translate3d(0, ${transform.y}px, 0)` : undefined,
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+    return (
+      // Number column sits outside setNodeRef so it stays anchored to the DOM
+      // slot position while the content transforms during drag.
+      <div
+        className="relative flex items-stretch"
+        data-workflow-step-index={stepItemProps.index}
+      >
+        {showPauseBoundaryBefore && <PauseBoundary />}
+        <div className="w-[2px] flex-shrink-0 self-stretch" />
+        <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
+          {slotNumber}
+        </div>
+        {stepItemProps.isCurrent && <ExecutingStepHighlight />}
+        <div ref={setNodeRef} style={style} className="relative flex-1 min-w-0">
+          <WorkflowStepRow
+            {...stepItemProps}
+            slotNumber={slotNumber}
+            dragHandleProps={disabled ? undefined : { listeners, attributes }}
+          />
+        </div>
       </div>
-      {stepItemProps.isCurrent && <ExecutingStepHighlight />}
-      <div ref={setNodeRef} style={style} className="relative flex-1 min-w-0">
-        <WorkflowStepItem
-          {...stepItemProps}
-          displayNumber={slotNumber}
-          dragHandleProps={disabled ? undefined : { listeners, attributes }}
-        />
-      </div>
-    </div>
-  );
-}
+    );
+  }
+);
+
+SortableWorkflowStepWrapper.displayName = "SortableWorkflowStepWrapper";
 
 /**
  * WorkflowStepsPanel - Left panel showing the list of steps in the workflow
@@ -226,58 +383,58 @@ const WorkflowStepsPanelInner: React.FC<{
   //
   // For pending steps, compute from the three-tier precedence (step →
   // workflow → global) so the display stays live and reflects any changes.
-  const getStepHarnessModel = (
-    step: (typeof steps)[0],
-    status?: StepStatus
-  ) => {
-    if (isScriptStep(step))
-      return {
-        harnessLabel: undefined,
-        harnessIsDefault: true,
-        modelLabel: undefined,
-        modelIsDefault: true,
-      };
-    // Use runtime values when they're present, OR when the step has reached a
-    // terminal status and any _runtime exists — this covers the case where a step
-    // completed after the last SESSION_RESTORED so harness/model weren't yet in
-    // the working file snapshot but were since delivered via STEP_STATUS_CHANGED.
-    const isTerminalStatus =
-      status === STEP_STATUS.COMPLETED ||
-      status === STEP_STATUS.FAILED ||
-      status === STEP_STATUS.CANCELLED ||
-      status === STEP_STATUS.SKIPPED;
-    if (
-      (step._runtime?.harness ?? step._runtime?.model) ||
-      (isTerminalStatus && step._runtime != null)
-    ) {
-      const h = step._runtime?.harness;
-      const m = step._runtime?.model;
-      return {
-        harnessLabel: h
-          ? (HARNESS_INFO[h as keyof typeof HARNESS_INFO]?.name ?? h)
-          : undefined,
-        harnessIsDefault: false,
-        modelLabel: m,
-        modelIsDefault: false,
-      };
-    }
+  const getStepHarnessModel = useCallback(
+    (step: (typeof steps)[0], status?: StepStatus) => {
+      if (isScriptStep(step))
+        return {
+          harnessLabel: undefined,
+          harnessIsDefault: true,
+          modelLabel: undefined,
+          modelIsDefault: true,
+        };
+      // Use runtime values when they're present, OR when the step has reached a
+      // terminal status and any _runtime exists — this covers the case where a step
+      // completed after the last SESSION_RESTORED so harness/model weren't yet in
+      // the working file snapshot but were since delivered via STEP_STATUS_CHANGED.
+      const isTerminalStatus =
+        status === STEP_STATUS.COMPLETED ||
+        status === STEP_STATUS.FAILED ||
+        status === STEP_STATUS.CANCELLED ||
+        status === STEP_STATUS.SKIPPED;
+      if (
+        (step._runtime?.harness ?? step._runtime?.model) ||
+        (isTerminalStatus && step._runtime != null)
+      ) {
+        const h = step._runtime?.harness;
+        const m = step._runtime?.model;
+        return {
+          harnessLabel: h
+            ? (HARNESS_INFO[h as keyof typeof HARNESS_INFO]?.name ?? h)
+            : undefined,
+          harnessIsDefault: false,
+          modelLabel: m,
+          modelIsDefault: false,
+        };
+      }
 
-    // Pending / queued — reflect live settings with default indicators
-    const harnessIsDefault = step.harness === undefined;
-    const modelIsDefault = step.model === undefined;
-    const effectiveHarness =
-      step.harness ?? workflowProperties.harness ?? globalSettings.harness;
-    const effectiveModel =
-      step.model ?? workflowProperties.model ?? globalSettings.model;
-    return {
-      harnessLabel:
-        HARNESS_INFO[effectiveHarness as keyof typeof HARNESS_INFO]?.name ??
-        effectiveHarness,
-      harnessIsDefault,
-      modelLabel: effectiveModel,
-      modelIsDefault,
-    };
-  };
+      // Pending / queued — reflect live settings with default indicators
+      const harnessIsDefault = step.harness === undefined;
+      const modelIsDefault = step.model === undefined;
+      const effectiveHarness =
+        step.harness ?? workflowProperties.harness ?? globalSettings.harness;
+      const effectiveModel =
+        step.model ?? workflowProperties.model ?? globalSettings.model;
+      return {
+        harnessLabel:
+          HARNESS_INFO[effectiveHarness as keyof typeof HARNESS_INFO]?.name ??
+          effectiveHarness,
+        harnessIsDefault,
+        modelLabel: effectiveModel,
+        modelIsDefault,
+      };
+    },
+    [globalSettings, workflowProperties]
+  );
 
   // Compute the step-level property overrides to surface as chips.
   //
@@ -285,212 +442,218 @@ const WorkflowStepsPanelInner: React.FC<{
   // it meaningfully differs from (or adds to) the inherited workflow/global
   // default. Redundant chips — e.g. "ec: disabled" when the workflow is
   // already disabled — are suppressed so overrides reflect actual differences.
-  const getStepOverrides = (step: (typeof steps)[0]): PromptOverride[] => {
-    const result: PromptOverride[] = [];
+  const getStepOverrides = useCallback(
+    (step: (typeof steps)[0]): PromptOverride[] => {
+      const result: PromptOverride[] = [];
 
-    if (step.executionMode !== undefined) {
-      result.push({
-        label:
-          step.executionMode === EXECUTION_MODES.INTERACTIVE
-            ? "Interactive"
-            : "Headless",
-        title: `executionMode: ${step.executionMode}`,
-        icon:
-          step.executionMode === EXECUTION_MODES.INTERACTIVE
-            ? "debug-console"
-            : "terminal",
-      });
-    }
-
-    if (isScriptStep(step)) return result;
-
-    // agent — show basename only, or explicit none when disabled
-    if (step.agent === null) {
-      result.push({
-        label: "agent: none",
-        title: "agent explicitly disabled",
-      });
-    } else if (step.agent != null) {
-      const basename = step.agent.replace(/.*[\\/]/, "");
-      result.push({
-        label: `agent: ${basename}`,
-        title: `agent: ${step.agent}`,
-      });
-    }
-
-    // skills — show count, or explicit none when disabled
-    if (step.skills === null) {
-      result.push({
-        label: "skills: none",
-        title: "skills explicitly disabled",
-      });
-    } else if (step.skills != null && step.skills.length > 0) {
-      result.push({
-        label: `skills: ${step.skills.length}`,
-        title: step.skills.join(", "),
-      });
-    }
-
-    // mcpServers — show whenever explicitly set
-    if (step.mcpServers !== undefined) {
-      if (step.mcpServers === null) {
+      if (step.executionMode !== undefined) {
         result.push({
-          label: "MCP: none",
-          title: "MCP servers explicitly disabled",
+          label:
+            step.executionMode === EXECUTION_MODES.INTERACTIVE
+              ? "Interactive"
+              : "Headless",
+          title: `executionMode: ${step.executionMode}`,
+          icon:
+            step.executionMode === EXECUTION_MODES.INTERACTIVE
+              ? "debug-console"
+              : "terminal",
         });
-      } else if (Array.isArray(step.mcpServers)) {
-        const count = step.mcpServers.length;
-        const hasCtrlYoke = step.mcpServers.some(
-          (s) => typeof s === "string" && s === "ctrlyoke"
-        );
-        const serverIds = step.mcpServers.map((s) =>
-          typeof s === "string" ? s : ((s as { id?: string }).id ?? "custom")
-        );
-        if (count === 0) {
+      }
+
+      if (isScriptStep(step)) return result;
+
+      // agent — show basename only, or explicit none when disabled
+      if (step.agent === null) {
+        result.push({
+          label: "agent: none",
+          title: "agent explicitly disabled",
+        });
+      } else if (step.agent != null) {
+        const basename = step.agent.replace(/.*[\\/]/, "");
+        result.push({
+          label: `agent: ${basename}`,
+          title: `agent: ${step.agent}`,
+        });
+      }
+
+      // skills — show count, or explicit none when disabled
+      if (step.skills === null) {
+        result.push({
+          label: "skills: none",
+          title: "skills explicitly disabled",
+        });
+      } else if (step.skills != null && step.skills.length > 0) {
+        result.push({
+          label: `skills: ${step.skills.length}`,
+          title: step.skills.join(", "),
+        });
+      }
+
+      // mcpServers — show whenever explicitly set
+      if (step.mcpServers !== undefined) {
+        if (step.mcpServers === null) {
           result.push({
-            label: "MCP: 0",
-            title: "MCP servers explicitly set to empty",
+            label: "MCP: none",
+            title: "MCP servers explicitly disabled",
           });
-        } else if (hasCtrlYoke && count === 1) {
-          result.push({ label: "MCP[ctrlyoke]", title: "MCP: ctrlyoke" });
-        } else if (hasCtrlYoke) {
+        } else if (Array.isArray(step.mcpServers)) {
+          const count = step.mcpServers.length;
+          const hasCtrlYoke = step.mcpServers.some(
+            (s) => typeof s === "string" && s === "ctrlyoke"
+          );
+          const serverIds = step.mcpServers.map((s) =>
+            typeof s === "string" ? s : ((s as { id?: string }).id ?? "custom")
+          );
+          if (count === 0) {
+            result.push({
+              label: "MCP: 0",
+              title: "MCP servers explicitly set to empty",
+            });
+          } else if (hasCtrlYoke && count === 1) {
+            result.push({ label: "MCP[ctrlyoke]", title: "MCP: ctrlyoke" });
+          } else if (hasCtrlYoke) {
+            result.push({
+              label: `MCP[ctrlyoke]+${count - 1}`,
+              title: serverIds.join(", "),
+            });
+          } else {
+            result.push({
+              label: `MCP: ${count}`,
+              title: serverIds.join(", "),
+            });
+          }
+        }
+      }
+
+      // hooks — show when explicitly set
+      if (step.hooks !== undefined) {
+        if (step.hooks === null) {
+          result.push({ label: "hooks: none" });
+        } else if (Array.isArray(step.hooks) && step.hooks.length > 0) {
+          result.push({ label: `hooks: ${step.hooks.length}` });
+        }
+      }
+
+      // resumeSession — show whenever explicitly set
+      if (step.resumeSession !== undefined) {
+        result.push({
+          label: step.resumeSession ? "resume" : "no resume",
+        });
+      }
+
+      // priorContext — show whenever explicitly set
+      if (step.priorContext !== undefined) {
+        let ctxLabel: string;
+        if (Array.isArray(step.priorContext)) {
+          ctxLabel = `ctx: [${step.priorContext.join(",")}]`;
+        } else {
+          // "all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"
+          const shortMap: Record<string, string> = {
+            all: "all",
+            previous: "prev",
+            none: "none",
+            finalStepAll: "fs-all",
+            finalStepPrevious: "fs-prev",
+          };
+          ctxLabel = `ctx: ${shortMap[step.priorContext as string] ?? String(step.priorContext)}`;
+        }
+        result.push({
+          label: ctxLabel,
+          title: `priorContext: ${String(step.priorContext)}`,
+        });
+      }
+
+      // endCondition — only show "ec: disabled" if the workflow actually has an
+      // active end condition to override. If the workflow is already disabled/unset,
+      // the chip is redundant (the step value matches the inherited default).
+      if (step.endCondition !== undefined) {
+        if (step.endCondition === null) {
+          const workflowHasActiveEndCondition =
+            workflowProperties.endCondition != null &&
+            Boolean(workflowProperties.endCondition.script);
+          if (workflowHasActiveEndCondition) {
+            result.push({ label: "ec: disabled" });
+          }
+        } else if (step.endCondition.script) {
+          const script = step.endCondition.script;
+          const basename = script.replace(/.*[\\/]/, "");
+          const short =
+            basename.length > 30 ? basename.substring(0, 30) + "…" : basename;
           result.push({
-            label: `MCP[ctrlyoke]+${count - 1}`,
-            title: serverIds.join(", "),
+            label: `ec: ${short}`,
+            title: `endCondition: ${script}`,
+          });
+        }
+      }
+
+      // preCondition — only show "pc: disabled" if the workflow has an active
+      // pre-condition to override. If the workflow has none, the chip is redundant.
+      if (step.preCondition !== undefined) {
+        if (step.preCondition === null) {
+          const workflowHasActivePreCondition =
+            workflowProperties.preCondition != null &&
+            Boolean(workflowProperties.preCondition.script);
+          if (workflowHasActivePreCondition) {
+            result.push({ label: "pc: disabled" });
+          }
+        } else if (step.preCondition.script) {
+          const script = step.preCondition.script;
+          const basename = script.replace(/.*[\\/]/, "");
+          const short =
+            basename.length > 30 ? basename.substring(0, 30) + "…" : basename;
+          result.push({
+            label: `pc: ${short}`,
+            title: `preCondition: ${script}`,
+          });
+        }
+      }
+
+      // additionalArgs — show when explicitly set or disabled
+      if (step.additionalArgs !== undefined) {
+        if (step.additionalArgs === null) {
+          result.push({
+            label: "args: none",
+            title: "additionalArgs explicitly disabled",
           });
         } else {
-          result.push({ label: `MCP: ${count}`, title: serverIds.join(", ") });
+          const short =
+            step.additionalArgs.length > 20
+              ? step.additionalArgs.substring(0, 20) + "…"
+              : step.additionalArgs;
+          result.push({
+            label: `args: ${short}`,
+            title: `additionalArgs: ${step.additionalArgs}`,
+          });
         }
       }
-    }
 
-    // hooks — show when explicitly set
-    if (step.hooks !== undefined) {
-      if (step.hooks === null) {
-        result.push({ label: "hooks: none" });
-      } else if (Array.isArray(step.hooks) && step.hooks.length > 0) {
-        result.push({ label: `hooks: ${step.hooks.length}` });
-      }
-    }
-
-    // resumeSession — show whenever explicitly set
-    if (step.resumeSession !== undefined) {
-      result.push({
-        label: step.resumeSession ? "resume" : "no resume",
-      });
-    }
-
-    // priorContext — show whenever explicitly set
-    if (step.priorContext !== undefined) {
-      let ctxLabel: string;
-      if (Array.isArray(step.priorContext)) {
-        ctxLabel = `ctx: [${step.priorContext.join(",")}]`;
-      } else {
-        // "all" | "previous" | "none" | "finalStepAll" | "finalStepPrevious"
-        const shortMap: Record<string, string> = {
-          all: "all",
-          previous: "prev",
-          none: "none",
-          finalStepAll: "fs-all",
-          finalStepPrevious: "fs-prev",
-        };
-        ctxLabel = `ctx: ${shortMap[step.priorContext as string] ?? String(step.priorContext)}`;
-      }
-      result.push({
-        label: ctxLabel,
-        title: `priorContext: ${String(step.priorContext)}`,
-      });
-    }
-
-    // endCondition — only show "ec: disabled" if the workflow actually has an
-    // active end condition to override. If the workflow is already disabled/unset,
-    // the chip is redundant (the step value matches the inherited default).
-    if (step.endCondition !== undefined) {
-      if (step.endCondition === null) {
-        const workflowHasActiveEndCondition =
-          workflowProperties.endCondition != null &&
-          Boolean(workflowProperties.endCondition.script);
-        if (workflowHasActiveEndCondition) {
-          result.push({ label: "ec: disabled" });
+      // toolPermissions — show when explicitly set or disabled
+      if (step.toolPermissions !== undefined) {
+        if (step.toolPermissions === null) {
+          result.push({
+            label: "perms: none",
+            title: "toolPermissions explicitly disabled",
+          });
+        } else if (step.toolPermissions.mode) {
+          const modeShort: Record<string, string> = {
+            dangerouslyAllowAll: "allow all!",
+            allowAll: "allow all",
+            custom: "custom",
+            passthrough: "pass-thru",
+          };
+          const short =
+            modeShort[step.toolPermissions.mode] ?? step.toolPermissions.mode;
+          result.push({
+            label: `perms: ${short}`,
+            title: `toolPermissions: ${step.toolPermissions.mode}`,
+          });
         }
-      } else if (step.endCondition.script) {
-        const script = step.endCondition.script;
-        const basename = script.replace(/.*[\\/]/, "");
-        const short =
-          basename.length > 30 ? basename.substring(0, 30) + "…" : basename;
-        result.push({
-          label: `ec: ${short}`,
-          title: `endCondition: ${script}`,
-        });
       }
-    }
 
-    // preCondition — only show "pc: disabled" if the workflow has an active
-    // pre-condition to override. If the workflow has none, the chip is redundant.
-    if (step.preCondition !== undefined) {
-      if (step.preCondition === null) {
-        const workflowHasActivePreCondition =
-          workflowProperties.preCondition != null &&
-          Boolean(workflowProperties.preCondition.script);
-        if (workflowHasActivePreCondition) {
-          result.push({ label: "pc: disabled" });
-        }
-      } else if (step.preCondition.script) {
-        const script = step.preCondition.script;
-        const basename = script.replace(/.*[\\/]/, "");
-        const short =
-          basename.length > 30 ? basename.substring(0, 30) + "…" : basename;
-        result.push({
-          label: `pc: ${short}`,
-          title: `preCondition: ${script}`,
-        });
-      }
-    }
-
-    // additionalArgs — show when explicitly set or disabled
-    if (step.additionalArgs !== undefined) {
-      if (step.additionalArgs === null) {
-        result.push({
-          label: "args: none",
-          title: "additionalArgs explicitly disabled",
-        });
-      } else {
-        const short =
-          step.additionalArgs.length > 20
-            ? step.additionalArgs.substring(0, 20) + "…"
-            : step.additionalArgs;
-        result.push({
-          label: `args: ${short}`,
-          title: `additionalArgs: ${step.additionalArgs}`,
-        });
-      }
-    }
-
-    // toolPermissions — show when explicitly set or disabled
-    if (step.toolPermissions !== undefined) {
-      if (step.toolPermissions === null) {
-        result.push({
-          label: "perms: none",
-          title: "toolPermissions explicitly disabled",
-        });
-      } else if (step.toolPermissions.mode) {
-        const modeShort: Record<string, string> = {
-          dangerouslyAllowAll: "allow all!",
-          allowAll: "allow all",
-          custom: "custom",
-          passthrough: "pass-thru",
-        };
-        const short =
-          modeShort[step.toolPermissions.mode] ?? step.toolPermissions.mode;
-        result.push({
-          label: `perms: ${short}`,
-          title: `toolPermissions: ${step.toolPermissions.mode}`,
-        });
-      }
-    }
-
-    return result;
-  };
+      return result;
+    },
+    [workflowProperties]
+  );
 
   // Handle clicking a step to edit it (disabled in CLI watch mode)
   const handleStepClick = useCallback(
@@ -625,36 +788,6 @@ const WorkflowStepsPanelInner: React.FC<{
   const finalStepOverrides = finalStep
     ? getStepOverrides(finalStep)
     : undefined;
-
-  // Build details object for a step
-  const getStepDetails = (
-    step: (typeof steps)[0],
-    index: number,
-    status: StepStatus
-  ): StepDetails => {
-    const output = getLatestOutput(index);
-    const details: StepDetails = {};
-
-    if (output?.elapsed) {
-      details.duration = output.elapsed;
-    }
-
-    if (status === STEP_STATUS.FAILED && index < currentStep) {
-      const failureMessage = !isScriptStep(step)
-        ? step._runtime?.failureMessage
-        : undefined;
-      details.message = failureMessage
-        ? `Workflow continued after failure: ${failureMessage}`
-        : "Workflow continued after this step failed.";
-    }
-
-    // The step's persisted `_runtime` has no end-condition result. The executor
-    // currently sends that result on the STEP_STATUS_CHANGED status payload,
-    // while the webview handler only merges `details` into `_runtime`; exposing
-    // it here requires that message/runtime contract to be extended first.
-
-    return details;
-  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -896,16 +1029,10 @@ const WorkflowStepsPanelInner: React.FC<{
                 const slotNumber = index + 1;
                 const status = getPromptStatus(step, index);
                 const retryState = retryStates[index];
-                const details = getStepDetails(step, index, status);
                 const latestOutput = getLatestOutput(index);
                 const isSelected =
                   selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
                   selectionTarget.index === index;
-                const harnessModel = getStepHarnessModel(step, status);
-                const overrides = getStepOverrides(step);
-                const runtimeMeta = step._runtime;
-                const outputText = latestOutput?.response as string | undefined;
-                const isDisabled = step.enabled === false;
                 const isExecutionTargetLocked =
                   isExecutionBusy(executionState) && index === currentStep;
                 return (
@@ -922,46 +1049,31 @@ const WorkflowStepsPanelInner: React.FC<{
                       {slotNumber}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <WorkflowStepItem
-                        text={getStepText(step)}
+                      <WorkflowStepRow
+                        step={step}
                         index={index}
-                        displayNumber={slotNumber}
-                        name={step.name}
+                        slotNumber={slotNumber}
+                        currentStep={currentStep}
                         status={status}
                         retryState={retryState}
-                        details={details}
                         latestOutput={latestOutput}
                         liveContextWindow={liveContextWindow?.[index]}
-                        runtimeMeta={runtimeMeta}
-                        isDisabled={isDisabled}
                         isCurrent={false}
                         isSelected={isSelected}
-                        onClick={() => handleStepClick(index)}
-                        harnessLabel={harnessModel.harnessLabel}
-                        harnessIsDefault={harnessModel.harnessIsDefault}
-                        modelLabel={harnessModel.modelLabel}
-                        modelIsDefault={harnessModel.modelIsDefault}
-                        overrides={overrides}
                         canSetStartPosition={canChangeStartPosition}
                         startPositionDirection="rewind"
-                        onSetStartPosition={() => handleSetStartPosition(index)}
-                        onContextMenu={(x, y) =>
-                          openContextMenu(x, y, {
-                            step,
-                            setPositionTarget: index,
-                            deleteIndex: index,
-                            isCurrentStep: false,
-                            isExecutionTargetLocked,
-                            direction: "rewind",
-                            outputText,
-                          })
-                        }
+                        setPositionTarget={index}
+                        isExecutionTargetLocked={isExecutionTargetLocked}
                         hideBorderBottom={
                           sliceIdx === doneStepCount - 1 &&
                           doneStepCount < steps.length
                         }
                         dimmed
-                        isScript={isScriptStep(step)}
+                        getStepHarnessModel={getStepHarnessModel}
+                        getStepOverrides={getStepOverrides}
+                        onStepClick={handleStepClick}
+                        onSetStartPosition={handleSetStartPosition}
+                        onOpenContextMenu={openContextMenu}
                       />
                     </div>
                   </div>
@@ -988,23 +1100,15 @@ const WorkflowStepsPanelInner: React.FC<{
                   const isCurrentStep = visualIdx === 0;
                   const status = getPromptStatus(step, index);
                   const retryState = retryStates[index];
-                  const details = getStepDetails(step, index, status);
                   const latestOutput = getLatestOutput(index);
                   const isCurrent = isRunning && isCurrentStep;
                   const isSelected =
                     selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
                     selectionTarget.index === index;
-                  const harnessModel = getStepHarnessModel(step, status);
-                  const overrides = getStepOverrides(step);
-                  const runtimeMeta = step._runtime;
                   // Target index for set-position is currentStep + visual offset,
                   // matching the post-reorder backend index for this slot.
                   const setPositionTarget = currentStep + visualIdx;
                   const slotNumber = currentStep + visualIdx + 1;
-                  const outputText = latestOutput?.response as
-                    | string
-                    | undefined;
-                  const isDisabled = step.enabled === false;
                   const isExecutionTargetLocked =
                     isExecutionBusy(executionState) && isCurrentStep;
                   return (
@@ -1016,45 +1120,26 @@ const WorkflowStepsPanelInner: React.FC<{
                       showPauseBoundaryBefore={
                         isPaused && currentStep > 0 && visualIdx === 0
                       }
-                      text={getStepText(step)}
+                      step={step}
                       index={index}
-                      name={step.name}
+                      currentStep={currentStep}
                       status={status}
                       retryState={retryState}
-                      details={details}
                       latestOutput={latestOutput}
                       liveContextWindow={liveContextWindow?.[index]}
-                      runtimeMeta={runtimeMeta}
-                      isDisabled={isDisabled}
                       isCurrent={isCurrent}
                       isSelected={isSelected}
-                      onClick={() => handleStepClick(index)}
-                      harnessLabel={harnessModel.harnessLabel}
-                      harnessIsDefault={harnessModel.harnessIsDefault}
-                      modelLabel={harnessModel.modelLabel}
-                      modelIsDefault={harnessModel.modelIsDefault}
-                      overrides={overrides}
                       canSetStartPosition={
                         canChangeStartPosition && !isCurrentStep
                       }
                       startPositionDirection="forward"
-                      onSetStartPosition={
-                        !isCurrentStep
-                          ? () => handleSetStartPosition(setPositionTarget)
-                          : undefined
-                      }
-                      onContextMenu={(x, y) =>
-                        openContextMenu(x, y, {
-                          step,
-                          setPositionTarget,
-                          deleteIndex: index,
-                          isCurrentStep,
-                          isExecutionTargetLocked,
-                          direction: "forward",
-                          outputText,
-                        })
-                      }
-                      isScript={isScriptStep(step)}
+                      setPositionTarget={setPositionTarget}
+                      isExecutionTargetLocked={isExecutionTargetLocked}
+                      getStepHarnessModel={getStepHarnessModel}
+                      getStepOverrides={getStepOverrides}
+                      onStepClick={handleStepClick}
+                      onSetStartPosition={handleSetStartPosition}
+                      onOpenContextMenu={openContextMenu}
                     />
                   );
                 })}

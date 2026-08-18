@@ -117,7 +117,7 @@ const truncate = (text: string, maxLength: number = 60): string => {
  * Renders both AI prompt steps and script steps via the `isScript` prop.
  * Shared chrome (drag handle, status icon, set-start-position button) is always present.
  */
-export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
+const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
   text,
   index,
   status,
@@ -410,3 +410,12 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
     </div>
   );
 };
+
+/**
+ * Step rows receive frequent live execution updates from the workflow store.
+ * Keep direct consumers from re-running token/usage formatting when their
+ * display props have not changed.
+ */
+export const WorkflowStepItem = React.memo(WorkflowStepItemInner);
+
+WorkflowStepItem.displayName = "WorkflowStepItem";
