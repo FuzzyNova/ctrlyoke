@@ -1,5 +1,6 @@
 import { isValidSecretName } from "../platform/SecretKey";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
+import { NOT_AFTER_BOUNDARY, NOT_BEFORE_BOUNDARY } from "./ReferenceBoundary";
 
 /** A valid inline secret grant found in prompt text. */
 export interface SecretReference {
@@ -21,8 +22,10 @@ export interface SecretReference {
  */
 export function parseSecretReferences(text: string): SecretReference[] {
   const references: SecretReference[] = [];
-  const regex =
-    /(?<![A-Za-z0-9_+=@#$%^&!~-])!([A-Z0-9_]*)(?![A-Za-z0-9_+=@#$%^&!~-])/g;
+  const regex = new RegExp(
+    `${NOT_AFTER_BOUNDARY}!([A-Z0-9_]*)${NOT_BEFORE_BOUNDARY}`,
+    "g"
+  );
 
   let match: RegExpExecArray | null;
   while ((match = regex.exec(text)) !== null) {

@@ -31,6 +31,7 @@ import { Decoration, ViewPlugin } from "@codemirror/view";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useUiStore } from "@store/uiStore";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
+import { NOT_AFTER_BOUNDARY } from "@root/utils/ReferenceBoundary";
 
 export interface WorkspaceFileEditorHandle {
   undo: () => void;
@@ -329,35 +330,52 @@ function findWorkspaceReferenceMatches(
     // parses as one reference rather than splitting at the inner @; must
     // stay in lockstep with atomicReferences.ts, PromptLinkProvider.ts, and
     // FileReferenceParser.ts.
-    fullFileQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])@"([^"]+\.[a-zA-Z0-9]+)"(?!\/)/g,
-    directoryQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])@"([^"]+\/)"(?![\w])/g,
-    fullFile: /(?<![A-Za-z0-9_+=@#$%^&!~-])@([^\s#"]+\.[a-zA-Z0-9]+)(?!\/)/g,
-    directory: /(?<![A-Za-z0-9_+=@#$%^&!~-])@([^\s#"]+\/)/g,
-    lineRangeQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])#selection:"([^"]+)":(\d+)-(\d+)/g,
-    lineRange: /(?<![A-Za-z0-9_+=@#$%^&!~-])#selection:([^\s:"]+):(\d+)-(\d+)/g,
+    fullFileQuoted: new RegExp(
+      `${NOT_AFTER_BOUNDARY}@"([^"]+\\.[a-zA-Z0-9]+)"(?!\\/)`,
+      "g"
+    ),
+    directoryQuoted: new RegExp(
+      `${NOT_AFTER_BOUNDARY}@"([^"]+\\/)"(?![\\w])`,
+      "g"
+    ),
+    fullFile: new RegExp(
+      `${NOT_AFTER_BOUNDARY}@([^\\s#"]+\\.[a-zA-Z0-9]+)(?!\\/)`,
+      "g"
+    ),
+    directory: new RegExp(`${NOT_AFTER_BOUNDARY}@([^\\s#"]+\\/)`, "g"),
+    lineRangeQuoted: new RegExp(
+      `${NOT_AFTER_BOUNDARY}#selection:"([^"]+)":(\\d+)-(\\d+)`,
+      "g"
+    ),
+    lineRange: new RegExp(
+      `${NOT_AFTER_BOUNDARY}#selection:([^\\s:"]+):(\\d+)-(\\d+)`,
+      "g"
+    ),
     // Must stay in lockstep with the canonical symbol pattern in
     // src/ui/webview-react/utils/atomicReferences.ts and
     // src/utils/FileReferenceParser.ts: one regex, quoted-or-bare per field,
     // with the optional `.kind` suffix ctrlyoke now emits. A token this parser
     // misses renders as inert text here while every other surface links it.
     // Groups: 1 kind, 2/3 quoted/bare path, 4/5 quoted/bare name, 6-7 range.
-    symbol:
-      /(?<![A-Za-z0-9_+=@#$%^&!~-])#sym(?:\.([a-z-]+))?:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
+    symbol: new RegExp(
+      `${NOT_AFTER_BOUNDARY}#sym(?:\\.([a-z-]+))?:(?:"([^"]+)"|([^\\s:"]+)):(?:"([^"]+)"|([^\\s:"]+)):(\\d+)-(\\d+)`,
+      "g"
+    ),
   };
 
   const fileMatches: WorkspaceReferenceMatch[] = [];
   const directoryMatches: WorkspaceReferenceMatch[] = [];
   const lineRangeMatches: WorkspaceReferenceMatch[] = [];
   const symbolMatches: WorkspaceReferenceMatch[] = [];
-  const secretMatches: WorkspaceReferenceMatch[] = parseSecretReferences(text).map(
-    (reference) => ({
-      from: offset + reference.startOffset,
-      to: offset + reference.endOffset,
-      type: "secret",
-      path: "",
-      secretName: reference.name,
-    })
-  );
+  const secretMatches: WorkspaceReferenceMatch[] = parseSecretReferences(
+    text
+  ).map((reference) => ({
+    from: offset + reference.startOffset,
+    to: offset + reference.endOffset,
+    type: "secret",
+    path: "",
+    secretName: reference.name,
+  }));
   let match: RegExpExecArray | null;
 
   const collectPathMatches = (

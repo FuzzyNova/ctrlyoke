@@ -15,6 +15,7 @@ import {
   type FileAccessDecision,
 } from "../utils/FileAccessPolicy";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { NOT_AFTER_BOUNDARY } from "../utils/ReferenceBoundary";
 import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import type { FileOpenTarget } from "../ui/ExternalFileTrustPrompt";
 import { PromptFileResolver } from "../core/PromptFileResolver";
@@ -57,32 +58,42 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   // WorkspaceFileEditor.tsx, and src/utils/FileReferenceParser.ts.
   private readonly patterns = {
     // @"path with spaces/file.ext" (quoted path, full file)
-    fullFileQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])@"([^"]+\.[a-zA-Z0-9]+)"/g,
+    fullFileQuoted: new RegExp(
+      `${NOT_AFTER_BOUNDARY}@"([^"]+\\.[a-zA-Z0-9]+)"`,
+      "g"
+    ),
 
     // @file.ext (unquoted, no trailing slash, has extension)
     // Matches: @src/extension.ts, @docs/plan.md
     // The body allows an embedded @ (e.g. myimage@512x512.png) so a filename
     // containing one still parses as a single reference.
-    fullFile: /(?<![A-Za-z0-9_+=@#$%^&!~-])@([^\s#"]+\.[a-zA-Z0-9]+)/g,
+    fullFile: new RegExp(
+      `${NOT_AFTER_BOUNDARY}@([^\\s#"]+\\.[a-zA-Z0-9]+)`,
+      "g"
+    ),
 
     // @"path with spaces/dir/" (quoted path, directory with trailing slash)
-    directoryQuoted: /(?<![A-Za-z0-9_+=@#$%^&!~-])@"([^"]+\/)"/g,
+    directoryQuoted: new RegExp(`${NOT_AFTER_BOUNDARY}@"([^"]+\\/)"`, "g"),
 
     // @dir/ (unquoted, trailing slash)
     // Matches: @src/ui/, @docs/
-    directory: /(?<![A-Za-z0-9_+=@#$%^&!~-])@([^\s#"]+\/)/g,
+    directory: new RegExp(`${NOT_AFTER_BOUNDARY}@([^\\s#"]+\\/)`, "g"),
 
     // #selection:<path>:10-20 — path quoted, or bare with no whitespace/`:`/`"`.
     // Groups: 1 quoted path, 2 bare path, 3 startLine, 4 endLine.
-    lineRange:
-      /(?<![A-Za-z0-9_+=@#$%^&!~-])#selection:(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
+    lineRange: new RegExp(
+      `${NOT_AFTER_BOUNDARY}#selection:(?:"([^"]+)"|([^\\s:"]+)):(\\d+)-(\\d+)`,
+      "g"
+    ),
 
     // #sym[.kind]:<path>:<symbol>:42-58 — both fields quoted or bare, same rule.
     // Groups: 1 kind, 2/3 quoted/bare path, 4/5 quoted/bare symbol, 6-7 line range.
     // Matches: #sym:src/extension.ts:activate:14-36
     //          #sym:"C:/dev/my repo/a.ts":"get value":14-36
-    symbol:
-      /(?<![A-Za-z0-9_+=@#$%^&!~-])#sym(?:\.([a-z-]+))?:(?:"([^"]+)"|([^\s:"]+)):(?:"([^"]+)"|([^\s:"]+)):(\d+)-(\d+)/g,
+    symbol: new RegExp(
+      `${NOT_AFTER_BOUNDARY}#sym(?:\\.([a-z-]+))?:(?:"([^"]+)"|([^\\s:"]+)):(?:"([^"]+)"|([^\\s:"]+)):(\\d+)-(\\d+)`,
+      "g"
+    ),
   };
 
   /**
@@ -609,17 +620,17 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     const gitPatterns = [
       // ~diff and ~staged (fixed keywords)
       {
-        pattern: /(?<![A-Za-z0-9_+=@#$%^&!~-])~(diff|staged)/g,
+        pattern: new RegExp(`${NOT_AFTER_BOUNDARY}~(diff|staged)`, "g"),
         getRef: (m: RegExpExecArray) => m[1],
       },
       // ~stash:N
       {
-        pattern: /(?<![A-Za-z0-9_+=@#$%^&!~-])~(stash:\d+)/g,
+        pattern: new RegExp(`${NOT_AFTER_BOUNDARY}~(stash:\\d+)`, "g"),
         getRef: (m: RegExpExecArray) => m[1],
       },
       // ~<7-40 hex chars> (commit hash)
       {
-        pattern: /(?<![A-Za-z0-9_+=@#$%^&!~-])~([0-9a-f]{7,40})/gi,
+        pattern: new RegExp(`${NOT_AFTER_BOUNDARY}~([0-9a-f]{7,40})`, "gi"),
         getRef: (m: RegExpExecArray) => m[1],
       },
     ];

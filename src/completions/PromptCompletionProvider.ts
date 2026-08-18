@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { getAvailableModelsSync } from "../utils/ModelRegistry";
 import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
+import { findWordStartTriggerIndex } from "../utils/ReferenceBoundary";
 import {
   getFileCompletions,
   getHashCompletions,
@@ -16,27 +17,6 @@ import type { SecretRegistryService } from "../ui/SecretRegistryService";
  * Trigger character types for context-aware completions
  */
 type TriggerChar = "@" | "#" | "~" | "$" | "!";
-
-/**
- * Find the rightmost occurrence of `triggerChar` in `text` that isn't
- * preceded by a character that's legal inside a filename — letters, digits,
- * or `_ + - = @ # $ % ^ & ! ~`. It can start right after whitespace,
- * punctuation like `(`/`"`, or the start of the string, but not mid-word or
- * mid-filename. This keeps an email address (nathan@gmail.com) or a filename
- * mentioned in prose (data_file~@backup!.csv, myimage@512x512.png) from
- * being treated as the start of a new @/#/~/$ reference, while still
- * resolving to the earlier, legitimate trigger when one exists (so
- * `@src/myimage@512x512.p` still resolves to the leading @, keeping the
- * embedded @ in the query).
- * Mirrored in CodeMirrorEditor.tsx's `customCompletions` — keep both in sync.
- */
-function findWordStartTriggerIndex(text: string, triggerChar: string): number {
-  let index = text.lastIndexOf(triggerChar);
-  while (index > 0 && /[A-Za-z0-9_+=@#$%^&!~-]/.test(text[index - 1])) {
-    index = text.lastIndexOf(triggerChar, index - 1);
-  }
-  return index;
-}
 
 /**
  * Provides context-aware completions for ctrlyoke prompt files
