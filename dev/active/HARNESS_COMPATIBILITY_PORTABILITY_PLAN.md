@@ -28,9 +28,12 @@
 > Defaults and advanced permission settings now render the same capability
 > summary, and hosted-browser transport parity is covered by the standalone
 > shim tests. Customer docs distinguish portable workflow attachments from
-> optional harness-native discovery. Compatibility Phase 2 (dry run, portability
-> reporting, and CLI/MCP serialization) and Phase 3 capability domains remain
-> post-release.
+> optional harness-native discovery. The dry-run leg of Compatibility Phase 2
+> has since shipped through the shared analyzer and exact provider-plan
+> projection. CLI compatibility validation, the workflow portability report,
+> and Phase 3 capability domains remain. MCP capability serialization was cut
+> because a context-free snapshot cannot honestly describe whether a workflow
+> uses a capability.
 >
 > **Priority:** P0 — release gate for 0.1.0
 >
@@ -41,10 +44,11 @@
 > [`COMPATIBILITY_AND_FEEDBACK_STAGING.md`](../implemented/COMPATIBILITY_AND_FEEDBACK_STAGING.md);
 > remaining Phase 2 and Phase 3 work is sequenced by
 > [`FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md`](../active/FEEDBACK_AUTOMATION_COMPATIBILITY_STAGING.md),
-> which splits Phase 2 because only its dry-run leg has an unbuilt dependency.
+> which records the now-satisfied dry-run dependency and the ordered Stage D/G
+> implementation seams.
 >
 > **No dependency on**
-> [`BROWSER_USER_FEEDBACK_PLAN.md`](BROWSER_USER_FEEDBACK_PLAN.md) — see
+> [`BROWSER_USER_FEEDBACK_PLAN.md`](../implemented/BROWSER_USER_FEEDBACK_PLAN.md) — see
 > "Toasts are not the authoring surface". The two plans touch disjoint UI:
 > compatibility renders persistent field diagnostics and (for blocking
 > preflight results) the existing `components/shared/Modal.tsx`; the feedback
@@ -55,14 +59,15 @@
 Phase 1 is what prevents ctrlyoke from claiming enforcement it does not perform.
 
 Phases 2 and 3 are post-release (decided 2026-07-31). Phase 2 (dry run,
-portability report, CLI/MCP serialization) makes existing truth more visible; it
-does not prevent a dishonest support claim or an unsafe workspace mutation, so it
-does not gate the release. Phase 3 adds new capability domains.
+portability report, CLI validation) makes existing truth more visible; it does
+not prevent a dishonest support claim or an unsafe workspace mutation, so it
+does not gate the release. Its dry-run leg is implemented; CLI validation and
+the report remain. Phase 3 adds new capability domains.
 
-Acceptance criteria below that describe dry-run output, the portability report,
-or MCP capability serialization therefore belong to Phase 2 and are not release
-gates. Criteria covering the registry, analyzer, effective-property resolution,
-authoring diagnostics, and behavioral permission verification are.
+Acceptance criteria below that describe dry-run output or the portability
+report therefore belong to Phase 2 and are not release gates. Criteria covering
+the registry, analyzer, effective-property resolution, authoring diagnostics,
+and behavioral permission verification are.
 
 ---
 
@@ -180,11 +185,12 @@ asymmetry proves to need its own declaration.
 
 ### When a temporary difference becomes invariant
 
-Usage reporting remains in the registry for now because Antigravity does not
-currently provide the normalized usage data exposed by the other harnesses. If
-Antigravity reaches the same reporting contract before this plan is
-implemented, remove the entire usage domain rather than shipping a compatibility
-dimension whose entries are all identical.
+**Usage reporting is now a product invariant and is removed from the registry.**
+The required re-audit completed 2026-08-18: `AntigravityUsageProvider` now
+participates in the same six-provider `HarnessUsageService`, and Antigravity's
+statusline/log parser supplies the normalized turn and context-window data that
+was previously missing. Do not ship a compatibility dimension whose entries
+are all identical.
 
 ## Capability Vocabulary
 
@@ -272,12 +278,7 @@ interface EffectiveCapabilityState {
   verification: CapabilityVerificationStatus;
 }
 
-type CapabilityDomain =
-  | "permissions"
-  | "promptInputs"
-  | "hooks"
-  | "mcp"
-  | "usage";
+type CapabilityDomain = "permissions" | "promptInputs" | "hooks" | "mcp";
 
 interface PermissionCapabilityDescriptor {
   mode: CapabilityDeclaration;
@@ -294,11 +295,6 @@ interface HarnessCapabilityDescriptor {
   hooks?: Partial<Record<HookEvent, CapabilityDeclaration>>;
   mcp?: {
     perServerToolFiltering: CapabilityDeclaration;
-  };
-  usage?: {
-    contextWindow: CapabilityDeclaration;
-    turnTokens: CapabilityDeclaration;
-    cumulativeTokens: CapabilityDeclaration;
   };
 }
 
@@ -418,7 +414,6 @@ Initial checks:
 - requested hook events;
 - MCP per-server tool filtering;
 - image inputs;
-- context/usage reporting;
 - required workspace configuration and its side effects.
 
 Do not warn merely because a harness lacks a native `--agent`/`--skill`
@@ -771,9 +766,12 @@ errors and optionally on lossy or unverified behavior.
 
 ### MCP capabilities
 
-Evolve `.ctrlyoke/capabilities.json` without making it the source of truth. It
-should serialize the installed-version-aware subset of the shared registry for
-external tools while retaining the existing availability/model data.
+No capability serialization is added to `.ctrlyoke/capabilities.json`. A static
+per-harness snapshot is context-free and cannot say whether the current
+workflow actually uses a field, so it can turn an honest analyzer result into a
+misleading support claim. The file retains its existing availability/model data
+and existence-validation role; external workflow compatibility remains a
+validation/report concern.
 
 ## Browser and Hosted-Server Parity
 
@@ -944,7 +942,7 @@ After Phase 1C, continue with the permission plan in this order:
 3. implement and behaviorally verify Qwen;
 4. implement OpenCode and coordinate its writes with the existing MCP writer.
 
-### Phase 2 — Dry run and complete workflow report
+### Phase 2 — Validation and complete workflow report
 
 > **Post-release (P1).** Not a 0.1.0 gate — see the status note at the top of
 > this plan.
@@ -953,22 +951,22 @@ Begin this phase after the permission plan's Qwen/OpenCode preparation paths
 exist, so preview reports the actual translation and side effects rather than a
 second speculative implementation.
 
-- Integrate the Phase 1 shared analyzer with dry-run preview and CLI validation.
+- **Done:** integrate the Phase 1 shared analyzer and exact provider translation
+  with dry-run preview.
+- Integrate the Phase 1 shared analyzer with CLI validation.
 - Add the installed-harness portability report.
-- Serialize the relevant capability data for MCP consumers.
 
 ### Phase 3 — Expand capability domains
 
 - Hooks and notifications.
 - MCP per-server tool filtering, if the Codex asymmetry above proves to need its
   own declaration. Injection is uniform and is not modeled.
-- Images and usage metadata.
+- Image prompt inputs.
 - Generate customer-facing compatibility documentation from the registry.
 - Extend the tab warning-badge overlay to every domain enabled in this phase.
 
-Before implementing usage metadata as a capability domain, re-audit
-Antigravity. If every supported harness then supplies the same normalized usage
-contract, remove usage from this phase and from the registry.
+The usage re-audit is complete and removed that uniform domain; see "When a
+temporary difference becomes invariant" above.
 
 #### Tab warning badges
 
@@ -1026,7 +1024,7 @@ overlay-badge treatment instead of inventing a new visual language:
 - **MCP** — once per-server tool filtering (or another MCP capability) is
   modeled, `getMcpTabOverride` needs the equivalent overlay for a filtering
   warning, without losing the existing "servers configured" indicator.
-- **Images / usage** — if either becomes a tab-scoped domain with its own
+- **Images** — if image inputs become a tab-scoped domain with their own
   authoring surface, give that surface the same warning-badge overlay rather
   than a bespoke treatment.
 
