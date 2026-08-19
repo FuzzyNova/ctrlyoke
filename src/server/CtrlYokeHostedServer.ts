@@ -69,6 +69,7 @@ import type {
   WorkspaceMoveRequest,
   WorkspaceGenerateCommitMessageResponse,
   WorkspaceGitRefDiffResponse,
+  WorkspaceSearchScope,
 } from "../types/HostedWorkspaceViewerTypes";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import { secretRedactionService } from "../utils/SecretRedactionService";
@@ -796,6 +797,54 @@ export class CtrlYokeHostedServer
           res.json(await this.viewerService.listDirectory(dirPath));
         } catch (err) {
           Log.error(`workspace-viewer /tree error: ${String(err)}`);
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
+    this.app.get(
+      "/api/workspace-viewer/search",
+      requireToken,
+      async (req, res) => {
+        const query =
+          typeof req.query.query === "string" ? req.query.query.trim() : "";
+        if (query.length < 2) {
+          res
+            .status(400)
+            .json({ error: "query must be at least 2 characters" });
+          return;
+        }
+
+        const rawScope =
+          typeof req.query.scope === "string" ? req.query.scope : "";
+        const scope: WorkspaceSearchScope =
+          rawScope === "files" || rawScope === "content" || rawScope === "both"
+            ? rawScope
+            : "both";
+        const includeGitIgnored = req.query.includeGitIgnored === "true";
+        const repo =
+          typeof req.query.repo === "string" && req.query.repo.trim()
+            ? req.query.repo.trim()
+            : undefined;
+        const rawLimit =
+          typeof req.query.limit === "string"
+            ? Number.parseInt(req.query.limit, 10)
+            : NaN;
+        const limit =
+          Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : undefined;
+
+        try {
+          res.json(
+            await this.viewerService.searchWorkspace({
+              query,
+              scope,
+              includeGitIgnored,
+              repo,
+              limit,
+            })
+          );
+        } catch (err) {
+          Log.error(`workspace-viewer /search error: ${String(err)}`);
           res.status(500).json({ error: "Internal server error" });
         }
       }

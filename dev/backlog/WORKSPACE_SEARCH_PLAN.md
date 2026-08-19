@@ -332,7 +332,7 @@ its box here (plus any correction to this document that the work uncovers).
 
 - [x] **1 — Contracts.** Search types in `src/types/HostedWorkspaceViewerTypes.ts`; new
       `getGitIgnoredFiles()` in `src/utils/GitUtils.ts` (+ `GitUtils.test.ts` coverage).
-- [ ] **2 — Server.** `HostedWorkspaceViewerService.searchWorkspace()` + the
+- [x] **2 — Server.** `HostedWorkspaceViewerService.searchWorkspace()` + the
       `GET /api/workspace-viewer/search` route, with unit coverage per the Test Plan.
 - [ ] **3 — Client data layer.** `hostedApi.workspaceSearch()`; `workspaceViewerStore` search state
       and `activeTab` widening; `truncateSnippet()` moved into `utils/string.ts`.
