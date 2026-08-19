@@ -341,11 +341,11 @@ describe("DiffFileList virtualization", () => {
       const mountedCount = screen.getAllByTestId("diff-view").length;
       expect(mountedCount).toBeGreaterThan(0);
       expect(mountedCount).toBeLessThan(100);
-      expect(screen.getAllByRole("listitem")[0]).toHaveAttribute(
+      expect(screen.getAllByRole("article")[0]).toHaveAttribute(
         "aria-setsize",
         "100"
       );
-      expect(screen.getAllByRole("listitem")[0]).toHaveAttribute(
+      expect(screen.getAllByRole("article")[0]).toHaveAttribute(
         "aria-posinset",
         "1"
       );

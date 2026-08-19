@@ -123,10 +123,16 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
 
   const pathTitle = diffFilePathTitle(path, oldPath);
 
+  // `article`, not `listitem`: the card is a self-contained region with no
+  // `role="list"` ancestor — the virtual spacer and absolutely positioned row
+  // wrappers sit in between, and the list also holds heading/summary rows that a
+  // list may not directly contain. An orphaned `listitem` is invalid ARIA and its
+  // set metadata is not reliably exposed, while `article` supports
+  // aria-posinset/aria-setsize standalone.
   return (
     <div
       className="border border-panel-border rounded overflow-hidden"
-      {...(ariaSetSize !== undefined ? { role: "listitem" } : {})}
+      {...(ariaSetSize !== undefined ? { role: "article" } : {})}
       aria-setsize={ariaSetSize}
       aria-posinset={ariaPosInSet}
     >
