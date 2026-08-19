@@ -259,21 +259,21 @@ in the new pane.
 
 ## Affected Files
 
-| Area                                                              | Planned change                                                    |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| `src/types/HostedWorkspaceViewerTypes.ts`                          | New search request/response/result types                          |
-| `src/utils/GitUtils.ts`                                            | New `listSearchableFiles()` recursive `git ls-files` helper        |
-| `src/server/HostedWorkspaceViewerService.ts`                       | New `searchWorkspace()` method                                    |
-| `src/server/CtrlYokeHostedServer.ts`                                | New `GET /api/workspace-viewer/search` route                      |
-| `src/ui/webview-react/utils/hostedApi.ts`                          | New `workspaceSearch()` client call                                |
-| `src/ui/webview-react/store/workspaceViewerStore.ts`                | `activeTab` widened; new search state + setters                    |
-| `src/ui/webview-react/components/workspace-viewer/WorkspaceSearchPane.tsx` | New component                                              |
-| `src/ui/webview-react/components/workspace-viewer/WorkspaceViewerHeader.tsx` | New `Search` tab button                                  |
-| `src/ui/webview-react/components/workspace-viewer/WorkspaceViewerModal.tsx`  | Three-way pane switch                                    |
-| `src/ui/webview-react/components/workspace-viewer/WorkspaceExplorerPane.tsx` | Shortcut search icon button in the toolbar                |
-| `src/ui/webview-react/utils/textSnippets.ts`                       | New — `truncateSnippet()` extracted from `HistorySearchDrawer.tsx` |
-| `src/ui/webview-react/components/search/HistorySearchDrawer.tsx`   | Import `truncateSnippet()` from the new shared util instead of defining it locally |
-| Tests under `src/test/unit/**` and `src/ui/webview-react/test/**`  | New + updated coverage per Test Plan                               |
+| Area                                                                         | Planned change                                                                     |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `src/types/HostedWorkspaceViewerTypes.ts`                                    | New search request/response/result types                                           |
+| `src/utils/GitUtils.ts`                                                      | New `listSearchableFiles()` recursive `git ls-files` helper                        |
+| `src/server/HostedWorkspaceViewerService.ts`                                 | New `searchWorkspace()` method                                                     |
+| `src/server/CtrlYokeHostedServer.ts`                                         | New `GET /api/workspace-viewer/search` route                                       |
+| `src/ui/webview-react/utils/hostedApi.ts`                                    | New `workspaceSearch()` client call                                                |
+| `src/ui/webview-react/store/workspaceViewerStore.ts`                         | `activeTab` widened; new search state + setters                                    |
+| `src/ui/webview-react/components/workspace-viewer/WorkspaceSearchPane.tsx`   | New component                                                                      |
+| `src/ui/webview-react/components/workspace-viewer/WorkspaceViewerHeader.tsx` | New `Search` tab button                                                            |
+| `src/ui/webview-react/components/workspace-viewer/WorkspaceViewerModal.tsx`  | Three-way pane switch                                                              |
+| `src/ui/webview-react/components/workspace-viewer/WorkspaceExplorerPane.tsx` | Shortcut search icon button in the toolbar                                         |
+| `src/ui/webview-react/utils/textSnippets.ts`                                 | New — `truncateSnippet()` extracted from `HistorySearchDrawer.tsx`                 |
+| `src/ui/webview-react/components/search/HistorySearchDrawer.tsx`             | Import `truncateSnippet()` from the new shared util instead of defining it locally |
+| Tests under `src/test/unit/**` and `src/ui/webview-react/test/**`            | New + updated coverage per Test Plan                                               |
 
 ## Non-Goals
 

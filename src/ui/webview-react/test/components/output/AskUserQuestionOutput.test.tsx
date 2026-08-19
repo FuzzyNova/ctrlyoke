@@ -37,7 +37,11 @@ describe("AskUserQuestionOutput", () => {
         {
           question: "Favorite animal?",
           options: [
-            { label: "Cat", description: "Independent feline", preview: "/\\_/\\" },
+            {
+              label: "Cat",
+              description: "Independent feline",
+              preview: "/\\_/\\",
+            },
             { label: "Dog", description: "Loyal companion" },
           ],
           answer: "Cat",
@@ -67,9 +71,7 @@ describe("AskUserQuestionOutput", () => {
 
     render(<AskUserQuestionOutput data={data} />);
 
-    expect(
-      screen.getByText(/Not yet, let's wait for QA/)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Not yet, let's wait for QA/)).toBeInTheDocument();
   });
 
   it("renders a decline with the clarify feedback text", () => {
@@ -77,7 +79,10 @@ describe("AskUserQuestionOutput", () => {
       toolCallId: "ask-4",
       status: OPERATION_STATUS.FAILED,
       questions: [
-        { question: "Pick a color", options: [{ label: "Red" }, { label: "Blue" }] },
+        {
+          question: "Pick a color",
+          options: [{ label: "Red" }, { label: "Blue" }],
+        },
       ],
       declined: {
         reason: "clarify",

@@ -120,14 +120,18 @@ describe("WorkflowPropertiesPanel permissions", () => {
         usedBy: { mcpServers: [], workflows: [] },
       },
     ]);
-    useSettingsStore.getState().updateWorkflowProperty("secrets", ["API_TOKEN"]);
+    useSettingsStore
+      .getState()
+      .updateWorkflowProperty("secrets", ["API_TOKEN"]);
 
     render(<WorkflowPropertiesPanel />);
     fireEvent.click(screen.getByTitle("Permissions"));
 
     fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
 
-    expect(screen.getByRole("button", { name: "API_TOKEN" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "API_TOKEN" })
+    ).toBeInTheDocument();
     expect(screen.getByText("Active: API_TOKEN")).toBeInTheDocument();
   });
 
@@ -165,7 +169,9 @@ describe("WorkflowPropertiesPanel permissions", () => {
   });
 
   it("shows the default affordance when secret arrays differ", () => {
-    useSettingsStore.getState().updateGlobalSetting("secrets", ["DEFAULT_TOKEN"]);
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("secrets", ["DEFAULT_TOKEN"]);
     useSettingsStore
       .getState()
       .updateWorkflowProperty("secrets", ["WORKFLOW_TOKEN"]);

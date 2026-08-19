@@ -70,7 +70,9 @@ describe("useMobileLayout — keyboard-aware editor collapse", () => {
     mockTouchCapability(originalMaxTouchPoints);
   });
 
-  function renderMobileLayout(overrides: Partial<Parameters<typeof useMobileLayout>[0]> = {}) {
+  function renderMobileLayout(
+    overrides: Partial<Parameters<typeof useMobileLayout>[0]> = {}
+  ) {
     return renderHook(() =>
       useMobileLayout({
         isMobile: true,

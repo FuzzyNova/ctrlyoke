@@ -246,7 +246,9 @@ describe("PromptEditor — prompt-file action", () => {
     useEditorStore.getState().setPromptText("exact text\nwith whitespace\n");
     const getAction = renderWithAction();
 
-    await waitFor(() => expect(getAction()?.tooltip).toBe("Convert to prompt file"));
+    await waitFor(() =>
+      expect(getAction()?.tooltip).toBe("Convert to prompt file")
+    );
     getAction()?.onClick();
 
     const request = postMessageSpy.mock.calls.find(
@@ -285,7 +287,9 @@ describe("PromptEditor — prompt-file action", () => {
   it("leaves the editor unchanged when conversion fails or a late reply arrives", async () => {
     useEditorStore.getState().setPromptText("keep this text");
     const getAction = renderWithAction();
-    await waitFor(() => expect(getAction()?.tooltip).toBe("Convert to prompt file"));
+    await waitFor(() =>
+      expect(getAction()?.tooltip).toBe("Convert to prompt file")
+    );
     getAction()?.onClick();
     const request = postMessageSpy.mock.calls.find(
       ([message]) =>
@@ -366,10 +370,12 @@ describe("PromptEditor — prompt-file action", () => {
 
 describe("PromptEditor — image compatibility feedback", () => {
   it("keeps image compatibility feedback beside the editable prompt", () => {
-    useEditorStore.getState().selectPrompt(
-      { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
-      { prompt: "Review @screen.png", harness: HARNESS_IDS.CODEX_CLI }
-    );
+    useEditorStore
+      .getState()
+      .selectPrompt(
+        { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        { prompt: "Review @screen.png", harness: HARNESS_IDS.CODEX_CLI }
+      );
 
     render(<PromptEditor />);
 

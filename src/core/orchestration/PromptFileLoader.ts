@@ -3,10 +3,7 @@ import { PromptFileParser } from "../PromptFileParser";
 import { PromptQueue } from "../PromptQueue";
 import { Log } from "../../utils/Log";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import {
-  PromptFile,
-  EXECUTION_STATES,
-} from "../../types/CtrlYokeTypes";
+import { PromptFile, EXECUTION_STATES } from "../../types/CtrlYokeTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import { normalizeAgentSelection } from "../WorkflowStepSanitizer";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
@@ -374,11 +371,12 @@ export class PromptFileLoader {
       typeof workflow.prompt === "string" ? [workflow.prompt] : [];
     promptTexts.push(
       ...(workflow.steps ?? [])
-        .filter((step): step is Exclude<typeof step, { type: "script" }> =>
-          typeof step === "object" &&
-          step !== null &&
-          "prompt" in step &&
-          typeof step.prompt === "string"
+        .filter(
+          (step): step is Exclude<typeof step, { type: "script" }> =>
+            typeof step === "object" &&
+            step !== null &&
+            "prompt" in step &&
+            typeof step.prompt === "string"
         )
         .map((step) => step.prompt)
     );
@@ -399,10 +397,9 @@ export class PromptFileLoader {
       return;
     }
 
-    const message =
-      `Workflow references missing exported assets: ${missingDirectories.join(
-        ", "
-      )}. Restore the sibling *.assets/ directory or use Save As to create a portable copy.`;
+    const message = `Workflow references missing exported assets: ${missingDirectories.join(
+      ", "
+    )}. Restore the sibling *.assets/ directory or use Save As to create a portable copy.`;
     const dashboard = this.getDashboard();
     if (dashboard) {
       dashboard.updateStatusMessage(

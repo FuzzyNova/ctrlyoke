@@ -411,13 +411,11 @@ describe("setDisplayedRunView", () => {
     expect(store().displayedViewAddress).toEqual(runAddress);
     expect(store().displayedRunDirectory).toBe("C:/runs/wf-1/run-1");
 
-    const draftAddress = { workflowKey: "wf-1" as never, kind: "draft" as const };
-    store().setDisplayedViewIdentity(
-      draftAddress,
-      2,
-      3,
-      "C:/runs/wf-1/draft"
-    );
+    const draftAddress = {
+      workflowKey: "wf-1" as never,
+      kind: "draft" as const,
+    };
+    store().setDisplayedViewIdentity(draftAddress, 2, 3, "C:/runs/wf-1/draft");
     expect(store().displayedViewAddress).toEqual(draftAddress);
     expect(store().displayedRunDirectory).toBe("C:/runs/wf-1/draft");
   });

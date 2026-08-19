@@ -6,8 +6,7 @@ const ANSI_ESCAPE_SEQUENCE_PATTERN =
 // alternation still collapses a CRLF pair to one \n instead of leaving a
 // stray \n behind; \x0D is intentionally absent from the character class
 // below since it is already handled by the first two alternatives.
-const CRLF_CR_OR_CONTROL_PATTERN =
-  /\r\n|\r|[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g;
+const CRLF_CR_OR_CONTROL_PATTERN = /\r\n|\r|[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g;
 
 /**
  * Remove ANSI escape sequences from terminal output.

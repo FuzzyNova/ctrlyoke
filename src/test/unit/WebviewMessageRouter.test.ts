@@ -238,10 +238,9 @@ suite("WebviewMessageRouter — end-condition script creation", () => {
       }
     );
 
-    assert.deepStrictEqual(
-      created,
-      [`${END_CONDITION_SCRIPT_TYPES.JAVASCRIPT}:custom-check.js`]
-    );
+    assert.deepStrictEqual(created, [
+      `${END_CONDITION_SCRIPT_TYPES.JAVASCRIPT}:custom-check.js`,
+    ]);
     assert.deepStrictEqual(browserMessages, [
       {
         type: MESSAGE_TYPES.END_CONDITION_SCRIPT_CREATED,

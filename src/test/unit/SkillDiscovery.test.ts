@@ -31,7 +31,10 @@ suite("Execution-root asset discovery", () => {
     try {
       fs.mkdirSync(path.dirname(agentPath), { recursive: true });
       fs.mkdirSync(path.dirname(skillPath), { recursive: true });
-      fs.writeFileSync(agentPath, "---\nname: Execution Agent\n---\nagent body");
+      fs.writeFileSync(
+        agentPath,
+        "---\nname: Execution Agent\n---\nagent body"
+      );
       fs.writeFileSync(
         skillPath,
         "---\ndescription: execution skill\n---\nskill body"

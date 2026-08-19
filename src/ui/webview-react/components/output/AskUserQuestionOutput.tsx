@@ -106,9 +106,7 @@ export const AskUserQuestionOutput: React.FC<AskUserQuestionOutputProps> = ({
             : undefined;
           const customReply =
             question.answer &&
-            !question.options.some(
-              (option) => option.label === question.answer
-            )
+            !question.options.some((option) => option.label === question.answer)
               ? question.answer
               : undefined;
 
@@ -201,7 +199,9 @@ export const AskUserQuestionOutput: React.FC<AskUserQuestionOutputProps> = ({
               )}
 
               {customReply && (
-                <div className={`${TOOL_RESULT_LINE} mt-1 flex items-start gap-1`}>
+                <div
+                  className={`${TOOL_RESULT_LINE} mt-1 flex items-start gap-1`}
+                >
                   <span className="shrink-0">⎿</span>
                   <span className="min-w-0 flex-1">
                     Reply:{" "}
@@ -220,7 +220,9 @@ export const AskUserQuestionOutput: React.FC<AskUserQuestionOutputProps> = ({
               )}
 
               {question.notes && (
-                <div className={`${TOOL_RESULT_LINE} mt-1 flex items-start gap-1`}>
+                <div
+                  className={`${TOOL_RESULT_LINE} mt-1 flex items-start gap-1`}
+                >
                   <span className="shrink-0">⎿</span>
                   <span className="min-w-0 flex-1">
                     Note:{" "}

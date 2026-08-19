@@ -28,7 +28,10 @@ suite("WebPushService", () => {
     );
     originalCtrlyokeHome = process.env.CTRLYOKE_HOME;
     process.env.CTRLYOKE_HOME = workspaceRoot;
-    notificationsDir = path.join(ctrlyokeStateHome(), PATH_CONSTANTS.NOTIFICATIONS_DIR);
+    notificationsDir = path.join(
+      ctrlyokeStateHome(),
+      PATH_CONSTANTS.NOTIFICATIONS_DIR
+    );
     vapidKeysPath = path.join(notificationsDir, PATH_CONSTANTS.VAPID_KEYS_FILE);
     subscriptionsPath = path.join(
       notificationsDir,

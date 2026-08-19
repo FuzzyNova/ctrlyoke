@@ -61,10 +61,7 @@ suite("TerminalOutputSanitizer", () => {
 
     test("mixed CRLF, lone CR, ANSI, and control chars in one pass", () => {
       const input = "\x1B[32mok\x1B[0m\r\nline2\rline3\x0Bline4";
-      assert.strictEqual(
-        sanitizeTerminalOutput(input),
-        "ok\nline2line3line4"
-      );
+      assert.strictEqual(sanitizeTerminalOutput(input), "ok\nline2line3line4");
     });
 
     test("caches repeated calls with the same input string", () => {

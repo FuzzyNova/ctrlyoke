@@ -69,7 +69,9 @@ describe("Header execution controls", () => {
     const labels = Array.from(actionGroup.querySelectorAll("button")).map(
       (button) => button.getAttribute("aria-label")
     );
-    expect(labels.indexOf("Dry Run")).toBeGreaterThan(labels.indexOf("Save workflow"));
+    expect(labels.indexOf("Dry Run")).toBeGreaterThan(
+      labels.indexOf("Save workflow")
+    );
     expect(labels.indexOf("Dry Run")).toBeLessThan(labels.indexOf("Undo"));
 
     fireEvent.click(

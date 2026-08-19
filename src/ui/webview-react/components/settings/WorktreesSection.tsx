@@ -68,7 +68,9 @@ type RequestConfirm = (request: PendingConfirmRequest) => void;
  */
 function useWorktreeActionFeedback() {
   const results = useSettingsStore((state) => state.worktreeActionResults);
-  const clearResult = useSettingsStore((state) => state.clearWorktreeActionResult);
+  const clearResult = useSettingsStore(
+    (state) => state.clearWorktreeActionResult
+  );
   const [pending, setPending] = useState<Record<string, string[]>>({});
   const [feedback, setFeedback] = useState<Record<string, ActionFeedback>>({});
   const timersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -123,7 +125,9 @@ function useWorktreeActionFeedback() {
   );
 
   const begin = useCallback((key: string, count = 1): string[] => {
-    const requestIds = Array.from({ length: count }, () => generateRequestId(key));
+    const requestIds = Array.from({ length: count }, () =>
+      generateRequestId(key)
+    );
     clearTimeout(timersRef.current[key]);
     setPending((prev) => ({ ...prev, [key]: requestIds }));
     setFeedback((prev) => {
@@ -179,7 +183,8 @@ export function WorktreesSection({
     (state) => state.globalSettings.confirmResetOperations
   );
   const feedback = useWorktreeActionFeedback();
-  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirmRequest | null>(null);
+  const [pendingConfirm, setPendingConfirm] =
+    useState<PendingConfirmRequest | null>(null);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const sources = settings.sources as Record<string, SettingSource>;
   const configuredRoot = settings.settings.worktrees.root.trim();
@@ -192,7 +197,9 @@ export function WorktreesSection({
     : "Automatic: repository sibling, then user fallback";
 
   useEffect(() => {
-    vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_WORKTREE_MANAGEMENT_STATE });
+    vscode.postMessage({
+      type: MESSAGE_TYPES.REQUEST_WORKTREE_MANAGEMENT_STATE,
+    });
   }, [vscode]);
 
   const safeBranches = useMemo(
@@ -219,19 +226,32 @@ export function WorktreesSection({
   const bulkCleanup = () => {
     const targets = selectedBranches
       .map((branchName) =>
-        management?.entries.find((candidate) => candidate.branchName === branchName)
+        management?.entries.find(
+          (candidate) => candidate.branchName === branchName
+        )
       )
       .filter((entry): entry is WorktreeManagementEntry => Boolean(entry));
     if (!targets.length) return;
     const requestIds = feedback.begin("bulk-cleanup", targets.length);
     targets.forEach((entry, index) =>
-      sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH, requestIds[index], entry)
+      sendAction(
+        vscode,
+        WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH,
+        requestIds[index],
+        entry
+      )
     );
   };
 
   const prune = () => {
     const [requestId] = feedback.begin("prune");
-    sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.PRUNE, requestId, undefined, true);
+    sendAction(
+      vscode,
+      WORKTREE_MANAGEMENT_ACTIONS.PRUNE,
+      requestId,
+      undefined,
+      true
+    );
   };
 
   return (
@@ -275,18 +295,34 @@ export function WorktreesSection({
       <div className="border-t border-panel-border pt-4">
         <div className="flex items-center gap-1.5 mb-1">
           <span className="text-xs text-description-fg">Effective root</span>
-          <span className="text-xxs text-description-fg">({effectiveTier})</span>
+          <span className="text-xxs text-description-fg">
+            ({effectiveTier})
+          </span>
         </div>
-        <div id="worktrees-effective-root" role="status" className="w-full rounded border border-input-border bg-input-bg px-2 py-1 text-sm text-description-fg font-mono break-all">
+        <div
+          id="worktrees-effective-root"
+          role="status"
+          className="w-full rounded border border-input-border bg-input-bg px-2 py-1 text-sm text-description-fg font-mono break-all"
+        >
           {effectiveRoot}
         </div>
       </div>
 
-      <section aria-labelledby="manage-worktrees-heading" className="border-t border-panel-border pt-4">
+      <section
+        aria-labelledby="manage-worktrees-heading"
+        className="border-t border-panel-border pt-4"
+      >
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h4 id="manage-worktrees-heading" className="text-sm font-semibold text-foreground">Manage Worktrees</h4>
-            <p className="text-xs text-description-fg">Ownership, leases, branches, and retention actions.</p>
+            <h4
+              id="manage-worktrees-heading"
+              className="text-sm font-semibold text-foreground"
+            >
+              Manage Worktrees
+            </h4>
+            <p className="text-xs text-description-fg">
+              Ownership, leases, branches, and retention actions.
+            </p>
           </div>
           <ActionButton
             label="Refresh"
@@ -314,7 +350,9 @@ export function WorktreesSection({
             ))}
           </div>
         ) : (
-          <p className="mt-3 text-xs text-description-fg">No linked worktrees were discovered.</p>
+          <p className="mt-3 text-xs text-description-fg">
+            No linked worktrees were discovered.
+          </p>
         )}
 
         <div className="mt-3 flex flex-wrap gap-2">
@@ -335,7 +373,9 @@ export function WorktreesSection({
           />
         </div>
         <p className="mt-2 text-xs text-description-fg">
-          Safe cleanup preselects only ctrlyoke-owned, inactive branches proven merged into their recorded target. Squash and rebase merges stay explicit.
+          Safe cleanup preselects only ctrlyoke-owned, inactive branches proven
+          merged into their recorded target. Squash and rebase merges stay
+          explicit.
         </p>
       </section>
 
@@ -348,8 +388,14 @@ export function WorktreesSection({
           request?.onConfirm();
         }}
         title={pendingConfirm?.variant === "delete" ? pendingConfirm.title : ""}
-        message={pendingConfirm?.variant === "delete" ? pendingConfirm.message : ""}
-        detail={pendingConfirm?.variant === "delete" ? pendingConfirm.detail : undefined}
+        message={
+          pendingConfirm?.variant === "delete" ? pendingConfirm.message : ""
+        }
+        detail={
+          pendingConfirm?.variant === "delete"
+            ? pendingConfirm.detail
+            : undefined
+        }
       />
       <ResetConfirmModal
         isOpen={pendingConfirm?.variant === "reset"}
@@ -360,9 +406,19 @@ export function WorktreesSection({
           request?.onConfirm();
         }}
         title={pendingConfirm?.variant === "reset" ? pendingConfirm.title : ""}
-        message={pendingConfirm?.variant === "reset" ? pendingConfirm.message : ""}
-        detail={pendingConfirm?.variant === "reset" ? pendingConfirm.detail : undefined}
-        confirmLabel={pendingConfirm?.variant === "reset" ? pendingConfirm.confirmLabel : undefined}
+        message={
+          pendingConfirm?.variant === "reset" ? pendingConfirm.message : ""
+        }
+        detail={
+          pendingConfirm?.variant === "reset"
+            ? pendingConfirm.detail
+            : undefined
+        }
+        confirmLabel={
+          pendingConfirm?.variant === "reset"
+            ? pendingConfirm.confirmLabel
+            : undefined
+        }
       />
     </div>
   );
@@ -390,7 +446,9 @@ function WorktreeRow({
   const rowKey = (suffix: string) => `${entry.worktreePath}::${suffix}`;
   const owner = entry.inUse
     ? `In use — ${entry.leaseOwners.map((item) => `${item.lease.workflowKey}/${item.lease.runRef}`).join(", ")}`
-    : entry.ownership === "managed" ? "ctrlyoke-owned" : "user-owned";
+    : entry.ownership === "managed"
+      ? "ctrlyoke-owned"
+      : "user-owned";
   const retry = () => {
     const [requestId] = feedback.begin(rowKey("retry"));
     vscode.postMessage({
@@ -401,7 +459,13 @@ function WorktreeRow({
   };
   const doRemove = () => {
     const [requestId] = feedback.begin(rowKey("remove"));
-    sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.REMOVE, requestId, entry, true);
+    sendAction(
+      vscode,
+      WORKTREE_MANAGEMENT_ACTIONS.REMOVE,
+      requestId,
+      entry,
+      true
+    );
   };
   const remove = () => {
     if (!confirmDeleteOperations) {
@@ -417,7 +481,13 @@ function WorktreeRow({
   };
   const doForceRemove = () => {
     const [requestId] = feedback.begin(rowKey("force-remove"));
-    sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.FORCE_REMOVE, requestId, entry, true);
+    sendAction(
+      vscode,
+      WORKTREE_MANAGEMENT_ACTIONS.FORCE_REMOVE,
+      requestId,
+      entry,
+      true
+    );
   };
   const forceRemove = () => {
     if (!confirmDeleteOperations) {
@@ -434,7 +504,13 @@ function WorktreeRow({
   };
   const cleanupBranch = (confirmed: boolean) => {
     const [requestId] = feedback.begin(rowKey("cleanup-branch"));
-    sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH, requestId, entry, confirmed);
+    sendAction(
+      vscode,
+      WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH,
+      requestId,
+      entry,
+      confirmed
+    );
   };
   const deleteBranchWithConfirm = () => {
     if (!confirmDeleteOperations) {
@@ -453,9 +529,11 @@ function WorktreeRow({
     const [requestId] = feedback.begin(rowKey("repair"));
     sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.REPAIR, requestId, entry);
   };
-  const normalizePath = (value: string) => value.replace(/\\/g, "/").toLowerCase().replace(/\/$/, "");
+  const normalizePath = (value: string) =>
+    value.replace(/\\/g, "/").toLowerCase().replace(/\/$/, "");
   const isSourceCheckout =
-    !!sourceCheckoutRoot && normalizePath(entry.worktreePath) === normalizePath(sourceCheckoutRoot);
+    !!sourceCheckoutRoot &&
+    normalizePath(entry.worktreePath) === normalizePath(sourceCheckoutRoot);
   const canSync =
     entry.ownership === "user" &&
     !isSourceCheckout &&
@@ -486,27 +564,64 @@ function WorktreeRow({
     });
   };
   return (
-    <div className={`rounded border p-2 text-xs ${entry.inUse ? "border-warning-fg" : "border-panel-border"}`}>
-      <div className="font-mono break-all text-foreground">{entry.worktreePath}</div>
+    <div
+      className={`rounded border p-2 text-xs ${entry.inUse ? "border-warning-fg" : "border-panel-border"}`}
+    >
+      <div className="font-mono break-all text-foreground">
+        {entry.worktreePath}
+      </div>
       <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-description-fg">
         <span>Owner: {owner}</span>
         <span>Age: {formatAge(entry.ageMs)}</span>
-        <span>Branch: {entry.branchName ?? "detached"} ({entry.branchState})</span>
-        <span>{entry.prunableReason ? `Prunable: ${entry.prunableReason}` : entry.stale ? "Stale admin entry" : entry.directoryState === "removed" ? "Directory removed" : "Git entry present"}</span>
+        <span>
+          Branch: {entry.branchName ?? "detached"} ({entry.branchState})
+        </span>
+        <span>
+          {entry.prunableReason
+            ? `Prunable: ${entry.prunableReason}`
+            : entry.stale
+              ? "Stale admin entry"
+              : entry.directoryState === "removed"
+                ? "Directory removed"
+                : "Git entry present"}
+        </span>
       </div>
-      {entry.inUse && <div className="mt-1 text-warning-fg">Retry after the owner releases it, or open the owning workspace from its run.</div>}
-      {entry.divergence && <div className="mt-1 text-description-fg">{entry.branchName} — {entry.divergence.ahead} ahead, {entry.divergence.behind} behind {entry.divergence.comparisonLabel}</div>}
+      {entry.inUse && (
+        <div className="mt-1 text-warning-fg">
+          Retry after the owner releases it, or open the owning workspace from
+          its run.
+        </div>
+      )}
+      {entry.divergence && (
+        <div className="mt-1 text-description-fg">
+          {entry.branchName} — {entry.divergence.ahead} ahead,{" "}
+          {entry.divergence.behind} behind {entry.divergence.comparisonLabel}
+        </div>
+      )}
       <div className="mt-2 flex flex-wrap gap-2">
-        {entry.inUse && entry.leaseOwners[0] && <>
-          <ActionButton
-            label="Retry"
-            pendingLabel="Retrying…"
-            pending={feedback.isPending(rowKey("retry"))}
-            feedback={feedback.getFeedback(rowKey("retry"))}
-            onClick={retry}
-          />
-          <button type="button" className="fp-select-trigger text-xs" onClick={() => vscode.postMessage({ type: MESSAGE_TYPES.OPEN_WORKTREE_OWNER, stateRoot: entry.leaseOwners[0].lease.stateRoot })}>Open owning workspace</button>
-        </>}
+        {entry.inUse && entry.leaseOwners[0] && (
+          <>
+            <ActionButton
+              label="Retry"
+              pendingLabel="Retrying…"
+              pending={feedback.isPending(rowKey("retry"))}
+              feedback={feedback.getFeedback(rowKey("retry"))}
+              onClick={retry}
+            />
+            <button
+              type="button"
+              className="fp-select-trigger text-xs"
+              onClick={() =>
+                vscode.postMessage({
+                  type: MESSAGE_TYPES.OPEN_WORKTREE_OWNER,
+                  stateRoot: entry.leaseOwners[0].lease.stateRoot,
+                })
+              }
+            >
+              Open owning workspace
+            </button>
+          </>
+        )}
         {canSync && (
           <ActionButton
             label={`Sync with ${sourceCheckoutBranch ?? "checkout"}`}
@@ -525,35 +640,42 @@ function WorktreeRow({
             onClick={() => cleanupBranch(false)}
           />
         )}
-        {entry.ownership === "managed" && entry.branchName && entry.branchState === "present" && !entry.branchCleanupEligible && !entry.inUse && !entry.stale && (
-          <ActionButton
-            label="Delete branch…"
-            pendingLabel="Deleting…"
-            pending={feedback.isPending(rowKey("cleanup-branch"))}
-            feedback={feedback.getFeedback(rowKey("cleanup-branch"))}
-            onClick={deleteBranchWithConfirm}
-          />
-        )}
-        {entry.ownership === "managed" && entry.directoryState !== "removed" && (
-          <ActionButton
-            label="Remove"
-            pendingLabel="Removing…"
-            disabled={entry.inUse}
-            pending={feedback.isPending(rowKey("remove"))}
-            feedback={feedback.getFeedback(rowKey("remove"))}
-            onClick={remove}
-          />
-        )}
-        {entry.ownership === "managed" && entry.directoryState !== "removed" && (
-          <ActionButton
-            label="Force remove"
-            pendingLabel="Force removing…"
-            disabled={entry.inUse}
-            pending={feedback.isPending(rowKey("force-remove"))}
-            feedback={feedback.getFeedback(rowKey("force-remove"))}
-            onClick={forceRemove}
-          />
-        )}
+        {entry.ownership === "managed" &&
+          entry.branchName &&
+          entry.branchState === "present" &&
+          !entry.branchCleanupEligible &&
+          !entry.inUse &&
+          !entry.stale && (
+            <ActionButton
+              label="Delete branch…"
+              pendingLabel="Deleting…"
+              pending={feedback.isPending(rowKey("cleanup-branch"))}
+              feedback={feedback.getFeedback(rowKey("cleanup-branch"))}
+              onClick={deleteBranchWithConfirm}
+            />
+          )}
+        {entry.ownership === "managed" &&
+          entry.directoryState !== "removed" && (
+            <ActionButton
+              label="Remove"
+              pendingLabel="Removing…"
+              disabled={entry.inUse}
+              pending={feedback.isPending(rowKey("remove"))}
+              feedback={feedback.getFeedback(rowKey("remove"))}
+              onClick={remove}
+            />
+          )}
+        {entry.ownership === "managed" &&
+          entry.directoryState !== "removed" && (
+            <ActionButton
+              label="Force remove"
+              pendingLabel="Force removing…"
+              disabled={entry.inUse}
+              pending={feedback.isPending(rowKey("force-remove"))}
+              feedback={feedback.getFeedback(rowKey("force-remove"))}
+              onClick={forceRemove}
+            />
+          )}
         {entry.stale && (
           <ActionButton
             label="Repair entry"

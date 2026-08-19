@@ -151,9 +151,7 @@ function getEventKey(event: CliEvent): string | undefined {
     }
     case CLI_EVENT_TYPES.ASK_USER_QUESTION: {
       const data = event.data as AskUserQuestionData;
-      return data.toolCallId
-        ? `askUserQuestion:${data.toolCallId}`
-        : undefined;
+      return data.toolCallId ? `askUserQuestion:${data.toolCallId}` : undefined;
     }
     case CLI_EVENT_TYPES.WEB_SEARCH: {
       const data = event.data as WebSearchData;

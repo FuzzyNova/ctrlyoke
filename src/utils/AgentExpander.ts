@@ -21,10 +21,7 @@ import { TtlCache } from "./TtlCache";
  */
 
 export class AgentExpander {
-  private static readonly agentCaches = new Map<
-    string,
-    TtlCache<AgentInfo>
-  >();
+  private static readonly agentCaches = new Map<string, TtlCache<AgentInfo>>();
 
   /** Get cached agents or refresh the cache from disk */
   private static async getAgents(workspaceRoot?: string): Promise<AgentInfo[]> {

@@ -845,7 +845,10 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       case CLI_EVENT_TYPES.ASK_USER_QUESTION: {
         const data = event.data as AskUserQuestionData;
         return (
-          <AskUserQuestionOutput data={data} findDecorations={findDecorations} />
+          <AskUserQuestionOutput
+            data={data}
+            findDecorations={findDecorations}
+          />
         );
       }
       case CLI_EVENT_TYPES.COMPACTION: {
@@ -944,7 +947,7 @@ const CliHeaderRowView: React.FC<{
           ? `End condition${row.attemptIndex > 0 ? ` retry ${row.attemptIndex + 1}` : ""}`
           : isWorktreeSetup
             ? "Worktree setup"
-          : undefined;
+            : undefined;
     const headerLabel = isConditionOutput
       ? conditionLabel
       : (stepLabelContent ?? row.stepLabel);

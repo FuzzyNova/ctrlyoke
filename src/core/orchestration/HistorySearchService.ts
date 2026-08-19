@@ -310,9 +310,8 @@ export class HistorySearchService {
     runRef: import("../../types/CtrlYokeTypes").RunRef
   ): HistorySearchDocument[] {
     const cliOutput = event.payload.cliOutput;
-    const candidates = this.candidateExtractor.collectCliOutputCandidates(
-      cliOutput
-    );
+    const candidates =
+      this.candidateExtractor.collectCliOutputCandidates(cliOutput);
 
     return candidates.map((candidate, candidateIndex) =>
       this.buildDocument(

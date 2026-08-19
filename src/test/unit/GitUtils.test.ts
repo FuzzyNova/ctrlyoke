@@ -284,7 +284,13 @@ suite("GitUtils worktree plumbing", function () {
       await getAheadBehind(workspaceRoot, "base", "feature"),
       { ahead: 1, behind: 0 }
     );
-    assert.strictEqual(await getBranchUpstream(workspaceRoot, "feature"), "base");
-    assert.strictEqual(await isCommitAncestor(workspaceRoot, "base", "feature"), true);
+    assert.strictEqual(
+      await getBranchUpstream(workspaceRoot, "feature"),
+      "base"
+    );
+    assert.strictEqual(
+      await isCommitAncestor(workspaceRoot, "base", "feature"),
+      true
+    );
   });
 });

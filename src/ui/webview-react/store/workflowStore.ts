@@ -77,10 +77,16 @@ function deepValueEqual(a: unknown, b: unknown): boolean {
  * registered as undoable no matter which one edited it.
  */
 export function isStepContentEqual(a: WorkflowStep, b: WorkflowStep): boolean {
-  const { status: _statusA, _runtime: _runtimeA, ...restA } =
-    a as unknown as Record<string, unknown>;
-  const { status: _statusB, _runtime: _runtimeB, ...restB } =
-    b as unknown as Record<string, unknown>;
+  const {
+    status: _statusA,
+    _runtime: _runtimeA,
+    ...restA
+  } = a as unknown as Record<string, unknown>;
+  const {
+    status: _statusB,
+    _runtime: _runtimeB,
+    ...restB
+  } = b as unknown as Record<string, unknown>;
   return deepValueEqual(restA, restB);
 }
 import type {
@@ -1014,11 +1020,11 @@ export const useWorkflowStore = create<
                 runMetadata: {
                   runId: history.runId,
                   startedAt: history.startedAt,
-                completedAt: history.completedAt,
-                executionState: history.executionState,
-                worktree: history.worktree,
-                worktreeNotice: history.worktreeNotice,
-              },
+                  completedAt: history.completedAt,
+                  executionState: history.executionState,
+                  worktree: history.worktree,
+                  worktreeNotice: history.worktreeNotice,
+                },
               }),
               undoRecords: preserveReferences(state.undoRecords, {}),
               workspaceSnapshots: preserveReferences(

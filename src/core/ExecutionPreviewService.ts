@@ -97,9 +97,7 @@ import {
 import { WorktreeManager } from "./orchestration/WorktreeManager";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import type { SecretStore } from "../platform/SecretStore";
-import {
-  findMissingSecretNames,
-} from "../utils/SecretResolver";
+import { findMissingSecretNames } from "../utils/SecretResolver";
 import { getEffectiveSecretGrants } from "../utils/SecretReferenceParser";
 
 /** The already-wired shared planners for one CLI harness. */
@@ -287,8 +285,10 @@ export class ExecutionPreviewService {
       workspace: { workspaceRoot: this.options.workspaceRoot },
     });
 
-    const { dto: worktreePreview, executionWorkspace: worktreeExecutionWorkspace } =
-      await this.buildWorktreePreview(preparedWorkflow);
+    const {
+      dto: worktreePreview,
+      executionWorkspace: worktreeExecutionWorkspace,
+    } = await this.buildWorktreePreview(preparedWorkflow);
 
     const steps: StepExecutionPreview[] = [];
     for (const target of targets) {
@@ -387,7 +387,10 @@ export class ExecutionPreviewService {
       managedMcpServers,
       promptStep.prompt
     );
-    const secretNames = getEffectiveSecretGrants(promptStep, properties.secrets);
+    const secretNames = getEffectiveSecretGrants(
+      promptStep,
+      properties.secrets
+    );
     const missingSecretNames = await findMissingSecretNames(secretNames, {
       workspaceRoot: this.options.workspaceRoot ?? "",
       secretStore: this.options.secretStore,

@@ -156,7 +156,9 @@ suite("ContextExpander.expandContextSplit", () => {
       process.env.GIT_TRACE2_EVENT = tracePath;
       try {
         const expander = new ContextExpander({ workspaceRoot: root });
-        const result = await expander.expandContextSplit("Review @ordinary.log");
+        const result = await expander.expandContextSplit(
+          "Review @ordinary.log"
+        );
         assert.deepStrictEqual(result.directFileRefs, [filePath]);
       } finally {
         if (previousTracePath === undefined) {

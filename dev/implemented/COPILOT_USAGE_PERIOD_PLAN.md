@@ -145,7 +145,7 @@ from the quota RPC error and normalized to a safe status code.
 Keep the transport comparison with `CodexAppServerClient` honest: Codex speaks
 newline-delimited JSON with a hand-rolled request matcher, while Copilot speaks
 `Content-Length`-framed JSON-RPC through `vscode-jsonrpc`. Reuse the shared
-*shape* (injected spawn, one bounded deadline, abort race, best-effort teardown)
+_shape_ (injected spawn, one bounded deadline, abort race, best-effort teardown)
 and factor out only what genuinely single-sources — do not force two different
 framings behind one abstraction just to satisfy DRY.
 
@@ -341,6 +341,7 @@ first would leave a step that cannot compile or be tested on its own.
       development `npm run compile:extension` also succeeded and included all
       three transport symbols in all three bundles. The temporary import was
       then removed.
+
 - [x] Add a production-build assertion that no `@github/copilot-*` platform
       runtime or native Copilot binary is packaged. Assert against
       `package.json` dependencies plus the built bundles under `out/` — do not
@@ -354,13 +355,13 @@ first would leave a step that cannot compile or be tested on its own.
 ### Phase 3: Provider wiring
 
 - [x] Replace `CopilotUsageProvider`'s observed-only inheritance with the live
-  pull provider.
+      pull provider.
 - [x] Retain shared observed token rollups unchanged.
 - [x] Refresh once after a completed/stopped/error Copilot attempt through the
-  usage service's existing debounce/single-flight path
-  (`HarnessUsageService.refreshHarnessUsage` already debounces and
-  single-flights per harness, so the seam only needs to call it once per
-  terminal attempt).
+      usage service's existing debounce/single-flight path
+      (`HarnessUsageService.refreshHarnessUsage` already debounces and
+      single-flights per harness, so the seam only needs to call it once per
+      terminal attempt).
 
 Refresh seam: `OutputHistoryManager.recordAttemptTerminal` schedules the
 fire-and-forget request after the terminal event is durable. `WorkflowExecutor`
@@ -452,37 +453,37 @@ implementation steps:
 ## Acceptance Criteria
 
 - [x] Met — an authenticated supported CLI response is normalized by
-  `normalizeCopilotAccountQuota` into provider-live percentage, used amount,
-  entitlement, and reset time; covered by `CopilotUsageNormalization.test.ts`.
+      `normalizeCopilotAccountQuota` into provider-live percentage, used amount,
+      entitlement, and reset time; covered by `CopilotUsageNormalization.test.ts`.
 - [x] Met — `CopilotQuotaClient.test.ts` verifies no session/auth RPCs, no
-  prompt, and no model turn.
+      prompt, and no model turn.
 - [x] Met — `CopilotQuotaClient` uses one bounded probe and best-effort
-  `runtime.shutdown`, then waits and falls back to process-tree termination on
-  success, error, timeout, cancellation, or teardown failure.
-  `HarnessUsageService.dispose()` supplies the extension-lifecycle path: it
-  aborts in-flight probes and refuses new ones, and is called from
-  `WorkflowOrchestrator.dispose()` (reached via `extension.ts` deactivation).
-  The client additionally re-checks abort/teardown state immediately before and
-  after spawning, so an abort landing while the launcher is still resolving
-  cannot leave an orphaned Copilot child.
+      `runtime.shutdown`, then waits and falls back to process-tree termination on
+      success, error, timeout, cancellation, or teardown failure.
+      `HarnessUsageService.dispose()` supplies the extension-lifecycle path: it
+      aborts in-flight probes and refuses new ones, and is called from
+      `WorkflowOrchestrator.dispose()` (reached via `extension.ts` deactivation).
+      The client additionally re-checks abort/teardown state immediately before and
+      after spawning, so an abort landing while the launcher is still resolving
+      cannot leave an orphaned Copilot child.
 - [x] Met — launcher resolution uses the same installed `copilot` command as
-  the harness, and `assert-no-copilot-runtime.mjs` guards dependencies and
-  production bundles against a duplicate runtime.
+      the harness, and `assert-no-copilot-runtime.mjs` guards dependencies and
+      production bundles against a duplicate runtime.
 - [x] Met — normalization preserves valid unknown bucket keys and ignores
-  additive fields while retaining known buckets.
+      additive fields while retaining known buckets.
 - [x] Met — unlimited buckets omit finite `limit`/`percentUsed`, and overage
-  state is preserved; display and selection-assist tests cover the behavior.
+      state is preserved; display and selection-assist tests cover the behavior.
 - [x] Met — only normalized quota fields are persisted; bounded stderr and
-  safe error-code tests ensure raw quota/auth data and credentials do not leak.
+      safe error-code tests ensure raw quota/auth data and credentials do not leak.
 - [x] Met — provider failures are non-throwing and
-  `HarnessUsageService.test.ts` verifies last-known snapshot preservation.
+      `HarnessUsageService.test.ts` verifies last-known snapshot preservation.
 - [x] Met — provider quota drives the compact badge and pre-launch warning;
-  observed OTel token totals remain separately labelled, covered by display and
-  selection-assist tests.
+      observed OTel token totals remain separately labelled, covered by display and
+      selection-assist tests.
 - [x] Met — the production-build assertion checks all three bundles and
-  package dependencies for platform-specific Copilot runtime/binary content;
-  VSIX packaging is intentionally outside the normal gate per the Phase 2
-  packaging decision.
+      package dependencies for platform-specific Copilot runtime/binary content;
+      VSIX packaging is intentionally outside the normal gate per the Phase 2
+      packaging decision.
 
 ## References
 

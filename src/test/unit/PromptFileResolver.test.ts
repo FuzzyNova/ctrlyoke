@@ -263,7 +263,11 @@ suite("PromptFileResolver", () => {
 
   test("keeps sync candidates identical apart from the source-side entry", async () => {
     const sourceRoot = await createSourceRepository();
-    const sourcePrompt = path.join(sourceRoot, "runtime", "candidate.prompt.md");
+    const sourcePrompt = path.join(
+      sourceRoot,
+      "runtime",
+      "candidate.prompt.md"
+    );
     const sourceDefinitionPath = path.join(workspaceRoot, "workflow.yaml");
     const resolver = createWorktreeResolver(sourceRoot);
 
@@ -423,7 +427,9 @@ suite("PromptFileResolver", () => {
     assert.deepStrictEqual(resolution.candidates, []);
   });
 
-  function createWorktreeResolver(sourceCheckoutRoot: string): PromptFileResolver {
+  function createWorktreeResolver(
+    sourceCheckoutRoot: string
+  ): PromptFileResolver {
     return new PromptFileResolver({
       workspaceRoot,
       trustedRoots: [workspaceRoot],

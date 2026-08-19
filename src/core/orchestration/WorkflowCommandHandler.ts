@@ -1,10 +1,6 @@
 import * as vscode from "vscode";
-import {
-  ConfigurationUtils,
-} from "../../utils/ConfigurationUtils";
-import {
-  USER_FEEDBACK_SEVERITY,
-} from "../../types/DashboardConstants";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { USER_FEEDBACK_SEVERITY } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 
@@ -18,10 +14,7 @@ import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
  * - Opening current prompt file
  */
 export class WorkflowCommandHandler {
-  constructor(
-    private readonly userFeedbackSink?: UserFeedbackSink
-  ) {
-  }
+  constructor(private readonly userFeedbackSink?: UserFeedbackSink) {}
 
   /**
    * Open ctrlyoke panel/dashboard
@@ -89,5 +82,4 @@ export class WorkflowCommandHandler {
       Log.error("ctrlyoke: Failed to open prompt file:", error);
     }
   }
-
 }

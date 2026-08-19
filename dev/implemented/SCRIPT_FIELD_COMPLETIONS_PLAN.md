@@ -70,12 +70,12 @@ Both fields should behave like a normal single-line input:
 
 ### Branch Suggestions
 
-| Typed text  | Suggestions                                                                 |
-| ----------- | ---------------------------------------------------------------------------- |
+| Typed text  | Suggestions                                                                                                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | empty field | all local branches, most-recently-committed first (no exclusions — the current branch is listed like any other; `validateBranchName`/`addWorktree` already reject unusable branches) |
-| `feat/`     | local branches whose name starts with `feat/`                                |
-| `fix-123`   | local branches matching `fix-123` anywhere convenient by prefix filter       |
-| no match    | no suggestions shown; typed text is kept as-is (a new branch name)           |
+| `feat/`     | local branches whose name starts with `feat/`                                                                                                                                        |
+| `fix-123`   | local branches matching `fix-123` anywhere convenient by prefix filter                                                                                                               |
+| no match    | no suggestions shown; typed text is kept as-is (a new branch name)                                                                                                                   |
 
 Suggestion items for existing branches carry a `detail` of `"Existing branch"` so users
 can tell an exact-match suggestion is not going to create a new branch. There is no
@@ -270,7 +270,10 @@ Create `src/completions/ScriptCommandCompletionHelpers.ts` (details below) and
       "--format=%(refname:short)",
       "refs/heads",
     ]);
-    return stdout.split("\n").map((line) => line.trim()).filter(Boolean);
+    return stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
   }
   ```
 - Cache the branch list with a short time-based TTL (10s), mirroring `getGitChangeCompletions`'s
@@ -337,8 +340,8 @@ table.set(MESSAGE_TYPES.BRANCH_LIST_REQUEST, async (message, ctx) => {
 });
 ```
 
-**There is no `this.emitMessage` on the router.** Responses go back to the *requesting
-client only*, via the `WebviewClientContext` (`src/ui/WebviewClientContext.ts`) that the
+**There is no `this.emitMessage` on the router.** Responses go back to the _requesting
+client only_, via the `WebviewClientContext` (`src/ui/WebviewClientContext.ts`) that the
 dispatch table passes as the second handler argument — this is what makes the flow work
 for the hosted browser dashboard as well as the VS Code panel, since multiple clients can
 be connected at once. Mirror `emitCompletionsResponse` in `PromptEditorSupportService`:
@@ -590,26 +593,26 @@ Worktree Branch field swap, and focused UI coverage.
 
 16. ~~Run the gate (`npm run typecheck`, `npm run lint`, `npm run test:ui`).~~
 
-| File                                                                       | Action | Purpose                                               |
-| -------------------------------------------------------------------------- | ------ | ----------------------------------------------------- |
-| `src/types/DashboardConstants.ts`                                          | Modify | Add script + branch completion message constants      |
-| `src/types/WebviewMessageTypes.ts`                                         | Modify | Add request/response payload types if needed          |
-| `src/completions/ScriptCommandCompletionHelpers.ts`                        | Create | Workspace script and shell command completion logic   |
-| `src/completions/BranchCompletionHelpers.ts`                               | Create | Local branch discovery, caching, and filtering logic  |
-| `src/utils/GitUtils.ts`                                                    | Modify | Add `listLocalBranches(repoRoot)`                      |
-| `src/ui/WebviewMessageRouter.ts`                                           | Modify | Route script and branch completion requests from the webview |
-| `src/ui/PromptEditorSupportService.ts`                                     | Modify | Handle both requests and reply via `ctx.emit`          |
-| `src/ui/webview-react/components/shared/index.ts`                          | Modify | Barrel-export the three new components                 |
-| `src/ui/webview-react/components/shared/SingleLineCompletionEditor.tsx`    | Create | Generic single-line CodeMirror input + autocomplete shell |
-| `src/ui/webview-react/components/shared/ScriptCommandEditor.tsx`           | Create | Script-specific completion source on top of the generic editor |
-| `src/ui/webview-react/components/shared/BranchNameEditor.tsx`              | Create | Branch-specific completion source on top of the generic editor |
-| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`         | Modify | Replace plain script input with `ScriptCommandEditor` |
-| `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx`       | Modify | Replace plain branch input with `BranchNameEditor`    |
+| File                                                                              | Action | Purpose                                                         |
+| --------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------- |
+| `src/types/DashboardConstants.ts`                                                 | Modify | Add script + branch completion message constants                |
+| `src/types/WebviewMessageTypes.ts`                                                | Modify | Add request/response payload types if needed                    |
+| `src/completions/ScriptCommandCompletionHelpers.ts`                               | Create | Workspace script and shell command completion logic             |
+| `src/completions/BranchCompletionHelpers.ts`                                      | Create | Local branch discovery, caching, and filtering logic            |
+| `src/utils/GitUtils.ts`                                                           | Modify | Add `listLocalBranches(repoRoot)`                               |
+| `src/ui/WebviewMessageRouter.ts`                                                  | Modify | Route script and branch completion requests from the webview    |
+| `src/ui/PromptEditorSupportService.ts`                                            | Modify | Handle both requests and reply via `ctx.emit`                   |
+| `src/ui/webview-react/components/shared/index.ts`                                 | Modify | Barrel-export the three new components                          |
+| `src/ui/webview-react/components/shared/SingleLineCompletionEditor.tsx`           | Create | Generic single-line CodeMirror input + autocomplete shell       |
+| `src/ui/webview-react/components/shared/ScriptCommandEditor.tsx`                  | Create | Script-specific completion source on top of the generic editor  |
+| `src/ui/webview-react/components/shared/BranchNameEditor.tsx`                     | Create | Branch-specific completion source on top of the generic editor  |
+| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`                | Modify | Replace plain script input with `ScriptCommandEditor`           |
+| `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx`              | Modify | Replace plain branch input with `BranchNameEditor`              |
 | `src/ui/webview-react/test/components/shared/SingleLineCompletionEditor.test.tsx` | Create | Generic editor behavior tests (Enter/Escape/Blur, no multiline) |
-| `src/ui/webview-react/test/components/shared/ScriptCommandEditor.test.tsx` | Create | Script completion source tests                        |
-| `src/ui/webview-react/test/components/shared/BranchNameEditor.test.tsx`   | Create | Branch completion source tests                        |
-| `src/test/unit/ScriptCommandCompletionHelpers.test.ts`              | Create | Extension-side parser/completion tests                |
-| `src/test/unit/BranchCompletionHelpers.test.ts`                    | Create | Extension-side branch filtering/caching tests          |
+| `src/ui/webview-react/test/components/shared/ScriptCommandEditor.test.tsx`        | Create | Script completion source tests                                  |
+| `src/ui/webview-react/test/components/shared/BranchNameEditor.test.tsx`           | Create | Branch completion source tests                                  |
+| `src/test/unit/ScriptCommandCompletionHelpers.test.ts`                            | Create | Extension-side parser/completion tests                          |
+| `src/test/unit/BranchCompletionHelpers.test.ts`                                   | Create | Extension-side branch filtering/caching tests                   |
 
 ---
 
@@ -617,31 +620,31 @@ Worktree Branch field swap, and focused UI coverage.
 
 ### Script Field
 
-| Scenario                           | Expected behavior                                                                             |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------- |
-| No workspace folder                 | Show static shell/common command completions only                                               |
-| Missing `package.json`               | Show static shell/common command completions only                                               |
-| Malformed `package.json`             | Log a warning and continue with built-ins                                                       |
-| Empty `scripts` object               | Show built-ins and package manager base commands                                                |
-| User types after `&&`, `\|\|`, `\|`, or `;` | Complete only the current command segment                                                |
-| User is editing middle of command    | Preserve text before and after the replacement range                                            |
-| Disabled editor                      | No editing and no completion requests                                                            |
-| Multiple package managers            | Suggest npm, pnpm, and yarn forms; sorting can prefer detected lockfile later                    |
-| Very large `package.json`            | Cache parsed scripts and avoid reading on every keystroke                                        |
-| Browser-hosted dashboard client      | Completion request still routes through the extension/server client context where available     |
+| Scenario                                    | Expected behavior                                                                           |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| No workspace folder                         | Show static shell/common command completions only                                           |
+| Missing `package.json`                      | Show static shell/common command completions only                                           |
+| Malformed `package.json`                    | Log a warning and continue with built-ins                                                   |
+| Empty `scripts` object                      | Show built-ins and package manager base commands                                            |
+| User types after `&&`, `\|\|`, `\|`, or `;` | Complete only the current command segment                                                   |
+| User is editing middle of command           | Preserve text before and after the replacement range                                        |
+| Disabled editor                             | No editing and no completion requests                                                       |
+| Multiple package managers                   | Suggest npm, pnpm, and yarn forms; sorting can prefer detected lockfile later               |
+| Very large `package.json`                   | Cache parsed scripts and avoid reading on every keystroke                                   |
+| Browser-hosted dashboard client             | Completion request still routes through the extension/server client context where available |
 
 ### Branch Field
 
-| Scenario                             | Expected behavior                                                                       |
-| ------------------------------------- | ------------------------------------------------------------------------------------------- |
-| No workspace folder / not a Git repo   | No suggestions; field behaves like today's plain `<input>`                                  |
-| Repo with zero local branches          | No suggestions; typed text is kept as free text                                             |
-| Typed text matches no branch           | No suggestions shown; typed text is preserved as-is (creating a new branch)                  |
-| Typed text exactly matches a branch    | Suggestion still shown with `detail: "Existing branch"` so the user can confirm the match    |
-| Disabled editor                        | No editing and no completion requests                                                       |
+| Scenario                                                    | Expected behavior                                                                                     |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| No workspace folder / not a Git repo                        | No suggestions; field behaves like today's plain `<input>`                                            |
+| Repo with zero local branches                               | No suggestions; typed text is kept as free text                                                       |
+| Typed text matches no branch                                | No suggestions shown; typed text is preserved as-is (creating a new branch)                           |
+| Typed text exactly matches a branch                         | Suggestion still shown with `detail: "Existing branch"` so the user can confirm the match             |
+| Disabled editor                                             | No editing and no completion requests                                                                 |
 | Branch list changes mid-session (checkout/create elsewhere) | Suggestions may be up to 10s stale (see Open Questions #3); next keystroke after TTL expiry refreshes |
-| Detached HEAD / no current branch      | Doesn't affect suggestions — `listLocalBranches` lists refs, not current HEAD state          |
-| Browser-hosted dashboard client        | Completion request still routes through the extension/server client context where available |
+| Detached HEAD / no current branch                           | Doesn't affect suggestions — `listLocalBranches` lists refs, not current HEAD state                   |
+| Browser-hosted dashboard client                             | Completion request still routes through the extension/server client context where available           |
 
 ---
 

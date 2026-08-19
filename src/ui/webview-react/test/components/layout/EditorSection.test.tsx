@@ -10,12 +10,14 @@ import { RUNNER_IDS, STEP_TYPES } from "@root/types/DashboardConstants";
 
 const { attachmentTokenCount, promptFileAction } = vi.hoisted(() => ({
   attachmentTokenCount: { value: 128 },
-  promptFileAction: { value: null as null | {
-    icon: string;
-    tooltip: string;
-    disabled: boolean;
-    onClick: () => void;
-  } },
+  promptFileAction: {
+    value: null as null | {
+      icon: string;
+      tooltip: string;
+      disabled: boolean;
+      onClick: () => void;
+    },
+  },
 }));
 
 vi.mock("../../../components/editor/PromptEditor", () => ({
@@ -115,9 +117,7 @@ describe("EditorSection", () => {
 
     useEditorStore.getState().setStepType(STEP_TYPES.PROMPT);
     useUiStore.setState({
-      loadedWorkflows: [
-        { id: "cli", managedBy: RUNNER_IDS.CLI } as never,
-      ],
+      loadedWorkflows: [{ id: "cli", managedBy: RUNNER_IDS.CLI } as never],
       activeWorkflowId: "cli",
     });
     expect(

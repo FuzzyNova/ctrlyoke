@@ -1035,9 +1035,8 @@ export class WorktreeManager {
 
     // Managed worktrees already have a dedicated, lease-integrated merge
     // path tied to their own run; sync is for user-owned named worktrees.
-    const commonDirectory = await this.requireCommonDirectory(
-      sourceCheckoutRoot
-    );
+    const commonDirectory =
+      await this.requireCommonDirectory(sourceCheckoutRoot);
     const records = await this.readRecords(commonDirectory);
     if (records.some((record) => record.branchName === worktreeBranch)) {
       throw new Error(
@@ -1926,7 +1925,8 @@ export class WorktreeManager {
           )
         : {
             eligible: false,
-            reason: "The Git worktree admin entry is stale; repair is required.",
+            reason:
+              "The Git worktree admin entry is stale; repair is required.",
           };
       managedEntries.push({
         worktreePath: record.worktreePath,

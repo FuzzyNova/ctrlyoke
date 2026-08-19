@@ -750,10 +750,7 @@ export class HistorySearchIndexService {
 
   private getIndexDir(workspaceFolderPath: string): string {
     return path.join(
-      projectStateRoot(
-        workspaceFolderPath,
-        getFrozenRunHistoryLocation()
-      ),
+      projectStateRoot(workspaceFolderPath, getFrozenRunHistoryLocation()),
       PATH_CONSTANTS.SEARCH_INDEX_DIR
     );
   }

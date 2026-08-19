@@ -19,10 +19,7 @@ import { TtlCache } from "./TtlCache";
  */
 
 export class SkillExpander {
-  private static readonly skillCaches = new Map<
-    string,
-    TtlCache<SkillInfo>
-  >();
+  private static readonly skillCaches = new Map<string, TtlCache<SkillInfo>>();
 
   /**
    * Expand multiple skill names to formatted prompt blocks.

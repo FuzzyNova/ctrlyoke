@@ -9,10 +9,7 @@ import {
   FINAL_STEP_PHASES,
   STEP_TYPES,
 } from "@root/types/DashboardConstants";
-import type {
-  PromptStep,
-  ScriptStep,
-} from "@root/types/CtrlYokeTypes";
+import type { PromptStep, ScriptStep } from "@root/types/CtrlYokeTypes";
 import type { ExecutionPreviewEditorSnapshot } from "@root/types/WebviewMessageTypes";
 
 /**
@@ -39,7 +36,7 @@ export function getExecutionPreviewEditorSnapshot():
   if (!editor.hasContent()) return undefined;
 
   const existingStep: WebviewWorkflowStep | undefined = isFinalStep
-    ? workflow.finalStep ?? undefined
+    ? (workflow.finalStep ?? undefined)
     : stepIndex !== undefined
       ? workflow.steps[stepIndex]
       : undefined;
@@ -65,12 +62,11 @@ export function getExecutionPreviewEditorSnapshot():
         : {}),
       ...(editor.scriptCompareSource !== "auto"
         ? {
-            compareSource: editor.scriptCompareSource as ScriptStep["compareSource"],
+            compareSource:
+              editor.scriptCompareSource as ScriptStep["compareSource"],
           }
         : {}),
-      ...(editor.scriptReturns.trim()
-        ? { returns: editor.scriptReturns }
-        : {}),
+      ...(editor.scriptReturns.trim() ? { returns: editor.scriptReturns } : {}),
       ...(editor.stepEnabled ? {} : { enabled: false }),
     };
     if (!editor.promptName.trim()) delete step.name;
@@ -93,7 +89,7 @@ export function getExecutionPreviewEditorSnapshot():
 
   const base: PromptStep =
     existingStep?.type !== STEP_TYPES.SCRIPT
-      ? (existingStep as PromptStep | undefined) ?? { prompt: "" }
+      ? ((existingStep as PromptStep | undefined) ?? { prompt: "" })
       : { prompt: "" };
   const step: PromptStep = {
     ...base,
@@ -106,7 +102,10 @@ export function getExecutionPreviewEditorSnapshot():
     delete step.name;
   }
   if (editor.stepEnabled) delete step.enabled;
-  if (editor.properties.sessionId === undefined || !editor.properties.sessionId) {
+  if (
+    editor.properties.sessionId === undefined ||
+    !editor.properties.sessionId
+  ) {
     delete step.sessionId;
   } else {
     step.sessionId = editor.properties.sessionId;
@@ -134,7 +133,8 @@ export function getExecutionPreviewEditorSnapshot():
     delete step.toolPermissions;
   }
   if (editor.properties.endCondition !== undefined) {
-    step.endCondition = editor.properties.endCondition as PromptStep["endCondition"];
+    step.endCondition = editor.properties
+      .endCondition as PromptStep["endCondition"];
   }
 
   return {

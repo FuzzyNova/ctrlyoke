@@ -90,10 +90,7 @@ suite("PromptLinkProvider slash-token links", () => {
     assert.ok(links);
     assert.strictEqual(links.length, 1);
     assert.strictEqual(links[0].target?.scheme, "command");
-    assert.strictEqual(
-      links[0].target?.path,
-      "ctrlyoke.openSecretsSettings"
-    );
+    assert.strictEqual(links[0].target?.path, "ctrlyoke.openSecretsSettings");
     assert.strictEqual(links[0].tooltip, "Open ctrlyoke Secrets settings");
   });
 });

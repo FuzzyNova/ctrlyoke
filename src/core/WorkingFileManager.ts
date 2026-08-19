@@ -529,9 +529,7 @@ export class WorkingFileManager {
 
     const startedAt = Date.now();
     const finalStep = source.finalStep
-      ? stripViewOnlyWorkflowStepFields(
-          stripStepRuntime([source.finalStep])[0]
-        )
+      ? stripViewOnlyWorkflowStepFields(stripStepRuntime([source.finalStep])[0])
       : undefined;
     const workingFile: WorkingFile = {
       ...source,
@@ -1493,7 +1491,8 @@ export class WorkingFileManager {
         .getSteps()
         .map(stripViewOnlyWorkflowStepFields);
       const tokenTotals =
-        this.queueAccess.getTokenTotals?.() ?? workingFile._runtime?.tokenTotals;
+        this.queueAccess.getTokenTotals?.() ??
+        workingFile._runtime?.tokenTotals;
 
       // The finalStep definition remains disk-authoritative, but its per-step
       // execution metadata is owned by PromptQueue just like queue-step runtime.
@@ -1630,8 +1629,7 @@ export class WorkingFileManager {
     const operation = this.operationQueue.then(async () => {
       await withFileLock(workingFilePath, async () => {
         const workingFile = await this.readWorkingFile(workingFilePath);
-        const currentRuntime =
-          workingFile._runtime ?? {
+        const currentRuntime = workingFile._runtime ?? {
           currentIndex: this.queueAccess.getCurrentIndex(),
           executionState: this.queueAccess.getStatus(),
         };
@@ -1666,8 +1664,7 @@ export class WorkingFileManager {
     const operation = this.operationQueue.then(async () => {
       await withFileLock(workingFilePath, async () => {
         const workingFile = await this.readWorkingFile(workingFilePath);
-        const currentRuntime =
-          workingFile._runtime ?? {
+        const currentRuntime = workingFile._runtime ?? {
           currentIndex: this.queueAccess.getCurrentIndex(),
           executionState: this.queueAccess.getStatus(),
         };

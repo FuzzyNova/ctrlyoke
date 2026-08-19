@@ -983,7 +983,9 @@ function registerCommands(context: vscode.ExtensionContext) {
     async (args: { address?: { workflowKey?: string; runRef?: string } }) => {
       const address = args?.address;
       if (!address?.workflowKey || !address.runRef) {
-        reportCommandError("ctrlyoke: The managed worktree merge target is unavailable.");
+        reportCommandError(
+          "ctrlyoke: The managed worktree merge target is unavailable."
+        );
         return;
       }
       try {
@@ -1243,7 +1245,9 @@ function registerCommands(context: vscode.ExtensionContext) {
     VSCODE_COMMANDS.OPEN_WORKTREE_OWNER,
     async (args: { stateRoot?: string }) => {
       if (!args?.stateRoot || !path.isAbsolute(args.stateRoot)) {
-        reportCommandError("ctrlyoke: The owning workspace path is unavailable.");
+        reportCommandError(
+          "ctrlyoke: The owning workspace path is unavailable."
+        );
         return;
       }
       await vscode.commands.executeCommand(

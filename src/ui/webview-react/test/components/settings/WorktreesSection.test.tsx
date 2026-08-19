@@ -78,7 +78,9 @@ describe("WorktreesSection", () => {
       screen.getByRole("button", { name: "Clean up safe merged branches (1)" })
     ).toBeInTheDocument();
     expect(screen.getByText(/In use — wf\/run/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open owning workspace" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open owning workspace" })
+    ).toBeInTheDocument();
   });
   it("offers Sync only for a live, non-stale named worktree, not the source checkout itself", () => {
     const postMessage = vi.fn();

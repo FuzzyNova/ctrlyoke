@@ -40,7 +40,7 @@ Important `extension.ts` conventions:
 - Everything VS Code should auto-dispose belongs in `context.subscriptions`. The notable exceptions are:
   - `hostedServer`, disposed manually by `disableServer` and `deactivate()`
   - `notificationManager`, owned through `DashboardBroadcastHub.addClient(...)`
-- **ctrlyoke registers no `vscode.lm` tools, and should not.** Four LM tools (queue status, append queue, capabilities, read output) existed to serve the removed Copilot Chat harness and were deleted along with their shared `QueueOperations` module. `vscode.lm.registerTool` publishes to VS Code chat participants — a surface ctrlyoke no longer drives — while `mcp-server.ts` already exposes the same capabilities to every harness ctrlyoke *does* support, including Copilot CLI. Re-adding an LM twin would recreate a second tool contract that has no consumer and must be kept in sync by hand.
+- **ctrlyoke registers no `vscode.lm` tools, and should not.** Four LM tools (queue status, append queue, capabilities, read output) existed to serve the removed Copilot Chat harness and were deleted along with their shared `QueueOperations` module. `vscode.lm.registerTool` publishes to VS Code chat participants — a surface ctrlyoke no longer drives — while `mcp-server.ts` already exposes the same capabilities to every harness ctrlyoke _does_ support, including Copilot CLI. Re-adding an LM twin would recreate a second tool contract that has no consumer and must be kept in sync by hand.
 - `registerCommands(context)` is the single production command-wiring point. Keep it orchestration-only:
   - context-menu commands save dirty files before delegating
   - the hosted server auto-start check runs **after** command registration

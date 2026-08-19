@@ -134,12 +134,11 @@ export class McpServerNormalizer {
         continue;
       }
 
-      const resolved = resolveCtrlYokeMcpInvocation(
-        managedServers,
-        token.name
-      );
+      const resolved = resolveCtrlYokeMcpInvocation(managedServers, token.name);
       if (!resolved) {
-        diagnostics.push(this.createUnknownReferenceDiagnostic(properties, token.name));
+        diagnostics.push(
+          this.createUnknownReferenceDiagnostic(properties, token.name)
+        );
         continue;
       }
 

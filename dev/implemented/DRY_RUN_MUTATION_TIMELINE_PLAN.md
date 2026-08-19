@@ -10,7 +10,7 @@ execution timeline; its scope has broadened to general redesign decisions for
 the shipped `DryRunModal`, tab by tab, while keeping the original filename for
 continuity. Sections are added per tab as they're worked through — Summary/
 Overview (the timeline), Payload, and the tab bar itself (order, icons,
-number formatting) are covered below; Command and Conditions tab *content*
+number formatting) are covered below; Command and Conditions tab _content_
 redesigns remain deferred follow-up work.
 
 ## Implementation Sequencing
@@ -24,10 +24,10 @@ added yet. Steps must run **sequentially, never concurrently**: steps 4–6
 all edit `DryRunModal.tsx` and would conflict if overlapped.
 
 1. **✅ Mutation scope/ownedKeys (backend) — complete.** `WorkspaceMutationPreview.scope`
-   + optional `path`/`warning` (`ExecutionPreviewTypes.ts`),
-   `PreparedMutation.ownedKeys`, `ExecutionPreviewService.toWorkspaceMutation`
-   classification, `ExecutionPlanBuilder`'s directory-scoped cleanup path,
-   `QwenCliProvider`'s explicit `ownedKeys`.
+   - optional `path`/`warning` (`ExecutionPreviewTypes.ts`),
+     `PreparedMutation.ownedKeys`, `ExecutionPreviewService.toWorkspaceMutation`
+     classification, `ExecutionPlanBuilder`'s directory-scoped cleanup path,
+     `QwenCliProvider`'s explicit `ownedKeys`.
 2. **✅ Payload backend.** `PREVIEW_PROMPT_CATEGORY_LABELS` +
    `PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE` (`DashboardConstants.ts`),
    `CliPromptPreparer`'s prior-context placeholder section,
@@ -86,7 +86,7 @@ redesigns remain deliberately deferred; this plan does not implement them.
   `utils/executionPreview.ts`. Despite its name that file is not a home for
   "the other preview helpers" — it contains exactly one function,
   `getExecutionPreviewEditorSnapshot`, which captures unsaved editor state
-  for the preview *request*. It reaches into `useEditorStore`/
+  for the preview _request_. It reaches into `useEditorStore`/
   `useWorkflowStore`; a pure DTO→view-model function does not belong beside
   it.
 - **The file-reference basename is derived client-side from
@@ -117,7 +117,7 @@ The current `DryRunModal` Overview and per-step Summary tabs render
   label as `OpenCodeCliProvider`'s genuinely in-memory
   `this.pendingUserHooksEnv = ...` mutation, which never touches disk.
 - **The warning-colored "Workspace-wide side effect" line is applied to every
-  mutation that has *any* path**, regardless of what kind of path. Compare
+  mutation that has _any_ path**, regardless of what kind of path. Compare
   `ClaudeCliProvider.createHookSettingsMutation` (writes
   `.ctrlyoke/temp/claude-hook-settings-*.json` — per-prompt, gitignored by
   ctrlyoke's own installed `.gitignore`, deleted by
@@ -137,7 +137,7 @@ The current `DryRunModal` Overview and per-step Summary tabs render
   `ExecutionPreviewService.extractOwnedKeys` parses `mutation.intendedContent`
   and lists its top-level keys. That question — "which keys does this
   mutation touch in a file it doesn't fully own" — only matters for a partial
-  merge into a *shared* file, i.e. exactly the Qwen `.qwen/settings.json`
+  merge into a _shared_ file, i.e. exactly the Qwen `.qwen/settings.json`
   case. But that mutation never sets `intendedContent` (the merge happens
   inside `SettingsJsonHooksTracker.registerWorkflow`, not as a precomputed
   string), so `ownedKeys` comes back empty exactly where it would matter.
@@ -161,7 +161,7 @@ brought into the same view. Verified against `CliIntegration`:
 - `initializeExecutionSession()` calls `promptPreparer.preparePrompt(...)` —
   this is where the categorized payload temp files are actually written.
 - `runExecutionSession()` calls `initializeExecutionSession()` first (or
-  reuses an already-prepared session), *then* calls
+  reuses an already-prepared session), _then_ calls
   `executionPlanBuilder.plan(session)` — this is where every
   `WorkspaceMutationPreview` originates.
 - The resolved command is dispatched only after `plan()` returns.
@@ -183,7 +183,7 @@ The container renamed from "Workspace mutations" — it now holds payload and
 command entries too, not just mutations. **"Timeline," not "Step events" or
 "Step Sequence."** `events.jsonl` (`run-<timestamp>/events.jsonl`, documented
 in `.github/copilot-instructions.md`) already means something specific and
-different in this codebase: the per-step *output* chunks captured from an
+different in this codebase: the per-step _output_ chunks captured from an
 already-executed run. A dry run is the opposite of that — nothing has
 happened yet — so naming this section "events" would collide with an
 established term for real captured output right when a user could plausibly
@@ -290,7 +290,7 @@ UI styling by `scope`, not by path-presence:
 
 Rejected: filtering the timeline down to `scope: "shared"` mutations only.
 The dry run's stated purpose (`DRY_RUN_PREVIEW_PLAN.md`'s Problem section)
-is that users cannot currently inspect the *complete* execution ctrlyoke is
+is that users cannot currently inspect the _complete_ execution ctrlyoke is
 about to prepare — hiding `run-local` mutations, and the payload/command
 rows, would reintroduce exactly that gap for the sake of a shorter list. The
 Payload and Command tabs already default to showing full internal detail
@@ -307,7 +307,7 @@ collapsed summary line by default (e.g. "3 internal changes —
 individual rows. The payload row, command row, and any `scope: "shared"`
 mutation always render expanded — only `run-local` mutations collapse.
 Nothing is omitted from the DTO or from what a user can reach; only the
-*default* rendering density changes, same as the existing chunk-body
+_default_ rendering density changes, same as the existing chunk-body
 pattern.
 
 `ownedKeys`: rename the rendered label from "Owned keys" to something
@@ -335,7 +335,7 @@ the caller, e.g. `ctrlyokeHookKeys`/hook section keys). `extractOwnedKeys`
 from `intendedContent` becomes a fallback used only when a provider didn't
 set `ownedKeys` explicitly (Claude/Antigravity's full-file writes can keep
 deriving it automatically — it's cheap and correct there, it's just not
-worth *showing* per the `scope` gating above).
+worth _showing_ per the `scope` gating above).
 
 ### Rendering
 
@@ -361,7 +361,7 @@ worth *showing* per the `scope` gating above).
   does.** From the per-step Summary tab, "View in Payload/Command tab" only
   has to set `activeTabs[stepIndex]` — the rail selection is already that
   step. From Overview, `selection` is `"overview"`, not a step index, so the
-  same affordance must set `selection` to that step's index *and*
+  same affordance must set `selection` to that step's index _and_
   `activeTabs[stepIndex]`, in that order — otherwise the tab switch has no
   step detail mounted to apply to. Easy to implement only for the per-step
   case and miss this because the two call sites look identical at a glance.
@@ -427,7 +427,7 @@ per `HarnessIntegration.ts`'s `formatAttachmentClauses` (the single source
 for both CLI and Chat harness prompt composition), a direct file reference is
 embedded directly in the prompt text sent to the harness, exactly like an
 excerpt reference; the harness absolutely receives it and reads the file
-itself. What ctrlyoke's own process does *not* do is embed the file's bytes
+itself. What ctrlyoke's own process does _not_ do is embed the file's bytes
 in its own payload — that's a true statement about ctrlyoke's internal
 pipeline, not about what the harness receives, and the current copy conflates
 the two. `src/cli/CliTerminalFormatter.ts` already gets this right for the
@@ -473,7 +473,10 @@ not just edge cases.
 each place independently:
 
 ```typescript
-export const PREVIEW_PROMPT_CATEGORY_LABELS: Record<PreviewPromptCategory, string> = {
+export const PREVIEW_PROMPT_CATEGORY_LABELS: Record<
+  PreviewPromptCategory,
+  string
+> = {
   "agent-instructions": "Agent instructions",
   "skill-content": "Skill content",
   "prompt-text": "Prompt text",
@@ -569,7 +572,7 @@ wrong for `"not-yet-available"` — there is no payload available, it doesn't
 exist yet, which is a different claim than "available but not shown here."
 This needs a third branch with wording matching the modal's new copy above,
 not just a reuse of the existing two-way split — an easy thing to miss since
-the rest of this section talks about *reusing* `CliTerminalFormatter`'s
+the rest of this section talks about _reusing_ `CliTerminalFormatter`'s
 existing wording for the `"reference"` case, and it would be easy to
 generalize that into "reuse it for this case too" without noticing the
 existing ternary has nowhere for a third meaning to go.
@@ -598,7 +601,7 @@ existing ternary has nowhere for a third meaning to go.
   given the same resolved items — closing the gap the golden tests in
   `DRY_RUN_PREVIEW_PLAN.md` (preview vs. real execution) should have caught.
 - `ExecutionPreviewService` test: a workflow step with a `priorContext`
-  reference and *no* resolvable run history yet produces exactly one
+  reference and _no_ resolvable run history yet produces exactly one
   `prior-context` section with `truncationReason: "not-yet-available"`,
   zero byte/token counts, and no body — not an omitted section, not an
   error. Dashboard test: that section renders "Prior context · chunk 1"
@@ -613,7 +616,7 @@ Summary → Payload → Command → Conditions to **Summary → Command → Payl
 Conditions**. Command is the tab a reviewer most often wants immediately
 after Summary — "what's it actually going to run" — and having it third
 underneath Payload buries it. Payload and Conditions keep their relative
-order. No change to the tab *contents* here, only `DRY_RUN_TAB_DEFINITIONS`'
+order. No change to the tab _contents_ here, only `DRY_RUN_TAB_DEFINITIONS`'
 array order (`SegmentedTabBar` renders tabs in array order, so this is the
 only place the change needs to be made).
 
@@ -648,7 +651,7 @@ icon entirely rather than shrinking it to a badge.**
 `"history"` was considered and rejected: it's VS Code's own glyph for a
 timeline view, but its connotation is backward-looking (a record of what
 already happened), which is exactly wrong for a dry run — this tab
-summarizes what is *about to* happen, never what did.
+summarizes what is _about to_ happen, never what did.
 
 `"map-vertical"` (codicon metadata: `tags: location, guide, up, down,
 chart`, description "Vertical map") is forward/guide-oriented instead —
@@ -661,7 +664,7 @@ mutations → command top-to-bottom, a resonance `"history"` or a plain
 because this exact modal's own Overview rail entry already uses it
 (`DryRunModal.tsx:678`); `"globe"` is ruled out because ctrlyoke already
 uses it elsewhere (`GlobalSettingsDrawer`, MCP remote-server rows) to mean
-*global/workspace scope* — reusing it here would read as "this tab is about
+_global/workspace scope_ — reusing it here would read as "this tab is about
 workspace-wide effects," which is exactly the distinction the `scope:
 "run-local" | "shared"` work above is trying to make legible.
 `"telescope"` is ruled out for a different reason: it's already the Dry Run
@@ -677,12 +680,12 @@ specifically, which risks reading as "release milestone" rather than "step
 in this run" for a developer audience already using git integrations
 heavily), `"compass"` (good forward-looking connotation, but a single-point
 orientation instrument reads weaker than a multi-waypoint route for implying
-a *sequence* of steps), `"report"` (generic "document/summary," says
+a _sequence_ of steps), `"report"` (generic "document/summary," says
 nothing about sequence), the harness icon (rejected — it's step-specific,
 already shown separately in the `StepDetail` header, and Summary's icon
 should stay stable across steps like every other tab).
 **Revised, superseding the full-replace behavior for both tabs: neither
-tab's icon *shape* ever changes. All signals — diagnostic severity on
+tab's icon _shape_ ever changes. All signals — diagnostic severity on
 Summary, permission mode on Command — render as a color tint on the stable
 shape plus a small badge, never a shape swap.** A shape swap makes a tab
 read as "this is now the warning tab" / "this is now the permission tab,"
@@ -703,12 +706,12 @@ is small.
   use the correct per-severity shape instead of a hardcoded one.
 - **Command: permission mode, color + badge, shape stays `terminal`
   always — no diagnostic signal of any kind.** Confirmed: Command shows
-  *only* the permission-mode indicator; diagnostics (including permission-
+  _only_ the permission-mode indicator; diagnostics (including permission-
   translation diagnostics) stay exclusively on Summary. Checked both tab
   bodies to justify moving the mode indicator here at all: `SummaryPanel`
   already renders `["Permission mode", permissionMode]` as a plain labeled
   row, so a same-information badge there would be redundant; `CommandPanel`
-  has no headline mode indicator, only the *translated* native arguments
+  has no headline mode indicator, only the _translated_ native arguments
   buried in its `DefinitionList`.
 - **`getPermissionTabOverride` (`tabBadgeUtils.ts`) must not change** — it's
   not private to `DryRunModal`. `useDrawerTabOverrides.ts` and
@@ -717,11 +720,11 @@ is small.
   it still does the shape-swap thing for `DANGEROUSLY_ALLOW_ALL` there —
   changing its behavior would silently change the drawer too. Add a new
   sibling function instead, e.g. `getPermissionModeBadge(mode: string):
-  Pick<TabIconOverride, "color" | "hoverColor" | "activeColor" |
-  "badgeCodicon" | "badgeColor"> | undefined`, used only by `DryRunModal`'s
+Pick<TabIconOverride, "color" | "hoverColor" | "activeColor" |
+"badgeCodicon" | "badgeColor"> | undefined`, used only by `DryRunModal`'s
   Command tab. One constant badge shape across all modes —
   `badgeCodicon: "shield"` (codicon tags: `security, protect, safety,
-  guard` — a clean, mode-agnostic "this is about permissions" glyph) —
+guard` — a clean, mode-agnostic "this is about permissions" glyph) —
   colored per mode with the same palette `getPermissionTabOverride` already
   uses (green for custom, yellow for allow-all, red for
   dangerously-allow-all; no badge for `none`). One shape recolored by level
@@ -820,7 +823,7 @@ shape for token counts, inlined in JSX rather than shared:
 ```typescript
 tokenCount >= 1_000
   ? `${(tokenCount / 1_000).toFixed(1)}K`
-  : tokenCount.toString()
+  : tokenCount.toString();
 ```
 
 That inline version also has a latent gap worth fixing at the same time: it

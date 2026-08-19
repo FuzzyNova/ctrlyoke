@@ -300,8 +300,7 @@ describe("HistorySearchDrawer filters", () => {
       type: MESSAGE_TYPES.SEARCH_HISTORY,
       query: "needle",
       limit: 50,
-      filters: {
-      },
+      filters: {},
     });
   });
 

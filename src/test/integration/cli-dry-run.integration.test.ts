@@ -22,12 +22,7 @@ function runCli(args: string[], cwd: string): Promise<CliRunResult> {
       { cwd, maxBuffer: 8 * 1024 * 1024 },
       (error, stdout, stderr) => {
         resolve({
-          code:
-            typeof error?.code === "number"
-              ? error.code
-              : error
-                ? 1
-                : 0,
+          code: typeof error?.code === "number" ? error.code : error ? 1 : 0,
           stdout,
           stderr,
         });
@@ -107,7 +102,10 @@ suite("CLI dry-run process", () => {
     );
 
     assert.notStrictEqual(result.code, 0);
-    assert.match(result.stderr, /Failed to load workflow file|Validation failed/);
+    assert.match(
+      result.stderr,
+      /Failed to load workflow file|Validation failed/
+    );
   });
 });
 

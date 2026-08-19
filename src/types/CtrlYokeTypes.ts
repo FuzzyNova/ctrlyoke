@@ -496,8 +496,12 @@ export type WorktreeRunProjection = Pick<
   Partial<
     Pick<
       WorkingFileWorktreeRuntime,
-      "baseCommit" | "changedFileCount" | "lifecycleState" | "branchState"
-      | "comparisonBaseLabel" | "comparisonBaseCommit"
+      | "baseCommit"
+      | "changedFileCount"
+      | "lifecycleState"
+      | "branchState"
+      | "comparisonBaseLabel"
+      | "comparisonBaseCommit"
     >
   >;
 

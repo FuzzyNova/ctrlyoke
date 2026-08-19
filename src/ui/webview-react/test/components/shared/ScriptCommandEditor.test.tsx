@@ -92,8 +92,8 @@ describe("ScriptCommandEditor", () => {
       ).toBe(true);
     });
 
-    const request = postMessage.mock.calls.find(([message]) =>
-      message.type === MESSAGE_TYPES.SCRIPT_COMPLETIONS_REQUEST
+    const request = postMessage.mock.calls.find(
+      ([message]) => message.type === MESSAGE_TYPES.SCRIPT_COMPLETIONS_REQUEST
     )?.[0];
     if (!request || typeof request.seq !== "number") {
       throw new Error("Script completion request was not posted");

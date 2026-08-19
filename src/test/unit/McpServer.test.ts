@@ -3,10 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { afterEach, suite, suiteSetup, suiteTeardown, test } from "mocha";
-import {
-  CtrlYokeMCPServer,
-  initializeMcpStorage,
-} from "../../mcp-server";
+import { CtrlYokeMCPServer, initializeMcpStorage } from "../../mcp-server";
 import type {
   RunRef,
   WorkflowKey,

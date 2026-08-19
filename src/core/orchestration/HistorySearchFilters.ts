@@ -28,17 +28,11 @@ export function matchesFilters(
     return false;
   }
 
-  if (
-    typeof filters.since === "number" &&
-    document.startedAt < filters.since
-  ) {
+  if (typeof filters.since === "number" && document.startedAt < filters.since) {
     return false;
   }
 
-  if (
-    typeof filters.until === "number" &&
-    document.startedAt > filters.until
-  ) {
+  if (typeof filters.until === "number" && document.startedAt > filters.until) {
     return false;
   }
 

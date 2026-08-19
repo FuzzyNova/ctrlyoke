@@ -29,7 +29,9 @@ export function isValidSecretName(value: string): value is SecretName {
 /** Validate a managed secret name and throw an actionable error if invalid. */
 export function validateSecretName(value: string): asserts value is SecretName {
   if (!isValidSecretName(value)) {
-    throw new Error(`Invalid secret name "${value}". ${SECRET_NAME_REQUIREMENT_TEXT}`);
+    throw new Error(
+      `Invalid secret name "${value}". ${SECRET_NAME_REQUIREMENT_TEXT}`
+    );
   }
 }
 

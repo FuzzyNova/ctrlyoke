@@ -80,7 +80,8 @@ function mcpEnvStringToObject(raw: string): Record<string, string> | undefined {
 }
 
 const SECRET_REFERENCE_PATTERN = /^\$\{secret:[A-Z][A-Z0-9_]*\}$/;
-const SENSITIVE_ENV_KEY_PATTERN = /(api|access|auth|credential|key|password|secret|token)/i;
+const SENSITIVE_ENV_KEY_PATTERN =
+  /(api|access|auth|credential|key|password|secret|token)/i;
 
 /** Identify env entries that look like pasted credentials rather than references. */
 export function findLiteralCredentialEnvKeys(
@@ -241,7 +242,9 @@ export function McpServerForm({
     () =>
       [
         ...new Set([
-          ...secretEntriesByScope[SETTING_SCOPES.USER].map((entry) => entry.name),
+          ...secretEntriesByScope[SETTING_SCOPES.USER].map(
+            (entry) => entry.name
+          ),
           ...secretEntriesByScope[SETTING_SCOPES.WORKSPACE].map(
             (entry) => entry.name
           ),
@@ -365,10 +368,18 @@ export function McpServerForm({
               </select>
             )}
             {literalCredentialKeys.length > 0 && (
-              <p className="flex items-start gap-1 text-xxs text-warning-fg" role="alert">
-                <i className="codicon codicon-warning mt-px" aria-hidden="true" />
+              <p
+                className="flex items-start gap-1 text-xxs text-warning-fg"
+                role="alert"
+              >
+                <i
+                  className="codicon codicon-warning mt-px"
+                  aria-hidden="true"
+                />
                 <span>
-                  {literalCredentialKeys.join(", ")} looks like a pasted credential. Use the secret picker so the value is resolved at run time.
+                  {literalCredentialKeys.join(", ")} looks like a pasted
+                  credential. Use the secret picker so the value is resolved at
+                  run time.
                 </span>
               </p>
             )}
@@ -408,7 +419,7 @@ export function McpServerForm({
         <input
           id={autoApproveId}
           type="checkbox"
-          aria-label="Auto-approve all tools (CLI harnesses only)"
+          aria-label="Auto-approve all tools"
           checked={value.autoApprove}
           onChange={(event) =>
             onChange({
@@ -420,7 +431,7 @@ export function McpServerForm({
           className="h-3 w-3 accent-focus-border"
         />
         <span className="text-xs text-description-fg">
-          Auto-approve all tools (CLI harnesses only)
+          Auto-approve all tools
         </span>
       </label>
 

@@ -105,7 +105,10 @@ suite("PromptFileParser worktree authoring", function () {
         worktree: { mode: "named", branch: "feature", keep: true },
       },
       { prompt: "prompt", worktree: { mode: "managed", branch: "feature" } },
-      { prompt: "prompt", worktree: { mode: "named", branch: "feature", merge: true } },
+      {
+        prompt: "prompt",
+        worktree: { mode: "named", branch: "feature", merge: true },
+      },
     ];
 
     for (const authored of invalid) {

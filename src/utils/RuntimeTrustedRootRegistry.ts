@@ -34,7 +34,9 @@ export class RuntimeTrustedRootRegistry {
     const rootPath = await this.requireDirectory(options.rootPath);
     const rootRepository = await repoToplevel(rootPath);
     if (!rootRepository) {
-      throw new Error(`Runtime trusted root is not a Git worktree: ${rootPath}`);
+      throw new Error(
+        `Runtime trusted root is not a Git worktree: ${rootPath}`
+      );
     }
 
     const expectedRepository = options.repositoryRoot
@@ -52,7 +54,9 @@ export class RuntimeTrustedRootRegistry {
     const repositoryIdentity = await this.repositoryIdentity(rootRepository);
     const repositoryMarker = this.readRepositoryMarker(rootPath);
     if (!repositoryMarker) {
-      throw new Error(`Runtime trusted root has no stable Git identity: ${rootPath}`);
+      throw new Error(
+        `Runtime trusted root has no stable Git identity: ${rootPath}`
+      );
     }
     const ownerToken = options.ownerToken ?? cryptoRandomToken();
     const key = foldPathForCompare(rootPath);
@@ -64,14 +68,12 @@ export class RuntimeTrustedRootRegistry {
     ) {
       throw new Error(`Runtime trusted root changed repository: ${rootPath}`);
     }
-    const grant =
-      existing ??
-      {
-        rootPath,
-        repositoryIdentity,
-        repositoryMarker,
-        owners: new Map<string, number>(),
-      };
+    const grant = existing ?? {
+      rootPath,
+      repositoryIdentity,
+      repositoryMarker,
+      owners: new Map<string, number>(),
+    };
     grant.owners.set(ownerToken, (grant.owners.get(ownerToken) ?? 0) + 1);
     this.grants.set(key, grant);
 
@@ -132,9 +134,9 @@ export class RuntimeTrustedRootRegistry {
     ]);
     return Boolean(
       leftCommon &&
-        rightCommon &&
-        foldPathForCompare(path.resolve(leftCommon)) ===
-          foldPathForCompare(path.resolve(rightCommon))
+      rightCommon &&
+      foldPathForCompare(path.resolve(leftCommon)) ===
+        foldPathForCompare(path.resolve(rightCommon))
     );
   }
 
@@ -151,9 +153,7 @@ export class RuntimeTrustedRootRegistry {
       const contents = fs.readFileSync(gitPath, "utf8").trim();
       const gitDir = contents.match(/^gitdir:\s*(.+)$/i)?.[1];
       return gitDir
-        ? path.normalize(
-            fs.realpathSync(path.resolve(rootPath, gitDir.trim()))
-          )
+        ? path.normalize(fs.realpathSync(path.resolve(rootPath, gitDir.trim())))
         : undefined;
     } catch {
       return undefined;

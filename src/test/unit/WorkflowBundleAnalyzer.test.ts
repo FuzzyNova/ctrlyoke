@@ -134,11 +134,7 @@ suite("WorkflowBundleAnalyzer", () => {
         workspace,
         { steps: [{ prompt: "@.ctrlyoke/attachments/shot.txt" }] },
         {
-          sourceDefinitionPath: path.join(
-            workspace,
-            "authored",
-            "source.yaml"
-          ),
+          sourceDefinitionPath: path.join(workspace, "authored", "source.yaml"),
         }
       );
 
@@ -335,9 +331,10 @@ suite("WorkflowBundleAnalyzer", () => {
         .digest("hex")
         .slice(0, 8);
       assert.ok(
-        result.plan.copies.some((copy) =>
-          copy.relativePath.endsWith("same-" + hash + ".txt") &&
-          copy.relativePath.startsWith("./fix-tests.assets/")
+        result.plan.copies.some(
+          (copy) =>
+            copy.relativePath.endsWith("same-" + hash + ".txt") &&
+            copy.relativePath.startsWith("./fix-tests.assets/")
         )
       );
       assert.strictEqual(
@@ -549,7 +546,7 @@ suite("WorkflowBundleAnalyzer", () => {
         "./multi-root.assets/image.png"
       );
       assert.strictEqual(
-        (result.workflow.prompt as string),
+        result.workflow.prompt as string,
         "Attach @./multi-root.assets/image.png"
       );
       assert.strictEqual(

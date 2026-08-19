@@ -5,13 +5,13 @@
 ctrlyoke renders "a list of changed files, each with a diff" in two places that were built
 independently and have drifted apart in both styling and correctness:
 
-| Surface                      | File                                                        | Rows are…                                        |
-| ---------------------------- | ----------------------------------------------------------- | ------------------------------------------------ |
-| Undo/Redo Changes dialog     | `src/ui/webview-react/components/output/UndoChangesDialog.tsx` | selectable (checkbox) undo candidates            |
-| Workspace viewer diff pane   | `src/ui/webview-react/components/workspace-viewer/WorkspaceDiffPane.tsx` | read-only files in a git ref (commit/stash/tree) |
+| Surface                    | File                                                                     | Rows are…                                        |
+| -------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------ |
+| Undo/Redo Changes dialog   | `src/ui/webview-react/components/output/UndoChangesDialog.tsx`           | selectable (checkbox) undo candidates            |
+| Workspace viewer diff pane | `src/ui/webview-react/components/workspace-viewer/WorkspaceDiffPane.tsx` | read-only files in a git ref (commit/stash/tree) |
 
 Both already render through the same leaf renderer (`components/output/DiffView.tsx`) and the
-same expand/collapse control (`shared/ExpandCollapseAllDiffsButton`), but everything *around*
+same expand/collapse control (`shared/ExpandCollapseAllDiffsButton`), but everything _around_
 the diff — the file card, the path label, the change-type badge, the selection affordance — is
 duplicated or missing on one side.
 
@@ -20,7 +20,7 @@ duplicated or missing on one side.
 bug fixes that fall out of unifying them.
 
 **Non-goals:** changing `DiffView.tsx`'s internals (tokenization, gap expansion, split/unified
-switching), reworking the undo *execution* protocol beyond the ordering fix in §4.6, adding
+switching), reworking the undo _execution_ protocol beyond the ordering fix in §4.6, adding
 download-diff to the undo dialog.
 
 ---
@@ -35,7 +35,7 @@ in workflow mode (`:660-695`), an inline redo row in single-step mode (`:735-770
 workflow-mode wrapper that rebuilds a `FileRow` from a workflow row (`:696-719`). Consequences:
 
 - The change-type badge (`CHANGE_TYPE_LABEL` / `CHANGE_TYPE_COLORS`, `:110-120`) exists only on
-  the undo path; redo rows use a *separate* vocabulary (`redoActionBadgeLabel`, `:127-145`) that
+  the undo path; redo rows use a _separate_ vocabulary (`redoActionBadgeLabel`, `:127-145`) that
   collapses `restore-content` to the string `"modified/created"`.
 - `hasDiff` is computed independently in three places, each with the same truthiness bug (§4.3).
 - Diffs hang below the row rather than inside a card, so on a long list there is no visual
@@ -53,11 +53,11 @@ header, no path, and no change-type label at all, even though the store already 
 
 ### 1.3 The three change-type vocabularies
 
-| Vocabulary        | Values                                                     | Defined in                              |
-| ----------------- | ---------------------------------------------------------- | --------------------------------------- |
-| `PromptChangeType`| `created` \| `modified` \| `deleted`                       | `src/types/OutputHistoryTypes.ts`       |
-| `DiffKind`        | `modified` \| `added` \| `deleted` \| `renamed` \| `untracked` | `src/types/HostedWorkspaceViewerTypes.ts` |
-| `DiffType` (rdv)  | `add` \| `delete` \| `modify` \| `rename` \| `copy`        | `react-diff-view`                       |
+| Vocabulary         | Values                                                         | Defined in                                |
+| ------------------ | -------------------------------------------------------------- | ----------------------------------------- |
+| `PromptChangeType` | `created` \| `modified` \| `deleted`                           | `src/types/OutputHistoryTypes.ts`         |
+| `DiffKind`         | `modified` \| `added` \| `deleted` \| `renamed` \| `untracked` | `src/types/HostedWorkspaceViewerTypes.ts` |
+| `DiffType` (rdv)   | `add` \| `delete` \| `modify` \| `rename` \| `copy`            | `react-diff-view`                         |
 
 Three names for the same concept, and the surface that has the richest one (`DiffKind`, which
 knows about renames) is the one that displays nothing.
@@ -96,7 +96,11 @@ export interface DiffFileCardProps {
   source:
     | { kind: "hunks"; hunks: HunkData[]; diffType: DiffType }
     | { kind: "content"; oldContent?: string; newContent?: string }
-    | { kind: "patch"; structuredPatch: UnifiedDiffHunk[]; oldContent?: string };
+    | {
+        kind: "patch";
+        structuredPatch: UnifiedDiffHunk[];
+        oldContent?: string;
+      };
 
   language?: string;
 
@@ -212,10 +216,10 @@ whether the instruction carries a `structuredPatch`).
   `my-2` at `DiffView.tsx:477`; parameterize the outer margin rather than fighting it with
   `!important` — **but `my-2` must remain the default.** That 16px is baked into
   `DIFF_VERTICAL_CHROME_HEIGHT = 28` (`utils/rdvAdapter.ts:163-167`: `my-2` 16 + header `mb-1` 4
-  + 2px borders), which `outputRenderUtils.ts:91` feeds into the output row-height estimator.
-  Changing the default desyncs every estimated diff row in the virtualized timeline. The undo
-  dialog and workspace pane are not virtualized and never call `buildDiffRenderPlan`, so a
-  non-default margin passed only by `DiffFileCard` is free.
+  - 2px borders), which `outputRenderUtils.ts:91` feeds into the output row-height estimator.
+    Changing the default desyncs every estimated diff row in the virtualized timeline. The undo
+    dialog and workspace pane are not virtualized and never call `buildDiffRenderPlan`, so a
+    non-default margin passed only by `DiffFileCard` is free.
 
 ---
 
@@ -237,7 +241,7 @@ renamed file→ { type: "modify", oldPath: "src/a.ts",   newPath: "src/b.ts" }
 The adapter sets `oldPath` whenever `file.oldPath !== file.newPath`, so an added file keeps
 `/dev/null`, and `FileHeader` (`WorkspaceDiffPane.tsx:10-13`) renders the arrow form.
 
-**Also broken, same line, not yet reported:** for a *deleted* file,
+**Also broken, same line, not yet reported:** for a _deleted_ file,
 `path = file.newPath ?? file.oldPath` resolves to `"/dev/null"`. So the card's `path`, its React
 `key`, and `languageFromPath()` all get the sentinel — the file displays as
 `src/old.ts → /dev/null` and loses syntax highlighting. Two files deleted in one commit collide
@@ -247,7 +251,8 @@ on `key="/dev/null"`.
 
 ```ts
 const DEV_NULL = "/dev/null";
-const realPath = (p: string | undefined) => (p && p !== DEV_NULL ? p : undefined);
+const realPath = (p: string | undefined) =>
+  p && p !== DEV_NULL ? p : undefined;
 
 const oldReal = realPath(file.oldPath);
 const newReal = realPath(file.newPath);
@@ -257,7 +262,13 @@ return {
   // Only a genuine rename keeps oldPath. Note gitdiff-parser reports renames as
   // type:"modify" with differing real paths, so this must NOT gate on type === "rename".
   oldPath: oldReal && newReal && oldReal !== newReal ? oldReal : undefined,
-  changeType: newReal ? (oldReal ? (oldReal !== newReal ? "renamed" : "modified") : "created") : "deleted",
+  changeType: newReal
+    ? oldReal
+      ? oldReal !== newReal
+        ? "renamed"
+        : "modified"
+      : "created"
+    : "deleted",
   language: languageFromPath(path),
   hunks: (file.hunks ?? []) as HunkData[],
   diffType: (file.type as DiffType) ?? "modify",
@@ -279,7 +290,7 @@ two workspace modes stop looking like different features.
 ### 4.3 [W] File path truncated on mobile
 
 **Root cause.** `FileHeader` uses `<span className="truncate">` on the full path
-(`WorkspaceDiffPane.tsx:16`). `truncate` ellipsizes the *end*, and a workspace-relative path is
+(`WorkspaceDiffPane.tsx:16`). `truncate` ellipsizes the _end_, and a workspace-relative path is
 front-loaded with directories, so the basename — the only part that identifies the file — is the
 first thing lost.
 
@@ -356,8 +367,8 @@ correct — it tests `oldContent !== undefined && newContent !== undefined`
    arms of the `hasDiffs` memo), `:662` / `:736-737` (the inline redo rows), and
    `FileOperationOutput.tsx:218-222` (`hasDiffData`, which keeps its extra `hideDiff` /
    `status !== FAILED` conditions around the helper).
-Timeline `FILE_WRITE` rows (`OutputRow.tsx:678-707` → `FileWriteOutput`'s raw content block)
-keep showing content, not a diff — **deliberately out of scope**, see the follow-up in §7.
+   Timeline `FILE_WRITE` rows (`OutputRow.tsx:678-707` → `FileWriteOutput`'s raw content block)
+   keep showing content, not a diff — **deliberately out of scope**, see the follow-up in §7.
 
 ### 4.5 [U] Workflow-level undo shows per-step diffs instead of aggregate
 
@@ -379,18 +390,24 @@ New export:
 export interface AggregatedUndoFile {
   /** Normalized key used to merge across steps (sameFilePath semantics). */
   key: string;
-  path: string;                      // display path, from the first step that touched it
-  changeType: DiffChangeType;        // net change across all steps
-  oldContent?: string;               // base before the FIRST step touched it
-  newContent?: string;               // content after the LAST step touched it
+  path: string; // display path, from the first step that touched it
+  changeType: DiffChangeType; // net change across all steps
+  oldContent?: string; // base before the FIRST step touched it
+  newContent?: string; // content after the LAST step touched it
   structuredPatch?: UnifiedDiffHunk[]; // fallback when content composition is impossible
   /** Steps that touched this file, ascending, each with its own instruction. */
-  steps: Array<{ target: UndoExecutionTarget; label: string; instruction: UndoFileInstruction }>;
+  steps: Array<{
+    target: UndoExecutionTarget;
+    label: string;
+    instruction: UndoFileInstruction;
+  }>;
   /** True when the aggregate diff could not be composed and this is a partial view. */
   isPartialDiff: boolean;
 }
 
-export function aggregateWorkflowUndoFiles(entries: WorkflowStepEntry[]): AggregatedUndoFile[];
+export function aggregateWorkflowUndoFiles(
+  entries: WorkflowStepEntry[]
+): AggregatedUndoFile[];
 ```
 
 The same function serves redo — a redo entry's `redoInstructions` populate `steps` identically,
@@ -399,13 +416,13 @@ and the net-change-type table below reads the instruction actions (`delete` → 
 
 Net change type:
 
-| First step | Last step | Net        |
-| ---------- | --------- | ---------- |
-| created    | modified  | `created`  |
+| First step | Last step | Net                                                |
+| ---------- | --------- | -------------------------------------------------- |
+| created    | modified  | `created`                                          |
 | created    | deleted   | drop the row entirely (net no-op; nothing to undo) |
-| modified   | deleted   | `deleted`  |
-| deleted    | created   | `modified` |
-| modified   | modified  | `modified` |
+| modified   | deleted   | `deleted`                                          |
+| deleted    | created   | `modified`                                         |
+| modified   | modified  | `modified`                                         |
 
 Aggregate diff composition, in order of preference:
 
@@ -435,7 +452,7 @@ protocol change.
 **Root cause.** The webview builds `entries` in ascending step order (`useOutputUndoActions.ts:86`
 iterates `uniqueStepTargets`, which `buildOutputRows` derives from chronologically sorted
 messages), and `UndoRedoCoordinator.applySnapshotEntries` applies them in exactly that order
-(`src/ui/UndoRedoCoordinator.ts:155-175`). But a `reverse-patch` undo reads the file's *current*
+(`src/ui/UndoRedoCoordinator.ts:155-175`). But a `reverse-patch` undo reads the file's _current_
 content and reverses one step's hunks against it. When two steps edited the same file, step 1's
 reverse patch has to be applied to content that still contains step 2's edits — its context
 lines don't match, and jsdiff's fuzz either fails the hunk or, worse, applies it at a shifted
@@ -488,15 +505,15 @@ Do this in `Modal` rather than in the dialog so the next full-screen surface inh
 
 **Root cause.** `UndoChangesDialog.tsx:784` and `:803` label the two tiers
 "Event-attributed changes" / "Other snapshot changes" — internal implementation vocabulary. The
-warning banner (`:610-620`) explains the *consequence* but never defines the terms.
+warning banner (`:610-620`) explains the _consequence_ but never defines the terms.
 
 **Fix.** Keep two groups (they really do carry different confidence) but rename and explain,
 using `DiffFileGroup.headingHint`:
 
-| Old                        | New heading                    | Hint                                                                             |
-| -------------------------- | ------------------------------ | -------------------------------------------------------------------------------- |
-| Event-attributed changes   | **Changes the AI reported**    | The harness told us it made these edits, so we know exactly what changed.        |
-| Other snapshot changes     | **Other changes we detected**  | Found by comparing the workspace before and after — may include edits from other tools or another workflow running at the same time. |
+| Old                      | New heading                   | Hint                                                                                                                                 |
+| ------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Event-attributed changes | **Changes the AI reported**   | The harness told us it made these edits, so we know exactly what changed.                                                            |
+| Other snapshot changes   | **Other changes we detected** | Found by comparing the workspace before and after — may include edits from other tools or another workflow running at the same time. |
 
 Fold the current standalone tier-2 warning banner into that second hint so the same caveat isn't
 stated twice, and move the per-row `(may include other changes)` note
@@ -529,7 +546,7 @@ the smaller consumer), including the single-file mode. Delivers §4.2 and §4.3.
 Replace all four row implementations with `DiffFileList`, delete
 `redoActionBadgeLabel`/`redoActionBadgeColor`/`FileRowItem`/`CHANGE_TYPE_*`. Add `Modal`
 `size="full"` (§4.7) and the wording change (§4.8). This is also where
-`UndoChangesDialog.tsx` should shed most of its length — the mode-specific *data shaping* moves
+`UndoChangesDialog.tsx` should shed most of its length — the mode-specific _data shaping_ moves
 into `promptUndo.ts` and the component becomes "build groups, render list, send message".
 Implemented with no contract deviations; the single-non-empty-group rule also suppresses
 workflow step headings when only one workflow group has files.
@@ -575,26 +592,26 @@ Existing suites to extend rather than duplicate:
 
 New cases:
 
-| Case                                                              | Covers |
-| ----------------------------------------------------------------- | ------ |
-| added-file diff → header shows `src/new.ts`, badge `created`, no `/dev/null` | 4.1 |
-| deleted-file diff → `path` is the real path, not `/dev/null`; two deletes in one commit get distinct keys | 4.1 |
-| rename (`type: "modify"`, differing real paths) → `old → new`      | 4.1 |
-| narrow container → basename present in the DOM, dir truncated      | 4.3 |
-| `FILE_WRITE`-only step → candidate has `oldContent: ""` + content, card renders a diff | 4.4 |
-| step 1 creates + step 2 edits → one aggregated row, `created`, diff includes step 2's lines | 4.5 |
-| step 1 edits 4-5 + step 2 edits 6-7 → one row, diff spans 4-7      | 4.5 |
-| create-then-delete across steps → row dropped                      | 4.5 |
-| unappliable patch → falls back and sets `isPartialDiff`            | 4.5 |
-| two steps edit one file → undo payload lists steps descending      | 4.6 |
-| file touched in two steps → one aggregated **redo** row, steps ascending | 4.5 |
-| undo two steps then redo two steps → file matches pre-undo content | 4.6 |
-| single non-empty tier → no group headings rendered                 | 4.8 |
+| Case                                                                                                      | Covers |
+| --------------------------------------------------------------------------------------------------------- | ------ |
+| added-file diff → header shows `src/new.ts`, badge `created`, no `/dev/null`                              | 4.1    |
+| deleted-file diff → `path` is the real path, not `/dev/null`; two deletes in one commit get distinct keys | 4.1    |
+| rename (`type: "modify"`, differing real paths) → `old → new`                                             | 4.1    |
+| narrow container → basename present in the DOM, dir truncated                                             | 4.3    |
+| `FILE_WRITE`-only step → candidate has `oldContent: ""` + content, card renders a diff                    | 4.4    |
+| step 1 creates + step 2 edits → one aggregated row, `created`, diff includes step 2's lines               | 4.5    |
+| step 1 edits 4-5 + step 2 edits 6-7 → one row, diff spans 4-7                                             | 4.5    |
+| create-then-delete across steps → row dropped                                                             | 4.5    |
+| unappliable patch → falls back and sets `isPartialDiff`                                                   | 4.5    |
+| two steps edit one file → undo payload lists steps descending                                             | 4.6    |
+| file touched in two steps → one aggregated **redo** row, steps ascending                                  | 4.5    |
+| undo two steps then redo two steps → file matches pre-undo content                                        | 4.6    |
+| single non-empty tier → no group headings rendered                                                        | 4.8    |
 
 Note the existing `MAX_RENDERS` guard convention in `DiffView.test.tsx` — `components/diff/*`
 must not reintroduce the "fresh `[]`/`Map` in an effect dependency" infinite-render pattern
 documented in `webview-react-components.instructions.md`. `DiffFileList` builds arrays of props
-per render, so memoize group construction in the *callers* (or key on stable inputs) rather
+per render, so memoize group construction in the _callers_ (or key on stable inputs) rather
 than inside the list.
 
 ---

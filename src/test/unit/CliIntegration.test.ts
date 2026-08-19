@@ -291,10 +291,7 @@ suite("CliIntegration", () => {
 
     assert.strictEqual(integration.extractSlashCommand("/commit"), "/commit");
     assert.strictEqual(integration.extractSlashCommand("/mcp"), "/mcp");
-    assert.strictEqual(
-      integration.extractSlashCommand("/skill:commit"),
-      null
-    );
+    assert.strictEqual(integration.extractSlashCommand("/skill:commit"), null);
     assert.strictEqual(
       integration.extractSlashCommand("/mcp:playwright"),
       null

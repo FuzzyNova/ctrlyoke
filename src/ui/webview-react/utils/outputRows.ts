@@ -1190,7 +1190,9 @@ function estimateAskUserQuestionHeight(
           : option.label
       );
       if (option.label === question.answer && option.preview) {
-        height += option.preview.split("\n").length * toolResultLineHeight(outputFontSize);
+        height +=
+          option.preview.split("\n").length *
+          toolResultLineHeight(outputFontSize);
       }
     }
 

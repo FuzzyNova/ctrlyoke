@@ -290,7 +290,7 @@ preview never embeds this content in the payload — the body shown for a
 FILE_REFERENCE section is always just the path, the provider-formatted
 rendering, and `stat()` metadata (size, mtime).
 
-The token *estimate* is a deliberate exception to "preview reads nothing
+The token _estimate_ is a deliberate exception to "preview reads nothing
 execution wouldn't": the live editor's attachment token count
 (`useAttachmentTokenCount` / `ContextExpander.estimateFileReferenceTokens`)
 already reads these files in full to tell the user what they'll cost once the

@@ -200,10 +200,7 @@ suite("WorktreeUtils", function () {
       validateWorktreeBranchName("../escape"),
       /Invalid branch name/
     );
-    await assert.rejects(
-      validateWorktreeBranchName(""),
-      /Invalid branch name/
-    );
+    await assert.rejects(validateWorktreeBranchName(""), /Invalid branch name/);
     await assert.rejects(
       validateWorktreeBranchName("-bad"),
       /Invalid branch name/

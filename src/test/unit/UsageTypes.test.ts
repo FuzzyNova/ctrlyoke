@@ -7,7 +7,10 @@ import {
   HARNESS_USAGE_UNITS,
   HARNESS_USAGE_WINDOW_KINDS,
 } from "../../types/DashboardConstants";
-import type { HarnessQuotaSnapshot, HarnessUsageWindow } from "../../types/UsageTypes";
+import type {
+  HarnessQuotaSnapshot,
+  HarnessUsageWindow,
+} from "../../types/UsageTypes";
 import {
   isHarnessQuotaStale,
   isHarnessUsageWindowStale,
@@ -41,7 +44,10 @@ suite("UsageTypes staleness", () => {
 
   test("a sibling window's early reset no longer marks the whole snapshot stale", () => {
     const fiveHour = window({ id: "five-hour", resetAt: fetchedAt + 60_000 });
-    const sevenDay = window({ id: "seven-day", resetAt: fetchedAt + 999_999_999 });
+    const sevenDay = window({
+      id: "seven-day",
+      resetAt: fetchedAt + 999_999_999,
+    });
     const snapshot = quota([fiveHour, sevenDay]);
 
     // Past the five-hour window's own reset, but well within staleAfterMs and
@@ -49,8 +55,14 @@ suite("UsageTypes staleness", () => {
     const now = fetchedAt + 120_000;
 
     assert.strictEqual(isHarnessQuotaStale(snapshot, now), false);
-    assert.strictEqual(isHarnessUsageWindowStale(snapshot, fiveHour, now), true);
-    assert.strictEqual(isHarnessUsageWindowStale(snapshot, sevenDay, now), false);
+    assert.strictEqual(
+      isHarnessUsageWindowStale(snapshot, fiveHour, now),
+      true
+    );
+    assert.strictEqual(
+      isHarnessUsageWindowStale(snapshot, sevenDay, now),
+      false
+    );
   });
 
   test("a window without its own reset still inherits snapshot-clock staleness", () => {
@@ -62,7 +74,11 @@ suite("UsageTypes staleness", () => {
       true
     );
     assert.strictEqual(
-      isHarnessUsageWindowStale(snapshot, noReset, fetchedAt + staleAfterMs - 1),
+      isHarnessUsageWindowStale(
+        snapshot,
+        noReset,
+        fetchedAt + staleAfterMs - 1
+      ),
       false
     );
   });

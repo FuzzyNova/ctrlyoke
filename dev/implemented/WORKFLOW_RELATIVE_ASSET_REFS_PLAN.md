@@ -9,19 +9,19 @@ asserted as `@"workflows/fix-tests.assets/shot one.txt"` in
 `src/test/unit/WorkflowBundleAnalyzer.test.ts:91-104`.
 
 The consequence is that an exported pair is **position-locked, not repo-locked**. Cloning the repo
-works. Copying `fix-tests.ctrlyoke.yaml` + `fix-tests.assets/` into another repo works *only* if
+works. Copying `fix-tests.ctrlyoke.yaml` + `fix-tests.assets/` into another repo works _only_ if
 they land at the identical path relative to that repo's root. Moving the pair one directory over —
 in the same repo — silently invalidates every bundled reference, which is what §3.1's
 missing-assets warning exists to catch.
 
 **Goal:** an exported workflow file plus its sibling `*.assets/` directory can be moved or copied
 anywhere — another directory, another repo — and still resolve. That is the difference between
-*committable* and *shareable*.
+_committable_ and _shareable_.
 
 **Non-goals:** changing the sibling-directory bundle layout (§3.1 of the portability plan stands);
 making `.runs/` state portable; changing how the UI inserts ordinary repo references.
 
-**Scope note.** Only attachments are at stake. Lone prompt-file references are *inlined* at export
+**Scope note.** Only attachments are at stake. Lone prompt-file references are _inlined_ at export
 (`WorkflowBundleAnalyzer.ts:401-407`), so they carry no dependency. `*.assets/` only ever holds
 copied attachment files.
 
@@ -30,7 +30,7 @@ copied attachment files.
 ## 1. What exists already, and what is actually missing
 
 Half of the machinery is built. The portability plan's own steps 2-3 landed
-`sourceDefinitionPath`, and it is threaded end to end — but only for *lone prompt-file paths*:
+`sourceDefinitionPath`, and it is threaded end to end — but only for _lone prompt-file paths_:
 
 - `PromptFileResolver.getCandidates()` (`src/core/PromptFileResolver.ts:220-254`) probes
   `dirname(sourceDefinitionPath)` **first**, then the workspace root, then the `.ctrlyoke/`
@@ -47,7 +47,7 @@ Half of the machinery is built. The portability plan's own steps 2-3 landed
 (`schemas/workflow-schema.json:93-96`) and `WorkflowSerializer.buildCleanWorkflow()` strips it —
 it is absent from `WORKFLOW_FIELDS` (`src/ui/WorkflowSerializer.ts:480-486`). It is a machine-local
 absolute path recorded at load time (`PromptFileLoader.ts:87` → `WorkingFileManager.ts:377` →
-lineage descriptor). Nothing in this plan puts it in a committed file; it is only the *base* the
+lineage descriptor). Nothing in this plan puts it in a committed file; it is only the _base_ the
 resolver already knows.
 
 ### 1.1 What actually gets bundled — verified against the analyzer
@@ -55,14 +55,14 @@ resolver already knows.
 Easy to get wrong from the §3.2 table alone. The rule is **where the reference points × how the
 reference is written**, and the second factor is what surprises people:
 
-| Prompt content                                              | Points into                | Result                                    |
-| ----------------------------------------------------------- | -------------------------- | ----------------------------------------- |
-| lone `prompt: ./x.prompt.md`                                | `.ctrlyoke/prompts/**`     | **inlined** — content replaces the path   |
-| lone `prompt: ./x.prompt.md`                                | ordinary repo file         | **untouched**                             |
-| lone `prompt: ./x.prompt.md`                                | `attachments/**`, `temp/**`| **blocked**                               |
-| `@x` / `#selection:x` / `#sym:x` inside prompt text         | `.ctrlyoke/attachments/**` | **copied to `*.assets/`** + token rewritten |
-| `@x` / `#selection:x` / `#sym:x` inside prompt text         | `.ctrlyoke/prompts/**`     | **copied to `*.assets/`** + token rewritten |
-| `@x` inside prompt text                                     | ordinary repo file         | **untouched**                             |
+| Prompt content                                      | Points into                 | Result                                      |
+| --------------------------------------------------- | --------------------------- | ------------------------------------------- |
+| lone `prompt: ./x.prompt.md`                        | `.ctrlyoke/prompts/**`      | **inlined** — content replaces the path     |
+| lone `prompt: ./x.prompt.md`                        | ordinary repo file          | **untouched**                               |
+| lone `prompt: ./x.prompt.md`                        | `attachments/**`, `temp/**` | **blocked**                                 |
+| `@x` / `#selection:x` / `#sym:x` inside prompt text | `.ctrlyoke/attachments/**`  | **copied to `*.assets/`** + token rewritten |
+| `@x` / `#selection:x` / `#sym:x` inside prompt text | `.ctrlyoke/prompts/**`      | **copied to `*.assets/`** + token rewritten |
+| `@x` inside prompt text                             | ordinary repo file          | **untouched**                               |
 
 So `*.assets/` receives pasted attachments **and prompt files that were _mentioned_ rather than
 _used_** — `"help me refine this prompt @.ctrlyoke/prompts/fixLint.prompt.md"` copies
@@ -76,7 +76,7 @@ change what the harness receives), and it is locked by
 untouched. It never produces a copy plan. This matters for §2.2: the `./`-prefixed form the
 prompt-file completion generates is never the thing being rewritten.
 
-**The relocatability boundary.** A moved pair carries its *generated* dependencies. It does not
+**The relocatability boundary.** A moved pair carries its _generated_ dependencies. It does not
 carry the repo it operates on — `@src/foo.ts` and a lone prompt pointing at a committed
 `prompts/fixLint.prompt.md` stay as they are, by design, the same way `.ctrlyoke/scripts/**` does.
 "Relocatable" means the workflow and its assets travel together, not that a workflow works in a
@@ -103,12 +103,12 @@ file. This is the one place the existing probing behavior is doing real work, an
 leave §6.4 alone.
 
 Inlining only ever touches `.ctrlyoke/prompts/**` — gitignored dashboard scratch that was never
-going to travel. Inlining is the *correct* answer there.
+going to travel. Inlining is the _correct_ answer there.
 
 **The actual defect is upstream, in the UI.** `PromptFileWriter` hard-codes the canonical
 `.ctrlyoke/prompts/` store (`src/utils/PromptFileWriter.ts:22-30`) and the convert-to-prompt-file
 button offers no destination. So two authors with identical intent get opposite export behavior
-purely from *how* they created the file — hand-authored stays factored, dashboard-converted gets
+purely from _how_ they created the file — hand-authored stays factored, dashboard-converted gets
 inlined — and nothing in the UI signals the difference.
 
 Note the sharper version of the complaint is not file size but **review granularity**: inlining N
@@ -163,7 +163,7 @@ assets directory and the §3.4/§8.2 rules already govern them.
 It would be a third path syntax alongside `./` lone paths and `@`/`#` tokens, on top of the §2.3
 dual meaning; it is only ever machine-written, so a user would first meet it as unexplained,
 untypeable syntax in their own exported YAML; and it prevents a failure that requires a missing
-assets directory *and* a root-level directory named `<stem>.assets/` holding the same-named file.
+assets directory _and_ a root-level directory named `<stem>.assets/` holding the same-named file.
 If a marker is ever genuinely needed, use an ASCII namespaced prefix in the existing
 `#selection:` / `#sym:` family (`workflow:./x.prompt.md`), not a non-ASCII sigil — greppability of
 this codebase is worth more than the character.
@@ -185,10 +185,10 @@ If `ContextExpander` copied `PromptFileResolver`'s behavior — try source-dir, 
 workspace root — then for a workflow at `workflows/fix-tests.ctrlyoke.yaml`, the token
 `@src/index.ts` becomes ambiguous:
 
-| Base                     | Resolves to                 |
-| ------------------------ | --------------------------- |
-| source-definition dir    | `workflows/src/index.ts`    |
-| workspace root           | `src/index.ts`              |
+| Base                  | Resolves to              |
+| --------------------- | ------------------------ |
+| source-definition dir | `workflows/src/index.ts` |
+| workspace root        | `src/index.ts`           |
 
 Whichever is probed first wins, so **the meaning of an existing token would depend on filesystem
 state**. A workflow that reads `src/index.ts` today starts reading a different file the day
@@ -197,7 +197,7 @@ someone adds a `workflows/src/` subtree. Nothing in the token warns you. `index.
 
 Three further problems with probing: it doubles `stat` calls on the hot expansion path; it makes
 resolution non-deterministic with respect to disk contents, which is a bad property for a value
-that also feeds a security boundary (§4); and it gives no way to *express* "definitely relative to
+that also feeds a security boundary (§4); and it gives no way to _express_ "definitely relative to
 the workflow" when both files exist.
 
 ### 2.2 The decision
@@ -220,14 +220,14 @@ one they wrote `./` on purpose.
 
 `../` is included deliberately and is a small win on its own: today `@../docs/x.png` resolves to
 `path.resolve(workspaceRoot, "../docs/x.png")`, escapes the root, and is blocked. With a
-workflow-file base it means the obvious thing and usually stays *inside* the root — still fully
+workflow-file base it means the obvious thing and usually stays _inside_ the root — still fully
 containment-checked (§4).
 
 ### 2.3 `./` will mean two different things, and that is forced on us
 
 **This is the one wart, and it needs a conscious decision rather than a footnote.**
 
-In a **lone `prompt:` value**, a leading `./` is already *mandatory syntax*, not a base selector.
+In a **lone `prompt:` value**, a leading `./` is already _mandatory syntax_, not a base selector.
 `looksLikeFilePath()` (`src/utils/promptPathUtils.ts`) only treats a prompt value as a file
 reference if it starts with `./`, `../`, `/`, a drive letter, or — multi-root only — a folder-name
 prefix. That gate exists to tell a path apart from a one-line prompt that happens to end in `.md`.
@@ -238,10 +238,10 @@ Accordingly the prompt-file completion inserts `./` + the **workspace-relative**
 
 So after this change:
 
-| Position                        | `./x`                                            |
-| ------------------------------- | ------------------------------------------------ |
-| lone `prompt:` value            | "this is a path" marker; source-dir-then-workspace probing (unchanged) |
-| `@` / `#selection:` / `#sym`    | workflow-relative base (new)                     |
+| Position                     | `./x`                                                                  |
+| ---------------------------- | ---------------------------------------------------------------------- |
+| lone `prompt:` value         | "this is a path" marker; source-dir-then-workspace probing (unchanged) |
+| `@` / `#selection:` / `#sym` | workflow-relative base (new)                                           |
 
 **Decision: accept the dual meaning.** It is defensible because no single string is ever read both
 ways — `looksLikeFilePath` explicitly rejects anything starting with `@` or `#`, and
@@ -330,7 +330,7 @@ codebase rather than two shapes of it.
 
 **4.4 Symlink escape.** Existing bundle-side handling already realpaths sources and validates the
 assets directory and its ancestors (`WorkflowBundleAnalyzer.validateExportDirectory`). Reference
-*reads* are lexical-only today. Do not expand that scope here — note it as a separate gap so it is
+_reads_ are lexical-only today. Do not expand that scope here — note it as a separate gap so it is
 not silently assumed fixed.
 
 ---
@@ -377,15 +377,15 @@ and excerpt bodies embed content, not paths.
 Each of these resolves reference paths against the workspace root only, and each would report a
 correctly-bundled workflow as broken if left alone:
 
-| Site                                                        | Symptom if skipped                                |
-| ----------------------------------------------------------- | ------------------------------------------------- |
+| Site                                                                                           | Symptom if skipped                             |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | `PromptEditorSupportService.handleContextRefsValidation` (`:487`) → `validateContextReference` | every bundled ref marked invalid in the editor |
-| `PromptEditorSupportService` image preview (`:440`)         | pasted-image thumbnails vanish after export       |
-| `PromptEditorSupportService` (`:682`, `:773`)               | open-file / attach flows miss bundled assets      |
-| `PromptLinkProvider.ts:224`                                 | ctrl+click in the `.yaml` dead-links              |
-| `AttachmentBuilders.ts:107`                                 | directory attachments resolve wrong               |
-| `WorkflowAssetWarnings.ts:63-70`                            | false "missing assets" warnings on load           |
-| `PromptEditorSupportService.handleAttachmentTokenCountRequest`  | token counts wrong/zero for bundled refs      |
+| `PromptEditorSupportService` image preview (`:440`)                                            | pasted-image thumbnails vanish after export    |
+| `PromptEditorSupportService` (`:682`, `:773`)                                                  | open-file / attach flows miss bundled assets   |
+| `PromptLinkProvider.ts:224`                                                                    | ctrl+click in the `.yaml` dead-links           |
+| `AttachmentBuilders.ts:107`                                                                    | directory attachments resolve wrong            |
+| `WorkflowAssetWarnings.ts:63-70`                                                               | false "missing assets" warnings on load        |
+| `PromptEditorSupportService.handleAttachmentTokenCountRequest`                                 | token counts wrong/zero for bundled refs       |
 
 **CLI and MCP need no separate work.** The CLI's `run` path loads through
 `WorkflowInstance.loadPromptFile()`, which sets `sourceDefinitionPath` (`:922-927`), so it inherits
@@ -394,7 +394,7 @@ the §5.1 plumbing; its preview path already passes it explicitly (`cli.ts:722-7
 never expands references — so there is nothing to thread there.
 
 No wire-format change is needed for token counts. `useAttachmentTokenCount` sends reference
-*strings* and caches counts by string (`REQUEST_ATTACHMENT_TOKEN_COUNTS` →
+_strings_ and caches counts by string (`REQUEST_ATTACHMENT_TOKEN_COUNTS` →
 `WebviewMessageRouter.ts:668-676`); all resolution is host-side, where `ctx.clientId` makes
 `getViewSourceDefinitionPath()` available exactly as it is in `handleFileRefValidation`. Every row
 above is therefore an extension-host change.
@@ -421,7 +421,7 @@ destination's assets directory.** Add it as a row in the §3.2 classification ta
 generated stores.
 
 Note this bug exists today with workspace-relative refs, in a nastier form: the ref stays
-`@workflows/fix-tests.assets/shot.png` and keeps *resolving*, so the two exports silently share one
+`@workflows/fix-tests.assets/shot.png` and keeps _resolving_, so the two exports silently share one
 assets directory and deleting the first pair breaks the second. Workflow-relative at least fails
 loudly. Either way the manifest-aware classification is the fix, and it should land in the same
 change.
@@ -432,7 +432,7 @@ the existing manifest prune logic (§3.4 / §8.2 of the portability plan) govern
 ### 6.1.1 The same hole in template export
 
 `handleSaveWorkflowAsTemplate` runs the analyzer with `templateMode: true`, which blocks every
-*generated-store* reference (`WorkflowBundleAnalyzer.ts:509-518`). A `./big.assets/x.png` inherited
+_generated-store_ reference (`WorkflowBundleAnalyzer.ts:509-518`). A `./big.assets/x.png` inherited
 from a previously-exported workflow resolves to an **ordinary repo file**, so `generatedStore` is
 undefined and the reference falls through the `if (!generatedStore) continue;` guard untouched. The
 template is then instantiated in an arbitrary repo carrying a dangling `./` reference — exactly the
@@ -448,7 +448,7 @@ classification change, not two.
 `PromptFileLoader.loadFromMemory()` leaves `originalFile` undefined by design (`:100-105`), so
 dashboard-composed and template-instantiated workflows have no workflow-relative base until they
 are loaded from a file on disk. Per §3 step 2 this is an error, not a fallback — but it should
-never be *reachable* in normal use, because such a workflow's references point into
+never be _reachable_ in normal use, because such a workflow's references point into
 `.ctrlyoke/attachments/`, not into an assets directory. It becomes reachable only if a human hand-
 writes `./` in the dashboard editor. Make the editor's inline validation say so plainly.
 
@@ -482,7 +482,7 @@ the code, so record it in a comment on `PromptFileResolver.getCandidates` rather
 plan floated that as a cheap consistency win. It is wrong and would be a live bug: the prompt-file
 completion inserts `./` + the **workspace-relative** path (`CompletionHelpers.ts:1200`), so
 `./prompts/b.prompt.md` in a workflow under `workflows/` reaches its target through the
-*workspace-root* candidate, not the source-dir one. Removing the fallback breaks every
+_workspace-root_ candidate, not the source-dir one. Removing the fallback breaks every
 completion-inserted prompt reference whose target is not a sibling of the workflow — which is the
 common case. The probing order in `getCandidates` stays exactly as it is.
 
@@ -506,11 +506,11 @@ than as part of it — and see §6.5.1 before reaching for a name match.
 A user's own `mygame.assets/` is not a ctrlyoke bundle. Name-based `.assets` matching is used in
 three places today or in this plan, and they do not share a risk profile:
 
-| Site                                   | Keyed on | Cost of a false positive on `mygame.assets/` |
-| -------------------------------------- | -------- | --------------------------------------------- |
-| §6.1 re-bundling classification        | manifest | none — no manifest, not bundle-managed        |
-| §6.5 discovery exclusion               | name     | a real `.prompt.md` workflow disappears from the picker |
-| `WorkflowAssetWarnings.ts:71` regex    | name     | one spurious "use Save As" warning            |
+| Site                                | Keyed on | Cost of a false positive on `mygame.assets/`            |
+| ----------------------------------- | -------- | ------------------------------------------------------- |
+| §6.1 re-bundling classification     | manifest | none — no manifest, not bundle-managed                  |
+| §6.5 discovery exclusion            | name     | a real `.prompt.md` workflow disappears from the picker |
+| `WorkflowAssetWarnings.ts:71` regex | name     | one spurious "use Save As" warning                      |
 
 **Rule: key on the manifest wherever the consequence is behavioral; name matching is acceptable
 only where it is advisory.** For discovery that means treating a directory as a bundle only when it
@@ -595,7 +595,7 @@ checkable rather than assumed.
   workflow. This is the cheapest regression test for the whole write ordering.
 - Relocation round trip, the whole point: export a workflow with a pasted image, `mv` the pair to a
   different directory, load it, confirm every reference resolves and no missing-assets warning
-  fires. Repeat into a second workspace at a *different* relative path — the case that fails today.
+  fires. Repeat into a second workspace at a _different_ relative path — the case that fails today.
 - Parity sites: at minimum `handleContextRefsValidation` and `WorkflowAssetWarnings` report a
   relocated bundle as valid.
 
@@ -603,16 +603,16 @@ checkable rather than assumed.
 
 ## 9. Sequencing
 
-| # | Step                                                                                  |
-| - | ------------------------------------------------------------------------------------- |
-| 0 | Today-bugs, independent of this plan: exclude manifested `*.assets/` from workflow discovery (§6.5, §6.5.1) and extend the missing-assets scan to top-level `workflow.prompt` (§1.2.1 gap 1, first half) — **landed** |
-| 1 | `resolveReferencePath` + `PromptFileResolver` containment fix (§3, §4) — no behavior change to emitted refs yet — **landed** |
-| 2 | `ContextExpander` base plumbing through `HarnessIntegration`, incl. the `sanitizeReferences` rewrite (§5.1, §5.2) and the §6.7 dedupe-on-absolute-path fix — **landed** |
-| 3 | Parity sites (§5.3), webview payload included — **landed**                              |
-| 4 | Analyzer emits `./` (§5.1.3) — the flip, plus the relocation round trip and idempotence tests (§8) — **landed** |
-| 5 | Manifest-aware re-bundling classification + template-mode block (§6.1, §6.1.1) — **landed** |
-| 6 | Migration script (§7), run once, then delete — **done**                                |
-| 7 | Docs: `docs/reference/commands.md` Save-As section; the "exported pairs are movable" line in the guide, stating the §1.1 relocatability boundary — **done** |
+| #   | Step                                                                                                                                                                                                                  |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0   | Today-bugs, independent of this plan: exclude manifested `*.assets/` from workflow discovery (§6.5, §6.5.1) and extend the missing-assets scan to top-level `workflow.prompt` (§1.2.1 gap 1, first half) — **landed** |
+| 1   | `resolveReferencePath` + `PromptFileResolver` containment fix (§3, §4) — no behavior change to emitted refs yet — **landed**                                                                                          |
+| 2   | `ContextExpander` base plumbing through `HarnessIntegration`, incl. the `sanitizeReferences` rewrite (§5.1, §5.2) and the §6.7 dedupe-on-absolute-path fix — **landed**                                               |
+| 3   | Parity sites (§5.3), webview payload included — **landed**                                                                                                                                                            |
+| 4   | Analyzer emits `./` (§5.1.3) — the flip, plus the relocation round trip and idempotence tests (§8) — **landed**                                                                                                       |
+| 5   | Manifest-aware re-bundling classification + template-mode block (§6.1, §6.1.1) — **landed**                                                                                                                           |
+| 6   | Migration script (§7), run once, then delete — **done**                                                                                                                                                               |
+| 7   | Docs: `docs/reference/commands.md` Save-As section; the "exported pairs are movable" line in the guide, stating the §1.1 relocatability boundary — **done**                                                           |
 
 Step 0 is pure bug-fixing that stands on its own and must land first: §6.5's discovery exclusion is
 already wrong today (bundled `.prompt.md` files show up as runnable workflows), and the warning
@@ -655,7 +655,7 @@ were not built as part of this execution.
 
 **Fixed during review.** `resolveInlineReference` classifies inline references through
 `PromptFileResolver.getCandidatePaths` — the lone-prompt probing API — and step 5 threaded
-`sourceDefinitionPath` into it for *every* reference, not just `./`-prefixed ones. That put the
+`sourceDefinitionPath` into it for _every_ reference, not just `./`-prefixed ones. That put the
 workflow directory ahead of the workspace root for bare references, reintroducing §2.1 inside the
 analyzer: a file at `<workflowDir>/<the exact ref path>` shadowed the real target, so
 `@.ctrlyoke/attachments/a.png` was classified as an ordinary repo file and silently left

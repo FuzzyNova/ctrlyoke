@@ -129,9 +129,7 @@ suite("UsageSelectionAssist", () => {
       windowMinutes: undefined,
     };
     assert.strictEqual(
-      buildUsageSelectionWarning(
-        input([stale], HARNESS_IDS.COPILOT_CLI)
-      ),
+      buildUsageSelectionWarning(input([stale], HARNESS_IDS.COPILOT_CLI)),
       undefined
     );
 
@@ -145,9 +143,7 @@ suite("UsageSelectionAssist", () => {
       windowMinutes: undefined,
     };
     assert.strictEqual(
-      buildUsageSelectionWarning(
-        input([unavailable], HARNESS_IDS.COPILOT_CLI)
-      ),
+      buildUsageSelectionWarning(input([unavailable], HARNESS_IDS.COPILOT_CLI)),
       undefined
     );
 
@@ -164,9 +160,7 @@ suite("UsageSelectionAssist", () => {
       isUnlimited: true,
     };
     assert.strictEqual(
-      buildUsageSelectionWarning(
-        input([unlimited], HARNESS_IDS.COPILOT_CLI)
-      ),
+      buildUsageSelectionWarning(input([unlimited], HARNESS_IDS.COPILOT_CLI)),
       undefined
     );
   });

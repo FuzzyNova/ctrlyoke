@@ -54,7 +54,8 @@ suite("HostedErrorPageTemplate", () => {
       message: "You need a valid token.",
       hints: ["Check your token.", "Reconnect via the ctrlyoke panel."],
       themeBodyClass: "vscode-dark",
-      themeStyleBlock: "<style>:root {\n  --vscode-foreground: #fff;\n}</style>\n",
+      themeStyleBlock:
+        "<style>:root {\n  --vscode-foreground: #fff;\n}</style>\n",
     });
 
     assert.ok(html.includes("Error 401"));

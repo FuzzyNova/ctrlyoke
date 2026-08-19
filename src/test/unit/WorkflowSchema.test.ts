@@ -63,7 +63,7 @@ suite("Workflow template schema", () => {
   });
 
   test("rejects secret grants with invalid names", () => {
-    for (const name of ["lowercase", "1START", "HAS-DASH", ""] ) {
+    for (const name of ["lowercase", "1START", "HAS-DASH", ""]) {
       const valid = validate({
         steps: [{ prompt: "prompt", secrets: [name] }],
       });

@@ -98,7 +98,9 @@ describe("DefaultsHarnessPage execution defaults", () => {
     expect(screen.getByLabelText("Merge")).toBeChecked();
     expect(screen.getByText(WORKTREE_KEEP_HELP_TEXT)).toBeInTheDocument();
     expect(
-      screen.getByText(/merges the managed branch into the working checkout after every run/i)
+      screen.getByText(
+        /merges the managed branch into the working checkout after every run/i
+      )
     ).toBeInTheDocument();
 
     screen.getByLabelText("Keep directory").click();

@@ -96,7 +96,10 @@ describe("RunSummaryBanner", () => {
     ["fast-forward", "Merged (fast-forward)"],
     ["merge-commit", "Merged (merge commit)"],
     ["conflict", "Merge conflict — branch preserved"],
-    ["blocked", "Auto merge blocked — source branch changed or checkout is dirty"],
+    [
+      "blocked",
+      "Auto merge blocked — source branch changed or checkout is dirty",
+    ],
   ] as const)(
     "renders the persisted %s merge outcome",
     (mergeOutcome, text) => {

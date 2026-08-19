@@ -55,12 +55,13 @@ Skills and MCP servers attach through genuinely different mechanisms in ctrlyoke
 
 Consequences for `/mcp:<name>`:
 
-1. **A rewrite is still needed, but for a different reason than skills.** Tool *discovery* needs no textual cue — an MCP server's tools become visible to the model automatically through the harness's own MCP protocol the moment the server is connected. But prompt *intent* often does: `"only use /mcp:ctrlyoke if you need to add more steps, and only use /mcp:playwright if you need to test a UI"` is disambiguating between two attached servers with per-server guidance, and that mapping has to survive whatever happens to the token. So `/mcp:<name>` is **rewritten in place**, not deleted — same in-place-substitution shape as `/skill:`, substituting a minimal, grammar-neutral reference such as `mcp: ctrlyoke` for the literal token (just the leading `/` and the colon-prefixed syntax swapped for a plain label — no injected verb phrase, since a full sentence like `use the attached MCP server "ctrlyoke"` presupposes a sentence shape that may not match where the token sits and can read as a run-on when it doesn't). (An earlier draft of this plan proposed deleting the token outright; that was wrong — it silently drops exactly the per-server guidance this syntax exists to carry, and is corrected here.) The literal `/mcp:...` token must still never reach the harness verbatim, both because it has no meaning there and to avoid confusing a harness with a native `/mcp` parser.
+1. **A rewrite is still needed, but for a different reason than skills.** Tool _discovery_ needs no textual cue — an MCP server's tools become visible to the model automatically through the harness's own MCP protocol the moment the server is connected. But prompt _intent_ often does: `"only use /mcp:ctrlyoke if you need to add more steps, and only use /mcp:playwright if you need to test a UI"` is disambiguating between two attached servers with per-server guidance, and that mapping has to survive whatever happens to the token. So `/mcp:<name>` is **rewritten in place**, not deleted — same in-place-substitution shape as `/skill:`, substituting a minimal, grammar-neutral reference such as `mcp: ctrlyoke` for the literal token (just the leading `/` and the colon-prefixed syntax swapped for a plain label — no injected verb phrase, since a full sentence like `use the attached MCP server "ctrlyoke"` presupposes a sentence shape that may not match where the token sits and can read as a run-on when it doesn't). (An earlier draft of this plan proposed deleting the token outright; that was wrong — it silently drops exactly the per-server guidance this syntax exists to carry, and is corrected here.) The literal `/mcp:...` token must still never reach the harness verbatim, both because it has no meaning there and to avoid confusing a harness with a native `/mcp` parser.
 2. **The extraction point is different — and it is _not_ inside `PropertyResolver`.** `/skill:` extraction happens inside `CliPromptPreparer`, per prompt, right before send. `/mcp:` extraction has to happen **after property resolution but before spawn**, because `resolvedProperties.mcpServers` is what feeds `ExecutionPlanBuilder` (`session.resolvedProperties?.mcpServers`, `ExecutionPlanBuilder.ts:212`) and `CliProviderUtils.planMcpConfigBlock()`, both of which run before the harness process spawns — well before `CliPromptPreparer` ever sees the prompt.
 
    An earlier draft of this plan said to do the merge "at or before `PropertyResolver.resolve()`". **That is not implementable as written** — see "Verified constraints" below. `PropertyResolver` is a thin VS Code adapter over the synchronous, platform-neutral `resolveExecutionProperties()` in `src/types/ExecutionPropertyResolver.ts`, while registry lookup (`McpRegistryFileManager.readAll()`) is async filesystem I/O. Making resolution async would ripple into synchronous callers (`SessionResolver.ts:103,310,345`, `WorkflowInstance.ts:556`, `CliSessionResolverAdapter.ts:29`).
 
    **Corrected approach:** apply an async post-resolution normalization pass, exactly parallel to the `VarSubstitutor` step that already exists at `WorkflowExecutor.ts:641-648`. That step already establishes the pattern of reassigning `resolvedProperties` after `PropertyResolver.resolve()` inside an async function. The new pass both (a) resolves bare registry-ID strings into full `McpServerConfig` objects and (b) merges `/mcp:<name>` tokens found in the prompt text, deduped by id — same force-attach semantics as an explicit `mcpServers:` list.
+
 3. **PTY reuse is already covered — verify, don't build.** `.github/instructions/harness-integrations.instructions.md` states: "If a spawn-time property changes, retire the PTY instead of forcing reuse." `mcpServers` is a spawn-time property, and `CliIntegration.getInjectIncompatibilityReason()` **already** compares it: `JSON.stringify(curr.mcpServers) !== JSON.stringify(prev.mcpServers)` → `"mcpServers changed"` (`CliIntegration.ts:608-610`). So no new comparison logic is needed. What _is_ needed is a regression test proving that the value compared is the **normalized/merged** set (post-`/mcp:` merge), so a later queued prompt introducing a new `/mcp:<name>` retires the PTY. Note the side effect of normalization: once bare strings become full config objects, this `JSON.stringify` comparison also becomes sensitive to a registry entry being edited mid-run — which is the correct behavior (the spawned process genuinely has stale config), but it should be a deliberate, documented consequence rather than a surprise.
 4. **No harness-native-vs-ctrlyoke-only ambiguity.** The skill plan needs `isSkillNativeToHarness()` because a skill named `commit` might be native to one harness and ctrlyoke-only for another. MCP servers referenced by `/mcp:<name>` have no such duality: `/mcp:<name>` always means "the entry named `<name>` in the ctrlyoke MCP registry" (`.ctrlyoke/mcp/servers.json` workspace-scope, `~/.ctrlyoke/mcp/servers.json` user-scope, via `McpRegistryFileManager.readAll()`), never a server that merely happens to already exist in some harness's own native config file. That simplifies MCP resolution relative to skills — there is exactly one source of truth to check, not "is this native, and if not where do I find it."
 
@@ -83,18 +84,18 @@ numbers (they drift) but the constraints themselves are load-bearing.
    declares `let resolvedProperties = PropertyResolver.resolve(...)` and then reassigns it via
    `VarSubstitutor.applyToResolvedProperties()`. The MCP normalization pass belongs immediately
    after `resolveEffectivePrompt()` (`WorkflowExecutor.ts:653`) — the `/mcp:` scan must read the
-   *effective* prompt text, since tokens can arrive via var substitution or a resolved prompt-file
+   _effective_ prompt text, since tokens can arrive via var substitution or a resolved prompt-file
    reference, and it must land before `getIntegrationForPrompt()` / spawn at line 662.
 
 3. **`resolvedProperties.mcpServers` has more consumers than `planMcpConfigBlock()`.** Also read by
    `ExecutionPlanBuilder.ts:212`, `ClaudeCliProvider.ts:255-264`, `CopilotCliProvider.ts:235-244`,
    and `ExecutionPreviewService.ts:550,576,694`. Normalization must be applied at every site that
-   feeds a spawn *or a dry-run preview*, or preview will diverge from execution.
+   feeds a spawn _or a dry-run preview_, or preview will diverge from execution.
 
 4. **`"ctrlyoke"` must stay a bare string after normalization.** `ClaudeCliProvider.ts:257` and
    `CopilotCliProvider.ts:237` both test `mcpServersResolved.includes("ctrlyoke")` against the raw
    array. Converting the reserved `"ctrlyoke"` sentinel into an object would silently break those
-   checks. Normalize *only* non-`"ctrlyoke"` strings; pass `"ctrlyoke"` through untouched. (This
+   checks. Normalize _only_ non-`"ctrlyoke"` strings; pass `"ctrlyoke"` through untouched. (This
    also settles Open Question 9.)
 
 5. **The bare-string gap is real and confirmed.** `CliProviderUtils.planMcpConfigBlock()` filters
@@ -124,7 +125,7 @@ numbers (they drift) but the constraints themselves are load-bearing.
 9. **`CliPromptPreparer`'s second fast path guards on four section kinds, not three.** The
    direct-reference fast path at `planPrompt()` emits only the prompt text and its direct file
    references, so it must stay gated on `!agentContent && !skillContent && !excerptContent &&
-   !hasPriorContext`. Dropping any one of those conditions silently discards that section from what
+!hasPriorContext`. Dropping any one of those conditions silently discards that section from what
    reaches the harness — no error, no diagnostic, just missing context. Excerpt content was lost
    this way once during implementation; `CliPromptPreparer.test.ts` now pins it.
 
@@ -161,7 +162,7 @@ numbers (they drift) but the constraints themselves are load-bearing.
 - `/mcp:playwright`
   - Explicit ctrlyoke MCP server reference.
   - ctrlyoke resolves MCP server `playwright` from the ctrlyoke MCP registry, merges it into this step's effective `mcpServers`, and rewrites the token in place to `mcp: playwright` in the outgoing prompt text.
-- `/mcp:playwright:browser_hover` *(follow-on extension, design point 9 — not Phase 1)*
+- `/mcp:playwright:browser_hover` _(follow-on extension, design point 9 — not Phase 1)_
   - Explicit ctrlyoke MCP tool reference. Attaches the whole `playwright` server exactly like `/mcp:playwright` would, and additionally rewrites the token to that server's literal declared tool name (`mcp: <literal tool name>`) instead of just the server name, saving the user from typing the tool name out by hand.
 
 ### Rewrite behavior
@@ -178,7 +179,7 @@ Prompt preparation should rewrite each `/skill:` and `/mcp:` token in place to a
   - becomes `using mcp: ctrlyoke, append steps to the queue`
 - `only use /mcp:ctrlyoke if you need to add more steps, and only use /mcp:playwright if you need to test a UI`
   - becomes `only use mcp: ctrlyoke if you need to add more steps, and only use mcp: playwright if you need to test a UI`
-- `use /mcp:ctrlyoke:append_queue to add a planning and implementation step to the queue` *(follow-on extension, design point 9)*
+- `use /mcp:ctrlyoke:append_queue to add a planning and implementation step to the queue` _(follow-on extension, design point 9)_
   - becomes `use mcp: ctrlyoke_append_queue to add a planning and implementation step to the queue` — the inserted name is the tool's literal declared name (here it happens to already be `ctrlyoke_append_queue`), never a synthesized `<server>_<tool>` concatenation
 
 Deleting the token outright (an earlier draft's approach) was also considered and rejected: it collapses `look up the page title with /mcp:playwright` to `look up the page title with`, losing the only thing the sentence was about. Minimal in-place substitution is the correct default for both `/skill:` and `/mcp:` — enough to keep the referent, not enough to impose sentence structure.
@@ -302,7 +303,7 @@ This avoids harness parser conflicts while preserving readable inline semantics 
 Unlike skills, `/mcp:<mcp-name>` cannot be handled inside `CliPromptPreparer` — by the time
 `CliPromptPreparer.planPrompt()` runs, `resolvedProperties.mcpServers` has already been read by
 `ExecutionPlanBuilder`/`CliProviderUtils.planMcpConfigBlock()` to build the process's spawn args.
-And it cannot be handled *inside* `PropertyResolver.resolve()` either, because that path is
+And it cannot be handled _inside_ `PropertyResolver.resolve()` either, because that path is
 synchronous and registry lookup is async (Verified constraint 1).
 
 The merge runs as an **async post-resolution normalization pass**, in the same slot
@@ -390,9 +391,9 @@ This is a materially different cost and risk profile from everything else in thi
 
 - **ctrlyoke's own server is free.** `mcp-server.ts`'s `getToolDefinitions()` already returns the full tool list statically, in-process. `/mcp:ctrlyoke:<tool>` completions can be served from that list directly with no spawn, no network call, no cache invalidation story.
 - **Third-party servers require building a real MCP client — new capability, not reuse of existing code.** `@modelcontextprotocol/sdk` is already a dependency, but grep confirms it is only ever used to build ctrlyoke's own server (`mcp-server.ts`); the only other `tools/list` handler in the repo (`src/test/harness/helpers/harnessRunner.ts:362`) is a fake server used to fixture tests, not a client. Introspecting `playwright` (or any registry entry that isn't `"ctrlyoke"`) means connecting as a client for the first time anywhere in this codebase: spawn + `initialize` + `tools/list` for a stdio server (`command`/`args`/`env` from its `McpServerConfig`), or an HTTP/SSE handshake for a `url`-based one.
-- **This must be lazy, cached, and timeout-bounded, or it is genuinely expensive.** Populating the base `/` dropdown must never trigger introspection of every registered server — that would spawn N processes on a single keystroke. Introspection should trigger only once the user has typed `/mcp:<server>:` for a *specific* server, cache the resulting tool list in-memory for the extension-host session (keyed by server id, invalidated when that server's registry entry changes), and enforce a short timeout (a few seconds) with graceful fallback to "no tool-level completions available yet" rather than blocking the dropdown — some MCP servers (`npx`-based ones especially) can take several seconds to cold-start, and a misconfigured or auth-gated server can hang indefinitely.
+- **This must be lazy, cached, and timeout-bounded, or it is genuinely expensive.** Populating the base `/` dropdown must never trigger introspection of every registered server — that would spawn N processes on a single keystroke. Introspection should trigger only once the user has typed `/mcp:<server>:` for a _specific_ server, cache the resulting tool list in-memory for the extension-host session (keyed by server id, invalidated when that server's registry entry changes), and enforce a short timeout (a few seconds) with graceful fallback to "no tool-level completions available yet" rather than blocking the dropdown — some MCP servers (`npx`-based ones especially) can take several seconds to cold-start, and a misconfigured or auth-gated server can hang indefinitely.
 - **The expanded name must come from the server, not be synthesized.** `ctrlyoke_append_queue` happens to be self-prefixed because that's the literal name the ctrlyoke server registers — that is a fact about this one server, not a naming convention `/mcp:` can assume generally. The resolver must insert whatever `tools/list` actually returned for that tool, not `<server>_<tool>` concatenated client-side; guessing a name the server didn't declare would hand the model a tool reference that doesn't exist.
-- **Attachment scope is unchanged.** `/mcp:<server>:<tool>` still merges the *whole* `McpServerConfig` for `<server>` into `resolvedProperties.mcpServers` — identical resolution to `/mcp:<server>` alone (design point 3). The `:<tool>` segment is a completion/rewrite convenience only; it does not add per-tool attachment scoping (`McpServerConfig.deniedTools` already exists for narrowing what's enabled, but that's an orthogonal, pre-existing mechanism this extension doesn't need to touch).
+- **Attachment scope is unchanged.** `/mcp:<server>:<tool>` still merges the _whole_ `McpServerConfig` for `<server>` into `resolvedProperties.mcpServers` — identical resolution to `/mcp:<server>` alone (design point 3). The `:<tool>` segment is a completion/rewrite convenience only; it does not add per-tool attachment scoping (`McpServerConfig.deniedTools` already exists for narrowing what's enabled, but that's an orthogonal, pre-existing mechanism this extension doesn't need to touch).
 
 Given the new-capability risk (first MCP client code in the codebase) and the UX unknowns (loading state while a server cold-starts, what a timed-out completion looks like, per-server caching lifetime), this extension should land as its own follow-on phase after server-level `/mcp:<name>` has shipped and proven out, not as part of Phase 1.
 
@@ -475,7 +476,7 @@ The dropdown should not depend on curated native slash-command lists, and should
 
 8. Extend the normalization pass so `/mcp:<server>` contributes to the step's effective `mcpServers` set (merged into `resolvedProperties.mcpServers`, deduped by id) before `ExecutionPlanBuilder`/`CliProviderUtils.planMcpConfigBlock()` consume it; rewrite the token in place to a minimal label (e.g. `mcp: playwright`) during prompt assembly, preserving its position in the sentence.
 
-9. Add a regression test proving the existing interactive PTY-reuse comparison (`CliIntegration.ts:608-610`, already present) sees the *normalized* `mcpServers`, so a newly-introduced `/mcp:<server>` in a later queued prompt forces PTY retirement/respawn instead of silently running without the new server. No new comparison logic — verification only.
+9. Add a regression test proving the existing interactive PTY-reuse comparison (`CliIntegration.ts:608-610`, already present) sees the _normalized_ `mcpServers`, so a newly-introduced `/mcp:<server>` in a later queued prompt forces PTY retirement/respawn instead of silently running without the new server. No new comparison logic — verification only.
 
 10. Update `PromptLinkProvider.ts` to recognize `/skill:<skill>` and `/mcp:<server>`, opening the resolved `SKILL.md` or MCP Manager entry respectively.
 
@@ -491,7 +492,7 @@ The dropdown should not depend on curated native slash-command lists, and should
     - bare non-`"ctrlyoke"` string in `mcpServers: [...]` now resolves instead of being dropped
     - PTY retirement when a queued prompt's `/mcp:` reference changes the resolved `mcpServers` set mid-run
 
-12. *(Follow-on extension, design point 9 — separate phase, not bundled with the steps above)* Add `/mcp:<server>:<tool>` support:
+12. _(Follow-on extension, design point 9 — separate phase, not bundled with the steps above)_ Add `/mcp:<server>:<tool>` support:
     - a new introspection module that, given a resolved `McpServerConfig`, connects as an MCP client (stdio spawn or HTTP/SSE) and calls `tools/list`
     - an in-memory cache keyed by server id, with a short timeout and graceful "no tool completions yet" fallback on failure/timeout
     - completion wiring that only triggers introspection once the user types `/mcp:<server>:`, never eagerly for the base `/` dropdown
@@ -502,27 +503,27 @@ The dropdown should not depend on curated native slash-command lists, and should
 
 ## Files to Modify
 
-| File                                                          | Action                   | Purpose                                                                           |
-| --------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------- |
-| `src/utils/SkillDiscovery.ts`                                 | Modify                   | Add harness-aware skill resolution helpers for `/skill:`                          |
-| `src/utils/HarnessDirectoryUtils.ts`                          | Maybe modify             | Extend or reuse directory helpers as single source of truth                       |
-| `src/utils/McpRegistryFileManager.ts`                         | Modify                   | Add name-based resolution helper for `/mcp:` and for fixing bare-string handling  |
-| `src/core/harness/shared/CliProviderUtils.ts`                 | Verify only              | Existing `userServers` filter should need no change once normalized configs reach it |
-| `src/utils/McpServerNormalizer.ts` *(new)*                     | Add                      | Async pass: resolve bare registry IDs + merge `/mcp:` tokens into `mcpServers`     |
-| `src/core/WorkflowExecutor.ts`                                 | Modify                   | Invoke the normalization pass after `resolveEffectivePrompt()`, before spawn       |
-| `src/core/ExecutionPreviewService.ts`                          | Modify                   | Apply the same normalization so dry-run preview matches execution                  |
-| `src/utils/PropertyResolver.ts`                                | Do not modify            | Sync adapter over `ExecutionPropertyResolver`; registry I/O cannot live here (Verified constraint 1) |
-| `src/core/HarnessIntegration.ts`                               | Modify                   | `extractLeadingSlashCommand()` must not match `/skill:`/`/mcp:` tokens (Verified constraint 6) |
-| `src/completions/CompletionHelpers.ts`                        | Modify or extract helper | Add skill-token and MCP-token completion generation                              |
-| `src/completions/PromptCompletionProvider.ts`                 | Modify                   | Add `/` trigger support for prompt-file completions if desired in VS Code editors |
-| `src/completions/PromptLinkProvider.ts`                       | Modify                   | Add `/skill:<skill>` and `/mcp:<server>` document links                          |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | Modify                   | Add `/skill:` and `/mcp:` completions and link decoration/click handling          |
-| `src/core/harness/shared/CliPromptPreparer.ts`                | Modify                   | Treat `/skill:` as attachable skill syntax and rewrite it before send; rewrite `/mcp:` tokens in place to minimal `mcp: <name>` labels in outgoing text |
-| `src/ui/McpManagerService.ts`                                 | Maybe modify             | Expose registry lookups to completion/link providers if not already accessible    |
-| `src/types/DashboardConstants.ts`                             | Maybe modify             | Add message constants or skill/MCP-token metadata constants                       |
-| `src/types/WebviewMessageTypes.ts`                             | Maybe modify             | Add or extend completion/open-skill/open-mcp-server message payload types         |
-| `.github/instructions/harness-integrations.instructions.md`   | Maybe modify             | Document the PTY-retirement trigger once `/mcp:`-driven `mcpServers` changes are wired in |
-| `src/utils/McpToolIntrospector.ts` *(new, follow-on extension)* | Add                     | MCP client: spawn/connect + `initialize` + `tools/list`, in-memory cache, timeout — powers `/mcp:<server>:<tool>` completions (design point 9) |
+| File                                                            | Action                   | Purpose                                                                                                                                                 |
+| --------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/utils/SkillDiscovery.ts`                                   | Modify                   | Add harness-aware skill resolution helpers for `/skill:`                                                                                                |
+| `src/utils/HarnessDirectoryUtils.ts`                            | Maybe modify             | Extend or reuse directory helpers as single source of truth                                                                                             |
+| `src/utils/McpRegistryFileManager.ts`                           | Modify                   | Add name-based resolution helper for `/mcp:` and for fixing bare-string handling                                                                        |
+| `src/core/harness/shared/CliProviderUtils.ts`                   | Verify only              | Existing `userServers` filter should need no change once normalized configs reach it                                                                    |
+| `src/utils/McpServerNormalizer.ts` _(new)_                      | Add                      | Async pass: resolve bare registry IDs + merge `/mcp:` tokens into `mcpServers`                                                                          |
+| `src/core/WorkflowExecutor.ts`                                  | Modify                   | Invoke the normalization pass after `resolveEffectivePrompt()`, before spawn                                                                            |
+| `src/core/ExecutionPreviewService.ts`                           | Modify                   | Apply the same normalization so dry-run preview matches execution                                                                                       |
+| `src/utils/PropertyResolver.ts`                                 | Do not modify            | Sync adapter over `ExecutionPropertyResolver`; registry I/O cannot live here (Verified constraint 1)                                                    |
+| `src/core/HarnessIntegration.ts`                                | Modify                   | `extractLeadingSlashCommand()` must not match `/skill:`/`/mcp:` tokens (Verified constraint 6)                                                          |
+| `src/completions/CompletionHelpers.ts`                          | Modify or extract helper | Add skill-token and MCP-token completion generation                                                                                                     |
+| `src/completions/PromptCompletionProvider.ts`                   | Modify                   | Add `/` trigger support for prompt-file completions if desired in VS Code editors                                                                       |
+| `src/completions/PromptLinkProvider.ts`                         | Modify                   | Add `/skill:<skill>` and `/mcp:<server>` document links                                                                                                 |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`   | Modify                   | Add `/skill:` and `/mcp:` completions and link decoration/click handling                                                                                |
+| `src/core/harness/shared/CliPromptPreparer.ts`                  | Modify                   | Treat `/skill:` as attachable skill syntax and rewrite it before send; rewrite `/mcp:` tokens in place to minimal `mcp: <name>` labels in outgoing text |
+| `src/ui/McpManagerService.ts`                                   | Maybe modify             | Expose registry lookups to completion/link providers if not already accessible                                                                          |
+| `src/types/DashboardConstants.ts`                               | Maybe modify             | Add message constants or skill/MCP-token metadata constants                                                                                             |
+| `src/types/WebviewMessageTypes.ts`                              | Maybe modify             | Add or extend completion/open-skill/open-mcp-server message payload types                                                                               |
+| `.github/instructions/harness-integrations.instructions.md`     | Maybe modify             | Document the PTY-retirement trigger once `/mcp:`-driven `mcpServers` changes are wired in                                                               |
+| `src/utils/McpToolIntrospector.ts` _(new, follow-on extension)_ | Add                      | MCP client: spawn/connect + `initialize` + `tools/list`, in-memory cache, timeout — powers `/mcp:<server>:<tool>` completions (design point 9)          |
 
 ---
 

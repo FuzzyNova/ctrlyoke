@@ -226,7 +226,9 @@ suite("PropertyResolver Tests", () => {
         workflow,
         context
       );
-      assert.deepStrictEqual(fromWorkflow.properties.secrets, ["WORKFLOW_SECRET"]);
+      assert.deepStrictEqual(fromWorkflow.properties.secrets, [
+        "WORKFLOW_SECRET",
+      ]);
       assert.strictEqual(fromWorkflow.sources.secrets, "workflow");
 
       const fromDefaults = resolveExecutionProperties(
@@ -234,7 +236,9 @@ suite("PropertyResolver Tests", () => {
         { steps: [] },
         context
       );
-      assert.deepStrictEqual(fromDefaults.properties.secrets, ["DEFAULT_SECRET"]);
+      assert.deepStrictEqual(fromDefaults.properties.secrets, [
+        "DEFAULT_SECRET",
+      ]);
       assert.strictEqual(fromDefaults.sources.secrets, "defaults");
 
       const clearedAtPrompt = resolveExecutionProperties(

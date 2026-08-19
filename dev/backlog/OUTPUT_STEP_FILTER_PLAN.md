@@ -65,13 +65,13 @@ These need a quick prototype/comparison rather than being pre-decided here:
 
 ## Affected Components
 
-| Component | Planned role |
-| --- | --- |
-| `OutputSection.tsx` | Own the visible-step-set filter state; pass it into row building |
-| `useOutputRowsModel.ts` / `outputRows.ts` | Apply the visibility predicate when building rows; decide how `StepAnchorRow` behaves for hidden steps |
-| `useOutputMinimapModel.ts` / `OutputMinimap.tsx` | Add the toggle affordance per step entry |
-| `workflowStore.ts` or `uiStore.ts` | Hold the per-workflow-session step visibility selection |
-| `OutputPane.tsx` | No change — stays a generic renderer of whatever rows it receives |
+| Component                                        | Planned role                                                                                           |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `OutputSection.tsx`                              | Own the visible-step-set filter state; pass it into row building                                       |
+| `useOutputRowsModel.ts` / `outputRows.ts`        | Apply the visibility predicate when building rows; decide how `StepAnchorRow` behaves for hidden steps |
+| `useOutputMinimapModel.ts` / `OutputMinimap.tsx` | Add the toggle affordance per step entry                                                               |
+| `workflowStore.ts` or `uiStore.ts`               | Hold the per-workflow-session step visibility selection                                                |
+| `OutputPane.tsx`                                 | No change — stays a generic renderer of whatever rows it receives                                      |
 
 ## Non-Goals
 

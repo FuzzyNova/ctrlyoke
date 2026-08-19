@@ -64,9 +64,7 @@ export class SkillDiscovery {
    * @param workspaceFolder Current workspace folder (optional)
    * @returns Array of discovered skills (deduplicated by path)
    */
-  static async discoverSkills(
-    workspaceRoot?: string
-  ): Promise<SkillInfo[]> {
+  static async discoverSkills(workspaceRoot?: string): Promise<SkillInfo[]> {
     const skills: SkillInfo[] = [];
     const scannedPaths = new Set<string>();
 

@@ -77,7 +77,7 @@ share the single hook instance with no new portal or listener pair.
 
 | Item                           | Message                                          | Notes                                                         |
 | ------------------------------ | ------------------------------------------------ | ------------------------------------------------------------- |
-| Duplicate Workflow…            | `CREATE_WORKFLOW_VARIANT`                        | Address-scoped; opens the shared duplicate dialog              |
+| Duplicate Workflow…            | `CREATE_WORKFLOW_VARIANT`                        | Address-scoped; opens the shared duplicate dialog             |
 | Copy Run Directory Path        | none (clipboard)                                 | New. See below                                                |
 | — divider —                    |                                                  |                                                               |
 | Add to / Remove from Favorites | `TOGGLE_WORKFLOW_FAVORITE`                       | Always lineage-scoped, on every surface                       |

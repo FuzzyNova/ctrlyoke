@@ -253,8 +253,7 @@ suite("WorkflowBundleWriter", () => {
       const source = path.join(workspace, "source.png");
       const workflow = path.join(workspace, "fix-tests.ctrlyoke.yaml");
       const asset = path.join(assets, "source.png");
-      const serializedWorkflow =
-        'prompt: @"./fix-tests.assets/source.png"\n';
+      const serializedWorkflow = 'prompt: @"./fix-tests.assets/source.png"\n';
       await fs.writeFile(source, "image", "utf8");
 
       await writeWorkflowBundle({
@@ -283,7 +282,10 @@ suite("WorkflowBundleWriter", () => {
       assert.deepStrictEqual(await fs.readFile(workflow), Buffer.from(first));
       assert.deepStrictEqual(
         JSON.parse(
-          await fs.readFile(path.join(assets, BUNDLE_MANIFEST_FILE_NAME), "utf8")
+          await fs.readFile(
+            path.join(assets, BUNDLE_MANIFEST_FILE_NAME),
+            "utf8"
+          )
         ),
         { version: BUNDLE_MANIFEST_VERSION, files: ["source.png"] }
       );

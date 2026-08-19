@@ -946,7 +946,9 @@ suite("WorkingFileManager", () => {
         workflowKey as any,
         runRef as any
       );
-      const source = JSON.parse(await fs.readFile(sourcePath, "utf8")) as WorkingFile;
+      const source = JSON.parse(
+        await fs.readFile(sourcePath, "utf8")
+      ) as WorkingFile;
       const tokenTotals: WorkflowTokenTotals = {
         total: 7,
         coverage: "complete",

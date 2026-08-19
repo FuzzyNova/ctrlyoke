@@ -350,21 +350,20 @@ export class QwenLogParser extends BaseLogParser {
       ? lastAssistantUsage.promptTokenCount || 0
       : undefined;
 
-    const tokenUsage: TokenUsage | undefined =
-      sawUsageMetadata
-        ? {
-            inputTokens: totalInputTokens,
-            outputTokens: totalOutputTokens,
-            totalTokens: totalInputTokens + totalOutputTokens,
-            totalConfidence: TOKEN_TOTAL_CONFIDENCE.ACCUMULATED,
-            cachedInputTokens:
-              totalCachedTokens > 0 ? totalCachedTokens : undefined,
-            contextWindowUsedTokens,
-            contextWindowSize: getQwenContextWindowSize(
-              model ?? this.resolvedModel
-            ),
-          }
-        : undefined;
+    const tokenUsage: TokenUsage | undefined = sawUsageMetadata
+      ? {
+          inputTokens: totalInputTokens,
+          outputTokens: totalOutputTokens,
+          totalTokens: totalInputTokens + totalOutputTokens,
+          totalConfidence: TOKEN_TOTAL_CONFIDENCE.ACCUMULATED,
+          cachedInputTokens:
+            totalCachedTokens > 0 ? totalCachedTokens : undefined,
+          contextWindowUsedTokens,
+          contextWindowSize: getQwenContextWindowSize(
+            model ?? this.resolvedModel
+          ),
+        }
+      : undefined;
 
     return {
       events: outputEvents,

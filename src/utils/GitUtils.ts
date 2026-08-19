@@ -510,7 +510,15 @@ export async function getGitTrackedAndUntrackedFiles(
   repoRoot: string
 ): Promise<string[]> {
   const { stdout } = await execGit(
-    ["-C", repoRoot, "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+    [
+      "-C",
+      repoRoot,
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "-z",
+    ],
     { maxBuffer: GIT_MAX_BUFFER }
   );
   return stdout.split("\0").filter(Boolean);
@@ -684,7 +692,9 @@ export async function gitCommonDir(dir: string): Promise<string | null> {
     ]);
     const result = stdout.trim();
     if (!result) return null;
-    const resolved = path.isAbsolute(result) ? result : path.resolve(dir, result);
+    const resolved = path.isAbsolute(result)
+      ? result
+      : path.resolve(dir, result);
     try {
       return path.normalize(await fs.realpath(resolved));
     } catch {
@@ -1092,16 +1102,13 @@ export async function commitAll(
 ): Promise<boolean> {
   if (!(await hasUncommittedChanges(dir))) return false;
   await execGit(["-C", dir, "add", "--all", "--", "."]);
-  await execGit(
-    ["-C", dir, "commit", `--message=${message}`, "--"],
-    {
-      env: {
-        ...process.env,
-        GIT_EDITOR: "true",
-        GIT_TERMINAL_PROMPT: "0",
-      },
-    }
-  );
+  await execGit(["-C", dir, "commit", `--message=${message}`, "--"], {
+    env: {
+      ...process.env,
+      GIT_EDITOR: "true",
+      GIT_TERMINAL_PROMPT: "0",
+    },
+  });
   return true;
 }
 

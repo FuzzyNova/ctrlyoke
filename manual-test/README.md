@@ -75,12 +75,12 @@ When creating new files:
 
 ### Basic Format Tests
 
-| File                                 | Tests                                   | Duration |
-| ------------------------------------ | --------------------------------------- | -------- |
-| `simple-prompt-test.prompt.md`       | Markdown format, basic execution        | 5 sec    |
-| `yaml-format-test.ctrlyoke.yaml`     | YAML parsing, multi-line strings        | 5 sec    |
-| `.ctrlyoke/simple.prompt.md`         | Simple prompt in .ctrlyoke directory    | 5 sec    |
-| `.ctrlyoke/multi-step.ctrlyoke.json` | Multi-step with model switching         | 15 sec   |
+| File                                 | Tests                                | Duration |
+| ------------------------------------ | ------------------------------------ | -------- |
+| `simple-prompt-test.prompt.md`       | Markdown format, basic execution     | 5 sec    |
+| `yaml-format-test.ctrlyoke.yaml`     | YAML parsing, multi-line strings     | 5 sec    |
+| `.ctrlyoke/simple.prompt.md`         | Simple prompt in .ctrlyoke directory | 5 sec    |
+| `.ctrlyoke/multi-step.ctrlyoke.json` | Multi-step with model switching      | 15 sec   |
 
 ### Session Management Tests
 
@@ -120,8 +120,8 @@ dashboard before running — it is intentionally not hardcoded in the files) to
 confirm notifications, hooks, and MCP all resolve correctly from inside a
 worktree, not just the ordinary workspace.
 
-| File                                 | Tests                                              | Duration |
-| ------------------------------------- | --------------------------------------------------- | -------- |
+| File                                  | Tests                                                     | Duration |
+| ------------------------------------- | --------------------------------------------------------- | -------- |
 | `worktree-managed-test.ctrlyoke.yaml` | Managed worktree: setup, auto-commit, auto-merge, cleanup | 15 sec   |
 | `worktree-named-test.ctrlyoke.yaml`   | Named worktree: create-once setup, no auto-commit/merge   | 15 sec   |
 
@@ -373,15 +373,15 @@ per harness; no manual worktree/branch setup needed — ctrlyoke creates them)
 
 Located in `.ctrlyoke/scripts/`:
 
-| Script                   | Purpose                       | Returns        |
-| ------------------------ | ----------------------------- | -------------- |
-| `always_true.py`         | Always succeeds (pass test)   | `true`         |
-| `always_false.py`        | Always fails (retry test)     | `false`        |
-| `always_fails.py`        | Exhaustion tests              | `false`        |
-| `throws_error.py`        | Script crash/error            | Exit code 1    |
-| `timeout_script.py`      | Timeout handling (sleeps 20s) | Timeout        |
-| `check_counter.py`       | Validates counter equals 3    | `true`/`false` |
-| `check_counter_value.py` | Validates counter equals N    | `true`/`false` |
+| Script                   | Purpose                                                | Returns        |
+| ------------------------ | ------------------------------------------------------ | -------------- |
+| `always_true.py`         | Always succeeds (pass test)                            | `true`         |
+| `always_false.py`        | Always fails (retry test)                              | `false`        |
+| `always_fails.py`        | Exhaustion tests                                       | `false`        |
+| `throws_error.py`        | Script crash/error                                     | Exit code 1    |
+| `timeout_script.py`      | Timeout handling (sleeps 20s)                          | Timeout        |
+| `check_counter.py`       | Validates counter equals 3                             | `true`/`false` |
+| `check_counter_value.py` | Validates counter equals N                             | `true`/`false` |
 | `check_file_contains.py` | Validates a file (path + substring args) contains text | `true`/`false` |
 
 ---

@@ -57,6 +57,9 @@ suite("ClaudeCliProvider", () => {
     );
 
     const allowedToolsIndex = preparation.cliArgs.indexOf("--allowed-tools");
-    assert.strictEqual(preparation.cliArgs[allowedToolsIndex + 1], "mcp__ctrlyoke");
+    assert.strictEqual(
+      preparation.cliArgs[allowedToolsIndex + 1],
+      "mcp__ctrlyoke"
+    );
   });
 });

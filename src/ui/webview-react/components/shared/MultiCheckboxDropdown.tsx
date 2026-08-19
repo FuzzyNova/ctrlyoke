@@ -83,7 +83,11 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
     hidden: hiddenOptions,
   } = useHideableOptions(options, (o) => o.value, hiddenValues, namespace);
 
-  const rawPos = useDropdownPortalPosition(buttonRef, isOpen, dropdownMaxHeight);
+  const rawPos = useDropdownPortalPosition(
+    buttonRef,
+    isOpen,
+    dropdownMaxHeight
+  );
   const popupPos =
     rawPos && dropdownMinWidth
       ? (() => {

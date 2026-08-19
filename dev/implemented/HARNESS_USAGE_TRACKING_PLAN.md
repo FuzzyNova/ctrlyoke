@@ -234,7 +234,7 @@ Confirmed surfaces:
   progress; `/context` shows context-window token usage. The earlier
   `ai-credits` statusline item name is stale and must not be implemented.
 - `copilot --version` reports `1.0.78`. `copilot help billing
-  --output-format json` still returns the same human help text, and
+--output-format json` still returns the same human help text, and
   `copilot help statusline` is not a documented help topic. No JSON/JSONL
   statusline output, callback, or public quota schema was exposed by the
   installed CLI. The quota is therefore TUI text only for this integration;
@@ -700,13 +700,13 @@ Resolved in the Stage 9 closeout:
 1. **Copilot `/statusline quota ai-used` is TUI-only for this integration.**
    In installed Copilot CLI `1.0.78`, `copilot help billing` documents the
    current `quota` and `ai-used` item names, but `copilot help billing
-   --output-format json` remains human help text and `copilot help statusline`
+--output-format json` remains human help text and `copilot help statusline`
    is not a documented topic. No structured statusline surface was found.
    Do not parse ANSI/private TUI state or implement the stale `ai-credits`
    name. Use OTel-derived observed totals and the existing GitHub dashboard
    link.
 
-3. **Antigravity exposes no documented/stable quota field in the available
+2. **Antigravity exposes no documented/stable quota field in the available
    statusline surface.** `agy` `1.1.10` has no configured statusline command in
    the current user settings, so capturing a live payload would require
    changing global settings and starting a new session. No raw snapshot exists
@@ -716,7 +716,7 @@ Resolved in the Stage 9 closeout:
    Keep `AntigravityUsageProvider` observed-only, and never render missing
    quota as available capacity.
 
-4. **The provider schemas remain safe at implementation time.** Installed
+3. **The provider schemas remain safe at implementation time.** Installed
    versions are Claude Code `2.1.225`, Codex CLI `0.146.0`, and Copilot CLI
    `1.0.78`; Antigravity is `agy` `1.1.10`. Claude and Codex golden fixtures
    remain shape fixtures (their recorded metadata identifies older runs), while
@@ -735,9 +735,9 @@ Still open:
    **Recommendation:** do not add the user-level aggregate in the first
    implementation. It expands privacy, migration, and cross-process locking
    scope without helping the pre-launch quota warning.
-None of these questions blocks combined stages 1–7. The remaining workspace
-scope decision is intentionally deferred; the Stage 9 provider spikes are
-closed with safe fallbacks.
+   None of these questions blocks combined stages 1–7. The remaining workspace
+   scope decision is intentionally deferred; the Stage 9 provider spikes are
+   closed with safe fallbacks.
 
 ---
 

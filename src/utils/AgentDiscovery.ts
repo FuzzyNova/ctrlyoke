@@ -104,9 +104,7 @@ export class AgentDiscovery {
    * @param workspaceFolder Current workspace folder (optional)
    * @returns Array of discovered agents
    */
-  static async discoverAgents(
-    workspaceRoot?: string
-  ): Promise<AgentInfo[]> {
+  static async discoverAgents(workspaceRoot?: string): Promise<AgentInfo[]> {
     const agents: AgentInfo[] = [];
 
     try {

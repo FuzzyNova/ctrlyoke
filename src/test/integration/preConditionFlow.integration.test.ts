@@ -241,10 +241,7 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
     );
 
     const eventsPath = (
-      await findFiles(
-        WorkflowPaths.runsRoot(workspace),
-        "events.jsonl"
-      )
+      await findFiles(WorkflowPaths.runsRoot(workspace), "events.jsonl")
     )[0];
     assert.ok(eventsPath, "the run must persist a timeline");
     const cliEntries = (await fs.readFile(eventsPath, "utf8"))
@@ -326,10 +323,7 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
 
     assert.deepStrictEqual(harness.integration.sentPrompts, ["step 1"]);
     const eventsPath = (
-      await findFiles(
-        WorkflowPaths.runsRoot(workspace),
-        "events.jsonl"
-      )
+      await findFiles(WorkflowPaths.runsRoot(workspace), "events.jsonl")
     )[0];
     const warning = (await fs.readFile(eventsPath, "utf8"))
       .trim()

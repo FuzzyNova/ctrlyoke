@@ -161,7 +161,7 @@ measure it in a controlled session rather than trusting this pair.**
 
 All three items below were closed in the same-day follow-up — see "Follow-Up: Log
 Cleanup and Deferred Items" — but the original reasoning is kept here since it explains
-*why* each fix takes the shape it does.
+_why_ each fix takes the shape it does.
 
 - ~~**`Decoration` gap rows are not counted.**~~ Fixed. Each collapsed region in a diff
   renders one row that `estimateRenderedVisualRows` did not model. It pushed estimates
@@ -178,8 +178,8 @@ Cleanup and Deferred Items" — but the original reasoning is kept here since it
   eliminated. `hasRecentUserScrollInput` still mutes corrections for
   `userScrollInputGraceMs` after the most recent real scroll signal, and that tradeoff
   (never fight an active user gesture) is intentional and unchanged. What was fixed is
-  the repair's own timing: it used to reschedule a full grace window from *whenever the
-  muted attempt happened*, so a reflow landing late in the window could wait up to 2x
+  the repair's own timing: it used to reschedule a full grace window from _whenever the
+  muted attempt happened_, so a reflow landing late in the window could wait up to 2x
   the grace period. It now targets the window's real expiry, capping the uncorrected
   paint at one grace period.
 
@@ -228,10 +228,10 @@ above (all three "Known Limits" items, treating the "two deferred" phrasing loos
   almost exactly.
 - **Gap-expansion viewport pin.** `resolveDiffGapExpansionScrollTarget`
   (`utils/outputAutoscroll.ts`) re-points the anchor lock's committed `viewportOffsetPx`
-  by the diff row's measured height delta *before* the lock's own layout effect
+  by the diff row's measured height delta _before_ the lock's own layout effect
   resolves, so the lock itself performs the compensating `scrollTop` write on its next
   resolve — no second writer touches `scrollTop`, preserving the pass's core invariant.
-  Wired in `OutputSection.tsx` as a `useLayoutEffect` registered *before* the
+  Wired in `OutputSection.tsx` as a `useLayoutEffect` registered _before_ the
   `useOutputScrollTarget()` call, so React runs it first within the same commit.
 - **Decoration gap rows counted.** `diffGapDecorationHeight` (`outputLineMetrics.ts`)
   and `countCollapsedDiffGaps` (`rdvAdapter.ts`) add each still-collapsed gap bar's

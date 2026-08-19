@@ -44,9 +44,7 @@ class RecordingMemento implements vscode.Memento {
   get<T>(key: string): T | undefined;
   get<T>(key: string, defaultValue: T): T;
   get<T>(key: string, defaultValue?: T): T | undefined {
-    return this.values.has(key)
-      ? (this.values.get(key) as T)
-      : defaultValue;
+    return this.values.has(key) ? (this.values.get(key) as T) : defaultValue;
   }
 
   async update(key: string, value: unknown): Promise<void> {
@@ -267,7 +265,9 @@ suite("WorkflowSerializer", () => {
           value: async (options: vscode.OpenDialogOptions) => {
             dialogOptions.push(options);
             callCount += 1;
-            return callCount === 1 ? [vscode.Uri.file(selectedFile)] : undefined;
+            return callCount === 1
+              ? [vscode.Uri.file(selectedFile)]
+              : undefined;
           },
           configurable: true,
         });
@@ -683,7 +683,10 @@ suite("WorkflowSerializer", () => {
         const references = parseAllFileReferences(loaded.steps[1].prompt);
         const resolver = new PromptFileResolver({ workspaceRoot });
         for (const reference of references) {
-          const resolution = await resolver.resolvePath(reference.path, loadedPath);
+          const resolution = await resolver.resolvePath(
+            reference.path,
+            loadedPath
+          );
           assert.strictEqual(
             resolution.status,
             "resolved",
@@ -1278,11 +1281,7 @@ suite("WorkflowSerializer", () => {
         const message = messages.pop();
         assert.strictEqual(
           message.workflows[0].runDirectory,
-          WorkflowPaths.runDir(
-            workspaceRoot,
-            lineage.workflowKey,
-            latestRunRef
-          )
+          WorkflowPaths.runDir(workspaceRoot, lineage.workflowKey, latestRunRef)
         );
         assert.deepStrictEqual(message.workflows[0].runNav, {
           primaryAddress: {

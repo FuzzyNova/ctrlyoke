@@ -123,14 +123,11 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       queue.loadPrompts({ steps: [{ prompt: "inline" }] });
       await queue.updatePrompt(0, { prompt: "./current.prompt.md" });
 
-      await makeExecutor(queue).execute(
-        integration,
-        {
-          ...makeContext(integration),
-          workspaceFolderPath: root,
-          sourceDefinitionPath,
-        }
-      );
+      await makeExecutor(queue).execute(integration, {
+        ...makeContext(integration),
+        workspaceFolderPath: root,
+        sourceDefinitionPath,
+      });
 
       assert.deepStrictEqual(integration.sentPrompts, ["first contents"]);
       assert.strictEqual(
@@ -142,16 +139,15 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       const secondQueue = new PromptQueue();
       await fs.writeFile(promptFilePath, "updated contents", "utf8");
       secondQueue.loadPrompts({ steps: [{ prompt: "./current.prompt.md" }] });
-      await makeExecutor(secondQueue).execute(
-        secondIntegration,
-        {
-          ...makeContext(secondIntegration),
-          workspaceFolderPath: root,
-          sourceDefinitionPath,
-        }
-      );
+      await makeExecutor(secondQueue).execute(secondIntegration, {
+        ...makeContext(secondIntegration),
+        workspaceFolderPath: root,
+        sourceDefinitionPath,
+      });
 
-      assert.deepStrictEqual(secondIntegration.sentPrompts, ["updated contents"]);
+      assert.deepStrictEqual(secondIntegration.sentPrompts, [
+        "updated contents",
+      ]);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
@@ -174,14 +170,11 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         steps: [{ prompt: "./{{name}}.prompt.md" }],
       });
 
-      await makeExecutor(queue).execute(
-        integration,
-        {
-          ...makeContext(integration),
-          workspaceFolderPath: root,
-          sourceDefinitionPath: path.join(root, "workflow.ctrlyoke.json"),
-        }
-      );
+      await makeExecutor(queue).execute(integration, {
+        ...makeContext(integration),
+        workspaceFolderPath: root,
+        sourceDefinitionPath: path.join(root, "workflow.ctrlyoke.json"),
+      });
 
       assert.deepStrictEqual(integration.sentPrompts, ["variable contents"]);
       assert.strictEqual(
@@ -220,14 +213,11 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         queue.loadPrompts({ steps: [{ prompt: `./${currentCase.name}` }] });
 
         await assert.rejects(
-          makeExecutor(queue).execute(
-            integration,
-            {
-              ...makeContext(integration),
-              workspaceFolderPath: root,
-              sourceDefinitionPath,
-            }
-          ),
+          makeExecutor(queue).execute(integration, {
+            ...makeContext(integration),
+            workspaceFolderPath: root,
+            sourceDefinitionPath,
+          }),
           currentCase.error
         );
         assert.deepStrictEqual(integration.sentPrompts, []);
@@ -888,7 +878,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
     const worktreeRoot = path.join(os.tmpdir(), "ctrlyoke-worktree-root");
     const context = makeContext(integration);
-    context.workspaceFolderPath = path.join(os.tmpdir(), "ctrlyoke-source-root");
+    context.workspaceFolderPath = path.join(
+      os.tmpdir(),
+      "ctrlyoke-source-root"
+    );
     context.executionWorkspace = {
       ...context.executionWorkspace,
       executionRoot: worktreeRoot,

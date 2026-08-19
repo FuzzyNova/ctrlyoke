@@ -398,15 +398,15 @@ Two constraints this feature must respect:
 
 ## 7. Phasing
 
-| Phase | Scope                                                                                   |
-| ----- | --------------------------------------------------------------------------------------- |
+| Phase | Scope                                                                                        |
+| ----- | -------------------------------------------------------------------------------------------- |
 | 0     | None — the §6 tracking question is settled in `dev/implemented/WORKFLOW_PORTABILITY_PLAN.md` |
-| 1     | Shared resolver + preserve refs + just-in-time execution/preview resolution (§4.4)      |
-| 2     | Gitignore toggle → icon-only; prune `IconToggleButton` label machinery; update its test |
-| 3     | Message pair + writer + button (convert / empty-draft / open states)                    |
-| 4     | Empty-file UX (§3.1a): validation `isEmpty`, badge, addressed revalidation              |
-| 5     | Delete `createPromptFile`, `createDraftPrompt`, dead `NEW_PROMPT` route; update docs    |
-| 6     | (Later) Inline-back-into-step reverse action                                            |
+| 1     | Shared resolver + preserve refs + just-in-time execution/preview resolution (§4.4)           |
+| 2     | Gitignore toggle → icon-only; prune `IconToggleButton` label machinery; update its test      |
+| 3     | Message pair + writer + button (convert / empty-draft / open states)                         |
+| 4     | Empty-file UX (§3.1a): validation `isEmpty`, badge, addressed revalidation                   |
+| 5     | Delete `createPromptFile`, `createDraftPrompt`, dead `NEW_PROMPT` route; update docs         |
+| 6     | (Later) Inline-back-into-step reverse action                                                 |
 
 Phases 1 and 2 can land first. Phase 1 is a hard prerequisite for both portability bundling and this
 plan's phase 3: without just-in-time resolution, a converted dashboard step executes the path

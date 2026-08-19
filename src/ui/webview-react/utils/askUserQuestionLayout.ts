@@ -1,4 +1,7 @@
-import type { AskUserQuestionData, AskUserQuestionEntry } from "../types/cliEvents";
+import type {
+  AskUserQuestionData,
+  AskUserQuestionEntry,
+} from "../types/cliEvents";
 
 /**
  * Shared text layout for one AskUserQuestion question, used by both

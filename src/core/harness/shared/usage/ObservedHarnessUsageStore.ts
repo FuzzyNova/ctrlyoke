@@ -382,10 +382,7 @@ function isValidObservedTokens(value: unknown): value is HarnessObservedTokens {
   ]) {
     if (key in value && !isFiniteNonNegative(value[key])) return false;
   }
-  if (
-    "costPartial" in value &&
-    typeof value.costPartial !== "boolean"
-  ) {
+  if ("costPartial" in value && typeof value.costPartial !== "boolean") {
     return false;
   }
   if ("partial" in value && typeof value.partial !== "boolean") {
@@ -406,9 +403,7 @@ function isValidObservedTokens(value: unknown): value is HarnessObservedTokens {
   return true;
 }
 
-function validateBucketsForRollup(
-  buckets: ObservedHarnessUsageBuckets
-): void {
+function validateBucketsForRollup(buckets: ObservedHarnessUsageBuckets): void {
   for (const period of Object.values(HARNESS_OBSERVED_PERIODS)) {
     for (const [bucketKey, harnesses] of Object.entries(buckets[period])) {
       if (!isLocalDayKey(bucketKey) || !isRecord(harnesses)) {

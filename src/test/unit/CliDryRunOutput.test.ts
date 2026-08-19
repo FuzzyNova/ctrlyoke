@@ -155,8 +155,7 @@ suite("CLI dry-run output", () => {
             tokenEstimate: 0,
             chunkIndex: 0,
             contentHash: null,
-            truncationReason:
-              PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE,
+            truncationReason: PREVIEW_TRUNCATION_REASONS.NOT_YET_AVAILABLE,
           },
         ],
         totalByteCount: 0,
@@ -180,8 +179,12 @@ suite("CLI dry-run output", () => {
           ]
         )
       );
-      assert.ok(!delivery.includes("the harness receives the provider reference"));
-      assert.ok(!delivery.includes("the full planned payload remains available"));
+      assert.ok(
+        !delivery.includes("the harness receives the provider reference")
+      );
+      assert.ok(
+        !delivery.includes("the full planned payload remains available")
+      );
       assert.ok(!delivery.includes("\u001b[33m"));
       assert.ok(lines.some((line) => line.includes("Prior context")));
     } finally {
@@ -210,7 +213,9 @@ suite("CLI dry-run output", () => {
     };
 
     const lines: string[] = [];
-    CliTerminalFormatter.renderExecutionPreview(preview, (line) => lines.push(line));
+    CliTerminalFormatter.renderExecutionPreview(preview, (line) =>
+      lines.push(line)
+    );
 
     assert.ok(
       lines.some((line) =>

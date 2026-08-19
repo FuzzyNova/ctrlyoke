@@ -945,12 +945,15 @@ export class WebviewMessageRouter {
       );
     });
 
-    table.set(MESSAGE_TYPES.REQUEST_MCP_CONFIG_PREVIEW, async (message, ctx) => {
-      await this.mcpManager.handleRequestMcpConfigPreview(
-        ctx,
-        message as RequestMcpConfigPreviewMessage
-      );
-    });
+    table.set(
+      MESSAGE_TYPES.REQUEST_MCP_CONFIG_PREVIEW,
+      async (message, ctx) => {
+        await this.mcpManager.handleRequestMcpConfigPreview(
+          ctx,
+          message as RequestMcpConfigPreviewMessage
+        );
+      }
+    );
   }
 
   private registerSecretRegistry(table: DispatchTable): void {
@@ -1571,46 +1574,51 @@ export class WebviewMessageRouter {
         );
       }
     );
-    table.set(MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION, async (message, ctx) => {
-      const orchestrator = this.getOrchestrator();
-      if (!orchestrator) return;
-      const target = message.worktreePath ?? message.branchName ?? "";
-      Log.info(
-        `[WorktreeManagement] ${message.action} requested for "${target}"`
-      );
-      let success = true;
-      let resultMessage: string;
-      try {
-        await orchestrator.applyWorktreeManagementAction({
-          action: message.action,
-          worktreePath: message.worktreePath,
-          branchName: message.branchName,
-          confirmed: message.confirmed,
-        });
-        resultMessage = describeWorktreeActionSuccess(message.action, target);
-        Log.info(`[WorktreeManagement] ${message.action} succeeded: ${resultMessage}`);
-        void vscode.window.showInformationMessage(resultMessage);
-      } catch (error) {
-        // Without this, a rejected destructive action (e.g. a stale admin
-        // entry that still needs `git worktree repair`) vanished into the
-        // log with no feedback in the panel — the button looked like a no-op.
-        success = false;
-        resultMessage = `Worktree action failed: ${getErrorMessage(error)}`;
-        Log.error(
-          `[WorktreeManagement] ${message.action} failed for "${target}": ${getErrorMessage(error)}`
+    table.set(
+      MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION,
+      async (message, ctx) => {
+        const orchestrator = this.getOrchestrator();
+        if (!orchestrator) return;
+        const target = message.worktreePath ?? message.branchName ?? "";
+        Log.info(
+          `[WorktreeManagement] ${message.action} requested for "${target}"`
         );
-        void vscode.window.showErrorMessage(resultMessage);
+        let success = true;
+        let resultMessage: string;
+        try {
+          await orchestrator.applyWorktreeManagementAction({
+            action: message.action,
+            worktreePath: message.worktreePath,
+            branchName: message.branchName,
+            confirmed: message.confirmed,
+          });
+          resultMessage = describeWorktreeActionSuccess(message.action, target);
+          Log.info(
+            `[WorktreeManagement] ${message.action} succeeded: ${resultMessage}`
+          );
+          void vscode.window.showInformationMessage(resultMessage);
+        } catch (error) {
+          // Without this, a rejected destructive action (e.g. a stale admin
+          // entry that still needs `git worktree repair`) vanished into the
+          // log with no feedback in the panel — the button looked like a no-op.
+          success = false;
+          resultMessage = `Worktree action failed: ${getErrorMessage(error)}`;
+          Log.error(
+            `[WorktreeManagement] ${message.action} failed for "${target}": ${getErrorMessage(error)}`
+          );
+          void vscode.window.showErrorMessage(resultMessage);
+        }
+        if (message.requestId) {
+          ctx.emit({
+            type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT,
+            requestId: message.requestId,
+            success,
+            message: resultMessage,
+          });
+        }
+        await sendWorktreeManagementState(true, ctx);
       }
-      if (message.requestId) {
-        ctx.emit({
-          type: MESSAGE_TYPES.WORKTREE_MANAGEMENT_ACTION_RESULT,
-          requestId: message.requestId,
-          success,
-          message: resultMessage,
-        });
-      }
-      await sendWorktreeManagementState(true, ctx);
-    });
+    );
     table.set(MESSAGE_TYPES.SYNC_NAMED_WORKTREE, async (message, ctx) => {
       const orchestrator = this.getOrchestrator();
       if (!orchestrator) return;
@@ -1637,7 +1645,8 @@ export class WebviewMessageRouter {
           describe(`"${result.sourceBranch}":`, result.intoSource),
           describe(`"${result.worktreeBranch}":`, result.intoWorktree),
         ].join(" — ");
-        success = succeeded(result.intoSource) && succeeded(result.intoWorktree);
+        success =
+          succeeded(result.intoSource) && succeeded(result.intoWorktree);
         resultMessage = success
           ? `Worktree synced. ${summary}`
           : `Worktree sync finished with issues. ${summary}`;
@@ -1645,7 +1654,9 @@ export class WebviewMessageRouter {
           Log.info(`[WorktreeManagement] sync succeeded: ${summary}`);
           void vscode.window.showInformationMessage(resultMessage);
         } else {
-          Log.warn(`[WorktreeManagement] sync finished with issues: ${summary}`);
+          Log.warn(
+            `[WorktreeManagement] sync finished with issues: ${summary}`
+          );
           void vscode.window.showWarningMessage(resultMessage);
         }
       } catch (error) {
@@ -1667,9 +1678,12 @@ export class WebviewMessageRouter {
       await sendWorktreeManagementState(true, ctx);
     });
     table.set(MESSAGE_TYPES.OPEN_WORKTREE_OWNER, async (message) => {
-      await vscode.commands.executeCommand(VSCODE_COMMANDS.OPEN_WORKTREE_OWNER, {
-        stateRoot: message.stateRoot,
-      });
+      await vscode.commands.executeCommand(
+        VSCODE_COMMANDS.OPEN_WORKTREE_OWNER,
+        {
+          stateRoot: message.stateRoot,
+        }
+      );
     });
 
     table.set(MESSAGE_TYPES.REQUEST_HARNESS_USAGE, (_message, ctx) => {

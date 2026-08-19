@@ -2,9 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
-import {
-  projectWorktreeRuntime,
-} from "../../types/CtrlYokeTypes";
+import { projectWorktreeRuntime } from "../../types/CtrlYokeTypes";
 import type {
   RunRef,
   WorkflowKey,
@@ -902,7 +900,9 @@ export class OutputHistoryManager {
           worktreeNotice?: string;
         };
       };
-      enriched.worktree = projectWorktreeRuntime(workingFile._runtime?.worktree);
+      enriched.worktree = projectWorktreeRuntime(
+        workingFile._runtime?.worktree
+      );
       enriched.worktreeNotice = workingFile._runtime?.worktreeNotice;
     } catch {
       // Older or partially recovered runs may not have a working file. The

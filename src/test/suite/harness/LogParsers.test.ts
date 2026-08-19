@@ -163,10 +163,8 @@ suite("ClaudeLogParser", () => {
       const logOutput = parser.extractResponse(sessionLog);
       const normalize = (output: UniversalCliOutput) =>
         JSON.parse(
-        JSON.stringify(output, (key, value) =>
-            key === "timestamp" || key === "totalConfidence"
-              ? undefined
-              : value
+          JSON.stringify(output, (key, value) =>
+            key === "timestamp" || key === "totalConfidence" ? undefined : value
           )
         );
 
@@ -366,10 +364,7 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(response.metadata.usage!.inputTokens, 80);
       assert.strictEqual(response.metadata.usage!.outputTokens, 35);
       assert.strictEqual(response.metadata.usage!.totalTokens, 115);
-      assert.strictEqual(
-        response.metadata.usage!.contextWindowUsedTokens,
-        30
-      );
+      assert.strictEqual(response.metadata.usage!.contextWindowUsedTokens, 30);
       assert.strictEqual(
         response.metadata.usage!.totalConfidence,
         TOKEN_TOTAL_CONFIDENCE.ACCUMULATED
@@ -745,7 +740,11 @@ suite("ClaudeLogParser", () => {
           type: "user",
           message: {
             content: [
-              { type: "tool_result", tool_use_id: "toolu_free", content: "..." },
+              {
+                type: "tool_result",
+                tool_use_id: "toolu_free",
+                content: "...",
+              },
             ],
           },
           toolUseResult: {
@@ -809,8 +808,7 @@ suite("ClaudeLogParser", () => {
                 type: "tool_result",
                 tool_use_id: "toolu_2",
                 is_error: true,
-                content:
-                  "The user doesn't want to proceed with this tool use.",
+                content: "The user doesn't want to proceed with this tool use.",
               },
             ],
           },
@@ -4079,17 +4077,17 @@ suite("OpenCodeLogParser", () => {
       ] as unknown as BaseCliEvent[]);
 
       assert.strictEqual(response.metadata.harness, HARNESS_IDS.OPENCODE_CLI);
-      assert.strictEqual(response.metadata.model, "anthropic/claude-sonnet-4-6");
+      assert.strictEqual(
+        response.metadata.model,
+        "anthropic/claude-sonnet-4-6"
+      );
       assert.strictEqual(response.metadata.usage?.inputTokens, 300);
       assert.strictEqual(response.metadata.usage?.outputTokens, 30);
       assert.strictEqual(response.metadata.usage?.totalTokens, 330);
       assert.strictEqual(response.metadata.usage?.reasoningOutputTokens, 10);
       assert.strictEqual(response.metadata.usage?.cachedInputTokens, 80);
       assert.strictEqual(response.metadata.usage?.cacheCreatedTokens, 10);
-      assert.strictEqual(
-        response.metadata.usage?.contextWindowUsedTokens,
-        230
-      );
+      assert.strictEqual(response.metadata.usage?.contextWindowUsedTokens, 230);
       assert.strictEqual(
         response.metadata.usage?.totalConfidence,
         TOKEN_TOTAL_CONFIDENCE.ACCUMULATED
@@ -4113,7 +4111,8 @@ suite("OpenCodeLogParser", () => {
                 options: [
                   {
                     label: "Dog",
-                    description: "Loyal, playful companion.\n\n   / \\__\n  (    @\\___",
+                    description:
+                      "Loyal, playful companion.\n\n   / \\__\n  (    @\\___",
                   },
                   {
                     label: "Cat",
@@ -4145,17 +4144,17 @@ suite("OpenCodeLogParser", () => {
       const data = response.events[0].data as AskUserQuestionData;
       assert.strictEqual(data.toolCallId, "call_question_1");
       assert.strictEqual(data.status, OPERATION_STATUS.COMPLETED);
-      assert.strictEqual(data.questions[0].question, "What's your favorite animal?");
+      assert.strictEqual(
+        data.questions[0].question,
+        "What's your favorite animal?"
+      );
       assert.deepStrictEqual(data.questions[0].options[0], {
         label: "Dog",
         description: "Loyal, playful companion.",
         preview: "   / \\__\n  (    @\\___",
       });
       assert.strictEqual(data.questions[0].answer, "Cat");
-      assert.strictEqual(
-        data.questions[0].answerPreview,
-        " /\\_/\\\n( o.o )"
-      );
+      assert.strictEqual(data.questions[0].answerPreview, " /\\_/\\\n( o.o )");
     });
 
     test("uses the same question mapping for streaming events", () => {

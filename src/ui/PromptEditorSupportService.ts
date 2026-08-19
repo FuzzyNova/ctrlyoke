@@ -611,13 +611,7 @@ export class PromptEditorSupportService {
     ctx: WebviewClientContext,
     references: Array<{
       id: string;
-      type:
-        | "file"
-        | "directory"
-        | "lineRange"
-        | "symbol"
-        | "git"
-        | "secret";
+      type: "file" | "directory" | "lineRange" | "symbol" | "git" | "secret";
       path?: string;
       gitRef?: string;
       lineStart?: string;
@@ -660,13 +654,7 @@ export class PromptEditorSupportService {
 
   private async validateContextReference(
     reference: {
-      type:
-        | "file"
-        | "directory"
-        | "lineRange"
-        | "symbol"
-        | "git"
-        | "secret";
+      type: "file" | "directory" | "lineRange" | "symbol" | "git" | "secret";
       path?: string;
       gitRef?: string;
       lineStart?: string;

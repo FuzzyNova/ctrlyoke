@@ -401,8 +401,8 @@ export function ServerSection({
               <p className="mt-1 flex items-baseline gap-1 text-xs text-error-fg">
                 <i className="codicon codicon-warning shrink-0 translate-y-px" />
                 <span>
-                  Port {portFallbackForCurrentSetting.requestedPort} was
-                  already in use by another process — ctrlyoke started on port{" "}
+                  Port {portFallbackForCurrentSetting.requestedPort} was already
+                  in use by another process — ctrlyoke started on port{" "}
                   {portFallbackForCurrentSetting.actualPort} instead. Restart
                   the server to try binding to port{" "}
                   {portFallbackForCurrentSetting.requestedPort} again.

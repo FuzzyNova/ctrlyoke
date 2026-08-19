@@ -4,18 +4,18 @@
 > failed-setup defects below were traced, fixed, or deliberately dropped after
 > the five implementation steps described here.
 >
-> | # | Bug | Severity | Status |
-> | - | --- | -------- | ------ |
-> | 1 | Append after a landed run gets an empty checkout with setup skipped | High — agent starts in a tree that does not build | fixed in step 2 |
-> | 2 | No-change append on a landed branch blocks finalization | High — normal conversational turn reports a bogus identity error | fixed |
-> | 3 | `changedFileCount` diffs from the original base | Low — misreported count | fixed |
-> | 4 | "Retry Setup" action is unreachable (zero callers) | Medium — failed setup has no recovery path | dropped — re-run is the recovery gesture |
-> | 5 | Retry Setup would still no-op for managed once wired | Medium — blocks the fix for 4 | dropped — no action is wired |
-> | 6 | Named mode silently runs in a half-provisioned worktree after a failed setup | High — no error, no setup, no warning | fixed |
+> | #   | Bug                                                                          | Severity                                                         | Status                                   |
+> | --- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------- |
+> | 1   | Append after a landed run gets an empty checkout with setup skipped          | High — agent starts in a tree that does not build                | fixed in step 2                          |
+> | 2   | No-change append on a landed branch blocks finalization                      | High — normal conversational turn reports a bogus identity error | fixed                                    |
+> | 3   | `changedFileCount` diffs from the original base                              | Low — misreported count                                          | fixed                                    |
+> | 4   | "Retry Setup" action is unreachable (zero callers)                           | Medium — failed setup has no recovery path                       | dropped — re-run is the recovery gesture |
+> | 5   | Retry Setup would still no-op for managed once wired                         | Medium — blocks the fix for 4                                    | dropped — no action is wired             |
+> | 6   | Named mode silently runs in a half-provisioned worktree after a failed setup | High — no error, no setup, no warning                            | fixed                                    |
 >
 > Bugs 1–3 are the "follow up on a landed managed run" case. Bugs 4–6 are the
-> separate "recover from a failed setup" case; see *Recovery: re-run, not a
-> button* below for why 4 and 5 were dropped in favor of fixing 6 and cleaning
+> separate "recover from a failed setup" case; see _Recovery: re-run, not a
+> button_ below for why 4 and 5 were dropped in favor of fixing 6 and cleaning
 > up failed managed attempts.
 >
 > Only bites workflows that opted into managed mode —
@@ -29,7 +29,7 @@ reuses the same `workflowKey` and `runRef`. Meanwhile terminal settlement of a
 managed run clears both `activeWorktree` and `executionLease`
 (`WorkflowInstance.ts:4017-4019`), so `prepareExecutionWorktree`'s early return
 (`:3623`) does not apply and the append re-enters `ensureManagedWorktree` with
-the *same run identity*.
+the _same run identity_.
 
 Everything downstream then hinges on one line:
 
@@ -49,7 +49,7 @@ the append targets the same branch and the same path either way.
 
 `removeAfterLanding` keeps the ownership record after removing the directory,
 writing `directoryState: "removed"`, `branchState: "present"`
-(`WorktreeManager.ts:1023-1030`). The record is unlinked *only* on the
+(`WorktreeManager.ts:1023-1030`). The record is unlinked _only_ on the
 no-change-plus-branch-deleted path (`:1045-1051`).
 
 So after a run that landed changes, an append resolves:
@@ -88,14 +88,14 @@ if (!changed) {
 
 `validateManagedCheckoutIdentity` passes (branch tip still equals
 `lastVerifiedBranchTip`, `:888`), so the guard that fires is the `!changed` one —
-which exists to catch a branch that moved *outside* ctrlyoke. Here it fires on a
+which exists to catch a branch that moved _outside_ ctrlyoke. Here it fires on a
 branch ctrlyoke itself landed one turn earlier.
 
 Result: finalization is `blocked`, the directory is kept, the run reports a
 misleading identity error. This is the ordinary shape of a conversational
 planning turn that writes no files.
 
-**Fix direction:** the no-change comparison must be against the run's *current*
+**Fix direction:** the no-change comparison must be against the run's _current_
 landed tip, not its original base — compare `committedHead` to
 `record.finalBranchTip ?? record.baseCommit`. Keep `baseCommit` as the review
 base for the branch as a whole; it should not double as the per-attempt
@@ -147,7 +147,7 @@ after pending or running leaves a state that the next Run re-provisions.
 **A newly created checkout always runs setup, whatever the record says**
 (review-pass fix). Named worktree paths are derived deterministically from the
 branch (`createWorktreeDirectoryName`, `kind: "named"`), so a worktree removed
-and later recreated lands at the *same* path and inherits the previous
+and later recreated lands at the _same_ path and inherits the previous
 checkout's record. Keying provisioning state to the directory therefore needs
 `origin === "created"` to override a surviving `succeeded` record; without it a
 stale record silently suppressed setup on an empty new checkout — Bug 1's exact
@@ -251,13 +251,13 @@ sub-paragraph at `WorkflowPropertiesPanel.tsx:1620` and `:1637-1640`:
 
 Surfaces to update:
 
-| Surface                                                  | What                                                        |
-| -------------------------------------------------------- | ------------------------------------------------------------ |
-| `DashboardConstants.ts`                                  | the two new help constants                                  |
-| `WorkflowPropertiesPanel.tsx:1517`, `:1620`, `:1637-1640` | consume them; drop the duplicated keep sub-paragraph        |
-| `DefaultsHarnessPage.tsx`                                | same text on the `defaults.worktree` rows                   |
+| Surface                                                   | What                                                         |
+| --------------------------------------------------------- | ------------------------------------------------------------ |
+| `DashboardConstants.ts`                                   | the two new help constants                                   |
+| `WorkflowPropertiesPanel.tsx:1517`, `:1620`, `:1637-1640` | consume them; drop the duplicated keep sub-paragraph         |
+| `DefaultsHarnessPage.tsx`                                 | same text on the `defaults.worktree` rows                    |
 | `schemas/workflow-schema.json:226`, `:238`, `:251`        | branch-object and `keep` descriptions (YAML authoring hover) |
-| `schemas/settings-schema.json:293`, `:300`, `:318`        | the settings-side equivalents                               |
+| `schemas/settings-schema.json:293`, `:300`, `:318`        | the settings-side equivalents                                |
 
 Correction (2026-08-14): the `mode` properties in `workflow-schema.json` are bare
 `const` values with **no** `description` field (`:229-232`, `:254-257`). The
@@ -267,7 +267,7 @@ that is what the new copy replaces there. `settings-schema.json:298` does have a
 real `mode` description.
 
 `settings/WorktreesSection.tsx` was listed here in error: it carries only the
-worktree *root directory* setting, with no mode or `keep` row, so it was
+worktree _root directory_ setting, with no mode or `keep` row, so it was
 correctly left alone.
 
 The JSON schemas cannot import the TS constant, so their descriptions stay a
@@ -276,19 +276,19 @@ serves the UI. Regenerate `schemas/workflow-schema.yaml` via
 `npm run generate-schema` after editing the JSON.
 
 **Sequencing:** this copy must land **with** the Bug 1 fix, not before it. Today
-setup does *not* re-run on append — that is Bug 1 — so shipping the text first
+setup does _not_ re-run on append — that is Bug 1 — so shipping the text first
 would document behavior the code does not have.
 
 ---
 
 ## Interaction with the two failure modes
 
-Which bug an append hits depends on whether the *previous* turn wrote files:
+Which bug an append hits depends on whether the _previous_ turn wrote files:
 
-| Previous turn | Record after settle | Append `origin` | Setup | Outcome                                        |
-| ------------- | -------------------- | --------------- | ----- | ---------------------------------------------- |
-| landed        | kept                 | `recovered`     | runs  | fixed: recreated checkout is provisioned      |
-| no changes    | unlinked             | `created`       | runs  | new branch + directory; setup re-runs each time |
+| Previous turn | Record after settle | Append `origin` | Setup | Outcome                                         |
+| ------------- | ------------------- | --------------- | ----- | ----------------------------------------------- |
+| landed        | kept                | `recovered`     | runs  | fixed: recreated checkout is provisioned        |
+| no changes    | unlinked            | `created`       | runs  | new branch + directory; setup re-runs each time |
 
 The second row is the "setup fires on every append" case. The first is the
 inverse and more damaging. A spec-design conversation alternates between the two
@@ -310,19 +310,19 @@ append by design, as specified above.
 Five steps, in dependency order. Each lands with tests and its own commit, and
 updates this document's status table as it goes.
 
-| Step | Scope | Bugs | Status |
-| ---- | ----- | ---- | ------ |
-| 1 | Settlement watermark in `completeManagedRun` | 2, 3 | complete |
-| 2 | Re-provision managed worktrees whose directory was recreated | 1 | complete |
-| 3 | `WORKTREE_MODE_HELP_TEXT` / `WORKTREE_KEEP_HELP_TEXT` + schema copy | — | complete |
-| 4 | Durable per-worktree named setup state; delete Retry Setup | 6, 4, 5 | complete |
-| 5 | Clean up blocked managed attempts so they stop accumulating | — | complete |
+| Step | Scope                                                               | Bugs    | Status   |
+| ---- | ------------------------------------------------------------------- | ------- | -------- |
+| 1    | Settlement watermark in `completeManagedRun`                        | 2, 3    | complete |
+| 2    | Re-provision managed worktrees whose directory was recreated        | 1       | complete |
+| 3    | `WORKTREE_MODE_HELP_TEXT` / `WORKTREE_KEEP_HELP_TEXT` + schema copy | —       | complete |
+| 4    | Durable per-worktree named setup state; delete Retry Setup          | 6, 4, 5 | complete |
+| 5    | Clean up blocked managed attempts so they stop accumulating         | —       | complete |
 
 Sequencing constraints that are not arbitrary:
 
 - Step 3 must not land before step 2. The copy describes setup re-running on
   append, which is only true once Bug 1 is fixed.
-- Step 4 must delete `retrySetup` only *after* the same step makes a failed
+- Step 4 must delete `retrySetup` only _after_ the same step makes a failed
   setup re-run automatically; deleting first would leave named mode with no
   recovery path at all.
 

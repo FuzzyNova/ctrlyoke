@@ -117,14 +117,14 @@ materially different from an unavailable convenience feature.
 Treat granular allow/deny support as follows until behavioral verification says
 otherwise:
 
-| Harness         | Permission mode                             | Allowed/denied lists              | Current disposition                                                                          |
-| --------------- | ------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------- |
-| Copilot CLI     | Supported                                   | Supported                         | Retain and integration-test                                                                  |
-| Claude CLI      | Supported                                   | Supported through translation     | Retain and integration-test                                                                  |
-| Qwen Code       | Supported                                   | Supported inline                  | Retain canonical inline mapping; re-verify the pinned fixture on CLI upgrade                 |
-| OpenCode        | Supported                                   | Supported inline                  | Retain collision-safe inline mapping; re-verify the pinned fixture on CLI upgrade            |
+| Harness         | Permission mode                             | Allowed/denied lists              | Current disposition                                                                                      |
+| --------------- | ------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Copilot CLI     | Supported                                   | Supported                         | Retain and integration-test                                                                              |
+| Claude CLI      | Supported                                   | Supported through translation     | Retain and integration-test                                                                              |
+| Qwen Code       | Supported                                   | Supported inline                  | Retain canonical inline mapping; re-verify the pinned fixture on CLI upgrade                             |
+| OpenCode        | Supported                                   | Supported inline                  | Retain collision-safe inline mapping; re-verify the pinned fixture on CLI upgrade                        |
 | Codex CLI       | Supported through sandbox/approval controls | No safe general equivalent        | Mode-only summary derived from the three capabilities; G.1 concluded no safe general partial translation |
-| Antigravity CLI | Supported                                   | No documented granular equivalent | Mode-only summary derived from the three capabilities                                        |
+| Antigravity CLI | Supported                                   | No documented granular equivalent | Mode-only summary derived from the three capabilities                                                    |
 
 These six CLI harnesses are the complete supported set (`HARNESS_IDS` in
 `src/types/DashboardConstants.ts`). The `copilot-chat` harness was permanently

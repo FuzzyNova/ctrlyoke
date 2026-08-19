@@ -186,17 +186,17 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
   const hasDiffButton = Boolean(worktree?.baseCommit && branchName);
   const hasOpenButton = Boolean(
     !isStandalone &&
-      worktree?.baseCommit &&
-      branchName &&
-      worktree.directoryState === "present"
+    worktree?.baseCommit &&
+    branchName &&
+    worktree.directoryState === "present"
   );
   const hasMergeButton = Boolean(
     address &&
-      worktree?.baseCommit &&
-      branchName &&
-      worktree.mode === "managed" &&
-      worktree.branchState === "present" &&
-      worktree.landingOutcome === "landed"
+    worktree?.baseCommit &&
+    branchName &&
+    worktree.mode === "managed" &&
+    worktree.branchState === "present" &&
+    worktree.landingOutcome === "landed"
   );
   const hasWorktreeButtons = hasDiffButton || hasOpenButton || hasMergeButton;
 
@@ -276,10 +276,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <span className="flex min-w-0 flex-shrink items-center gap-1">
                 <span className="flex-shrink-0">Branch:</span>
-                <span
-                  className="min-w-0 truncate font-mono"
-                  title={branchName}
-                >
+                <span className="min-w-0 truncate font-mono" title={branchName}>
                   {branchName}
                 </span>
                 <button

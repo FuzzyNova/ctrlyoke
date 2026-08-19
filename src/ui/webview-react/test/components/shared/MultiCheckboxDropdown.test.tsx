@@ -67,10 +67,7 @@ describe("MultiCheckboxDropdown", () => {
     fireEvent.click(screen.getByRole("button", { name: "Read" }));
     const header = screen.getByRole("checkbox", { name: "File (1/2)" });
     expect(header).toHaveAttribute("aria-checked", "mixed");
-    expect(header.querySelector("input")).toHaveProperty(
-      "indeterminate",
-      true
-    );
+    expect(header.querySelector("input")).toHaveProperty("indeterminate", true);
   });
 
   it("emits grouped values as a flat string array", () => {
@@ -106,7 +103,9 @@ describe("MultiCheckboxDropdown", () => {
     // Only the new "All" header registers a checkbox role — individual option
     // rows hide their native checkbox from the a11y tree, as before.
     expect(screen.queryAllByRole("checkbox")).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "LintRun lint" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "LintRun lint" })
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Test" })).toBeInTheDocument();
   });
 
@@ -126,7 +125,12 @@ describe("MultiCheckboxDropdown", () => {
     expect(allHeader).toHaveAttribute("aria-checked", "false");
 
     fireEvent.click(allHeader);
-    expect(onChange).toHaveBeenLastCalledWith(["read", "write", "bash", "tool"]);
+    expect(onChange).toHaveBeenLastCalledWith([
+      "read",
+      "write",
+      "bash",
+      "tool",
+    ]);
 
     rerender(
       <MultiCheckboxDropdown
@@ -196,7 +200,9 @@ describe("MultiCheckboxDropdown", () => {
 
     fireEvent.keyDown(option, { key: "Escape" });
 
-    expect(screen.queryByRole("button", { name: "Write" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Write" })
+    ).not.toBeInTheDocument();
     expect(onDocumentKeyDown).not.toHaveBeenCalled();
     document.removeEventListener("keydown", onDocumentKeyDown);
   });

@@ -313,7 +313,9 @@ async function prepareDestination(destination, stateRoot) {
     return;
   }
   if (destinationStats.isSymbolicLink() || !destinationStats.isDirectory()) {
-    throw new Error(`Destination project is not an ordinary directory: ${destination}`);
+    throw new Error(
+      `Destination project is not an ordinary directory: ${destination}`
+    );
   }
 
   await fs.chmod(destination, 0o700);

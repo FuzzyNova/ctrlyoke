@@ -1199,9 +1199,7 @@ suite("WorktreeManager", function () {
   });
 
   test("lands copied runtime artifacts without treating them as blocked paths", async () => {
-    const { parent, repository } = await makeRepository(
-      "managed-runtime-copy"
-    );
+    const { parent, repository } = await makeRepository("managed-runtime-copy");
     const instance = manager(parent);
     const info = await ensureManaged(instance, repository);
     const copiedRuntimePath = path.join(
@@ -1872,11 +1870,9 @@ suite("WorktreeManager", function () {
       "from source\n"
     );
     execFileSync("git", ["-C", repository, "add", "source-file.txt"]);
-    execFileSync(
-      "git",
-      ["-C", repository, "commit", "-m", "source change"],
-      { stdio: "ignore" }
-    );
+    execFileSync("git", ["-C", repository, "commit", "-m", "source change"], {
+      stdio: "ignore",
+    });
 
     const result = await instance.syncNamedWorktree({
       sourceCheckoutRoot: repository,
@@ -1929,9 +1925,7 @@ suite("WorktreeManager", function () {
   });
 
   test("refuses to sync a managed worktree", async () => {
-    const { parent, repository } = await makeRepository(
-      "sync-managed-guard"
-    );
+    const { parent, repository } = await makeRepository("sync-managed-guard");
     const instance = manager(parent);
     const info = await ensureManaged(instance, repository);
     await info.lease.release();

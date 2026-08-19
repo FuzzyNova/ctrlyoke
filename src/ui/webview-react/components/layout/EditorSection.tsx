@@ -7,10 +7,7 @@ import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { formatMagnitude } from "../../utils/number";
-import {
-  PromptEditor,
-  type PromptFileAction,
-} from "../editor/PromptEditor";
+import { PromptEditor, type PromptFileAction } from "../editor/PromptEditor";
 import { PanelBar, IconToggleButton } from "../shared";
 import {
   FINAL_STEP_PHASES,

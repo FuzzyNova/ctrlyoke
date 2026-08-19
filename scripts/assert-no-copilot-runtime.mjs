@@ -16,7 +16,8 @@ export const PRODUCTION_BUNDLE_FILES = [
 const COPILOT_PACKAGE_PATTERN = /^@github\/copilot(?:-|$)/iu;
 const COPILOT_BUNDLE_PATTERN = /@github\/copilot(?:-|\/)/iu;
 const NATIVE_FILE_PATTERN = /\.(?:dll|dylib|exe|node|so)$/iu;
-const COPILOT_NATIVE_REFERENCE_PATTERN = /\bcopilot[^\s"'\\]{0,80}\.(?:dll|dylib|exe|node|so)\b/iu;
+const COPILOT_NATIVE_REFERENCE_PATTERN =
+  /\bcopilot[^\s"'\\]{0,80}\.(?:dll|dylib|exe|node|so)\b/iu;
 
 function dependencyNames(packageJson, fieldName) {
   const value = packageJson?.[fieldName];
@@ -42,7 +43,10 @@ export function findForbiddenPackageDependencies(packageJson) {
 
   for (const fieldName of fields) {
     for (const dependencyName of dependencyNames(packageJson, fieldName)) {
-      if (typeof dependencyName === "string" && COPILOT_PACKAGE_PATTERN.test(dependencyName)) {
+      if (
+        typeof dependencyName === "string" &&
+        COPILOT_PACKAGE_PATTERN.test(dependencyName)
+      ) {
         matches.push(`${fieldName}:${dependencyName}`);
       }
     }
@@ -102,7 +106,9 @@ export function findForbiddenOutEntries(
 
     const bundleText = fs.readFileSync(bundlePath, "utf8");
     if (COPILOT_BUNDLE_PATTERN.test(bundleText)) {
-      matches.push(`bundle:${relativeBundlePath}:@github/copilot runtime reference`);
+      matches.push(
+        `bundle:${relativeBundlePath}:@github/copilot runtime reference`
+      );
     }
     if (COPILOT_NATIVE_REFERENCE_PATTERN.test(bundleText)) {
       matches.push(`bundle:${relativeBundlePath}:native Copilot reference`);

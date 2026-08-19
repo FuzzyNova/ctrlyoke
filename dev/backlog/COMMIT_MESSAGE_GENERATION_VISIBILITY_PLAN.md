@@ -67,7 +67,7 @@ plumbing a second time for a settings-page card would be a parallel,
 lower-fidelity copy of infrastructure that already exists elsewhere.
 
 The right fix is upstream of the UI: **give commit-generation runs the same
-persistence a normal workflow run gets**, then reuse the *existing* run-viewing
+persistence a normal workflow run gets**, then reuse the _existing_ run-viewing
 machinery instead of building a new one.
 
 ---
@@ -129,7 +129,7 @@ true when `CommitMessageGenerator` creates the lineage, and filter it out in
 search index and usage-stats feeds
 (`OutputHistoryManager.refreshSearchIndex()` / `feedUsageStores()`, both
 called from `initializeRunAt`/`finalizeRun`) need the same filter, or whether
-excluding "internal" runs from search/usage is undesirable (arguably you *do*
+excluding "internal" runs from search/usage is undesirable (arguably you _do_
 want commit-gen runs searchable/countable — only the recent-workflows list is
 in scope here; treat the others as an open question, §7).
 
@@ -183,7 +183,7 @@ outcome and the raw response length before the empty-response throw, and
 consider a temporary streaming-chunk subscriber (mirroring
 `emitStreamingChunk`/`emitStreamingEvents` in
 `src/core/harness/CliIntegration.ts:634-640`) so a developer reading
-`ctrlyoke-*.log` mid-incident sees *something* about tool calls even before
+`ctrlyoke-*.log` mid-incident sees _something_ about tool calls even before
 §3.1 ships. This does not replace the UI fix — it's a stopgap for exactly the
 kind of log-diving that produced this plan's triggering incident — but it's
 cheap enough to land first/independently.
@@ -195,7 +195,7 @@ cheap enough to land first/independently.
 - Not a user-configurable "define your own commit-message workflow" system.
   That's a materially bigger feature (template authoring, end-condition
   opt-out UI, per-user workflow definitions) than the visibility problem
-  requires. If demand shows up for customizing *how* commit-gen prompts run
+  requires. If demand shows up for customizing _how_ commit-gen prompts run
   beyond the existing harness/model/prompt settings, that's a separate plan.
 - Not a fix to `extractTextFromEvents` / opencode's parser. §1 identifies
   where the empty-response path is, not why the model's output didn't parse
@@ -221,12 +221,12 @@ checked to confirm they pass through whatever `generateMessage()` now returns.
 
 ## 6. Phasing
 
-| Phase | Content                                                                                   | Ships value alone? |
-| ----- | ------------------------------------------------------------------------------------------ | ------------------- |
-| 1     | §3.5 — `Log.debug` additions around MCP outcome / response length                          | Yes — immediate debugging aid |
-| 2     | §3.1 — `loadPromptStringAsRun()`, lineage allocation, `initializeRunAt`/`finalizeRun` wiring for commit-gen | Partial — data now persists, but nothing surfaces it yet |
-| 3     | §3.2 — `isSystemGenerated` flag + recent-list filtering                                    | Gate for phase 2 shipping without cluttering the UI |
-| 4     | §3.3 + §3.4 — dedupe `CommitMessageGenerationRecord`, carry the address, "View full output" affordance in `CommitSection` | Yes — completes the loop |
+| Phase | Content                                                                                                                   | Ships value alone?                                       |
+| ----- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| 1     | §3.5 — `Log.debug` additions around MCP outcome / response length                                                         | Yes — immediate debugging aid                            |
+| 2     | §3.1 — `loadPromptStringAsRun()`, lineage allocation, `initializeRunAt`/`finalizeRun` wiring for commit-gen               | Partial — data now persists, but nothing surfaces it yet |
+| 3     | §3.2 — `isSystemGenerated` flag + recent-list filtering                                                                   | Gate for phase 2 shipping without cluttering the UI      |
+| 4     | §3.3 + §3.4 — dedupe `CommitMessageGenerationRecord`, carry the address, "View full output" affordance in `CommitSection` | Yes — completes the loop                                 |
 
 Phase 3 should land no later than phase 2 — persisting commit-gen runs without
 filtering them out of "recent workflows" is a regression (log/history clutter
@@ -249,7 +249,7 @@ proportional to how often the user commits), not a strict improvement.
    with pruning-as-normal (`OutputHistoryManager.pruneOldRuns`, already called
    from `initializeRunAt`) sufficient? Proposed: reuse one lineage per
    workspace (stable `nameHint`, e.g. `"commit-message-generation"") so normal
-   per-lineage `maxRuns` pruning applies without new configuration.
+per-lineage `maxRuns` pruning applies without new configuration.
 3. **CLI parity.** `commitCommand` (CLI) also calls `generateMessage()`
    directly per `git.instructions.md`. Does the CLI want a
    `--show-output`/log-path pointer on failure, given it has no dashboard to

@@ -12,11 +12,12 @@
 
 export type CommandDisplayShell = "cmd" | "powershell" | "posix";
 
-export const COMMAND_DISPLAY_SHELL_LABELS: Record<CommandDisplayShell, string> = {
-  cmd: "Command Prompt",
-  powershell: "PowerShell",
-  posix: "POSIX shell",
-};
+export const COMMAND_DISPLAY_SHELL_LABELS: Record<CommandDisplayShell, string> =
+  {
+    cmd: "Command Prompt",
+    powershell: "PowerShell",
+    posix: "POSIX shell",
+  };
 
 const CMD_META_CHARS_REGEXP = /([()\][%!^"`<>&|;, *?])/g;
 

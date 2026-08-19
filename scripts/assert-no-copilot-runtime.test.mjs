@@ -26,14 +26,20 @@ test("detects forbidden bundle references and native files", async () => {
   );
   try {
     for (const bundleName of ["extension.js", "mcp-server.js", "cli.js"]) {
-      await fs.writeFile(path.join(outDir, bundleName), "const copilot = 'copilot-cli';");
+      await fs.writeFile(
+        path.join(outDir, bundleName),
+        "const copilot = 'copilot-cli';"
+      );
     }
     await fs.writeFile(
       path.join(outDir, "mcp-server.js"),
       "require('@github/copilot-linux-x64');"
     );
     await fs.mkdir(path.join(outDir, "runtime"));
-    await fs.writeFile(path.join(outDir, "runtime", "copilot-linux.node"), "native");
+    await fs.writeFile(
+      path.join(outDir, "runtime", "copilot-linux.node"),
+      "native"
+    );
 
     const violations = findForbiddenOutEntries(outDir, [
       path.join(outDir, "extension.js"),
@@ -41,8 +47,12 @@ test("detects forbidden bundle references and native files", async () => {
       path.join(outDir, "cli.js"),
     ]);
     assert.equal(violations.length, 2);
-    assert.ok(violations.some((violation) => violation.includes("@github/copilot")));
-    assert.ok(violations.some((violation) => violation.includes("copilot-linux.node")));
+    assert.ok(
+      violations.some((violation) => violation.includes("@github/copilot"))
+    );
+    assert.ok(
+      violations.some((violation) => violation.includes("copilot-linux.node"))
+    );
   } finally {
     await fs.rm(outDir, { recursive: true, force: true });
   }
@@ -54,7 +64,10 @@ test("passes clean package and bundle inputs", async () => {
   );
   try {
     for (const bundleName of ["extension.js", "mcp-server.js", "cli.js"]) {
-      await fs.writeFile(path.join(outDir, bundleName), "const copilot = 'copilot-cli';");
+      await fs.writeFile(
+        path.join(outDir, bundleName),
+        "const copilot = 'copilot-cli';"
+      );
     }
     assert.deepEqual(
       findPackagingViolations({

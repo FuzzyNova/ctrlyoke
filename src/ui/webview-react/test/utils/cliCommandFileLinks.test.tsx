@@ -14,18 +14,21 @@ import {
 describe("findCliFileReferenceRanges", () => {
   it("matches a Codex-style bare-relative temp file reference with escaped backslashes", () => {
     const text =
-      'using these attachment excerpts .ctrlyoke\\\\temp\\\\1786938810-plan-4.excerpts.md, follow the instructions';
+      "using these attachment excerpts .ctrlyoke\\\\temp\\\\1786938810-plan-4.excerpts.md, follow the instructions";
     const ranges = findCliFileReferenceRanges(text);
 
     expect(ranges).toHaveLength(1);
     expect(text.slice(ranges[0].start, ranges[0].end)).toBe(
       ".ctrlyoke\\\\temp\\\\1786938810-plan-4.excerpts.md"
     );
-    expect(ranges[0].openPath).toBe(".ctrlyoke\\temp\\1786938810-plan-4.excerpts.md");
+    expect(ranges[0].openPath).toBe(
+      ".ctrlyoke\\temp\\1786938810-plan-4.excerpts.md"
+    );
   });
 
   it("matches a Claude-style @-prefixed reference and includes the @ in the range", () => {
-    const text = "using these file references @dev\\\\implemented\\\\PLAN.md, follow";
+    const text =
+      "using these file references @dev\\\\implemented\\\\PLAN.md, follow";
     const ranges = findCliFileReferenceRanges(text);
 
     expect(ranges).toHaveLength(1);

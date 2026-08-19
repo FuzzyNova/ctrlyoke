@@ -596,8 +596,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       set({ lastTokenRegenerated: timestamp }),
     bumpTokenFlashCount: () =>
       set((s) => ({ tokenFlashCount: s.tokenFlashCount + 1 })),
-    setLastCertDownloadSaved: (saved) =>
-      set({ lastCertDownloadSaved: saved }),
+    setLastCertDownloadSaved: (saved) => set({ lastCertDownloadSaved: saved }),
     bumpCertDownloadFlashCount: () =>
       set((s) => ({ certDownloadFlashCount: s.certDownloadFlashCount + 1 })),
 

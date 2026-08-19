@@ -182,9 +182,7 @@ export class ClaudeToolBuilder {
         continue;
       }
 
-      const outputText = ClaudeToolBuilder.extractToolResultText(
-        block.content
-      );
+      const outputText = ClaudeToolBuilder.extractToolResultText(block.content);
       events.push({
         type: CLI_EVENT_TYPES.TOOL_RESULT,
         timestamp,
@@ -240,7 +238,9 @@ export class ClaudeToolBuilder {
    * `answers` — so this alone is enough to detect the answered case without
    * knowing the originating tool name.
    */
-  private static isAskUserQuestionResult(toolUseResult: unknown): toolUseResult is {
+  private static isAskUserQuestionResult(
+    toolUseResult: unknown
+  ): toolUseResult is {
     questions: Array<Record<string, unknown>>;
     answers?: Record<string, string>;
     annotations?: Record<string, { notes?: string; preview?: string }>;
