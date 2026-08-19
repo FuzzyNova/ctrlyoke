@@ -11,6 +11,7 @@ import { countStructuredPatchDisplayLines } from "./outputUtils";
 import {
   buildDiffRenderPlanFromStats,
   getRenderedDiffStats,
+  toRdvHunks,
 } from "./rdvAdapter";
 
 /** The existing `gap-3` between list items, folded into each row's size. */
@@ -77,14 +78,14 @@ export type DiffFileListRow =
       kind: "file";
       groupKey: string;
       fileKey: string;
-      file: DiffFileCardProps;
+      file: DiffFileCardProps & { key: string };
     });
 
 interface ContentSourceMetrics {
   oldLineCount: number;
   newLineCount: number;
+  lineCount: number;
   changedLineCount: number;
-  estimatedRows: number;
   hasDisplayableContent: boolean;
 }
 
@@ -128,22 +129,11 @@ function getContentSourceMetrics(
     if (oldLines[index] !== newLines[index]) changedLineCount++;
   }
 
-  // A raw-content diff needs context around changed lines, but doing a real
-  // diff here would run the expensive parser for an offscreen card. A small
-  // density allowance gives sparse edits context without tokenizing them.
-  const estimatedRows =
-    changedLineCount === 0
-      ? 0
-      : Math.min(
-          lineCount,
-          changedLineCount +
-            Math.min(6, Math.ceil((lineCount - changedLineCount) * 0.15))
-        );
   const metrics: ContentSourceMetrics = {
     oldLineCount: oldLines.length,
     newLineCount: newLines.length,
+    lineCount,
     changedLineCount,
-    estimatedRows,
     hasDisplayableContent: lineCount > 0,
   };
   contentSourceMetricsCache.set(source, metrics);
@@ -209,6 +199,11 @@ function getPatchEstimate(
   );
   if (displayLineCount === 0) return 0;
 
+  // Structured patches are already line-structured, so deriving their hunk
+  // geometry is cheap and lets the shared plan account for hidden gaps without
+  // parsing raw content or tokenizing syntax.
+  const hunks = toRdvHunks(file.source.structuredPatch);
+
   return buildDiffRenderPlanFromStats(
     {
       added: 0,
@@ -226,6 +221,7 @@ function getPatchEstimate(
       collapsed,
       outputFontSize: options.outputFontSize,
       outputContentWidth: options.outputContentWidth,
+      hunks,
       layoutMode: "file-edit",
     }
   ).diffBlockHeight;
@@ -247,6 +243,21 @@ function getContentEstimate(
     file.source.oldContent !== undefined &&
     file.source.newContent !== undefined &&
     metrics.changedLineCount > 0;
+  // A raw-content diff needs context around changed lines, but doing a real
+  // diff here would run the expensive parser for an offscreen card. Unified
+  // layout displays replacements as two rows (delete + insert), while split
+  // layout pairs them into one row. Keep the allowance bounded by the source
+  // line count; this is deliberately a cheap upper-bound estimate, not a diff.
+  const replacementRows =
+    metrics.changedLineCount * (options.viewType === "unified" ? 2 : 1);
+  const contextRows = Math.min(
+    6,
+    Math.floor(Math.max(0, metrics.lineCount - metrics.changedLineCount) * 0.15)
+  );
+  const estimatedRows = Math.min(
+    metrics.lineCount * (options.viewType === "unified" ? 2 : 1),
+    replacementRows + contextRows
+  );
   const plan = buildDiffRenderPlanFromStats(
     hasDiffBody
       ? {
@@ -254,7 +265,7 @@ function getContentEstimate(
           removed: 0,
           runs: [
             {
-              count: metrics.estimatedRows,
+              count: estimatedRows,
               addedLines: 0,
               removedLines: 0,
             },

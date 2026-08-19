@@ -497,7 +497,7 @@ describe("DiffFileList virtualization", () => {
           );
           const scrollTop = container?.scrollTop ?? 4000;
           const expansionShift =
-            container?.dataset.commandCollapsed === "false" ? 943.75 : 0;
+            container?.dataset.commandCollapsed === "false" ? 1843.75 : 0;
           const top =
             100 + (index - 50) * 80 + expansionShift - (scrollTop - 4000);
           return {
@@ -552,7 +552,7 @@ describe("DiffFileList virtualization", () => {
           .closest<HTMLElement>("[data-diff-file-key]");
         expect(currentAnchor?.getBoundingClientRect().top).toBeCloseTo(100, 0);
       });
-      expect(scroller.scrollTop).toBeCloseTo(4943.75, 0);
+      expect(scroller.scrollTop).toBeCloseTo(5843.75, 0);
     } finally {
       getBoundingClientRect.mockRestore();
     }

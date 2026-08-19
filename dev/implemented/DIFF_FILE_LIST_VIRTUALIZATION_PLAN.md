@@ -1,7 +1,8 @@
 # Diff File List Virtualization Plan
 
-> **Status:** Phase 5 implemented; virtualization is enabled above the file-count threshold. This is a focused UI-performance change for the shared
-> `DiffFileList`; it does not replace the Output pane's existing virtualization.
+> **Status:** Implemented and closed (Phases 1–6). Virtualization is enabled above the
+> 30-file threshold with two-row overscan. This is a focused UI-performance change for the
+> shared `DiffFileList`; it does not replace the Output pane's existing virtualization.
 
 ## Goal
 
@@ -337,13 +338,38 @@ workflow ordering, visible-row file opening, and a real large-dialog smoke mount
 
 ### Phase 6 — Profile and tune
 
-1. Add a development fixture with at least 120 files containing a mix of small patches, large
-   raw-content diffs, multiple hunks, renamed files, long paths, and wrapped notes.
-2. Record dialog open, Expand all, fast scroll, individual gap expansion, Collapse all, and close.
-3. Tune the threshold, overscan, and estimates from measured versus estimated heights.
-4. Only after this pass, consider a bounded cache for parsed raw-content diffs if scrolling back
-   repeatedly causes meaningful reparsing. Consider a Web Worker only if lazy mounting leaves a
-   material initial diff-construction task; it is not part of the first implementation.
+1. [x] Add a development fixture with at least 120 files containing a mix of small patches, large
+       raw-content diffs, multiple hunks, renamed files, long paths, and wrapped notes.
+2. [x] Record dialog open, Expand all, fast scroll, individual gap expansion, Collapse all, and close.
+3. [x] Tune the threshold, overscan, and estimates from measured versus estimated heights.
+4. [x] Only after this pass, consider a bounded cache for parsed raw-content diffs if scrolling back
+       repeatedly causes meaningful reparsing. Consider a Web Worker only if lazy mounting leaves a
+       material initial diff-construction task; it is not part of the first implementation.
+
+Phase 6 shipped the reusable `createDiffFileFixture(fileCount)` test/dev fixture and deterministic
+acceptance coverage for 60, 120, and 240 files. It includes structured patches, large raw
+old/new content, wide multi-hunk gaps, renames, long paths, wrapped notes, and unchanged files.
+
+Calibration used the 120-file fixture at 800px content width, 13px output font size, and unified
+layout. The first pass under-counted unified raw replacements by up to 5,760px (mean -962.3px)
+because one changed line can render as both a deletion and an insertion. The final estimator is
+view-aware (`2 × changed lines` for unified replacements, `1 ×` for split replacements), keeps a
+bounded context allowance, and supplies structured-patch hunks to the shared render-plan helper
+so wide-gap decoration height is included. Final measured mean and maximum residual are both 0px
+in the deterministic realized-geometry calibration test. The final card-chrome constants are 2px
+outer border, 1px header border, 8px header vertical padding, 16px per header line, 2px note
+gap, 8px DiffView margin, 12px inter-row gap, and a 0.6 monospace note character advance.
+
+The final virtualization constants are a 30-file threshold and two-row overscan. With a fixed
+180px jsdom viewport, the acceptance harness mounted six `DiffView` instances and 96 DOM nodes
+for each of 60, 120, and 240 files. Expand all did not add offscreen cards; adapter/tokenizer
+spies and table queries confirmed that offscreen files do no diff construction or rendering;
+unmounting removed all active observer targets and disconnected the list-owned observer. No
+parsed-diff cache or Web Worker was added: the lazy mount boundary removes the aggregate work,
+and the calibration did not demonstrate a need for either deferred optimization.
+
+A wall-clock Chrome trace on a reference desktop remains a useful manual follow-up, but is not a
+reproducible automated gate.
 
 ## Test Plan
 

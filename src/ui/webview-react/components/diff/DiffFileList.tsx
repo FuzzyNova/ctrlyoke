@@ -37,17 +37,23 @@ const EMPTY_COLLAPSED_OVERRIDES = new Map<string, CollapsedOverride>();
 const EMPTY_EXPANDED_GAPS_OVERRIDES = new Map<string, ExpandedGapsOverride>();
 const EMPTY_EXPANDED_GAPS: DiffGapExpansionState = new Map();
 const DIFF_SPLIT_VIEW_THRESHOLD = 1024;
-const DIFF_FILE_LIST_VIRTUALIZATION_THRESHOLD = 30;
-// Diff cards are orders of magnitude more expensive than workflow dropdown
-// rows, so two nearby cards are enough to hide mount/unmount churn. A later
-// fixture pass will calibrate this against real diff-card costs.
-const DIFF_FILE_LIST_VIRTUALIZATION_OVERSCAN = 2;
+/** Virtualize before a list reaches the fixture sizes used by acceptance tests. */
+export const DIFF_FILE_LIST_VIRTUALIZATION_THRESHOLD = 30;
+/** Two neighboring rows cover one normal wheel/touch increment without mounting a full page. */
+export const DIFF_FILE_LIST_VIRTUALIZATION_OVERSCAN = 2;
 const DEFAULT_CONTENT_WIDTH_BUCKET = Math.floor(
   DEFAULT_OUTPUT_CONTENT_WIDTH / DIFF_FILE_CONTENT_WIDTH_BUCKET
 );
 
 function resolveDiffFileContentWidthBucket(width: number): number {
   return Math.floor(width / DIFF_FILE_CONTENT_WIDTH_BUCKET);
+}
+
+function diffFileCardPropsWithoutKey(
+  file: DiffFileCardProps & { key: string }
+): DiffFileCardProps {
+  const { key: _fileKey, ...fileProps } = file;
+  return fileProps;
 }
 
 export interface DiffFileGroup {
@@ -286,7 +292,7 @@ export const DiffFileList = React.forwardRef<
       )}
       {row.kind === "file" && (
         <DiffFileCard
-          {...row.file}
+          {...diffFileCardPropsWithoutKey(row.file)}
           ariaSetSize={fileRows.length}
           ariaPosInSet={filePositionByKey.get(row.key)}
           collapsed={
