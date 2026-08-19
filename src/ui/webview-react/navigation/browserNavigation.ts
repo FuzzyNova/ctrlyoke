@@ -23,6 +23,7 @@ import { routeTitle } from "./navTitle";
 import {
   parseRoute,
   serializeRoute,
+  isSearchStateChange,
   sameNavigation,
   type Route,
 } from "./route";
@@ -120,6 +121,14 @@ export function setupBrowserNavigation(): () => void {
     // A line range within the same file is not a distinct history entry, so the
     // settle of a `?…&lines=` deep link must not push (and drop the range).
     if (sameNavigation(route, lastRoute)) return;
+
+    if (isSearchStateChange(lastRoute, route)) {
+      lastRoute = route;
+      updateTitle(route);
+      const { idx } = useBrowserHistoryStore.getState();
+      window.history.replaceState({ idx }, "", urlForRoute(route));
+      return;
+    }
 
     const replace =
       !startedWithImplicitRecentWorkflow && shouldReplace(lastRoute, route);

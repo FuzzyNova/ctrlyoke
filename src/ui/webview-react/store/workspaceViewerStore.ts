@@ -773,6 +773,10 @@ export const useWorkspaceViewerStore = create<
       // --- Pending navigation ---
 
       openToFile(filePath, startLine, endLine) {
+        // Select the target synchronously so navigation history records the
+        // destination immediately, before WorkspaceExplorerPane consumes the
+        // pending request and starts the asynchronous file fetch.
+        get().selectFile(filePath);
         set({
           isOpen: true,
           activeTab: "explorer",

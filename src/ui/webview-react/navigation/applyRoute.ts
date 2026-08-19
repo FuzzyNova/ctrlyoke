@@ -79,6 +79,10 @@ function applyViewer(route: Route): void {
 
   if (route.viewer === "search") {
     if (!wv.isOpen) wv.open();
+    wv.setSearchQuery(route.searchQuery ?? "");
+    wv.setSearchScope(route.searchScope ?? "both");
+    wv.setSearchIncludeGitIgnored(route.searchIncludeGitIgnored ?? false);
+    wv.setSelectedRepoId(route.searchRepo ?? null);
     wv.setActiveTab("search");
     return;
   }

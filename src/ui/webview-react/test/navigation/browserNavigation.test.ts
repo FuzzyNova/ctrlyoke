@@ -53,6 +53,23 @@ describe("setupBrowserNavigation", () => {
     expect(document.title).toBe("a.ts — ctrlyoke");
   });
 
+  it("restores a shareable search URL", () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/?token=t&viewer=search&query=use+state&scope=content&includeGitIgnored=true&repo=repo-2"
+    );
+    cleanup = setupBrowserNavigation();
+
+    const wv = useWorkspaceViewerStore.getState();
+    expect(wv.isOpen).toBe(true);
+    expect(wv.activeTab).toBe("search");
+    expect(wv.searchQuery).toBe("use state");
+    expect(wv.searchScope).toBe("content");
+    expect(wv.searchIncludeGitIgnored).toBe(true);
+    expect(wv.selectedRepoId).toBe("repo-2");
+  });
+
   it("keeps token-only startup as an implicit recent-workflow route", () => {
     window.history.replaceState({}, "", "/?token=t");
     cleanup = setupBrowserNavigation();
@@ -163,6 +180,46 @@ describe("setupBrowserNavigation", () => {
     expect(useBrowserHistoryStore.getState().idx).toBe(1);
     expect(window.location.search).toContain("dir=src");
     expect(window.location.search).toContain("token=t");
+  });
+
+  it("replaces search edits and returns to the search after opening a result", () => {
+    window.history.replaceState({}, "", "/?token=t&viewer=search");
+    cleanup = setupBrowserNavigation();
+
+    useWorkspaceViewerStore.getState().setSearchQuery("use state");
+    useWorkspaceViewerStore.getState().setSearchScope("content");
+
+    expect(useBrowserHistoryStore.getState()).toMatchObject({
+      idx: 0,
+      length: 1,
+    });
+    expect(new URLSearchParams(window.location.search).get("query")).toBe(
+      "use state"
+    );
+    expect(new URLSearchParams(window.location.search).get("scope")).toBe(
+      "content"
+    );
+
+    useWorkspaceViewerStore.getState().openToFile("src/useState.ts");
+    expect(useBrowserHistoryStore.getState()).toMatchObject({
+      idx: 1,
+      length: 2,
+    });
+    expect(new URLSearchParams(window.location.search).get("file")).toBe(
+      "src/useState.ts"
+    );
+
+    window.history.replaceState(
+      { idx: 0 },
+      "",
+      "/?token=t&viewer=search&query=use+state&scope=content"
+    );
+    window.dispatchEvent(new PopStateEvent("popstate", { state: { idx: 0 } }));
+
+    const wv = useWorkspaceViewerStore.getState();
+    expect(wv.activeTab).toBe("search");
+    expect(wv.searchQuery).toBe("use state");
+    expect(wv.searchScope).toBe("content");
   });
 
   it("pushes a ref URL when a commit diff becomes active", () => {

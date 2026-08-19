@@ -30,6 +30,8 @@ interface NavHistoryState {
 interface NavHistoryActions {
   /** Record a navigation to `route`, clearing any forward history. */
   record(route: Route): void;
+  /** Replace the current route without adding a back/forward step. */
+  replace(route: Route): void;
   /** Step back one entry; returns the new current Route, or null at the start. */
   back(): Route | null;
   /** Step forward one entry; returns the new current Route, or null at the tip. */
@@ -56,6 +58,10 @@ export const useNavHistoryStore = create<NavHistoryState & NavHistoryActions>()(
         current: route,
         future: [],
       });
+    },
+
+    replace(route) {
+      set({ current: route });
     },
 
     back() {

@@ -315,7 +315,6 @@ export const WorkspaceExplorerPane: React.FC = () => {
   // Consume pending navigation set externally (e.g. from CodeMirror link clicks)
   useEffect(() => {
     if (!pendingNavigation) return;
-    clearPendingNavigation();
     if (pendingNavigation.type === "directory") {
       loadDirectory(pendingNavigation.dirPath);
     } else {
@@ -331,6 +330,10 @@ export const WorkspaceExplorerPane: React.FC = () => {
       }
       openFile(filePath);
     }
+    // File navigation updates selectedFilePath synchronously before its HTTP
+    // request begins. Clear the request afterwards so navigation recording sees
+    // the target file rather than the file that was previously open.
+    clearPendingNavigation();
   }, [pendingNavigation, clearPendingNavigation, loadDirectory, openFile]);
 
   const handlePendingSelectionApplied = useCallback((requestId: number) => {

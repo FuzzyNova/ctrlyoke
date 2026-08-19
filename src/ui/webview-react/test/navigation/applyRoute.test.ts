@@ -45,10 +45,23 @@ describe("applyRoute", () => {
   });
 
   it("opens the viewer on the search tab", () => {
-    applyRoute({ viewer: "search" }, fakeVsCode());
+    applyRoute(
+      {
+        viewer: "search",
+        searchQuery: "use state",
+        searchScope: "content",
+        searchIncludeGitIgnored: true,
+        searchRepo: "repo-2",
+      },
+      fakeVsCode()
+    );
     const wv = useWorkspaceViewerStore.getState();
     expect(wv.isOpen).toBe(true);
     expect(wv.activeTab).toBe("search");
+    expect(wv.searchQuery).toBe("use state");
+    expect(wv.searchScope).toBe("content");
+    expect(wv.searchIncludeGitIgnored).toBe(true);
+    expect(wv.selectedRepoId).toBe("repo-2");
   });
 
   it("opens an explorer file and clears the guard afterwards", () => {

@@ -45,6 +45,13 @@ describe("workflow run routes", () => {
     { viewer: "sourceControl", ref: "~diff" },
     { viewer: "search" },
     { workflow: RUN, viewer: "search" },
+    {
+      viewer: "search",
+      searchQuery: "use state",
+      searchScope: "content",
+      searchIncludeGitIgnored: true,
+      searchRepo: "repo-2",
+    },
   ])("round-trips %o", (route) => {
     expect(parseRoute(serializeRoute(route, "?token=t"))).toEqual(
       normalizeRoute(route)
@@ -68,6 +75,23 @@ describe("workflow run routes", () => {
       )
     ).toBe("search");
     expect(parseRoute("?viewer=search")).toEqual({ viewer: "search" });
+  });
+
+  it("serializes the shareable search state", () => {
+    const params = new URLSearchParams(
+      serializeRoute({
+        viewer: "search",
+        searchQuery: "use state",
+        searchScope: "content",
+        searchIncludeGitIgnored: true,
+        searchRepo: "repo-2",
+      })
+    );
+
+    expect(params.get("query")).toBe("use state");
+    expect(params.get("scope")).toBe("content");
+    expect(params.get("includeGitIgnored")).toBe("true");
+    expect(params.get("repo")).toBe("repo-2");
   });
 
   it("drops file/dir/ref location fields on the search tab", () => {
@@ -126,5 +150,25 @@ describe("deriveRoute", () => {
         selectedFilePath: "src/a.ts",
       })
     ).toEqual({ workflow: DRAFT, viewer: "explorer", file: "src/a.ts" });
+  });
+
+  it("derives the active search state", () => {
+    expect(
+      deriveRoute({
+        ...base,
+        isOpen: true,
+        activeTab: "search",
+        searchQuery: "use state",
+        searchScope: "content",
+        searchIncludeGitIgnored: true,
+        searchRepo: "repo-2",
+      })
+    ).toEqual({
+      viewer: "search",
+      searchQuery: "use state",
+      searchScope: "content",
+      searchIncludeGitIgnored: true,
+      searchRepo: "repo-2",
+    });
   });
 });

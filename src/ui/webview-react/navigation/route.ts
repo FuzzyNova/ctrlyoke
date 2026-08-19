@@ -14,6 +14,8 @@
  *   dir=<relPath>                         explorer directory (when no file)
  *   lines=<start>-<end>                   explorer file selection (inbound only)
  *   ref=<hash|~diff|~staged|~stash:N>     scm git-ref diff (when no file)
+ *   query=<text>&scope=<scope>            workspace search state
+ *   includeGitIgnored=true&repo=<id>      optional workspace search filters
  *
  * `viewer` uses the short token `scm` in the URL but maps to the store's
  * canonical `"sourceControl"` tab id internally, keeping shareable URLs tidy
@@ -21,6 +23,7 @@
  */
 
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+import type { WorkspaceSearchScope } from "@root/types/HostedWorkspaceViewerTypes";
 
 /** Workspace viewer tab id — matches `workspaceViewerStore`'s `activeTab`. */
 type ViewerTab = "explorer" | "sourceControl" | "search";
@@ -57,6 +60,14 @@ export interface Route {
   ref?: string;
   /** Inbound-only selection range for an explorer file. */
   lines?: [number, number];
+  /** Workspace search query, restored when the search tab is opened. */
+  searchQuery?: string;
+  /** Workspace search scope. */
+  searchScope?: WorkspaceSearchScope;
+  /** Whether workspace search includes git-ignored files. */
+  searchIncludeGitIgnored?: boolean;
+  /** Selected workspace repository for multi-repo search. */
+  searchRepo?: string;
 }
 
 /** Plain snapshot of the store fields that determine the current Route. */
@@ -68,6 +79,10 @@ export interface RouteSourceState {
   explorerPath: string;
   selectedDiffPath: string | null;
   diffRef: string | null;
+  searchQuery?: string;
+  searchScope?: WorkspaceSearchScope;
+  searchIncludeGitIgnored?: boolean;
+  searchRepo?: string | null;
 }
 
 /** Forward-slash normalize a path; the rest of the UI keys off these. */
@@ -80,6 +95,16 @@ function clean(value: string | null | undefined): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed === "" ? undefined : trimmed;
+}
+
+function parseSearchScope(value: string | null): WorkspaceSearchScope {
+  return value === "files" || value === "content" || value === "both"
+    ? value
+    : "both";
+}
+
+function parseBoolean(value: string | null): boolean {
+  return value === "true";
 }
 
 function parseLines(value: string | null): [number, number] | undefined {
@@ -159,6 +184,17 @@ export function normalizeRoute(route: Route): Route {
     } else if (route.file) {
       out.file = fwd(route.file);
     }
+  } else if (route.viewer === "search") {
+    const searchQuery = clean(route.searchQuery);
+    if (searchQuery) out.searchQuery = searchQuery;
+    if (route.searchScope && route.searchScope !== "both") {
+      out.searchScope = route.searchScope;
+    }
+    if (route.searchIncludeGitIgnored) {
+      out.searchIncludeGitIgnored = true;
+    }
+    const searchRepo = clean(route.searchRepo);
+    if (searchRepo) out.searchRepo = searchRepo;
   }
 
   return out;
@@ -197,6 +233,10 @@ export function parseRoute(search: string): Route {
     dir: clean(params.get("dir")),
     ref: clean(params.get("ref")),
     lines: parseLines(params.get("lines")),
+    searchQuery: clean(params.get("query")),
+    searchScope: parseSearchScope(params.get("scope")),
+    searchIncludeGitIgnored: parseBoolean(params.get("includeGitIgnored")),
+    searchRepo: clean(params.get("repo")),
   });
 }
 
@@ -236,6 +276,19 @@ export function serializeRoute(route: Route, currentSearch = ""): string {
       } else if (normalized.file) {
         params.set("file", normalized.file);
       }
+    } else if (normalized.viewer === "search") {
+      if (normalized.searchQuery) {
+        params.set("query", normalized.searchQuery);
+      }
+      if (normalized.searchScope && normalized.searchScope !== "both") {
+        params.set("scope", normalized.searchScope);
+      }
+      if (normalized.searchIncludeGitIgnored) {
+        params.set("includeGitIgnored", "true");
+      }
+      if (normalized.searchRepo) {
+        params.set("repo", normalized.searchRepo);
+      }
     }
   }
 
@@ -256,7 +309,12 @@ export function sameNavigation(a: Route, b: Route): boolean {
     na.viewer === nb.viewer &&
     na.file === nb.file &&
     na.dir === nb.dir &&
-    na.ref === nb.ref
+    na.ref === nb.ref &&
+    na.searchQuery === nb.searchQuery &&
+    (na.searchScope ?? "both") === (nb.searchScope ?? "both") &&
+    (na.searchIncludeGitIgnored ?? false) ===
+      (nb.searchIncludeGitIgnored ?? false) &&
+    na.searchRepo === nb.searchRepo
   );
 }
 
@@ -270,7 +328,27 @@ export function routesEqual(a: Route, b: Route): boolean {
     na.file === nb.file &&
     na.dir === nb.dir &&
     na.ref === nb.ref &&
-    linesEqual(na.lines, nb.lines)
+    linesEqual(na.lines, nb.lines) &&
+    na.searchQuery === nb.searchQuery &&
+    (na.searchScope ?? "both") === (nb.searchScope ?? "both") &&
+    (na.searchIncludeGitIgnored ?? false) ===
+      (nb.searchIncludeGitIgnored ?? false) &&
+    na.searchRepo === nb.searchRepo
+  );
+}
+
+/**
+ * Search controls are view state, not separate document locations. Update the
+ * current URL/history entry while the user edits them, but keep the transition
+ * from Search to a file as a real back/forward step.
+ */
+export function isSearchStateChange(a: Route, b: Route): boolean {
+  const na = normalizeRoute(a);
+  const nb = normalizeRoute(b);
+  return (
+    na.viewer === "search" &&
+    nb.viewer === "search" &&
+    workflowAddressesEqual(na.workflow, nb.workflow)
   );
 }
 
@@ -301,9 +379,12 @@ export function deriveRoute(s: RouteSourceState): Route {
       } else if (s.selectedDiffPath) {
         raw.file = s.selectedDiffPath;
       }
+    } else if (s.activeTab === "search") {
+      raw.searchQuery = s.searchQuery;
+      raw.searchScope = s.searchScope;
+      raw.searchIncludeGitIgnored = s.searchIncludeGitIgnored;
+      raw.searchRepo = s.searchRepo ?? undefined;
     }
-    // The search tab carries no location of its own — the query is transient
-    // per-session state, not a shareable address.
   }
 
   return normalizeRoute(raw);

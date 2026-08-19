@@ -15,10 +15,17 @@ import { useNavHistoryStore } from "./navHistoryStore";
 import { deriveCurrentRoute } from "./navState";
 import { isApplyingRoute } from "./applyRoute";
 import { setupBrowserNavigation } from "./browserNavigation";
+import { isSearchStateChange } from "./route";
 
 function recordCurrentRoute(): void {
   if (isApplyingRoute()) return;
-  useNavHistoryStore.getState().record(deriveCurrentRoute());
+  const route = deriveCurrentRoute();
+  const history = useNavHistoryStore.getState();
+  if (history.current && isSearchStateChange(history.current, route)) {
+    history.replace(route);
+  } else {
+    history.record(route);
+  }
 }
 
 function setupInMemoryRecorder(): () => void {

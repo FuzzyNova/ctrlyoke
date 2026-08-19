@@ -18,6 +18,10 @@ function currentSourceState(): RouteSourceState {
     explorerPath: wv.explorerPath,
     selectedDiffPath: wv.selectedDiffPath,
     diffRef: wv.diffRef,
+    searchQuery: wv.searchQuery,
+    searchScope: wv.searchScope,
+    searchIncludeGitIgnored: wv.searchIncludeGitIgnored,
+    searchRepo: wv.repos.length > 1 ? wv.selectedRepoId : null,
   };
 }
 
