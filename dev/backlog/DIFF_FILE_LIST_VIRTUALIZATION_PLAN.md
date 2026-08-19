@@ -40,6 +40,13 @@ individually large diff. Those optimizations do not prevent the first render of 
 files, and many individually small diffs still tokenize synchronously. The list must stop
 mounting offscreen diff trees.
 
+Collapsing a card is not a substitute for unmounting it. `DiffView`'s `parsedDiff` memo runs
+`toRdvHunks` / `toRdvFromContent` on mount **regardless of collapsed state**, because the
+collapsed summary header shows exact add/remove counts (`summaryStats` is derived from
+`parsedDiff.baseHunks`). A collapsed 120-file list therefore still performs 120 diff
+computations. Only not mounting the card avoids that work, which is why the acceptance criterion
+below is stated as "no offscreen file performs `toRdvFromContent`".
+
 ## Existing Patterns to Reuse
 
 ### `VirtualizedDropdownList`
@@ -139,8 +146,13 @@ For file rows:
 
 - Define and measure card-specific chrome once: card borders, the two-line path header, optional
   note, `DiffView` summary row, margins, and the list-row gap.
-- Reuse `diffLineHeight`, gap-decoration geometry, and the hunk/render-stat helpers already used
-  by `rdvAdapter.ts` for the expanded body.
+- Reuse `rdvAdapter.ts`'s existing render-plan pipeline for the expanded body rather than
+  re-deriving line geometry: `getRenderedDiffStats(hunks, viewType)` →
+  `buildDiffRenderPlanFromStats(stats, { viewType, collapsed, outputFontSize, outputContentWidth,
+hunks, layoutMode: "file-edit" })`, and take **`plan.diffBlockHeight`** (summary header + body).
+  Do not take `plan.totalHeight`: it adds `toolLineHeight` for the Output pane's `● Edited <path>`
+  header, which a `DiffFileCard` does not render. Card chrome (border, two-line path header,
+  optional note, `my-1` margin, list-row gap) is added on top of `diffBlockHeight`.
 - For an existing `hunks` source, derive an accurate render plan without reparsing content.
 - For a structured patch, count patch display lines without syntax tokenization.
 - For raw old/new content, use a cheap line-count/change-density estimate; do not run
@@ -161,8 +173,13 @@ top-level estimate.
 
 ### 4. Preserve state across virtual unmounts
 
-Today `DiffView` owns uncontrolled per-card expansion and expanded-gap maps. Virtualization would
-otherwise reset both whenever a file scrolls out of the render window.
+`DiffView` **already supports** controlled `collapsed` / `onCollapsedChange` / `expandedGaps` /
+`onExpandGap` (the virtualized Output rows use them today) and already accepts
+`localResetVersion`. `DiffFileCard` forwards `globallyCollapsed`, `localResetVersion` and
+`viewType` but **not** the controlled-state props, so a card's expansion and gap maps are
+uncontrolled and would reset whenever a file scrolls out of the render window. The work here is
+threading and list-level ownership, not new `DiffView` capability — do not add a second control
+mechanism.
 
 Lift the following state to `DiffFileList`, keyed by the composite file-row key:
 
@@ -174,6 +191,10 @@ Thread the existing controlled `collapsed`, `onCollapsedChange`, `expandedGaps`,
 keys disappear.
 
 Represent Expand all / Collapse all as a list-level command containing `{ version, collapsed }`.
+Both consumers already hold exactly this pair as two separate `useState` values
+(`dialogDiffsCollapsed` + `dialogDiffResetVersion`, `commitDiffsCollapsed` +
+`commitDiffResetVersion`) and copy them onto every card's props; formalize that pair as one
+list-level prop instead of inventing a third concept.
 Store local overrides with the command version that created them. When the version changes, old
 overrides and gap expansions are ignored immediately in render and then discarded; do not wait
 for 100 child effects to synchronize uncontrolled state. This also preserves the existing
@@ -240,22 +261,36 @@ scrolling reliable with changing item sizes.
 3. Add card-specific estimate utilities with O(1) virtualizer callbacks.
 4. Keep `DiffFileList` on its direct-render path while testing projection geometry independently.
 
-### Phase 2 — Conditional virtualization
+### Phase 2 — Controlled per-file state (before any virtualization)
+
+1. Lift collapse and gap-expansion state into the list, threading `DiffView`'s existing controlled
+   props through `DiffFileCard`.
+2. Convert global collapse resets to the versioned list command.
+
+Per the risk register below, controlled per-file state is a **precondition** for enabling
+virtualization: shipping the threshold first would land an intermediate state where scrolling a
+file out of the window silently discards its expansion and gap state. This phase changes no
+rendering structure and is independently verifiable.
+
+### Phase 3 — Scroll ownership and single width measurement
 
 1. Add the `scrollContainerRef` contract and wire `Modal`, `UndoChangesDialog`, and
    `WorkspaceDiffPane`.
-2. Turn on virtualization at the file-count threshold.
-3. Measure realized variable-height rows and invalidate on width/view-type changes.
-4. Confirm sticky file headers remain constrained to their own card inside absolute row wrappers.
+2. Resolve split/unified once in `DiffFileList` and pass `viewType` to every card.
 
-### Phase 3 — State and interaction correctness
+### Phase 4 — Conditional virtualization
 
-1. Lift collapse and gap-expansion state into the list.
-2. Convert global collapse resets to the versioned list command.
-3. Preserve the visible file anchor across Expand all / Collapse all.
-4. Ensure selecting, opening, and confirming an offscreen file still uses the complete model.
+1. Turn on virtualization at the file-count threshold.
+2. Measure realized variable-height rows and invalidate on width/view-type changes.
+3. Confirm sticky file headers remain constrained to their own card inside absolute row wrappers.
+4. Expose list position metadata on realized rows.
 
-### Phase 4 — Profile and tune
+### Phase 5 — Interaction correctness under virtualization
+
+1. Preserve the visible file anchor across Expand all / Collapse all.
+2. Ensure selecting, opening, and confirming an offscreen file still uses the complete model.
+
+### Phase 6 — Profile and tune
 
 1. Add a development fixture with at least 120 files containing a mix of small patches, large
    raw-content diffs, multiple hunks, renamed files, long paths, and wrapped notes.
@@ -385,5 +420,10 @@ Using the 120-file fixture on the same reference desktop/browser:
 - Estimates are O(1) in the virtualizer callback and use shared measured geometry.
 - Automated tests cover parent-ref resolution, dynamic height changes, global resets, offscreen
   selection, and both consumers.
-- A before/after performance capture demonstrates bounded DOM size and removes the multi-second
-  expand-all task caused by offscreen diffs.
+- Automated, deterministic evidence replaces the multi-second expand-all task: a test over the
+  120-file fixture asserts that the mounted `DiffView` count and rendered DOM node count stay
+  bounded by viewport + overscan and do **not** grow when the fixture doubles from 120 to 240
+  files, and that Expand all mounts no additional offscreen cards.
+- A wall-clock before/after Chrome trace on a reference desktop remains valuable but is a manual
+  follow-up, not a gate — it cannot be produced reproducibly from a headless test run, and the
+  bounded-mount assertions above are the criterion the implementation is held to.
