@@ -254,13 +254,15 @@ function getProcessMaps(
   ];
 }
 
-/** Shared run preflight used by execution and the future `secret check` command. */
+/** Shared run preflight used by execution and the `secret check` command. */
 export async function preflightWorkflowSecrets(
   workflow: PromptFile,
   platform: PlatformAdapter,
   workspaceRoot: string,
-  environment: NodeJS.ProcessEnv = process.env
-): Promise<void> {
+  environment: NodeJS.ProcessEnv = process.env,
+  { failOnMissing = true }: { failOnMissing?: boolean } = {}
+): Promise<string[]> {
+  const missingSecretNames = new Set<string>();
   const assertConditionPrompts = (
     condition: object | null | undefined
   ): void => {
@@ -314,7 +316,12 @@ export async function preflightWorkflowSecrets(
           environment,
         });
         if (missing.length > 0) {
-          throw new MissingSecretError(missing[0], missing);
+          if (failOnMissing) {
+            throw new MissingSecretError(missing[0], missing);
+          }
+          for (const name of missing) {
+            missingSecretNames.add(name);
+          }
         }
       } catch (error) {
         if (error instanceof MissingSecretError) {
@@ -328,4 +335,5 @@ export async function preflightWorkflowSecrets(
       }
     }
   }
+  return [...missingSecretNames];
 }

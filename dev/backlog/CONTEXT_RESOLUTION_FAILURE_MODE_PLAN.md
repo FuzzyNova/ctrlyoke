@@ -367,14 +367,16 @@ step failure does today (not a warning row; an actual failure/error state).
       `isContextResolutionDiagnostic` predicate + shared message formatter the
       two gates will use. (There is **no** `schemas/settings-schema.yaml` —
       only `workflow-schema.yaml` has a YAML twin. Nothing to regenerate.)
-- [ ] **Phase 2 — Make secret resolvability conditional.** Add the
+- [x] **Phase 2 — Make secret resolvability conditional.** Add the
       `failOnMissing` option to `preflightWorkflowSecrets`; wire
       `WorkflowInstance.ts:1558` to pass the resolved mode; leave
       `SecretCommands.ts:199` unconditional. **Decision: (a)** — keep the
       timing asymmetry (see Resolved Decisions below). Update `src/test/unit/SecretResolver.test.ts` for the new default
       behavior (missing secret + `"warn"` no longer throws) without breaking
-      existing "throws on missing" coverage (that coverage should move to the
-      `failOnMissing: true` / default-call-signature case).
+      existing "throws on missing" coverage (that coverage remains covered by
+      the default and explicit `failOnMissing: true` call signatures). In
+      `"warn"` mode, the run path surfaces returned missing names through the
+      dashboard warning-status pipeline; `secret check` remains strict.
 - [x] **Phase 3 — Close the git-ref diagnostic gap.** Change
       `expandGitChanges`'s return shape, thread `skipped` into
       `expandContextSplit`'s `skippedReferences`. Add a unit test asserting a

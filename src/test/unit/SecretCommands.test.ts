@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Command } from "commander";
+import { configService } from "../../config/CtrlYokeConfigService";
 import { suite, test } from "mocha";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import type { SecretStore } from "../../platform/SecretStore";
@@ -305,5 +306,27 @@ suite("Secret command handlers", () => {
       missingIo.errors.join("\n"),
       /MISSING_TOKEN.*scope.*workspace\/user or environment.*SECOND_MISSING_TOKEN/
     );
+  });
+
+  test("secret check stays strict when context resolution mode is warn", async () => {
+    configService.setCliOverlay({
+      execution: { strictContextResolution: "warn" },
+    });
+    try {
+      const io = new TestIo();
+      const result = await checkSecretsCommand(
+        "workflow.ctrlyoke.yaml",
+        {},
+        workflowDependencies(new InMemorySecretStore(), {
+          steps: [{ name: "deploy", prompt: "Use !MISSING_TOKEN" }],
+        }),
+        io
+      );
+
+      assert.strictEqual(result, 1);
+      assert.match(io.errors.join("\n"), /MISSING_TOKEN/);
+    } finally {
+      configService.setCliOverlay({});
+    }
   });
 });

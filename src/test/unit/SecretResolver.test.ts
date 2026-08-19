@@ -157,6 +157,84 @@ suite("SecretResolver", () => {
     );
   });
 
+  test("preflight reports missing names instead of throwing when configured not to fail", async () => {
+    const workflow: PromptFile = {
+      steps: [{ name: "deploy", prompt: "Use !MISSING" }],
+    };
+
+    const missing = await preflightWorkflowSecrets(
+      workflow,
+      platformWith(new InMemorySecretStore({})),
+      "C:\\workspace",
+      {},
+      { failOnMissing: false }
+    );
+
+    assert.deepStrictEqual(missing, ["MISSING"]);
+  });
+
+  test("preflight remains strict when failOnMissing is explicitly true", async () => {
+    const workflow: PromptFile = {
+      steps: [{ name: "deploy", prompt: "Use !MISSING" }],
+    };
+
+    await assert.rejects(
+      preflightWorkflowSecrets(
+        workflow,
+        platformWith(new InMemorySecretStore({})),
+        "C:\\workspace",
+        {},
+        { failOnMissing: true }
+      ),
+      /Secret "MISSING" is missing for scope "deploy"/
+    );
+  });
+
+  test("prompt interpolation is always rejected regardless of failOnMissing", async () => {
+    const workflow: PromptFile = {
+      steps: [{ prompt: "Use ${secret:MISSING}" }],
+    };
+
+    for (const failOnMissing of [false, true]) {
+      await assert.rejects(
+        preflightWorkflowSecrets(
+          workflow,
+          platformWith(new InMemorySecretStore({})),
+          "C:\\workspace",
+          {},
+          { failOnMissing }
+        ),
+        /not allowed in prompt text/
+      );
+    }
+  });
+
+  test("process-map grant consistency is always rejected regardless of failOnMissing", async () => {
+    const workflow: PromptFile = {
+      steps: [
+        {
+          prompt: "Run the service",
+          mcpServers: [
+            { id: "service", env: { TOKEN: "${secret:MISSING}" } },
+          ],
+        },
+      ],
+    };
+
+    for (const failOnMissing of [false, true]) {
+      await assert.rejects(
+        preflightWorkflowSecrets(
+          workflow,
+          platformWith(new InMemorySecretStore({})),
+          "C:\\workspace",
+          {},
+          { failOnMissing }
+        ),
+        /is referenced in process environment.*not granted/
+      );
+    }
+  });
+
   test("injects granted secrets into script environment without changing prompt text", async () => {
     const store = new InMemorySecretStore({
       [userSecretKey("SCRIPT_TOKEN")]: "script-value",

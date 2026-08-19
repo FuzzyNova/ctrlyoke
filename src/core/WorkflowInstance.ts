@@ -53,6 +53,7 @@ import {
   SESSION_KINDS,
   STATUS_MESSAGE_SEVERITY,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  CONTEXT_RESOLUTION_FAILURE_MODES,
   PROMPT_INPUT_CAPABILITY_KEYS,
   EXECUTION_PHASES,
   SCRIPT_OUTPUT_SOURCES,
@@ -1542,6 +1543,7 @@ export class WorkflowInstance {
     // legitimately completed run.
     let promotedRunRef: RunRef | undefined;
     let worktreeNotice: string | undefined;
+    let missingSecretNames: string[] = [];
 
     // A genuinely fresh run (not a step continuation, append, or idle-rewind
     // resume) starts a new compatibility-reporting window so this run's
@@ -1555,10 +1557,16 @@ export class WorkflowInstance {
     try {
       Log.info(`ctrlyoke: Executing loaded prompt file: ${filePath}`);
 
-      await preflightWorkflowSecrets(
+      missingSecretNames = await preflightWorkflowSecrets(
         this.promptQueue.getWorkflowFile(),
         this.platform,
-        this.platform.getWorkspaceRoot()
+        this.platform.getWorkspaceRoot(),
+        process.env,
+        {
+          failOnMissing:
+            ConfigurationUtils.getContextResolutionFailureMode() ===
+            CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+        }
       );
 
       this.worktreeResolution = await resolveWorktreeForWorkspace(
@@ -1956,6 +1964,33 @@ export class WorkflowInstance {
       // later — so the warning silently never appears live, only resurfacing
       // once the run ends and history is reloaded from disk.
       this.reportCompatibilityDiagnostics(compatibilityDiagnostics);
+
+      if (missingSecretNames.length > 0) {
+        const missingSecretNotice =
+          `Context resolution warning: declared secrets are not available: ${missingSecretNames.join(
+            ", "
+          )}.`;
+        const timestampMs = Date.now();
+        const stepIndex = currentQueueState.currentIndex;
+        this.dashboardSink?.updateStatusMessage(
+          stepIndex,
+          missingSecretNotice,
+          STATUS_MESSAGE_SEVERITY.WARNING,
+          this.id,
+          timestampMs
+        );
+        if (historyFilePath) {
+          await this.outputHistoryManager.appendStatusMessage(
+            historyFilePath,
+            { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+            {
+              message: missingSecretNotice,
+              severity: STATUS_MESSAGE_SEVERITY.WARNING,
+              timestamp: timestampMs,
+            }
+          );
+        }
+      }
 
       if (worktreeNotice && historyFilePath) {
         await this.promptQueue.updateWorktreeNotice(worktreeNotice);
