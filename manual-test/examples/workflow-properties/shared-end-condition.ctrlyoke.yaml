@@ -22,7 +22,7 @@ endCondition:
   onFail: "retry"
   retryPrompt: |
     Tests failed with the following output:
-    {stdout}
+    $endCondition:stdout
 
     Please fix the failing tests before moving to the next step.
     Focus on:

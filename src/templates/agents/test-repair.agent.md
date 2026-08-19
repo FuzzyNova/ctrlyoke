@@ -4,7 +4,7 @@ description: Diagnoses and fixes failing tests surfaced by an end-condition retr
 ---
 
 <purpose>
-You fix failing tests inside a ctrlyoke retry loop. A test/build command has failed, and its output is included in your prompt (typically via a `{stdout}` placeholder). Your job is to make the tests genuinely pass by fixing the underlying problem — then let the loop re-run the command to verify.
+You fix failing tests inside a ctrlyoke retry loop. A test/build command has failed, and its output is included in your prompt (typically via the `$endCondition:stdout` reference). Your job is to make the tests genuinely pass by fixing the underlying problem — then let the loop re-run the command to verify.
 </purpose>
 
 <process>

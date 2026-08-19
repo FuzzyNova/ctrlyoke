@@ -1,73 +1,139 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { forceLinting } from "@codemirror/lint";
+import { forEachDiagnostic, forceLinting } from "@codemirror/lint";
 import {
   buildCodeMirrorCompletionResult,
   buildPromptReferenceInsertion,
   createAtomicReferenceExtension,
   createClickHandlerExtension,
+  createConditionOutputLintExtension,
   createContextReferenceLintExtension,
   createSlashTokenDecorationExtension,
   destroyOrphanedMouseSelection,
   findSlashCompletionContext,
   findCustomCompletionContext,
-  getRetryPlaceholderCompletions,
   keyboardTooltipSpace,
   type CodeMirrorEditorMode,
 } from "@components/editor/CodeMirrorEditor";
+import { MESSAGE_TYPES, PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
 import {
-  MESSAGE_TYPES,
-  PROMPT_EDITOR_INSERT_MODES,
   RETRY_PROMPT_PLACEHOLDERS,
-} from "@/types/messages";
+  SCRIPT_OUTPUT_SOURCES,
+} from "@root/types/DashboardConstants";
 import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
 
-function getCompletions(
+async function getConditionOutputDiagnostics(
   doc: string,
-  mode: CodeMirrorEditorMode = "endCondition",
-  explicit = false
+  mode: CodeMirrorEditorMode,
+  hasPreCondition: boolean
 ) {
-  return getRetryPlaceholderCompletions(
-    {
-      state: EditorState.create({ doc }),
-      pos: doc.length,
-      explicit,
-    },
-    mode
-  );
+  const parent = document.createElement("div");
+  document.body.appendChild(parent);
+  const view = new EditorView({
+    parent,
+    doc,
+    extensions: [
+      createConditionOutputLintExtension(
+        { current: hasPreCondition },
+        { current: mode }
+      ),
+    ],
+  });
+
+  try {
+    forceLinting(view);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    const diagnostics: Array<{ message: string }> = [];
+    forEachDiagnostic(view.state, (diagnostic) => {
+      diagnostics.push({ message: diagnostic.message });
+    });
+    return diagnostics;
+  } finally {
+    view.destroy();
+    parent.remove();
+  }
 }
 
-describe("CodeMirrorEditor retry placeholder completions", () => {
-  it("offers retry placeholders after an opening brace in endCondition mode", () => {
-    const result = getCompletions("{");
+describe("CodeMirrorEditor condition-output references", () => {
+  it("offers both condition-output namespaces through the dollar completion source", () => {
+    expect(findCustomCompletionContext("$preCondition:", 0)).toEqual({
+      trigger: "$",
+      query: "preCondition:",
+      from: 0,
+    });
 
-    expect(result?.from).toBe(1);
-    expect(result?.options.map((option) => option.label)).toContain(
-      RETRY_PROMPT_PLACEHOLDERS.STDOUT
+    const result = buildCodeMirrorCompletionResult(
+      [
+        {
+          label: `${SCRIPT_OUTPUT_SOURCES.PRE_CONDITION}:${RETRY_PROMPT_PLACEHOLDERS.STDOUT}`,
+          detail: "Pre-condition script stdout",
+        },
+        {
+          label: `${SCRIPT_OUTPUT_SOURCES.END_CONDITION}:${RETRY_PROMPT_PLACEHOLDERS.STDOUT}`,
+          detail: "End-condition script stdout",
+        },
+      ],
+      1,
+      { trigger: "$", query: "preCondition:" }
     );
-    expect(result?.options.map((option) => option.label)).toContain(
-      RETRY_PROMPT_PLACEHOLDERS.STDERR
+
+    expect(result.options.map((option) => option.label)).toContain(
+      `${SCRIPT_OUTPUT_SOURCES.PRE_CONDITION}:${RETRY_PROMPT_PLACEHOLDERS.STDOUT}`
+    );
+    expect(result.options.map((option) => option.label)).toContain(
+      `${SCRIPT_OUTPUT_SOURCES.END_CONDITION}:${RETRY_PROMPT_PLACEHOLDERS.STDOUT}`
     );
   });
 
-  it("replaces only the text after the opening brace", () => {
-    const result = getCompletions("Retry with {std");
-
-    expect(result?.from).toBe("Retry with {".length);
-    const stdout = result?.options.find(
-      (option) => option.label === RETRY_PROMPT_PLACEHOLDERS.STDOUT
-    );
-    expect(stdout?.apply).toBe("stdout}");
+  it("does not offer a placeholder completion after an opening brace", () => {
+    expect(findCustomCompletionContext("{", 0)).toBeNull();
   });
 
-  it("does not offer retry placeholders in prompt mode", () => {
-    expect(getCompletions("{", "prompt")).toBeNull();
-  });
+  it.each([
+    {
+      mode: "prompt" as const,
+      hasPreCondition: false,
+      doc: "$preCondition:stdout",
+      message:
+        "$preCondition:stdout has no effect — this step has no pre-condition configured",
+    },
+    {
+      mode: "prompt" as const,
+      hasPreCondition: true,
+      doc: "$endCondition:stderr",
+      message:
+        "$endCondition:stderr is only available in the retry prompt, not the initial prompt",
+    },
+  ])(
+    "warns for unavailable $ references",
+    async ({ mode, hasPreCondition, doc, message }) => {
+      await expect(
+        getConditionOutputDiagnostics(doc, mode, hasPreCondition)
+      ).resolves.toEqual([{ message }]);
+    }
+  );
 
-  it("does not trigger after whitespace or a closing brace", () => {
-    expect(getCompletions("{std out")).toBeNull();
-    expect(getCompletions("{stdout}")).toBeNull();
+  it.each([
+    ["prompt", true, "$preCondition:stdout"],
+    ["endCondition", true, "$preCondition:stdout"],
+    ["endCondition", true, "$endCondition:stdout"],
+  ] as const)(
+    "does not warn for valid %s references",
+    async (mode, hasPreCondition, doc) => {
+      await expect(
+        getConditionOutputDiagnostics(doc, mode, hasPreCondition)
+      ).resolves.toEqual([]);
+    }
+  );
+
+  it("does not lint condition-output references inside fenced code blocks", async () => {
+    await expect(
+      getConditionOutputDiagnostics(
+        "```text\n$endCondition:stdout\n```",
+        "prompt",
+        false
+      )
+    ).resolves.toEqual([]);
   });
 });
 

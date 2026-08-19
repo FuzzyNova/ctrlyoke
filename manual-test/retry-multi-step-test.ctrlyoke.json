@@ -8,7 +8,7 @@
         "maxRetries": 3,
         "timeout": 10000,
         "onFail": "retry",
-        "retryPrompt": "Step 1 validation failed:\n{stdout}\n\nPlease set @multi-step-counter.txt to exactly 5."
+        "retryPrompt": "Step 1 validation failed:\n$endCondition:stdout\n\nPlease set @multi-step-counter.txt to exactly 5."
       }
     },
     {
@@ -19,7 +19,7 @@
         "maxRetries": 3,
         "timeout": 10000,
         "onFail": "retry",
-        "retryPrompt": "Step 2 validation failed:\n{stdout}\n\nPlease multiply the current value in @multi-step-counter.txt by 2."
+        "retryPrompt": "Step 2 validation failed:\n$endCondition:stdout\n\nPlease multiply the current value in @multi-step-counter.txt by 2."
       }
     },
     {
@@ -30,7 +30,7 @@
         "maxRetries": 3,
         "timeout": 10000,
         "onFail": "retry",
-        "retryPrompt": "Step 3 validation failed:\n{stdout}\n\nPlease add 5 to the current value in @multi-step-counter.txt."
+        "retryPrompt": "Step 3 validation failed:\n$endCondition:stdout\n\nPlease add 5 to the current value in @multi-step-counter.txt."
       }
     }
   ]

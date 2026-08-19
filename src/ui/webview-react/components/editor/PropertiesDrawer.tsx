@@ -81,6 +81,7 @@ interface PropertiesDrawerProps {
   onClose: () => void;
   activePage: DrawerPage;
   onRequestPage?: (page: DrawerPage, focusId: string) => void;
+  hasPreCondition?: boolean;
 }
 
 /**
@@ -98,6 +99,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   onClose,
   activePage,
   onRequestPage,
+  hasPreCondition = false,
 }) => {
   const {
     properties,
@@ -945,6 +947,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
                   <ScriptConditionEditor
                     variant="endCondition"
+                    hasPreCondition={hasPreCondition}
                     value={
                       properties.endCondition as
                         | ScriptConditionValue

@@ -793,6 +793,8 @@ export interface ConditionEvaluationSummary {
   passed: boolean;
   action?: ConditionAction;
   script: string;
+  expected?: string;
+  compareSource?: CompareSource;
   actual: string;
   actualSource: ScriptVerdict["actualSource"];
   stdout: string;

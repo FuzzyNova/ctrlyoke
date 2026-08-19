@@ -12,7 +12,6 @@ import {
 import {
   COMPARE_SOURCES,
   END_CONDITION_SCRIPT_TYPES,
-  RETRY_PROMPT_PLACEHOLDERS,
   type EndConditionScriptType,
 } from "../types/DashboardConstants";
 import {
@@ -47,7 +46,7 @@ export interface EvaluationResult {
   errored: boolean;
   stdout: string; // Separate stdout from script
   stderr: string; // Separate stderr from script
-  result: string; // Same as stdout; used in retry prompt interpolation ({actual})
+  result: string; // Same as stdout; used in retry prompt interpolation ($endCondition:actual)
   error?: string;
   timeout?: boolean;
   duration: number;
@@ -838,33 +837,6 @@ export class EndConditionEvaluator {
 
     // String contains (for complex outputs)
     return matched(actual.includes(expected), "substring");
-  }
-
-  /**
-   * Build retry prompt from template by replacing placeholders
-   */
-  buildRetryPrompt(
-    template: string,
-    evaluationResult: EvaluationResult,
-    expected: string,
-    compareSource?: EndConditionCompareSource
-  ): string {
-    const replacements: Record<string, string> = {
-      [RETRY_PROMPT_PLACEHOLDERS.STDOUT]: evaluationResult.stdout.trim(),
-      [RETRY_PROMPT_PLACEHOLDERS.STDERR]: evaluationResult.stderr.trim(),
-      [RETRY_PROMPT_PLACEHOLDERS.EXPECTED_VALUE]: expected,
-      [RETRY_PROMPT_PLACEHOLDERS.ACTUAL_VALUE]: evaluationResult.result.trim(),
-      [RETRY_PROMPT_PLACEHOLDERS.EXIT_CODE]: String(
-        evaluationResult.exitCode ?? ""
-      ),
-      [RETRY_PROMPT_PLACEHOLDERS.COMPARE_SOURCE]: compareSource ?? "auto",
-    };
-
-    return Object.entries(replacements).reduce(
-      (result, [key, value]) =>
-        result.replace(new RegExp(`\\{${key}\\}`, "g"), value),
-      template
-    );
   }
 
   /**

@@ -12,7 +12,7 @@ A variable is a `{placeholder}` token in a prompt (or any string field). The tok
 | `{text:name}`     | text       | single-line input (explicit)    |
 | `{file:name}`     | file       | input with a **Browse…** button |
 
-Variable names must start with a lowercase letter and contain only letters and digits. Retry-prompt placeholders (`{stdout}`, `{stderr}`, `{exitCode}`, …) are reserved and never treated as template variables.
+Variable names must start with a lowercase letter and contain only letters and digits. Condition output references (`$preCondition:<field>` and `$endCondition:<field>`) are runtime values and never treated as template variables. `$preCondition:*` works in step and retry prompts; `$endCondition:*` is only available in retry prompts.
 
 The `{file:…}` / `{text:…}` inline prefixes only cover those two types. For a `directory` or `select` variable, write a plain `{name}` token in the body and declare its type in `_templateMeta` (below).
 

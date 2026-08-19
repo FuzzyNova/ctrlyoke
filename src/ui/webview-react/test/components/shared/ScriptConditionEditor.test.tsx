@@ -282,7 +282,7 @@ describe("ScriptConditionEditor", () => {
           script: "npm test",
           returns: "true",
           onFail: CONDITION_ACTIONS.RETRY,
-          retryPrompt: "Fix {stderr}",
+          retryPrompt: "Fix $preCondition:stderr",
         }}
         onChange={onChange}
         idPrefix="test-condition"
@@ -292,15 +292,17 @@ describe("ScriptConditionEditor", () => {
     const editor = screen.getByLabelText("Retry Prompt");
     expect(editor).toHaveAttribute("data-mode", "endCondition");
     expect(editor).toHaveAttribute("data-surface", "input");
-    expect(screen.getByText(/Type \{/)).toHaveTextContent("{stderr}");
+    expect(
+      screen.getByText(/Type \$ for condition-output references/)
+    ).toHaveTextContent("$preCondition:stderr");
 
     fireEvent.change(editor, {
-      target: { value: "Use {stdout} and {stderr}" },
+      target: { value: "Use $preCondition:stdout and $endCondition:stderr" },
     });
 
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({
-        retryPrompt: "Use {stdout} and {stderr}",
+        retryPrompt: "Use $preCondition:stdout and $endCondition:stderr",
       })
     );
   });

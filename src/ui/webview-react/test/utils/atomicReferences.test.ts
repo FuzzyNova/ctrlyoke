@@ -3,6 +3,7 @@ import {
   CHART_ACCENT_COLORS,
   createAtomicReferencePresentation,
   createFileReferenceChip,
+  findConditionOutputRefs,
   findAtomicReferences,
   findContextReferenceMatches,
   projectAtomicReferenceFind,
@@ -290,6 +291,46 @@ describe("atomic reference presentation", () => {
     ]);
   });
 
+  it("parses condition-output refs without treating them as prior context", () => {
+    const token = "$preCondition:stdout";
+    expect(findConditionOutputRefs(token, 7)).toEqual([
+      {
+        from: 7,
+        to: 7 + token.length,
+        token,
+        phase: "preCondition",
+        field: "stdout",
+      },
+    ]);
+    expect(findAtomicReferences(token)[0]).toMatchObject({
+      icon: "shield",
+      label: "preCondition:stdout",
+      title: token,
+      attrs: {
+        "data-type": "conditionOutput",
+        "data-phase": "preCondition",
+        "data-field": "stdout",
+      },
+    });
+  });
+
+  it.each([
+    "$preCondition:unknownField",
+    "$endCondition:unknownField",
+    "x$preCondition:stdout",
+    "$preCondition:stdoutSuffix",
+  ])("does not chip invalid condition-output ref %s", (token) => {
+    expect(findConditionOutputRefs(token)).toEqual([]);
+    expect(findAtomicReferences(token)).toEqual([]);
+  });
+
+  it("renders end-condition output with the checklist icon", () => {
+    expect(findAtomicReferences("$endCondition:stderr")[0]).toMatchObject({
+      icon: "checklist",
+      label: "endCondition:stderr",
+    });
+  });
+
   it("renders a secret reference as an atomic key chip", () => {
     expect(findAtomicReferences("Use !SERVICE_TOKEN here")).toEqual([
       {
@@ -377,6 +418,10 @@ describe("atomic reference presentation", () => {
 
   it("excludes references inside fenced blocks", () => {
     expect(findAtomicReferences("```\n@src/file.ts\n```")).toEqual([]);
+  });
+
+  it("excludes condition-output references inside fenced blocks", () => {
+    expect(findAtomicReferences("```\n$preCondition:stdout\n```")).toEqual([]);
   });
 
   it("excludes a lone prompt-path prompt (no trigger character)", () => {

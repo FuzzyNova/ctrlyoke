@@ -25,6 +25,7 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { TempFileManager } from "../../../utils/TempFileManager";
 import { Log } from "../../../utils/Log";
 import { parseInlinePriorContextRefs } from "../../../utils/FileReferenceParser";
+import { substituteConditionOutputRefs } from "../../ConditionOutputRefs";
 import {
   getEffectiveSecretGrants,
   parseSecretReferences,
@@ -61,6 +62,7 @@ const PROMPT_DIAGNOSTIC_CODES = {
   UNKNOWN_SKILL_REFERENCE: "prompt.skill.unknown",
   UNKNOWN_SECRET_REFERENCE: "prompt.secret.unknown",
   UNRESOLVED_REFERENCE: "prompt.reference.unresolved",
+  CONDITION_OUTPUT_UNAVAILABLE: "prompt.reference.condition-output-unavailable",
 } as const;
 
 export interface PlannedPromptFile {
@@ -133,7 +135,28 @@ export class CliPromptPreparer {
     resolvedSessionId: string | undefined,
     injectMode = false
   ): Promise<PromptPreparationPlan> {
-    const originalPromptText = prompt.prompt.trim();
+    const conditionOutputSubstitution = substituteConditionOutputRefs(
+      prompt.prompt.trim(),
+      {
+        preCondition: workflowContext?.preConditionResult,
+        endCondition: workflowContext?.endConditionResult,
+      }
+    );
+    const originalPromptText = conditionOutputSubstitution.text;
+    const harnessId = resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI;
+    const promptForPreparation =
+      originalPromptText === prompt.prompt.trim()
+        ? prompt
+        : { ...prompt, prompt: originalPromptText };
+    const conditionOutputDiagnostics =
+      conditionOutputSubstitution.unresolved.map((unresolved) =>
+        this.createDiagnostic(
+          PROMPT_DIAGNOSTIC_CODES.CONDITION_OUTPUT_UNAVAILABLE,
+          harnessId,
+          `Condition output reference "${unresolved.token}" is unavailable because no ${unresolved.phase} result has been recorded.`,
+          COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
+        )
+      );
     const slashCommand =
       this.deps.extractLeadingSlashCommand(originalPromptText);
     const isPureSlashCommand =
@@ -145,7 +168,10 @@ export class CliPromptPreparer {
       Log.debug(
         `⚡ Slash command detected ("${slashCommand}") — skipping instruction assembly`
       );
-      return this.createInlinePlan(originalPromptText);
+      return this.createInlinePlan(
+        originalPromptText,
+        conditionOutputDiagnostics
+      );
     }
 
     const promptIndex = workflowContext?.promptIndex ?? 0;
@@ -207,7 +233,6 @@ export class CliPromptPreparer {
           .map((token) => token.name)
       ),
     ];
-    const harnessId = resolvedProperties?.harness ?? HARNESS_IDS.COPILOT_CLI;
     const inlineSecretNames = [
       ...new Set(
         parseSecretReferences(originalPromptText).map(
@@ -233,7 +258,7 @@ export class CliPromptPreparer {
         )
       );
     const sections = await this.deps.buildPromptSections(
-      prompt,
+      promptForPreparation,
       attachmentResolution.agent,
       effectiveSkillResolution
     );
@@ -250,6 +275,7 @@ export class CliPromptPreparer {
         )
     );
     const promptDiagnostics = [
+      ...conditionOutputDiagnostics,
       ...inlineSkillDiagnostics,
       ...unknownSecretNames.map((name) =>
         this.createDiagnostic(

@@ -484,12 +484,12 @@ suite("PromptFileLoader Tests", () => {
           onFail: "retry",
           retryPrompt:
             "Workflow-level retry prompt.\n" +
-            "Script output: {stdout}\n" +
-            "Stderr: {stderr}\n" +
-            "Exit code: {exitCode}\n" +
-            "Expected: {expected}\n" +
-            "Actual: {actual}\n" +
-            "Compare source: {compareSource}\n" +
+            "Script output: $endCondition:stdout\n" +
+            "Stderr: $endCondition:stderr\n" +
+            "Exit code: $endCondition:exitCode\n" +
+            "Expected: $endCondition:expected\n" +
+            "Actual: $endCondition:actual\n" +
+            "Compare source: $endCondition:compareSource\n" +
             "Please fix and try again.\n",
         });
         assert.deepStrictEqual(loaded.finalStep, {
@@ -550,12 +550,12 @@ suite("PromptFileLoader Tests", () => {
         onFail: "retry",
         retryPrompt:
           "Step-level retry prompt.\n" +
-          "Stdout: {stdout}\n" +
-          "Stderr: {stderr}\n" +
-          "Exit code: {exitCode}\n" +
-          "Expected: {expected}\n" +
-          "Actual: {actual}\n" +
-          "Compare source: {compareSource}\n" +
+          "Stdout: $endCondition:stdout\n" +
+          "Stderr: $endCondition:stderr\n" +
+          "Exit code: $endCondition:exitCode\n" +
+          "Expected: $endCondition:expected\n" +
+          "Actual: $endCondition:actual\n" +
+          "Compare source: $endCondition:compareSource\n" +
           "Please fix and try again.\n",
       });
 

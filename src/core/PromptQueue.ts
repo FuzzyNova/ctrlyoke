@@ -8,6 +8,7 @@ import {
   WorkflowRuntimeState,
   PromptResult,
   ConditionEvaluationSummary,
+  WorkflowAttemptTarget,
   EXECUTION_STATES,
   WorkflowStep,
   ScriptRuntimeOutput,
@@ -693,6 +694,28 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       }),
       endCondition: { ...summary },
     };
+  }
+
+  /** Read the latest pre-condition evaluation for a workflow attempt target. */
+  public getPreConditionSummary(
+    target: WorkflowAttemptTarget
+  ): ConditionEvaluationSummary | undefined {
+    const summary =
+      target.kind === FINAL_STEP_PHASES.QUEUE
+        ? this.state.results[target.stepIndex]?.preCondition
+        : this.finalStepRuntime?.preCondition;
+    return summary ? { ...summary } : undefined;
+  }
+
+  /** Read the latest end-condition evaluation for a workflow attempt target. */
+  public getEndConditionSummary(
+    target: WorkflowAttemptTarget
+  ): ConditionEvaluationSummary | undefined {
+    const summary =
+      target.kind === FINAL_STEP_PHASES.QUEUE
+        ? this.state.results[target.stepIndex]?.endCondition
+        : this.finalStepRuntime?.endCondition;
+    return summary ? { ...summary } : undefined;
   }
 
   /**

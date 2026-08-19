@@ -127,6 +127,125 @@ suite("CliPromptPreparer", () => {
     });
   });
 
+  test("should substitute both condition outputs before preparing a retry prompt", async () => {
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (prompt) =>
+        createSections({ userPromptText: prompt.prompt }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: () => "",
+      formatTempFileRef: () => "",
+      formatCategorizedReferences: () => "",
+    });
+
+    const result = await preparer.planPrompt(
+      {
+        prompt:
+          "Use pre=${pre} $preCondition:stdout and end=$end $endCondition:stderr",
+      } as PromptStep,
+      {
+        promptIndex: 0,
+        allPrompts: [],
+        preConditionResult: {
+          passed: false,
+          script: "pre.js",
+          actual: "pre-actual",
+          actualSource: "stdout",
+          stdout: "pre-output",
+          stderr: "pre-error",
+          durationMs: 1,
+        },
+        endConditionResult: {
+          passed: false,
+          script: "end.js",
+          actual: "end-actual",
+          actualSource: "stderr",
+          stdout: "end-output",
+          stderr: "end-error",
+          durationMs: 1,
+        },
+      },
+      undefined,
+      undefined
+    );
+
+    assert.strictEqual(
+      result.promptWithInstruction,
+      "Use pre=${pre} pre-output and end=$end end-error"
+    );
+    assert.deepStrictEqual(result.diagnostics, []);
+  });
+
+  test("should warn for unavailable condition output and avoid double substitution", async () => {
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async (prompt) =>
+        createSections({ userPromptText: prompt.prompt }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: () => "",
+      formatTempFileRef: () => "",
+      formatCategorizedReferences: () => "",
+    });
+
+    const unresolved = await preparer.planPrompt(
+      { prompt: "$preCondition:stdout $endCondition:stdout" } as PromptStep,
+      undefined,
+      undefined,
+      undefined
+    );
+    assert.strictEqual(
+      unresolved.promptWithInstruction,
+      "$preCondition:stdout $endCondition:stdout"
+    );
+    assert.deepStrictEqual(
+      unresolved.diagnostics.map((diagnostic) => ({
+        code: diagnostic.code,
+        severity: diagnostic.severity,
+      })),
+      [
+        {
+          code: "prompt.reference.condition-output-unavailable",
+          severity: "warning",
+        },
+        {
+          code: "prompt.reference.condition-output-unavailable",
+          severity: "warning",
+        },
+      ]
+    );
+
+    const literalContent = await preparer.planPrompt(
+      { prompt: "The output was $preCondition:stdout" } as PromptStep,
+      {
+        promptIndex: 0,
+        allPrompts: [],
+        preConditionResult: {
+          passed: true,
+          script: "pre.js",
+          actual: "literal",
+          actualSource: "stdout",
+          stdout: "$preCondition:stdout",
+          stderr: "",
+          durationMs: 1,
+        },
+      },
+      undefined,
+      undefined
+    );
+    assert.strictEqual(
+      literalContent.promptWithInstruction,
+      "The output was $preCondition:stdout"
+    );
+  });
+
   test("should keep pure native /commit and /mcp commands inline", async () => {
     for (const command of ["/commit", "/mcp"]) {
       let buildSectionsCalled = false;

@@ -12,7 +12,12 @@ import {
   scanCtrlYokeSlashTokens,
   type CtrlYokeSlashToken,
 } from "../../../utils/CtrlYokeSlashTokens";
-import { CTRLYOKE_SLASH_TOKEN_KINDS } from "../../../types/DashboardConstants";
+import {
+  CTRLYOKE_SLASH_TOKEN_KINDS,
+  RETRY_PROMPT_PLACEHOLDERS,
+  SCRIPT_OUTPUT_SOURCES,
+  type RetryPromptPlaceholder,
+} from "../../../types/DashboardConstants";
 import { parseSecretReferences } from "../../../utils/SecretReferenceParser";
 import { NOT_AFTER_BOUNDARY } from "../../../utils/ReferenceBoundary";
 import { createReferencePatterns } from "../../../utils/ReferencePatterns";
@@ -328,6 +333,8 @@ export const SYMBOL_ICON_COLORS: Record<string, string> = {
   "list-selection": CHART_ACCENT_COLORS.purple,
   "source-control": CHART_ACCENT_COLORS.green,
   book: CHART_ACCENT_COLORS.red,
+  shield: CHART_ACCENT_COLORS.blue,
+  checklist: CHART_ACCENT_COLORS.green,
   // /skill: and /mcp: slash-token chips (see describeSlashTokenChip) share the
   // orange accent so both read as one "ctrlyoke attachment" family, distinct
   // from the file/symbol/git/prior-context accents above.
@@ -372,6 +379,79 @@ export interface InlinePriorContextRef {
   token: string;
   kind: "previous" | "all" | "finalStep" | "allFinalStep" | "step";
   indices?: number[];
+}
+
+type ConditionOutputPhase =
+  | typeof SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
+  | typeof SCRIPT_OUTPUT_SOURCES.END_CONDITION;
+
+export interface ConditionOutputRef {
+  from: number;
+  to: number;
+  token: string;
+  phase: ConditionOutputPhase;
+  field: RetryPromptPlaceholder;
+}
+
+const CONDITION_OUTPUT_PHASES: readonly ConditionOutputPhase[] = [
+  SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+  SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+];
+
+const CONDITION_OUTPUT_FIELDS = new Set<string>(
+  Object.values(RETRY_PROMPT_PLACEHOLDERS)
+);
+
+function isConditionOutputPhase(value: string): value is ConditionOutputPhase {
+  return CONDITION_OUTPUT_PHASES.includes(value as ConditionOutputPhase);
+}
+
+function isConditionOutputField(
+  value: string
+): value is RetryPromptPlaceholder {
+  return CONDITION_OUTPUT_FIELDS.has(value);
+}
+
+/**
+ * Find condition-output refs without widening the prior-context ref type.
+ *
+ * This intentionally mirrors findInlinePriorContextRefs' tokenizer. The two
+ * namespaces have different runtime meanings and must remain separate.
+ */
+export function findConditionOutputRefs(
+  text: string,
+  offset = 0
+): ConditionOutputRef[] {
+  const results: ConditionOutputRef[] = [];
+  const regex = new RegExp(
+    `${NOT_AFTER_BOUNDARY}\\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\\-]*)?)`,
+    "g"
+  );
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    const body = match[1];
+    const separatorIndex = body.indexOf(":");
+    if (separatorIndex === -1) continue;
+
+    const phase = body.slice(0, separatorIndex);
+    const field = body.slice(separatorIndex + 1);
+    if (!isConditionOutputPhase(phase) || !isConditionOutputField(field)) {
+      continue;
+    }
+
+    const token = match[0];
+    const from = offset + match.index;
+    results.push({
+      from,
+      to: from + token.length,
+      token,
+      phase,
+      field,
+    });
+  }
+
+  return results;
 }
 
 export const PRIOR_CONTEXT_CHIP_LABELS: Record<
@@ -479,6 +559,25 @@ export function describePriorContextChip(
   };
 }
 
+function describeConditionOutputChip(
+  ref: ConditionOutputRef,
+  docText: string
+): Omit<AtomicReferenceChip, "from" | "to"> {
+  return {
+    icon:
+      ref.phase === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
+        ? "shield"
+        : "checklist",
+    label: `${ref.phase}:${ref.field}`,
+    title: docText.slice(ref.from, ref.to),
+    attrs: {
+      "data-type": "conditionOutput",
+      "data-phase": ref.phase,
+      "data-field": ref.field,
+    },
+  };
+}
+
 // Explicit /skill:<name> and /mcp:<name> references (see CtrlYokeSlashTokens.ts).
 // A separate parser from findContextReferenceMatches by design — the two
 // namespaces don't overlap and share no token grammar — but the resulting
@@ -534,6 +633,11 @@ export function findAtomicReferences(
       from: ref.from,
       to: ref.to,
       describe: () => describePriorContextChip(ref, docText),
+    })),
+    ...findConditionOutputRefs(docText).map((ref) => ({
+      from: ref.from,
+      to: ref.to,
+      describe: () => describeConditionOutputChip(ref, docText),
     })),
     ...scanCtrlYokeSlashTokens(docText).map((token) => ({
       from: token.index,

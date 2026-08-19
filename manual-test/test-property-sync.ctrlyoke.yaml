@@ -64,12 +64,12 @@ endCondition:
   onFail: retry
   retryPrompt: |
     Workflow-level retry prompt.
-    Script output: {stdout}
-    Stderr: {stderr}
-    Exit code: {exitCode}
-    Expected: {expected}
-    Actual: {actual}
-    Compare source: {compareSource}
+    Script output: $endCondition:stdout
+    Stderr: $endCondition:stderr
+    Exit code: $endCondition:exitCode
+    Expected: $endCondition:expected
+    Actual: $endCondition:actual
+    Compare source: $endCondition:compareSource
     Please fix and try again.
 
 preCondition:
@@ -194,12 +194,12 @@ steps:
       onFail: retry
       retryPrompt: |
         Step-level retry prompt.
-        Stdout: {stdout}
-        Stderr: {stderr}
-        Exit code: {exitCode}
-        Expected: {expected}
-        Actual: {actual}
-        Compare source: {compareSource}
+        Stdout: $endCondition:stdout
+        Stderr: $endCondition:stderr
+        Exit code: $endCondition:exitCode
+        Expected: $endCondition:expected
+        Actual: $endCondition:actual
+        Compare source: $endCondition:compareSource
         Please fix and try again.
 
   # ──────────────────────────────────────────────────────────────────────────

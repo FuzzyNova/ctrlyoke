@@ -220,11 +220,11 @@
                 },
                 "retryPrompt": {
                   "type": "string",
-                  "description": "Retry prompt template. Supports {stdout}, {stderr}, {exitCode}, {actual}, {expected}, {compareSource}."
+                  "description": "Retry prompt template. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:* works in the step and retry prompts; $endCondition:* is only available in the retry prompt."
                 },
                 "passRetryPrompt": {
                   "type": "string",
-                  "description": "Pass-retry prompt template. Supports {stdout}, {stderr}, {exitCode}, {actual}, {expected}, {compareSource}. If omitted, the step's own prompt is re-sent."
+                  "description": "Pass-retry prompt template. Supports $preCondition:<field> and $endCondition:<field> for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource). $preCondition:* works in the step and retry prompts; $endCondition:* is only available in the retry prompt. If omitted, the step's own prompt is re-sent."
                 },
                 "resumeSessionOnRetry": {
                   "type": "boolean",

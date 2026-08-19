@@ -35,7 +35,7 @@ steps:
       maxRetries: 2
       retryPrompt: |
         Lint failed. Fix the issues:
-        {stdout}
+        $endCondition:stdout
 ```
 
 Key fields:
@@ -43,7 +43,7 @@ Key fields:
 - **`prompt`** — the instruction for that step. Reference a file with `@path/to/file.ts` or a whole directory with `@path/to/dir/` (trailing slash). `@` is **only** for files and directories — there is no "whole workspace" reference. For broad context, reference the relevant directories or just describe what to analyze.
 - **`model`** _(optional)_ — a model override for the step. Omit it to inherit the workflow/user default. Model names are **harness-specific**, so prefer describing intent (see Models) over hardcoding a value.
 - **`resumeSession: true`** — continue the prior step's conversation (shared live context) instead of starting fresh. **Only use it when the combined work fits one context window** — small, tightly-coupled steps (e.g. implement right after plan on a small change). For larger features, keep sessions separate and share context through a written plan doc instead (see Session strategy).
-- **`endCondition`** — run a `script` after the step and gate on its result. `returns: "true"` passes on exit code 0. `onFail: retry` re-runs after failure with `retryPrompt`; `onPass: retry` re-runs after a pass with `passRetryPrompt` (or the step's own prompt) up to `maxRetries` times, then advances when the budget is exhausted. Retry placeholders: `{stdout}`, `{stderr}`, `{exitCode}`, `{actual}`, `{expected}`, `{compareSource}`. Use this at checkpoints (tests, lint, build), including regression tests that should fail with `onPass: retry` and `onFail: continue`.
+- **`endCondition`** — run a `script` after the step and gate on its result. `returns: "true"` passes on exit code 0. `onFail: retry` re-runs after failure with `retryPrompt`; `onPass: retry` re-runs after a pass with `passRetryPrompt` (or the step's own prompt) up to `maxRetries` times, then advances when the budget is exhausted. Condition output references are `$preCondition:<field>` and `$endCondition:<field>` for `stdout`, `stderr`, `exitCode`, `actual`, `expected`, and `compareSource`. `$preCondition:*` works in the step and retry prompts; `$endCondition:*` is only available in retry prompts. Use this at checkpoints (tests, lint, build), including regression tests that should fail with `onPass: retry` and `onFail: continue`.
 
 ## Standard phases
 
@@ -119,7 +119,7 @@ steps:
       maxRetries: 2
       retryPrompt: |
         Tests failed. Fix the issues:
-        {stdout}
+        $endCondition:stdout
 
   - name: commit-message
     prompt: |

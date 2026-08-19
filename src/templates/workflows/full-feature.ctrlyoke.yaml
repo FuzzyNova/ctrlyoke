@@ -74,7 +74,7 @@ steps:
       retryPrompt: |
         {testCommand} is still failing. Fix the remaining issues:
 
-        {stdout}
+        $endCondition:stdout
 
   - name: review
     harness: "{reviewHarness}"

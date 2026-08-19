@@ -3,6 +3,8 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
+import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
+import type { PromptSections } from "../../core/HarnessIntegration";
 import {
   ACTION_TYPES,
   CONDITION_ACTIONS,
@@ -42,6 +44,33 @@ const RETRY_GATE_SCRIPT = "pre-retry.js";
 const SHARED_BUDGET_GATE_SCRIPT = "pre-shared-budget.js";
 const WRITE_MARKER = `require('fs').writeFileSync(require('path').join(__dirname, '${MARKER_FILE}'), 'ran');`;
 const APPEND_MARKER = `const fs = require('fs'); const p = require('path').join(__dirname, '${MARKER_FILE}'); const before = fs.existsSync(p) ? fs.readFileSync(p, 'utf8').length : 0; fs.appendFileSync(p, 'x');`;
+
+function createSimplePromptPreparer(): CliPromptPreparer {
+  const createSections = (prompt: string): PromptSections => ({
+    skillContent: null,
+    agentContent: null,
+    directFileRefs: [],
+    imageFileRefs: [],
+    sourceRuntimeCopies: [],
+    sourceRuntimeReadReferences: [],
+    excerptContent: null,
+    userPromptText: prompt,
+    skippedReferences: [],
+  });
+
+  return new CliPromptPreparer({
+    shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
+    buildPromptSections: async (prompt) => createSections(prompt.prompt),
+    extractLeadingSlashCommand: () => null,
+    isSimplePrompt: () => true,
+    buildPriorContextXmlFromItems: () => "",
+    getWorkspaceRoot: () => process.cwd(),
+    getTempFileSplitConfig: () => undefined,
+    formatDirectFileRef: () => "",
+    formatTempFileRef: () => "",
+    formatCategorizedReferences: () => "",
+  });
+}
 
 suite("Workflow-level preCondition full flow (load -> run)", function () {
   // Each test executes a full workflow incl. a node subprocess for the gate.
@@ -273,6 +302,37 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
       promptOutput.timestampMs > preOutput.timestampMs,
       `the prompt output must be stamped after the pre-condition that gated it (pre=${preOutput.timestampMs}, prompt=${promptOutput.timestampMs})`
     );
+  });
+
+  test("substitutes preCondition output in the prompt dispatched to the harness", async () => {
+    harness = createExecutionHarness(workspace);
+    const promptPreparer = createSimplePromptPreparer();
+    harness.integration.prepareSentPrompt = async (prompt, context) =>
+      (
+        await promptPreparer.preparePrompt(
+          prompt,
+          context,
+          undefined,
+          undefined
+        )
+      ).promptWithInstruction;
+    await harness.instance.loadPromptFile(
+      await writeWorkflow({
+        steps: [
+          { prompt: "Fix the failures reported here: $preCondition:stdout" },
+        ],
+        preCondition: {
+          script: "echo gate-output",
+          compareSource: "stdout",
+          returns: "gate-output",
+        },
+      })
+    );
+    await harness.instance.executeLoadedPromptFile();
+
+    assert.deepStrictEqual(harness.integration.sentPrompts, [
+      "Fix the failures reported here: gate-output",
+    ]);
   });
 
   test("errored preCondition with onError stop halts before the prompt", async () => {
