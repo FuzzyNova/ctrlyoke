@@ -96,7 +96,6 @@ class TestEndConditionEvaluator extends EndConditionEvaluator {
     this.varsSeen.push(vars);
     return this.retryResults.shift() ?? successResult();
   }
-
 }
 
 function successResult(stdout: string = "ok"): EvaluationResult {
@@ -822,10 +821,7 @@ suite("EndConditionHandler", () => {
     );
 
     assert.strictEqual(result.shouldContinue, true);
-    assert.deepStrictEqual(retryPrompts, [
-      "Pass again",
-      "Fix failure",
-    ]);
+    assert.deepStrictEqual(retryPrompts, ["Pass again", "Fix failure"]);
     assert.strictEqual(queue.getCurrentRetryCount(), 0);
   });
 
@@ -834,8 +830,7 @@ suite("EndConditionHandler", () => {
     const runtime = new WorkflowStateMachine();
     const queue = new PromptQueue(runtime);
     const prompt = createPrompt(1, "retry", {
-      passRetryPrompt:
-        "pre=$preCondition:stdout;end=$endCondition:stderr",
+      passRetryPrompt: "pre=$preCondition:stdout;end=$endCondition:stderr",
     });
     const integration = new MockHarnessIntegration(undefined, false);
     const evaluator = new EndConditionEvaluator(platform);

@@ -27,10 +27,10 @@ steps:
       retryPrompt: |
         The validation step failed.
         stdout:
-        {stdout}
+        $endCondition:stdout
 
         stderr:
-        {stderr}
+        $endCondition:stderr
 
         Fix the remaining issues and try again.
 

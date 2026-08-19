@@ -97,10 +97,10 @@ steps:
       retryPrompt: |
         Tests are still failing.
         stdout:
-        {stdout}
+        $endCondition:stdout
 
         stderr:
-        {stderr}
+        $endCondition:stderr
 
         Fix the remaining issues.
 ```

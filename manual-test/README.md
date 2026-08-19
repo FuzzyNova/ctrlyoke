@@ -410,19 +410,23 @@ Located in `.ctrlyoke/scripts/`:
     "script": "validate.py",
     "returns": "success",
     "maxRetries": 5,
-    "retryPrompt": "Validation failed (exit {exitCode}): {stdout}"
+    "retryPrompt": "Validation failed (exit $endCondition:exitCode): $endCondition:stdout"
   }
 }
 ```
 
-### Retry Prompt Placeholders
+### Retry Prompt Condition Output References
 
-- `{stdout}` - stdout from the script
-- `{stderr}` - stderr from the script
-- `{expected}` - what we're looking for
-- `{actual}` - what we got
-- `{exitCode}` - numeric exit code from the script
-- `{compareSource}` - comparison source: stdout, stderr, exitCode, or auto
+- `$endCondition:stdout` - stdout from the script
+- `$endCondition:stderr` - stderr from the script
+- `$endCondition:expected` - what we're looking for
+- `$endCondition:actual` - what we got
+- `$endCondition:exitCode` - numeric exit code from the script
+- `$endCondition:compareSource` - comparison source: stdout, stderr, exitCode, or auto
+
+`$preCondition:*` references use the same fields and work in both the step
+prompt and retry prompt. `$endCondition:*` references are only available in
+retry prompts.
 
 ---
 
@@ -550,7 +554,7 @@ steps:
     "returns": "true",
     "onFail": "retry",
     "maxRetries": 3,
-    "retryPrompt": "Validation failed: {stdout}\n\nPlease fix and try again."
+    "retryPrompt": "Validation failed: $endCondition:stdout\n\nPlease fix and try again."
   }
 }
 ```

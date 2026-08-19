@@ -150,7 +150,7 @@ steps:
       returns: "true"
       maxRetries: 3
       retryPrompt: |
-        Tests failed with: {stderr}
+        Tests failed with: $endCondition:stderr
         Please fix the failures.
 
   - name: step-2
@@ -222,11 +222,14 @@ steps:
       returns: "true"
       maxRetries: 3
       retryPrompt: |
-        Tests still failing: {stderr}
+        Tests still failing: $endCondition:stderr
         Fix all failures before continuing.
 ```
 
-The script runs in an isolated child process. The `returns` value is compared against `stdout`. Template variables `{stdout}`, `{stderr}`, `{exitCode}` are available in `retryPrompt`.
+The script runs in an isolated child process. The `returns` value is compared against
+`stdout`. `$endCondition:stdout`, `$endCondition:stderr`, and
+`$endCondition:exitCode` are available in `retryPrompt`; `$preCondition:*`
+references are available in both the step and retry prompts.
 
 ---
 

@@ -16,10 +16,10 @@ endCondition:
   retryPrompt: |
     Validation failed.
     stdout:
-    {stdout}
+    $endCondition:stdout
 
     stderr:
-    {stderr}
+    $endCondition:stderr
 ```
 
 The pass and failure directions are independent actions. `onFail: retry`
@@ -79,13 +79,17 @@ preCondition:
   onFail: stopWorkflow
 ```
 
-## Placeholder variables
+## Condition output references
 
-Retry templates can use:
+Retry templates can use `$endCondition:*` references:
 
-- `{stdout}`
-- `{stderr}`
-- `{exitCode}`
-- `{actual}`
-- `{expected}`
-- `{compareSource}`
+- `$endCondition:stdout`
+- `$endCondition:stderr`
+- `$endCondition:exitCode`
+- `$endCondition:actual`
+- `$endCondition:expected`
+- `$endCondition:compareSource`
+
+`$preCondition:*` references use the same six fields and work in both the
+step prompt and its retry prompt. `$endCondition:*` references are only
+available in retry prompts because the end condition runs after the prompt.

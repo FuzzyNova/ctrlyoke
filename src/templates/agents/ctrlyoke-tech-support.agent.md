@@ -145,8 +145,8 @@ steps:
       maxRetries: 2
       retryPrompt: |
         Tests failed. Fix the issues:
-        {stdout}
-        {stderr}
+        $endCondition:stdout
+        $endCondition:stderr
 ```
 
 Common properties:
@@ -218,7 +218,7 @@ Validation:
 - Pre-condition runs before a prompt and decides whether to continue, skip, or stop.
 - End condition runs after a prompt and compares stdout, stderr, exit code, or auto-detected output to `returns`.
 - Use end conditions for objective checks like tests, lint, builds, file existence, or custom verification scripts.
-- Retry prompts can include placeholders such as `{stdout}`, `{stderr}`, `{exitCode}`, `{error}`, `{retryCount}`, and `{maxRetries}` when available from the condition context.
+- Retry prompts can include condition output references such as `$preCondition:stdout`, `$endCondition:stdout`, `$endCondition:stderr`, and `$endCondition:exitCode`. `$preCondition:*` works in the step and retry prompts; `$endCondition:*` is only available in retry prompts.
 
 Error behavior:
 

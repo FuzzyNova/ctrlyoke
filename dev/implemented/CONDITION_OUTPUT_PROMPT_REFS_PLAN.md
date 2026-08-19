@@ -2,8 +2,12 @@
 
 ## Status
 
-Phase 4 complete (editor parser/chips, completions, linting, and placeholder removal);
-schema/template migration remains for phase 5. **Revised 2026-08-19** after tracing the code: substitution
+Feature shipped — phases 1–5 complete as of 2026-08-19. Runtime substitution,
+editor support, schema/docs/template migration, tests, and validation are complete.
+The core and webview parsers remain duplicated, generalized `$scriptStep:*`
+references remain out of scope, unresolved references remain advisory rather than
+validation errors, and the flat completion list was retained instead of adding a
+second completion pass. **Revised 2026-08-19** after tracing the code: substitution
 collapsed from three call sites to one (`CliPromptPreparer`), the
 `createConditionEvaluationSummary` third parameter changed from `ScriptVerdict` to a details
 bag, fenced-code masking added as a requirement, and the `{...}` migration surface expanded

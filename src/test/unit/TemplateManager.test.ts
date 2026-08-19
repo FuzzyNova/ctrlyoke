@@ -205,10 +205,10 @@ suite("TemplateManager variable metadata", () => {
   });
 
   suite("extractVariables", () => {
-    test("extracts typed and untyped tokens and filters retry placeholders", () => {
+    test("extracts template variables without treating condition refs as variables", () => {
       const tm = makeManager();
       const vars = tm.extractVariables(
-        "Run {testCommand}; see @{file:specFile}; note {stdout}"
+        "Run {testCommand}; see @{file:specFile}; note $preCondition:stdout"
       );
       const byName = Object.fromEntries(
         vars.map((v: { name: string }) => [v.name, v])
@@ -218,7 +218,7 @@ suite("TemplateManager variable metadata", () => {
       assert.strictEqual(
         byName.stdout,
         undefined,
-        "reserved retry placeholder filtered out"
+        "condition-output reference is not a template variable"
       );
     });
   });
@@ -417,8 +417,8 @@ suite("TemplateManager variable metadata", () => {
           compareSource: "stdout",
           timeout: 1_000,
           maxRetries: 2,
-          retryPrompt: "retry {stdout}",
-          passRetryPrompt: "pass {stdout}",
+          retryPrompt: "retry $endCondition:stdout",
+          passRetryPrompt: "pass $endCondition:stdout",
           resumeSessionOnRetry: false,
           onPass: "retry",
           onFail: "continue",

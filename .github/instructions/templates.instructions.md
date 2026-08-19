@@ -26,7 +26,7 @@ Runtime code reads the built copies from `out/templates/`, never `src/templates/
 - The workflow schema treats `_templateMeta` as the authoring marker: valid `{variableName}` placeholders are accepted in enum-constrained template fields such as `harness`, while ordinary workflows without `_templateMeta` remain restricted to concrete runtime values.
 - File variables belong in prompt text as `@{file:name}` — the `@` stays outside the braces so substitution still produces a valid attachment reference.
 - `_templateMeta.variables` can enrich extracted variables with `type`, `fileFilter`, and `autoFillFilename`; only the first variable marked `autoFillFilename: true` wins.
-- Retry placeholders like `{stdout}`, `{stderr}`, `{expected}`, `{actual}`, `{exitCode}`, and `{compareSource}` are reserved runtime values, not template-input variables.
+- Condition output references use `$preCondition:<field>` and `$endCondition:<field>` with fields `stdout`, `stderr`, `expected`, `actual`, `exitCode`, and `compareSource`; they are runtime values, not template-input variables. `$preCondition:*` works in step and retry prompts, while `$endCondition:*` is only available in retry prompts.
 </templateVariables>
 
 <manifests>

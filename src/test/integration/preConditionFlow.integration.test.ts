@@ -318,7 +318,9 @@ suite("Workflow-level preCondition full flow (load -> run)", function () {
       ).promptWithInstruction;
     await harness.instance.loadPromptFile(
       await writeWorkflow({
-        steps: [{ prompt: "Fix the failures reported here: $preCondition:stdout" }],
+        steps: [
+          { prompt: "Fix the failures reported here: $preCondition:stdout" },
+        ],
         preCondition: {
           script: "echo gate-output",
           compareSource: "stdout",

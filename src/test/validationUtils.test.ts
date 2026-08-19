@@ -234,7 +234,7 @@ suite("ValidationUtils Extended Tests", () => {
       const result = ValidationUtils.validateEndCondition({
         script: "test.py",
         returns: "true",
-        retryPrompt: "Try again: {stdout}",
+        retryPrompt: "Try again: $endCondition:stdout",
       });
       assert.strictEqual(result.valid, true);
     });
@@ -266,7 +266,8 @@ suite("ValidationUtils Extended Tests", () => {
       const result = ValidationUtils.validateEndCondition({
         script: "test.py",
         returns: "true",
-        passRetryPrompt: "Keep working: {actual} vs {expected}",
+        passRetryPrompt:
+          "Keep working: $endCondition:actual vs $endCondition:expected",
       });
       assert.strictEqual(result.valid, true);
     });

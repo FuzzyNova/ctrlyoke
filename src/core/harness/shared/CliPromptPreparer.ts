@@ -148,15 +148,15 @@ export class CliPromptPreparer {
       originalPromptText === prompt.prompt.trim()
         ? prompt
         : { ...prompt, prompt: originalPromptText };
-    const conditionOutputDiagnostics = conditionOutputSubstitution.unresolved.map(
-      (unresolved) =>
+    const conditionOutputDiagnostics =
+      conditionOutputSubstitution.unresolved.map((unresolved) =>
         this.createDiagnostic(
           PROMPT_DIAGNOSTIC_CODES.CONDITION_OUTPUT_UNAVAILABLE,
           harnessId,
           `Condition output reference "${unresolved.token}" is unavailable because no ${unresolved.phase} result has been recorded.`,
           COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING
         )
-    );
+      );
     const slashCommand =
       this.deps.extractLeadingSlashCommand(originalPromptText);
     const isPureSlashCommand =

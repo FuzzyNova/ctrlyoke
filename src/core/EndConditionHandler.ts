@@ -500,9 +500,7 @@ export class EndConditionHandler {
    * Build the prompt sent after a passing end-condition evaluation.
    * A missing pass template deliberately falls back to the step's own prompt.
    */
-  buildPassRetryPrompt(
-    prompt: PromptStep
-  ): string {
+  buildPassRetryPrompt(prompt: PromptStep): string {
     const passRetryPromptTemplate =
       this.promptQueue.getEffectivePassRetryPrompt(prompt);
 

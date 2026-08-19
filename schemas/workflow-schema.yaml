@@ -776,13 +776,17 @@ definitions:
       retryPrompt:
         type: string
         description: >-
-          Template for retry prompt with placeholders: {stdout}, {stderr}, {exitCode}, {actual},
-          {expected}, {compareSource}
+          Template for retry prompt. Supports $preCondition:<field> and $endCondition:<field> for
+          condition output fields (stdout, stderr, exitCode, actual, expected, compareSource).
+          $preCondition:* works in the step and retry prompts; $endCondition:* is only available in
+          the retry prompt.
       passRetryPrompt:
         type: string
         description: >-
-          Template for pass-retry prompt with placeholders: {stdout}, {stderr}, {exitCode},
-          {actual}, {expected}, {compareSource}. If omitted, the step's own prompt is re-sent.
+          Template for pass-retry prompt. Supports $preCondition:<field> and $endCondition:<field>
+          for condition output fields (stdout, stderr, exitCode, actual, expected, compareSource).
+          $preCondition:* works in the step and retry prompts; $endCondition:* is only available in
+          the retry prompt. If omitted, the step's own prompt is re-sent.
       resumeSessionOnRetry:
         type: boolean
         description: >-

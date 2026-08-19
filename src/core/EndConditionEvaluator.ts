@@ -46,7 +46,7 @@ export interface EvaluationResult {
   errored: boolean;
   stdout: string; // Separate stdout from script
   stderr: string; // Separate stderr from script
-  result: string; // Same as stdout; used in retry prompt interpolation ({actual})
+  result: string; // Same as stdout; used in retry prompt interpolation ($endCondition:actual)
   error?: string;
   timeout?: boolean;
   duration: number;
