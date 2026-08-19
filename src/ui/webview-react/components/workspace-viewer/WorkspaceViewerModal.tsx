@@ -5,6 +5,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { WorkspaceViewerHeader } from "./WorkspaceViewerHeader";
 import { WorkspaceExplorerPane } from "./WorkspaceExplorerPane";
 import { WorkspaceSourceControlPane } from "./WorkspaceSourceControlPane";
+import { WorkspaceSearchPane } from "./WorkspaceSearchPane";
 
 const EXIT_DURATION_MS = 220;
 
@@ -72,8 +73,10 @@ export const WorkspaceViewerModal: React.FC = () => {
       <div className="flex-1 overflow-hidden relative">
         {activeTab === "explorer" ? (
           <WorkspaceExplorerPane />
-        ) : (
+        ) : activeTab === "sourceControl" ? (
           <WorkspaceSourceControlPane />
+        ) : (
+          <WorkspaceSearchPane />
         )}
       </div>
     </div>,

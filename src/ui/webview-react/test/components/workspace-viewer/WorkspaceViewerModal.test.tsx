@@ -5,6 +5,7 @@
  *   - workspaceViewerStore (isOpen, activeTab, fileDirty, etc.)
  *   - WorkspaceExplorerPane (pane sub-component — stubbed)
  *   - WorkspaceSourceControlPane (pane sub-component — stubbed)
+ *   - WorkspaceSearchPane (pane sub-component — stubbed)
  *   - WorkspaceViewerHeader (header with tab buttons + close)
  *
  * Strategy: stub all heavy sub-components and hostedApi, preset store state,
@@ -32,6 +33,10 @@ vi.mock("@components/workspace-viewer/WorkspaceSourceControlPane", () => ({
   WorkspaceSourceControlPane: () => (
     <div data-testid="source-control-pane">SourceControlPane</div>
   ),
+}));
+
+vi.mock("@components/workspace-viewer/WorkspaceSearchPane", () => ({
+  WorkspaceSearchPane: () => <div data-testid="search-pane">SearchPane</div>,
 }));
 
 // ---------------------------------------------------------------------------
@@ -125,6 +130,18 @@ describe("WorkspaceViewerModal — tabs", () => {
     expect(screen.queryByTestId("source-control-pane")).not.toBeInTheDocument();
   });
 
+  it("switches to the Search pane when the Search tab is clicked", async () => {
+    const user = userEvent.setup();
+    useWorkspaceViewerStore.setState({ isOpen: true });
+    render(<WorkspaceViewerModal />);
+
+    await user.click(screen.getByRole("tab", { name: /search/i }));
+
+    expect(useWorkspaceViewerStore.getState().activeTab).toBe("search");
+    expect(screen.getByTestId("search-pane")).toBeInTheDocument();
+    expect(screen.queryByTestId("explorer-pane")).not.toBeInTheDocument();
+  });
+
   it("marks the active tab with aria-selected=true", () => {
     useWorkspaceViewerStore.setState({
       isOpen: true,
@@ -175,6 +192,21 @@ describe("WorkspaceViewerModal — header title", () => {
 
     expect(screen.getByText("fileA.ts")).toBeInTheDocument();
     expect(screen.getByText("ctrlyoke/src/fileA.ts")).toBeInTheDocument();
+  });
+
+  it("does not show a selected explorer file while the Search tab is active", () => {
+    useWorkspaceViewerStore.setState({
+      isOpen: true,
+      activeTab: "search",
+      selectedFilePath: "src/index.ts",
+    });
+
+    render(<WorkspaceViewerModal />);
+
+    expect(
+      screen.getByText("Workspace: ctrlyoke Workspace")
+    ).toBeInTheDocument();
+    expect(screen.queryByText("index.ts")).not.toBeInTheDocument();
   });
 });
 

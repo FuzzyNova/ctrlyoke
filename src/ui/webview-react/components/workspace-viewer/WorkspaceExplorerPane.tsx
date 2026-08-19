@@ -127,6 +127,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const setMobileEditorVisible = useWorkspaceViewerStore(
     (s) => s.setMobileEditorVisible
   );
+  const setActiveTab = useWorkspaceViewerStore((s) => s.setActiveTab);
   const setError = useWorkspaceViewerStore((s) => s.setError);
 
   const pendingNavigation = useWorkspaceViewerStore((s) => s.pendingNavigation);
@@ -512,6 +513,15 @@ export const WorkspaceExplorerPane: React.FC = () => {
             <i className="codicon codicon-arrow-swap text-xs" />
           </button>
         )}
+
+        <button
+          onClick={() => setActiveTab("search")}
+          className="flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded hover:bg-btn-secondary-hover text-editor-fg transition-colors flex-shrink-0"
+          title="Search workspace"
+          aria-label="Search workspace"
+        >
+          <i className="codicon codicon-search text-xs" />
+        </button>
       </div>
 
       {/* Entry list */}

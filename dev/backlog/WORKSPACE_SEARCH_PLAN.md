@@ -1,7 +1,7 @@
 # Workspace Search Plan
 
-> **Status:** Approved for implementation. Filename + file-content search inside the workspace
-> viewer (`WorkspaceViewerModal.tsx`), staged as the five steps in **Implementation Steps** below.
+> **Status:** Implemented. Filename + file-content search is available inside the workspace
+> viewer (`WorkspaceViewerModal.tsx`) through the Search tab and Explorer toolbar shortcut.
 >
 > A **2026-08-19 orchestration review** corrected five points where the original proposal conflicted
 > with the codebase: the candidate-list helper already exists (`getGitTrackedFiles`),
@@ -337,7 +337,7 @@ its box here (plus any correction to this document that the work uncovers).
 - [x] **3 — Client data layer.** `hostedApi.workspaceSearch()`; `workspaceViewerStore` search state
       and `activeTab` widening; `truncateSnippet()` moved into `utils/string.ts`.
 - [x] **4 — Search pane.** `WorkspaceSearchPane.tsx` + `WorkspaceSearchPane.test.tsx`.
-- [ ] **5 — Wiring.** Header tab, modal three-way pane switch, Explorer toolbar shortcut, and the
+- [x] **5 — Wiring.** Header tab, modal three-way pane switch, Explorer toolbar shortcut, and the
       existing tests those touch.
 
 ## Definition of Done
