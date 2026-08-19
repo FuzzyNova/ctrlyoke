@@ -334,7 +334,7 @@ its box here (plus any correction to this document that the work uncovers).
       `getGitIgnoredFiles()` in `src/utils/GitUtils.ts` (+ `GitUtils.test.ts` coverage).
 - [x] **2 — Server.** `HostedWorkspaceViewerService.searchWorkspace()` + the
       `GET /api/workspace-viewer/search` route, with unit coverage per the Test Plan.
-- [ ] **3 — Client data layer.** `hostedApi.workspaceSearch()`; `workspaceViewerStore` search state
+- [x] **3 — Client data layer.** `hostedApi.workspaceSearch()`; `workspaceViewerStore` search state
       and `activeTab` widening; `truncateSnippet()` moved into `utils/string.ts`.
 - [ ] **4 — Search pane.** `WorkspaceSearchPane.tsx` + `WorkspaceSearchPane.test.tsx`.
 - [ ] **5 — Wiring.** Header tab, modal three-way pane switch, Explorer toolbar shortcut, and the

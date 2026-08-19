@@ -5,8 +5,8 @@ import { NavHistoryControls } from "../shared/NavHistoryControls";
 import { ExitButton } from "../shared/ExitButton";
 
 interface WorkspaceViewerHeaderProps {
-  activeTab: "explorer" | "sourceControl";
-  onTabChange: (tab: "explorer" | "sourceControl") => void;
+  activeTab: "explorer" | "sourceControl" | "search";
+  onTabChange: (tab: "explorer" | "sourceControl" | "search") => void;
   onClose: () => void;
   workspacePath?: string;
 }

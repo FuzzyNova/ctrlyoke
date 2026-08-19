@@ -20,6 +20,7 @@ import { MESSAGE_TYPES, type HistorySearchResult } from "@/types/messages";
 import { HISTORY_EVENT_KINDS } from "@root/types/DashboardConstants";
 import type { HistoryEventKind } from "@root/types/WorkflowTimelineTypes";
 import { formatRelativeTimeVerbose } from "@utils/time";
+import { truncateSnippet } from "@utils/string";
 import {
   ALL_WORKFLOW_HARNESSES,
   ALL_WORKFLOW_STATES,
@@ -158,14 +159,6 @@ const EVENT_KIND_OPTIONS: Array<{
   },
   { value: HISTORY_EVENT_KINDS.STATUS, label: "Status", group: "Run" },
 ];
-
-function truncateSnippet(snippet: string, maxLength = 80): string {
-  const normalized = snippet.replace(/\s+/g, " ").trim();
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-  return `${normalized.slice(0, maxLength - 1).trimEnd()}...`;
-}
 
 export function HistorySearchDrawer() {
   const vscode = useVsCodeApi();

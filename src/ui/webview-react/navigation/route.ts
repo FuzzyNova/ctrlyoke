@@ -23,7 +23,7 @@
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 
 /** Workspace viewer tab id — matches `workspaceViewerStore`'s `activeTab`. */
-type ViewerTab = "explorer" | "sourceControl";
+type ViewerTab = "explorer" | "sourceControl" | "search";
 
 export interface Route {
   /** Active lineage draft or promoted run, addressed without a filesystem path. */
@@ -134,7 +134,7 @@ export function normalizeRoute(route: Route): Route {
     } else if (route.dir) {
       out.dir = fwd(route.dir);
     }
-  } else {
+  } else if (route.viewer === "sourceControl") {
     if (route.ref) {
       out.ref = route.ref;
     } else if (route.file) {

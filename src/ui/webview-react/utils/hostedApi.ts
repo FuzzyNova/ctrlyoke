@@ -19,6 +19,8 @@ import type {
   WorkspaceCheckoutBranchRequest,
   WorkspaceGitRefDiffResponse,
   WorkspaceReposResponse,
+  WorkspaceSearchRequest,
+  WorkspaceSearchResponse,
 } from "@root/types/HostedWorkspaceViewerTypes";
 
 const token = new URLSearchParams(window.location.search).get("token") ?? "";
@@ -90,6 +92,18 @@ export async function workspaceSaveFile(
 
 export async function workspaceRepos(): Promise<WorkspaceReposResponse> {
   return hostedFetch<WorkspaceReposResponse>("/api/workspace-viewer/repos");
+}
+
+export async function workspaceSearch(
+  req: WorkspaceSearchRequest
+): Promise<WorkspaceSearchResponse> {
+  const params = new URLSearchParams({ query: req.query, scope: req.scope });
+  if (req.includeGitIgnored) params.set("includeGitIgnored", "true");
+  if (req.repo) params.set("repo", req.repo);
+  if (req.limit) params.set("limit", String(req.limit));
+  return hostedFetch<WorkspaceSearchResponse>(
+    `/api/workspace-viewer/search?${params.toString()}`
+  );
 }
 
 /**

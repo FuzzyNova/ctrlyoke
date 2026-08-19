@@ -8,6 +8,8 @@ import type {
   WorkspaceCommitLogEntry,
   WorkspaceCommitInfo,
   WorkspaceRepo,
+  WorkspaceSearchResult,
+  WorkspaceSearchScope,
 } from "@root/types/HostedWorkspaceViewerTypes";
 import type { ParsedDiffFile } from "@utils/rdvAdapter";
 import { workspaceGitRefDiff, workspaceWorktreeDiff } from "@utils/hostedApi";
@@ -53,7 +55,7 @@ interface CachedFileDraft {
 
 interface WorkspaceViewerState {
   isOpen: boolean;
-  activeTab: "explorer" | "sourceControl";
+  activeTab: "explorer" | "sourceControl" | "search";
 
   // Explorer
   explorerPath: string;
@@ -96,6 +98,14 @@ interface WorkspaceViewerState {
   diffLanguage: string | undefined;
   diffKind: DiffKind | null;
   diffLoading: boolean;
+
+  // Search
+  searchQuery: string;
+  searchScope: WorkspaceSearchScope;
+  searchIncludeGitIgnored: boolean;
+  searchResults: WorkspaceSearchResult[];
+  searchLoading: boolean;
+  searchTruncated: boolean;
 
   // Commit area
   commitMessage: string;
@@ -143,7 +153,7 @@ interface WorkspaceViewerActions {
   open(): void;
   close(): void;
   reset(): void;
-  setActiveTab(tab: "explorer" | "sourceControl"): void;
+  setActiveTab(tab: "explorer" | "sourceControl" | "search"): void;
 
   // Explorer
   setExplorerPath(path: string): void;
@@ -191,6 +201,14 @@ interface WorkspaceViewerActions {
   setPulling(v: boolean): void;
   setScmError(err: string | null): void;
   setError(err: string | null): void;
+
+  // Search
+  setSearchQuery(query: string): void;
+  setSearchScope(scope: WorkspaceSearchScope): void;
+  setSearchIncludeGitIgnored(include: boolean): void;
+  setSearchResults(results: WorkspaceSearchResult[]): void;
+  setSearchLoading(loading: boolean): void;
+  setSearchTruncated(truncated: boolean): void;
 
   // Commit history
   setCommitHistory(
@@ -264,6 +282,13 @@ const INITIAL_STATE: WorkspaceViewerState = {
   diffKind: null,
   diffLoading: false,
 
+  searchQuery: "",
+  searchScope: "both",
+  searchIncludeGitIgnored: false,
+  searchResults: [],
+  searchLoading: false,
+  searchTruncated: false,
+
   commitMessage: "",
   committing: false,
   generatingCommitMessage: false,
@@ -315,6 +340,10 @@ export const useWorkspaceViewerStore = create<
           fileSaving: false,
           sourceControlLoading: false,
           diffLoading: false,
+          searchLoading: false,
+          searchResults: [],
+          searchTruncated: false,
+          searchQuery: "",
           diffFiles: null,
           diffRefLabel: null,
           diffRefLoading: false,
@@ -614,6 +643,32 @@ export const useWorkspaceViewerStore = create<
 
       setError(err) {
         set({ error: err });
+      },
+
+      // --- Search ---
+
+      setSearchQuery(query) {
+        set({ searchQuery: query });
+      },
+
+      setSearchScope(scope) {
+        set({ searchScope: scope });
+      },
+
+      setSearchIncludeGitIgnored(include) {
+        set({ searchIncludeGitIgnored: include });
+      },
+
+      setSearchResults(results) {
+        set({ searchResults: results });
+      },
+
+      setSearchLoading(loading) {
+        set({ searchLoading: loading });
+      },
+
+      setSearchTruncated(truncated) {
+        set({ searchTruncated: truncated });
       },
 
       // --- Commit history ---

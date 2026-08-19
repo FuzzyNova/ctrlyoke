@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   escapeHtml,
   truncate,
+  truncateSnippet,
   getWorkflowName,
   capitalize,
   toTitleCase,
@@ -43,6 +44,22 @@ describe("truncate", () => {
 
   it("handles empty string", () => {
     expect(truncate("", 5)).toBe("");
+  });
+});
+
+describe("truncateSnippet", () => {
+  it("normalizes whitespace and truncates with the default suffix", () => {
+    expect(
+      truncateSnippet(
+        "  A   snippet\nwith\tmultiple   whitespace characters that is long enough to truncate in the results list  "
+      )
+    ).toBe(
+      "A snippet with multiple whitespace characters that is long enough to truncate i..."
+    );
+  });
+
+  it("returns normalized text unchanged when it fits", () => {
+    expect(truncateSnippet("  A\n short   snippet  ")).toBe("A short snippet");
   });
 });
 
