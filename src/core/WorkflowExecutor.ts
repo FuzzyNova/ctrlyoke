@@ -799,6 +799,9 @@ export class WorkflowExecutor {
           workflowFile,
           hostCanProvidePty: context.hostCanProvidePty,
           workingFilePersistence: this.promptQueue,
+          preConditionResult: this.promptQueue.getPreConditionSummary(target),
+          // End-condition output is only available to retry prompts. Leaving
+          // this unset keeps first-attempt prompt text deterministic.
           reportCompatibilityDiagnostics:
             context.reportCompatibilityDiagnostics,
           analyzeCompatibilityForPrompt: context.analyzeCompatibilityForPrompt,
@@ -2656,6 +2659,8 @@ export class WorkflowExecutor {
           resolvedProperties: { ...resolvedProperties, resumeSession: true },
           workflowFile,
           workingFilePersistence: this.promptQueue,
+          preConditionResult: this.promptQueue.getPreConditionSummary(target),
+          endConditionResult: this.promptQueue.getEndConditionSummary(target),
           reportCompatibilityDiagnostics:
             context.reportCompatibilityDiagnostics,
           analyzeCompatibilityForPrompt: context.analyzeCompatibilityForPrompt,

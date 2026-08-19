@@ -49,6 +49,10 @@ export class MockPlatform implements PlatformAdapter {
 
 export class MockHarnessIntegration extends HarnessIntegration {
   public sentPrompts: string[] = [];
+  public prepareSentPrompt?: (
+    prompt: PromptStep,
+    workflowContext?: Parameters<HarnessIntegration["sendPrompt"]>[2]
+  ) => Promise<string> | string;
   public processExitFailure: boolean = false;
   public harnessErrorFailure: boolean = false;
   public timeoutFailure: boolean = false;
@@ -66,12 +70,15 @@ export class MockHarnessIntegration extends HarnessIntegration {
     _needsCompletionDetection?: boolean,
     workflowContext?: Parameters<HarnessIntegration["sendPrompt"]>[2]
   ): Promise<boolean> {
-    this.sentPrompts.push(prompt.prompt);
-    this.promptReadyEmitter.fire({ fullPrompt: prompt.prompt });
+    const sentPrompt = this.prepareSentPrompt
+      ? await this.prepareSentPrompt(prompt, workflowContext)
+      : prompt.prompt;
+    this.sentPrompts.push(sentPrompt);
+    this.promptReadyEmitter.fire({ fullPrompt: sentPrompt });
 
     const outcome = this.onSend
       ? await this.onSend(prompt, workflowContext)
-      : { success: true, responseText: `ok:${prompt.prompt}` };
+      : { success: true, responseText: `ok:${sentPrompt}` };
 
     const success = outcome.success ?? true;
     if (!success) {
@@ -79,7 +86,7 @@ export class MockHarnessIntegration extends HarnessIntegration {
     }
 
     this.responseCompleteEmitter.fire(
-      outcome.responseText ?? `ok:${prompt.prompt}`
+      outcome.responseText ?? `ok:${sentPrompt}`
     );
     if (outcome.afterResponse) {
       await outcome.afterResponse();

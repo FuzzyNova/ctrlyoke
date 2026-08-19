@@ -347,7 +347,7 @@ export class EndConditionHandler {
     const nextAttemptIndex = currentAttemptIndex + 1;
     const retryPromptText =
       retryKind === "pass"
-        ? this.buildPassRetryPrompt(prompt, evaluationResult)
+        ? this.buildPassRetryPrompt(prompt)
         : this.buildRetryPrompt(prompt, evaluationResult);
 
     retryContext.runtime.scheduleRetry(
@@ -493,13 +493,7 @@ export class EndConditionHandler {
       return `The previous task validation failed. Expected: ${prompt.endCondition?.returns}, but got: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout}\n\nPlease fix the issues and try again.`;
     }
 
-    // Use EndConditionEvaluator's buildRetryPrompt method for placeholder replacement
-    return this.endConditionEvaluator.buildRetryPrompt(
-      retryPromptTemplate,
-      evaluationResult,
-      prompt.endCondition!.returns,
-      prompt.endCondition?.compareSource
-    );
+    return retryPromptTemplate;
   }
 
   /**
@@ -507,8 +501,7 @@ export class EndConditionHandler {
    * A missing pass template deliberately falls back to the step's own prompt.
    */
   buildPassRetryPrompt(
-    prompt: PromptStep,
-    evaluationResult: EvaluationResult
+    prompt: PromptStep
   ): string {
     const passRetryPromptTemplate =
       this.promptQueue.getEffectivePassRetryPrompt(prompt);
@@ -517,11 +510,6 @@ export class EndConditionHandler {
       return prompt.prompt;
     }
 
-    return this.endConditionEvaluator.buildRetryPrompt(
-      passRetryPromptTemplate,
-      evaluationResult,
-      prompt.endCondition!.returns,
-      prompt.endCondition?.compareSource
-    );
+    return passRetryPromptTemplate;
   }
 }

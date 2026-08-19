@@ -2,7 +2,8 @@
 
 ## Status
 
-Phase 1 complete (pure data layer and tests). **Revised 2026-08-19** after tracing the code: substitution
+Phase 2 complete (runtime wiring, centralized substitution, and focused tests); editor/schema/template
+migration remains for later phases. **Revised 2026-08-19** after tracing the code: substitution
 collapsed from three call sites to one (`CliPromptPreparer`), the
 `createConditionEvaluationSummary` third parameter changed from `ScriptVerdict` to a details
 bag, fenced-code masking added as a requirement, and the `{...}` migration surface expanded

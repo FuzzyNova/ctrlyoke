@@ -97,13 +97,6 @@ class TestEndConditionEvaluator extends EndConditionEvaluator {
     return this.retryResults.shift() ?? successResult();
   }
 
-  override buildRetryPrompt(
-    retryPromptTemplate: string,
-    _evaluationResult: EvaluationResult,
-    _expectedResult: string
-  ): string {
-    return `${retryPromptTemplate} [retry]`;
-  }
 }
 
 function successResult(stdout: string = "ok"): EvaluationResult {
@@ -621,12 +614,12 @@ suite("EndConditionHandler", () => {
 
     assert.strictEqual(result.shouldContinue, true);
     assert.deepStrictEqual(retryPrompts, [
-      "Run the task again [retry]:1",
-      "Run the task again [retry]:2",
+      "Run the task again:1",
+      "Run the task again:2",
     ]);
     assert.deepStrictEqual(dashboardMessages, [
-      "Re-running Prompt 1 (Pass retry 1/2): Run the task again [retry]",
-      "Re-running Prompt 1 (Pass retry 2/2): Run the task again [retry]",
+      "Re-running Prompt 1 (Pass retry 1/2): Run the task again",
+      "Re-running Prompt 1 (Pass retry 2/2): Run the task again",
     ]);
     assert.deepStrictEqual(transitions, [
       `${WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY}:1`,
@@ -671,7 +664,7 @@ suite("EndConditionHandler", () => {
     );
 
     assert.strictEqual(result.shouldContinue, true);
-    assert.deepStrictEqual(retryPrompts, ["Strengthen the test [retry]"]);
+    assert.deepStrictEqual(retryPrompts, ["Strengthen the test"]);
     assert.strictEqual(queue.getCurrentRetryCount(), 0);
   });
 
@@ -830,19 +823,19 @@ suite("EndConditionHandler", () => {
 
     assert.strictEqual(result.shouldContinue, true);
     assert.deepStrictEqual(retryPrompts, [
-      "Pass again [retry]",
-      "Fix failure [retry]",
+      "Pass again",
+      "Fix failure",
     ]);
     assert.strictEqual(queue.getCurrentRetryCount(), 0);
   });
 
-  test("falls back to the step prompt and substitutes pass template placeholders", async () => {
+  test("returns raw pass-retry templates and falls back to the step prompt", async () => {
     const platform = new MockPlatform();
     const runtime = new WorkflowStateMachine();
     const queue = new PromptQueue(runtime);
     const prompt = createPrompt(1, "retry", {
       passRetryPrompt:
-        "out={stdout};err={stderr};exit={exitCode};actual={actual};expected={expected};source={compareSource}",
+        "pre=$preCondition:stdout;end=$endCondition:stderr",
     });
     const integration = new MockHarnessIntegration(undefined, false);
     const evaluator = new EndConditionEvaluator(platform);
@@ -878,7 +871,7 @@ suite("EndConditionHandler", () => {
 
     assert.strictEqual(
       retryPromptText,
-      "out=actual-value;err=stderr-value;exit=7;actual=actual-value;expected=ok;source=auto"
+      "pre=$preCondition:stdout;end=$endCondition:stderr"
     );
 
     const fallbackPrompt = createPrompt(1, "retry", {

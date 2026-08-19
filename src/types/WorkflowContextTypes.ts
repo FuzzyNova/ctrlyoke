@@ -1,5 +1,6 @@
 import * as path from "path";
 import type {
+  ConditionEvaluationSummary,
   PriorContext,
   PromptFile,
   WorkflowStep,
@@ -102,6 +103,10 @@ export interface WorkflowContext {
   promptStartedAt?: number;
   /** Minimal working-file persistence hook used for prompt runtime metadata. */
   workingFilePersistence?: WorkflowWorkingFilePersistence;
+  /** Latest pre-condition result recorded for this prompt's dispatch target. */
+  preConditionResult?: ConditionEvaluationSummary;
+  /** Latest end-condition result recorded for this prompt's dispatch target. */
+  endConditionResult?: ConditionEvaluationSummary;
   /** Forward runtime compatibility diagnostics to the workflow dashboard. */
   reportCompatibilityDiagnostics?: (
     diagnostics: readonly CompatibilityDiagnostic[],
