@@ -1,4 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkspaceDiffPane } from "@components/workspace-viewer/WorkspaceDiffPane";
@@ -20,6 +28,30 @@ vi.mock("@utils/hostedApi", () => ({
 vi.mock("@utils/diff", () => ({
   downloadTextFile: vi.fn(),
 }));
+
+const originalOffsetHeight = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "offsetHeight"
+);
+
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.classList.contains("flex-1") ? 600 : 40;
+    },
+  });
+});
+
+afterAll(() => {
+  if (originalOffsetHeight) {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "offsetHeight",
+      originalOffsetHeight
+    );
+  }
+});
 
 const diffFile: ParsedDiffFile = {
   path: "src/file.ts",
@@ -144,6 +176,31 @@ describe("WorkspaceDiffPane commit diff controls", () => {
     expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.OPEN_FILE,
       path: "src/file.ts",
+    });
+  });
+
+  it("opens a file from a visible virtualized row", async () => {
+    const user = userEvent.setup();
+    useWorkspaceViewerStore.setState({
+      diffFiles: Array.from({ length: 100 }, (_unused, index) => ({
+        ...diffFile,
+        path: `src/file-${index}.ts`,
+      })),
+      diffRefLabel: "Commit abc1234",
+      diffRefLoading: false,
+    });
+    const postMessage = vi.mocked(window.vscodeApi!.postMessage);
+    postMessage.mockClear();
+
+    render(<WorkspaceDiffPane />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Open src/file-0.ts" })
+    );
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.OPEN_FILE,
+      path: "src/file-0.ts",
     });
   });
 });

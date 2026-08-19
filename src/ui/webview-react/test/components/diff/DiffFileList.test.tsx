@@ -15,8 +15,11 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { useRef, type ReactElement } from "react";
-import { DiffFileList } from "@components/diff/DiffFileList";
+import { useRef, useState, type ReactElement } from "react";
+import {
+  DiffFileList,
+  type DiffFileListHandle,
+} from "@components/diff/DiffFileList";
 
 vi.mock("@components/output/DiffView", () => ({
   DiffView: ({
@@ -151,6 +154,50 @@ function VirtualizedHost({
         scrollContainerRef={scrollContainerRef}
       />
     </div>
+  );
+}
+
+function AnchorVirtualizedHost(): ReactElement {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const diffFileListRef = useRef<DiffFileListHandle>(null);
+  const [command, setCommand] = useState<{
+    version: number;
+    collapsed: boolean;
+  }>({ version: 0, collapsed: true });
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          diffFileListRef.current?.prepareGlobalLayoutChange();
+          setCommand({ version: 1, collapsed: false });
+        }}
+      >
+        Expand all
+      </button>
+      <div
+        ref={scrollContainerRef}
+        className={DIFF_SCROLLER_CLASS}
+        data-testid="diff-anchor-scroll-container"
+        data-command-collapsed={String(command.collapsed)}
+      >
+        <DiffFileList
+          ref={diffFileListRef}
+          groups={[
+            {
+              key: "files",
+              files: Array.from({ length: 120 }, (_unused, index) =>
+                makeFile(`file-${index}`)
+              ),
+            },
+          ]}
+          emptyMessage="No files"
+          command={command}
+          scrollContainerRef={scrollContainerRef}
+        />
+      </div>
+    </>
   );
 }
 
@@ -420,6 +467,95 @@ describe("DiffFileList virtualization", () => {
         "false"
       );
     });
+  });
+
+  it("restores the first visible file anchor after a global reset", async () => {
+    const originalGetBoundingClientRect =
+      HTMLElement.prototype.getBoundingClientRect;
+    const getBoundingClientRect = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.classList.contains(DIFF_SCROLLER_CLASS)) {
+          return {
+            width: 800,
+            height: 120,
+            x: 0,
+            y: 100,
+            top: 100,
+            right: 800,
+            bottom: 220,
+            left: 0,
+            toJSON: () => ({}),
+          } as DOMRect;
+        }
+
+        const row = this.closest<HTMLElement>("[data-index]");
+        const index = row ? Number(row.dataset.index) : NaN;
+        if (Number.isFinite(index)) {
+          const container = this.closest<HTMLElement>(
+            `.${DIFF_SCROLLER_CLASS}`
+          );
+          const scrollTop = container?.scrollTop ?? 4000;
+          const expansionShift =
+            container?.dataset.commandCollapsed === "false" ? 943.75 : 0;
+          const top =
+            100 + (index - 50) * 80 + expansionShift - (scrollTop - 4000);
+          return {
+            width: 800,
+            height: 80,
+            x: 0,
+            y: top,
+            top,
+            right: 800,
+            bottom: top + 80,
+            left: 0,
+            toJSON: () => ({}),
+          } as DOMRect;
+        }
+
+        return originalGetBoundingClientRect.call(this);
+      });
+
+    try {
+      render(<AnchorVirtualizedHost />);
+      const scroller = screen.getByTestId("diff-anchor-scroll-container");
+      Object.defineProperty(scroller, "scrollTop", {
+        configurable: true,
+        writable: true,
+        value: 4000,
+      });
+      Object.defineProperty(scroller, "scrollTo", {
+        configurable: true,
+        value: (options: ScrollToOptions | number, y?: number) => {
+          const top =
+            typeof options === "number" ? (y ?? 0) : (options.top ?? 0);
+          scroller.scrollTop = top;
+          fireEvent.scroll(scroller);
+        },
+      });
+      fireEvent.scroll(scroller);
+
+      await waitFor(() =>
+        expect(screen.getByText("file-50.ts")).toBeInTheDocument()
+      );
+      const anchor = screen
+        .getByText("file-50.ts")
+        .closest<HTMLElement>("[data-diff-file-key]");
+      expect(anchor).toBeTruthy();
+      expect(anchor?.getBoundingClientRect().top).toBe(100);
+
+      fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+
+      await waitFor(() => {
+        const currentAnchor = screen
+          .getByText("file-50.ts")
+          .closest<HTMLElement>("[data-diff-file-key]");
+        expect(currentAnchor?.getBoundingClientRect().top).toBeCloseTo(100, 0);
+      });
+      expect(scroller.scrollTop).toBeCloseTo(4943.75, 0);
+    } finally {
+      getBoundingClientRect.mockRestore();
+    }
   });
 
   it("keeps empty and single-file lists on the direct path", () => {

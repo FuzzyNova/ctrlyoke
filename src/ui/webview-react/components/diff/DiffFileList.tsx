@@ -1,4 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
+} from "react";
 import { DiffFileCard, type DiffFileCardProps } from "./DiffFileCard";
 import { VirtualizedList } from "@components/shared/VirtualizedList";
 import { useElementTier } from "@hooks/useElementNarrow";
@@ -65,13 +70,23 @@ export interface DiffFileListProps {
   scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-export const DiffFileList: React.FC<DiffFileListProps> = ({
-  groups,
-  emptyMessage,
-  command,
-  selectionSummary,
-  scrollContainerRef,
-}) => {
+export interface DiffFileListHandle {
+  /** Capture the visible file before a global layout command changes estimates. */
+  prepareGlobalLayoutChange: () => void;
+}
+
+interface DiffFileAnchor {
+  key: string;
+  viewportOffset: number;
+}
+
+export const DiffFileList = React.forwardRef<
+  DiffFileListHandle,
+  DiffFileListProps
+>(function DiffFileList(
+  { groups, emptyMessage, command, selectionSummary, scrollContainerRef },
+  ref
+) {
   // The list owns the one responsive measurement for all of its cards. The
   // bucket is a primitive so useElementTier only re-renders at meaningful
   // width changes, and its module-level resolver keeps the observer stable.
@@ -122,6 +137,39 @@ export const DiffFileList: React.FC<DiffFileListProps> = ({
   );
   const [expandedGapsOverrides, setExpandedGapsOverrides] = useState(
     EMPTY_EXPANDED_GAPS_OVERRIDES
+  );
+  const [anchorRestore, setAnchorRestore] = useState<DiffFileAnchor | null>(
+    null
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      prepareGlobalLayoutChange: () => {
+        const container = scrollContainerRef?.current;
+        if (!container) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const visibleFiles = container.querySelectorAll<HTMLElement>(
+          "[data-diff-file-key]"
+        );
+        for (const file of visibleFiles) {
+          const fileRect = file.getBoundingClientRect();
+          if (
+            fileRect.bottom > containerRect.top &&
+            fileRect.top < containerRect.bottom
+          ) {
+            setAnchorRestore({
+              key: file.dataset.diffFileKey ?? "",
+              viewportOffset: fileRect.top - containerRect.top,
+            });
+            return;
+          }
+        }
+        setAnchorRestore(null);
+      },
+    }),
+    [scrollContainerRef]
   );
 
   // A command reset must take effect during this render. The effects below
@@ -217,7 +265,12 @@ export const DiffFileList: React.FC<DiffFileListProps> = ({
   }
 
   const renderRow = (row: DiffFileListRow): React.ReactNode => (
-    <div key={row.key} className={diffFileListRowGapClass(row)}>
+    <div
+      key={row.key}
+      className={diffFileListRowGapClass(row)}
+      data-scroll-key={row.key}
+      {...(row.kind === "file" ? { "data-diff-file-key": row.key } : {})}
+    >
       {row.kind === "selection-summary" && row.content}
       {row.kind === "group-heading" && (
         <div className="flex flex-col gap-0.5">
@@ -281,10 +334,15 @@ export const DiffFileList: React.FC<DiffFileListProps> = ({
           threshold={1}
           overscan={DIFF_FILE_LIST_VIRTUALIZATION_OVERSCAN}
           layoutResetKey={layoutResetKey}
+          scrollToKey={anchorRestore?.key ?? null}
+          scrollToKeyOffset={anchorRestore?.viewportOffset}
+          scrollToKeyRequest={anchorRestore ? command.version : undefined}
         />
       ) : (
         rows.map(renderRow)
       )}
     </div>
   );
-};
+});
+
+DiffFileList.displayName = "DiffFileList";

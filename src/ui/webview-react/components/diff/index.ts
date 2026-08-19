@@ -5,6 +5,7 @@ export type { OpenFileButtonProps } from "./OpenFileButton";
 export { DiffFileList } from "./DiffFileList";
 export type {
   DiffFileGroup,
+  DiffFileListHandle,
   DiffFileListCommand,
   DiffFileListProps,
 } from "./DiffFileList";

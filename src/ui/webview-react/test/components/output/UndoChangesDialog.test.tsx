@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  it,
+  expect,
+  vi,
+} from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { UndoChangesDialog } from "@components/output/UndoChangesDialog";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -33,6 +41,30 @@ vi.mock("@components/output/DiffView", () => ({
     <div data-testid="dialog-diff-view" data-collapsed={String(collapsed)} />
   ),
 }));
+
+const originalOffsetHeight = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "offsetHeight"
+);
+
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.classList.contains("flex-1") ? 600 : 40;
+    },
+  });
+});
+
+afterAll(() => {
+  if (originalOffsetHeight) {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "offsetHeight",
+      originalOffsetHeight
+    );
+  }
+});
 
 describe("UndoChangesDialog", () => {
   const workflowKey = "workflow-test" as WorkflowKey;
@@ -439,6 +471,93 @@ describe("UndoChangesDialog", () => {
           entries: [{ target: queueTarget, files: [redoInstruction] }],
         },
       }
+    );
+  });
+
+  it("selects and confirms all 100 workflow files, including unmounted rows", () => {
+    const entries = [
+      {
+        target: queueTarget,
+        label: "Large step",
+        undoCandidates: Array.from({ length: 100 }, (_unused, index) => {
+          const path = `src/file-${index}.ts`;
+          const instruction: UndoFileInstruction = {
+            path,
+            action: "delete",
+          };
+          return {
+            path,
+            changeType: "created" as const,
+            tier: "tier1" as const,
+            instruction,
+          };
+        }),
+      },
+    ];
+
+    render(
+      <UndoChangesDialog
+        mode="undo"
+        target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
+        workspacePath="C:/dev/ctrlyoke"
+        workflowEntries={entries}
+        requestId="workflow-large-select-all"
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("100 of 100 files selected")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Deselect all" }));
+    expect(
+      screen.getByRole("button", { name: "Select all" })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Select all" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Undo Selected (100)" })
+    );
+
+    const message = sendMessageMock.mock.calls[0]?.[1] as {
+      data: { entries: Array<{ files: UndoFileInstruction[] }> };
+    };
+    expect(message.data.entries).toHaveLength(1);
+    expect(message.data.entries[0]?.files).toHaveLength(100);
+    expect(message.data.entries[0]?.files[99]?.path).toBe("src/file-99.ts");
+  });
+
+  it("sends workflow redo steps oldest first", () => {
+    const entries = [0, 1, 2].map((stepIndex) => ({
+      target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+      label: `Prompt ${stepIndex + 1}`,
+      redoInstructions: [
+        {
+          path: `src/file-${stepIndex}.ts`,
+          action: "restore-content" as const,
+          contentToRestore: `step ${stepIndex}`,
+        },
+      ],
+    }));
+
+    render(
+      <UndoChangesDialog
+        mode="redo"
+        target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
+        workspacePath="C:/dev/ctrlyoke"
+        workflowEntries={entries}
+        requestId="workflow-redo-order"
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Redo Selected (3)" }));
+    const message = sendMessageMock.mock.calls[0]?.[1] as {
+      data: { entries: Array<{ target: { stepIndex: number } }> };
+    };
+    expect(message.data.entries.map((entry) => entry.target.stepIndex)).toEqual(
+      [0, 1, 2]
     );
   });
 

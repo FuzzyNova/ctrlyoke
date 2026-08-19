@@ -27,7 +27,11 @@ import { useTerminalStore } from "@store/terminalStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useCompatibilityStore } from "@store/compatibilityStore";
-import { EXECUTION_STATES } from "@/types/messages";
+import { EXECUTION_STATES, FINAL_STEP_PHASES } from "@/types/messages";
+import {
+  OutputUndoDialogs,
+  type WorkflowDialogState,
+} from "@components/layout/output-section/OutputUndoDialogs";
 
 /**
  * React reports these by console.error rather than by throwing, or throws only
@@ -117,11 +121,12 @@ function resetStores(): void {
 }
 
 /** Reports the crash and its component stack as the assertion's own message. */
-function mountDashboard(scenario: string): void {
+function mountDashboard(scenario: string, extra?: ReactNode): void {
   render(
     <StrictMode>
       <CrashCapture>
         <App />
+        {extra}
       </CrashCapture>
     </StrictMode>
   );
@@ -205,6 +210,64 @@ describe("dashboard mount smoke", () => {
     mountDashboard("workflow portability report mount");
     expect(useCompatibilityStore.getState().capabilitySnapshotStatus).toBe(
       "checking"
+    );
+  });
+
+  it("mounts a large undo dialog through the real component tree", () => {
+    const entries: WorkflowDialogState["entries"] = Array.from(
+      { length: 100 },
+      (_unused, stepIndex) => ({
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+        label: `Prompt ${stepIndex + 1}`,
+        undoCandidates: [
+          {
+            path: `src/file-${stepIndex}.ts`,
+            changeType: "modified" as const,
+            tier: "tier1" as const,
+            oldContent: "before\n",
+            newContent: "after\n",
+            structuredPatch: [
+              {
+                oldStart: 1,
+                oldLines: 1,
+                newStart: 1,
+                newLines: 1,
+                lines: ["-before", "+after"],
+              },
+            ],
+            instruction: {
+              path: `src/file-${stepIndex}.ts`,
+              action: "reverse-patch" as const,
+              structuredPatch: [
+                {
+                  oldStart: 1,
+                  oldLines: 1,
+                  newStart: 1,
+                  newLines: 1,
+                  lines: ["-before", "+after"],
+                },
+              ],
+            },
+          },
+        ],
+      })
+    );
+    const workflowDialogState: WorkflowDialogState = {
+      mode: "undo",
+      address: RUN_ADDRESS,
+      entries,
+      requestId: "large-undo-dialog-smoke",
+    };
+
+    seedDisplayedRun();
+    mountDashboard(
+      "large undo dialog mount",
+      <OutputUndoDialogs
+        minimapDialogState={null}
+        workflowDialogState={workflowDialogState}
+        onCloseMinimapDialog={vi.fn()}
+        onCloseWorkflowDialog={vi.fn()}
+      />
     );
   });
 });

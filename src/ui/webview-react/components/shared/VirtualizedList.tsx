@@ -18,6 +18,10 @@ export interface VirtualizedListProps<T> {
   layoutResetKey?: string | number;
   /** Scrolls the matching row into view once; a new key starts another scroll. */
   scrollToKey?: string | null;
+  /** Viewport offset for a one-shot scroll-to-key anchor restoration. */
+  scrollToKeyOffset?: number;
+  /** Optional request identity for repeating the same key intentionally. */
+  scrollToKeyRequest?: string | number;
 }
 
 export function VirtualizedList<T>({
@@ -30,6 +34,8 @@ export function VirtualizedList<T>({
   overscan,
   layoutResetKey,
   scrollToKey = null,
+  scrollToKeyOffset,
+  scrollToKeyRequest,
 }: VirtualizedListProps<T>): React.ReactElement {
   const shouldVirtualize = items.length >= threshold;
 
@@ -135,12 +141,19 @@ export function VirtualizedList<T>({
     rowVirtualizer.measure();
   }, [layoutResetKey, rowVirtualizer]);
 
-  // Tracks the key already scrolled-to so a re-render with the same target
+  // Tracks the key/request already scrolled-to so a re-render with the same target
   // (e.g. items array identity changing but not content) doesn't keep
   // re-issuing scrollIntoView/scrollToIndex and fighting the user's own scroll.
-  const scrolledKeyRef = useRef<string | null>(null);
+  const scrolledKeyRef = useRef<{
+    key: string;
+    request: string | number;
+  } | null>(null);
   useEffect(() => {
-    if (!scrollToKey || scrolledKeyRef.current === scrollToKey) {
+    if (
+      !scrollToKey ||
+      (scrolledKeyRef.current?.key === scrollToKey &&
+        scrolledKeyRef.current.request === (scrollToKeyRequest ?? scrollToKey))
+    ) {
       return;
     }
     const index = items.findIndex(
@@ -149,10 +162,38 @@ export function VirtualizedList<T>({
     if (index === -1) {
       return;
     }
-    scrolledKeyRef.current = scrollToKey;
+    scrolledKeyRef.current = {
+      key: scrollToKey,
+      request: scrollToKeyRequest ?? scrollToKey,
+    };
     if (shouldVirtualize) {
-      rowVirtualizer.scrollToIndex(index, { align: "center" });
-      return;
+      if (scrollToKeyOffset === undefined) {
+        rowVirtualizer.scrollToIndex(index, { align: "center" });
+        return;
+      }
+      const estimatedOffset = items
+        .slice(0, index)
+        .reduce(
+          (total, item, itemIndex) => total + estimateItemSize(item, itemIndex),
+          0
+        );
+      const restoreAnchor = (): void => {
+        const container = scrollContainerRef.current;
+        if (container) {
+          container.scrollTop = Math.max(
+            0,
+            estimatedOffset - (scrollToKeyOffset ?? 0)
+          );
+          container.dispatchEvent(new Event("scroll"));
+        } else {
+          rowVirtualizer.scrollToOffset(
+            estimatedOffset - (scrollToKeyOffset ?? 0),
+            { behavior: "auto" }
+          );
+        }
+      };
+      const frame = requestAnimationFrame(restoreAnchor);
+      return () => cancelAnimationFrame(frame);
     }
     const container = scrollContainerRef.current;
     const target = container?.querySelector(
@@ -167,7 +208,17 @@ export function VirtualizedList<T>({
     // summary fetch that hasn't landed yet on the first pass) still gets
     // scrolled to once its row actually appears.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scrollToKey, shouldVirtualize, items.length]);
+  }, [
+    scrollToKey,
+    scrollToKeyOffset,
+    scrollToKeyRequest,
+    shouldVirtualize,
+    items.length,
+  ]);
+
+  useEffect(() => {
+    if (scrollToKey === null) scrolledKeyRef.current = null;
+  }, [scrollToKey]);
 
   if (!shouldVirtualize) {
     return (
@@ -201,6 +252,7 @@ export function VirtualizedList<T>({
             key={virtualRow.key}
             ref={rowVirtualizer.measureElement}
             data-index={virtualRow.index}
+            data-scroll-key={getItemKey(item, virtualRow.index)}
             style={{
               position: "absolute",
               top: virtualRow.start,

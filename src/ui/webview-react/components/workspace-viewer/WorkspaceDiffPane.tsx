@@ -10,6 +10,7 @@ import { ExpandCollapseAllDiffsButton } from "@components/shared";
 import {
   DiffFileList,
   type DiffFileGroup,
+  type DiffFileListHandle,
   fromDiffKind,
   OpenFileButton,
 } from "@components/diff";
@@ -30,6 +31,7 @@ export const WorkspaceDiffPane: React.FC = () => {
 
   const [downloading, setDownloading] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const diffFileListRef = useRef<DiffFileListHandle>(null);
   const [commitDiffsCollapsed, setCommitDiffsCollapsed] = useState(false);
   const [commitDiffResetVersion, setCommitDiffResetVersion] = useState(0);
   const [commitDetailsExpanded, setCommitDetailsExpanded] = useState(false);
@@ -90,11 +92,13 @@ export const WorkspaceDiffPane: React.FC = () => {
   }, [diffRefLabel]);
 
   const handleExpandAllDiffs = useCallback(() => {
+    diffFileListRef.current?.prepareGlobalLayoutChange();
     setCommitDiffsCollapsed(false);
     setCommitDiffResetVersion((version) => version + 1);
   }, []);
 
   const handleCollapseAllDiffs = useCallback(() => {
+    diffFileListRef.current?.prepareGlobalLayoutChange();
     setCommitDiffsCollapsed(true);
     setCommitDiffResetVersion((version) => version + 1);
   }, []);
@@ -233,6 +237,7 @@ export const WorkspaceDiffPane: React.FC = () => {
           className="flex-1 overflow-auto px-3 py-2"
         >
           <DiffFileList
+            ref={diffFileListRef}
             groups={commitGroups}
             emptyMessage="No text changes to display"
             command={{
@@ -268,6 +273,7 @@ export const WorkspaceDiffPane: React.FC = () => {
   return (
     <div ref={scrollContainerRef} className="h-full overflow-auto px-3 py-2">
       <DiffFileList
+        ref={diffFileListRef}
         groups={singleFileGroups}
         emptyMessage="No text changes to display"
         command={{

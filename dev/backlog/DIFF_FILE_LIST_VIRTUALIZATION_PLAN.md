@@ -1,6 +1,6 @@
 # Diff File List Virtualization Plan
 
-> **Status:** Phase 3 implemented; virtualization remains off. This is a focused UI-performance change for the shared
+> **Status:** Phase 5 implemented; virtualization is enabled above the file-count threshold. This is a focused UI-performance change for the shared
 > `DiffFileList`; it does not replace the Output pane's existing virtualization.
 
 ## Goal
@@ -326,8 +326,14 @@ transform or overflow so each card's sticky header remains scoped to its own
 
 ### Phase 5 — Interaction correctness under virtualization
 
-1. Preserve the visible file anchor across Expand all / Collapse all.
-2. Ensure selecting, opening, and confirming an offscreen file still uses the complete model.
+1. [x] Preserve the visible file anchor across Expand all / Collapse all.
+2. [x] Ensure selecting, opening, and confirming an offscreen file still uses the complete model.
+
+Phase 5 is implemented. Global diff commands capture the first visible file's composite key and
+viewport offset before changing estimates, then restore that anchor once through the shared list's
+local one-shot scroll operation. Undo/redo selection, payload construction, and workspace download
+continue to use their complete source models; coverage includes a 100-file offscreen selection case,
+workflow ordering, visible-row file opening, and a real large-dialog smoke mount.
 
 ### Phase 6 — Profile and tune
 
