@@ -230,9 +230,9 @@ export class ContextExpander {
       );
 
       // Expand git change references (~diff, ~staged, ~stash:N, ~<hash>)
-      const gitAttachments = await this.expandGitChanges(gitRefs);
+      const gitResult = await this.expandGitChanges(gitRefs);
 
-      const allAttachments = [...validAttachments, ...gitAttachments];
+      const allAttachments = [...validAttachments, ...gitResult.attachments];
 
       if (allAttachments.length === 0) {
         return promptText; // No valid attachments
@@ -486,8 +486,9 @@ export class ContextExpander {
       }
 
       // Git diffs → excerpt blocks (carry their own line number format)
-      const gitAttachments = await this.expandGitChanges(gitRefs);
-      excerptParts.push(...gitAttachments);
+      const gitResult = await this.expandGitChanges(gitRefs);
+      excerptParts.push(...gitResult.attachments);
+      skippedReferences.push(...gitResult.skipped);
 
       return {
         directFileRefs,
@@ -749,8 +750,9 @@ export class ContextExpander {
    */
   private async expandGitChanges(
     refs: ReturnType<typeof parseGitChangeReferences>
-  ): Promise<string[]> {
+  ): Promise<{ attachments: string[]; skipped: SkippedReference[] }> {
     const results: string[] = [];
+    const skipped: SkippedReference[] = [];
 
     for (const ref of refs) {
       // Compute attachment id for deduplication
@@ -812,11 +814,12 @@ export class ContextExpander {
           `[ContextExpander] Failed to expand git attachment ${attachmentId}:`,
           err
         );
+        skipped.push({ ref: ref.raw, reason: getErrorMessage(err) });
         // Skip on error — never throw
       }
     }
 
-    return results;
+    return { attachments: results, skipped };
   }
 
   /**

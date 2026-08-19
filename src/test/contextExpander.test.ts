@@ -499,6 +499,61 @@ suite("ContextExpander.expandContextSplit", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
+  suite("git change references", () => {
+    test("reports a missing commit hash in skippedReferences", async () => {
+      const root = createGitRepository();
+      const missingHash = "0123456789abcdef0123456789abcdef01234567";
+      const rawReference = `~${missingHash}`;
+
+      const expander = new ContextExpander({ workspaceRoot: root });
+      const result = await expander.expandContextSplit(
+        `Review ${rawReference}`
+      );
+
+      assert.strictEqual(result.excerptBlocks, "");
+      const skipped = result.skippedReferences.find(
+        (reference) => reference.ref === rawReference
+      );
+      assert.ok(skipped);
+      assert.ok(skipped.reason.length > 0);
+    });
+
+    test("does not report a successful commit hash as skipped", async () => {
+      const root = createGitRepository();
+      const hash = execFileSync("git", ["-C", root, "rev-parse", "HEAD"], {
+        encoding: "utf8",
+      }).trim();
+
+      const expander = new ContextExpander({ workspaceRoot: root });
+      const result = await expander.expandContextSplit(`Review ~${hash}`);
+
+      assert.ok(
+        result.excerptBlocks.includes(`<attachment id="git:commit:${hash}">`)
+      );
+      assert.deepStrictEqual(result.skippedReferences, []);
+    });
+
+    test("does not report a duplicate commit hash as skipped", async () => {
+      const root = createGitRepository();
+      const hash = execFileSync("git", ["-C", root, "rev-parse", "HEAD"], {
+        encoding: "utf8",
+      }).trim();
+
+      const expander = new ContextExpander({ workspaceRoot: root });
+      const result = await expander.expandContextSplit(
+        `Review ~${hash} and then review ~${hash} again.`
+      );
+
+      const attachmentId = `<attachment id="git:commit:${hash}">`;
+      assert.strictEqual(
+        result.excerptBlocks.split(attachmentId).length - 1,
+        1
+      );
+      assert.deepStrictEqual(result.skippedReferences, []);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
   suite("line-range #selection: references", () => {
     test("puts line-range ref into excerptBlocks (not directFileRefs)", async () => {
       const root = freshWorkspace();

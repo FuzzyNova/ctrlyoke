@@ -375,7 +375,7 @@ step failure does today (not a warning row; an actual failure/error state).
       behavior (missing secret + `"warn"` no longer throws) without breaking
       existing "throws on missing" coverage (that coverage should move to the
       `failOnMissing: true` / default-call-signature case).
-- [ ] **Phase 3 — Close the git-ref diagnostic gap.** Change
+- [x] **Phase 3 — Close the git-ref diagnostic gap.** Change
       `expandGitChanges`'s return shape, thread `skipped` into
       `expandContextSplit`'s `skippedReferences`. Add a unit test asserting a
       bad `~<hash>` produces an `UNRESOLVED_REFERENCE`-equivalent entry in
