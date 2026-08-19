@@ -54,3 +54,5 @@ research translation and localization
 fix tab navigation and keyboard shortcuts
 
 fix commit message generation
+
+we are leaving statusline configuration in the global claude settings, it should probably be a setting like antigravity has where users can disable if wanted.
