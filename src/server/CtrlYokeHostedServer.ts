@@ -17,6 +17,7 @@ import type { WorkflowSummary, WorkflowStep } from "../types/CtrlYokeTypes";
 import type {
   CliEvent,
   CliOutput,
+  ServerPortFallbackInfo,
   UndoExecutionTarget,
   UserFeedbackMessage,
 } from "../types/WebviewMessageTypes";
@@ -72,6 +73,7 @@ import type {
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { installSecretRedactionMiddleware } from "./SecretRedactionMiddleware";
+import { buildHostedErrorPage } from "./HostedErrorPageTemplate";
 
 const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
 
@@ -163,6 +165,8 @@ export class CtrlYokeHostedServer
   private readonly tlsCertPath: string | undefined;
   private publicUrl?: string;
   private availableIps: string[] = [];
+  private requestedPort?: number;
+  private portFellBack = false;
   private readonly viewerService: HostedWorkspaceViewerService;
 
   constructor(
@@ -641,7 +645,13 @@ export class CtrlYokeHostedServer
     // before the WebSocket handshake can succeed. The cert is a public key only.
     this.app.get("/cert", (_req, res) => {
       if (!this.tlsCertPath) {
-        res.status(404).send("Not found");
+        this.sendNotFoundPage(
+          res,
+          "This ctrlyoke server isn't running with TLS enabled, so there's no certificate to download.",
+          [
+            "Enable TLS in your ctrlyoke server settings, or connect using the non-HTTPS link instead.",
+          ]
+        );
         return;
       }
       try {
@@ -654,7 +664,10 @@ export class CtrlYokeHostedServer
         );
         res.send(cert);
       } catch {
-        res.status(404).send("Certificate not found");
+        this.sendNotFoundPage(
+          res,
+          "The ctrlyoke TLS certificate could not be read from disk."
+        );
       }
     });
     this.app.get("/ctrlyoke-service-worker.js", (_req, res) => {
@@ -689,6 +702,13 @@ export class CtrlYokeHostedServer
     const requireToken: express.RequestHandler = (req, res, next) => {
       if (this.requestHasValidToken(req)) return next();
       res.status(401).send("Unauthorized");
+    };
+    // Same check, but for browser-navigated page routes (entry HTML, SPA fallback)
+    // rather than JSON API routes — these get the themed landing page instead of a
+    // bare "Unauthorized" string, since a human is looking at this in a browser tab.
+    const requireTokenForPage: express.RequestHandler = (req, res, next) => {
+      if (this.requestHasValidToken(req)) return next();
+      this.sendUnauthorizedPage(res);
     };
     this.app.get("/manifest.webmanifest", requireToken, (_req, res) => {
       this.setNoStore(res);
@@ -743,7 +763,7 @@ export class CtrlYokeHostedServer
       }
     );
     // Serve index.html through buildHtml so all placeholders are patched first.
-    this.app.get(["/", "/index.html"], requireToken, (req, res) => {
+    this.app.get(["/", "/index.html"], requireTokenForPage, (req, res) => {
       this.setNoStore(res);
       res.send(this.buildHtml(webviewDist, req.get("host")));
     });
@@ -1251,7 +1271,7 @@ export class CtrlYokeHostedServer
     );
 
     // SPA fallback: any unmatched route gets the patched index.html (token required).
-    this.app.use(requireToken, (req, res) => {
+    this.app.use(requireTokenForPage, (req, res) => {
       this.setNoStore(res);
       res.send(this.buildHtml(webviewDist, req.get("host")));
     });
@@ -1283,13 +1303,7 @@ export class CtrlYokeHostedServer
     // vscode-high-contrast) from the cached theme vars so that CSS rules that
     // gate on body class (e.g. harness-icon-adaptive inversion) work correctly
     // on first render, before the WebSocket THEME_VARS_UPDATED message arrives.
-    const themeKind = this.cachedThemeVars["--fp-color-theme-kind"];
-    const themeBodyClass =
-      themeKind === "light"
-        ? "vscode-light"
-        : themeKind === "high-contrast"
-          ? "vscode-high-contrast"
-          : "vscode-dark";
+    const themeBodyClass = this.resolveThemeBodyClass();
     html = html.replace(
       "<body>",
       `<body class="${themeBodyClass}" data-aff-uri="/dictionaries/en_US/en_US.aff" data-dic-uri="/dictionaries/en_US/en_US.dic" data-logo-uri="/ctrlyoke-icon.svg">`
@@ -1365,6 +1379,60 @@ export class CtrlYokeHostedServer
       .map(([k, v]) => `  ${k}: ${v};`)
       .join("\n");
     return vars ? `<style>:root {\n${vars}\n}</style>\n` : "";
+  }
+
+  private resolveThemeBodyClass(): string {
+    const themeKind = this.cachedThemeVars["--fp-color-theme-kind"];
+    return themeKind === "light"
+      ? "vscode-light"
+      : themeKind === "high-contrast"
+        ? "vscode-high-contrast"
+        : "vscode-dark";
+  }
+
+  /**
+   * Themed 401 landing page shown to a human in a browser tab (wrong/missing
+   * token). Reuses the same theme vars/body class as the main app shell so it
+   * never flashes an unstyled background before the user has a valid session.
+   */
+  private sendUnauthorizedPage(res: express.Response): void {
+    this.setNoStore(res);
+    res
+      .status(401)
+      .type("html")
+      .send(
+        buildHostedErrorPage({
+          statusCode: 401,
+          message: "You need a valid ctrlyoke access token to view this page.",
+          hints: [
+            "Did you recently regenerate your ctrlyoke token? Old links stop working as soon as the token changes.",
+            "Open the ctrlyoke panel in VS Code, go to its settings, and use the current link (with token) to reconnect.",
+          ],
+          themeBodyClass: this.resolveThemeBodyClass(),
+          themeStyleBlock: this.buildThemeStyleBlock(),
+        })
+      );
+  }
+
+  /** Themed 404 landing page for a browser-navigated public route (e.g. `/cert`). */
+  private sendNotFoundPage(
+    res: express.Response,
+    message: string,
+    hints?: string[]
+  ): void {
+    this.setNoStore(res);
+    res
+      .status(404)
+      .type("html")
+      .send(
+        buildHostedErrorPage({
+          statusCode: 404,
+          message,
+          hints,
+          themeBodyClass: this.resolveThemeBodyClass(),
+          themeStyleBlock: this.buildThemeStyleBlock(),
+        })
+      );
   }
 
   private serveColorizedSvg(svgPath: string, res: express.Response): void {
@@ -1809,11 +1877,14 @@ export class CtrlYokeHostedServer
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   listen(): Promise<string> {
+    this.requestedPort = this.port;
+    this.portFellBack = false;
     return new Promise((resolve, reject) => {
       const attemptListen = (port: number) => {
         const onError = (err: NodeJS.ErrnoException) => {
           this.httpServer.removeListener("listening", onListening);
           if (err.code === "EADDRINUSE") {
+            this.portFellBack = true;
             setImmediate(() => attemptListen(0));
           } else {
             reject(err);
@@ -1840,6 +1911,19 @@ export class CtrlYokeHostedServer
 
   getAvailableIps(): string[] {
     return this.availableIps;
+  }
+
+  /**
+   * Non-null only when the configured `server.port` was already taken
+   * (EADDRINUSE) and listen() fell back to an OS-assigned port instead.
+   * Callers use this to warn the user, since the running URL silently
+   * differs from what they configured until the server is restarted.
+   */
+  getPortFallbackInfo(): ServerPortFallbackInfo | null {
+    if (!this.portFellBack || this.requestedPort === undefined) {
+      return null;
+    }
+    return { requestedPort: this.requestedPort, actualPort: this.port };
   }
 
   private getLanIps(): string[] {

@@ -8,6 +8,7 @@ import {
   type PriorContext,
   type ExecutionMode,
   type ToolPermissionMode,
+  type ServerPortFallbackInfo,
 } from "../types/messages";
 import {
   CLAUDE_CLI_MODELS as CLAUDE_CLI_MODEL_LIST,
@@ -206,6 +207,11 @@ interface SettingsState {
   // The IP currently selected for display in the URL/QR code (null = use serverUrl as-is)
   selectedDisplayIp: string | null;
 
+  // Set when the last server start couldn't bind the configured server.port
+  // (EADDRINUSE) and fell back to an OS-assigned port instead. Cleared on
+  // SERVER_STOPPED or once a start succeeds on the configured port.
+  portFallback: ServerPortFallbackInfo | null;
+
   // Last generated self-signed cert metadata (generatedAt/expiresAt are ISO strings)
   lastCertGenerated: {
     generatedAt: string;
@@ -294,6 +300,9 @@ interface SettingsActions {
   // Available IPs + selected display IP
   setAvailableIps: (ips: string[]) => void;
   setSelectedDisplayIp: (ip: string | null) => void;
+
+  // Port-fallback warning (null clears it)
+  setPortFallback: (info: ServerPortFallbackInfo | null) => void;
 
   // Cert / token feedback signals
   setLastCertGenerated: (
@@ -445,6 +454,7 @@ const initialState: SettingsState = {
   serverUrl: null,
   availableIps: [],
   selectedDisplayIp: null,
+  portFallback: null,
   lastCertGenerated: null,
   certFlashCount: 0,
   lastTokenRegenerated: null,
@@ -576,6 +586,8 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     setAvailableIps: (ips) => set({ availableIps: ips }),
 
     setSelectedDisplayIp: (ip) => set({ selectedDisplayIp: ip }),
+
+    setPortFallback: (info) => set({ portFallback: info }),
 
     setLastCertGenerated: (info) => set({ lastCertGenerated: info }),
     bumpCertFlashCount: () =>

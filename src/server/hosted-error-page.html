@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ctrlyoke — __CTRLYOKE_TITLE__</title>
+__CTRLYOKE_THEME_STYLE_BLOCK__
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--vscode-editor-background, #1f1f1f);
+    color: var(--vscode-foreground, #cccccc);
+    font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  }
+  .ctrlyoke-error-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    max-width: 440px;
+    padding: 32px;
+    text-align: center;
+  }
+  .ctrlyoke-error-logo { width: 72px; height: 72px; }
+  .ctrlyoke-error-code {
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+  }
+  .ctrlyoke-error-message {
+    font-size: 1.25rem;
+    line-height: 1.5;
+    margin: 0;
+    font-weight: 600;
+  }
+  .ctrlyoke-error-hints {
+    text-align: left;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+    margin: 0;
+    padding-left: 20px;
+  }
+  .ctrlyoke-error-hints li + li { margin-top: 8px; }
+</style>
+</head>
+<body class="__CTRLYOKE_BODY_CLASS__">
+  <div class="ctrlyoke-error-page">
+    <img class="ctrlyoke-error-logo" src="/app-icon.svg" alt="ctrlyoke" />
+    <span class="ctrlyoke-error-code">Error __CTRLYOKE_STATUS_CODE__</span>
+    <p class="ctrlyoke-error-message">__CTRLYOKE_MESSAGE__</p>
+    __CTRLYOKE_HINTS_BLOCK__
+  </div>
+</body>
+</html>

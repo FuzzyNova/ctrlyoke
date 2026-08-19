@@ -232,6 +232,7 @@ const copyServerPlugin = {
       const serverStaticFiles = [
         "standalone-shim.js",
         "ctrlyoke-service-worker.js",
+        "hosted-error-page.html",
       ];
 
       for (const fileName of serverStaticFiles) {

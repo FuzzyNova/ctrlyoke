@@ -23,6 +23,7 @@ import type {
   DevDashboardAction,
   DevStatus,
   PromptEditorInsertRequest,
+  ServerPortFallbackInfo,
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
@@ -92,6 +93,7 @@ export class CtrlYokeWebviewProvider
   private commitMessageGenerationUnsubscribe?: () => void;
   private runningServerUrl?: string;
   private runningServerAvailableIps: string[] = [];
+  private runningServerPortFallback?: ServerPortFallbackInfo;
   private panelReady = false;
   private readonly pendingPromptEditorInsertQueue: PromptEditorInsertRequest[] =
     [];
@@ -184,6 +186,7 @@ export class CtrlYokeWebviewProvider
             : undefined,
         getServerUrl: () => this.runningServerUrl,
         getAvailableIps: () => this.runningServerAvailableIps,
+        getPortFallback: () => this.runningServerPortFallback,
         onPanelReady: () => this.handlePanelReady(),
       },
       this.secretRegistry
@@ -1013,10 +1016,12 @@ export class CtrlYokeWebviewProvider
    */
   public setRunningServerUrl(
     url: string | undefined,
-    availableIps?: string[]
+    availableIps?: string[],
+    portFallback?: ServerPortFallbackInfo
   ): void {
     this.runningServerUrl = url;
     this.runningServerAvailableIps = availableIps ?? [];
+    this.runningServerPortFallback = portFallback;
   }
 
   /**

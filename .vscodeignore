@@ -36,6 +36,7 @@
 !out/scripts/*.js
 !out/scripts/ctrlyoke-opencode-plugin.ts
 !out/server/standalone-shim.js
+!out/server/hosted-error-page.html
 !out/ui/webview-scripts/*.js
 !out/ui/webview-react/index.html
 !out/ui/webview-react/*.css

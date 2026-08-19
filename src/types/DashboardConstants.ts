@@ -254,7 +254,7 @@ export const MESSAGE_TYPES = {
   ACTIVE_WORKFLOW_CHANGED: "activeWorkflowChanged", // Active selection changed: { workflowId }
 
   // VS Code-hosted server — Extension → Webview
-  SERVER_STARTED: "serverStarted", // Server started: { url: string }
+  SERVER_STARTED: "serverStarted", // Server started: { url: string; availableIps?: string[]; portFallback?: ServerPortFallbackInfo }
   SERVER_STOPPED: "serverStopped", // Server stopped
   SERVER_TOKEN_REGENERATED: "serverTokenRegenerated", // Token deleted; restart server to apply new token
 

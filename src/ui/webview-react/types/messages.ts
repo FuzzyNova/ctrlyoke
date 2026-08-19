@@ -205,6 +205,7 @@ export {
   type SecretRegistryUpdateMessage,
   type SecretSetMessage,
   type SecretDeletedMessage,
+  type ServerPortFallbackInfo,
 } from "@root/types/WebviewMessageTypes";
 
 // Re-export WorkflowSummary, PriorContext, McpServerConfig, ToolPermissionsOverride, PreCondition, and helpers from CtrlYokeTypes

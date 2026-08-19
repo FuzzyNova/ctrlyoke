@@ -1165,17 +1165,29 @@ function registerCommands(context: vscode.ExtensionContext) {
         return;
       }
       const availableIps = hostedServer.getAvailableIps();
-      webviewProvider.setRunningServerUrl(url, availableIps);
+      const portFallback = hostedServer.getPortFallbackInfo() ?? undefined;
+      webviewProvider.setRunningServerUrl(url, availableIps, portFallback);
       webviewProvider.postMessage({
         type: MESSAGE_TYPES.SERVER_STARTED,
         url,
         availableIps,
+        ...(portFallback ? { portFallback } : {}),
       });
       webviewProvider.setThemeVarsCapturedCallback((vars) =>
         hostedServer?.updateThemeVars(vars)
       );
       webviewProvider.postMessage({ type: MESSAGE_TYPES.CAPTURE_THEME_VARS });
       Log.info(`ctrlyoke: Hosted server started at ${url}`);
+      if (portFallback) {
+        Log.warn(
+          `ctrlyoke: Port ${portFallback.requestedPort} was already in use — server started on port ${portFallback.actualPort} instead.`
+        );
+        notifyUserFeedback(
+          workflowOrchestrator.getUserFeedbackSink(),
+          USER_FEEDBACK_SEVERITY.WARNING,
+          `ctrlyoke: Port ${portFallback.requestedPort} was already in use by another process. The server started on port ${portFallback.actualPort} instead — restart the server to try binding to ${portFallback.requestedPort} again.`
+        );
+      }
     }
   );
 

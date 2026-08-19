@@ -57,6 +57,7 @@ import type {
   RetryHarnessDetectionMessage,
   DeleteSecretMessage,
   SetSecretMessage,
+  ServerPortFallbackInfo,
 } from "../types/WebviewMessageTypes";
 import type {
   WorkflowVariantCreatedMessage,
@@ -416,10 +417,12 @@ export class WebviewMessageRouter {
         const serverUrl = this.callbacks.getServerUrl?.();
         if (serverUrl) {
           const availableIps = this.callbacks.getAvailableIps?.() ?? [];
+          const portFallback = this.callbacks.getPortFallback?.();
           ctx.emit({
             type: MESSAGE_TYPES.SERVER_STARTED,
             url: serverUrl,
             availableIps,
+            ...(portFallback ? { portFallback } : {}),
           });
         }
         this.terminalHandlers.reconnectPanel(ctx);
@@ -2142,6 +2145,8 @@ export interface WebviewRouterCallbacks {
   getServerUrl?: () => string | undefined;
   /** Returns all available LAN IPs (populated when binding to 0.0.0.0). */
   getAvailableIps?: () => string[];
+  /** Returns port-fallback info if the running server couldn't bind its configured port. */
+  getPortFallback?: () => ServerPortFallbackInfo | undefined;
   /**
    * Called synchronously when the VS Code panel sends READY.
    * Used by CtrlYokeWebviewProvider to cancel pending RECONNECT retries

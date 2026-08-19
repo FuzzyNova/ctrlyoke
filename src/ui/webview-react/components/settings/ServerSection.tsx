@@ -47,6 +47,7 @@ export function ServerSection({
   const selectedDisplayIp = useSettingsStore(
     (state) => state.selectedDisplayIp
   );
+  const portFallback = useSettingsStore((state) => state.portFallback);
   const setSelectedDisplayIp = useSettingsStore(
     (state) => state.setSelectedDisplayIp
   );
@@ -135,6 +136,14 @@ export function ServerSection({
   }, [vscode]);
 
   const rowProps = { sources, onReset, activeScope };
+
+  // Only surface the warning while it still describes the currently configured
+  // port — if the user already edited the port field to work around the
+  // conflict, the stale fallback from the last start no longer applies to it.
+  const portFallbackForCurrentSetting =
+    portFallback && portFallback.requestedPort === server.port
+      ? portFallback
+      : null;
 
   const showIpSelector =
     server.bindAddress === "0.0.0.0" && availableIps.length > 1;
@@ -374,19 +383,33 @@ export function ServerSection({
 
         {/* Port, standalone port, bind address — server-side only; changing these could lock out browser clients */}
         {!isStandalone && (
-          <SettingInputRow
-            label="Server port"
-            id="server-port"
-            path="server.port"
-            {...rowProps}
-          >
-            <LocalNumberInput
+          <div>
+            <SettingInputRow
+              label="Server port"
               id="server-port"
-              value={server.port}
-              onCommit={(v) => onUpdate("server.port", v)}
-              className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
-            />
-          </SettingInputRow>
+              path="server.port"
+              {...rowProps}
+            >
+              <LocalNumberInput
+                id="server-port"
+                value={server.port}
+                onCommit={(v) => onUpdate("server.port", v)}
+                className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+              />
+            </SettingInputRow>
+            {portFallbackForCurrentSetting && (
+              <p className="mt-1 flex items-baseline gap-1 text-xs text-error-fg">
+                <i className="codicon codicon-warning shrink-0 translate-y-px" />
+                <span>
+                  Port {portFallbackForCurrentSetting.requestedPort} was
+                  already in use by another process — ctrlyoke started on port{" "}
+                  {portFallbackForCurrentSetting.actualPort} instead. Restart
+                  the server to try binding to port{" "}
+                  {portFallbackForCurrentSetting.requestedPort} again.
+                </span>
+              </p>
+            )}
+          </div>
         )}
 
         {/*

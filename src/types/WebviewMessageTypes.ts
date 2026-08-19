@@ -292,6 +292,17 @@ export type { ToolResult };
 export type StructuredOutput = UniversalCliOutput;
 
 /**
+ * Reported alongside SERVER_STARTED when the hosted server couldn't bind the
+ * configured `server.port` (EADDRINUSE) and fell back to an OS-assigned port
+ * instead. `requestedPort` is the configured value at the time listen() ran;
+ * `actualPort` is what it actually bound to.
+ */
+export interface ServerPortFallbackInfo {
+  requestedPort: number;
+  actualPort: number;
+}
+
+/**
  * Status message for output display
  */
 export interface OutputStatusMessage {
