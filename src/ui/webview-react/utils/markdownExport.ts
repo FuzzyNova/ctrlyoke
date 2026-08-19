@@ -30,7 +30,8 @@ import {
 import { mapOrderedHistoryEntriesToMessages } from "./outputProjection";
 import { truncate } from "./string";
 import { generateDiffLines } from "./diffUtils";
-import { secretRedactionService } from "@root/utils/SecretRedactionService";
+import { redactPreviewText } from "@root/types/PreviewRedactor";
+import { useSettingsStore } from "@store/settingsStore";
 import {
   extractKeyParameters,
   formatExecutionBadge,
@@ -40,6 +41,24 @@ import { formatCliCommandDisplay } from "./outputCommandDisplay";
 import { isScriptOutput } from "./outputRenderUtils";
 
 // ── Private helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Redact an assembled export document.
+ *
+ * Deliberately calls the pure `redactPreviewText` boundary rather than the
+ * process-wide redaction singleton in `@root/utils`: that module reaches
+ * ConfigurationUtils -> ExternalRootsTrustStore -> `os.homedir()`, which Vite
+ * resolves to a browser stub, so importing it throws at module-eval time and
+ * takes the whole dashboard down. Nothing is lost — in a browser process the
+ * singleton has no registered runs and no protected values, so it only ever
+ * applied the same heuristic rules this does.
+ */
+function redactExportText(text: string): string {
+  const applyHeuristics =
+    useSettingsStore.getState().fullGlobalSettings?.settings.permissions
+      .heuristicSecretRedactionEnabled ?? true;
+  return redactPreviewText(text, [], [], [], applyHeuristics).text;
+}
 
 interface MarkdownExportItem {
   type: "status" | "cli";
@@ -378,7 +397,7 @@ export function generateMarkdownExport(
 
   if (filteredOutputs.length === 0) {
     lines.push("*No output captured*");
-    return secretRedactionService.redactText(lines.join("\n"));
+    return redactExportText(lines.join("\n"));
   }
 
   filteredOutputs.forEach((item) => {
@@ -523,5 +542,5 @@ export function generateMarkdownExport(
     }
   });
 
-  return secretRedactionService.redactText(lines.join("\n"));
+  return redactExportText(lines.join("\n"));
 }

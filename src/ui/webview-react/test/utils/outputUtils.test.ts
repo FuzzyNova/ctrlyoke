@@ -1,4 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { REDACTION_MARKER } from "@root/types/PreviewRedactor";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
+import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import { useSettingsStore } from "@store/settingsStore";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
   buildDiffAnchorPrefix,
@@ -639,5 +643,63 @@ describe("generateMarkdownExport", () => {
       md.indexOf("## Final Step Loop 1 — Initial Attempt")
     );
     expect(md).toContain("canonical final");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// generateMarkdownExport — secret redaction
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("generateMarkdownExport redaction", () => {
+  const metadata = {
+    fileName: "my-workflow.ctrlyoke.yaml",
+    executionState: "completed",
+    currentStep: 1,
+    totalSteps: 1,
+  };
+
+  const outputsWithSecret = [
+    {
+      type: "cli" as const,
+      target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+      timestamp: 1000,
+      attemptIndex: 0,
+      data: { response: "export API_TOKEN=abcdef0123456789" },
+    },
+  ];
+
+  beforeEach(() => {
+    useSettingsStore.setState({ fullGlobalSettings: null });
+  });
+
+  afterEach(() => {
+    useSettingsStore.setState({ fullGlobalSettings: null });
+  });
+
+  // Regression guard: this used to route through the process-wide redaction
+  // singleton in src/utils, whose transitive `os.homedir()` import blanked the
+  // whole dashboard once Vite stubbed it out for the browser.
+  it("applies heuristic redaction by default", () => {
+    const md = generateMarkdownExport(outputsWithSecret, metadata);
+    expect(md).toContain(REDACTION_MARKER);
+    expect(md).not.toContain("abcdef0123456789");
+  });
+
+  it("skips heuristic redaction when the setting is disabled", () => {
+    useSettingsStore.setState({
+      fullGlobalSettings: {
+        settings: {
+          ...CTRLYOKE_SETTINGS_DEFAULTS,
+          permissions: {
+            ...CTRLYOKE_SETTINGS_DEFAULTS.permissions,
+            heuristicSecretRedactionEnabled: false,
+          },
+        },
+        sources: {},
+      } as FullGlobalSettings,
+    });
+    const md = generateMarkdownExport(outputsWithSecret, metadata);
+    expect(md).toContain("abcdef0123456789");
+    expect(md).not.toContain(REDACTION_MARKER);
   });
 });
