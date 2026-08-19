@@ -54,7 +54,8 @@ export function redactPreviewText(
   text: string,
   existing: RedactionSpan[] = [],
   exactSecrets: readonly string[] = [],
-  protectedValues: readonly string[] = []
+  protectedValues: readonly string[] = [],
+  applyHeuristics: boolean = true
 ): RedactedText {
   let currentText = text;
   let spans = [...existing];
@@ -80,7 +81,7 @@ export function redactPreviewText(
     }
   }
 
-  for (const rule of REDACTION_RULES) {
+  for (const rule of applyHeuristics ? REDACTION_RULES : []) {
     const matches = [...currentText.matchAll(rule.pattern)];
     if (matches.length === 0) {
       continue;

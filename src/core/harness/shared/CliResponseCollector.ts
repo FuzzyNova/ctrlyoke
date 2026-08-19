@@ -91,7 +91,17 @@ export class CliResponseCollector {
     if (this.deps.provider.augmentParsedOutput) {
       parsedOutput = await this.deps.provider.augmentParsedOutput(parsedOutput);
     }
-    parsedOutput = secretRedactionService.redactValue(parsedOutput);
+    // Deliberately not redacted here: `parsedOutput`/`responseText` become the
+    // harness's canonical response — reused verbatim as `$prior-context`/
+    // `$step:N` in a later prompt (see PromptQueue/CliPromptPreparer) and as
+    // commit-message text (CommitMessageGenerator). Redacting the harness's
+    // own output at this choke point corrupted legitimate values the model
+    // needs to see again (e.g. a real token printed while debugging auth
+    // code), the same failure mode as redacting the standalone shim's own
+    // generated JS. Every genuine output boundary (Log, TimelineRecorder,
+    // dashboard/hosted transports, CLI output, Markdown export) redacts
+    // independently at its own edge, so removing this pass does not weaken
+    // that protection.
 
     const responseText = extractTextFromEvents(parsedOutput);
     const statistics = CliOutputFormatter.formatStatistics(

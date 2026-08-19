@@ -107,6 +107,14 @@ export interface CtrlYokeGlobalSettings {
      * `dev/backlog/ALLOWED_EXTERNAL_FILE_ROOTS_PLAN.md`.
      */
     allowedExternalFileRoots: string[];
+    /**
+     * Apply pattern-based heuristics (e.g. `token=...`, `Bearer ...`,
+     * private-key blocks) during secret redaction, in addition to exact
+     * matches of resolved managed/env secret values. Exact-value redaction
+     * always stays on regardless of this setting — only the broader,
+     * false-positive-prone heuristic matching is affected.
+     */
+    heuristicSecretRedactionEnabled: boolean;
   };
 
   /** Workspace-local provider quota and observed-usage collection controls. */
@@ -357,6 +365,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     codexApprovalPolicy: "on-request",
     antigravityStatusLineTracking: true,
     allowedExternalFileRoots: [],
+    heuristicSecretRedactionEnabled: true,
   },
   usageTracking: {
     enabled: true,

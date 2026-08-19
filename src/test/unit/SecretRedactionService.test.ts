@@ -4,6 +4,7 @@ import {
   RunSecretRedactor,
   secretRedactionService,
 } from "../../utils/SecretRedactionService";
+import { configService } from "../../config/CtrlYokeConfigService";
 
 suite("SecretRedactionService", () => {
   test("redacts exact values recursively at a transport boundary", () => {
@@ -42,6 +43,36 @@ suite("SecretRedactionService", () => {
       secretRedactionService.redactText("run-only-value"),
       "run-only-value"
     );
+  });
+
+  test("permissions.heuristicSecretRedactionEnabled=false disables heuristic matching but not exact-secret redaction", () => {
+    configService.setCliOverlay({
+      permissions: { heuristicSecretRedactionEnabled: false },
+    });
+    try {
+      // Heuristic-shaped but never resolved by ctrlyoke: must survive.
+      assert.strictEqual(
+        secretRedactionService.redactText(
+          "Authorization: Bearer abcdefghijklmnopqrstuvwxyz"
+        ),
+        "Authorization: Bearer abcdefghijklmnopqrstuvwxyz"
+      );
+
+      // Exact resolved secrets always redact, heuristics setting or not.
+      const redactor = new RunSecretRedactor();
+      redactor.addResolvedValues({ TOKEN: "resolved-token" });
+      const release = secretRedactionService.register(redactor);
+      try {
+        assert.strictEqual(
+          secretRedactionService.redactText("failure: resolved-token"),
+          "failure: [REDACTED]"
+        );
+      } finally {
+        release();
+      }
+    } finally {
+      configService.setCliOverlay({});
+    }
   });
 
   test("protectValue exempts a value from heuristic credential-assignment matching", () => {

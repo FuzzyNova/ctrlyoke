@@ -1,4 +1,5 @@
 import { REDACTION_MARKER, redactPreviewText } from "../types/PreviewRedactor";
+import { ConfigurationUtils } from "./ConfigurationUtils";
 
 /** A run-owned collection of values that must never cross an output boundary. */
 export class RunSecretRedactor {
@@ -70,7 +71,8 @@ export class SecretRedactionService {
       text,
       [],
       [...exactSecrets],
-      [...this.protectedValues]
+      [...this.protectedValues],
+      ConfigurationUtils.isHeuristicSecretRedactionEnabled()
     ).text;
   }
 

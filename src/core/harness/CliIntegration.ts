@@ -67,10 +67,7 @@ import type { PtySession } from "./PtyProcessManager";
 import type { HookEvent } from "../../types/CtrlYokeTypes";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import { resolveSecretEnvironment } from "../../utils/SecretResolver";
-import {
-  secretRedactionService,
-  type RunSecretRedactor,
-} from "../../utils/SecretRedactionService";
+import { type RunSecretRedactor } from "../../utils/SecretRedactionService";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
 /**
@@ -641,14 +638,22 @@ export class CliIntegration extends HarnessIntegration {
     this.lastFailureReason = reason;
   }
 
+  // Deliberately not redacted: these emitters carry the harness's canonical,
+  // still-in-progress response. WorkflowExecutor consumes their payloads to
+  // build `$prior-context`/`$step:N` for later prompts and the runtime
+  // output cache (see PromptQueue.cacheRuntimeOutput), so pre-redacting here
+  // would send the model back its own corrupted output next turn — the same
+  // failure mode that broke the standalone shim's generated JS. Every
+  // downstream consumer that actually persists or displays this content
+  // (TimelineRecorder, dashboard/hosted transports, OutputHistoryManager via
+  // TimelineRecorder, CLI output, Markdown export) redacts independently at
+  // its own boundary, so removing this pass does not weaken that protection.
   private emitStreamingChunk(chunk: string): void {
-    this.streamingChunkEmitter.fire(secretRedactionService.redactText(chunk));
+    this.streamingChunkEmitter.fire(chunk);
   }
 
   private emitStreamingEvents(events: CliEvent[]): void {
-    this.streamingEventsEmitter.fire(
-      secretRedactionService.redactValue(events)
-    );
+    this.streamingEventsEmitter.fire(events);
   }
 
   private emitContextWindowUpdate(used: number, size: number): void {
@@ -656,9 +661,7 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   private emitResponseComplete(response: string): void {
-    this.responseCompleteEmitter.fire(
-      secretRedactionService.redactText(response)
-    );
+    this.responseCompleteEmitter.fire(response);
   }
 
   private emitSessionActivityResumed(events: CliEvent[]): void {

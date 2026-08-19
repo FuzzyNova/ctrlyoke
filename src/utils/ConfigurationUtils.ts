@@ -772,6 +772,17 @@ export const ConfigurationUtils = {
       .antigravityStatusLineTracking;
   },
 
+  /**
+   * Whether pattern-based heuristics (e.g. `token=...`, `Bearer ...`) apply
+   * during secret redaction, in addition to exact matches of resolved
+   * managed/env secret values, which always redact regardless of this
+   * setting.
+   */
+  isHeuristicSecretRedactionEnabled(): boolean {
+    return configService.get(CONFIG_KEYS.PERMISSIONS)
+      .heuristicSecretRedactionEnabled;
+  },
+
   /** Whether provider quota and observed usage collection is enabled. */
   shouldTrackHarnessUsage(): boolean {
     return configService.get(CONFIG_KEYS.USAGE_TRACKING).enabled;

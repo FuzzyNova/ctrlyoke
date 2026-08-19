@@ -261,6 +261,35 @@ suite("CliResponseCollector", () => {
     assert.ok(loggedResponses.every((response) => !response.includes(secret)));
   });
 
+  test("does not heuristically redact the harness's own response text (prior-context regression)", async () => {
+    // Regression: `cliResult.response` becomes `$prior-context`/`$step:N` in
+    // a later prompt (see PromptQueue/CliPromptPreparer) and commit-message
+    // text (CommitMessageGenerator). A value shaped like the heuristic
+    // credential-assignment rule but backed by no resolved secret — e.g.
+    // ordinary code the model wrote while helping debug auth — must survive
+    // verbatim here, or a later step would send the model back a corrupted
+    // copy of its own output. This is the same failure mode as redacting
+    // the standalone shim's generated JS.
+    const responseText = 'const token = "example-not-a-real-secret";';
+    const collector = createCollector(
+      createProvider(
+        createParsedOutput({
+          events: [{ type: "text" as any, data: { text: responseText } }],
+        })
+      )
+    );
+
+    const result = await collector.collectHeadlessResponse({
+      stdout: "stdout",
+      stderr: "",
+      exitCode: 0,
+      promptForSessionLog: "say hi",
+      executionStartTime: new Date(),
+    });
+
+    assert.strictEqual(result.cliResult.response, responseText);
+  });
+
   test("should preserve stderr for providers with no redaction hook", async () => {
     const result = await createCollector({}).collectHeadlessResponse({
       stdout: "",
