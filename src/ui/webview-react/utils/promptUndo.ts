@@ -411,7 +411,6 @@ function buildUndoDialogRow(options: {
     changeType: fromPromptChangeType(options.changeType),
     source: buildDiffSource(oldContent, newContent, structuredPatch),
     language: getLanguageFromPath(options.path),
-    globallyCollapsed: true,
     instruction: options.instruction,
     hasDiff: hasRenderableDiff({
       oldContent,
@@ -700,7 +699,6 @@ function buildAggregatedDialogRow(
     changeType: file.changeType,
     source: buildDiffSource(oldContent, newContent, structuredPatch),
     language: getLanguageFromPath(file.path),
-    globallyCollapsed: true,
     instruction: file.steps[0]?.instruction ?? null,
     hasDiff: hasRenderableDiff({ oldContent, newContent, structuredPatch }),
     note: noteParts.join(" · "),
@@ -718,7 +716,6 @@ function buildRedoDialogRow(
     changeType: redoInstructionToDiffChangeType(instruction),
     source: buildDiffSource(undefined, undefined, structuredPatch),
     language: getLanguageFromPath(instruction.path),
-    globallyCollapsed: true,
     instruction,
     hasDiff: hasRenderableDiff({ structuredPatch }),
   };

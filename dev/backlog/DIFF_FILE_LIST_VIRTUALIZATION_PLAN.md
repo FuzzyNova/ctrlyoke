@@ -1,6 +1,6 @@
 # Diff File List Virtualization Plan
 
-> **Status:** Phase 1 items 2–4 implemented; virtualization remains off. This is a focused UI-performance change for the shared
+> **Status:** Phase 2 implemented; virtualization remains off. This is a focused UI-performance change for the shared
 > `DiffFileList`; it does not replace the Output pane's existing virtualization.
 
 ## Goal
@@ -175,11 +175,10 @@ top-level estimate.
 
 `DiffView` **already supports** controlled `collapsed` / `onCollapsedChange` / `expandedGaps` /
 `onExpandGap` (the virtualized Output rows use them today) and already accepts
-`localResetVersion`. `DiffFileCard` forwards `globallyCollapsed`, `localResetVersion` and
-`viewType` but **not** the controlled-state props, so a card's expansion and gap maps are
-uncontrolled and would reset whenever a file scrolls out of the render window. The work here is
-threading and list-level ownership, not new `DiffView` capability — do not add a second control
-mechanism.
+`localResetVersion`. `DiffFileCard` now threads the controlled-state props and `DiffFileList`
+owns the per-file overrides and gap maps, so a card can be unmounted and remounted without
+losing its state. The work here is list-level ownership, not new `DiffView` capability — do not
+add a second control mechanism.
 
 Lift the following state to `DiffFileList`, keyed by the composite file-row key:
 
@@ -284,14 +283,18 @@ state, view type, font size, and a 32px content-width bucket.
 
 ### Phase 2 — Controlled per-file state (before any virtualization)
 
-1. Lift collapse and gap-expansion state into the list, threading `DiffView`'s existing controlled
-   props through `DiffFileCard`.
-2. Convert global collapse resets to the versioned list command.
+1. [x] Lift collapse and gap-expansion state into the list, threading `DiffView`'s existing controlled
+       props through `DiffFileCard`.
+2. [x] Convert global collapse resets to the versioned list command.
 
 Per the risk register below, controlled per-file state is a **precondition** for enabling
 virtualization: shipping the threshold first would land an intermediate state where scrolling a
 file out of the window silently discards its expansion and gap state. This phase changes no
 rendering structure and is independently verifiable.
+
+The list ignores stale-version overrides during render, then prunes them with idempotent
+functional updates. Its direct-render path continues to use the shared row projection and
+command-aware estimates.
 
 ### Phase 3 — Scroll ownership and single width measurement
 

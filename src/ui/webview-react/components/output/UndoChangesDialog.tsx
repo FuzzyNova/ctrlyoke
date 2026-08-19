@@ -307,8 +307,6 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
           return {
             key,
             ...file,
-            globallyCollapsed: dialogDiffsCollapsed,
-            localResetVersion: dialogDiffResetVersion,
             headerActions: <OpenFileButton path={file.path} />,
             selection: {
               checked: checkedPaths.has(key),
@@ -318,7 +316,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
           };
         }),
       })),
-    [checkedPaths, dialogDiffResetVersion, dialogDiffsCollapsed, model.groups]
+    [checkedPaths, model.groups]
   );
 
   const selectionSummary =
@@ -403,6 +401,10 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
       <DiffFileList
         groups={dialogGroups}
         emptyMessage={emptyMessage}
+        command={{
+          version: dialogDiffResetVersion,
+          collapsed: dialogDiffsCollapsed,
+        }}
         selectionSummary={selectionSummary}
       />
     </Modal>

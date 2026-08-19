@@ -49,6 +49,7 @@ const DIFF_FILE_HEADER_CHAR_WIDTH = 0.6;
 const GROUP_KEY_SEPARATOR = "\u001f";
 
 export interface DiffFileRowEstimateOptions {
+  collapsed?: boolean;
   viewType?: "split" | "unified";
   outputFontSize?: number;
   outputContentWidth?: number;
@@ -94,6 +95,7 @@ function normalizedOptions(
   options: DiffFileRowEstimateOptions
 ): Required<DiffFileRowEstimateOptions> {
   return {
+    collapsed: options.collapsed ?? false,
     viewType: options.viewType ?? "unified",
     outputFontSize: options.outputFontSize ?? DEFAULT_OUTPUT_FONT_SIZE,
     outputContentWidth:
@@ -295,7 +297,7 @@ function getDiffBodyEstimate(
   file: DiffFileCardProps,
   options: Required<DiffFileRowEstimateOptions>
 ): number {
-  const collapsed = file.globallyCollapsed;
+  const collapsed = options.collapsed;
   const cacheKey = [
     collapsed ? "collapsed" : "expanded",
     options.viewType,

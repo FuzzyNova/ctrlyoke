@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { UndoChangesDialog } from "@components/output/UndoChangesDialog";
 import { useWorkflowStore } from "@store/workflowStore";
+import { useUiStore } from "@store/uiStore";
 import {
   FINAL_STEP_PHASES,
   MESSAGE_TYPES,
@@ -26,6 +27,12 @@ vi.mock("@utils/syntaxHighlighting", async (importOriginal) => {
     getLanguageFromPath: vi.fn(() => "typescript"),
   };
 });
+
+vi.mock("@components/output/DiffView", () => ({
+  DiffView: ({ collapsed }: { collapsed?: boolean }) => (
+    <div data-testid="dialog-diff-view" data-collapsed={String(collapsed)} />
+  ),
+}));
 
 describe("UndoChangesDialog", () => {
   const workflowKey = "workflow-test" as WorkflowKey;
@@ -84,6 +91,64 @@ describe("UndoChangesDialog", () => {
     expect(
       screen.queryByText("No file changes found for this prompt.")
     ).not.toBeInTheDocument();
+  });
+
+  it("applies versioned Expand all and Collapse all commands to dialog diffs", () => {
+    useUiStore.getState().setUndoDialogDiffsCollapsed(true);
+    const instruction: UndoFileInstruction = {
+      path: "src/example.ts",
+      action: "reverse-patch",
+      structuredPatch: [
+        {
+          oldStart: 1,
+          oldLines: 1,
+          newStart: 1,
+          newLines: 1,
+          lines: ["-before", "+after"],
+        },
+      ],
+    };
+
+    render(
+      <UndoChangesDialog
+        mode="undo"
+        target={queueTarget}
+        workflowKey={workflowKey}
+        runRef={runRef}
+        workspacePath="C:/dev/ctrlyoke"
+        requestId="dialog-collapse-command"
+        onClose={vi.fn()}
+        input={{
+          scope: { mode: "prompt" as const, target: queueTarget },
+          eventAttributedFiles: [
+            {
+              path: instruction.path,
+              changeType: "modified",
+              tier: "tier1",
+              instruction,
+              structuredPatch: instruction.structuredPatch,
+            },
+          ],
+          snapshotOnlyFiles: [],
+          workspacePath: "C:/dev/ctrlyoke",
+        }}
+      />
+    );
+
+    expect(screen.getByTestId("dialog-diff-view")).toHaveAttribute(
+      "data-collapsed",
+      "true"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Expand all diffs" }));
+    expect(screen.getByTestId("dialog-diff-view")).toHaveAttribute(
+      "data-collapsed",
+      "false"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Collapse all diffs" }));
+    expect(screen.getByTestId("dialog-diff-view")).toHaveAttribute(
+      "data-collapsed",
+      "true"
+    );
   });
 
   it("renders the four undo and redo row shapes through the shared card", () => {

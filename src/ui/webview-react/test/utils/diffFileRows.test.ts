@@ -52,7 +52,6 @@ function file(
     path: key,
     changeType: "modified",
     source,
-    globallyCollapsed: false,
   };
 }
 

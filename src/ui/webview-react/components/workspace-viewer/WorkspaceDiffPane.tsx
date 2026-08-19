@@ -46,13 +46,11 @@ export const WorkspaceDiffPane: React.FC = () => {
             hunks: file.hunks,
             diffType: file.diffType,
           },
-          globallyCollapsed: commitDiffsCollapsed,
-          localResetVersion: commitDiffResetVersion,
           headerActions: <OpenFileButton path={file.path} />,
         })),
       },
     ],
-    [commitDiffResetVersion, commitDiffsCollapsed, visibleFiles]
+    [visibleFiles]
   );
   const singleFileGroups = useMemo<DiffFileGroup[]>(
     () =>
@@ -71,7 +69,6 @@ export const WorkspaceDiffPane: React.FC = () => {
                     oldContent: diffOldContent,
                     newContent: diffNewContent,
                   },
-                  globallyCollapsed: false,
                   headerActions: <OpenFileButton path={selectedDiffPath} />,
                 },
               ],
@@ -228,6 +225,10 @@ export const WorkspaceDiffPane: React.FC = () => {
           <DiffFileList
             groups={commitGroups}
             emptyMessage="No text changes to display"
+            command={{
+              version: commitDiffResetVersion,
+              collapsed: commitDiffsCollapsed,
+            }}
           />
         </div>
       </div>
@@ -258,6 +259,10 @@ export const WorkspaceDiffPane: React.FC = () => {
       <DiffFileList
         groups={singleFileGroups}
         emptyMessage="No text changes to display"
+        command={{
+          version: commitDiffResetVersion,
+          collapsed: commitDiffsCollapsed,
+        }}
       />
     </div>
   );

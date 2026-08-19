@@ -8,18 +8,8 @@ import type { ParsedDiffFile } from "@utils/rdvAdapter";
 import { MESSAGE_TYPES } from "@/types/messages";
 
 vi.mock("@components/output/DiffView", () => ({
-  DiffView: ({
-    globallyCollapsed,
-    localResetVersion,
-  }: {
-    globallyCollapsed: boolean;
-    localResetVersion?: number;
-  }) => (
-    <div
-      data-testid="diff-view"
-      data-collapsed={String(globallyCollapsed)}
-      data-reset-version={String(localResetVersion ?? 0)}
-    />
+  DiffView: ({ collapsed }: { collapsed: boolean }) => (
+    <div data-testid="diff-view" data-collapsed={String(collapsed)} />
   ),
 }));
 
@@ -87,20 +77,11 @@ describe("WorkspaceDiffPane commit diff controls", () => {
       "data-collapsed",
       "true"
     );
-    expect(screen.getByTestId("diff-view")).toHaveAttribute(
-      "data-reset-version",
-      "1"
-    );
-
     await user.click(screen.getByRole("button", { name: "Expand all diffs" }));
 
     expect(screen.getByTestId("diff-view")).toHaveAttribute(
       "data-collapsed",
       "false"
-    );
-    expect(screen.getByTestId("diff-view")).toHaveAttribute(
-      "data-reset-version",
-      "2"
     );
   });
 
