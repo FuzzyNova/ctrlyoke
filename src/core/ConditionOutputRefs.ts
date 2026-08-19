@@ -5,10 +5,7 @@ import {
   SCRIPT_OUTPUT_SOURCES,
   type RetryPromptPlaceholder,
 } from "../types/DashboardConstants";
-import {
-  maskFencedCodeBlocks,
-  parseConditionOutputRefs,
-} from "../utils/FileReferenceParser";
+import { parseConditionOutputRefs } from "../utils/FileReferenceParser";
 
 type ConditionOutputPhase =
   | typeof SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
@@ -65,8 +62,9 @@ export function substituteConditionOutputRefs(
   text: string,
   context: ConditionOutputContext
 ): ConditionOutputSubstitutionResult {
-  const maskedText = maskFencedCodeBlocks(text);
-  const matches = parseConditionOutputRefs(maskedText);
+  // parseConditionOutputRefs masks fenced blocks itself, and masking is a
+  // 1:1 character substitution — so its offsets index the original text.
+  const matches = parseConditionOutputRefs(text);
   const unresolved: ConditionOutputSubstitutionResult["unresolved"] = [];
   let cursor = 0;
   let substitutedText = "";
