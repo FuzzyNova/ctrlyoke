@@ -5,8 +5,8 @@ import { NavHistoryControls } from "../shared/NavHistoryControls";
 import { ExitButton } from "../shared/ExitButton";
 
 interface WorkspaceViewerHeaderProps {
-  activeTab: "explorer" | "sourceControl";
-  onTabChange: (tab: "explorer" | "sourceControl") => void;
+  activeTab: "explorer" | "sourceControl" | "search";
+  onTabChange: (tab: "explorer" | "sourceControl" | "search") => void;
   onClose: () => void;
   workspacePath?: string;
 }
@@ -94,6 +94,16 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
         >
           <i className="codicon codicon-source-control codicon-sm px-1 sm:px-0" />
           <span className="hidden sm:inline">Source Control</span>
+        </button>
+        <button
+          className={`fp-tab fp-tab-hc ${activeTab === "search" ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
+          onClick={() => onTabChange("search")}
+          aria-selected={activeTab === "search"}
+          role="tab"
+          title="Search"
+        >
+          <i className="codicon codicon-search codicon-sm px-1 sm:px-0" />
+          <span className="hidden sm:inline">Search</span>
         </button>
         <NavHistoryControls className="ml-2" />
       </div>

@@ -9,7 +9,7 @@
  *
  * URL scheme (query params, carried alongside the existing `?token=`):
  *   workflowKey=<key>&runRef=<ref>         stable workflow/run selection
- *   viewer=explorer|scm                   workspace viewer open + active tab
+ *   viewer=explorer|scm|search            workspace viewer open + active tab
  *   file=<relPath>                        explorer file, or scm diff file
  *   dir=<relPath>                         explorer directory (when no file)
  *   lines=<start>-<end>                   explorer file selection (inbound only)
@@ -23,7 +23,26 @@
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 
 /** Workspace viewer tab id — matches `workspaceViewerStore`'s `activeTab`. */
-type ViewerTab = "explorer" | "sourceControl";
+type ViewerTab = "explorer" | "sourceControl" | "search";
+
+/**
+ * Single source for the `viewer=` URL token of each tab, and its inverse. Every
+ * tab needs an entry: a tab missing from here would serialize to another tab's
+ * token and silently switch tabs on reload/back.
+ */
+const VIEWER_URL_TOKENS: Record<ViewerTab, string> = {
+  explorer: "explorer",
+  sourceControl: "scm",
+  search: "search",
+};
+
+const VIEWER_TABS_BY_URL_TOKEN: Record<string, ViewerTab | undefined> =
+  Object.fromEntries(
+    (Object.keys(VIEWER_URL_TOKENS) as ViewerTab[]).map((tab) => [
+      VIEWER_URL_TOKENS[tab],
+      tab,
+    ])
+  );
 
 export interface Route {
   /** Active lineage draft or promoted run, addressed without a filesystem path. */
@@ -134,7 +153,7 @@ export function normalizeRoute(route: Route): Route {
     } else if (route.dir) {
       out.dir = fwd(route.dir);
     }
-  } else {
+  } else if (route.viewer === "sourceControl") {
     if (route.ref) {
       out.ref = route.ref;
     } else if (route.file) {
@@ -150,12 +169,9 @@ export function parseRoute(search: string): Route {
   const params = new URLSearchParams(search);
 
   const viewerRaw = params.get("viewer");
-  const viewer: ViewerTab | undefined =
-    viewerRaw === "explorer"
-      ? "explorer"
-      : viewerRaw === "scm"
-        ? "sourceControl"
-        : undefined;
+  const viewer: ViewerTab | undefined = viewerRaw
+    ? VIEWER_TABS_BY_URL_TOKEN[viewerRaw]
+    : undefined;
 
   return normalizeRoute({
     workflow: (() => {
@@ -204,7 +220,7 @@ export function serializeRoute(route: Route, currentSearch = ""): string {
   }
 
   if (normalized.viewer) {
-    params.set("viewer", normalized.viewer === "explorer" ? "explorer" : "scm");
+    params.set("viewer", VIEWER_URL_TOKENS[normalized.viewer]);
     if (normalized.viewer === "explorer") {
       if (normalized.file) {
         params.set("file", normalized.file);
@@ -214,10 +230,12 @@ export function serializeRoute(route: Route, currentSearch = ""): string {
       } else if (normalized.dir) {
         params.set("dir", normalized.dir);
       }
-    } else if (normalized.ref) {
-      params.set("ref", normalized.ref);
-    } else if (normalized.file) {
-      params.set("file", normalized.file);
+    } else if (normalized.viewer === "sourceControl") {
+      if (normalized.ref) {
+        params.set("ref", normalized.ref);
+      } else if (normalized.file) {
+        params.set("file", normalized.file);
+      }
     }
   }
 
@@ -277,11 +295,15 @@ export function deriveRoute(s: RouteSourceState): Route {
       } else if (s.explorerPath) {
         raw.dir = s.explorerPath;
       }
-    } else if (s.diffRef) {
-      raw.ref = s.diffRef;
-    } else if (s.selectedDiffPath) {
-      raw.file = s.selectedDiffPath;
+    } else if (s.activeTab === "sourceControl") {
+      if (s.diffRef) {
+        raw.ref = s.diffRef;
+      } else if (s.selectedDiffPath) {
+        raw.file = s.selectedDiffPath;
+      }
     }
+    // The search tab carries no location of its own — the query is transient
+    // per-session state, not a shareable address.
   }
 
   return normalizeRoute(raw);

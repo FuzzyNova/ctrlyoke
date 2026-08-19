@@ -138,4 +138,18 @@ describe("WorkspaceExplorerPane — markdown preview toggle", () => {
     const editorWrapper = screen.getByTestId("file-editor").parentElement;
     expect(editorWrapper).not.toHaveClass("hidden");
   });
+
+  it("opens the Search tab from the directory toolbar", async () => {
+    const user = userEvent.setup();
+    render(<WorkspaceExplorerPane />);
+
+    const searchButton = screen.getByRole("button", {
+      name: "Search workspace",
+    });
+    expect(searchButton).toBeInTheDocument();
+
+    await user.click(searchButton);
+
+    expect(useWorkspaceViewerStore.getState().activeTab).toBe("search");
+  });
 });

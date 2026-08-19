@@ -535,6 +535,23 @@ export async function getGitUntrackedFiles(
   return stdout.split("\0").filter(Boolean);
 }
 
+/** Return ignored untracked paths recursively, preserving Git's NUL-safe output. */
+export async function getGitIgnoredFiles(repoRoot: string): Promise<string[]> {
+  const { stdout } = await execGit(
+    [
+      "-C",
+      repoRoot,
+      "ls-files",
+      "--others",
+      "--ignored",
+      "--exclude-standard",
+      "-z",
+    ],
+    { maxBuffer: GIT_MAX_BUFFER }
+  );
+  return stdout.split("\0").filter(Boolean);
+}
+
 /**
  * Return the absolute paths Git reports as ignored in one batched query.
  *

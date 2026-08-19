@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as readline from "readline";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { Log } from "../utils/Log";
@@ -27,6 +28,11 @@ import type {
   WorkspaceRepo,
   WorkspaceReposResponse,
   GitRefLabel,
+  WorkspaceSearchRequest,
+  WorkspaceSearchResponse,
+  WorkspaceSearchResult,
+  WorkspaceSearchScope,
+  WorkspaceSearchContentMatch,
 } from "../types/HostedWorkspaceViewerTypes";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {
@@ -52,6 +58,8 @@ import {
   getCommitDiff,
   getCommitInfo,
   getIgnoredEntryNames,
+  getGitTrackedFiles,
+  getGitIgnoredFiles,
   getDiffBetweenRefs,
 } from "../utils/GitUtils";
 import {
@@ -65,6 +73,37 @@ const GIT_TIMEOUT_MS = 10_000;
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 const BINARY_CHECK_BYTES = 8192;
 const MAX_ENTRIES = 1000;
+const SEARCH_MAX_FILES = 5000;
+const SEARCH_MAX_DURATION_MS = 3000;
+const SEARCH_MAX_FILENAME_MATCHES = 30;
+const SEARCH_MAX_CONTENT_MATCHES_PER_FILE = 3;
+const SEARCH_CONCURRENCY = 8;
+const SEARCH_DEFAULT_LIMIT = 100;
+const SEARCH_MAX_LIMIT = 500;
+const SEARCH_SNIPPET_MAX_LENGTH = 200;
+const SEARCH_FALLBACK_SKIP_DIRECTORIES = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  "out",
+  "coverage",
+]);
+
+interface SearchCandidate {
+  absolutePath: string;
+  viewerPath: string;
+}
+
+interface SearchContentScan {
+  matches: WorkspaceSearchContentMatch[];
+  truncated: boolean;
+}
+
+interface SearchWalkResult {
+  files: string[];
+  truncated: boolean;
+}
 
 /** Extension → Monaco language ID mapping. */
 const LANGUAGE_MAP: Record<string, string> = {
@@ -369,6 +408,328 @@ export class HostedWorkspaceViewerService {
    */
   private relativePath(absolutePath: string): string {
     return toViewerPath(absolutePath, this.viewerContext);
+  }
+
+  // ── Workspace search ────────────────────────────────────────────────────
+
+  /**
+   * Search the files visible to the workspace viewer. This deliberately walks
+   * workspace roots rather than discovered repository toplevels: a workspace
+   * root may be nested inside a repository, and the viewer must not expose the
+   * repository's siblings or parent files.
+   */
+  async searchWorkspace(
+    request: WorkspaceSearchRequest
+  ): Promise<WorkspaceSearchResponse> {
+    const query = request.query.trim();
+    if (query.length < 2) {
+      return { results: [], truncated: false };
+    }
+
+    const scope: WorkspaceSearchScope =
+      request.scope === "files" ||
+      request.scope === "content" ||
+      request.scope === "both"
+        ? request.scope
+        : "both";
+    const requestedLimit = Number.isFinite(request.limit)
+      ? Math.floor(request.limit ?? SEARCH_DEFAULT_LIMIT)
+      : SEARCH_DEFAULT_LIMIT;
+    const limit = Math.min(
+      SEARCH_MAX_LIMIT,
+      requestedLimit > 0 ? requestedLimit : SEARCH_DEFAULT_LIMIT
+    );
+    const startedAt = Date.now();
+    const roots = await this.searchRoots(request.repo);
+    if (roots.length === 0) {
+      return { results: [], truncated: false };
+    }
+
+    const discovered = await Promise.all(
+      roots.map((root) =>
+        this.discoverSearchCandidates(root.fsPath, request, startedAt)
+      )
+    );
+    const candidates = discovered.flatMap((result) => result.candidates);
+    let truncated = discovered.some((result) => result.truncated);
+    let scannedFiles = 0;
+    const queryLower = query.toLowerCase();
+    const filenameResults: WorkspaceSearchResult[] = [];
+    const surfacedFilenamePaths = new Set<string>();
+    const contentCandidates: SearchCandidate[] = [];
+    const filenameLimit = Math.min(SEARCH_MAX_FILENAME_MATCHES, limit);
+
+    for (const candidate of candidates) {
+      if (filenameResults.length >= limit) break;
+      if (
+        scannedFiles >= SEARCH_MAX_FILES ||
+        Date.now() - startedAt >= SEARCH_MAX_DURATION_MS
+      ) {
+        truncated = true;
+        break;
+      }
+      scannedFiles++;
+
+      if (scope !== "content") {
+        const name = path.basename(candidate.absolutePath);
+        if (
+          filenameResults.length < filenameLimit &&
+          name.toLowerCase().includes(queryLower)
+        ) {
+          filenameResults.push({
+            kind: "file",
+            path: candidate.viewerPath,
+            name,
+          });
+          surfacedFilenamePaths.add(candidate.absolutePath);
+        }
+      }
+
+      if (
+        (scope === "content" || scope === "both") &&
+        !surfacedFilenamePaths.has(candidate.absolutePath)
+      ) {
+        contentCandidates.push(candidate);
+      }
+    }
+
+    if (scope === "files" || filenameResults.length >= limit) {
+      return { results: filenameResults.slice(0, limit), truncated };
+    }
+
+    const contentResultLimit = limit - filenameResults.length;
+    const contentMatchesByCandidate = new Map<
+      number,
+      WorkspaceSearchContentMatch[]
+    >();
+    let contentMatchCount = 0;
+    let nextCandidateIndex = 0;
+
+    const scanContent = async (): Promise<void> => {
+      while (true) {
+        if (
+          contentMatchCount >= contentResultLimit ||
+          Date.now() - startedAt >= SEARCH_MAX_DURATION_MS
+        ) {
+          if (Date.now() - startedAt >= SEARCH_MAX_DURATION_MS) {
+            truncated = true;
+          }
+          return;
+        }
+
+        const candidateIndex = nextCandidateIndex++;
+        if (candidateIndex >= contentCandidates.length) return;
+        const scan = await this.scanSearchFile(
+          contentCandidates[candidateIndex],
+          queryLower,
+          Math.min(
+            SEARCH_MAX_CONTENT_MATCHES_PER_FILE,
+            contentResultLimit - contentMatchCount
+          ),
+          startedAt
+        );
+        if (scan.truncated) truncated = true;
+
+        const remaining = contentResultLimit - contentMatchCount;
+        if (remaining > 0 && scan.matches.length > 0) {
+          const matches = scan.matches.slice(0, remaining);
+          contentMatchesByCandidate.set(candidateIndex, matches);
+          contentMatchCount += matches.length;
+        }
+      }
+    };
+
+    await Promise.all(
+      Array.from(
+        {
+          length: Math.min(SEARCH_CONCURRENCY, contentCandidates.length),
+        },
+        () => scanContent()
+      )
+    );
+
+    const contentResults: WorkspaceSearchContentMatch[] = [];
+    for (let i = 0; i < contentCandidates.length; i++) {
+      const matches = contentMatchesByCandidate.get(i);
+      if (!matches) continue;
+      contentResults.push(...matches);
+      if (contentResults.length >= contentResultLimit) break;
+    }
+
+    return {
+      results: [...filenameResults, ...contentResults].slice(0, limit),
+      truncated,
+    };
+  }
+
+  private async searchRoots(
+    repoId: string | undefined
+  ): Promise<ResolverWorkspaceFolder[]> {
+    const roots: ResolverWorkspaceFolder[] = this.isMultiRoot
+      ? this.namedRoots
+      : [{ name: this.primaryRootName, fsPath: this.workspaceRoot }];
+    if (!repoId) return roots;
+
+    const repos = await this.getReposInternal();
+    const prefixRepoIds = mapRootPrefixesToRepos(roots, repos);
+    return roots.filter((root) => prefixRepoIds[root.name] === repoId);
+  }
+
+  private async discoverSearchCandidates(
+    rootPath: string,
+    request: WorkspaceSearchRequest,
+    startedAt: number
+  ): Promise<{ candidates: SearchCandidate[]; truncated: boolean }> {
+    let relativeFiles: string[];
+    let truncated = false;
+    try {
+      const trackedFiles = await getGitTrackedFiles(rootPath);
+      relativeFiles = trackedFiles;
+      if (request.includeGitIgnored) {
+        const ignoredFiles = await getGitIgnoredFiles(rootPath);
+        relativeFiles = [...new Set([...trackedFiles, ...ignoredFiles])];
+      }
+    } catch {
+      const walked = await this.walkSearchFiles(rootPath, startedAt);
+      relativeFiles = walked.files;
+      truncated = walked.truncated;
+    }
+
+    const candidates: SearchCandidate[] = [];
+    const root = path.resolve(rootPath);
+    for (const relativeFile of relativeFiles) {
+      const absolutePath = path.resolve(root, relativeFile);
+      if (!isPathWithinDirectory(absolutePath, root)) continue;
+      candidates.push({
+        absolutePath,
+        viewerPath: this.relativePath(absolutePath),
+      });
+    }
+    return { candidates, truncated };
+  }
+
+  /** Bounded non-git fallback walk. Symlinks are not followed. */
+  private async walkSearchFiles(
+    rootPath: string,
+    startedAt: number
+  ): Promise<SearchWalkResult> {
+    const root = path.resolve(rootPath);
+    const pending = [root];
+    const files: string[] = [];
+    let truncated = false;
+
+    while (pending.length > 0 && files.length < SEARCH_MAX_FILES) {
+      if (Date.now() - startedAt >= SEARCH_MAX_DURATION_MS) {
+        truncated = true;
+        break;
+      }
+      const directory = pending.pop();
+      if (!directory) break;
+      let entries: fs.Dirent[];
+      try {
+        entries = await fs.promises.readdir(directory, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+
+      for (const entry of entries) {
+        if (Date.now() - startedAt >= SEARCH_MAX_DURATION_MS) {
+          truncated = true;
+          break;
+        }
+        if (files.length >= SEARCH_MAX_FILES) {
+          truncated = true;
+          break;
+        }
+        if (
+          entry.isDirectory() &&
+          !SEARCH_FALLBACK_SKIP_DIRECTORIES.has(entry.name)
+        ) {
+          pending.push(path.join(directory, entry.name));
+        } else if (entry.isFile()) {
+          files.push(path.relative(root, path.join(directory, entry.name)));
+        }
+      }
+    }
+    if (files.length >= SEARCH_MAX_FILES && pending.length > 0) {
+      truncated = true;
+    }
+    return { files, truncated };
+  }
+
+  private async isSearchFileWithinTrustedRoots(
+    filePath: string
+  ): Promise<string | null> {
+    try {
+      const realPath = await fs.promises.realpath(filePath);
+      return isPathWithinAnyDirectory(realPath, this.trustedRoots)
+        ? realPath
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async scanSearchFile(
+    candidate: SearchCandidate,
+    queryLower: string,
+    maxMatches: number,
+    startedAt: number
+  ): Promise<SearchContentScan> {
+    const safePath = await this.isSearchFileWithinTrustedRoots(
+      candidate.absolutePath
+    );
+    if (!safePath) return { matches: [], truncated: false };
+
+    let stat: fs.Stats;
+    try {
+      stat = await fs.promises.stat(safePath);
+    } catch {
+      return { matches: [], truncated: false };
+    }
+    if (!stat.isFile() || stat.size > MAX_FILE_SIZE) {
+      return { matches: [], truncated: false };
+    }
+    if (await this.isBinaryFile(safePath)) {
+      return { matches: [], truncated: false };
+    }
+
+    const stream = fs.createReadStream(safePath, { encoding: "utf8" });
+    const lines = readline.createInterface({
+      input: stream,
+      crlfDelay: Infinity,
+    });
+    const matches: WorkspaceSearchContentMatch[] = [];
+    let lineNumber = 0;
+    let truncated = false;
+    try {
+      for await (const line of lines) {
+        lineNumber++;
+        if (Date.now() - startedAt >= SEARCH_MAX_DURATION_MS) {
+          truncated = true;
+          break;
+        }
+        if (line.toLowerCase().includes(queryLower)) {
+          const trimmed = line.trim();
+          matches.push({
+            kind: "content",
+            path: candidate.viewerPath,
+            line: lineNumber,
+            matchSnippet:
+              trimmed.length > SEARCH_SNIPPET_MAX_LENGTH
+                ? `${trimmed.slice(0, SEARCH_SNIPPET_MAX_LENGTH - 1)}…`
+                : trimmed,
+          });
+          if (matches.length >= maxMatches) break;
+        }
+      }
+    } catch {
+      return { matches: [], truncated };
+    } finally {
+      lines.close();
+      stream.destroy();
+    }
+    return { matches, truncated };
   }
 
   // ── Directory listing ────────────────────────────────────────────────────

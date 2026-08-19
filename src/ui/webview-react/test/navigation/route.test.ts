@@ -43,6 +43,8 @@ describe("workflow run routes", () => {
     { workflow: DRAFT },
     { workflow: RUN, viewer: "explorer", file: "src/a.ts" },
     { viewer: "sourceControl", ref: "~diff" },
+    { viewer: "search" },
+    { workflow: RUN, viewer: "search" },
   ])("round-trips %o", (route) => {
     expect(parseRoute(serializeRoute(route, "?token=t"))).toEqual(
       normalizeRoute(route)
@@ -55,6 +57,28 @@ describe("workflow run routes", () => {
         workflow: { ...RUN, runRef: "run-2026-07-20T10-31-00-000Z" as never },
       })
     ).toBe(false);
+  });
+
+  it("gives the search tab its own url token", () => {
+    // Serializing search as another tab's token would silently switch tabs on
+    // reload or back/forward.
+    expect(
+      new URLSearchParams(serializeRoute({ viewer: "search" }, "")).get(
+        "viewer"
+      )
+    ).toBe("search");
+    expect(parseRoute("?viewer=search")).toEqual({ viewer: "search" });
+  });
+
+  it("drops file/dir/ref location fields on the search tab", () => {
+    expect(
+      normalizeRoute({
+        viewer: "search",
+        file: "src/a.ts",
+        dir: "src",
+        ref: "~diff",
+      })
+    ).toEqual({ viewer: "search" });
   });
 
   it("normalizes nested viewer fields", () => {

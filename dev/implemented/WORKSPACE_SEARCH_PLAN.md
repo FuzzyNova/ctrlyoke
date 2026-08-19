@@ -1,7 +1,15 @@
 # Workspace Search Plan
 
-> **Status:** Not implemented. Design proposal for a filename + file-content search feature inside
-> the workspace viewer (`WorkspaceViewerModal.tsx`).
+> **Status:** Implemented and reviewed. Filename + file-content search is available inside the
+> workspace viewer (`WorkspaceViewerModal.tsx`) through the Search tab and Explorer toolbar
+> shortcut.
+>
+> A **2026-08-19 orchestration review** corrected five points where the original proposal conflicted
+> with the codebase: the candidate-list helper already exists (`getGitTrackedFiles`),
+> `truncateSnippet` belongs in the existing `utils/string.ts`, result paths are folder-name-prefixed
+> _viewer_ paths, repo scoping must iterate workspace roots rather than repo toplevels, and
+> `hideGitIgnoredFiles` is a global setting rather than Explorer-local state. Each correction is
+> marked inline below.
 
 ## Goal
 
@@ -59,9 +67,13 @@ already a much smaller, bounded corpus. Proposed filter set for v1, rendered inl
 drawer needed — three controls fit in the pane's toolbar row):
 
 - Scope toggle: `Files` / `Content` / `Both` (§2).
-- "Include git-ignored files" checkbox — mirrors the Explorer's existing
-  `hideGitIgnoredFiles` concept (`WorkspaceExplorerPane.tsx:140-148`), default off (matches the
-  Explorer's default).
+- "Include git-ignored files" checkbox. Corrected 2026-08-19: `hideGitIgnoredFiles` is **not**
+  Explorer-local state — it is the global setting `ui.hideGitIgnoredFiles`, read from
+  `settingsStore.globalSettings.hideGitIgnoredFiles` (`WorkspaceExplorerPane.tsx:140-148`) and
+  written back through the settings path by the Explorer's eye toggle. Per the workspace-viewer
+  instructions ("do not add viewer-local copies" of global settings), the search checkbox seeds
+  its initial value from `!globalSettings.hideGitIgnoredFiles` and then acts as a per-search
+  override in `workspaceViewerStore` — it must not write the global setting back.
 - Repo picker, but **only rendered when `repos.length > 1`** — same conditional the SCM pane
   already uses (see `webview-react-workspace.instructions.md`'s multi-repo note) — scopes the
   search to one repo instead of all workspace roots.
@@ -87,13 +99,19 @@ see Non-Goals.
 
 ## Existing Patterns to Reuse
 
-- **`git ls-files` for the gitignore-aware candidate list.** `GitUtils.ts` already exports
-  `getIgnoredEntryNames()` (used by `HostedWorkspaceViewerService.listDirectory`), which shells out
-  to `git ls-files --others --ignored --exclude-standard --directory -z .` scoped to one directory.
-  Add a sibling export, e.g. `listSearchableFiles(repoRoot, includeIgnored)`, that instead runs
-  `git ls-files --cached --others --exclude-standard -z .` (recursive, no `--directory`) to get the
-  full non-ignored candidate list in one shot, or additionally unions in
-  `git ls-files --others --ignored --exclude-standard -z .` when "include git-ignored" is checked.
+- **`GitUtils.getGitTrackedFiles()` already _is_ the candidate list — do not add a new helper for
+  it.** (Corrected 2026-08-19.) `src/utils/GitUtils.ts` exports `getGitTrackedFiles(repoRoot)`,
+  which runs exactly `git ls-files --cached --others --exclude-standard -z` with `cwd: repoRoot`
+  and a 500 MB `maxBuffer` sized for monorepos. Because `git ls-files` with no pathspec lists only
+  the cwd's subtree and emits cwd-relative paths, calling it with a _workspace root_ that sits
+  below its git toplevel returns exactly that root's files — no extra scoping needed and nothing
+  outside the root leaks in. Reuse it.
+  The only genuinely missing piece is the ignored-file union for the "include git-ignored" case:
+  add one sibling export `getGitIgnoredFiles(repoRoot)` running
+  `git ls-files --others --ignored --exclude-standard -z` (recursive, **no** `--directory`).
+  `getIgnoredEntryNames()` cannot serve this — it is `--directory`-scoped and returns bare entry
+  _names_ for one directory — and `getGitIgnoredPaths()` is a `check-ignore` over paths you already
+  have, not an enumeration.
   For a non-git root (`isGitRepo` false in the existing tree response), fall back to a bounded
   recursive `fs.promises.readdir` walk skipping a small hardcoded set (`.git`, `node_modules`,
   `dist`, `build`, `out`, `coverage`) — same spirit as the existing non-git fallback in
@@ -118,9 +136,12 @@ see Non-Goals.
   same small effect shape into the new pane. It's ~15 lines; not worth abstracting into a shared
   hook for one additional consumer.
 - **Genuinely shared, worth extracting now:** `truncateSnippet()` (`HistorySearchDrawer.tsx:162-168`)
-  is generic string truncation with no history-specific logic. Move it to
-  `src/ui/webview-react/utils/textSnippets.ts` and import it from both `HistorySearchDrawer` and
-  the new `WorkspaceSearchPane`, instead of duplicating it.
+  is generic string truncation with no history-specific logic. Move it into the **existing**
+  `src/ui/webview-react/utils/string.ts` (which already owns `truncate()`) and re-export it from
+  `utils/index.ts` alongside the other string helpers — not into a new `textSnippets.ts` file,
+  which would split string utilities across two modules for one function (corrected 2026-08-19).
+  Import it in both `HistorySearchDrawer` and the new `WorkspaceSearchPane` instead of
+  duplicating it.
 - **Not worth sharing:** the result-card JSX itself. History results show workflow name / run id /
   relative time / harness badge; workspace results show a file path / line number / breadcrumb.
   The visual rhythm (title row + badge + snippet) is similar but the data shapes don't overlap
@@ -144,7 +165,11 @@ export interface WorkspaceSearchRequest {
 
 export interface WorkspaceSearchFileMatch {
   kind: "file";
-  path: string; // workspace-relative, forward-slashed
+  /** Viewer path: plain workspace-relative single-root, folder-name-prefixed
+   *  (`root2/src/index.ts`) multi-root — the same convention every other
+   *  `HostedWorkspaceViewerTypes` path uses, and what `openToFile()` expects.
+   *  (Corrected 2026-08-19; always build it with `toViewerPath`.) */
+  path: string;
   name: string;
 }
 
@@ -169,11 +194,17 @@ export interface WorkspaceSearchResponse {
 
 Add `async searchWorkspace(request: WorkspaceSearchRequest): Promise<WorkspaceSearchResponse>`:
 
-1. Resolve the candidate root(s): a single repo root if `request.repo` is set (multi-repo, mirror
-   how `readFile`/`listDirectory` already resolve a root via `this.namedRoots`/`findRootFor`), else
-   all workspace roots.
-2. Per root, get the candidate file list via the new `listSearchableFiles()` GitUtils helper (§
-   Existing Patterns), or the bounded fs-walk fallback for non-git roots.
+1. Resolve the candidate root(s) by iterating **workspace roots** (`this.namedRoots`, or
+   `this.workspaceRoot` in single-root) — **not** repo toplevels (corrected 2026-08-19).
+   `WorkspaceRepo.rootPath` is the git toplevel, which can sit _above_ a workspace root, so
+   scanning from `resolveRepoRoot()` would surface files outside the workspace the user can browse.
+   When `request.repo` is set, filter the roots to those whose folder-name prefix maps to that repo
+   id via `mapRootPrefixesToRepos()` — the same authoritative map
+   `GET /api/workspace-viewer/repos` already returns (never re-derive it from `label`/`id`).
+2. Per root, get the candidate file list via `getGitTrackedFiles(root)` (plus
+   `getGitIgnoredFiles(root)` when `includeGitIgnored`), or the bounded fs-walk fallback when the
+   git call fails (non-git root). Convert each absolute candidate back to a viewer path with
+   `this.relativePath()` (the `toViewerPath` wrapper) — never by string-joining prefixes.
 3. Filename matches (scope `files`/`both`): case-insensitive substring match of `query` against
    each candidate's basename, capped at some count (e.g. 30) so content matches still get room in
    `limit`.
@@ -186,7 +217,13 @@ Add `async searchWorkspace(request: WorkspaceSearchRequest): Promise<WorkspaceSe
 5. Enforce a scan budget (file-count and/or wall-clock, e.g. 5,000 files or ~3 seconds) across
    steps 3–4; set `truncated: true` and return whatever was found so far rather than blocking the
    request indefinitely on a huge monorepo.
-6. No new persisted state — this method is stateless per call (§ Design Decisions #4).
+6. Path safety (added 2026-08-19): candidates come from `git ls-files` under an already-trusted
+   root, but a listed entry can still be a symlink pointing outside it. Before **reading** a file's
+   content, confirm containment asynchronously (`fs.promises.realpath` + the existing
+   `isPathWithinAnyDirectory(…, this.trustedRoots)`); add a small private async helper for this.
+   Do **not** call the existing `safeResolve()` per candidate — it is `realpathSync`, and thousands
+   of sync realpath calls per keystroke would block the extension host's event loop.
+7. No new persisted state — this method is stateless per call (§ Design Decisions #4).
 
 ### 3. Route (`src/server/CtrlYokeHostedServer.ts`)
 
@@ -247,9 +284,10 @@ in the new pane.
   correct line numbers, binary files skipped, oversized files skipped, git-ignored files excluded
   by default and included when requested, multi-root/`repo` scoping, `truncated: true` once the
   scan budget is exceeded, non-git-root fallback walk.
-- **`GitUtils.listSearchableFiles` (`src/test/unit/GitUtils.test.ts` or similar):** recursive
-  tracked+untracked-not-ignored listing matches `git ls-files` behavior directly against a fixture
-  repo, ignored-files union works when requested.
+- **`GitUtils.getGitIgnoredFiles` (`src/test/unit/GitUtils.test.ts`):** recursive ignored-file
+  listing against a fixture repo (nested `.gitignore`, ignored subdirectory contents enumerated
+  rather than collapsed to a directory name), and an empty result for a repo with nothing
+  ignored.
 - **Client (`src/ui/webview-react/test/components/workspace-viewer/`):** new
   `WorkspaceSearchPane.test.tsx` — debounced query issuing, scope toggle, min-length gating, empty
   state, loading state, "Load more", clicking a result calls `openToFile` with the right
@@ -262,7 +300,7 @@ in the new pane.
 | Area                                                                         | Planned change                                                                     |
 | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | `src/types/HostedWorkspaceViewerTypes.ts`                                    | New search request/response/result types                                           |
-| `src/utils/GitUtils.ts`                                                      | New `listSearchableFiles()` recursive `git ls-files` helper                        |
+| `src/utils/GitUtils.ts`                                                      | New `getGitIgnoredFiles()` only; reuse existing `getGitTrackedFiles()`             |
 | `src/server/HostedWorkspaceViewerService.ts`                                 | New `searchWorkspace()` method                                                     |
 | `src/server/CtrlYokeHostedServer.ts`                                         | New `GET /api/workspace-viewer/search` route                                       |
 | `src/ui/webview-react/utils/hostedApi.ts`                                    | New `workspaceSearch()` client call                                                |
@@ -271,7 +309,7 @@ in the new pane.
 | `src/ui/webview-react/components/workspace-viewer/WorkspaceViewerHeader.tsx` | New `Search` tab button                                                            |
 | `src/ui/webview-react/components/workspace-viewer/WorkspaceViewerModal.tsx`  | Three-way pane switch                                                              |
 | `src/ui/webview-react/components/workspace-viewer/WorkspaceExplorerPane.tsx` | Shortcut search icon button in the toolbar                                         |
-| `src/ui/webview-react/utils/textSnippets.ts`                                 | New — `truncateSnippet()` extracted from `HistorySearchDrawer.tsx`                 |
+| `src/ui/webview-react/utils/string.ts` (+ `utils/index.ts`)                  | `truncateSnippet()` moved here from `HistorySearchDrawer.tsx` and re-exported      |
 | `src/ui/webview-react/components/search/HistorySearchDrawer.tsx`             | Import `truncateSnippet()` from the new shared util instead of defining it locally |
 | Tests under `src/test/unit/**` and `src/ui/webview-react/test/**`            | New + updated coverage per Test Plan                                               |
 
@@ -287,6 +325,45 @@ in the new pane.
   content-matching half of `searchWorkspace()`, not an architecture change.
 - A generic cross-feature `SearchResultRow` component (§ Existing Patterns — not worth it for two
   call sites yet).
+
+## Implementation Steps
+
+Staged 2026-08-19. Each step is one session: it lands, verifies, and commits on its own, and ticks
+its box here (plus any correction to this document that the work uncovers).
+
+- [x] **1 — Contracts.** Search types in `src/types/HostedWorkspaceViewerTypes.ts`; new
+      `getGitIgnoredFiles()` in `src/utils/GitUtils.ts` (+ `GitUtils.test.ts` coverage).
+- [x] **2 — Server.** `HostedWorkspaceViewerService.searchWorkspace()` + the
+      `GET /api/workspace-viewer/search` route, with unit coverage per the Test Plan.
+- [x] **3 — Client data layer.** `hostedApi.workspaceSearch()`; `workspaceViewerStore` search state
+      and `activeTab` widening; `truncateSnippet()` moved into `utils/string.ts`.
+- [x] **4 — Search pane.** `WorkspaceSearchPane.tsx` + `WorkspaceSearchPane.test.tsx`.
+- [x] **5 — Wiring.** Header tab, modal three-way pane switch, Explorer toolbar shortcut, and the
+      existing tests those touch.
+
+### Review pass (2026-08-19)
+
+Four defects were found by inspecting the landed code and fixed during review:
+
+1. **Browser navigation did not know the tab existed.** Widening `activeTab` left
+   `navigation/route.ts` serializing `viewer=scm` for the search tab, so a reload or back/forward
+   from Search silently landed on Source Control; `applyRoute`'s `applyViewer` fell through to the
+   same SCM branch, and `navTitle` had no label. Fixed by making `VIEWER_URL_TOKENS` the single
+   source for each tab's URL token (with the inverse used by `parseRoute`), giving Search its own
+   `viewer=search` token, and handling the tab in `applyViewer`/`locationLabel`. The search tab
+   deliberately carries no `file`/`dir`/`ref` — the query is transient session state, not a
+   shareable address. Captured as a durable gotcha in
+   `webview-react-workspace.instructions.md`.
+2. **The repo picker could never appear for a user who went straight to Search.** Repos were
+   discovered only by `WorkspaceSourceControlPane`'s mount effect, and panes unmount on tab switch.
+   `WorkspaceSearchPane` now runs the same `workspaceRepos()` discovery on mount.
+3. **A lone repo silently scoped the scan.** The pane passed `selectedRepoId` even when the picker
+   was hidden, which in a multi-root workspace excludes roots belonging to no repo. It now scopes
+   only when `repos.length > 1`.
+4. **"Load more" was unreachable for a full page of results.** Visibility keyed off `truncated`,
+   which only reports a scan that ran out of budget — a result set that exactly filled `limit` (the
+   common case on a broad query) offered no way to see more. The pane now offers Load more when the
+   scan was truncated _or_ the cap was filled, with wording that distinguishes the two.
 
 ## Definition of Done
 

@@ -25,6 +25,66 @@ describe("initial state", () => {
   it("modal starts closed", () => {
     expect(store().isOpen).toBe(false);
   });
+
+  it("search state starts with its defaults", () => {
+    expect(store().searchQuery).toBe("");
+    expect(store().searchScope).toBe("both");
+    expect(store().searchIncludeGitIgnored).toBe(false);
+    expect(store().searchResults).toEqual([]);
+    expect(store().searchLoading).toBe(false);
+    expect(store().searchTruncated).toBe(false);
+  });
+});
+
+describe("search state", () => {
+  it("updates each search field through its setter", () => {
+    const result = {
+      kind: "file" as const,
+      path: "src/search.ts",
+      name: "search.ts",
+    };
+
+    store().setSearchQuery("search");
+    store().setSearchScope("content");
+    store().setSearchIncludeGitIgnored(true);
+    store().setSearchResults([result]);
+    store().setSearchLoading(true);
+    store().setSearchTruncated(true);
+
+    expect(store().searchQuery).toBe("search");
+    expect(store().searchScope).toBe("content");
+    expect(store().searchIncludeGitIgnored).toBe(true);
+    expect(store().searchResults).toEqual([result]);
+    expect(store().searchLoading).toBe(true);
+    expect(store().searchTruncated).toBe(true);
+  });
+
+  it('accepts the "search" active tab', () => {
+    store().setActiveTab("search");
+    expect(store().activeTab).toBe("search");
+  });
+
+  it("close clears transient search state but preserves file drafts", () => {
+    useWorkspaceViewerStore.setState({
+      fileDrafts: { "src/draft.ts": { content: "draft" } },
+    });
+    store().setSearchQuery("query");
+    store().setSearchResults([
+      { kind: "file", path: "src/query.ts", name: "query.ts" },
+    ]);
+    store().setSearchLoading(true);
+    store().setSearchTruncated(true);
+
+    store().close();
+
+    expect(store().searchQuery).toBe("");
+    expect(store().searchResults).toEqual([]);
+    expect(store().searchLoading).toBe(false);
+    expect(store().searchTruncated).toBe(false);
+    expect(store().fileDrafts).toEqual({
+      "src/draft.ts": { content: "draft" },
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

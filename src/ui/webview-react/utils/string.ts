@@ -35,6 +35,14 @@ export function truncate(str: string, maxLen: number): string {
   return str.length > maxLen ? str.substring(0, maxLen) + "..." : str;
 }
 
+export function truncateSnippet(snippet: string, maxLength = 80): string {
+  const normalized = snippet.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxLength - 1).trimEnd()}...`;
+}
+
 /**
  * Get workflow name from file path
  * Extracts filename and removes ctrlyoke-specific extensions

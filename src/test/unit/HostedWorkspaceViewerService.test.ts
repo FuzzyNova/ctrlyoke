@@ -9,6 +9,7 @@ import {
   CommitMessageGenerator,
   type CommitResult,
 } from "../../git/CommitMessageGenerator";
+import type { WorkspaceSearchContentMatch } from "../../types/HostedWorkspaceViewerTypes";
 
 suite("HostedWorkspaceViewerService", function () {
   // Most tests here shell out to real git (init/config/commit/clone/push/
@@ -269,6 +270,170 @@ suite("HostedWorkspaceViewerService", function () {
       const result = await svc.readFile("index.ts");
 
       assert.strictEqual(result.language, "typescript");
+    });
+  });
+
+  // ── searchWorkspace ──────────────────────────────────────────────────────
+
+  suite("searchWorkspace", () => {
+    test("returns filename and content matches with 1-based line numbers", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      fs.writeFileSync(
+        path.join(root, "needle-result.txt"),
+        "first line\nneedle on the second line\nneedle again\n"
+      );
+      fs.writeFileSync(path.join(root, "other.txt"), "needle in content\n");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const filenameResult = await svc.searchWorkspace({
+        query: "NEEDLE",
+        scope: "files",
+      });
+      assert.deepStrictEqual(filenameResult.results, [
+        { kind: "file", path: "needle-result.txt", name: "needle-result.txt" },
+      ]);
+
+      const contentResult = await svc.searchWorkspace({
+        query: "needle",
+        scope: "content",
+      });
+      assert.deepStrictEqual(
+        contentResult.results
+          .filter(
+            (result): result is WorkspaceSearchContentMatch =>
+              result.kind === "content"
+          )
+          .map((result) => ({
+            path: result.path,
+            line: result.line,
+            snippet: result.matchSnippet,
+          })),
+        [
+          {
+            path: "needle-result.txt",
+            line: 2,
+            snippet: "needle on the second line",
+          },
+          { path: "needle-result.txt", line: 3, snippet: "needle again" },
+          { path: "other.txt", line: 1, snippet: "needle in content" },
+        ]
+      );
+    });
+
+    test("skips binary and oversized files during content search", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      fs.writeFileSync(
+        path.join(root, "binary.dat"),
+        Buffer.from([0, ...Buffer.from("needle")])
+      );
+      fs.writeFileSync(
+        path.join(root, "large.txt"),
+        Buffer.alloc(2 * 1024 * 1024 + 1, "needle")
+      );
+
+      const result = await new HostedWorkspaceViewerService(
+        root
+      ).searchWorkspace({ query: "needle", scope: "content" });
+
+      assert.deepStrictEqual(result.results, []);
+    });
+
+    test("excludes ignored files unless explicitly requested", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      fs.writeFileSync(path.join(root, ".gitignore"), "ignored.txt\n");
+      fs.writeFileSync(path.join(root, "ignored.txt"), "secret needle\n");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const excluded = await svc.searchWorkspace({
+        query: "secret",
+        scope: "content",
+      });
+      const included = await svc.searchWorkspace({
+        query: "secret",
+        scope: "content",
+        includeGitIgnored: true,
+      });
+
+      assert.deepStrictEqual(excluded.results, []);
+      assert.strictEqual(included.results[0]?.path, "ignored.txt");
+    });
+
+    test("uses a bounded non-git fallback walk", async () => {
+      const root = createWorkspace();
+      fs.mkdirSync(path.join(root, "node_modules"));
+      fs.writeFileSync(
+        path.join(root, "node_modules", "hidden.txt"),
+        "fallback needle\n"
+      );
+      fs.mkdirSync(path.join(root, "src"));
+      fs.writeFileSync(
+        path.join(root, "src", "visible.txt"),
+        "fallback needle\n"
+      );
+
+      const result = await new HostedWorkspaceViewerService(
+        root
+      ).searchWorkspace({
+        query: "fallback",
+        scope: "content",
+      });
+
+      assert.deepStrictEqual(
+        result.results.map((match) => match.path),
+        ["src/visible.txt"]
+      );
+    });
+
+    test("returns prefixed multi-root paths and scopes by repo", async () => {
+      const primary = createWorkspace();
+      const secondary = createWorkspace();
+      for (const root of [primary, secondary]) {
+        runGit(root, "init");
+        fs.writeFileSync(path.join(root, "match.txt"), "multi-root needle\n");
+      }
+      const svc = new HostedWorkspaceViewerService(primary, [
+        { name: "primary", fsPath: primary },
+        { name: "secondary", fsPath: secondary },
+      ]);
+      const repos = await svc.getRepos();
+
+      const all = await svc.searchWorkspace({
+        query: "multi-root",
+        scope: "content",
+      });
+      const primaryOnly = await svc.searchWorkspace({
+        query: "multi-root",
+        scope: "content",
+        repo: repos.prefixRepoIds.primary,
+      });
+
+      assert.deepStrictEqual(all.results.map((result) => result.path).sort(), [
+        "primary/match.txt",
+        "secondary/match.txt",
+      ]);
+      assert.deepStrictEqual(
+        primaryOnly.results.map((result) => result.path),
+        ["primary/match.txt"]
+      );
+    });
+
+    test("marks the response truncated when the scan file budget is exceeded", async () => {
+      const root = createWorkspace();
+      for (let i = 0; i < 5001; i++) {
+        fs.writeFileSync(path.join(root, `file-${i}.txt`), "contents\n");
+      }
+
+      const result = await new HostedWorkspaceViewerService(
+        root
+      ).searchWorkspace({
+        query: "missing",
+        scope: "files",
+      });
+
+      assert.strictEqual(result.truncated, true);
     });
   });
 

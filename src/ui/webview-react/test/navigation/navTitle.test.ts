@@ -30,6 +30,10 @@ describe("routeTitle", () => {
     );
   });
 
+  it("labels the search tab", () => {
+    expect(routeTitle({ viewer: "search" })).toBe("Search — ctrlyoke");
+  });
+
   it("labels a diff file in source control", () => {
     expect(routeTitle({ viewer: "sourceControl", file: "src/a.ts" })).toBe(
       "a.ts (diff) — ctrlyoke"

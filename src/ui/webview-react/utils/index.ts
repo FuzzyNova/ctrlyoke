@@ -16,6 +16,7 @@ export {
 export {
   escapeHtml,
   truncate,
+  truncateSnippet,
   getWorkflowName,
   capitalize,
   toTitleCase,

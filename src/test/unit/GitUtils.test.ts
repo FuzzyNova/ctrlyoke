@@ -6,6 +6,7 @@ import { execFileSync } from "child_process";
 import { suite, test, setup, teardown } from "mocha";
 import {
   gitRefExists,
+  getGitIgnoredFiles,
   parseGitWorktreePorcelain,
   listWorktrees,
   currentBranch,
@@ -292,5 +293,77 @@ suite("GitUtils worktree plumbing", function () {
       await isCommitAncestor(workspaceRoot, "base", "feature"),
       true
     );
+  });
+});
+
+suite("GitUtils.getGitIgnoredFiles", function () {
+  this.timeout(10_000);
+
+  const temporaryRoots: string[] = [];
+
+  async function createRepo(): Promise<string> {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "fp-gitignored-"));
+    temporaryRoots.push(root);
+    execFileSync("git", ["init"], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: "pipe",
+    });
+    return root;
+  }
+
+  async function writeRepoFile(
+    root: string,
+    relativePath: string,
+    content: string
+  ): Promise<void> {
+    const absolutePath = path.join(root, relativePath);
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+    await fs.writeFile(absolutePath, content, "utf8");
+  }
+
+  teardown(async () => {
+    for (const root of temporaryRoots.splice(0)) {
+      await fs.rm(root, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 50,
+      });
+    }
+  });
+
+  test("lists root and nested ignored files recursively", async () => {
+    const root = await createRepo();
+    await writeRepoFile(root, ".gitignore", "*.log\nignored-directory/\n");
+    await writeRepoFile(root, "root.log", "ignored\n");
+    await writeRepoFile(root, "ignored-directory/one.txt", "ignored\n");
+    await writeRepoFile(root, "ignored-directory/nested/two.txt", "ignored\n");
+    await writeRepoFile(root, "nested/.gitignore", "secret.txt\n");
+    await writeRepoFile(root, "nested/secret.txt", "ignored\n");
+    await writeRepoFile(root, "nested/visible.txt", "visible\n");
+
+    const ignoredFiles = await getGitIgnoredFiles(root);
+
+    assert.deepStrictEqual(
+      ignoredFiles.sort(),
+      [
+        "ignored-directory/nested/two.txt",
+        "ignored-directory/one.txt",
+        "nested/secret.txt",
+        "root.log",
+      ].sort()
+    );
+    assert.ok(ignoredFiles.includes("ignored-directory/one.txt"));
+    assert.ok(ignoredFiles.includes("ignored-directory/nested/two.txt"));
+    assert.ok(!ignoredFiles.includes("ignored-directory/"));
+  });
+
+  test("returns an empty list when nothing is ignored", async () => {
+    const root = await createRepo();
+    await writeRepoFile(root, "visible.txt", "visible\n");
+    await writeRepoFile(root, "nested/also-visible.txt", "visible\n");
+
+    assert.deepStrictEqual(await getGitIgnoredFiles(root), []);
   });
 });
