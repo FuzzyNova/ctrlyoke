@@ -1,7 +1,8 @@
 # Workspace Search Plan
 
-> **Status:** Implemented. Filename + file-content search is available inside the workspace
-> viewer (`WorkspaceViewerModal.tsx`) through the Search tab and Explorer toolbar shortcut.
+> **Status:** Implemented and reviewed. Filename + file-content search is available inside the
+> workspace viewer (`WorkspaceViewerModal.tsx`) through the Search tab and Explorer toolbar
+> shortcut.
 >
 > A **2026-08-19 orchestration review** corrected five points where the original proposal conflicted
 > with the codebase: the candidate-list helper already exists (`getGitTrackedFiles`),
@@ -339,6 +340,30 @@ its box here (plus any correction to this document that the work uncovers).
 - [x] **4 — Search pane.** `WorkspaceSearchPane.tsx` + `WorkspaceSearchPane.test.tsx`.
 - [x] **5 — Wiring.** Header tab, modal three-way pane switch, Explorer toolbar shortcut, and the
       existing tests those touch.
+
+### Review pass (2026-08-19)
+
+Four defects were found by inspecting the landed code and fixed during review:
+
+1. **Browser navigation did not know the tab existed.** Widening `activeTab` left
+   `navigation/route.ts` serializing `viewer=scm` for the search tab, so a reload or back/forward
+   from Search silently landed on Source Control; `applyRoute`'s `applyViewer` fell through to the
+   same SCM branch, and `navTitle` had no label. Fixed by making `VIEWER_URL_TOKENS` the single
+   source for each tab's URL token (with the inverse used by `parseRoute`), giving Search its own
+   `viewer=search` token, and handling the tab in `applyViewer`/`locationLabel`. The search tab
+   deliberately carries no `file`/`dir`/`ref` — the query is transient session state, not a
+   shareable address. Captured as a durable gotcha in
+   `webview-react-workspace.instructions.md`.
+2. **The repo picker could never appear for a user who went straight to Search.** Repos were
+   discovered only by `WorkspaceSourceControlPane`'s mount effect, and panes unmount on tab switch.
+   `WorkspaceSearchPane` now runs the same `workspaceRepos()` discovery on mount.
+3. **A lone repo silently scoped the scan.** The pane passed `selectedRepoId` even when the picker
+   was hidden, which in a multi-root workspace excludes roots belonging to no repo. It now scopes
+   only when `repos.length > 1`.
+4. **"Load more" was unreachable for a full page of results.** Visibility keyed off `truncated`,
+   which only reports a scan that ran out of budget — a result set that exactly filled `limit` (the
+   common case on a broad query) offered no way to see more. The pane now offers Load more when the
+   scan was truncated _or_ the cap was filled, with wording that distinguishes the two.
 
 ## Definition of Done
 

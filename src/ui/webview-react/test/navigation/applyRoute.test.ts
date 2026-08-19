@@ -44,6 +44,13 @@ describe("applyRoute", () => {
     expect(api.postMessage).not.toHaveBeenCalled();
   });
 
+  it("opens the viewer on the search tab", () => {
+    applyRoute({ viewer: "search" }, fakeVsCode());
+    const wv = useWorkspaceViewerStore.getState();
+    expect(wv.isOpen).toBe(true);
+    expect(wv.activeTab).toBe("search");
+  });
+
   it("opens an explorer file and clears the guard afterwards", () => {
     applyRoute(
       { viewer: "explorer", file: "src/a.ts", lines: [3, 9] },

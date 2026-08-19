@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type {
   WorkspaceSearchContentMatch,
   WorkspaceSearchResult,
@@ -6,7 +12,7 @@ import type {
 } from "@root/types/HostedWorkspaceViewerTypes";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
-import { workspaceSearch } from "@utils/hostedApi";
+import { workspaceRepos, workspaceSearch } from "@utils/hostedApi";
 import { truncateSnippet } from "@utils/string";
 
 const INITIAL_RESULT_LIMIT = 50;
@@ -64,6 +70,7 @@ export const WorkspaceSearchPane: React.FC = () => {
     (s) => s.setSearchTruncated
   );
   const setSelectedRepoId = useWorkspaceViewerStore((s) => s.setSelectedRepoId);
+  const setRepos = useWorkspaceViewerStore((s) => s.setRepos);
   const openToFile = useWorkspaceViewerStore((s) => s.openToFile);
   const hideGitIgnoredFiles = useSettingsStore(
     (s) => s.globalSettings.hideGitIgnoredFiles
@@ -72,13 +79,31 @@ export const WorkspaceSearchPane: React.FC = () => {
   const requestSequenceRef = useRef(0);
   const resultLimitRef = useRef(INITIAL_RESULT_LIMIT);
   const hasSeededGitIgnoredRef = useRef(false);
+  const [moreAvailable, setMoreAvailable] = useState(false);
   const trimmedQuery = searchQuery.trim();
+  // Scoping only means something when there is more than one repo to choose
+  // between; with none or one, search every root the viewer can browse (a
+  // multi-root workspace can also hold roots that are in no repo at all).
+  const scopedRepoId =
+    repos.length > 1 ? (selectedRepoId ?? undefined) : undefined;
 
   useEffect(() => {
     if (hasSeededGitIgnoredRef.current) return;
     hasSeededGitIgnoredRef.current = true;
     setSearchIncludeGitIgnored(!hideGitIgnoredFiles);
   }, [hideGitIgnoredFiles, setSearchIncludeGitIgnored]);
+
+  // Discover repos on mount like the SCM pane does. Panes unmount on tab
+  // switch, so the search pane cannot assume the SCM tab was ever opened —
+  // without this the repo picker would never appear for a user who goes
+  // straight to Search.
+  useEffect(() => {
+    workspaceRepos()
+      .then((result) => setRepos(result.repos, result.prefixRepoIds))
+      .catch(() => {
+        // ignore — the picker simply won't appear and search stays unscoped
+      });
+  }, [setRepos]);
 
   const runSearch = useCallback(
     (limit: number) => {
@@ -89,26 +114,33 @@ export const WorkspaceSearchPane: React.FC = () => {
         query: trimmedQuery,
         scope: searchScope,
         includeGitIgnored: searchIncludeGitIgnored,
-        repo: selectedRepoId ?? undefined,
+        repo: scopedRepoId,
         limit,
       })
         .then((response) => {
           if (requestId !== requestSequenceRef.current) return;
           setSearchResults(response.results);
           setSearchTruncated(response.truncated);
+          // `truncated` only reports a scan that ran out of budget. A result
+          // set that filled `limit` exactly is also incomplete, and is the
+          // common case on a broad query — both need "Load more".
+          setMoreAvailable(
+            response.truncated || response.results.length >= limit
+          );
           setSearchLoading(false);
         })
         .catch(() => {
           if (requestId !== requestSequenceRef.current) return;
           setSearchResults([]);
           setSearchTruncated(false);
+          setMoreAvailable(false);
           setSearchLoading(false);
         });
     },
     [
+      scopedRepoId,
       searchIncludeGitIgnored,
       searchScope,
-      selectedRepoId,
       setSearchLoading,
       setSearchResults,
       setSearchTruncated,
@@ -121,6 +153,7 @@ export const WorkspaceSearchPane: React.FC = () => {
     resultLimitRef.current = INITIAL_RESULT_LIMIT;
     setSearchResults([]);
     setSearchTruncated(false);
+    setMoreAvailable(false);
     setSearchLoading(false);
 
     if (trimmedQuery.length < 2) return;
@@ -136,7 +169,7 @@ export const WorkspaceSearchPane: React.FC = () => {
     searchQuery,
     searchScope,
     searchIncludeGitIgnored,
-    selectedRepoId,
+    scopedRepoId,
     setSearchLoading,
     setSearchResults,
     setSearchTruncated,
@@ -144,11 +177,11 @@ export const WorkspaceSearchPane: React.FC = () => {
   ]);
 
   const handleLoadMore = useCallback(() => {
-    if (searchLoading || !searchTruncated || trimmedQuery.length < 2) return;
+    if (searchLoading || !moreAvailable || trimmedQuery.length < 2) return;
     const nextLimit = resultLimitRef.current * 2;
     resultLimitRef.current = nextLimit;
     runSearch(nextLimit);
-  }, [runSearch, searchLoading, searchTruncated, trimmedQuery.length]);
+  }, [moreAvailable, runSearch, searchLoading, trimmedQuery.length]);
 
   const contentMatchGroups = useMemo(
     () => groupContentMatches(searchResults),
@@ -328,10 +361,12 @@ export const WorkspaceSearchPane: React.FC = () => {
           </div>
         )}
 
-        {searchTruncated && (
+        {moreAvailable && (
           <div className="flex flex-col items-center gap-2 border-t border-panel-border pt-3">
             <div className="text-center text-xs text-description-fg">
-              Results are limited. More matches may be available.
+              {searchTruncated
+                ? "The scan stopped early. More matches may be available."
+                : "Results are limited. More matches may be available."}
             </div>
             <button
               type="button"

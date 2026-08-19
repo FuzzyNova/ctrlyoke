@@ -77,6 +77,12 @@ function applyViewer(route: Route): void {
     return;
   }
 
+  if (route.viewer === "search") {
+    if (!wv.isOpen) wv.open();
+    wv.setActiveTab("search");
+    return;
+  }
+
   // sourceControl
   if (route.ref) {
     // openToGitRef opens the viewer on the SCM tab and fetches the ref diff.

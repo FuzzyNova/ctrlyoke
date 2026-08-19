@@ -10,13 +10,15 @@ import type { WorkspaceSearchResponse } from "@root/types/HostedWorkspaceViewerT
 import { WorkspaceSearchPane } from "@components/workspace-viewer/WorkspaceSearchPane";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
-import { workspaceSearch } from "@utils/hostedApi";
+import { workspaceRepos, workspaceSearch } from "@utils/hostedApi";
 
 vi.mock("@utils/hostedApi", () => ({
   workspaceSearch: vi.fn(),
+  workspaceRepos: vi.fn(),
 }));
 
 const workspaceSearchMock = vi.mocked(workspaceSearch);
+const workspaceReposMock = vi.mocked(workspaceRepos);
 
 const EMPTY_RESPONSE: WorkspaceSearchResponse = {
   results: [],
@@ -38,6 +40,8 @@ describe("WorkspaceSearchPane", () => {
     vi.useFakeTimers();
     workspaceSearchMock.mockReset();
     workspaceSearchMock.mockResolvedValue(EMPTY_RESPONSE);
+    workspaceReposMock.mockReset();
+    workspaceReposMock.mockResolvedValue({ repos: [], prefixRepoIds: {} });
     useWorkspaceViewerStore.getState().reset();
     useSettingsStore.setState((state) => ({
       globalSettings: {
@@ -149,6 +153,57 @@ describe("WorkspaceSearchPane", () => {
     ).toHaveValue("two");
   });
 
+  it("discovers repos on mount so the picker works without opening SCM", async () => {
+    workspaceReposMock.mockResolvedValue({
+      repos: [
+        { id: "one", label: "One", rootPath: "/one" },
+        { id: "two", label: "Two", rootPath: "/two" },
+      ],
+      prefixRepoIds: { one: "one", two: "two" },
+    });
+
+    render(<WorkspaceSearchPane />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(workspaceReposMock).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole("combobox", { name: "Select repository" })
+    ).toBeInTheDocument();
+  });
+
+  it("scopes to a repo only when there is more than one to choose from", async () => {
+    workspaceReposMock.mockResolvedValue({
+      repos: [{ id: "only", label: "Only", rootPath: "/only" }],
+      prefixRepoIds: { only: "only" },
+    });
+
+    render(<WorkspaceSearchPane />);
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "ab" },
+    });
+    await advanceDebounce();
+
+    // A lone repo must not scope the scan away from non-repo workspace roots.
+    expect(workspaceSearchMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ repo: undefined })
+    );
+
+    useWorkspaceViewerStore.setState({
+      repos: [
+        { id: "only", label: "Only", rootPath: "/only" },
+        { id: "other", label: "Other", rootPath: "/other" },
+      ],
+      selectedRepoId: "other",
+    });
+    await advanceDebounce();
+
+    expect(workspaceSearchMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ repo: "other" })
+    );
+  });
+
   it("renders loading and empty states", async () => {
     let resolveSearch!: (response: WorkspaceSearchResponse) => void;
     workspaceSearchMock.mockReturnValueOnce(
@@ -188,7 +243,7 @@ describe("WorkspaceSearchPane", () => {
     });
     await advanceDebounce();
     expect(
-      screen.getByText("Results are limited. More matches may be available.")
+      screen.getByText("The scan stopped early. More matches may be available.")
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Load more" }));
@@ -204,6 +259,34 @@ describe("WorkspaceSearchPane", () => {
       limit: 100,
     });
     expect(screen.getByText("main.ts")).toBeInTheDocument();
+  });
+
+  it("offers Load more when the result cap is filled without a truncated scan", async () => {
+    // A full page of results is incomplete even though the scan finished
+    // inside its budget, so `truncated: false` must still offer Load more.
+    setSearchResults({
+      results: Array.from({ length: 50 }, (_, i) => ({
+        kind: "file" as const,
+        path: `src/file-${i}.ts`,
+        name: `file-${i}.ts`,
+      })),
+      truncated: false,
+    });
+
+    render(<WorkspaceSearchPane />);
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "file" },
+    });
+    await advanceDebounce();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(workspaceSearchMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ limit: 100 })
+    );
   });
 
   it("opens filename and content matches through store navigation", async () => {

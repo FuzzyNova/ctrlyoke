@@ -29,6 +29,9 @@ function locationLabel(route: Route): string | undefined {
     if (route.file) return `${basename(route.file)} (diff)`;
     return "Source Control";
   }
+  if (route.viewer === "search") {
+    return "Search";
+  }
   if (route.workflow) {
     return route.workflow.kind === "run"
       ? `Run ${route.workflow.runRef}`
