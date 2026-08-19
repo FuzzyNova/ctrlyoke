@@ -330,7 +330,7 @@ in the new pane.
 Staged 2026-08-19. Each step is one session: it lands, verifies, and commits on its own, and ticks
 its box here (plus any correction to this document that the work uncovers).
 
-- [ ] **1 — Contracts.** Search types in `src/types/HostedWorkspaceViewerTypes.ts`; new
+- [x] **1 — Contracts.** Search types in `src/types/HostedWorkspaceViewerTypes.ts`; new
       `getGitIgnoredFiles()` in `src/utils/GitUtils.ts` (+ `GitUtils.test.ts` coverage).
 - [ ] **2 — Server.** `HostedWorkspaceViewerService.searchWorkspace()` + the
       `GET /api/workspace-viewer/search` route, with unit coverage per the Test Plan.

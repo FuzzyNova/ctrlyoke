@@ -86,6 +86,42 @@ export interface WorkspaceReposResponse {
   prefixRepoIds: Record<string, string>;
 }
 
+export type WorkspaceSearchScope = "files" | "content" | "both";
+
+export interface WorkspaceSearchRequest {
+  query: string;
+  scope: WorkspaceSearchScope;
+  includeGitIgnored?: boolean;
+  repo?: string;
+  limit?: number; // results cap; re-issued with a higher limit for "Load more"
+}
+
+export interface WorkspaceSearchFileMatch {
+  kind: "file";
+  /** Viewer path: plain workspace-relative single-root, folder-name-prefixed
+   *  (`root2/src/index.ts`) multi-root — the same convention every other
+   *  `HostedWorkspaceViewerTypes` path uses, and what `openToFile()` expects.
+   *  (Corrected 2026-08-19; always build it with `toViewerPath`.) */
+  path: string;
+  name: string;
+}
+
+export interface WorkspaceSearchContentMatch {
+  kind: "content";
+  path: string;
+  line: number; // 1-based
+  matchSnippet: string; // the matching line, trimmed/truncated
+}
+
+export type WorkspaceSearchResult =
+  | WorkspaceSearchFileMatch
+  | WorkspaceSearchContentMatch;
+
+export interface WorkspaceSearchResponse {
+  results: WorkspaceSearchResult[];
+  truncated: boolean; // true if the scan hit its file/time budget before finishing
+}
+
 export interface SourceControlFile {
   path: string;
   stagedStatus: string | null;
