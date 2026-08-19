@@ -293,6 +293,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   const dialogGroups = useMemo<DiffFileGroup[]>(
     () =>
       model.groups.map((group) => ({
+        key: group.key,
         heading: group.heading,
         headingHint: group.headingHint,
         files: group.files.map((row) => {

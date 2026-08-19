@@ -1,7 +1,13 @@
 import React from "react";
 import { DiffFileCard, type DiffFileCardProps } from "./DiffFileCard";
+import {
+  diffFileListRowGapClass,
+  projectDiffFileListRows,
+} from "@utils/diffFileRows";
 
 export interface DiffFileGroup {
+  /** Stable semantic identity for this group, independent of heading text/order. */
+  key?: string;
   /** Optional heading; omit for a flat list. */
   heading?: string;
   /** Optional one-line explainer under the heading. */
@@ -34,34 +40,27 @@ export const DiffFileList: React.FC<DiffFileListProps> = ({
     );
   }
 
-  const nonEmptyGroups = groups.filter((group) => group.files.length > 0);
-  const hasHeadings =
-    nonEmptyGroups.length > 1 &&
-    nonEmptyGroups.some((group) => group.heading !== undefined);
+  const rows = projectDiffFileListRows({ groups, selectionSummary });
 
   return (
-    <div className="flex flex-col gap-3">
-      {selectionSummary}
-      {nonEmptyGroups.map((group, groupIndex) => (
-        <React.Fragment key={group.heading ?? `group-${groupIndex}`}>
-          {hasHeadings && group.heading && (
+    <div className="flex flex-col">
+      {rows.map((row) => (
+        <div key={row.key} className={diffFileListRowGapClass(row)}>
+          {row.kind === "selection-summary" && row.content}
+          {row.kind === "group-heading" && (
             <div className="flex flex-col gap-0.5">
               <h3 className="text-xs font-semibold text-description-fg">
-                {group.heading}
+                {row.heading}
               </h3>
-              {group.headingHint && (
+              {row.headingHint && (
                 <p className="text-xs text-description-fg italic">
-                  {group.headingHint}
+                  {row.headingHint}
                 </p>
               )}
             </div>
           )}
-          <div className="flex flex-col gap-3">
-            {group.files.map(({ key, ...file }) => (
-              <DiffFileCard key={key} {...file} />
-            ))}
-          </div>
-        </React.Fragment>
+          {row.kind === "file" && <DiffFileCard {...row.file} />}
+        </div>
       ))}
     </div>
   );

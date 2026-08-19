@@ -83,6 +83,8 @@ export interface PromptUndoDialogRow extends Omit<
 }
 
 export interface PromptUndoDialogGroup {
+  /** Stable semantic identity used by the shared diff row projection. */
+  key?: string;
   heading?: string;
   headingHint?: string;
   files: PromptUndoDialogRow[];
@@ -764,7 +766,9 @@ export function buildPromptUndoDialogModel(options: {
     );
     const workflowFiles = aggregateWorkflowUndoFiles(aggregationEntries);
     const workflowRows = workflowFiles.map(buildAggregatedDialogRow);
-    const groups: PromptUndoDialogGroup[] = [{ files: workflowRows }];
+    const groups: PromptUndoDialogGroup[] = [
+      { key: "workflow-aggregate", files: workflowRows },
+    ];
     return {
       workflowRows,
       workflowFiles,
@@ -806,15 +810,17 @@ export function buildPromptUndoDialogModel(options: {
 
   const groups: PromptUndoDialogGroup[] =
     mode === "redo"
-      ? [{ files: redoRows }]
+      ? [{ key: "redo", files: redoRows }]
       : [
           {
+            key: "reported",
             heading: "Changes the AI reported",
             headingHint:
               "The harness told us it made these edits, so we know exactly what changed.",
             files: tier1Rows,
           },
           {
+            key: "detected",
             heading: "Other changes we detected",
             headingHint:
               "Found by comparing the workspace before and after — may include edits from other tools or another workflow running at the same time.",

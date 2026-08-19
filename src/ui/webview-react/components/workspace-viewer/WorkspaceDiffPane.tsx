@@ -34,6 +34,7 @@ export const WorkspaceDiffPane: React.FC = () => {
   const commitGroups = useMemo<DiffFileGroup[]>(
     () => [
       {
+        key: "workspace-commit",
         files: visibleFiles.map((file) => ({
           key: file.path,
           path: file.path,
@@ -58,6 +59,7 @@ export const WorkspaceDiffPane: React.FC = () => {
       selectedDiffPath
         ? [
             {
+              key: "workspace-working-tree",
               files: [
                 {
                   key: selectedDiffPath,

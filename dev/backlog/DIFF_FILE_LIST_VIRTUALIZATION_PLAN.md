@@ -1,6 +1,6 @@
 # Diff File List Virtualization Plan
 
-> **Status:** Not implemented. This is a focused UI-performance change for the shared
+> **Status:** Phase 1 items 2–4 implemented; virtualization remains off. This is a focused UI-performance change for the shared
 > `DiffFileList`; it does not replace the Output pane's existing virtualization.
 
 ## Goal
@@ -264,9 +264,23 @@ scrolling reliable with changing item sizes.
    dropdown remains a thin wrapper with its existing defaults and DOM output. The
    primitive's estimate callback is documented as O(1) and receives the item/index
    contract needed for precomputed diff-row estimates.
-2. Add stable group keys and the flat `DiffFileListRow` projection.
-3. Add card-specific estimate utilities with O(1) virtualizer callbacks.
-4. Keep `DiffFileList` on its direct-render path while testing projection geometry independently.
+
+2. [x] Add stable group keys and the flat `DiffFileListRow` projection.
+3. [x] Add card-specific estimate utilities with O(1) virtualizer callbacks.
+4. [x] Keep `DiffFileList` on its direct-render path while testing projection geometry independently.
+
+Phase 1 items 2–4 landed in the shared `diffFileRows` projection. The direct path now renders
+the same flat rows that will later feed `VirtualizedList`; each row publishes its estimate once,
+and the future virtualizer callback can return that stored number without doing diff work. Empty
+groups and the existing heading/spacing rules are preserved. Semantic group keys are supplied by
+the workspace and undo consumers, while the projection's fallback uses only the stable file-key
+signature (never heading text or array position).
+
+The measured card-chrome constants are: 2px for the outer one-pixel borders, 1px for the header
+border, 8px for header `py-1`, 16px per `text-xs` line, 2px for the header `gap-0.5` before a
+note, 8px for `DiffView`'s `my-1`, and 12px for the existing `gap-3` list spacing. Raw-content
+metrics are cached by source object identity; render geometry additionally keys on collapsed
+state, view type, font size, and a 32px content-width bucket.
 
 ### Phase 2 — Controlled per-file state (before any virtualization)
 
