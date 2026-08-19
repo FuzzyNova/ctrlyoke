@@ -2,7 +2,6 @@ import * as path from "path";
 import * as fs from "fs/promises";
 import {
   FileReference,
-  maskFencedCodeBlocks,
   parseAllFileReferences,
   parseAtReferences,
   parseGitChangeReferences,
@@ -179,14 +178,6 @@ export class ContextExpander {
   }
 
   /**
-   * Mask trigger characters inside triple-backtick fenced blocks so reference
-   * parsers treat block contents as literal text.
-   */
-  private maskBacktickBlocks(text: string): string {
-    return maskFencedCodeBlocks(text);
-  }
-
-  /**
    * Expand all context references in prompt text.
    * Returns fully-expanded prompt with all files/symbols inlined as attachments.
    *
@@ -195,11 +186,11 @@ export class ContextExpander {
    */
   async expandContext(promptText: string): Promise<string> {
     try {
-      const maskedPromptText = this.maskBacktickBlocks(promptText);
-
-      // Parse all file references from prompt
-      const fileReferences = parseAllFileReferences(maskedPromptText);
-      const gitRefs = parseGitChangeReferences(maskedPromptText);
+      // Every reference parser below masks triple-backtick fenced blocks
+      // internally (see FileReferenceParser.maskFencedCodeBlocks) — no local
+      // masking needed here.
+      const fileReferences = parseAllFileReferences(promptText);
+      const gitRefs = parseGitChangeReferences(promptText);
 
       await this.prepareSourceRuntimeResolutions(fileReferences);
 
@@ -267,7 +258,7 @@ export class ContextExpander {
    * area instead (see {@link estimateImageTokens}).
    */
   async estimateImageReferenceTokens(rawRef: string): Promise<number | null> {
-    const ref = parseAtReferences(this.maskBacktickBlocks(rawRef))[0];
+    const ref = parseAtReferences(rawRef)[0];
     if (!ref || ref.isDirectory || !isImageRefPath(ref.path)) {
       return null;
     }
@@ -296,7 +287,7 @@ export class ContextExpander {
   async estimateFileReferenceTokens(
     rawRef: string
   ): Promise<FileTokenEstimate | null> {
-    const ref = parseAtReferences(this.maskBacktickBlocks(rawRef))[0];
+    const ref = parseAtReferences(rawRef)[0];
     if (!ref || ref.isDirectory) {
       return null;
     }
@@ -336,9 +327,8 @@ export class ContextExpander {
     const skippedReferences: SkippedReference[] = [];
 
     try {
-      const maskedPromptText = this.maskBacktickBlocks(promptText);
-      const fileReferences = parseAllFileReferences(maskedPromptText);
-      const gitRefs = parseGitChangeReferences(maskedPromptText);
+      const fileReferences = parseAllFileReferences(promptText);
+      const gitRefs = parseGitChangeReferences(promptText);
 
       await this.prepareSourceRuntimeResolutions(fileReferences);
 
@@ -558,8 +548,7 @@ export class ContextExpander {
     formatFileRef: (quotedPath: string) => string = (quoted) => `@${quoted}`
   ): Promise<string> {
     try {
-      const maskedPromptText = this.maskBacktickBlocks(promptText);
-      const allRefs = parseAllFileReferences(maskedPromptText);
+      const allRefs = parseAllFileReferences(promptText);
       await this.prepareSourceRuntimeResolutions(allRefs);
       const refs = allRefs.filter(
         (ref) =>

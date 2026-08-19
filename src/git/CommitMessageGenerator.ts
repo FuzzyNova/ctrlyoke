@@ -12,10 +12,7 @@ import { IntegrationFactory } from "../core/IntegrationFactory";
 import { CliIntegration } from "../core/harness/CliIntegration";
 import { WorkflowInstance } from "../core/WorkflowInstance";
 import { Log } from "../utils/Log";
-import {
-  EXECUTION_MODES,
-  PERMISSION_MODES,
-} from "../types/DashboardConstants";
+import { EXECUTION_MODES, PERMISSION_MODES } from "../types/DashboardConstants";
 import type { HarnessId } from "../types/DashboardConstants";
 import {
   isScriptStep,
@@ -218,7 +215,14 @@ export class CommitMessageGenerator {
     const mcpInstruction = useMcpCapture
       ? "\n\nSubmit the commit message using the `ctrlyoke_submit_commit_message` tool. Do not output it as text."
       : "";
-    const fullPrompt = `${commitPrompt}\n\n${diff}${instructionsSection}${mcpInstruction}`;
+    // Fence the diff so its literal content (e.g. an added file's leading
+    // `<!DOCTYPE html>`) is never mistaken for a ctrlyoke reference trigger
+    // (`@`/`#`/`~`/`!`) by the context-expansion or secret-grant parsers,
+    // which both treat fenced blocks as suppressed. An unfenced diff line
+    // like `+<!DOCTYPE html>` previously parsed as an inline `!DOCTYPE`
+    // secret grant and hard-failed the run at preflight.
+    const fencedDiff = "```diff\n" + diff + "\n```";
+    const fullPrompt = `${commitPrompt}\n\n${fencedDiff}${instructionsSection}${mcpInstruction}`;
 
     const mcpServerConfig: McpServerConfig | undefined = useMcpCapture
       ? {

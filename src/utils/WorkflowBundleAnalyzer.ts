@@ -8,7 +8,6 @@ import {
 } from "../completions/ContextReferenceBuilder";
 import {
   parseAllFileReferences,
-  maskFencedCodeBlocks,
   type FileReference,
 } from "./FileReferenceParser";
 import { PromptFileResolver } from "../core/PromptFileResolver";
@@ -434,8 +433,7 @@ async function analyzeInlineReferences(
   plan: BundlePlan,
   rewriteRequests: RewriteRequest[]
 ): Promise<void> {
-  const maskedPrompt = maskFencedCodeBlocks(prompt);
-  const refs = parseAllFileReferences(maskedPrompt).filter(
+  const refs = parseAllFileReferences(prompt).filter(
     (ref) => ref.startOffset !== undefined && ref.endOffset !== undefined
   );
   if (refs.length === 0) {
@@ -725,10 +723,7 @@ async function finalizeCopyPlan(
     usedNames.add(name);
     const destination = path.join(assetsDirectory, name);
     copy.destinationPath = destination;
-    copy.relativePath = toWorkflowRelativePath(
-      destination,
-      destinationPath
-    );
+    copy.relativePath = toWorkflowRelativePath(destination, destinationPath);
   }
 
   plan.copies = [...sourceByContent.values()];

@@ -17,10 +17,7 @@ import {
   type HookEvent,
 } from "./DashboardConstants";
 import type { PromptFile, PromptStep, WorkflowStep } from "./CtrlYokeTypes";
-import {
-  maskFencedCodeBlocks,
-  parseAllFileReferences,
-} from "../utils/FileReferenceParser";
+import { parseAllFileReferences } from "../utils/FileReferenceParser";
 import type { ResolvedExecutionTarget } from "./ExecutionPropertyResolver";
 import type {
   CompatibilityConsumerTarget,
@@ -241,7 +238,7 @@ export function analyzeCompatibility({
 export function getPromptImageFileRefs(
   prompt: string
 ): readonly string[] | undefined {
-  const imageFileRefs = parseAllFileReferences(maskFencedCodeBlocks(prompt))
+  const imageFileRefs = parseAllFileReferences(prompt)
     .filter(
       (reference) =>
         !reference.isDirectory &&

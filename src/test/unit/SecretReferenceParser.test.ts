@@ -37,12 +37,20 @@ suite("SecretReferenceParser", () => {
   });
 
   test("does not parse markdown images, prose, filenames, or lowercase text", () => {
-    const text =
-      "![alt](url) Done! data!file.csv !lowercase !VALID_NAME.";
+    const text = "![alt](url) Done! data!file.csv !lowercase !VALID_NAME.";
 
     assert.deepStrictEqual(
       parseSecretReferences(text).map((reference) => reference.name),
       ["VALID_NAME"]
+    );
+  });
+
+  test("does not parse !NAME inside triple-backtick fenced blocks", () => {
+    const text = "Log excerpt:\n```log\n<!DOCTYPE>\n```\nUse !REAL_NAME too.";
+
+    assert.deepStrictEqual(
+      parseSecretReferences(text).map((reference) => reference.name),
+      ["REAL_NAME"]
     );
   });
 
@@ -63,10 +71,9 @@ suite("SecretReferenceParser", () => {
       script: "./report.sh",
     };
 
-    assert.deepStrictEqual(
-      getEffectiveSecretGrants(step, ["SCRIPT_SECRET"]),
-      ["SCRIPT_SECRET"]
-    );
+    assert.deepStrictEqual(getEffectiveSecretGrants(step, ["SCRIPT_SECRET"]), [
+      "SCRIPT_SECRET",
+    ]);
     assert.deepStrictEqual(getEffectiveSecretGrants(step, null), []);
   });
 

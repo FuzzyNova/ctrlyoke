@@ -10,10 +10,7 @@ import {
 suite("CtrlYokeSlashTokens", () => {
   test("recognizes only explicit skill and MCP references", () => {
     assert.strictEqual(classifyCtrlYokeSlashToken("/skill:commit"), "skill");
-    assert.strictEqual(
-      classifyCtrlYokeSlashToken("/mcp:playwright"),
-      "mcp"
-    );
+    assert.strictEqual(classifyCtrlYokeSlashToken("/mcp:playwright"), "mcp");
     assert.strictEqual(classifyCtrlYokeSlashToken("/commit"), undefined);
     assert.strictEqual(classifyCtrlYokeSlashToken("/mcp"), undefined);
     assert.strictEqual(classifyCtrlYokeSlashToken("/skill:"), undefined);
@@ -35,9 +32,9 @@ suite("CtrlYokeSlashTokens", () => {
     // were captured, the name would never resolve and the literal token would
     // reach the harness — the exact collision this syntax exists to avoid.
     assert.deepStrictEqual(
-      scanCtrlYokeSlashTokens(
-        "commit the changes using /skill:commit."
-      ).map((token) => token.raw),
+      scanCtrlYokeSlashTokens("commit the changes using /skill:commit.").map(
+        (token) => token.raw
+      ),
       ["/skill:commit"]
     );
     assert.deepStrictEqual(
@@ -99,7 +96,9 @@ suite("CtrlYokeSlashTokens", () => {
       "perform a code review using skill: code-review, then run tests with skill: test"
     );
     assert.strictEqual(
-      rewriteCtrlYokeSlashTokens("using /mcp:ctrlyoke, append steps to the queue"),
+      rewriteCtrlYokeSlashTokens(
+        "using /mcp:ctrlyoke, append steps to the queue"
+      ),
       "using mcp: ctrlyoke, append steps to the queue"
     );
     assert.strictEqual(
@@ -114,5 +113,17 @@ suite("CtrlYokeSlashTokens", () => {
     const text = "/commit /mcp /skill: /skill:valid:extra";
     assert.deepStrictEqual(scanCtrlYokeSlashTokens(text), []);
     assert.strictEqual(rewriteCtrlYokeSlashTokens(text), text);
+  });
+
+  test("does not scan or rewrite /skill:/mcp: refs inside fenced blocks", () => {
+    const text = "```\n/skill:fenced\n```\nUse /skill:real instead.";
+    assert.deepStrictEqual(
+      scanCtrlYokeSlashTokens(text).map((token) => token.name),
+      ["real"]
+    );
+    assert.strictEqual(
+      rewriteCtrlYokeSlashTokens(text),
+      "```\n/skill:fenced\n```\nUse skill: real instead."
+    );
   });
 });

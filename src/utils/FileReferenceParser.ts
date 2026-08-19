@@ -26,15 +26,25 @@ import { parseRangeNotation } from "./RangeNotationParser";
 import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
 
 /**
- * Mask reference trigger characters inside triple-backtick fenced blocks.
+ * Mask every prompt-reference trigger character (`@#~!$/`) inside
+ * triple-backtick fenced blocks.
  *
- * Runtime context expansion treats fenced code as literal text. Export
- * analysis must use the same mask so a code sample cannot accidentally become
- * a bundled dependency or be rewritten on Save As.
+ * This is the single point that decides "is this inside a fence" for every
+ * reference parser in the file (plus `SecretReferenceParser.parseSecretReferences`
+ * and `CtrlYokeSlashTokens.scanCtrlYokeSlashTokens`, which both mask through
+ * this same function) — each of those parsers calls it on its own input
+ * rather than requiring every one of their many call sites to remember to
+ * mask first. A pasted literal like `<!DOCTYPE>` or a `/mcp:` example inside
+ * a fenced log/code excerpt must never be mistaken for a live reference:
+ * `!NAME` hard-fails a run at secret preflight, and `$previous`/`/skill:`
+ * silently inject real content the fence promised was inert. A trigger char
+ * missing from this set is therefore a silent correctness bug, not just a
+ * missed expansion — when a new trigger is added anywhere in the
+ * prompt-reference system, it must be added here too.
  */
 export function maskFencedCodeBlocks(text: string): string {
   return text.replace(/```[\s\S]*?```/g, (block) =>
-    block.replace(/[@#~]/g, "\x00")
+    block.replace(/[@#~!$/]/g, "\x00")
   );
 }
 
@@ -82,6 +92,7 @@ export interface InlinePriorContextMatch {
  */
 export function parseAtReferences(prompt: string): FileReference[] {
   const references: FileReference[] = [];
+  const maskedPrompt = maskFencedCodeBlocks(prompt);
 
   // Regex to match @path or @"path with spaces"
   // Group 1: quoted path, Group 2: unquoted path
@@ -99,7 +110,7 @@ export function parseAtReferences(prompt: string): FileReference[] {
   );
   let match;
 
-  while ((match = regex.exec(prompt)) !== null) {
+  while ((match = regex.exec(maskedPrompt)) !== null) {
     const [, quotedPath, unquotedPath] = match;
     let filePath = quotedPath || unquotedPath;
 
@@ -157,6 +168,7 @@ export function parseAtReferences(prompt: string): FileReference[] {
  */
 export function parseSelectionReferences(prompt: string): FileReference[] {
   const references: FileReference[] = [];
+  const maskedPrompt = maskFencedCodeBlocks(prompt);
 
   // Match #selection:path:startLine-endLine for line ranges ONLY
   // Group 1: quoted path, Group 2: unquoted path, Group 3: startLine, Group 4: endLine
@@ -168,7 +180,7 @@ export function parseSelectionReferences(prompt: string): FileReference[] {
   );
   let match;
 
-  while ((match = regex.exec(prompt)) !== null) {
+  while ((match = regex.exec(maskedPrompt)) !== null) {
     const [, quotedPath, unquotedPath, startLine, endLine] = match;
     const filePath = quotedPath ?? unquotedPath;
 
@@ -200,6 +212,7 @@ export function parseSelectionReferences(prompt: string): FileReference[] {
  */
 export function parseSymbolReferences(prompt: string): FileReference[] {
   const references: FileReference[] = [];
+  const maskedPrompt = maskFencedCodeBlocks(prompt);
 
   // One pattern, quoted-or-bare per field — the same shape
   // parseSelectionReferences uses. Group 1: optional kind; groups 2/3:
@@ -221,7 +234,7 @@ export function parseSymbolReferences(prompt: string): FileReference[] {
   );
   let match;
 
-  while ((match = regex.exec(prompt)) !== null) {
+  while ((match = regex.exec(maskedPrompt)) !== null) {
     const [
       ,
       symbolKind,
@@ -282,6 +295,7 @@ export function parseInlinePriorContextRefs(
   text: string
 ): InlinePriorContextMatch[] {
   const matches: InlinePriorContextMatch[] = [];
+  const maskedText = maskFencedCodeBlocks(text);
   // Same word-boundary rationale as parseAtReferences: rejects filename-legal
   // characters immediately before $, not just alphanumerics — e.g. a
   // shell/env-style "price$previous" or a filename containing "$" shouldn't
@@ -292,7 +306,7 @@ export function parseInlinePriorContextRefs(
   );
   let match: RegExpExecArray | null;
 
-  while ((match = regex.exec(text)) !== null) {
+  while ((match = regex.exec(maskedText)) !== null) {
     const body = match[1];
     const token = match[0];
 
@@ -400,6 +414,7 @@ export interface GitChangeReference {
  */
 export function parseGitChangeReferences(text: string): GitChangeReference[] {
   const results: GitChangeReference[] = [];
+  const maskedText = maskFencedCodeBlocks(text);
 
   // ~diff  — exact keyword
   // ~staged — exact keyword
@@ -415,7 +430,7 @@ export function parseGitChangeReferences(text: string): GitChangeReference[] {
   );
   let match: RegExpExecArray | null;
 
-  while ((match = regex.exec(text)) !== null) {
+  while ((match = regex.exec(maskedText)) !== null) {
     const raw = match[0]; // e.g. "~diff", "~stash:2", "~c056e24"
     const inner = match[1]; // e.g. "diff", "stash:2", "c056e24"
     const stashNumStr = match[2]; // defined only for stash:<N>

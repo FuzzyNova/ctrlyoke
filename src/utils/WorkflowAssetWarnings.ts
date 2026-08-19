@@ -1,9 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import {
-  maskFencedCodeBlocks,
-  parseAllFileReferences,
-} from "./FileReferenceParser";
+import { parseAllFileReferences } from "./FileReferenceParser";
 import { isPathWithinDirectory } from "./PathSecurity";
 import {
   getTrustedSourceDefinitionDir,
@@ -32,7 +29,7 @@ export async function findMissingWorkflowAssetDirectories(
   const missingDirectories = new Set<string>();
 
   for (const promptText of promptTexts) {
-    const references = parseAllFileReferences(maskFencedCodeBlocks(promptText));
+    const references = parseAllFileReferences(promptText);
     for (const reference of references) {
       const assetsDirectory = getReferencedAssetsDirectory(
         reference.path,

@@ -6,6 +6,7 @@ import {
   parseSymbolReferences,
   parseDirectoryReferences,
   parseAllFileReferences,
+  parseGitChangeReferences,
   parseInlinePriorContextRefs,
   encodePriorContextTokenRef,
   decodePriorContextTokenRef,
@@ -455,6 +456,69 @@ suite("FileReferenceParser", () => {
       const refs = parseInlinePriorContextRefs("Use $previous, then continue.");
       assert.strictEqual(refs.length, 1);
       assert.deepStrictEqual(refs[0].ref, { kind: "previous" });
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Every parser here masks triple-backtick fenced blocks internally
+  // (FileReferenceParser.maskFencedCodeBlocks), so a trigger char that only
+  // appears as literal pasted text inside a fence is never treated as a live
+  // reference — regardless of which of the many call sites invokes the
+  // parser directly (e.g. the editor's token-count hook, which never masks
+  // itself).
+  suite("triple-backtick fenced block suppression", () => {
+    test("does not parse @ refs inside fenced blocks", () => {
+      const text = "```\n@src/fenced.ts\n```\nUse @src/real.ts instead.";
+      assert.deepStrictEqual(
+        parseAtReferences(text).map((r) => r.path),
+        ["src/real.ts"]
+      );
+    });
+
+    test("does not parse #selection: refs inside fenced blocks", () => {
+      const text =
+        "```\n#selection:src/fenced.ts:1-2\n```\nSee #selection:src/real.ts:3-4.";
+      assert.deepStrictEqual(
+        parseSelectionReferences(text).map((r) => r.path),
+        ["src/real.ts"]
+      );
+    });
+
+    test("does not parse #sym: refs inside fenced blocks", () => {
+      const text =
+        "```\n#sym:src/fenced.ts:Foo:1-2\n```\nSee #sym:src/real.ts:Bar:3-4.";
+      assert.deepStrictEqual(
+        parseSymbolReferences(text).map((r) => r.symbolName),
+        ["Bar"]
+      );
+    });
+
+    test("does not parse ~diff/~staged/~stash/~<hash> refs inside fenced blocks", () => {
+      const text = "```\n~diff\n```\nNow expand ~staged for real.";
+      assert.deepStrictEqual(
+        parseGitChangeReferences(text).map((r) => r.raw),
+        ["~staged"]
+      );
+    });
+
+    test("does not parse $previous/$step refs inside fenced blocks", () => {
+      const text = "```\n$previous\n```\nUse $step:1 instead.";
+      assert.deepStrictEqual(
+        parseInlinePriorContextRefs(text).map((m) => m.token),
+        ["$step:1"]
+      );
+    });
+
+    test("leaves single-backtick inline code unaffected", () => {
+      const text = "Check `@src/inline.ts` and $previous here.";
+      assert.deepStrictEqual(
+        parseAtReferences(text).map((r) => r.path),
+        ["src/inline.ts"]
+      );
+      assert.deepStrictEqual(
+        parseInlinePriorContextRefs(text).map((m) => m.token),
+        ["$previous"]
+      );
     });
   });
 
