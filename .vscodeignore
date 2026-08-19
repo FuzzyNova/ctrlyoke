@@ -36,12 +36,16 @@
 !out/scripts/*.js
 !out/scripts/ctrlyoke-opencode-plugin.ts
 !out/server/standalone-shim.js
+!out/server/ctrlyoke-service-worker.js
 !out/server/hosted-error-page.html
 !out/ui/webview-scripts/*.js
 !out/ui/webview-react/index.html
 !out/ui/webview-react/*.css
 !out/ui/webview-react/*.js
 !out/ui/webview-react/*.svg
+# Notification badge served statically by /ctrlyoke-icon-color.png (SERVICE_WORKER's
+# FAVICON_PNG path has no dynamic route override, unlike icon.png/apple-touch-icon.png).
+!out/ui/webview-react/ctrlyoke-icon-color.png
 !out/ui/webview-react/assets/*.css
 !out/ui/webview-react/assets/*.js
 !out/ui/webview-react/codicons/**
