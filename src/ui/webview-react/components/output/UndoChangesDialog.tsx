@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "../shared/Modal";
 import { Button } from "../shared/Button";
 import { ExpandCollapseAllDiffsButton } from "../shared/ExpandCollapseAllDiffsButton";
@@ -150,6 +150,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
 
   const [checkedPaths, setCheckedPaths] = useState<Set<string>>(initialChecked);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const [resultState, setResultState] = useState<
     "idle" | "success" | "partial" | "error"
   >(RESULT_STATE.IDLE);
@@ -379,6 +380,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
       onClose={onClose}
       size="full"
       footer={footer}
+      bodyRef={bodyRef}
       bodyClassName="px-3 py-2"
       headerSubtitle={dialogSubtitle}
       headerActions={
@@ -406,6 +408,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
           collapsed: dialogDiffsCollapsed,
         }}
         selectionSummary={selectionSummary}
+        scrollContainerRef={bodyRef}
       />
     </Modal>
   );

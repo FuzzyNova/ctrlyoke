@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { DiffFileCard, type DiffFileCardProps } from "./DiffFileCard";
+import { useElementTier } from "@hooks/useElementNarrow";
 import {
+  DIFF_FILE_CONTENT_WIDTH_BUCKET,
   type DiffFileListRow,
   diffFileListRowGapClass,
   projectDiffFileListRows,
 } from "@utils/diffFileRows";
+import { DEFAULT_OUTPUT_CONTENT_WIDTH } from "@utils/outputLineMetrics";
 import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
 
 export interface DiffFileListCommand {
@@ -26,6 +29,14 @@ interface ExpandedGapsOverride {
 const EMPTY_COLLAPSED_OVERRIDES = new Map<string, CollapsedOverride>();
 const EMPTY_EXPANDED_GAPS_OVERRIDES = new Map<string, ExpandedGapsOverride>();
 const EMPTY_EXPANDED_GAPS: DiffGapExpansionState = new Map();
+const DIFF_SPLIT_VIEW_THRESHOLD = 1024;
+const DEFAULT_CONTENT_WIDTH_BUCKET = Math.floor(
+  DEFAULT_OUTPUT_CONTENT_WIDTH / DIFF_FILE_CONTENT_WIDTH_BUCKET
+);
+
+function resolveDiffFileContentWidthBucket(width: number): number {
+  return Math.floor(width / DIFF_FILE_CONTENT_WIDTH_BUCKET);
+}
 
 export interface DiffFileGroup {
   /** Stable semantic identity for this group, independent of heading text/order. */
@@ -43,6 +54,8 @@ export interface DiffFileListProps {
   command: DiffFileListCommand;
   /** Rendered above the list. */
   selectionSummary?: React.ReactNode;
+  /** Parent-owned scroll element used by the future virtual-list path. */
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 export const DiffFileList: React.FC<DiffFileListProps> = ({
@@ -51,9 +64,29 @@ export const DiffFileList: React.FC<DiffFileListProps> = ({
   command,
   selectionSummary,
 }) => {
+  // The list owns the one responsive measurement for all of its cards. The
+  // bucket is a primitive so useElementTier only re-renders at meaningful
+  // width changes, and its module-level resolver keeps the observer stable.
+  const [contentWidthRef, contentWidthBucket] = useElementTier<
+    number,
+    HTMLDivElement
+  >(resolveDiffFileContentWidthBucket, DEFAULT_CONTENT_WIDTH_BUCKET);
+  const outputContentWidth =
+    contentWidthBucket > 0
+      ? contentWidthBucket * DIFF_FILE_CONTENT_WIDTH_BUCKET
+      : undefined;
+  const viewType =
+    contentWidthBucket * DIFF_FILE_CONTENT_WIDTH_BUCKET >=
+    DIFF_SPLIT_VIEW_THRESHOLD
+      ? "split"
+      : "unified";
   const rows = projectDiffFileListRows(
     { groups, selectionSummary },
-    { collapsed: command.collapsed }
+    {
+      collapsed: command.collapsed,
+      outputContentWidth,
+      viewType,
+    }
   );
   const fileRows = rows.filter(
     (row): row is Extract<DiffFileListRow, { kind: "file" }> =>
@@ -170,7 +203,7 @@ export const DiffFileList: React.FC<DiffFileListProps> = ({
   }
 
   return (
-    <div className="flex flex-col">
+    <div ref={contentWidthRef} className="flex flex-col">
       {rows.map((row) => (
         <div key={row.key} className={diffFileListRowGapClass(row)}>
           {row.kind === "selection-summary" && row.content}
@@ -200,6 +233,7 @@ export const DiffFileList: React.FC<DiffFileListProps> = ({
                 currentExpandedGapsOverrides.get(row.key)?.expandedGaps ??
                 EMPTY_EXPANDED_GAPS
               }
+              viewType={viewType}
               onExpandGap={(gapIndex, nextExpandedToLine) =>
                 handleExpandGap(row.key, gapIndex, nextExpandedToLine)
               }

@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { ExpandCollapseAllDiffsButton } from "@components/shared";
 import {
@@ -23,6 +29,7 @@ export const WorkspaceDiffPane: React.FC = () => {
   const diffKind = useWorkspaceViewerStore((s) => s.diffKind);
 
   const [downloading, setDownloading] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [commitDiffsCollapsed, setCommitDiffsCollapsed] = useState(false);
   const [commitDiffResetVersion, setCommitDiffResetVersion] = useState(0);
   const [commitDetailsExpanded, setCommitDetailsExpanded] = useState(false);
@@ -221,7 +228,10 @@ export const WorkspaceDiffPane: React.FC = () => {
         )}
 
         {/* File list */}
-        <div className="flex-1 overflow-auto px-3 py-2">
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 overflow-auto px-3 py-2"
+        >
           <DiffFileList
             groups={commitGroups}
             emptyMessage="No text changes to display"
@@ -229,6 +239,7 @@ export const WorkspaceDiffPane: React.FC = () => {
               version: commitDiffResetVersion,
               collapsed: commitDiffsCollapsed,
             }}
+            scrollContainerRef={scrollContainerRef}
           />
         </div>
       </div>
@@ -255,7 +266,7 @@ export const WorkspaceDiffPane: React.FC = () => {
   }
 
   return (
-    <div className="h-full overflow-auto px-3 py-2">
+    <div ref={scrollContainerRef} className="h-full overflow-auto px-3 py-2">
       <DiffFileList
         groups={singleFileGroups}
         emptyMessage="No text changes to display"
@@ -263,6 +274,7 @@ export const WorkspaceDiffPane: React.FC = () => {
           version: commitDiffResetVersion,
           collapsed: commitDiffsCollapsed,
         }}
+        scrollContainerRef={scrollContainerRef}
       />
     </div>
   );

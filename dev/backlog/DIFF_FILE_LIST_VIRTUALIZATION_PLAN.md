@@ -1,6 +1,6 @@
 # Diff File List Virtualization Plan
 
-> **Status:** Phase 2 implemented; virtualization remains off. This is a focused UI-performance change for the shared
+> **Status:** Phase 3 implemented; virtualization remains off. This is a focused UI-performance change for the shared
 > `DiffFileList`; it does not replace the Output pane's existing virtualization.
 
 ## Goal
@@ -301,6 +301,10 @@ command-aware estimates.
 1. Add the `scrollContainerRef` contract and wire `Modal`, `UndoChangesDialog`, and
    `WorkspaceDiffPane`.
 2. Resolve split/unified once in `DiffFileList` and pass `viewType` to every card.
+
+**Implemented:** The existing modal and workspace scroll elements are now parent-owned list
+contracts. `DiffFileList` measures its content width once in 32px buckets, derives the 1024px
+split/unified choice from that bucket, and feeds both values into row estimates and every card.
 
 ### Phase 4 — Conditional virtualization
 
