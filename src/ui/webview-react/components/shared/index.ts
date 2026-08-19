@@ -88,6 +88,7 @@ export { ExpandCollapseAllDiffsButton } from "./ExpandCollapseAllDiffsButton";
 export { AutoResumeStatusRow } from "./AutoResumeStatusRow";
 export { ScopeToggle, type ScopeToggleOption } from "./ScopeToggle";
 export { VirtualizedDropdownList } from "./VirtualizedDropdownList";
+export { VirtualizedList, type VirtualizedListProps } from "./VirtualizedList";
 export { ToastViewport } from "./ToastViewport";
 export {
   DateRangeFilterControls,

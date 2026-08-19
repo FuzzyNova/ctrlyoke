@@ -256,7 +256,14 @@ scrolling reliable with changing item sizes.
 
 ### Phase 1 — Shared primitive and row projection
 
-1. Extract `VirtualizedList<T>` and migrate `VirtualizedDropdownList` without behavior changes.
+1. [x] Extract `VirtualizedList<T>` and migrate `VirtualizedDropdownList` without behavior changes.
+
+   Landed in Phase 1 item 1: the shared primitive now owns threshold branching,
+   parent-owned scroll-element re-resolution, dynamic row measurement, layout-reset
+   invalidation, stale-index protection, and one-shot `scrollToKey` handling. The
+   dropdown remains a thin wrapper with its existing defaults and DOM output. The
+   primitive's estimate callback is documented as O(1) and receives the item/index
+   contract needed for precomputed diff-row estimates.
 2. Add stable group keys and the flat `DiffFileListRow` projection.
 3. Add card-specific estimate utilities with O(1) virtualizer callbacks.
 4. Keep `DiffFileList` on its direct-render path while testing projection geometry independently.
