@@ -517,6 +517,12 @@
         "autoDeleteTempFiles": {
           "type": "boolean",
           "description": "Automatically delete categorized prompt temp files after execution. Set to false to retain files in .ctrlyoke/temp/ for debugging."
+        },
+        "strictContextResolution": {
+          "type": "string",
+          "enum": ["warn", "fail"],
+          "default": "warn",
+          "description": "How to handle a declared reference that fails to resolve: a missing/invalid secret (!NAME), an unknown skill (/skill:) or MCP server (/mcp:), an unresolved @file/#selection/#sym reference, or an unresolved ~diff/~staged/~stash/~<hash> git reference. 'warn' (default) reports a diagnostic and lets the step run anyway. 'fail' stops the step before the harness spawns, naming the unresolved reference."
         }
       }
     },

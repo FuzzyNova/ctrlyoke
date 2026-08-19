@@ -1,6 +1,10 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { EXECUTION_MODES, HARNESS_IDS } from "../../types/DashboardConstants";
+import {
+  EXECUTION_MODES,
+  HARNESS_IDS,
+  PROMPT_DIAGNOSTIC_CODES,
+} from "../../types/DashboardConstants";
 import type { McpServerConfig } from "../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../types/ExecutionPropertyTypes";
 import type { ManagedMcpServer } from "../../types/WebviewMessageTypes";
@@ -137,7 +141,10 @@ suite("McpServerNormalizer", () => {
     );
     assert.strictEqual(result.properties.mcpServers, null);
     assert.strictEqual(result.diagnostics.length, 1);
-    assert.strictEqual(result.diagnostics[0].code, "prompt.mcp.unknown");
+    assert.strictEqual(
+      result.diagnostics[0].code,
+      PROMPT_DIAGNOSTIC_CODES.UNKNOWN_MCP_REFERENCE
+    );
   });
 
   test("preserves an explicit null MCP override", async () => {

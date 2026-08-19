@@ -1,7 +1,7 @@
 # Unified Context-Resolution Failure Mode Plan
 
-> **Status:** Not started — design settled, plumbing mapped and re-verified
-> against the code (2026-08-19), open questions resolved, no code written yet.
+> **Status:** Phase 1 complete — design settled, plumbing mapped and re-verified
+> against the code (2026-08-19), open questions resolved.
 > **Priority:** P2 — real gap (silent git-ref failures), but not urgent.
 > **Origin:** Grew out of the `!DOCTYPE` backtick-masking bug fix. See the
 > session that produced this plan for the full discussion; short version below.
@@ -222,20 +222,20 @@ session.preparePrompt(prepared.promptWithInstruction, ...);       // :989 — sp
 **Filter on diagnostic `code`, not on severity and not on "any diagnostic".**
 An earlier draft of this plan recommended blocking whenever
 `prepared.diagnostics` was non-empty. That is wrong: `prepared.diagnostics` is
-a **mixed** array. `CliPromptPreparer` defines seven codes
-(`CliPromptPreparer.ts:58-66`) and only three of them describe a declared
+a **mixed** array. `CliPromptPreparer` defines eight codes
+(`CliPromptPreparer.ts:58-66`) and only four of them describe a declared
 reference that failed to resolve:
 
-| Code                              | Resolution failure? |
-| --------------------------------- | ------------------- |
-| `prompt.skill.unknown`            | yes                 |
-| `prompt.secret.unknown`           | yes                 |
-| `prompt.reference.unresolved`     | yes                 |
-| `prompt.mcp.unknown` (other file) | yes                 |
-| `prompt.reference.implausibly-large`             | no — advisory |
-| `prompt.content.over-inline-cap`                 | no — content was truncated, not lost |
-| `prompt.reference.source-runtime-disclosure`     | no — advisory |
-| `prompt.reference.condition-output-unavailable`  | no — a prior step produced no output; not a declared-reference failure |
+| Code                                            | Resolution failure?                                                    |
+| ----------------------------------------------- | ---------------------------------------------------------------------- |
+| `prompt.skill.unknown`                          | yes                                                                    |
+| `prompt.secret.unknown`                         | yes                                                                    |
+| `prompt.reference.unresolved`                   | yes                                                                    |
+| `prompt.mcp.unknown` (other file)               | yes                                                                    |
+| `prompt.reference.implausibly-large`            | no — advisory                                                          |
+| `prompt.content.over-inline-cap`                | no — content was truncated, not lost                                   |
+| `prompt.reference.source-runtime-disclosure`    | no — advisory                                                          |
+| `prompt.reference.condition-output-unavailable` | no — a prior step produced no output; not a declared-reference failure |
 
 Blocking on the whole array would mean a user in `"fail"` mode gets their step
 killed because an attachment was large enough to truncate — unrelated to this
@@ -355,14 +355,15 @@ step failure does today (not a warning row; an actual failure/error state).
 
 ## Implementation Phases
 
-- [ ] **Phase 1 — Schema + settings type + accessor + shared diagnostic codes.**
+- [x] **Phase 1 — Schema + settings type + accessor + shared diagnostic codes.**
       Add `strictContextResolution` to `schemas/settings-schema.json` under
       `execution` (`:496`), to the `execution` interface and
       `CTRLYOKE_SETTINGS_DEFAULTS` in `src/types/CtrlYokeSettings.ts`, and as a
       row in `ExecutionSection.tsx`. Add
       `ConfigurationUtils.getContextResolutionFailureMode()`. Also promote the
       resolution-failure diagnostic codes to a shared exported source and point
-      `CliPromptPreparer`/`McpServerNormalizer` at it, with the
+      `CliPromptPreparer`/`McpServerNormalizer` at
+      `src/types/DashboardConstants.ts`, with the
       `isContextResolutionDiagnostic` predicate + shared message formatter the
       two gates will use. (There is **no** `schemas/settings-schema.yaml` —
       only `workflow-schema.yaml` has a YAML twin. Nothing to regenerate.)
@@ -411,9 +412,10 @@ step failure does today (not a warning row; an actual failure/error state).
 | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | `schemas/settings-schema.json`                                                   | Add `execution.strictContextResolution`                                                 |
 | `src/types/CtrlYokeSettings.ts`                                                  | Add the `execution` interface member + `CTRLYOKE_SETTINGS_DEFAULTS` entry (`"warn"`)    |
-| `src/ui/webview-react/components/settings/ExecutionSection.tsx`                  | Add the settings row (enum `<select>` inside `SettingInputRow`)                          |
+| `src/ui/webview-react/components/settings/ExecutionSection.tsx`                  | Add the settings row (enum `<select>` inside `SettingInputRow`)                         |
 | `src/utils/ConfigurationUtils.ts`                                                | Add `getContextResolutionFailureMode()`                                                 |
-| `src/core/harness/shared/CliPromptPreparer.ts`                                   | Export the diagnostic codes from a shared source; add the gate predicate/formatter      |
+| `src/types/DashboardConstants.ts`                                                | Shared prompt diagnostic codes, resolution predicate, and failure-message formatter     |
+| `src/core/harness/shared/CliPromptPreparer.ts`                                   | Point prompt preparation at the shared diagnostic codes                                 |
 | `src/utils/McpServerNormalizer.ts`                                               | Replace the hardcoded `"prompt.mcp.unknown"` literal with the shared constant           |
 | `src/utils/SecretResolver.ts`                                                    | Add `failOnMissing` option to `preflightWorkflowSecrets`                                |
 | `src/core/WorkflowInstance.ts`                                                   | Pass resolved mode into `preflightWorkflowSecrets`                                      |

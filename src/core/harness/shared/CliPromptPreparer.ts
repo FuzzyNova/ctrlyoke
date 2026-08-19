@@ -17,8 +17,10 @@ import {
   MAX_PREVIEW_BODY_BYTES,
   PREVIEW_PROMPT_CATEGORIES,
   PREVIEW_TRUNCATION_REASONS,
+  PROMPT_DIAGNOSTIC_CODES,
   TEMP_FILE_CATEGORIES,
   CTRLYOKE_SLASH_TOKEN_KINDS,
+  type PromptDiagnosticCode,
   type PreviewPromptCategory,
 } from "../../../types/DashboardConstants";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
@@ -54,16 +56,6 @@ import type {
   CompatibilityDiagnosticSeverity,
 } from "../../../types/CompatibilityTypes";
 import type { PreparedMutation } from "./interfaces/PreparedMutation";
-
-const PROMPT_DIAGNOSTIC_CODES = {
-  LARGE_REFERENCE: "prompt.reference.implausibly-large",
-  OVER_INLINE_CAP: "prompt.content.over-inline-cap",
-  SOURCE_RUNTIME_DISCLOSURE: "prompt.reference.source-runtime-disclosure",
-  UNKNOWN_SKILL_REFERENCE: "prompt.skill.unknown",
-  UNKNOWN_SECRET_REFERENCE: "prompt.secret.unknown",
-  UNRESOLVED_REFERENCE: "prompt.reference.unresolved",
-  CONDITION_OUTPUT_UNAVAILABLE: "prompt.reference.condition-output-unavailable",
-} as const;
 
 export interface PlannedPromptFile {
   readonly path: string;
@@ -1016,7 +1008,7 @@ export class CliPromptPreparer {
   }
 
   private createDiagnostic(
-    code: string,
+    code: PromptDiagnosticCode,
     harnessId: ResolvedProperties["harness"],
     message: string,
     severity: CompatibilityDiagnosticSeverity = COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING

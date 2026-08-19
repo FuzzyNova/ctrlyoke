@@ -15,6 +15,7 @@ import {
   MAX_PREVIEW_BODY_BYTES,
   PREVIEW_PROMPT_CATEGORIES,
   PREVIEW_TRUNCATION_REASONS,
+  PROMPT_DIAGNOSTIC_CODES,
   TEMP_FILE_CATEGORIES,
 } from "../../types/DashboardConstants";
 
@@ -212,11 +213,11 @@ suite("CliPromptPreparer", () => {
       })),
       [
         {
-          code: "prompt.reference.condition-output-unavailable",
+          code: PROMPT_DIAGNOSTIC_CODES.CONDITION_OUTPUT_UNAVAILABLE,
           severity: "warning",
         },
         {
-          code: "prompt.reference.condition-output-unavailable",
+          code: PROMPT_DIAGNOSTIC_CODES.CONDITION_OUTPUT_UNAVAILABLE,
           severity: "warning",
         },
       ]
@@ -484,7 +485,10 @@ suite("CliPromptPreparer", () => {
 
       assert.strictEqual(result.promptWithInstruction, "/skill:unknown");
       assert.strictEqual(result.diagnostics.length, 1);
-      assert.strictEqual(result.diagnostics[0].code, "prompt.skill.unknown");
+      assert.strictEqual(
+        result.diagnostics[0].code,
+        PROMPT_DIAGNOSTIC_CODES.UNKNOWN_SKILL_REFERENCE
+      );
     } finally {
       await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
     }
@@ -607,7 +611,10 @@ suite("CliPromptPreparer", () => {
     );
 
     assert.strictEqual(result.diagnostics.length, 1);
-    assert.strictEqual(result.diagnostics[0].code, "prompt.secret.unknown");
+    assert.strictEqual(
+      result.diagnostics[0].code,
+      PROMPT_DIAGNOSTIC_CODES.UNKNOWN_SECRET_REFERENCE
+    );
     assert.strictEqual(result.diagnostics[0].severity, "error");
   });
 
@@ -650,7 +657,8 @@ suite("CliPromptPreparer", () => {
     );
     assert.ok(
       !result.diagnostics.some(
-        (diagnostic) => diagnostic.code === "prompt.content.over-inline-cap"
+        (diagnostic) =>
+          diagnostic.code === PROMPT_DIAGNOSTIC_CODES.OVER_INLINE_CAP
       )
     );
     assert.ok(MAX_CONTENT_SIZE > 0);

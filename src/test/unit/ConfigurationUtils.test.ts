@@ -147,6 +147,29 @@ suite("ConfigurationUtils — allowed external file roots", () => {
   });
 });
 
+suite("ConfigurationUtils — context resolution failure mode", () => {
+  teardown(() => {
+    configService.setUserBackend(makeBackend({}));
+    configService.setWorkspaceBackend(makeBackend({}));
+  });
+
+  test("reads the configured mode and falls back to warn", () => {
+    configService.setUserBackend(
+      makeBackend({ execution: { strictContextResolution: "fail" } })
+    );
+    assert.strictEqual(
+      ConfigurationUtils.getContextResolutionFailureMode(),
+      "fail"
+    );
+
+    configService.setUserBackend(makeBackend({}));
+    assert.strictEqual(
+      ConfigurationUtils.getContextResolutionFailureMode(),
+      "warn"
+    );
+  });
+});
+
 suite("ConfigurationUtils — Antigravity statusline tracking", () => {
   teardown(() => {
     configService.setUserBackend(makeBackend({}));

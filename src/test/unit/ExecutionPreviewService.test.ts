@@ -20,6 +20,7 @@ import {
   PREVIEW_SCOPES,
   SETTING_SCOPES,
   HOOK_EVENT_ORDER,
+  PROMPT_DIAGNOSTIC_CODES,
   WORKTREE_MODES,
 } from "../../types/DashboardConstants";
 import type { HarnessCapabilityRegistrySnapshot } from "../../types/CompatibilityTypes";
@@ -466,7 +467,7 @@ suite("ExecutionPreviewService", () => {
     assert.strictEqual(
       step.diagnostics.find(
         (diagnostic) =>
-          diagnostic.code === "prompt.reference.source-runtime-disclosure"
+          diagnostic.code === PROMPT_DIAGNOSTIC_CODES.SOURCE_RUNTIME_DISCLOSURE
       )?.message,
       `Read from source checkout: @runtime/other.log, @runtime/another.log; Copied into worktree: @runtime/source.log → ${destinationPath}`
     );

@@ -4,6 +4,7 @@ import {
   CAPABILITY_VERIFICATION_STATUSES,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CTRLYOKE_SLASH_TOKEN_KINDS,
+  PROMPT_DIAGNOSTIC_CODES,
   SPECIAL_TARGET_IDS,
 } from "../types/DashboardConstants";
 import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
@@ -165,7 +166,7 @@ export class McpServerNormalizer {
     name: string
   ): CompatibilityDiagnostic {
     return {
-      code: "prompt.mcp.unknown",
+      code: PROMPT_DIAGNOSTIC_CODES.UNKNOWN_MCP_REFERENCE,
       severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
       harnessId: properties.harness,
       capability: "mcpServers",

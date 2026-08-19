@@ -1,5 +1,6 @@
 import {
   BROWSER_NOTIFICATION_MODES,
+  CONTEXT_RESOLUTION_FAILURE_MODES,
   NOTIFICATION_EVENT_MODES,
   TERMINAL_CURSOR_STYLES,
   TERMINAL_MOBILE_CONTROL_BAR,
@@ -8,6 +9,7 @@ import {
   type TerminalMobileControlBar,
   type NotificationEventMode,
   type BrowserNotificationMode,
+  type ContextResolutionFailureMode,
   type HookEvent,
   type ExecutionMode,
   RUN_HISTORY_LOCATIONS,
@@ -140,6 +142,7 @@ export interface CtrlYokeGlobalSettings {
     scriptTimeout: number; // seconds
     closeTerminalOnComplete: boolean;
     autoDeleteTempFiles: boolean;
+    strictContextResolution: ContextResolutionFailureMode;
   };
 
   // Queue
@@ -382,6 +385,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     scriptTimeout: 3600,
     closeTerminalOnComplete: false,
     autoDeleteTempFiles: true,
+    strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
   },
   queue: {
     maxSize: 100,

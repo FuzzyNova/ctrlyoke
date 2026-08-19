@@ -28,5 +28,8 @@ describe("ExecutionSection", () => {
     expect(
       screen.getByLabelText("Max prompt timeout (seconds, -1 = unlimited)")
     ).toBeInTheDocument();
+    expect(screen.getByLabelText("Context resolution failures")).toHaveValue(
+      "warn"
+    );
   });
 });

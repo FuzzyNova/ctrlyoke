@@ -18,6 +18,7 @@ import {
   DEFAULT_MODELS,
   SETTING_PATHS,
   type HarnessId,
+  type ContextResolutionFailureMode,
   type PermissionMode,
 } from "../types/DashboardConstants";
 import { configService } from "../config/CtrlYokeConfigService";
@@ -781,6 +782,13 @@ export const ConfigurationUtils = {
   isHeuristicSecretRedactionEnabled(): boolean {
     return configService.get(CONFIG_KEYS.PERMISSIONS)
       .heuristicSecretRedactionEnabled;
+  },
+
+  /** Get how declared context references that fail to resolve should be handled. */
+  getContextResolutionFailureMode(): ContextResolutionFailureMode {
+    return (
+      configService.get(CONFIG_KEYS.EXECUTION).strictContextResolution ?? "warn"
+    );
   },
 
   /** Whether provider quota and observed usage collection is enabled. */

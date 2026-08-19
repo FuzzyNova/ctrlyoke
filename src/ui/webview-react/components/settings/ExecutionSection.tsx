@@ -3,6 +3,7 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
+import { CONTEXT_RESOLUTION_FAILURE_MODES } from "@root/types/DashboardConstants";
 import { LocalNumberInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
@@ -30,6 +31,25 @@ export function ExecutionSection({
       <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
         Execution
       </h3>
+      <SettingInputRow
+        label="Context resolution failures"
+        description="How to handle a declared reference that fails to resolve: a missing/invalid secret (!NAME), an unknown skill (/skill:) or MCP server (/mcp:), an unresolved @file/#selection/#sym reference, or an unresolved ~diff/~staged/~stash/~<hash> git reference. 'warn' (default) reports a diagnostic and lets the step run anyway. 'fail' stops the step before the harness spawns, naming the unresolved reference."
+        id="exec-strict-context-resolution"
+        path="execution.strictContextResolution"
+        {...rowProps}
+      >
+        <select
+          id="exec-strict-context-resolution"
+          value={exec.strictContextResolution}
+          onChange={(event) =>
+            onUpdate("execution.strictContextResolution", event.target.value)
+          }
+          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+        >
+          <option value={CONTEXT_RESOLUTION_FAILURE_MODES.WARN}>Warn</option>
+          <option value={CONTEXT_RESOLUTION_FAILURE_MODES.FAIL}>Fail</option>
+        </select>
+      </SettingInputRow>
       <SettingInputRow
         label="Max prompt timeout (seconds, -1 = unlimited)"
         id="exec-max-prompt-timeout"

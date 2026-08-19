@@ -950,6 +950,50 @@ export const COMPATIBILITY_DIAGNOSTIC_SEVERITIES = {
   ERROR: "error",
 } as const;
 
+/** Diagnostic codes emitted while preparing prompt references for execution. */
+export const PROMPT_DIAGNOSTIC_CODES = {
+  LARGE_REFERENCE: "prompt.reference.implausibly-large",
+  OVER_INLINE_CAP: "prompt.content.over-inline-cap",
+  SOURCE_RUNTIME_DISCLOSURE: "prompt.reference.source-runtime-disclosure",
+  UNKNOWN_SKILL_REFERENCE: "prompt.skill.unknown",
+  UNKNOWN_SECRET_REFERENCE: "prompt.secret.unknown",
+  UNRESOLVED_REFERENCE: "prompt.reference.unresolved",
+  UNKNOWN_MCP_REFERENCE: "prompt.mcp.unknown",
+  CONDITION_OUTPUT_UNAVAILABLE: "prompt.reference.condition-output-unavailable",
+} as const;
+
+export type PromptDiagnosticCode =
+  (typeof PROMPT_DIAGNOSTIC_CODES)[keyof typeof PROMPT_DIAGNOSTIC_CODES];
+
+const CONTEXT_RESOLUTION_DIAGNOSTIC_CODES = [
+  PROMPT_DIAGNOSTIC_CODES.UNKNOWN_SKILL_REFERENCE,
+  PROMPT_DIAGNOSTIC_CODES.UNKNOWN_SECRET_REFERENCE,
+  PROMPT_DIAGNOSTIC_CODES.UNRESOLVED_REFERENCE,
+  PROMPT_DIAGNOSTIC_CODES.UNKNOWN_MCP_REFERENCE,
+] as const satisfies readonly PromptDiagnosticCode[];
+
+export type ContextResolutionDiagnosticCode =
+  (typeof CONTEXT_RESOLUTION_DIAGNOSTIC_CODES)[number];
+
+/** Whether a diagnostic represents a declared reference that failed to resolve. */
+export function isContextResolutionDiagnostic(
+  code: string
+): code is ContextResolutionDiagnosticCode {
+  return CONTEXT_RESOLUTION_DIAGNOSTIC_CODES.includes(
+    code as ContextResolutionDiagnosticCode
+  );
+}
+
+/** Format the diagnostics that block a step when strict context resolution is enabled. */
+export function formatContextResolutionFailureMessage(
+  diagnostics: readonly { readonly message: string }[]
+): string {
+  return [
+    `Step blocked by execution.strictContextResolution="fail" — ${diagnostics.length} references did not resolve:`,
+    ...diagnostics.map((diagnostic) => `  • ${diagnostic.message}`),
+  ].join("\n");
+}
+
 export const COMPATIBILITY_SOURCE_TIERS = {
   PROMPT: "prompt",
   WORKFLOW: "workflow",
@@ -1118,6 +1162,14 @@ export const EXECUTION_MODES = {
   INTERACTIVE: "interactive",
   HEADLESS: "headless",
 } as const;
+
+export const CONTEXT_RESOLUTION_FAILURE_MODES = {
+  WARN: "warn",
+  FAIL: "fail",
+} as const;
+
+export type ContextResolutionFailureMode =
+  (typeof CONTEXT_RESOLUTION_FAILURE_MODES)[keyof typeof CONTEXT_RESOLUTION_FAILURE_MODES];
 
 export type ExecutionMode =
   (typeof EXECUTION_MODES)[keyof typeof EXECUTION_MODES];
