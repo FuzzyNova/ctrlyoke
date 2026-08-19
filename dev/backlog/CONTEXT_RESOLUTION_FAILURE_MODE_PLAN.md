@@ -1,6 +1,7 @@
 # Unified Context-Resolution Failure Mode Plan
 
-> **Status:** Not started — design settled, plumbing mapped, no code written yet.
+> **Status:** Not started — design settled, plumbing mapped and re-verified
+> against the code (2026-08-19), open questions resolved, no code written yet.
 > **Priority:** P2 — real gap (silent git-ref failures), but not urgent.
 > **Origin:** Grew out of the `!DOCTYPE` backtick-masking bug fix. See the
 > session that produced this plan for the full discussion; short version below.
@@ -106,7 +107,29 @@ getContextResolutionFailureMode(): "warn" | "fail" {
 
 No new plumbing layer needed — `PlatformAdapter.getConfig?()` was considered
 and rejected as the injection point; it's CLI-adapter-specific and
-`ConfigurationUtils` is what every other global toggle already uses.
+`ConfigurationUtils` is what every other global toggle already uses. Verified
+that all three consuming files already import `ConfigurationUtils` today
+(`WorkflowInstance.ts:1565`, `WorkflowExecutor.ts:51`, `CliIntegration.ts`),
+so no new import risk and nothing to prove about CLI safety.
+
+The schema is **not** the only declaration site. A settings key lives in three
+places that must stay in sync, plus the dashboard:
+
+- `schemas/settings-schema.json` — the `execution` block at `:496`.
+- `src/types/CtrlYokeSettings.ts` — the `execution` interface member (`:136`)
+  **and** the `CTRLYOKE_SETTINGS_DEFAULTS.execution` literal (`:379`), which is
+  where `"warn"` actually becomes the default. The `?? "warn"` in the accessor
+  is belt-and-braces; the defaults object is the real source.
+- `src/ui/webview-react/components/settings/ExecutionSection.tsx` — every
+  neighbouring `execution.*` key has a row here, so this one needs one too or
+  the setting is unreachable outside hand-edited JSON.
+
+Note this is the first **enum-valued** global setting in that section; the
+existing rows are `SettingToggleRow` (boolean) and `SettingInputRow` (number
+input passed as a child). There is no select-row component in
+`components/settings/` today. Prefer rendering a plain `<select>` as a child of
+`SettingInputRow` — that's the established escape hatch for non-toggle
+controls — rather than inventing a `SettingSelectRow` for a single use.
 
 ### Secrets: `preflightWorkflowSecrets` is three checks, not one
 
@@ -187,32 +210,79 @@ one `prepared.diagnostics` array:
 ```ts
 const prepared = await this.promptPreparer.preparePrompt(...);   // :965
 // existing: log + report each diagnostic
-if (mode === "fail" && prepared.diagnostics.length > 0) {
-  throw new Error(prepared.diagnostics.map((d) => d.message).join(" "));
+const blocking = prepared.diagnostics.filter((d) =>
+  isContextResolutionDiagnostic(d.code)
+);
+if (mode === "fail" && blocking.length > 0) {
+  throw new Error(/* see message format below */);
 }
 session.preparePrompt(prepared.promptWithInstruction, ...);       // :989 — spawn commits here
 ```
 
-Recommend gating on `mode === "fail"` alone, **ignoring the stored
-`severity`** field rather than filtering to `severity === ERROR`. Confirmed
-(grep across `CliIntegration.ts`) that nothing today reads `severity` for
-control flow — it's purely informational — so keeping severity and the new
-mode as two independent axes would just be confusing. The mode _is_ the
-blocking decision; treat every diagnostic in this array as blocking when
-`"fail"` is active.
+**Filter on diagnostic `code`, not on severity and not on "any diagnostic".**
+An earlier draft of this plan recommended blocking whenever
+`prepared.diagnostics` was non-empty. That is wrong: `prepared.diagnostics` is
+a **mixed** array. `CliPromptPreparer` defines seven codes
+(`CliPromptPreparer.ts:58-66`) and only three of them describe a declared
+reference that failed to resolve:
+
+| Code                              | Resolution failure? |
+| --------------------------------- | ------------------- |
+| `prompt.skill.unknown`            | yes                 |
+| `prompt.secret.unknown`           | yes                 |
+| `prompt.reference.unresolved`     | yes                 |
+| `prompt.mcp.unknown` (other file) | yes                 |
+| `prompt.reference.implausibly-large`             | no — advisory |
+| `prompt.content.over-inline-cap`                 | no — content was truncated, not lost |
+| `prompt.reference.source-runtime-disclosure`     | no — advisory |
+| `prompt.reference.condition-output-unavailable`  | no — a prior step produced no output; not a declared-reference failure |
+
+Blocking on the whole array would mean a user in `"fail"` mode gets their step
+killed because an attachment was large enough to truncate — unrelated to this
+feature and a clear over-reach.
+
+Severity stays out of the decision: confirmed by grep that nothing in
+`CliIntegration.ts` reads `severity` for control flow, and
+`UNKNOWN_SECRET_REFERENCE` is the only code that sets a non-default severity.
+Leave severity exactly as it is (informational, drives the Output-pane row
+styling) and make **code** the single axis the gate switches on.
+
+That means the code set must become a shared, exported single source rather
+than the module-local `PROMPT_DIAGNOSTIC_CODES` const it is today, and
+`McpServerNormalizer.ts:168`'s hardcoded `code: "prompt.mcp.unknown"` string
+literal must come from that same source — otherwise the gate would be
+switching on hardcoded strings, which the project's coding principles forbid.
 
 **2. `WorkflowExecutor.ts:723`**, right after
 `mcpNormalization.diagnostics` is computed and reported, before
 `context.getIntegrationForPrompt(...)` at `:725`:
 
 ```ts
-if (mode === "fail" && mcpNormalization.diagnostics.length > 0) {
-  throw new Error(mcpNormalization.diagnostics.map((d) => d.message).join(" "));
+const blocking = mcpNormalization.diagnostics.filter((d) =>
+  isContextResolutionDiagnostic(d.code)
+);
+if (mode === "fail" && blocking.length > 0) {
+  throw new Error(/* same message format as the other chokepoint */);
 }
 ```
 
-MCP diagnostics are always WARNING today (no severity variation), so no
-filtering needed there either.
+`McpServerNormalizer` only emits `prompt.mcp.unknown` today, so the filter is
+a no-op there right now — but use the same shared predicate anyway so a future
+advisory MCP diagnostic doesn't silently start blocking steps.
+
+### Error message format
+
+Both chokepoints must format identically, so put the message construction in
+one shared helper next to the predicate. Join with **newlines**, not spaces,
+under a short lead line — a step with four unresolved references produces four
+sentences, and space-joining them (the style
+`preflightWorkflowSecrets` uses for its name list) is unreadable at that size:
+
+```
+Step blocked by execution.strictContextResolution="fail" — 2 references did not resolve:
+  • Skill "foo" referenced by /skill:foo was not found among discovered skills.
+  • Reference "~abc1234" could not be attached: <reason>
+```
 
 ### Closing the silent git-ref gap (needed in both modes)
 
@@ -285,17 +355,22 @@ step failure does today (not a warning row; an actual failure/error state).
 
 ## Implementation Phases
 
-- [ ] **Phase 1 — Schema + config accessor.** Add `strictContextResolution` to
-      `schemas/settings-schema.json` under `execution`; regenerate
-      `schemas/settings-schema.yaml` if applicable (check for a generation
-      script, same caution as `RAW_PROMPT_MODE_PLAN`'s note about
-      `prompt-schema.yaml`). Add `ConfigurationUtils.getContextResolutionFailureMode()`.
+- [ ] **Phase 1 — Schema + settings type + accessor + shared diagnostic codes.**
+      Add `strictContextResolution` to `schemas/settings-schema.json` under
+      `execution` (`:496`), to the `execution` interface and
+      `CTRLYOKE_SETTINGS_DEFAULTS` in `src/types/CtrlYokeSettings.ts`, and as a
+      row in `ExecutionSection.tsx`. Add
+      `ConfigurationUtils.getContextResolutionFailureMode()`. Also promote the
+      resolution-failure diagnostic codes to a shared exported source and point
+      `CliPromptPreparer`/`McpServerNormalizer` at it, with the
+      `isContextResolutionDiagnostic` predicate + shared message formatter the
+      two gates will use. (There is **no** `schemas/settings-schema.yaml` —
+      only `workflow-schema.yaml` has a YAML twin. Nothing to regenerate.)
 - [ ] **Phase 2 — Make secret resolvability conditional.** Add the
       `failOnMissing` option to `preflightWorkflowSecrets`; wire
       `WorkflowInstance.ts:1558` to pass the resolved mode; leave
-      `SecretCommands.ts:199` unconditional. Decide (a) vs (b) from the open
-      question above — default to (a) unless there's a concrete reason not
-      to. Update `src/test/unit/SecretResolver.test.ts` for the new default
+      `SecretCommands.ts:199` unconditional. **Decision: (a)** — keep the
+      timing asymmetry (see Resolved Decisions below). Update `src/test/unit/SecretResolver.test.ts` for the new default
       behavior (missing secret + `"warn"` no longer throws) without breaking
       existing "throws on missing" coverage (that coverage should move to the
       `failOnMissing: true` / default-call-signature case).
@@ -306,21 +381,24 @@ step failure does today (not a warning row; an actual failure/error state).
       `skippedReferences` (mirroring the existing `@file` missing-ref test
       pattern already used for `skippedReferences`).
 - [ ] **Phase 4 — Per-step "fail" gate, `CliIntegration.ts`.** Insert the
-      blocking check after diagnostics are logged/reported and before
-      `session.preparePrompt(...)` spawns. Add a test forcing an unknown
+      code-filtered blocking check after diagnostics are logged/reported and
+      before `session.preparePrompt(...)` spawns. Add tests forcing an unknown
       `/skill:`, an unresolved `@file`, and a missing `!NAME` (via
       `CliPromptPreparer`'s path, not the whole-workflow preflight) each to
-      confirm they throw only when the mode is `"fail"`.
+      confirm they throw only when the mode is `"fail"` — plus a test that a
+      non-resolution diagnostic (e.g. `prompt.content.over-inline-cap`) does
+      **not** block even in `"fail"` mode.
 - [ ] **Phase 5 — Per-step "fail" gate, `WorkflowExecutor.ts`.** Same pattern
       for `mcpNormalization.diagnostics`, right before
       `getIntegrationForPrompt`. Add a test forcing an unknown `/mcp:` to
       confirm the same fail/warn split.
-- [ ] **Phase 6 — Manual verification of the warning-row pipeline.** Run a
-      workflow with a deliberately-broken `~<hash>` reference in `"warn"`
-      mode and confirm a warning row appears in the Output pane via the
-      existing `StatusMessage` path — this should require no new UI code per
-      the section above; if it does, that's a sign an assumption in this plan
-      was wrong and needs revisiting before continuing.
+- [ ] **Phase 6 — Verify the warning-row pipeline.** Assert by test that a
+      failed `~<hash>` ref reaches `reportCompatibilityDiagnostics` →
+      `updateStatusMessage` with WARNING severity in `"warn"` mode, which is
+      what the `StatusMessage` row renders from. Per the section above this
+      should require no new UI code; if it does, an assumption in this plan was
+      wrong and needs revisiting before continuing. Visual confirmation in a
+      live VS Code window is left to the user — do not claim it was done.
 - [ ] **Phase 7 — Docs.** Update `.github/instructions/utils.instructions.md`
       or `core.instructions.md` (whichever ends up owning the new gate logic)
       with a short note on the two-chokepoint design and the "mode ignores
@@ -332,7 +410,11 @@ step failure does today (not a warning row; an actual failure/error state).
 | File                                                                             | Change                                                                                  |
 | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | `schemas/settings-schema.json`                                                   | Add `execution.strictContextResolution`                                                 |
+| `src/types/CtrlYokeSettings.ts`                                                  | Add the `execution` interface member + `CTRLYOKE_SETTINGS_DEFAULTS` entry (`"warn"`)    |
+| `src/ui/webview-react/components/settings/ExecutionSection.tsx`                  | Add the settings row (enum `<select>` inside `SettingInputRow`)                          |
 | `src/utils/ConfigurationUtils.ts`                                                | Add `getContextResolutionFailureMode()`                                                 |
+| `src/core/harness/shared/CliPromptPreparer.ts`                                   | Export the diagnostic codes from a shared source; add the gate predicate/formatter      |
+| `src/utils/McpServerNormalizer.ts`                                               | Replace the hardcoded `"prompt.mcp.unknown"` literal with the shared constant           |
 | `src/utils/SecretResolver.ts`                                                    | Add `failOnMissing` option to `preflightWorkflowSecrets`                                |
 | `src/core/WorkflowInstance.ts`                                                   | Pass resolved mode into `preflightWorkflowSecrets`                                      |
 | `src/cli/SecretCommands.ts`                                                      | No change (confirm it still calls with default `failOnMissing: true`)                   |
@@ -358,21 +440,29 @@ step failure does today (not a warning row; an actual failure/error state).
   behavior, unchanged).
 - Unit: `WorkflowExecutor`'s per-step gate throws in `"fail"` mode for an
   unknown `/mcp:`, and does not throw in `"warn"` mode.
+- Unit: an advisory diagnostic (`prompt.content.over-inline-cap`,
+  `prompt.reference.condition-output-unavailable`) does **not** block a step
+  even in `"fail"` mode — this is the regression the code filter exists to
+  prevent.
 - Manual: confirm the Output pane shows a warning row for a bad `~<hash>` ref
   in `"warn"` mode (Phase 6).
 
-## Open Questions
+## Resolved Decisions
 
-- (a) vs (b) from "keep the timing asymmetry, or unify it?" above — needs a
-  decision before Phase 2, not just a default.
-- Should `UNKNOWN_SECRET_REFERENCE`'s existing explicit `ERROR` severity be
-  left as-is (now genuinely meaningful once something reads it), removed
-  (redundant once the gate ignores severity entirely), or repurposed as the
-  signal the gate _does_ filter on instead of a blanket `mode === "fail"`
-  check? This plan recommends the blanket check for simplicity, but an
-  implementer should double-check nothing else was relying on that field
-  staying `ERROR`-but-inert before changing what reads it.
-- Exact wording/format for the thrown error message when multiple diagnostics
-  block a single step (the plan above just joins `.message` with spaces,
-  matching `preflightWorkflowSecrets`'s existing multi-name join style —
-  worth a second look for readability with a large diagnostic count).
+All three former open questions are settled; implementers should follow these
+rather than re-opening them.
+
+1. **(a) vs (b) — keep the timing asymmetry, option (a).** Secrets keep their
+   whole-workflow pre-step-1 check (now conditional on the setting); the other
+   four categories get the per-step gate. (b)'s only benefit is uniformity, and
+   it costs a real regression: in `"fail"` mode a secret needed only by step 3
+   would burn two steps' worth of harness turns before failing.
+2. **The gate switches on diagnostic `code`, not severity, and not "any
+   diagnostic present".** See the chokepoint section above for why — the
+   blanket check would block on unrelated advisory diagnostics such as
+   `prompt.content.over-inline-cap`. `UNKNOWN_SECRET_REFERENCE` keeps its
+   `ERROR` severity unchanged; severity stays purely informational and keeps
+   driving the Output-pane row styling.
+3. **Error message format:** newline-joined bullets under a lead line naming
+   the setting and the count — not the space-joined style
+   `preflightWorkflowSecrets` uses. Both chokepoints share one formatter.
