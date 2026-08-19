@@ -2,7 +2,11 @@
 
 ## Status
 
-Design plan, not yet implemented. Supersedes the `{stdout}`/`{stderr}`/... retry-prompt
+Design plan, not yet implemented. **Revised 2026-08-19** after tracing the code: substitution
+collapsed from three call sites to one (`CliPromptPreparer`), the
+`createConditionEvaluationSummary` third parameter changed from `ScriptVerdict` to a details
+bag, fenced-code masking added as a requirement, and the `{...}` migration surface expanded
+with the shipped templates/schemas the original draft missed. Supersedes the `{stdout}`/`{stderr}`/... retry-prompt
 placeholder syntax added in `dev/implemented/RETRY_PROMPT_CODEMIRROR_PLAN.md`. That plan
 remains as historical record of the work it describes; this plan replaces the mechanism it
 built.
@@ -79,14 +83,14 @@ Confirmed with the user: a pre-condition's output should be referenceable from *
 main prompt and the retry prompt — e.g. `"Your original fix to the test issues referenced in
 $preCondition:stdout didn't fix all the tests, there's still failures shown here
 $endCondition:stdout"` in a retry prompt. `$endCondition:*`, by contrast, can only ever be
-meaningful in a retry prompt: the end-condition evaluates *after* the prompt runs (to decide
+meaningful in a retry prompt: the end-condition evaluates _after_ the prompt runs (to decide
 pass/retry/stop), so there is no end-condition result yet when the original prompt is being
 built.
 
-| Ref                | Main prompt (`mode="prompt"`)                                             | Retry / pass-retry prompt (`mode="endCondition"`)                        |
-| ------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `$preCondition:*`  | Valid. Warn if the step's effective `preCondition` is not configured.     | Valid. Same warning rule (the step's `preCondition`, not the retry itself). |
-| `$endCondition:*`  | Warn — "not available until the retry prompt" (structural, not config).  | Valid. No warning needed — a retry prompt only exists under a configured `endCondition`. |
+| Ref               | Main prompt (`mode="prompt"`)                                           | Retry / pass-retry prompt (`mode="endCondition"`)                                        |
+| ----------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `$preCondition:*` | Valid. Warn if the step's effective `preCondition` is not configured.   | Valid. Same warning rule (the step's `preCondition`, not the retry itself).              |
+| `$endCondition:*` | Warn — "not available until the retry prompt" (structural, not config). | Valid. No warning needed — a retry prompt only exists under a configured `endCondition`. |
 
 This maps directly onto the `CodeMirrorEditorMode` the editor already threads down
 (`"prompt"` vs `"endCondition"`, `CodeMirrorEditor.tsx:96`) — no new mode concept needed, just
@@ -109,13 +113,24 @@ already have a full `ScriptVerdict` in hand at construction time (e.g. `preRepor
 
 **Change:** add `expected?: string` and `compareSource?: CompareSource` to
 `ConditionEvaluationSummary`, and change `createConditionEvaluationSummary(script, result,
-action?)` to `createConditionEvaluationSummary(script, result, verdict?: ScriptVerdict)`,
-copying `verdict.expected`/`verdict.compareSource`/`verdict.action` in. Update both call sites
-(`WorkflowExecutor.ts:602-608`, `EndConditionHandler.recordEndConditionEvaluation`
-`EndConditionHandler.ts:460-474` — verify whether a `ScriptVerdict` is available there or
-needs threading in alongside `evaluationResult`). This makes `ConditionEvaluationSummary` the
-single struct condition-output substitution needs, and is a small, additive change to a type
-already used only for display today.
+action?)` to `createConditionEvaluationSummary(script, result, details?: { action?:
+ConditionAction; expected?: string; compareSource?: CompareSource })`.
+
+**Verified — do _not_ make the third parameter a `ScriptVerdict`.** A verdict is not universally
+available. `EndConditionHandler.recordEndConditionEvaluation` (`EndConditionHandler.ts:460-474`)
+receives only an `EvaluationResult`, and the missing-script error path
+(`WorkflowExecutor.ts:2112`) has no verdict at all. All four call sites do, however, have
+`expected`/`compareSource` in reach, so a plain details bag serves every one of them:
+
+- `WorkflowExecutor.ts:604` (pre-condition) → `{ action: preReport.verdict.action, expected:
+preReport.verdict.expected, compareSource: preReport.verdict.compareSource }`.
+- `WorkflowExecutor.ts:2112`, `:2179` (end-condition error paths) → `{ expected:
+endCondition.returns, compareSource: endCondition.compareSource }`.
+- `EndConditionHandler.ts:465` → `{ expected: prompt.endCondition?.returns, compareSource:
+prompt.endCondition?.compareSource }`.
+
+This makes `ConditionEvaluationSummary` the single struct condition-output substitution needs,
+and is a small, additive change to a type already used only for display today.
 
 ## Runtime substitution
 
@@ -130,7 +145,11 @@ export interface ConditionOutputContext {
 export interface ConditionOutputSubstitutionResult {
   text: string;
   /** $phase:field tokens found with no summary for that phase — feeds a diagnostic/warning. */
-  unresolved: Array<{ phase: "preCondition" | "endCondition"; field: string; token: string }>;
+  unresolved: Array<{
+    phase: "preCondition" | "endCondition";
+    field: string;
+    token: string;
+  }>;
 }
 
 export function substituteConditionOutputRefs(
@@ -146,53 +165,79 @@ behavior for an unset `returns`); `actual`/`compareSource` off `summary.actual` 
 untouched (forward-compat, matches the `$step:` precedent) but SHOULD be surfaced as an
 "unrecognized placeholder" lint on the editor side (nice-to-have, not required for v1).
 
-Three call sites:
+Substitution MUST mask fenced code blocks the way every other prompt-reference trigger does —
+reuse `maskFencedCodeBlocks` from `FileReferenceParser.ts` (commit `7ece66af`, "mask all
+prompt-reference triggers inside fenced code blocks"). A `$preCondition:stdout` inside a
+`fence` is documentation, not a reference, and must survive verbatim.
 
-1. **Main prompt, first attempt.** `WorkflowExecutor.ts` already holds `preReport`/`preResult`
-   right before the prompt is dispatched (~line 601). Thread it down to
-   `CliPromptPreparer.planPrompt` — add `preConditionResult?: ConditionEvaluationSummary` to
-   `WorkflowContext` (`WorkflowContextTypes.ts:86-126`), populated by `WorkflowExecutor` at
-   the point it already has `preResult` in scope (this is the *value*, not a resolver
-   callback — unlike `resolvePriorContextItems`, there's no async work needed since the data
-   is already computed). `CliPromptPreparer.planPrompt` calls
-   `substituteConditionOutputRefs(originalPromptText, { preCondition: workflowContext?.preConditionResult })`
-   as its very first step, before slash-command detection — this is a pure text swap with no
-   size/attachment implications (unlike `$previous`, which pulls in a whole XML block via
-   `resolvePriorContextItems`), so it's safe to do unconditionally up front. Any
-   `$endCondition:*` token found here becomes an `unresolved` entry → a
-   `CompatibilityDiagnostic` via the same channel `CliPromptPreparer` already uses for
-   unresolved references (`PROMPT_DIAGNOSTIC_CODES.UNRESOLVED_REFERENCE`,
-   `CliPromptPreparer.ts:63, :244-251`) — no new diagnostic plumbing needed, just a new code
-   (e.g. `prompt.reference.condition-output-unavailable`).
+### One substitution site, not three (revised)
 
-   **Verify during implementation:** the exact hop from `WorkflowExecutor` to where
-   `session.workflowContext` (`CliIntegration.ts:965-971`) is actually constructed — this plan
-   assumes `WorkflowExecutor` (or something it calls synchronously) builds that
-   `WorkflowContext`, but the construction site wasn't traced to its exact line.
+The original draft put substitution in three places: `CliPromptPreparer` for the main prompt,
+`EndConditionHandler` for the retry prompt, and possibly a third for preview. Tracing the code
+shows that is both unnecessary and subtly wrong:
 
-2. **Retry / pass-retry prompt.** Replace `EndConditionEvaluator.buildRetryPrompt()`
-   (`EndConditionEvaluator.ts:846-868`) with a call to `substituteConditionOutputRefs`, called
-   from `EndConditionHandler.buildRetryPrompt()` / `buildPassRetryPrompt()`
-   (`EndConditionHandler.ts:479-521`) with
-   `{ preCondition: <this step's precondition summary>, endCondition: createConditionEvaluationSummary(prompt.endCondition!.script, evaluationResult, verdict) }`.
-   `EndConditionHandler` doesn't currently receive the step's precondition summary anywhere
-   near `buildRetryPrompt`. Rather than threading it through `RetryContext`, add a read
-   accessor on `PromptQueue` symmetric to the existing writers:
+- **The retry prompt already goes through `CliPromptPreparer.planPrompt`.** `WorkflowExecutor`
+  dispatches retries via the same `executeWithStreaming` path as the first attempt
+  (`WorkflowExecutor.ts:2626-2650`), so a retry prompt substituted in `EndConditionHandler`
+  would be substituted _again_ in `CliPromptPreparer`. That double pass is a live bug: if a
+  script's stdout happens to contain the literal text `$preCondition:stdout`, the second pass
+  expands the _substituted content_.
+- **`EndConditionHandler` has no diagnostic channel.** Unresolved-reference reporting already
+  exists in `CliPromptPreparer` (`PROMPT_DIAGNOSTIC_CODES` — note it is a _module-local_ const
+  at `CliPromptPreparer.ts:57`, not in `DashboardConstants.ts` — consumed at `:244-251`).
+  Substituting there gets diagnostics for free on both first attempt and retry.
+- **Preview falls out for free.** `ExecutionPreviewService.ts:460-481` builds a `WorkflowContext`
+  and calls `planPrompt` directly. With no summaries on that context, `$preCondition:*` resolves
+  empty and reports an unresolved-token diagnostic — exactly the "no data yet" behavior the
+  third call site was going to hand-roll. No changes needed in `ExecutionPreviewService` or
+  `CliJsonResultBuilder`.
+
+**So: substitute in exactly one place — `CliPromptPreparer.planPrompt`** — driven by data carried
+on `WorkflowContext`. `EndConditionHandler.buildRetryPrompt`/`buildPassRetryPrompt` stop
+substituting and return the raw template; `EndConditionEvaluator.buildRetryPrompt()` is deleted.
+
+#### Wiring
+
+1. **`WorkflowContext` gains two value fields** (`WorkflowContextTypes.ts`):
+   `preConditionResult?: ConditionEvaluationSummary` and
+   `endConditionResult?: ConditionEvaluationSummary`. These are _values_, not resolver callbacks —
+   unlike `resolvePriorContextItems` there is no async work; the data is already computed.
+
+2. **`WorkflowExecutor` populates them at its two dispatch sites.** Verified: `WorkflowExecutor`
+   already constructs a **fresh `WorkflowContext` object literal per dispatch** — at
+   `WorkflowExecutor.ts:787-800` (first attempt) and `:2634-2650` (retry). `WorkflowInstance`
+   builds the longer-lived _`WorkflowExecutionContext`_ (`WorkflowInstance.ts:4165`), which is a
+   different type; nothing changes there, and no shared object is mutated.
+   - First-attempt literal (`:787`): set `preConditionResult` only. Deliberately leave
+     `endConditionResult` undefined so the main prompt can never pick up a stale end-condition
+     summary from a previous whole-step retry attempt. This matches the documented rule that
+     `$endCondition:*` is retry-prompt-only, and keeps first-attempt text deterministic.
+   - Retry literal (`:2634`): set both.
+
+3. **Read the summaries through new `PromptQueue` accessors**, symmetric with the four existing
+   writers (`PromptQueue.ts:647-698`):
+
    ```typescript
    public getPreConditionSummary(target: WorkflowAttemptTarget): ConditionEvaluationSummary | undefined
+   public getEndConditionSummary(target: WorkflowAttemptTarget): ConditionEvaluationSummary | undefined
    ```
-   (mirrors `recordPreConditionSummary`/`recordFinalStepPreConditionSummary`,
-   `PromptQueue.ts:647-683` — reads `this.state.results[stepIndex].preCondition` or
-   `this.finalStepRuntime?.preCondition` depending on `target.kind`). `EndConditionHandler`
-   already holds `this.promptQueue`, so this is a same-class read, no new plumbing. Using the
-   already-recorded value (rather than re-threading a fresh copy through `RetryContext`)
-   guarantees the retry prompt sees exactly what the step status panel shows for the same run.
 
-3. **Preview / dry-run.** `ExecutionPreviewService.ts:422-423` and `CliJsonResultBuilder.ts`
-   read `properties.preCondition`/`properties.endCondition` for other purposes today — check
-   whether either renders prompt text a user would expect substituted refs in, and if so route
-   it through the same helper with whatever summary (if any) is available in that context, or
-   through a "no data yet" empty-summary path with the same unresolved-token reporting.
+   (read `this.state.results[stepIndex].preCondition`/`.endCondition` or
+   `this.finalStepRuntime?.preCondition`/`.endCondition` depending on `target.kind`, mirroring
+   `WorkflowExecutor.recordPreConditionSummary` at `WorkflowExecutor.ts:1841-1850`). Using the
+   already-recorded value — rather than re-threading a fresh copy — guarantees the prompt sees
+   exactly what the step status panel shows for the same run, and works from the retry dispatch
+   site even though it lives in a different method than the evaluation.
+
+4. **`CliPromptPreparer.planPrompt` substitutes first.** Call
+   `substituteConditionOutputRefs(originalPromptText, { preCondition: workflowContext?.preConditionResult,
+endCondition: workflowContext?.endConditionResult })` as the very first step, before
+   slash-command detection (`CliPromptPreparer.ts:130-140`). This is a pure text swap with no
+   size/attachment implications (unlike `$previous`, which pulls in a whole XML block via
+   `resolvePriorContextItems`), so doing it unconditionally up front is safe. Each `unresolved`
+   entry becomes a `CompatibilityDiagnostic` under a new code (e.g.
+   `prompt.reference.condition-output-unavailable`) added to the existing module-local
+   `PROMPT_DIAGNOSTIC_CODES` — no new diagnostic plumbing.
 
 ## Editor changes
 
@@ -262,35 +307,68 @@ is a full replacement, not an addition:
 - `RETRY_PROMPT_PLACEHOLDERS` (`DashboardConstants.ts:1722-1729`) survives as the shared
   6-field vocabulary constant (still useful for the completion list and the substitution
   lookup table) — it just stops being paired with brace syntax.
-- Update the two schema description strings that document `{stdout}` etc.
-  (`schemas/workflow-schema.json:843, :847`, and the mirrored `schemas/workflow-schema.yaml`
-  source) to describe `$preCondition:*`/`$endCondition:*` instead.
-- Update docs mentioning the old placeholders: `docs/workflows/end-conditions.md`,
-  `docs/workflows/templates.md`, `docs/guide/quick-start.md`,
-  `docs/guide/your-first-workflow.md` (the `.vitepress/.temp` files are generated — do not
-  hand-edit).
+- `RETRY_PROMPT_PLACEHOLDER_METADATA` is deleted along with the `{`-trigger machinery.
+
+### Full `{...}` migration surface (verified by repo-wide grep)
+
+The original draft listed only two schema files and four docs. The real surface is larger, and
+two entries are **functional, not documentation** — shipped templates that would silently stop
+substituting:
+
+**Functional (must change or the feature regresses):**
+
+- `src/templates/workflows/fix-tests.ctrlyoke.yaml:22` — `{stdout}` inside a live `retryPrompt`.
+- `src/templates/workflows/full-feature.ctrlyoke.yaml:77` — same.
+- `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx:598-601` — the user-facing
+  hint "Type { for retry placeholders like {stderr} and {stdout}".
+
+**Schema / settings:**
+
+- `schemas/workflow-schema.json:843, :847` and the mirrored `schemas/workflow-schema.yaml`.
+- `schemas/settings-schema.json:223, :227` — `retryPrompt`/`passRetryPrompt` descriptions
+  (**missed by the original draft**).
+
+**Prose that teaches the syntax to users and to AI agents:**
+
+- `src/templates/agents/ctrlyoke-workflow-composer.agent.md:38, :46, :122`,
+  `src/templates/agents/ctrlyoke-tech-support.agent.md:148-149, :221`,
+  `src/templates/agents/test-repair.agent.md:7` — shipped agent instructions; leaving them stale
+  actively teaches the removed syntax to the composer agent.
+- `docs/workflows/end-conditions.md`, `docs/workflows/templates.md`,
+  `docs/guide/quick-start.md`, `docs/guide/your-first-workflow.md`, `QUICK_START.md`
+  (the `.vitepress/.temp` files are generated — do not hand-edit).
+- `.github/instructions/templates.instructions.md`.
+- `manual-test/README.md`, `manual-test/retry-max-exhaustion-test.ctrlyoke.json`,
+  `manual-test/retry-multi-step-test.ctrlyoke.json`, `manual-test/test-property-sync.ctrlyoke.yaml`,
+  `manual-test/examples/workflow-properties/shared-end-condition.ctrlyoke.yaml`.
+
+**Leave alone:** `dev/implemented/**`, `dev/rejected/**`, `dev/reference/**` — historical record.
 
 ## File change summary
 
-| File | Change |
-| --- | --- |
-| `src/types/CtrlYokeTypes.ts` | `ConditionEvaluationSummary` gains `expected?`, `compareSource?` |
-| `src/core/orchestration/ScriptExecutionReporter.ts` | `createConditionEvaluationSummary` takes `verdict?: ScriptVerdict` instead of `action?`, copies `expected`/`compareSource` |
-| `src/core/ConditionOutputRefs.ts` | NEW — `substituteConditionOutputRefs`, `ConditionOutputContext` |
-| `src/core/WorkflowExecutor.ts` | Populate `workflowContext.preConditionResult` before dispatching the main prompt; pass verdict into `createConditionEvaluationSummary` calls |
-| `src/core/EndConditionHandler.ts` | `buildRetryPrompt`/`buildPassRetryPrompt` call `substituteConditionOutputRefs` with both phases; read pre-condition summary via new `PromptQueue.getPreConditionSummary` |
-| `src/core/PromptQueue.ts` | NEW `getPreConditionSummary(target)` accessor |
-| `src/core/EndConditionEvaluator.ts` | Remove `buildRetryPrompt` (or delegate to the new helper and deprecate) |
-| `src/types/WorkflowContextTypes.ts` | `WorkflowContext` gains `preConditionResult?: ConditionEvaluationSummary` |
-| `src/core/harness/shared/CliPromptPreparer.ts` | `planPrompt` calls `substituteConditionOutputRefs` first; unresolved `$endCondition:*` → new diagnostic code |
-| `src/utils/FileReferenceParser.ts` | New `parseConditionOutputRefs` (or extended kind), core-side |
-| `src/ui/webview-react/utils/atomicReferences.ts` | Same, webview-side; `findAtomicReferences` emits chips for the two new kinds |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | Remove `{`-placeholder machinery; add `hasPreConditionRef` prop, `createConditionOutputLintExtension`, decoration class |
-| `src/completions/CompletionHelpers.ts` | `getPriorContextCompletions` gains the 12 new entries |
-| `src/ui/webview-react/components/editor/PropertiesDrawer.tsx`, `PromptEditor.tsx` | Thread resolved `hasPreCondition` down to `CodeMirrorEditor` alongside `stepCount`/`hasFinalStep` |
-| `schemas/workflow-schema.json`, `schemas/workflow-schema.yaml` | Update `retryPrompt`/`passRetryPrompt` description strings |
-| `docs/workflows/end-conditions.md`, `docs/workflows/templates.md`, `docs/guide/quick-start.md`, `docs/guide/your-first-workflow.md` | Replace `{stdout}`-style examples |
-| `src/core/ExecutionPreviewService.ts`, `src/cli/CliJsonResultBuilder.ts` | Verify whether preview/dry-run rendering needs the same substitution |
+| File                                                                                                                                | Change                                                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/types/CtrlYokeTypes.ts`                                                                                                        | `ConditionEvaluationSummary` gains `expected?`, `compareSource?`                                                                                                                                                                   |
+| `src/core/orchestration/ScriptExecutionReporter.ts`                                                                                 | `createConditionEvaluationSummary` takes `verdict?: ScriptVerdict` instead of `action?`, copies `expected`/`compareSource`                                                                                                         |
+| `src/core/ConditionOutputRefs.ts`                                                                                                   | NEW — `substituteConditionOutputRefs`, `ConditionOutputContext`                                                                                                                                                                    |
+| `src/core/WorkflowExecutor.ts`                                                                                                      | Populate `preConditionResult` on the first-attempt context literal (`:787-800`) and both fields on the retry literal (`:2634-2650`); pass the details bag into `createConditionEvaluationSummary` calls (`:604`, `:2112`, `:2179`) |
+| `src/core/EndConditionHandler.ts`                                                                                                   | `buildRetryPrompt`/`buildPassRetryPrompt` stop substituting — return the raw template; `recordEndConditionEvaluation` passes `expected`/`compareSource` from `prompt.endCondition`                                                 |
+| `src/core/PromptQueue.ts`                                                                                                           | NEW `getPreConditionSummary(target)` / `getEndConditionSummary(target)` accessors                                                                                                                                                  |
+| `src/core/EndConditionEvaluator.ts`                                                                                                 | Delete `buildRetryPrompt`                                                                                                                                                                                                          |
+| `src/types/WorkflowContextTypes.ts`                                                                                                 | `WorkflowContext` gains `preConditionResult?` and `endConditionResult?: ConditionEvaluationSummary`                                                                                                                                |
+| `src/core/harness/shared/CliPromptPreparer.ts`                                                                                      | `planPrompt` calls `substituteConditionOutputRefs` first (both phases); unresolved refs → new diagnostic code                                                                                                                      |
+| `src/utils/FileReferenceParser.ts`                                                                                                  | New `parseConditionOutputRefs` (or extended kind), core-side                                                                                                                                                                       |
+| `src/ui/webview-react/utils/atomicReferences.ts`                                                                                    | Same, webview-side; `findAtomicReferences` emits chips for the two new kinds                                                                                                                                                       |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`                                                                       | Remove `{`-placeholder machinery; add `hasPreConditionRef` prop, `createConditionOutputLintExtension`, decoration class                                                                                                            |
+| `src/completions/CompletionHelpers.ts`                                                                                              | `getPriorContextCompletions` gains the 12 new entries                                                                                                                                                                              |
+| `src/ui/webview-react/components/editor/PropertiesDrawer.tsx`, `PromptEditor.tsx`                                                   | Thread resolved `hasPreCondition` down to `CodeMirrorEditor` alongside `stepCount`/`hasFinalStep`                                                                                                                                  |
+| `schemas/workflow-schema.json`, `schemas/workflow-schema.yaml`                                                                      | Update `retryPrompt`/`passRetryPrompt` description strings                                                                                                                                                                         |
+| `docs/workflows/end-conditions.md`, `docs/workflows/templates.md`, `docs/guide/quick-start.md`, `docs/guide/your-first-workflow.md` | Replace `{stdout}`-style examples                                                                                                                                                                                                  |
+| `src/templates/workflows/fix-tests.ctrlyoke.yaml`, `full-feature.ctrlyoke.yaml`                                                     | Live `retryPrompt` templates using `{stdout}` — must migrate or the feature regresses                                                                                                                                              |
+| `src/templates/agents/*.agent.md` (3 files)                                                                                         | Shipped agent prose teaching the removed `{...}` syntax                                                                                                                                                                            |
+| `schemas/settings-schema.json`                                                                                                      | `retryPrompt`/`passRetryPrompt` description strings                                                                                                                                                                                |
+| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`                                                                  | `{`-trigger hint text → `$` trigger                                                                                                                                                                                                |
+| `src/core/ExecutionPreviewService.ts`, `src/cli/CliJsonResultBuilder.ts`                                                            | **No change needed** — preview already routes through `planPrompt` (`ExecutionPreviewService.ts:460-481`) and correctly reports unresolved refs when no summaries are available                                                    |
 
 ## Testing
 
@@ -312,19 +390,28 @@ is a full replacement, not an addition:
 - `src/ui/webview-react/test/utils/atomicReferences.test.ts` — chip rendering for the two new
   ref kinds.
 - Schema validation tests — confirm removing the old description text doesn't break any
-  snapshot assuming the old wording.
+  snapshot assuming the old wording. Verified to include `src/test/unit/PromptFileLoader.test.ts`,
+  `src/test/unit/TemplateManager.test.ts`, and `src/test/validationUtils.test.ts`, all of which
+  currently assert `{stdout}`-bearing fixtures.
+- `src/test/harness/hooks.harness.test.ts` also contains `{stdout}` — update the text, but
+  **do not run `npm run test:harness`** (real harnesses, real cost, 30+ minutes).
+- Fenced-code masking: a `$preCondition:stdout` inside a fenced block is left verbatim, matching
+  the invariant established in commit `7ece66af`.
+- Double-substitution guard: a retry prompt whose resolved stdout itself contains the literal
+  text `$preCondition:stdout` must not be expanded a second time — this is the reason
+  substitution happens only in `CliPromptPreparer`.
 
 ## Edge cases
 
-| Scenario | Handling |
-| --- | --- |
-| Step has `preCondition` but it was skipped this run (e.g. workflow resumed mid-run) | `preConditionResult` is `undefined` → `$preCondition:*` resolves empty + unresolved-token diagnostic, same as "not configured" |
-| `preCondition.returns` unset | `$preCondition:expected` → `""`, matching today's `buildRetryPrompt` behavior for unset `returns` |
-| `$preCondition:unknownField` | Left as literal text (forward-compat with `$step:` precedent); worth a follow-up lint for unrecognized field names, not required for v1 |
-| Same step has both `preCondition` and `endCondition`, retry prompt references both | Both resolve independently — `ConditionOutputContext` carries both summaries simultaneously |
-| `$endCondition:*` typed in the main prompt of a step that also has a retry prompt | Lint warns in the main-prompt editor instance (`mode="prompt"`); at runtime, resolves to empty + diagnostic, exactly like the "not configured" case |
-| Workflow-level `preCondition` inherited (not set directly on the step) | `hasPreConditionRef` reflects the *resolved* value (inheritance + `null` override), matching how `PropertiesDrawer` already resolves it for display |
-| `finalStep` loop, `preCondition` re-evaluated each iteration | `PromptQueue.finalStepRuntime.preCondition` is overwritten each iteration (existing behavior); `$preCondition:*` in the finalStep's prompt/retry prompt always sees the *current* iteration's result |
+| Scenario                                                                            | Handling                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Step has `preCondition` but it was skipped this run (e.g. workflow resumed mid-run) | `preConditionResult` is `undefined` → `$preCondition:*` resolves empty + unresolved-token diagnostic, same as "not configured"                                                                       |
+| `preCondition.returns` unset                                                        | `$preCondition:expected` → `""`, matching today's `buildRetryPrompt` behavior for unset `returns`                                                                                                    |
+| `$preCondition:unknownField`                                                        | Left as literal text (forward-compat with `$step:` precedent); worth a follow-up lint for unrecognized field names, not required for v1                                                              |
+| Same step has both `preCondition` and `endCondition`, retry prompt references both  | Both resolve independently — `ConditionOutputContext` carries both summaries simultaneously                                                                                                          |
+| `$endCondition:*` typed in the main prompt of a step that also has a retry prompt   | Lint warns in the main-prompt editor instance (`mode="prompt"`); at runtime, resolves to empty + diagnostic, exactly like the "not configured" case                                                  |
+| Workflow-level `preCondition` inherited (not set directly on the step)              | `hasPreConditionRef` reflects the _resolved_ value (inheritance + `null` override), matching how `PropertiesDrawer` already resolves it for display                                                  |
+| `finalStep` loop, `preCondition` re-evaluated each iteration                        | `PromptQueue.finalStepRuntime.preCondition` is overwritten each iteration (existing behavior); `$preCondition:*` in the finalStep's prompt/retry prompt always sees the _current_ iteration's result |
 
 ## Non-goals
 
