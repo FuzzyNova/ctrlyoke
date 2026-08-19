@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 
 export interface VirtualizedListProps<T> {
   items: T[];
@@ -33,6 +33,28 @@ export function VirtualizedList<T>({
 }: VirtualizedListProps<T>): React.ReactElement {
   const shouldVirtualize = items.length >= threshold;
 
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const [scrollElementReady, markScrollElementResolvable] = useState(false);
+
+  // Keep a focused row in the rendered range even when it falls just outside
+  // the normal overscan window. Keyboard focus must not disappear merely
+  // because a scroll event moved the row across a virtual boundary.
+  const rangeExtractor = React.useCallback(
+    (range: Parameters<typeof defaultRangeExtractor>[0]) => {
+      const indexes = defaultRangeExtractor(range);
+      if (
+        focusedIndex === null ||
+        focusedIndex < 0 ||
+        focusedIndex >= range.count ||
+        indexes.includes(focusedIndex)
+      ) {
+        return indexes;
+      }
+      return [...indexes, focusedIndex].sort((left, right) => left - right);
+    },
+    [focusedIndex]
+  );
+
   const rowVirtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollContainerRef.current,
@@ -41,6 +63,7 @@ export function VirtualizedList<T>({
       return item === undefined ? 0 : estimateItemSize(item, index);
     },
     overscan,
+    rangeExtractor,
     getItemKey: (index) => {
       const item = items[index];
       return item === undefined ? index : getItemKey(item, index);
@@ -56,10 +79,52 @@ export function VirtualizedList<T>({
   // attached, so the virtualizer resolves and observes the real scroll
   // element. Flipping an already-true value bails out, so it costs exactly one
   // extra render.
-  const [, markScrollElementResolvable] = useState(false);
   useLayoutEffect(() => {
     markScrollElementResolvable(true);
   }, []);
+
+  useEffect(() => {
+    if (!shouldVirtualize) {
+      setFocusedIndex(null);
+      return;
+    }
+
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const getFocusedRowIndex = (): number | null => {
+      const activeElement = document.activeElement;
+      if (
+        !(activeElement instanceof Element) ||
+        !container.contains(activeElement)
+      ) {
+        return null;
+      }
+      const row = activeElement.closest<HTMLElement>("[data-index]");
+      const index = row?.dataset.index;
+      return index === undefined ? null : Number(index);
+    };
+
+    const handleFocusIn = (event: FocusEvent): void => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const row = target.closest<HTMLElement>("[data-index]");
+      const index = row?.dataset.index;
+      setFocusedIndex(index === undefined ? null : Number(index));
+    };
+    const handleFocusOut = (): void => {
+      // Let the browser update activeElement before deciding whether focus
+      // moved within the same card, to another row, or outside the list.
+      queueMicrotask(() => setFocusedIndex(getFocusedRowIndex()));
+    };
+
+    container.addEventListener("focusin", handleFocusIn);
+    container.addEventListener("focusout", handleFocusOut);
+    return () => {
+      container.removeEventListener("focusin", handleFocusIn);
+      container.removeEventListener("focusout", handleFocusOut);
+    };
+  }, [scrollContainerRef, scrollElementReady, shouldVirtualize]);
 
   const previousLayoutResetKeyRef = useRef(layoutResetKey);
   useEffect(() => {
@@ -138,10 +203,9 @@ export function VirtualizedList<T>({
             data-index={virtualRow.index}
             style={{
               position: "absolute",
-              top: 0,
+              top: virtualRow.start,
               left: 0,
               width: "100%",
-              transform: `translateY(${virtualRow.start}px)`,
             }}
           >
             {renderItem(item, virtualRow.index)}

@@ -53,6 +53,9 @@ export interface DiffFileCardProps {
   expandedGaps?: DiffGapExpansionState;
   /** Called when the user expands a hidden context gap. */
   onExpandGap?: (gapIndex: number, nextExpandedToLine: number) => void;
+  /** Optional list semantics supplied by DiffFileList for realized rows. */
+  ariaSetSize?: number;
+  ariaPosInSet?: number;
   findQuery?: string;
   findCaseSensitive?: boolean;
   viewType?: "split" | "unified";
@@ -71,6 +74,8 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
   onCollapsedChange,
   expandedGaps,
   onExpandGap,
+  ariaSetSize,
+  ariaPosInSet,
   findQuery,
   findCaseSensitive,
   viewType,
@@ -119,7 +124,12 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
   const pathTitle = diffFilePathTitle(path, oldPath);
 
   return (
-    <div className="border border-panel-border rounded overflow-hidden">
+    <div
+      className="border border-panel-border rounded overflow-hidden"
+      {...(ariaSetSize !== undefined ? { role: "listitem" } : {})}
+      aria-setsize={ariaSetSize}
+      aria-posinset={ariaPosInSet}
+    >
       <div className="sticky top-0 z-10 flex flex-col gap-0.5 border-b border-panel-border bg-editor-bg px-2.5 py-1 text-xs font-mono">
         <div className="flex items-center gap-2">
           {selection &&

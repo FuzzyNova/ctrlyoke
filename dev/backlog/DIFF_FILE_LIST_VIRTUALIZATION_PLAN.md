@@ -308,10 +308,21 @@ split/unified choice from that bucket, and feeds both values into row estimates 
 
 ### Phase 4 — Conditional virtualization
 
-1. Turn on virtualization at the file-count threshold.
-2. Measure realized variable-height rows and invalidate on width/view-type changes.
-3. Confirm sticky file headers remain constrained to their own card inside absolute row wrappers.
-4. Expose list position metadata on realized rows.
+1. [x] Turn on virtualization at the file-count threshold.
+2. [x] Measure realized variable-height rows and invalidate on width/view-type changes.
+3. [x] Confirm sticky file headers remain constrained to their own card inside absolute row wrappers.
+4. [x] Expose list position metadata on realized rows.
+
+Implemented with a 30-file threshold and two-row overscan. The threshold counts
+file rows rather than projected summary/heading rows, while the direct path
+continues to use the same row renderer and spacing. Published row estimates
+are returned directly by the virtualizer; realized outer wrappers are measured,
+and measurements reset when view type, output font size, content-width bucket,
+or a global collapse command changes. Diff cards expose `aria-setsize` and
+`aria-posinset`, and the shared virtual list retains a focused row in its range
+until focus leaves it. Diff wrappers use absolute `top` positioning without a
+transform or overflow so each card's sticky header remains scoped to its own
+`overflow-hidden` card.
 
 ### Phase 5 — Interaction correctness under virtualization
 

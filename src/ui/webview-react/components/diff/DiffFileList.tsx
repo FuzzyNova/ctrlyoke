@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { DiffFileCard, type DiffFileCardProps } from "./DiffFileCard";
+import { VirtualizedList } from "@components/shared/VirtualizedList";
 import { useElementTier } from "@hooks/useElementNarrow";
+import { useUiStore } from "@store/uiStore";
 import {
   DIFF_FILE_CONTENT_WIDTH_BUCKET,
   type DiffFileListRow,
@@ -30,6 +32,11 @@ const EMPTY_COLLAPSED_OVERRIDES = new Map<string, CollapsedOverride>();
 const EMPTY_EXPANDED_GAPS_OVERRIDES = new Map<string, ExpandedGapsOverride>();
 const EMPTY_EXPANDED_GAPS: DiffGapExpansionState = new Map();
 const DIFF_SPLIT_VIEW_THRESHOLD = 1024;
+const DIFF_FILE_LIST_VIRTUALIZATION_THRESHOLD = 30;
+// Diff cards are orders of magnitude more expensive than workflow dropdown
+// rows, so two nearby cards are enough to hide mount/unmount churn. A later
+// fixture pass will calibrate this against real diff-card costs.
+const DIFF_FILE_LIST_VIRTUALIZATION_OVERSCAN = 2;
 const DEFAULT_CONTENT_WIDTH_BUCKET = Math.floor(
   DEFAULT_OUTPUT_CONTENT_WIDTH / DIFF_FILE_CONTENT_WIDTH_BUCKET
 );
@@ -63,6 +70,7 @@ export const DiffFileList: React.FC<DiffFileListProps> = ({
   emptyMessage,
   command,
   selectionSummary,
+  scrollContainerRef,
 }) => {
   // The list owns the one responsive measurement for all of its cards. The
   // bucket is a primitive so useElementTier only re-renders at meaningful
@@ -80,10 +88,12 @@ export const DiffFileList: React.FC<DiffFileListProps> = ({
     DIFF_SPLIT_VIEW_THRESHOLD
       ? "split"
       : "unified";
+  const outputFontSize = useUiStore((state) => state.outputFontSize);
   const rows = projectDiffFileListRows(
     { groups, selectionSummary },
     {
       collapsed: command.collapsed,
+      outputFontSize,
       outputContentWidth,
       viewType,
     }
@@ -101,6 +111,10 @@ export const DiffFileList: React.FC<DiffFileListProps> = ({
           : []
       ),
     [fileRowKeySignature]
+  );
+  const filePositionByKey = useMemo(
+    () => new Map(fileRows.map((row, index) => [row.key, index + 1])),
+    [fileRows]
   );
 
   const [collapsedOverrides, setCollapsedOverrides] = useState(
@@ -202,45 +216,75 @@ export const DiffFileList: React.FC<DiffFileListProps> = ({
     );
   }
 
-  return (
-    <div ref={contentWidthRef} className="flex flex-col">
-      {rows.map((row) => (
-        <div key={row.key} className={diffFileListRowGapClass(row)}>
-          {row.kind === "selection-summary" && row.content}
-          {row.kind === "group-heading" && (
-            <div className="flex flex-col gap-0.5">
-              <h3 className="text-xs font-semibold text-description-fg">
-                {row.heading}
-              </h3>
-              {row.headingHint && (
-                <p className="text-xs text-description-fg italic">
-                  {row.headingHint}
-                </p>
-              )}
-            </div>
-          )}
-          {row.kind === "file" && (
-            <DiffFileCard
-              {...row.file}
-              collapsed={
-                currentCollapsedOverrides.get(row.key)?.collapsed ??
-                command.collapsed
-              }
-              onCollapsedChange={(collapsed) =>
-                handleCollapsedChange(row.key, collapsed)
-              }
-              expandedGaps={
-                currentExpandedGapsOverrides.get(row.key)?.expandedGaps ??
-                EMPTY_EXPANDED_GAPS
-              }
-              viewType={viewType}
-              onExpandGap={(gapIndex, nextExpandedToLine) =>
-                handleExpandGap(row.key, gapIndex, nextExpandedToLine)
-              }
-            />
+  const renderRow = (row: DiffFileListRow): React.ReactNode => (
+    <div key={row.key} className={diffFileListRowGapClass(row)}>
+      {row.kind === "selection-summary" && row.content}
+      {row.kind === "group-heading" && (
+        <div className="flex flex-col gap-0.5">
+          <h3 className="text-xs font-semibold text-description-fg">
+            {row.heading}
+          </h3>
+          {row.headingHint && (
+            <p className="text-xs text-description-fg italic">
+              {row.headingHint}
+            </p>
           )}
         </div>
-      ))}
+      )}
+      {row.kind === "file" && (
+        <DiffFileCard
+          {...row.file}
+          ariaSetSize={fileRows.length}
+          ariaPosInSet={filePositionByKey.get(row.key)}
+          collapsed={
+            currentCollapsedOverrides.get(row.key)?.collapsed ??
+            command.collapsed
+          }
+          onCollapsedChange={(collapsed) =>
+            handleCollapsedChange(row.key, collapsed)
+          }
+          expandedGaps={
+            currentExpandedGapsOverrides.get(row.key)?.expandedGaps ??
+            EMPTY_EXPANDED_GAPS
+          }
+          viewType={viewType}
+          onExpandGap={(gapIndex, nextExpandedToLine) =>
+            handleExpandGap(row.key, gapIndex, nextExpandedToLine)
+          }
+        />
+      )}
+    </div>
+  );
+
+  const shouldVirtualize =
+    fileRows.length >= DIFF_FILE_LIST_VIRTUALIZATION_THRESHOLD &&
+    scrollContainerRef !== undefined;
+  const layoutResetKey = [
+    viewType,
+    outputFontSize,
+    contentWidthBucket,
+    command.version,
+    command.collapsed,
+  ].join(":");
+
+  return (
+    <div ref={contentWidthRef} className="flex flex-col">
+      {shouldVirtualize && scrollContainerRef ? (
+        <VirtualizedList
+          items={rows}
+          getItemKey={(row) => row.key}
+          renderItem={renderRow}
+          scrollContainerRef={scrollContainerRef}
+          estimateItemSize={(row) => row.estimateSize}
+          // The file-count check above deliberately controls this branch;
+          // summary and heading rows must not move the threshold.
+          threshold={1}
+          overscan={DIFF_FILE_LIST_VIRTUALIZATION_OVERSCAN}
+          layoutResetKey={layoutResetKey}
+        />
+      ) : (
+        rows.map(renderRow)
+      )}
     </div>
   );
 };

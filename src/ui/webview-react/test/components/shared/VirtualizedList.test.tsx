@@ -112,7 +112,7 @@ describe("VirtualizedList", () => {
     expect(spacer).toHaveStyle({ position: "relative", width: "100%" });
     expect(spacer?.querySelector("[data-index='0']")).toHaveStyle({
       position: "absolute",
-      transform: "translateY(0px)",
+      top: "0px",
     });
     await waitFor(() =>
       expect(Number(spacer?.style.height.replace("px", ""))).toBeGreaterThan(
