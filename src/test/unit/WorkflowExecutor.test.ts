@@ -20,11 +20,15 @@ import {
 } from "../../types/CtrlYokeTypes";
 import {
   HARNESS_IDS,
+  CONTEXT_RESOLUTION_FAILURE_MODES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  PROMPT_DIAGNOSTIC_CODES,
   STEP_STATUS,
   CONDITION_ACTIONS,
 } from "../../types/DashboardConstants";
+import { configService } from "../../config/CtrlYokeConfigService";
+import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import { CliEvent } from "../../types/WebviewMessageTypes";
 import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapter";
 import { Log } from "../../utils/Log";
@@ -109,6 +113,69 @@ async function resumeQueueExecution(queue: PromptQueue): Promise<void> {
 }
 
 suite("WorkflowExecutor finalStep phase 2", () => {
+  test("gates unknown MCP references in fail mode but reports and continues in warn mode", async () => {
+    const promptText = "Use /mcp:missing-for-strict-resolution-test";
+    const failQueue = new PromptQueue();
+    failQueue.loadPrompts({ steps: [{ prompt: promptText }] });
+    const failIntegration = new MockHarnessIntegration(undefined, false);
+    const failDiagnostics: CompatibilityDiagnostic[] = [];
+    let failIntegrationLookups = 0;
+
+    configService.setCliOverlay({
+      execution: {
+        strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+      },
+    });
+    try {
+      await assert.rejects(
+        makeExecutor(failQueue).execute(failIntegration, {
+          ...makeContext(failIntegration),
+          getIntegrationForPrompt: () => {
+            failIntegrationLookups += 1;
+            return failIntegration;
+          },
+          reportCompatibilityDiagnostics: (diagnostics) =>
+            failDiagnostics.push(...diagnostics),
+        }),
+        /Step blocked by execution\.strictContextResolution="fail"/u
+      );
+      assert.strictEqual(failIntegration.sentPrompts.length, 0);
+      assert.strictEqual(failIntegrationLookups, 0);
+      assert.strictEqual(failDiagnostics.length, 1);
+      assert.strictEqual(
+        failDiagnostics[0].code,
+        PROMPT_DIAGNOSTIC_CODES.UNKNOWN_MCP_REFERENCE
+      );
+    } finally {
+      configService.setCliOverlay({});
+    }
+
+    const warnQueue = new PromptQueue();
+    warnQueue.loadPrompts({ steps: [{ prompt: promptText }] });
+    const warnIntegration = new MockHarnessIntegration(undefined, false);
+    const warnDiagnostics: CompatibilityDiagnostic[] = [];
+    configService.setCliOverlay({
+      execution: {
+        strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+      },
+    });
+    try {
+      await makeExecutor(warnQueue).execute(warnIntegration, {
+        ...makeContext(warnIntegration),
+        reportCompatibilityDiagnostics: (diagnostics) =>
+          warnDiagnostics.push(...diagnostics),
+      });
+      assert.deepStrictEqual(warnIntegration.sentPrompts, [promptText]);
+      assert.strictEqual(warnDiagnostics.length, 1);
+      assert.strictEqual(
+        warnDiagnostics[0].code,
+        PROMPT_DIAGNOSTIC_CODES.UNKNOWN_MCP_REFERENCE
+      );
+    } finally {
+      configService.setCliOverlay({});
+    }
+  });
+
   test("resolves prompt-file references at execution time without replacing queue state", async () => {
     const root = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-executor-prompt-file-")

@@ -33,8 +33,11 @@ import { TempFileManager } from "../../utils/TempFileManager";
 import { Log } from "../../utils/Log";
 import {
   CLI_EVENT_TYPES,
+  CONTEXT_RESOLUTION_FAILURE_MODES,
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
+  formatContextResolutionFailureMessage,
+  isContextResolutionDiagnostic,
   type ExecutionMode,
   type HarnessId,
   HOOK_EVENT_ORDER,
@@ -983,6 +986,19 @@ export class CliIntegration extends HarnessIntegration {
         promptStartedAt === undefined
           ? undefined
           : Math.max(0, promptStartedAt - 1)
+      );
+    }
+
+    const blockingDiagnostics = prepared.diagnostics.filter((diagnostic) =>
+      isContextResolutionDiagnostic(diagnostic.code)
+    );
+    if (
+      ConfigurationUtils.getContextResolutionFailureMode() ===
+        CONTEXT_RESOLUTION_FAILURE_MODES.FAIL &&
+      blockingDiagnostics.length > 0
+    ) {
+      throw new Error(
+        formatContextResolutionFailureMessage(blockingDiagnostics)
       );
     }
 

@@ -6,10 +6,15 @@ import { suite, test, setup, teardown } from "mocha";
 import type * as vscode from "vscode";
 import { CliIntegration } from "../../core/harness/CliIntegration";
 import {
+  CONTEXT_RESOLUTION_FAILURE_MODES,
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
 } from "../../types/DashboardConstants";
-import { HARNESS_IDS, PERMISSION_MODES } from "../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  PERMISSION_MODES,
+  PROMPT_DIAGNOSTIC_CODES,
+} from "../../types/DashboardConstants";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import type {
@@ -201,6 +206,24 @@ function getInjectIncompatibilityReason(
     curr,
     currSessionId
   );
+}
+
+function createPromptPreparationDiagnostic(
+  code: string,
+  message: string
+): CompatibilityDiagnostic {
+  return {
+    code,
+    severity: "warning",
+    harnessId: HARNESS_IDS.CLAUDE_CLI,
+    capability: "prompt",
+    state: {
+      fidelity: "partial",
+      mechanism: "none",
+      verification: "unknown",
+    },
+    message,
+  };
 }
 
 suite("CliIntegration", () => {
@@ -559,6 +582,164 @@ suite("CliIntegration", () => {
         kind: FINAL_STEP_PHASES.QUEUE,
         stepIndex: 1,
       });
+    } finally {
+      integration.dispose();
+    }
+  });
+
+  test("blocks resolution diagnostics before preparing the CLI session in fail mode", async () => {
+    const cases = [
+      {
+        code: PROMPT_DIAGNOSTIC_CODES.UNKNOWN_SKILL_REFERENCE,
+        message:
+          'Skill "missing" referenced by /skill:missing was not found among discovered skills.',
+      },
+      {
+        code: PROMPT_DIAGNOSTIC_CODES.UNRESOLVED_REFERENCE,
+        message:
+          'Reference "@missing.md" could not be attached: file was not found.',
+      },
+      {
+        code: PROMPT_DIAGNOSTIC_CODES.UNKNOWN_SECRET_REFERENCE,
+        message:
+          'Secret "MISSING" referenced by !MISSING is not available as a managed secret or environment variable.',
+      },
+    ];
+
+    for (const currentCase of cases) {
+      configService.setCliOverlay({
+        execution: {
+          strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+        },
+      });
+      const integration = createHeadlessIntegration();
+      const prompt: PromptStep = { prompt: "run" };
+      const surfaced: CompatibilityDiagnostic[] = [];
+      let preparePromptCalls = 0;
+      const session = (integration as any).createExecutionSession(
+        prompt,
+        {
+          promptIndex: 0,
+          allPrompts: [prompt],
+          reportCompatibilityDiagnostics: (
+            diagnostics: readonly CompatibilityDiagnostic[]
+          ) => surfaced.push(...diagnostics),
+        },
+        createResolvedProperties({ executionMode: EXECUTION_MODES.HEADLESS }),
+        undefined
+      );
+      const diagnostic = createPromptPreparationDiagnostic(
+        currentCase.code,
+        currentCase.message
+      );
+      (integration as any).promptPreparer.preparePrompt = async () => ({
+        promptWithInstruction: prompt.prompt,
+        tempFilePaths: [],
+        diagnostics: [diagnostic],
+      });
+      session.preparePrompt = () => {
+        preparePromptCalls += 1;
+      };
+
+      try {
+        await assert.rejects(
+          (integration as any).initializeExecutionSession(session, false),
+          /Step blocked by execution\.strictContextResolution="fail"/u
+        );
+        assert.strictEqual(preparePromptCalls, 0);
+        assert.strictEqual(surfaced.length, 1);
+        assert.strictEqual(surfaced[0].code, currentCase.code);
+      } finally {
+        integration.dispose();
+      }
+    }
+  });
+
+  test("reports resolution diagnostics and prepares the session in warn mode", async () => {
+    const cases = [
+      PROMPT_DIAGNOSTIC_CODES.UNKNOWN_SKILL_REFERENCE,
+      PROMPT_DIAGNOSTIC_CODES.UNRESOLVED_REFERENCE,
+      PROMPT_DIAGNOSTIC_CODES.UNKNOWN_SECRET_REFERENCE,
+    ];
+
+    for (const code of cases) {
+      configService.setCliOverlay({
+        execution: {
+          strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+        },
+      });
+      const integration = createHeadlessIntegration();
+      const prompt: PromptStep = { prompt: "run" };
+      const surfaced: CompatibilityDiagnostic[] = [];
+      let preparePromptCalls = 0;
+      const session = (integration as any).createExecutionSession(
+        prompt,
+        {
+          promptIndex: 0,
+          allPrompts: [prompt],
+          reportCompatibilityDiagnostics: (
+            diagnostics: readonly CompatibilityDiagnostic[]
+          ) => surfaced.push(...diagnostics),
+        },
+        createResolvedProperties({ executionMode: EXECUTION_MODES.HEADLESS }),
+        undefined
+      );
+      const diagnostic = createPromptPreparationDiagnostic(
+        code,
+        `diagnostic for ${code}`
+      );
+      (integration as any).promptPreparer.preparePrompt = async () => ({
+        promptWithInstruction: prompt.prompt,
+        tempFilePaths: [],
+        diagnostics: [diagnostic],
+      });
+      session.preparePrompt = () => {
+        preparePromptCalls += 1;
+      };
+
+      try {
+        await (integration as any).initializeExecutionSession(session, false);
+        assert.strictEqual(preparePromptCalls, 1);
+        assert.strictEqual(surfaced.length, 1);
+        assert.strictEqual(surfaced[0].code, code);
+      } finally {
+        integration.dispose();
+      }
+    }
+  });
+
+  test("does not block advisory prompt diagnostics in fail mode", async () => {
+    configService.setCliOverlay({
+      execution: {
+        strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+      },
+    });
+    const integration = createHeadlessIntegration();
+    const prompt: PromptStep = { prompt: "run" };
+    let preparePromptCalls = 0;
+    const session = (integration as any).createExecutionSession(
+      prompt,
+      undefined,
+      createResolvedProperties({ executionMode: EXECUTION_MODES.HEADLESS }),
+      undefined
+    );
+    (integration as any).promptPreparer.preparePrompt = async () => ({
+      promptWithInstruction: prompt.prompt,
+      tempFilePaths: [],
+      diagnostics: [
+        createPromptPreparationDiagnostic(
+          PROMPT_DIAGNOSTIC_CODES.OVER_INLINE_CAP,
+          "prompt content was truncated"
+        ),
+      ],
+    });
+    session.preparePrompt = () => {
+      preparePromptCalls += 1;
+    };
+
+    try {
+      await (integration as any).initializeExecutionSession(session, false);
+      assert.strictEqual(preparePromptCalls, 1);
     } finally {
       integration.dispose();
     }

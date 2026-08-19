@@ -383,18 +383,21 @@ step failure does today (not a warning row; an actual failure/error state).
       bad `~<hash>` produces an `UNRESOLVED_REFERENCE`-equivalent entry in
       `skippedReferences` (mirroring the existing `@file` missing-ref test
       pattern already used for `skippedReferences`).
-- [ ] **Phase 4 — Per-step "fail" gate, `CliIntegration.ts`.** Insert the
+- [x] **Phase 4 — Per-step "fail" gate, `CliIntegration.ts`.** Inserted the
       code-filtered blocking check after diagnostics are logged/reported and
-      before `session.preparePrompt(...)` spawns. Add tests forcing an unknown
-      `/skill:`, an unresolved `@file`, and a missing `!NAME` (via
-      `CliPromptPreparer`'s path, not the whole-workflow preflight) each to
-      confirm they throw only when the mode is `"fail"` — plus a test that a
-      non-resolution diagnostic (e.g. `prompt.content.over-inline-cap`) does
-      **not** block even in `"fail"` mode.
-- [ ] **Phase 5 — Per-step "fail" gate, `WorkflowExecutor.ts`.** Same pattern
-      for `mcpNormalization.diagnostics`, right before
-      `getIntegrationForPrompt`. Add a test forcing an unknown `/mcp:` to
-      confirm the same fail/warn split.
+      before `session.preparePrompt(...)` spawns. Tests force an unknown
+      `/skill:`, an unresolved `@file`, and a missing `!NAME` through
+      `CliPromptPreparer`'s diagnostic path (not the whole-workflow preflight),
+      verify the fail/warn split and warn-mode reporting, and confirm a
+      non-resolution diagnostic (`prompt.content.over-inline-cap`) does
+      **not** block even in `"fail"` mode. The tests also verify that blocking
+      occurs before session preparation.
+- [x] **Phase 5 — Per-step "fail" gate, `WorkflowExecutor.ts`.** Applied the
+      same code-filtered gate for `mcpNormalization.diagnostics`, immediately
+      before `getIntegrationForPrompt`, with a shared assertion helper reused
+      by retry prompts so retries cannot bypass strict mode. Tests force an
+      unknown `/mcp:` and confirm the same fail/warn split, reporting, and
+      no-integration lookup in fail mode.
 - [ ] **Phase 6 — Verify the warning-row pipeline.** Assert by test that a
       failed `~<hash>` ref reaches `reportCompatibilityDiagnostics` →
       `updateStatusMessage` with WARNING severity in `"warn"` mode, which is

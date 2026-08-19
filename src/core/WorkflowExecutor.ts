@@ -21,6 +21,9 @@ import {
 } from "../types/WorkflowContextTypes";
 import {
   EXECUTION_MODES,
+  CONTEXT_RESOLUTION_FAILURE_MODES,
+  formatContextResolutionFailureMessage,
+  isContextResolutionDiagnostic,
   STEP_STATUS,
   STATUS_MESSAGE_SEVERITY,
   FINAL_STEP_PHASES,
@@ -32,6 +35,7 @@ import {
   ATTEMPT_COST_UNAVAILABLE_REASONS,
   type ConditionAction,
 } from "../types/DashboardConstants";
+import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import { PromptQueue } from "./PromptQueue";
 import { HarnessIntegration } from "./HarnessIntegration";
 import {
@@ -725,6 +729,9 @@ export class WorkflowExecutor {
               })),
       };
       context.reportCompatibilityDiagnostics?.(mcpNormalization.diagnostics);
+      this.assertContextResolutionDiagnosticsAllowed(
+        mcpNormalization.diagnostics
+      );
 
       const integration = context.getIntegrationForPrompt(
         prompt,
@@ -2628,6 +2635,9 @@ export class WorkflowExecutor {
               })),
       };
       context.reportCompatibilityDiagnostics?.(mcpNormalization.diagnostics);
+      this.assertContextResolutionDiagnosticsAllowed(
+        mcpNormalization.diagnostics
+      );
 
       if (context.historyFilePath && context.outputHistoryManager) {
         await context.outputHistoryManager.recordRetryScheduled(
@@ -2703,6 +2713,23 @@ export class WorkflowExecutor {
 
       return result.responseText;
     };
+  }
+
+  private assertContextResolutionDiagnosticsAllowed(
+    diagnostics: readonly CompatibilityDiagnostic[]
+  ): void {
+    const blockingDiagnostics = diagnostics.filter((diagnostic) =>
+      isContextResolutionDiagnostic(diagnostic.code)
+    );
+    if (
+      ConfigurationUtils.getContextResolutionFailureMode() ===
+        CONTEXT_RESOLUTION_FAILURE_MODES.FAIL &&
+      blockingDiagnostics.length > 0
+    ) {
+      throw new Error(
+        formatContextResolutionFailureMessage(blockingDiagnostics)
+      );
+    }
   }
 
   private async resolveEffectivePrompt(
