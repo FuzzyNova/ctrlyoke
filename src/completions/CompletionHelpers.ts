@@ -26,6 +26,10 @@ import {
 } from "./ContextReferenceBuilder";
 import { SYMBOL_KIND_ICONS } from "../types/SymbolKindConstants";
 import { clearSlashTokenCompletionCache } from "./SlashTokenCompletionHelpers";
+import {
+  RETRY_PROMPT_PLACEHOLDERS,
+  SCRIPT_OUTPUT_SOURCES,
+} from "../types/DashboardConstants";
 
 export {
   clearSlashTokenCompletionCache,
@@ -1142,6 +1146,19 @@ export function getPriorContextCompletions(
     { label: "finalStep", detail: "Previous finalStep output" },
     { label: "allFinalStep", detail: "All finalStep outputs" },
     { label: "step:", detail: "Specific steps, e.g. $step:1,3-5" },
+    ...[
+      SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+      SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+    ].flatMap((phase) =>
+      Object.values(RETRY_PROMPT_PLACEHOLDERS).map((field) => ({
+        label: `${phase}:${field}`,
+        detail: `${
+          phase === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
+            ? "Pre-condition"
+            : "End-condition"
+        } script ${field}`,
+      }))
+    ),
   ];
 
   return keywords

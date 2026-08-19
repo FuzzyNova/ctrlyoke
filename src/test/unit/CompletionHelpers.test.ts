@@ -15,7 +15,12 @@ import {
   findWorkspaceSymbolByUriNameAndRange,
   mapSymbolKindToReferenceKind,
   getSecretCompletions,
+  getPriorContextCompletions,
 } from "../../completions/CompletionHelpers";
+import {
+  RETRY_PROMPT_PLACEHOLDERS,
+  SCRIPT_OUTPUT_SOURCES,
+} from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { SYMBOL_KIND_ICONS } from "../../types/SymbolKindConstants";
 import { SkillDiscovery, type SkillInfo } from "../../utils/SkillDiscovery";
@@ -45,6 +50,36 @@ suite("CompletionHelpers", () => {
       ]
     );
     assert.ok(items.every((item) => !("value" in item)));
+  });
+
+  test("offers condition-output completions and filters them fuzzily", () => {
+    const items = getPriorContextCompletions("");
+    const conditionItems = items.filter((item) =>
+      [
+        SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+        SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+      ].some((phase) => item.label.startsWith(`${phase}:`))
+    );
+    const expectedLabels = [
+      SCRIPT_OUTPUT_SOURCES.PRE_CONDITION,
+      SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+    ].flatMap((phase) =>
+      Object.values(RETRY_PROMPT_PLACEHOLDERS).map(
+        (field) => `${phase}:${field}`
+      )
+    );
+
+    assert.deepStrictEqual(
+      conditionItems.map((item) => item.label),
+      expectedLabels
+    );
+    assert.ok(conditionItems.every((item) => item.detail?.includes("script")));
+    assert.deepStrictEqual(
+      getPriorContextCompletions("endcondition:exit").map((item) => item.label),
+      [
+        `${SCRIPT_OUTPUT_SOURCES.END_CONDITION}:${RETRY_PROMPT_PLACEHOLDERS.EXIT_CODE}`,
+      ]
+    );
   });
 
   // Install fake visible editors whose selections drive getHashSelectionCompletions.
