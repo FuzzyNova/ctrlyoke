@@ -2,8 +2,8 @@
 
 ## Status
 
-Phase 3 complete (editor parser/chips and completions); schema/template
-migration remains for later phases. **Revised 2026-08-19** after tracing the code: substitution
+Phase 4 complete (editor parser/chips, completions, linting, and placeholder removal);
+schema/template migration remains for phase 5. **Revised 2026-08-19** after tracing the code: substitution
 collapsed from three call sites to one (`CliPromptPreparer`), the
 `createConditionEvaluationSummary` third parameter changed from `ScriptVerdict` to a details
 bag, fenced-code masking added as a requirement, and the `{...}` migration surface expanded

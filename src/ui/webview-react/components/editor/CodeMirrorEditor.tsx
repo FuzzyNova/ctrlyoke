@@ -15,6 +15,7 @@ import { createThemeExtension } from "@utils/codemirrorTheme";
 import {
   DEFAULT_COMPLETION_ICON,
   findAtomicReferences,
+  findConditionOutputRefs,
   findContextReferenceMatches,
   findInlinePriorContextRefs,
   getFencedBlockRanges,
@@ -32,7 +33,6 @@ import {
   insertCompletionText,
   pickedCompletion,
   type Completion,
-  type CompletionContext,
   type CompletionResult,
 } from "@codemirror/autocomplete";
 import { history, historyKeymap, insertTab } from "@codemirror/commands";
@@ -53,17 +53,16 @@ import { openContextReference } from "@utils/contextReferenceActions";
 import {
   USER_FEEDBACK_SEVERITY,
   CTRLYOKE_SLASH_TOKEN_KINDS,
+  SCRIPT_OUTPUT_SOURCES,
 } from "@root/types/DashboardConstants";
 import {
   MESSAGE_TYPES,
   EDITOR_PLACEHOLDER_TEXT,
-  RETRY_PROMPT_PLACEHOLDERS,
   PROMPT_EDITOR_INSERT_MODES,
   MAX_PASTED_IMAGE_BYTES,
   PASTING_IMAGE_PLACEHOLDER,
   PASTED_IMAGE_SAVE_TIMEOUT_MS,
   mimeTypeToImageExtension,
-  type RetryPromptPlaceholder,
   type PromptEditorInsertRequest,
 } from "../../types/messages";
 import { WebviewLog } from "../../utils/logger";
@@ -105,7 +104,7 @@ interface CodeMirrorEditorProps {
   dicUri: string;
   /** When true, the editor is read-only (no edits allowed). */
   readOnly?: boolean;
-  /** Prompt mode keeps standard completions; endCondition adds retry placeholders. */
+  /** Editor mode controls which condition-output references are valid. */
   mode?: CodeMirrorEditorMode;
   /** Visual surface used by the editor theme. */
   surface?: CodeMirrorEditorSurface;
@@ -120,6 +119,8 @@ interface CodeMirrorEditorProps {
   stepCount?: number;
   /** Whether a final step is configured (for $finalStep/$allFinalStep validation). */
   hasFinalStep?: boolean;
+  /** Whether this step has an effective pre-condition configured. */
+  hasPreCondition?: boolean;
   /** Pending external insert request from VS Code context menus. */
   pendingInsertRequest?: PromptEditorInsertRequest | null;
   /** Called after a pending external insert has been applied. */
@@ -166,36 +167,6 @@ interface PendingPaste {
 const LINK_TOUCH_MOVE_THRESHOLD_PX = 10;
 const LINK_TOUCH_LONG_PRESS_MS = 500;
 
-const RETRY_PROMPT_PLACEHOLDER_METADATA: Record<
-  RetryPromptPlaceholder,
-  { detail: string; info: string }
-> = {
-  [RETRY_PROMPT_PLACEHOLDERS.STDOUT]: {
-    detail: "stdout",
-    info: "Validation script stdout",
-  },
-  [RETRY_PROMPT_PLACEHOLDERS.STDERR]: {
-    detail: "stderr",
-    info: "Validation script stderr",
-  },
-  [RETRY_PROMPT_PLACEHOLDERS.EXPECTED_VALUE]: {
-    detail: "expected",
-    info: "Configured expected value",
-  },
-  [RETRY_PROMPT_PLACEHOLDERS.ACTUAL_VALUE]: {
-    detail: "actual",
-    info: "Actual comparison value (resolved from compareSource)",
-  },
-  [RETRY_PROMPT_PLACEHOLDERS.EXIT_CODE]: {
-    detail: "exitCode",
-    info: "Numeric exit code from the validation script",
-  },
-  [RETRY_PROMPT_PLACEHOLDERS.COMPARE_SOURCE]: {
-    detail: "compareSource",
-    info: "Comparison source: stdout, stderr, exitCode, or auto",
-  },
-};
-
 // Maps VS Code CompletionItemKind values to the codicon that best represents
 // them — the single source shared by the completions dropdown (built from a
 // live item's `kind`) and atomic reference chips (resolved asynchronously for
@@ -235,38 +206,6 @@ const COMPLETION_KIND_ICONS: Record<number, string> = {
   23: "symbol-operator", // Operator
   24: "symbol-type-parameter", // TypeParameter
 };
-
-export function getRetryPlaceholderCompletions(
-  context: Pick<CompletionContext, "state" | "pos" | "explicit">,
-  mode: CodeMirrorEditorMode = "endCondition"
-): CompletionResult | null {
-  if (mode !== "endCondition") return null;
-
-  const line = context.state.doc.lineAt(context.pos);
-  const textBefore = line.text.slice(0, context.pos - line.from);
-  const openBraceIndex = textBefore.lastIndexOf("{");
-  if (openBraceIndex === -1) return null;
-
-  const afterBrace = textBefore.slice(openBraceIndex + 1);
-  if (/[\s}]/.test(afterBrace)) return null;
-
-  const from = line.from + openBraceIndex + 1;
-  const options: Completion[] = Object.values(RETRY_PROMPT_PLACEHOLDERS).map(
-    (placeholder) => ({
-      label: placeholder,
-      apply: `${placeholder}}`,
-      type: "symbol-variable",
-      detail: RETRY_PROMPT_PLACEHOLDER_METADATA[placeholder].detail,
-      info: RETRY_PROMPT_PLACEHOLDER_METADATA[placeholder].info,
-      boost: 1000,
-    })
-  );
-
-  return {
-    from,
-    options,
-  };
-}
 
 function shouldBypassCodeMirrorFiltering(
   request: PendingCompletionRequest | null
@@ -667,6 +606,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   } = props;
   const stepCountRef = useRef(props.stepCount ?? 0);
   const hasFinalStepRef = useRef(props.hasFinalStep ?? false);
+  const hasPreConditionRef = useRef(props.hasPreCondition ?? false);
+  const modeRef = useRef<CodeMirrorEditorMode>(mode);
   const placeholderText = props.placeholder || EDITOR_PLACEHOLDER_TEXT.DEFAULT;
 
   const editorRef = useRef<HTMLDivElement>(null);
@@ -783,6 +724,20 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       forceLinting(viewRef.current);
     }
   }, [props.hasFinalStep]);
+
+  useEffect(() => {
+    hasPreConditionRef.current = props.hasPreCondition ?? false;
+    if (viewRef.current) {
+      forceLinting(viewRef.current);
+    }
+  }, [props.hasPreCondition]);
+
+  useEffect(() => {
+    modeRef.current = mode;
+    if (viewRef.current) {
+      forceLinting(viewRef.current);
+    }
+  }, [mode]);
 
   useEffect(() => {
     if (!pendingInsertRequest || !viewRef.current || mode !== "prompt") {
@@ -1320,13 +1275,6 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     [isMultiRootWorkspace, vscode]
   );
 
-  const retryPlaceholderCompletions = useCallback(
-    (context: CompletionContext): CompletionResult | null => {
-      return getRetryPlaceholderCompletions(context, mode);
-    },
-    [mode]
-  );
-
   // Initialize CodeMirror editor
   useEffect(() => {
     if (!editorRef.current) return;
@@ -1401,14 +1349,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         // overflow:hidden chain, so the tooltip renders above the footer.
         tooltips({ parent: document.body, tooltipSpace: keyboardTooltipSpace }),
         autocompletion({
-          override:
-            mode === "endCondition"
-              ? [
-                  retryPlaceholderCompletions,
-                  customCompletions,
-                  pathCompletions,
-                ]
-              : [customCompletions, pathCompletions],
+          override: [customCompletions, pathCompletions],
           activateOnTyping: true,
           closeOnBlur: true,
           optionClass: (completion) =>
@@ -1455,10 +1396,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           : [
               createLinkDecorationExtension(referenceValidityRef.current),
               createPriorContextDecorationExtension(),
+              createConditionOutputDecorationExtension(),
               createSlashTokenDecorationExtension(),
             ]),
         createFileRefDecorationExtension(isMultiRootWorkspace),
         createPriorContextLintExtension(stepCountRef, hasFinalStepRef),
+        createConditionOutputLintExtension(hasPreConditionRef, modeRef),
         createClickHandlerExtension(vscode, stepCountRef),
         // iOS Safari: enable the word-suggestion bar above the keyboard and
         // autocapitalization. CodeMirror defaults these to "off" which suppresses
@@ -1555,7 +1498,6 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     placeholderText,
     customCompletions,
     pathCompletions,
-    retryPlaceholderCompletions,
     validateContextReferences,
     handleImagePaste,
     mode,
@@ -1854,6 +1796,9 @@ function createPromptDecorationThemeExtension() {
       fontStyle: "italic",
     },
     ".cm-prior-context-ref": {
+      fontStyle: "italic",
+    },
+    ".cm-condition-output-ref": {
       fontStyle: "italic",
     },
     // Atomic-mode reference chip: the box/icon/label styling is the shared
@@ -2611,6 +2556,44 @@ function createPriorContextDecorationExtension() {
   );
 }
 
+/** Apply a marker to inline condition-output references. */
+function createConditionOutputDecorationExtension() {
+  return ViewPlugin.fromClass(
+    class implements PluginValue {
+      decorations;
+
+      constructor(view: EditorView) {
+        this.decorations = this.buildDecorations(view);
+      }
+
+      update(update: ViewUpdate) {
+        if (update.docChanged || update.viewportChanged) {
+          this.decorations = this.buildDecorations(update.view);
+        }
+      }
+
+      buildDecorations(view: EditorView) {
+        const builder = new RangeSetBuilder<Decoration>();
+        const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
+        for (const { from, to } of view.visibleRanges) {
+          const text = view.state.doc.sliceString(from, to);
+          const refs = findConditionOutputRefs(text, from);
+          for (const ref of refs) {
+            if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
+            builder.add(
+              ref.from,
+              ref.to,
+              Decoration.mark({ class: "cm-condition-output-ref" })
+            );
+          }
+        }
+        return builder.finish();
+      }
+    },
+    { decorations: (v) => v.decorations }
+  );
+}
+
 /** Warn when $prior-context refs point to steps that don't exist. */
 function createPriorContextLintExtension(
   stepCountRef: React.RefObject<number>,
@@ -2664,6 +2647,58 @@ function createPriorContextLintExtension(
                 message: `Prior context not found — ${label}`,
               });
             }
+          }
+        }
+      }
+
+      return diagnostics;
+    },
+    {
+      delay: 300,
+      needsRefresh: (update) => update.docChanged || update.viewportChanged,
+    }
+  );
+}
+
+/** Warn when condition-output refs are unavailable in the current editor context. */
+export function createConditionOutputLintExtension(
+  hasPreConditionRef: React.RefObject<boolean>,
+  modeRef: React.RefObject<CodeMirrorEditorMode>
+) {
+  return linter(
+    (view): Diagnostic[] => {
+      const hasPreCondition = hasPreConditionRef.current ?? false;
+      const mode = modeRef.current ?? "prompt";
+      const diagnostics: Diagnostic[] = [];
+      const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
+
+      for (const { from, to } of view.visibleRanges) {
+        const text = view.state.doc.sliceString(from, to);
+        const refs = findConditionOutputRefs(text, from);
+
+        for (const ref of refs) {
+          if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
+
+          if (
+            ref.phase === SCRIPT_OUTPUT_SOURCES.PRE_CONDITION &&
+            !hasPreCondition
+          ) {
+            diagnostics.push({
+              from: ref.from,
+              to: ref.to,
+              severity: "warning",
+              message: `$preCondition:${ref.field} has no effect — this step has no pre-condition configured`,
+            });
+          } else if (
+            ref.phase === SCRIPT_OUTPUT_SOURCES.END_CONDITION &&
+            mode !== "endCondition"
+          ) {
+            diagnostics.push({
+              from: ref.from,
+              to: ref.to,
+              severity: "warning",
+              message: `$endCondition:${ref.field} is only available in the retry prompt, not the initial prompt`,
+            });
           }
         }
       }

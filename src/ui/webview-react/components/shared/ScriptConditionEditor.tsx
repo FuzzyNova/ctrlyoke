@@ -100,6 +100,8 @@ interface ScriptConditionEditorProps {
   idPrefix?: string;
   /** Label for the script input field (defaults to "Script") */
   scriptLabel?: string;
+  /** Whether the edited step has an effective pre-condition configured. */
+  hasPreCondition?: boolean;
 }
 
 /**
@@ -131,6 +133,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   disabled = false,
   idPrefix = variant,
   scriptLabel = "Script",
+  hasPreCondition = false,
 }) => {
   const v = value ?? {};
   const actionOptions =
@@ -560,13 +563,14 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
                 readOnly={disabled}
                 mode="endCondition"
                 surface="input"
+                hasPreCondition={hasPreCondition}
                 minHeightClassName="min-h-[96px]"
                 maxHeightClassName="max-h-[220px]"
                 className={`overflow-hidden rounded border border-input-border bg-input-bg focus-within:border-focus-border ${disabled ? "opacity-50" : ""}`}
               />
               <span className="text-xxs text-description-fg">
-                Type {"{"} for retry placeholders like {"{actual}"} and{" "}
-                {"{expected}"}.
+                Type $ for condition-output references like{" "}
+                {"$preCondition:stdout"} and {"$endCondition:stdout"}.
               </span>
             </div>
           )}
@@ -591,13 +595,14 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
                 readOnly={disabled}
                 mode="endCondition"
                 surface="input"
+                hasPreCondition={hasPreCondition}
                 minHeightClassName="min-h-[96px]"
                 maxHeightClassName="max-h-[220px]"
                 className={`overflow-hidden rounded border border-input-border bg-input-bg focus-within:border-focus-border ${disabled ? "opacity-50" : ""}`}
               />
               <span className="text-xxs text-description-fg">
-                Type {"{"} for retry placeholders like {"{stderr}"} and{" "}
-                {"{stdout}"}.
+                Type $ for condition-output references like{" "}
+                {"$preCondition:stderr"} and {"$endCondition:stdout"}.
               </span>
             </div>
           )}

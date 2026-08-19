@@ -225,6 +225,13 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       ? selectionTarget.index
       : prompts.length;
   const hasFinalStep = finalStep !== null;
+  const effectivePreCondition =
+    properties.preCondition !== undefined
+      ? properties.preCondition
+      : workflowProperties.preCondition !== undefined
+        ? workflowProperties.preCondition
+        : globalSettings.defaultPreCondition;
+  const hasPreCondition = effectivePreCondition != null;
   const isRunning = isWorkflowRunning(executionState);
   const selectedPromptStatus =
     selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
@@ -1185,6 +1192,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             onQueue={handleEditorQueue}
             stepCount={stepCount}
             hasFinalStep={hasFinalStep}
+            hasPreCondition={hasPreCondition}
             pendingInsertRequest={pendingPromptEditorInsert}
             onInsertApplied={consumePromptEditorInsert}
           />
@@ -1195,6 +1203,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             onClose={closePropertiesDrawer}
             activePage={drawerActivePage}
             onRequestPage={handleCompatibilityReview}
+            hasPreCondition={hasPreCondition}
           />
         </div>
       )}
