@@ -48,4 +48,56 @@ suite("PromptQueue condition summaries", () => {
       endCondition: { ...summary, passed: true },
     });
   });
+
+  test("reads condition summaries for queue and final-step targets", () => {
+    const queue = new PromptQueue();
+    queue.loadPrompts({ steps: [{ prompt: "step" }] });
+    const queuePreCondition = { ...summary, expected: "0" };
+    const queueEndCondition = {
+      ...summary,
+      passed: true,
+      compareSource: "stdout" as const,
+    };
+    queue.recordPreConditionSummary(0, queuePreCondition);
+    queue.recordEndConditionSummary(0, queueEndCondition);
+
+    assert.deepStrictEqual(
+      queue.getPreConditionSummary({
+        kind: FINAL_STEP_PHASES.QUEUE,
+        stepIndex: 0,
+      }),
+      queuePreCondition
+    );
+    assert.deepStrictEqual(
+      queue.getEndConditionSummary({
+        kind: FINAL_STEP_PHASES.QUEUE,
+        stepIndex: 0,
+      }),
+      queueEndCondition
+    );
+    assert.strictEqual(
+      queue.getPreConditionSummary({
+        kind: FINAL_STEP_PHASES.QUEUE,
+        stepIndex: 1,
+      }),
+      undefined
+    );
+
+    queue.recordFinalStepPreConditionSummary(queuePreCondition);
+    queue.recordFinalStepEndConditionSummary(queueEndCondition);
+    assert.deepStrictEqual(
+      queue.getPreConditionSummary({
+        kind: FINAL_STEP_PHASES.FINAL_STEP,
+        loopIndex: 0,
+      }),
+      queuePreCondition
+    );
+    assert.deepStrictEqual(
+      queue.getEndConditionSummary({
+        kind: FINAL_STEP_PHASES.FINAL_STEP,
+        loopIndex: 0,
+      }),
+      queueEndCondition
+    );
+  });
 });

@@ -20,6 +20,7 @@
 
 import {
   GIT_CHANGE_KINDS,
+  SCRIPT_OUTPUT_SOURCES,
   type GitChangeKind,
 } from "../types/DashboardConstants";
 import { parseRangeNotation } from "./RangeNotationParser";
@@ -72,6 +73,19 @@ export interface InlinePriorContextMatch {
   ref: InlinePriorContextRef;
   /** The full matched token, e.g. "$previous" or "$step:1,3-5". */
   token: string;
+}
+
+export interface ConditionOutputMatch {
+  phase:
+    | typeof SCRIPT_OUTPUT_SOURCES.PRE_CONDITION
+    | typeof SCRIPT_OUTPUT_SOURCES.END_CONDITION;
+  field: string;
+  /** The full matched token, e.g. "$preCondition:stdout". */
+  token: string;
+  /** Offset of the first character of the matched token in the source text. */
+  startOffset: number;
+  /** Offset one past the last character of the matched token in the source text. */
+  endOffset: number;
 }
 
 /**
@@ -335,6 +349,46 @@ export function parseInlinePriorContextRefs(
       }
       matches.push({ ref: { kind: "step", indices }, token });
     }
+  }
+
+  return matches;
+}
+
+/**
+ * Parse condition-output references from prompt text.
+ *
+ * Unknown phases are ignored so future dollar-token namespaces can pass
+ * through unchanged. Unknown fields on a recognized phase are returned for
+ * the substitution layer to leave untouched.
+ */
+export function parseConditionOutputRefs(text: string): ConditionOutputMatch[] {
+  const matches: ConditionOutputMatch[] = [];
+  const maskedText = maskFencedCodeBlocks(text);
+  const regex = new RegExp(
+    `${NOT_AFTER_BOUNDARY}\\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\\-]*)?)`,
+    "g"
+  );
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(maskedText)) !== null) {
+    const body = match[1];
+    const separatorIndex = body.indexOf(":");
+    const phase = separatorIndex === -1 ? body : body.slice(0, separatorIndex);
+    if (
+      phase !== SCRIPT_OUTPUT_SOURCES.PRE_CONDITION &&
+      phase !== SCRIPT_OUTPUT_SOURCES.END_CONDITION
+    ) {
+      continue;
+    }
+
+    const field = separatorIndex === -1 ? "" : body.slice(separatorIndex + 1);
+    matches.push({
+      phase,
+      field,
+      token: match[0],
+      startOffset: match.index,
+      endOffset: match.index + match[0].length,
+    });
   }
 
   return matches;

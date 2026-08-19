@@ -464,7 +464,11 @@ export class EndConditionHandler {
   ): void {
     const summary = createConditionEvaluationSummary(
       prompt.endCondition?.script ?? "",
-      evaluationResult
+      evaluationResult,
+      {
+        expected: prompt.endCondition?.returns,
+        compareSource: prompt.endCondition?.compareSource,
+      }
     );
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       this.promptQueue.recordEndConditionSummary(target.stepIndex, summary);

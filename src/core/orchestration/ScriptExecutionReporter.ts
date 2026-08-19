@@ -122,7 +122,11 @@ export interface ScriptExecutionReport {
 export function createConditionEvaluationSummary(
   script: string,
   result: EvaluationResult,
-  action?: ScriptVerdict["action"]
+  details?: {
+    action?: ConditionAction;
+    expected?: string;
+    compareSource?: CompareSource;
+  }
 ): ConditionEvaluationSummary {
   const summary: ConditionEvaluationSummary = {
     passed: result.passed,
@@ -133,8 +137,14 @@ export function createConditionEvaluationSummary(
     stderr: result.stderr,
     durationMs: result.duration,
   };
-  if (action !== undefined) {
-    summary.action = action;
+  if (details?.action !== undefined) {
+    summary.action = details.action;
+  }
+  if (details?.expected !== undefined) {
+    summary.expected = details.expected;
+  }
+  if (details?.compareSource !== undefined) {
+    summary.compareSource = details.compareSource;
   }
   if (result.exitCode !== undefined) {
     summary.exitCode = result.exitCode;

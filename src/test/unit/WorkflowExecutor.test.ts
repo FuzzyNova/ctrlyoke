@@ -388,6 +388,8 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       passed: true,
       action: CONDITION_ACTIONS.CONTINUE,
       script: `node -e "process.stdout.write('pre-output')"`,
+      expected: "pre-output",
+      compareSource: "stdout",
       actual: "pre-output",
       actualSource: "stdout",
       stdout: "pre-output",

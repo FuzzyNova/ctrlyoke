@@ -218,6 +218,7 @@ suite("EndConditionHandler", () => {
     assert.deepStrictEqual(queue.getState().results[0].endCondition, {
       passed: true,
       script: "check-results.js",
+      expected: "ok",
       actual: "ok",
       actualSource: "stdout",
       stdout: "ok",
@@ -447,6 +448,7 @@ suite("EndConditionHandler", () => {
     assert.deepStrictEqual(queue.getState().results[0].endCondition, {
       passed: false,
       script: "check-results.js",
+      expected: "ok",
       actual: "",
       actualSource: "exitCode",
       stdout: "partial stdout",

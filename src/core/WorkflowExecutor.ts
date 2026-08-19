@@ -604,7 +604,11 @@ export class WorkflowExecutor {
           createConditionEvaluationSummary(
             resolvedPreCondition.script,
             preResult,
-            preReport.verdict.action
+            {
+              action: preReport.verdict.action,
+              expected: preReport.verdict.expected,
+              compareSource: preReport.verdict.compareSource,
+            }
           )
         );
 
@@ -2111,7 +2115,11 @@ export class WorkflowExecutor {
         target,
         createConditionEvaluationSummary(
           prompt.endCondition?.script ?? "",
-          missingScriptResult
+          missingScriptResult,
+          {
+            expected: prompt.endCondition?.returns,
+            compareSource: prompt.endCondition?.compareSource,
+          }
         )
       );
       return this.handleEvaluationError(
@@ -2176,7 +2184,14 @@ export class WorkflowExecutor {
     if (evaluationResult.errored) {
       this.recordEndConditionSummary(
         target,
-        createConditionEvaluationSummary(endCondition.script, evaluationResult)
+        createConditionEvaluationSummary(
+          endCondition.script,
+          evaluationResult,
+          {
+            expected: endCondition.returns,
+            compareSource: endCondition.compareSource,
+          }
+        )
       );
       return this.handleEvaluationError(
         context,

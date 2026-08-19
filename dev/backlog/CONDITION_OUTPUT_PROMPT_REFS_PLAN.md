@@ -2,7 +2,7 @@
 
 ## Status
 
-Design plan, not yet implemented. **Revised 2026-08-19** after tracing the code: substitution
+Phase 1 complete (pure data layer and tests). **Revised 2026-08-19** after tracing the code: substitution
 collapsed from three call sites to one (`CliPromptPreparer`), the
 `createConditionEvaluationSummary` third parameter changed from `ScriptVerdict` to a details
 bag, fenced-code masking added as a requirement, and the `{...}` migration surface expanded
