@@ -336,7 +336,7 @@ its box here (plus any correction to this document that the work uncovers).
       `GET /api/workspace-viewer/search` route, with unit coverage per the Test Plan.
 - [x] **3 — Client data layer.** `hostedApi.workspaceSearch()`; `workspaceViewerStore` search state
       and `activeTab` widening; `truncateSnippet()` moved into `utils/string.ts`.
-- [ ] **4 — Search pane.** `WorkspaceSearchPane.tsx` + `WorkspaceSearchPane.test.tsx`.
+- [x] **4 — Search pane.** `WorkspaceSearchPane.tsx` + `WorkspaceSearchPane.test.tsx`.
 - [ ] **5 — Wiring.** Header tab, modal three-way pane switch, Explorer toolbar shortcut, and the
       existing tests those touch.
 
