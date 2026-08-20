@@ -14,19 +14,23 @@ import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import {
   CLI_EVENT_TYPES,
+  CONTEXT_RESOLUTION_FAILURE_MODES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
   STEP_STATUS,
   HARNESS_IDS,
+  WORKTREE_MODES,
   type HarnessId,
 } from "../../types/DashboardConstants";
 import { PromptStep } from "../../types/CtrlYokeTypes";
+import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { ExecutionLeaseConflictError } from "../../core/orchestration/ExecutionRootLeaseManager";
+import { configService } from "../../config/CtrlYokeConfigService";
 
 /** Test-only shim mirroring OutputHistoryManager.test.ts's initTestRun helper. */
 async function initTestRun(
@@ -58,6 +62,12 @@ class MockPlatform implements PlatformAdapter {
   }
   getExtensionPath(): string {
     return process.cwd();
+  }
+}
+
+class IneligibleMockPlatform extends MockPlatform {
+  override getNamedWorkspaceRoots() {
+    return [];
   }
 }
 
@@ -1773,6 +1783,235 @@ suite("WorkflowInstance append-and-continue", () => {
       persistedStatusMessages[0].message,
       statusMessages.find((entry) => entry.severity === "error")?.message
     );
+  });
+
+  test("deduplicates compatibility live pushes while persisting after history starts", () => {
+    const statusMessages: Array<{
+      stepIndex: number;
+      message: string;
+      severity: string;
+    }> = [];
+    const dashboardSink: any = {
+      updateStatusMessage: (
+        stepIndex: number,
+        message: string,
+        severity: string
+      ) => {
+        statusMessages.push({ stepIndex, message, severity });
+      },
+    };
+    const instance = new WorkflowInstance(
+      new MockPlatform(),
+      dashboardSink,
+      new MockIntegrationFactory(new MockPlatform()),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const persistedStatusMessages: Array<{
+      filePath: string;
+      message: string;
+      severity: string;
+    }> = [];
+    (instance as any).outputHistoryManager.appendStatusMessage = async (
+      filePath: string,
+      _target: unknown,
+      statusMessage: { message: string; severity: string }
+    ) => {
+      persistedStatusMessages.push({
+        filePath,
+        message: statusMessage.message,
+        severity: statusMessage.severity,
+      });
+    };
+    const diagnostic: CompatibilityDiagnostic = {
+      code: "compatibility.test",
+      severity: "warning",
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      capability: "images",
+      state: {
+        fidelity: "unsupported",
+        mechanism: "none",
+        verification: "unknown",
+      },
+      consumer: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      message: "Images are not supported.",
+    };
+
+    (instance as any).reportCompatibilityDiagnostics([diagnostic], 1234);
+    (instance as any).activeHistoryFilePath = "history.json";
+    (instance as any).reportCompatibilityDiagnostics([diagnostic], 1234);
+
+    assert.deepStrictEqual(statusMessages, [
+      {
+        stepIndex: 0,
+        message: diagnostic.message,
+        severity: diagnostic.severity,
+      },
+    ]);
+    assert.deepStrictEqual(persistedStatusMessages, [
+      {
+        filePath: "history.json",
+        message: diagnostic.message,
+        severity: diagnostic.severity,
+      },
+    ]);
+  });
+
+  test("reports and persists missing-secret warnings", async () => {
+    const missingSecretName = `CTRLYOKE_MISSING_${Date.now()}`;
+    const statusMessages: Array<{ message: string; severity: string }> = [];
+    const persistedStatusMessages: Array<{
+      filePath: string;
+      message: string;
+      severity: string;
+    }> = [];
+    const dashboardSink: any = {
+      updateExecutionStarted: () => {},
+      updateStepsExtended: () => {},
+      updateProgress: () => {},
+      updateStatusMessage: (
+        _stepIndex: number,
+        message: string,
+        severity: string
+      ) => {
+        statusMessages.push({ message, severity });
+      },
+    };
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    instance.promptQueue.loadPrompts({
+      steps: [{ prompt: "missing secret", secrets: [missingSecretName] }],
+    });
+    instance.setCurrentPromptFile("workflow.ctrlyoke.json", {
+      steps: [{ prompt: "missing secret", secrets: [missingSecretName] }],
+    });
+    (instance as any).activeHistoryFilePath = "history.json";
+    (instance as any).outputHistoryManager.appendStatusMessage = async (
+      filePath: string,
+      _target: unknown,
+      statusMessage: { message: string; severity: string }
+    ) => {
+      persistedStatusMessages.push({
+        filePath,
+        message: statusMessage.message,
+        severity: statusMessage.severity,
+      });
+    };
+    (instance as any).ensureRunnerLock = async () => {};
+    (instance as any).prepareExecutionWorktree = async () => {};
+    (instance as any).computeTargetRunIndices = async () => new Map();
+    (instance as any).startWorkflowExecution = async () => {};
+
+    try {
+      configService.setCliOverlay({
+        execution: {
+          strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+        },
+      });
+      await (instance as any).executeLoadedPromptFile(
+        undefined,
+        false,
+        "history.json",
+        true
+      );
+    } finally {
+      configService.setCliOverlay({});
+    }
+
+    assert.strictEqual(statusMessages.length, 1);
+    assert.strictEqual(statusMessages[0].severity, "warning");
+    assert.strictEqual(persistedStatusMessages.length, 1);
+    assert.deepStrictEqual(persistedStatusMessages[0], {
+      filePath: "history.json",
+      message: statusMessages[0].message,
+      severity: statusMessages[0].severity,
+    });
+  });
+
+  test("reports and persists inherited-worktree notices", async () => {
+    const statusMessages: Array<{ message: string; severity: string }> = [];
+    const persistedStatusMessages: Array<{
+      filePath: string;
+      message: string;
+      severity: string;
+    }> = [];
+    const dashboardSink: any = {
+      updateExecutionStarted: () => {},
+      updateStepsExtended: () => {},
+      updateProgress: () => {},
+      updateStatusMessage: (
+        _stepIndex: number,
+        message: string,
+        severity: string
+      ) => {
+        statusMessages.push({ message, severity });
+      },
+    };
+    const platform = new IneligibleMockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    instance.promptQueue.loadPrompts({ steps: [{ prompt: "worktree" }] });
+    instance.setCurrentPromptFile("workflow.ctrlyoke.json", {
+      steps: [{ prompt: "worktree" }],
+    });
+    (instance as any).activeHistoryFilePath = "history.json";
+    (instance as any).outputHistoryManager.appendStatusMessage = async (
+      filePath: string,
+      _target: unknown,
+      statusMessage: { message: string; severity: string }
+    ) => {
+      persistedStatusMessages.push({
+        filePath,
+        message: statusMessage.message,
+        severity: statusMessage.severity,
+      });
+    };
+    (instance as any).ensureRunnerLock = async () => {};
+    (instance as any).prepareExecutionWorktree = async () => {};
+    (instance as any).computeTargetRunIndices = async () => new Map();
+    (instance as any).startWorkflowExecution = async () => {};
+
+    try {
+      configService.setCliOverlay({
+        defaults: {
+          worktree: { mode: WORKTREE_MODES.NAMED, branch: "notice-test" },
+        },
+      });
+      await (instance as any).executeLoadedPromptFile(
+        undefined,
+        false,
+        "history.json",
+        true
+      );
+    } finally {
+      configService.setCliOverlay({});
+    }
+
+    assert.strictEqual(statusMessages.length, 1);
+    assert.strictEqual(statusMessages[0].severity, "warning");
+    assert.strictEqual(persistedStatusMessages.length, 1);
+    assert.deepStrictEqual(persistedStatusMessages[0], {
+      filePath: "history.json",
+      message: statusMessages[0].message,
+      severity: statusMessages[0].severity,
+    });
   });
 
   test("keeps an earlier harness terminal alive when the next prompt switches harnesses", () => {

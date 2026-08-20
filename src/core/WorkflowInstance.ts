@@ -121,6 +121,7 @@ import {
   OutputHistoryManager,
   type DefinitionRevisionContext,
 } from "./orchestration/OutputHistoryManager";
+import { StatusMessageReporter } from "./orchestration/StatusMessageReporter";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { HarnessCapabilityRegistry } from "./HarnessCapabilityRegistry";
@@ -271,6 +272,7 @@ export class WorkflowInstance {
 
   /** Per-workflow dashboard sink (wrapped with WorkflowTaggedSink to inject workflowId) */
   private readonly dashboardSink: IDashboardSink | undefined;
+  private readonly statusMessageReporter: StatusMessageReporter;
 
   /** Manages all output capture Maps and replay logic for background workflows. */
   private readonly outputCaptureBuffer: OutputCaptureBuffer;
@@ -350,36 +352,6 @@ export class WorkflowInstance {
       workspaceRoot: string;
     }
   >();
-
-  /**
-   * Compatibility facts already posted to the dashboard for the run in
-   * progress, keyed by code/harness/capability/message. Compatibility is
-   * checked from more than one place — the preflight analysis in
-   * `executeLoadedPromptFile()` and the per-launch permission translation in
-   * `CliIntegration.runExecutionSession()` — and both can legitimately fire
-   * more than once per run (step continuations, inject-mode fallback,
-   * resumed sessions). Without this, the same "Allowed/Denied Tools are NOT
-   * ENFORCED" sentence repeats once per firing. Cleared at the start of each
-   * fresh (non-continuation) run in `executeLoadedPromptFile()` so a later
-   * run still reports its own applicable warnings.
-   */
-  private reportedCompatibilityDiagnosticKeys = new Set<string>();
-
-  /**
-   * Compatibility facts already written to this run's history, tracked
-   * separately from `reportedCompatibilityDiagnosticKeys`. The earliest
-   * report — the preflight analysis in `executeLoadedPromptFile()` — fires
-   * before this run's history file exists (`resolveHistoryFilePath()`
-   * resolves to "" until `startWorkflowExecution` sets
-   * `activeHistoryFilePath`, since falling back to the queue's `runRef` at
-   * that point risks writing into the *previous*, already-completed run —
-   * see the `promotedRunRef` comment in `executeLoadedPromptFile()`). A
-   * single shared "already reported" set would let that first, unwritable
-   * occurrence permanently suppress the later occurrence that actually has
-   * somewhere to persist to. Cleared alongside
-   * `reportedCompatibilityDiagnosticKeys`.
-   */
-  private persistedCompatibilityDiagnosticKeys = new Set<string>();
 
   // ─────────────────────────────────────────────────────────────────────────
   // Streaming event forwarding — aggregates events from all execution integrations
@@ -486,6 +458,39 @@ export class WorkflowInstance {
     this.executionWorkspaceIdentity =
       getExecutionWorkspaceIdentity(executionWorkspace);
     this.outputHistoryManager = new OutputHistoryManager(resolvedWorkspacePath);
+    this.statusMessageReporter = new StatusMessageReporter(
+      () => this.dashboardSink,
+      () => {
+        const filePath = this.resolveHistoryFilePath();
+        return filePath
+          ? { filePath, manager: this.outputHistoryManager }
+          : undefined;
+      },
+      (target, message, severity) => {
+        if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+          if (target.stepIndex === undefined) {
+            throw new Error("Queue status message target requires stepIndex");
+          }
+          this._workflowStatusMessageEmitter.fire({
+            stepIndex: target.stepIndex,
+            message,
+            severity,
+          });
+        } else {
+          if (target.loopIndex === undefined) {
+            throw new Error(
+              "Final-step status message target requires loopIndex"
+            );
+          }
+          this.outputCaptureBuffer.onFinalStepStatusMessage(
+            target.loopIndex,
+            message,
+            severity
+          );
+        }
+      },
+      () => this.id
+    );
     this.outputHistoryManager.setTokenTotalsChangedHandler(
       async (_historyFilePath, tokenTotals) => {
         this.promptQueue.setTokenTotals(tokenTotals);
@@ -638,8 +643,6 @@ export class WorkflowInstance {
     diagnostics: readonly CompatibilityDiagnostic[],
     timestampMs?: number
   ): void {
-    const historyFilePath = this.resolveHistoryFilePath();
-
     for (const diagnostic of diagnostics) {
       const key = JSON.stringify([
         diagnostic.code,
@@ -652,49 +655,16 @@ export class WorkflowInstance {
           ? diagnostic.consumer.stepIndex
           : 0;
       const diagnosticTimestampMs = timestampMs ?? Date.now();
-
-      // Same fact, live-pushed once per run regardless of how many times this
-      // method fires — see `reportedCompatibilityDiagnosticKeys`.
-      if (!this.reportedCompatibilityDiagnosticKeys.has(key)) {
-        this.reportedCompatibilityDiagnosticKeys.add(key);
-        this.dashboardSink?.updateStatusMessage(
-          stepIndex,
-          diagnostic.message,
-          diagnostic.severity,
-          this.id,
-          diagnosticTimestampMs
-        );
-      }
-
-      // Persist alongside the live push so the warning survives navigating
-      // away and back — same pattern as WorkflowExecutor.trackStatusMessage().
-      // Tracked independently of the live-push dedup above: the earliest call
-      // (preflight, before this run's history file exists) has nothing to
-      // persist to, so it must not block a later call — once execution is
-      // underway and a history file exists — from writing it. See
-      // `persistedCompatibilityDiagnosticKeys`.
-      if (
-        historyFilePath &&
-        !this.persistedCompatibilityDiagnosticKeys.has(key)
-      ) {
-        this.persistedCompatibilityDiagnosticKeys.add(key);
-        this.outputHistoryManager
-          .appendStatusMessage(
-            historyFilePath,
-            { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
-            {
-              message: diagnostic.message,
-              severity: diagnostic.severity,
-              timestamp: diagnosticTimestampMs,
-            }
-          )
-          .catch((err) =>
-            Log.warn(
-              "Failed to append compatibility diagnostic to history:",
-              err
-            )
-          );
-      }
+      this.statusMessageReporter.report(
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
+        diagnostic.message,
+        diagnostic.severity,
+        {
+          timestampMs: diagnosticTimestampMs,
+          liveDedupeKey: key,
+          persistDedupeKey: key,
+        }
+      );
     }
   }
 
@@ -1552,8 +1522,7 @@ export class WorkflowInstance {
     // applicable warnings are reported at least once, even if the previous
     // run already reported the identical fact.
     if (!continueFromCurrent && !isAppendContinuation && !isIdleContinuation) {
-      this.reportedCompatibilityDiagnosticKeys.clear();
-      this.persistedCompatibilityDiagnosticKeys.clear();
+      this.statusMessageReporter.resetDedupeState();
     }
 
     try {
@@ -1973,45 +1942,23 @@ export class WorkflowInstance {
         )}.`;
         const timestampMs = Date.now();
         const stepIndex = currentQueueState.currentIndex;
-        this.dashboardSink?.updateStatusMessage(
-          stepIndex,
+        this.statusMessageReporter.report(
+          { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
           missingSecretNotice,
           STATUS_MESSAGE_SEVERITY.WARNING,
-          this.id,
-          timestampMs
+          { timestampMs }
         );
-        if (historyFilePath) {
-          await this.outputHistoryManager.appendStatusMessage(
-            historyFilePath,
-            { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
-            {
-              message: missingSecretNotice,
-              severity: STATUS_MESSAGE_SEVERITY.WARNING,
-              timestamp: timestampMs,
-            }
-          );
-        }
       }
 
       if (worktreeNotice && historyFilePath) {
         await this.promptQueue.updateWorktreeNotice(worktreeNotice);
         const timestampMs = Date.now();
         const stepIndex = currentQueueState.currentIndex;
-        this.dashboardSink?.updateStatusMessage(
-          stepIndex,
+        this.statusMessageReporter.report(
+          { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
           worktreeNotice,
           STATUS_MESSAGE_SEVERITY.WARNING,
-          this.id,
-          timestampMs
-        );
-        await this.outputHistoryManager.appendStatusMessage(
-          historyFilePath,
-          { kind: FINAL_STEP_PHASES.QUEUE, stepIndex },
-          {
-            message: worktreeNotice,
-            severity: STATUS_MESSAGE_SEVERITY.WARNING,
-            timestamp: timestampMs,
-          }
+          { timestampMs }
         );
       }
 
@@ -2115,38 +2062,34 @@ export class WorkflowInstance {
       const executionFailureTimestampMs = Date.now();
       const executionFailureStepIndex =
         this.promptQueue.getState().currentIndex;
-      this.dashboardSink?.updateStatusMessage(
-        executionFailureStepIndex,
-        executionFailureStatusMessage,
-        STATUS_MESSAGE_SEVERITY.ERROR,
-        this.id,
-        executionFailureTimestampMs
-      );
-      // Persist alongside the live push so the error survives navigating away
-      // and back — same pattern as WorkflowExecutor.trackStatusMessage() and
-      // the worktreeNotice/missingSecretNames writes above. Without this the
-      // row only exists in the live in-memory dashboard state and vanishes
-      // once the user switches workflows and returns.
-      if (runToFinalize) {
-        await this.outputHistoryManager
-          .appendStatusMessage(
-            runToFinalize,
-            {
-              kind: FINAL_STEP_PHASES.QUEUE,
-              stepIndex: executionFailureStepIndex,
-            },
-            {
-              message: executionFailureStatusMessage,
-              severity: STATUS_MESSAGE_SEVERITY.ERROR,
-              timestamp: executionFailureTimestampMs,
-            }
-          )
-          .catch((err) =>
-            Log.warn(
-              "Failed to append execution-failure status message to history:",
-              err
-            )
-          );
+      const resolvedHistoryFilePath = this.resolveHistoryFilePath();
+      if (runToFinalize && runToFinalize !== resolvedHistoryFilePath) {
+        // This early-failure path can finalize the promoted run before the
+        // active-history field is assigned. Temporarily point the reporter at
+        // the exact run that was finalized rather than silently changing the
+        // row's destination.
+        const previousActiveHistoryFilePath = this.activeHistoryFilePath;
+        this.activeHistoryFilePath = runToFinalize;
+        this.statusMessageReporter.report(
+          {
+            kind: FINAL_STEP_PHASES.QUEUE,
+            stepIndex: executionFailureStepIndex,
+          },
+          executionFailureStatusMessage,
+          STATUS_MESSAGE_SEVERITY.ERROR,
+          { timestampMs: executionFailureTimestampMs }
+        );
+        this.activeHistoryFilePath = previousActiveHistoryFilePath;
+      } else {
+        this.statusMessageReporter.report(
+          {
+            kind: FINAL_STEP_PHASES.QUEUE,
+            stepIndex: executionFailureStepIndex,
+          },
+          executionFailureStatusMessage,
+          STATUS_MESSAGE_SEVERITY.ERROR,
+          { timestampMs: executionFailureTimestampMs }
+        );
       }
     }
   }
