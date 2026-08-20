@@ -927,9 +927,13 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       const scriptProperties = {
         type: STEP_TYPES.SCRIPT,
         ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
-        ...(scriptOnPass !== "continue" && { onPass: scriptOnPass }),
-        ...(scriptOnFail !== "stopWorkflow" && { onFail: scriptOnFail }),
-        ...(scriptCompareSource !== "auto" && {
+        ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && {
+          onPass: scriptOnPass,
+        }),
+        ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && {
+          onFail: scriptOnFail,
+        }),
+        ...(scriptCompareSource !== COMPARE_SOURCES.AUTO && {
           compareSource: scriptCompareSource,
         }),
         ...(scriptReturns && { returns: scriptReturns }),
@@ -938,7 +942,18 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         }),
         ...(!stepEnabled && { enabled: false }),
       };
-      const clearProperties = stepEnabled ? ["enabled"] : undefined;
+      const clearProperties = [
+        ...(scriptTimeout === undefined ? ["timeout"] : []),
+        ...(scriptOnPass === CONDITION_ACTIONS.CONTINUE ? ["onPass"] : []),
+        ...(scriptOnFail === CONDITION_ACTIONS.STOP_WORKFLOW ? ["onFail"] : []),
+        ...(scriptCompareSource === COMPARE_SOURCES.AUTO
+          ? ["compareSource"]
+          : []),
+        ...(!scriptReturns ? ["returns"] : []),
+        ...(scriptExecutionMode === undefined ? ["executionMode"] : []),
+        ...(stepEnabled ? ["enabled"] : []),
+        ...(!promptName.trim() ? ["name"] : []),
+      ];
 
       if (selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
         postWorkflowDefinitionMutation(vscode, {

@@ -188,21 +188,22 @@ function buildPromptStepChange(
   properties: unknown,
   promptName?: string,
   clearProperties?: string[]
-): { updates: Partial<WorkflowStep> } | { replace: WorkflowStep } {
+): { replace: WorkflowStep; clearProperties?: string[] } {
   const props = properties as Record<string, unknown>;
   return props?.type === STEP_TYPES.SCRIPT
     ? {
         replace: buildScriptStepFromProperties(text, props, promptName),
+        clearProperties,
       }
     : {
-        updates: {
+        replace: {
           prompt: text,
           ...(promptName !== undefined && {
             name: promptName || undefined,
           }),
           ...buildPromptStepProperties(properties),
-          ...buildClearUpdates(clearProperties),
         },
+        clearProperties,
       };
 }
 

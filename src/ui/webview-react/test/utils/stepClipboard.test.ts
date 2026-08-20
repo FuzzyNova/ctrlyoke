@@ -43,7 +43,7 @@ describe("stepClipboard", () => {
     });
   });
 
-  it("preserves script-step fields when disabling a script step", () => {
+  it("sends a minimal script-step disable update", () => {
     expect(
       buildWorkflowStepEnabledUpdate(
         {
@@ -59,8 +59,6 @@ describe("stepClipboard", () => {
       promptName: "",
       properties: {
         type: STEP_TYPES.SCRIPT,
-        timeout: 30,
-        returns: "true",
         enabled: false,
       },
     });
@@ -82,19 +80,13 @@ describe("stepClipboard", () => {
       promptName: "",
       properties: {
         type: STEP_TYPES.SCRIPT,
-        timeout: 30,
       },
       clearProperties: ["enabled"],
     });
   });
 
-  // Expected-failure guards for the payload gaps in
-  // dev/backlog/WORKFLOW_SCHEMA_UI_PARITY_PLAN.md. The UPDATE_PROMPT script
-  // path replaces the stored step with this payload, so a field missing here is
-  // deleted from the user's workflow by a context-menu toggle. When the payload
-  // builders are fixed these turn red — drop the `.fails` and keep the test.
-  it.fails(
-    "KNOWN GAP: disabling a script step drops env, secrets, errorBehavior and executionMode",
+  it(
+    "disabling a script step sends only its type and enabled state",
     () => {
       expect(
         buildWorkflowStepEnabledUpdate(
@@ -111,11 +103,6 @@ describe("stepClipboard", () => {
         ).properties
       ).toEqual({
         type: STEP_TYPES.SCRIPT,
-        env: { DEPLOY_TOKEN: "${secret:DEPLOY_TOKEN}" },
-        secrets: ["DEPLOY_TOKEN"],
-        errorBehavior: { onError: "retry", maxRetries: 2 },
-        executionMode: "headless",
-        timeout: 30,
         enabled: false,
       });
     }

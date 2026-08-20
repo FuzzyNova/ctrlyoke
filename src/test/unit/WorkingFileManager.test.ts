@@ -1516,7 +1516,7 @@ suite("WorkingFileManager", () => {
       );
     });
 
-    test("updateStepAtRun merges updates and supports a full replace", async () => {
+    test("updateStepAtRun merges updates and preserves same-kind runtime", async () => {
       const { workflowKey, runRef, runFilePath } = await makeIdleRun();
 
       const merged = await WorkingFileManager.updateStepAtRun(
@@ -1548,7 +1548,10 @@ suite("WorkingFileManager", () => {
         (replaced.workingFile.steps![0] as PromptStep).prompt,
         "replaced entirely"
       );
-      assert.strictEqual(replaced.workingFile.steps![0]._runtime, undefined);
+      assert.ok(
+        replaced.workingFile.steps![0]._runtime?.completedAt,
+        "same-kind replacement must not drop existing runtime"
+      );
 
       const after = JSON.parse(
         await fs.readFile(runFilePath, "utf8")

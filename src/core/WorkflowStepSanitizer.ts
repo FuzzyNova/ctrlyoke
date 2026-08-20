@@ -5,20 +5,21 @@ import {
   EXECUTION_MODES,
   type ExecutionMode,
 } from "../types/DashboardConstants";
-import type {
-  ErrorBehavior,
-  EndCondition,
-  HarnessId,
-  McpServerConfig,
-  PreCondition,
-  PriorContext,
-  PromptStep,
-  ScriptStep,
-  ToolPermissionsOverride,
-  UserHookConfig,
-  WorkingFile,
-  WorktreeConfig,
-  WorkflowStep,
+import {
+  isScriptStep,
+  type ErrorBehavior,
+  type EndCondition,
+  type HarnessId,
+  type McpServerConfig,
+  type PreCondition,
+  type PriorContext,
+  type PromptStep,
+  type ScriptStep,
+  type ToolPermissionsOverride,
+  type UserHookConfig,
+  type WorkingFile,
+  type WorktreeConfig,
+  type WorkflowStep,
 } from "../types/CtrlYokeTypes";
 import type { WorkflowDefinitionSnapshot } from "../types/WorkflowTimelineTypes";
 
@@ -527,6 +528,28 @@ export function buildClearUpdates(
   return Object.fromEntries(
     clearProperties.map((key) => [key, undefined])
   ) as Partial<PromptStep>;
+}
+
+/**
+ * Apply an incoming step edit without losing properties the editor does not
+ * enumerate. Same-kind script edits merge, same-kind prompt edits retain the
+ * existing prompt merge behavior, and a real type change remains wholesale so
+ * fields from the previous step kind cannot leak into the new definition.
+ */
+export function mergeWorkflowStepUpdate(
+  existingStep: WorkflowStep,
+  incomingStep: WorkflowStep,
+  clearProperties?: string[]
+): WorkflowStep {
+  if (isScriptStep(existingStep) !== isScriptStep(incomingStep)) {
+    return incomingStep;
+  }
+
+  return {
+    ...existingStep,
+    ...incomingStep,
+    ...buildClearUpdates(clearProperties),
+  } as WorkflowStep;
 }
 
 /** Build a ScriptStep from properties sent in an EXECUTE_PROMPT / UPDATE_PROMPT message. */

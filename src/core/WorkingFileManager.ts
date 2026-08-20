@@ -28,6 +28,7 @@ import { invalidateRunSummaryFor } from "./orchestration/RunSummaryCache";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
   buildDefinitionSnapshot,
+  mergeWorkflowStepUpdate,
   normalizeAgentSelection,
   stripStepRuntime,
   stripTimelineDuplicatedWorkingFileOutput,
@@ -1025,7 +1026,9 @@ export class WorkingFileManager {
     workflowKey: WorkflowKey,
     runRef: RunRef,
     index: number,
-    change: { updates: Partial<WorkflowStep> } | { replace: WorkflowStep },
+    change:
+      | { updates: Partial<WorkflowStep> }
+      | { replace: WorkflowStep; clearProperties?: string[] },
     expectedDefinitionRevision: number,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
   ): Promise<{
@@ -1050,10 +1053,15 @@ export class WorkingFileManager {
           );
         }
         const nextSteps = [...steps];
-        nextSteps[index] =
+        const incomingStep =
           "replace" in change
             ? change.replace
-            : ({ ...steps[index], ...change.updates } as WorkflowStep);
+            : (change.updates as WorkflowStep);
+        nextSteps[index] = mergeWorkflowStepUpdate(
+          steps[index],
+          incomingStep,
+          "replace" in change ? change.clearProperties : undefined
+        );
         return {
           workingFile: { ...source, steps: nextSteps },
           result: undefined,

@@ -69,13 +69,6 @@ export function buildWorkflowStepEnabledUpdate(
       promptName: step.name ?? "",
       properties: {
         type: STEP_TYPES.SCRIPT,
-        ...(step.timeout !== undefined && { timeout: step.timeout }),
-        ...(step.compareSource !== undefined && {
-          compareSource: step.compareSource,
-        }),
-        ...(step.returns !== undefined && { returns: step.returns }),
-        ...(step.onPass !== undefined && { onPass: step.onPass }),
-        ...(step.onFail !== undefined && { onFail: step.onFail }),
         ...(!enabled && { enabled: false }),
       },
       ...(enabled ? { clearProperties: ["enabled"] } : {}),

@@ -8,6 +8,7 @@ import {
   buildEphemeralWorkflowStep,
   buildPromptStepProperties,
   buildScriptStepFromProperties,
+  mergeWorkflowStepUpdate,
   sanitizeClipboardWorkflowStep,
   stripViewOnlyWorkflowStepFields,
 } from "./WorkflowStepSanitizer";
@@ -2683,19 +2684,21 @@ export class WorkflowInstance {
     clearProperties?: string[]
   ): Promise<void> {
     const props = properties as Record<string, unknown>;
-    if (props?.type === STEP_TYPES.SCRIPT) {
-      // Replace the step entirely — merging would leave stale prompt-step fields
-      const scriptStep = buildScriptStepFromProperties(text, props, promptName);
-      await this.promptQueue.replaceStep(index, scriptStep);
-    } else {
-      const updates: Partial<PromptStep> = {
-        prompt: text,
-        ...(promptName !== undefined && { name: promptName || undefined }),
-        ...buildPromptStepProperties(properties),
-        ...buildClearUpdates(clearProperties),
-      };
-      await this.promptQueue.updatePrompt(index, updates);
-    }
+    const incomingStep: WorkflowStep =
+      props?.type === STEP_TYPES.SCRIPT
+        ? buildScriptStepFromProperties(text, props, promptName)
+        : {
+            prompt: text,
+            ...(promptName !== undefined && { name: promptName || undefined }),
+            ...buildPromptStepProperties(properties),
+          };
+    const existingStep = this.promptQueue.getState().steps[index];
+    await this.promptQueue.replaceStep(
+      index,
+      existingStep
+        ? mergeWorkflowStepUpdate(existingStep, incomingStep, clearProperties)
+        : incomingStep
+    );
     if (this.dashboardSink) {
       const currentState = this.promptQueue.getState();
       this.dashboardSink.updateStepsExtended(

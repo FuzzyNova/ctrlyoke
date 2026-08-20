@@ -468,7 +468,7 @@ before the control that makes them reachable.
 
 | #   | Step                                                                              | Closes                                                    |
 | --- | --------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| 1   | Script steps merge instead of replace (+ `clearProperties` threading)             | 9 `script step:*` preservation failures                   |
+| 1   | **Done (2026-08-20):** Script steps merge instead of replace (+ `clearProperties` threading) | 9 `script step:*` preservation failures                   |
 | 2   | `finalStep` merges against disk; `secrets` in `buildPromptStepProperties`         | 25 `final step:*` preservation + both acceptance failures |
 | 3   | Step-drawer `secrets` control                                                     | Prompt-step parity gap                                    |
 | 4   | Shared env/headers map editor; `McpServerForm` `headers` + `autoApprove` list     | MCP form parity gaps                                      |

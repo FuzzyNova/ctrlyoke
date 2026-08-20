@@ -349,22 +349,6 @@ const SURFACES: Surface[] = [
  * disable toggle does not, and the persistence layer protects neither.
  */
 const KNOWN_LOSSY_PRESERVATION = new Set<string>([
-  // Script steps are replaced, never merged. `WorkflowInstance.updatePromptInQueue`
-  // and `buildPromptStepChange` rebuild the step from the save payload alone
-  // (`PromptQueue.replaceStep` / `nextSteps[index] = change.replace`), so every
-  // property the payload omits is deleted. The replace itself is deliberate — it
-  // is what makes a prompt -> script type change clean — but it must merge over
-  // the existing step when the step is already a script step.
-  "script step:compareSource",
-  "script step:env",
-  "script step:errorBehavior",
-  "script step:executionMode",
-  "script step:onFail",
-  "script step:onPass",
-  "script step:returns",
-  "script step:secrets",
-  "script step:timeout",
-
   // `finalStep` is written as one whole property, so the stored step is only ever
   // as complete as the editor's outgoing object: `WorkflowInstance.updateFinalStepInQueue`
   // rebuilds a prompt final step as `prompt` + `name` + `buildPromptStepProperties(...)`,
@@ -514,7 +498,7 @@ suite("Schema -> dashboard property round trip", () => {
    * without reading the surface table.
    */
   suite("user-reachable reproduction", () => {
-    test("KNOWN BUG: saving a hand-authored script step deletes env, secrets and errorBehavior", async () => {
+    test("saving a hand-authored script step preserves unenumerated properties", async () => {
       workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-parity-"));
       const run = await createPromotedRun(workspace, {
         steps: [{ prompt: PROMPT_TEXT }],
@@ -547,13 +531,113 @@ suite("Schema -> dashboard property round trip", () => {
         },
       });
 
-      // Invert this assertion once the script path merges instead of replacing.
       assert.deepStrictEqual((await harness.readRunDefinition()).steps?.[0], {
         type: "script",
         script: "npm run deploy",
-        executionMode: "headless",
         name: "Deploy",
+        env: { DEPLOY_TOKEN: "${secret:DEPLOY_TOKEN}" },
+        secrets: ["DEPLOY_TOKEN"],
+        errorBehavior: { onError: "continue" },
+        executionMode: "headless",
         timeout: 60000,
+      });
+    });
+
+    test("saving default script values clears previously customized fields", async () => {
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-parity-"));
+      const run = await createPromotedRun(workspace, {
+        steps: [{ prompt: PROMPT_TEXT }],
+      });
+      const harness = createRoundTripHarness(workspace, run);
+      await harness.patchRunDefinition((head) => {
+        head.steps = [
+          {
+            type: "script",
+            script: SCRIPT_TEXT,
+            timeout: 60000,
+            onPass: "stopWorkflow",
+            onFail: "continue",
+            compareSource: "stdout",
+            returns: "OK",
+            executionMode: "headless",
+          },
+        ];
+      });
+
+      await harness.routeUpdatePrompt({
+        index: 0,
+        text: SCRIPT_TEXT,
+        properties: { type: "script" },
+        clearProperties: [
+          "timeout",
+          "onPass",
+          "onFail",
+          "compareSource",
+          "returns",
+          "executionMode",
+        ],
+      });
+
+      assert.deepStrictEqual((await harness.readRunDefinition()).steps?.[0], {
+        type: "script",
+        script: SCRIPT_TEXT,
+      });
+    });
+
+    test("prompt to script changes replace the previous step wholesale", async () => {
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-parity-"));
+      const run = await createPromotedRun(workspace, {
+        steps: [{ prompt: PROMPT_TEXT }],
+      });
+      const harness = createRoundTripHarness(workspace, run);
+      await harness.patchRunDefinition((head) => {
+        head.steps = [
+          {
+            prompt: PROMPT_TEXT,
+            harness: "claude-cli",
+            _runtime: { completedAt: 123 },
+          },
+        ];
+      });
+
+      await harness.routeUpdatePrompt({
+        index: 0,
+        text: SCRIPT_TEXT,
+        properties: { type: "script", executionMode: "headless" },
+      });
+
+      assert.deepStrictEqual((await harness.readRunDefinition()).steps?.[0], {
+        type: "script",
+        script: SCRIPT_TEXT,
+        executionMode: "headless",
+      });
+    });
+
+    test("script to prompt changes replace the previous step wholesale", async () => {
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-parity-"));
+      const run = await createPromotedRun(workspace, {
+        steps: [{ prompt: PROMPT_TEXT }],
+      });
+      const harness = createRoundTripHarness(workspace, run);
+      await harness.patchRunDefinition((head) => {
+        head.steps = [
+          {
+            type: "script",
+            script: SCRIPT_TEXT,
+            env: { DEPLOY_TOKEN: "${secret:DEPLOY_TOKEN}" },
+            _runtime: { completedAt: 123 },
+          },
+        ];
+      });
+
+      await harness.routeUpdatePrompt({
+        index: 0,
+        text: PROMPT_TEXT,
+        properties: {},
+      });
+
+      assert.deepStrictEqual((await harness.readRunDefinition()).steps?.[0], {
+        prompt: PROMPT_TEXT,
       });
     });
   });
