@@ -2,8 +2,11 @@
 
 > **Status:** Schema cleanup landed; UI parity work not started. Audit complete
 > and verified against the code (2026-08-19).
-> **Priority:** P1 — one open question below (property preservation on save) is
-> a possible silent data-loss bug and must be answered first.
+> **Priority:** P0 — the property-preservation question is answered and the
+> answer is **confirmed silent data loss**: saving a script step through the
+> dashboard, or toggling one enabled/disabled from the context menu, deletes
+> `env`, `secrets`, `errorBehavior` (and, on the toggle, `executionMode`). Fix
+> that before adding any control below.
 > **Origin:** A user who authors workflows **exclusively through the dashboard**
 > hit a hard failure caused by `${secret:NAME}` in an MCP env map, and could not
 > resolve it because the field that fixes it (`secrets`) is not reachable from
@@ -20,42 +23,152 @@ recover from an error the runtime raises about them.
 
 This is not a cosmetic gap. `secrets` is required to resolve the hard failure
 in `OVERZEALOUS_STEP_FAILURES_PLAN.md` item 3, and for a **script step** it is
-the *only* way to resolve it (script steps have no prompt, so the inline
+the _only_ way to resolve it (script steps have no prompt, so the inline
 `!NAME` gesture does not exist). A UI-only author hitting that failure on a
 script step is stuck with no path forward inside the product.
 
-## Open question — answer this before anything else
+## Answered — saving a step through the UI DELETES properties it cannot edit
 
-**Does saving a step through the UI preserve properties the UI cannot edit?**
+**Verified 2026-08-19 by driving the real persistence pipeline** (the
+`propertyRoundTrip` integration harness: `UPDATE_PROMPT` →
+`WorkflowOrchestrator` → `WorkingFileManager` → disk) with the exact payloads
+the editor posts. This is a **data-loss bug, not a discoverability gap**, and it
+is worse than the original suspicion: one of the fields destroyed
+(`executionMode`) is one the UI _can_ edit.
 
-The script-step submit path (`PromptEditor.tsx:838-856` and `:926-940`) builds
-its payload by **explicit enumeration**:
+### The split: prompt steps merge, script steps are replaced
 
-```ts
-properties: {
-  type: STEP_TYPES.SCRIPT,
-  ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
-  ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && { onPass: scriptOnPass }),
-  ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && { onFail: scriptOnFail }),
-  ...(scriptCompareSource !== COMPARE_SOURCES.AUTO && { compareSource: scriptCompareSource }),
-  ...(scriptReturns && { returns: scriptReturns }),
-  ...(scriptExecutionMode !== undefined && { executionMode: scriptExecutionMode }),
-  ...(!stepEnabled && { enabled: false }),
+`WorkflowInstance.updatePromptInQueue` (`src/core/WorkflowInstance.ts:2678-2695`)
+and its static twin `buildPromptStepChange` (`src/core/WorkflowOrchestrator.ts:186-206`)
+branch on `properties.type`:
+
+| Step kind | Path                                                            | Result                                                 |
+| --------- | --------------------------------------------------------------- | ------------------------------------------------------ |
+| Prompt    | `PromptQueue.updatePrompt` → `{ ...existing, ...updates }`      | **Safe.** Unknown properties survive.                  |
+| Script    | `PromptQueue.replaceStep` / `nextSteps[index] = change.replace` | **Lossy.** The step is rebuilt from the payload alone. |
+
+The replace is deliberate and correct in itself — the comment at
+`WorkflowInstance.ts:2686` explains it, and it is what makes a prompt→script type
+change clean. The bug is that the _editor's payload_ is an incomplete
+enumeration, so "replace" means "delete everything the editor forgot".
+
+### Measured, seeded step vs. saved step
+
+Seeded a run with a fully-populated script step, then routed the payload
+`PromptEditor.handleUpdate` posts when the user changes nothing but the command:
+
+```jsonc
+// on disk before
+{
+  "type": "script",
+  "script": "npm run deploy",
+  "name": "Deploy",
+  "env": { "DEPLOY_TOKEN": "${secret:DEPLOY_TOKEN}" },
+  "secrets": ["DEPLOY_TOKEN"],
+  "errorBehavior": { "onError": "continue", "maxRetries": 2 },
+  "executionMode": "headless",
+  "timeout": 60000
+}
+
+// on disk after pressing Update
+{
+  "type": "script",
+  "script": "npm run deploy",
+  "executionMode": "headless",
+  "name": "Deploy",
+  "timeout": 60000
 }
 ```
 
-`env`, `secrets`, and `errorBehavior` are absent. If `UPDATE_PROMPT` replaces
-the step's properties rather than merging them, then **opening a hand-authored
-or CLI-authored script step in the dashboard and saving it silently deletes
-those fields** — including a secret grant, which would convert a working
-workflow into the hard failure above.
+`env`, `secrets`, and `errorBehavior` are gone. A working workflow becomes the
+`OVERZEALOUS_STEP_FAILURES_PLAN.md` item-3 hard failure, caused by opening the
+step and pressing save.
 
-This has **not** been verified either way. Verify it first: it decides whether
-this document describes a discoverability gap (annoying) or a data-loss bug
-(urgent), and it may apply to prompt steps and the final step too. If
-properties are replaced rather than merged, fix that before adding any
-controls — round-tripping unknown properties safely is the foundation
-everything else sits on.
+### Worse: the enable/disable toggle drops `executionMode` too
+
+`buildWorkflowStepEnabledUpdate` (`src/ui/webview-react/utils/stepClipboard.ts:62-83`)
+re-enumerates a script step from the step object and carries only `timeout`,
+`compareSource`, `returns`, `onPass`, `onFail`. Right-clicking a script step and
+toggling Disable/Enable produced:
+
+```json
+{
+  "type": "script",
+  "script": "npm run deploy",
+  "name": "Deploy",
+  "enabled": false,
+  "timeout": 60000
+}
+```
+
+`env`, `secrets`, `errorBehavior` **and `executionMode`** destroyed — by a
+context-menu gesture that never opens an editor, on a field the dashboard
+itself authors. This one is a plain bug independent of the parity work.
+
+### Full matrix, measured
+
+`src/test/integration/schemaUiPropertyRoundTrip.integration.test.ts` enumerates
+every user-authorable property in `schemas/workflow-schema.json` and drives it
+through the real persistence pipeline on five surfaces, in both directions:
+**preservation** (a save that does not mention the property must not delete it)
+and **acceptance** (a property present in the payload must land on disk). 140
+checks. Result:
+
+| Surface                          | Preservation    | Acceptance      |
+| -------------------------------- | --------------- | --------------- |
+| Workflow root (18 props)         | all pass        | all pass        |
+| Prompt step (16 props)           | all pass        | `secrets` fails |
+| Script step (9 props)            | **all 9 fail**  | all pass        |
+| `finalStep` as prompt (16 props) | **all 16 fail** | `secrets` fails |
+| `finalStep` as script (9 props)  | **all 9 fail**  | all pass        |
+
+Two things this makes precise that reading the code did not:
+
+- **`finalStep` is worse than the step list.** It is written as one whole
+  property, so the stored step is only ever as complete as the editor's outgoing
+  object — _every_ execution property is unprotected, not just the ones with no
+  control. A prompt final step survives today only because the drawer happens to
+  round-trip its own state into the payload.
+- **The script-step builders are already complete.** Every script property
+  passes acceptance, so `buildScriptStepFromProperties` knows every key in the
+  schema. The 18 script failures are purely replace-vs-merge plus incomplete
+  payloads — one merge fix closes all of them without touching the builder.
+
+Two narrower losses live in the webview payload builders rather than the
+persistence layer, and are pinned by `it.fails` guards in
+`src/ui/webview-react/test/utils/stepClipboard.test.ts`:
+`buildWorkflowStepEnabledUpdate` (the context-menu toggle) and
+`buildWorkflowStepEnabledState` (the final-step toggle, which routes through
+`sanitizeClipboardWorkflowStep` — whose script branch omits `secrets` while its
+prompt branch includes it).
+
+### `secrets` on a prompt step needs a backend change, not just a control
+
+`buildPromptStepProperties` (`WorkflowStepSanitizer.ts:605-676`) has no `secrets`
+case. Today that is harmless — the merge preserves an existing value — but it
+means adding the drawer control from step 2 below **will not persist** until
+`secrets` is added to that builder. The same is true of `vars`. Confirmed: a
+prompt step carrying `secrets` and `vars` survived a drawer save untouched, and
+a `model` override applied alongside them.
+
+### Fix direction
+
+Make the script path stop rebuilding from an enumeration. The narrow fix is to
+merge `buildScriptStepFromProperties` over the existing step when the existing
+step is already a script step, replacing only on a genuine type change — that
+closes every caller at once (editor save, context toggle, and the static
+`updateStepAtRun` path) instead of patching each payload builder. `finalStep`
+needs the same treatment: merge against what is on disk rather than writing the
+editor's object whole.
+
+The verification is already in place. Every failing pair is listed in
+`KNOWN_LOSSY_PRESERVATION` / `KNOWN_UNACCEPTED` in the round-trip suite, and each
+entry is asserted to _still_ fail — so fixing one turns the suite red until the
+entry is deleted. The lists can only shrink. A schema property with no sample
+value also fails, which is the schema→UI guard proposed at the end of this
+document, in its cheapest form: adding a property to the schema without deciding
+how the dashboard round-trips it breaks the build at the moment the schema
+changes.
 
 ## Audit
 
@@ -75,9 +188,9 @@ to the separate template-authoring surface.
 
 **Missing:**
 
-| Property | Notes |
-| --- | --- |
-| `vars` | Zero occurrences anywhere under `src/ui/webview-react/components/`. Workflow-level `{{var}}` defaults are schema-and-CLI-only. Directly related to `OVERZEALOUS_STEP_FAILURES_PLAN.md` item 2: a UI author cannot see that a workflow defines vars, nor define one to satisfy an unresolved-placeholder error. |
+| Property | Notes                                                                                                                                                                                                                                                                                                          |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vars`   | Zero occurrences anywhere under `src/ui/webview-react/components/`. Workflow-level `{{var}}` defaults are schema-and-CLI-only. Directly related to `OVERZEALOUS_STEP_FAILURES_PLAN.md` item 2: a UI author cannot see that a workflow defines vars, nor define one to satisfy an unresolved-placeholder error. |
 
 ### Prompt step — `PropertiesDrawer.tsx`
 
@@ -88,8 +201,8 @@ and `enabled` live in `EditorSection.tsx` (`:217-253`).
 
 **Missing:**
 
-| Property | Notes |
-| --- | --- |
+| Property  | Notes                                                                                                                                                                                                                                                |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `secrets` | In `executionProperties`, so it is valid on every step, and the workflow panel has a control for it — but the step drawer does not. A per-step grant is unreachable. Highest-value single addition: it is the fix for the failure that started this. |
 
 ### Script step — `PromptEditor.tsx` + `ScriptConditionEditor` (`variant="scriptStep"`)
@@ -99,10 +212,10 @@ and `enabled` live in `EditorSection.tsx` (`:217-253`).
 
 **Missing:**
 
-| Property | Notes |
-| --- | --- |
-| `env` | The map the schema explicitly documents as the place `${secret:NAME}` is allowed. `ScriptConditionValue` has no `env` field at all. |
-| `secrets` | The **only** way a script step can grant a secret. Its absence makes the item-3 hard failure unrecoverable from the UI. |
+| Property        | Notes                                                                                                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `env`           | The map the schema explicitly documents as the place `${secret:NAME}` is allowed. `ScriptConditionValue` has no `env` field at all.                                            |
+| `secrets`       | The **only** way a script step can grant a secret. Its absence makes the item-3 hard failure unrecoverable from the UI.                                                        |
 | `errorBehavior` | Declared on `scriptStep` in the schema; the drawer's Error Behavior control is on the prompt-step path. Confirm whether it reaches script steps before treating this as a gap. |
 
 ### Conditions — `ScriptConditionEditor` (`preCondition` / `endCondition`)
@@ -113,9 +226,9 @@ and `enabled` live in `EditorSection.tsx` (`:217-253`).
 
 **Missing:**
 
-| Property | Notes |
-| --- | --- |
-| `env` | `preCondition` inherits it from `scriptProperties` in the schema; `endCondition` supports it at runtime (see schema bug below). `ScriptConditionValue` has no `env` field, so neither is editable. Both are scanned by `getProcessMaps`, so both can trigger the item-3 failure. |
+| Property | Notes                                                                                                                                                                                                                                                                            |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `env`    | `preCondition` inherits it from `scriptProperties` in the schema; `endCondition` supports it at runtime (see schema bug below). `ScriptConditionValue` has no `env` field, so neither is editable. Both are scanned by `getProcessMaps`, so both can trigger the item-3 failure. |
 
 ### Hooks — `HooksEditor.tsx`
 
@@ -123,20 +236,20 @@ and `enabled` live in `EditorSection.tsx` (`:217-253`).
 
 **Missing:**
 
-| Property | Notes |
-| --- | --- |
-| `env` | Zero occurrences in the file. Another `${secret:NAME}` surface with no control. |
+| Property     | Notes                                                                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `env`        | Zero occurrences in the file. Another `${secret:NAME}` surface with no control.                                                 |
 | `timeoutSec` | Declared in the editor's own local TS interface (`:10`) but never rendered — the file has exactly one `<input>`, for `command`. |
 
 ### MCP servers — three surfaces, only one of which edits
 
 Worth stating plainly, because it is easy to look in the wrong file:
 
-| File | Role |
-| --- | --- |
+| File                                     | Role                                                                                                                                                                                                                  |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `McpServersEditor.tsx` (workflow + step) | **Selector only.** Toggles which registry servers are attached, toggles individual ctrlyoke tools, and renders a read-only detail summary (`:169-201`). Edits nothing; links out to MCP Manager (`:252`, `:521-531`). |
-| `McpManagerSection.tsx` (settings) | List, import, export, delete, set-default. Delegates all field editing to the form below. |
-| **`McpServerForm.tsx`** | **The only place MCP server fields are actually edited.** |
+| `McpManagerSection.tsx` (settings)       | List, import, export, delete, set-default. Delegates all field editing to the form below.                                                                                                                             |
+| **`McpServerForm.tsx`**                  | **The only place MCP server fields are actually edited.**                                                                                                                                                             |
 
 `McpServerFormState` (`:15-27`) is therefore the real parity surface:
 `id`, `description`, `command`, `args`, `env`, `autoApprove`, `url`,
@@ -144,10 +257,10 @@ Worth stating plainly, because it is easy to look in the wrong file:
 
 **Missing from the form:**
 
-| Field | Notes |
-| --- | --- |
-| `headers` | **The significant one.** No form state, no input. Remote MCP servers' headers are preserved across an edit (`mcpServerFormStateToServer` clones `originalServer`, and only the stdio branch deletes them — `:177`), so this is not data loss, but they can never be *authored or filled in*. `registryEntryToServer` imports a registry entry's required headers as **empty strings** (`:200-207`), so a remote server needing `Authorization` arrives with `{ "Authorization": "" }` and the dashboard offers no way to set it. This is exactly the original complaint's shape — and headers are a `${secret:NAME}` surface scanned by `getProcessMaps`, so a Bearer token is precisely what belongs there. |
-| `autoApprove` as a tool list | Form state types it `boolean` only (`:22`). The schema and types both allow `boolean \| string[]`, so per-tool auto-approval is not authorable. An existing array survives an edit via `cloneMcpServerConfig`, but is overwritten with a boolean once the user touches the toggle. |
+| Field                        | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `headers`                    | **The significant one.** No form state, no input. Remote MCP servers' headers are preserved across an edit (`mcpServerFormStateToServer` clones `originalServer`, and only the stdio branch deletes them — `:177`), so this is not data loss, but they can never be _authored or filled in_. `registryEntryToServer` imports a registry entry's required headers as **empty strings** (`:200-207`), so a remote server needing `Authorization` arrives with `{ "Authorization": "" }` and the dashboard offers no way to set it. This is exactly the original complaint's shape — and headers are a `${secret:NAME}` surface scanned by `getProcessMaps`, so a Bearer token is precisely what belongs there. |
+| `autoApprove` as a tool list | Form state types it `boolean` only (`:22`). The schema and types both allow `boolean \| string[]`, so per-tool auto-approval is not authorable. An existing array survives an edit via `cloneMcpServerConfig`, but is overwritten with a boolean once the user touches the toggle.                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 **Not a gap after all:** inline `mcpServerConfig` objects in a workflow's
 `mcpServers` array are not merely schema-legal, the UI writes them —
@@ -165,12 +278,12 @@ reproduction is the evidence for why the parity work that follows matters.
 **The suspected validation failure was real.** Validating the old schema
 directly with ajv rejected three of four cases:
 
-| Case | Old schema | New schema |
-| --- | --- | --- |
-| Uncheck a ctrlyoke MCP tool → `{ id: "ctrlyoke", deniedTools: [...] }` | **INVALID** | valid |
-| Enable a managed MCP server → embedded config with `description` | **INVALID** | valid |
-| Root-level script workflow with `secrets` | **INVALID** | valid |
-| `endCondition.env` | valid but undocumented | valid + documented |
+| Case                                                                   | Old schema             | New schema         |
+| ---------------------------------------------------------------------- | ---------------------- | ------------------ |
+| Uncheck a ctrlyoke MCP tool → `{ id: "ctrlyoke", deniedTools: [...] }` | **INVALID**            | valid              |
+| Enable a managed MCP server → embedded config with `description`       | **INVALID**            | valid              |
+| Root-level script workflow with `secrets`                              | **INVALID**            | valid              |
+| `endCondition.env`                                                     | valid but undocumented | valid + documented |
 
 So two ordinary dashboard gestures produced workflows ctrlyoke's own parser
 rejects. That is the strongest possible argument for the parity guard proposed
@@ -185,9 +298,9 @@ nothing failed until a user tried the combination.
 
 `McpServerConfig` in `src/types/CtrlYokeTypes.ts:65-95` has **two more**:
 
-| Field | Written by |
-| --- | --- |
-| `description` | `McpServerForm`'s description input (`:293`), and `registryEntryToServer` on every registry import |
+| Field         | Written by                                                                                                                         |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `description` | `McpServerForm`'s description input (`:293`), and `registryEntryToServer` on every registry import                                 |
 | `deniedTools` | `McpServersEditor.buildArray` — emitted as `{ id: "ctrlyoke", deniedTools: [...] }` whenever a user unchecks any ctrlyoke MCP tool |
 
 Both reach workflow files: `McpServersEditor.handleToggleServer` pushes
@@ -250,9 +363,10 @@ definition, but it is not blocking anything.
 ## Recommended order
 
 0. ~~Schema cleanup~~ — **done**, see above.
-1. **Answer the open question** on property preservation. If the UI drops
-   unknown properties on save, fix that first — adding controls to a UI that
-   silently deletes fields makes the problem worse, not better.
+1. ~~Answer the open question on property preservation~~ — **answered: the UI
+   deletes them.** Fix the script-step and `finalStep` replace paths first, plus
+   `buildWorkflowStepEnabledUpdate`. Adding controls to a UI that silently
+   deletes fields makes the problem worse, not better.
 2. **`secrets` on the step drawer** and **`secrets` + `env` on script steps.**
    These unblock the hard failure that motivated this document. If
    `OVERZEALOUS_STEP_FAILURES_PLAN.md` item 3 (auto-grant from process maps)
@@ -271,28 +385,34 @@ definition, but it is not blocking anything.
 ## Preventing the next one
 
 The gaps above accumulated one feature at a time, each individually reasonable.
-A checklist item in the instruction files is unlikely to hold on its own.
-Consider a test that walks `schemas/workflow-schema.json`, enumerates
-user-authorable properties, and asserts each one appears in a maintained
-registry of UI control ids — with an explicit, commented opt-out list for
-properties deliberately left CLI-only. That converts "we forgot" into a failing
-test at the moment the schema changes, which is the only point where the
-context to decide is still fresh.
+A checklist item in the instruction files was never going to hold.
 
-If that proves too heavy, the cheaper version is a single documented table in
-`.github/instructions/webview-react.instructions.md` mapping every schema
-property to its control, reviewed whenever the schema gains a property.
+**Half of this now exists.** `schemaUiPropertyRoundTrip.integration.test.ts`
+walks the schema, enumerates user-authorable properties, and fails when one has
+no sample value — so a new schema property cannot land without someone deciding
+how it round-trips. What it does _not_ check is whether a control exists: a
+property can round-trip perfectly through the message contract and still be
+unreachable in the UI (`vars` and `headers` are exactly that today).
+
+The remaining piece is therefore the control-id half: assert each authorable
+property appears in a maintained registry of UI control ids, with an explicit,
+commented opt-out list for properties deliberately left CLI-only. The sample
+table in the round-trip suite is the natural place to hang it — it already
+enumerates the same property set and already fails when the schema grows.
 
 ## Files likely changed
 
-| File | Change |
-| --- | --- |
-| `schemas/workflow-schema.json` | `mcpServerConfig` gains `description` + `deniedTools`; `endCondition` and `scriptStep` `$ref` `scriptProperties` instead of duplicating it |
-| `src/ui/webview-react/components/shared/McpServerForm.tsx` | `headers` editor; `autoApprove` tool list |
-| `src/ui/webview-react/components/editor/PropertiesDrawer.tsx` | Step-level `secrets` control |
-| `src/ui/webview-react/components/editor/PromptEditor.tsx` | Script-step `env` / `secrets` / `errorBehavior` in the submit payload |
-| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx` | `env` on `ScriptConditionValue` + editor for script steps and both conditions |
-| `src/ui/webview-react/components/editor/HooksEditor.tsx` | Hook `env` and `timeoutSec` controls |
-| `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx` | Workflow-level `vars` editor |
-| `src/ui/webview-react/components/shared/` | New shared env key/value map editor with the secret picker |
-| `src/test/**`, `src/ui/webview-react/test/**` | Property-preservation coverage; schema→UI parity guard |
+| File                                                                 | Change                                                                                                                                     |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `schemas/workflow-schema.json`                                       | `mcpServerConfig` gains `description` + `deniedTools`; `endCondition` and `scriptStep` `$ref` `scriptProperties` instead of duplicating it |
+| `src/ui/webview-react/components/shared/McpServerForm.tsx`           | `headers` editor; `autoApprove` tool list                                                                                                  |
+| `src/ui/webview-react/components/editor/PropertiesDrawer.tsx`        | Step-level `secrets` control                                                                                                               |
+| `src/ui/webview-react/components/editor/PromptEditor.tsx`            | Script-step `env` / `secrets` / `errorBehavior` in the submit payload                                                                      |
+| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`   | `env` on `ScriptConditionValue` + editor for script steps and both conditions                                                              |
+| `src/ui/webview-react/components/editor/HooksEditor.tsx`             | Hook `env` and `timeoutSec` controls                                                                                                       |
+| `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx` | Workflow-level `vars` editor                                                                                                               |
+| `src/ui/webview-react/components/shared/`                            | New shared env key/value map editor with the secret picker                                                                                 |
+| `src/core/WorkflowStepSanitizer.ts`                                  | Script-step merge-vs-replace; `secrets`/`vars` in `buildPromptStepProperties`; `secrets` in the clipboard script branch                    |
+| `src/core/WorkflowInstance.ts`, `src/core/WorkflowOrchestrator.ts`   | Script-step and `finalStep` replace paths                                                                                                  |
+| `src/ui/webview-react/utils/stepClipboard.ts`                        | `buildWorkflowStepEnabledUpdate` drops fields it does not enumerate                                                                        |
+| `src/test/**`, `src/ui/webview-react/test/**`                        | Property-preservation coverage; schema→UI parity guard                                                                                     |

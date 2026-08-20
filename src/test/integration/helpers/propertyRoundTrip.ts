@@ -9,6 +9,7 @@ import type {
   WorkflowKey,
   RunRef,
   WorkflowStep,
+  PromptStep,
 } from "../../../types/CtrlYokeTypes";
 import type { WorkflowDefinitionMutation } from "../../../types/WebviewMessageTypes";
 
@@ -49,7 +50,7 @@ export interface PromotedRun {
 }
 
 /** Parsed run definition head (`workflow.ctrlyoke.json`), as raw JSON. */
-type RunDefinition = Record<string, unknown> & {
+export type RunDefinition = Record<string, unknown> & {
   steps?: Array<Record<string, unknown>>;
   finalStep?: Record<string, unknown>;
   definitionRevision?: number;
@@ -124,6 +125,21 @@ export interface RoundTripHarness {
     promptName?: string;
     clearProperties?: string[];
   }): Promise<void>;
+  /** Mirrors `WebviewMessageRouter.handleUpdateFinalStep`. */
+  routeUpdateFinalPrompt(message: {
+    finalStep: WorkflowStep | null;
+    clearProperties?: string[];
+  }): Promise<void>;
+  /**
+   * Rewrite the run definition head in place, leaving `definitionRevision`
+   * untouched. Models a hand-authored or CLI-authored workflow: the file
+   * already contains properties no dashboard gesture put there. Seeding this
+   * way (rather than through a route) keeps the seed itself out of the code
+   * paths under test.
+   */
+  patchRunDefinition(
+    mutate: (definition: RunDefinition) => void
+  ): Promise<void>;
   /** The live `{ address, expectedDefinitionRevision, expectedDescriptorRevision }`
    * a client would echo — read fresh from disk. */
   currentMutationContext(): Promise<WorkflowDefinitionMutation>;
@@ -268,6 +284,26 @@ export function createRoundTripHarness(
         wired.promptName,
         wired.clearProperties,
         TEST_CLIENT_ID
+      );
+    },
+    async routeUpdateFinalPrompt(message) {
+      const wired = wire(message);
+      const mutation = await currentMutationContext();
+      await orchestrator.prepareDefinitionMutation(mutation, TEST_CLIENT_ID);
+      await orchestrator.updateFinalStepInQueue(
+        mutation,
+        wired.finalStep as PromptStep | null,
+        wired.clearProperties,
+        TEST_CLIENT_ID
+      );
+    },
+    async patchRunDefinition(mutate) {
+      const definition = await readRunDefinition();
+      mutate(definition);
+      await fs.writeFile(
+        runFilePath(),
+        JSON.stringify(definition, null, 2),
+        "utf8"
       );
     },
   };
