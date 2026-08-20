@@ -16,6 +16,7 @@ import {
   formatTokenCount,
   formatTokenTotal,
 } from "@root/utils/TokenFormatting";
+import { getUsageBarColorClass } from "@utils/usageBarColor";
 
 function formatTimestamp(value: number | undefined): string {
   return value === undefined
@@ -148,23 +149,28 @@ export function UsageCard({
           </div>
         )}
       {snapshot.quota.windows.length > 0 && (
-        <div className="space-y-1">
+        <div className="space-y-2">
           {snapshot.quota.windows.map((window) => (
-            <div key={window.id} className="text-description-fg">
-              {window.label}:{" "}
-              {window.isUnlimited
-                ? "Unlimited"
-                : `${formatQuotaValue(window.used, window.unit)}${
-                    window.limit !== undefined
-                      ? ` / ${formatQuotaValue(window.limit, window.unit)}`
-                      : ""
-                  }`}
-              {window.resetAt !== undefined
-                ? ` · resets ${formatTimestamp(window.resetAt)}`
-                : ""}
-              {isHarnessUsageWindowStale(snapshot.quota, window)
-                ? " · stale"
-                : ""}
+            <div key={window.id}>
+              <div className="text-description-fg">
+                {window.label}:{" "}
+                {window.isUnlimited
+                  ? "Unlimited"
+                  : `${formatQuotaValue(window.used, window.unit)}${
+                      window.limit !== undefined
+                        ? ` / ${formatQuotaValue(window.limit, window.unit)}`
+                        : ""
+                    }`}
+                {window.resetAt !== undefined
+                  ? ` · resets ${formatTimestamp(window.resetAt)}`
+                  : ""}
+                {isHarnessUsageWindowStale(snapshot.quota, window)
+                  ? " · stale"
+                  : ""}
+              </div>
+              {!window.isUnlimited && window.percentUsed !== undefined && (
+                <UsagePercentBar percent={window.percentUsed} />
+              )}
             </div>
           ))}
         </div>
@@ -172,6 +178,18 @@ export function UsageCard({
       <div className="text-description-fg">
         Last safe error: {snapshot.quota.errorCode ?? "none"}
       </div>
+    </div>
+  );
+}
+
+function UsagePercentBar({ percent }: { percent: number }) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  return (
+    <div className="mt-1 mx-1 h-1.5 rounded-full bg-ctx-bar-track overflow-hidden">
+      <div
+        className={`h-full rounded-full ${getUsageBarColorClass(clamped)}`}
+        style={{ width: `${clamped}%` }}
+      />
     </div>
   );
 }

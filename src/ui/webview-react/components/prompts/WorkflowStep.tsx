@@ -15,6 +15,7 @@ import {
   resolveTokenTotal,
 } from "@root/utils/TokenFormatting";
 import { useSettingsStore } from "@store/settingsStore";
+import { getUsageBarColorClass } from "@utils/usageBarColor";
 
 export interface EndConditionResult {
   passed: boolean;
@@ -384,13 +385,9 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
               {/* Fill */}
               <div
                 key={contextPct}
-                className={`absolute bottom-0 left-0 right-0 rounded-full animate-ctx-update ${
-                  contextPct >= 85
-                    ? "bg-error-fg opacity-90"
-                    : contextPct >= 70
-                      ? "bg-warning-fg opacity-85"
-                      : "bg-info-fg opacity-80"
-                }`}
+                className={`absolute bottom-0 left-0 right-0 rounded-full animate-ctx-update ${getUsageBarColorClass(
+                  contextPct
+                )}`}
                 style={{ height: `${contextPct}%` }}
               />
             </div>
