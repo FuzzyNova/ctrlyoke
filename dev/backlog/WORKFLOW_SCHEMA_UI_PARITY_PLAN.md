@@ -128,41 +128,118 @@ and `enabled` live in `EditorSection.tsx` (`:217-253`).
 | `env` | Zero occurrences in the file. Another `${secret:NAME}` surface with no control. |
 | `timeoutSec` | Declared in the editor's own local TS interface (`:10`) but never rendered — the file has exactly one `<input>`, for `command`. |
 
-### MCP servers — `McpServersEditor.tsx` (workflow/step) + `McpManagerSection.tsx` (settings)
+### MCP servers — three surfaces, only one of which edits
 
-The workflow-level editor is a **selector over registry-managed servers** plus
-a read-only detail summary (`args`, `transport`, `env` keys, `headers` keys,
-`autoApprove` — `:173-199`), and it explicitly directs users to the MCP Manager
-for `${secret:NAME}` references (`:252`). The MCP Manager covers `command`,
-`args`, `env`, `url`, `transport`, `headers`, and `autoApprove`.
+Worth stating plainly, because it is easy to look in the wrong file:
 
-**Gap:** the schema allows an **inline `mcpServerConfig` object** in a
-workflow's `mcpServers` array, not just a registry ID string. Inline objects
-are not authorable from the workflow panel. Decide whether that is a deliberate
-"registry is the only authoring path" product stance — if so, document it and
-consider narrowing the schema — or a genuine gap. Do not add an inline-object
-editor without making that call first.
+| File | Role |
+| --- | --- |
+| `McpServersEditor.tsx` (workflow + step) | **Selector only.** Toggles which registry servers are attached, toggles individual ctrlyoke tools, and renders a read-only detail summary (`:169-201`). Edits nothing; links out to MCP Manager (`:252`, `:521-531`). |
+| `McpManagerSection.tsx` (settings) | List, import, export, delete, set-default. Delegates all field editing to the form below. |
+| **`McpServerForm.tsx`** | **The only place MCP server fields are actually edited.** |
 
-## Schema bug found during the audit
+`McpServerFormState` (`:15-27`) is therefore the real parity surface:
+`id`, `description`, `command`, `args`, `env`, `autoApprove`, `url`,
+`transport`. It is also where the `${secret:NAME}` picker lives (`:357`).
 
-`endCondition` in the JSON schema (`schemas/workflow-schema.json:815-867`)
-declares its own property list and **does not include `env`**, and unlike
-`preCondition` it does not `$ref` `scriptProperties`. But at runtime:
+**Missing from the form:**
 
-- `EndCondition extends ScriptProperties` in `src/types/CtrlYokeTypes.ts:878`,
+| Field | Notes |
+| --- | --- |
+| `headers` | **The significant one.** No form state, no input. Remote MCP servers' headers are preserved across an edit (`mcpServerFormStateToServer` clones `originalServer`, and only the stdio branch deletes them — `:177`), so this is not data loss, but they can never be *authored or filled in*. `registryEntryToServer` imports a registry entry's required headers as **empty strings** (`:200-207`), so a remote server needing `Authorization` arrives with `{ "Authorization": "" }` and the dashboard offers no way to set it. This is exactly the original complaint's shape — and headers are a `${secret:NAME}` surface scanned by `getProcessMaps`, so a Bearer token is precisely what belongs there. |
+| `autoApprove` as a tool list | Form state types it `boolean` only (`:22`). The schema and types both allow `boolean \| string[]`, so per-tool auto-approval is not authorable. An existing array survives an edit via `cloneMcpServerConfig`, but is overwritten with a boolean once the user touches the toggle. |
+
+**Not a gap after all:** inline `mcpServerConfig` objects in a workflow's
+`mcpServers` array are not merely schema-legal, the UI writes them —
+`handleToggleServer` embeds `managedServer.config` when a server is enabled.
+The earlier framing of this as "decide whether inline objects should be
+authorable" is wrong; they already are, implicitly. What matters instead is
+that the schema describe what gets written (see Schema cleanup item 1).
+
+## Schema cleanup — decided
+
+Pre-release, no customers, single developer: there is no back-compat
+constraint, so the schema should be corrected to match the types rather than
+worked around. Three divergences, in priority order.
+
+### 1. `mcpServerConfig` rejects fields the UI writes — verify first
+
+`schemas/workflow-schema.json:1299-1358` declares `mcpServerConfig` with
+`"additionalProperties": false` and these properties only: `id`, `command`,
+`args`, `env`, `autoApprove`, `url`, `transport`, `headers`.
+
+`McpServerConfig` in `src/types/CtrlYokeTypes.ts:65-95` has **two more**:
+
+| Field | Written by |
+| --- | --- |
+| `description` | `McpServerForm`'s description input (`:293`), and `registryEntryToServer` on every registry import |
+| `deniedTools` | `McpServersEditor.buildArray` — emitted as `{ id: "ctrlyoke", deniedTools: [...] }` whenever a user unchecks any ctrlyoke MCP tool |
+
+Both reach workflow files: `McpServersEditor.handleToggleServer` pushes
+`managedServer.config` — the **whole object, including `description`** — into
+the `mcpServers` array when a server is enabled for a workflow.
+
+With `additionalProperties: false`, a workflow carrying either field should
+fail `PromptFileParser` validation. **Verify this before anything else** — if
+it reproduces, then enabling a managed MCP server on a workflow, or unchecking
+a ctrlyoke tool, produces a workflow ctrlyoke itself cannot load. Fix by adding
+both properties to the schema (they are real, documented, ctrlyoke-only
+metadata — `description` is deliberately stripped from every harness export
+path, per its doc comment).
+
+This also settles the inline-object question below: inline `mcpServerConfig`
+objects are not a hypothetical the schema merely tolerates — **the UI actively
+writes them**, so the schema must describe exactly what the UI produces.
+
+### 2. `endCondition` duplicates `scriptProperties` and loses `env`
+
+`endCondition` (`:815-867`) hand-declares its property list instead of
+`$ref`-ing `scriptProperties` the way `preCondition` (`:899-922`) does, and in
+the process **drops `env`**. At runtime that field is fully live:
+
+- `EndCondition extends ScriptProperties` (`src/types/CtrlYokeTypes.ts:878`),
   and `ScriptProperties` has `env`.
 - `SecretResolver.getProcessMaps` reads `step.endCondition?.env` **and**
-  `workflow.endCondition?.env`.
-- `VarSubstitutor.applyToEndCondition` substitutes `cond.env`.
+  `workflow.endCondition?.env` — so it is scanned for secret grants and can
+  hard-fail a run.
+- `VarSubstitutor.applyToEndCondition` substitutes into `cond.env`.
 
-So `endCondition.env` works, is scanned for secrets, and can hard-fail a run —
-while being absent from the schema, and therefore from IntelliSense, hover
-docs, and any schema-derived documentation. It validates only because
-`endCondition` has no `additionalProperties: false`. Align the schema with the
-types (probably by `$ref`-ing `scriptProperties` the way `preCondition` does).
+So `endCondition.env` works, participates in two failure paths, and is invisible
+to IntelliSense and hover docs. It validates today only because `endCondition`
+has no `additionalProperties: false`.
+
+**Decision: restructure `endCondition` to `allOf` + `$ref: scriptProperties`,
+mirroring `preCondition`, and keep only its genuinely endCondition-specific
+properties inline** (`maxRetries`, `retryPrompt`, `passRetryPrompt`,
+`resumeSessionOnRetry`, and its own `onPass`/`onFail` enums). That removes the
+duplicated `script`/`returns`/`compareSource`/`timeout` definitions, picks up
+`env` for free, and makes the two condition types structurally symmetric —
+which is what the TypeScript types already assert.
+
+Watch two details while doing it: `endCondition` currently has
+`"required": ["script", "returns"]` where `scriptProperties` requires only
+`script`, so the `returns` requirement must be preserved at the `endCondition`
+level; and `scriptProperties.returns` has a shorter description than
+`endCondition`'s, so keep the richer wording where it belongs.
+
+### 3. `scriptStep` duplicates `scriptProperties` too
+
+Same shape as (2), lower stakes: `scriptStep` (`:724-814`) re-declares
+`script`, `env`, `compareSource`, `returns`, and `timeout` inline rather than
+referencing `scriptProperties`, even though `ScriptStep extends ScriptProperties`
+in the types (`src/types/CtrlYokeTypes.ts:712`). Its `additionalProperties: false`
+makes a `$ref` restructure slightly more delicate than (2). Worth folding into
+the same cleanup pass so all three consumers of `scriptProperties` share one
+definition, but it is not blocking anything.
 
 ## Recommended order
 
+0. **Verify the two suspected live failures** — `mcpServerConfig`'s
+   `additionalProperties: false` versus the `description`/`deniedTools` the UI
+   writes (Schema cleanup item 1), and the property-preservation question
+   below. Both are cheap to check and both change the priority of everything
+   else. The schema cleanup itself (items 1–3) is a small, self-contained
+   change that can land immediately after.
 1. **Answer the open question** on property preservation. If the UI drops
    unknown properties on save, fix that first — adding controls to a UI that
    silently deletes fields makes the problem worse, not better.
@@ -171,14 +248,15 @@ types (probably by `$ref`-ing `scriptProperties` the way `preCondition` does).
    `OVERZEALOUS_STEP_FAILURES_PLAN.md` item 3 (auto-grant from process maps)
    ships first, this becomes less urgent but is still needed — an explicit
    grant remains the way to grant a secret a step never textually references.
-3. **`env` on conditions and hooks**, plus the `endCondition.env` schema fix.
-   One shared key/value map editor should serve script steps, conditions, and
-   hooks; build it once. It is also the natural home for the MCP Manager's
-   `${secret:NAME}` picker and its literal-credential warning
-   (`findLiteralCredentialEnvKeys`) — reuse, do not reimplement.
+3. **`env` on conditions and hooks**, plus **`headers` on `McpServerForm`.**
+   One shared key/value map editor should serve script steps, conditions,
+   hooks, MCP `env`, and MCP `headers`; build it once. `McpServerForm` already
+   has the pieces worth reusing — the `${secret:NAME}` picker (`:357`) and the
+   literal-credential warning (`findLiteralCredentialEnvKeys`) — so lift those
+   into the shared component rather than reimplementing them per surface.
 4. **`vars` at the workflow root.** Pairs with the `{{var}}` failure fix.
-5. **`timeoutSec` on hooks** — smallest item, finish the hook editor.
-6. **Decide the inline-`mcpServerConfig` question** and record the answer.
+5. **`timeoutSec` on hooks** and **`autoApprove` as a tool list** — small
+   completions of editors that already exist.
 
 ## Preventing the next one
 
@@ -199,7 +277,8 @@ property to its control, reviewed whenever the schema gains a property.
 
 | File | Change |
 | --- | --- |
-| `schemas/workflow-schema.json` | `endCondition` gains `env` (via `scriptProperties` `$ref`) |
+| `schemas/workflow-schema.json` | `mcpServerConfig` gains `description` + `deniedTools`; `endCondition` and `scriptStep` `$ref` `scriptProperties` instead of duplicating it |
+| `src/ui/webview-react/components/shared/McpServerForm.tsx` | `headers` editor; `autoApprove` tool list |
 | `src/ui/webview-react/components/editor/PropertiesDrawer.tsx` | Step-level `secrets` control |
 | `src/ui/webview-react/components/editor/PromptEditor.tsx` | Script-step `env` / `secrets` / `errorBehavior` in the submit payload |
 | `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx` | `env` on `ScriptConditionValue` + editor for script steps and both conditions |
