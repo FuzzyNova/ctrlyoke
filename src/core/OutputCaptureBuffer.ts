@@ -6,7 +6,10 @@ import type {
 import type { WorkflowStep, PromptStep } from "../types/CtrlYokeTypes";
 import { isScriptStep } from "../types/CtrlYokeTypes";
 import { EXECUTION_STATES } from "../types/CtrlYokeTypes";
-import { FINAL_STEP_PHASES } from "../types/DashboardConstants";
+import {
+  FINAL_STEP_PHASES,
+  type StatusMessageSeverity,
+} from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { normalizeCliEvents } from "../utils/CliEventNormalizer";
 import { Log } from "../utils/Log";
@@ -423,27 +426,16 @@ export class OutputCaptureBuffer {
 
     // Replay finalStep status messages (encoded as signed negative step indices).
     if (this.finalStepStatusMessages.size > 0) {
-      const dashboard = dashboardSink as {
-        updateStatusMessage?: (
-          stepIndex: number,
-          message: string,
-          severity?: string,
-          workflowId?: string,
-          timestampMs?: number
-        ) => void;
-      };
-      if (dashboard.updateStatusMessage) {
-        for (const [loopIndex, messages] of this.finalStepStatusMessages) {
-          const negativeLoopStepIndex = -(loopIndex + 1);
-          for (const msg of messages) {
-            dashboard.updateStatusMessage(
-              negativeLoopStepIndex,
-              msg.message,
-              msg.severity,
-              undefined,
-              msg.timestamp
-            );
-          }
+      for (const [loopIndex, messages] of this.finalStepStatusMessages) {
+        const negativeLoopStepIndex = -(loopIndex + 1);
+        for (const msg of messages) {
+          dashboardSink.updateStatusMessage(
+            negativeLoopStepIndex,
+            msg.message,
+            msg.severity as StatusMessageSeverity,
+            undefined,
+            msg.timestamp
+          );
         }
       }
     }

@@ -39,6 +39,7 @@ import {
   FAILURE_KINDS,
   ATTEMPT_COST_UNAVAILABLE_REASONS,
   type ConditionAction,
+  type StatusMessageSeverity,
 } from "../types/DashboardConstants";
 import type { CompatibilityDiagnostic } from "../types/CompatibilityTypes";
 import { PromptQueue } from "./PromptQueue";
@@ -102,6 +103,11 @@ import {
   createConditionEvaluationSummary,
   ScriptExecutionReporter,
 } from "./orchestration/ScriptExecutionReporter";
+import {
+  getSignedStepIndex as getSignedWorkflowStepIndex,
+  toOutputExecutionTarget as toWorkflowOutputExecutionTarget,
+  type StatusMessageReporter,
+} from "./orchestration/StatusMessageReporter";
 
 export interface WorkflowExecutionContext {
   /** Immutable state/execution roots for this workflow run. */
@@ -118,6 +124,7 @@ export interface WorkflowExecutionContext {
   currentPromptFilePath: string | undefined;
   /** Authored workflow definition used as the semantic base for prompt-file refs. */
   sourceDefinitionPath?: string;
+  statusReporter: StatusMessageReporter;
   dashboardProvider?: IDashboardSink;
   reportCompatibilityDiagnostics?: WorkflowContext["reportCompatibilityDiagnostics"];
   analyzeCompatibilityForPrompt?: WorkflowContext["analyzeCompatibilityForPrompt"];
@@ -1470,9 +1477,7 @@ export class WorkflowExecutor {
   private toOutputExecutionTarget(
     target: ExecutionTarget
   ): OutputExecutionTarget {
-    return target.kind === FINAL_STEP_PHASES.QUEUE
-      ? { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: target.stepIndex }
-      : { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: target.loopIndex };
+    return toWorkflowOutputExecutionTarget(target);
   }
 
   /**
@@ -1482,9 +1487,7 @@ export class WorkflowExecutor {
    * and callers can detect them with `< 0`.
    */
   private getSignedStepIndex(target: ExecutionTarget): number {
-    return target.kind === FINAL_STEP_PHASES.QUEUE
-      ? target.stepIndex
-      : -(target.loopIndex + 1);
+    return getSignedWorkflowStepIndex(target);
   }
 
   private getRunIndexForTarget(
@@ -1822,7 +1825,6 @@ export class WorkflowExecutor {
     severity: string = STATUS_MESSAGE_SEVERITY.INFO,
     timestampMs?: number
   ): Promise<void> {
-    const signedStepIndex = this.getSignedStepIndex(target);
     const resolvedTimestampMs = timestampMs ?? Date.now();
 
     // Queue steps keep non-negative indices; finalStep loops use negative
@@ -1831,36 +1833,12 @@ export class WorkflowExecutor {
     // so this extension-clock timestamp must ride along with the live message
     // instead of being re-stamped on receipt — a webview-side Date.now() races
     // the CLI/script row it's meant to precede.
-    context.dashboardProvider?.updateStatusMessage(
-      signedStepIndex,
+    context.statusReporter.report(
+      target,
       message,
-      severity as any,
-      undefined,
-      resolvedTimestampMs
+      severity as StatusMessageSeverity,
+      { timestampMs: resolvedTimestampMs }
     );
-    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      context.onStatusMessage?.(target.stepIndex, message, severity);
-    } else {
-      context.onFinalStepStatusMessage?.(target.loopIndex, message, severity);
-    }
-
-    const statusMessage = {
-      message,
-      severity: severity as any,
-      timestamp: resolvedTimestampMs,
-    };
-
-    if (context.historyFilePath && context.outputHistoryManager) {
-      await context.outputHistoryManager
-        .appendStatusMessage(
-          context.historyFilePath,
-          this.toOutputExecutionTarget(target),
-          statusMessage
-        )
-        .catch((err) =>
-          Log.warn("Failed to append status message to history:", err)
-        );
-    }
   }
 
   private getConditionScriptName(script: string): string {

@@ -3,6 +3,7 @@ import { suite, setup, teardown, test } from "mocha";
 import { CliIntegration } from "../../core/harness/CliIntegration";
 import { EndConditionEvaluator } from "../../core/EndConditionEvaluator";
 import { EndConditionHandler } from "../../core/EndConditionHandler";
+import { StatusMessageReporter } from "../../core/orchestration/StatusMessageReporter";
 import {
   WorkflowExecutor,
   type WorkflowExecutionContext,
@@ -15,6 +16,7 @@ import { createNoWorktreeExecutionWorkspace } from "../../platform/PlatformAdapt
 import {
   EXECUTION_MODES,
   HARNESS_IDS,
+  FINAL_STEP_PHASES,
   type ExecutionMode,
   CLI_EVENT_TYPES,
 } from "../../types/DashboardConstants";
@@ -69,7 +71,8 @@ function createExecutionContext(
   integration: CliIntegration,
   captureEvents?: (stepIndex: number, events: any[]) => void
 ): WorkflowExecutionContext {
-  return {
+  let context: WorkflowExecutionContext;
+  context = {
     executionWorkspace: createNoWorktreeExecutionWorkspace(new MockPlatform()),
     workspaceFolderPath: process.cwd(),
     currentPromptFilePath: "mixed-mode.ctrlyoke.yaml",
@@ -84,7 +87,37 @@ function createExecutionContext(
     historyFilePath: "",
     instanceId: "mixed-mode-test",
     captureEvents,
+    statusReporter: new StatusMessageReporter(
+      () => context.dashboardProvider,
+      () =>
+        context.historyFilePath && context.outputHistoryManager
+          ? {
+              filePath: context.historyFilePath,
+              manager: context.outputHistoryManager,
+            }
+          : undefined,
+      (target, message, severity) => {
+        if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+          if (target.stepIndex === undefined) {
+            throw new Error("Queue status message target requires stepIndex");
+          }
+          context.onStatusMessage?.(target.stepIndex, message, severity);
+        } else {
+          if (target.loopIndex === undefined) {
+            throw new Error(
+              "Final-step status message target requires loopIndex"
+            );
+          }
+          context.onFinalStepStatusMessage?.(
+            target.loopIndex,
+            message,
+            severity
+          );
+        }
+      }
+    ),
   };
+  return context;
 }
 
 suite("mixed-mode workflow execution", () => {
@@ -234,7 +267,11 @@ suite("mixed-mode workflow execution", () => {
 
     const platform = new MockPlatform();
     const evaluator = new EndConditionEvaluator(platform);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
+    const handler = new EndConditionHandler(
+      evaluator,
+      queue,
+      new StatusMessageReporter(() => undefined, () => undefined)
+    );
     const executor = new WorkflowExecutor(queue, handler, evaluator, platform);
 
     await executor.execute(

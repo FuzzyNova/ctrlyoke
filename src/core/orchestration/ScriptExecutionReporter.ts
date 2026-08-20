@@ -30,11 +30,13 @@ import type {
 } from "./OutputHistoryManager";
 import { sanitizeTerminalOutput } from "../../utils/TerminalOutputSanitizer";
 import { StreamChunkCoalescer } from "../../utils/StreamChunkCoalescer";
+import type { StatusMessageReporter } from "./StatusMessageReporter";
 
 export interface ScriptExecutionReporterContext {
   executionWorkspace?: ExecutionWorkspace;
   workspaceFolderPath?: string;
   historyFilePath?: string;
+  statusReporter: StatusMessageReporter;
   dashboardProvider?: IDashboardSink;
   outputHistoryManager?: OutputHistoryManager;
   getDefinitionRevisionContext?: () => DefinitionRevisionContext | undefined;
@@ -402,34 +404,12 @@ export class ScriptExecutionReporter {
       outcome === "passed"
         ? STATUS_MESSAGE_SEVERITY.INFO
         : STATUS_MESSAGE_SEVERITY.ERROR;
-    const signedStepIndex = request.signedStepIndex;
     const timestampMs = Date.now();
 
     // Threaded through rather than left for the webview to stamp on receipt —
     // the dashboard sorts output rows by timestamp, so a status message must
     // carry the same extension-clock origin time as the CLI/script rows it's
     // ordered against (see IDashboardSink.updateStatusMessage).
-    context.dashboardProvider?.updateStatusMessage(
-      signedStepIndex,
-      message,
-      severity,
-      undefined,
-      timestampMs
-    );
-    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      context.onStatusMessage?.(target.stepIndex, message, severity);
-    } else {
-      context.onFinalStepStatusMessage?.(target.loopIndex, message, severity);
-    }
-
-    if (context.historyFilePath && context.outputHistoryManager) {
-      await context.outputHistoryManager
-        .appendStatusMessage(context.historyFilePath, target, {
-          message,
-          severity,
-          timestamp: timestampMs,
-        })
-        .catch(() => undefined);
-    }
+    context.statusReporter.report(target, message, severity, { timestampMs });
   }
 }

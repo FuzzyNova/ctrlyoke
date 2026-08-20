@@ -7,8 +7,10 @@ import {
 import { PromptQueue } from "../../core/PromptQueue";
 import { EndConditionEvaluator } from "../../core/EndConditionEvaluator";
 import { EndConditionHandler } from "../../core/EndConditionHandler";
+import { StatusMessageReporter } from "../../core/orchestration/StatusMessageReporter";
 import {
   EXECUTION_MODES,
+  FINAL_STEP_PHASES,
   STEP_STATUS,
   STEP_TYPES,
 } from "../../types/DashboardConstants";
@@ -91,7 +93,8 @@ function makeContext(
   scriptOutputs?: Array<{ stdout: string; stderr: string }>
 ): WorkflowExecutionContext {
   const integration = new MockHarnessIntegration(undefined, false);
-  const context: WorkflowExecutionContext = {
+  let context: WorkflowExecutionContext;
+  context = {
     executionWorkspace: createNoWorktreeExecutionWorkspace(new MockPlatform()),
     workspaceFolderPath: process.cwd(),
     currentPromptFilePath: "workflow.ctrlyoke.yaml",
@@ -104,6 +107,35 @@ function makeContext(
     },
     getIntegrationForPrompt: () => integration,
     historyFilePath: "",
+    statusReporter: new StatusMessageReporter(
+      () => context.dashboardProvider,
+      () =>
+        context.historyFilePath && context.outputHistoryManager
+          ? {
+              filePath: context.historyFilePath,
+              manager: context.outputHistoryManager,
+            }
+          : undefined,
+      (target, message, severity) => {
+        if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+          if (target.stepIndex === undefined) {
+            throw new Error("Queue status message target requires stepIndex");
+          }
+          context.onStatusMessage?.(target.stepIndex, message, severity);
+        } else {
+          if (target.loopIndex === undefined) {
+            throw new Error(
+              "Final-step status message target requires loopIndex"
+            );
+          }
+          context.onFinalStepStatusMessage?.(
+            target.loopIndex,
+            message,
+            severity
+          );
+        }
+      }
+    ),
   };
 
   if (ptyOutput !== undefined && onPtySpawn === undefined) {
@@ -145,7 +177,11 @@ function makeContext(
 function makeExecutor(queue: PromptQueue): WorkflowExecutor {
   const platform = new MockPlatform();
   const evaluator = new EndConditionEvaluator(platform);
-  const handler = new EndConditionHandler(evaluator, queue, () => undefined);
+  const handler = new EndConditionHandler(
+    evaluator,
+    queue,
+    new StatusMessageReporter(() => undefined, () => undefined)
+  );
   return new WorkflowExecutor(queue, handler, evaluator, platform);
 }
 

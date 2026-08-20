@@ -13,6 +13,7 @@ import {
   type EvaluationResult,
 } from "../../core/EndConditionEvaluator";
 import { EndConditionHandler } from "../../core/EndConditionHandler";
+import { StatusMessageReporter } from "../../core/orchestration/StatusMessageReporter";
 import {
   PromptFile,
   PromptStep,
@@ -38,7 +39,8 @@ import { MockHarnessIntegration, MockPlatform } from "../helpers/mockHarness";
 function makeContext(
   integration: MockHarnessIntegration
 ): WorkflowExecutionContext {
-  return {
+  let context: WorkflowExecutionContext;
+  context = {
     executionWorkspace: createNoWorktreeExecutionWorkspace(new MockPlatform()),
     workspaceFolderPath: process.cwd(),
     currentPromptFilePath: "workflow.ctrlyoke.yaml",
@@ -51,7 +53,37 @@ function makeContext(
     },
     getIntegrationForPrompt: () => integration,
     historyFilePath: "",
+    statusReporter: new StatusMessageReporter(
+      () => context.dashboardProvider,
+      () =>
+        context.historyFilePath && context.outputHistoryManager
+          ? {
+              filePath: context.historyFilePath,
+              manager: context.outputHistoryManager,
+            }
+          : undefined,
+      (target, message, severity) => {
+        if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+          if (target.stepIndex === undefined) {
+            throw new Error("Queue status message target requires stepIndex");
+          }
+          context.onStatusMessage?.(target.stepIndex, message, severity);
+        } else {
+          if (target.loopIndex === undefined) {
+            throw new Error(
+              "Final-step status message target requires loopIndex"
+            );
+          }
+          context.onFinalStepStatusMessage?.(
+            target.loopIndex,
+            message,
+            severity
+          );
+        }
+      }
+    ),
   };
+  return context;
 }
 
 function makeExecutor(
@@ -63,7 +95,7 @@ function makeExecutor(
   const handler = new EndConditionHandler(
     conditionEvaluator,
     queue,
-    () => undefined
+    new StatusMessageReporter(() => undefined, () => undefined)
   );
   return new WorkflowExecutor(queue, handler, conditionEvaluator, platform);
 }
@@ -225,10 +257,9 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       },
     });
     try {
-      await makeExecutor(warnQueue).execute(warnIntegration, {
-        ...makeContext(warnIntegration),
-        dashboardProvider: dashboardProvider as any,
-      });
+      const warnContext = makeContext(warnIntegration);
+      warnContext.dashboardProvider = dashboardProvider as any;
+      await makeExecutor(warnQueue).execute(warnIntegration, warnContext);
       assert.deepStrictEqual(warnIntegration.sentPrompts, [promptText]);
       assert.ok(
         warnStatusMessages.some((status) =>
@@ -696,14 +727,13 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       ],
     });
 
-    await executor.execute(integration, {
-      ...makeContext(integration),
-      historyFilePath: "manifest.json",
-      outputHistoryManager: outputHistoryManager as any,
-      onStatusMessage: (stepIndex, message, severity) => {
-        liveStatuses.push({ stepIndex, message, severity });
-      },
-    });
+    const context = makeContext(integration);
+    context.historyFilePath = "manifest.json";
+    context.outputHistoryManager = outputHistoryManager as any;
+    context.onStatusMessage = (stepIndex, message, severity) => {
+      liveStatuses.push({ stepIndex, message, severity });
+    };
+    await executor.execute(integration, context);
 
     const preResult = liveStatuses.find((status) =>
       status.message.startsWith("Pre-condition passed")
@@ -1267,8 +1297,16 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       phase: string | null;
     }> = [];
     const outputUpdates: Array<{ loopIndex: number; output: unknown }> = [];
+    const finalStepStatusMessages: Array<{
+      loopIndex: number;
+      message: string;
+      severity: string;
+    }> = [];
 
     const context = makeContext(integration);
+    context.onFinalStepStatusMessage = (loopIndex, message, severity) => {
+      finalStepStatusMessages.push({ loopIndex, message, severity });
+    };
     context.dashboardProvider = {
       updateStepStatus: () => {},
       updateRetryAttempt: () => {},
@@ -1283,6 +1321,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       ) => {
         statusUpdates.push({ status, loopCount, phase });
       },
+      updateStatusMessage: () => {},
       updateFinalStepOutput: (loopIndex: number, output: unknown) => {
         outputUpdates.push({ loopIndex, output });
       },
@@ -1292,7 +1331,14 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
     queue.loadPrompts({
       steps: [{ prompt: "queue-1" }],
-      finalStep: { prompt: "final-observe" },
+      finalStep: {
+        prompt: "final-observe",
+        preCondition: {
+          script: `node -e "process.stdout.write('ok')"`,
+          compareSource: "stdout",
+          returns: "ok",
+        },
+      },
     });
 
     await executor.execute(integration, context);
@@ -1316,6 +1362,13 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.ok(outputUpdates.length >= 1);
     assert.ok(outputUpdates.every((u) => u.loopIndex === 0));
     assert.ok(outputUpdates.some((u: any) => u.output?.isStreaming === false));
+    assert.ok(
+      finalStepStatusMessages.some(
+        (status) =>
+          status.loopIndex === 0 &&
+          status.message.startsWith("Evaluating pre-condition")
+      )
+    );
   });
 
   test("forwards runIndex on queue streaming events", async () => {
