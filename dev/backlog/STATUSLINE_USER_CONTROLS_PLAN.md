@@ -316,10 +316,15 @@ to both scripts is exactly the kind of change that will drift further if done tw
 shared flat sibling module (`src/scripts/ctrlyoke-statusline-wrapper.js`, plain Node/CommonJS to
 match how these scripts already ship standalone under `out/scripts/`) providing:
 
-- `writeSnapshotAtomic(directory, token, payload, writtenAt)` — the write-temp-then-rename
-  logic, currently near-identical in both files.
+- `writeSnapshotAtomic(directory, filePrefix, token, payload, writtenAt)` — the
+  write-temp-then-rename logic, currently near-identical in both files. The provider-supplied
+  prefix is required to preserve the existing `claude-statusline-<token>.json` and
+  `agy-statusline-<token>.json` transport contracts; a shared helper cannot infer that filename
+  from `directory` and `token` alone.
 - `forwardToCommand(command, inputBytes, timeoutMs)` — spawn-with-timeout, one implementation,
-  one timeout value used by both (pick one deliberately, don't keep the accidental split).
+  using **200 ms for both wrappers**. That value is already justified by Antigravity's ~300 ms
+  poll cadence; there is no evidence supporting Claude's accidental 500 ms variant, and the
+  faster shared bound is safe for both statusline refresh paths.
 - A provider-parameterized branded-line formatter, generalizing
   `formatBrandedStatusLine`/`getContextValues`/`getQuotaPercentage` out of the Antigravity
   script so Claude's version can reuse the same context/quota-percentage-bar formatting instead
@@ -509,9 +514,10 @@ Mirror `ClaudeUsageProvider.parseClaudeRateLimitWindows` (`src/core/harness/shar
    install when `customCommand` is empty (Decision 6); read `customCommand` (not a frozen
    baseline) as the forward target on every prompt; wire the `notifyUserFeedback` call
    (Decision 9) off the install step's returned result from Phase 2.
-4. **Shared wrapper module + `useCtrlyokeStyle` + Claude branded line**: extract
-   `statuslineWrapper.js`, add the style switch to both entry scripts, add Claude's branded
-   line, pick and document one forward timeout instead of the accidental 500ms/200ms split.
+4. **Shared wrapper module + `useCtrlyokeStyle` + Claude branded line**: extract the flat
+   `ctrlyoke-statusline-wrapper.js`, add the style switch to both entry scripts, add Claude's
+   branded line, and use the deliberate shared 200 ms forward timeout instead of the accidental
+   500ms/200ms split.
 5. **UI**: `StatusLineTrackingControls` component, `UsageCard.tsx` custom-command field +
    conditional style checkbox, `Modal`-based disable-confirmation dialog with the
    checked-by-default restore checkbox next to the confirm button and its single
