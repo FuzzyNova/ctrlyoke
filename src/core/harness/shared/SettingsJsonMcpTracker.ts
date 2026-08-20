@@ -38,6 +38,31 @@ export type SettingsJsonPermissionPolicy = Record<
   | Record<string, SettingsJsonPermissionDecision>
 >;
 
+/** The persistent single-value API is intentionally limited to statusLine. */
+export const STATUS_LINE_SETTING_KEY = "statusLine" as const;
+export type SettingsJsonPersistentValueKey = typeof STATUS_LINE_SETTING_KEY;
+
+export type SettingsJsonPersistentValueCapture = (
+  preexistingValue: unknown,
+  hadKey: boolean
+) => void | Promise<void>;
+
+export type SettingsJsonPersistentValueUninstall =
+  | { readonly action: "restore"; readonly value: unknown }
+  | { readonly action: "delete" };
+
+export type SettingsJsonPersistentValueInstallResult =
+  | {
+      readonly kind: "no-op";
+      readonly preexistingValue: unknown;
+      readonly hadKey: boolean;
+    }
+  | {
+      readonly kind: "written";
+      readonly preexistingValue: unknown;
+      readonly hadKey: boolean;
+    };
+
 interface ValueLease {
   normalizedRequestedValue: string;
   owners: Map<string, LeaseOwnerState>;
@@ -499,6 +524,84 @@ export class SettingsJsonMcpTracker {
   // ============================================================
   // SINGLE-VALUE LEASE
   // ============================================================
+
+  /**
+   * Install the persistent statusLine value without creating a lease owner.
+   *
+   * The callback is part of the locked read/check/capture/write sequence. This
+   * ordering lets a caller persist a captured user value before replacing the
+   * only copy in the harness settings file.
+   */
+  async installPersistentValue(
+    workspaceRoot: string,
+    key: SettingsJsonPersistentValueKey,
+    value: unknown,
+    capture?: SettingsJsonPersistentValueCapture
+  ): Promise<SettingsJsonPersistentValueInstallResult> {
+    const settingsPath = this.getProjectConfigPath(workspaceRoot);
+
+    return this.withMutationLock(settingsPath, async () => {
+      await this.deleteLeaseSidecar(settingsPath, key);
+      const settings = await this.readProjectConfig(settingsPath);
+      const hadKey = Object.prototype.hasOwnProperty.call(settings, key);
+      const preexistingValue = this.cloneJson(settings[key]);
+
+      if (
+        (hadKey && this.jsonEquals(preexistingValue, value)) ||
+        (!hadKey && value === undefined)
+      ) {
+        return {
+          kind: "no-op",
+          preexistingValue,
+          hadKey,
+        };
+      }
+
+      await capture?.(this.cloneJson(preexistingValue), hadKey);
+      settings[key] = this.cloneJson(value);
+      await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+      await writeFileAtomic(settingsPath, JSON.stringify(settings, null, 2));
+      return {
+        kind: "written",
+        preexistingValue,
+        hadKey,
+      };
+    });
+  }
+
+  /**
+   * Restore or delete the persistent statusLine value without creating a lease
+   * owner. The legacy statusLine lease sidecar is removed while holding the
+   * same settings-file mutation lock.
+   */
+  async uninstallPersistentValue(
+    workspaceRoot: string,
+    key: SettingsJsonPersistentValueKey,
+    operation: SettingsJsonPersistentValueUninstall
+  ): Promise<void> {
+    const settingsPath = this.getProjectConfigPath(workspaceRoot);
+
+    await this.withMutationLock(settingsPath, async () => {
+      await this.deleteLeaseSidecar(settingsPath, key);
+      const settings = await this.readProjectConfig(settingsPath);
+      const hadKey = Object.prototype.hasOwnProperty.call(settings, key);
+
+      if (operation.action === "restore") {
+        if (hadKey && this.jsonEquals(settings[key], operation.value)) {
+          return;
+        }
+        settings[key] = this.cloneJson(operation.value);
+      } else {
+        if (!hadKey) {
+          return;
+        }
+        delete settings[key];
+      }
+
+      await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+      await writeFileAtomic(settingsPath, JSON.stringify(settings, null, 2));
+    });
+  }
 
   /**
    * Apply an ownership-aware value to the same project config used for MCP

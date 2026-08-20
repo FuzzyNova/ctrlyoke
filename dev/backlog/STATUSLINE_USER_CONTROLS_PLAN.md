@@ -506,12 +506,14 @@ Mirror `ClaudeUsageProvider.parseClaudeRateLimitWindows` (`src/core/harness/shar
    Implementation decision: workspace filtering is path-generalized and removes only forbidden
    subtrees/leaves, preserving allowed sibling values such as other `permissions` and
    `usageTracking` settings.
-2. **Provider install/uninstall rewrite**: replace the `statusLine`-key value-lease
-   register/unregister calls in both providers with the idempotent install/uninstall pair;
-   remove the now-dead `pruneOrphanedStatusLine` sweep and owner-state file for this key only,
-   deleting any leftover lease-sidecar file on sight. The install step returns whether it
-   performed a write and whether it captured an existing command, so `CliIntegration` can fire
-   the Decision 9 install notification off that result.
+2. **Provider install/uninstall rewrite (tracker API in progress)**: the shared tracker now
+   exposes a typed, idempotent persistent-value install/uninstall pair for the `statusLine`
+   key. Its locked capture-before-write sequence and legacy sidecar cleanup are ready for the
+   provider migration; both providers still use the existing value-lease calls until that
+   integration is implemented. The remaining provider work also removes the now-dead
+   `pruneOrphanedStatusLine` sweep and owner-state file for this key only. The install result
+   carries whether it performed a write and the preexisting value so the provider migration can
+   persist the capture and later let `CliIntegration` fire the Decision 9 install notification.
 3. **Custom-command auto-detect-once + live read + install notification**: populate
    `customCommand` and compute `useCtrlyokeStyle`'s default together, atomically, on first-ever
    install when `customCommand` is empty (Decision 6); read `customCommand` (not a frozen
