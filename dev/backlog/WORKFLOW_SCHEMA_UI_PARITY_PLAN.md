@@ -1,6 +1,7 @@
 # Workflow Schema → UI Parity Plan
 
-> **Status:** Schema cleanup landed; UI parity work not started. Audit complete
+> **Status:** Schema cleanup landed; UI parity work staged as an ordered step
+> queue (2026-08-20 — see "Staged execution plan" at the end). Audit complete
 > and verified against the code (2026-08-19).
 > **Priority:** P0 — the property-preservation question is answered and the
 > answer is **confirmed silent data loss**: saving a script step through the
@@ -147,9 +148,14 @@ prompt branch includes it).
 `buildPromptStepProperties` (`WorkflowStepSanitizer.ts:605-676`) has no `secrets`
 case. Today that is harmless — the merge preserves an existing value — but it
 means adding the drawer control from step 2 below **will not persist** until
-`secrets` is added to that builder. The same is true of `vars`. Confirmed: a
-prompt step carrying `secrets` and `vars` survived a drawer save untouched, and
-a `model` override applied alongside them.
+`secrets` is added to that builder. Confirmed: a prompt step carrying `secrets`
+survived a drawer save untouched, and a `model` override applied alongside it.
+
+`secrets` is the **only** key that builder is missing. An earlier draft of this
+document also named `vars`; that is wrong — `vars` is declared on the workflow
+root branch, not in `executionProperties`, so it is not a step property at all
+and `buildPromptStepProperties` must not learn it. Workflow `vars` already round-
+trips through `UPDATE_WORKFLOW_PROPERTY` and needs only a control.
 
 ### Fix direction
 
@@ -160,6 +166,47 @@ closes every caller at once (editor save, context toggle, and the static
 `updateStepAtRun` path) instead of patching each payload builder. `finalStep`
 needs the same treatment: merge against what is on disk rather than writing the
 editor's object whole.
+
+#### Three consequences the fix direction has to carry with it
+
+Found while staging the work; each is load-bearing, not a refinement.
+
+1. **Merging makes a cleared script field sticky unless `clearProperties` is
+   threaded.** `buildPromptStepChange` drops `clearProperties` entirely on its
+   script branch (`WorkflowOrchestrator.ts:186-206`), and `PromptEditor`'s
+   script payload _omits_ a field when it sits at its default —
+   `onPass !== "continue"`, `onFail !== "stopWorkflow"`,
+   `compareSource !== "auto"`, falsy `returns`. Under today's replace semantics
+   "omitted" reads as "deleted", which is how clearing works at all. The moment
+   the path merges, omission means "keep", so a user returning `onPass` to
+   Continue would silently keep `stopWorkflow` on disk. The merge fix is only
+   correct if it lands together with: `clearProperties` threaded through the
+   script branch, and the script payload builders emitting an explicit clear for
+   every field the user reset. **Do not land the merge without this** — it trades
+   a deletion bug for a stuck-value bug.
+2. **After the merge, the enable/disable payload should get _smaller_, not
+   bigger.** `buildWorkflowStepEnabledUpdate` is only lossy because the payload
+   is treated as the whole step; once the persistence layer merges, the toggle
+   should send just `{ type: script }` + `enabled` (+ its existing
+   `clearProperties: ["enabled"]`), and preservation stops depending on the
+   enumeration being complete. The two `it.fails` guards in
+   `src/ui/webview-react/test/utils/stepClipboard.test.ts` assert the _fuller_
+   enumeration, so they must be **rewritten** to assert the minimal payload —
+   not merely un-`.fails`ed. The persistence-level proof belongs in the
+   round-trip suite, which is where it is already expressed.
+3. **`sanitizeClipboardWorkflowStep`'s missing `secrets` is a separate bug and
+   still needs fixing.** Its script branch omits `secrets` while its prompt
+   branch includes it (`WorkflowStepSanitizer.ts:436-478`). Merging fixes the
+   final-step toggle that routes through it, but plain clipboard copy/paste of a
+   script step still drops the grant, and no merge protects that.
+
+`finalStep` also needs a real merge site: it is written today through
+`WorkingFileManager.updatePropertiesAtRun` as one whole ordinary property
+(`WorkflowOrchestrator.ts:3543-3581`), which has nowhere to see the previous
+step. It needs its own `updateFinalStepAtRun` that merges against `source.finalStep`,
+replacing on a genuine prompt↔script type change and still honouring deletion
+(`finalStep: null`) and `clearProperties`. `WorkflowInstance.updateFinalStepInQueue`
+must move in lockstep so the instance-bound and run-addressed paths agree.
 
 The verification is already in place. Every failing pair is listed in
 `KNOWN_LOSSY_PRESERVATION` / `KNOWN_UNACCEPTED` in the round-trip suite, and each
@@ -399,6 +446,43 @@ property appears in a maintained registry of UI control ids, with an explicit,
 commented opt-out list for properties deliberately left CLI-only. The sample
 table in the round-trip suite is the natural place to hang it — it already
 enumerates the same property set and already fails when the schema grows.
+
+## Interleaved from `OVERZEALOUS_STEP_FAILURES_PLAN.md`
+
+Two items from that plan are **coupled to this one** and are staged inside this
+queue. The rest stays there.
+
+| Item                                                     | Decision                                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **3 — ungranted `${secret:NAME}` in a process map**      | **Interleaved, after the `env` editors land.** Adding `env` controls to script steps, conditions and hooks multiplies the surfaces from which a UI author can write `${secret:NAME}` — the MCP env editor already inserts the reference for them. Shipping those editors without recommendation 3.1 means shipping four new ways to walk a user into a preflight hard failure. |
+| **2 — `{{name}}` throws when the workflow defines vars** | **Interleaved, immediately before the workflow `vars` editor.** The bug is latent today only because a dashboard-only author cannot define a var at all. The `vars` control is what makes it reachable, so the throw has to go first. If the `vars` editor is cut, cut this with it.                                                                                           |
+| 1 — `${secret:NAME}` in prompt text                      | Already fixed; kept there as precedent.                                                                                                                                                                                                                                                                                                                                        |
+| 4 — heuristic redactor rewrites authored text            | **Deferred.** Display-layer, needs a trace before a fix can be designed, and nothing in this plan makes it more reachable.                                                                                                                                                                                                                                                     |
+| Cross-cutting "documents every syntax" test              | **Deferred** with item 4.                                                                                                                                                                                                                                                                                                                                                      |
+
+## Staged execution plan
+
+Ordered so each step builds only on work already on disk: persistence before
+controls, the shared editor before its consumers, and the runtime guard changes
+before the control that makes them reachable.
+
+| #   | Step                                                                              | Closes                                                    |
+| --- | --------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| 1   | Script steps merge instead of replace (+ `clearProperties` threading)             | 9 `script step:*` preservation failures                   |
+| 2   | `finalStep` merges against disk; `secrets` in `buildPromptStepProperties`         | 25 `final step:*` preservation + both acceptance failures |
+| 3   | Step-drawer `secrets` control                                                     | Prompt-step parity gap                                    |
+| 4   | Shared env/headers map editor; `McpServerForm` `headers` + `autoApprove` list     | MCP form parity gaps                                      |
+| 5   | Script-step `env` / `secrets` / `errorBehavior` controls                          | Script-step parity gaps                                   |
+| 6   | `env` on pre/end conditions and hooks; hook `timeoutSec`                          | Condition + hook parity gaps                              |
+| 7   | Process-map secret references auto-grant (overzealous item 3)                     | Hard failure reachable from the new `env` editors         |
+| 8   | Unresolved `{{var}}` becomes advisory + fenced-block masking (overzealous item 2) | Hard failure the `vars` editor would make reachable       |
+| 9   | Workflow-root `vars` editor                                                       | Last root-level parity gap                                |
+| 10  | Schema→UI control-id parity guard                                                 | "Preventing the next one"                                 |
+
+After step 2, `KNOWN_LOSSY_PRESERVATION` and `KNOWN_UNACCEPTED` in
+`src/test/integration/schemaUiPropertyRoundTrip.integration.test.ts` are both
+empty and stay that way; they are kept in place, empty, so a regression names
+itself.
 
 ## Files likely changed
 

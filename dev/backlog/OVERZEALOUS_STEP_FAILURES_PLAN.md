@@ -1,7 +1,11 @@
 # Overzealous Step Failures Plan
 
 > **Status:** Not started — problems verified against the code, fixes not
-> designed in detail.
+> designed in detail. **Items 2 and 3 are staged inside
+> `WORKFLOW_SCHEMA_UI_PARITY_PLAN.md`'s step queue** (2026-08-20): that plan
+> adds the UI controls which make both failures reachable for a dashboard-only
+> author, so the guards have to be fixed alongside them. Items 4 and the
+> cross-cutting test stay here, deferred.
 > **Priority:** P1 for item 2 (latent, trips any workflow that uses `vars`);
 > P2 for the rest.
 > **Origin:** Fell out of implementing
@@ -13,7 +17,7 @@
 ## The pattern
 
 ctrlyoke has several guards that hard-fail a step because prompt text or
-config *mentions* a ctrlyoke syntax, without being able to tell "the author
+config _mentions_ a ctrlyoke syntax, without being able to tell "the author
 means this" from "the author is writing about this."
 
 The recurring failure is authoring a workflow **about ctrlyoke** — a plan, an
@@ -55,17 +59,17 @@ Unresolved variable "{{foo}}" — pass --var foo=<value> or add it to the workfl
 Both entry points bail out first when there are no vars at all:
 
 ```ts
-if (!promptText || Object.keys(vars).length === 0) return promptText;   // :55
+if (!promptText || Object.keys(vars).length === 0) return promptText; // :55
 ```
 
 So the bug is **latent, not universal**:
 
-| Workflow | `{{foo}}` in prompt text |
-| --- | --- |
+| Workflow                  | `{{foo}}` in prompt text            |
+| ------------------------- | ----------------------------------- |
 | No `vars:` and no `--var` | Passes through untouched — no error |
-| **Any** vars defined | **Throws, killing the step** |
+| **Any** vars defined      | **Throws, killing the step**        |
 
-A workflow that uses variables for anything can therefore no longer *discuss*
+A workflow that uses variables for anything can therefore no longer _discuss_
 variable syntax. The failure is also confusing: the message tells you to define
 `foo`, when the author never wanted a variable at all.
 
@@ -110,14 +114,14 @@ defense.
 Those maps genuinely interpolate. If ctrlyoke let an ungranted reference
 through, the child process would receive the literal string
 `${secret:GITHUB_PAT}` as its token and fail somewhere downstream with a
-confusing auth error. So "just warn and continue" is *not* obviously right
+confusing auth error. So "just warn and continue" is _not_ obviously right
 here — something really was going to be substituted.
 
 The problem is not that ctrlyoke checks. It is that the **grant is a second,
 separate gesture** the user has no reason to expect:
 
 - The user set up the secret, referenced it correctly in the MCP/script config,
-  and is then told the workflow is invalid because they didn't *also* list it
+  and is then told the workflow is invalid because they didn't _also_ list it
   somewhere else.
 - The MCP Manager env editor **inserts `${secret:NAME}` for them** (shipped in
   `SECRETS_AND_REDACTION_PLAN.md` Phase 5) and does not add the grant, so the
@@ -126,7 +130,7 @@ separate gesture** the user has no reason to expect:
   there is no `!NAME` gesture available; `secrets: [NAME]` is the only option —
   and that array is not editable from the UI today (see
   `WORKFLOW_SCHEMA_UI_PARITY_PLAN.md`), which makes the failure
-  *unrecoverable* for a UI-only author.
+  _unrecoverable_ for a UI-only author.
 
 ### The security argument does not survive contact with the code
 
@@ -157,7 +161,7 @@ stop. That trains rubber-stamping.
    throw and the `expandSecretInterpolations` throw become unreachable for this
    case and can stay as genuine invariant guards.
 2. **Put the cloned-repo protection where it belongs:** a one-time trust
-   approval that surfaces *every* grant a workflow wants — inline and env-map
+   approval that surfaces _every_ grant a workflow wants — inline and env-map
    alike — reusing the `permissions.allowedExternalFileRoots` approval pattern.
    `SECRETS_AND_REDACTION_PLAN.md`'s own open questions already propose this
    ("Leaning yes for grants") and it was never built. One coherent gate beats
@@ -182,13 +186,13 @@ Confirmed cause of the match — `REDACTION_RULES`' `credential-assignment` rule
 
 `secret` + `:` + 8-or-more characters matches `${secret:LONG_NAME}` exactly.
 
-Confirmed *not* the cause: `CliPromptPreparer` does no redaction, so the prompt
+Confirmed _not_ the cause: `CliPromptPreparer` does no redaction, so the prompt
 file is not rewritten at preparation time. The rewrite happens further
 upstream — `PostMessageDashboardSink` and `CtrlYokeWebviewProvider` both wrap
 messages with `secretRedactionService`, so the likely path is the webview
 transport or a persistence step before it. **Trace the exact site before
 designing a fix**; the correct fix differs depending on whether authored text
-is being redacted on the way *in* (a corruption bug) or only on the way *out*
+is being redacted on the way _in_ (a corruption bug) or only on the way _out_
 to a display surface (a display-only annoyance).
 
 Notes for whoever picks this up:
@@ -213,11 +217,11 @@ item above would have been caught by it.
 
 ## Files likely changed
 
-| File | Change |
-| --- | --- |
-| `src/utils/VarSubstitutor.ts` | Stop throwing on unresolved placeholders; mask fenced blocks (item 2) |
-| `src/utils/SecretReferenceParser.ts` | Union process-map secret references into the effective grant (item 3) |
-| `src/utils/SecretResolver.ts` | `getDeclaredSecretGrants` / `getProcessMaps` wiring for the above |
-| `src/types/PreviewRedactor.ts` | Narrow `credential-assignment` so it does not eat `${secret:NAME}` (item 4) |
-| `src/ui/PostMessageDashboardSink.ts`, `src/ui/CtrlYokeWebviewProvider.ts` | Trace target for item 4 |
-| `src/test/**` | The documents-every-syntax regression test |
+| File                                                                      | Change                                                                      |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `src/utils/VarSubstitutor.ts`                                             | Stop throwing on unresolved placeholders; mask fenced blocks (item 2)       |
+| `src/utils/SecretReferenceParser.ts`                                      | Union process-map secret references into the effective grant (item 3)       |
+| `src/utils/SecretResolver.ts`                                             | `getDeclaredSecretGrants` / `getProcessMaps` wiring for the above           |
+| `src/types/PreviewRedactor.ts`                                            | Narrow `credential-assignment` so it does not eat `${secret:NAME}` (item 4) |
+| `src/ui/PostMessageDashboardSink.ts`, `src/ui/CtrlYokeWebviewProvider.ts` | Trace target for item 4                                                     |
+| `src/test/**`                                                             | The documents-every-syntax regression test                                  |
