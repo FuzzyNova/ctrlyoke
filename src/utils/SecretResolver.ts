@@ -130,16 +130,24 @@ export async function findMissingSecretNames(
   return missing;
 }
 
-/** Prompt bodies are never a resolution boundary. */
-export function assertNoSecretInterpolationInPrompt(prompt: string): void {
+/**
+ * Prompt bodies are never a resolution boundary — `${secret:NAME}` in prompt
+ * text is passed through verbatim, never substituted.
+ *
+ * This deliberately only *detects*; it must never throw. Prompt text is
+ * frequently documentation about ctrlyoke itself (plans, instruction files,
+ * and prompts that quote this very syntax), so treating the token's presence
+ * as an authoring error blocked legitimate runs that merely mentioned it.
+ * Callers report the returned tokens as an advisory diagnostic instead.
+ */
+export function findSecretInterpolationsInPrompt(prompt: string): string[] {
   SECRET_INTERPOLATION_PATTERN.lastIndex = 0;
-  const match = SECRET_INTERPOLATION_PATTERN.exec(prompt);
-  if (match) {
-    throw new Error(
-      `Secret interpolation is not allowed in prompt text ("${match[0]}"). ` +
-        "Use !NAME to grant an environment variable to the step."
-    );
+  const found = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = SECRET_INTERPOLATION_PATTERN.exec(prompt)) !== null) {
+    found.add(match[0]);
   }
+  return [...found];
 }
 
 export function collectSecretInterpolationNames(
@@ -263,40 +271,18 @@ export async function preflightWorkflowSecrets(
   { failOnMissing = true }: { failOnMissing?: boolean } = {}
 ): Promise<string[]> {
   const missingSecretNames = new Set<string>();
-  const assertConditionPrompts = (
-    condition: object | null | undefined
-  ): void => {
-    const prompts = condition as
-      | { retryPrompt?: unknown; passRetryPrompt?: unknown }
-      | null
-      | undefined;
-    if (typeof prompts?.retryPrompt === "string") {
-      assertNoSecretInterpolationInPrompt(prompts.retryPrompt);
-    }
-    if (typeof prompts?.passRetryPrompt === "string") {
-      assertNoSecretInterpolationInPrompt(prompts.passRetryPrompt);
-    }
-  };
 
-  if (workflow.prompt !== undefined) {
-    assertNoSecretInterpolationInPrompt(workflow.prompt);
-  }
-  assertConditionPrompts(workflow.preCondition);
-  assertConditionPrompts(workflow.endCondition);
-
+  // Prompt-text `${secret:NAME}` is deliberately *not* checked here. It is
+  // never substituted, and a prompt merely quoting the syntax is legitimate,
+  // so it is surfaced as a per-step advisory by WorkflowExecutor rather than
+  // blocking the run. Env-map interpolation below is a different case: those
+  // maps really do interpolate, so an ungranted name there stays an error.
   const steps = [
     ...(workflow.steps ?? []),
     ...(workflow.finalStep ? [workflow.finalStep] : []),
   ];
   for (const [index, step] of steps.entries()) {
     const scope = step.name?.trim() || `step ${index + 1}`;
-    if ("prompt" in step) {
-      assertNoSecretInterpolationInPrompt(step.prompt);
-    }
-    if (!isScriptStep(step)) {
-      assertConditionPrompts(step.preCondition);
-      assertConditionPrompts(step.endCondition);
-    }
     const grants = getDeclaredSecretGrants(step, workflow);
     const mapNames = getProcessMaps(step, workflow).flatMap((map) =>
       collectSecretInterpolationNames(map)

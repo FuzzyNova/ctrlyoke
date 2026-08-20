@@ -960,6 +960,7 @@ export const PROMPT_DIAGNOSTIC_CODES = {
   UNRESOLVED_REFERENCE: "prompt.reference.unresolved",
   UNKNOWN_MCP_REFERENCE: "prompt.mcp.unknown",
   CONDITION_OUTPUT_UNAVAILABLE: "prompt.reference.condition-output-unavailable",
+  SECRET_INTERPOLATION_IGNORED: "prompt.secret.interpolation-ignored",
 } as const;
 
 export type PromptDiagnosticCode =
@@ -988,8 +989,11 @@ export function isContextResolutionDiagnostic(
 export function formatContextResolutionFailureMessage(
   diagnostics: readonly { readonly message: string }[]
 ): string {
+  const count = diagnostics.length;
   return [
-    `Step blocked by execution.strictContextResolution="fail" — ${diagnostics.length} references did not resolve:`,
+    `Step blocked by execution.strictContextResolution="fail" — ${count} reference${
+      count === 1 ? "" : "s"
+    } did not resolve:`,
     ...diagnostics.map((diagnostic) => `  • ${diagnostic.message}`),
   ].join("\n");
 }

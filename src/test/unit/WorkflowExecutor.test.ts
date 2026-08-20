@@ -24,6 +24,7 @@ import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   PROMPT_DIAGNOSTIC_CODES,
+  isContextResolutionDiagnostic,
   STEP_STATUS,
   CONDITION_ACTIONS,
 } from "../../types/DashboardConstants";
@@ -174,6 +175,46 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     } finally {
       configService.setCliOverlay({});
     }
+  });
+
+  test("reports prompt-text secret interpolation as an advisory without blocking, even in fail mode", async () => {
+    // A prompt that merely quotes ${secret:NAME} — plans and instruction files
+    // legitimately document the syntax — must never block the step.
+    const promptText =
+      "Explain why ${secret:X} is never substituted into prompt text";
+    const queue = new PromptQueue();
+    queue.loadPrompts({ steps: [{ prompt: promptText }] });
+    const integration = new MockHarnessIntegration(undefined, false);
+    const diagnostics: CompatibilityDiagnostic[] = [];
+
+    configService.setCliOverlay({
+      execution: {
+        strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+      },
+    });
+    try {
+      await makeExecutor(queue).execute(integration, {
+        ...makeContext(integration),
+        reportCompatibilityDiagnostics: (reported) =>
+          diagnostics.push(...reported),
+      });
+    } finally {
+      configService.setCliOverlay({});
+    }
+
+    assert.deepStrictEqual(integration.sentPrompts, [promptText]);
+    const advisories = diagnostics.filter(
+      (diagnostic) =>
+        diagnostic.code ===
+        PROMPT_DIAGNOSTIC_CODES.SECRET_INTERPOLATION_IGNORED
+    );
+    assert.strictEqual(advisories.length, 1);
+    assert.ok(advisories[0].message.includes("${secret:X}"));
+    assert.strictEqual(
+      isContextResolutionDiagnostic(advisories[0].code),
+      false,
+      "the advisory must stay outside the blocking set"
+    );
   });
 
   test("resolves prompt-file references at execution time without replacing queue state", async () => {

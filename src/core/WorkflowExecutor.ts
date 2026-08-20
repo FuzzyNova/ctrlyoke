@@ -21,7 +21,12 @@ import {
 } from "../types/WorkflowContextTypes";
 import {
   EXECUTION_MODES,
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+  CAPABILITY_VERIFICATION_STATUSES,
+  COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
   CONTEXT_RESOLUTION_FAILURE_MODES,
+  PROMPT_DIAGNOSTIC_CODES,
   formatContextResolutionFailureMessage,
   isContextResolutionDiagnostic,
   STEP_STATUS,
@@ -56,7 +61,7 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { sanitizeTerminalOutput } from "../utils/TerminalOutputSanitizer";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
 import {
-  assertNoSecretInterpolationInPrompt,
+  findSecretInterpolationsInPrompt,
   buildSecretProcessEnvironment,
   expandSecretInterpolations,
   getDeclaredSecretGrants,
@@ -694,7 +699,11 @@ export class WorkflowExecutor {
       if (!effectivePromptText.trim()) {
         throw new Error("Prompt is empty after resolving its prompt file");
       }
-      assertNoSecretInterpolationInPrompt(effectivePromptText);
+      this.reportIgnoredSecretInterpolations(
+        effectivePromptText,
+        resolvedProperties,
+        context
+      );
 
       const mcpNormalization =
         await McpServerNormalizer.applyFromRegistryWithDiagnostics(
@@ -2597,7 +2606,11 @@ export class WorkflowExecutor {
           "Retry prompt is empty after resolving its prompt file"
         );
       }
-      assertNoSecretInterpolationInPrompt(effectiveRetryPrompt.prompt);
+      this.reportIgnoredSecretInterpolations(
+        effectiveRetryPrompt.prompt,
+        resolvedProperties,
+        context
+      );
 
       const mcpNormalization =
         await McpServerNormalizer.applyFromRegistryWithDiagnostics(
@@ -2713,6 +2726,43 @@ export class WorkflowExecutor {
 
       return result.responseText;
     };
+  }
+
+  /**
+   * `${secret:NAME}` in prompt text is never substituted — prompt bodies are
+   * not a resolution boundary. This is reported as an advisory only: it is
+   * deliberately excluded from `isContextResolutionDiagnostic`, so it never
+   * blocks a step even in `"fail"` mode. Prompts legitimately quote the syntax
+   * (plans and instruction files that document it), and hard-failing those was
+   * the behavior this replaced.
+   */
+  private reportIgnoredSecretInterpolations(
+    promptText: string,
+    resolvedProperties: ResolvedProperties,
+    context: WorkflowExecutionContext
+  ): void {
+    const tokens = findSecretInterpolationsInPrompt(promptText);
+    if (tokens.length === 0) {
+      return;
+    }
+    context.reportCompatibilityDiagnostics?.([
+      {
+        code: PROMPT_DIAGNOSTIC_CODES.SECRET_INTERPOLATION_IGNORED,
+        severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+        harnessId: resolvedProperties.harness,
+        capability: "promptInputs",
+        state: {
+          fidelity: CAPABILITY_FIDELITIES.PARTIAL,
+          mechanism: CAPABILITY_MECHANISMS.NONE,
+          verification: CAPABILITY_VERIFICATION_STATUSES.VERIFIED,
+        },
+        message:
+          `Secret interpolation is not substituted in prompt text (${tokens.join(
+            ", "
+          )}); the text is sent to the harness verbatim. ` +
+          "Use !NAME to grant an environment variable to the step.",
+      },
+    ]);
   }
 
   private assertContextResolutionDiagnosticsAllowed(

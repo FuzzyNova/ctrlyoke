@@ -1,8 +1,8 @@
 # Unified Context-Resolution Failure Mode Plan
 
-> **Status:** Implemented — Phases 1–7 complete and re-verified against the
-> code (2026-08-19). Candidate for moving to `dev/implemented/`; leave that
-> move to the user.
+> **Status:** Implemented — Phases 1–8 complete and re-verified against the
+> code (2026-08-19), including the review-pass removal of the prompt-text
+> interpolation hard-fail (Phase 8).
 > **Priority:** P2 — real gap (silent git-ref failures), but not urgent.
 > **Origin:** Grew out of the `!DOCTYPE` backtick-masking bug fix. See the
 > session that produced this plan for the full discussion; short version below.
@@ -139,7 +139,12 @@ controls — rather than inventing a `SettingSelectRow` for a single use.
 **only one of them should become conditional**:
 
 1. `assertNoSecretInterpolationInPrompt` — rejects `${secret:X}` in prompt
-   text. This is always an authoring error; keep it an unconditional throw.
+   text. ~~This is always an authoring error; keep it an unconditional
+   throw.~~ **Reversed during review — see Phase 8.** This was wrong: prompt
+   text frequently *documents* the syntax (this very plan does), and the check
+   cannot tell an author who expects substitution from a prompt that merely
+   quotes the token. It hard-failed several legitimate runs of this workflow.
+   It is now a non-blocking advisory diagnostic.
 2. Grant-consistency check on MCP/hook/script env maps (`${secret:NAME}`
    referenced but not granted to the step). Also always an authoring error;
    keep it an unconditional throw.
@@ -411,6 +416,22 @@ step failure does today (not a warning row; an actual failure/error state).
       two-chokepoint design, code-based predicate, and separate secret-check
       behavior.
 
+- [x] **Phase 8 — Remove the prompt-text interpolation hard-fail** (added
+      during the review pass, from direct user feedback: this run itself failed
+      repeatedly because orchestrator prompts quoted `${secret:X}` while
+      describing the feature). `assertNoSecretInterpolationInPrompt` became
+      `findSecretInterpolationsInPrompt`, which only detects and never throws.
+      Its four `preflightWorkflowSecrets` call sites were removed outright; the
+      two live `WorkflowExecutor` call sites (the step path and the retry path)
+      now report a `prompt.secret.interpolation-ignored` WARNING through
+      `reportCompatibilityDiagnostics`, so the author still learns the token is
+      passed through verbatim. **The advisory is deliberately excluded from
+      `isContextResolutionDiagnostic`, so it never blocks a step even in
+      `"fail"` mode** — nothing failed to *resolve* here; prompt bodies simply
+      are not a resolution boundary. The env-map grant-consistency throw
+      (check 2) is unchanged: those maps really do interpolate, so an ungranted
+      name there remains a genuine error.
+
 **Implementation note:** Phase 6 matched the design: the end-to-end test
 confirmed that no new UI or diagnostic plumbing was needed. No feature design
 deviations were found. The test verifies the extension-host warning dispatch;
@@ -430,7 +451,7 @@ legitimately exceeded the old limit; this is test infrastructure only.
 | `src/types/DashboardConstants.ts`                                                | Shared prompt diagnostic codes, resolution predicate, and failure-message formatter     |
 | `src/core/harness/shared/CliPromptPreparer.ts`                                   | Point prompt preparation at the shared diagnostic codes                                 |
 | `src/utils/McpServerNormalizer.ts`                                               | Replace the hardcoded `"prompt.mcp.unknown"` literal with the shared constant           |
-| `src/utils/SecretResolver.ts`                                                    | Add `failOnMissing` option to `preflightWorkflowSecrets`                                |
+| `src/utils/SecretResolver.ts`                                                    | Add `failOnMissing` option to `preflightWorkflowSecrets`; replace the prompt-text interpolation throw with `findSecretInterpolationsInPrompt` (Phase 8) |
 | `src/core/WorkflowInstance.ts`                                                   | Pass resolved mode into `preflightWorkflowSecrets`                                      |
 | `src/cli/SecretCommands.ts`                                                      | No change (confirm it still calls with default `failOnMissing: true`)                   |
 | `src/utils/ContextExpander.ts`                                                   | `expandGitChanges` returns `{ attachments, skipped }`; thread into `expandContextSplit` |
@@ -459,6 +480,9 @@ legitimately exceeded the old limit; this is test infrastructure only.
   `prompt.reference.condition-output-unavailable`) does **not** block a step
   even in `"fail"` mode — this is the regression the code filter exists to
   prevent.
+- Unit: a prompt quoting `${secret:X}` runs to completion and reports a
+  `prompt.secret.interpolation-ignored` advisory, in both modes; preflight
+  returns no missing names for it (Phase 8).
 - Manual: confirm the Output pane shows a warning row for a bad `~<hash>` ref
   in `"warn"` mode (Phase 6).
 

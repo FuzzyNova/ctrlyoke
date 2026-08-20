@@ -11,7 +11,7 @@ import {
 import { EndConditionEvaluator } from "../../core/EndConditionEvaluator";
 import {
   MissingSecretError,
-  assertNoSecretInterpolationInPrompt,
+  findSecretInterpolationsInPrompt,
   expandSecretInterpolations,
   getDeclaredSecretGrants,
   preflightWorkflowSecrets,
@@ -104,10 +104,41 @@ suite("SecretResolver", () => {
         ),
       /not granted/
     );
-    assert.throws(
-      () => assertNoSecretInterpolationInPrompt("Send ${secret:API_TOKEN}"),
-      /not allowed in prompt text/
+  });
+
+  test("prompt-text secret interpolation is detected but never throws", () => {
+    assert.deepStrictEqual(
+      findSecretInterpolationsInPrompt(
+        "Send ${secret:API_TOKEN} and ${secret:OTHER} and ${secret:API_TOKEN}"
+      ),
+      ["${secret:API_TOKEN}", "${secret:OTHER}"]
     );
+    assert.deepStrictEqual(
+      findSecretInterpolationsInPrompt("No interpolation here"),
+      []
+    );
+  });
+
+  test("preflight does not reject a prompt that merely quotes the interpolation syntax", async () => {
+    // Plans and instruction files legitimately document this syntax; a run
+    // whose prompt mentions it must not be blocked.
+    const workflow: PromptFile = {
+      prompt: "Explain why ${secret:X} is never substituted in prompt text",
+      steps: [
+        {
+          name: "docs",
+          prompt: "Document the ${secret:NAME} passthrough behavior",
+        },
+      ],
+    };
+
+    const missing = await preflightWorkflowSecrets(
+      workflow,
+      platformWith(new InMemorySecretStore({})),
+      "C:\\workspace"
+    );
+
+    assert.deepStrictEqual(missing, []);
   });
 
   test("preflight shares the resolution path and accepts env passthrough", async () => {
@@ -190,22 +221,23 @@ suite("SecretResolver", () => {
     );
   });
 
-  test("prompt interpolation is always rejected regardless of failOnMissing", async () => {
+  test("prompt interpolation never blocks preflight, in either mode", async () => {
     const workflow: PromptFile = {
       steps: [{ prompt: "Use ${secret:MISSING}" }],
     };
 
+    // Prompt text is never a resolution boundary, so the token is passed
+    // through verbatim and reported as an advisory by the executor instead.
+    // It is not a granted secret, so it must not appear as a missing name.
     for (const failOnMissing of [false, true]) {
-      await assert.rejects(
-        preflightWorkflowSecrets(
-          workflow,
-          platformWith(new InMemorySecretStore({})),
-          "C:\\workspace",
-          {},
-          { failOnMissing }
-        ),
-        /not allowed in prompt text/
+      const missing = await preflightWorkflowSecrets(
+        workflow,
+        platformWith(new InMemorySecretStore({})),
+        "C:\\workspace",
+        {},
+        { failOnMissing }
       );
+      assert.deepStrictEqual(missing, []);
     }
   });
 
