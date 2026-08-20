@@ -551,11 +551,18 @@ export class WorkflowExecutor {
 
       // Evaluate pre-condition gate before running the AI prompt.
       const workflowFileForPre = this.promptQueue.getWorkflowFile();
-      const preResolvedProperties = PropertyResolver.resolve(
+      let preResolvedProperties = PropertyResolver.resolve(
         prompt,
         workflowFileForPre,
         { hostCanProvidePty: context.hostCanProvidePty }
       );
+      const preVars = workflowFileForPre.vars;
+      if (preVars && Object.keys(preVars).length > 0) {
+        preResolvedProperties = VarSubstitutor.applyToResolvedProperties(
+          preResolvedProperties,
+          preVars
+        );
+      }
       const resolvedPreCondition = preResolvedProperties.preCondition;
       const preErrorBehavior = preResolvedProperties.errorBehavior;
       const preSecretNames = getEffectiveSecretGrants(
@@ -1055,7 +1062,12 @@ export class WorkflowExecutor {
     target: ExecutionTarget
   ): Promise<boolean> {
     const runtime = this.getRuntime();
-    const stepLabel = step.name ?? step.script.split(/\s+/)[0];
+    const scriptVars = this.promptQueue.getWorkflowFile().vars;
+    const effectiveStep =
+      scriptVars && Object.keys(scriptVars).length > 0
+        ? VarSubstitutor.applyToScriptStep(step, scriptVars)
+        : step;
+    const stepLabel = step.name ?? effectiveStep.script.split(/\s+/)[0];
     const runIndex = this.getRunIndexForTarget(context, target);
     const secretNames = getDeclaredSecretGrants(
       step,
@@ -1116,8 +1128,8 @@ export class WorkflowExecutor {
         );
       }
       const resolvedProperties = {
-        script: step.script,
-        env: step.env,
+        script: effectiveStep.script,
+        env: effectiveStep.env,
         compareSource: step.compareSource ?? COMPARE_SOURCES.EXIT_CODE,
         returns: step.returns ?? "0",
         timeout,
@@ -1132,10 +1144,10 @@ export class WorkflowExecutor {
           ptyExitCode = await context.spawnScriptPty({
             stepName: stepLabel,
             stepIndex: signedStepIndex,
-            script: step.script,
+            script: effectiveStep.script,
             cwd: context.executionWorkspace.executionRoot,
             env: await this.resolveScriptEnvironment(
-              step.env,
+              effectiveStep.env,
               secretNames,
               context
             ),

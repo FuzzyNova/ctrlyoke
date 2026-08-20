@@ -357,6 +357,65 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     }
   });
 
+  test("substitutes {{var}} in a preCondition's script and env before running it", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+
+    queue.loadPrompts({
+      vars: { token: "pre-output" },
+      steps: [
+        {
+          prompt: "after-precondition",
+          preCondition: {
+            script: `node -e "process.stdout.write(process.env.CHECK_TOKEN === '{{token}}' ? '{{token}}' : 'mismatch')"`,
+            env: { CHECK_TOKEN: "{{token}}" },
+            compareSource: "stdout",
+            returns: "pre-output",
+          },
+        },
+      ],
+    });
+
+    await executor.execute(integration, makeContext(integration));
+
+    // If {{token}} were not substituted, the script's stdout would compare
+    // against the literal placeholder text and fail, so the default
+    // onFail (skipPrompt) would leave sentPrompts empty.
+    assert.deepStrictEqual(integration.sentPrompts, ["after-precondition"]);
+    assert.strictEqual(
+      queue.getState().results[0].status,
+      STEP_STATUS.COMPLETED
+    );
+  });
+
+  test("substitutes {{var}} in a script step's script and env before running it", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+
+    queue.loadPrompts({
+      vars: { greeting: "hello-world" },
+      steps: [
+        {
+          type: "script",
+          script: `node -e "process.stdout.write(process.env.GREETING || '')"`,
+          env: { GREETING: "{{greeting}}" },
+          compareSource: "stdout",
+          returns: "hello-world",
+        },
+      ],
+    });
+
+    await executor.execute(integration, makeContext(integration));
+
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    assert.strictEqual(
+      queue.getState().results[0].status,
+      STEP_STATUS.COMPLETED
+    );
+  });
+
   test("fails before sending missing or empty prompt-file references", async () => {
     const root = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-executor-invalid-prompt-file-")

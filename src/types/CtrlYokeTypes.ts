@@ -330,8 +330,11 @@ export interface PromptFile extends ExecutionProperties {
   /**
    * Workflow-level variable defaults for `{{varName}}` substitution.
    * CLI `--var key=value` flags override these at runtime (highest precedence).
-   * Variables are substituted in: prompt text, model, additionalArgs, hook commands,
-   * and endCondition script paths before execution.
+   * Substituted into: prompt text, model, additionalArgs, hook command/env,
+   * preCondition script/env, endCondition script/env/retryPrompt/passRetryPrompt,
+   * script-step script/env, and worktree setup commands — see `VarSubstitutor`.
+   * Every script/condition process also receives each var as a
+   * `CTRLYOKE_VAR_<KEY>` environment variable regardless of `{{varName}}` usage.
    */
   vars?: Record<string, string>;
 }

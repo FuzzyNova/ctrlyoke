@@ -595,10 +595,7 @@ export class ExecutionPreviewService {
     sourceDefinitionPath?: string
   ): Promise<WorkflowStep> {
     if (isScriptStep(step)) {
-      return Promise.resolve({
-        ...step,
-        script: VarSubstitutor.substitute(step.script, variables),
-      });
+      return Promise.resolve(VarSubstitutor.applyToScriptStep(step, variables));
     }
     const substituted = VarSubstitutor.applyToPromptText(
       step.prompt,
