@@ -47,6 +47,7 @@ import {
   ErrorBehaviorEditor,
   ScriptConditionEditor,
   type ScriptConditionValue,
+  KeyValueMapEditor,
   BranchNameEditor,
   AnimatedSection,
   AutoResumeStatusRow,
@@ -835,6 +836,25 @@ const WorkflowPropertiesPanelInner: React.FC<{
     [syncWorkflowPropertiesForUndo, vscode]
   );
 
+  const handleVarsChange = useCallback(
+    (vars: Record<string, string>) => {
+      // An empty map means the root property should be removed, not persisted
+      // as an empty object. The extension's workflow-property path treats an
+      // undefined value as an explicit delete.
+      const nextVars = Object.keys(vars).length > 0 ? vars : undefined;
+      const settingsStore = useSettingsStore.getState();
+      settingsStore.updateWorkflowProperty("vars", nextVars);
+      syncWorkflowPropertiesForUndo();
+
+      postWorkflowDefinitionMutation(vscode, {
+        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+        property: "vars",
+        value: nextVars,
+      });
+    },
+    [syncWorkflowPropertiesForUndo, vscode]
+  );
+
   const handleSecretsChange = useCallback(
     (secrets: string[]) => {
       // Inline !NAME references are authoritative and are represented as
@@ -1162,6 +1182,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
       agent: globalSettings.agent,
       skills: globalSettings.skills ?? [],
       secrets: globalSettings.secrets ?? [],
+      vars: undefined,
       additionalArgs:
         globalSettings.harnessDefaultAdditionalArgs[globalHarness] ?? "",
       executionMode: globalSettings.executionMode,
@@ -1534,6 +1555,19 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   )}
                 </FormField>
               </DrawerRow>
+
+              <FormField
+                label="Variables"
+                description="Workflow-level defaults for {{name}} substitution in prompt text, model, additional arguments, hook command/env, pre- and end-condition script/env and retry prompts, script-step script/env, and worktree setup commands. CLI --var values override these defaults. Unresolved placeholders remain literal text and are reported as an advisory."
+              >
+                <KeyValueMapEditor
+                  label="name=value"
+                  ariaLabel="Variables"
+                  value={workflowProperties.vars ?? {}}
+                  onChange={handleVarsChange}
+                  rows={4}
+                />
+              </FormField>
 
               {/* Row 3: Additional Args + Execution Mode */}
               <DrawerRow narrow={isNarrow}>

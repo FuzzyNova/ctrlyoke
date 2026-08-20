@@ -230,6 +230,82 @@ describe("WorkflowPropertiesPanel permissions", () => {
   });
 });
 
+describe("WorkflowPropertiesPanel variables", () => {
+  beforeEach(() => {
+    resetStores();
+    postMessage.mockClear();
+    (
+      window.vscodeApi as unknown as { postMessage: typeof postMessage }
+    ).postMessage = postMessage;
+  });
+
+  afterEach(cleanup);
+
+  it("renders variables loaded from the workflow", () => {
+    useSettingsStore.getState().setWorkflowProperties({
+      vars: { region: "us-east-1", retries: "3" },
+    });
+
+    render(<WorkflowPropertiesPanel />);
+
+    expect(screen.getByLabelText("Variables")).toHaveValue(
+      "region=us-east-1\nretries=3"
+    );
+  });
+
+  it("posts a new variable through workflow-property updates", () => {
+    render(<WorkflowPropertiesPanel />);
+
+    fireEvent.change(screen.getByLabelText("Variables"), {
+      target: { value: "region=us-east-1" },
+    });
+
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: "updateWorkflowProperty",
+      property: "vars",
+      value: { region: "us-east-1" },
+    });
+  });
+
+  it("round-trips an edited variable value", () => {
+    useSettingsStore.getState().setWorkflowProperties({
+      vars: { region: "us-east-1" },
+    });
+
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.change(screen.getByLabelText("Variables"), {
+      target: { value: "region=eu-west-1" },
+    });
+
+    expect(useSettingsStore.getState().workflowProperties.vars).toEqual({
+      region: "eu-west-1",
+    });
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: "updateWorkflowProperty",
+      property: "vars",
+      value: { region: "eu-west-1" },
+    });
+  });
+
+  it("removes vars when every variable is cleared", () => {
+    useSettingsStore.getState().setWorkflowProperties({
+      vars: { region: "us-east-1" },
+    });
+
+    render(<WorkflowPropertiesPanel />);
+    fireEvent.change(screen.getByLabelText("Variables"), {
+      target: { value: "" },
+    });
+
+    expect(useSettingsStore.getState().workflowProperties.vars).toBeUndefined();
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: "updateWorkflowProperty",
+      property: "vars",
+      value: undefined,
+    });
+  });
+});
+
 describe("WorkflowPropertiesPanel inherited defaults", () => {
   beforeEach(() => {
     resetStores();

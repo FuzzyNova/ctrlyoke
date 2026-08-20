@@ -222,13 +222,9 @@ to the separate template-authoring surface.
 `executionMode`, `worktree` (mode / branch / base / setup / keep / merge),
 `resumeSession`, `sessionId`, `priorContext`, `preCondition`, `endCondition`,
 `errorBehavior`, `mcpServers`, `toolPermissions` (mode / allowed / denied),
-`secrets`.
+`secrets`, `vars`.
 
-**Missing:**
-
-| Property | Notes                                                                                                                                                                                                                                                                                                          |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vars`   | Zero occurrences anywhere under `src/ui/webview-react/components/`. Workflow-level `{{var}}` defaults are schema-and-CLI-only. Directly related to `OVERZEALOUS_STEP_FAILURES_PLAN.md` item 2: a UI author cannot see that a workflow defines vars, nor define one to satisfy an unresolved-placeholder error. |
+**Missing:** None.
 
 ### Prompt step — `PropertiesDrawer.tsx`
 
@@ -462,7 +458,7 @@ before the control that makes them reachable.
 | 6   | **Done (2026-08-20):** `env` on pre/end conditions and hooks; hook `timeoutSec`                                                              | Condition + hook parity gaps                                                                                                               |
 | 7   | **Done (2026-08-20):** Process-map secret references auto-grant (overzealous item 3)                                                         | Hard failure reachable from the new `env` editors                                                                                          |
 | 8   | **Done (2026-08-20):** Unresolved `{{var}}` becomes advisory + fenced-block masking (overzealous item 2, including preCondition/script-step) | Hard failure already reachable via preCondition/script-step today; also what the `vars` editor (step 9) would newly expose for prompt text |
-| 9   | Workflow-root `vars` editor                                                                                                                  | Last root-level parity gap                                                                                                                 |
+| 9   | **Done (2026-08-20):** Workflow-root `vars` editor                                                                                           | Last root-level parity gap                                                                                                                 |
 | 10  | Schema→UI control-id parity guard                                                                                                            | "Preventing the next one"                                                                                                                  |
 
 After step 2, `KNOWN_LOSSY_PRESERVATION` and `KNOWN_UNACCEPTED` in
