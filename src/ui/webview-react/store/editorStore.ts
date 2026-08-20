@@ -129,6 +129,7 @@ export interface SavedNewStepState {
   scriptOnFail?: string;
   scriptCompareSource?: string;
   scriptReturns?: string;
+  scriptEnv?: Record<string, string>;
   scriptExecutionMode?: ExecutionMode;
 }
 
@@ -183,6 +184,7 @@ interface EditorState {
   scriptOnFail: string;
   scriptCompareSource: string;
   scriptReturns: string;
+  scriptEnv: Record<string, string> | undefined;
   scriptExecutionMode: ExecutionMode | undefined;
 
   // Property values
@@ -227,6 +229,7 @@ interface EditorActions {
   setScriptOnFail: (value: string) => void;
   setScriptCompareSource: (value: string) => void;
   setScriptReturns: (value: string) => void;
+  setScriptEnv: (value: Record<string, string> | undefined) => void;
   setScriptExecutionMode: (value: ExecutionMode | undefined) => void;
 
   // Content updates
@@ -311,6 +314,7 @@ const initialState: EditorState = {
   scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
   scriptCompareSource: COMPARE_SOURCES.AUTO,
   scriptReturns: "",
+  scriptEnv: undefined,
   scriptExecutionMode: undefined,
   properties: { ...PROPERTY_DEFAULTS },
   isDirty: false,
@@ -392,6 +396,7 @@ export const useEditorStore = create<
         scriptCompareSource:
           savedNewPromptState.scriptCompareSource ?? COMPARE_SOURCES.AUTO,
         scriptReturns: savedNewPromptState.scriptReturns ?? "",
+        scriptEnv: savedNewPromptState.scriptEnv,
         scriptExecutionMode: savedNewPromptState.scriptExecutionMode,
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
@@ -421,6 +426,7 @@ export const useEditorStore = create<
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
           scriptCompareSource: COMPARE_SOURCES.AUTO,
           scriptReturns: "",
+          scriptEnv: undefined,
           scriptExecutionMode: undefined,
           properties: { ...PROPERTY_DEFAULTS },
           isDirty: false,
@@ -440,6 +446,7 @@ export const useEditorStore = create<
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
           scriptCompareSource: COMPARE_SOURCES.AUTO,
           scriptReturns: "",
+          scriptEnv: undefined,
           scriptExecutionMode: undefined,
           savedNewPromptState: null,
         });
@@ -467,6 +474,7 @@ export const useEditorStore = create<
         scriptOnFail: state.scriptOnFail,
         scriptCompareSource: state.scriptCompareSource,
         scriptReturns: state.scriptReturns,
+        scriptEnv: state.scriptEnv,
         scriptExecutionMode: state.scriptExecutionMode,
       };
     }
@@ -488,6 +496,7 @@ export const useEditorStore = create<
             scriptOnFail: state.scriptOnFail,
             scriptCompareSource: state.scriptCompareSource,
             scriptReturns: state.scriptReturns,
+            scriptEnv: state.scriptEnv,
             scriptExecutionMode: state.scriptExecutionMode,
           }
         : state.savedNewPromptState;
@@ -532,6 +541,7 @@ export const useEditorStore = create<
         scriptReturns: pendingEdit
           ? (pendingEdit.scriptReturns ?? "")
           : (promptData.returns ?? ""),
+        scriptEnv: pendingEdit ? pendingEdit.scriptEnv : promptData.env,
         scriptExecutionMode: pendingEdit
           ? pendingEdit.scriptExecutionMode
           : promptData.executionMode,
@@ -589,6 +599,7 @@ export const useEditorStore = create<
         scriptCompareSource:
           pendingEdit?.scriptCompareSource ?? COMPARE_SOURCES.AUTO,
         scriptReturns: pendingEdit?.scriptReturns ?? "",
+        scriptEnv: pendingEdit?.scriptEnv,
         scriptExecutionMode: pendingEdit?.scriptExecutionMode,
         properties: pendingEdit ? pendingEdit.properties : propertiesFromData,
         isDirty: pendingEdit ? true : false,
@@ -629,6 +640,7 @@ export const useEditorStore = create<
         scriptCompareSource:
           savedNewPromptState.scriptCompareSource ?? COMPARE_SOURCES.AUTO,
         scriptReturns: savedNewPromptState.scriptReturns ?? "",
+        scriptEnv: savedNewPromptState.scriptEnv,
         scriptExecutionMode: savedNewPromptState.scriptExecutionMode,
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
@@ -660,6 +672,7 @@ export const useEditorStore = create<
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
           scriptCompareSource: COMPARE_SOURCES.AUTO,
           scriptReturns: "",
+          scriptEnv: undefined,
           scriptExecutionMode: undefined,
           properties: { ...PROPERTY_DEFAULTS },
           isDirty: false,
@@ -680,6 +693,7 @@ export const useEditorStore = create<
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
           scriptCompareSource: COMPARE_SOURCES.AUTO,
           scriptReturns: "",
+          scriptEnv: undefined,
           scriptExecutionMode: undefined,
           savedNewPromptState: null,
           validationErrors: {},
@@ -708,6 +722,7 @@ export const useEditorStore = create<
       scriptOnFail: state.scriptOnFail,
       scriptCompareSource: state.scriptCompareSource,
       scriptReturns: state.scriptReturns,
+      scriptEnv: state.scriptEnv,
       scriptExecutionMode: state.scriptExecutionMode,
     };
 
@@ -730,6 +745,7 @@ export const useEditorStore = create<
         scriptCompareSource:
           savedNewPromptState.scriptCompareSource ?? COMPARE_SOURCES.AUTO,
         scriptReturns: savedNewPromptState.scriptReturns ?? "",
+        scriptEnv: savedNewPromptState.scriptEnv,
         scriptExecutionMode: savedNewPromptState.scriptExecutionMode,
         properties: savedNewPromptState.properties,
         savedNewPromptState: null,
@@ -757,6 +773,7 @@ export const useEditorStore = create<
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
           scriptCompareSource: COMPARE_SOURCES.AUTO,
           scriptReturns: "",
+          scriptEnv: undefined,
           scriptExecutionMode: undefined,
           properties: { ...PROPERTY_DEFAULTS },
           isDirty: false,
@@ -776,6 +793,7 @@ export const useEditorStore = create<
           scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
           scriptCompareSource: COMPARE_SOURCES.AUTO,
           scriptReturns: "",
+          scriptEnv: undefined,
           scriptExecutionMode: undefined,
           savedNewPromptState: null,
           validationErrors: {},
@@ -839,6 +857,12 @@ export const useEditorStore = create<
   setScriptReturns: (value) =>
     set({
       scriptReturns: value,
+      isDirty: true,
+    }),
+
+  setScriptEnv: (value) =>
+    set({
+      scriptEnv: value,
       isDirty: true,
     }),
 
@@ -1098,6 +1122,7 @@ export const useEditorStore = create<
       scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
       scriptCompareSource: COMPARE_SOURCES.AUTO,
       scriptReturns: "",
+      scriptEnv: undefined,
       scriptExecutionMode: undefined,
       properties: { ...PROPERTY_DEFAULTS },
       isDirty: false,
@@ -1118,6 +1143,7 @@ export const useEditorStore = create<
       scriptOnFail: CONDITION_ACTIONS.STOP_WORKFLOW,
       scriptCompareSource: COMPARE_SOURCES.AUTO,
       scriptReturns: "",
+      scriptEnv: undefined,
       scriptExecutionMode: undefined,
       properties: { ...PROPERTY_DEFAULTS },
       isDirty: false,

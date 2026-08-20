@@ -485,6 +485,39 @@ suite("Schema -> dashboard property round trip", () => {
       });
     });
 
+    test("dashboard-authored script properties survive a later unrelated save", async () => {
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-parity-"));
+      const run = await createPromotedRun(workspace, {
+        steps: [{ prompt: PROMPT_TEXT }],
+      });
+      const harness = createRoundTripHarness(workspace, run);
+
+      await harness.routeUpdatePrompt({
+        index: 0,
+        text: "npm run deploy",
+        properties: {
+          type: "script",
+          env: { DEPLOY_TOKEN: "${secret:DEPLOY_TOKEN}" },
+          secrets: ["DEPLOY_TOKEN"],
+          errorBehavior: { onError: "continue" },
+        },
+      });
+
+      await harness.routeUpdatePrompt({
+        index: 0,
+        text: "npm run deploy -- --verbose",
+        properties: { type: "script" },
+      });
+
+      assert.deepStrictEqual((await harness.readRunDefinition()).steps?.[0], {
+        type: "script",
+        script: "npm run deploy -- --verbose",
+        env: { DEPLOY_TOKEN: "${secret:DEPLOY_TOKEN}" },
+        secrets: ["DEPLOY_TOKEN"],
+        errorBehavior: { onError: "continue" },
+      });
+    });
+
     test("saving default script values clears previously customized fields", async () => {
       workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-parity-"));
       const run = await createPromotedRun(workspace, {

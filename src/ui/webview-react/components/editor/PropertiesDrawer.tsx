@@ -41,7 +41,6 @@ import {
   PriorContextSelect,
   PRIOR_CONTEXT_KEYWORD_LABELS,
   SkillsSelect,
-  MultiCheckboxDropdown,
   McpServersEditor,
   buildMcpDefaultLabel,
   type McpServersValue,
@@ -50,13 +49,12 @@ import {
   CompatibilitySummary,
   buildPermissionsDefaultLabel,
   ErrorBehaviorEditor,
+  SecretGrantsEditor,
   ScriptConditionEditor,
   type ScriptConditionValue,
   AnimatedSection,
   AutoResumeStatusRow,
   ExitButton,
-  filterExplicitSecretGrants,
-  useSecretGrantOptions,
 } from "../shared";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
 import {
@@ -87,8 +85,6 @@ interface PropertiesDrawerProps {
   onRequestPage?: (page: DrawerPage, focusId: string) => void;
   hasPreCondition?: boolean;
 }
-
-const EMPTY_SECRET_NAMES: string[] = [];
 
 /**
  * PropertiesDrawer - Slide-up panel for prompt properties
@@ -197,11 +193,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         : `Inherit (${resolvedSkills.slice(0, 2).join(", ")} +${resolvedSkills.length - 2})`;
 
   const resolvedSecrets =
-    properties.secrets !== undefined
-      ? (properties.secrets ?? EMPTY_SECRET_NAMES)
-      : workflowProperties.secrets !== undefined
-        ? (workflowProperties.secrets ?? EMPTY_SECRET_NAMES)
-        : (globalSettings.secrets ?? EMPTY_SECRET_NAMES);
+    workflowProperties.secrets !== undefined
+      ? (workflowProperties.secrets ?? [])
+      : (globalSettings.secrets ?? []);
   const inlineSecretNames = useMemo(
     () => [
       ...new Set(
@@ -210,18 +204,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     ],
     [promptText]
   );
-  const {
-    options: secretOptions,
-    selectedValues: resolvedSecretGrants,
-    lockedValues: inlineSecretGrantNames,
-    nonHideableValues: secretNames,
-    unresolvedSecretDiagnostics,
-    warning: secretsWarn,
-  } = useSecretGrantOptions({
-    declaredSecrets: resolvedSecrets,
-    inlineSecretNames,
-  });
-
   const resolvedAdditionalArgs =
     workflowProperties.additionalArgs === undefined
       ? (globalSettings.harnessDefaultAdditionalArgs[resolvedHarness] ?? "")
@@ -420,13 +402,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         globalSettings.harnessDefaultAdditionalArgs[newHarness];
       setProperty("additionalArgs", defaultArgs || null);
     }
-  };
-
-  const handleSecretsChange = (secrets: string[]) => {
-    setProperty(
-      "secrets",
-      filterExplicitSecretGrants(secrets, inlineSecretNames)
-    );
   };
 
   // ── Condition mode derivations ──────────────────────────────────────────────
@@ -810,38 +785,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             {/* Secrets — workflow grants plus locked inline !NAME references */}
             <DrawerRow narrow={isNarrow}>
               <div className="flex flex-col gap-1">
-                <label
-                  htmlFor="prop-secrets"
-                  className="text-xs font-semibold uppercase text-description-fg"
+                <SecretGrantsEditor
+                  value={properties.secrets}
+                  inheritedValue={resolvedSecrets}
+                  inlineSecretNames={inlineSecretNames}
+                  onChange={(secrets) => setProperty("secrets", secrets)}
+                  idPrefix="prop-secrets"
                   title="Grant named credentials to this prompt. Inline !NAME references in prompt text are always granted. Reset all to inherit to remove the prompt override."
-                >
-                  Secrets
-                </label>
-                <MultiCheckboxDropdown
-                  id="prop-secrets"
-                  selectedValues={resolvedSecretGrants}
-                  onChange={handleSecretsChange}
-                  options={secretOptions}
-                  buttonLabel={
-                    properties.secrets === undefined
-                      ? `Inherit (${resolvedSecrets.length === 0 ? "None" : resolvedSecrets.join(", ")})`
-                      : properties.secrets === null
-                        ? "None"
-                        : undefined
-                  }
-                  placeholder="No secrets granted"
-                  lockedValues={inlineSecretGrantNames}
-                  nonHideableValues={secretNames}
-                  warning={secretsWarn}
-                />
-                {resolvedSecretGrants.length > 0 && (
-                  <p className="mt-0.5 text-xxs text-description-fg">
-                    Active: {resolvedSecretGrants.join(", ")}
-                  </p>
-                )}
-                <FieldDiagnostic
-                  id="prop-secrets-diagnostic"
-                  diagnostics={unresolvedSecretDiagnostics}
                 />
               </div>
               <div />

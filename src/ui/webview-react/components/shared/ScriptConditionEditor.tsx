@@ -24,6 +24,7 @@ import {
 } from "@root/types/DashboardConstants";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { notifyUser } from "@utils/notifyUser";
+import { KeyValueMapEditor } from "./KeyValueMapEditor";
 
 const COMPARE_SOURCE_OPTIONS: SelectOption[] = (
   Object.values(COMPARE_SOURCES) as CompareSource[]
@@ -66,6 +67,7 @@ function scriptFileName(scriptPath: string): string {
  */
 export interface ScriptConditionValue {
   script?: string;
+  env?: Record<string, string>;
   returns?: string;
   compareSource?: string;
   timeout?: number;
@@ -317,6 +319,16 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
         />
       </div>
+
+      {variant === "scriptStep" && (
+        <KeyValueMapEditor
+          label="Environment"
+          ariaLabel={`${idPrefix}-env`}
+          value={v.env ?? {}}
+          onChange={(env) => update({ env })}
+          allowSecretReferences
+        />
+      )}
 
       {variant === "endCondition" && (
         <DrawerRow narrow={narrow}>

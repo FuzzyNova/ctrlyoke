@@ -472,4 +472,47 @@ describe("ScriptConditionEditor", () => {
       );
     });
   });
+
+  describe("scriptStep environment", () => {
+    it("renders and round-trips the environment map only for script steps", () => {
+      const onChange = vi.fn();
+
+      render(
+        <ScriptConditionEditor
+          variant="scriptStep"
+          value={{ script: "npm test", env: { CI: "true" } }}
+          onChange={onChange}
+          idPrefix="test-script"
+        />
+      );
+
+      const env = screen.getByLabelText("test-script-env");
+      expect(env).toHaveValue("CI=true");
+      fireEvent.change(env, { target: { value: "CI=true\nTOKEN=value" } });
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          env: { CI: "true", TOKEN: "value" },
+        })
+      );
+    });
+
+    it.each(["endCondition", "preCondition"] as const)(
+      "%s does not render the script-step environment map",
+      (variant) => {
+        render(
+          <ScriptConditionEditor
+            variant={variant}
+            value={{ script: "npm test" }}
+            onChange={vi.fn()}
+            idPrefix="test-condition"
+          />
+        );
+
+        expect(
+          screen.queryByLabelText("test-condition-env")
+        ).not.toBeInTheDocument();
+      }
+    );
+  });
 });

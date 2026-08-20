@@ -464,6 +464,96 @@ describe("PromptEditor — prompt secret grants", () => {
   });
 });
 
+describe("PromptEditor — script-step properties", () => {
+  function prepareScriptEditor(properties = {}) {
+    useEditorStore.setState({
+      selectionTarget: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+      stepType: STEP_TYPES.SCRIPT,
+      scriptCommand: "npm run deploy",
+      properties: {
+        ...useEditorStore.getState().properties,
+        ...properties,
+      },
+    });
+  }
+
+  it("renders env, secrets, and error behavior and posts all three", async () => {
+    prepareScriptEditor({
+      secrets: ["DEPLOY_TOKEN"],
+      errorBehavior: { onError: "continue" },
+    });
+    useEditorStore.getState().setScriptEnv({
+      DEPLOY_TOKEN: "${secret:DEPLOY_TOKEN}",
+    });
+
+    expect(screen.queryByLabelText("script-step-env")).not.toBeInTheDocument();
+    const { container } = render(<PromptEditor />);
+
+    expect(screen.getByLabelText("script-step-env")).toHaveValue(
+      "DEPLOY_TOKEN=${secret:DEPLOY_TOKEN}"
+    );
+    expect(screen.getByText("Secrets")).toBeInTheDocument();
+    expect(screen.getByText("Error Behavior")).toBeInTheDocument();
+
+    await userEvent
+      .setup()
+      .click(
+        container.querySelector(".btn-editor-update") as HTMLButtonElement
+      );
+
+    const message = postMessageSpy.mock.calls.find(
+      ([msg]) => (msg as { type?: string }).type === MESSAGE_TYPES.UPDATE_PROMPT
+    )?.[0] as Record<string, unknown> | undefined;
+    expect(message).toMatchObject({
+      type: MESSAGE_TYPES.UPDATE_PROMPT,
+      properties: {
+        env: { DEPLOY_TOKEN: "${secret:DEPLOY_TOKEN}" },
+        secrets: ["DEPLOY_TOKEN"],
+        errorBehavior: { onError: "continue" },
+      },
+    });
+    expect(message?.clearProperties).not.toEqual(
+      expect.arrayContaining(["env", "secrets", "errorBehavior"])
+    );
+  });
+
+  it("clears empty env, secrets, and error behavior overrides", async () => {
+    prepareScriptEditor({
+      secrets: ["DEPLOY_TOKEN"],
+      errorBehavior: { onError: "continue" },
+    });
+    useEditorStore.getState().setScriptEnv({});
+    const { container } = render(<PromptEditor />);
+    useEditorStore.setState({
+      properties: {
+        ...useEditorStore.getState().properties,
+        secrets: undefined,
+        errorBehavior: undefined,
+      },
+    });
+
+    await userEvent
+      .setup()
+      .click(
+        container.querySelector(".btn-editor-update") as HTMLButtonElement
+      );
+
+    const message = postMessageSpy.mock.calls.find(
+      ([msg]) => (msg as { type?: string }).type === MESSAGE_TYPES.UPDATE_PROMPT
+    )?.[0] as Record<string, unknown> | undefined;
+    expect(message).toMatchObject({
+      clearProperties: expect.arrayContaining([
+        "env",
+        "secrets",
+        "errorBehavior",
+      ]),
+    });
+    expect(message?.properties).not.toHaveProperty("env");
+    expect(message?.properties).not.toHaveProperty("secrets");
+    expect(message?.properties).not.toHaveProperty("errorBehavior");
+  });
+});
+
 describe("PromptEditor — image compatibility feedback", () => {
   it("keeps image compatibility feedback beside the editable prompt", () => {
     useEditorStore

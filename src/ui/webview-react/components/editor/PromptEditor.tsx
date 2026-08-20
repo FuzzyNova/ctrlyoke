@@ -21,6 +21,12 @@ import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import { ScriptConditionEditor } from "../shared/ScriptConditionEditor";
 import type { ScriptConditionValue } from "../shared/ScriptConditionEditor";
 import {
+  CustomSelect,
+  ErrorBehaviorEditor,
+  SecretGrantsEditor,
+} from "../shared";
+import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
+import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
   STEP_STATUS,
@@ -85,6 +91,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     promptText,
     promptName,
     setPromptText,
+    setProperty,
     properties,
     resetEditor,
     cancelEdit,
@@ -100,6 +107,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     scriptOnFail,
     scriptCompareSource,
     scriptReturns,
+    scriptEnv,
     scriptExecutionMode,
     setScriptCommand,
     setScriptTimeout,
@@ -107,6 +115,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     setScriptOnFail,
     setScriptCompareSource,
     setScriptReturns,
+    setScriptEnv,
     setScriptExecutionMode,
     pendingPromptEditorInserts,
     consumePromptEditorInsert,
@@ -216,6 +225,16 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
   const isFinalStep = selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP;
   const isScriptMode = stepType === STEP_TYPES.SCRIPT;
+  const inheritedScriptSecrets =
+    workflowProperties.secrets !== undefined
+      ? (workflowProperties.secrets ?? [])
+      : (globalSettings.secrets ?? []);
+  const scriptErrorBehaviorMode =
+    properties.errorBehavior === undefined ? "inherit" : "custom";
+  const scriptErrorBehaviorOptions = [
+    { value: "inherit", label: "Inherit" },
+    { value: "custom", label: "Custom" },
+  ];
   const isFileRef = looksLikeFilePath(promptText.trim(), {
     allowWorkspaceFolderPrefix: globalSettings.isMultiRoot,
   });
@@ -945,6 +964,18 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
       const scriptProperties = {
         type: STEP_TYPES.SCRIPT,
+        ...(scriptEnv &&
+          Object.keys(scriptEnv).length > 0 && {
+            env: scriptEnv,
+          }),
+        ...(properties.secrets === null
+          ? { secrets: null }
+          : Array.isArray(properties.secrets) && properties.secrets.length > 0
+            ? { secrets: properties.secrets }
+            : {}),
+        ...(properties.errorBehavior !== undefined && {
+          errorBehavior: properties.errorBehavior,
+        }),
         ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
         ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && {
           onPass: scriptOnPass,
@@ -962,6 +993,12 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         ...(!stepEnabled && { enabled: false }),
       };
       const clearProperties = [
+        ...(!scriptEnv || Object.keys(scriptEnv).length === 0 ? ["env"] : []),
+        ...(properties.secrets === undefined ||
+        (Array.isArray(properties.secrets) && properties.secrets.length === 0)
+          ? ["secrets"]
+          : []),
+        ...(properties.errorBehavior === undefined ? ["errorBehavior"] : []),
         ...(scriptTimeout === undefined ? ["timeout"] : []),
         ...(scriptOnPass === CONDITION_ACTIONS.CONTINUE ? ["onPass"] : []),
         ...(scriptOnFail === CONDITION_ACTIONS.STOP_WORKFLOW ? ["onFail"] : []),
@@ -988,23 +1025,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         postWorkflowDefinitionMutation(vscode, {
           type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
           finalStep: {
-            type: STEP_TYPES.SCRIPT,
+            ...scriptProperties,
             script: command,
             ...(promptName.trim() ? { name: promptName.trim() } : {}),
-            ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
-            ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && {
-              onPass: scriptOnPass,
-            }),
-            ...(scriptOnFail !== CONDITION_ACTIONS.STOP_WORKFLOW && {
-              onFail: scriptOnFail,
-            }),
-            ...(scriptCompareSource !== COMPARE_SOURCES.AUTO && {
-              compareSource: scriptCompareSource,
-            }),
-            ...(scriptReturns && { returns: scriptReturns }),
-            ...(scriptExecutionMode !== undefined && {
-              executionMode: scriptExecutionMode,
-            }),
             ...(!stepEnabled && { enabled: false }),
           },
           clearProperties,
@@ -1056,7 +1079,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     scriptOnFail,
     scriptCompareSource,
     scriptReturns,
+    scriptEnv,
     scriptExecutionMode,
+    properties,
     stepEnabled,
     selectionTarget,
     promptText,
@@ -1148,6 +1173,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       setScriptOnFail(updated.onFail ?? CONDITION_ACTIONS.STOP_WORKFLOW);
       setScriptCompareSource(updated.compareSource ?? COMPARE_SOURCES.AUTO);
       setScriptReturns(updated.returns ?? "");
+      setScriptEnv(updated.env);
       setScriptExecutionMode(updated.executionMode);
     },
     [
@@ -1157,6 +1183,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       setScriptOnFail,
       setScriptCompareSource,
       setScriptReturns,
+      setScriptEnv,
       setScriptExecutionMode,
     ]
   );
@@ -1254,6 +1281,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
               onFail: scriptOnFail,
               compareSource: scriptCompareSource,
               returns: scriptReturns,
+              env: scriptEnv,
               executionMode: scriptExecutionMode,
             }}
             onChange={handleScriptChange}
@@ -1261,6 +1289,47 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             disabled={isCLIManaged}
             idPrefix="script-step"
           />
+          <div className="mt-4 space-y-4 rounded border border-panel-border p-3">
+            <SecretGrantsEditor
+              value={properties.secrets}
+              inheritedValue={inheritedScriptSecrets}
+              onChange={(secrets) => setProperty("secrets", secrets)}
+              idPrefix="script-step-secrets"
+              title="Grant named credentials to this script step. Script steps have no inline !NAME references."
+            />
+            <div className="space-y-3">
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="script-step-error-behavior-mode"
+                  className="text-xs font-semibold uppercase text-description-fg"
+                  title="Controls what happens when this script step encounters an internal error."
+                >
+                  Error Behavior
+                </label>
+                <CustomSelect
+                  id="script-step-error-behavior-mode"
+                  value={scriptErrorBehaviorMode}
+                  onChange={(value) => {
+                    if (value === "inherit") {
+                      setProperty("errorBehavior", undefined);
+                    } else {
+                      setProperty("errorBehavior", {
+                        onError: "stop",
+                      } as ErrorBehavior);
+                    }
+                  }}
+                  options={scriptErrorBehaviorOptions}
+                />
+              </div>
+              {scriptErrorBehaviorMode === "custom" && (
+                <ErrorBehaviorEditor
+                  value={properties.errorBehavior}
+                  onChange={(updated) => setProperty("errorBehavior", updated)}
+                  idPrefix="script-step-error"
+                />
+              )}
+            </div>
+          </div>
         </div>
       )}
 

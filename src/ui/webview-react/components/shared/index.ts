@@ -79,6 +79,10 @@ export {
 export { ScriptCommandEditor } from "./ScriptCommandEditor";
 export { BranchNameEditor } from "./BranchNameEditor";
 export { ErrorBehaviorEditor } from "./ErrorBehaviorEditor";
+export {
+  SecretGrantsEditor,
+  type SecretGrantsEditorProps,
+} from "./SecretGrantsEditor";
 export { AnimatedSection } from "./AnimatedSection";
 export { SettingSourceBadge } from "./SettingSourceBadge";
 export { SettingToggleRow } from "./SettingToggleRow";

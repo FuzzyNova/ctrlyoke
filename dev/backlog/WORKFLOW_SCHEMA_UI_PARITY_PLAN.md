@@ -242,15 +242,17 @@ Step `name` and `enabled` live in `EditorSection.tsx` (`:217-253`).
 ### Script step — `PromptEditor.tsx` + `ScriptConditionEditor` (`variant="scriptStep"`)
 
 **Present:** `script`, `timeout`, `onPass`, `onFail`, `compareSource`,
-`returns`, `executionMode`, `enabled`, `name`.
+`returns`, `env`, `executionMode`, `secrets`, `errorBehavior`, `enabled`,
+`name`.
 
-**Missing:**
-
-| Property        | Notes                                                                                                                                                                          |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `env`           | The map the schema explicitly documents as the place `${secret:NAME}` is allowed. `ScriptConditionValue` has no `env` field at all.                                            |
-| `secrets`       | The **only** way a script step can grant a secret. Its absence makes the item-3 hard failure unrecoverable from the UI.                                                        |
-| `errorBehavior` | Declared on `scriptStep` in the schema; the drawer's Error Behavior control is on the prompt-step path. Confirm whether it reaches script steps before treating this as a gap. |
+**Missing:** None. `env` is rendered only for the `scriptStep` variant and
+reuses `KeyValueMapEditor` with the secret picker and literal-credential
+warning. `secrets` reuses the shared secret-grant control without inline
+`!NAME` locking because script steps have no prompt text. `errorBehavior` was
+not reachable from script steps: the existing control lived in
+`PropertiesDrawer`, which closes when a script step is edited. The script
+surface now wires the existing `ErrorBehaviorEditor` and preserves the
+inherit/custom mode.
 
 ### Conditions — `ScriptConditionEditor` (`preCondition` / `endCondition`)
 
@@ -460,7 +462,7 @@ before the control that makes them reachable.
 | 2   | **Done (2026-08-20):** `finalStep` merges against disk; `secrets` in `buildPromptStepProperties` | 25 `final step:*` preservation + both acceptance failures |
 | 3   | **Done (2026-08-20):** Step-drawer `secrets` control                         | Prompt-step parity gap                                    |
 | 4   | **Done (2026-08-20):** `KeyValueMapEditor` shared env/headers map editor; `McpServerForm` `headers` + `autoApprove` list | MCP form parity gaps                                      |
-| 5   | Script-step `env` / `secrets` / `errorBehavior` controls                          | Script-step parity gaps                                   |
+| 5   | **Done (2026-08-20):** Script-step `env` / `secrets` / `errorBehavior` controls | Script-step parity gaps                                   |
 | 6   | `env` on pre/end conditions and hooks; hook `timeoutSec`                          | Condition + hook parity gaps                              |
 | 7   | Process-map secret references auto-grant (overzealous item 3)                     | Hard failure reachable from the new `env` editors         |
 | 8   | Unresolved `{{var}}` becomes advisory + fenced-block masking (overzealous item 2, now also covering preCondition/script-step) | Hard failure already reachable via preCondition/script-step today; also what the `vars` editor (step 9) would newly expose for prompt text |
