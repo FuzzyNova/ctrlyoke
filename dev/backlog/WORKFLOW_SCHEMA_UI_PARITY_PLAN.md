@@ -1,7 +1,7 @@
 # Workflow Schema → UI Parity Plan
 
-> **Status:** Not started — audit complete and verified against the code
-> (2026-08-19); fixes not designed.
+> **Status:** Schema cleanup landed; UI parity work not started. Audit complete
+> and verified against the code (2026-08-19).
 > **Priority:** P1 — one open question below (property preservation on save) is
 > a possible silent data-loss bug and must be answered first.
 > **Origin:** A user who authors workflows **exclusively through the dashboard**
@@ -156,13 +156,28 @@ The earlier framing of this as "decide whether inline objects should be
 authorable" is wrong; they already are, implicitly. What matters instead is
 that the schema describe what gets written (see Schema cleanup item 1).
 
-## Schema cleanup — decided
+## Schema cleanup — DONE
 
-Pre-release, no customers, single developer: there is no back-compat
-constraint, so the schema should be corrected to match the types rather than
-worked around. Three divergences, in priority order.
+Landed in `fix(schema): align workflow schema with the config the UI writes`.
+All four items below are fixed; the section is kept because the confirmed
+reproduction is the evidence for why the parity work that follows matters.
 
-### 1. `mcpServerConfig` rejects fields the UI writes — verify first
+**The suspected validation failure was real.** Validating the old schema
+directly with ajv rejected three of four cases:
+
+| Case | Old schema | New schema |
+| --- | --- | --- |
+| Uncheck a ctrlyoke MCP tool → `{ id: "ctrlyoke", deniedTools: [...] }` | **INVALID** | valid |
+| Enable a managed MCP server → embedded config with `description` | **INVALID** | valid |
+| Root-level script workflow with `secrets` | **INVALID** | valid |
+| `endCondition.env` | valid but undocumented | valid + documented |
+
+So two ordinary dashboard gestures produced workflows ctrlyoke's own parser
+rejects. That is the strongest possible argument for the parity guard proposed
+at the end of this document: the schema and the UI drifted apart silently, and
+nothing failed until a user tried the combination.
+
+### 1. `mcpServerConfig` rejected fields the UI writes — FIXED
 
 `schemas/workflow-schema.json:1299-1358` declares `mcpServerConfig` with
 `"additionalProperties": false` and these properties only: `id`, `command`,
@@ -191,7 +206,7 @@ This also settles the inline-object question below: inline `mcpServerConfig`
 objects are not a hypothetical the schema merely tolerates — **the UI actively
 writes them**, so the schema must describe exactly what the UI produces.
 
-### 2. `endCondition` duplicates `scriptProperties` and loses `env`
+### 2. `endCondition` duplicated `scriptProperties` and lost `env` — FIXED
 
 `endCondition` (`:815-867`) hand-declares its property list instead of
 `$ref`-ing `scriptProperties` the way `preCondition` (`:899-922`) does, and in
@@ -222,7 +237,7 @@ Watch two details while doing it: `endCondition` currently has
 level; and `scriptProperties.returns` has a shorter description than
 `endCondition`'s, so keep the richer wording where it belongs.
 
-### 3. `scriptStep` duplicates `scriptProperties` too
+### 3. `scriptStep` duplicated `scriptProperties` too — FIXED
 
 Same shape as (2), lower stakes: `scriptStep` (`:724-814`) re-declares
 `script`, `env`, `compareSource`, `returns`, and `timeout` inline rather than
@@ -234,12 +249,7 @@ definition, but it is not blocking anything.
 
 ## Recommended order
 
-0. **Verify the two suspected live failures** — `mcpServerConfig`'s
-   `additionalProperties: false` versus the `description`/`deniedTools` the UI
-   writes (Schema cleanup item 1), and the property-preservation question
-   below. Both are cheap to check and both change the priority of everything
-   else. The schema cleanup itself (items 1–3) is a small, self-contained
-   change that can land immediately after.
+0. ~~Schema cleanup~~ — **done**, see above.
 1. **Answer the open question** on property preservation. If the UI drops
    unknown properties on save, fix that first — adding controls to a UI that
    silently deletes fields makes the problem worse, not better.

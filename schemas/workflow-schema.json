@@ -346,6 +346,9 @@
         "errorBehavior": {
           "$ref": "#/definitions/scriptStep/properties/errorBehavior"
         },
+        "secrets": {
+          "$ref": "#/definitions/scriptStep/properties/secrets"
+        },
         "onPass": {
           "$ref": "#/definitions/scriptStep/properties/onPass"
         },
@@ -743,28 +746,19 @@
           "description": "Where this script step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Omitting this field inherits the global default."
         },
         "script": {
-          "type": "string",
-          "description": "Shell command or path to script. Resolved relative to workspace root or .ctrlyoke/."
+          "$ref": "#/definitions/scriptProperties/properties/script"
         },
         "env": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
-          "description": "Environment map consumed by the script process. Secret references are allowed only as ${secret:NAME} values."
+          "$ref": "#/definitions/scriptProperties/properties/env"
         },
         "compareSource": {
-          "type": "string",
-          "enum": ["auto", "stdout", "stderr", "exitCode"],
-          "description": "Which output to compare against returns. 'auto' (default): 'true'/'false' use exit code, other values compare stdout. 'stdout': always compare stdout. 'stderr': compare stderr content. 'exitCode': compare the numeric exit code directly."
+          "$ref": "#/definitions/scriptProperties/properties/compareSource"
         },
         "returns": {
-          "type": "string",
-          "description": "Expected result to compare against. When absent, exit code 0 = pass. Interpretation depends on compareSource (default auto): for 'true'/'false' uses exit code; for other values checks stdout."
+          "$ref": "#/definitions/scriptProperties/properties/returns"
         },
         "timeout": {
-          "type": "number",
-          "description": "Timeout in milliseconds. Defaults to ctrlyoke.scriptTimeout setting."
+          "$ref": "#/definitions/scriptProperties/properties/timeout"
         },
         "errorBehavior": {
           "oneOf": [
@@ -814,24 +808,13 @@
     },
     "endCondition": {
       "type": "object",
+      "description": "Validation that runs after the prompt completes. Shares script/env/returns/compareSource/timeout with preCondition and scriptStep via scriptProperties.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/scriptProperties"
+        }
+      ],
       "properties": {
-        "script": {
-          "type": "string",
-          "description": "Path to script file to execute, or direct shell command (e.g., 'npm test', 'python script.py'). File paths are resolved relative to workspace root or .ctrlyoke directory."
-        },
-        "returns": {
-          "type": "string",
-          "description": "Expected result to compare against. Interpretation depends on compareSource (default auto): for 'true'/'false' auto uses exit code (exit 0 = true, non-zero = false); for other values auto checks stdout via exact match, numeric >=, or substring. For compareSource: exitCode, provide the expected exit code as a number string (e.g., '0', '1') or 'true'/'false'."
-        },
-        "compareSource": {
-          "type": "string",
-          "enum": ["auto", "stdout", "stderr", "exitCode"],
-          "description": "Which output to compare against `returns`. 'auto' (default): 'true'/'false' use exit code, other values compare stdout. 'stdout': always compare stdout (also requires clean exit). 'stderr': compare stderr content (exit code ignored). 'exitCode': compare the numeric exit code directly."
-        },
-        "timeout": {
-          "type": "number",
-          "description": "Timeout in milliseconds. Defaults to ctrlyoke.scriptTimeout setting."
-        },
         "maxRetries": {
           "type": "number",
           "description": "Maximum number of retry attempts when validation fails. Use -1 for unlimited retries (use with caution), 0 for no retries (default), or 1-100 for a specific limit.",
@@ -883,11 +866,11 @@
         "compareSource": {
           "type": "string",
           "enum": ["auto", "stdout", "stderr", "exitCode"],
-          "description": "Which output to compare against returns. 'auto' (default): 'true'/'false' use exit code, other values compare stdout. 'stdout': always compare stdout. 'stderr': compare stderr content. 'exitCode': compare the numeric exit code directly."
+          "description": "Which output to compare against `returns`. 'auto' (default): 'true'/'false' use exit code, other values compare stdout. 'stdout': always compare stdout (also requires a clean exit). 'stderr': compare stderr content (exit code ignored). 'exitCode': compare the numeric exit code directly."
         },
         "returns": {
           "type": "string",
-          "description": "Expected result to compare against. When absent, exit code 0 = pass."
+          "description": "Expected result to compare against. When absent, exit code 0 = pass. Interpretation depends on compareSource (default auto): for 'true'/'false' auto uses exit code (exit 0 = true, non-zero = false); for other values auto checks stdout via exact match, numeric >=, or substring. For compareSource: exitCode, provide the expected exit code as a number string (e.g., '0', '1') or 'true'/'false'."
         },
         "timeout": {
           "type": "number",
@@ -1304,6 +1287,10 @@
           "type": "string",
           "description": "Unique server identifier"
         },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description shown in MCP Manager. ctrlyoke-only metadata — deliberately omitted by every harness export path so it never leaks an unrecognized key into an external tool's native config file."
+        },
         "command": {
           "type": "string",
           "description": "Command to run the MCP server process (stdio servers, e.g. \"npx\" or \"node\")"
@@ -1350,7 +1337,14 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "HTTP headers to send with every request (remote servers only, e.g. { \"Authorization\": \"Bearer token\" })"
+          "description": "HTTP headers to send with every request (remote servers only, e.g. { \"Authorization\": \"Bearer token\" }). Secret references are allowed as ${secret:NAME} values."
+        },
+        "deniedTools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tool names from this server to deny at execution time. Use bare tool names without the mcp__<serverid>__ prefix (e.g. [\"ctrlyoke_append_queue\"]). Translated to mcp__<id>__<tool> deny patterns and merged into the harness permission args. Supported on harnesses that accept tool deny patterns."
         }
       },
       "required": ["id"],
