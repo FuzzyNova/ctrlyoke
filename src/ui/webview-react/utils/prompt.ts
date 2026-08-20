@@ -7,6 +7,7 @@ import {
   type StepStatus,
   type CompareSource,
 } from "../types/messages";
+import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
 
 export type EndConditionCompareSource = CompareSource;
 
@@ -16,6 +17,7 @@ export type EndConditionCompareSource = CompareSource;
 interface EndCondition {
   script: string;
   returns: string;
+  env?: Record<string, string>;
   compareSource?: EndConditionCompareSource;
   timeout?: number;
   maxRetries?: number;
@@ -49,7 +51,7 @@ export interface RawPrompt {
   resumeSession?: boolean;
   sessionId?: string | number;
   mcpServers?: (string | object)[] | null;
-  hooks?: object[] | null;
+  hooks?: UserHookConfig[] | null;
   endCondition?: EndCondition | null;
   _runtime?: PromptRuntime;
 }
@@ -94,7 +96,7 @@ export interface PromptStep {
   /** MCP servers to attach for this prompt */
   mcpServers?: (string | object)[] | null;
   /** User hooks configuration */
-  hooks?: object[] | null;
+  hooks?: UserHookConfig[] | null;
   /** End condition configuration */
   endCondition?: EndCondition | null;
   /** Runtime metadata from execution */
@@ -158,7 +160,7 @@ export function createPromptStep(
     resumeSession: prompt.resumeSession,
     sessionId: prompt.sessionId,
     mcpServers: prompt.mcpServers,
-    hooks: (prompt as any).hooks,
+    hooks: prompt.hooks,
     endCondition: prompt.endCondition,
     _runtime: prompt._runtime,
   };

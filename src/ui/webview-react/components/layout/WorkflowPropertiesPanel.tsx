@@ -1,5 +1,9 @@
 import React, { useState, useCallback, useEffect, useMemo } from "react";
-import type { ErrorBehavior, WorktreeConfig } from "@root/types/CtrlYokeTypes";
+import type {
+  ErrorBehavior,
+  UserHookConfig,
+  WorktreeConfig,
+} from "@root/types/CtrlYokeTypes";
 import {
   useSettingsStore,
   type WorkflowProperties,
@@ -920,11 +924,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
   );
 
   const handleHooksChange = useCallback(
-    (newValue: object[] | null | undefined) => {
+    (newValue: UserHookConfig[] | null | undefined) => {
       const settingsStore = useSettingsStore.getState();
       settingsStore.updateWorkflowProperty(
         "hooks",
-        newValue as WorkflowProperties["hooks"]
+        newValue
       );
       syncWorkflowPropertiesForUndo();
 

@@ -440,6 +440,87 @@ suite("Schema -> dashboard property round trip", () => {
    * without reading the surface table.
    */
   suite("user-reachable reproduction", () => {
+    test("dashboard-authored condition and hook properties survive later saves", async () => {
+      workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-parity-"));
+      const run = await createPromotedRun(workspace, {
+        steps: [{ prompt: PROMPT_TEXT }],
+      });
+      const harness = createRoundTripHarness(workspace, run);
+      const workflowPreCondition = {
+        script: "git diff --quiet",
+        env: { PRE_TOKEN: "${secret:PRE_TOKEN}" },
+      };
+      const workflowEndCondition = {
+        script: "npm test",
+        returns: "true",
+        env: { END_TOKEN: "${secret:END_TOKEN}" },
+      };
+      const workflowHooks = [
+        {
+          event: "stop",
+          command: "echo done",
+          env: { HOOK_TOKEN: "${secret:HOOK_TOKEN}" },
+          timeoutSec: 30,
+        },
+      ];
+      const stepPreCondition = {
+        script: "git diff --quiet",
+        env: { STEP_PRE_TOKEN: "${secret:STEP_PRE_TOKEN}" },
+      };
+      const stepEndCondition = {
+        script: "npm test",
+        returns: "true",
+        env: { STEP_END_TOKEN: "${secret:STEP_END_TOKEN}" },
+      };
+      const stepHooks = [
+        {
+          event: "stop",
+          command: "echo step done",
+          env: { STEP_HOOK_TOKEN: "${secret:STEP_HOOK_TOKEN}" },
+          timeoutSec: 45,
+        },
+      ];
+
+      await harness.routeWorkflowPropertyUpdate(
+        "preCondition",
+        workflowPreCondition
+      );
+      await harness.routeWorkflowPropertyUpdate(
+        "endCondition",
+        workflowEndCondition
+      );
+      await harness.routeWorkflowPropertyUpdate("hooks", workflowHooks);
+      await harness.routeUpdatePrompt({
+        index: 0,
+        text: PROMPT_TEXT,
+        properties: {
+          preCondition: stepPreCondition,
+          endCondition: stepEndCondition,
+          hooks: stepHooks,
+        },
+      });
+
+      // These unrelated saves model later dashboard gestures. They must not
+      // replace the nested condition/hook properties written above.
+      await harness.routeWorkflowPropertyUpdate("model", "sonnet");
+      await harness.routeUpdatePrompt({
+        index: 0,
+        text: "updated prompt text",
+        properties: {},
+      });
+
+      const definition = await harness.readRunDefinition();
+      assert.deepStrictEqual(definition.preCondition, workflowPreCondition);
+      assert.deepStrictEqual(definition.endCondition, workflowEndCondition);
+      assert.deepStrictEqual(definition.hooks, workflowHooks);
+      assert.deepStrictEqual(definition.steps?.[0], {
+        prompt: "updated prompt text",
+        preCondition: stepPreCondition,
+        endCondition: stepEndCondition,
+        hooks: stepHooks,
+      });
+    });
+
     test("saving a hand-authored script step preserves unenumerated properties", async () => {
       workspace = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-parity-"));
       const run = await createPromotedRun(workspace, {

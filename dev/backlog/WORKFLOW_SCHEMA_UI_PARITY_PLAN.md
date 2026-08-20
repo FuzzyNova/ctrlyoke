@@ -260,22 +260,18 @@ inherit/custom mode.
 `onFail`; endCondition adds `maxRetries`, `retryPrompt`, `passRetryPrompt`,
 `resumeSessionOnRetry`.
 
-**Missing:**
-
-| Property | Notes                                                                                                                                                                                                                                                                            |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `env`    | `preCondition` inherits it from `scriptProperties` in the schema; `endCondition` supports it at runtime (see schema bug below). `ScriptConditionValue` has no `env` field, so neither is editable. Both are scanned by `getProcessMaps`, so both can trigger the item-3 failure. |
+**Missing:** None. `env` reuses `KeyValueMapEditor` with the secret picker and
+literal-credential warning for both condition variants. Clearing the map
+removes the authored key so the runtime can inherit its process environment.
 
 ### Hooks — `HooksEditor.tsx`
 
 **Present:** `event`, `command`.
 
-**Missing:**
-
-| Property     | Notes                                                                                                                           |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `env`        | Zero occurrences in the file. Another `${secret:NAME}` surface with no control.                                                 |
-| `timeoutSec` | Declared in the editor's own local TS interface (`:10`) but never rendered — the file has exactly one `<input>`, for `command`. |
+**Missing:** None. `env` reuses `KeyValueMapEditor` with the secret picker and
+literal-credential warning, and `timeoutSec` is an optional numeric override
+whose empty value clears the authored key. `HooksEditor` uses the shared
+`UserHookConfig` type rather than a local structural restatement.
 
 ### MCP servers — three surfaces, only one of which edits
 
@@ -463,7 +459,7 @@ before the control that makes them reachable.
 | 3   | **Done (2026-08-20):** Step-drawer `secrets` control                         | Prompt-step parity gap                                    |
 | 4   | **Done (2026-08-20):** `KeyValueMapEditor` shared env/headers map editor; `McpServerForm` `headers` + `autoApprove` list | MCP form parity gaps                                      |
 | 5   | **Done (2026-08-20):** Script-step `env` / `secrets` / `errorBehavior` controls | Script-step parity gaps                                   |
-| 6   | `env` on pre/end conditions and hooks; hook `timeoutSec`                          | Condition + hook parity gaps                              |
+| 6   | **Done (2026-08-20):** `env` on pre/end conditions and hooks; hook `timeoutSec` | Condition + hook parity gaps                              |
 | 7   | Process-map secret references auto-grant (overzealous item 3)                     | Hard failure reachable from the new `env` editors         |
 | 8   | Unresolved `{{var}}` becomes advisory + fenced-block masking (overzealous item 2, now also covering preCondition/script-step) | Hard failure already reachable via preCondition/script-step today; also what the `vars` editor (step 9) would newly expose for prompt text |
 | 9   | Workflow-root `vars` editor                                                       | Last root-level parity gap                                |

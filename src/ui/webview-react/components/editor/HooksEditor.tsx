@@ -1,22 +1,18 @@
 import React, { useCallback, useMemo } from "react";
 import { HOOK_EVENT_METADATA } from "@root/types/DashboardConstants";
+import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
 import { toFieldDiagnostic } from "@utils/compatibilityDiagnostics";
 import { FieldDiagnostic } from "../shared/FieldDiagnostic";
+import { KeyValueMapEditor } from "../shared/KeyValueMapEditor";
 
-interface HookEntry {
-  event: string;
-  command: string;
-  timeoutSec?: number;
-}
-
-type HooksValue = object[] | null | undefined;
+type HooksValue = UserHookConfig[] | null | undefined;
 
 interface HooksEditorProps {
   value: HooksValue;
   onChange: (value: HooksValue) => void;
   /** Resolved hooks from the tier below (workflow or global) for Default mode preview */
-  inheritedValue?: object[];
+  inheritedValue?: UserHookConfig[];
   /** When true, hides the Default/None/Custom mode selector (for WorkflowPropertiesPanel global level) */
   showDefault?: boolean;
   /** Compatibility findings for configured hook events. */
@@ -40,13 +36,13 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
   diagnostics = [],
 }) => {
   const mode = getMode(value);
-  const hooks = useMemo<HookEntry[]>(
-    () => (Array.isArray(value) ? (value as HookEntry[]) : []),
+  const hooks = useMemo<UserHookConfig[]>(
+    () => (Array.isArray(value) ? value : []),
     [value]
   );
 
-  const inherited: HookEntry[] = Array.isArray(inheritedValue)
-    ? (inheritedValue as HookEntry[])
+  const inherited: UserHookConfig[] = Array.isArray(inheritedValue)
+    ? inheritedValue
     : [];
 
   const handleModeChange = useCallback(
@@ -71,13 +67,16 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
   );
 
   const handleUpdateHook = useCallback(
-    (
-      index: number,
-      field: keyof HookEntry,
-      val: string | number | undefined
-    ) => {
+    (index: number, patch: Partial<UserHookConfig>) => {
       const updated = hooks.map((h, i) =>
-        i === index ? { ...h, [field]: val } : h
+        i === index
+          ? (() => {
+              const next = { ...h, ...patch };
+              // Keep explicit undefined on optional fields so a later
+              // workflow/step merge clears the authored key. JSON omits it.
+              return next;
+            })()
+          : h
       );
       onChange(updated);
     },
@@ -160,7 +159,11 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
           <div key={index} className="flex gap-1 items-start">
             <select
               value={hook.event}
-              onChange={(e) => handleUpdateHook(index, "event", e.target.value)}
+              onChange={(e) =>
+                handleUpdateHook(index, {
+                  event: e.target.value as UserHookConfig["event"],
+                })
+              }
               className="bg-input-bg text-input-fg border border-input-border rounded px-1 py-0.5 text-xs min-w-[120px]"
             >
               {HOOK_EVENT_METADATA.map((m) => (
@@ -173,10 +176,50 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
               type="text"
               value={hook.command}
               onChange={(e) =>
-                handleUpdateHook(index, "command", e.target.value)
+                handleUpdateHook(index, { command: e.target.value })
               }
               placeholder="node ./scripts/my-hook.js"
               className="flex-1 bg-input-bg text-input-fg border border-input-border rounded px-2 py-0.5 text-xs font-mono"
+            />
+            <div className="flex min-w-[180px] flex-col gap-1">
+              <label
+                htmlFor={`hook-${index}-timeout-sec`}
+                className="text-xxs text-description-fg"
+              >
+                Timeout (seconds)
+              </label>
+              <input
+                type="number"
+                id={`hook-${index}-timeout-sec`}
+                value={hook.timeoutSec ?? ""}
+                min={0}
+                onChange={(e) => {
+                  const raw = e.target.value.trim();
+                  const timeoutSec = raw === "" ? undefined : Number(raw);
+                  handleUpdateHook(
+                    index,
+                    raw === ""
+                      ? { timeoutSec: undefined }
+                      : Number.isFinite(timeoutSec)
+                        ? { timeoutSec }
+                        : {}
+                  );
+                }}
+                placeholder="Default"
+                className="bg-input-bg text-input-fg border border-input-border rounded px-2 py-0.5 text-xs"
+              />
+            </div>
+            <KeyValueMapEditor
+              label="Environment"
+              ariaLabel={`hook-${index}-env`}
+              value={hook.env ?? {}}
+              onChange={(env) =>
+                handleUpdateHook(index, {
+                  env: Object.keys(env).length > 0 ? env : undefined,
+                })
+              }
+              allowSecretReferences
+              rows={2}
             />
             <button
               type="button"

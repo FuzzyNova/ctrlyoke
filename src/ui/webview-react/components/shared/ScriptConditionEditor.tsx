@@ -233,8 +233,19 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
     return () => window.removeEventListener("message", handleMessage);
   }, [onChange]);
 
-  const update = (patch: Partial<ScriptConditionValue>) =>
-    onChange({ ...v, ...patch });
+  const update = (patch: Partial<ScriptConditionValue>) => {
+    const next = { ...v, ...patch };
+    // An empty map means inherit. The explicit undefined is intentional: it
+    // lets a nested UPDATE_PROMPT merge clear an existing env key, while JSON
+    // persistence omits the key instead of writing env: {}.
+    onChange(next);
+  };
+
+  const handleEnvironmentChange = (env: Record<string, string>) => {
+    update({
+      env: Object.keys(env).length > 0 ? env : undefined,
+    });
+  };
 
   const handleCreateScript = (
     scriptType: EndConditionScriptType,
@@ -320,13 +331,16 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         />
       </div>
 
-      {variant === "scriptStep" && (
+      {(variant === "scriptStep" ||
+        variant === "preCondition" ||
+        variant === "endCondition") && (
         <KeyValueMapEditor
           label="Environment"
           ariaLabel={`${idPrefix}-env`}
           value={v.env ?? {}}
-          onChange={(env) => update({ env })}
+          onChange={handleEnvironmentChange}
           allowSecretReferences
+          disabled={disabled}
         />
       )}
 

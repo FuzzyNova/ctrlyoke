@@ -30,6 +30,7 @@ import type {
 import type {
   EndCondition,
   ErrorBehavior,
+  UserHookConfig,
   WorktreeConfig,
 } from "@root/types/CtrlYokeTypes";
 import {
@@ -103,7 +104,7 @@ export interface GlobalSettings {
   executionMode: ExecutionMode;
   resumeSession: boolean;
   mcpServers: (string | object)[];
-  hooks: object[];
+  hooks: UserHookConfig[];
   autoFocusOutputOnExecution: boolean;
   toolPermissions: {
     mode: string;
@@ -144,10 +145,11 @@ export interface WorkflowProperties {
   resumeSession?: boolean;
   sessionId?: string | number; // UUID string or prompt number reference
   mcpServers?: (string | object)[] | null;
-  hooks?: object[] | null;
+  hooks?: UserHookConfig[] | null;
   errorBehavior?: ErrorBehavior | null;
   endCondition?: {
     script?: string; // Made optional - fields can be set incrementally
+    env?: Record<string, string>;
     returns?: string;
     timeout?: number;
     maxRetries?: number;
@@ -343,7 +345,7 @@ interface SettingsActions {
   getEffectiveAgent: () => string;
   getEffectiveResumeSession: () => boolean;
   getEffectiveMcpServers: () => (string | object)[] | null;
-  getEffectiveHooks: () => object[] | null;
+  getEffectiveHooks: () => UserHookConfig[] | null;
   getEffectivePriorContext: () => PriorContext;
   getEffectiveAdditionalArgs: () => string;
   getEffectiveToolPermissions: () => WorkflowProperties["toolPermissions"];

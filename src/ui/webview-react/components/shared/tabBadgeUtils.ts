@@ -1,4 +1,5 @@
 import { PERMISSION_MODES } from "@root/types/DashboardConstants";
+import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
 
 /** Tab icon override shape used by DrawerTabBar */
 export interface TabIconOverride {
@@ -94,7 +95,7 @@ export function getPermissionModeBadge(
 
 /** Focus-border (blue) icon if any hooks are configured in the resolved value */
 export function getHooksTabOverride(
-  hooks: object[] | null | undefined,
+  hooks: readonly Pick<UserHookConfig, "event">[] | null | undefined,
   hasCompatibilityWarning = false
 ): TabIconOverride | undefined {
   if (Array.isArray(hooks) && hooks.length > 0) {

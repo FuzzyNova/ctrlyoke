@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import type { VsCodeApi } from "../types/vscode";
-import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
+import type {
+  ErrorBehavior,
+  UserHookConfig,
+} from "@root/types/CtrlYokeTypes";
 import type { PromptStep } from "./workflowStore";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
 import type {
@@ -40,6 +43,7 @@ export type Disableable<T> = T | null | undefined;
  */
 export interface EndConditionConfig {
   script: string;
+  env?: Record<string, string>;
   returns?: string;
   compareSource?: EndConditionCompareSource;
   timeout?: number;
@@ -65,7 +69,7 @@ export interface PropertyValues {
   resumeSession: Inheritable<boolean>; // undefined = inherit, true = yes, false = no
   sessionId: string; // "" or session ID or prompt number reference
   mcpServers: (string | object)[] | null | undefined; // undefined = inherit, null = none, array = custom
-  hooks: object[] | null | undefined; // undefined = inherit, null = none, array = custom
+  hooks: UserHookConfig[] | null | undefined; // undefined = inherit, null = none, array = custom
   errorBehavior?: ErrorBehavior | null;
   endCondition?: EndConditionConfig | null;
   preCondition?: PreCondition | null;
