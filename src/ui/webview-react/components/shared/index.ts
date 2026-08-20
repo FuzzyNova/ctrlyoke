@@ -1,4 +1,11 @@
 export { Button } from "./Button";
+export {
+  KeyValueMapEditor,
+  keyValueMapObjectToString,
+  keyValueMapStringToObject,
+  findLiteralCredentialEnvKeys,
+  type KeyValueMapEditorProps,
+} from "./KeyValueMapEditor";
 export { ExitButton } from "./ExitButton";
 export { ExecutionStateBadge } from "./ExecutionStateBadge";
 export { CustomSelect, type SelectOption } from "./CustomSelect";

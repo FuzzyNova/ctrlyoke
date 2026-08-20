@@ -1,8 +1,9 @@
-import { useEffect, useId, useMemo } from "react";
+import { useId } from "react";
 import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import { CustomSelect } from "./CustomSelect";
-import { useSecretRegistryStore } from "@store/secretRegistryStore";
-import { SETTING_SCOPES } from "@root/types/DashboardConstants";
+import { KeyValueMapEditor } from "./KeyValueMapEditor";
+
+export { findLiteralCredentialEnvKeys } from "./KeyValueMapEditor";
 
 export type McpServerFormTab = "stdio" | "remote";
 export type McpServerTransport = "streamable-http" | "sse";
@@ -18,11 +19,12 @@ export interface McpServerFormState {
   activeTab: McpServerFormTab;
   command: string;
   args: string;
-  env: string;
-  autoApprove: boolean;
+  env: Record<string, string>;
+  autoApprove: boolean | string[];
   autoApproveTouched: boolean;
   url: string;
   transport: McpServerTransport;
+  headers: Record<string, string>;
   originalServer?: McpServerConfig;
 }
 
@@ -32,11 +34,12 @@ export const EMPTY_MCP_SERVER_FORM_STATE: McpServerFormState = {
   activeTab: "stdio",
   command: "",
   args: "",
-  env: "",
+  env: {},
   autoApprove: false,
   autoApproveTouched: false,
   url: "",
   transport: "streamable-http",
+  headers: {},
 };
 
 function cloneMcpServerConfig(server: McpServerConfig): McpServerConfig {
@@ -52,58 +55,6 @@ function cloneMcpServerConfig(server: McpServerConfig): McpServerConfig {
   };
 }
 
-function mcpEnvObjectToString(env: Record<string, string> | undefined): string {
-  if (!env) return "";
-  return Object.entries(env)
-    .map(([key, value]) => `${key}=${value}`)
-    .join("\n");
-}
-
-function mcpEnvStringToObject(raw: string): Record<string, string> | undefined {
-  const lines = raw
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (lines.length === 0) return undefined;
-
-  const result: Record<string, string> = {};
-  for (const line of lines) {
-    const separatorIndex = line.indexOf("=");
-    if (separatorIndex < 1) continue;
-    result[line.slice(0, separatorIndex).trim()] = line.slice(
-      separatorIndex + 1
-    );
-  }
-
-  return Object.keys(result).length > 0 ? result : undefined;
-}
-
-const SECRET_REFERENCE_PATTERN = /^\$\{secret:[A-Z][A-Z0-9_]*\}$/;
-const SENSITIVE_ENV_KEY_PATTERN =
-  /(api|access|auth|credential|key|password|secret|token)/i;
-
-/** Identify env entries that look like pasted credentials rather than references. */
-export function findLiteralCredentialEnvKeys(
-  env: Record<string, string> | undefined
-): string[] {
-  if (!env) return [];
-  return Object.entries(env)
-    .filter(([key, value]) => {
-      const trimmed = value.trim();
-      if (!trimmed || SECRET_REFERENCE_PATTERN.test(trimmed)) return false;
-      return (
-        (SENSITIVE_ENV_KEY_PATTERN.test(key) && trimmed.length >= 12) ||
-        /^Bearer\s+\S{8,}$/i.test(trimmed) ||
-        /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/i.test(trimmed) ||
-        /^(?:sk-|ghp_|github_pat_|xox[baprs]-|AKIA)[A-Za-z0-9_-]{12,}$/.test(
-          trimmed
-        )
-      );
-    })
-    .map(([key]) => key);
-}
-
 export function serverToMcpServerFormState(
   server: McpServerConfig
 ): McpServerFormState {
@@ -113,27 +64,35 @@ export function serverToMcpServerFormState(
     activeTab: server.url ? "remote" : "stdio",
     command: server.command ?? "",
     args: server.args ? server.args.join(" ") : "",
-    env: mcpEnvObjectToString(server.env),
-    autoApprove:
-      typeof server.autoApprove === "boolean" ? server.autoApprove : false,
+    env: server.env ? { ...server.env } : {},
+    autoApprove: Array.isArray(server.autoApprove)
+      ? [...server.autoApprove]
+      : typeof server.autoApprove === "boolean"
+        ? server.autoApprove
+        : false,
     autoApproveTouched: false,
     url: server.url ?? "",
     transport: server.transport ?? "streamable-http",
+    headers: server.headers ? { ...server.headers } : {},
     originalServer: cloneMcpServerConfig(server),
   };
 }
 
-function getAutoApproveValue(
+export function getAutoApproveValue(
   form: McpServerFormState
 ): boolean | string[] | undefined {
   const original = form.originalServer?.autoApprove;
-  const originalCheckboxValue =
-    typeof original === "boolean" ? original : false;
 
-  if (!form.autoApproveTouched && form.autoApprove === originalCheckboxValue) {
-    return Array.isArray(original) ? [...original] : original;
+  if (!form.autoApproveTouched) {
+    if (Array.isArray(original)) return [...original];
+    if (typeof original === "boolean" && form.autoApprove === original) {
+      return original;
+    }
   }
 
+  if (Array.isArray(form.autoApprove)) {
+    return form.autoApprove.length > 0 ? [...form.autoApprove] : undefined;
+  }
   if (form.autoApprove) return true;
   return undefined;
 }
@@ -169,8 +128,12 @@ export function mcpServerFormStateToServer(
     delete server.command;
     delete server.args;
     delete server.env;
+    delete server.headers;
     server.url = form.url.trim();
     server.transport = form.transport;
+    if (Object.keys(form.headers).length > 0) {
+      server.headers = { ...form.headers };
+    }
     return server;
   }
 
@@ -185,9 +148,8 @@ export function mcpServerFormStateToServer(
   }
 
   delete server.env;
-  const env = mcpEnvStringToObject(form.env);
-  if (env) {
-    server.env = env;
+  if (Object.keys(form.env).length > 0) {
+    server.env = { ...form.env };
   }
 
   return server;
@@ -228,40 +190,6 @@ export function McpServerForm({
 }: McpServerFormProps) {
   const isValid = isMcpServerFormValid(value);
   const autoApproveId = useId();
-  const secretEntriesByScope = useSecretRegistryStore(
-    (state) => state.entriesByScope
-  );
-  const requestSecretEntries = useSecretRegistryStore(
-    (state) => state.requestEntries
-  );
-  useEffect(() => {
-    requestSecretEntries(SETTING_SCOPES.USER);
-    requestSecretEntries(SETTING_SCOPES.WORKSPACE);
-  }, [requestSecretEntries]);
-  const secretNames = useMemo(
-    () =>
-      [
-        ...new Set([
-          ...secretEntriesByScope[SETTING_SCOPES.USER].map(
-            (entry) => entry.name
-          ),
-          ...secretEntriesByScope[SETTING_SCOPES.WORKSPACE].map(
-            (entry) => entry.name
-          ),
-        ]),
-      ].sort(),
-    [secretEntriesByScope]
-  );
-  const literalCredentialKeys = findLiteralCredentialEnvKeys(
-    mcpEnvStringToObject(value.env)
-  );
-  const insertSecretReference = (name: string) => {
-    if (!name) return;
-    const reference = `\${secret:${name}}`;
-    const line = `${name}=${reference}`;
-    const current = value.env.trim();
-    onChange({ ...value, env: current ? `${current}\n${line}` : line });
-  };
 
   return (
     <div
@@ -338,52 +266,13 @@ export function McpServerForm({
             }
             className="w-full rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none"
           />
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xxs text-description-fg">
-              env (KEY=VALUE, one per line)
-            </span>
-            <textarea
-              placeholder={"MY_KEY=value\nANOTHER_KEY=value"}
-              aria-label="Environment variables (KEY=VALUE, one per line)"
-              value={value.env}
-              onChange={(event) =>
-                onChange({ ...value, env: event.target.value })
-              }
-              rows={3}
-              className="w-full resize-none rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none"
-            />
-            {secretNames.length > 0 && (
-              <select
-                aria-label="Insert secret reference"
-                value=""
-                onChange={(event) => insertSecretReference(event.target.value)}
-                className="w-full rounded border border-input-border bg-input-bg px-2 py-1 text-xxs text-input-fg focus:border-focus-border focus:outline-none"
-              >
-                <option value="">Insert secret reference…</option>
-                {secretNames.map((name) => (
-                  <option key={name} value={name}>
-                    {name} → $&#123;secret:{name}&#125;
-                  </option>
-                ))}
-              </select>
-            )}
-            {literalCredentialKeys.length > 0 && (
-              <p
-                className="flex items-start gap-1 text-xxs text-warning-fg"
-                role="alert"
-              >
-                <i
-                  className="codicon codicon-warning mt-px"
-                  aria-hidden="true"
-                />
-                <span>
-                  {literalCredentialKeys.join(", ")} looks like a pasted
-                  credential. Use the secret picker so the value is resolved at
-                  run time.
-                </span>
-              </p>
-            )}
-          </div>
+          <KeyValueMapEditor
+            label="env (KEY=VALUE, one per line)"
+            ariaLabel="Environment variables (KEY=VALUE, one per line)"
+            value={value.env}
+            onChange={(env) => onChange({ ...value, env })}
+            allowSecretReferences
+          />
         </>
       ) : (
         <>
@@ -409,8 +298,43 @@ export function McpServerForm({
             triggerAriaLabel="Choose remote transport"
             triggerTitle="Choose the transport used by the remote MCP server"
           />
+          <KeyValueMapEditor
+            label="headers (KEY=VALUE, one per line)"
+            value={value.headers}
+            onChange={(headers) => onChange({ ...value, headers })}
+            allowSecretReferences
+          />
         </>
       )}
+
+      <label
+        htmlFor={`${autoApproveId}-tools`}
+        className="flex flex-col gap-0.5"
+      >
+        <span className="text-xxs text-description-fg">
+          Auto-approve tools (one per line)
+        </span>
+        <textarea
+          id={`${autoApproveId}-tools`}
+          aria-label="Auto-approve tools"
+          placeholder="tool_name"
+          value={
+            Array.isArray(value.autoApprove) ? value.autoApprove.join("\n") : ""
+          }
+          onChange={(event) =>
+            onChange({
+              ...value,
+              autoApprove: event.target.value
+                .split("\n")
+                .map((tool) => tool.trim())
+                .filter(Boolean),
+              autoApproveTouched: true,
+            })
+          }
+          rows={2}
+          className="w-full resize-none rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none"
+        />
+      </label>
 
       <label
         htmlFor={autoApproveId}
@@ -420,7 +344,7 @@ export function McpServerForm({
           id={autoApproveId}
           type="checkbox"
           aria-label="Auto-approve all tools"
-          checked={value.autoApprove}
+          checked={value.autoApprove === true}
           onChange={(event) =>
             onChange({
               ...value,

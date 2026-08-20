@@ -287,14 +287,14 @@ Worth stating plainly, because it is easy to look in the wrong file:
 
 `McpServerFormState` (`:15-27`) is therefore the real parity surface:
 `id`, `description`, `command`, `args`, `env`, `autoApprove`, `url`,
-`transport`. It is also where the `${secret:NAME}` picker lives (`:357`).
+`transport`, and `headers`. The shared `KeyValueMapEditor` now owns the
+`KEY=VALUE` parsing, optional `${secret:NAME}` picker, and optional literal
+credential warning for MCP `env` and `headers`; steps 5, 6, and 9 should reuse
+that component rather than create another map control.
 
-**Missing from the form:**
-
-| Field                        | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `headers`                    | **The significant one.** No form state, no input. Remote MCP servers' headers are preserved across an edit (`mcpServerFormStateToServer` clones `originalServer`, and only the stdio branch deletes them — `:177`), so this is not data loss, but they can never be _authored or filled in_. `registryEntryToServer` imports a registry entry's required headers as **empty strings** (`:200-207`), so a remote server needing `Authorization` arrives with `{ "Authorization": "" }` and the dashboard offers no way to set it. This is exactly the original complaint's shape — and headers are a `${secret:NAME}` surface scanned by `getProcessMaps`, so a Bearer token is precisely what belongs there. |
-| `autoApprove` as a tool list | Form state types it `boolean` only (`:22`). The schema and types both allow `boolean \| string[]`, so per-tool auto-approval is not authorable. An existing array survives an edit via `cloneMcpServerConfig`, but is overwritten with a boolean once the user touches the toggle.                                                                                                                                                                                                                                                                                                                                                                                                                           |
+**Missing from the form:** None. `headers` is editable for remote servers and
+stripped for stdio servers, and `autoApprove` supports both the boolean and
+tool-list forms without flattening an untouched loaded list.
 
 **Not a gap after all:** inline `mcpServerConfig` objects in a workflow's
 `mcpServers` array are not merely schema-legal, the UI writes them —
@@ -459,7 +459,7 @@ before the control that makes them reachable.
 | 1   | **Done (2026-08-20):** Script steps merge instead of replace (+ `clearProperties` threading) | 9 `script step:*` preservation failures                   |
 | 2   | **Done (2026-08-20):** `finalStep` merges against disk; `secrets` in `buildPromptStepProperties` | 25 `final step:*` preservation + both acceptance failures |
 | 3   | **Done (2026-08-20):** Step-drawer `secrets` control                         | Prompt-step parity gap                                    |
-| 4   | Shared env/headers map editor; `McpServerForm` `headers` + `autoApprove` list     | MCP form parity gaps                                      |
+| 4   | **Done (2026-08-20):** `KeyValueMapEditor` shared env/headers map editor; `McpServerForm` `headers` + `autoApprove` list | MCP form parity gaps                                      |
 | 5   | Script-step `env` / `secrets` / `errorBehavior` controls                          | Script-step parity gaps                                   |
 | 6   | `env` on pre/end conditions and hooks; hook `timeoutSec`                          | Condition + hook parity gaps                              |
 | 7   | Process-map secret references auto-grant (overzealous item 3)                     | Hard failure reachable from the new `env` editors         |
@@ -478,6 +478,7 @@ itself.
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `schemas/workflow-schema.json`                                       | `mcpServerConfig` gains `description` + `deniedTools`; `endCondition` and `scriptStep` `$ref` `scriptProperties` instead of duplicating it |
 | `src/ui/webview-react/components/shared/McpServerForm.tsx`           | `headers` editor; `autoApprove` tool list                                                                                                  |
+| `src/ui/webview-react/components/shared/KeyValueMapEditor.tsx`       | Shared controlled `Record<string, string>` editor with opt-in secret picker and credential warning                                         |
 | `src/ui/webview-react/components/editor/PropertiesDrawer.tsx`        | Step-level `secrets` control                                                                                                               |
 | `src/ui/webview-react/components/editor/PromptEditor.tsx`            | Script-step `env` / `secrets` / `errorBehavior` in the submit payload                                                                      |
 | `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`   | `env` on `ScriptConditionValue` + editor for script steps and both conditions                                                              |
