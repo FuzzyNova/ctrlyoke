@@ -900,6 +900,47 @@ suite("CliIntegration", () => {
     }
   });
 
+  test("notifies only after a provider statusline install mutation writes", async () => {
+    const feedback: string[] = [];
+    let pending: {
+      kind: "written" | "no-op";
+      captured: boolean;
+    } = {
+      kind: "written",
+      captured: true,
+    };
+    const provider = createProvider({
+      planCliArgs: async () => ({
+        cliArgs: [],
+        mutations: [
+          { description: "install statusline", apply: async () => {} },
+        ],
+        diagnostics: [],
+      }),
+      consumeStatuslineInstallResult: () => {
+        const result = pending;
+        pending = { kind: "no-op", captured: false };
+        return result;
+      },
+    });
+    const integration = new CliIntegration(
+      provider,
+      new MockVsCodePlatform(),
+      false,
+      { notify: ({ message }) => feedback.push(message) }
+    );
+    (integration as any).executionRunner.executeHeadless = async () => true;
+
+    assert.strictEqual(
+      await integration.sendPrompt({ prompt: "install" }),
+      true
+    );
+    assert.strictEqual(feedback.length, 1);
+    assert.match(feedback[0], /forwarding to your existing script unchanged/u);
+
+    integration.dispose();
+  });
+
   test("starts and stops the execution sidecar around an injected turn", async () => {
     configService.setCliOverlay({
       defaults: { executionMode: EXECUTION_MODES.INTERACTIVE },

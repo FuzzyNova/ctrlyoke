@@ -778,6 +778,18 @@ export const ConfigurationUtils = {
     ];
   },
 
+  /** Persist one complete machine-scoped statusline provider object. */
+  async setStatusLineTrackingSettings(
+    provider: StatusLineTrackingProvider,
+    settings: StatusLineTrackingSettings
+  ): Promise<void> {
+    await configService.set(
+      `${SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING}.${provider}`,
+      settings,
+      CONFIG_SCOPE.USER
+    );
+  },
+
   /**
    * Whether pattern-based heuristics (e.g. `token=...`, `Bearer ...`) apply
    * during secret redaction, in addition to exact matches of resolved

@@ -63,6 +63,11 @@ export type SettingsJsonPersistentValueInstallResult =
       readonly hadKey: boolean;
     };
 
+export type SettingsJsonPersistentValueAlreadyInstalled = (
+  currentValue: unknown,
+  hadKey: boolean
+) => boolean;
+
 interface ValueLease {
   normalizedRequestedValue: string;
   owners: Map<string, LeaseOwnerState>;
@@ -536,7 +541,8 @@ export class SettingsJsonMcpTracker {
     workspaceRoot: string,
     key: SettingsJsonPersistentValueKey,
     value: unknown,
-    capture?: SettingsJsonPersistentValueCapture
+    capture?: SettingsJsonPersistentValueCapture,
+    alreadyInstalled?: SettingsJsonPersistentValueAlreadyInstalled
   ): Promise<SettingsJsonPersistentValueInstallResult> {
     const settingsPath = this.getProjectConfigPath(workspaceRoot);
 
@@ -547,6 +553,7 @@ export class SettingsJsonMcpTracker {
       const preexistingValue = this.cloneJson(settings[key]);
 
       if (
+        alreadyInstalled?.(this.cloneJson(settings[key]), hadKey) === true ||
         (hadKey && this.jsonEquals(preexistingValue, value)) ||
         (!hadKey && value === undefined)
       ) {

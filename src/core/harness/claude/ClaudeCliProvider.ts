@@ -1,9 +1,11 @@
 import * as path from "path";
-import * as os from "os";
 import * as fs from "fs/promises";
 import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
-import { HARNESS_IDS } from "../../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  STATUS_LINE_TRACKING_PROVIDERS,
+} from "../../../types/DashboardConstants";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
@@ -25,7 +27,10 @@ import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { CliParseUtils } from "../shared/CliParseUtils";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
+import {
+  StatuslineManager,
+  type StatuslineInstallResult,
+} from "../shared/StatuslineManager";
 import { ClaudeStatuslineSidecar } from "./ClaudeStatuslineSidecar";
 import type {
   CliExecutionSidecar,
@@ -94,20 +99,9 @@ const CLAUDE_IMAGE_INPUT_CAPABILITY = {
  * ```
  */
 export class ClaudeCliProvider implements ICliProvider {
-  private static readonly statusLineTracker =
-    SettingsJsonMcpTracker.getInstance("claude-cli-settings", {
-      projectConfigPath: () =>
-        path.join(os.homedir(), ".claude", "settings.json"),
-      userConfigPath: () => path.join(os.homedir(), ".claude", "settings.json"),
-    });
-  private static readonly STATUS_LINE_KEY = "statusLine";
-
-  static async pruneOrphanedStatusLine(workspaceRoot: string): Promise<void> {
-    await ClaudeCliProvider.statusLineTracker.pruneDeadOwners(
-      workspaceRoot,
-      ClaudeCliProvider.STATUS_LINE_KEY
-    );
-  }
+  private static readonly statuslineManager = StatuslineManager.forProvider(
+    STATUS_LINE_TRACKING_PROVIDERS.CLAUDE
+  );
 
   /** Tracks per-prompt hook settings files for cleanup */
   private hookSettingsPaths: string[] = [];
@@ -116,7 +110,15 @@ export class ClaudeCliProvider implements ICliProvider {
   private statusLineDirectory: string | undefined;
   private statusLineEnabledForPrompt = false;
   private statusLineForwardCommand: string | undefined;
+  private statusLineUseCtrlyokeStyle = true;
   private statusLineSidecar: ClaudeStatuslineSidecar | undefined;
+  private statuslineInstallResult: StatuslineInstallResult | undefined;
+
+  consumeStatuslineInstallResult(): StatuslineInstallResult | undefined {
+    const result = this.statuslineInstallResult;
+    this.statuslineInstallResult = undefined;
+    return result;
+  }
 
   shouldRetainWorkflowArtifactsForReuse(): boolean {
     // Injected turns do not rebuild CLI arguments. Keep the prompt-scoped
@@ -403,8 +405,15 @@ export class ClaudeCliProvider implements ICliProvider {
             this.statusLineDirectory = undefined;
             this.statusLineEnabledForPrompt = false;
             this.statusLineForwardCommand = undefined;
-            if (workspaceRoot && ConfigurationUtils.shouldTrackHarnessUsage()) {
-              await this.registerStatusLine(
+            this.statusLineUseCtrlyokeStyle = true;
+            this.statuslineInstallResult = undefined;
+            if (
+              workspaceRoot &&
+              ConfigurationUtils.getStatusLineTrackingSettings(
+                STATUS_LINE_TRACKING_PROVIDERS.CLAUDE
+              ).enabled
+            ) {
+              this.statuslineInstallResult = await this.registerStatusLine(
                 extensionPath,
                 workspaceRoot,
                 workflowContext?.workingFilePath ?? workspaceRoot
@@ -718,19 +727,14 @@ export class ClaudeCliProvider implements ICliProvider {
   }
 
   async cleanupWorkspaceArtifacts(
-    workspaceRoot: string,
-    workingFilePath?: string
+    _workspaceRoot: string,
+    _workingFilePath?: string
   ): Promise<void> {
     this.statusLineSidecar?.stop();
     this.statusLineSidecar = undefined;
     for (const snapshotPath of this.statusLineSnapshotPaths) {
       await fs.unlink(snapshotPath).catch(() => undefined);
     }
-    await ClaudeCliProvider.statusLineTracker.unregisterValueLease(
-      workingFilePath ?? workspaceRoot,
-      workspaceRoot,
-      ClaudeCliProvider.STATUS_LINE_KEY
-    );
   }
 
   /**
@@ -913,8 +917,8 @@ export class ClaudeCliProvider implements ICliProvider {
   private async registerStatusLine(
     extensionPath: string,
     workspaceRoot: string,
-    workflowKey: string
-  ): Promise<void> {
+    _workflowKey: string
+  ): Promise<StatuslineInstallResult> {
     const scriptPath = path.join(
       extensionPath,
       "out",
@@ -937,23 +941,20 @@ export class ClaudeCliProvider implements ICliProvider {
     this.statusLineSnapshotPaths.add(snapshotPath);
 
     try {
-      await ClaudeCliProvider.statusLineTracker.registerValueLease(
-        workflowKey,
+      const result = await ClaudeCliProvider.statuslineManager.install(
         workspaceRoot,
-        ClaudeCliProvider.STATUS_LINE_KEY,
-        { type: "command", command }
+        command
       );
-      const baseline =
-        ClaudeCliProvider.statusLineTracker.getValueLeaseBaseline(
-          workspaceRoot,
-          ClaudeCliProvider.STATUS_LINE_KEY
-        );
-      this.statusLineForwardCommand = this.extractStatusLineCommand(baseline);
+      const settings = ClaudeCliProvider.statuslineManager.getSettings();
+      this.statusLineForwardCommand = settings.customCommand || undefined;
+      this.statusLineUseCtrlyokeStyle = settings.useCtrlyokeStyle;
       this.statusLineDirectory = snapshotDirectory;
       this.statusLineEnabledForPrompt = true;
+      return result;
     } catch (error) {
       // A statusline failure must never prevent Claude itself from running.
       Log.warn(`Failed to register Claude statusline: ${error}`);
+      return { kind: "no-op", captured: false };
     }
   }
 
@@ -972,17 +973,10 @@ export class ClaudeCliProvider implements ICliProvider {
     if (this.statusLineForwardCommand) {
       env.CTRLYOKE_CLAUDE_STATUSLINE_FORWARD = this.statusLineForwardCommand;
     }
+    env.CTRLYOKE_CLAUDE_STATUSLINE_USE_CTRLYOKE_STYLE = String(
+      this.statusLineUseCtrlyokeStyle
+    );
     return env;
-  }
-
-  private extractStatusLineCommand(value: unknown): string | undefined {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      return undefined;
-    }
-    const command = (value as { command?: unknown }).command;
-    return typeof command === "string" && command.length > 0
-      ? command
-      : undefined;
   }
 
   /**

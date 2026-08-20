@@ -67,7 +67,7 @@ the user explicitly turns tracking off.
    specifically is an arbitrary shell command that must not be settable from a workspace's
    (possibly repo-committed, untrusted) `.vscode/settings.json`.
 3. **Auto-detected baseline becomes a persisted, user-editable setting, not an in-memory
-   snapshot.** The first time ctrlyoke ever registers its command *on this machine* and finds
+   snapshot.** The first time ctrlyoke ever registers its command _on this machine_ and finds
    the custom-command setting empty, copy the file's current `statusLine.command` value into
    that setting once. From then on, the setting — not a frozen baseline captured at
    registration time — is the forward target, so editing it in the UI takes effect on the next
@@ -81,7 +81,7 @@ the user explicitly turns tracking off.
    behavior change from the existing `SettingsJsonMcpTracker` value-lease pattern — see
    Architecture Impact below for what that simplifies (and what it still needs to keep).
 5. **Disabling requires confirmation**, worded per-provider: losing token/quota data for
-   Claude, losing token/quota *and context-window* data for Antigravity (context-window
+   Claude, losing token/quota _and context-window_ data for Antigravity (context-window
    tracking has no other source there — see `ANTIGRAVITY_STATUSLINE_TOKEN_TRACKING_PLAN.md`),
    plus a note that the visible statusline text will change back too when `useCtrlyokeStyle`
    was on (it's not just a data-loss warning — the terminal will visibly look different again).
@@ -93,7 +93,7 @@ the user explicitly turns tracking off.
    nothing to offer back.
 6. **A `useCtrlyokeStyle` toggle controls stdout only, independent of the forward target.**
    The wrapper always writes the snapshot and always invokes the custom command (if any) so
-   its own state/side effects keep running; it only decides whose *output* reaches the
+   its own state/side effects keep running; it only decides whose _output_ reaches the
    harness's statusline. `true`: always print ctrlyoke's branded line, discarding the custom
    command's stdout. `false`: relay the custom command's stdout (or print nothing if none is
    configured). This gives "run my script AND show my decoration" as well as "run my script but
@@ -113,6 +113,7 @@ the user explicitly turns tracking off.
    there is nothing to capture, the effective static default already supplies `true`; the
    installer must not write `true` again on every disable/re-enable cycle, because that would
    overwrite a later user edit and violate this compute-once rule.
+
 7. **Add a branded line for Claude.** Today only Antigravity's wrapper has one
    (`formatBrandedStatusLine` in `ctrlyoke-antigravity-statusline.js`); Claude's wrapper prints
    nothing when there's no forward target. Give Claude an equivalent branded line (model,
@@ -122,7 +123,7 @@ the user explicitly turns tracking off.
    of `unavailable`.
 9. **Fire a one-time install notification per provider, keyed to the actual write, not to
    "ctrlyoke's first run."** A user can install ctrlyoke, use only Claude for months, then
-   install Antigravity later — Antigravity's notification must still fire the first time *its*
+   install Antigravity later — Antigravity's notification must still fire the first time _its_
    statusline gets taken over, independently of whatever already happened with Claude's. See
    "Install Notification" below for the full design.
 
@@ -142,7 +143,7 @@ which the file physically cannot do:
   variant was found"). There is no way for workspace A to see ctrlyoke's line and workspace B
   to see the user's own line at the same time; whichever workspace's ctrlyoke instance wrote
   last wins, machine-wide, including for CLI invocations outside VS Code entirely. Letting the
-  *setting* be workspace-scoped would just let two open workspaces disagree about a value that
+  _setting_ be workspace-scoped would just let two open workspaces disagree about a value that
   can only physically hold one answer — recreating exactly the "who wins" conflict problem
   `SettingsJsonMcpTracker`'s original ref-counted lease existed to arbitrate, which Decision 4's
   simplification (dropping ref-counting) only holds up if these settings genuinely can't
@@ -205,8 +206,8 @@ permissions: {
   statusLineTracking: {
     claude: StatusLineTrackingSettings;
     antigravity: StatusLineTrackingSettings;
-  };
-};
+  }
+}
 ```
 
 Static defaults (before any install has ever run): `enabled: true` for both (matches today's
@@ -244,7 +245,7 @@ ones.
 
 Decision 4 (stop restoring on every run exit) means the `statusLine` key no longer needs
 `SettingsJsonMcpTracker`'s ref-counted, multi-owner, dead-PID-pruned value-lease machinery at
-all for the *write* side. That machinery exists to answer "when is it safe to put the user's
+all for the _write_ side. That machinery exists to answer "when is it safe to put the user's
 original value back," and the new design only asks that question once — on an explicit user
 action — not on every workflow's cleanup. Concretely:
 
@@ -266,7 +267,7 @@ action — not on every workflow's cleanup. Concretely:
   machine-scoped; if they could vary per workspace, "the same idempotent end state" wouldn't be
   true and the ref-counting would still be needed.
 - **Still keep the per-settings-file mutex** (`SettingsJsonMcpTracker.withMutationLock`) around
-  the detect-and-install sequence, even though the ownership/ref-counting *around* it goes away.
+  the detect-and-install sequence, even though the ownership/ref-counting _around_ it goes away.
   Two hosts can still race on a machine's genuine first-ever install — two VS Code windows both
   opening for the first time, or the VS Code extension and a concurrently-running `ctrlyoke` CLI
   invocation. Without the lock, the loser of that race could read the winner's
@@ -372,10 +373,10 @@ Per your ask:
   **Wording**: never "restore previous"/"restore old" on the checkbox label or the body copy —
   name the actual value being restored so the user sees exactly what they're getting back. Use
   the command's basename when it looks like a plain script path (e.g. checkbox label `Restore
-  ctrlyoke-old-line.js as the statusline command`); when `customCommand` isn't a clean path (has
+ctrlyoke-old-line.js as the statusline command`); when `customCommand` isn't a clean path (has
   flags/args, or doesn't parse as one), fall back to the full command string, truncated with a
   tooltip carrying the untruncated value (e.g. `Restore "node C:/tools/my-line.js --compact" as
-  the statusline command`).
+the statusline command`).
 
 ## Install Notification
 
@@ -410,11 +411,11 @@ The install step already knows, from the same locked install sequence, whether i
 pre-existing `customCommand` (Decision 6) — reuse that to pick the message so it matches what
 the user is about to observe, rather than a single generic string:
 
-- Nothing captured: *"ctrlyoke is now showing its own statusline for \<Claude/Antigravity\>.
-  Settings → Usage to change this."*
+- Nothing captured: _"ctrlyoke is now showing its own statusline for \<Claude/Antigravity\>.
+  Settings → Usage to change this."_
 - Existing script captured (`customCommand` populated, `useCtrlyokeStyle` defaulted to `false`):
-  *"ctrlyoke is now managing your \<Claude/Antigravity\> statusline and forwarding to your
-  existing script unchanged. Settings → Usage to change this."* — reassuring rather than
+  _"ctrlyoke is now managing your \<Claude/Antigravity\> statusline and forwarding to your
+  existing script unchanged. Settings → Usage to change this."_ — reassuring rather than
   alarming, since Decision 6 already guarantees nothing visibly changed for this user.
 
 Wiring: keep providers unaware of the feedback sink (matches today's separation — providers
@@ -506,19 +507,17 @@ Mirror `ClaudeUsageProvider.parseClaudeRateLimitWindows` (`src/core/harness/shar
    Implementation decision: workspace filtering is path-generalized and removes only forbidden
    subtrees/leaves, preserving allowed sibling values such as other `permissions` and
    `usageTracking` settings.
-2. **Provider install/uninstall rewrite (tracker API in progress)**: the shared tracker now
-   exposes a typed, idempotent persistent-value install/uninstall pair for the `statusLine`
-   key. Its locked capture-before-write sequence and legacy sidecar cleanup are ready for the
-   provider migration; both providers still use the existing value-lease calls until that
-   integration is implemented. The remaining provider work also removes the now-dead
-   `pruneOrphanedStatusLine` sweep and owner-state file for this key only. The install result
-   carries whether it performed a write and the preexisting value so the provider migration can
-   persist the capture and later let `CliIntegration` fire the Decision 9 install notification.
-3. **Custom-command auto-detect-once + live read + install notification**: populate
-   `customCommand` and compute `useCtrlyokeStyle`'s default together, atomically, on first-ever
-   install when `customCommand` is empty (Decision 6); read `customCommand` (not a frozen
-   baseline) as the forward target on every prompt; wire the `notifyUserFeedback` call
-   (Decision 9) off the install step's returned result from Phase 2.
+2. **Provider install/uninstall rewrite (completed)**: the shared tracker now exposes a typed,
+   idempotent persistent-value install/uninstall pair for the `statusLine` key. Both providers
+   use the shared `StatuslineManager`, which keeps capture-before-write, command parsing,
+   restore/delete, and global settings paths single-sourced. Statusline leases, orphan pruning,
+   and owner sidecars are no longer involved; MCP and permission leases remain unchanged.
+3. **Custom-command auto-detect-once + live read + install notification (completed)**:
+   `customCommand` and `useCtrlyokeStyle` are captured together before first install writes the
+   harness file; providers read both settings live for every prompt and pass them to the wrapper
+   environment. `CliIntegration` consumes the nominal provider install result after plan
+   mutations apply and emits the per-harness info message only for actual writes. Race and
+   cleanup-persistence coverage is included for both providers.
 4. **Shared wrapper module + `useCtrlyokeStyle` + Claude branded line**: extract the flat
    `ctrlyoke-statusline-wrapper.js`, add the style switch to both entry scripts, add Claude's
    branded line, and use the deliberate shared 200 ms forward timeout instead of the accidental

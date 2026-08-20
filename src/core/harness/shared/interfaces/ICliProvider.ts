@@ -24,6 +24,7 @@ import type { HarnessId } from "../../../../types/DashboardConstants";
 import type { HarnessCapabilityFacts } from "../../../../types/CompatibilityTypes";
 import type { CliEvent } from "../../../../types/CliOutputTypes";
 import type { HarnessQuotaSnapshot } from "../../../../types/UsageTypes";
+import type { StatuslineInstallResult } from "../StatuslineManager";
 
 /** Timeout for CLI version-check subprocesses (checkAvailability + getVersion) */
 export const CLI_VERSION_CHECK_TIMEOUT_MS = 30_000;
@@ -259,6 +260,9 @@ export interface ICliProvider {
   startExecutionSidecar?(
     deps: CliExecutionSidecarDeps
   ): CliExecutionSidecar | undefined;
+
+  /** Consume the result of the statusline install mutation for host feedback. */
+  consumeStatuslineInstallResult?(): StatuslineInstallResult | undefined;
 
   /**
    * Format a file path reference for this CLI.
