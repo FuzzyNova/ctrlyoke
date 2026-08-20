@@ -199,9 +199,12 @@ stop. That trains rubber-stamping.
    `SECRETS_AND_REDACTION_PLAN.md`'s own open questions already propose this
    ("Leaning yes for grants") and it was never built. One coherent gate beats
    one silent path plus one noisy one.
-3. **Outstanding — keep the invalid-name throw (`isValidSecretName`) and the runtime
-   `MissingSecretError` — those are real resolution failures, not declaration
-   friction.**
+3. **Honored (2026-08-20), not outstanding work** — this was a constraint on the
+   fix, not a task. The invalid-name throw (`isValidSecretName`) and the runtime
+   `MissingSecretError` are both still in place: they are real resolution
+   failures, not declaration friction. So are the `preflightWorkflowSecrets` and
+   `expandSecretInterpolations` throws, now unreachable for the auto-granted case
+   and retained as genuine invariant guards.
 
 ## 4. The heuristic redactor rewrites authored prompt text
 

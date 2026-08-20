@@ -383,10 +383,22 @@ const WEBVIEW_SOURCE_ROOT = path.resolve(
   "../../../src/ui/webview-react"
 );
 
+/**
+ * Vitest suites live under `src/ui/webview-react/test/` and reference the same
+ * control ids they render. Scanning them would let a deleted control keep
+ * passing this guard purely because its own test still names the id, which is
+ * the opposite of what the guard is for — only production source counts.
+ */
+const WEBVIEW_TEST_DIRECTORIES = new Set(["test", "__tests__"]);
+
 function webviewSourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) return webviewSourceFiles(entryPath);
+    if (entry.isDirectory()) {
+      return WEBVIEW_TEST_DIRECTORIES.has(entry.name)
+        ? []
+        : webviewSourceFiles(entryPath);
+    }
     return /\.(?:ts|tsx)$/.test(entry.name) ? [entryPath] : [];
   });
 }

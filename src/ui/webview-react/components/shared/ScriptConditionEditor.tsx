@@ -235,13 +235,13 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
 
   const update = (patch: Partial<ScriptConditionValue>) => {
     const next = { ...v, ...patch };
-    // An empty map means inherit. The explicit undefined is intentional: it
-    // lets a nested UPDATE_PROMPT merge clear an existing env key, while JSON
-    // persistence omits the key instead of writing env: {}.
     onChange(next);
   };
 
   const handleEnvironmentChange = (env: Record<string, string>) => {
+    // An empty map means inherit. The explicit undefined is intentional: it
+    // lets a nested UPDATE_PROMPT merge clear an existing env key, while JSON
+    // persistence omits the key instead of writing env: {}.
     update({
       env: Object.keys(env).length > 0 ? env : undefined,
     });
@@ -331,19 +331,16 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         />
       </div>
 
-      {(variant === "scriptStep" ||
-        variant === "preCondition" ||
-        variant === "endCondition") && (
-        <KeyValueMapEditor
-          id={`${idPrefix}-env`}
-          label="Environment"
-          ariaLabel={`${idPrefix}-env`}
-          value={v.env ?? {}}
-          onChange={handleEnvironmentChange}
-          allowSecretReferences
-          disabled={disabled}
-        />
-      )}
+      {/* Every variant runs a process, so all three author `env`. */}
+      <KeyValueMapEditor
+        id={`${idPrefix}-env`}
+        label="Environment"
+        ariaLabel={`${idPrefix}-env`}
+        value={v.env ?? {}}
+        onChange={handleEnvironmentChange}
+        allowSecretReferences
+        disabled={disabled}
+      />
 
       {variant === "endCondition" && (
         <DrawerRow narrow={narrow}>

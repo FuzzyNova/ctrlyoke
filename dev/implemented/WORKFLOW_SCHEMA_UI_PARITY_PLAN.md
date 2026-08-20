@@ -4,11 +4,12 @@
 > persistence preservation, runtime guard softening, and the schema→UI control
 > parity guard are complete. The remaining overzealous-failure work is
 > deliberately deferred in `OVERZEALOUS_STEP_FAILURES_PLAN.md`.
-> **Priority:** P0 — the property-preservation question is answered and the
-> answer is **confirmed silent data loss**: saving a script step through the
-> dashboard, or toggling one enabled/disabled from the context menu, deletes
-> `env`, `secrets`, `errorBehavior` (and, on the toggle, `executionMode`). Fix
-> that before adding any control below.
+> **Priority when opened:** P0 — the property-preservation question was
+> answered and the answer was **confirmed silent data loss**: saving a script
+> step through the dashboard, or toggling one enabled/disabled from the context
+> menu, deleted `env`, `secrets`, `errorBehavior` (and, on the toggle,
+> `executionMode`). That was fixed first, in steps 1–2, before any control below
+> was added.
 > **Origin:** A user who authors workflows **exclusively through the dashboard**
 > hit a hard failure caused by `${secret:NAME}` in an MCP env map, and could not
 > resolve it because the field that fixes it (`secrets`) is not reachable from
@@ -242,9 +243,10 @@ Step `name` and `enabled` live in `EditorSection.tsx` (`:217-253`).
 `returns`, `env`, `executionMode`, `secrets`, `errorBehavior`, `enabled`,
 `name`.
 
-**Missing:** None. `env` is rendered only for the `scriptStep` variant and
-reuses `KeyValueMapEditor` with the secret picker and literal-credential
-warning. `secrets` reuses the shared secret-grant control without inline
+**Missing:** None. `env` reuses `KeyValueMapEditor` with the secret picker and
+literal-credential warning; it is rendered by `ScriptConditionEditor` for every
+variant, since a script step and both conditions all spawn a process (see the
+Conditions section below). `secrets` reuses the shared secret-grant control without inline
 `!NAME` locking because script steps have no prompt text. `errorBehavior` was
 not reachable from script steps: the existing control lived in
 `PropertiesDrawer`, which closes when a script step is edited. The script
@@ -254,8 +256,8 @@ inherit/custom mode.
 ### Conditions — `ScriptConditionEditor` (`preCondition` / `endCondition`)
 
 **Present:** `script`, `returns`, `compareSource`, `timeout`, `onPass`,
-`onFail`; endCondition adds `maxRetries`, `retryPrompt`, `passRetryPrompt`,
-`resumeSessionOnRetry`.
+`onFail`, `env`; endCondition adds `maxRetries`, `retryPrompt`,
+`passRetryPrompt`, `resumeSessionOnRetry`.
 
 **Missing:** None. `env` reuses `KeyValueMapEditor` with the secret picker and
 literal-credential warning for both condition variants. Clearing the map
@@ -263,7 +265,7 @@ removes the authored key so the runtime can inherit its process environment.
 
 ### Hooks — `HooksEditor.tsx`
 
-**Present:** `event`, `command`.
+**Present:** `event`, `command`, `env`, `timeoutSec`.
 
 **Missing:** None. `env` reuses `KeyValueMapEditor` with the secret picker and
 literal-credential warning, and `timeoutSec` is an optional numeric override
