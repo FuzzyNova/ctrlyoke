@@ -518,10 +518,11 @@ Mirror `ClaudeUsageProvider.parseClaudeRateLimitWindows` (`src/core/harness/shar
    environment. `CliIntegration` consumes the nominal provider install result after plan
    mutations apply and emits the per-harness info message only for actual writes. Race and
    cleanup-persistence coverage is included for both providers.
-4. **Shared wrapper module + `useCtrlyokeStyle` + Claude branded line**: extract the flat
-   `ctrlyoke-statusline-wrapper.js`, add the style switch to both entry scripts, add Claude's
-   branded line, and use the deliberate shared 200 ms forward timeout instead of the accidental
-   500ms/200ms split.
+4. **Shared wrapper module + `useCtrlyokeStyle` + Claude branded line (completed)**: extracted
+   the flat `ctrlyoke-statusline-wrapper.js`, added the style switch to both entry scripts,
+   added Claude's branded line through the shared formatter, and standardized forwarding on the
+   deliberate shared 200 ms timeout. Wrapper coverage verifies both providers' stdout, failure,
+   timeout, malformed-input, side-effect, and atomic filename contracts.
 5. **UI**: `StatusLineTrackingControls` component, `UsageCard.tsx` custom-command field +
    conditional style checkbox, `Modal`-based disable-confirmation dialog with the
    checked-by-default restore checkbox next to the confirm button and its single
