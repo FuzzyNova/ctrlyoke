@@ -256,9 +256,11 @@ describe("WorkflowPropertiesPanel variables", () => {
   it("posts a new variable through workflow-property updates", () => {
     render(<WorkflowPropertiesPanel />);
 
-    fireEvent.change(screen.getByLabelText("Variables"), {
+    const vars = screen.getByLabelText("Variables");
+    fireEvent.change(vars, {
       target: { value: "region=us-east-1" },
     });
+    fireEvent.blur(vars);
 
     expect(postMessage).toHaveBeenLastCalledWith({
       type: "updateWorkflowProperty",
@@ -273,9 +275,11 @@ describe("WorkflowPropertiesPanel variables", () => {
     });
 
     render(<WorkflowPropertiesPanel />);
-    fireEvent.change(screen.getByLabelText("Variables"), {
+    const vars = screen.getByLabelText("Variables");
+    fireEvent.change(vars, {
       target: { value: "region=eu-west-1" },
     });
+    fireEvent.blur(vars);
 
     expect(useSettingsStore.getState().workflowProperties.vars).toEqual({
       region: "eu-west-1",
@@ -293,9 +297,11 @@ describe("WorkflowPropertiesPanel variables", () => {
     });
 
     render(<WorkflowPropertiesPanel />);
-    fireEvent.change(screen.getByLabelText("Variables"), {
+    const vars = screen.getByLabelText("Variables");
+    fireEvent.change(vars, {
       target: { value: "" },
     });
+    fireEvent.blur(vars);
 
     expect(useSettingsStore.getState().workflowProperties.vars).toBeUndefined();
     expect(postMessage).toHaveBeenLastCalledWith({

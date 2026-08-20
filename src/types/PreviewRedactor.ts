@@ -39,8 +39,13 @@ export const REDACTION_RULES: readonly RedactionRule[] = [
   },
   {
     id: "credential-assignment",
+    // The leading negative lookbehind excludes ctrlyoke's own `${secret:NAME}`
+    // reference syntax: without it, "secret:" + an 8+ char name matches this
+    // rule and redacts the *name*, corrupting the reference into
+    // `${secret:[REDACTED]}` (see OVERZEALOUS_STEP_FAILURES_PLAN.md item 4).
+    // Secret names are not secret, so there is nothing to protect here.
     pattern:
-      /((?:api[_-]?key|access[_-]?token|auth[_-]?token|token|secret|password|private[_-]?key)\s*["']?\s*[:=]\s*["']?)(?!\[REDACTED\])([^\s"',;}\]]{8,})/gi,
+      /(?<!\$\{)((?:api[_-]?key|access[_-]?token|auth[_-]?token|token|secret|password|private[_-]?key)\s*["']?\s*[:=]\s*["']?)(?!\[REDACTED\])([^\s"',;}\]]{8,})/gi,
     valueGroup: 2,
   },
 ];

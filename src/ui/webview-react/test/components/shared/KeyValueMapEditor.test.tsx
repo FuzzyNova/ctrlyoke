@@ -9,7 +9,7 @@ afterEach(() => {
 });
 
 describe("KeyValueMapEditor", () => {
-  it("round-trips a map through the KEY=VALUE editor", () => {
+  it("does not commit on every keystroke, only on blur", () => {
     const onChange = vi.fn();
     render(
       <KeyValueMapEditor
@@ -19,9 +19,14 @@ describe("KeyValueMapEditor", () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText("Environment variables"), {
+    const textarea = screen.getByLabelText("Environment variables");
+    fireEvent.change(textarea, {
       target: { value: "FIRST=updated\nTHIRD=three" },
     });
+
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.blur(textarea);
 
     expect(onChange).toHaveBeenCalledWith({
       FIRST: "updated",
@@ -35,12 +40,14 @@ describe("KeyValueMapEditor", () => {
       <KeyValueMapEditor label="Headers" value={{}} onChange={onChange} />
     );
 
-    fireEvent.change(screen.getByLabelText("Headers"), {
+    const textarea = screen.getByLabelText("Headers");
+    fireEvent.change(textarea, {
       target: {
         value:
           "Authorization=Bearer token=with=equals\nmalformed\n=missing-key",
       },
     });
+    fireEvent.blur(textarea);
 
     expect(onChange).toHaveBeenCalledWith({
       Authorization: "Bearer token=with=equals",

@@ -67,12 +67,11 @@ describe("McpServerForm round trips", () => {
       })
     );
 
-    fireEvent.change(
-      screen.getByLabelText("headers (KEY=VALUE, one per line)"),
-      {
-        target: { value: "Authorization=${secret:API_TOKEN}" },
-      }
-    );
+    const headers = screen.getByLabelText("headers (KEY=VALUE, one per line)");
+    fireEvent.change(headers, {
+      target: { value: "Authorization=${secret:API_TOKEN}" },
+    });
+    fireEvent.blur(headers);
 
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({

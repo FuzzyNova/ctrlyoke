@@ -1,8 +1,8 @@
 # Overzealous Step Failures Plan
 
-> **Status:** Items 2 and 3 implemented (2026-08-20). Remaining work is
-> deliberately deferred: item 3 recommendations 2 and 3, item 4's heuristic
-> redactor trace/fix, and the cross-cutting "documents every syntax" test.
+> **Status:** Items 2, 3, and 4 implemented (2026-08-20). Remaining work is
+> deliberately deferred: item 3 recommendations 2 and 3, and the cross-cutting
+> "documents every syntax" test.
 > **Items 2 and 3 were staged inside
 > `dev/implemented/WORKFLOW_SCHEMA_UI_PARITY_PLAN.md`'s step queue** (2026-08-20):
 > that plan added the UI controls which make both failures reachable for a
@@ -206,15 +206,18 @@ stop. That trains rubber-stamping.
    `expandSecretInterpolations` throws, now unreachable for the auto-granted case
    and retained as genuine invariant guards.
 
-## 4. The heuristic redactor rewrites authored prompt text
+## 4. The heuristic redactor rewrites authored prompt text — FIXED (2026-08-20)
 
-**Partly verified — needs one more trace before fixing.**
-
-Observed: a prompt authored as `${secret:SOME_NAME}` reached the harness as
-`${secret:[REDACTED]}`. The **name** was redacted, not a value.
+Observed (reproduced live via the workflow-root end-condition `env` editor
+added by `WORKFLOW_SCHEMA_UI_PARITY_PLAN.md`): a value authored as
+`${secret:TEST_SECRET}` displayed back as `${secret:[REDACTED]}`. The **name**
+was redacted, not a value, and the mangled reference then failed
+`KeyValueMapEditor`'s own `SECRET_REFERENCE_PATTERN` check, triggering a false
+"looks like a pasted credential" warning on a value the user had correctly
+picked from the secret-reference dropdown.
 
 Confirmed cause of the match — `REDACTION_RULES`' `credential-assignment` rule
-(`src/types/PreviewRedactor.ts:43`):
+(`src/types/PreviewRedactor.ts`):
 
 ```
 /((?:api[_-]?key|access[_-]?token|auth[_-]?token|token|secret|password|private[_-]?key)\s*["']?\s*[:=]\s*["']?)(?!\[REDACTED\])([^\s"',;}\]]{8,})/gi
@@ -222,26 +225,19 @@ Confirmed cause of the match — `REDACTION_RULES`' `credential-assignment` rule
 
 `secret` + `:` + 8-or-more characters matches `${secret:LONG_NAME}` exactly.
 
-Confirmed _not_ the cause: `CliPromptPreparer` does no redaction, so the prompt
-file is not rewritten at preparation time. The rewrite happens further
-upstream — `PostMessageDashboardSink` and `CtrlYokeWebviewProvider` both wrap
-messages with `secretRedactionService`, so the likely path is the webview
-transport or a persistence step before it. **Trace the exact site before
-designing a fix**; the correct fix differs depending on whether authored text
-is being redacted on the way _in_ (a corruption bug) or only on the way _out_
-to a display surface (a display-only annoyance).
-
-Notes for whoever picks this up:
-
-- Secret **names are not secret** — `SECRETS_AND_REDACTION_PLAN.md` says so
-  repeatedly and builds a whole settings UI that lists them. Redacting a name
-  protects nothing.
-- The heuristic layer exists to catch credentials ctrlyoke was never told
-  about, which is genuinely valuable; the fix is to narrow this rule (e.g.
-  exclude a `${secret:...}` reference form), not to disable heuristics.
-- `permissions.heuristicSecretRedactionEnabled` (default on) is the existing
-  escape hatch, but "turn off all heuristic redaction" is a bad trade for
-  "stop mangling a reference syntax."
+No trace of the exact site was needed in the end: since
+`redactPreviewText`/`secretRedactionService.redactValue` is applied broadly
+(webview `postMessage`, hosted-server responses, CLI output, logs) and secret
+**names are not secret** (`SECRETS_AND_REDACTION_PLAN.md` says so repeatedly
+and builds a whole settings UI that lists them), the correct fix is the same
+regardless of which call site is hit: narrow the rule itself so it never
+matches ctrlyoke's own reference syntax. Added a negative lookbehind,
+`(?<!\$\{)`, immediately before the keyword alternation — it excludes exactly
+the case where the keyword is preceded by `${` (i.e. `${secret:NAME}`,
+`${token:NAME}`, etc.), while leaving every other credential-assignment match
+(`api_key=...`, `token: "..."`, …) untouched. Regression test:
+`src/test/unit/PreviewRedactor.test.ts` ("does not redact ctrlyoke's own
+${secret:NAME} reference syntax").
 
 ## Cross-cutting: a test for the whole class
 
@@ -258,6 +254,5 @@ item above would have been caught by it.
 | `src/utils/VarSubstitutor.ts`                                             | Stop throwing on unresolved placeholders; mask fenced blocks (item 2)       |
 | `src/utils/SecretReferenceParser.ts`                                      | Union process-map secret references into the effective grant (item 3)       |
 | `src/utils/SecretResolver.ts`                                             | `getDeclaredSecretGrants` / `getProcessMaps` wiring for the above           |
-| `src/types/PreviewRedactor.ts`                                            | Narrow `credential-assignment` so it does not eat `${secret:NAME}` (item 4) |
-| `src/ui/PostMessageDashboardSink.ts`, `src/ui/CtrlYokeWebviewProvider.ts` | Trace target for item 4                                                     |
-| `src/test/**`                                                             | The documents-every-syntax regression test                                  |
+| `src/types/PreviewRedactor.ts`                                            | **Done.** Narrowed `credential-assignment` so it does not eat `${secret:NAME}` (item 4) |
+| `src/test/**`                                                             | The documents-every-syntax regression test (still outstanding)             |

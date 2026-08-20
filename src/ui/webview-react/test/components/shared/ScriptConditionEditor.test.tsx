@@ -265,6 +265,7 @@ describe("ScriptConditionEditor", () => {
       fireEvent.change(env, {
         target: { value: "CI_TOKEN=${secret:CI_TOKEN}\nMODE=ci" },
       });
+      fireEvent.blur(env);
 
       expect(onChange).toHaveBeenLastCalledWith(
         expect.objectContaining({
@@ -294,9 +295,11 @@ describe("ScriptConditionEditor", () => {
         />
       );
 
-      fireEvent.change(screen.getByLabelText(`test-${variant}-env`), {
+      const env = screen.getByLabelText(`test-${variant}-env`);
+      fireEvent.change(env, {
         target: { value: "" },
       });
+      fireEvent.blur(env);
 
       const updated = onChange.mock.lastCall?.[0] as {
         env?: Record<string, string>;
@@ -563,6 +566,7 @@ describe("ScriptConditionEditor", () => {
       const env = screen.getByLabelText(`test-${variant}-env`);
       expect(env).toHaveValue("CI=true");
       fireEvent.change(env, { target: { value: "CI=true\nTOKEN=value" } });
+      fireEvent.blur(env);
 
       expect(onChange).toHaveBeenCalledWith(
         expect.objectContaining({

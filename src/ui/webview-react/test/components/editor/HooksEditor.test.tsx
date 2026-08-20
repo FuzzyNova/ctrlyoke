@@ -54,9 +54,11 @@ describe("HooksEditor compatibility diagnostics", () => {
     );
     expect(screen.getByLabelText("Timeout (seconds)")).toHaveValue(30);
 
-    fireEvent.change(screen.getByLabelText("hook-0-env"), {
+    const hookEnv = screen.getByLabelText("hook-0-env");
+    fireEvent.change(hookEnv, {
       target: { value: "HOOK_TOKEN=${secret:HOOK_TOKEN}\nMODE=ci" },
     });
+    fireEvent.blur(hookEnv);
     expect(onChange).toHaveBeenLastCalledWith([
       expect.objectContaining({
         env: {
@@ -90,9 +92,11 @@ describe("HooksEditor compatibility diagnostics", () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText("hook-0-env"), {
+    const hookEnvToClear = screen.getByLabelText("hook-0-env");
+    fireEvent.change(hookEnvToClear, {
       target: { value: "" },
     });
+    fireEvent.blur(hookEnvToClear);
     const clearedEnv = onChange.mock.lastCall?.[0]?.[0] as {
       env?: Record<string, string>;
     };

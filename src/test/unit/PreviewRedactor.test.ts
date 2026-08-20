@@ -94,6 +94,13 @@ suite("PreviewRedactor", () => {
     assert.strictEqual(result.redactions[0].ruleId, "credential-assignment");
   });
 
+  test("does not redact ctrlyoke's own ${secret:NAME} reference syntax", () => {
+    const result = redactedVariable("${secret:TEST_SECRET}");
+
+    assert.strictEqual(result.value, "${secret:TEST_SECRET}");
+    assert.strictEqual(result.redactions.length, 0);
+  });
+
   test("masks exact resolved values, including deterministic JSON escaping", () => {
     const secret = 'value-with-"quotes"';
     const result = redactPreviewText(

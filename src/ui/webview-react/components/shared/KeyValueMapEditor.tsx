@@ -121,8 +121,7 @@ export function KeyValueMapEditor({
     ? findLiteralCredentialEnvKeys(keyValueMapStringToObject(rawValue))
     : [];
 
-  const handleChange = (nextRawValue: string) => {
-    setRawValue(nextRawValue);
+  const commit = (nextRawValue: string) => {
     onChange(keyValueMapStringToObject(nextRawValue) ?? {});
   };
 
@@ -130,7 +129,9 @@ export function KeyValueMapEditor({
     if (!name) return;
     const reference = `\${secret:${name}}`;
     const line = `${name}=${reference}`;
-    handleChange(rawValue.trim() ? `${rawValue}\n${line}` : line);
+    const nextRawValue = rawValue.trim() ? `${rawValue}\n${line}` : line;
+    setRawValue(nextRawValue);
+    commit(nextRawValue);
   };
 
   return (
@@ -141,7 +142,8 @@ export function KeyValueMapEditor({
         aria-label={ariaLabel}
         placeholder="KEY=value\nANOTHER_KEY=value"
         value={rawValue}
-        onChange={(event) => handleChange(event.target.value)}
+        onChange={(event) => setRawValue(event.target.value)}
+        onBlur={(event) => commit(event.target.value)}
         disabled={disabled}
         rows={rows}
         className="w-full resize-none rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
