@@ -1395,12 +1395,18 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           ? []
           : [
               createLinkDecorationExtension(referenceValidityRef.current),
-              createPriorContextDecorationExtension(),
+              createPriorContextDecorationExtension(
+                referenceValidityRef.current
+              ),
               createConditionOutputDecorationExtension(),
               createSlashTokenDecorationExtension(),
             ]),
         createFileRefDecorationExtension(isMultiRootWorkspace),
-        createPriorContextLintExtension(stepCountRef, hasFinalStepRef),
+        createPriorContextLintExtension(
+          stepCountRef,
+          hasFinalStepRef,
+          referenceValidityRef.current
+        ),
         createConditionOutputLintExtension(hasPreConditionRef, modeRef),
         createClickHandlerExtension(vscode, stepCountRef),
         // iOS Safari: enable the word-suggestion bar above the keyboard and
@@ -2511,7 +2517,9 @@ function createFileRefDecorationExtension(allowWorkspaceFolderPrefix: boolean) {
 // ============================================================================
 
 /** Apply cm-link decoration to inline $prior-context references. */
-function createPriorContextDecorationExtension() {
+function createPriorContextDecorationExtension(
+  referenceValidity?: Map<string, boolean>
+) {
   return ViewPlugin.fromClass(
     class implements PluginValue {
       decorations;
@@ -2521,7 +2529,12 @@ function createPriorContextDecorationExtension() {
       }
 
       update(update: any) {
-        if (update.docChanged || update.viewportChanged) {
+        const validityUpdated = update.transactions.some((tr: any) =>
+          tr.effects.some((effect: any) =>
+            effect.is(referenceValidityUpdatedEffect)
+          )
+        );
+        if (update.docChanged || update.viewportChanged || validityUpdated) {
           this.decorations = this.buildDecorations(update.view);
         }
       }
@@ -2536,15 +2549,19 @@ function createPriorContextDecorationExtension() {
             if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
             const dataRef =
               ref.kind === "step" ? `step:${ref.indices!.join(",")}` : ref.kind;
+            const attributes: Record<string, string> = {
+              "data-type": "priorContext",
+              "data-ref": dataRef,
+            };
+            if (referenceValidity?.get(ref.token) === false) {
+              attributes["data-invalid"] = "true";
+            }
             builder.add(
               ref.from,
               ref.to,
               Decoration.mark({
                 class: "cm-link cm-prior-context-ref",
-                attributes: {
-                  "data-type": "priorContext",
-                  "data-ref": dataRef,
-                },
+                attributes,
               })
             );
           }
@@ -2595,15 +2612,17 @@ function createConditionOutputDecorationExtension() {
 }
 
 /** Warn when $prior-context refs point to steps that don't exist. */
-function createPriorContextLintExtension(
+export function createPriorContextLintExtension(
   stepCountRef: React.RefObject<number>,
-  hasFinalStepRef: React.RefObject<boolean>
+  hasFinalStepRef: React.RefObject<boolean>,
+  referenceValidity?: Map<string, boolean>
 ) {
   return linter(
     (view): Diagnostic[] => {
       const stepCount = stepCountRef.current ?? 0;
       const hasFinalStep = hasFinalStepRef.current ?? false;
       const diagnostics: Diagnostic[] = [];
+      let validityChanged = false;
       const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
 
       for (const { from, to } of view.visibleRanges) {
@@ -2613,23 +2632,15 @@ function createPriorContextLintExtension(
         for (const ref of refs) {
           if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
 
+          let message: string | undefined;
           if (ref.kind === "previous" || ref.kind === "all") {
             if (stepCount <= 0) {
-              diagnostics.push({
-                from: ref.from,
-                to: ref.to,
-                severity: "warning",
-                message: `Prior context not found — no prior steps exist at this position`,
-              });
+              message =
+                "Prior context not found — no prior steps exist at this position";
             }
           } else if (ref.kind === "finalStep" || ref.kind === "allFinalStep") {
             if (!hasFinalStep) {
-              diagnostics.push({
-                from: ref.from,
-                to: ref.to,
-                severity: "warning",
-                message: `Prior context not found — no final step is configured`,
-              });
+              message = "Prior context not found — no final step is configured";
             }
           } else if (ref.kind === "step" && ref.indices) {
             const outOfRange = ref.indices.filter(
@@ -2640,15 +2651,32 @@ function createPriorContextLintExtension(
                 outOfRange.length === 1
                   ? `step ${outOfRange[0]} does not exist`
                   : `steps ${outOfRange.join(", ")} do not exist`;
-              diagnostics.push({
-                from: ref.from,
-                to: ref.to,
-                severity: "warning",
-                message: `Prior context not found — ${label}`,
-              });
+              message = `Prior context not found — ${label}`;
             }
           }
+
+          if (message) {
+            diagnostics.push({
+              from: ref.from,
+              to: ref.to,
+              severity: "warning",
+              message,
+            });
+          }
+          if (
+            referenceValidity &&
+            referenceValidity.get(ref.token) !== !message
+          ) {
+            referenceValidity.set(ref.token, !message);
+            validityChanged = true;
+          }
         }
+      }
+
+      if (validityChanged) {
+        view.dispatch({
+          effects: referenceValidityUpdatedEffect.of(undefined),
+        });
       }
 
       return diagnostics;

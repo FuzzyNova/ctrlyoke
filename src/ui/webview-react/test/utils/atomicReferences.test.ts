@@ -356,6 +356,15 @@ describe("atomic reference presentation", () => {
     ).toMatchObject({ invalid: true });
   });
 
+  it("uses the shared warning-border validity path for invalid prior context", () => {
+    const token = "$step:4";
+    expect(
+      findAtomicReferences(token, undefined, (reference) =>
+        reference === token ? false : undefined
+      )[0]
+    ).toMatchObject({ invalid: true });
+  });
+
   it("labels a $step range reference", () => {
     const chips = findAtomicReferences("$step:1,3-4");
     expect(chips[0]).toMatchObject({

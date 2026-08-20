@@ -632,6 +632,10 @@ export function findAtomicReferences(
     ...findInlinePriorContextRefs(docText).map((ref) => ({
       from: ref.from,
       to: ref.to,
+      invalid:
+        getValidity?.(docText.slice(ref.from, ref.to)) === false
+          ? true
+          : undefined,
       describe: () => describePriorContextChip(ref, docText),
     })),
     ...findConditionOutputRefs(docText).map((ref) => ({
