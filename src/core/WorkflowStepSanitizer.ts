@@ -456,6 +456,10 @@ export function sanitizeClipboardWorkflowStep(step: unknown): WorkflowStep {
       ...(cloneStringRecord(step.env) && {
         env: cloneStringRecord(step.env),
       }),
+      ...((cloneStringArray(step.secrets) !== undefined ||
+        step.secrets === null) && {
+        secrets: cloneStringArray(step.secrets) ?? null,
+      }),
       ...((step.executionMode === EXECUTION_MODES.INTERACTIVE ||
         step.executionMode === EXECUTION_MODES.HEADLESS) && {
         executionMode: step.executionMode,
@@ -552,6 +556,22 @@ export function mergeWorkflowStepUpdate(
   } as WorkflowStep;
 }
 
+/** Normalize a dashboard final-step payload before applying the shared merge rule. */
+export function buildFinalStepUpdate(finalStep: WorkflowStep): WorkflowStep {
+  const normalized = (isScriptStep(finalStep)
+    ? stripViewOnlyWorkflowStepFields(finalStep)
+    : {
+        prompt: finalStep.prompt,
+        ...(finalStep.name ? { name: finalStep.name } : {}),
+        ...buildPromptStepProperties(finalStep),
+      }) as WorkflowStep;
+
+  // Final-step runtime metadata belongs to the disk head, not to an editor
+  // payload. Same-kind merges preserve it from the existing step; type changes
+  // intentionally start with a runtime-free replacement.
+  return stripStepRuntime([stripViewOnlyWorkflowStepFields(normalized)])[0];
+}
+
 /** Build a ScriptStep from properties sent in an EXECUTE_PROMPT / UPDATE_PROMPT message. */
 export function buildScriptStepFromProperties(
   script: string,
@@ -630,7 +650,7 @@ export function buildPromptStepProperties(
 ): Partial<PromptStep> {
   const props = properties as Record<string, unknown>;
   // For non-nullable properties: null coerces to undefined (removes key from PromptStep).
-  // For tri-state nullable properties like agent, skills, and additionalArgs,
+  // For tri-state nullable properties like agent, skills, secrets, and additionalArgs,
   // null is stored as-is to represent an explicit "none/disabled" override.
   // "Clear to inherit" is handled separately via buildClearUpdates / clearProperties.
   const coerce = <T>(
@@ -680,6 +700,9 @@ export function buildPromptStepProperties(
     }),
     ...(props?.skills !== undefined && {
       skills: props.skills as string[] | null,
+    }),
+    ...(props?.secrets !== undefined && {
+      secrets: props.secrets as string[] | null,
     }),
     ...(props?.priorContext !== undefined && {
       priorContext: coerce<PriorContext>(props.priorContext),

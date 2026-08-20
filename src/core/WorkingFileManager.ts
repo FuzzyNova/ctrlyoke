@@ -28,6 +28,8 @@ import { invalidateRunSummaryFor } from "./orchestration/RunSummaryCache";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
   buildDefinitionSnapshot,
+  buildFinalStepUpdate,
+  buildClearUpdates,
   mergeWorkflowStepUpdate,
   normalizeAgentSelection,
   stripStepRuntime,
@@ -1070,6 +1072,57 @@ export class WorkingFileManager {
       // Content/type edits are safe inside the rewound suffix. Structural
       // insert/delete/reorder operations retain the stricter pending-edit
       // guard until their prefix-identity behavior is explicitly audited.
+      { lineageRepository, allowDuringPendingRewind: true }
+    );
+  }
+
+  /**
+   * Addressed final-step update: merge same-kind edits against the disk head,
+   * replace on a prompt/script type change, and delete on an explicit null.
+   */
+  public static async updateFinalStepAtRun(
+    workspaceFolderPath: string,
+    workflowKey: WorkflowKey,
+    runRef: RunRef,
+    finalStep: WorkflowStep | null,
+    clearProperties: string[] | undefined,
+    expectedDefinitionRevision: number,
+    lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository()
+  ): Promise<{
+    workingFile: WorkingFile;
+    definitionRevision: number;
+    descriptorRevision: number;
+  }> {
+    return this.mutateRunDefinition(
+      workspaceFolderPath,
+      workflowKey,
+      runRef,
+      expectedDefinitionRevision,
+      (source) => {
+        const workingFile: WorkingFile = { ...source };
+        if (finalStep === null) {
+          delete workingFile.finalStep;
+          if (workingFile._runtime?.finalStep) {
+            const { finalStep: _finalStep, ...runtime } = workingFile._runtime;
+            void _finalStep;
+            workingFile._runtime = runtime;
+          }
+          return { workingFile, result: undefined };
+        }
+
+        const incomingStep = buildFinalStepUpdate(finalStep);
+        workingFile.finalStep = source.finalStep
+          ? mergeWorkflowStepUpdate(
+              source.finalStep,
+              incomingStep,
+              clearProperties
+            )
+          : ({
+              ...incomingStep,
+              ...buildClearUpdates(clearProperties),
+            } as WorkflowStep);
+        return { workingFile, result: undefined };
+      },
       { lineageRepository, allowDuringPendingRewind: true }
     );
   }

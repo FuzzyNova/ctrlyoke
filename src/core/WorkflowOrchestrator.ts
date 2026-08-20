@@ -15,7 +15,6 @@ import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { createPriorContextResolver } from "./orchestration/AddressedPriorContextResolver";
 import {
-  buildClearUpdates,
   buildDefinitionSnapshot,
   buildEphemeralWorkflowStep,
   buildPromptStepProperties,
@@ -31,7 +30,6 @@ import {
   WorkflowRunnerLock,
   EXECUTION_STATES,
   type PromptFile,
-  type PromptStep,
   type WorkflowStep,
   type WorkflowKey,
   type RunRef,
@@ -40,7 +38,6 @@ import {
   type WorktreeRunProjection,
   projectWorktreeRuntime,
   workflowDisplayStep,
-  isScriptStep,
 } from "../types/CtrlYokeTypes";
 import {
   ACTION_TYPES,
@@ -3543,7 +3540,7 @@ export class WorkflowOrchestrator {
 
   async updateFinalStepInQueue(
     mutation: WorkflowDefinitionMutation | undefined,
-    finalStep: PromptStep | null,
+    finalStep: WorkflowStep | null,
     clearProperties?: string[],
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
@@ -3557,27 +3554,16 @@ export class WorkflowOrchestrator {
     await this.applyRunAddressedMutation(
       runAddress,
       (instance) => instance.updateFinalStepInQueue(finalStep, clearProperties),
-      (workspaceRoot) => {
-        const normalized = !finalStep
-          ? undefined
-          : isScriptStep(finalStep)
-            ? stripViewOnlyWorkflowStepFields(finalStep)
-            : {
-                prompt: finalStep.prompt,
-                ...(finalStep.name ? { name: finalStep.name } : {}),
-                ...buildPromptStepProperties(finalStep as unknown),
-                ...buildClearUpdates(clearProperties),
-              };
-        return WorkingFileManager.updatePropertiesAtRun(
+      (workspaceRoot) =>
+        WorkingFileManager.updateFinalStepAtRun(
           workspaceRoot,
           runAddress.workflowKey,
           runAddress.runRef,
-          { finalStep: normalized },
+          finalStep,
+          clearProperties,
           mutation.expectedDefinitionRevision,
-          this.lineageRepository,
-          { allowDeletes: true }
-        ).then(() => undefined);
-      }
+          this.lineageRepository
+        ).then(() => undefined)
     );
   }
 

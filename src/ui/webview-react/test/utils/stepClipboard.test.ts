@@ -108,8 +108,8 @@ describe("stepClipboard", () => {
     }
   );
 
-  it.fails(
-    "KNOWN GAP: the canonical enabled-state payload drops a script step's secrets",
+  it(
+    "the canonical enabled-state payload preserves a script step's secrets",
     () => {
       expect(
         buildWorkflowStepEnabledState(

@@ -6,6 +6,7 @@ import {
   buildClearUpdates,
   buildDefinitionSnapshot,
   buildEphemeralWorkflowStep,
+  buildFinalStepUpdate,
   buildPromptStepProperties,
   buildScriptStepFromProperties,
   mergeWorkflowStepUpdate,
@@ -2717,31 +2718,25 @@ export class WorkflowInstance {
   ): Promise<void> {
     await this.ensureEphemeralWorkingFile();
 
-    if (finalStep && !isScriptStep(finalStep)) {
-      const normalized: PromptStep = {
-        prompt: finalStep.prompt,
-        ...(finalStep.name ? { name: finalStep.name } : {}),
-        ...buildPromptStepProperties(finalStep as unknown),
-        ...buildClearUpdates(clearProperties),
-      };
+    if (finalStep) {
+      const incomingStep = buildFinalStepUpdate(finalStep);
+      const existingFinalStep = this.promptQueue.getWorkflowFile().finalStep;
+      const normalized = existingFinalStep
+        ? mergeWorkflowStepUpdate(
+            existingFinalStep,
+            incomingStep,
+            clearProperties
+          )
+        : ({
+            ...incomingStep,
+            ...buildClearUpdates(clearProperties),
+          } as WorkflowStep);
       this.promptQueue.updateWorkflowProperty("finalStep", normalized);
       await this.promptQueue.updateWorkingFileProperties({
         finalStep: normalized,
       });
       if (this.currentPromptFile) {
         this.currentPromptFile.promptFile.finalStep = normalized;
-      }
-    } else if (finalStep && isScriptStep(finalStep)) {
-      const persistableFinalStep = stripViewOnlyWorkflowStepFields(finalStep);
-      this.promptQueue.updateWorkflowProperty(
-        "finalStep",
-        persistableFinalStep
-      );
-      await this.promptQueue.updateWorkingFileProperties({
-        finalStep: persistableFinalStep,
-      });
-      if (this.currentPromptFile) {
-        this.currentPromptFile.promptFile.finalStep = persistableFinalStep;
       }
     } else {
       this.promptQueue.updateWorkflowProperty("finalStep", undefined);

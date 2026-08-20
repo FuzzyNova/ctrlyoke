@@ -36,10 +36,9 @@ import {
  *    A property that fails here cannot be fixed by adding a UI control alone;
  *    the message-contract builder has to learn the key first.
  *
- * Properties known to violate an invariant are listed in the `KNOWN_*` sets
- * below with a reason. Those entries are asserted to *still* fail, so fixing
- * one turns this suite red until the entry is removed — the list can only
- * shrink by accident, never grow.
+ * The `KNOWN_*` sets below intentionally stay empty. If a future regression
+ * breaks one of these invariants, the failing test names the surface/property
+ * directly instead of normalizing the loss as an expected gap.
  *
  * See `dev/backlog/WORKFLOW_SCHEMA_UI_PARITY_PLAN.md`.
  */
@@ -337,68 +336,11 @@ const SURFACES: Surface[] = [
   },
 ];
 
-/**
- * `surface:property` pairs where a save that does not mention the property
- * deletes it. Every entry is a live persistence bug, not a design decision —
- * see `dev/backlog/WORKFLOW_SCHEMA_UI_PARITY_PLAN.md`. The list can only
- * shrink: an entry that starts passing fails the matching test until removed.
- *
- * Whether a given entry is *reachable today* depends on which payload builder
- * the gesture goes through, and that is exactly the fragility. `executionMode`
- * is the proof: the prompt editor enumerates it, the context-menu enable /
- * disable toggle does not, and the persistence layer protects neither.
- */
-const KNOWN_LOSSY_PRESERVATION = new Set<string>([
-  // `finalStep` is written as one whole property, so the stored step is only ever
-  // as complete as the editor's outgoing object: `WorkflowInstance.updateFinalStepInQueue`
-  // rebuilds a prompt final step as `prompt` + `name` + `buildPromptStepProperties(...)`,
-  // and `WorkflowOrchestrator.updateFinalStepInQueue` does the same on the
-  // addressed path. Nothing merges against what is already on disk.
-  "final step (prompt):additionalArgs",
-  "final step (prompt):agent",
-  "final step (prompt):endCondition",
-  "final step (prompt):errorBehavior",
-  "final step (prompt):executionMode",
-  "final step (prompt):harness",
-  "final step (prompt):hooks",
-  "final step (prompt):mcpServers",
-  "final step (prompt):model",
-  "final step (prompt):preCondition",
-  "final step (prompt):priorContext",
-  "final step (prompt):resumeSession",
-  "final step (prompt):secrets",
-  "final step (prompt):sessionId",
-  "final step (prompt):skills",
-  "final step (prompt):toolPermissions",
+/** Keep empty: every authorable property must survive an omitted save payload. */
+const KNOWN_LOSSY_PRESERVATION = new Set<string>();
 
-  // Script final steps take the same replace path, via
-  // `stripViewOnlyWorkflowStepFields(finalStep)` — whatever the editor enumerated,
-  // verbatim.
-  "final step (script):compareSource",
-  "final step (script):env",
-  "final step (script):errorBehavior",
-  "final step (script):executionMode",
-  "final step (script):onFail",
-  "final step (script):onPass",
-  "final step (script):returns",
-  "final step (script):secrets",
-  "final step (script):timeout",
-]);
-
-/**
- * `surface:property` pairs the save payload cannot carry: the message-contract
- * builder has no case for the key, so a UI control alone would not persist it.
- */
-const KNOWN_UNACCEPTED = new Set<string>([
-  // `buildPromptStepProperties` has no `secrets` case, so a prompt step's secret
-  // grant cannot be written through UPDATE_PROMPT / UPDATE_FINAL_PROMPT at all.
-  // Harmless today only because the prompt-step path merges and therefore never
-  // destroys an existing grant — but the step-drawer `secrets` control the parity
-  // plan calls for will silently do nothing until that builder learns the key.
-  // The script-step builder (`buildScriptStepFromProperties`) already handles it.
-  "prompt step:secrets",
-  "final step (prompt):secrets",
-]);
+/** Keep empty: every authorable property must be accepted by its save payload. */
+const KNOWN_UNACCEPTED = new Set<string>();
 
 suite("Schema -> dashboard property round trip", () => {
   let workspace = "";

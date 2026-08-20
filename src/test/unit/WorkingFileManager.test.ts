@@ -1559,6 +1559,71 @@ suite("WorkingFileManager", () => {
       assert.strictEqual(after.definitionRevision, 3);
     });
 
+    test("updateFinalStepAtRun replaces across prompt/script type changes", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeIdleRun();
+      const seeded = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      seeded.finalStep = {
+        prompt: "final prompt",
+        model: "old-model",
+        _runtime: { startedAt: 10, completedAt: 20 },
+      };
+      await fs.writeFile(runFilePath, JSON.stringify(seeded, null, 2), "utf8");
+
+      const script = await WorkingFileManager.updateFinalStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        { type: "script", script: "npm test", timeout: 30 },
+        undefined,
+        1
+      );
+      assert.deepStrictEqual(script.workingFile.finalStep, {
+        type: "script",
+        script: "npm test",
+        timeout: 30,
+      });
+
+      const prompt = await WorkingFileManager.updateFinalStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        { prompt: "final prompt again", harness: "codex-cli" },
+        undefined,
+        2
+      );
+      assert.deepStrictEqual(prompt.workingFile.finalStep, {
+        prompt: "final prompt again",
+        harness: "codex-cli",
+      });
+    });
+
+    test("updateFinalStepAtRun deletes the final step on null", async () => {
+      const { workflowKey, runRef, runFilePath } = await makeIdleRun();
+      const seeded = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      seeded.finalStep = { prompt: "remove me" };
+      await fs.writeFile(runFilePath, JSON.stringify(seeded, null, 2), "utf8");
+
+      const result = await WorkingFileManager.updateFinalStepAtRun(
+        workspace,
+        workflowKey,
+        runRef,
+        null,
+        undefined,
+        1
+      );
+
+      assert.strictEqual(result.workingFile.finalStep, undefined);
+      const after = JSON.parse(
+        await fs.readFile(runFilePath, "utf8")
+      ) as WorkingFile;
+      assert.strictEqual(after.finalStep, undefined);
+      assert.strictEqual(after.definitionRevision, 2);
+    });
+
     test("deleteStepAtRun removes the step and shifts currentIndex", async () => {
       const { workflowKey, runRef, runFilePath } = await makeIdleRun();
 

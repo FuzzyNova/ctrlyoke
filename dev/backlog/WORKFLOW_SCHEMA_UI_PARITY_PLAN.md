@@ -118,38 +118,29 @@ checks. Result:
 | Surface                          | Preservation    | Acceptance      |
 | -------------------------------- | --------------- | --------------- |
 | Workflow root (18 props)         | all pass        | all pass        |
-| Prompt step (16 props)           | all pass        | `secrets` fails |
-| Script step (9 props)            | **all 9 fail**  | all pass        |
-| `finalStep` as prompt (16 props) | **all 16 fail** | `secrets` fails |
-| `finalStep` as script (9 props)  | **all 9 fail**  | all pass        |
+| Prompt step (16 props)           | all pass        | all pass        |
+| Script step (9 props)            | all pass        | all pass        |
+| `finalStep` as prompt (16 props) | all pass        | all pass        |
+| `finalStep` as script (9 props)  | all pass        | all pass        |
 
-Two things this makes precise that reading the code did not:
+The completed persistence pass makes two things precise:
 
-- **`finalStep` is worse than the step list.** It is written as one whole
-  property, so the stored step is only ever as complete as the editor's outgoing
-  object — _every_ execution property is unprotected, not just the ones with no
-  control. A prompt final step survives today only because the drawer happens to
-  round-trip its own state into the payload.
-- **The script-step builders are already complete.** Every script property
+- **`finalStep` now follows the same preservation rule as queued steps.** Its
+  addressed and instance-bound write paths merge same-kind edits against the
+  current definition and replace only on a prompt/script type change.
+- **The script-step builders were already complete.** Every script property
   passes acceptance, so `buildScriptStepFromProperties` knows every key in the
-  schema. The 18 script failures are purely replace-vs-merge plus incomplete
-  payloads — one merge fix closes all of them without touching the builder.
-
-Two narrower losses live in the webview payload builders rather than the
-persistence layer, and are pinned by `it.fails` guards in
-`src/ui/webview-react/test/utils/stepClipboard.test.ts`:
-`buildWorkflowStepEnabledUpdate` (the context-menu toggle) and
-`buildWorkflowStepEnabledState` (the final-step toggle, which routes through
-`sanitizeClipboardWorkflowStep` — whose script branch omits `secrets` while its
-prompt branch includes it).
+  schema. The script and final-step preservation failures were persistence
+  issues, while prompt `secrets` required the builder and clipboard branches to
+  carry the key explicitly.
 
 ### `secrets` on a prompt step needs a backend change, not just a control
 
-`buildPromptStepProperties` (`WorkflowStepSanitizer.ts:605-676`) has no `secrets`
-case. Today that is harmless — the merge preserves an existing value — but it
-means adding the drawer control from step 2 below **will not persist** until
-`secrets` is added to that builder. Confirmed: a prompt step carrying `secrets`
-survived a drawer save untouched, and a `model` override applied alongside it.
+`buildPromptStepProperties` (`WorkflowStepSanitizer.ts:605-676`) now carries
+`secrets` with the same tri-state semantics as `skills`: `null` explicitly
+disables inherited grants while `undefined` inherits them. The clipboard script
+branch carries the same key, so both prompt and script copy/paste paths retain
+secret grants.
 
 `secrets` is the **only** key that builder is missing. An earlier draft of this
 document also named `vars`; that is wrong — `vars` is declared on the workflow
@@ -469,7 +460,7 @@ before the control that makes them reachable.
 | #   | Step                                                                              | Closes                                                    |
 | --- | --------------------------------------------------------------------------------- | --------------------------------------------------------- |
 | 1   | **Done (2026-08-20):** Script steps merge instead of replace (+ `clearProperties` threading) | 9 `script step:*` preservation failures                   |
-| 2   | `finalStep` merges against disk; `secrets` in `buildPromptStepProperties`         | 25 `final step:*` preservation + both acceptance failures |
+| 2   | **Done (2026-08-20):** `finalStep` merges against disk; `secrets` in `buildPromptStepProperties` | 25 `final step:*` preservation + both acceptance failures |
 | 3   | Step-drawer `secrets` control                                                     | Prompt-step parity gap                                    |
 | 4   | Shared env/headers map editor; `McpServerForm` `headers` + `autoApprove` list     | MCP form parity gaps                                      |
 | 5   | Script-step `env` / `secrets` / `errorBehavior` controls                          | Script-step parity gaps                                   |
@@ -496,7 +487,7 @@ itself.
 | `src/ui/webview-react/components/editor/HooksEditor.tsx`             | Hook `env` and `timeoutSec` controls                                                                                                       |
 | `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx` | Workflow-level `vars` editor                                                                                                               |
 | `src/ui/webview-react/components/shared/`                            | New shared env key/value map editor with the secret picker                                                                                 |
-| `src/core/WorkflowStepSanitizer.ts`                                  | Script-step merge-vs-replace; `secrets`/`vars` in `buildPromptStepProperties`; `secrets` in the clipboard script branch                    |
+| `src/core/WorkflowStepSanitizer.ts`                                  | Shared final-step normalization/merge support; `secrets` in `buildPromptStepProperties` and the clipboard script branch                    |
 | `src/core/WorkflowInstance.ts`, `src/core/WorkflowOrchestrator.ts`   | Script-step and `finalStep` replace paths                                                                                                  |
 | `src/ui/webview-react/utils/stepClipboard.ts`                        | `buildWorkflowStepEnabledUpdate` drops fields it does not enumerate                                                                        |
 | `src/test/**`, `src/ui/webview-react/test/**`                        | Property-preservation coverage; schema→UI parity guard                                                                                     |
