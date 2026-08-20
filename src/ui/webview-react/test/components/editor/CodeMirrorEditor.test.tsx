@@ -8,6 +8,7 @@ import {
   createClickHandlerExtension,
   createConditionOutputLintExtension,
   createContextReferenceLintExtension,
+  createPriorContextLintExtension,
   createSlashTokenDecorationExtension,
   destroyOrphanedMouseSelection,
   findSlashCompletionContext,
@@ -134,6 +135,38 @@ describe("CodeMirrorEditor condition-output references", () => {
         false
       )
     ).resolves.toEqual([]);
+  });
+});
+
+describe("CodeMirrorEditor prior-context references", () => {
+  it("marks an invalid prior-context chip after lint validation", async () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const referenceValidity = new Map<string, boolean>();
+    const view = new EditorView({
+      parent,
+      doc: "$previous",
+      extensions: [
+        createAtomicReferenceExtension(new Map(), referenceValidity),
+        createPriorContextLintExtension(
+          { current: 0 },
+          { current: false },
+          referenceValidity
+        ),
+      ],
+    });
+
+    try {
+      forceLinting(view);
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      const chip = view.dom.querySelector<HTMLElement>(".cm-atomic-ref");
+
+      expect(chip?.getAttribute("data-invalid")).toBe("true");
+      expect(referenceValidity.get("$previous")).toBe(false);
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
   });
 });
 
