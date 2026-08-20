@@ -109,7 +109,10 @@ the user explicitly turns tracking off.
    line is strictly additive there — something appears where nothing did — which is also what
    makes it a safe default discoverability channel (see UX Risks below). After this one-time
    computed default, both settings are independently user-editable as normal; toggling
-   `useCtrlyokeStyle` later, or clearing `customCommand`, does not recompute the other.
+   `useCtrlyokeStyle` later, or clearing `customCommand`, does not recompute the other. When
+   there is nothing to capture, the effective static default already supplies `true`; the
+   installer must not write `true` again on every disable/re-enable cycle, because that would
+   overwrite a later user edit and violate this compute-once rule.
 7. **Add a branded line for Claude.** Today only Antigravity's wrapper has one
    (`formatBrandedStatusLine` in `ctrlyoke-antigravity-statusline.js`); Claude's wrapper prints
    nothing when there's no forward target. Give Claude an equivalent branded line (model,
@@ -247,13 +250,16 @@ action — not on every workflow's cleanup. Concretely:
 
 - Replace `registerValueLease`/`unregisterValueLease`/`pruneDeadOwners` calls for the
   `statusLine` key with a much smaller **idempotent install/uninstall pair**: "if
-  `statusLine.command` isn't already ctrlyoke's script and tracking is enabled, write it and,
-  if `customCommand` was empty, copy the file's current value into `customCommand` **and** set
-  `useCtrlyokeStyle: false` in the same atomic step (Decision 6's computed default — do not
-  split these into two writes, a crash between them would leave a captured `customCommand` with
-  a stale `useCtrlyokeStyle: true`, silently replacing a user's working statusline after all)";
-  "if the user disables tracking, write `customCommand`'s value back (or delete the key) and
-  clear/keep `customCommand` per the dialog's choice."
+  `statusLine.command` isn't already ctrlyoke's script and tracking is enabled, install it and,
+  if `customCommand` was empty and the file currently names a non-ctrlyoke command, copy that
+  value into `customCommand` **and** set `useCtrlyokeStyle: false` in one user-settings object
+  write (Decision 6's computed default — do not split those two setting changes, or a crash
+  between them would leave a captured `customCommand` with stale styling and silently replace a
+  user's working statusline after all)";
+  "if the user disables tracking, write `customCommand`'s value back when the dialog checkbox is
+  checked, or delete the harness `statusLine` key when it is unchecked." Disabling does not clear
+  the persisted `customCommand`; it remains the user's editable forward target for a later
+  re-enable. The dialog choice controls only the harness settings file.
 - No per-workflow ref-counting is needed for the write side any more — concurrent workflows
   all want the same idempotent end state (ctrlyoke's command installed), so there's nothing to
   count. This only holds because Decision 2 makes `enabled`/`customCommand`/`useCtrlyokeStyle`
@@ -266,9 +272,18 @@ action — not on every workflow's cleanup. Concretely:
   invocation. Without the lock, the loser of that race could read the winner's
   already-installed ctrlyoke command back out of the file and mistake it for the user's original
   baseline, permanently corrupting what `customCommand` (and therefore the eventual "restore")
-  captures. The lock only needs to guard "check `customCommand`, read current file value if
-  empty, write both" as one atomic step — it doesn't need the multi-owner bookkeeping the old
-  lease used it for.
+  captures. The lock only needs to guard the whole detect-and-install sequence; it doesn't need
+  the multi-owner bookkeeping the old lease used it for. The harness settings file and
+  ctrlyoke's user settings are two different files, so they cannot be one filesystem transaction.
+  Make the sequence crash-safe instead: under the harness-file lock, first return immediately
+  when the harness already points at ctrlyoke; otherwise read the current command, and when it
+  must be captured, persist `{ customCommand, useCtrlyokeStyle: false }` together as one
+  provider-settings object **before** replacing the harness command. A crash after that first
+  write is harmless — the next install sees the saved forward target and finishes the harness
+  write. Never replace the harness command first, because a crash before saving the capture would
+  lose the only copy of the user's command. When there is no command to capture, leave
+  `useCtrlyokeStyle` untouched (its fresh-install default is already `true`, and later user edits
+  must survive a reinstall).
 - Keep `SettingsJsonMcpTracker`'s existing value-lease pattern exactly as-is for anything that
   genuinely does need per-workflow restore (MCP servers, the `permission` key) — this change is
   scoped to the `statusLine` key only.
@@ -386,7 +401,7 @@ CLI-vs-extension branching needed. Severity: `USER_FEEDBACK_SEVERITY.INFO`
 this renders as a native `showInformationMessage`; in the standalone webview it renders as a
 toast via the existing `notifyUser`/`ToastViewport` path.
 
-The install step already knows, in the same atomic write, whether it just captured a
+The install step already knows, from the same locked install sequence, whether it just captured a
 pre-existing `customCommand` (Decision 6) — reuse that to pick the message so it matches what
 the user is about to observe, rather than a single generic string:
 
