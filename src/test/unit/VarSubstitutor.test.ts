@@ -36,31 +36,37 @@ suite("VarSubstitutor Tests", () => {
       );
     });
 
-    test("throws on unresolved placeholder when vars is empty", () => {
-      assert.throws(
-        () => VarSubstitutor.substitute("no vars {{key}}", {}),
-        /Unresolved variable.*key/
+    test("leaves an unresolved placeholder literal when vars is empty", () => {
+      assert.strictEqual(
+        VarSubstitutor.substitute("no vars {{key}}", {}),
+        "no vars {{key}}"
       );
     });
 
-    test("throws on unresolved placeholder", () => {
-      assert.throws(
-        () => VarSubstitutor.substitute("Hello {{missing}}", { other: "x" }),
-        /Unresolved variable.*missing.*--var missing=/
+    test("leaves an unresolved placeholder literal", () => {
+      assert.strictEqual(
+        VarSubstitutor.substitute("Hello {{missing}}", { other: "x" }),
+        "Hello {{missing}}"
       );
     });
 
-    test("throws listing the exact missing key", () => {
-      try {
-        VarSubstitutor.substitute("path = {{repoPath}}", {});
-        assert.fail("Should have thrown");
-      } catch (err) {
-        assert.ok(err instanceof Error);
-        assert.ok(
-          err.message.includes("repoPath"),
-          `Expected 'repoPath' in error message: ${err.message}`
-        );
-      }
+    test("finds unique unresolved placeholders outside fenced blocks", () => {
+      assert.deepStrictEqual(
+        VarSubstitutor.findUnresolvedVariables(
+          "{{missing}} {{missing}} {{resolved}} ```\n{{fenced}}\n```",
+          { resolved: "yes" }
+        ),
+        ["{{missing}}"]
+      );
+    });
+
+    test("leaves fenced placeholders untouched", () => {
+      const text = "```\n{{resolved}} {{missing}}\n```";
+      assert.strictEqual(
+        VarSubstitutor.substitute(text, { resolved: "yes" }),
+        text
+      );
+      assert.strictEqual(VarSubstitutor.hasPlaceholders(text), false);
     });
 
     test("handles empty string value", () => {
@@ -226,16 +232,12 @@ suite("VarSubstitutor Tests", () => {
       assert.strictEqual(result.endCondition, undefined);
     });
 
-    test("throws on missing var in model when other vars are present", () => {
-      // When vars is non-empty, substitution runs and missing keys throw.
-      assert.throws(
-        () =>
-          VarSubstitutor.applyToResolvedProperties(
-            makeProps({ model: "{{missing}}" }),
-            { other: "value" }
-          ),
-        /missing/
+    test("leaves missing vars literal in model when other vars are present", () => {
+      const result = VarSubstitutor.applyToResolvedProperties(
+        makeProps({ model: "{{missing}}" }),
+        { other: "value" }
       );
+      assert.strictEqual(result.model, "{{missing}}");
     });
 
     test("substitutes preCondition script and env", () => {

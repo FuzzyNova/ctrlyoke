@@ -1,7 +1,7 @@
 # Overzealous Step Failures Plan
 
-> **Status:** Not started — problems verified against the code, fixes not
-> designed in detail. **Items 2 and 3 are staged inside
+> **Status:** Item 2 implemented (2026-08-20); item 3 implemented (2026-08-20).
+> Problems not yet implemented remain documented below. **Items 2 and 3 are staged inside
 > `WORKFLOW_SCHEMA_UI_PARITY_PLAN.md`'s step queue** (2026-08-20): that plan
 > adds the UI controls which make both failures reachable for a dashboard-only
 > author, so the guards have to be fixed alongside them. Items 4 and the
@@ -47,7 +47,7 @@ and retry paths, deliberately excluded from
 
 Listed here because it is the template for the remaining three.
 
-## 2. `{{name}}` throws when the workflow defines any vars
+## 2. `{{name}}` throws when the workflow defines any vars — IMPLEMENTED
 
 **Verified.** `VarSubstitutor.substitute` (`src/utils/VarSubstitutor.ts:28`)
 throws on any `{{key}}` with no matching entry:
@@ -89,10 +89,22 @@ prerequisite this item now depends on: the throw below was already live for
 prompt/model/hooks/endCondition/worktree-setup, and now reaches preCondition and
 script-step too — so a fix for this item that doesn't cover those two is incomplete.
 
+**Implemented 2026-08-20 — option (a) plus fenced-block masking.**
+`VarSubstitutor` now leaves unresolved placeholders literal and exposes unique
+unresolved tokens for a non-blocking
+`prompt.variable.substitution-ignored` advisory. `WorkflowExecutor` reports
+the field and step for prompt text, model/additionalArgs, hooks,
+preCondition/endCondition, retry prompts, and script steps; worktree setup
+reports its own field through the same diagnostic channel. Fenced code blocks
+are masked before substitution and diagnostics, so quoted `{{...}}` syntax is
+left untouched without an advisory. The diagnostic is deliberately outside
+`isContextResolutionDiagnostic`, including under
+`execution.strictContextResolution: "fail"`.
+
 **This also makes the failure reachable today, independent of any `vars` editor.**
 `ScriptConditionEditor`'s `preCondition` variant already renders an editable `script`
 field, so a user can put `{{typo}}` in a preCondition's script through the dashboard
-right now; combined with any workflow vars (workflow-defined *or* a bare `--var` on
+right now; combined with any workflow vars (workflow-defined _or_ a bare `--var` on
 the CLI), that throws before step 1 runs.
 
 **Options, roughly in order of preference:**

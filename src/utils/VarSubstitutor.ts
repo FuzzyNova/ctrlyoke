@@ -6,6 +6,7 @@ import type {
   ScriptStep,
   ScriptProperties,
 } from "../types/CtrlYokeTypes";
+import { maskFencedCodeBlocks } from "./FileReferenceParser";
 
 /**
  * Handles `{{varName}}` substitution for CLI variable injection.
@@ -30,33 +31,76 @@ import type {
  * unconditionally in the runner; this class only rewrites the text handed
  * to it before the process is spawned.
  *
- * Missing variables (a `{{key}}` with no matching entry) cause a hard error
- * with a clear message indicating which placeholder is unresolved.
+ * Missing variables (a `{{key}}` with no matching entry) remain literal and
+ * are reported by the execution layer as an advisory diagnostic. This keeps
+ * workflows that document ctrlyoke syntax runnable.
  */
 export class VarSubstitutor {
   private static readonly PLACEHOLDER_RE = /\{\{(\w+)\}\}/g;
 
   /**
    * Substitute all `{{key}}` placeholders in `text` using `vars`.
-   * Throws if any placeholder has no matching key in `vars`.
+   * Unresolved placeholders and placeholders inside fenced code blocks remain
+   * literal. Resolved placeholders outside fences behave as before.
    */
   static substitute(text: string, vars: Record<string, string>): string {
-    return text.replace(this.PLACEHOLDER_RE, (_match, key: string) => {
-      if (!Object.prototype.hasOwnProperty.call(vars, key)) {
-        throw new Error(
-          `Unresolved variable "{{${key}}}" — pass --var ${key}=<value> or add it to the workflow's vars: section`
-        );
+    const maskedText = maskFencedCodeBlocks(text);
+    return text.replace(
+      this.PLACEHOLDER_RE,
+      (match, key: string, offset: number) => {
+        if (maskedText.slice(offset, offset + match.length).includes("\x00")) {
+          return match;
+        }
+        if (!Object.prototype.hasOwnProperty.call(vars, key)) {
+          return match;
+        }
+        return vars[key];
       }
-      return vars[key];
-    });
+    );
+  }
+
+  /**
+   * Find unresolved placeholders outside fenced code blocks. Results are
+   * unique and retain their authored `{{name}}` spelling for diagnostics.
+   */
+  static findUnresolvedVariables(
+    text: string,
+    vars: Record<string, string>
+  ): string[] {
+    const maskedText = maskFencedCodeBlocks(text);
+    const found = new Set<string>();
+    this.PLACEHOLDER_RE.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = this.PLACEHOLDER_RE.exec(text)) !== null) {
+      const offset = match.index;
+      if (
+        maskedText.slice(offset, offset + match[0].length).includes("\x00") ||
+        Object.prototype.hasOwnProperty.call(vars, match[1])
+      ) {
+        continue;
+      }
+      found.add(match[0]);
+    }
+    return [...found];
   }
 
   /**
    * Returns true if `text` contains any `{{key}}` placeholder.
    */
   static hasPlaceholders(text: string): boolean {
+    const maskedText = maskFencedCodeBlocks(text);
     this.PLACEHOLDER_RE.lastIndex = 0;
-    return this.PLACEHOLDER_RE.test(text);
+    let match: RegExpExecArray | null;
+    while ((match = this.PLACEHOLDER_RE.exec(text)) !== null) {
+      if (
+        !maskedText
+          .slice(match.index, match.index + match[0].length)
+          .includes("\x00")
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

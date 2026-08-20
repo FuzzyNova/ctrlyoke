@@ -27,7 +27,7 @@ import { parseRangeNotation } from "./RangeNotationParser";
 import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
 
 /**
- * Mask every prompt-reference trigger character (`@#~!$/`) inside
+ * Mask every prompt-reference and variable trigger character inside
  * triple-backtick fenced blocks.
  *
  * This is the single point that decides "is this inside a fence" for every
@@ -45,7 +45,7 @@ import { NOT_AFTER_BOUNDARY } from "./ReferenceBoundary";
  */
 export function maskFencedCodeBlocks(text: string): string {
   return text.replace(/```[\s\S]*?```/g, (block) =>
-    block.replace(/[@#~!$/]/g, "\x00")
+    block.replace(/[@#~!$/{}]/g, "\x00")
   );
 }
 

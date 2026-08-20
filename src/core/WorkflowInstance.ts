@@ -55,7 +55,11 @@ import {
   SESSION_KINDS,
   STATUS_MESSAGE_SEVERITY,
   COMPATIBILITY_DIAGNOSTIC_SEVERITIES,
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+  CAPABILITY_VERIFICATION_STATUSES,
   CONTEXT_RESOLUTION_FAILURE_MODES,
+  PROMPT_DIAGNOSTIC_CODES,
   PROMPT_INPUT_CAPABILITY_KEYS,
   EXECUTION_PHASES,
   SCRIPT_OUTPUT_SOURCES,
@@ -696,6 +700,35 @@ export class WorkflowInstance {
           );
       }
     }
+  }
+
+  private reportUnresolvedWorktreeVariables(
+    placeholders: readonly string[],
+    harnessId: HarnessId
+  ): void {
+    if (placeholders.length === 0) {
+      return;
+    }
+    this.reportCompatibilityDiagnostics([
+      {
+        code: PROMPT_DIAGNOSTIC_CODES.VARIABLE_SUBSTITUTION_IGNORED,
+        severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+        harnessId,
+        capability: "variableSubstitution",
+        state: {
+          fidelity: CAPABILITY_FIDELITIES.PARTIAL,
+          mechanism: CAPABILITY_MECHANISMS.NONE,
+          verification: CAPABILITY_VERIFICATION_STATUSES.VERIFIED,
+        },
+        message:
+          `Unresolved variable placeholders were left literal in worktree setup: ${placeholders.join(
+            ", "
+          )}. ` +
+          "Define the variable in vars or remove the placeholder if it was intended as text.",
+        remediation:
+          "Define the variable in the workflow vars section or remove the placeholder if it was intended as text.",
+      },
+    ]);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -4019,6 +4052,14 @@ export class WorkflowInstance {
       vars: this.promptQueue.getWorkflowFile().vars,
       setupAttemptIndex,
       worktreeSetupRunner: this.createWorktreeSetupRunner(historyFilePath),
+      reportUnresolvedVariables: (placeholders: readonly string[]) =>
+        this.reportUnresolvedWorktreeVariables(
+          placeholders,
+          PropertyResolver.resolveHarnessValue(
+            undefined,
+            this.promptQueue.getWorkflowFile().harness
+          )
+        ),
     } as const;
     const info =
       config.mode === "managed"

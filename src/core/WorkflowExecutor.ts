@@ -565,6 +565,23 @@ export class WorkflowExecutor {
         );
       }
       const resolvedPreCondition = preResolvedProperties.preCondition;
+      this.reportUnresolvedVariables(
+        [
+          {
+            field: "preCondition.script",
+            value: resolvedPreCondition?.script,
+          },
+          ...this.getEnvironmentFields(
+            "preCondition.env",
+            resolvedPreCondition?.env
+          ),
+        ],
+        preVars ?? {},
+        preResolvedProperties.harness,
+        context,
+        target,
+        prompt
+      );
       const preErrorBehavior = preResolvedProperties.errorBehavior;
       const preSecretNames = getEffectiveSecretGrants(
         prompt,
@@ -710,6 +727,16 @@ export class WorkflowExecutor {
       if (!effectivePromptText.trim()) {
         throw new Error("Prompt is empty after resolving its prompt file");
       }
+      this.reportUnresolvedVariables(
+        this.getResolvedPropertyVariableFields(resolvedProperties, {
+          includePreCondition: false,
+        }).concat({ field: "prompt text", value: effectivePromptText }),
+        vars ?? {},
+        resolvedProperties.harness,
+        context,
+        target,
+        prompt
+      );
       this.reportIgnoredSecretInterpolations(
         effectivePromptText,
         resolvedProperties,
@@ -1071,6 +1098,21 @@ export class WorkflowExecutor {
         ? VarSubstitutor.applyToScriptStep(step, scriptVars)
         : step;
     const stepLabel = step.name ?? effectiveStep.script.split(/\s+/)[0];
+    const resolvedScriptHarness = PropertyResolver.resolveHarnessValue(
+      undefined,
+      this.promptQueue.getWorkflowFile().harness
+    );
+    this.reportUnresolvedVariables(
+      [
+        { field: "script-step.script", value: effectiveStep.script },
+        ...this.getEnvironmentFields("script-step.env", effectiveStep.env),
+      ],
+      scriptVars ?? {},
+      resolvedScriptHarness,
+      context,
+      target,
+      step
+    );
     const runIndex = this.getRunIndexForTarget(context, target);
     const secretNames = getDeclaredSecretGrants(
       step,
@@ -2659,6 +2701,13 @@ export class WorkflowExecutor {
         workflowFile,
         { hostCanProvidePty: context.hostCanProvidePty }
       );
+      const retryVars = workflowFile.vars ?? {};
+      if (Object.keys(retryVars).length > 0) {
+        resolvedProperties = VarSubstitutor.applyToResolvedProperties(
+          resolvedProperties,
+          retryVars
+        );
+      }
       const effectiveRetryPrompt: PromptStep = {
         ...retryPromptStep,
         prompt: await this.resolveEffectivePrompt(
@@ -2672,6 +2721,18 @@ export class WorkflowExecutor {
           "Retry prompt is empty after resolving its prompt file"
         );
       }
+      this.reportUnresolvedVariables(
+        this.getResolvedPropertyVariableFields(resolvedProperties).concat({
+          field: "retry prompt text",
+          value: effectiveRetryPrompt.prompt,
+        }),
+        retryVars,
+        resolvedProperties.harness,
+        context,
+        target,
+        retryPromptStep,
+        "retry prompt"
+      );
       this.reportIgnoredSecretInterpolations(
         effectiveRetryPrompt.prompt,
         resolvedProperties,
@@ -2826,6 +2887,120 @@ export class WorkflowExecutor {
             ", "
           )}); the text is sent to the harness verbatim. ` +
           "Use !NAME to grant an environment variable to the step.",
+      },
+    ]);
+  }
+
+  private getEnvironmentFields(
+    prefix: string,
+    env: Record<string, string> | undefined
+  ): Array<{ field: string; value: string }> {
+    return env
+      ? Object.entries(env).map(([key, value]) => ({
+          field: `${prefix}.${key}`,
+          value,
+        }))
+      : [];
+  }
+
+  private getResolvedPropertyVariableFields(
+    properties: ResolvedProperties,
+    options: { includePreCondition?: boolean } = {}
+  ): Array<{ field: string; value: string | undefined }> {
+    const fields: Array<{ field: string; value: string | undefined }> = [
+      { field: "model", value: properties.model },
+      { field: "additionalArgs", value: properties.additionalArgs },
+    ];
+
+    properties.hooks?.forEach((hook, index) => {
+      fields.push({ field: `hook[${index}].command`, value: hook.command });
+      fields.push(...this.getEnvironmentFields(`hook[${index}].env`, hook.env));
+    });
+
+    if (options.includePreCondition !== false) {
+      fields.push({
+        field: "preCondition.script",
+        value: properties.preCondition?.script,
+      });
+      fields.push(
+        ...this.getEnvironmentFields(
+          "preCondition.env",
+          properties.preCondition?.env
+        )
+      );
+    }
+
+    fields.push({
+      field: "endCondition.script",
+      value: properties.endCondition?.script,
+    });
+    fields.push(
+      ...this.getEnvironmentFields(
+        "endCondition.env",
+        properties.endCondition?.env
+      ),
+      {
+        field: "endCondition.retryPrompt",
+        value: properties.endCondition?.retryPrompt,
+      },
+      {
+        field: "endCondition.passRetryPrompt",
+        value: properties.endCondition?.passRetryPrompt,
+      }
+    );
+    return fields;
+  }
+
+  private reportUnresolvedVariables(
+    fields: ReadonlyArray<{ field: string; value: string | undefined }>,
+    vars: Record<string, string>,
+    harnessId: HarnessId,
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    step: WorkflowStep,
+    phase?: string
+  ): void {
+    if (Object.keys(vars).length === 0) {
+      return;
+    }
+
+    const findings = fields.flatMap(({ field, value }) =>
+      value === undefined
+        ? []
+        : VarSubstitutor.findUnresolvedVariables(value, vars).map(
+            (placeholder) => ({ field, placeholder })
+          )
+    );
+    if (findings.length === 0) {
+      return;
+    }
+
+    const stepLabel =
+      target.kind === FINAL_STEP_PHASES.QUEUE
+        ? `step ${target.stepIndex + 1}${step.name ? ` ("${step.name}")` : ""}`
+        : "final step";
+    const phaseLabel = phase ? ` during ${phase}` : "";
+    const locations = findings.map(
+      ({ field, placeholder }) => `${placeholder} in ${field}`
+    );
+    context.reportCompatibilityDiagnostics?.([
+      {
+        code: PROMPT_DIAGNOSTIC_CODES.VARIABLE_SUBSTITUTION_IGNORED,
+        severity: COMPATIBILITY_DIAGNOSTIC_SEVERITIES.WARNING,
+        harnessId,
+        capability: "variableSubstitution",
+        consumer: this.toOutputExecutionTarget(target),
+        state: {
+          fidelity: CAPABILITY_FIDELITIES.PARTIAL,
+          mechanism: CAPABILITY_MECHANISMS.NONE,
+          verification: CAPABILITY_VERIFICATION_STATUSES.VERIFIED,
+        },
+        message:
+          `Unresolved variable placeholders were left literal in ${stepLabel}${phaseLabel}: ` +
+          `${locations.join(", ")}. ` +
+          "Define the variable in vars or remove the placeholder if it was intended as text.",
+        remediation:
+          "Define the variable in the workflow vars section or remove the placeholder if it was intended as text.",
       },
     ]);
   }

@@ -961,6 +961,7 @@ export const PROMPT_DIAGNOSTIC_CODES = {
   UNKNOWN_MCP_REFERENCE: "prompt.mcp.unknown",
   CONDITION_OUTPUT_UNAVAILABLE: "prompt.reference.condition-output-unavailable",
   SECRET_INTERPOLATION_IGNORED: "prompt.secret.interpolation-ignored",
+  VARIABLE_SUBSTITUTION_IGNORED: "prompt.variable.substitution-ignored",
 } as const;
 
 export type PromptDiagnosticCode =

@@ -439,6 +439,68 @@ suite("WorktreeManager", function () {
     await info.lease.release();
   });
 
+  test("leaves unresolved setup variables literal and reports an advisory", async () => {
+    const { parent, repository } = await makeRepository(
+      "setup-unresolved-variable"
+    );
+    const runner = new RecordingWorktreeSetupRunner({
+      success: true,
+      result: "",
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+    });
+    const unresolved: string[][] = [];
+    const instance = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      worktreeSetupRunner: runner,
+    });
+
+    const info = await resolve(
+      instance,
+      repository,
+      "feature/setup-unresolved-variable",
+      {
+        setup: "echo {{unknown}}",
+        vars: { known: "value" },
+        reportUnresolvedVariables: (placeholders) =>
+          unresolved.push([...placeholders]),
+      }
+    );
+
+    assert.deepStrictEqual(unresolved, [["{{unknown}}"]]);
+    assert.strictEqual(runner.calls[0]!.command, "echo {{unknown}}");
+    await info.lease.release();
+  });
+
+  test("does not report setup variables when workflow vars are absent", async () => {
+    const { parent, repository } = await makeRepository(
+      "setup-unresolved-variable-without-vars"
+    );
+    const runner = new RecordingWorktreeSetupRunner({
+      success: true,
+      result: "",
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+    });
+    const unresolved: string[][] = [];
+    const instance = new WorktreeManager({
+      worktreeRoot: path.join(parent, "worktrees"),
+      worktreeSetupRunner: runner,
+    });
+
+    const info = await resolve(instance, repository, "feature/setup-no-vars", {
+      setup: "echo {{unknown}}",
+      reportUnresolvedVariables: (placeholders) =>
+        unresolved.push([...placeholders]),
+    });
+
+    assert.deepStrictEqual(unresolved, []);
+    assert.strictEqual(runner.calls[0]!.command, "echo {{unknown}}");
+    await info.lease.release();
+  });
+
   test("persists failed setup durably, leaves the directory, and throws", async () => {
     const { parent, repository } = await makeRepository("setup-failed");
     const updates: string[] = [];

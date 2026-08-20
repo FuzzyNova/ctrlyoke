@@ -280,6 +280,130 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     );
   });
 
+  test("leaves unresolved variables literal, reports their fields, and does not block in fail mode", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const diagnostics: CompatibilityDiagnostic[] = [];
+    queue.loadPrompts({
+      vars: { known: "value" },
+      steps: [
+        {
+          name: "Document variables",
+          prompt: "Explain {{unknownPrompt}} and ```\n{{fenced}}\n```",
+          model: "{{unknownModel}}",
+          additionalArgs: "--value {{unknownArgs}}",
+          hooks: [
+            {
+              event: "stop",
+              command: "notify {{unknownHookCommand}}",
+              env: { HOOK_VALUE: "{{unknownHookEnv}}" },
+            },
+          ],
+          preCondition: {
+            script: `node -e "process.stdout.write('0')" # {{unknownPreScript}}`,
+            env: { PRE_VALUE: "{{unknownPreEnv}}" },
+            returns: "0",
+          },
+          endCondition: {
+            script: `node -e "process.stdout.write('0')" # {{unknownEndScript}}`,
+            env: { END_VALUE: "{{unknownEndEnv}}" },
+            returns: "0",
+            retryPrompt: "Retry {{unknownRetryPrompt}}",
+            passRetryPrompt: "Pass {{unknownPassRetryPrompt}}",
+          },
+        },
+      ],
+    });
+
+    configService.setCliOverlay({
+      execution: {
+        strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+      },
+    });
+    try {
+      await makeExecutor(queue).execute(integration, {
+        ...makeContext(integration),
+        reportCompatibilityDiagnostics: (reported) =>
+          diagnostics.push(...reported),
+      });
+    } finally {
+      configService.setCliOverlay({});
+    }
+
+    assert.deepStrictEqual(integration.sentPrompts, [
+      "Explain {{unknownPrompt}} and ```\n{{fenced}}\n```",
+    ]);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    const variableAdvisories = diagnostics.filter(
+      (diagnostic) =>
+        diagnostic.code ===
+        PROMPT_DIAGNOSTIC_CODES.VARIABLE_SUBSTITUTION_IGNORED
+    );
+    assert.strictEqual(variableAdvisories.length, 2);
+    const diagnosticText = variableAdvisories
+      .map((item) => item.message)
+      .join(" ");
+    for (const field of [
+      "prompt text",
+      "model",
+      "additionalArgs",
+      "hook[0].command",
+      "hook[0].env.HOOK_VALUE",
+      "preCondition.script",
+      "preCondition.env.PRE_VALUE",
+      "endCondition.script",
+      "endCondition.env.END_VALUE",
+      "endCondition.retryPrompt",
+      "endCondition.passRetryPrompt",
+    ]) {
+      assert.ok(diagnosticText.includes(field), `missing field ${field}`);
+    }
+    assert.ok(diagnosticText.includes('step 1 ("Document variables")'));
+    assert.strictEqual(
+      variableAdvisories.some((diagnostic) =>
+        isContextResolutionDiagnostic(diagnostic.code)
+      ),
+      false,
+      "variable advisories must stay outside the blocking set"
+    );
+  });
+
+  test("leaves unresolved script-step variables literal and reports script fields", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const diagnostics: CompatibilityDiagnostic[] = [];
+    queue.loadPrompts({
+      vars: { known: "value" },
+      steps: [
+        {
+          type: "script",
+          name: "Document script variables",
+          script: `node -e "process.exit(0)" # {{unknownScript}}`,
+          env: { SCRIPT_VALUE: "{{unknownScriptEnv}}" },
+        },
+      ],
+    });
+
+    await makeExecutor(queue).execute(integration, {
+      ...makeContext(integration),
+      reportCompatibilityDiagnostics: (reported) =>
+        diagnostics.push(...reported),
+    });
+
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    const advisory = diagnostics.find(
+      (diagnostic) =>
+        diagnostic.code ===
+        PROMPT_DIAGNOSTIC_CODES.VARIABLE_SUBSTITUTION_IGNORED
+    );
+    assert.ok(advisory);
+    assert.ok(
+      advisory.message.includes('step 1 ("Document script variables")')
+    );
+    assert.ok(advisory.message.includes("script-step.script"));
+    assert.ok(advisory.message.includes("script-step.env.SCRIPT_VALUE"));
+  });
+
   test("resolves prompt-file references at execution time without replacing queue state", async () => {
     const root = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-executor-prompt-file-")

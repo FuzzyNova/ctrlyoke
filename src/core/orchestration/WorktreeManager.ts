@@ -354,6 +354,8 @@ export interface ResolveNamedWorktreeOptions {
   setupAttemptIndex?: number;
   /** Optional per-execution reporter-backed setup transport. */
   worktreeSetupRunner?: WorktreeSetupRunner;
+  /** Advisory sink for unresolved workflow variables in worktree setup. */
+  reportUnresolvedVariables?: (placeholders: readonly string[]) => void;
 }
 
 export interface EnsureManagedWorktreeOptions extends Omit<
@@ -2438,7 +2440,8 @@ export class WorktreeManager {
           options.setup!,
           options.vars,
           options.setupAttemptIndex ?? 0,
-          options.worktreeSetupRunner
+          options.worktreeSetupRunner,
+          options.reportUnresolvedVariables
         );
         setupOutcome = "succeeded";
         await this.writeNamedSetupRecord(namedSetupRecordPath, {
@@ -2519,8 +2522,15 @@ export class WorktreeManager {
     setup: string,
     vars: Record<string, string> | undefined,
     attemptIndex: number,
-    setupRunner?: WorktreeSetupRunner
+    setupRunner?: WorktreeSetupRunner,
+    reportUnresolvedVariables?: (placeholders: readonly string[]) => void
   ): Promise<void> {
+    if (vars && Object.keys(vars).length > 0) {
+      const unresolved = VarSubstitutor.findUnresolvedVariables(setup, vars);
+      if (unresolved.length > 0) {
+        reportUnresolvedVariables?.(unresolved);
+      }
+    }
     const command = VarSubstitutor.substitute(setup, vars ?? {});
     const result = await (setupRunner ?? this.worktreeSetupRunner).run({
       executionRoot,
@@ -2956,7 +2966,8 @@ export class WorktreeManager {
           args.options.setup!,
           args.options.vars,
           args.options.setupAttemptIndex ?? 0,
-          args.options.worktreeSetupRunner
+          args.options.worktreeSetupRunner,
+          args.options.reportUnresolvedVariables
         );
         setupOutcome = "succeeded";
       } catch (error) {
