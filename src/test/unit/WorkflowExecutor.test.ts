@@ -13,6 +13,7 @@ import {
   type EvaluationResult,
 } from "../../core/EndConditionEvaluator";
 import { EndConditionHandler } from "../../core/EndConditionHandler";
+import { StatusMessageReporter } from "../../core/orchestration/StatusMessageReporter";
 import {
   PromptFile,
   PromptStep,
@@ -63,7 +64,7 @@ function makeExecutor(
   const handler = new EndConditionHandler(
     conditionEvaluator,
     queue,
-    () => undefined
+    new StatusMessageReporter(() => undefined, () => undefined)
   );
   return new WorkflowExecutor(queue, handler, conditionEvaluator, platform);
 }

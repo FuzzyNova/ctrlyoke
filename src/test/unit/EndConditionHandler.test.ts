@@ -11,13 +11,17 @@ import {
   HarnessIntegration,
   HarnessStatus,
 } from "../../core/HarnessIntegration";
+import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
+import { StatusMessageReporter } from "../../core/orchestration/StatusMessageReporter";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import type { IDashboardSink } from "../../types/IDashboardSink";
+import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import {
   type PromptStep,
   type ScriptProperties,
   type EndConditionAction,
 } from "../../types/CtrlYokeTypes";
+import type { StatusMessage } from "../../types/WebviewMessageTypes";
 import {
   WORKFLOW_ATTEMPT_STATUS,
   FINAL_STEP_PHASES,
@@ -167,6 +171,84 @@ function createPrompt(
   };
 }
 
+class DashboardSinkDouble implements IDashboardSink {
+  readonly statusMessages: Array<{
+    stepIndex: number;
+    message: string;
+    severity: StatusMessageSeverity | undefined;
+  }> = [];
+
+  updateFileSelected(): Promise<void> {
+    return Promise.resolve();
+  }
+  updateSessionRestored(): Promise<void> {
+    return Promise.resolve();
+  }
+  updateExecutionStarted(): void {}
+  updateProgress(): void {}
+  updateExecutionState(): void {}
+  updateStepStatus(): void {}
+  updateRetryAttempt(): void {}
+  updateCliOutput(): void {}
+  updateCliStreamingChunk(): void {}
+  updateCliStreamingEvents(): void {}
+  updateContextWindow(): void {}
+  updateStatusMessage(
+    stepIndex: number,
+    message: string,
+    severity?: StatusMessageSeverity
+  ): void {
+    this.statusMessages.push({ stepIndex, message, severity });
+  }
+  updateStepsExtended(): void {}
+  updatePromptDeleted(): void {}
+  updateFinalStep(): void {}
+  updateFinalStepStatus(): void {}
+  updateFinalStepOutput(): void {}
+  updateFinalStepStreamingChunk(): void {}
+  updateFinalStepStreamingEvents(): void {}
+  notifyPromptsReordered(): void {}
+  notifyUndoRedoSynced(): void {}
+  updateWorkflowName(): void {}
+  sendStepUndoDataUpdated(): void {}
+  updateHarnessUsage(): void {}
+  updateWorktreeMerge(): void {}
+}
+
+class HistoryManagerDouble extends OutputHistoryManager {
+  readonly statusMessages: Array<{
+    filePath: string;
+    target: OutputExecutionTarget;
+    statusMessage: StatusMessage;
+  }> = [];
+
+  constructor() {
+    super(".");
+  }
+
+  override appendStatusMessage(
+    filePath: string,
+    target: OutputExecutionTarget,
+    statusMessage: StatusMessage
+  ): Promise<void> {
+    this.statusMessages.push({ filePath, target, statusMessage });
+    return Promise.resolve();
+  }
+}
+
+function createReporter(
+  dashboard?: IDashboardSink,
+  history?: HistoryManagerDouble
+): StatusMessageReporter {
+  return new StatusMessageReporter(
+    () => dashboard,
+    () =>
+      history
+        ? { filePath: "history.json", manager: history }
+        : undefined
+  );
+}
+
 suite("EndConditionHandler", () => {
   test("completes the current attempt through the runtime owner on initial success", async () => {
     const platform = new MockPlatform();
@@ -175,7 +257,7 @@ suite("EndConditionHandler", () => {
     const prompt = createPrompt(1, "continue");
     const integration = new MockHarnessIntegration(undefined, false);
     const evaluator = new TestEndConditionEvaluator(platform);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
+    const handler = new EndConditionHandler(evaluator, queue, createReporter());
     const transitions: Array<{ command: string; attemptIndex: number }> = [];
 
     queue.loadPrompts({ steps: [prompt] });
@@ -229,7 +311,7 @@ suite("EndConditionHandler", () => {
     const handler = new EndConditionHandler(
       new TestEndConditionEvaluator(platform),
       queue,
-      () => undefined
+      createReporter()
     );
 
     queue.loadPrompts({ steps: [prompt] });
@@ -266,7 +348,7 @@ suite("EndConditionHandler", () => {
     const evaluator = new TestEndConditionEvaluator(platform, [
       successResult(),
     ]);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
+    const handler = new EndConditionHandler(evaluator, queue, createReporter());
     const transitions: Array<{
       command: string;
       attemptIndex: number;
@@ -344,21 +426,13 @@ suite("EndConditionHandler", () => {
     const prompt = createPrompt(0);
     const integration = new MockHarnessIntegration(undefined, false);
     const evaluator = new TestEndConditionEvaluator(platform);
-    const dashboardMessages: Array<{
-      stepIndex: number;
-      message: string;
-      severity?: StatusMessageSeverity;
-    }> = [];
-    const dashboard = {
-      updateStatusMessage: (
-        stepIndex: number,
-        message: string,
-        severity?: StatusMessageSeverity
-      ) => {
-        dashboardMessages.push({ stepIndex, message, severity });
-      },
-    } as IDashboardSink;
-    const handler = new EndConditionHandler(evaluator, queue, () => dashboard);
+    const dashboard = new DashboardSinkDouble();
+    const history = new HistoryManagerDouble();
+    const handler = new EndConditionHandler(
+      evaluator,
+      queue,
+      createReporter(dashboard, history)
+    );
     const transitions: Array<{ command: string; attemptIndex: number }> = [];
 
     queue.loadPrompts({ steps: [prompt] });
@@ -390,12 +464,24 @@ suite("EndConditionHandler", () => {
     assert.deepStrictEqual(transitions, [
       { command: WORKFLOW_ATTEMPT_COMMANDS.FAIL, attemptIndex: 0 },
     ]);
-    assert.deepStrictEqual(dashboardMessages, [
+    assert.deepStrictEqual(dashboard.statusMessages, [
       {
         stepIndex: 0,
         message:
           "End condition validation failed.\n\nExpected: ok\nActual: actual-result\n\nScript output:\nactual-result",
         severity: "error",
+      },
+    ]);
+    assert.deepStrictEqual(history.statusMessages, [
+      {
+        filePath: "history.json",
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        statusMessage: {
+          message:
+            "End condition validation failed.\n\nExpected: ok\nActual: actual-result\n\nScript output:\nactual-result",
+          severity: "error",
+          timestamp: history.statusMessages[0]?.statusMessage.timestamp,
+        },
       },
     ]);
     assert.strictEqual(queue.getState().results[0].endCondition?.passed, false);
@@ -415,7 +501,7 @@ suite("EndConditionHandler", () => {
     const handler = new EndConditionHandler(
       new TestEndConditionEvaluator(platform),
       queue,
-      () => undefined
+      createReporter()
     );
 
     queue.loadPrompts({ steps: [prompt] });
@@ -459,7 +545,7 @@ suite("EndConditionHandler", () => {
     const handler = new EndConditionHandler(
       new TestEndConditionEvaluator(platform, [validationFailure("final")]),
       queue,
-      () => undefined
+      createReporter()
     );
 
     queue.loadPrompts({ steps: [prompt] });
@@ -495,7 +581,7 @@ suite("EndConditionHandler", () => {
     const handler = new EndConditionHandler(
       new TestEndConditionEvaluator(platform),
       queue,
-      () => undefined
+      createReporter()
     );
     const transitions: string[] = [];
 
@@ -534,7 +620,7 @@ suite("EndConditionHandler", () => {
     const evaluator = new TestEndConditionEvaluator(platform, [
       successResult("should-not-run"),
     ]);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
+    const handler = new EndConditionHandler(evaluator, queue, createReporter());
     let retryCallbackCount = 0;
 
     queue.loadPrompts({ steps: [prompt] });
@@ -577,13 +663,13 @@ suite("EndConditionHandler", () => {
       successResult("third"),
     ]);
     const retryPrompts: string[] = [];
-    const dashboardMessages: string[] = [];
-    const dashboard = {
-      updateStatusMessage: (_stepIndex: number, message: string) => {
-        dashboardMessages.push(message);
-      },
-    } as IDashboardSink;
-    const handler = new EndConditionHandler(evaluator, queue, () => dashboard);
+    const dashboard = new DashboardSinkDouble();
+    const history = new HistoryManagerDouble();
+    const handler = new EndConditionHandler(
+      evaluator,
+      queue,
+      createReporter(dashboard, history)
+    );
     const transitions: string[] = [];
 
     queue.loadPrompts({ steps: [prompt] });
@@ -616,10 +702,32 @@ suite("EndConditionHandler", () => {
       "Run the task again:1",
       "Run the task again:2",
     ]);
-    assert.deepStrictEqual(dashboardMessages, [
+    assert.deepStrictEqual(
+      dashboard.statusMessages.map(({ message }) => message),
+      [
       "Re-running Prompt 1 (Pass retry 1/2): Run the task again",
       "Re-running Prompt 1 (Pass retry 2/2): Run the task again",
-    ]);
+      ]
+    );
+    assert.deepStrictEqual(
+      history.statusMessages.map(({ target, statusMessage }) => ({
+        target,
+        message: statusMessage.message,
+        severity: statusMessage.severity,
+      })),
+      [
+        {
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          message: "Re-running Prompt 1 (Pass retry 1/2): Run the task again",
+          severity: "warning",
+        },
+        {
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+          message: "Re-running Prompt 1 (Pass retry 2/2): Run the task again",
+          severity: "warning",
+        },
+      ]
+    );
     assert.deepStrictEqual(transitions, [
       `${WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY}:1`,
       `${WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY}:2`,
@@ -640,7 +748,7 @@ suite("EndConditionHandler", () => {
     const evaluator = new TestEndConditionEvaluator(platform, [
       validationFailure("still green"),
     ]);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
+    const handler = new EndConditionHandler(evaluator, queue, createReporter());
     const retryPrompts: string[] = [];
 
     queue.loadPrompts({ steps: [prompt] });
@@ -680,7 +788,7 @@ suite("EndConditionHandler", () => {
     const evaluator = new TestEndConditionEvaluator(platform, [
       validationFailure("red"),
     ]);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
+    const handler = new EndConditionHandler(evaluator, queue, createReporter());
 
     queue.loadPrompts({ steps: [prompt] });
     const result = await handler.handleEndConditionResult(
@@ -717,7 +825,7 @@ suite("EndConditionHandler", () => {
     const evaluator = new TestEndConditionEvaluator(platform, [
       successResult(),
     ]);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
+    const handler = new EndConditionHandler(evaluator, queue, createReporter());
     const retryAttempts: number[] = [];
     const maxRetries: number[] = [];
 
@@ -756,7 +864,7 @@ suite("EndConditionHandler", () => {
     const prompt = createPrompt(2, "retry", { passRetryPrompt: "Again" });
     const integration = new MockHarnessIntegration(undefined, false);
     const evaluator = new TestEndConditionEvaluator(platform);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
+    const handler = new EndConditionHandler(evaluator, queue, createReporter());
     let retryCallbackCount = 0;
 
     queue.loadPrompts({ steps: [prompt] });
@@ -798,7 +906,7 @@ suite("EndConditionHandler", () => {
       validationFailure("failure after pass retry"),
       successResult("passing again"),
     ]);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
+    const handler = new EndConditionHandler(evaluator, queue, createReporter());
     const retryPrompts: string[] = [];
 
     queue.loadPrompts({ steps: [prompt] });
@@ -834,7 +942,7 @@ suite("EndConditionHandler", () => {
     });
     const integration = new MockHarnessIntegration(undefined, false);
     const evaluator = new EndConditionEvaluator(platform);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
+    const handler = new EndConditionHandler(evaluator, queue, createReporter());
     let retryPromptText = "";
 
     queue.loadPrompts({ steps: [prompt] });
@@ -876,7 +984,7 @@ suite("EndConditionHandler", () => {
     const fallbackHandler = new EndConditionHandler(
       new TestEndConditionEvaluator(platform, [successResult()]),
       queue,
-      () => undefined
+      createReporter()
     );
     let fallbackText = "";
     await fallbackHandler.handleEndConditionResult(

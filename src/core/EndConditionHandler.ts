@@ -19,9 +19,9 @@ import { createConditionEvaluationSummary } from "./orchestration/ScriptExecutio
 import { PromptQueue } from "./PromptQueue";
 import { HarnessIntegration } from "./HarnessIntegration";
 import type { WorkflowStateMachine } from "./WorkflowStateMachine";
-import type { IDashboardSink } from "../types/IDashboardSink";
 import type { ExecutionWorkspace } from "../types/WorkflowContextTypes";
 import { notifyUserFeedback, type UserFeedbackSink } from "./UserFeedbackSink";
+import { StatusMessageReporter } from "./orchestration/StatusMessageReporter";
 
 /**
  * Context needed to handle retry prompts
@@ -94,8 +94,7 @@ export class EndConditionHandler {
   constructor(
     private readonly endConditionEvaluator: EndConditionEvaluator,
     private readonly promptQueue: PromptQueue,
-    private readonly getDashboard: () => IDashboardSink | undefined = () =>
-      undefined,
+    private readonly statusMessageReporter: StatusMessageReporter,
     private readonly userFeedbackSink?: UserFeedbackSink
   ) {}
 
@@ -274,8 +273,11 @@ export class EndConditionHandler {
         Log.error(
           `❌ End condition failed after ${retryCount} retries (max: ${maxRetries})`
         );
-        this.getDashboard()?.updateStatusMessage(
-          this.promptQueue.getState().currentIndex,
+        this.statusMessageReporter.report(
+          {
+            kind: FINAL_STEP_PHASES.QUEUE,
+            stepIndex: this.promptQueue.getState().currentIndex,
+          },
           failureReason,
           STATUS_MESSAGE_SEVERITY.ERROR
         );
@@ -365,8 +367,7 @@ export class EndConditionHandler {
 
     const hasQueueStep =
       currentIndex < this.promptQueue.getState().results.length;
-    const retryDashboard = this.getDashboard();
-    if (retryDashboard && hasQueueStep) {
+    if (hasQueueStep) {
       const retryPromptPreview = retryPromptText
         .split("\n")[0]
         .substring(0, 60);
@@ -375,8 +376,11 @@ export class EndConditionHandler {
         retryKind === "pass"
           ? `Re-running Prompt ${currentIndex + 1} (Pass retry ${currentRetry}/${maxRetries}): ${retryPromptPreview}${ellipsis}`
           : `Retrying Prompt ${currentIndex + 1} (Attempt ${currentRetry}/${maxRetries}): ${retryPromptPreview}${ellipsis}`;
-      retryDashboard.updateStatusMessage(
-        currentIndex,
+      this.statusMessageReporter.report(
+        {
+          kind: FINAL_STEP_PHASES.QUEUE,
+          stepIndex: currentIndex,
+        },
         statusMessage,
         STATUS_MESSAGE_SEVERITY.WARNING
       );

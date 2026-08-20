@@ -510,7 +510,7 @@ export class WorkflowInstance {
     this.endConditionHandler = new EndConditionHandler(
       this.endConditionEvaluator,
       this.promptQueue,
-      () => this.dashboardSink,
+      this.statusMessageReporter,
       this.userFeedbackSink
     );
     this.workflowExecutor = new WorkflowExecutor(
@@ -3742,7 +3742,7 @@ export class WorkflowInstance {
     this.endConditionHandler = new EndConditionHandler(
       this.endConditionEvaluator,
       this.promptQueue,
-      () => this.dashboardSink,
+      this.statusMessageReporter,
       this.userFeedbackSink
     );
     this.workflowExecutor = new WorkflowExecutor(

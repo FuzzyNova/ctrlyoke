@@ -3,6 +3,7 @@ import { suite, setup, teardown, test } from "mocha";
 import { CliIntegration } from "../../core/harness/CliIntegration";
 import { EndConditionEvaluator } from "../../core/EndConditionEvaluator";
 import { EndConditionHandler } from "../../core/EndConditionHandler";
+import { StatusMessageReporter } from "../../core/orchestration/StatusMessageReporter";
 import {
   WorkflowExecutor,
   type WorkflowExecutionContext,
@@ -234,7 +235,11 @@ suite("mixed-mode workflow execution", () => {
 
     const platform = new MockPlatform();
     const evaluator = new EndConditionEvaluator(platform);
-    const handler = new EndConditionHandler(evaluator, queue, () => undefined);
+    const handler = new EndConditionHandler(
+      evaluator,
+      queue,
+      new StatusMessageReporter(() => undefined, () => undefined)
+    );
     const executor = new WorkflowExecutor(queue, handler, evaluator, platform);
 
     await executor.execute(

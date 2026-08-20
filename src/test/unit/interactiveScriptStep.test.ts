@@ -7,6 +7,7 @@ import {
 import { PromptQueue } from "../../core/PromptQueue";
 import { EndConditionEvaluator } from "../../core/EndConditionEvaluator";
 import { EndConditionHandler } from "../../core/EndConditionHandler";
+import { StatusMessageReporter } from "../../core/orchestration/StatusMessageReporter";
 import {
   EXECUTION_MODES,
   STEP_STATUS,
@@ -145,7 +146,11 @@ function makeContext(
 function makeExecutor(queue: PromptQueue): WorkflowExecutor {
   const platform = new MockPlatform();
   const evaluator = new EndConditionEvaluator(platform);
-  const handler = new EndConditionHandler(evaluator, queue, () => undefined);
+  const handler = new EndConditionHandler(
+    evaluator,
+    queue,
+    new StatusMessageReporter(() => undefined, () => undefined)
+  );
   return new WorkflowExecutor(queue, handler, evaluator, platform);
 }
 
