@@ -61,6 +61,7 @@ export interface PropertyValues {
   executionMode: Inheritable<ExecutionMode>; // undefined = inherit, interactive/headless = override
   agent: Disableable<string>; // undefined = inherit, null = none, string = agent filename slug
   skills: Disableable<string[]>; // undefined = inherit, null = none, string[] = specific (empty array allowed transiently in custom mode)
+  secrets: Disableable<string[]>; // undefined = inherit, null = none, string[] = specific
   resumeSession: Inheritable<boolean>; // undefined = inherit, true = yes, false = no
   sessionId: string; // "" or session ID or prompt number reference
   mcpServers: (string | object)[] | null | undefined; // undefined = inherit, null = none, array = custom
@@ -83,6 +84,7 @@ export const PROPERTY_DEFAULTS: PropertyValues = {
   executionMode: undefined,
   agent: undefined,
   skills: undefined,
+  secrets: undefined,
   resumeSession: undefined,
   sessionId: "",
   mcpServers: undefined,
@@ -552,6 +554,7 @@ export const useEditorStore = create<
         executionMode: promptData.executionMode,
         agent: promptData.agent,
         skills: promptData.skills,
+        secrets: promptData.secrets,
         resumeSession: promptData.resumeSession,
         sessionId:
           promptData.sessionId !== undefined

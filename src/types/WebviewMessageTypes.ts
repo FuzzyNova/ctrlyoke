@@ -343,6 +343,7 @@ export interface PromptStep {
   executionMode?: ExecutionMode;
   agent?: string | null;
   skills?: string[] | null;
+  secrets?: string[] | null;
   resumeSession?: boolean;
   sessionId?: string | number;
   mcpServers?: (string | McpServerConfig)[] | null;

@@ -11,14 +11,11 @@ import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
 import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
-import { useSecretRegistryStore } from "../../store/secretRegistryStore";
 import {
   MESSAGE_TYPES,
   SESSION_ID_SENTINELS,
   RUNNER_IDS,
   CONDITION_ACTIONS,
-  SETTING_SCOPES,
-  SECRET_REGISTRY_STATES,
   type PriorContext,
   type HarnessId,
   type ToolPermissionMode,
@@ -50,6 +47,8 @@ import {
   AnimatedSection,
   AutoResumeStatusRow,
   ExitButton,
+  filterExplicitSecretGrants,
+  useSecretGrantOptions,
 } from "../shared";
 import { HooksEditor } from "../editor/HooksEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
@@ -405,21 +404,6 @@ const WorkflowPropertiesPanelInner: React.FC<{
   // queue, shown when the Session ID field is blank.
   const steps = useWorkflowStore((s) => s.steps);
   const finalStep = useWorkflowStore((s) => s.finalStep);
-  const secretEntriesByScope = useSecretRegistryStore(
-    (state) => state.entriesByScope
-  );
-  const secretRegistryLoading = useSecretRegistryStore(
-    (state) =>
-      state.loadingByScope[SETTING_SCOPES.USER] ||
-      state.loadingByScope[SETTING_SCOPES.WORKSPACE]
-  );
-  const requestSecretEntries = useSecretRegistryStore(
-    (state) => state.requestEntries
-  );
-  useEffect(() => {
-    requestSecretEntries(SETTING_SCOPES.USER);
-    requestSecretEntries(SETTING_SCOPES.WORKSPACE);
-  }, [requestSecretEntries]);
   const inlineSecretNames = useMemo(
     () => [
       ...new Set(
@@ -434,37 +418,17 @@ const WorkflowPropertiesPanelInner: React.FC<{
     ],
     [finalStep, steps]
   );
-  const registryEntries = [
-    ...secretEntriesByScope.user,
-    ...secretEntriesByScope.workspace,
-  ];
-  const secretNames = [
-    ...new Set([
-      ...registryEntries.map((entry) => entry.name),
-      ...effectiveSecrets,
-      ...inlineSecretNames,
-    ]),
-  ].sort();
-  const resolvableSecretNames = new Set(
-    registryEntries
-      .filter(
-        (entry) =>
-          entry.state === SECRET_REGISTRY_STATES.MANAGED_AND_SET ||
-          entry.state === SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_DETECTED
-      )
-      .map((entry) => entry.name)
-  );
-  const resolvedSecretGrants = [
-    ...new Set([...effectiveSecrets, ...inlineSecretNames]),
-  ];
-  const unresolvedSecretNames =
-    secretRegistryLoading && registryEntries.length === 0
-      ? []
-      : resolvedSecretGrants.filter((name) => !resolvableSecretNames.has(name));
-  const unresolvedSecretDiagnostics = unresolvedSecretNames.map((name) => ({
-    severity: "error" as const,
-    message: `Secret "${name}" is not available from the managed registry or environment.`,
-  }));
+  const {
+    options: secretOptions,
+    selectedValues: resolvedSecretGrants,
+    lockedValues: inlineSecretGrantNames,
+    nonHideableValues: secretNames,
+    unresolvedSecretNames,
+    unresolvedSecretDiagnostics,
+  } = useSecretGrantOptions({
+    declaredSecrets: effectiveSecrets,
+    inlineSecretNames,
+  });
   const autoResumePreview = getAutoResumePreview(
     steps,
     steps.length,
@@ -871,8 +835,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
     (secrets: string[]) => {
       // Inline !NAME references are authoritative and are represented as
       // locked selections, but remain prompt text rather than declarations.
-      const explicitSecrets = secrets.filter(
-        (name) => !inlineSecretNames.includes(name)
+      const explicitSecrets = filterExplicitSecretGrants(
+        secrets,
+        inlineSecretNames
       );
       const settingsStore = useSettingsStore.getState();
       settingsStore.updateWorkflowProperty("secrets", explicitSecrets);
@@ -2127,15 +2092,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     id="settings-secrets"
                     selectedValues={resolvedSecretGrants}
                     onChange={handleSecretsChange}
-                    options={secretNames.map((name) => ({
-                      value: name,
-                      label: name,
-                      description: inlineSecretNames.includes(name)
-                        ? "Granted by prompt text"
-                        : undefined,
-                    }))}
+                    options={secretOptions}
                     placeholder="No secrets granted"
-                    lockedValues={inlineSecretNames}
+                    lockedValues={inlineSecretGrantNames}
                     nonHideableValues={secretNames}
                     warning={
                       unresolvedSecretNames.length > 0

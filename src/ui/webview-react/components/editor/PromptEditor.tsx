@@ -49,6 +49,8 @@ import {
   toFieldDiagnostic,
 } from "@utils/compatibilityDiagnostics";
 import { FieldDiagnostic } from "../shared/FieldDiagnostic";
+import { filterExplicitSecretGrants } from "../shared/useSecretGrantOptions";
+import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 
 interface PromptEditorProps {
   /** When true, the editor is in CLI watch mode — all editing is disabled. */
@@ -419,6 +421,23 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         clearProperties.push("skills");
       }
 
+      // Secrets — tri-state, matching skills. Inline !NAME references are
+      // filtered by the drawer before this value reaches the editor.
+      if (properties.secrets === null) {
+        result.secrets = null;
+      } else if (Array.isArray(properties.secrets)) {
+        const inlineSecretNames = parseSecretReferences(promptText).map(
+          (reference) => reference.name
+        );
+        const explicitSecrets = filterExplicitSecretGrants(
+          properties.secrets,
+          inlineSecretNames
+        );
+        result.secrets = explicitSecrets.length > 0 ? explicitSecrets : null;
+      } else if (includeNullsForDefaults) {
+        clearProperties.push("secrets");
+      }
+
       // Prior Context
       if (properties.priorContext !== undefined) {
         result.priorContext = properties.priorContext;
@@ -490,7 +509,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
       return { properties: result, clearProperties };
     },
-    [properties, stepEnabled]
+    [properties, promptText, stepEnabled]
   );
 
   const validateFileRef = useCallback(

@@ -48,6 +48,7 @@ import {
 import { useEditorStore } from "@store/editorStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
+import { useSecretRegistryStore } from "@store/secretRegistryStore";
 import {
   MESSAGE_TYPES,
   ACTION_TYPES,
@@ -55,7 +56,11 @@ import {
   EXECUTION_STATES,
   STEP_STATUS,
 } from "@/types/messages";
-import { HARNESS_IDS, STEP_TYPES } from "@root/types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  SECRET_REGISTRY_STATES,
+  STEP_TYPES,
+} from "@root/types/DashboardConstants";
 
 // The vscode mock is set up in test/setup.ts (window.vscodeApi).
 const postMessageSpy = vi.fn();
@@ -67,6 +72,7 @@ beforeEach(() => {
     currentStep: 0,
     executionState: EXECUTION_STATES.IDLE,
   });
+  useSecretRegistryStore.getState().resetSecretRegistry();
   useUiStore.setState({
     displayedViewAddress: null,
     displayedDefinitionRevision: null,
@@ -364,6 +370,96 @@ describe("PromptEditor — prompt-file action", () => {
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.OPEN_PROMPT_FILE,
       path: "C:/workspace/.ctrlyoke/prompts/draft.prompt.md",
+    });
+  });
+});
+
+describe("PromptEditor — prompt secret grants", () => {
+  it("posts a selected secret in the UPDATE_PROMPT payload", async () => {
+    useSecretRegistryStore.getState().setEntries("workspace", [
+      {
+        name: "API_TOKEN",
+        scope: "workspace",
+        state: SECRET_REGISTRY_STATES.MANAGED_AND_SET,
+        usedBy: { mcpServers: [], workflows: [] },
+      },
+    ]);
+    useEditorStore
+      .getState()
+      .selectPrompt(
+        { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        { prompt: "old prompt" }
+      );
+    useEditorStore.getState().setPromptText("updated prompt");
+    useUiStore.getState().openPropertiesDrawer();
+
+    const { container } = render(<PromptEditor />);
+    fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
+    fireEvent.click(screen.getByText("API_TOKEN").closest("button")!);
+    await userEvent
+      .setup()
+      .click(
+        container.querySelector(".btn-editor-update") as HTMLButtonElement
+      );
+
+    const message = postMessageSpy.mock.calls.find(
+      ([msg]) => (msg as { type?: string }).type === MESSAGE_TYPES.UPDATE_PROMPT
+    )?.[0] as Record<string, unknown> | undefined;
+    expect(message).toMatchObject({
+      type: MESSAGE_TYPES.UPDATE_PROMPT,
+      text: "updated prompt",
+      properties: { secrets: ["API_TOKEN"] },
+    });
+  });
+
+  it("sends secrets in clearProperties when a step override is cleared", async () => {
+    useEditorStore
+      .getState()
+      .selectPrompt(
+        { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        { prompt: "old prompt", secrets: ["API_TOKEN"] }
+      );
+    useEditorStore.getState().setPromptText("updated prompt");
+    useEditorStore.getState().setProperty("secrets", undefined);
+
+    const { container } = render(<PromptEditor />);
+    await userEvent
+      .setup()
+      .click(
+        container.querySelector(".btn-editor-update") as HTMLButtonElement
+      );
+
+    const message = postMessageSpy.mock.calls.find(
+      ([msg]) => (msg as { type?: string }).type === MESSAGE_TYPES.UPDATE_PROMPT
+    )?.[0] as Record<string, unknown> | undefined;
+    expect(message).toMatchObject({
+      type: MESSAGE_TYPES.UPDATE_PROMPT,
+      clearProperties: expect.arrayContaining(["secrets"]),
+    });
+  });
+
+  it("does not persist an inline secret reference as a declaration", async () => {
+    useEditorStore.getState().selectPrompt(
+      { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+      {
+        prompt: "Use !INLINE_TOKEN",
+        secrets: ["INLINE_TOKEN", "EXPLICIT_TOKEN"],
+      }
+    );
+    useEditorStore.getState().setPromptText("Use !INLINE_TOKEN");
+
+    const { container } = render(<PromptEditor />);
+    await userEvent
+      .setup()
+      .click(
+        container.querySelector(".btn-editor-update") as HTMLButtonElement
+      );
+
+    const message = postMessageSpy.mock.calls.find(
+      ([msg]) => (msg as { type?: string }).type === MESSAGE_TYPES.UPDATE_PROMPT
+    )?.[0] as Record<string, unknown> | undefined;
+    expect(message).toMatchObject({
+      properties: { secrets: ["EXPLICIT_TOKEN"] },
     });
   });
 });

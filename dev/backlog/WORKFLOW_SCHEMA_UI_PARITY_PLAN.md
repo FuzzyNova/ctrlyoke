@@ -234,14 +234,10 @@ to the separate template-authoring surface.
 
 **Present:** `harness`, `model`, `agent`, `skills`, `additionalArgs`,
 `executionMode`, `resumeSession`, `sessionId`, `priorContext`, `preCondition`,
-`endCondition`, `errorBehavior`, `mcpServers`, `toolPermissions`. Step `name`
-and `enabled` live in `EditorSection.tsx` (`:217-253`).
+`endCondition`, `errorBehavior`, `mcpServers`, `toolPermissions`, `secrets`.
+Step `name` and `enabled` live in `EditorSection.tsx` (`:217-253`).
 
-**Missing:**
-
-| Property  | Notes                                                                                                                                                                                                                                                |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `secrets` | In `executionProperties`, so it is valid on every step, and the workflow panel has a control for it — but the step drawer does not. A per-step grant is unreachable. Highest-value single addition: it is the fix for the failure that started this. |
+**Missing:** None.
 
 ### Script step — `PromptEditor.tsx` + `ScriptConditionEditor` (`variant="scriptStep"`)
 
@@ -405,11 +401,12 @@ definition, but it is not blocking anything.
    deletes them.** Fix the script-step and `finalStep` replace paths first, plus
    `buildWorkflowStepEnabledUpdate`. Adding controls to a UI that silently
    deletes fields makes the problem worse, not better.
-2. **`secrets` on the step drawer** and **`secrets` + `env` on script steps.**
-   These unblock the hard failure that motivated this document. If
-   `OVERZEALOUS_STEP_FAILURES_PLAN.md` item 3 (auto-grant from process maps)
-   ships first, this becomes less urgent but is still needed — an explicit
-   grant remains the way to grant a secret a step never textually references.
+2. ~~**`secrets` on the step drawer**~~ — **done**. The remaining
+   **`secrets` + `env` on script steps** still unblock the hard failure that
+   motivated this document. If `OVERZEALOUS_STEP_FAILURES_PLAN.md` item 3
+   (auto-grant from process maps) ships first, this becomes less urgent but is
+   still needed — an explicit grant remains the way to grant a secret a step
+   never textually references.
 3. **`env` on conditions and hooks**, plus **`headers` on `McpServerForm`.**
    One shared key/value map editor should serve script steps, conditions,
    hooks, MCP `env`, and MCP `headers`; build it once. `McpServerForm` already
@@ -461,7 +458,7 @@ before the control that makes them reachable.
 | --- | --------------------------------------------------------------------------------- | --------------------------------------------------------- |
 | 1   | **Done (2026-08-20):** Script steps merge instead of replace (+ `clearProperties` threading) | 9 `script step:*` preservation failures                   |
 | 2   | **Done (2026-08-20):** `finalStep` merges against disk; `secrets` in `buildPromptStepProperties` | 25 `final step:*` preservation + both acceptance failures |
-| 3   | Step-drawer `secrets` control                                                     | Prompt-step parity gap                                    |
+| 3   | **Done (2026-08-20):** Step-drawer `secrets` control                         | Prompt-step parity gap                                    |
 | 4   | Shared env/headers map editor; `McpServerForm` `headers` + `autoApprove` list     | MCP form parity gaps                                      |
 | 5   | Script-step `env` / `secrets` / `errorBehavior` controls                          | Script-step parity gaps                                   |
 | 6   | `env` on pre/end conditions and hooks; hook `timeoutSec`                          | Condition + hook parity gaps                              |

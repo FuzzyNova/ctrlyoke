@@ -11,9 +11,13 @@ import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
+import { useSecretRegistryStore } from "@store/secretRegistryStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { DRAWER_PAGES } from "@/types/drawerPages";
-import { EXECUTION_MODES } from "@root/types/DashboardConstants";
+import {
+  EXECUTION_MODES,
+  SECRET_REGISTRY_STATES,
+} from "@root/types/DashboardConstants";
 
 function resetStores(): void {
   useEditorStore.getState().resetEditor();
@@ -21,6 +25,7 @@ function resetStores(): void {
   useUiStore.getState().resetUi();
   useWorkflowStore.getState().resetWorkflow();
   useExecutionPreviewStore.getState().reset();
+  useSecretRegistryStore.getState().resetSecretRegistry();
 }
 
 function renderHarnessDrawer() {
@@ -151,6 +156,68 @@ describe("PropertiesDrawer Dry Run entry point", () => {
       kind: "step",
       stepIndex: 0,
     });
+  });
+});
+
+describe("PropertiesDrawer secrets", () => {
+  beforeEach(resetStores);
+
+  afterEach(cleanup);
+
+  it("renders names from the user and workspace secret registries", () => {
+    useSecretRegistryStore.getState().setEntries("user", [
+      {
+        name: "USER_TOKEN",
+        scope: "user",
+        state: SECRET_REGISTRY_STATES.MANAGED_AND_SET,
+        usedBy: { mcpServers: [], workflows: [] },
+      },
+    ]);
+    useSecretRegistryStore.getState().setEntries("workspace", [
+      {
+        name: "WORKSPACE_TOKEN",
+        scope: "workspace",
+        state: SECRET_REGISTRY_STATES.FROM_ENVIRONMENT_AND_DETECTED,
+        usedBy: { mcpServers: [], workflows: [] },
+      },
+    ]);
+
+    renderHarnessDrawer();
+    fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
+
+    expect(screen.getByText("USER_TOKEN")).toBeInTheDocument();
+    expect(screen.getByText("WORKSPACE_TOKEN")).toBeInTheDocument();
+  });
+
+  it("locks inline references and excludes them from explicit grants", () => {
+    useEditorStore.getState().setPromptText("Use !INLINE_TOKEN here");
+    useSecretRegistryStore.getState().setEntries("workspace", [
+      {
+        name: "INLINE_TOKEN",
+        scope: "workspace",
+        state: SECRET_REGISTRY_STATES.MANAGED_AND_SET,
+        usedBy: { mcpServers: [], workflows: [] },
+      },
+      {
+        name: "EXPLICIT_TOKEN",
+        scope: "workspace",
+        state: SECRET_REGISTRY_STATES.MANAGED_AND_SET,
+        usedBy: { mcpServers: [], workflows: [] },
+      },
+    ]);
+
+    renderHarnessDrawer();
+    fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
+
+    const inlineRow = screen.getByRole("button", {
+      name: "INLINE_TOKENGranted by prompt text",
+    });
+    expect(inlineRow.querySelector("input")).toBeDisabled();
+    fireEvent.click(screen.getByText("EXPLICIT_TOKEN").closest("button")!);
+
+    expect(useEditorStore.getState().properties.secrets).toEqual([
+      "EXPLICIT_TOKEN",
+    ]);
   });
 });
 

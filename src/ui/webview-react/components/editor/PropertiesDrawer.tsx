@@ -41,6 +41,7 @@ import {
   PriorContextSelect,
   PRIOR_CONTEXT_KEYWORD_LABELS,
   SkillsSelect,
+  MultiCheckboxDropdown,
   McpServersEditor,
   buildMcpDefaultLabel,
   type McpServersValue,
@@ -54,6 +55,8 @@ import {
   AnimatedSection,
   AutoResumeStatusRow,
   ExitButton,
+  filterExplicitSecretGrants,
+  useSecretGrantOptions,
 } from "../shared";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
 import {
@@ -75,6 +78,7 @@ import { EDITOR_FOOTER_HEIGHT_REM } from "./EditorFooter";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
+import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 
 interface PropertiesDrawerProps {
   isOpen: boolean;
@@ -83,6 +87,8 @@ interface PropertiesDrawerProps {
   onRequestPage?: (page: DrawerPage, focusId: string) => void;
   hasPreCondition?: boolean;
 }
+
+const EMPTY_SECRET_NAMES: string[] = [];
 
 /**
  * PropertiesDrawer - Slide-up panel for prompt properties
@@ -123,6 +129,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       ? s.scriptCommand.trim().length > 0
       : s.promptText.trim().length > 0
   );
+  const promptText = useEditorStore((s) => s.promptText);
   const { hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =
     useUiStore();
   const handleResetAllToInherit = useCallback(() => {
@@ -130,6 +137,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     setProperty("model", undefined);
     setProperty("agent", undefined);
     setProperty("skills", undefined);
+    setProperty("secrets", undefined);
     setProperty("additionalArgs", undefined);
     setProperty("executionMode", undefined);
     setProperty("resumeSession", undefined);
@@ -187,6 +195,32 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       : resolvedSkills.length <= 2
         ? `Inherit (${resolvedSkills.join(", ")})`
         : `Inherit (${resolvedSkills.slice(0, 2).join(", ")} +${resolvedSkills.length - 2})`;
+
+  const resolvedSecrets =
+    properties.secrets !== undefined
+      ? (properties.secrets ?? EMPTY_SECRET_NAMES)
+      : workflowProperties.secrets !== undefined
+        ? (workflowProperties.secrets ?? EMPTY_SECRET_NAMES)
+        : (globalSettings.secrets ?? EMPTY_SECRET_NAMES);
+  const inlineSecretNames = useMemo(
+    () => [
+      ...new Set(
+        parseSecretReferences(promptText).map((reference) => reference.name)
+      ),
+    ],
+    [promptText]
+  );
+  const {
+    options: secretOptions,
+    selectedValues: resolvedSecretGrants,
+    lockedValues: inlineSecretGrantNames,
+    nonHideableValues: secretNames,
+    unresolvedSecretDiagnostics,
+    warning: secretsWarn,
+  } = useSecretGrantOptions({
+    declaredSecrets: resolvedSecrets,
+    inlineSecretNames,
+  });
 
   const resolvedAdditionalArgs =
     workflowProperties.additionalArgs === undefined
@@ -386,6 +420,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         globalSettings.harnessDefaultAdditionalArgs[newHarness];
       setProperty("additionalArgs", defaultArgs || null);
     }
+  };
+
+  const handleSecretsChange = (secrets: string[]) => {
+    setProperty(
+      "secrets",
+      filterExplicitSecretGrants(secrets, inlineSecretNames)
+    );
   };
 
   // ── Condition mode derivations ──────────────────────────────────────────────
@@ -761,6 +802,46 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     { value: "default", label: defaultExecutionModeLabel },
                     ...EXECUTION_MODE_OPTIONS,
                   ]}
+                />
+              </div>
+              <div />
+            </DrawerRow>
+
+            {/* Secrets — workflow grants plus locked inline !NAME references */}
+            <DrawerRow narrow={isNarrow}>
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="prop-secrets"
+                  className="text-xs font-semibold uppercase text-description-fg"
+                  title="Grant named credentials to this prompt. Inline !NAME references in prompt text are always granted. Reset all to inherit to remove the prompt override."
+                >
+                  Secrets
+                </label>
+                <MultiCheckboxDropdown
+                  id="prop-secrets"
+                  selectedValues={resolvedSecretGrants}
+                  onChange={handleSecretsChange}
+                  options={secretOptions}
+                  buttonLabel={
+                    properties.secrets === undefined
+                      ? `Inherit (${resolvedSecrets.length === 0 ? "None" : resolvedSecrets.join(", ")})`
+                      : properties.secrets === null
+                        ? "None"
+                        : undefined
+                  }
+                  placeholder="No secrets granted"
+                  lockedValues={inlineSecretGrantNames}
+                  nonHideableValues={secretNames}
+                  warning={secretsWarn}
+                />
+                {resolvedSecretGrants.length > 0 && (
+                  <p className="mt-0.5 text-xxs text-description-fg">
+                    Active: {resolvedSecretGrants.join(", ")}
+                  </p>
+                )}
+                <FieldDiagnostic
+                  id="prop-secrets-diagnostic"
+                  diagnostics={unresolvedSecretDiagnostics}
                 />
               </div>
               <div />
