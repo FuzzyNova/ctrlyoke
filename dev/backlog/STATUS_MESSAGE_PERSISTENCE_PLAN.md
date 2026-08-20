@@ -1,6 +1,8 @@
 # Status Message Persistence Plan
 
-> **Status:** Not started. One instance of the bug this plan targets was
+> **Status:** Not started. Spec audited against the code on 2026-08-20 —
+> see "Corrections from the code audit" below; the audit changed phases 4, 5
+> and 6, so read it before implementing any phase. One instance of the bug this plan targets was
 > already fixed as a narrow patch (`WorkflowInstance.executeLoadedPromptFile`'s
 > "Execution failed" row, 2026-08-20) — this document is the follow-up
 > redesign so the *class* of bug can't recur, requested directly after that
@@ -209,6 +211,107 @@ also means this plan does not add a new closure parameter next to
 `getDashboard` — it *replaces* `getDashboard` everywhere the only reason a
 caller had it was to call `updateStatusMessage`.
 
+## Corrections from the code audit (2026-08-20)
+
+Every line reference in this document was re-checked against the current
+tree before staging. Four things in the original write-up are wrong or
+incomplete; the phase table below has been amended accordingly.
+
+### 1. A status message has *three* effects, not two
+
+The "Problem" section above describes live push + persistence. There is a
+third, and it is the one most likely to be silently dropped by phase 5:
+
+3. **Buffered replay / event fan-out**:
+   `WorkflowExecutionContext.onStatusMessage(stepIndex, message, severity)`
+   and `onFinalStepStatusMessage(loopIndex, message, severity)`. Both
+   `WorkflowExecutor.trackStatusMessage` (`WorkflowExecutor.ts:1797-1799`)
+   and `ScriptExecutionReporter.emitStatus`
+   (`ScriptExecutionReporter.ts:418-422`) fire one of these *between* the
+   live push and the persist. In `WorkflowInstance` they land on
+   `_workflowStatusMessageEmitter` (`WorkflowInstance.ts:3597-3603`,
+   consumed by `cli.ts:633`) and, for the finalStep variant, on
+   `OutputCaptureBuffer.onFinalStepStatusMessage`
+   (`WorkflowInstance.ts:3590-3596`), which buffers the message for replay
+   to a reconnecting dashboard (`OutputCaptureBuffer.ts:326-336`, replayed
+   at `:424-447`).
+
+   Consequence for phase 5: `report()` must carry this effect too, or
+   delegating `trackStatusMessage`/`emitStatus` to the reporter silently
+   loses CLI status output and finalStep reconnect-replay. The reporter
+   therefore takes a third constructor closure alongside `getDashboard` and
+   `getActiveHistorySink`:
+
+   ```ts
+   private readonly notifyStatusMessage?: (
+     target: WorkflowEventTarget,
+     message: string,
+     severity: StatusMessageSeverity
+   ) => void
+   ```
+
+   `WorkflowInstance` wires it to the same two callbacks it already passes
+   into `WorkflowExecutionContext`, dispatching on `target.kind`. This is a
+   deliberate, small behavior *addition* for `WorkflowInstance`'s own four
+   direct call sites and for `EndConditionHandler`/`PromptFileLoader`, which
+   fire no notification today — their messages become visible to the CLI
+   consumer and (for finalStep targets) replayable, which is the same gap in
+   a different coat. Call it out in the commit message; it is intended.
+
+### 2. `PromptFileLoader.getDashboard` cannot be replaced, only added to
+
+Phase 4's "replace `getDashboard` with the shared reporter" is wrong for
+this class. `PromptFileLoader` uses its dashboard handle for three
+*non*-status calls — `updateFileSelected` (`:221`), `updateSessionRestored`
+(`:302`), and the STEPS_EXTENDED merge push (`:329`) — in addition to the
+one `updateStatusMessage` at `:405`. Keep `getDashboard` and **add** the
+reporter as a new constructor parameter.
+
+`EndConditionHandler` is the opposite and the spec is right about it: its
+`getDashboard` (`:97`) is only ever used for `updateStatusMessage` (`:277`,
+and `:368`'s `retryDashboard` which is used solely at `:378`), so that
+parameter can be swapped outright.
+
+### 3. `EndConditionHandler` is constructed twice in production
+
+`WorkflowInstance.ts:505` (constructor) and `:3799` (rebuild when the
+execution workspace changes). Both must receive the **same** reporter
+instance — dedupe state lives in the reporter, and handing the rebuild a
+fresh one would re-fire already-reported facts mid-lineage. Construct the
+reporter right after `this.outputHistoryManager` is assigned
+(`WorkflowInstance.ts:488`) so it is available at both sites.
+
+Constructor-site counts for the test sweep, measured not estimated:
+`new EndConditionHandler` — 21 occurrences across `WorkflowInstance.ts`,
+`EndConditionHandler.test.ts`, `WorkflowExecutor.test.ts`,
+`mixedModeExecution.integration.test.ts`, `interactiveScriptStep.test.ts`.
+`new PromptFileLoader` — 8 occurrences (`WorkflowInstance.ts:518` plus 7 in
+`PromptFileLoader.test.ts`).
+
+### 4. `OutputCaptureBuffer` is a fifth `updateStatusMessage` caller — and a phase-6 exemption
+
+`OutputCaptureBuffer.ts:427-446` calls `updateStatusMessage` while replaying
+buffered finalStep messages to a dashboard that just (re)connected. It is
+**not** a status-raising event — the message was already raised, pushed and
+persisted through the normal path — so it must be exempt from the phase-6
+lint rule alongside the transport-layer implementations, and it must not be
+migrated onto the reporter (doing so would re-persist every replayed row on
+every reconnect). Note that it reaches the method through an inline
+`as { updateStatusMessage?: ... }` structural cast, which the repo's
+"make structural relationships nominal" principle forbids; phase 6 should
+narrow that to the real `IDashboardSink` type while adding the exemption,
+since a cast like that also hides the call from the lint rule.
+
+### 5. Passing `this.id` as `workflowId` everywhere is inert (verified)
+
+`trackStatusMessage`/`emitStatus` pass `undefined` for `workflowId` while
+`WorkflowInstance`'s direct sites pass `this.id`. Unifying on the workflow
+id inside the reporter is safe: `this.dashboardSink` is already a
+`WorkflowTaggedSink` constructed with `this.id`
+(`WorkflowInstance.ts:465`), and its `updateStatusMessage` discards the
+caller-supplied argument in favour of its own tag
+(`WorkflowTaggedSink.ts:227-240`).
+
 ## Staged execution plan
 
 | # | Step | Closes |
@@ -216,9 +319,9 @@ caller had it was to call `updateStatusMessage`.
 | 1 | Add `StatusMessageReporter` + `WorkflowEventTarget`/`StatusMessageReportOptions` types, with full unit coverage (live-only when no history sink, both when active, independent live/persist dedupe keys, `resetDedupeState()`). No production call site changes yet. | New primitive exists and is proven correct in isolation. |
 | 2 | `WorkflowInstance` constructs one `StatusMessageReporter`; migrate its own four direct call sites (compatibility diagnostics, worktree notice, missing-secret warning, execution-failure row) onto it; call `resetDedupeState()` where `reportedCompatibilityDiagnosticKeys`/`persistedCompatibilityDiagnosticKeys` are cleared today (`:1555-1556`); delete the two now-unused `Set` fields and the hand-rolled key-building code. | The original bug class, inside the file it was found in. |
 | 3 | `EndConditionHandler`: replace the `getDashboard` constructor param with the shared reporter; migrate its two call sites (`:277-281` end-condition-failed error, `:378-382` retry-in-progress notice). Update every test construction site (`EndConditionHandler.test.ts`, `WorkflowExecutor.test.ts`, `mixedModeExecution.integration.test.ts`, `interactiveScriptStep.test.ts` — ~19 call sites per the earlier audit) to pass a reporter (a no-op reporter for tests that don't care, matching today's `() => undefined`). | The two structurally-unpersisted sites found in the prior investigation. |
-| 4 | `PromptFileLoader`: replace `getDashboard` with the shared reporter for its one call site. Separately: since this warning fires before any run/history exists, add a second phase mirroring `reportCompatibilityDiagnostics`'s "report again once EXECUTION_STARTED" pattern — expose the last missing-directories list via a `getLastMissingAssetDirectories()` getter (symmetric with the existing `getLastCompatibilityDiagnostics()`), and have `WorkflowInstance` re-invoke `report()` for it once `historyFilePath` is resolved, right alongside where it already re-reports compatibility diagnostics (`:1961-1968`). Without this second phase the warning is *only* ever live-only (same bug, different trigger: today it also disappears the moment a run starts and `EXECUTION_STARTED` wipes the live status feed, not only on navigate-away). | The genuinely harder case — a warning raised before a run exists at all — instead of leaving it as a documented exception. |
-| 5 | `WorkflowExecutor.trackStatusMessage` and `ScriptExecutionReporter.emitStatus`: keep their existing signatures (both already take a context bag with a dashboard handle and history handle), but delete their internal duplicated push+persist logic and delegate to `context.statusReporter.report(...)` / the reporter reached through `ScriptExecutionReporterContext`. Add `statusReporter: StatusMessageReporter` to `WorkflowExecutionContext` and `ScriptExecutionReporterContext`, sourced from the one instance `WorkflowInstance` owns. | Removes the two remaining independent reimplementations; from here on there is exactly one. |
-| 6 (stretch, optional) | Add an ESLint `no-restricted-syntax` (or equivalent) rule forbidding direct `.updateStatusMessage(` calls outside `StatusMessageReporter.ts` and the sink-transport layer itself (`WorkflowTaggedSink.ts`, `DashboardBroadcastHub.ts`, `PostMessageDashboardSink.ts`, `CtrlYokeWebviewProvider.ts`, `CtrlYokeHostedServer.ts` — these *implement* `IDashboardSink.updateStatusMessage`, they don't call it as a status-raising event, and must stay exempt). This is what upgrades "consolidated" to "structurally hard to reintroduce" — a new call site that reaches for the sink directly fails lint instead of silently shipping a live-only warning. | Makes the fix durable against future call sites, not just the ones known today. |
+| 4 | `PromptFileLoader`: **add** the reporter as a new constructor param (keep `getDashboard` — see correction 2) and migrate its one status call site. Separately: since this warning fires before any run/history exists, add a second phase mirroring `reportCompatibilityDiagnostics`'s "report again once EXECUTION_STARTED" pattern — expose the last missing-directories list via a `getLastMissingAssetDirectories()` getter (symmetric with the existing `getLastCompatibilityDiagnostics()`), and have `WorkflowInstance` re-invoke `report()` for it once `historyFilePath` is resolved, right alongside where it already re-reports compatibility diagnostics (`:1961-1968`). Without this second phase the warning is *only* ever live-only (same bug, different trigger: today it also disappears the moment a run starts and `EXECUTION_STARTED` wipes the live status feed, not only on navigate-away). | The genuinely harder case — a warning raised before a run exists at all — instead of leaving it as a documented exception. |
+| 5 | `WorkflowExecutor.trackStatusMessage` and `ScriptExecutionReporter.emitStatus`: keep their existing signatures (both already take a context bag with a dashboard handle and history handle), but delete their internal duplicated push+persist+notify logic and delegate to `context.statusReporter.report(...)` — the reporter must fire the `onStatusMessage`/`onFinalStepStatusMessage` fan-out itself (correction 1), or CLI status output and finalStep reconnect-replay regress silently / the reporter reached through `ScriptExecutionReporterContext`. Add `statusReporter: StatusMessageReporter` to `WorkflowExecutionContext` and `ScriptExecutionReporterContext`, sourced from the one instance `WorkflowInstance` owns. | Removes the two remaining independent reimplementations; from here on there is exactly one. |
+| 6 (stretch, optional) | Add an ESLint `no-restricted-syntax` (or equivalent) rule forbidding direct `.updateStatusMessage(` calls outside `StatusMessageReporter.ts` and the sink-transport layer itself (`WorkflowTaggedSink.ts`, `DashboardBroadcastHub.ts`, `PostMessageDashboardSink.ts`, `CtrlYokeWebviewProvider.ts`, `CtrlYokeHostedServer.ts` — these *implement* `IDashboardSink.updateStatusMessage`, they don't call it as a status-raising event, and must stay exempt — plus `OutputCaptureBuffer.ts`, which *replays* already-raised messages and must also stay exempt, see correction 4). This is what upgrades "consolidated" to "structurally hard to reintroduce" — a new call site that reaches for the sink directly fails lint instead of silently shipping a live-only warning. | Makes the fix durable against future call sites, not just the ones known today. |
 
 Phases 1–5 are the correctness work; phase 6 is what actually satisfies
 "impossible to hit going forward" for code written after this lands, and
@@ -278,9 +381,11 @@ cleaner refactor.
 | `src/test/unit/StatusMessageReporter.test.ts` | New. Primitive unit coverage. |
 | `src/core/WorkflowInstance.ts` | Construct the reporter; migrate 4 direct call sites + `reportCompatibilityDiagnostics`; delete the two dedup `Set`s; call `resetDedupeState()`; pass the reporter into `EndConditionHandler`/`PromptFileLoader` construction and into `WorkflowExecutionContext`. |
 | `src/core/EndConditionHandler.ts` | Constructor param swap; migrate 2 call sites. |
-| `src/core/orchestration/PromptFileLoader.ts` | Constructor param swap; migrate 1 call site; add `getLastMissingAssetDirectories()` for the re-report phase. |
+| `src/core/orchestration/PromptFileLoader.ts` | Constructor param **added** (not swapped — `getDashboard` stays for its three non-status uses); migrate 1 call site; add `getLastMissingAssetDirectories()` for the re-report phase. |
 | `src/core/WorkflowExecutor.ts` | `WorkflowExecutionContext` gains `statusReporter`; `trackStatusMessage` delegates instead of duplicating. |
 | `src/core/orchestration/ScriptExecutionReporter.ts` | `ScriptExecutionReporterContext` gains `statusReporter`; `emitStatus` delegates instead of duplicating. |
+| `src/test/unit/PromptFileLoader.test.ts` (7 constructor sites) | Update constructor call sites. |
 | `src/test/unit/WorkflowInstance.test.ts`, `EndConditionHandler.test.ts`, `WorkflowExecutor.test.ts`, `src/test/integration/mixedModeExecution.integration.test.ts`, `src/test/unit/interactiveScriptStep.test.ts` | Update constructor call sites; add persistence assertions where only live-push was checked before. |
 | `.github/instructions/core.instructions.md` | Replace the interim "known, not-yet-fixed instances" bullet (added 2026-08-20) with a description of `StatusMessageReporter` as the single funnel point, once phases 1–5 land. |
-| `eslint.config.mjs` (phase 6 only) | New `no-restricted-syntax` rule, with the transport-layer exemption list. |
+| `eslint.config.mjs` (phase 6 only) | New `no-restricted-syntax` rule, with the transport-layer + `OutputCaptureBuffer` exemption list. |
+| `src/core/OutputCaptureBuffer.ts` (phase 6 only) | Replace the inline structural cast at `:427` with the real `IDashboardSink` type so the replay call is visible to the lint rule and covered by the exemption. |
