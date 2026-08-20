@@ -1,6 +1,6 @@
 # Status Message Persistence Plan
 
-> **Status:** Phases 1–5 complete; phase 6 remains. Spec audited against the code on 2026-08-20 —
+> **Status:** Phases 1–6 complete; the full plan has landed. Spec audited against the code on 2026-08-20 —
 > see "Corrections from the code audit" below; the audit changed phases 4, 5
 > and 6, so read it before implementing any phase. One instance of the bug this plan targets was
 > already fixed as a narrow patch (`WorkflowInstance.executeLoadedPromptFile`'s
@@ -321,12 +321,11 @@ caller-supplied argument in favour of its own tag
 | 3 | **Done.** `EndConditionHandler`: replace the `getDashboard` constructor param with the shared reporter; migrate its two call sites (`:277-281` end-condition-failed error, `:378-382` retry-in-progress notice). Update every test construction site (`EndConditionHandler.test.ts`, `WorkflowExecutor.test.ts`, `mixedModeExecution.integration.test.ts`, `interactiveScriptStep.test.ts` — 21 call sites) to pass a reporter (a no-op reporter for tests that don't care, matching today's `() => undefined`). | The two structurally-unpersisted sites found in the prior investigation. |
 | 4 | **Done.** `PromptFileLoader` adds the shared reporter while retaining `getDashboard` for its three non-status calls, migrates the missing-assets warning, preserves headless logging with an unconditional `Log.warn`, and exposes the last missing-directories list. `WorkflowInstance` re-reports that warning after `EXECUTION_STARTED` resolves a history path, using independent live/persist dedupe so the original load-time push fires once and the persisted write lands once. | The genuinely harder case — a warning raised before a run exists at all — instead of leaving it as a documented exception. |
 | 5 | **Done.** `WorkflowExecutor.trackStatusMessage` and `ScriptExecutionReporter.emitStatus` keep their existing signatures but delegate through the instance-owned reporter. The reporter retains the extension-clock timestamp and dispatches queue/final-step notification fan-out before persistence; both execution contexts require that shared instance. | Removes the two remaining independent reimplementations; from here on there is exactly one. |
-| 6 (stretch, optional) | Add an ESLint `no-restricted-syntax` (or equivalent) rule forbidding direct `.updateStatusMessage(` calls outside `StatusMessageReporter.ts` and the sink-transport layer itself (`WorkflowTaggedSink.ts`, `DashboardBroadcastHub.ts`, `PostMessageDashboardSink.ts`, `CtrlYokeWebviewProvider.ts`, `CtrlYokeHostedServer.ts` — these *implement* `IDashboardSink.updateStatusMessage`, they don't call it as a status-raising event, and must stay exempt — plus `OutputCaptureBuffer.ts`, which *replays* already-raised messages and must also stay exempt, see correction 4). This is what upgrades "consolidated" to "structurally hard to reintroduce" — a new call site that reaches for the sink directly fails lint instead of silently shipping a live-only warning. | Makes the fix durable against future call sites, not just the ones known today. |
+| 6 | **Done.** Add an ESLint `no-restricted-syntax` rule forbidding direct `.updateStatusMessage(` calls outside `StatusMessageReporter.ts` and the sink-transport layer itself (`WorkflowTaggedSink.ts`, `DashboardBroadcastHub.ts`, `PostMessageDashboardSink.ts`, `CtrlYokeWebviewProvider.ts`, `CtrlYokeHostedServer.ts` — these *implement* `IDashboardSink.updateStatusMessage`, they don't call it as a status-raising event, and must stay exempt — plus `OutputCaptureBuffer.ts`, which *replays* already-raised messages and must also stay exempt, see correction 4). The rule is configured with a file-scoped exemption list, and the replay path uses the real `IDashboardSink` type. | Makes the fix durable against future call sites, not just the ones known today. |
 
-Phases 1–5 are the correctness work; phase 6 is what actually satisfies
+Phases 1–5 were the correctness work; phase 6 is what satisfies
 "impossible to hit going forward" for code written after this lands, and
-should not be skipped if the team wants that guarantee rather than just a
-cleaner refactor.
+the full plan is now complete.
 
 ## Open design questions for the implementer
 

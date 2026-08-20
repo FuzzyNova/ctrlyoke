@@ -47,7 +47,32 @@ export default [
       curly: "warn",
       eqeqeq: ["warn", "always", { null: "ignore" }],
       "no-throw-literal": "warn",
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "CallExpression[callee.type='MemberExpression'][callee.property.name='updateStatusMessage']",
+          message:
+            "Use StatusMessageReporter.report() instead of calling updateStatusMessage() directly.",
+        },
+      ],
       semi: "warn",
+    },
+  },
+  // Direct status-message calls are restricted to the reporter, transport
+  // implementations, and the replay path that forwards already-persisted rows.
+  {
+    files: [
+      "src/core/orchestration/StatusMessageReporter.ts",
+      "src/core/WorkflowTaggedSink.ts",
+      "src/ui/DashboardBroadcastHub.ts",
+      "src/ui/PostMessageDashboardSink.ts",
+      "src/ui/CtrlYokeWebviewProvider.ts",
+      "src/server/CtrlYokeHostedServer.ts",
+      "src/core/OutputCaptureBuffer.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": "off",
     },
   },
   // React hooks rules for TSX files
