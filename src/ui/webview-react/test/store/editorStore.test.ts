@@ -441,6 +441,49 @@ describe("script step executionMode", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Script step secrets, errorBehavior, and env round-trip
+// ---------------------------------------------------------------------------
+
+describe("script step secrets/errorBehavior/env round-trip", () => {
+  it("enterEditMode loads secrets from an existing script step", () => {
+    store().enterEditMode(
+      0,
+      makeScriptStep({ secrets: ["API_KEY", "DB_PASSWORD"] })
+    );
+    expect(store().properties.secrets).toEqual(["API_KEY", "DB_PASSWORD"]);
+  });
+
+  it("enterEditMode loads errorBehavior from an existing script step", () => {
+    store().enterEditMode(
+      0,
+      makeScriptStep({ errorBehavior: { onError: "continue" } })
+    );
+    expect(store().properties.errorBehavior).toEqual({ onError: "continue" });
+  });
+
+  it("enterEditMode loads env from an existing script step", () => {
+    store().enterEditMode(0, makeScriptStep({ env: { FOO: "bar" } }));
+    expect(store().scriptEnv).toEqual({ FOO: "bar" });
+  });
+
+  it("enterEditMode leaves secrets/errorBehavior undefined when the step has none", () => {
+    store().enterEditMode(0, makeScriptStep());
+    expect(store().properties.secrets).toBeUndefined();
+    expect(store().properties.errorBehavior).toBeUndefined();
+  });
+
+  it("preserves an unsaved secrets change in pending edits across deselect", () => {
+    store().enterEditMode(0, makeScriptStep({ secrets: ["API_KEY"] }));
+    store().setProperty("secrets", ["OTHER_KEY"]);
+    store().deselect();
+
+    store().enterEditMode(0, makeScriptStep({ secrets: ["API_KEY"] }));
+
+    expect(store().properties.secrets).toEqual(["OTHER_KEY"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // getPromptProperties
 // ---------------------------------------------------------------------------
 

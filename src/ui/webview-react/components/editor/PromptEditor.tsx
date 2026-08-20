@@ -878,6 +878,19 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           text: command,
           properties: {
             type: STEP_TYPES.SCRIPT,
+            ...(scriptEnv &&
+              Object.keys(scriptEnv).length > 0 && {
+                env: scriptEnv,
+              }),
+            ...(properties.secrets === null
+              ? { secrets: null }
+              : Array.isArray(properties.secrets) &&
+                  properties.secrets.length > 0
+                ? { secrets: properties.secrets }
+                : {}),
+            ...(properties.errorBehavior !== undefined && {
+              errorBehavior: properties.errorBehavior,
+            }),
             ...(scriptTimeout !== undefined && { timeout: scriptTimeout }),
             ...(scriptOnPass !== CONDITION_ACTIONS.CONTINUE && {
               onPass: scriptOnPass,
@@ -944,7 +957,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       scriptOnFail,
       scriptCompareSource,
       scriptReturns,
+      scriptEnv,
       scriptExecutionMode,
+      properties,
       stepEnabled,
       promptText,
       promptName,

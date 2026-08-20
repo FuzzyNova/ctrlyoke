@@ -552,6 +552,36 @@ describe("PromptEditor — script-step properties", () => {
     expect(message?.properties).not.toHaveProperty("secrets");
     expect(message?.properties).not.toHaveProperty("errorBehavior");
   });
+
+  it("includes env, secrets, and error behavior when creating a new script step", async () => {
+    useEditorStore.setState({
+      stepType: STEP_TYPES.SCRIPT,
+      scriptCommand: "npm run deploy",
+      scriptEnv: { DEPLOY_TOKEN: "${secret:DEPLOY_TOKEN}" },
+      properties: {
+        ...useEditorStore.getState().properties,
+        secrets: ["DEPLOY_TOKEN"],
+        errorBehavior: { onError: "continue" },
+      },
+    });
+
+    const { container } = render(<PromptEditor />);
+    await userEvent
+      .setup()
+      .click(container.querySelector(".btn-editor-run") as HTMLButtonElement);
+
+    const message = postMessageSpy.mock.calls.find(
+      ([msg]) => (msg as { type?: string }).type === MESSAGE_TYPES.EXECUTE_PROMPT
+    )?.[0] as Record<string, unknown> | undefined;
+    expect(message).toMatchObject({
+      type: MESSAGE_TYPES.EXECUTE_PROMPT,
+      properties: {
+        env: { DEPLOY_TOKEN: "${secret:DEPLOY_TOKEN}" },
+        secrets: ["DEPLOY_TOKEN"],
+        errorBehavior: { onError: "continue" },
+      },
+    });
+  });
 });
 
 describe("PromptEditor — image compatibility feedback", () => {

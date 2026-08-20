@@ -516,6 +516,12 @@ export const useEditorStore = create<
 
     if (isScriptStep(promptData)) {
       // Script step: populate scriptCommand, set stepType to script (unless pending edit overrides)
+      const propertiesFromScriptData: PropertyValues = {
+        ...PROPERTY_DEFAULTS,
+        secrets: promptData.secrets,
+        errorBehavior: normalizePromptErrorBehavior(promptData.errorBehavior),
+      };
+
       set({
         selectionTarget: newTarget,
         selectedPromptIndex: isFinalStepTarget ? null : index,
@@ -551,7 +557,7 @@ export const useEditorStore = create<
           : promptData.executionMode,
         properties: pendingEdit
           ? pendingEdit.properties
-          : { ...PROPERTY_DEFAULTS },
+          : propertiesFromScriptData,
         isDirty: pendingEdit ? true : false,
         validationErrors: {},
         pendingEdits: newPendingEdits,
