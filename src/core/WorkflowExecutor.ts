@@ -65,6 +65,7 @@ import {
   buildSecretProcessEnvironment,
   expandSecretInterpolations,
   findMissingSecretNames,
+  getProcessMapSecretNames,
   getDeclaredSecretGrants,
   MissingSecretError,
   resolveSecretEnvironment,
@@ -567,7 +568,8 @@ export class WorkflowExecutor {
       const preErrorBehavior = preResolvedProperties.errorBehavior;
       const preSecretNames = getEffectiveSecretGrants(
         prompt,
-        preResolvedProperties.secrets
+        preResolvedProperties.secrets,
+        getProcessMapSecretNames(preResolvedProperties)
       );
       await this.registerResolvedSecrets(preSecretNames, context, target);
       await this.promptQueue.persistRuntimeMetadata(
@@ -724,7 +726,8 @@ export class WorkflowExecutor {
       resolvedProperties = mcpNormalization.properties;
       const secretNames = getEffectiveSecretGrants(
         prompt,
-        resolvedProperties.secrets
+        resolvedProperties.secrets,
+        getProcessMapSecretNames(resolvedProperties)
       );
       const resolvedSecretValues = await this.resolveGrantedSecretValues(
         secretNames,
@@ -2685,7 +2688,8 @@ export class WorkflowExecutor {
       resolvedProperties = mcpNormalization.properties;
       const retrySecretNames = getEffectiveSecretGrants(
         retryPromptStep,
-        resolvedProperties.secrets
+        resolvedProperties.secrets,
+        getProcessMapSecretNames(resolvedProperties)
       );
       const retrySecretValues = await this.resolveGrantedSecretValues(
         retrySecretNames,

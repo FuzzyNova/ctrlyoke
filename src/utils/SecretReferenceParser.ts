@@ -52,12 +52,14 @@ export function parseSecretReferences(text: string): SecretReference[] {
 }
 
 /**
- * Return the grants available to one step. Inline prompt references are
- * authoritative and are unioned with the resolved declaration array.
+ * Return the grants available to one step. Inline prompt references and
+ * references from the step's effective process maps are authoritative and
+ * are unioned with the resolved declaration array.
  */
 export function getEffectiveSecretGrants(
   step: WorkflowStep,
-  resolvedSecrets: string[] | null | undefined
+  resolvedSecrets: string[] | null | undefined,
+  processMapSecretNames: readonly string[] = []
 ): string[] {
   const grants = new Set<string>();
 
@@ -68,6 +70,12 @@ export function getEffectiveSecretGrants(
   }
 
   for (const name of resolvedSecrets ?? []) {
+    if (isValidSecretName(name)) {
+      grants.add(name);
+    }
+  }
+
+  for (const name of processMapSecretNames) {
     if (isValidSecretName(name)) {
       grants.add(name);
     }

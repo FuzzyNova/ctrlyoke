@@ -1,5 +1,7 @@
 import {
   isScriptStep,
+  type ExecutionProperties,
+  type McpServerConfig,
   type PromptFile,
   type UserHookConfig,
   type WorkflowStep,
@@ -168,6 +170,27 @@ export function collectSecretInterpolationNames(
   return [...names];
 }
 
+export function getProcessMapSecretNames(
+  properties: Pick<
+    ExecutionProperties,
+    "mcpServers" | "hooks" | "preCondition" | "endCondition"
+  > & { env?: Record<string, string> }
+): string[] {
+  const maps: Array<Record<string, string> | undefined> = [properties.env];
+  const mcpServers = properties.mcpServers ?? [];
+  maps.push(
+    ...mcpServers.flatMap((server: string | McpServerConfig) =>
+      typeof server === "string" ? [] : [server.env, server.headers]
+    )
+  );
+  maps.push(...(properties.hooks ?? []).map((hook) => hook.env));
+  maps.push(properties.preCondition?.env, properties.endCondition?.env);
+
+  return [
+    ...new Set(maps.flatMap((map) => collectSecretInterpolationNames(map))),
+  ];
+}
+
 export function expandSecretInterpolations(
   value: Record<string, string> | undefined,
   resolvedValues: Record<string, string>,
@@ -228,7 +251,13 @@ export function getDeclaredSecretGrants(
   // and re-inherit the workflow grants, injecting a secret the step opted out
   // of. Inline `!NAME` references still grant — that asymmetry is deliberate.
   const declared = step.secrets !== undefined ? step.secrets : workflow.secrets;
-  return getEffectiveSecretGrants(step, declared ?? []);
+  return getEffectiveSecretGrants(
+    step,
+    declared ?? [],
+    getProcessMaps(step, workflow).flatMap((map) =>
+      collectSecretInterpolationNames(map)
+    )
+  );
 }
 
 function getProcessMaps(
@@ -237,28 +266,47 @@ function getProcessMaps(
 ): Array<Record<string, string> | undefined> {
   const mcpServers = isScriptStep(step)
     ? (workflow.mcpServers ?? [])
-    : (step.mcpServers ?? workflow.mcpServers ?? []);
+    : step.mcpServers !== undefined
+      ? (step.mcpServers ?? [])
+      : (workflow.mcpServers ?? []);
   const mcpMaps = mcpServers.flatMap((server) =>
     typeof server === "string" ? [] : [server.env, server.headers]
   );
   const hooks = isScriptStep(step)
     ? (workflow.hooks ?? [])
-    : (step.hooks ?? workflow.hooks ?? []);
+    : getEffectiveHookConfigs(step.hooks, workflow.hooks);
   const hookMaps = hooks.map((hook: UserHookConfig) => hook.env);
   const scriptMaps = isScriptStep(step) ? [step.env] : [];
   const conditionMaps = isScriptStep(step)
     ? []
-    : [step.preCondition?.env, step.endCondition?.env];
-  const workflowConditionMaps = [
-    workflow.preCondition?.env,
-    workflow.endCondition?.env,
-  ];
+    : [
+        (step.preCondition === null
+          ? undefined
+          : (step.preCondition ?? workflow.preCondition)
+        )?.env,
+        (step.endCondition === null
+          ? undefined
+          : (step.endCondition ?? workflow.endCondition)
+        )?.env,
+      ];
+  return [...mcpMaps, ...hookMaps, ...scriptMaps, ...conditionMaps];
+}
+
+function getEffectiveHookConfigs(
+  stepHooks: UserHookConfig[] | null | undefined,
+  workflowHooks: UserHookConfig[] | null | undefined
+): UserHookConfig[] {
+  if (stepHooks === null) return [];
+
+  const inheritedHooks = workflowHooks ?? [];
+  if (stepHooks === undefined || stepHooks.length === 0) {
+    return inheritedHooks;
+  }
+
+  const overriddenEvents = new Set(stepHooks.map((hook) => hook.event));
   return [
-    ...mcpMaps,
-    ...hookMaps,
-    ...scriptMaps,
-    ...conditionMaps,
-    ...workflowConditionMaps,
+    ...inheritedHooks.filter((hook) => !overriddenEvents.has(hook.event)),
+    ...stepHooks,
   ];
 }
 

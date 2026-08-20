@@ -65,6 +65,15 @@ suite("SecretReferenceParser", () => {
     );
   });
 
+  test("unions process-map references with resolved declarations", () => {
+    const step: PromptStep = { prompt: "No inline reference" };
+
+    assert.deepStrictEqual(
+      getEffectiveSecretGrants(step, ["DECLARED"], ["MAP_SECRET", "DECLARED"]),
+      ["DECLARED", "MAP_SECRET"]
+    );
+  });
+
   test("uses only explicit declarations for script steps", () => {
     const step: ScriptStep = {
       type: "script",

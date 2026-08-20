@@ -460,7 +460,7 @@ before the control that makes them reachable.
 | 4   | **Done (2026-08-20):** `KeyValueMapEditor` shared env/headers map editor; `McpServerForm` `headers` + `autoApprove` list | MCP form parity gaps                                      |
 | 5   | **Done (2026-08-20):** Script-step `env` / `secrets` / `errorBehavior` controls | Script-step parity gaps                                   |
 | 6   | **Done (2026-08-20):** `env` on pre/end conditions and hooks; hook `timeoutSec` | Condition + hook parity gaps                              |
-| 7   | Process-map secret references auto-grant (overzealous item 3)                     | Hard failure reachable from the new `env` editors         |
+| 7   | **Done (2026-08-20):** Process-map secret references auto-grant (overzealous item 3) | Hard failure reachable from the new `env` editors         |
 | 8   | Unresolved `{{var}}` becomes advisory + fenced-block masking (overzealous item 2, now also covering preCondition/script-step) | Hard failure already reachable via preCondition/script-step today; also what the `vars` editor (step 9) would newly expose for prompt text |
 | 9   | Workflow-root `vars` editor                                                       | Last root-level parity gap                                |
 | 10  | Schema→UI control-id parity guard                                                 | "Preventing the next one"                                 |

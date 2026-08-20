@@ -241,30 +241,177 @@ suite("SecretResolver", () => {
     }
   });
 
-  test("process-map grant consistency is always rejected regardless of failOnMissing", async () => {
+  test("process-map references auto-grant without an explicit secrets array", async () => {
     const workflow: PromptFile = {
       steps: [
         {
           prompt: "Run the service",
           mcpServers: [
-            { id: "service", env: { TOKEN: "${secret:MISSING}" } },
+            { id: "service", env: { TOKEN: "${secret:MAP_SECRET}" } },
           ],
         },
       ],
     };
 
     for (const failOnMissing of [false, true]) {
-      await assert.rejects(
-        preflightWorkflowSecrets(
-          workflow,
-          platformWith(new InMemorySecretStore({})),
-          "C:\\workspace",
-          {},
-          { failOnMissing }
-        ),
-        /is referenced in process environment.*not granted/
+      const missing = await preflightWorkflowSecrets(
+        workflow,
+        platformWith(new InMemorySecretStore({})),
+        "C:\\workspace",
+        { MAP_SECRET: "resolved" },
+        { failOnMissing }
+      );
+      assert.deepStrictEqual(missing, []);
+    }
+  });
+
+  test("auto-grants process-map references on script, hook, condition, MCP env, and headers", async () => {
+    const cases: Array<{
+      secretName: string;
+      workflow: PromptFile;
+    }> = [
+      {
+        secretName: "SCRIPT_ENV_SECRET",
+        workflow: {
+          steps: [
+            {
+              type: "script",
+              script: "echo script",
+              env: { TOKEN: "${secret:SCRIPT_ENV_SECRET}" },
+            },
+          ],
+        },
+      },
+      {
+        secretName: "HOOK_ENV_SECRET",
+        workflow: {
+          steps: [
+            {
+              prompt: "Run the hook",
+              hooks: [
+                {
+                  event: "stop",
+                  command: "echo hook",
+                  env: { TOKEN: "${secret:HOOK_ENV_SECRET}" },
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        secretName: "CONDITION_ENV_SECRET",
+        workflow: {
+          steps: [
+            {
+              prompt: "Run the condition",
+              preCondition: {
+                script: "echo condition",
+                env: { TOKEN: "${secret:CONDITION_ENV_SECRET}" },
+              },
+            },
+          ],
+        },
+      },
+      {
+        secretName: "MCP_ENV_SECRET",
+        workflow: {
+          steps: [
+            {
+              prompt: "Run MCP",
+              mcpServers: [
+                {
+                  id: "service",
+                  command: "echo service",
+                  env: { TOKEN: "${secret:MCP_ENV_SECRET}" },
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        secretName: "MCP_HEADER_SECRET",
+        workflow: {
+          steps: [
+            {
+              prompt: "Run remote MCP",
+              mcpServers: [
+                {
+                  id: "remote",
+                  url: "https://example.test/mcp",
+                  headers: {
+                    Authorization: "Bearer ${secret:MCP_HEADER_SECRET}",
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ];
+
+    for (const { secretName, workflow } of cases) {
+      await preflightWorkflowSecrets(
+        workflow,
+        platformWith(new InMemorySecretStore({})),
+        "C:\\workspace",
+        { [secretName]: "resolved" }
       );
     }
+  });
+
+  test("workflow-level process maps grant at workflow scope", async () => {
+    const workflow: PromptFile = {
+      mcpServers: [
+        {
+          id: "workflow-service",
+          command: "echo service",
+          env: { TOKEN: "${secret:WORKFLOW_MAP_SECRET}" },
+        },
+      ],
+      steps: [{ prompt: "Run the workflow service" }],
+    };
+
+    assert.deepStrictEqual(
+      getDeclaredSecretGrants(workflow.steps![0], workflow),
+      ["WORKFLOW_MAP_SECRET"]
+    );
+    await preflightWorkflowSecrets(
+      workflow,
+      platformWith(new InMemorySecretStore({})),
+      "C:\\workspace",
+      { WORKFLOW_MAP_SECRET: "resolved" }
+    );
+  });
+
+  test("does not grant a step secret to an unrelated step", () => {
+    const workflow: PromptFile = {
+      steps: [
+        {
+          prompt: "Step one",
+          mcpServers: [
+            {
+              id: "step-one-service",
+              command: "echo service",
+              env: { TOKEN: "${secret:STEP_ONE_SECRET}" },
+            },
+          ],
+        },
+        { prompt: "Step two" },
+      ],
+    };
+
+    assert.ok(
+      getDeclaredSecretGrants(workflow.steps![0], workflow).includes(
+        "STEP_ONE_SECRET"
+      )
+    );
+    assert.ok(
+      !getDeclaredSecretGrants(workflow.steps![1], workflow).includes(
+        "STEP_ONE_SECRET"
+      )
+    );
   });
 
   test("injects granted secrets into script environment without changing prompt text", async () => {

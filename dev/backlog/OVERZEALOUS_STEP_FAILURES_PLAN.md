@@ -170,22 +170,25 @@ stop. That trains rubber-stamping.
 
 ### Recommendation
 
-1. **Treat `${secret:NAME}` in a step's own process maps as an authoritative
+1. ~~**Treat `${secret:NAME}` in a step's own process maps as an authoritative
    grant**, exactly like inline `!NAME`. Configure the MCP server or script
    with the secret and it comes as a package. This is a change to
    `getDeclaredSecretGrants`/`getEffectiveSecretGrants` (union in names
    collected from the step's process maps), after which both the preflight
    throw and the `expandSecretInterpolations` throw become unreachable for this
-   case and can stay as genuine invariant guards.
-2. **Put the cloned-repo protection where it belongs:** a one-time trust
+   case and can stay as genuine invariant guards.~~ **Implemented (2026-08-20).**
+   Process-map references are now authoritative grants with scope-preserving
+   coverage for script env, hooks, conditions, MCP env/headers, workflow maps,
+   and unrelated steps; the invariant guards remain in place.
+2. **Outstanding — put the cloned-repo protection where it belongs:** a one-time trust
    approval that surfaces _every_ grant a workflow wants — inline and env-map
    alike — reusing the `permissions.allowedExternalFileRoots` approval pattern.
    `SECRETS_AND_REDACTION_PLAN.md`'s own open questions already propose this
    ("Leaning yes for grants") and it was never built. One coherent gate beats
    one silent path plus one noisy one.
-3. Keep the invalid-name throw (`isValidSecretName`) and the runtime
+3. **Outstanding — keep the invalid-name throw (`isValidSecretName`) and the runtime
    `MissingSecretError` — those are real resolution failures, not declaration
-   friction.
+   friction.**
 
 ## 4. The heuristic redactor rewrites authored prompt text
 

@@ -32,6 +32,7 @@ import {
   getEffectiveSecretGrants,
   parseSecretReferences,
 } from "../../../utils/SecretReferenceParser";
+import { getProcessMapSecretNames } from "../../../utils/SecretResolver";
 import { ResumeAttachmentResolver } from "../../../utils/ResumeAttachmentResolver";
 import {
   scanCtrlYokeSlashTokens,
@@ -234,7 +235,10 @@ export class CliPromptPreparer {
     ];
     const secretNames = getEffectiveSecretGrants(
       prompt,
-      resolvedProperties?.secrets
+      resolvedProperties?.secrets,
+      resolvedProperties
+        ? getProcessMapSecretNames(resolvedProperties)
+        : undefined
     );
     const unknownSecretNames = await this.findUnknownSecretNames(
       inlineSecretNames,
