@@ -267,6 +267,7 @@ export function McpServerForm({
             className="w-full rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none"
           />
           <KeyValueMapEditor
+            id="mcp-server-env"
             label="env (KEY=VALUE, one per line)"
             ariaLabel="Environment variables (KEY=VALUE, one per line)"
             value={value.env}
@@ -299,6 +300,7 @@ export function McpServerForm({
             triggerTitle="Choose the transport used by the remote MCP server"
           />
           <KeyValueMapEditor
+            id="mcp-server-headers"
             label="headers (KEY=VALUE, one per line)"
             value={value.headers}
             onChange={(headers) => onChange({ ...value, headers })}

@@ -16,6 +16,7 @@ interface SkillOption {
 }
 
 interface SkillsSelectProps extends HideableProps {
+  id?: string;
   value: string[] | null | undefined;
   onChange: (v: string[] | null | undefined) => void;
   availableSkills: SkillOption[];
@@ -40,6 +41,7 @@ interface SkillsSelectProps extends HideableProps {
  * switches to custom array mode (matching the PriorContextSelect pattern).
  */
 export const SkillsSelect: React.FC<SkillsSelectProps> = ({
+  id,
   value,
   onChange,
   availableSkills,
@@ -281,6 +283,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
   return (
     <div className="relative inline-block w-full">
       <button
+        id={id}
         ref={buttonRef}
         type="button"
         onClick={() =>

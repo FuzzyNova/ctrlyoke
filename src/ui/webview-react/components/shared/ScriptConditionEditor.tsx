@@ -335,6 +335,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         variant === "preCondition" ||
         variant === "endCondition") && (
         <KeyValueMapEditor
+          id={`${idPrefix}-env`}
           label="Environment"
           ariaLabel={`${idPrefix}-env`}
           value={v.env ?? {}}

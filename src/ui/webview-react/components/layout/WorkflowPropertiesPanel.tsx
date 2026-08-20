@@ -1562,6 +1562,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
               >
                 <KeyValueMapEditor
                   label="name=value"
+                  id="settings-vars"
                   ariaLabel="Variables"
                   value={workflowProperties.vars ?? {}}
                   onChange={handleVarsChange}
@@ -2062,6 +2063,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 }
               >
                 <McpServersEditor
+                  controlId="settings-mcp-servers"
                   value={effectiveMcpServers as McpServersValue}
                   onChange={handleMcpServersChange}
                   showDefault={false}

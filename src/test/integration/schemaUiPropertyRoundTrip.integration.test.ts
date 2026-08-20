@@ -1,7 +1,7 @@
 import { suite, test, teardown } from "mocha";
 import * as assert from "assert";
 import * as fs from "fs/promises";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 import * as os from "os";
 import * as path from "path";
 import Ajv from "ajv";
@@ -40,7 +40,7 @@ import {
  * breaks one of these invariants, the failing test names the surface/property
  * directly instead of normalizing the loss as an expected gap.
  *
- * See `dev/backlog/WORKFLOW_SCHEMA_UI_PARITY_PLAN.md`.
+ * See `dev/implemented/WORKFLOW_SCHEMA_UI_PARITY_PLAN.md`.
  */
 
 const SCHEMA_PATH = path.resolve(
@@ -336,6 +336,67 @@ const SURFACES: Surface[] = [
   },
 ];
 
+/**
+ * One source-literal control id (or template-literal body) for every
+ * authorable schema property. Dynamic ids deliberately use the exact
+ * template-literal body from the component, so the source scan below still
+ * catches a renamed or removed control without pretending to render React in
+ * this extension-host suite.
+ */
+const UI_CONTROL_IDS: ReadonlyMap<string, readonly string[]> = new Map([
+  ["additionalArgs", ["settings-append-args"]],
+  ["agent", ["settings-agent"]],
+  ["compareSource", ["${idPrefix}-compare-source"]],
+  ["endCondition", ["settings-end-condition-enabled"]],
+  ["env", ["${idPrefix}-env"]],
+  ["errorBehavior", ["settings-error"]],
+  ["executionMode", ["settings-execution-mode"]],
+  ["harness", ["settings-harness"]],
+  ["hooks", ["hook-${index}-command"]],
+  ["mcpServers", ["settings-mcp-servers"]],
+  ["model", ["settings-model"]],
+  ["onFail", ["${idPrefix}-on-fail"]],
+  ["onPass", ["${idPrefix}-on-pass"]],
+  ["preCondition", ["settings-pre-condition-enabled"]],
+  ["priorContext", ["settings-prior-context"]],
+  ["resumeSession", ["settings-resume-session"]],
+  ["returns", ["${idPrefix}-returns"]],
+  ["secrets", ["${idPrefix}-control"]],
+  ["sessionId", ["settings-session-id"]],
+  ["skills", ["settings-skills"]],
+  ["timeout", ["${idPrefix}-timeout"]],
+  ["toolPermissions", ["settings-permission-mode"]],
+  ["vars", ["settings-vars"]],
+  ["worktree", ["settings-worktree-mode"]],
+]);
+
+/**
+ * Deliberately CLI-only properties may be listed here, but every entry needs
+ * a reason. Keep this empty: all currently authorable properties have a
+ * dashboard control. A future opt-out must explain why it is safe to leave a
+ * schema property unreachable from the UI.
+ */
+const UI_CONTROL_OPTOUTS = new Map<string, string>();
+
+const WEBVIEW_SOURCE_ROOT = path.resolve(
+  __dirname,
+  "../../../src/ui/webview-react"
+);
+
+function webviewSourceFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) return webviewSourceFiles(entryPath);
+    return /\.(?:ts|tsx)$/.test(entry.name) ? [entryPath] : [];
+  });
+}
+
+function webviewSource(): string {
+  return webviewSourceFiles(WEBVIEW_SOURCE_ROOT)
+    .map((filePath) => readFileSync(filePath, "utf8"))
+    .join("\n");
+}
+
 /** Keep empty: every authorable property must survive an omitted save payload. */
 const KNOWN_LOSSY_PRESERVATION = new Set<string>();
 
@@ -428,6 +489,73 @@ suite("Schema -> dashboard property round trip", () => {
         stale,
         [],
         `KNOWN_* entries for properties that no longer exist: ${stale.join(", ")}`
+      );
+    });
+
+    test("KNOWN_* regression allowances remain empty", () => {
+      assert.strictEqual(
+        KNOWN_LOSSY_PRESERVATION.size,
+        0,
+        "KNOWN_LOSSY_PRESERVATION must stay empty; fix the regression instead"
+      );
+      assert.strictEqual(
+        KNOWN_UNACCEPTED.size,
+        0,
+        "KNOWN_UNACCEPTED must stay empty; fix the regression instead"
+      );
+    });
+
+    test("every authorable schema property has a live UI control id", () => {
+      const authorable = new Set(
+        SURFACES.flatMap((surface) => surface.properties)
+      );
+      const registered = new Set(UI_CONTROL_IDS.keys());
+      const source = webviewSource();
+      const failures: string[] = [];
+
+      for (const property of authorable) {
+        if (UI_CONTROL_OPTOUTS.has(property)) continue;
+        const controlIds = UI_CONTROL_IDS.get(property);
+        if (!controlIds || controlIds.length === 0) {
+          failures.push(
+            `${property}: missing registry entry — add a UI control, register its id, or opt out with a written reason`
+          );
+          continue;
+        }
+        for (const controlId of controlIds) {
+          if (!source.includes(controlId)) {
+            failures.push(
+              `${property}: registered control id "${controlId}" is absent from src/ui/webview-react — add the control, register its current id, or opt out with a written reason`
+            );
+          }
+        }
+      }
+
+      for (const property of registered) {
+        if (!authorable.has(property) && !UI_CONTROL_OPTOUTS.has(property)) {
+          failures.push(
+            `${property}: registry entry has no authorable schema property — remove it or add the property to the schema/sample table`
+          );
+        }
+      }
+
+      for (const [property, reason] of UI_CONTROL_OPTOUTS) {
+        if (!reason.trim()) {
+          failures.push(
+            `${property}: UI opt-out must include a written reason`
+          );
+        }
+        if (!authorable.has(property)) {
+          failures.push(
+            `${property}: UI opt-out names no authorable schema property — remove it or add the property to the schema/sample table`
+          );
+        }
+      }
+
+      assert.deepStrictEqual(
+        failures,
+        [],
+        `Schema → UI control parity failures:\n${failures.join("\n")}`
       );
     });
   });

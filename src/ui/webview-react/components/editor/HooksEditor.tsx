@@ -158,6 +158,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
         {hooks.map((hook, index) => (
           <div key={index} className="flex gap-1 items-start">
             <select
+              id={`hook-${index}-event`}
               value={hook.event}
               onChange={(e) =>
                 handleUpdateHook(index, {
@@ -174,6 +175,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
             </select>
             <input
               type="text"
+              id={`hook-${index}-command`}
               value={hook.command}
               onChange={(e) =>
                 handleUpdateHook(index, { command: e.target.value })
@@ -210,6 +212,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
               />
             </div>
             <KeyValueMapEditor
+              id={`hook-${index}-env`}
               label="Environment"
               ariaLabel={`hook-${index}-env`}
               value={hook.env ?? {}}

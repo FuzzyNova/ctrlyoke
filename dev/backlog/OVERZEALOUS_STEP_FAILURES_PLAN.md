@@ -1,11 +1,12 @@
 # Overzealous Step Failures Plan
 
-> **Status:** Item 2 implemented (2026-08-20); item 3 implemented (2026-08-20).
-> Problems not yet implemented remain documented below. **Items 2 and 3 are staged inside
-> `WORKFLOW_SCHEMA_UI_PARITY_PLAN.md`'s step queue** (2026-08-20): that plan
-> adds the UI controls which make both failures reachable for a dashboard-only
-> author, so the guards have to be fixed alongside them. Items 4 and the
-> cross-cutting test stay here, deferred.
+> **Status:** Items 2 and 3 implemented (2026-08-20). Remaining work is
+> deliberately deferred: item 3 recommendations 2 and 3, item 4's heuristic
+> redactor trace/fix, and the cross-cutting "documents every syntax" test.
+> **Items 2 and 3 were staged inside
+> `dev/implemented/WORKFLOW_SCHEMA_UI_PARITY_PLAN.md`'s step queue** (2026-08-20):
+> that plan added the UI controls which make both failures reachable for a
+> dashboard-only author, so the guards were fixed alongside them.
 > **Priority:** P1 for item 2 (latent, trips any workflow that uses `vars`);
 > P2 for the rest.
 > **Origin:** Fell out of implementing
@@ -158,7 +159,7 @@ separate gesture** the user has no reason to expect:
 - **Script steps cannot satisfy it inline at all.** They have no prompt, so
   there is no `!NAME` gesture available; `secrets: [NAME]` is the only option —
   and that array is not editable from the UI today (see
-  `WORKFLOW_SCHEMA_UI_PARITY_PLAN.md`), which makes the failure
+  `dev/implemented/WORKFLOW_SCHEMA_UI_PARITY_PLAN.md`), which makes the failure
   _unrecoverable_ for a UI-only author.
 
 ### The security argument does not survive contact with the code

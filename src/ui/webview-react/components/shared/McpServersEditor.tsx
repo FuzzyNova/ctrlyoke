@@ -546,6 +546,7 @@ function McpServersPanel({
  * - null/undefined both treated as empty array for display
  */
 export const McpServersEditor: React.FC<{
+  controlId?: string;
   value: McpServersValue;
   onChange: (value: McpServersValue) => void;
   /** Text shown in the Default mode button (e.g. "Default (ctrlyoke)"). Only relevant when showDefault is true. */
@@ -567,6 +568,7 @@ export const McpServersEditor: React.FC<{
   /** Persistent compatibility findings for authored server filters. */
   diagnostics?: readonly CompatibilityDiagnostic[];
 }> = ({
+  controlId,
   value,
   onChange,
   defaultLabel = "Default",
@@ -697,6 +699,7 @@ export const McpServersEditor: React.FC<{
 
   return (
     <div
+      id={controlId}
       className={`flex min-w-0 flex-col gap-2${fillHeight ? " flex-1 min-h-0" : ""}`}
     >
       <FieldDiagnostic

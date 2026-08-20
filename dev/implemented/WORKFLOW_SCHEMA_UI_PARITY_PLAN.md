@@ -1,8 +1,9 @@
 # Workflow Schema → UI Parity Plan
 
-> **Status:** Schema cleanup landed; UI parity work staged as an ordered step
-> queue (2026-08-20 — see "Staged execution plan" at the end). Audit complete
-> and verified against the code (2026-08-19).
+> **Status:** Implemented and closed (2026-08-20). Schema cleanup, UI parity,
+> persistence preservation, runtime guard softening, and the schema→UI control
+> parity guard are complete. The remaining overzealous-failure work is
+> deliberately deferred in `OVERZEALOUS_STEP_FAILURES_PLAN.md`.
 > **Priority:** P0 — the property-preservation question is answered and the
 > answer is **confirmed silent data loss**: saving a script step through the
 > dashboard, or toggling one enabled/disabled from the context menu, deletes
@@ -416,18 +417,20 @@ definition, but it is not blocking anything.
 The gaps above accumulated one feature at a time, each individually reasonable.
 A checklist item in the instruction files was never going to hold.
 
-**Half of this now exists.** `schemaUiPropertyRoundTrip.integration.test.ts`
+`schemaUiPropertyRoundTrip.integration.test.ts`
 walks the schema, enumerates user-authorable properties, and fails when one has
 no sample value — so a new schema property cannot land without someone deciding
 how it round-trips. What it does _not_ check is whether a control exists: a
 property can round-trip perfectly through the message contract and still be
 unreachable in the UI (`vars` and `headers` are exactly that today).
 
-The remaining piece is therefore the control-id half: assert each authorable
-property appears in a maintained registry of UI control ids, with an explicit,
-commented opt-out list for properties deliberately left CLI-only. The sample
-table in the round-trip suite is the natural place to hang it — it already
-enumerates the same property set and already fails when the schema grows.
+The control-id half is now complete: the suite asserts each authorable property
+appears in a maintained registry of UI control ids, with an explicit,
+commented opt-out list for properties deliberately left CLI-only. It also scans
+the `src/ui/webview-react/` TypeScript source and requires every registered id
+to appear literally there, so deleting or renaming a control fails with an
+actionable message. The sample table remains the single enumeration shared by
+the round-trip and control-presence checks.
 
 ## Interleaved from `OVERZEALOUS_STEP_FAILURES_PLAN.md`
 
@@ -436,8 +439,8 @@ queue. The rest stays there.
 
 | Item                                                     | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **3 — ungranted `${secret:NAME}` in a process map**      | **Interleaved, after the `env` editors land.** Adding `env` controls to script steps, conditions and hooks multiplies the surfaces from which a UI author can write `${secret:NAME}` — the MCP env editor already inserts the reference for them. Shipping those editors without recommendation 3.1 means shipping four new ways to walk a user into a preflight hard failure.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| **2 — `{{name}}` throws when the workflow defines vars** | **Interleaved, immediately before the workflow `vars` editor.** Widened 2026-08-20: an out-of-band fix (`fix: add variable substitution in preCondition and script steps, update documentation for clarity`) extended `{{var}}` substitution to preCondition and script-step `script`/`env`, so the throw now also reaches those two — and preCondition's `script` field is already dashboard-editable today via `ScriptConditionEditor`, so this failure no longer needs the `vars` editor to be reachable; it's live now for anyone who defines a var (workflow `vars:` or a bare CLI `--var`). Step 8 must fix every field `VarSubstitutor` covers, not the original narrower list — see the corrected field list in `OVERZEALOUS_STEP_FAILURES_PLAN.md` item 2. The `vars` control is still what makes the failure reachable from plain prompt text with no scripting surface at all, so step 8 still has to land before step 9. If the `vars` editor is cut, cut this with it. |
+| **3 — ungranted `${secret:NAME}` in a process map**      | **Interleaved and implemented in step 7.** Process-map references are now authoritative grants, so the new `env` editors do not walk a dashboard author into the preflight failure. Recommendations 3.2 and 3.3 remain deliberately deferred in `OVERZEALOUS_STEP_FAILURES_PLAN.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **2 — `{{name}}` throws when the workflow defines vars** | **Interleaved and implemented in step 8.** Unresolved placeholders remain literal and produce advisories, with fenced-block masking. The workflow `vars` editor landed in step 9.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | 1 — `${secret:NAME}` in prompt text                      | Already fixed; kept there as precedent.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 4 — heuristic redactor rewrites authored text            | **Deferred.** Display-layer, needs a trace before a fix can be designed, and nothing in this plan makes it more reachable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Cross-cutting "documents every syntax" test              | **Deferred** with item 4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -459,12 +462,14 @@ before the control that makes them reachable.
 | 7   | **Done (2026-08-20):** Process-map secret references auto-grant (overzealous item 3)                                                         | Hard failure reachable from the new `env` editors                                                                                          |
 | 8   | **Done (2026-08-20):** Unresolved `{{var}}` becomes advisory + fenced-block masking (overzealous item 2, including preCondition/script-step) | Hard failure already reachable via preCondition/script-step today; also what the `vars` editor (step 9) would newly expose for prompt text |
 | 9   | **Done (2026-08-20):** Workflow-root `vars` editor                                                                                           | Last root-level parity gap                                                                                                                 |
-| 10  | Schema→UI control-id parity guard                                                                                                            | "Preventing the next one"                                                                                                                  |
+| 10  | **Done (2026-08-20):** Schema→UI control-id parity guard                                                                                      | "Preventing the next one"                                                                                                                  |
 
-After step 2, `KNOWN_LOSSY_PRESERVATION` and `KNOWN_UNACCEPTED` in
-`src/test/integration/schemaUiPropertyRoundTrip.integration.test.ts` are both
-empty and stay that way; they are kept in place, empty, so a regression names
-itself.
+`KNOWN_LOSSY_PRESERVATION` and `KNOWN_UNACCEPTED` in
+`src/test/integration/schemaUiPropertyRoundTrip.integration.test.ts` are empty
+and guarded as such, so a regression names itself. The same suite now owns the
+UI control registry and source scan described above. All audit-table "Missing"
+rows are delivered; the only remaining items are the explicitly deferred
+overzealous-failure recommendations listed above.
 
 ## Files likely changed
 

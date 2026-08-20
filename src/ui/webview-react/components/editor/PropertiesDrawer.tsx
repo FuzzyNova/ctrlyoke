@@ -1044,6 +1044,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               MCP Servers
             </p>
             <McpServersEditor
+              controlId="prop-mcp-servers"
               value={properties.mcpServers as McpServersValue}
               onChange={(v) => setProperty("mcpServers", v)}
               defaultLabel={defaultMcpServersLabel}

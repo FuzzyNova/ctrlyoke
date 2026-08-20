@@ -7,6 +7,7 @@ import {
 
 export interface KeyValueMapEditorProps {
   label: string;
+  id?: string;
   value: Record<string, string>;
   onChange: (value: Record<string, string>) => void;
   ariaLabel?: string;
@@ -84,6 +85,7 @@ function getSecretNames(
 
 export function KeyValueMapEditor({
   label,
+  id,
   value,
   onChange,
   ariaLabel = label,
@@ -135,6 +137,7 @@ export function KeyValueMapEditor({
     <div className="flex flex-col gap-0.5">
       <span className="text-xxs text-description-fg">{label}</span>
       <textarea
+        id={id}
         aria-label={ariaLabel}
         placeholder="KEY=value\nANOTHER_KEY=value"
         value={rawValue}
