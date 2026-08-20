@@ -1,6 +1,6 @@
 # Status Message Persistence Plan
 
-> **Status:** Not started. Spec audited against the code on 2026-08-20 —
+> **Status:** Phase 1 complete; phases 2–5 remain. Spec audited against the code on 2026-08-20 —
 > see "Corrections from the code audit" below; the audit changed phases 4, 5
 > and 6, so read it before implementing any phase. One instance of the bug this plan targets was
 > already fixed as a narrow patch (`WorkflowInstance.executeLoadedPromptFile`'s
@@ -316,7 +316,7 @@ caller-supplied argument in favour of its own tag
 
 | # | Step | Closes |
 | --- | --- | --- |
-| 1 | Add `StatusMessageReporter` + `WorkflowEventTarget`/`StatusMessageReportOptions` types, with full unit coverage (live-only when no history sink, both when active, independent live/persist dedupe keys, `resetDedupeState()`). No production call site changes yet. | New primitive exists and is proven correct in isolation. |
+| 1 | **Done.** Add `StatusMessageReporter` + `WorkflowEventTarget`/`StatusMessageReportOptions` types, with full unit coverage (live-only when no history sink, both when active, independent live/persist dedupe keys, `resetDedupeState()`). No production call site changes yet. | New primitive exists and is proven correct in isolation. |
 | 2 | `WorkflowInstance` constructs one `StatusMessageReporter`; migrate its own four direct call sites (compatibility diagnostics, worktree notice, missing-secret warning, execution-failure row) onto it; call `resetDedupeState()` where `reportedCompatibilityDiagnosticKeys`/`persistedCompatibilityDiagnosticKeys` are cleared today (`:1555-1556`); delete the two now-unused `Set` fields and the hand-rolled key-building code. | The original bug class, inside the file it was found in. |
 | 3 | `EndConditionHandler`: replace the `getDashboard` constructor param with the shared reporter; migrate its two call sites (`:277-281` end-condition-failed error, `:378-382` retry-in-progress notice). Update every test construction site (`EndConditionHandler.test.ts`, `WorkflowExecutor.test.ts`, `mixedModeExecution.integration.test.ts`, `interactiveScriptStep.test.ts` — ~19 call sites per the earlier audit) to pass a reporter (a no-op reporter for tests that don't care, matching today's `() => undefined`). | The two structurally-unpersisted sites found in the prior investigation. |
 | 4 | `PromptFileLoader`: **add** the reporter as a new constructor param (keep `getDashboard` — see correction 2) and migrate its one status call site. Separately: since this warning fires before any run/history exists, add a second phase mirroring `reportCompatibilityDiagnostics`'s "report again once EXECUTION_STARTED" pattern — expose the last missing-directories list via a `getLastMissingAssetDirectories()` getter (symmetric with the existing `getLastCompatibilityDiagnostics()`), and have `WorkflowInstance` re-invoke `report()` for it once `historyFilePath` is resolved, right alongside where it already re-reports compatibility diagnostics (`:1961-1968`). Without this second phase the warning is *only* ever live-only (same bug, different trigger: today it also disappears the moment a run starts and `EXECUTION_STARTED` wipes the live status feed, not only on navigate-away). | The genuinely harder case — a warning raised before a run exists at all — instead of leaving it as a documented exception. |
@@ -349,6 +349,16 @@ cleaner refactor.
    `WorkflowInstance.ts:1554`) — a continuation/append/resume must **not**
    reset dedupe, or a fact already reported for the still-running lineage
    would spuriously re-fire.
+
+### Phase 1 design decisions
+
+- `StatusMessageReporter` is always constructed and is never optional; absent
+  dashboard/history sinks are handled as internal no-ops.
+- Persistence dedupe keys are recorded only once an active history sink exists,
+  so a preflight report can persist on the first later call after a run starts.
+- `WorkflowExecutor` keeps its existing private conversion methods for phase-1
+  compatibility, but delegates their encoding to the reporter's exported
+  helpers so signed-index logic has one implementation.
 
 ## Testing
 

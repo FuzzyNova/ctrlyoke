@@ -101,6 +101,10 @@ import {
   createConditionEvaluationSummary,
   ScriptExecutionReporter,
 } from "./orchestration/ScriptExecutionReporter";
+import {
+  getSignedStepIndex as getSignedWorkflowStepIndex,
+  toOutputExecutionTarget as toWorkflowOutputExecutionTarget,
+} from "./orchestration/StatusMessageReporter";
 
 export interface WorkflowExecutionContext {
   /** Immutable state/execution roots for this workflow run. */
@@ -1425,9 +1429,7 @@ export class WorkflowExecutor {
   private toOutputExecutionTarget(
     target: ExecutionTarget
   ): OutputExecutionTarget {
-    return target.kind === FINAL_STEP_PHASES.QUEUE
-      ? { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: target.stepIndex }
-      : { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: target.loopIndex };
+    return toWorkflowOutputExecutionTarget(target);
   }
 
   /**
@@ -1437,9 +1439,7 @@ export class WorkflowExecutor {
    * and callers can detect them with `< 0`.
    */
   private getSignedStepIndex(target: ExecutionTarget): number {
-    return target.kind === FINAL_STEP_PHASES.QUEUE
-      ? target.stepIndex
-      : -(target.loopIndex + 1);
+    return getSignedWorkflowStepIndex(target);
   }
 
   private getRunIndexForTarget(
