@@ -1859,6 +1859,75 @@ suite("WorkflowInstance append-and-continue", () => {
     ]);
   });
 
+  test("re-reports missing-asset warnings once history starts", () => {
+    const statusMessages: Array<{ message: string; severity: string }> = [];
+    const persistedStatusMessages: Array<{
+      filePath: string;
+      message: string;
+      severity: string;
+    }> = [];
+    const dashboardSink: any = {
+      updateStatusMessage: (
+        _stepIndex: number,
+        message: string,
+        severity: string
+      ) => {
+        statusMessages.push({ message, severity });
+      },
+    };
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+    const history = (instance as any).outputHistoryManager;
+    history.appendStatusMessage = async (
+      filePath: string,
+      _target: unknown,
+      statusMessage: { message: string; severity: string }
+    ) => {
+      persistedStatusMessages.push({
+        filePath,
+        message: statusMessage.message,
+        severity: statusMessage.severity,
+      });
+    };
+    const loader = (instance as any).promptFileLoader;
+    loader.lastMissingAssetDirectories = ["portable.assets"];
+
+    (instance as any).reportMissingAssetWarning(
+      loader.getLastMissingAssetDirectories()
+    );
+    (instance as any).statusMessageReporter.resetDedupeState([
+      JSON.stringify(loader.getLastMissingAssetDirectories()),
+    ]);
+    (instance as any).activeHistoryFilePath = "history.json";
+    (instance as any).reportMissingAssetWarning(
+      loader.getLastMissingAssetDirectories()
+    );
+
+    assert.deepStrictEqual(statusMessages, [
+      {
+        message:
+          "Workflow references missing exported assets: portable.assets. Restore the sibling *.assets/ directory or use Save As to create a portable copy.",
+        severity: "warning",
+      },
+    ]);
+    assert.deepStrictEqual(persistedStatusMessages, [
+      {
+        filePath: "history.json",
+        message:
+          "Workflow references missing exported assets: portable.assets. Restore the sibling *.assets/ directory or use Save As to create a portable copy.",
+        severity: "warning",
+      },
+    ]);
+  });
+
   test("reports and persists missing-secret warnings", async () => {
     const missingSecretName = `CTRLYOKE_MISSING_${Date.now()}`;
     const statusMessages: Array<{ message: string; severity: string }> = [];

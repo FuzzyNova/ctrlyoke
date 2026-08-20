@@ -9,11 +9,13 @@ import { normalizeAgentSelection } from "../WorkflowStepSanitizer";
 import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import { USER_FEEDBACK_SEVERITY } from "../../types/DashboardConstants";
 import {
+  FINAL_STEP_PHASES,
   WORKFLOW_PROPERTY_KEYS,
   STATUS_MESSAGE_SEVERITY,
 } from "../../types/DashboardConstants";
 import { notifyUserFeedback, type UserFeedbackSink } from "../UserFeedbackSink";
 import { findMissingWorkflowAssetDirectories } from "../../utils/WorkflowAssetWarnings";
+import { StatusMessageReporter } from "./StatusMessageReporter";
 
 /**
  * PromptFileLoader
@@ -28,6 +30,7 @@ import { findMissingWorkflowAssetDirectories } from "../../utils/WorkflowAssetWa
  */
 export class PromptFileLoader {
   private lastCompatibilityDiagnostics: CompatibilityDiagnostic[] = [];
+  private lastMissingAssetDirectories: string[] = [];
 
   constructor(
     private promptFileParser: PromptFileParser,
@@ -39,11 +42,17 @@ export class PromptFileLoader {
     private onCompatibilityDiagnostics?: (
       diagnostics: CompatibilityDiagnostic[]
     ) => void,
-    private readonly userFeedbackSink?: UserFeedbackSink
+    private readonly userFeedbackSink?: UserFeedbackSink,
+    private readonly statusMessageReporter: StatusMessageReporter =
+      new StatusMessageReporter(() => undefined, () => undefined)
   ) {}
 
   getLastCompatibilityDiagnostics(): readonly CompatibilityDiagnostic[] {
     return this.lastCompatibilityDiagnostics;
+  }
+
+  getLastMissingAssetDirectories(): readonly string[] {
+    return this.lastMissingAssetDirectories;
   }
 
   /**
@@ -393,6 +402,7 @@ export class PromptFileLoader {
       workspaceFolderPath,
       sourceDefinitionPath
     );
+    this.lastMissingAssetDirectories = missingDirectories;
     if (missingDirectories.length === 0) {
       return;
     }
@@ -400,16 +410,17 @@ export class PromptFileLoader {
     const message = `Workflow references missing exported assets: ${missingDirectories.join(
       ", "
     )}. Restore the sibling *.assets/ directory or use Save As to create a portable copy.`;
-    const dashboard = this.getDashboard();
-    if (dashboard) {
-      dashboard.updateStatusMessage(
-        0,
-        message,
-        STATUS_MESSAGE_SEVERITY.WARNING
-      );
-    } else {
-      Log.warn(`ctrlyoke: ${message}`);
-    }
+    const dedupeKey = JSON.stringify(missingDirectories);
+    this.statusMessageReporter.report(
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      message,
+      STATUS_MESSAGE_SEVERITY.WARNING,
+      {
+        liveDedupeKey: dedupeKey,
+        persistDedupeKey: dedupeKey,
+      }
+    );
+    Log.warn(`ctrlyoke: ${message}`);
   }
 
   private async validateAndReportCompatibility(
@@ -417,6 +428,7 @@ export class PromptFileLoader {
   ): Promise<void> {
     if (!this.validateCompatibility) {
       this.lastCompatibilityDiagnostics = [];
+      this.lastMissingAssetDirectories = [];
       return;
     }
     this.lastCompatibilityDiagnostics =

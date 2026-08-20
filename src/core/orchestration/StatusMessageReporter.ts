@@ -134,9 +134,12 @@ export class StatusMessageReporter {
     }
   }
 
-  resetDedupeState(): void {
+  resetDedupeState(preserveLiveDedupeKeys: readonly string[] = []): void {
     this.liveDedupeKeys.clear();
     this.persistDedupeKeys.clear();
+    for (const key of preserveLiveDedupeKeys) {
+      this.liveDedupeKeys.add(key);
+    }
   }
 
   private shouldFire(

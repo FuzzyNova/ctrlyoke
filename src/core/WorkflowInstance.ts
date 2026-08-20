@@ -526,7 +526,8 @@ export class WorkflowInstance {
       () => this.dashboardSink,
       (workflow) => this.analyzeWorkflowCompatibility(workflow),
       (diagnostics) => this.reportCompatibilityDiagnostics(diagnostics),
-      this.userFeedbackSink
+      this.userFeedbackSink,
+      this.statusMessageReporter
     );
     this.promptFileWatcher = new PromptFileWatcher(
       this.promptQueue,
@@ -666,6 +667,35 @@ export class WorkflowInstance {
         }
       );
     }
+
+  }
+
+  private reportMissingAssetWarning(
+    missingDirectories: readonly string[]
+  ): void {
+    if (missingDirectories.length === 0) {
+      return;
+    }
+
+    const message = `Workflow references missing exported assets: ${missingDirectories.join(
+      ", "
+    )}. Restore the sibling *.assets/ directory or use Save As to create a portable copy.`;
+    const dedupeKey = this.getMissingAssetDedupeKey(missingDirectories);
+    this.statusMessageReporter.report(
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      message,
+      STATUS_MESSAGE_SEVERITY.WARNING,
+      {
+        liveDedupeKey: dedupeKey,
+        persistDedupeKey: dedupeKey,
+      }
+    );
+  }
+
+  private getMissingAssetDedupeKey(
+    missingDirectories: readonly string[]
+  ): string {
+    return JSON.stringify(missingDirectories);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1522,7 +1552,15 @@ export class WorkflowInstance {
     // applicable warnings are reported at least once, even if the previous
     // run already reported the identical fact.
     if (!continueFromCurrent && !isAppendContinuation && !isIdleContinuation) {
-      this.statusMessageReporter.resetDedupeState();
+      const missingAssetDirectories =
+        this.promptFileLoader.getLastMissingAssetDirectories();
+      const missingAssetDedupeKey =
+        missingAssetDirectories.length > 0
+          ? this.getMissingAssetDedupeKey(missingAssetDirectories)
+          : undefined;
+      this.statusMessageReporter.resetDedupeState(
+        missingAssetDedupeKey ? [missingAssetDedupeKey] : []
+      );
     }
 
     try {
@@ -1935,6 +1973,9 @@ export class WorkflowInstance {
       // later — so the warning silently never appears live, only resurfacing
       // once the run ends and history is reloaded from disk.
       this.reportCompatibilityDiagnostics(compatibilityDiagnostics);
+      this.reportMissingAssetWarning(
+        this.promptFileLoader.getLastMissingAssetDirectories()
+      );
 
       if (missingSecretNames.length > 0) {
         const missingSecretNotice = `Context resolution warning: declared secrets are not available: ${missingSecretNames.join(

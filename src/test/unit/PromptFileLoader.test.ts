@@ -23,6 +23,11 @@ import { analyzeWorkflowBundle } from "../../utils/WorkflowBundleAnalyzer";
 import { writeWorkflowBundle } from "../../utils/WorkflowBundleWriter";
 import { parseAllFileReferences } from "../../utils/FileReferenceParser";
 import { resolveReferencePath } from "../../platform/WorkspaceRootResolver";
+import { StatusMessageReporter } from "../../core/orchestration/StatusMessageReporter";
+
+function createNoopStatusReporter(): StatusMessageReporter {
+  return new StatusMessageReporter(() => undefined, () => undefined);
+}
 
 suite("PromptFileLoader Tests", () => {
   const tempDirs: string[] = [];
@@ -46,7 +51,8 @@ suite("PromptFileLoader Tests", () => {
         undefined,
         undefined,
         undefined,
-        { notify: (message) => feedback.push(message) }
+        { notify: (message) => feedback.push(message) },
+        createNoopStatusReporter()
       );
 
       const result = await loader.loadPromptFile("missing-workflow.yaml");
@@ -416,7 +422,11 @@ suite("PromptFileLoader Tests", () => {
                 finalStep,
               });
             },
-          }) as any
+          }) as any,
+        undefined,
+        undefined,
+        undefined,
+        createNoopStatusReporter()
       );
 
       const workingFilePath = await loader.loadPromptFile(
@@ -616,18 +626,23 @@ suite("PromptFileLoader Tests", () => {
         message: string;
         severity: string;
       }> = [];
+      const dashboard = () =>
+        ({
+          updateFileSelected: async () => {},
+          updateStatusMessage: (
+            stepIndex: number,
+            message: string,
+            severity: string
+          ) => statusMessages.push({ stepIndex, message, severity }),
+        }) as any;
       const loader = new PromptFileLoader(
         new PromptFileParser(),
         new PromptQueue(),
-        () =>
-          ({
-            updateFileSelected: async () => {},
-            updateStatusMessage: (
-              stepIndex: number,
-              message: string,
-              severity: string
-            ) => statusMessages.push({ stepIndex, message, severity }),
-          }) as any
+        dashboard,
+        undefined,
+        undefined,
+        undefined,
+        new StatusMessageReporter(dashboard, () => undefined)
       );
 
       await loader.loadPromptFile(workflowPath, workspaceRoot);
@@ -652,18 +667,23 @@ suite("PromptFileLoader Tests", () => {
         message: string;
         severity: string;
       }> = [];
+      const dashboard = () =>
+        ({
+          updateFileSelected: async () => {},
+          updateStatusMessage: (
+            stepIndex: number,
+            message: string,
+            severity: string
+          ) => statusMessages.push({ stepIndex, message, severity }),
+        }) as any;
       const loader = new PromptFileLoader(
         new PromptFileParser(),
         new PromptQueue(),
-        () =>
-          ({
-            updateFileSelected: async () => {},
-            updateStatusMessage: (
-              stepIndex: number,
-              message: string,
-              severity: string
-            ) => statusMessages.push({ stepIndex, message, severity }),
-          }) as any
+        dashboard,
+        undefined,
+        undefined,
+        undefined,
+        new StatusMessageReporter(dashboard, () => undefined)
       );
 
       await loader.loadFromMemory(
@@ -715,18 +735,23 @@ suite("PromptFileLoader Tests", () => {
         message: string;
         severity: string;
       }> = [];
+      const dashboard = () =>
+        ({
+          updateFileSelected: async () => {},
+          updateStatusMessage: (
+            stepIndex: number,
+            message: string,
+            severity: string
+          ) => statusMessages.push({ stepIndex, message, severity }),
+        }) as any;
       const loader = new PromptFileLoader(
         new PromptFileParser(),
         new PromptQueue(),
-        () =>
-          ({
-            updateFileSelected: async () => {},
-            updateStatusMessage: (
-              stepIndex: number,
-              message: string,
-              severity: string
-            ) => statusMessages.push({ stepIndex, message, severity }),
-          }) as any
+        dashboard,
+        undefined,
+        undefined,
+        undefined,
+        new StatusMessageReporter(dashboard, () => undefined)
       );
 
       await loader.loadPromptFile(workflowPath, workspaceRoot);
@@ -794,15 +819,20 @@ suite("PromptFileLoader Tests", () => {
         workspaceRoot: string
       ): Promise<void> => {
         const statusMessages: string[] = [];
+        const dashboard = () =>
+          ({
+            updateFileSelected: async () => {},
+            updateStatusMessage: (_stepIndex: number, message: string) =>
+              statusMessages.push(message),
+          }) as any;
         const loader = new PromptFileLoader(
           new PromptFileParser(),
           new PromptQueue(),
-          () =>
-            ({
-              updateFileSelected: async () => {},
-              updateStatusMessage: (_stepIndex: number, message: string) =>
-                statusMessages.push(message),
-            }) as any
+          dashboard,
+          undefined,
+          undefined,
+          undefined,
+          new StatusMessageReporter(dashboard, () => undefined)
         );
 
         await loader.loadPromptFile(workflowPath, workspaceRoot);

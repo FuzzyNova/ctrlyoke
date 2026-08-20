@@ -225,6 +225,31 @@ suite("StatusMessageReporter", () => {
     assert.strictEqual(history.statusMessages.length, 2);
   });
 
+  test("can preserve a preflight live key while resetting persistence", () => {
+    const dashboard = new DashboardSinkDouble();
+    const history = new HistoryManagerDouble();
+    let historyActive = false;
+    const reporter = new StatusMessageReporter(
+      () => dashboard,
+      () =>
+        historyActive
+          ? { filePath: "run/events.jsonl", manager: history }
+          : undefined
+    );
+    const options = {
+      liveDedupeKey: "preflight-notice",
+      persistDedupeKey: "preflight-notice",
+    };
+
+    reporter.report(queueTarget, "preflight notice", "warning", options);
+    reporter.resetDedupeState(["preflight-notice"]);
+    historyActive = true;
+    reporter.report(queueTarget, "preflight notice", "warning", options);
+
+    assert.strictEqual(dashboard.statusMessages.length, 1);
+    assert.strictEqual(history.statusMessages.length, 1);
+  });
+
   test("encodes finalStep targets as negative signed indices", () => {
     const dashboard = new DashboardSinkDouble();
     const history = new HistoryManagerDouble();
