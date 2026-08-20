@@ -56,3 +56,7 @@ fix tab navigation and keyboard shortcuts
 fix commit message generation
 
 we are leaving statusline configuration in the global claude settings, it should probably be a setting like antigravity has where users can disable if wanted.
+
+auto complete dropdown for single line codemirror doesn't work on mobile (maybe keyboard hiding it)
+
+we should add codemirror auto complete editors for allowed tools lists, additional args, and maybe convert the variable field to one.
