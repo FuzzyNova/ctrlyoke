@@ -10,6 +10,7 @@ Core CLI-harness runtime orchestration shared by every harness.
 - `CliIntegration` is the workflow-facing entry point, but most behavior now lives in composed services created by `createServices()`. Prefer changing the smallest service (`CliPromptPreparer`, `CliExecutionRunner`, `CliTransportCoordinator`, etc.) instead of adding more branches/state to `CliIntegration`.
 - Keep provider-specific behavior behind `ICliProvider`. If a change only applies to one harness, add or adjust a provider method; do not branch on harness ID inside `CliIntegration`.
 - `buildCliArgs()` returns provider base args only. `CliIntegration` appends permission args, interactive notification-hook args, and headless user-hook args later in the run; providers should not duplicate that wiring inside `buildCliArgs()`.
+- `execution.strictContextResolution` has two symmetric per-step chokepoints in two files: `CliIntegration.initializeExecutionSession` gates before `session.preparePrompt`, while `WorkflowExecutor` gates before `getIntegrationForPrompt`. Both must use the shared resolution predicate and formatter. The mode switches on diagnostic code—not stored severity or the presence of any diagnostic—because `prepared.diagnostics` is mixed with advisory codes that must not block. Secrets remain a separate whole-workflow pre-step-1 `preflightWorkflowSecrets` check, and `secret check` never reads this setting.
 </architecture>
 
 <interactiveExecution>

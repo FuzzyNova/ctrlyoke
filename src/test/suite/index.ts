@@ -32,6 +32,10 @@ export function run(): Promise<void> {
   const mocha = new Mocha({
     ui: "tdd",
     color: true,
+    // Extension-host tests routinely spawn Git and installed harness CLIs;
+    // two seconds is too short for a cold Windows subprocess even when the
+    // test itself is healthy.
+    timeout: 10_000,
     // Allow focused runs via `MOCHA_GREP="<pattern>"` for fast local iteration.
     ...(process.env.MOCHA_GREP ? { grep: process.env.MOCHA_GREP } : {}),
   });

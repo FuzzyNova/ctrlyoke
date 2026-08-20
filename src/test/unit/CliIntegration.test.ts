@@ -2,6 +2,8 @@ import * as assert from "assert";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { WorkflowInstance } from "../../core/WorkflowInstance";
+import { IntegrationFactory } from "../../core/IntegrationFactory";
 import { suite, test, setup, teardown } from "mocha";
 import type * as vscode from "vscode";
 import { CliIntegration } from "../../core/harness/CliIntegration";
@@ -22,7 +24,10 @@ import type {
   ILogParser,
 } from "../../core/harness/shared/interfaces/ILogParser";
 import { CliAdapter } from "../../platform/CliAdapter";
-import { PlatformAdapter } from "../../platform/PlatformAdapter";
+import {
+  createNoWorktreeExecutionWorkspace,
+  PlatformAdapter,
+} from "../../platform/PlatformAdapter";
 import type { VsCodeAdapter } from "../../platform/VsCodeAdapter";
 import type { McpServerConfig, PromptStep } from "../../types/CtrlYokeTypes";
 import { configService } from "../../config/CtrlYokeConfigService";
@@ -32,20 +37,23 @@ import type { CompatibilityDiagnostic } from "../../types/CompatibilityTypes";
 import type { ExecutionWorkspace } from "../../types/WorkflowContextTypes";
 import type { ManagedMcpServer } from "../../types/WebviewMessageTypes";
 import { McpServerNormalizer } from "../../utils/McpServerNormalizer";
+import { MockHarnessIntegration } from "../helpers/mockHarness";
 
 class MockVsCodePlatform
   implements PlatformAdapter, Pick<VsCodeAdapter, "getExtensionContext">
 {
+  constructor(private readonly workspaceRoot = process.cwd()) {}
+
   getWorkspaceRoot(): string {
-    return process.cwd();
+    return this.workspaceRoot;
   }
 
   getWorkspaceRoots(): string[] {
-    return [process.cwd()];
+    return [this.workspaceRoot];
   }
 
   getNamedWorkspaceRoots() {
-    return [{ name: "root", fsPath: process.cwd() }];
+    return [{ name: "root", fsPath: this.workspaceRoot }];
   }
 
   getExtensionPath(): string {
@@ -705,6 +713,87 @@ suite("CliIntegration", () => {
       } finally {
         integration.dispose();
       }
+    }
+  });
+
+  test("sends a failed git reference to the dashboard as a warning", async () => {
+    const workspaceRoot = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-git-warning-pipeline-")
+    );
+    const missingHash = "0123456789abcdef0123456789abcdef01234567";
+    const platform = new MockVsCodePlatform(workspaceRoot);
+    const statusMessages: Array<{
+      stepIndex: number;
+      message: string;
+      severity: string | undefined;
+    }> = [];
+    const dashboardSink = {
+      updateStatusMessage: (
+        stepIndex: number,
+        message: string,
+        severity?: string
+      ) => {
+        statusMessages.push({ stepIndex, message, severity });
+      },
+    } as any;
+    const workflowInstance = new WorkflowInstance(
+      platform,
+      dashboardSink,
+      new IntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      workspaceRoot,
+      false
+    );
+    const integration = new CliIntegration(
+      createProvider(),
+      platform,
+      false,
+      undefined,
+      undefined,
+      createNoWorktreeExecutionWorkspace(platform, workspaceRoot)
+    );
+
+    configService.setCliOverlay({
+      execution: {
+        strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+      },
+    });
+
+    try {
+      const prompt: PromptStep = { prompt: `Review ~${missingHash}` };
+      const session = (integration as any).createExecutionSession(
+        prompt,
+        {
+          promptIndex: 0,
+          allPrompts: [prompt],
+          reportCompatibilityDiagnostics: (
+            diagnostics: readonly CompatibilityDiagnostic[],
+            timestampMs?: number
+          ) =>
+            (workflowInstance as any).reportCompatibilityDiagnostics(
+              diagnostics,
+              timestampMs
+            ),
+        },
+        createResolvedProperties({ executionMode: EXECUTION_MODES.HEADLESS }),
+        undefined
+      );
+      session.preparePrompt = () => {};
+
+      await (integration as any).initializeExecutionSession(session, false);
+
+      assert.strictEqual(statusMessages.length, 1);
+      assert.strictEqual(statusMessages[0].stepIndex, 0);
+      assert.strictEqual(statusMessages[0].severity, "warning");
+      assert.match(statusMessages[0].message, new RegExp(missingHash));
+      assert.match(statusMessages[0].message, /could not be attached/u);
+    } finally {
+      integration.dispose();
+      await workflowInstance.shutdown();
+      configService.setCliOverlay({});
+      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
     }
   });
 

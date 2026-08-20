@@ -1,7 +1,8 @@
 # Unified Context-Resolution Failure Mode Plan
 
-> **Status:** Phase 1 complete — design settled, plumbing mapped and re-verified
-> against the code (2026-08-19), open questions resolved.
+> **Status:** Implemented — Phases 1–7 complete and re-verified against the
+> code (2026-08-19). Candidate for moving to `dev/implemented/`; leave that
+> move to the user.
 > **Priority:** P2 — real gap (silent git-ref failures), but not urgent.
 > **Origin:** Grew out of the `!DOCTYPE` backtick-masking bug fix. See the
 > session that produced this plan for the full discussion; short version below.
@@ -398,18 +399,25 @@ step failure does today (not a warning row; an actual failure/error state).
       by retry prompts so retries cannot bypass strict mode. Tests force an
       unknown `/mcp:` and confirm the same fail/warn split, reporting, and
       no-integration lookup in fail mode.
-- [ ] **Phase 6 — Verify the warning-row pipeline.** Assert by test that a
+- [x] **Phase 6 — Verify the warning-row pipeline.** Assert by test that a
       failed `~<hash>` ref reaches `reportCompatibilityDiagnostics` →
       `updateStatusMessage` with WARNING severity in `"warn"` mode, which is
       what the `StatusMessage` row renders from. Per the section above this
       should require no new UI code; if it does, an assumption in this plan was
       wrong and needs revisiting before continuing. Visual confirmation in a
       live VS Code window is left to the user — do not claim it was done.
-- [ ] **Phase 7 — Docs.** Update `.github/instructions/utils.instructions.md`
-      or `core.instructions.md` (whichever ends up owning the new gate logic)
-      with a short note on the two-chokepoint design and the "mode ignores
-      stored severity" decision, since that's exactly the kind of non-obvious
-      cross-file coupling the knowledge-capture rules call out.
+- [x] **Phase 7 — Docs.** Updated
+      `.github/instructions/harness-integrations.instructions.md` with the
+      two-chokepoint design, code-based predicate, and separate secret-check
+      behavior.
+
+**Implementation note:** Phase 6 matched the design: the end-to-end test
+confirmed that no new UI or diagnostic plumbing was needed. No feature design
+deviations were found. The test verifies the extension-host warning dispatch;
+visual confirmation in a live VS Code window remains a user task. During the
+required full-suite gate, the extension-test runner's default timeout was
+raised from 2 seconds to 10 seconds because cold Windows Git/CLI subprocesses
+legitimately exceeded the old limit; this is test infrastructure only.
 
 ## Files Likely Changed
 
