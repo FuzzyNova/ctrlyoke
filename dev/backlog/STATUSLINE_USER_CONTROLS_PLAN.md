@@ -168,10 +168,17 @@ which the file physically cannot do:
   `worktrees` and `storage` — nothing stops a hand-edited `.vscode/settings.json`, or the
   standalone `cli.ts`/`mcp-server.ts` hosts (which have no notion of VS Code's `machine` scope
   at all), from setting `permissions.antigravityStatusLineTracking` or
-  `usageTracking.enabled` at workspace scope today. Add `permissions.statusLineTracking` to
-  `WORKSPACE_FORBIDDEN_SETTING_ROOTS` for the new settings, and fold in the same fix for the two
-  existing machine-scoped settings this plan already touches rather than leaving the gap next to
-  the code that just documented it.
+  `usageTracking.enabled` at workspace scope today. Add `permissions.statusLineTracking` and
+  `usageTracking.enabled` to the workspace-forbidden path policy for the settings this plan
+  touches. That policy must apply on both sides of `CtrlYokeConfigService`: reject writes through
+  `set()`, **and strip those paths from `getWorkspaceSettings()` before `getAll()`, `resolve()`,
+  `getScoped()`, or `getLeafSources()` can observe them**. A write-only guard is insufficient:
+  hand-edited `.vscode/settings.json` and the standalone file-backed hosts bypass `set()` and
+  would otherwise still override the machine value on reads. Generalize the existing
+  `getWorkspaceSettings()` filtering (which currently removes `storage` only) rather than adding
+  another one-off merge exception. The relocated Antigravity setting is covered by the new
+  `permissions.statusLineTracking` subtree, so no compatibility filter for its deleted old path
+  is needed.
 
 ## Settings Shape (single-sourced, not six flat keys)
 
@@ -291,8 +298,8 @@ against Claude's own statusline refresh cadence.
 
 Adding a Claude branded line (Decision 7) and a shared `useCtrlyokeStyle` switch (Decision 6)
 to both scripts is exactly the kind of change that will drift further if done twice. Extract a
-shared module (e.g. `src/scripts/shared/statuslineWrapper.js`, plain Node/CommonJS to match how
-these scripts already ship standalone under `out/scripts/`) providing:
+shared flat sibling module (`src/scripts/ctrlyoke-statusline-wrapper.js`, plain Node/CommonJS to
+match how these scripts already ship standalone under `out/scripts/`) providing:
 
 - `writeSnapshotAtomic(directory, token, payload, writtenAt)` — the write-temp-then-rename
   logic, currently near-identical in both files.
@@ -303,9 +310,12 @@ these scripts already ship standalone under `out/scripts/`) providing:
   script so Claude's version can reuse the same context/quota-percentage-bar formatting instead
   of hand-rolling a second one.
 
-Verify early (Phase 1) that `out/scripts/` packaging actually carries a shared sibling file
-along with the two entry scripts — these run as detached Node processes outside the extension's
-module graph, so this is a build-config check, not an assumption to carry into later phases.
+Keep it flat unless the copier is deliberately rewritten: `esbuild.js`'s current `copy-scripts`
+plugin enumerates only the immediate children of `src/scripts/` and calls `copyFileSync` on each,
+so a `src/scripts/shared/` directory would fail the build rather than be copied recursively.
+Verify early (Phase 1) that `out/scripts/ctrlyoke-statusline-wrapper.js` is carried alongside the
+two entry scripts — these run as detached Node processes outside the extension's module graph,
+so this is a build-config check, not an assumption to carry into later phases.
 
 ## UI Placement
 
@@ -470,8 +480,9 @@ Mirror `ClaudeUsageProvider.parseClaudeRateLimitWindows` (`src/core/harness/shar
 
 1. **Settings & schema**: nested `statusLineTracking.{claude,antigravity}` shape, defaults,
    `settings-schema.json`, `ConfigurationUtils.getStatusLineTrackingSettings(provider)`,
-   `SETTING_PATHS` entries, relocate `antigravityStatusLineTracking`. Verify `out/scripts/`
-   packaging can carry a shared wrapper module.
+   `SETTING_PATHS` entries, relocate `antigravityStatusLineTracking`, and enforce machine-only
+   scope on effective reads as well as writes. Verify the flat shared wrapper sibling is copied
+   into `out/scripts/`.
 2. **Provider install/uninstall rewrite**: replace the `statusLine`-key value-lease
    register/unregister calls in both providers with the idempotent install/uninstall pair;
    remove the now-dead `pruneOrphanedStatusLine` sweep and owner-state file for this key only,
