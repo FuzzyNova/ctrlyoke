@@ -5,13 +5,12 @@ import {
   HARNESS_USAGE_CONFIDENCE,
   HARNESS_USAGE_FRESHNESS_MS,
   HARNESS_USAGE_UNITS,
-  HARNESS_USAGE_WINDOW_KINDS,
+  formatUsageWindowLabel,
+  usageWindowKind,
 } from "../../../types/DashboardConstants";
 import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 import type { HarnessUsageWindow } from "../../../types/UsageTypes";
 import { normalizeUsageTimestamp } from "../shared/usage/UsageTimestampUtils";
-
-const WEEK_MINUTES = 7 * 24 * 60;
 
 interface CodexRateLimitBucket {
   limitId?: unknown;
@@ -39,29 +38,6 @@ function asFiniteNumber(value: unknown): number | undefined {
 
 function asNonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-/** Derive the display kind from the provider's duration, not its bucket name. */
-export function codexWindowKind(windowMinutes: number) {
-  return windowMinutes >= WEEK_MINUTES
-    ? HARNESS_USAGE_WINDOW_KINDS.WEEKLY
-    : HARNESS_USAGE_WINDOW_KINDS.ROLLING;
-}
-
-export function codexWindowLabel(windowMinutes: number): string {
-  if (windowMinutes % WEEK_MINUTES === 0 && windowMinutes >= WEEK_MINUTES) {
-    const weeks = windowMinutes / WEEK_MINUTES;
-    return weeks === 1 ? "week" : `${weeks} weeks`;
-  }
-  if (windowMinutes % (24 * 60) === 0) {
-    const days = windowMinutes / (24 * 60);
-    return days === 1 ? "day" : `${days}d`;
-  }
-  if (windowMinutes % 60 === 0) {
-    const hours = windowMinutes / 60;
-    return `${hours}h`;
-  }
-  return `${windowMinutes}m`;
 }
 
 function normalizeBucketWindow(
@@ -92,11 +68,11 @@ function normalizeBucketWindow(
   const resetAt = normalizeUsageTimestamp(
     rawWindow.resetsAt ?? rawWindow.resets_at
   );
-  const label = codexWindowLabel(windowMinutes);
+  const label = formatUsageWindowLabel(windowMinutes);
   const id = `codex:${bucketId}:${period}`;
   return {
     id,
-    kind: codexWindowKind(windowMinutes),
+    kind: usageWindowKind(windowMinutes),
     label: bucketName ? `${bucketName} ${label}` : label,
     used: usedPercent,
     limit: 100,

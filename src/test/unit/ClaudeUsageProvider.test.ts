@@ -13,6 +13,7 @@ import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMc
 import { configService } from "../../config/CtrlYokeConfigService";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
+import { HARNESS_USAGE_WINDOW_KINDS } from "../../types/DashboardConstants";
 
 function backend(data: PartialCtrlYokeSettings): ConfigBackend {
   return { getAll: () => data, set: async () => {} };
@@ -59,6 +60,20 @@ suite("ClaudeUsageProvider", () => {
       JSON.stringify(windows).includes("must-not-be-retained"),
       false
     );
+  });
+
+  test("derives window label and kind from duration, matching Codex's shared formatter", () => {
+    const windows = parseClaudeRateLimitWindows({
+      rate_limits: {
+        five_hour: { used_percentage: 10 },
+        seven_day: { used_percentage: 20 },
+      },
+    });
+
+    assert.strictEqual(windows[0].label, "5h");
+    assert.strictEqual(windows[0].kind, HARNESS_USAGE_WINDOW_KINDS.ROLLING);
+    assert.strictEqual(windows[1].label, "week");
+    assert.strictEqual(windows[1].kind, HARNESS_USAGE_WINDOW_KINDS.WEEKLY);
   });
 
   test("treats absent, partial, and drifted rate_limits as normal", () => {

@@ -202,6 +202,41 @@ suite("Copilot usage normalization", () => {
     assert.strictEqual(quota?.windows[0].remaining, 75);
   });
 
+  test("drops a resetDate that is not after the fetch time but keeps the bucket", () => {
+    const quota = normalizeCopilotAccountQuota(
+      quotaSnapshots({
+        premium_interactions: {
+          entitlementRequests: 7_000,
+          usedRequests: 4_144,
+          remainingPercentage: 40.8,
+          resetDate: new Date(FETCHED_AT - 1_000).toISOString(),
+        },
+      }),
+      FETCHED_AT
+    );
+
+    const window = quota?.windows[0];
+    assert.strictEqual(window?.used, 4_144);
+    assert.strictEqual(window?.limit, 7_000);
+    assert.strictEqual(window?.resetAt, undefined);
+  });
+
+  test("drops a resetDate equal to the fetch time but keeps the bucket", () => {
+    const quota = normalizeCopilotAccountQuota(
+      quotaSnapshots({
+        premium_interactions: {
+          entitlementRequests: 7_000,
+          usedRequests: 4_144,
+          remainingPercentage: 40.8,
+          resetDate: new Date(FETCHED_AT).toISOString(),
+        },
+      }),
+      FETCHED_AT
+    );
+
+    assert.strictEqual(quota?.windows[0].resetAt, undefined);
+  });
+
   test("rejects malformed buckets without discarding valid buckets", () => {
     const quota = normalizeCopilotAccountQuota(
       quotaSnapshots({

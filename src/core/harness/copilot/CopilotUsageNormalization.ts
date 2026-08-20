@@ -142,7 +142,8 @@ function canDeriveRemaining(
 
 function normalizeBucketWindow(
   bucketKey: string,
-  rawBucket: unknown
+  rawBucket: unknown,
+  fetchedAt: number
 ): HarnessUsageWindow | undefined {
   if (!isRecord(rawBucket)) return undefined;
 
@@ -226,17 +227,26 @@ function normalizeBucketWindow(
     overageAllowed.value ?? usageAllowed.value ?? usageAllowedAlias.value;
 
   const rawResetDate = readField(bucket, "resetDate", "reset_date");
-  const resetAt =
+  const parsedResetAt =
     rawResetDate === undefined || rawResetDate === null
       ? undefined
       : normalizeUsageTimestamp(rawResetDate);
   if (
     rawResetDate !== undefined &&
     rawResetDate !== null &&
-    resetAt === undefined
+    parsedResetAt === undefined
   ) {
     return undefined;
   }
+  // Copilot's account.getQuota RPC has been observed returning `resetDate`
+  // at or before the fetch time even for a partially-used monthly bucket
+  // that plainly has not just reset. A genuine reset date is always in the
+  // future, so drop implausible values instead of showing a "resets now"
+  // time — but keep the rest of the bucket's data, since it's still valid.
+  const resetAt =
+    parsedResetAt !== undefined && parsedResetAt > fetchedAt
+      ? parsedResetAt
+      : undefined;
 
   const label = BUCKET_LABELS[bucketKey] ?? humanizeBucketKey(bucketKey);
   if (label === undefined) return undefined;
@@ -301,7 +311,8 @@ export function normalizeCopilotAccountQuota(
   for (const bucketKey of orderedBucketKeys(result.quotaSnapshots)) {
     const window = normalizeBucketWindow(
       bucketKey,
-      result.quotaSnapshots[bucketKey]
+      result.quotaSnapshots[bucketKey],
+      normalizedFetchedAt
     );
     if (window) windows.push(window);
   }

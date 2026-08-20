@@ -151,10 +151,14 @@ export function UsageCard({
         <div className="space-y-1">
           {snapshot.quota.windows.map((window) => (
             <div key={window.id} className="text-description-fg">
-              {window.label}: {formatQuotaValue(window.used, window.unit)}
-              {window.limit !== undefined
-                ? ` / ${formatQuotaValue(window.limit, window.unit)}`
-                : ""}
+              {window.label}:{" "}
+              {window.isUnlimited
+                ? "Unlimited"
+                : `${formatQuotaValue(window.used, window.unit)}${
+                    window.limit !== undefined
+                      ? ` / ${formatQuotaValue(window.limit, window.unit)}`
+                      : ""
+                  }`}
               {window.resetAt !== undefined
                 ? ` · resets ${formatTimestamp(window.resetAt)}`
                 : ""}

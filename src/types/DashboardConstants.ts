@@ -764,6 +764,41 @@ export const HARNESS_USAGE_WINDOW_KINDS = {
   UNKNOWN: "unknown",
 } as const;
 
+const USAGE_WINDOW_WEEK_MINUTES = 7 * 24 * 60;
+
+/** Derive a rate-limit window's display kind from its duration alone, not a provider bucket name. */
+export function usageWindowKind(
+  windowMinutes: number
+): (typeof HARNESS_USAGE_WINDOW_KINDS)["ROLLING" | "WEEKLY"] {
+  return windowMinutes >= USAGE_WINDOW_WEEK_MINUTES
+    ? HARNESS_USAGE_WINDOW_KINDS.WEEKLY
+    : HARNESS_USAGE_WINDOW_KINDS.ROLLING;
+}
+
+/**
+ * Format a rate-limit window's duration into a short display label, e.g. "week",
+ * "day", "5h". Single-sourced so every harness's rolling windows read consistently
+ * instead of each provider's normalizer inventing its own phrasing.
+ */
+export function formatUsageWindowLabel(windowMinutes: number): string {
+  if (
+    windowMinutes % USAGE_WINDOW_WEEK_MINUTES === 0 &&
+    windowMinutes >= USAGE_WINDOW_WEEK_MINUTES
+  ) {
+    const weeks = windowMinutes / USAGE_WINDOW_WEEK_MINUTES;
+    return weeks === 1 ? "week" : `${weeks} weeks`;
+  }
+  if (windowMinutes % (24 * 60) === 0) {
+    const days = windowMinutes / (24 * 60);
+    return days === 1 ? "day" : `${days}d`;
+  }
+  if (windowMinutes % 60 === 0) {
+    const hours = windowMinutes / 60;
+    return `${hours}h`;
+  }
+  return `${windowMinutes}m`;
+}
+
 export const HARNESS_OBSERVED_PERIODS = {
   DAILY: "daily",
   WEEKLY: "weekly",

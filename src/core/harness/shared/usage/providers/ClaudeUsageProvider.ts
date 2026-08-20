@@ -4,7 +4,8 @@ import {
   HARNESS_USAGE_CONFIDENCE,
   HARNESS_USAGE_FRESHNESS_MS,
   HARNESS_USAGE_UNITS,
-  HARNESS_USAGE_WINDOW_KINDS,
+  formatUsageWindowLabel,
+  usageWindowKind,
 } from "../../../../../types/DashboardConstants";
 import type {
   HarnessQuotaSnapshot,
@@ -27,13 +28,11 @@ const CLAUDE_RATE_LIMIT_WINDOWS = [
   {
     key: "five_hour",
     id: "five-hour",
-    label: "5-hour",
     windowMinutes: 5 * 60,
   },
   {
     key: "seven_day",
     id: "seven-day",
-    label: "7-day",
     windowMinutes: 7 * 24 * 60,
   },
 ] as const;
@@ -78,8 +77,8 @@ export function parseClaudeRateLimitWindows(
     const resetAt = normalizeUsageTimestamp(rawWindow.resets_at);
     windows.push({
       id: definition.id,
-      kind: HARNESS_USAGE_WINDOW_KINDS.ROLLING,
-      label: definition.label,
+      kind: usageWindowKind(definition.windowMinutes),
+      label: formatUsageWindowLabel(definition.windowMinutes),
       used: usedPercentage,
       limit: 100,
       remaining: 100 - usedPercentage,
