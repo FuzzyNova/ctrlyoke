@@ -910,16 +910,7 @@ interface UiActions {
   clearHiddenDropdownOptions: (namespace: string) => void;
 
   // Footer quick picker
-  setFooterOpenPicker: (
-    picker:
-      | "harness"
-      | "model"
-      | "agent"
-      | "skills"
-      | "permissions"
-      | "context"
-      | null
-  ) => void;
+  setFooterOpenPicker: (picker: FooterPicker | null) => void;
 
   // Mobile drawer actions
   toggleMobileSteps: () => void;

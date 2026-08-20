@@ -9,3 +9,4 @@ export { AgentQuickPicker } from "./AgentQuickPicker";
 export { SkillsQuickPicker } from "./SkillsQuickPicker";
 export { PermissionsQuickPicker } from "./PermissionsQuickPicker";
 export { ContextQuickPicker } from "./ContextQuickPicker";
+export { ExecutionModeQuickPicker } from "./ExecutionModeQuickPicker";
