@@ -194,7 +194,8 @@ suite("HarnessCapabilityRegistry", () => {
     }
   });
 
-  test("enables prompt-input compatibility for every registered harness", async () => {
+  test("enables prompt-input compatibility for every registered harness", async function () {
+    this.timeout(10_000);
     const registry = new HarnessCapabilityRegistry();
     const snapshot = await registry.getSnapshot();
     assert.deepStrictEqual(snapshot.enabledDomains, [

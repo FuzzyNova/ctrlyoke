@@ -83,6 +83,8 @@ export interface PromptUndoDialogRow extends Omit<
 }
 
 export interface PromptUndoDialogGroup {
+  /** Stable semantic identity used by the shared diff row projection. */
+  key?: string;
   heading?: string;
   headingHint?: string;
   files: PromptUndoDialogRow[];
@@ -409,7 +411,6 @@ function buildUndoDialogRow(options: {
     changeType: fromPromptChangeType(options.changeType),
     source: buildDiffSource(oldContent, newContent, structuredPatch),
     language: getLanguageFromPath(options.path),
-    globallyCollapsed: true,
     instruction: options.instruction,
     hasDiff: hasRenderableDiff({
       oldContent,
@@ -698,7 +699,6 @@ function buildAggregatedDialogRow(
     changeType: file.changeType,
     source: buildDiffSource(oldContent, newContent, structuredPatch),
     language: getLanguageFromPath(file.path),
-    globallyCollapsed: true,
     instruction: file.steps[0]?.instruction ?? null,
     hasDiff: hasRenderableDiff({ oldContent, newContent, structuredPatch }),
     note: noteParts.join(" · "),
@@ -716,7 +716,6 @@ function buildRedoDialogRow(
     changeType: redoInstructionToDiffChangeType(instruction),
     source: buildDiffSource(undefined, undefined, structuredPatch),
     language: getLanguageFromPath(instruction.path),
-    globallyCollapsed: true,
     instruction,
     hasDiff: hasRenderableDiff({ structuredPatch }),
   };
@@ -764,7 +763,9 @@ export function buildPromptUndoDialogModel(options: {
     );
     const workflowFiles = aggregateWorkflowUndoFiles(aggregationEntries);
     const workflowRows = workflowFiles.map(buildAggregatedDialogRow);
-    const groups: PromptUndoDialogGroup[] = [{ files: workflowRows }];
+    const groups: PromptUndoDialogGroup[] = [
+      { key: "workflow-aggregate", files: workflowRows },
+    ];
     return {
       workflowRows,
       workflowFiles,
@@ -806,15 +807,17 @@ export function buildPromptUndoDialogModel(options: {
 
   const groups: PromptUndoDialogGroup[] =
     mode === "redo"
-      ? [{ files: redoRows }]
+      ? [{ key: "redo", files: redoRows }]
       : [
           {
+            key: "reported",
             heading: "Changes the AI reported",
             headingHint:
               "The harness told us it made these edits, so we know exactly what changed.",
             files: tier1Rows,
           },
           {
+            key: "detected",
             heading: "Other changes we detected",
             headingHint:
               "Found by comparing the workspace before and after — may include edits from other tools or another workflow running at the same time.",

@@ -1,7 +1,8 @@
 # Diff File List Virtualization Plan
 
-> **Status:** Not implemented. This is a focused UI-performance change for the shared
-> `DiffFileList`; it does not replace the Output pane's existing virtualization.
+> **Status:** Implemented and closed (Phases 1–6). Virtualization is enabled above the
+> 30-file threshold with two-row overscan. This is a focused UI-performance change for the
+> shared `DiffFileList`; it does not replace the Output pane's existing virtualization.
 
 ## Goal
 
@@ -39,6 +40,13 @@ This is not an `OutputPane` virtualization failure:
 individually large diff. Those optimizations do not prevent the first render of 100 distinct
 files, and many individually small diffs still tokenize synchronously. The list must stop
 mounting offscreen diff trees.
+
+Collapsing a card is not a substitute for unmounting it. `DiffView`'s `parsedDiff` memo runs
+`toRdvHunks` / `toRdvFromContent` on mount **regardless of collapsed state**, because the
+collapsed summary header shows exact add/remove counts (`summaryStats` is derived from
+`parsedDiff.baseHunks`). A collapsed 120-file list therefore still performs 120 diff
+computations. Only not mounting the card avoids that work, which is why the acceptance criterion
+below is stated as "no offscreen file performs `toRdvFromContent`".
 
 ## Existing Patterns to Reuse
 
@@ -139,8 +147,13 @@ For file rows:
 
 - Define and measure card-specific chrome once: card borders, the two-line path header, optional
   note, `DiffView` summary row, margins, and the list-row gap.
-- Reuse `diffLineHeight`, gap-decoration geometry, and the hunk/render-stat helpers already used
-  by `rdvAdapter.ts` for the expanded body.
+- Reuse `rdvAdapter.ts`'s existing render-plan pipeline for the expanded body rather than
+  re-deriving line geometry: `getRenderedDiffStats(hunks, viewType)` →
+  `buildDiffRenderPlanFromStats(stats, { viewType, collapsed, outputFontSize, outputContentWidth,
+hunks, layoutMode: "file-edit" })`, and take **`plan.diffBlockHeight`** (summary header + body).
+  Do not take `plan.totalHeight`: it adds `toolLineHeight` for the Output pane's `● Edited <path>`
+  header, which a `DiffFileCard` does not render. Card chrome (border, two-line path header,
+  optional note, `my-1` margin, list-row gap) is added on top of `diffBlockHeight`.
 - For an existing `hunks` source, derive an accurate render plan without reparsing content.
 - For a structured patch, count patch display lines without syntax tokenization.
 - For raw old/new content, use a cheap line-count/change-density estimate; do not run
@@ -161,8 +174,12 @@ top-level estimate.
 
 ### 4. Preserve state across virtual unmounts
 
-Today `DiffView` owns uncontrolled per-card expansion and expanded-gap maps. Virtualization would
-otherwise reset both whenever a file scrolls out of the render window.
+`DiffView` **already supports** controlled `collapsed` / `onCollapsedChange` / `expandedGaps` /
+`onExpandGap` (the virtualized Output rows use them today) and already accepts
+`localResetVersion`. `DiffFileCard` now threads the controlled-state props and `DiffFileList`
+owns the per-file overrides and gap maps, so a card can be unmounted and remounted without
+losing its state. The work here is list-level ownership, not new `DiffView` capability — do not
+add a second control mechanism.
 
 Lift the following state to `DiffFileList`, keyed by the composite file-row key:
 
@@ -174,6 +191,10 @@ Thread the existing controlled `collapsed`, `onCollapsedChange`, `expandedGaps`,
 keys disappear.
 
 Represent Expand all / Collapse all as a list-level command containing `{ version, collapsed }`.
+Both consumers already hold exactly this pair as two separate `useState` values
+(`dialogDiffsCollapsed` + `dialogDiffResetVersion`, `commitDiffsCollapsed` +
+`commitDiffResetVersion`) and copy them onto every card's props; formalize that pair as one
+list-level prop instead of inventing a third concept.
 Store local overrides with the command version that created them. When the version changes, old
 overrides and gap expansions are ignored immediately in render and then discarded; do not wait
 for 100 child effects to synchronize uncontrolled state. This also preserves the existing
@@ -235,35 +256,120 @@ scrolling reliable with changing item sizes.
 
 ### Phase 1 — Shared primitive and row projection
 
-1. Extract `VirtualizedList<T>` and migrate `VirtualizedDropdownList` without behavior changes.
-2. Add stable group keys and the flat `DiffFileListRow` projection.
-3. Add card-specific estimate utilities with O(1) virtualizer callbacks.
-4. Keep `DiffFileList` on its direct-render path while testing projection geometry independently.
+1. [x] Extract `VirtualizedList<T>` and migrate `VirtualizedDropdownList` without behavior changes.
 
-### Phase 2 — Conditional virtualization
+   Landed in Phase 1 item 1: the shared primitive now owns threshold branching,
+   parent-owned scroll-element re-resolution, dynamic row measurement, layout-reset
+   invalidation, stale-index protection, and one-shot `scrollToKey` handling. The
+   dropdown remains a thin wrapper with its existing defaults and DOM output. The
+   primitive's estimate callback is documented as O(1) and receives the item/index
+   contract needed for precomputed diff-row estimates.
+
+2. [x] Add stable group keys and the flat `DiffFileListRow` projection.
+3. [x] Add card-specific estimate utilities with O(1) virtualizer callbacks.
+4. [x] Keep `DiffFileList` on its direct-render path while testing projection geometry independently.
+
+Phase 1 items 2–4 landed in the shared `diffFileRows` projection. The direct path now renders
+the same flat rows that will later feed `VirtualizedList`; each row publishes its estimate once,
+and the future virtualizer callback can return that stored number without doing diff work. Empty
+groups and the existing heading/spacing rules are preserved. Semantic group keys are supplied by
+the workspace and undo consumers, while the projection's fallback uses only the stable file-key
+signature (never heading text or array position).
+
+The measured card-chrome constants are: 2px for the outer one-pixel borders, 1px for the header
+border, 8px for header `py-1`, 16px per `text-xs` line, 2px for the header `gap-0.5` before a
+note, 8px for `DiffView`'s `my-1`, and 12px for the existing `gap-3` list spacing. Raw-content
+metrics are cached by source object identity; render geometry additionally keys on collapsed
+state, view type, font size, and a 32px content-width bucket.
+
+### Phase 2 — Controlled per-file state (before any virtualization)
+
+1. [x] Lift collapse and gap-expansion state into the list, threading `DiffView`'s existing controlled
+       props through `DiffFileCard`.
+2. [x] Convert global collapse resets to the versioned list command.
+
+Per the risk register below, controlled per-file state is a **precondition** for enabling
+virtualization: shipping the threshold first would land an intermediate state where scrolling a
+file out of the window silently discards its expansion and gap state. This phase changes no
+rendering structure and is independently verifiable.
+
+The list ignores stale-version overrides during render, then prunes them with idempotent
+functional updates. Its direct-render path continues to use the shared row projection and
+command-aware estimates.
+
+### Phase 3 — Scroll ownership and single width measurement
 
 1. Add the `scrollContainerRef` contract and wire `Modal`, `UndoChangesDialog`, and
    `WorkspaceDiffPane`.
-2. Turn on virtualization at the file-count threshold.
-3. Measure realized variable-height rows and invalidate on width/view-type changes.
-4. Confirm sticky file headers remain constrained to their own card inside absolute row wrappers.
+2. Resolve split/unified once in `DiffFileList` and pass `viewType` to every card.
 
-### Phase 3 — State and interaction correctness
+**Implemented:** The existing modal and workspace scroll elements are now parent-owned list
+contracts. `DiffFileList` measures its content width once in 32px buckets, derives the 1024px
+split/unified choice from that bucket, and feeds both values into row estimates and every card.
 
-1. Lift collapse and gap-expansion state into the list.
-2. Convert global collapse resets to the versioned list command.
-3. Preserve the visible file anchor across Expand all / Collapse all.
-4. Ensure selecting, opening, and confirming an offscreen file still uses the complete model.
+### Phase 4 — Conditional virtualization
 
-### Phase 4 — Profile and tune
+1. [x] Turn on virtualization at the file-count threshold.
+2. [x] Measure realized variable-height rows and invalidate on width/view-type changes.
+3. [x] Confirm sticky file headers remain constrained to their own card inside absolute row wrappers.
+4. [x] Expose list position metadata on realized rows.
 
-1. Add a development fixture with at least 120 files containing a mix of small patches, large
-   raw-content diffs, multiple hunks, renamed files, long paths, and wrapped notes.
-2. Record dialog open, Expand all, fast scroll, individual gap expansion, Collapse all, and close.
-3. Tune the threshold, overscan, and estimates from measured versus estimated heights.
-4. Only after this pass, consider a bounded cache for parsed raw-content diffs if scrolling back
-   repeatedly causes meaningful reparsing. Consider a Web Worker only if lazy mounting leaves a
-   material initial diff-construction task; it is not part of the first implementation.
+Implemented with a 30-file threshold and two-row overscan. The threshold counts
+file rows rather than projected summary/heading rows, while the direct path
+continues to use the same row renderer and spacing. Published row estimates
+are returned directly by the virtualizer; realized outer wrappers are measured,
+and measurements reset when view type, output font size, content-width bucket,
+or a global collapse command changes. Diff cards expose `aria-setsize` and
+`aria-posinset`, and the shared virtual list retains a focused row in its range
+until focus leaves it. Diff wrappers use absolute `top` positioning without a
+transform or overflow so each card's sticky header remains scoped to its own
+`overflow-hidden` card.
+
+### Phase 5 — Interaction correctness under virtualization
+
+1. [x] Preserve the visible file anchor across Expand all / Collapse all.
+2. [x] Ensure selecting, opening, and confirming an offscreen file still uses the complete model.
+
+Phase 5 is implemented. Global diff commands capture the first visible file's composite key and
+viewport offset before changing estimates, then restore that anchor once through the shared list's
+local one-shot scroll operation. Undo/redo selection, payload construction, and workspace download
+continue to use their complete source models; coverage includes a 100-file offscreen selection case,
+workflow ordering, visible-row file opening, and a real large-dialog smoke mount.
+
+### Phase 6 — Profile and tune
+
+1. [x] Add a development fixture with at least 120 files containing a mix of small patches, large
+       raw-content diffs, multiple hunks, renamed files, long paths, and wrapped notes.
+2. [x] Record dialog open, Expand all, fast scroll, individual gap expansion, Collapse all, and close.
+3. [x] Tune the threshold, overscan, and estimates from measured versus estimated heights.
+4. [x] Only after this pass, consider a bounded cache for parsed raw-content diffs if scrolling back
+       repeatedly causes meaningful reparsing. Consider a Web Worker only if lazy mounting leaves a
+       material initial diff-construction task; it is not part of the first implementation.
+
+Phase 6 shipped the reusable `createDiffFileFixture(fileCount)` test/dev fixture and deterministic
+acceptance coverage for 60, 120, and 240 files. It includes structured patches, large raw
+old/new content, wide multi-hunk gaps, renames, long paths, wrapped notes, and unchanged files.
+
+Calibration used the 120-file fixture at 800px content width, 13px output font size, and unified
+layout. The first pass under-counted unified raw replacements by up to 5,760px (mean -962.3px)
+because one changed line can render as both a deletion and an insertion. The final estimator is
+view-aware (`2 × changed lines` for unified replacements, `1 ×` for split replacements), keeps a
+bounded context allowance, and supplies structured-patch hunks to the shared render-plan helper
+so wide-gap decoration height is included. Final measured mean and maximum residual are both 0px
+in the deterministic realized-geometry calibration test. The final card-chrome constants are 2px
+outer border, 1px header border, 8px header vertical padding, 16px per header line, 2px note
+gap, 8px DiffView margin, 12px inter-row gap, and a 0.6 monospace note character advance.
+
+The final virtualization constants are a 30-file threshold and two-row overscan. With a fixed
+180px jsdom viewport, the acceptance harness mounted six `DiffView` instances and 96 DOM nodes
+for each of 60, 120, and 240 files. Expand all did not add offscreen cards; adapter/tokenizer
+spies and table queries confirmed that offscreen files do no diff construction or rendering;
+unmounting removed all active observer targets and disconnected the list-owned observer. No
+parsed-diff cache or Web Worker was added: the lazy mount boundary removes the aggregate work,
+and the calibration did not demonstrate a need for either deferred optimization.
+
+A wall-clock Chrome trace on a reference desktop remains a useful manual follow-up, but is not a
+reproducible automated gate.
 
 ## Test Plan
 
@@ -385,5 +491,10 @@ Using the 120-file fixture on the same reference desktop/browser:
 - Estimates are O(1) in the virtualizer callback and use shared measured geometry.
 - Automated tests cover parent-ref resolution, dynamic height changes, global resets, offscreen
   selection, and both consumers.
-- A before/after performance capture demonstrates bounded DOM size and removes the multi-second
-  expand-all task caused by offscreen diffs.
+- Automated, deterministic evidence replaces the multi-second expand-all task: a test over the
+  120-file fixture asserts that the mounted `DiffView` count and rendered DOM node count stay
+  bounded by viewport + overscan and do **not** grow when the fixture doubles from 120 to 240
+  files, and that Expand all mounts no additional offscreen cards.
+- A wall-clock before/after Chrome trace on a reference desktop remains valuable but is a manual
+  follow-up, not a gate — it cannot be produced reproducibly from a headless test run, and the
+  bounded-mount assertions above are the criterion the implementation is held to.

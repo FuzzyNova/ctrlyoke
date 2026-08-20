@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "../shared/Modal";
 import { Button } from "../shared/Button";
 import { ExpandCollapseAllDiffsButton } from "../shared/ExpandCollapseAllDiffsButton";
@@ -6,6 +6,7 @@ import {
   DiffFileList,
   OpenFileButton,
   type DiffFileGroup,
+  type DiffFileListHandle,
 } from "@components/diff";
 import { MESSAGE_TYPES } from "../../types/messages";
 import type { UndoFileInstruction } from "../../types/messages";
@@ -150,6 +151,8 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
 
   const [checkedPaths, setCheckedPaths] = useState<Set<string>>(initialChecked);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const diffFileListRef = useRef<DiffFileListHandle>(null);
   const [resultState, setResultState] = useState<
     "idle" | "success" | "partial" | "error"
   >(RESULT_STATE.IDLE);
@@ -260,11 +263,13 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
     checkedCount > 0 && !isSubmitting && resultState === RESULT_STATE.IDLE;
 
   function handleExpandAllDiffs() {
+    diffFileListRef.current?.prepareGlobalLayoutChange();
     setUndoDialogDiffsCollapsed(false);
     setDialogDiffResetVersion((version) => version + 1);
   }
 
   function handleCollapseAllDiffs() {
+    diffFileListRef.current?.prepareGlobalLayoutChange();
     setUndoDialogDiffsCollapsed(true);
     setDialogDiffResetVersion((version) => version + 1);
   }
@@ -293,6 +298,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   const dialogGroups = useMemo<DiffFileGroup[]>(
     () =>
       model.groups.map((group) => ({
+        key: group.key,
         heading: group.heading,
         headingHint: group.headingHint,
         files: group.files.map((row) => {
@@ -306,8 +312,6 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
           return {
             key,
             ...file,
-            globallyCollapsed: dialogDiffsCollapsed,
-            localResetVersion: dialogDiffResetVersion,
             headerActions: <OpenFileButton path={file.path} />,
             selection: {
               checked: checkedPaths.has(key),
@@ -317,7 +321,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
           };
         }),
       })),
-    [checkedPaths, dialogDiffResetVersion, dialogDiffsCollapsed, model.groups]
+    [checkedPaths, model.groups]
   );
 
   const selectionSummary =
@@ -380,6 +384,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
       onClose={onClose}
       size="full"
       footer={footer}
+      bodyRef={bodyRef}
       bodyClassName="px-3 py-2"
       headerSubtitle={dialogSubtitle}
       headerActions={
@@ -400,9 +405,15 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
         />
       )}
       <DiffFileList
+        ref={diffFileListRef}
         groups={dialogGroups}
         emptyMessage={emptyMessage}
+        command={{
+          version: dialogDiffResetVersion,
+          collapsed: dialogDiffsCollapsed,
+        }}
         selectionSummary={selectionSummary}
+        scrollContainerRef={bodyRef}
       />
     </Modal>
   );

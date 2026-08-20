@@ -1,11 +1,85 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { DiffFileCard } from "@components/diff/DiffFileCard";
 import { DiffFileList } from "@components/diff/DiffFileList";
 
-vi.mock("@components/output/DiffView", () => ({
-  DiffView: () => <div data-testid="diff-view" />,
+const { diffViewRenderCount } = vi.hoisted(() => ({
+  diffViewRenderCount: { value: 0 },
 }));
+
+vi.mock("@components/output/DiffView", () => ({
+  DiffView: ({
+    collapsed,
+    expandedGaps,
+    onCollapsedChange,
+    onExpandGap,
+  }: {
+    collapsed?: boolean;
+    expandedGaps?: Map<number, number>;
+    onCollapsedChange?: (collapsed: boolean) => void;
+    onExpandGap?: (gapIndex: number, nextExpandedToLine: number) => void;
+  }) => {
+    diffViewRenderCount.value += 1;
+    if (diffViewRenderCount.value > 25) {
+      throw new Error("DiffFileList render loop");
+    }
+    return (
+      <div data-testid="diff-view">
+        <div data-testid="diff-collapsed">{String(collapsed)}</div>
+        <div data-testid="diff-expanded-gaps">
+          {String(expandedGaps?.size ?? 0)}
+        </div>
+        <button
+          type="button"
+          aria-label="Toggle diff"
+          onClick={() => onCollapsedChange?.(!collapsed)}
+        />
+        <button
+          type="button"
+          aria-label="Expand gap"
+          onClick={() => onExpandGap?.(1, 27)}
+        />
+      </div>
+    );
+  },
+}));
+
+beforeEach(() => {
+  diffViewRenderCount.value = 0;
+});
+
+function makeListFiles() {
+  return [
+    {
+      key: "src/first.ts",
+      path: "src/first.ts",
+      changeType: "modified" as const,
+      source: {
+        kind: "hunks" as const,
+        hunks: [],
+        diffType: "modify" as const,
+      },
+    },
+    {
+      key: "src/second.ts",
+      path: "src/second.ts",
+      changeType: "modified" as const,
+      source: {
+        kind: "hunks" as const,
+        hunks: [],
+        diffType: "modify" as const,
+      },
+    },
+  ];
+}
+
+function listProps(command: { version: number; collapsed: boolean }) {
+  return {
+    groups: [{ key: "files", files: makeListFiles() }],
+    emptyMessage: "No files",
+    command,
+  };
+}
 
 describe("DiffFileCard", () => {
   it("shows a real added-file path, no /dev/null, and a created tooltip on the icon", () => {
@@ -18,7 +92,7 @@ describe("DiffFileCard", () => {
           oldContent: "",
           newContent: "const value = 1;",
         }}
-        globallyCollapsed
+        collapsed
       />
     );
 
@@ -35,7 +109,7 @@ describe("DiffFileCard", () => {
         oldPath="src/old-name.ts"
         changeType="renamed"
         source={{ kind: "hunks", hunks: [], diffType: "modify" }}
-        globallyCollapsed
+        collapsed
       />
     );
 
@@ -54,7 +128,7 @@ describe("DiffFileCard", () => {
           path="very/long/directory/name/file.ts"
           changeType="modified"
           source={{ kind: "hunks", hunks: [], diffType: "modify" }}
-          globallyCollapsed
+          collapsed
         />
       </div>
     );
@@ -72,7 +146,7 @@ describe("DiffFileCard", () => {
         path="src/file.ts"
         changeType="modified"
         source={{ kind: "hunks", hunks: [], diffType: "modify" }}
-        globallyCollapsed
+        collapsed
         note="Final Step Loop 1, Prompt 1, Prompt 2, Prompt 3, Prompt 4, Prompt 5"
       />
     );
@@ -86,35 +160,130 @@ describe("DiffFileCard", () => {
 describe("DiffFileList", () => {
   it("does not enter a render loop when rendering card props", () => {
     const MAX_RENDERS = 25;
-    let renderCount = 0;
+    render(
+      <DiffFileList
+        groups={[
+          {
+            files: [
+              {
+                key: "src/file.ts",
+                path: "src/file.ts",
+                changeType: "modified",
+                source: { kind: "hunks", hunks: [], diffType: "modify" },
+              },
+            ],
+          },
+        ]}
+        emptyMessage="No files"
+        command={{ version: 0, collapsed: true }}
+      />
+    );
 
-    const GuardedList = () => {
-      renderCount += 1;
-      if (renderCount > MAX_RENDERS) {
-        throw new Error("DiffFileList render loop");
-      }
-      return (
-        <DiffFileList
-          groups={[
-            {
-              files: [
-                {
-                  key: "src/file.ts",
-                  path: "src/file.ts",
-                  changeType: "modified",
-                  source: { kind: "hunks", hunks: [], diffType: "modify" },
-                  globallyCollapsed: true,
-                },
-              ],
-            },
-          ]}
-          emptyMessage="No files"
-        />
-      );
-    };
+    expect(diffViewRenderCount.value).toBeLessThan(MAX_RENDERS);
+  });
 
-    render(<GuardedList />);
+  it("keeps a manual collapse and expanded gap across parent prop rebuilds", () => {
+    const view = render(
+      <DiffFileList {...listProps({ version: 0, collapsed: false })} />
+    );
+    const toggles = screen.getAllByRole("button", { name: "Toggle diff" });
+    const gapButtons = screen.getAllByRole("button", { name: "Expand gap" });
 
-    expect(renderCount).toBeLessThan(MAX_RENDERS);
+    fireEvent.click(toggles[0]);
+    fireEvent.click(gapButtons[0]);
+    expect(screen.getAllByTestId("diff-collapsed")[0]).toHaveTextContent(
+      "true"
+    );
+    expect(screen.getAllByTestId("diff-expanded-gaps")[0]).toHaveTextContent(
+      "1"
+    );
+
+    view.rerender(
+      <DiffFileList {...listProps({ version: 0, collapsed: false })} />
+    );
+
+    expect(screen.getAllByTestId("diff-collapsed")[0]).toHaveTextContent(
+      "true"
+    );
+    expect(screen.getAllByTestId("diff-expanded-gaps")[0]).toHaveTextContent(
+      "1"
+    );
+  });
+
+  it("applies a new command version immediately to every unchanged card", () => {
+    const files = makeListFiles();
+    const view = render(
+      <DiffFileList
+        groups={[{ key: "files", files }]}
+        emptyMessage="No files"
+        command={{ version: 0, collapsed: false }}
+      />
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: "Toggle diff" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Expand gap" })[0]);
+
+    view.rerender(
+      <DiffFileList
+        groups={[{ key: "files", files }]}
+        emptyMessage="No files"
+        command={{ version: 1, collapsed: true }}
+      />
+    );
+
+    expect(screen.getAllByTestId("diff-collapsed")[0]).toHaveTextContent(
+      "true"
+    );
+    expect(screen.getAllByTestId("diff-collapsed")[1]).toHaveTextContent(
+      "true"
+    );
+    expect(screen.getAllByTestId("diff-expanded-gaps")[0]).toHaveTextContent(
+      "0"
+    );
+  });
+
+  it("re-expands a manually collapsed file when Expand all is pressed again", () => {
+    const view = render(
+      <DiffFileList {...listProps({ version: 0, collapsed: false })} />
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: "Toggle diff" })[0]);
+
+    view.rerender(
+      <DiffFileList {...listProps({ version: 1, collapsed: false })} />
+    );
+
+    expect(screen.getAllByTestId("diff-collapsed")[0]).toHaveTextContent(
+      "false"
+    );
+  });
+
+  it("prunes local state when a file row disappears", () => {
+    const files = makeListFiles();
+    const view = render(
+      <DiffFileList
+        groups={[{ key: "files", files }]}
+        emptyMessage="No files"
+        command={{ version: 0, collapsed: false }}
+      />
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: "Toggle diff" })[0]);
+
+    view.rerender(
+      <DiffFileList
+        groups={[]}
+        emptyMessage="No files"
+        command={{ version: 0, collapsed: false }}
+      />
+    );
+    view.rerender(
+      <DiffFileList
+        groups={[{ key: "files", files }]}
+        emptyMessage="No files"
+        command={{ version: 0, collapsed: false }}
+      />
+    );
+
+    expect(screen.getAllByTestId("diff-collapsed")[0]).toHaveTextContent(
+      "false"
+    );
   });
 });

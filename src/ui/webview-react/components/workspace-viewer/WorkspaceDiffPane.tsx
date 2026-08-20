@@ -1,9 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { ExpandCollapseAllDiffsButton } from "@components/shared";
 import {
   DiffFileList,
   type DiffFileGroup,
+  type DiffFileListHandle,
   fromDiffKind,
   OpenFileButton,
 } from "@components/diff";
@@ -23,6 +30,8 @@ export const WorkspaceDiffPane: React.FC = () => {
   const diffKind = useWorkspaceViewerStore((s) => s.diffKind);
 
   const [downloading, setDownloading] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const diffFileListRef = useRef<DiffFileListHandle>(null);
   const [commitDiffsCollapsed, setCommitDiffsCollapsed] = useState(false);
   const [commitDiffResetVersion, setCommitDiffResetVersion] = useState(0);
   const [commitDetailsExpanded, setCommitDetailsExpanded] = useState(false);
@@ -34,6 +43,7 @@ export const WorkspaceDiffPane: React.FC = () => {
   const commitGroups = useMemo<DiffFileGroup[]>(
     () => [
       {
+        key: "workspace-commit",
         files: visibleFiles.map((file) => ({
           key: file.path,
           path: file.path,
@@ -45,19 +55,18 @@ export const WorkspaceDiffPane: React.FC = () => {
             hunks: file.hunks,
             diffType: file.diffType,
           },
-          globallyCollapsed: commitDiffsCollapsed,
-          localResetVersion: commitDiffResetVersion,
           headerActions: <OpenFileButton path={file.path} />,
         })),
       },
     ],
-    [commitDiffResetVersion, commitDiffsCollapsed, visibleFiles]
+    [visibleFiles]
   );
   const singleFileGroups = useMemo<DiffFileGroup[]>(
     () =>
       selectedDiffPath
         ? [
             {
+              key: "workspace-working-tree",
               files: [
                 {
                   key: selectedDiffPath,
@@ -69,7 +78,6 @@ export const WorkspaceDiffPane: React.FC = () => {
                     oldContent: diffOldContent,
                     newContent: diffNewContent,
                   },
-                  globallyCollapsed: false,
                   headerActions: <OpenFileButton path={selectedDiffPath} />,
                 },
               ],
@@ -84,11 +92,13 @@ export const WorkspaceDiffPane: React.FC = () => {
   }, [diffRefLabel]);
 
   const handleExpandAllDiffs = useCallback(() => {
+    diffFileListRef.current?.prepareGlobalLayoutChange();
     setCommitDiffsCollapsed(false);
     setCommitDiffResetVersion((version) => version + 1);
   }, []);
 
   const handleCollapseAllDiffs = useCallback(() => {
+    diffFileListRef.current?.prepareGlobalLayoutChange();
     setCommitDiffsCollapsed(true);
     setCommitDiffResetVersion((version) => version + 1);
   }, []);
@@ -222,10 +232,19 @@ export const WorkspaceDiffPane: React.FC = () => {
         )}
 
         {/* File list */}
-        <div className="flex-1 overflow-auto px-3 py-2">
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 overflow-auto px-3 py-2"
+        >
           <DiffFileList
+            ref={diffFileListRef}
             groups={commitGroups}
             emptyMessage="No text changes to display"
+            command={{
+              version: commitDiffResetVersion,
+              collapsed: commitDiffsCollapsed,
+            }}
+            scrollContainerRef={scrollContainerRef}
           />
         </div>
       </div>
@@ -252,10 +271,16 @@ export const WorkspaceDiffPane: React.FC = () => {
   }
 
   return (
-    <div className="h-full overflow-auto px-3 py-2">
+    <div ref={scrollContainerRef} className="h-full overflow-auto px-3 py-2">
       <DiffFileList
+        ref={diffFileListRef}
         groups={singleFileGroups}
         emptyMessage="No text changes to display"
+        command={{
+          version: commitDiffResetVersion,
+          collapsed: commitDiffsCollapsed,
+        }}
+        scrollContainerRef={scrollContainerRef}
       />
     </div>
   );
