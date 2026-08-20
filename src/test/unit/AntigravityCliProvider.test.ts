@@ -293,7 +293,17 @@ suite("AntigravityCliProvider", () => {
     await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
     await fs.writeFile(settingsPath(), JSON.stringify(original));
     configService.setUserBackend(
-      makeBackend({ permissions: { antigravityStatusLineTracking: false } })
+      makeBackend({
+        permissions: {
+          statusLineTracking: {
+            antigravity: {
+              enabled: false,
+              customCommand: "",
+              useCtrlyokeStyle: true,
+            },
+          },
+        },
+      })
     );
     const provider = new AntigravityCliProvider();
 
@@ -554,7 +564,17 @@ suite("AntigravityCliProvider", () => {
 
     test("does not consult the snapshot when tracking is disabled", async () => {
       configService.setUserBackend(
-        makeBackend({ permissions: { antigravityStatusLineTracking: false } })
+        makeBackend({
+          permissions: {
+            statusLineTracking: {
+              antigravity: {
+                enabled: false,
+                customCommand: "",
+                useCtrlyokeStyle: true,
+              },
+            },
+          },
+        })
       );
       const provider = new AntigravityCliProvider();
       const calls = stubSessionRecovery(

@@ -498,11 +498,14 @@ Mirror `ClaudeUsageProvider.parseClaudeRateLimitWindows` (`src/core/harness/shar
 
 ## Phases
 
-1. **Settings & schema**: nested `statusLineTracking.{claude,antigravity}` shape, defaults,
-   `settings-schema.json`, `ConfigurationUtils.getStatusLineTrackingSettings(provider)`,
-   `SETTING_PATHS` entries, relocate `antigravityStatusLineTracking`, and enforce machine-only
-   scope on effective reads as well as writes. Verify the flat shared wrapper sibling is copied
-   into `out/scripts/`.
+1. **Settings & schema (completed)**: nested `statusLineTracking.{claude,antigravity}` shape,
+   defaults, `settings-schema.json`, `ConfigurationUtils.getStatusLineTrackingSettings(provider)`,
+   `SETTING_PATHS` entries, relocation of `antigravityStatusLineTracking`, and machine-only
+   scope enforcement on effective reads as well as writes. The existing flat script copier was
+   verified and requires no packaging change; the shared wrapper remains a later-phase file.
+   Implementation decision: workspace filtering is path-generalized and removes only forbidden
+   subtrees/leaves, preserving allowed sibling values such as other `permissions` and
+   `usageTracking` settings.
 2. **Provider install/uninstall rewrite**: replace the `statusLine`-key value-lease
    register/unregister calls in both providers with the idempotent install/uninstall pair;
    remove the now-dead `pruneOrphanedStatusLine` sweep and owner-state file for this key only,

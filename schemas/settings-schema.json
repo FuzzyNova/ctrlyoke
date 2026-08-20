@@ -417,9 +417,16 @@
           "enum": ["untrusted", "on-request", "never"],
           "description": "Approval policy for Codex CLI tool calls."
         },
-        "antigravityStatusLineTracking": {
-          "type": "boolean",
-          "description": "Enable Antigravity statusline token/context tracking. This writes to the global ~/.gemini/antigravity-cli/settings.json and wraps any statusline command already configured there."
+        "statusLineTracking": {
+          "type": "object",
+          "description": "Machine-only settings for providers that install a global statusline command.",
+          "additionalProperties": false,
+          "properties": {
+            "claude": { "$ref": "#/definitions/statusLineTrackingSettings" },
+            "antigravity": {
+              "$ref": "#/definitions/statusLineTrackingSettings"
+            }
+          }
         },
         "allowedExternalFileRoots": {
           "type": "array",
@@ -893,6 +900,25 @@
     "enableDiagnosticLogs": {
       "type": "boolean",
       "description": "Enable verbose diagnostic logging for troubleshooting."
+    }
+  },
+  "definitions": {
+    "statusLineTrackingSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "customCommand": {
+          "type": "string",
+          "default": "",
+          "description": "Command to run for the provider's statusline output."
+        },
+        "useCtrlyokeStyle": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show ctrlyoke's branded statusline instead of custom-command output."
+        }
+      }
     }
   }
 }

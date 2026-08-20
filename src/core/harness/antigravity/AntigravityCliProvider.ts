@@ -14,7 +14,11 @@ import {
   ToolPermissionApplication,
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
-import { HARNESS_IDS, type HookEvent } from "../../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  STATUS_LINE_TRACKING_PROVIDERS,
+  type HookEvent,
+} from "../../../types/DashboardConstants";
 import type {
   McpServerConfig,
   PromptStep,
@@ -292,7 +296,9 @@ export class AntigravityCliProvider implements ICliProvider {
             this.logParser.setStreamJsonUsage();
             if (
               workspaceRoot &&
-              ConfigurationUtils.shouldTrackAntigravityStatusLine()
+              ConfigurationUtils.getStatusLineTrackingSettings(
+                STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+              ).enabled
             ) {
               await this.registerStatusLine(
                 extensionPath,
@@ -339,7 +345,11 @@ export class AntigravityCliProvider implements ICliProvider {
 
   /** Observe stream-json usage without adding a second event-mapping path. */
   observeHeadlessStdout(chunk: string): void {
-    if (!ConfigurationUtils.shouldTrackAntigravityStatusLine()) {
+    if (
+      !ConfigurationUtils.getStatusLineTrackingSettings(
+        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      ).enabled
+    ) {
       this.streamJsonUsage.reset();
       this.logParser.setStreamJsonUsage();
       return;

@@ -51,32 +51,52 @@ suite("CtrlYokeConfigService", () => {
       all.enableDiagnosticLogs,
       CTRLYOKE_SETTINGS_DEFAULTS.enableDiagnosticLogs
     );
-    assert.strictEqual(all.permissions.antigravityStatusLineTracking, true);
+    assert.strictEqual(
+      all.permissions.statusLineTracking.antigravity.enabled,
+      true
+    );
     assert.strictEqual(
       all.ui.collapsedToolOutputLineCount,
       CTRLYOKE_SETTINGS_DEFAULTS.ui.collapsedToolOutputLineCount
     );
   });
 
-  test("resolves the Antigravity statusline setting through the config hierarchy", () => {
+  test("resolves nested statusline settings through the config hierarchy", () => {
     service.setUserBackend(
       makeBackend({
-        permissions: { antigravityStatusLineTracking: false },
+        permissions: {
+          statusLineTracking: {
+            antigravity: {
+              enabled: false,
+              customCommand: "",
+              useCtrlyokeStyle: true,
+            },
+          },
+        },
       })
     );
     assert.strictEqual(
-      service.get("permissions").antigravityStatusLineTracking,
+      service.get("permissions").statusLineTracking.antigravity.enabled,
       false
     );
 
     service.setWorkspaceBackend(
       makeBackend({
-        permissions: { antigravityStatusLineTracking: true },
+        permissions: {
+          statusLineTracking: {
+            antigravity: {
+              enabled: true,
+              customCommand: "",
+              useCtrlyokeStyle: true,
+            },
+          },
+        },
       })
     );
     assert.strictEqual(
-      service.get("permissions").antigravityStatusLineTracking,
-      true
+      service.get("permissions").statusLineTracking.antigravity.enabled,
+      false,
+      "workspace statusline values are ignored because they are machine-scoped"
     );
   });
 
@@ -274,6 +294,30 @@ suite("CtrlYokeConfigService", () => {
     assert.strictEqual(wrote, false);
   });
 
+  test("rejects workspace-scope statusline and usage enable writes", async () => {
+    let wrote = false;
+    service.setWorkspaceBackend({
+      getAll: () => ({}),
+      set: async () => {
+        wrote = true;
+      },
+    });
+
+    await assert.rejects(
+      service.set(
+        "permissions.statusLineTracking.claude.enabled",
+        false,
+        "workspace"
+      ),
+      /machine-scoped/
+    );
+    await assert.rejects(
+      service.set("usageTracking.enabled", false, "workspace"),
+      /machine-scoped/
+    );
+    assert.strictEqual(wrote, false);
+  });
+
   test("ignores workspace-scope storage settings during the effective merge", () => {
     service.setUserBackend(
       makeBackend({ storage: { runHistoryLocation: "user" } })
@@ -285,6 +329,77 @@ suite("CtrlYokeConfigService", () => {
     });
 
     assert.strictEqual(service.get("storage").runHistoryLocation, "user");
+  });
+
+  test("filters forbidden workspace paths while preserving allowed siblings", () => {
+    service.setUserBackend(
+      makeBackend({
+        permissions: {
+          statusLineTracking: {
+            antigravity: {
+              enabled: true,
+              customCommand: "user-command",
+              useCtrlyokeStyle: true,
+            },
+          },
+        },
+        usageTracking: {
+          enabled: true,
+          providerRefreshEnabled: false,
+        },
+      })
+    );
+    service.setWorkspaceBackend({
+      filePath: "workspace-settings.json",
+      getAll: () => ({
+        permissions: {
+          statusLineTracking: {
+            antigravity: {
+              enabled: false,
+              customCommand: "workspace-command",
+              useCtrlyokeStyle: false,
+            },
+          },
+          allowedExternalFileRoots: ["/shared/logs"],
+        },
+        usageTracking: {
+          enabled: false,
+          providerRefreshEnabled: true,
+        },
+      }),
+      set: async () => {},
+    });
+
+    assert.strictEqual(
+      service.get("permissions").statusLineTracking.antigravity.enabled,
+      true
+    );
+    assert.deepStrictEqual(
+      service.get("permissions").allowedExternalFileRoots,
+      ["/shared/logs"]
+    );
+    assert.strictEqual(service.get("usageTracking").enabled, true);
+    assert.strictEqual(
+      service.get("usageTracking").providerRefreshEnabled,
+      true
+    );
+    assert.strictEqual(
+      service.getScoped("usageTracking", "workspace")?.enabled,
+      undefined
+    );
+    assert.strictEqual(
+      service.getScoped("permissions", "workspace")?.statusLineTracking,
+      undefined
+    );
+    assert.strictEqual(service.resolve("permissions").source, "workspace");
+    assert.strictEqual(
+      service.getLeafSources()["usageTracking.enabled"],
+      "user"
+    );
+    assert.strictEqual(
+      service.getLeafSources()["permissions.statusLineTracking.antigravity"],
+      "user"
+    );
   });
 
   test("subscribe listener is called after notify()", () => {

@@ -61,11 +61,41 @@
           "scope": "window",
           "markdownDescription": "Directory that contains the `.ctrlyoke` folder for this workspace. Leave empty to auto-detect: the folder of the `.code-workspace` file when one is open, otherwise the first workspace folder. Accepts an absolute path or a path relative to the workspace file. Supports `${workspaceFolder}` and `${workspaceFolder:Name}`."
         },
-        "ctrlyoke.permissions.antigravityStatusLineTracking": {
+        "ctrlyoke.permissions.statusLineTracking.claude.enabled": {
           "type": "boolean",
           "default": true,
           "scope": "machine",
-          "markdownDescription": "Enable Antigravity statusline token/context tracking. This writes to the GLOBAL `~/.gemini/antigravity-cli/settings.json` and wraps any statusline command you already have configured, forwarding its output unchanged. Disable this if you do not want ctrlyoke to touch that global file or your existing statusline is fragile."
+          "markdownDescription": "Enable Claude statusline token and quota tracking."
+        },
+        "ctrlyoke.permissions.statusLineTracking.claude.customCommand": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Command to run for Claude statusline output."
+        },
+        "ctrlyoke.permissions.statusLineTracking.claude.useCtrlyokeStyle": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "markdownDescription": "Show ctrlyoke's branded Claude statusline instead of custom-command output."
+        },
+        "ctrlyoke.permissions.statusLineTracking.antigravity.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "markdownDescription": "Enable Antigravity statusline token and context-window tracking."
+        },
+        "ctrlyoke.permissions.statusLineTracking.antigravity.customCommand": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Command to run for Antigravity statusline output."
+        },
+        "ctrlyoke.permissions.statusLineTracking.antigravity.useCtrlyokeStyle": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "markdownDescription": "Show ctrlyoke's branded Antigravity statusline instead of custom-command output."
         },
         "ctrlyoke.usageTracking.enabled": {
           "type": "boolean",

@@ -3,7 +3,6 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AdvancedPermissionsSection } from "@components/settings/AdvancedPermissionsSection";
 import { SETTING_SCOPES, MESSAGE_TYPES } from "@/types/messages";
-import { SETTING_PATHS } from "@root/types/DashboardConstants";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 
@@ -147,33 +146,6 @@ describe("AdvancedPermissionsSection — allowed external file roots", () => {
     expect(onUpdate).toHaveBeenCalledWith(
       "permissions.heuristicSecretRedactionEnabled",
       !CTRLYOKE_SETTINGS_DEFAULTS.permissions.heuristicSecretRedactionEnabled
-    );
-  });
-
-  it("reflects the Antigravity statusline tracking setting and calls onUpdate on toggle", async () => {
-    const onUpdate = vi.fn();
-    const user = userEvent.setup();
-    render(
-      <AdvancedPermissionsSection
-        settings={createSettings()}
-        activeScope={SETTING_SCOPES.USER}
-        onUpdate={onUpdate}
-        onReset={() => {}}
-      />
-    );
-
-    const checkbox = screen.getByRole("checkbox", {
-      name: /Track statusline tokens and context/i,
-    }) as HTMLInputElement;
-    expect(checkbox.checked).toBe(
-      CTRLYOKE_SETTINGS_DEFAULTS.permissions.antigravityStatusLineTracking
-    );
-
-    await user.click(checkbox);
-
-    expect(onUpdate).toHaveBeenCalledWith(
-      SETTING_PATHS.PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING,
-      !CTRLYOKE_SETTINGS_DEFAULTS.permissions.antigravityStatusLineTracking
     );
   });
 });
