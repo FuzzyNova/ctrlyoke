@@ -12,6 +12,7 @@ import {
   type ScriptExecutionReporterContext,
 } from "../core/orchestration/ScriptExecutionReporter";
 import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
+import { StatusMessageReporter } from "../core/orchestration/StatusMessageReporter";
 import {
   EXECUTION_PHASES,
   FINAL_STEP_PHASES,
@@ -20,7 +21,10 @@ import {
 } from "../types/DashboardConstants";
 import type { CliOutput } from "../types/WebviewMessageTypes";
 import { TIMELINE_EVENT_TYPES } from "../types/WorkflowTimelineTypes";
-import type { OrderedCliHistoryEntry } from "../types/OutputHistoryTypes";
+import type {
+  OrderedCliHistoryEntry,
+  OutputExecutionTarget,
+} from "../types/OutputHistoryTypes";
 import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
 
 const temporaryDirectories: string[] = [];
@@ -66,6 +70,7 @@ function makeReporter(result: EvaluationResult, events: string[]) {
   const reporter = new ScriptExecutionReporter(evaluator);
   const context: ScriptExecutionReporterContext = {
     workspaceFolderPath: process.cwd(),
+    statusReporter: new StatusMessageReporter(() => undefined, () => undefined),
     dashboardProvider: {
       updateCliOutput: (_stepIndex: number, output: unknown) => {
         events.push(
@@ -326,6 +331,10 @@ suite("ScriptExecutionReporter", () => {
     } as unknown as EndConditionEvaluator;
     const reporter = new ScriptExecutionReporter(evaluator);
     const context: ScriptExecutionReporterContext = {
+      statusReporter: new StatusMessageReporter(
+        () => undefined,
+        () => undefined
+      ),
       dashboardProvider: {
         updateFinalStepOutput: () => undefined,
         updateFinalStepStreamingChunk: (_loopIndex: number, chunk: string) => {
@@ -479,6 +488,7 @@ suite("ScriptExecutionReporter", () => {
     const reporter = new ScriptExecutionReporter(evaluator);
     const context: ScriptExecutionReporterContext = {
       workspaceFolderPath: process.cwd(),
+      statusReporter: new StatusMessageReporter(() => undefined, () => undefined),
       dashboardProvider: {
         updateCliOutput: (_stepIndex: number, output: unknown) => {
           events.push(
@@ -520,5 +530,66 @@ suite("ScriptExecutionReporter", () => {
       `chunk:${expectedLength}`,
       "final",
     ]);
+  });
+
+  test("fans out delegated status messages for queue and final-step targets", async () => {
+    const statusMessages: Array<{
+      target: unknown;
+      message: string;
+      severity: string;
+    }> = [];
+    const evaluator = {
+      evaluateCondition: async () => makeResult(),
+    } as unknown as EndConditionEvaluator;
+    const reporter = new ScriptExecutionReporter(evaluator);
+    const context: ScriptExecutionReporterContext = {
+      statusReporter: new StatusMessageReporter(
+        () => undefined,
+        () => undefined,
+        (target, message, severity) => {
+          statusMessages.push({ target, message, severity });
+        }
+      ),
+    };
+
+    const report = (target: OutputExecutionTarget) =>
+      reporter.report({
+        context,
+        source: SCRIPT_OUTPUT_SOURCES.END_CONDITION,
+        properties: {
+          script: "check.sh",
+          compareSource: "stdout",
+          returns: "ok",
+        },
+        phase: EXECUTION_PHASES.END_CONDITION,
+        target,
+        signedStepIndex:
+          target.kind === FINAL_STEP_PHASES.QUEUE
+            ? target.stepIndex!
+            : -(target.loopIndex! + 1),
+        runIndex: 0,
+        attemptIndex: 0,
+        timestampMs: 100,
+        onPass: "continue",
+        onFail: "stopWorkflow",
+        actionForErrored: "stopWorkflow",
+      });
+
+    await report({ kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 });
+    await report({ kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 });
+
+    assert.deepStrictEqual(
+      statusMessages.map(({ target, severity }) => ({ target, severity })),
+      [
+        {
+          target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },
+          severity: "info",
+        },
+        {
+          target: { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: 1 },
+          severity: "info",
+        },
+      ]
+    );
   });
 });

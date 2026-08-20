@@ -3429,6 +3429,7 @@ export class WorkflowInstance {
       namedWorkspaceRoots: this.executionWorkspace.namedWorkspaceRoots,
       currentPromptFilePath: this.currentPromptFile?.filePath,
       sourceDefinitionPath: this.sourceDefinitionPath,
+      statusReporter: this.statusMessageReporter,
       // Use a getter so dashboardProvider is evaluated lazily each time
       // WorkflowExecutor accesses it.
       get dashboardProvider() {
@@ -3814,6 +3815,7 @@ export class WorkflowInstance {
               },
               workspaceFolderPath: args.executionRoot,
               historyFilePath,
+              statusReporter: this.statusMessageReporter,
               dashboardProvider: this.dashboardSink,
               outputHistoryManager: this.outputHistoryManager,
               getDefinitionRevisionContext: () =>
