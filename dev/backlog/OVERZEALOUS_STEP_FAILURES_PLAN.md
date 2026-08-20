@@ -74,9 +74,26 @@ variable syntax. The failure is also confusing: the message tells you to define
 `foo`, when the author never wanted a variable at all.
 
 Applies to prompt text, `model`, `additionalArgs`, hook commands, hook `env`,
-endCondition `script`/`env`/`retryPrompt`/`passRetryPrompt`
-(`applyToResolvedProperties`, `applyToHook`, `applyToEndCondition`), and
-worktree `setup` (`WorktreeManager.ts:2524`).
+preCondition `script`/`env`, endCondition `script`/`env`/`retryPrompt`/`passRetryPrompt`,
+script-step `script`/`env` (`applyToResolvedProperties`, `applyToHook`,
+`applyToPreCondition`, `applyToEndCondition`, `applyToScriptStep` — the latter three
+now share one `applyToScriptProperties` helper, all in `src/utils/VarSubstitutor.ts`),
+and worktree `setup` (`WorktreeManager.ts:2524`).
+
+**Widened 2026-08-20.** preCondition and script-step substitution did not exist when
+this item was first written. `applyToPreCondition`/`applyToScriptStep` landed in
+`fix: add variable substitution in preCondition and script steps, update documentation
+for clarity`, fixing a real mismatch (`ExecutionPreviewService` substituted a script
+step's `{{var}}` for preview, but the real run sent the literal text). That fix is a
+prerequisite this item now depends on: the throw below was already live for
+prompt/model/hooks/endCondition/worktree-setup, and now reaches preCondition and
+script-step too — so a fix for this item that doesn't cover those two is incomplete.
+
+**This also makes the failure reachable today, independent of any `vars` editor.**
+`ScriptConditionEditor`'s `preCondition` variant already renders an editable `script`
+field, so a user can put `{{typo}}` in a preCondition's script through the dashboard
+right now; combined with any workflow vars (workflow-defined *or* a bare `--var` on
+the CLI), that throws before step 1 runs.
 
 **Options, roughly in order of preference:**
 
