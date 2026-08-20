@@ -1556,20 +1556,6 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 </FormField>
               </DrawerRow>
 
-              <FormField
-                label="Variables"
-                description="Workflow-level defaults for {{name}} substitution in prompt text, model, additional arguments, hook command/env, pre- and end-condition script/env and retry prompts, script-step script/env, and worktree setup commands. CLI --var values override these defaults. Unresolved placeholders remain literal text and are reported as an advisory."
-              >
-                <KeyValueMapEditor
-                  label="name=value"
-                  id="settings-vars"
-                  ariaLabel="Variables"
-                  value={workflowProperties.vars ?? {}}
-                  onChange={handleVarsChange}
-                  rows={4}
-                />
-              </FormField>
-
               {/* Row 3: Additional Args + Execution Mode */}
               <DrawerRow narrow={isNarrow}>
                 <FormField
@@ -1890,6 +1876,20 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   />
                 </FormField>
               </DrawerRow>
+
+              <FormField
+                label="Variables"
+                description="Workflow-level defaults for {{name}} substitution in prompt text, model, additional arguments, hook command/env, pre- and end-condition script/env and retry prompts, script-step script/env, and worktree setup commands. CLI --var values override these defaults. Unresolved placeholders remain literal text and are reported as an advisory."
+              >
+                <KeyValueMapEditor
+                  label="name=value"
+                  id="settings-vars"
+                  ariaLabel="Variables"
+                  value={workflowProperties.vars ?? {}}
+                  onChange={handleVarsChange}
+                  rows={4}
+                />
+              </FormField>
             </>
           )}
 
