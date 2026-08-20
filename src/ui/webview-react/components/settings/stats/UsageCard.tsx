@@ -28,13 +28,28 @@ function quotaSourceLabel(
 ): string {
   switch (source) {
     case HARNESS_QUOTA_SOURCES.PROVIDER_LIVE:
-      return "provider-live";
+      return "live from provider";
     case HARNESS_QUOTA_SOURCES.PROVIDER_LOG:
-      return "provider-log";
+      return "from provider logs";
     case HARNESS_QUOTA_SOURCES.ENTERPRISE_API:
-      return "enterprise-api";
+      return "enterprise API";
     case HARNESS_QUOTA_SOURCES.UNAVAILABLE:
-      return "observed only";
+      return "not reported by provider";
+  }
+}
+
+function quotaSourceDescription(
+  source: HarnessUsageSnapshot["quota"]["source"]
+): string {
+  switch (source) {
+    case HARNESS_QUOTA_SOURCES.PROVIDER_LIVE:
+      return "Fetched directly from the provider's API just now.";
+    case HARNESS_QUOTA_SOURCES.PROVIDER_LOG:
+      return "Read from the provider's local usage log, not a live API call.";
+    case HARNESS_QUOTA_SOURCES.ENTERPRISE_API:
+      return "Fetched from your organization's enterprise usage API.";
+    case HARNESS_QUOTA_SOURCES.UNAVAILABLE:
+      return "This provider doesn't expose quota limits here. Only ctrlyoke's own observed token counts below are available.";
   }
 }
 
@@ -71,19 +86,21 @@ export function UsageCard({
   const observed = snapshot.observed;
   return (
     <div className="rounded border border-panel-border bg-panel-bg p-2 text-xs space-y-2">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <span className="font-medium text-foreground">Usage</span>
-        <span className="text-description-fg">
-          Quota source: {quotaSourceLabel(snapshot.quota.source)}
+        <span className="min-w-0 text-description-fg">
+          Quota source:{" "}
+          <span
+            className="cursor-help underline decoration-dotted underline-offset-2"
+            title={quotaSourceDescription(snapshot.quota.source)}
+          >
+            {quotaSourceLabel(snapshot.quota.source)}
+          </span>
           {stale ? " · stale" : ""}
         </span>
       </div>
       <div className="text-description-fg">
         Quota freshness: {formatTimestamp(snapshot.quota.fetchedAt)}
-      </div>
-      <div className="text-description-fg">
-        Observed source:{" "}
-        <span className="text-foreground">ctrlyoke-observed</span>
       </div>
       {harnessId === HARNESS_IDS.COPILOT_CLI && (
         <div className="space-y-1 text-foreground">
@@ -160,7 +177,13 @@ function formatQuotaValue(
   unit: (typeof HARNESS_USAGE_UNITS)[keyof typeof HARNESS_USAGE_UNITS]
 ): string {
   if (value === undefined) return "—";
-  return unit === HARNESS_USAGE_UNITS.TOKENS
-    ? formatTokenCount(value)
-    : String(value);
+  if (unit === HARNESS_USAGE_UNITS.TOKENS) return formatTokenCount(value);
+  if (unit === HARNESS_USAGE_UNITS.PERCENT) return formatRoundedNumber(value);
+  return String(value);
+}
+
+/** Rounds to at most one decimal place, dropping a trailing ".0". */
+function formatRoundedNumber(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }

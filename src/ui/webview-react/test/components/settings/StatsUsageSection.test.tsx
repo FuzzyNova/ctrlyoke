@@ -42,8 +42,12 @@ describe("StatsUsageSection", () => {
     expect(
       screen.getByText(HARNESS_INFO[HARNESS_IDS.QWEN_CLI].name)
     ).toBeInTheDocument();
-    expect(screen.getByText("Quota source: observed only")).toBeInTheDocument();
-    expect(screen.getByText("ctrlyoke-observed")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.textContent === "Quota source: not reported by provider"
+      )
+    ).toBeInTheDocument();
     expect(screen.getByText("7 tokens")).toBeInTheDocument();
     expect(screen.queryByText(/resets/i)).not.toBeInTheDocument();
     expect(

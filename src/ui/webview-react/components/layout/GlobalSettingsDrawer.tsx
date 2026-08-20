@@ -214,7 +214,7 @@ export function GlobalSettingsDrawer() {
             />
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden">
             <div className="p-4 max-w-2xl">
               {fullSettings && effectiveActiveTab === "general" && (
                 <GeneralSection
