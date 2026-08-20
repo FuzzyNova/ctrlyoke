@@ -2046,6 +2046,7 @@ export const FOOTER_PICKERS = {
   SKILLS: "skills",
   PERMISSIONS: "permissions",
   CONTEXT: "context",
+  EXECUTION_MODE: "executionMode",
 } as const;
 
 export type FooterPicker = (typeof FOOTER_PICKERS)[keyof typeof FOOTER_PICKERS];

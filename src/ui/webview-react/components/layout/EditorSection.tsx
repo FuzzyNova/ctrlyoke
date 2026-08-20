@@ -8,6 +8,7 @@ import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { formatMagnitude } from "../../utils/number";
 import { PromptEditor, type PromptFileAction } from "../editor/PromptEditor";
+import { ExecutionModeQuickPicker } from "../editor/ExecutionModeQuickPicker";
 import { PanelBar, IconToggleButton } from "../shared";
 import {
   FINAL_STEP_PHASES,
@@ -289,14 +290,14 @@ const EditorSectionInner: React.FC = () => {
                           : ""
                     }`}
                   >
-                    {formatMagnitude(tokenCount)} tokens
+                    {formatMagnitude(tokenCount)} {isNarrow ? "tks" : "tokens"}
                   </span>
                 </>
               ) : null)}
           </span>
         </div>
 
-        {/* Right: prompt-file action and Git ignore toggle */}
+        {/* Right: prompt-file action, execution mode override, and Git ignore toggle */}
         {!isCLIManaged && !isScriptMode && promptFileAction && (
           <button
             type="button"
@@ -311,6 +312,7 @@ const EditorSectionInner: React.FC = () => {
             />
           </button>
         )}
+        {!isCLIManaged && <ExecutionModeQuickPicker />}
         {!isCLIManaged && (
           <IconToggleButton
             active={globalSettings.respectGitignore}

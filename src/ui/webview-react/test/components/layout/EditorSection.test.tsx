@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, act } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EditorSection } from "@components/layout/EditorSection";
 import { useEditorStore } from "@store/editorStore";
@@ -8,17 +8,20 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { RUNNER_IDS, STEP_TYPES } from "@root/types/DashboardConstants";
 
-const { attachmentTokenCount, promptFileAction } = vi.hoisted(() => ({
-  attachmentTokenCount: { value: 128 },
-  promptFileAction: {
-    value: null as null | {
-      icon: string;
-      tooltip: string;
-      disabled: boolean;
-      onClick: () => void;
+const { attachmentTokenCount, promptFileAction, isElementNarrow } = vi.hoisted(
+  () => ({
+    attachmentTokenCount: { value: 128 },
+    promptFileAction: {
+      value: null as null | {
+        icon: string;
+        tooltip: string;
+        disabled: boolean;
+        onClick: () => void;
+      },
     },
-  },
-}));
+    isElementNarrow: { value: false },
+  })
+);
 
 vi.mock("../../../components/editor/PromptEditor", () => ({
   PromptEditor: ({
@@ -34,35 +37,41 @@ vi.mock("../../../components/editor/PromptEditor", () => ({
   },
 }));
 
-vi.mock("../../../components/shared", () => ({
-  PanelBar: () => <div data-testid="panel-bar" />,
-  IconToggleButton: ({
-    active,
-    onToggle,
-    activeTooltip,
-    inactiveTooltip,
-  }: {
-    active: boolean;
-    onToggle: (next: boolean) => void;
-    activeTooltip: string;
-    inactiveTooltip: string;
-  }) => (
-    <button
-      type="button"
-      title={active ? activeTooltip : inactiveTooltip}
-      aria-label={active ? activeTooltip : inactiveTooltip}
-      aria-pressed={active}
-      onClick={() => onToggle(!active)}
-    />
-  ),
-}));
+vi.mock("../../../components/shared", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../../components/shared")>();
+  return {
+    ...actual,
+    PanelBar: () => <div data-testid="panel-bar" />,
+    IconToggleButton: ({
+      active,
+      onToggle,
+      activeTooltip,
+      inactiveTooltip,
+    }: {
+      active: boolean;
+      onToggle: (next: boolean) => void;
+      activeTooltip: string;
+      inactiveTooltip: string;
+    }) => (
+      <button
+        type="button"
+        title={active ? activeTooltip : inactiveTooltip}
+        aria-label={active ? activeTooltip : inactiveTooltip}
+        aria-pressed={active}
+        onClick={() => onToggle(!active)}
+      />
+    ),
+  };
+});
 
 vi.mock("../../../hooks/useAttachmentTokenCount", () => ({
   useAttachmentTokenCount: () => attachmentTokenCount.value,
 }));
 
 vi.mock("../../../hooks/useElementNarrow", () => ({
-  useElementNarrow: () => [React.createRef<HTMLElement>(), false] as const,
+  useElementNarrow: () =>
+    [React.createRef<HTMLElement>(), isElementNarrow.value] as const,
 }));
 
 function resetStores() {
@@ -82,6 +91,7 @@ describe("EditorSection", () => {
   beforeEach(() => {
     attachmentTokenCount.value = 128;
     promptFileAction.value = null;
+    isElementNarrow.value = false;
     resetStores();
   });
 
@@ -115,10 +125,12 @@ describe("EditorSection", () => {
       screen.queryByRole("button", { name: "Convert to prompt file" })
     ).not.toBeInTheDocument();
 
-    useEditorStore.getState().setStepType(STEP_TYPES.PROMPT);
-    useUiStore.setState({
-      loadedWorkflows: [{ id: "cli", managedBy: RUNNER_IDS.CLI } as never],
-      activeWorkflowId: "cli",
+    act(() => {
+      useEditorStore.getState().setStepType(STEP_TYPES.PROMPT);
+      useUiStore.setState({
+        loadedWorkflows: [{ id: "cli", managedBy: RUNNER_IDS.CLI } as never],
+        activeWorkflowId: "cli",
+      });
     });
     expect(
       screen.queryByRole("button", { name: "Convert to prompt file" })
@@ -166,5 +178,42 @@ describe("EditorSection", () => {
     render(<EditorSection />);
 
     expect(screen.getByText("1.2M tokens")).toBeInTheDocument();
+  });
+
+  it("abbreviates the token label to 'tks' at narrow width", () => {
+    isElementNarrow.value = true;
+
+    render(<EditorSection />);
+
+    expect(screen.getByText("128 tks")).toBeInTheDocument();
+    expect(screen.queryByText("128 tokens")).not.toBeInTheDocument();
+  });
+
+  it("shows a dimmed inherited icon for the execution mode picker by default", () => {
+    render(<EditorSection />);
+
+    // Global default execution mode is interactive (see settingsStore defaults)
+    const picker = screen.getByRole("button", { name: "Execution mode" });
+    expect(picker).toHaveAttribute("aria-pressed", "false");
+    expect(picker).toHaveClass("text-description-fg");
+    expect(picker.querySelector(".codicon-debug-console")).not.toBeNull();
+  });
+
+  it("lets the user override the execution mode from the header picker", async () => {
+    render(<EditorSection />);
+
+    const picker = screen.getByRole("button", { name: "Execution mode" });
+    await act(async () => {
+      fireEvent.click(picker);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Headless" }));
+    });
+
+    expect(useEditorStore.getState().properties.executionMode).toBe("headless");
+    expect(picker).toHaveAttribute("aria-pressed", "true");
+    expect(picker).toHaveClass("text-widget-highlight-fg");
+    expect(picker.querySelector(".codicon-terminal")).not.toBeNull();
   });
 });
