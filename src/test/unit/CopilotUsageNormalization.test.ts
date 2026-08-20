@@ -35,6 +35,7 @@ suite("Copilot usage normalization", () => {
       id: "copilot:premium_interactions",
       kind: HARNESS_USAGE_WINDOW_KINDS.MONTHLY,
       label: "Premium interactions",
+      note: "This may be either AI credits or premium requests, depending on your plan.",
       used: 555,
       limit: 1_500,
       remaining: 945,
@@ -45,6 +46,36 @@ suite("Copilot usage normalization", () => {
     });
     assert.strictEqual(quota.source, HARNESS_QUOTA_SOURCES.PROVIDER_LIVE);
     assert.strictEqual(quota.fetchedAt, FETCHED_AT);
+  });
+
+  test("names the premium-interactions unit directly when the provider reports tokenBasedBilling", () => {
+    const aiCredits = normalizeCopilotAccountQuota(
+      quotaSnapshots({
+        premium_interactions: {
+          entitlementRequests: 1_500,
+          usedRequests: 555,
+          remainingPercentage: 63,
+          tokenBasedBilling: true,
+        },
+      }),
+      FETCHED_AT
+    );
+    assert.strictEqual(aiCredits?.windows[0].label, "AI credits");
+    assert.strictEqual(aiCredits?.windows[0].note, undefined);
+
+    const premiumRequests = normalizeCopilotAccountQuota(
+      quotaSnapshots({
+        premium_interactions: {
+          entitlementRequests: 1_500,
+          usedRequests: 555,
+          remainingPercentage: 63,
+          tokenBasedBilling: false,
+        },
+      }),
+      FETCHED_AT
+    );
+    assert.strictEqual(premiumRequests?.windows[0].label, "Premium requests");
+    assert.strictEqual(premiumRequests?.windows[0].note, undefined);
   });
 
   test("keeps chat and completions independent in their documented order", () => {

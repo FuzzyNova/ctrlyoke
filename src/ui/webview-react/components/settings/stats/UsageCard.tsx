@@ -105,7 +105,6 @@ export function UsageCard({
       </div>
       {harnessId === HARNESS_IDS.COPILOT_CLI && (
         <div className="space-y-1 text-foreground">
-          <div>AI credits: not reported by the local usage feed</div>
           <div className="text-description-fg">
             Tokens are secondary context for Copilot; billing uses AI credits or
             premium requests.
@@ -153,7 +152,17 @@ export function UsageCard({
           {snapshot.quota.windows.map((window) => (
             <div key={window.id}>
               <div className="text-description-fg">
-                {window.label}:{" "}
+                {window.note ? (
+                  <span
+                    className="cursor-help underline decoration-dotted underline-offset-2"
+                    title={window.note}
+                  >
+                    {window.label}
+                  </span>
+                ) : (
+                  window.label
+                )}
+                :{" "}
                 {window.isUnlimited
                   ? "Unlimited"
                   : `${formatQuotaValue(window.used, window.unit)}${

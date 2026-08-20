@@ -71,6 +71,8 @@ export interface HarnessUsageWindow {
   id: string;
   kind: HarnessUsageWindowKind;
   label: string;
+  /** Optional clarification shown alongside the label, e.g. when the provider's unit is ambiguous. */
+  note?: string;
   used?: number;
   limit?: number;
   remaining?: number;

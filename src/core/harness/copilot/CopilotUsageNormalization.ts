@@ -37,6 +37,38 @@ const BUCKET_LABELS: Record<string, string> = {
   [COPILOT_QUOTA_BUCKET_KEYS.COMPLETIONS]: "Completions",
 };
 
+const PREMIUM_INTERACTIONS_AMBIGUOUS_NOTE =
+  "This may be either AI credits or premium requests, depending on your plan.";
+
+/**
+ * GitHub's account.getQuota RPC does not document a unit for the
+ * `premium_interactions` bucket: it can represent either AI credits or
+ * legacy premium requests depending on the account's plan. An undocumented
+ * `tokenBasedBilling` flag has been observed on the wire and, when present,
+ * says which one — use it to show the real unit instead of the ambiguous
+ * bucket name, and fall back to a tooltip note when it's absent.
+ */
+function resolvePremiumInteractionsLabel(bucket: Record<string, unknown>): {
+  label: string;
+  note?: string;
+} {
+  const tokenBasedBilling = readOptionalBoolean(
+    bucket,
+    "tokenBasedBilling",
+    "token_based_billing"
+  );
+  if (tokenBasedBilling.value === true) {
+    return { label: "AI credits" };
+  }
+  if (tokenBasedBilling.value === false) {
+    return { label: "Premium requests" };
+  }
+  return {
+    label: BUCKET_LABELS[COPILOT_QUOTA_BUCKET_KEYS.PREMIUM_INTERACTIONS],
+    note: PREMIUM_INTERACTIONS_AMBIGUOUS_NOTE,
+  };
+}
+
 interface CopilotQuotaSnapshotWire {
   isUnlimitedEntitlement?: unknown;
   is_unlimited_entitlement?: unknown;
@@ -55,6 +87,8 @@ interface CopilotQuotaSnapshotWire {
   overage?: unknown;
   resetDate?: unknown;
   reset_date?: unknown;
+  tokenBasedBilling?: unknown;
+  token_based_billing?: unknown;
 }
 
 interface CopilotQuotaResultWire {
@@ -248,8 +282,12 @@ function normalizeBucketWindow(
       ? parsedResetAt
       : undefined;
 
-  const label = BUCKET_LABELS[bucketKey] ?? humanizeBucketKey(bucketKey);
-  if (label === undefined) return undefined;
+  const baseLabel = BUCKET_LABELS[bucketKey] ?? humanizeBucketKey(bucketKey);
+  if (baseLabel === undefined) return undefined;
+  const { label, note } =
+    bucketKey === COPILOT_QUOTA_BUCKET_KEYS.PREMIUM_INTERACTIONS
+      ? resolvePremiumInteractionsLabel(bucket)
+      : { label: baseLabel, note: undefined };
 
   const window: HarnessUsageWindow = {
     id: `copilot:${bucketKey}`,
@@ -257,6 +295,7 @@ function normalizeBucketWindow(
       ? HARNESS_USAGE_WINDOW_KINDS.MONTHLY
       : HARNESS_USAGE_WINDOW_KINDS.UNKNOWN,
     label,
+    ...(note !== undefined ? { note } : {}),
     used,
     ...(isUnlimited ? { isUnlimited: true } : {}),
     ...(!isUnlimited && entitlement !== undefined && entitlement >= 0
