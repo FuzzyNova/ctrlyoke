@@ -177,6 +177,70 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     }
   });
 
+  test("gates a missing declared secret in fail mode but reports and continues in warn mode", async () => {
+    const promptText = "Use !MISSING_TEST_SECRET_XYZ for auth";
+    const failQueue = new PromptQueue();
+    failQueue.loadPrompts({ steps: [{ prompt: promptText }] });
+    const failIntegration = new MockHarnessIntegration(undefined, false);
+
+    configService.setCliOverlay({
+      execution: {
+        strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+      },
+    });
+    try {
+      await assert.rejects(
+        makeExecutor(failQueue).execute(
+          failIntegration,
+          makeContext(failIntegration)
+        ),
+        /MISSING_TEST_SECRET_XYZ/u
+      );
+      assert.strictEqual(failIntegration.sentPrompts.length, 0);
+    } finally {
+      configService.setCliOverlay({});
+    }
+
+    const warnQueue = new PromptQueue();
+    warnQueue.loadPrompts({ steps: [{ prompt: promptText }] });
+    const warnIntegration = new MockHarnessIntegration(undefined, false);
+    const warnStatusMessages: Array<{ message: string; severity: string }> = [];
+    const dashboardProvider = new Proxy(
+      {
+        updateStatusMessage: (
+          _stepIndex: number,
+          message: string,
+          severity: string
+        ) => warnStatusMessages.push({ message, severity }),
+      },
+      {
+        get: (target, property) =>
+          Reflect.get(target, property) ?? (() => undefined),
+      }
+    );
+
+    configService.setCliOverlay({
+      execution: {
+        strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+      },
+    });
+    try {
+      await makeExecutor(warnQueue).execute(warnIntegration, {
+        ...makeContext(warnIntegration),
+        dashboardProvider: dashboardProvider as any,
+      });
+      assert.deepStrictEqual(warnIntegration.sentPrompts, [promptText]);
+      assert.ok(
+        warnStatusMessages.some((status) =>
+          status.message.includes("MISSING_TEST_SECRET_XYZ")
+        ),
+        "expected a warning status row naming the unresolved secret"
+      );
+    } finally {
+      configService.setCliOverlay({});
+    }
+  });
+
   test("reports prompt-text secret interpolation as an advisory without blocking, even in fail mode", async () => {
     // A prompt that merely quotes ${secret:NAME} — plans and instruction files
     // legitimately document the syntax — must never block the step.
@@ -205,8 +269,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.deepStrictEqual(integration.sentPrompts, [promptText]);
     const advisories = diagnostics.filter(
       (diagnostic) =>
-        diagnostic.code ===
-        PROMPT_DIAGNOSTIC_CODES.SECRET_INTERPOLATION_IGNORED
+        diagnostic.code === PROMPT_DIAGNOSTIC_CODES.SECRET_INTERPOLATION_IGNORED
     );
     assert.strictEqual(advisories.length, 1);
     assert.ok(advisories[0].message.includes("${secret:X}"));

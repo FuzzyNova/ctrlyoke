@@ -1722,6 +1722,22 @@ suite("WorkflowInstance append-and-continue", () => {
     history.finalizeRun = async (filePath: string, state: string) => {
       finalized.push({ path: filePath, state });
     };
+    const persistedStatusMessages: Array<{
+      filePath: string;
+      message: string;
+      severity: string;
+    }> = [];
+    history.appendStatusMessage = async (
+      filePath: string,
+      _target: unknown,
+      statusMessage: { message: string; severity: string }
+    ) => {
+      persistedStatusMessages.push({
+        filePath,
+        message: statusMessage.message,
+        severity: statusMessage.severity,
+      });
+    };
 
     await (instance as any).executeLoadedPromptFile();
 
@@ -1739,6 +1755,23 @@ suite("WorkflowInstance append-and-continue", () => {
       statusMessages.filter((entry) => entry.severity === "error").length,
       1,
       "the failure must reach the dashboard, not only the VS Code notification"
+    );
+    // The live-only push above vanishes on the next workflow switch unless it
+    // is also written to history — this is the failure this test guards
+    // against (a user navigating away and back must still see why it failed).
+    assert.strictEqual(
+      persistedStatusMessages.length,
+      1,
+      "the execution-failure row must survive navigating away and back"
+    );
+    assert.strictEqual(
+      persistedStatusMessages[0].filePath,
+      `${workflowKey}/${runRef}/manifest.json`
+    );
+    assert.strictEqual(persistedStatusMessages[0].severity, "error");
+    assert.strictEqual(
+      persistedStatusMessages[0].message,
+      statusMessages.find((entry) => entry.severity === "error")?.message
     );
   });
 

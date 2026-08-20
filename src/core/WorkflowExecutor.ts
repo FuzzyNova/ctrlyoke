@@ -64,7 +64,9 @@ import {
   findSecretInterpolationsInPrompt,
   buildSecretProcessEnvironment,
   expandSecretInterpolations,
+  findMissingSecretNames,
   getDeclaredSecretGrants,
+  MissingSecretError,
   resolveSecretEnvironment,
 } from "../utils/SecretResolver";
 import { getEffectiveSecretGrants } from "../utils/SecretReferenceParser";
@@ -560,7 +562,7 @@ export class WorkflowExecutor {
         prompt,
         preResolvedProperties.secrets
       );
-      await this.registerResolvedSecrets(preSecretNames, context);
+      await this.registerResolvedSecrets(preSecretNames, context, target);
       await this.promptQueue.persistRuntimeMetadata(
         target.kind === FINAL_STEP_PHASES.QUEUE
           ? target.stepIndex
@@ -717,10 +719,11 @@ export class WorkflowExecutor {
         prompt,
         resolvedProperties.secrets
       );
-      const resolvedSecretValues = await resolveSecretEnvironment(secretNames, {
-        workspaceRoot: this.platform.getWorkspaceRoot(),
-        secretStore: this.platform.getSecretStore?.(),
-      });
+      const resolvedSecretValues = await this.resolveGrantedSecretValues(
+        secretNames,
+        context,
+        target
+      );
       context.secretRedactor?.addResolvedValues(resolvedSecretValues);
       resolvedProperties = {
         ...resolvedProperties,
@@ -1058,7 +1061,7 @@ export class WorkflowExecutor {
       step,
       this.promptQueue.getWorkflowFile()
     );
-    await this.registerResolvedSecrets(secretNames, context);
+    await this.registerResolvedSecrets(secretNames, context, target);
     Log.info(`Executing script step: ${stepLabel}`);
 
     // Mark step as running in the dashboard
@@ -1826,16 +1829,64 @@ export class WorkflowExecutor {
 
   private async registerResolvedSecrets(
     names: readonly string[],
-    context: WorkflowExecutionContext
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget
   ): Promise<void> {
     if (names.length === 0) {
       return;
     }
-    const values = await resolveSecretEnvironment(names, {
+    const values = await this.resolveGrantedSecretValues(
+      names,
+      context,
+      target
+    );
+    context.secretRedactor?.addResolvedValues(values);
+  }
+
+  /**
+   * Resolves a step's granted secrets. A name that cannot resolve is reported
+   * as a warning status row (persisted to history like every other
+   * context-resolution warning) and simply omitted from the returned map —
+   * mirroring `execution.strictContextResolution`'s "warn" contract for every
+   * other declared-reference category, instead of hard-stopping the run the
+   * way this used to unconditionally. `"fail"` mode keeps today's hard stop
+   * so `secret check`'s guarantee still has a live-run counterpart. A name
+   * left unresolved here still throws downstream if something actually tries
+   * to interpolate it (e.g. `expandSecretInterpolations`), so a step that
+   * genuinely needs the credential still fails — just at the point of use,
+   * not at preflight.
+   */
+  private async resolveGrantedSecretValues(
+    names: readonly string[],
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget
+  ): Promise<Record<string, string>> {
+    if (names.length === 0) {
+      return {};
+    }
+    const resolutionContext = {
       workspaceRoot: this.platform.getWorkspaceRoot(),
       secretStore: this.platform.getSecretStore?.(),
-    });
-    context.secretRedactor?.addResolvedValues(values);
+    };
+    const missing = await findMissingSecretNames(names, resolutionContext);
+    if (missing.length > 0) {
+      if (
+        ConfigurationUtils.getContextResolutionFailureMode() ===
+        CONTEXT_RESOLUTION_FAILURE_MODES.FAIL
+      ) {
+        throw new MissingSecretError(missing[0], missing);
+      }
+      await this.trackStatusMessage(
+        context,
+        target,
+        `Context resolution warning: declared secret${
+          missing.length > 1 ? "s are" : " is"
+        } not available: ${missing.join(", ")}.`,
+        STATUS_MESSAGE_SEVERITY.WARNING
+      );
+    }
+    const resolvable = names.filter((name) => !missing.includes(name));
+    return resolveSecretEnvironment(resolvable, resolutionContext);
   }
 
   /**
@@ -2624,12 +2675,10 @@ export class WorkflowExecutor {
         retryPromptStep,
         resolvedProperties.secrets
       );
-      const retrySecretValues = await resolveSecretEnvironment(
+      const retrySecretValues = await this.resolveGrantedSecretValues(
         retrySecretNames,
-        {
-          workspaceRoot: this.platform.getWorkspaceRoot(),
-          secretStore: this.platform.getSecretStore?.(),
-        }
+        context,
+        target
       );
       context.secretRedactor?.addResolvedValues(retrySecretValues);
       resolvedProperties = {

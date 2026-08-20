@@ -1968,10 +1968,9 @@ export class WorkflowInstance {
       this.reportCompatibilityDiagnostics(compatibilityDiagnostics);
 
       if (missingSecretNames.length > 0) {
-        const missingSecretNotice =
-          `Context resolution warning: declared secrets are not available: ${missingSecretNames.join(
-            ", "
-          )}.`;
+        const missingSecretNotice = `Context resolution warning: declared secrets are not available: ${missingSecretNames.join(
+          ", "
+        )}.`;
         const timestampMs = Date.now();
         const stepIndex = currentQueueState.currentIndex;
         this.dashboardSink?.updateStatusMessage(
@@ -2112,12 +2111,43 @@ export class WorkflowInstance {
         "error",
         `ctrlyoke: Execution failed: ${executionFailureMessage}`
       );
+      const executionFailureStatusMessage = `Execution failed: ${executionFailureMessage}`;
+      const executionFailureTimestampMs = Date.now();
+      const executionFailureStepIndex =
+        this.promptQueue.getState().currentIndex;
       this.dashboardSink?.updateStatusMessage(
-        this.promptQueue.getState().currentIndex,
-        `Execution failed: ${executionFailureMessage}`,
+        executionFailureStepIndex,
+        executionFailureStatusMessage,
         STATUS_MESSAGE_SEVERITY.ERROR,
-        this.id
+        this.id,
+        executionFailureTimestampMs
       );
+      // Persist alongside the live push so the error survives navigating away
+      // and back — same pattern as WorkflowExecutor.trackStatusMessage() and
+      // the worktreeNotice/missingSecretNames writes above. Without this the
+      // row only exists in the live in-memory dashboard state and vanishes
+      // once the user switches workflows and returns.
+      if (runToFinalize) {
+        await this.outputHistoryManager
+          .appendStatusMessage(
+            runToFinalize,
+            {
+              kind: FINAL_STEP_PHASES.QUEUE,
+              stepIndex: executionFailureStepIndex,
+            },
+            {
+              message: executionFailureStatusMessage,
+              severity: STATUS_MESSAGE_SEVERITY.ERROR,
+              timestamp: executionFailureTimestampMs,
+            }
+          )
+          .catch((err) =>
+            Log.warn(
+              "Failed to append execution-failure status message to history:",
+              err
+            )
+          );
+      }
     }
   }
 
