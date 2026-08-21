@@ -11,6 +11,9 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
+const {
+  formatUsagePercentForDisplay,
+} = require("./ctrlyoke-statusline-format.js");
 
 // Both harnesses refresh their statusline frequently. Keep forwarding below
 // the documented ~300 ms Antigravity poll cadence for a consistent contract.
@@ -292,7 +295,7 @@ function getQuotaPercentage(payload, provider) {
           : undefined
       )
       .filter((value) => value !== undefined)
-      .map((value) => 100 - value);
+      .map((value) => formatUsagePercentForDisplay(value, "remaining"));
     if (remainingPercentages.length === 0) {
       return undefined;
     }
@@ -306,19 +309,29 @@ function getQuotaPercentage(payload, provider) {
   if (!quota || typeof quota !== "object" || Array.isArray(quota)) {
     return undefined;
   }
-  const remainingFractions = Object.values(quota)
+  const usedPercentages = Object.values(quota)
     .map((entry) =>
       entry && typeof entry === "object"
         ? asFiniteNumber(entry.remaining_fraction)
         : undefined
     )
-    .filter((value) => value !== undefined);
-  if (remainingFractions.length === 0) {
+    .filter((value) => value !== undefined)
+    .map((value) => 100 - value * 100);
+  if (usedPercentages.length === 0) {
     return undefined;
   }
   return Math.max(
     0,
-    Math.min(100, Math.round(Math.min(...remainingFractions) * 100))
+    Math.min(
+      100,
+      Math.round(
+        Math.min(
+          ...usedPercentages.map((value) =>
+            formatUsagePercentForDisplay(value, "remaining")
+          )
+        )
+      )
+    )
   );
 }
 
@@ -401,6 +414,7 @@ module.exports = {
   calculateContextPercentage,
   formatBrandedStatusLine,
   formatCompactTokenCount,
+  formatUsagePercentForDisplay,
   forwardToCommand,
   getContextBand,
   getContextValues,

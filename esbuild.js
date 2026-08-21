@@ -326,6 +326,22 @@ async function main() {
     ],
   });
 
+  // The detached statusline wrapper is copied as a flat CommonJS script. Build
+  // its shared TypeScript helper to a flat sibling so the wrapper can require
+  // the same implementation that the webview imports.
+  const statuslineFormatCtx = await esbuild.context({
+    entryPoints: ["src/utils/StatuslineFormat.ts"],
+    bundle: true,
+    format: "cjs",
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: "neutral",
+    target: "es2020",
+    outfile: "out/scripts/ctrlyoke-statusline-format.js",
+    logLevel: "silent",
+  });
+
   // Build MCP server (separate executable for CLI tools)
   const mcpCtx = await esbuild.context({
     entryPoints: ["src/mcp-server.ts"],
@@ -382,15 +398,18 @@ async function main() {
   if (watch) {
     await webviewScriptsCtx.watch();
     await ctx.watch();
+    await statuslineFormatCtx.watch();
     await mcpCtx.watch();
     await cliCtx.watch();
   } else {
     await webviewScriptsCtx.rebuild();
     await ctx.rebuild();
+    await statuslineFormatCtx.rebuild();
     await mcpCtx.rebuild();
     await cliCtx.rebuild();
     await webviewScriptsCtx.dispose();
     await ctx.dispose();
+    await statuslineFormatCtx.dispose();
     await mcpCtx.dispose();
     await cliCtx.dispose();
   }

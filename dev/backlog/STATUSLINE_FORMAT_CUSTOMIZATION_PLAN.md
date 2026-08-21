@@ -376,91 +376,18 @@ wrapper reuses these conventions without importing across that boundary.
    textarea blur, `AdvancedPermissionsSection.tsx:99-113`). No per-segment message plumbing to
    invent.
 
-11. **Preview must reuse the real formatter, not a second hand-rolled one.** A settings-UI
-    preview line that re-implements field formatting in TSX would drift from the wrapper's actual
-    output the first time either one changes — exactly the duplication this project's CLAUDE.md
-    prohibits ("Never duplicate code that can be single sourced"). The wrapper
-    (`src/scripts/ctrlyoke-statusline-wrapper.js`) is plain CommonJS with zero bundler-resolved
-    imports, by design, so it can run as a detached process outside the extension's module graph
-    (`STATUSLINE_USER_CONTROLS_PLAN.md`'s Wrapper Script Consolidation section already establishes
-    this constraint and that `esbuild.js`'s `copy-scripts` plugin only copies the flat immediate
-    children of `src/scripts/`, not nested folders). Two options, needing a build-time spike
-    before picking one:
-    - **(a)** Extract the pure, side-effect-free formatting functions (`getContextValues`,
-      `getQuotaPercentage`, `formatCompactTokenCount`, `calculateContextPercentage`,
-      `getContextBand`, the new segment-driven `formatBrandedStatusLine`, and — net-new to this
-      extraction scope, per Decisions 4-5 — `CLAUDE_RATE_LIMIT_WINDOWS`,
-      `formatUsageWindowLabel`, `humanizeQuotaKey`, and `quotaWindowKind`) into an isomorphic TS
-      module under `src/utils/`, imported both by the React preview/settings UI and, via a thin
-      CommonJS re-export, by `src/scripts/ctrlyoke-statusline-wrapper.js` **and** by
-      `ClaudeUsageProvider.ts`/`AntigravityUsageProvider.ts`, which already implement these exact
-      functions for `UsageCard.tsx`'s data path. Without this, `usage1`/`usage2` would be a
-      **third** independent reimplementation of window ordering and labeling — the wrapper
-      duplicating logic the extension host already has, purely because of the module-boundary
-      constraint, not because the logic actually differs. Preferred on DRY grounds, but needs
-      verifying the extension-host/webview bundler and the scripts copier both resolve that
-      re-export correctly — the wrapper today has intentionally zero external imports, and this
-      would be the first exception.
-    - **(b)** Push a live-rendered preview string from the extension host (which *can* `require()`
-      the compiled `out/scripts/ctrlyoke-statusline-wrapper.js` directly, no bundler involved) down
-      to the webview on every format edit, instead of rendering in React at all. Simpler
-      dependency story, slightly higher latency per keystroke (mitigated by debouncing, same as
-      any live-typed setting) — but does **not** solve the window-ordering/labeling duplication
-      called out in (a), since the wrapper would still need its own copy of that logic even if the
-      *preview* comes from the extension host. If (b) is chosen for the preview specifically, the
-      window-ordering/labeling extraction from (a) should still happen on its own merits.
-
-    Recommend (a) unless the Phase 1 spike finds a concrete bundler obstacle, since it also
-    benefits any future non-webview consumer (CLI/MCP hosts) that might want to preview a format
-    without spinning up a webview, and it closes the window-labeling duplication either way.
-
-    **Verified build constraints (orchestration pass, 2026-08-21).** These were read out of the
-    build config directly so the Phase 1 spike doesn't have to rediscover them; they narrow it to
-    one open question rather than an open-ended investigation:
-    - The extension host is bundled by esbuild into a **single** `out/extension.js`
-      (`esbuild.js:306-314`, `bundle: true`), and likewise `out/mcp-server.js` / `out/cli.js`.
-      There is no `out/utils/**` on disk, so the detached wrapper can never `require()` a compiled
-      TS module by path. Option (a)'s "thin CommonJS re-export" cannot mean "require the compiled
-      `src/utils` file" — that file doesn't exist at runtime.
-    - `copyScriptsPlugin` (`esbuild.js:189-214`) copies only the **flat immediate children** of
-      `src/scripts/` via `fs.copyFileSync`, into `out/scripts/`. A nested subdirectory would throw,
-      but a *sibling* `.js` file is copied fine — so `require("./some-sibling.js")` from the wrapper
-      is viable, as is an esbuild entry point that emits a CommonJS bundle directly into
-      `out/scripts/` alongside it.
-    - **The wrapper's own test suite already runs against `out/scripts/`, not `src/scripts/`**:
-      `StatuslineWrapper.test.ts:33-37`'s `scriptPath` resolves `../../scripts/<name>` from
-      `__dirname`, which is `out/test/unit/` at runtime. So any sibling module the wrapper requires
-      is present under test too — this is *not* the blocker it would be if tests ran from source.
-    - The webview can import `src/utils/**` today: `src/ui/webview-react/tsconfig.json:24-35`
-      already maps `@root/utils/*` → `../../utils/*`, and the webview builds with Vite
-      (`vite build --config src/ui/webview-react/vite.config.ts`). The webview *cannot* import a
-      plain CommonJS `.js` out of `src/scripts/` — that tsconfig's `include` is webview-only and
-      `allowJs` is unset. So the TS half of any shared module must live under `src/utils/`, not
-      `src/scripts/`.
-    - The extension host does **not** `require()` the wrapper anywhere today (grep: only
-      `StatuslineWrapper.test.ts` does). Option (b) is therefore a net-new host↔script dependency,
-      not an extension of an existing one.
-
-    Net effect: the TS-side sharing in (a) — one isomorphic module under `src/utils/` consumed by
-    the webview preview *and* `ClaudeUsageProvider`/`AntigravityUsageProvider` — is confirmed
-    workable with no build change at all. The only genuinely open question left for the spike is
-    **how the detached wrapper gets that same logic**, with three candidates to weigh:
-    - **(a1)** Add an esbuild entry point compiling the shared `src/utils/` module to a CommonJS
-      `out/scripts/ctrlyoke-statusline-format.js`, required by the wrapper as a flat sibling.
-      True single-sourcing; costs one new build output and a check that `copyScriptsPlugin`'s
-      `onEnd` copy doesn't race or clobber it.
-    - **(a2)** Keep the shared logic as a hand-written flat CommonJS sibling in `src/scripts/`
-      (copied verbatim by the existing plugin, zero build change) and have the TS side re-export
-      from it — blocked as written, since the webview can't import it (see above), so this only
-      works if the TS side keeps its own copy.
-    - **(c)** Accept that the wrapper stays fully standalone (its current, deliberate zero-import
-      posture) and enforce parity with a **contract test**: a fixture table of payloads + formats
-      asserting the wrapper's output is byte-identical to the shared TS module's. Duplication
-      becomes tracked and CI-enforced rather than silent. Cheapest build story; the honest
-      fallback if (a1) hits a packaging snag.
-
-    The spike should pick one, prove it with a real build (`npm run compile` + the packaging test),
-    and write the outcome back into this decision before Phase 2 starts.
+11. **Preview must reuse the real formatter, not a second hand-rolled one.** The settled
+    implementation is **(a1)**: pure statusline display helpers live in an isomorphic TypeScript
+    module under `src/utils/`, imported by TypeScript consumers and compiled by a dedicated esbuild
+    entry to the flat CommonJS sibling `out/scripts/ctrlyoke-statusline-format.js`. The detached
+    `src/scripts/ctrlyoke-statusline-wrapper.js` requires that sibling, while the webview imports
+    the source module through its existing `@root/utils/*` alias. Phase 1 proves the dependency with
+    `formatUsagePercentForDisplay(usedPercent, direction)`, exercised by the wrapper and the
+    `UsageCard` TypeScript path, plus a packaging test that verifies the emitted artifact and a
+    detached child-process require after a real build. The sequential esbuild rebuild keeps the
+    `copyScriptsPlugin` flat-file copy from racing or clobbering the generated sibling. Options
+    (a2) and (c) were rejected: (a2) cannot serve the webview's TypeScript-only module boundary,
+    while (c) would preserve the duplication that this shared build proves avoidable.
 
 12. **Give statusline configuration its own top-level settings tab ("Status Line"), separate
     from Stats & Usage.** The original design (this plan's earlier draft, and where

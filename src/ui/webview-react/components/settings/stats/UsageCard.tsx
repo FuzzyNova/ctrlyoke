@@ -16,6 +16,7 @@ import {
   formatTokenCount,
   formatTokenTotal,
 } from "@root/utils/TokenFormatting";
+import { formatUsagePercentForDisplay } from "@root/utils/StatuslineFormat";
 import { getUsageBarColorClass } from "@utils/usageBarColor";
 
 function formatTimestamp(value: number | undefined): string {
@@ -209,7 +210,9 @@ function formatQuotaValue(
 ): string {
   if (value === undefined) return "—";
   if (unit === HARNESS_USAGE_UNITS.TOKENS) return formatTokenCount(value);
-  if (unit === HARNESS_USAGE_UNITS.PERCENT) return formatRoundedNumber(value);
+  if (unit === HARNESS_USAGE_UNITS.PERCENT) {
+    return formatRoundedNumber(formatUsagePercentForDisplay(value, "used"));
+  }
   return String(value);
 }
 

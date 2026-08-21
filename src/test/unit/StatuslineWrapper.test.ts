@@ -15,6 +15,10 @@ type SharedWrapper = {
     provider: string,
     payload: Record<string, unknown>
   ): string;
+  formatUsagePercentForDisplay(
+    usedPercent: number,
+    direction: "used" | "remaining"
+  ): number;
   forwardToCommand(
     command: string | undefined,
     input: string | Buffer,
@@ -209,6 +213,45 @@ suite("Shared statusline wrappers", () => {
     assert.match(claudeLine, /12\.4k\/1\.0M ctx \(1\.2%\)/);
     assert.match(claudeLine, /rate 25% · idle/);
     assert.match(agyLine, /quota 98% · idle/);
+  });
+
+  test("loads the shared formatter sibling and uses it in a child process", async () => {
+    const formatPath = scriptPath("ctrlyoke-statusline-format.js");
+    await fs.access(formatPath);
+    assert.strictEqual(
+      shared.formatUsagePercentForDisplay(37, "remaining"),
+      63
+    );
+
+    const result = await new Promise<{ code: number | null; stdout: string }>(
+      (resolve, reject) => {
+        const child = spawn(
+          process.execPath,
+          [
+            "-e",
+            "const wrapper = require(process.argv[1]); process.stdout.write(String(wrapper.formatUsagePercentForDisplay(37, 'remaining')))",
+            scriptPath("ctrlyoke-statusline-wrapper.js"),
+          ],
+          {
+            detached: true,
+            stdio: ["ignore", "pipe", "ignore"],
+            windowsHide: true,
+          }
+        );
+        const output: Buffer[] = [];
+        child.stdout.on("data", (chunk) => output.push(Buffer.from(chunk)));
+        child.once("error", reject);
+        child.once("close", (code) =>
+          resolve({
+            code,
+            stdout: Buffer.concat(output).toString("utf8"),
+          })
+        );
+      }
+    );
+
+    assert.strictEqual(result.code, 0);
+    assert.strictEqual(result.stdout, "63");
   });
 
   test("treats malformed payloads and forwarding failures as non-fatal", async () => {
