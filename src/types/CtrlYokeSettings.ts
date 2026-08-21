@@ -138,7 +138,6 @@ export interface CtrlYokeGlobalSettings {
     providerRefreshEnabled: boolean;
     persistObservedUsage: boolean;
     warningPercentUsed: number;
-    preferredFallbackOrder: HarnessId[];
   };
 
   /** Explicit price overrides for models absent from the bundled table. */
@@ -395,7 +394,6 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     providerRefreshEnabled: true,
     persistObservedUsage: true,
     warningPercentUsed: 80,
-    preferredFallbackOrder: [],
   },
   modelPricing: {},
   execution: {

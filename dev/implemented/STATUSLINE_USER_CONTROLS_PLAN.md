@@ -129,6 +129,19 @@ the user explicitly turns tracking off.
 
 ## Scope: User/Machine Only, Not Workspace
 
+> **Correction, 2026-08-21:** the `package.json` `contributes.configuration` entries this
+> section originally called for have been removed. They were dead duplicates: no runtime code
+> reads `vscode.workspace.getConfiguration('ctrlyoke')` for any of these keys (the only such
+> call is for the unrelated bootstrap setting `ctrlyoke.workspaceDirectory`, in
+> `VsCodeWorkspaceRoot.ts`), so the VS Code Settings UI entries never had any effect — editing
+> them there silently did nothing, since the real value always came from `.ctrlyoke/settings.json`
+> via `CtrlYokeConfigService`. This does **not** weaken the workspace-scope prohibition argued
+> for below: that argument still holds, and it was always enforced by
+> `WORKSPACE_FORBIDDEN_SETTING_ROOTS` in `CtrlYokeConfigService.ts`, not by VS Code's native
+> `"scope": "machine"` metadata — the "Existing gap to fix" bullet a few paragraphs down says as
+> much explicitly. See `.github/copilot-instructions.md`'s `singleSourcesOfTruth` for the durable
+> rule: `package.json` is not a settings surface except for the one bootstrap exception.
+
 All three settings must be **machine-scoped** (VS Code `"scope": "machine"`, same as the two
 existing settings this design touches), never settable at workspace scope, for reasons that
 go beyond preference. This directly covers the "different script per workspace" scenario too

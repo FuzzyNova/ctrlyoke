@@ -3442,7 +3442,6 @@ export class WorkflowInstance {
       queuedAttempts,
       snapshots: this.getHarnessUsageSnapshots(),
       warningPercentUsed: settings.warningPercentUsed,
-      preferredFallbackOrder: settings.preferredFallbackOrder,
     });
     if (warning) {
       notifyUserFeedback(this.userFeedbackSink, "warning", warning.message);

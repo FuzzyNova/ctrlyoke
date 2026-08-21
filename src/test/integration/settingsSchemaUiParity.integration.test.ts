@@ -172,7 +172,6 @@ const PENDING_UI_PARITY: readonly string[] = [
   "server.theme",
   "usageTracking.enabled",
   "usageTracking.persistObservedUsage",
-  "usageTracking.preferredFallbackOrder",
   "usageTracking.providerRefreshEnabled",
   "usageTracking.warningPercentUsed",
 ];

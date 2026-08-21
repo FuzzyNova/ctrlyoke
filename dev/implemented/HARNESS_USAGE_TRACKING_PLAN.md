@@ -646,10 +646,19 @@ are not combined. Enterprise/org metrics remain explicitly deferred.
 - [x] Suppress the warning entirely when `snapshot.quota.source` is
       `unavailable` or the quota snapshot is stale past
       `snapshot.quota.staleAfterMs`, rather than guessing.
-- [x] Suggest a fallback only when its comparable provider window is fresh and
-      materially less used; never rank an observed-only or stale harness as if
-      its missing quota meant zero usage
-- [x] User-configurable preferred fallback order
+- [x] ~~Suggest a fallback only when its comparable provider window is fresh
+      and materially less used; never rank an observed-only or stale harness
+      as if its missing quota meant zero usage~~ / ~~User-configurable
+      preferred fallback order~~ — **rejected and removed, August 21, 2026.**
+      The warning's job is to report that a queued harness is low on quota,
+      not to recommend a replacement harness — that choice belongs to the
+      user, not to a setting they'd have to configure first ("you're about to
+      run out of usage for X" is actionable; "...try Y instead" second-guesses
+      a decision only the user can make). Removed
+      `findFallbackHarness`/`orderedHarnessIds`/`isComparableWindow`/
+      `fallbackHarnessId` from `UsageSelectionAssist.ts` and the
+      `usageTracking.preferredFallbackOrder` setting; the warning message now
+      ends after naming the triggering window and its reset time.
 
 ---
 
@@ -672,12 +681,11 @@ Non-negotiables:
 Potential setting:
 
 ```json
-"ctrlyoke.usageTracking": {
+"usageTracking": {
   "enabled": true,
   "providerRefreshEnabled": true,
   "persistObservedUsage": true,
-  "warningPercentUsed": 80,
-  "preferredFallbackOrder": []
+  "warningPercentUsed": 80
 }
 ```
 

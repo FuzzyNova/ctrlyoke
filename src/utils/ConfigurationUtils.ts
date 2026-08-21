@@ -105,8 +105,6 @@ export const CONFIG_KEYS = {
     "usageTracking.providerRefreshEnabled",
   USAGE_TRACKING_PERSIST_OBSERVED_USAGE: "usageTracking.persistObservedUsage",
   USAGE_TRACKING_WARNING_PERCENT_USED: "usageTracking.warningPercentUsed",
-  USAGE_TRACKING_PREFERRED_FALLBACK_ORDER:
-    "usageTracking.preferredFallbackOrder",
   MODEL_PRICING: "modelPricing",
   UI_OFFER_TRUST_FOR_UNTRUSTED_FILE_LINKS: "ui.offerTrustForUntrustedFileLinks",
   EXTENSION_NAMESPACE: "ctrlyoke.",
@@ -806,11 +804,7 @@ export const ConfigurationUtils = {
 
   /** Get the complete usage tracking configuration used by selection assist. */
   getHarnessUsageSettings(): CtrlYokeGlobalSettings["usageTracking"] {
-    const settings = configService.get(CONFIG_KEYS.USAGE_TRACKING);
-    return {
-      ...settings,
-      preferredFallbackOrder: [...settings.preferredFallbackOrder],
-    };
+    return configService.get(CONFIG_KEYS.USAGE_TRACKING);
   },
 
   /** Whether the explicit provider refresh command may invoke collectors. */

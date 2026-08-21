@@ -561,7 +561,7 @@ any attempt with `totalConfidence: "partial"`.
 Add a user override so a table miss is not a dead end:
 
 ```json
-"ctrlyoke.modelPricing": {
+"modelPricing": {
   "<harnessId>": { "<modelId>": { "inputPerMTok": 3, "outputPerMTok": 15 } }
 }
 ```
@@ -830,8 +830,11 @@ stats row, CLI formatter, workflow-step rendering, and their React tests.
       discrepancy.
 - [x] Compute and render attempt cost + run cost with source-aware labelling
       from `costSources`; suppress dollars for `copilot-cli`.
-- [x] Add the `ctrlyoke.modelPricing` override setting and a hide-cost setting.
-- [x] Plumb both settings through `package.json`, `CtrlYokeSettings.ts`,
+- [x] Add the `modelPricing` override setting and a hide-cost setting.
+- [x] ~~Plumb both settings through `package.json`~~ (2026-08-21: removed —
+      `package.json`'s `contributes.configuration` is not a settings surface;
+      see `.github/copilot-instructions.md`'s `singleSourcesOfTruth`), plumb
+      through `schemas/settings-schema.json`, `CtrlYokeSettings.ts`,
       `CtrlYokeConfigService`, and `ConfigurationUtils`; use a
       `USER_OVERRIDE` cost source.
 - [x] Tests: subset vs disjoint cache math, reasoning double-count guard,

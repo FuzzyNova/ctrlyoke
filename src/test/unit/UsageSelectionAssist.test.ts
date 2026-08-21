@@ -60,7 +60,6 @@ suite("UsageSelectionAssist", () => {
       queuedAttempts: [{ harnessId: queuedHarness }],
       snapshots,
       warningPercentUsed: 80,
-      preferredFallbackOrder: [HARNESS_IDS.CODEX_CLI],
       now,
     };
   }
@@ -182,36 +181,6 @@ suite("UsageSelectionAssist", () => {
       }),
       undefined
     );
-  });
-
-  test("suggests only a fresh, materially less-used comparable window", () => {
-    const warning = buildUsageSelectionWarning(
-      input([
-        snapshot(HARNESS_IDS.CLAUDE_CLI, 95),
-        snapshot(HARNESS_IDS.CODEX_CLI, 80),
-      ])
-    );
-    assert.strictEqual(warning?.fallbackHarnessId, HARNESS_IDS.CODEX_CLI);
-
-    const staleFallback = buildUsageSelectionWarning(
-      input([
-        snapshot(HARNESS_IDS.CLAUDE_CLI, 95),
-        snapshot(HARNESS_IDS.CODEX_CLI, 80, {
-          fetchedAt: now - 6 * 60 * 1000,
-        }),
-      ])
-    );
-    assert.strictEqual(staleFallback?.fallbackHarnessId, undefined);
-
-    const observedOnlyFallback = buildUsageSelectionWarning(
-      input([
-        snapshot(HARNESS_IDS.CLAUDE_CLI, 95),
-        snapshot(HARNESS_IDS.CODEX_CLI, 0, {
-          source: HARNESS_QUOTA_SOURCES.UNAVAILABLE,
-        }),
-      ])
-    );
-    assert.strictEqual(observedOnlyFallback?.fallbackHarnessId, undefined);
   });
 
   test("respects the master off switch", () => {

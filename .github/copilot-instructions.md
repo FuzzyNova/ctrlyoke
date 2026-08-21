@@ -114,6 +114,7 @@ NOTE: `npm run test:harness` runs real harnesses, costs money, and is very slow 
 - `src/utils/ConfigurationUtils.ts` — VS Code settings access
 - `src/utils/ModelConstants.ts` — model lists and display metadata
 - `schemas/workflow-schema.json` — prompt schema source
+- `schemas/settings-schema.json` + `src/types/CtrlYokeSettings.ts` — the only settings surface. Every ctrlyoke setting is read from `.ctrlyoke/settings.json` through `CtrlYokeConfigService`/`ConfigurationUtils`. **`package.json`'s `contributes.configuration` is not a settings surface** — `vscode.workspace.getConfiguration('ctrlyoke')` is called in exactly one place (`VsCodeWorkspaceRoot.ts`), for exactly one setting, `ctrlyoke.workspaceDirectory`, which must live there because ctrlyoke needs it to *locate* `.ctrlyoke/settings.json` in the first place — a real bootstrap exception, not a precedent. Any other property added to `package.json`'s configuration block is a disconnected, do-nothing duplicate that appears in VS Code's native Settings UI but is never read by any code path (confirmed by removing 13 such stale entries — six `statusLineTracking` and six `usageTracking`/`modelPricing`/`ui.hideCost` properties — on 2026-08-21). If a setting needs machine-scope-style exclusion from Settings Sync or user-vs-workspace write restrictions, implement it in `CtrlYokeConfigService.ts` (see `WORKSPACE_FORBIDDEN_SETTING_ROOTS`) — not by mirroring it into `package.json`.
 </singleSourcesOfTruth>
 
 <agentGuidance>

@@ -460,20 +460,6 @@
           "type": "number",
           "minimum": 0,
           "maximum": 100
-        },
-        "preferredFallbackOrder": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "copilot-cli",
-              "claude-cli",
-              "codex-cli",
-              "opencode-cli",
-              "qwen-cli",
-              "antigravity-cli"
-            ]
-          }
         }
       }
     },
