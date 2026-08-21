@@ -547,12 +547,17 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
     sessionId: string
   ): AntigravityLogEvent[] {
     const { entry, eventId } = record;
-    // A background-task launch is `status: "RUNNING"` regardless of `type`:
-    // in observed agy CLI output every tool result (run_command, view_file,
-    // manage_task, ...) is typed "GENERIC", never a per-tool type like
-    // "RUN_COMMAND". See the launch-detection note on trackTranscriptBackgroundState.
+    // A background-task launch is a MODEL/GENERIC entry with status
+    // "RUNNING": in observed agy CLI output every tool result (run_command,
+    // view_file, manage_task, ...) is typed "GENERIC", never a per-tool type
+    // like "RUN_COMMAND". A mid-stream PLANNER_RESPONSE can also carry
+    // status "RUNNING" and must stay excluded here (and unfinished, so it
+    // has nothing worth mapping yet). See the launch-detection note on
+    // trackTranscriptBackgroundState.
     const isBackgroundLaunch =
-      entry.source === "MODEL" && entry.status === "RUNNING";
+      entry.source === "MODEL" &&
+      entry.type === "GENERIC" &&
+      entry.status === "RUNNING";
     const isAskQuestionResult =
       entry.source === "MODEL" && entry.type === "ASK_QUESTION";
     if (entry.status !== "DONE" && !isBackgroundLaunch && !isAskQuestionResult) {
@@ -727,18 +732,13 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       case "GREP_SEARCH":
         return name === "grep_search";
       case "GENERIC":
-        return ![
-          "run_command",
-          "view_file",
-          "write_to_file",
-          "replace_file_content",
-          "multi_replace_file_content",
-          "list_resources",
-          "read_resource",
-          "search_web",
-          "list_dir",
-          "grep_search",
-        ].includes(name);
+        // Observed agy output (1.1.12+) types every tool result "GENERIC" —
+        // run_command, view_file, write_to_file, grep_search, manage_task,
+        // etc. all lose their distinct per-tool type. Type can no longer
+        // disambiguate here, so a GENERIC result always matches whatever
+        // call is oldest in the pending queue (adjacent-in-file-order
+        // pairing, per the class doc on `mapTranscriptRecord`).
+        return true;
       default:
         return false;
     }
@@ -760,7 +760,11 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   ): void {
     this.resetProviderStateForSession(sessionId);
 
-    if (entry.source === "MODEL" && entry.status === "RUNNING") {
+    if (
+      entry.source === "MODEL" &&
+      entry.type === "GENERIC" &&
+      entry.status === "RUNNING"
+    ) {
       const taskId = this.extractTaskId(entry);
       if (taskId) {
         this.backgroundFollowUpState.launch(taskId);
@@ -888,13 +892,13 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
    * transcript mapper consumes records. See
    * `dev/implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`, "Antigravity CLI".
    *
-   * Rule: pending while any background-task launch (a `MODEL`-sourced entry
-   * with `status: "RUNNING"` — observed agy output always types these
-   * "GENERIC", never a per-tool type like "RUN_COMMAND", so launch detection
-   * must not gate on `type`; the task ID is recovered from the freeform
-   * `Tool is running as a background task with task id: <sessionId>/task-N`
-   * content instead) lacks a matching completion/failure `SYSTEM_MESSAGE`
-   * (`Task id "<sessionId>/task-N" finished with result:`). Consuming a matching notification also latches
+   * Rule: pending while any background-task launch (a `MODEL`/`GENERIC`
+   * entry with `status: "RUNNING"` — observed agy output always types these
+   * "GENERIC", never a per-tool type like "RUN_COMMAND"; the task ID is
+   * recovered from the freeform `Tool is running as a background task with
+   * task id: <sessionId>/task-N` content) lacks a matching completion/failure
+   * `SYSTEM_MESSAGE` (`Task id "<sessionId>/task-N" finished with result:`).
+   * Consuming a matching notification also latches
    * the resumed turn until its terminal planner response, so a Stop that raced
    * the catch-up read cannot commit the workflow. New launches remain
    * independent while that resumed turn is active.

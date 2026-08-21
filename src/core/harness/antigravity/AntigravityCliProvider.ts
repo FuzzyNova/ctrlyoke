@@ -75,7 +75,13 @@ const ANTIGRAVITY_IMAGE_INPUT_CAPABILITY = {
   caveatCode: PROMPT_INPUT_CAVEAT_CODES.NO_NATIVE_IMAGE_ATTACHMENT,
 } as const;
 
-const ANTIGRAVITY_MIN_VERSION = "1.0.15";
+/**
+ * agy's transcript format changed to type every tool result "GENERIC"
+ * (no more per-tool `RUN_COMMAND`/`VIEW_FILE`/`CODE_ACTION`/etc. types),
+ * confirmed present in 1.1.12. `AntigravityLogParser`/`AntigravityToolEventBuilder`
+ * target that shape; older CLIs are not supported.
+ */
+const ANTIGRAVITY_MIN_VERSION = "1.1.12";
 
 type AntigravityHookGroup = Record<
   "PreToolUse" | "PostToolUse" | "PreInvocation" | "PostInvocation" | "Stop",

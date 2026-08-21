@@ -86,7 +86,7 @@ export class AntigravityToolEventBuilder {
       ];
     }
 
-    if (result.type === "RUN_COMMAND") {
+    if (result.type === "RUN_COMMAND" || normalizedName === "run_command") {
       const exitCode = this.exitCode(result);
       const command = this.stringArg(args, ["CommandLine", "command", "cmd"]);
       const workingDir = this.stringArg(args, ["Cwd", "cwd", "workingDir"]);
@@ -128,7 +128,12 @@ export class AntigravityToolEventBuilder {
       ];
     }
 
-    if (result.type === "CODE_ACTION") {
+    if (
+      result.type === "CODE_ACTION" ||
+      ["write_to_file", "replace_file_content", "multi_replace_file_content"].includes(
+        normalizedName
+      )
+    ) {
       return this.buildCodeAction(call, result, timestamp, success, error);
     }
 
@@ -522,8 +527,16 @@ export class AntigravityToolEventBuilder {
       return Number.isFinite(parsed) ? parsed : undefined;
     }
     const content = this.stringContent(entry);
-    const match = content.match(/(?:exit\s*code|exit_code)\s*[:=]\s*(-?\d+)/i);
-    return match ? Number(match[1]) : undefined;
+    // "exit code: N" / "exit_code=N" and agy's own "exited with code N"
+    // phrasing (confirmed in real background-task completion messages).
+    const match = content.match(
+      /(?:exit\s*code|exit_code)\s*[:=]\s*(-?\d+)|exited with code\s+(-?\d+)/i
+    );
+    if (!match) {
+      return undefined;
+    }
+    const raw = match[1] ?? match[2];
+    return raw !== undefined ? Number(raw) : undefined;
   }
 
   private static stringContent(entry: AntigravityTranscriptEntry): string {
