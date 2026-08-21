@@ -642,10 +642,6 @@
       "description": "UI display settings.",
       "additionalProperties": false,
       "properties": {
-        "showCliOutput": {
-          "type": "boolean",
-          "description": "Show CLI output in the ctrlyoke panel."
-        },
         "showCliCommand": {
           "type": "boolean",
           "description": "Show the CLI command being executed."

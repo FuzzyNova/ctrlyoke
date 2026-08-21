@@ -176,7 +176,6 @@ export interface CtrlYokeGlobalSettings {
 
   // UI
   ui: {
-    showCliOutput: boolean;
     showCliCommand: boolean;
     logRawCliOutput: boolean;
     showHeadlessPermissionWarning: boolean;
@@ -432,7 +431,6 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     mobileCustomShortcuts: [],
   },
   ui: {
-    showCliOutput: true,
     showCliCommand: true,
     logRawCliOutput: false,
     showHeadlessPermissionWarning: true,

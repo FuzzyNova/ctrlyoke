@@ -229,13 +229,6 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Check if CLI output should be shown in output panel
-   */
-  shouldShowCliOutput(): boolean {
-    return configService.get(CONFIG_KEYS.UI).showCliOutput;
-  },
-
-  /**
    * Check if raw CLI output should be logged for debugging
    */
   shouldLogRawCliOutput(): boolean {

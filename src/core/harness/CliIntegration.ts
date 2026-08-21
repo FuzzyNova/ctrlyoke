@@ -1388,17 +1388,10 @@ export class CliIntegration extends HarnessIntegration {
   // ============================================================
 
   /**
-   * Check if output should be shown in Output panel
-   */
-  protected shouldShowOutput(): boolean {
-    return ConfigurationUtils.shouldShowCliOutput();
-  }
-
-  /**
    * Log prompt to output channel with formatting
    */
   protected logPrompt(promptText: string): void {
-    if (this.shouldShowOutput()) {
+    if (ConfigurationUtils.shouldLogRawCliOutput()) {
       const preview =
         promptText.length > 120
           ? `${promptText.substring(0, 120)}…`
@@ -1413,7 +1406,7 @@ export class CliIntegration extends HarnessIntegration {
    * Log response to output channel with formatting
    */
   protected logResponse(_response: string, statistics?: string): void {
-    if (this.shouldShowOutput()) {
+    if (ConfigurationUtils.shouldLogRawCliOutput()) {
       if (statistics) {
         Log.appendLine(`\n[STATISTICS] ${statistics}`);
       }

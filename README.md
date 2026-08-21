@@ -378,7 +378,6 @@ not determine workflow field support.
 
 | Setting                      | Default | Description                                                                                                                                                 |
 | ---------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `showCliOutput`              | `true`  | Show CLI output in the Output panel                                                                                                                         |
 | `showCliCommand`             | `false` | Show the full CLI invocation in the dashboard                                                                                                               |
 | `runs.maxRuns`               | `-1`    | Maximum completed runs retained per workflow lineage; `-1` keeps all runs in run storage                                                                    |
 | `storage.runHistoryLocation` | `user`  | `user` keeps project-keyed history under the ctrlyoke state home; `workspace` keeps it beside the repo. This controls locality and durability, not sharing. |

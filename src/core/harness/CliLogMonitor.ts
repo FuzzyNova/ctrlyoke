@@ -103,7 +103,7 @@ export interface LogMonitorDependencies {
     onStreamingEvents: (events: CliEvent[]) => void;
     /** Callback fired when the full response is complete */
     onResponseComplete: (message: string) => void;
-    /** Callback to log the response (respects showCliOutput setting) */
+    /** Callback to log the response (respects logRawCliOutput setting) */
     logResponse: (response: string, statistics?: string) => void;
     /** Called when a streaming event reveals updated context window utilization */
     onContextWindowUpdate?: (used: number, size: number) => void;

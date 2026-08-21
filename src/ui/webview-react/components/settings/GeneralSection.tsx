@@ -99,14 +99,6 @@ export function GeneralSection({
           UI Preferences
         </h3>
         <SettingToggleRow
-          label="Show CLI output"
-          description="Display the AI CLI output in the output panel."
-          checked={ui.showCliOutput}
-          onChange={(v) => onUpdate("ui.showCliOutput", v)}
-          path="ui.showCliOutput"
-          {...rowProps}
-        />
-        <SettingToggleRow
           label="Show CLI command"
           description="Show the CLI command used to start the AI harness."
           checked={ui.showCliCommand}
