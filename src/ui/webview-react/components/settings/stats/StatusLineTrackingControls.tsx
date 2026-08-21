@@ -18,6 +18,7 @@ import { LocalTextInput } from "@components/shared/LocalInputs";
 import { Modal } from "@components/shared/Modal";
 import { SettingInputRow } from "@components/shared/SettingInputRow";
 import { SettingToggleRow } from "@components/shared/SettingToggleRow";
+import { useHarnessUsageStore } from "@store/harnessUsageStore";
 import { StatusLineFormatEditor } from "./StatusLineFormatEditor";
 
 interface Props {
@@ -124,6 +125,9 @@ export function StatusLineTrackingControls({ harnessId, settings }: Props) {
   const provider = providerForHarness(harnessId);
   const paths = STATUS_LINE_SETTING_PATHS[provider];
   const tracking = settings.settings.permissions.statusLineTracking[provider];
+  const snapshot = useHarnessUsageStore(
+    (state) => state.snapshotsByHarness[harnessId]
+  );
   const harnessName = HARNESS_INFO[harnessId].name;
   const [isDisableModalOpen, setIsDisableModalOpen] = useState(false);
   const [restoreCustomCommand, setRestoreCustomCommand] = useState(true);
@@ -202,6 +206,9 @@ export function StatusLineTrackingControls({ harnessId, settings }: Props) {
         <StatusLineFormatEditor
           format={tracking.format}
           onCommit={(format) => sendGlobalSetting(paths.format, format)}
+          provider={provider}
+          snapshot={snapshot}
+          percentDirection={settings.settings.usageTracking.percentDirection}
         />
       )}
       <Modal

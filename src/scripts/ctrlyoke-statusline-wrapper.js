@@ -13,13 +13,8 @@ const path = require("path");
 const { spawn } = require("child_process");
 const {
   DEFAULT_STATUS_LINE_FORMAT,
-  STATUS_LINE_COLOR_IDS,
-  STATUS_LINE_FIELD_IDS,
-  STATUS_LINE_FIELD_REGISTRY,
-  formatUsageWindowLabel,
-  humanizeQuotaKey,
-  quotaWindowKindRank,
   formatUsagePercentForDisplay,
+  formatBrandedStatusLine: formatSharedBrandedStatusLine,
 } = require("./ctrlyoke-statusline-format.js");
 
 // Both harnesses refresh their statusline frequently. Keep forwarding below
@@ -27,10 +22,6 @@ const {
 const FORWARD_TIMEOUT_MS = 200;
 const ANSI_RESET = "\u001b[0m";
 const DEFAULT_PERCENT_DIRECTION = "used";
-const STATUSLINE_SEGMENT_TYPES = Object.freeze({
-  FIELD: "field",
-  LITERAL: "literal",
-});
 
 const STATUSLINE_PROVIDERS = Object.freeze({
   CLAUDE: "claude",
@@ -55,13 +46,6 @@ const CONTEXT_COLORS = Object.freeze({
   warning: "\u001b[33m",
   danger: "\u001b[31m",
 });
-
-// Claude's rate-limit keys are a curated, stable enum. Keep this order aligned
-// with ClaudeUsageProvider's CLAUDE_RATE_LIMIT_WINDOWS definition.
-const CLAUDE_USAGE_WINDOW_DEFINITIONS = Object.freeze([
-  { key: "five_hour", windowMinutes: 5 * 60 },
-  { key: "seven_day", windowMinutes: 7 * 24 * 60 },
-]);
 
 let snapshotSequence = 0;
 
@@ -311,10 +295,6 @@ function getContextBand(percentage) {
   return "neutral";
 }
 
-function formatPercentage(percentage) {
-  return `${percentage.toFixed(1).replace(/\.0$/, "")}%`;
-}
-
 function getContextValues(payload) {
   const contextWindow = normalizePayload(payload).context_window;
   const currentUsage = normalizePayload(contextWindow?.current_usage);
@@ -372,80 +352,6 @@ function getQuotaPercentage(payload, provider) {
   return Math.max(0, Math.min(100, Math.round(Math.max(...usedPercentages))));
 }
 
-function normalizeUsedPercentage(value) {
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
-
-function getUsageWindows(payload, provider) {
-  const normalized = normalizePayload(payload);
-  if (provider === STATUSLINE_PROVIDERS.CLAUDE) {
-    const rateLimits = normalized.rate_limits;
-    if (
-      !rateLimits ||
-      typeof rateLimits !== "object" ||
-      Array.isArray(rateLimits)
-    ) {
-      return [];
-    }
-
-    return CLAUDE_USAGE_WINDOW_DEFINITIONS.flatMap((definition) => {
-      const entry = rateLimits[definition.key];
-      const usedPercentage =
-        entry && typeof entry === "object" && !Array.isArray(entry)
-          ? asFiniteNumber(entry.used_percentage)
-          : undefined;
-      if (usedPercentage === undefined) {
-        return [];
-      }
-      return [
-        {
-          label: formatUsageWindowLabel(definition.windowMinutes),
-          usedPercentage: normalizeUsedPercentage(usedPercentage),
-        },
-      ];
-    });
-  }
-
-  const quota = normalized.quota;
-  if (!quota || typeof quota !== "object" || Array.isArray(quota)) {
-    return [];
-  }
-
-  return Object.entries(quota)
-    .filter(
-      ([, entry]) =>
-        entry && typeof entry === "object" && !Array.isArray(entry)
-    )
-    .map(([id, entry]) => ({
-      id,
-      label: humanizeQuotaKey(id),
-      usedPercentage:
-        asFiniteNumber(entry.remaining_fraction) === undefined
-          ? undefined
-          : normalizeUsedPercentage(
-              100 - asFiniteNumber(entry.remaining_fraction) * 100
-            ),
-    }))
-    .filter((window) => window.usedPercentage !== undefined)
-    .sort((left, right) => {
-      const kindDifference =
-        quotaWindowKindRank(left.id) - quotaWindowKindRank(right.id);
-      return kindDifference !== 0
-        ? kindDifference
-        : left.id.localeCompare(right.id);
-    });
-}
-
-function getUsageWindowIndex(field) {
-  if (field === STATUS_LINE_FIELD_IDS.USAGE_1) {
-    return 0;
-  }
-  if (field === STATUS_LINE_FIELD_IDS.USAGE_2) {
-    return 1;
-  }
-  return undefined;
-}
-
 function getGitHeadPath(currentDirectory) {
   if (typeof currentDirectory !== "string" || currentDirectory.length === 0) {
     return undefined;
@@ -484,101 +390,6 @@ function getBranchName(payload) {
   }
 }
 
-function formatDateValue(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function formatTimeValue(date) {
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
-}
-
-function safeStatusLabel(value, fallback) {
-  return typeof value === "string" && value.length > 0
-    ? value.replace(/[\r\n]+/g, " ")
-    : fallback;
-}
-
-function applySegmentColor(text, color) {
-  if (
-    typeof color === "string" &&
-    color !== "default" &&
-    Object.prototype.hasOwnProperty.call(STATUS_LINE_COLOR_IDS, color) &&
-    STATUS_LINE_COLOR_IDS[color]
-  ) {
-    return `${STATUS_LINE_COLOR_IDS[color]}${text}${ANSI_RESET}`;
-  }
-  return text;
-}
-
-function renderField(field, segment, provider, context) {
-  const normalized = context.normalized;
-  const label = safeStatusLabel(segment.label, "");
-  switch (field) {
-    case STATUS_LINE_FIELD_IDS.BRAND:
-      return "ctrlyoke ⚡";
-    case STATUS_LINE_FIELD_IDS.MODEL: {
-      const model = normalizePayload(normalized.model);
-      return safeStatusLabel(
-        model.id,
-        typeof model.display_name === "string"
-          ? model.display_name
-          : "unknown-model"
-      );
-    }
-    case STATUS_LINE_FIELD_IDS.CONTEXT: {
-      const contextLabel = `${formatCompactTokenCount(context.used)}/${formatCompactTokenCount(context.size)} ${label || "ctx"} (${formatPercentage(context.percentage)})`;
-      return contextLabel;
-    }
-    case STATUS_LINE_FIELD_IDS.USAGE: {
-      const quotaPercentage = getQuotaPercentage(normalized, provider);
-      const quotaLabel =
-        quotaPercentage === undefined
-          ? "—"
-          : `${formatUsagePercentForDisplay(
-              quotaPercentage,
-              context.percentDirection
-            )}%`;
-      const usageLabel =
-        label || (provider === STATUSLINE_PROVIDERS.CLAUDE ? "rate" : "quota");
-      return `${usageLabel} ${quotaLabel}`;
-    }
-    case STATUS_LINE_FIELD_IDS.USAGE_1:
-    case STATUS_LINE_FIELD_IDS.USAGE_2: {
-      const windowIndex = getUsageWindowIndex(field);
-      const usageWindow = getUsageWindows(normalized, provider)[windowIndex];
-      if (!usageWindow || usageWindow.usedPercentage === undefined) {
-        return undefined;
-      }
-      const usageLabel = label || usageWindow.label;
-      return `${usageLabel} ${formatUsagePercentForDisplay(
-        usageWindow.usedPercentage,
-        context.percentDirection
-      )}%`;
-    }
-    case STATUS_LINE_FIELD_IDS.VERSION:
-      return safeStatusLabel(normalized.version, "—");
-    case STATUS_LINE_FIELD_IDS.CWD:
-      return typeof normalized.cwd === "string" && normalized.cwd.length > 0
-        ? safeStatusLabel(path.basename(normalized.cwd), "—")
-        : "—";
-    case STATUS_LINE_FIELD_IDS.SESSION_ID:
-      return safeStatusLabel(normalized.session_id, "—").slice(0, 8);
-    case STATUS_LINE_FIELD_IDS.BRANCH:
-      return getBranchName(normalized);
-    case STATUS_LINE_FIELD_IDS.DATE:
-      return formatDateValue(new Date());
-    case STATUS_LINE_FIELD_IDS.TIME:
-      return formatTimeValue(new Date());
-    default:
-      return undefined;
-  }
-}
-
 /** Format both providers from the shared segment vocabulary. */
 function formatBrandedStatusLine(
   provider,
@@ -586,125 +397,13 @@ function formatBrandedStatusLine(
   format,
   percentDirection = DEFAULT_PERCENT_DIRECTION
 ) {
-  try {
-    const normalized = normalizePayload(payload);
-    const { used, size } = getContextValues(normalized);
-    const percentage = calculateContextPercentage(used, size);
-    const band = getContextBand(percentage);
-    const segments =
-      Array.isArray(format) && format.length > 0
-        ? format
-        : DEFAULT_STATUS_LINE_FORMAT;
-    const context = {
-      normalized,
-      used,
-      size,
-      percentage,
-      percentDirection:
-        percentDirection === "remaining"
-          ? "remaining"
-          : DEFAULT_PERCENT_DIRECTION,
-    };
-
-    return segments
-      .reduce((rendered, segment) => {
-        if (!segment || typeof segment !== "object") {
-          return rendered;
-        }
-
-        if (segment.type === STATUSLINE_SEGMENT_TYPES.LITERAL) {
-          const literal = safeStatusLabel(segment.text, "");
-          if (literal.length > 0) {
-            rendered.push({
-              type: STATUSLINE_SEGMENT_TYPES.LITERAL,
-              text: applySegmentColor(literal, segment.color),
-            });
-          }
-          return rendered;
-        }
-
-        if (
-          segment.type !== STATUSLINE_SEGMENT_TYPES.FIELD ||
-          typeof segment.field !== "string" ||
-          !Object.prototype.hasOwnProperty.call(
-            STATUS_LINE_FIELD_REGISTRY,
-            segment.field
-          )
-        ) {
-          return rendered;
-        }
-
-        const fieldText = renderField(
-          segment.field,
-          segment,
-          provider,
-          context
-        );
-        if (fieldText === undefined || fieldText.length === 0) {
-          rendered.push({
-            type: STATUSLINE_SEGMENT_TYPES.FIELD,
-            text: "",
-          });
-          return rendered;
-        }
-
-        const builtInColor =
-          segment.field === STATUS_LINE_FIELD_IDS.CONTEXT
-            ? CONTEXT_COLORS[band]
-            : "";
-        const text =
-          typeof segment.color === "string" &&
-          segment.color !== "default" &&
-          Object.prototype.hasOwnProperty.call(
-            STATUS_LINE_COLOR_IDS,
-            segment.color
-          )
-            ? applySegmentColor(fieldText, segment.color)
-            : builtInColor
-              ? `${builtInColor}${fieldText}${ANSI_RESET}`
-              : fieldText;
-        rendered.push({
-          type: STATUSLINE_SEGMENT_TYPES.FIELD,
-          text,
-        });
-        return rendered;
-      }, [])
-      .filter((segment, index, allSegments) => {
-        if (segment.type !== STATUSLINE_SEGMENT_TYPES.LITERAL) {
-          return true;
-        }
-        let previousField;
-        for (let previousIndex = index - 1; previousIndex >= 0; previousIndex--) {
-          if (
-            allSegments[previousIndex].type === STATUSLINE_SEGMENT_TYPES.FIELD
-          ) {
-            previousField = allSegments[previousIndex];
-            break;
-          }
-        }
-        let nextField;
-        for (
-          let nextIndex = index + 1;
-          nextIndex < allSegments.length;
-          nextIndex++
-        ) {
-          if (allSegments[nextIndex].type === STATUSLINE_SEGMENT_TYPES.FIELD) {
-            nextField = allSegments[nextIndex];
-            break;
-          }
-        }
-        return !(
-          previousField &&
-          nextField &&
-          (previousField.text.length === 0 || nextField.text.length === 0)
-        );
-      })
-      .filter((segment) => segment.text.length > 0)
-      .map((segment) => segment.text)
-      .join(" ");
-  } catch {
-    return "";
-  }
+  return formatSharedBrandedStatusLine(
+    provider,
+    payload,
+    Array.isArray(format) ? format : undefined,
+    percentDirection,
+    { branch: getBranchName(payload) }
+  );
 }
 
 function writeStdoutSafely(value) {

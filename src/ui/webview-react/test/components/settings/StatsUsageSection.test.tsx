@@ -9,6 +9,8 @@ import {
   HARNESS_IDS,
   HARNESS_INFO,
   MESSAGE_TYPES,
+  SETTING_PATHS,
+  SETTING_SCOPES,
 } from "@root/types/DashboardConstants";
 
 describe("StatsUsageSection", () => {
@@ -111,5 +113,19 @@ describe("StatsUsageSection", () => {
     expect(
       screen.queryByRole("textbox", { name: "Custom statusline command" })
     ).not.toBeInTheDocument();
+  });
+
+  it("writes the global percent direction setting at user scope", async () => {
+    const user = userEvent.setup();
+    render(<StatsUsageSection hideCost={false} />);
+
+    await user.click(screen.getByRole("button", { name: "Remaining" }));
+
+    expect(getVsCodeApi().postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+      path: SETTING_PATHS.USAGE_TRACKING_PERCENT_DIRECTION,
+      value: "remaining",
+      scope: SETTING_SCOPES.USER,
+    });
   });
 });

@@ -19,25 +19,43 @@ export type StatusLineFieldId =
 
 /** Field metadata shared by the formatter and the format editor. */
 export const STATUS_LINE_FIELD_REGISTRY = {
-  [STATUS_LINE_FIELD_IDS.BRAND]: { label: "ctrlyoke ⚡" },
-  [STATUS_LINE_FIELD_IDS.MODEL]: { label: "Model name" },
-  [STATUS_LINE_FIELD_IDS.CONTEXT]: { label: "Context usage (colored band)" },
+  [STATUS_LINE_FIELD_IDS.BRAND]: { label: "ctrlyoke ⚡", labelSlot: false },
+  [STATUS_LINE_FIELD_IDS.MODEL]: { label: "Model name", labelSlot: false },
+  [STATUS_LINE_FIELD_IDS.CONTEXT]: {
+    label: "Context usage (colored band)",
+    labelSlot: true,
+  },
   [STATUS_LINE_FIELD_IDS.USAGE]: {
     label: "Rate/quota used % (worst of all windows)",
+    labelSlot: true,
   },
   [STATUS_LINE_FIELD_IDS.USAGE_1]: {
     label: "First usage window, used % + short label",
+    labelSlot: true,
   },
   [STATUS_LINE_FIELD_IDS.USAGE_2]: {
     label: "Second usage window, used % + short label",
+    labelSlot: true,
   },
-  [STATUS_LINE_FIELD_IDS.VERSION]: { label: "Harness/CLI version" },
-  [STATUS_LINE_FIELD_IDS.CWD]: { label: "Current directory (basename)" },
-  [STATUS_LINE_FIELD_IDS.SESSION_ID]: { label: "Session id (truncated)" },
-  [STATUS_LINE_FIELD_IDS.BRANCH]: { label: "Git branch" },
-  [STATUS_LINE_FIELD_IDS.DATE]: { label: "Date" },
-  [STATUS_LINE_FIELD_IDS.TIME]: { label: "Time" },
-} as const satisfies Record<StatusLineFieldId, { label: string }>;
+  [STATUS_LINE_FIELD_IDS.VERSION]: {
+    label: "Harness/CLI version",
+    labelSlot: false,
+  },
+  [STATUS_LINE_FIELD_IDS.CWD]: {
+    label: "Current directory (basename)",
+    labelSlot: false,
+  },
+  [STATUS_LINE_FIELD_IDS.SESSION_ID]: {
+    label: "Session id (truncated)",
+    labelSlot: false,
+  },
+  [STATUS_LINE_FIELD_IDS.BRANCH]: { label: "Git branch", labelSlot: false },
+  [STATUS_LINE_FIELD_IDS.DATE]: { label: "Date", labelSlot: false },
+  [STATUS_LINE_FIELD_IDS.TIME]: { label: "Time", labelSlot: false },
+} as const satisfies Record<
+  StatusLineFieldId,
+  { label: string; labelSlot: boolean }
+>;
 
 /** ANSI prefixes for the curated statusline color vocabulary. */
 export const STATUS_LINE_COLOR_IDS = {
@@ -53,6 +71,19 @@ export const STATUS_LINE_COLOR_IDS = {
 } as const;
 
 export type StatusLineColorId = keyof typeof STATUS_LINE_COLOR_IDS;
+
+/** Browser-friendly swatch colours for the closed terminal colour vocabulary. */
+export const STATUS_LINE_COLOR_SWATCHES: Record<StatusLineColorId, string> = {
+  default: "var(--vscode-foreground, currentColor)",
+  red: "#f14c4c",
+  yellow: "#cca700",
+  green: "#89d185",
+  cyan: "#29b8db",
+  blue: "#3794ff",
+  magenta: "#bc3fbc",
+  white: "#ffffff",
+  gray: "#808080",
+};
 
 export type StatusLineSegment =
   | {
@@ -164,4 +195,358 @@ export function formatUsagePercentForDisplay(
   direction: UsagePercentDirection
 ): number {
   return direction === "remaining" ? 100 - usedPercent : usedPercent;
+}
+
+export const STATUS_LINE_FORMAT_PROVIDERS = {
+  CLAUDE: "claude",
+  ANTIGRAVITY: "antigravity",
+} as const;
+
+export type StatusLineFormatProvider =
+  (typeof STATUS_LINE_FORMAT_PROVIDERS)[keyof typeof STATUS_LINE_FORMAT_PROVIDERS];
+
+export interface StatusLineFormatOptions {
+  /** Locally computed fields are supplied by the detached wrapper when available. */
+  branch?: string;
+  now?: Date;
+}
+
+const STATUS_LINE_FORMAT_SEGMENT_TYPES = {
+  FIELD: "field",
+  LITERAL: "literal",
+} as const;
+
+const STATUS_LINE_CONTEXT_THRESHOLDS = {
+  WARNING: 70,
+  DANGER: 85,
+} as const;
+
+const STATUS_LINE_CONTEXT_BANDS = {
+  NEUTRAL: "neutral",
+  WARNING: "warning",
+  DANGER: "danger",
+} as const;
+
+type StatusLineContextBand =
+  (typeof STATUS_LINE_CONTEXT_BANDS)[keyof typeof STATUS_LINE_CONTEXT_BANDS];
+
+const STATUS_LINE_CLAUDE_WINDOWS = [
+  { key: "five_hour", windowMinutes: 5 * 60 },
+  { key: "seven_day", windowMinutes: 7 * 24 * 60 },
+] as const;
+
+const ANSI_RESET = "\u001b[0m";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function safeLabel(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.length > 0
+    ? value.replace(/[\r\n]+/gu, " ")
+    : fallback;
+}
+
+function compactTokenCount(value: unknown): string {
+  const number = finiteNumber(value) ?? 0;
+  const absolute = Math.abs(number);
+  const sign = number < 0 ? "-" : "";
+  if (absolute >= 1_000_000_000)
+    return `${sign}${(absolute / 1_000_000_000).toFixed(1)}B`;
+  if (absolute >= 1_000_000)
+    return `${sign}${(absolute / 1_000_000).toFixed(1)}M`;
+  if (absolute >= 1_000) return `${sign}${(absolute / 1_000).toFixed(1)}k`;
+  return `${Math.round(number)}`;
+}
+
+function contextValues(payload: Record<string, unknown>): {
+  used: number;
+  size: number;
+} {
+  const contextWindow = isRecord(payload.context_window)
+    ? payload.context_window
+    : {};
+  const currentUsage = isRecord(contextWindow.current_usage)
+    ? contextWindow.current_usage
+    : {};
+  const input =
+    finiteNumber(contextWindow.total_input_tokens) ??
+    finiteNumber(currentUsage.input_tokens) ??
+    0;
+  const output =
+    finiteNumber(contextWindow.total_output_tokens) ??
+    finiteNumber(currentUsage.output_tokens) ??
+    0;
+  return {
+    used: input + output,
+    size: finiteNumber(contextWindow.context_window_size) ?? 0,
+  };
+}
+
+function contextPercentage(used: number, size: number): number {
+  if (!Number.isFinite(used) || !Number.isFinite(size) || size <= 0) return 0;
+  return Math.max(0, Math.min(100, (used / size) * 100));
+}
+
+function contextBand(percentage: number): StatusLineContextBand {
+  if (percentage >= STATUS_LINE_CONTEXT_THRESHOLDS.DANGER) {
+    return STATUS_LINE_CONTEXT_BANDS.DANGER;
+  }
+  if (percentage >= STATUS_LINE_CONTEXT_THRESHOLDS.WARNING) {
+    return STATUS_LINE_CONTEXT_BANDS.WARNING;
+  }
+  return STATUS_LINE_CONTEXT_BANDS.NEUTRAL;
+}
+
+function percentageLabel(percentage: number): string {
+  return `${percentage.toFixed(1).replace(/\.0$/u, "")}%`;
+}
+
+function quotaPercentage(
+  payload: Record<string, unknown>,
+  provider: StatusLineFormatProvider
+): number | undefined {
+  const source =
+    provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE
+      ? payload.rate_limits
+      : payload.quota;
+  if (!isRecord(source)) return undefined;
+
+  const percentages = Object.values(source)
+    .map((entry) => {
+      if (!isRecord(entry)) return undefined;
+      if (provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE) {
+        return finiteNumber(entry.used_percentage);
+      }
+      const remaining = finiteNumber(entry.remaining_fraction);
+      return remaining === undefined ? undefined : 100 - remaining * 100;
+    })
+    .filter((value): value is number => value !== undefined);
+  return percentages.length > 0
+    ? Math.max(0, Math.min(100, Math.round(Math.max(...percentages))))
+    : undefined;
+}
+
+function normalizeUsedPercentage(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function usageWindows(
+  payload: Record<string, unknown>,
+  provider: StatusLineFormatProvider
+): Array<{ id?: string; label: string; usedPercentage: number }> {
+  const source =
+    provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE
+      ? payload.rate_limits
+      : payload.quota;
+  if (!isRecord(source)) return [];
+
+  if (provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE) {
+    return STATUS_LINE_CLAUDE_WINDOWS.flatMap((definition) => {
+      const entry = source[definition.key];
+      const value = isRecord(entry)
+        ? finiteNumber(entry.used_percentage)
+        : undefined;
+      return value === undefined
+        ? []
+        : [
+            {
+              label: formatUsageWindowLabel(definition.windowMinutes),
+              usedPercentage: normalizeUsedPercentage(value),
+            },
+          ];
+    });
+  }
+
+  return Object.entries(source)
+    .filter(([, entry]) => isRecord(entry))
+    .map(([id, entry]) => {
+      const remaining = finiteNumber(
+        isRecord(entry) ? entry.remaining_fraction : undefined
+      );
+      return {
+        id,
+        label: humanizeQuotaKey(id),
+        usedPercentage:
+          remaining === undefined
+            ? Number.NaN
+            : normalizeUsedPercentage(100 - remaining * 100),
+      };
+    })
+    .filter((window) => Number.isFinite(window.usedPercentage))
+    .sort(
+      (left, right) =>
+        quotaWindowKindRank(left.id ?? "") -
+          quotaWindowKindRank(right.id ?? "") ||
+        (left.id ?? "").localeCompare(right.id ?? "")
+    );
+}
+
+function basename(value: string): string {
+  const parts = value.split(/[\\/]/u);
+  return parts[parts.length - 1] ?? value;
+}
+
+function applyColor(text: string, color: unknown): string {
+  if (
+    typeof color === "string" &&
+    color !== "default" &&
+    Object.prototype.hasOwnProperty.call(STATUS_LINE_COLOR_IDS, color)
+  ) {
+    const ansi = STATUS_LINE_COLOR_IDS[color as StatusLineColorId];
+    return ansi ? `${ansi}${text}${ANSI_RESET}` : text;
+  }
+  return text;
+}
+
+/** Format statusline segments for both the detached wrapper and the webview preview. */
+export function formatBrandedStatusLine(
+  provider: StatusLineFormatProvider,
+  payload: unknown,
+  format?: readonly StatusLineSegment[],
+  percentDirection: UsagePercentDirection = "used",
+  options: StatusLineFormatOptions = {}
+): string {
+  try {
+    const normalized = isRecord(payload) ? payload : {};
+    const { used, size } = contextValues(normalized);
+    const percentage = contextPercentage(used, size);
+    const band = contextBand(percentage);
+    const segments: readonly StatusLineSegment[] =
+      format && format.length > 0 ? format : DEFAULT_STATUS_LINE_FORMAT;
+    const windows = usageWindows(normalized, provider);
+    const direction = percentDirection === "remaining" ? "remaining" : "used";
+    const now = options.now ?? new Date();
+    const rendered: Array<{
+      type: "field" | "literal";
+      text: string;
+    }> = [];
+
+    for (const segment of segments) {
+      if (!isRecord(segment)) continue;
+      let text: string | undefined;
+      let isRecognizedField = false;
+      if (segment.type === STATUS_LINE_FORMAT_SEGMENT_TYPES.LITERAL) {
+        const literal = safeLabel(segment.text, "");
+        text =
+          literal.length > 0 ? applyColor(literal, segment.color) : undefined;
+        if (text !== undefined) rendered.push({ type: "literal", text });
+      } else if (
+        segment.type === STATUS_LINE_FORMAT_SEGMENT_TYPES.FIELD &&
+        typeof segment.field === "string" &&
+        Object.prototype.hasOwnProperty.call(
+          STATUS_LINE_FIELD_REGISTRY,
+          segment.field
+        )
+      ) {
+        isRecognizedField = true;
+        const field = segment.field as StatusLineFieldId;
+        const label = safeLabel(segment.label, "");
+        switch (field) {
+          case STATUS_LINE_FIELD_IDS.BRAND:
+            text = "ctrlyoke ⚡";
+            break;
+          case STATUS_LINE_FIELD_IDS.MODEL: {
+            const model = isRecord(normalized.model) ? normalized.model : {};
+            text = safeLabel(
+              model.id,
+              safeLabel(model.display_name, "unknown-model")
+            );
+            break;
+          }
+          case STATUS_LINE_FIELD_IDS.CONTEXT:
+            text = `${compactTokenCount(used)}/${compactTokenCount(size)} ${label || "ctx"} (${percentageLabel(percentage)})`;
+            break;
+          case STATUS_LINE_FIELD_IDS.USAGE: {
+            const value = quotaPercentage(normalized, provider);
+            const display =
+              value === undefined
+                ? "—"
+                : `${formatUsagePercentForDisplay(value, direction)}%`;
+            text = `${label || (provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE ? "rate" : "quota")} ${display}`;
+            break;
+          }
+          case STATUS_LINE_FIELD_IDS.USAGE_1:
+          case STATUS_LINE_FIELD_IDS.USAGE_2: {
+            const window =
+              windows[field === STATUS_LINE_FIELD_IDS.USAGE_1 ? 0 : 1];
+            if (window) {
+              text = `${label || window.label} ${formatUsagePercentForDisplay(window.usedPercentage, direction)}%`;
+            }
+            break;
+          }
+          case STATUS_LINE_FIELD_IDS.VERSION:
+            text = safeLabel(normalized.version, "—");
+            break;
+          case STATUS_LINE_FIELD_IDS.CWD:
+            text = safeLabel(
+              typeof normalized.cwd === "string"
+                ? basename(normalized.cwd)
+                : undefined,
+              "—"
+            );
+            break;
+          case STATUS_LINE_FIELD_IDS.SESSION_ID:
+            text = safeLabel(normalized.session_id, "—").slice(0, 8);
+            break;
+          case STATUS_LINE_FIELD_IDS.BRANCH:
+            text = options.branch;
+            break;
+          case STATUS_LINE_FIELD_IDS.DATE:
+            text = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+            break;
+          case STATUS_LINE_FIELD_IDS.TIME:
+            text = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+            break;
+        }
+        if (text !== undefined) {
+          const explicitColor =
+            typeof segment.color === "string" && segment.color !== "default";
+          text = explicitColor
+            ? applyColor(text, segment.color)
+            : field === STATUS_LINE_FIELD_IDS.CONTEXT
+              ? applyColor(
+                  text,
+                  band === STATUS_LINE_CONTEXT_BANDS.DANGER
+                    ? "red"
+                    : band === STATUS_LINE_CONTEXT_BANDS.WARNING
+                      ? "yellow"
+                      : "cyan"
+                )
+              : text;
+        }
+      }
+      if (isRecognizedField) {
+        rendered.push({ type: "field", text: text ?? "" });
+      }
+    }
+
+    return rendered
+      .filter((segment, index, allSegments) => {
+        if (segment.type !== "literal") return true;
+        const previousField = [...allSegments]
+          .slice(0, index)
+          .reverse()
+          .find((candidate) => candidate.type === "field");
+        const nextField = allSegments
+          .slice(index + 1)
+          .find((candidate) => candidate.type === "field");
+        return !(
+          previousField &&
+          nextField &&
+          (previousField.text.length === 0 || nextField.text.length === 0)
+        );
+      })
+      .filter((segment) => segment.text.length > 0)
+      .map((segment) => segment.text)
+      .join(" ");
+  } catch {
+    return "";
+  }
 }

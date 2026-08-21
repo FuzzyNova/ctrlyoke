@@ -4,6 +4,8 @@ import {
   HARNESS_INFO,
   HARNESS_SHARE_METRICS,
   MESSAGE_TYPES,
+  SETTING_PATHS,
+  SETTING_SCOPES,
 } from "@root/types/DashboardConstants";
 import type {
   HarnessId,
@@ -19,6 +21,7 @@ import {
 import { sendMessage } from "@hooks/useMessageHandler";
 import { getVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useHarnessUsageStore } from "@store/harnessUsageStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
 import { WebviewLog } from "@utils/logger";
 import { buildWorkspaceStatsExport } from "@utils/workspaceStatsExport";
@@ -30,6 +33,7 @@ import {
   type HarnessShareSegment,
 } from "./HarnessShareBar";
 import { HarnessShareRow } from "./HarnessShareRow";
+import type { UsagePercentDirection } from "@root/utils/StatuslineFormat";
 
 const ALL_HARNESS_IDS = Object.values(HARNESS_IDS) as HarnessId[];
 
@@ -38,10 +42,7 @@ interface Props {
   isNarrow?: boolean;
 }
 
-export function StatsUsageSection({
-  hideCost,
-  isNarrow = false,
-}: Props) {
+export function StatsUsageSection({ hideCost, isNarrow = false }: Props) {
   const [shareMetric, setShareMetric] = useState<HarnessShareMetric>(
     HARNESS_SHARE_METRICS.AI_STEPS
   );
@@ -55,6 +56,19 @@ export function StatsUsageSection({
   const snapshotsByHarness = useHarnessUsageStore(
     (state) => state.snapshotsByHarness
   );
+  const percentDirection = useSettingsStore(
+    (state) =>
+      state.fullGlobalSettings?.settings.usageTracking.percentDirection ??
+      "used"
+  ) as UsagePercentDirection;
+
+  const updatePercentDirection = (value: UsagePercentDirection) => {
+    sendMessage(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, {
+      path: SETTING_PATHS.USAGE_TRACKING_PERCENT_DIRECTION,
+      value,
+      scope: SETTING_SCOPES.USER,
+    });
+  };
 
   const getExport = useCallback(
     () =>
@@ -141,6 +155,33 @@ export function StatsUsageSection({
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-panel-border bg-panel-bg px-2 py-1.5">
+        <div>
+          <p className="text-sm text-foreground">Quota percent direction</p>
+          <p className="text-xs text-description-fg">
+            Choose whether usage percentages show used or remaining capacity.
+          </p>
+        </div>
+        <ScopeToggle
+          value={percentDirection}
+          onChange={updatePercentDirection}
+          ariaLabel="Quota percent direction"
+          options={[
+            {
+              value: "used",
+              label: "Used",
+              icon: "codicon-arrow-up",
+              title: "Show the percentage already used",
+            },
+            {
+              value: "remaining",
+              label: "Remaining",
+              icon: "codicon-arrow-down",
+              title: "Show the percentage remaining",
+            },
+          ]}
+        />
+      </div>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">

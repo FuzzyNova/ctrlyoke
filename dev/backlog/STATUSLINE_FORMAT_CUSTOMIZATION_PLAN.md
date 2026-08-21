@@ -671,16 +671,15 @@ wrapper reuses these conventions without importing across that boundary.
    `WorkflowStep.tsx:388-390`'s unrelated context-bar usage — still receives a used%-oriented
    value regardless of the setting (Decision 6's critical catch). This phase's tests should
    specifically assert the context bar's coloring is unaffected by `percentDirection`.
-5. **[In progress]** UI: new "Status Line" settings tab (`ALL_TABS` entry + render switch in
+5. **[Done]** UI: new "Status Line" settings tab (`ALL_TABS` entry + render switch in
    `GlobalSettingsDrawer.tsx`, mirroring how "Stats & Usage" was added — Decision 12) hosting the
    relocated `StatusLineTrackingControls` blocks; the core ordered-array `StatusLineFormatEditor`
    with field inclusion/exclusion, literal editing, reordering, reset, and whole-array persistence
    is now wired into each provider's controls on that tab. The per-segment color swatch picker
    (Decision 13), custom-label input (Decision 14, shown conditionally), and live preview (per
-   Phase 1's architecture decision) remain for the follow-up UI pass. The `percentDirection`
-   control stays in `StatsUsageSection.tsx` (Decision 6); focused component tests alongside the existing
-   `StatusLineTrackingControls`/`UsageCard` coverage, plus a test confirming the new tab appears
-   in the settings drawer's tab list.
+   Phase 1's architecture decision) are now wired into each provider's editor. The
+   `percentDirection` control stays in `StatsUsageSection.tsx` (Decision 6), with focused
+   component coverage for both editor providers, preview fallback/direction, and setting writes.
 6. Update `STATUSLINE_USER_CONTROLS_PLAN.md`'s "UX Risks Found In Review" section, which
    currently frames "write your own script" as the only escape hatch from ctrlyoke's fixed line
    — note this plan as the closing answer once shipped.

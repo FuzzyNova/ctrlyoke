@@ -111,4 +111,80 @@ describe("StatusLineFormatEditor", () => {
       DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment }))
     );
   });
+
+  it("persists a color selection for both field and literal segments", async () => {
+    const user = userEvent.setup();
+    const onCommit = renderEditor([
+      { type: "field", field: STATUS_LINE_FIELD_IDS.CONTEXT },
+      { type: "literal", text: "|" },
+    ]);
+
+    await user.click(
+      screen.getByRole("button", { name: "Red color for segment 1" })
+    );
+    expect(onCommit).toHaveBeenLastCalledWith([
+      { type: "field", field: STATUS_LINE_FIELD_IDS.CONTEXT, color: "red" },
+      { type: "literal", text: "|" },
+    ]);
+
+    await user.click(
+      screen.getByRole("button", { name: "Blue color for segment 2" })
+    );
+    expect(onCommit).toHaveBeenLastCalledWith([
+      { type: "field", field: STATUS_LINE_FIELD_IDS.CONTEXT, color: "red" },
+      { type: "literal", text: "|", color: "blue" },
+    ]);
+    expect(
+      screen.getByText(/explicit color overrides a field's automatic coloring/i)
+    ).toBeInTheDocument();
+  });
+
+  it("shows and persists custom labels only for registry label-slot fields", async () => {
+    const user = userEvent.setup();
+    const onCommit = renderEditor([
+      { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
+      { type: "field", field: STATUS_LINE_FIELD_IDS.CONTEXT },
+    ]);
+
+    expect(
+      screen.queryByRole("textbox", { name: "Custom label for ctrlyoke ⚡" })
+    ).not.toBeInTheDocument();
+    const labelInput = screen.getByRole("textbox", {
+      name: "Custom label for Context usage (colored band)",
+    });
+    await user.type(labelInput, "window");
+    await user.tab();
+
+    expect(onCommit).toHaveBeenLastCalledWith([
+      { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
+      { type: "field", field: STATUS_LINE_FIELD_IDS.CONTEXT, label: "window" },
+    ]);
+  });
+
+  it("renders the fixture preview and respects both percent directions", () => {
+    const { rerender } = render(
+      <StatusLineFormatEditor
+        format={[{ type: "field", field: STATUS_LINE_FIELD_IDS.USAGE }]}
+        onCommit={vi.fn()}
+        percentDirection="used"
+      />
+    );
+
+    expect(screen.getByText(/rate 41%/)).toBeInTheDocument();
+    expect(screen.getByText(/representative fixture/i)).toBeInTheDocument();
+
+    rerender(
+      <StatusLineFormatEditor
+        format={[{ type: "field", field: STATUS_LINE_FIELD_IDS.USAGE }]}
+        onCommit={vi.fn()}
+        percentDirection="remaining"
+      />
+    );
+    expect(screen.getByText(/rate 59%/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /uses your Stats & Usage percent-direction setting \(remaining\)/i
+      )
+    ).toBeInTheDocument();
+  });
 });

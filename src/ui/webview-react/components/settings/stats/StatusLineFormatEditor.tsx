@@ -3,20 +3,34 @@ import { Button } from "@components/shared/Button";
 import { LocalTextInput } from "@components/shared/LocalInputs";
 import {
   DEFAULT_STATUS_LINE_FORMAT,
+  formatBrandedStatusLine,
+  STATUS_LINE_COLOR_IDS,
+  STATUS_LINE_COLOR_SWATCHES,
   STATUS_LINE_FIELD_IDS,
   STATUS_LINE_FIELD_REGISTRY,
+  STATUS_LINE_FORMAT_PROVIDERS,
+  type StatusLineColorId,
   type StatusLineFieldId,
   type StatusLineSegment,
+  type StatusLineFormatProvider,
+  type UsagePercentDirection,
 } from "@root/utils/StatuslineFormat";
+import type { HarnessUsageSnapshot } from "@root/types/UsageTypes";
 
 const MAX_LITERAL_LENGTH = 64;
 const STATUS_LINE_FIELD_LIST: readonly StatusLineFieldId[] = Object.values(
   STATUS_LINE_FIELD_IDS
 );
+const STATUS_LINE_COLOR_LIST = Object.keys(
+  STATUS_LINE_COLOR_IDS
+) as StatusLineColorId[];
 
 interface Props {
   format: StatusLineSegment[];
   onCommit: (format: StatusLineSegment[]) => void;
+  provider?: StatusLineFormatProvider;
+  snapshot?: HarnessUsageSnapshot;
+  percentDirection?: UsagePercentDirection;
 }
 
 function cloneDefaultFormat(): StatusLineSegment[] {
@@ -29,7 +43,92 @@ function fieldLabel(field: StatusLineFieldId): string {
   return STATUS_LINE_FIELD_REGISTRY[field].label;
 }
 
-export function StatusLineFormatEditor({ format, onCommit }: Props) {
+function colorLabel(color: StatusLineColorId): string {
+  return color === "default"
+    ? "Default"
+    : `${color.slice(0, 1).toUpperCase()}${color.slice(1)}`;
+}
+
+function previewPayload(
+  provider: StatusLineFormatProvider,
+  snapshot: HarnessUsageSnapshot | undefined
+): Record<string, unknown> {
+  if (!snapshot) {
+    return provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE
+      ? {
+          model: { id: "claude-sonnet-4.5" },
+          context_window: {
+            total_input_tokens: 68_000,
+            total_output_tokens: 12_000,
+            context_window_size: 200_000,
+          },
+          rate_limits: {
+            five_hour: { used_percentage: 24 },
+            seven_day: { used_percentage: 41 },
+          },
+          version: "preview",
+          cwd: "/workspace/project",
+          session_id: "preview-session",
+        }
+      : {
+          model: { id: "gemini-2.5-pro" },
+          context_window: {
+            total_input_tokens: 68_000,
+            total_output_tokens: 12_000,
+            context_window_size: 200_000,
+          },
+          quota: {
+            "3p-weekly": { remaining_fraction: 0.76 },
+            "gemini-weekly": { remaining_fraction: 0.59 },
+          },
+          version: "preview",
+          cwd: "/workspace/project",
+          session_id: "preview-session",
+        };
+  }
+
+  const windows = snapshot.quota.windows;
+  if (provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE) {
+    return {
+      model: { id: "cached model" },
+      context_window: {
+        total_input_tokens: 68_000,
+        total_output_tokens: 12_000,
+        context_window_size: 200_000,
+      },
+      rate_limits: Object.fromEntries(
+        windows
+          .slice(0, 2)
+          .map((window, index) => [
+            index === 0 ? "five_hour" : "seven_day",
+            { used_percentage: window.percentUsed ?? 0 },
+          ])
+      ),
+    };
+  }
+  return {
+    model: { id: "cached model" },
+    context_window: {
+      total_input_tokens: 68_000,
+      total_output_tokens: 12_000,
+      context_window_size: 200_000,
+    },
+    quota: Object.fromEntries(
+      windows.map((window) => [
+        window.id,
+        { remaining_fraction: 1 - (window.percentUsed ?? 0) / 100 },
+      ])
+    ),
+  };
+}
+
+export function StatusLineFormatEditor({
+  format,
+  onCommit,
+  provider = STATUS_LINE_FORMAT_PROVIDERS.CLAUDE,
+  snapshot,
+  percentDirection = "used",
+}: Props) {
   const [draftFormat, setDraftFormat] = useState(format);
 
   useEffect(() => {
@@ -72,6 +171,27 @@ export function StatusLineFormatEditor({ format, onCommit }: Props) {
     commit(nextFormat);
   };
 
+  const updateSegmentColor = (index: number, color: StatusLineColorId) => {
+    const nextFormat = draftFormat.map((segment, segmentIndex) =>
+      segmentIndex === index
+        ? {
+            ...segment,
+            ...(color === "default" ? { color: undefined } : { color }),
+          }
+        : segment
+    );
+    commit(nextFormat);
+  };
+
+  const updateFieldLabel = (index: number, label: string) => {
+    const nextFormat = draftFormat.map((segment, segmentIndex) =>
+      segmentIndex === index && segment.type === "field"
+        ? { ...segment, label: label.slice(0, MAX_LITERAL_LENGTH) }
+        : segment
+    );
+    commit(nextFormat);
+  };
+
   const includedFields = new Set(
     draftFormat.flatMap((segment) =>
       segment.type === "field" ? [segment.field] : []
@@ -89,6 +209,29 @@ export function StatusLineFormatEditor({ format, onCommit }: Props) {
         </h4>
         <p className="text-xs text-description-fg mt-1">
           Choose the fields to show and arrange them in terminal order.
+        </p>
+        <p className="text-xs text-description-fg mt-1">
+          An explicit color overrides a field&apos;s automatic coloring,
+          including the context warning/danger bands.
+        </p>
+      </div>
+
+      <div className="rounded border border-input-border bg-input-bg px-2 py-1.5">
+        <p className="text-xs text-description-fg">Live preview</p>
+        <code className="mt-1 block break-all text-sm text-foreground">
+          {formatBrandedStatusLine(
+            provider,
+            previewPayload(provider, snapshot),
+            draftFormat,
+            percentDirection
+          ) || "—"}
+        </code>
+        <p className="mt-1 text-xs text-description-fg">
+          Uses your Stats &amp; Usage percent-direction setting (
+          {percentDirection}).
+          {snapshot
+            ? " Showing the latest cached usage snapshot."
+            : " Showing a representative fixture until usage is cached."}
         </p>
       </div>
 
@@ -111,6 +254,16 @@ export function StatusLineFormatEditor({ format, onCommit }: Props) {
                   className="w-3.5 h-3.5 accent-focus-border cursor-pointer shrink-0"
                 />
                 <span className="truncate">{fieldLabel(segment.field)}</span>
+                {STATUS_LINE_FIELD_REGISTRY[segment.field].labelSlot && (
+                  <LocalTextInput
+                    value={segment.label ?? ""}
+                    onCommit={(label) => updateFieldLabel(index, label)}
+                    maxLength={MAX_LITERAL_LENGTH}
+                    aria-label={`Custom label for ${fieldLabel(segment.field)}`}
+                    placeholder="Default label"
+                    className="min-w-0 w-32 bg-input-bg border border-input-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:border-focus-border"
+                  />
+                )}
               </label>
             ) : (
               <LocalTextInput
@@ -122,6 +275,28 @@ export function StatusLineFormatEditor({ format, onCommit }: Props) {
                 className="min-w-0 flex-1 bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border font-mono"
               />
             )}
+            <div
+              className="flex shrink-0 items-center gap-0.5"
+              role="group"
+              aria-label={`Color for segment ${index + 1}`}
+            >
+              {STATUS_LINE_COLOR_LIST.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => updateSegmentColor(index, color)}
+                  aria-label={`${colorLabel(color)} color for segment ${index + 1}`}
+                  aria-pressed={(segment.color ?? "default") === color}
+                  title={colorLabel(color)}
+                  className={`h-4 w-4 rounded-full border ${
+                    (segment.color ?? "default") === color
+                      ? "border-focus-border ring-1 ring-focus-border"
+                      : "border-input-border"
+                  }`}
+                  style={{ backgroundColor: STATUS_LINE_COLOR_SWATCHES[color] }}
+                />
+              ))}
+            </div>
             <div className="flex shrink-0 items-center gap-1">
               <Button
                 type="button"
