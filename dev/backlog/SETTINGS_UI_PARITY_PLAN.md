@@ -107,3 +107,25 @@ is "this harness's billing model makes an estimate meaningless":
 3. `modelPricing` — scope its own editor as a separate task.
 4. Leave `server.theme` and `server.standalonePort` in `PENDING_UI_PARITY` until
    `dev/active/STANDALONE_SERVER_PLAN.md` ships.
+
+### Staging vs. `STATUSLINE_FORMAT_CUSTOMIZATION_PLAN.md`
+
+**No strict dependency either direction — the two plans can be worked in parallel, or in either
+order.** Checked for real coupling (2026-08-21) and found none: this plan's remaining work (the
+four `usageTracking.*` toggles above, the `modelPricing` editor) is about data-collection/cost
+settings; the statusline plan is about display formatting. Neither reads or depends on the other's
+settings or code paths.
+
+Both plans edit `StatsUsageSection.tsx`, but in disjoint regions: this plan's toggles land near
+the top (where they gate the stats rendered below); the statusline plan's only edit to that file
+is *removing* its "Statusline Tracking" block (moved to a new dedicated "Status Line" settings
+tab) and adding a `percentDirection` control. Whichever plan lands first, the other's diff doesn't
+meaningfully conflict with it.
+
+**One operational watch-item, not a blocker.** The statusline plan introduces a brand-new schema
+leaf, `usageTracking.percentDirection`, sitting in the same `usageTracking` object this plan's
+`settingsSchemaUiParity.integration.test.ts` already inventories. If that plan's schema addition
+and its own UI control for that setting ever land in *separate* merges, this test will flag a new
+gap in the interim — fix, if it happens, is adding `permissions.usageTracking.percentDirection` to
+`PENDING_UI_PARITY` here, same as any other tracked-but-not-yet-controlled setting, until the
+statusline plan's own UI phase lands.
