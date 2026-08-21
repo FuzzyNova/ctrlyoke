@@ -292,12 +292,12 @@ suite("AntigravityCliProvider", () => {
       assert.ok(!settings.statusLine.command.includes('"'));
       assert.strictEqual(
         provider.getHeadlessSpawnEnv().CTRLYOKE_AGY_STATUSLINE_FORWARD,
-        "node user-statusline.js"
+        undefined
       );
       assert.strictEqual(
         provider.getHeadlessSpawnEnv()
           .CTRLYOKE_AGY_STATUSLINE_USE_CTRLYOKE_STYLE,
-        "false"
+        undefined
       );
     } finally {
       await provider.cleanupWorkspaceArtifacts(
@@ -414,7 +414,7 @@ suite("AntigravityCliProvider", () => {
 
     assert.strictEqual(
       provider.getHeadlessSpawnEnv().CTRLYOKE_AGY_STATUSLINE_USE_CTRLYOKE_STYLE,
-      "false"
+      undefined
     );
   });
 

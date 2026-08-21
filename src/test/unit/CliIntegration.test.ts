@@ -937,6 +937,62 @@ suite("CliIntegration", () => {
     );
     assert.strictEqual(feedback.length, 1);
     assert.match(feedback[0], /forwarding to your existing script unchanged/u);
+    assert.match(feedback[0], /your Test statusline/u);
+
+    integration.dispose();
+  });
+
+  test("notifies an install that wrote before a later mutation failed", async () => {
+    const feedback: string[] = [];
+    let appliedInstall = false;
+    const provider = createProvider({
+      config: {
+        name: "claude",
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        displayName: "Claude Code CLI",
+        terminalName: "Claude",
+        installHint: "",
+        shouldStreamHeadlessOutput: false,
+      },
+      planCliArgs: async () => ({
+        cliArgs: [],
+        mutations: [
+          {
+            description: "install statusline",
+            apply: async () => {
+              appliedInstall = true;
+            },
+          },
+          {
+            description: "later mutation",
+            apply: async () => {
+              throw new Error("later mutation failed");
+            },
+          },
+        ],
+        diagnostics: [],
+      }),
+      consumeStatuslineInstallResult: () => ({
+        kind: "written",
+        captured: false,
+      }),
+    });
+    const integration = new CliIntegration(
+      provider,
+      new MockVsCodePlatform(),
+      false,
+      { notify: ({ message }) => feedback.push(message) }
+    );
+
+    (integration as any).executionRunner.executeHeadless = async () => true;
+    assert.strictEqual(
+      await integration.sendPrompt({ prompt: "install" }),
+      false
+    );
+    assert.strictEqual(appliedInstall, true);
+    assert.deepStrictEqual(feedback, [
+      "ctrlyoke is now showing its own statusline for Claude. Settings → Usage to change this.",
+    ]);
 
     integration.dispose();
   });

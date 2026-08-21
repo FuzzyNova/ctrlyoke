@@ -514,15 +514,21 @@ Mirror `ClaudeUsageProvider.parseClaudeRateLimitWindows` (`src/core/harness/shar
    and owner sidecars are no longer involved; MCP and permission leases remain unchanged.
 3. **Custom-command auto-detect-once + live read + install notification (completed)**:
    `customCommand` and `useCtrlyokeStyle` are captured together before first install writes the
-   harness file; providers read both settings live for every prompt and pass them to the wrapper
-   environment. `CliIntegration` consumes the nominal provider install result after plan
-   mutations apply and emits the per-harness info message only for actual writes. Race and
+   harness file; the wrapper now resolves the current machine-scoped settings from
+   `~/.ctrlyoke/settings.json` on every invocation, so direct launches, reused PTYs, and inject
+   turns observe edits without relying on a stale parent environment. Providers retain only the
+   per-run snapshot directory/token environment needed by sidecars. `CliIntegration` consumes
+   the nominal provider install result after plan mutations apply (including when a later
+   mutation throws) and emits the per-harness info message only for actual writes. Race and
    cleanup-persistence coverage is included for both providers.
 4. **Shared wrapper module + `useCtrlyokeStyle` + Claude branded line (completed)**: extracted
-   the flat `ctrlyoke-statusline-wrapper.js`, added the style switch to both entry scripts,
-   added Claude's branded line through the shared formatter, and standardized forwarding on the
-   deliberate shared 200 ms timeout. Wrapper coverage verifies both providers' stdout, failure,
-   timeout, malformed-input, side-effect, and atomic filename contracts.
+   the flat `ctrlyoke-statusline-wrapper.js`, added tolerant live machine-settings resolution
+   and the style switch to both entry scripts, added Claude's branded line through the shared
+   formatter, and standardized forwarding on the deliberate shared 200 ms timeout. Disabled
+   persisted tracking forwards the configured command without collecting or branding, while
+   malformed/missing settings fall back to the declared defaults. Wrapper coverage verifies
+   both providers' direct-launch settings resolution, live edits, stdout, failure, timeout,
+   malformed-input, side-effect, disabled behavior, and atomic filename contracts.
 5. **UI (completed)**: shared
    `DISABLE_STATUS_LINE_TRACKING` discriminator and typed harness-id payload, validated
    `WebviewMessageRouter`/`WebviewSettingsSync` routing through `StatuslineManager`,

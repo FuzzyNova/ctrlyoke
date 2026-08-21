@@ -8,6 +8,7 @@
  */
 
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
 
@@ -19,6 +20,12 @@ const ANSI_RESET = "\u001b[0m";
 const STATUSLINE_PROVIDERS = Object.freeze({
   CLAUDE: "claude",
   ANTIGRAVITY: "antigravity",
+});
+
+const DEFAULT_STATUSLINE_SETTINGS = Object.freeze({
+  enabled: true,
+  customCommand: "",
+  useCtrlyokeStyle: true,
 });
 
 const CONTEXT_THRESHOLDS = Object.freeze({
@@ -33,6 +40,53 @@ const CONTEXT_COLORS = Object.freeze({
 });
 
 let snapshotSequence = 0;
+
+/**
+ * Read the machine-scoped settings directly for every wrapper invocation.
+ * This script is installed into global harness settings and can therefore be
+ * launched without a ctrlyoke parent process or with an old parent
+ * environment. Missing, malformed, and partial settings remain harmless.
+ */
+function resolveStatusLineSettings(provider, homeDirectory = os.homedir()) {
+  let configured;
+  try {
+    const settingsPath = path.join(homeDirectory, ".ctrlyoke", "settings.json");
+    const parsed = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+    const permissions =
+      parsed && typeof parsed === "object" ? parsed.permissions : undefined;
+    const tracking =
+      permissions && typeof permissions === "object"
+        ? permissions.statusLineTracking
+        : undefined;
+    configured =
+      tracking && typeof tracking === "object" ? tracking[provider] : undefined;
+  } catch {
+    configured = undefined;
+  }
+
+  if (
+    !configured ||
+    typeof configured !== "object" ||
+    Array.isArray(configured)
+  ) {
+    return { ...DEFAULT_STATUSLINE_SETTINGS };
+  }
+
+  return {
+    enabled:
+      typeof configured.enabled === "boolean"
+        ? configured.enabled
+        : DEFAULT_STATUSLINE_SETTINGS.enabled,
+    customCommand:
+      typeof configured.customCommand === "string"
+        ? configured.customCommand
+        : DEFAULT_STATUSLINE_SETTINGS.customCommand,
+    useCtrlyokeStyle:
+      typeof configured.useCtrlyokeStyle === "boolean"
+        ? configured.useCtrlyokeStyle
+        : DEFAULT_STATUSLINE_SETTINGS.useCtrlyokeStyle,
+  };
+}
 
 function asFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value)
@@ -341,6 +395,7 @@ module.exports = {
   CONTEXT_THRESHOLDS,
   FORWARD_TIMEOUT_MS,
   STATUSLINE_PROVIDERS,
+  DEFAULT_STATUSLINE_SETTINGS,
   asFiniteNumber,
   buildSnapshotPayload,
   calculateContextPercentage,
@@ -353,6 +408,7 @@ module.exports = {
   normalizePayload,
   parsePayload,
   readStdinBytes,
+  resolveStatusLineSettings,
   safeSnapshotToken,
   writeSnapshotAtomic,
   writeStdoutSafely,

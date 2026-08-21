@@ -64,35 +64,54 @@ async function runWrapper(
 
 function buildEnvironment(
   provider: "claude" | "antigravity",
-  directory: string,
-  style: boolean,
-  forward?: string
+  directory: string
 ): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {
+  return {
     ...(provider === "claude"
       ? {
           CTRLYOKE_CLAUDE_STATUSLINE_DIR: directory,
           CTRLYOKE_CLAUDE_STATUSLINE_TOKEN: "claude-token",
-          CTRLYOKE_CLAUDE_STATUSLINE_USE_CTRLYOKE_STYLE: String(style),
         }
       : {
           CTRLYOKE_AGY_STATUSLINE_DIR: directory,
           CTRLYOKE_AGY_STATUSLINE_TOKEN: "agy-token",
-          CTRLYOKE_AGY_STATUSLINE_USE_CTRLYOKE_STYLE: String(style),
         }),
   };
-  if (forward) {
-    env[
-      provider === "claude"
-        ? "CTRLYOKE_CLAUDE_STATUSLINE_FORWARD"
-        : "CTRLYOKE_AGY_STATUSLINE_FORWARD"
-    ] = forward;
+}
+
+async function writeMachineSettings(
+  homeDirectory: string,
+  provider: "claude" | "antigravity",
+  settings: {
+    enabled?: boolean;
+    customCommand?: string;
+    useCtrlyokeStyle?: boolean;
   }
-  return env;
+): Promise<void> {
+  const filePath = path.join(homeDirectory, ".ctrlyoke", "settings.json");
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(
+    filePath,
+    JSON.stringify({
+      permissions: {
+        statusLineTracking: {
+          [provider]: {
+            enabled: true,
+            customCommand: "",
+            useCtrlyokeStyle: true,
+            ...settings,
+          },
+        },
+      },
+    })
+  );
 }
 
 suite("Shared statusline wrappers", () => {
   let tempDirectory = "";
+  let tempHome = "";
+  const originalHome = process.env.HOME;
+  const originalUserProfile = process.env.USERPROFILE;
   const originalMarker = process.env.CTRLYOKE_STATUSLINE_TEST_MARKER;
 
   teardown(async () => {
@@ -100,12 +119,29 @@ suite("Shared statusline wrappers", () => {
       await fs.rm(tempDirectory, { recursive: true, force: true });
       tempDirectory = "";
     }
+    if (tempHome) {
+      await fs.rm(tempHome, { recursive: true, force: true });
+      tempHome = "";
+    }
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = originalUserProfile;
     if (originalMarker === undefined) {
       delete process.env.CTRLYOKE_STATUSLINE_TEST_MARKER;
     } else {
       process.env.CTRLYOKE_STATUSLINE_TEST_MARKER = originalMarker;
     }
   });
+
+  async function createHome(): Promise<string> {
+    tempHome = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-statusline-home-")
+    );
+    process.env.HOME = tempHome;
+    process.env.USERPROFILE = tempHome;
+    return tempHome;
+  }
 
   test("keeps the shared timeout and atomic filename prefixes", async () => {
     tempDirectory = await fs.mkdtemp(
@@ -201,6 +237,7 @@ suite("Shared statusline wrappers", () => {
     ["antigravity", scriptPath("ctrlyoke-antigravity-statusline.js")],
   ] as const) {
     test(`${provider} always writes and forwards while branded style discards stdout`, async () => {
+      await createHome();
       tempDirectory = await fs.mkdtemp(
         path.join(os.tmpdir(), `ctrlyoke-${provider}-statusline-`)
       );
@@ -209,6 +246,10 @@ suite("Shared statusline wrappers", () => {
       const command = nodeCommand(
         "require('fs').writeFileSync(process.env.CTRLYOKE_STATUSLINE_TEST_MARKER, 'ran'); process.stdout.write('custom')"
       );
+      await writeMachineSettings(tempHome, provider, {
+        customCommand: command,
+        useCtrlyokeStyle: true,
+      });
       const result = await runWrapper(
         script,
         JSON.stringify({
@@ -220,7 +261,7 @@ suite("Shared statusline wrappers", () => {
           },
           agent_state: "idle",
         }),
-        buildEnvironment(provider, tempDirectory, true, command)
+        buildEnvironment(provider, tempDirectory)
       );
 
       assert.strictEqual(result.code, 0);
@@ -240,29 +281,117 @@ suite("Shared statusline wrappers", () => {
     });
 
     test(`${provider} relays custom stdout or nothing when style is disabled`, async () => {
+      await createHome();
       tempDirectory = await fs.mkdtemp(
         path.join(os.tmpdir(), `ctrlyoke-${provider}-statusline-`)
       );
+      await writeMachineSettings(tempHome, provider, {
+        customCommand: nodeCommand("process.stdout.write('custom')"),
+        useCtrlyokeStyle: false,
+      });
       const forwarded = await runWrapper(
         script,
         JSON.stringify({ model: { id: `${provider}-model` } }),
-        buildEnvironment(
-          provider,
-          tempDirectory,
-          false,
-          nodeCommand("process.stdout.write('custom')")
-        )
+        buildEnvironment(provider, tempDirectory)
       );
       assert.strictEqual(forwarded.code, 0);
       assert.strictEqual(forwarded.stdout, "custom");
 
+      await writeMachineSettings(tempHome, provider, {
+        customCommand: "",
+        useCtrlyokeStyle: false,
+      });
       const noCommand = await runWrapper(
         script,
         "not json",
-        buildEnvironment(provider, tempDirectory, false)
+        buildEnvironment(provider, tempDirectory)
       );
       assert.strictEqual(noCommand.code, 0);
       assert.strictEqual(noCommand.stdout, "");
+    });
+  }
+
+  for (const [provider, script] of [
+    ["claude", scriptPath("ctrlyoke-claude-statusline.js")],
+    ["antigravity", scriptPath("ctrlyoke-antigravity-statusline.js")],
+  ] as const) {
+    test(`${provider} resolves persisted settings without a ctrlyoke launch environment`, async () => {
+      await createHome();
+      const first = nodeCommand("process.stdout.write('first')");
+      await writeMachineSettings(tempHome, provider, {
+        customCommand: first,
+        useCtrlyokeStyle: false,
+      });
+
+      const firstResult = await runWrapper(
+        script,
+        JSON.stringify({ model: { id: `${provider}-model` } }),
+        { HOME: tempHome, USERPROFILE: tempHome }
+      );
+      assert.strictEqual(firstResult.stdout, "first");
+
+      await writeMachineSettings(tempHome, provider, {
+        customCommand: nodeCommand("process.stdout.write('second')"),
+        useCtrlyokeStyle: false,
+      });
+      const secondResult = await runWrapper(
+        script,
+        JSON.stringify({ model: { id: `${provider}-model` } }),
+        { HOME: tempHome, USERPROFILE: tempHome }
+      );
+      assert.strictEqual(secondResult.stdout, "second");
+    });
+
+    test(`${provider} uses safe defaults for empty or malformed machine settings`, async () => {
+      await createHome();
+      const settingsPath = path.join(tempHome, ".ctrlyoke", "settings.json");
+      const missing = await runWrapper(
+        script,
+        JSON.stringify({ model: { id: `${provider}-model` } }),
+        { HOME: tempHome, USERPROFILE: tempHome }
+      );
+      assert.match(missing.stdout, /^ctrlyoke ⚡/);
+
+      await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+      await fs.writeFile(settingsPath, "{}");
+      const empty = await runWrapper(
+        script,
+        JSON.stringify({ model: { id: `${provider}-model` } }),
+        { HOME: tempHome, USERPROFILE: tempHome }
+      );
+      assert.match(empty.stdout, /^ctrlyoke ⚡/);
+
+      await fs.writeFile(settingsPath, "{ malformed");
+      const malformed = await runWrapper(
+        script,
+        JSON.stringify({ model: { id: `${provider}-model` } }),
+        { HOME: tempHome, USERPROFILE: tempHome }
+      );
+      assert.match(malformed.stdout, /^ctrlyoke ⚡/);
+    });
+
+    test(`${provider} forwards without snapshot or branding when disabled`, async () => {
+      await createHome();
+      tempDirectory = await fs.mkdtemp(
+        path.join(os.tmpdir(), `ctrlyoke-${provider}-disabled-`)
+      );
+      await writeMachineSettings(tempHome, provider, {
+        enabled: false,
+        customCommand: nodeCommand("process.stdout.write('restored')"),
+        useCtrlyokeStyle: true,
+      });
+      const result = await runWrapper(
+        script,
+        JSON.stringify({ model: { id: `${provider}-model` } }),
+        {
+          ...buildEnvironment(provider, tempDirectory),
+          HOME: tempHome,
+          USERPROFILE: tempHome,
+        }
+      );
+
+      assert.strictEqual(result.stdout, "restored");
+      assert.strictEqual((await fs.readdir(tempDirectory)).length, 0);
     });
   }
 });
