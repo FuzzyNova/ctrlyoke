@@ -247,6 +247,7 @@ describe("WorkflowPropertiesPanel variables", () => {
     });
 
     render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByTitle("Context"));
 
     expect(screen.getByLabelText("Variables")).toHaveValue(
       "region=us-east-1\nretries=3"
@@ -255,6 +256,7 @@ describe("WorkflowPropertiesPanel variables", () => {
 
   it("posts a new variable through workflow-property updates", () => {
     render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByTitle("Context"));
 
     const vars = screen.getByLabelText("Variables");
     fireEvent.change(vars, {
@@ -275,6 +277,7 @@ describe("WorkflowPropertiesPanel variables", () => {
     });
 
     render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByTitle("Context"));
     const vars = screen.getByLabelText("Variables");
     fireEvent.change(vars, {
       target: { value: "region=eu-west-1" },
@@ -297,6 +300,7 @@ describe("WorkflowPropertiesPanel variables", () => {
     });
 
     render(<WorkflowPropertiesPanel />);
+    fireEvent.click(screen.getByTitle("Context"));
     const vars = screen.getByLabelText("Variables");
     fireEvent.change(vars, {
       target: { value: "" },

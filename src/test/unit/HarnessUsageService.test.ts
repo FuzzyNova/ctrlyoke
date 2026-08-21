@@ -331,7 +331,10 @@ async function waitForPersistedSnapshot(
 ): Promise<{
   snapshots: Partial<Record<string, HarnessQuotaSnapshot>>;
 }> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  // Persistence goes through withFileLock (LOCK_TIMEOUT_MS = 5000 in
+  // FileLockUtils), so the poll budget here must comfortably exceed that
+  // worst case rather than just the happy-path write latency.
+  for (let attempt = 0; attempt < 300; attempt += 1) {
     try {
       const raw = await fs.readFile(filePath, "utf8");
       const parsed = JSON.parse(raw) as {
@@ -346,7 +349,7 @@ async function waitForPersistedSnapshot(
     } catch {
       // The persistence task may still be between its temp write and rename.
     }
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 20));
   }
   throw new Error("Timed out waiting for provider snapshot persistence");
 }
