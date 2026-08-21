@@ -8,6 +8,7 @@ import {
 import type {
   HarnessId,
   HarnessShareMetric,
+  StatusLineTrackingHarnessId,
 } from "@root/types/DashboardConstants";
 import type { WorkspaceStatsSnapshot } from "@root/types/UsageTypes";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
@@ -34,6 +35,10 @@ import {
 import { HarnessShareRow } from "./HarnessShareRow";
 
 const ALL_HARNESS_IDS = Object.values(HARNESS_IDS) as HarnessId[];
+const STATUS_LINE_HARNESS_IDS: StatusLineTrackingHarnessId[] = [
+  HARNESS_IDS.CLAUDE_CLI,
+  HARNESS_IDS.ANTIGRAVITY_CLI,
+];
 
 interface Props {
   hideCost: boolean;
@@ -197,14 +202,6 @@ export function StatsUsageSection({
               snapshot={snapshotsByHarness[harnessId]}
               hideCost={hideCost}
             />
-            {settings &&
-              (harnessId === HARNESS_IDS.CLAUDE_CLI ||
-                harnessId === HARNESS_IDS.ANTIGRAVITY_CLI) && (
-                <StatusLineTrackingControls
-                  harnessId={harnessId}
-                  settings={settings}
-                />
-              )}
           </div>
         ))}
       </div>
@@ -213,6 +210,34 @@ export function StatsUsageSection({
         outside ctrlyoke. Costs are estimates at API list prices, not
         subscription spend.
       </p>
+      {settings && (
+        <section
+          className="pt-3 border-t border-panel-border space-y-3"
+          aria-labelledby="statusline-tracking-heading"
+        >
+          <div>
+            <h3
+              id="statusline-tracking-heading"
+              className="text-xs font-semibold uppercase text-description-fg tracking-wide"
+            >
+              Statusline Tracking
+            </h3>
+            <p className="text-xs text-description-fg mt-1">
+              Configure provider statusline integration to capture token,
+              quota, and context-window metrics.
+            </p>
+          </div>
+          <div className="space-y-3">
+            {STATUS_LINE_HARNESS_IDS.map((harnessId) => (
+              <StatusLineTrackingControls
+                key={harnessId}
+                harnessId={harnessId}
+                settings={settings}
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

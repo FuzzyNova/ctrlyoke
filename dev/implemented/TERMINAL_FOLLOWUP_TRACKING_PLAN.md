@@ -87,12 +87,15 @@ line (file order), not by arithmetic on sparse or non-monotonic `step_index`
 values. This preserves command text, file contents, structured edits, MCP
 targets, exit codes, and unified diffs.
 
-Background work is represented by separate records. A `RUN_COMMAND`/`RUNNING`
-entry launches a task and supplies its ID; a later `SYSTEM`/`SYSTEM_MESSAGE`
-entry reports that task's success or failure. The parser matches those IDs in
-`BackgroundFollowUpState`, then uses the terminal planner response as the
-resumed-turn completion signal. Antigravity uses the same two-check stale-stop
-guard as Copilot.
+Background work is represented by separate records. A launch is a
+`MODEL`-sourced entry with `status: "RUNNING"` — observed agy output always
+types these `GENERIC` (never a per-tool type like `RUN_COMMAND`), so launch
+detection keys on status alone and recovers the task ID from the freeform
+`Tool is running as a background task with task id: <id>` content. A later
+`SYSTEM`/`SYSTEM_MESSAGE` entry reports that task's success or failure. The
+parser matches those IDs in `BackgroundFollowUpState`, then uses the terminal
+planner response as the resumed-turn completion signal. Antigravity uses the
+same two-check stale-stop guard as Copilot.
 
 ## User-steer and completion flow
 

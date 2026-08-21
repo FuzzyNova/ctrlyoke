@@ -84,9 +84,11 @@ async function withAntigravityTranscriptSession<T>(
 }
 
 function backgroundLaunch(taskId: string): Record<string, unknown> {
+  // Real agy output types every tool result "GENERIC" (never a per-tool type
+  // like "RUN_COMMAND"), so launch detection keys on status alone.
   return {
     source: "MODEL",
-    type: "RUN_COMMAND",
+    type: "GENERIC",
     status: "RUNNING",
     content: `Tool is running as a background task with task id: ${taskId}.`,
   };
@@ -356,7 +358,7 @@ suite("AntigravityLogParser", () => {
         );
         const launch = {
           source: "MODEL",
-          type: "RUN_COMMAND",
+          type: "GENERIC",
           status: "RUNNING",
           content:
             "Tool is running as a background task with task id: session/task-2.",

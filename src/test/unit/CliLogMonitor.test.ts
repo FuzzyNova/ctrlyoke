@@ -564,7 +564,7 @@ suite("CliLogMonitor", () => {
           [
             {
               source: "MODEL",
-              type: "RUN_COMMAND",
+              type: "GENERIC",
               status: "RUNNING",
               content:
                 "Tool is running as a background task with task id: session/task-1.",
