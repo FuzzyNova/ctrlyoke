@@ -523,14 +523,14 @@ Mirror `ClaudeUsageProvider.parseClaudeRateLimitWindows` (`src/core/harness/shar
    added Claude's branded line through the shared formatter, and standardized forwarding on the
    deliberate shared 200 ms timeout. Wrapper coverage verifies both providers' stdout, failure,
    timeout, malformed-input, side-effect, and atomic filename contracts.
-5. **UI (host contract completed; React rendering remains queued)**: shared
+5. **UI (completed)**: shared
    `DISABLE_STATUS_LINE_TRACKING` discriminator and typed harness-id payload, validated
    `WebviewMessageRouter`/`WebviewSettingsSync` routing through `StatuslineManager`,
    user-scope disable with restore/delete coordination, rollback/error feedback, full
-   settings refresh, acknowledgment, and focused host tests are complete. The
-   `StatusLineTrackingControls` component, `UsageCard.tsx` custom-command field and
-   conditional style checkbox, and `Modal`-based disable-confirmation dialog remain for
-   the next React step.
+   settings refresh, acknowledgment, and focused host tests are complete. React now renders
+   parameterized `StatusLineTrackingControls` beside the Claude and Antigravity usage cards,
+   with user-scoped global setting writes, local custom-command editing, conditional style
+   control, and the restore/delete confirmation modal covered by focused component tests.
 6. **Antigravity quota plumbing**: `parseAntigravityQuotaSnapshot`, sidecar push port,
    `AntigravityUsageProvider` real implementation, doc correction in
    `HARNESS_USAGE_TRACKING_PLAN.md`.
