@@ -34,6 +34,8 @@ import {
   getCliSupportedModelIdsSync,
   getOpenCodeModelIdsSync,
   getQwenModelIdsSync,
+  getAntigravityModelIdsSync,
+  getAntigravityModelLabelSync,
 } from "../utils/ModelRegistry";
 import {
   getModelDisplayName,
@@ -972,9 +974,12 @@ export class WebviewSettingsSync {
 
     const antigravityCliOptions = [
       noneOption,
-      ...Object.entries(ANTIGRAVITY_CLI_MODEL_LABELS).map(([value, label]) => ({
-        value,
-        label,
+      ...getAntigravityModelIdsSync().map((id) => ({
+        value: id,
+        label:
+          getAntigravityModelLabelSync(id) ??
+          ANTIGRAVITY_CLI_MODEL_LABELS[id] ??
+          id,
       })),
     ];
 

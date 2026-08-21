@@ -20,12 +20,13 @@
 import * as vscode from "vscode";
 import * as os from "os";
 import * as path from "path";
-import { exec } from "child_process";
+import { exec, spawn } from "child_process";
 import { promisify } from "util";
 import { promises as fsPromises } from "fs";
 import {
   COPILOT_CLI_MODEL_IDS,
   OPENCODE_CLI_FALLBACK_MODELS,
+  ANTIGRAVITY_CLI_MODELS,
 } from "./ModelConstants";
 import { Log } from "./Log";
 import { retryWithBackoff } from "./RetryUtils";
@@ -48,8 +49,11 @@ const QWEN_CLI_FALLBACK_MODEL = "qwen3.5-plus";
 let cachedCopilotCliModelIds: string[] = [];
 let cachedOpenCodeModelIds: string[] = [];
 let cachedQwenModelIds: string[] = [];
+let cachedAntigravityModelIds: string[] = [];
 /** Context window size (tokens) keyed by fully-qualified OpenCode model ID */
 const cachedOpenCodeContextWindows = new Map<string, number>();
+/** Display label keyed by Antigravity model ID, sourced live from `agy models` */
+const cachedAntigravityModelLabels = new Map<string, string>();
 let isInitialized = false;
 let initializationPromise: Promise<void> | null = null;
 
@@ -77,6 +81,7 @@ export async function initializeModelRegistry(): Promise<void> {
     await queryCopilotCliModels();
     await queryOpenCodeModels();
     await queryQwenModels();
+    await queryAntigravityModels();
     isInitialized = true;
     // Notify subscribers that models are now available
     modelsLoadedEmitter.fire();
@@ -320,6 +325,122 @@ async function queryQwenModels(): Promise<void> {
 }
 
 /**
+ * Run a command with stdin explicitly closed (`stdio: ["ignore", "pipe", "pipe"]`).
+ *
+ * `agy models` hangs indefinitely under `child_process.exec`/`execFile` on Windows:
+ * those leave the child's stdin open as an unwritten, unclosed pipe, and the `models`
+ * subcommand specifically blocks on it before printing anything (`agy --version` is
+ * unaffected, confirming it's a stdin-read quirk of that one subcommand, not a general
+ * agy startup issue). Explicitly closing stdin up front avoids the hang.
+ */
+function execWithClosedStdin(
+  command: string,
+  args: string[],
+  timeoutMs: number
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(
+        new Error(
+          `Command timed out after ${timeoutMs}ms: ${command} ${args.join(" ")}`
+        )
+      );
+    }, timeoutMs);
+
+    child.stdout?.on("data", (chunk) => (stdout += chunk));
+    child.stderr?.on("data", (chunk) => (stderr += chunk));
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) {
+        resolve(stdout);
+      } else {
+        reject(
+          new Error(`Command failed (exit ${code}): ${stderr.trim() || stdout.trim()}`)
+        );
+      }
+    });
+  });
+}
+
+/**
+ * Query available models from `agy models`.
+ *
+ * Output is tab-separated `<id>\t<label>` lines on stdout (the "Fetching
+ * available models..." progress text goes to stderr, not stdout). Populates
+ * both `cachedAntigravityModelIds` and `cachedAntigravityModelLabels`.
+ */
+async function queryAntigravityModels(): Promise<void> {
+  try {
+    // Check availability before querying models to avoid a noisy error when Antigravity is not installed
+    try {
+      await execAsync("agy --version", {
+        timeout: CLI_VERSION_CHECK_TIMEOUT_MS,
+      });
+    } catch {
+      Log.debug(
+        "Antigravity CLI not available, skipping model query — using fallback list"
+      );
+      cachedAntigravityModelIds = [...ANTIGRAVITY_CLI_MODELS];
+      return;
+    }
+
+    Log.debug("Querying Antigravity for available models via 'agy models'...");
+    const stdout = await execWithClosedStdin("agy", ["models"], 10000);
+    const ids = parseAntigravityModelsOutput(stdout);
+
+    if (ids.length > 0) {
+      cachedAntigravityModelIds = ids;
+      Log.debug(`Antigravity reports ${ids.length} models: ${ids.join(", ")}`);
+    } else {
+      Log.info("'agy models' returned no models, using fallback list");
+      cachedAntigravityModelIds = [...ANTIGRAVITY_CLI_MODELS];
+    }
+  } catch (error) {
+    Log.warn(`Failed to query Antigravity models: ${error}`);
+    cachedAntigravityModelIds = [...ANTIGRAVITY_CLI_MODELS];
+  }
+}
+
+/**
+ * Parse `agy models` stdout into a list of model IDs.
+ * As a side effect, populates `cachedAntigravityModelLabels` with id -> label.
+ *
+ * Output format: one model per line, `<id>\t<label>` (e.g.
+ * "gemini-3.6-flash-low\tGemini 3.6 Flash (Low)").
+ */
+function parseAntigravityModelsOutput(stdout: string): string[] {
+  const modelIds: string[] = [];
+
+  for (const line of stdout.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const [id, label] = trimmed.split("\t");
+    if (!id) {
+      continue;
+    }
+
+    modelIds.push(id);
+    if (label) {
+      cachedAntigravityModelLabels.set(id, label);
+    }
+  }
+
+  return modelIds;
+}
+
+/**
  * Get Copilot CLI-supported model IDs synchronously (from cache, populated at startup)
  *
  * @returns Array of CLI-supported model IDs
@@ -350,6 +471,22 @@ export function getOpenCodeModelIdsSync(): string[] {
  */
 export function getQwenModelIdsSync(): string[] {
   return cachedQwenModelIds;
+}
+
+/**
+ * Get Antigravity model IDs synchronously (from cache, populated at startup via 'agy models')
+ */
+export function getAntigravityModelIdsSync(): string[] {
+  return cachedAntigravityModelIds;
+}
+
+/**
+ * Get the live display label for an Antigravity model ID, as reported by
+ * 'agy models'. Falls back to the static `ANTIGRAVITY_CLI_MODEL_LABELS` map
+ * (via the caller) when the live query hasn't populated this ID.
+ */
+export function getAntigravityModelLabelSync(modelId: string): string | undefined {
+  return cachedAntigravityModelLabels.get(modelId);
 }
 
 /**

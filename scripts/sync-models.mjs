@@ -16,15 +16,21 @@
  *   Model API or support a chat harness)
  * - Claude CLI models come from Anthropic's Claude Code CLI (separate)
  * - Codex CLI models come from OpenAI's Codex CLI (separate)
+ * - Antigravity CLI models come from `agy models` (separate; also the only
+ *   source that gives verbatim display labels, so --discover writes both
+ *   ANTIGRAVITY_CLI_MODELS and ANTIGRAVITY_CLI_MODEL_LABELS directly instead
+ *   of auto-deriving labels by title-casing the ID)
  *
  * Usage:
  *   node scripts/sync-models.mjs             # Sync all models from ModelConstants.ts
  *   node scripts/sync-models.mjs --check     # Check if in sync (CI mode)
- *   node scripts/sync-models.mjs --discover  # Query `copilot help config` directly and
- *                                             # update COPILOT_CLI_MODEL_IDS from it
+ *   node scripts/sync-models.mjs --discover  # Query `copilot help config` and `agy models`
+ *                                             # directly and update COPILOT_CLI_MODEL_IDS /
+ *                                             # ANTIGRAVITY_CLI_MODELS(+LABELS) from them
  *
  * Workflow for updating CLI models (authoritative, no extension needed):
- *   1. Run: npm run sync-models -- --discover  (updates COPILOT_CLI_MODEL_IDS)
+ *   1. Run: npm run sync-models -- --discover  (updates COPILOT_CLI_MODEL_IDS and
+ *      ANTIGRAVITY_CLI_MODELS/ANTIGRAVITY_CLI_MODEL_LABELS)
  *   2. Run: npm run sync-models (to update package.json and schema)
  *
  * The script preserves formatting and only updates the enum arrays and schema examples.
@@ -33,7 +39,7 @@
 import { readFileSync, writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import { exec } from "child_process";
+import { exec, spawn } from "child_process";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
@@ -480,7 +486,6 @@ async function discoverFromCli() {
     console.log("  Removed CLI models:");
     removed.forEach((id) => console.log(`    - ${id}`));
   }
-  console.log("\nNext step: Run 'npm run sync-models' to update package.json");
 }
 
 /**
@@ -515,6 +520,144 @@ function updateCopilotCliModelIds(content, cliModelIds) {
   return { content: updatedContent, added, removed };
 }
 
+/**
+ * Run a command with stdin explicitly closed (`stdio: ["ignore", "pipe", "pipe"]`).
+ *
+ * `agy models` hangs indefinitely under Node's `exec`/`execFile` on Windows: those
+ * leave the child's stdin open as an unwritten, unclosed pipe, and the `models`
+ * subcommand specifically blocks reading it before printing anything (`agy --version`
+ * is unaffected, confirming this is a stdin-read quirk of that one subcommand rather
+ * than a general agy startup issue). Closing stdin up front avoids the hang.
+ */
+function execWithClosedStdin(command, args, timeoutMs) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+
+    const timer = setTimeout(() => {
+      child.kill();
+      rejectPromise(
+        new Error(
+          `Command timed out after ${timeoutMs}ms: ${command} ${args.join(" ")}`
+        )
+      );
+    }, timeoutMs);
+
+    child.stdout?.on("data", (chunk) => (stdout += chunk));
+    child.stderr?.on("data", (chunk) => (stderr += chunk));
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      rejectPromise(err);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) {
+        resolvePromise(stdout);
+      } else {
+        rejectPromise(
+          new Error(`Command failed (exit ${code}): ${stderr.trim() || stdout.trim()}`)
+        );
+      }
+    });
+  });
+}
+
+/**
+ * Discover models directly from `agy models` and write them straight into
+ * ANTIGRAVITY_CLI_MODELS + ANTIGRAVITY_CLI_MODEL_LABELS in ModelConstants.ts.
+ *
+ * Unlike Copilot, agy's output already includes verbatim display labels
+ * (tab-separated `<id>\t<label>` per line), so labels are written as-is
+ * rather than auto-derived by title-casing the ID.
+ */
+async function discoverAntigravityFromCli() {
+  console.log("\nDiscovering models from Antigravity CLI ('agy models')...\n");
+
+  let stdout;
+  try {
+    stdout = await execWithClosedStdin("agy", ["models"], 15000);
+  } catch (error) {
+    console.error("Failed to run 'agy models':", error.message);
+    console.log("\nMake sure Antigravity CLI (agy) is installed and in your PATH.");
+    process.exit(1);
+  }
+
+  const modelPairs = [];
+  for (const line of stdout.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const [id, label] = trimmed.split("\t");
+    if (id) {
+      modelPairs.push([id, label ?? id]);
+    }
+  }
+
+  if (modelPairs.length === 0) {
+    console.error("Could not parse any models from 'agy models' output");
+    process.exit(1);
+  }
+
+  console.log(`Found ${modelPairs.length} Antigravity-supported models:`);
+  modelPairs.forEach(([id, label]) => console.log(`  - "${id}" -> "${label}"`));
+
+  const content = readFileSync(MODEL_CONSTANTS_PATH, "utf-8");
+  const {
+    content: updatedContent,
+    added,
+    removed,
+  } = updateAntigravityModelsAndLabels(content, modelPairs);
+  writeFileSync(MODEL_CONSTANTS_PATH, updatedContent);
+
+  console.log(
+    `\n✓ Updated ANTIGRAVITY_CLI_MODELS/ANTIGRAVITY_CLI_MODEL_LABELS with ${modelPairs.length} models`
+  );
+  if (added.length > 0) {
+    console.log("  New Antigravity models:");
+    added.forEach((id) => console.log(`    + ${id}`));
+  }
+  if (removed.length > 0) {
+    console.log("  Removed Antigravity models:");
+    removed.forEach((id) => console.log(`    - ${id}`));
+  }
+}
+
+/**
+ * Replace the ANTIGRAVITY_CLI_MODELS and ANTIGRAVITY_CLI_MODEL_LABELS blocks in
+ * ModelConstants.ts source content with `modelPairs` ([id, label] tuples,
+ * in `agy models` order), returning the updated content plus the added/removed
+ * model IDs relative to what was previously there.
+ */
+function updateAntigravityModelsAndLabels(content, modelPairs) {
+  const currentIds = parseStringArrayConstant(content, "ANTIGRAVITY_CLI_MODELS");
+
+  const modelIds = modelPairs.map(([id]) => id);
+  const idEntries = modelIds.map((id) => `  "${id}"`);
+  const newIdsBlock = `export const ANTIGRAVITY_CLI_MODELS = [\n${idEntries.join(",\n")},\n] as const`;
+
+  let updatedContent = content.replace(
+    /export\s+const\s+ANTIGRAVITY_CLI_MODELS\s*=\s*\[[\s\S]*?\]\s*as\s+const/,
+    newIdsBlock
+  );
+
+  const labelEntries = modelPairs.map(
+    ([id, label]) => `  "${id}": "${label}"`
+  );
+  const newLabelsBlock = `export const ANTIGRAVITY_CLI_MODEL_LABELS: Record<string, string> = {\n${labelEntries.join(",\n")},\n}`;
+
+  updatedContent = updatedContent.replace(
+    /export\s+const\s+ANTIGRAVITY_CLI_MODEL_LABELS[^=]*=\s*\{[^}]+\}/,
+    newLabelsBlock
+  );
+
+  const added = modelIds.filter((id) => !currentIds.includes(id));
+  const removed = currentIds.filter((id) => !modelIds.includes(id));
+
+  return { content: updatedContent, added, removed };
+}
+
 // Main
 async function main() {
   const args = process.argv.slice(2);
@@ -525,6 +668,8 @@ async function main() {
 
   if (discover) {
     await discoverFromCli();
+    await discoverAntigravityFromCli();
+    console.log("\nNext step: Run 'npm run sync-models' to update package.json");
     return;
   }
 

@@ -344,9 +344,13 @@ export function getQwenContextWindowSize(_modelId: string): number {
  * An unrecognized value is rejected by agy with exit 1 and a list of valid
  * models — it never silently falls back to the default.
  *
- * Last verified against `agy models` + `agy --model <id>` validation: 2026-07-26.
+ * Last verified against `agy models` + `agy --model <id>` validation: 2026-08-21.
+ * Command: npm run sync-models -- --discover
  */
 export const ANTIGRAVITY_CLI_MODELS = [
+  "gemini-3.7-flash-high",
+  "gemini-3.7-flash-medium",
+  "gemini-3.7-flash-low",
   "gemini-3.6-flash-high",
   "gemini-3.6-flash-medium",
   "gemini-3.6-flash-low",
@@ -367,6 +371,9 @@ export const ANTIGRAVITY_CLI_MODELS = [
  * `-thinking` ID suffix — that asymmetry is agy's, not ours.
  */
 export const ANTIGRAVITY_CLI_MODEL_LABELS: Record<string, string> = {
+  "gemini-3.7-flash-high": "Gemini 3.7 Flash (High)",
+  "gemini-3.7-flash-medium": "Gemini 3.7 Flash (Medium)",
+  "gemini-3.7-flash-low": "Gemini 3.7 Flash (Low)",
   "gemini-3.6-flash-high": "Gemini 3.6 Flash (High)",
   "gemini-3.6-flash-medium": "Gemini 3.6 Flash (Medium)",
   "gemini-3.6-flash-low": "Gemini 3.6 Flash (Low)",
