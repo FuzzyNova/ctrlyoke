@@ -39,20 +39,16 @@ npm run compile-tests
 $env:MOCHA_GREP = "Settings schema"; node ./out/test/runTest.js; $env:MOCHA_GREP = $null
 ```
 
-## Current gaps (7)
+## Current gaps (3)
 
 | Setting | Section it belongs in | Disposition |
 | --- | --- | --- |
 | `server.theme` | intentionally not surfaced (for now) | **Not a gap yet — leave as-is.** The VS Code-hosted dashboard (`ServerSection.tsx`'s process) always follows the VS Code theme; there's nothing for this setting to control there. It's meant for the standalone `ctrlyoke server` headless CLI process's own dashboard, which doesn't exist yet — same story as `server.standalonePort` below. Give it a control once the standalone server ships and gets its own settings surface. |
-| `usageTracking.enabled` | `StatsUsageSection` (or `AdvancedPermissionsSection`) | **Add control.** Master switch for workspace quota/observed-usage collection; currently only settable by hand-editing `settings.json`. |
-| `usageTracking.providerRefreshEnabled` | `StatsUsageSection` | **Add control.** Gate for provider quota refresh calls. |
-| `usageTracking.persistObservedUsage` | `StatsUsageSection` | **Add control.** Whether normalized observed usage is persisted to the workspace. |
-| `usageTracking.warningPercentUsed` | `StatsUsageSection` | **Add control.** Numeric threshold (0–100) for quota warnings. |
 | `modelPricing` | none yet — needs its own editor | Per-harness/per-model USD rate overrides (`inputPerMTok`, `outputPerMTok`, `cachedInputPerMTok`, `cacheWritePerMTok`, `reasoningPerMTok`) keyed by an open-ended `harness -> model -> rates` map. There's no natural fixed-key list to render (unlike `defaults.models`, which iterates the 6 known harnesses) since model IDs are freeform strings. Needs its own small editor (add/remove harness, add/remove model, five rate fields per model) before it can get a control — worth scoping as its own task rather than folding into the `usageTracking` batch above. **Design resolved (2026-08-21): the setting is a generic per-harness/per-model override of whatever `getModelPricing` would otherwise resolve from the downloaded models.dev registry (`src/utils/ModelPricingRegistry.ts`) — it must not special-case which harnesses are eligible.** What blocked two harnesses from calculating an estimate at all turned out to be separate bugs, not reasons to scope them out of the editor — see "Related fixes" below. |
 | `server.standalonePort` | intentionally not surfaced | **Not a gap — leave as-is.** `ServerSection.tsx` already documents why: it configures the standalone `ctrlyoke server` headless CLI process, which doesn't exist yet (`dev/active/STANDALONE_SERVER_PLAN.md` Phases 5–10 are unimplemented). The schema/type/default are kept so the standalone feature can use it later with no config migration. This test will keep flagging it until the standalone server ships and gets its own settings surface (not the VS Code `ServerSection`, which controls a different process) — that's expected, not a bug in the test. |
 
-`defaults.secrets` is done — see "Completed" below. Of the remaining 7, 5 are straightforward
-additive UI work; `modelPricing` needs its own small editor now that its design is resolved;
+`defaults.secrets` and the four `usageTracking.*` controls are done — see "Completed" below. Of
+the remaining 3, `modelPricing` needs its own small editor now that its design is resolved;
 `server.theme` and `server.standalonePort` are both intentionally deferred until the standalone
 server ships and should stay in `PENDING_UI_PARITY` as markers until then.
 
@@ -118,6 +114,10 @@ is "this harness's billing model makes an estimate meaningless":
 | Setting | Where | Notes |
 | --- | --- | --- |
 | `defaults.secrets` | `DefaultsHarnessPage.tsx`, "Agent & Skill Defaults" section | Reuses `SecretGrantsEditor` (shared with `PropertiesDrawer.tsx`/`PromptEditor.tsx`) inside a `SettingInputRow` for the source badge/reset button. Added a `hideLabel` prop to `SecretGrantsEditor` so it doesn't duplicate the row's own label. |
+| `usageTracking.enabled` | `StatsUsageSection.tsx`, "Usage collection" block | User-scope-only master switch for workspace quota and observed-usage collection. |
+| `usageTracking.providerRefreshEnabled` | `StatsUsageSection.tsx`, "Usage collection" block | Controls provider quota refreshes. |
+| `usageTracking.persistObservedUsage` | `StatsUsageSection.tsx`, "Usage collection" block | Controls persistence of normalized observed usage. |
+| `usageTracking.warningPercentUsed` | `StatsUsageSection.tsx`, "Usage collection" block | Sets the 0–100 near-limit warning threshold. |
 
 ## Rejected
 
@@ -129,8 +129,8 @@ is "this harness's billing model makes an estimate meaningless":
 ## Suggested sequencing
 
 1. ~~`defaults.secrets` — reuse `SecretGrantsEditor`, same page as `defaults.agent`/`defaults.skills`.~~ Done.
-2. The four simple `usageTracking.*` toggles/numbers (`enabled`, `providerRefreshEnabled`,
-   `persistObservedUsage`, `warningPercentUsed`) as one batch in `StatsUsageSection`.
+2. ~~The four simple `usageTracking.*` toggles/numbers (`enabled`, `providerRefreshEnabled`,
+   `persistObservedUsage`, `warningPercentUsed`) as one batch in `StatsUsageSection`.~~ Done.
 3. `modelPricing` — scope its own editor as a separate task.
 4. Leave `server.theme` and `server.standalonePort` in `PENDING_UI_PARITY` until
    `dev/active/STANDALONE_SERVER_PLAN.md` ships.

@@ -134,10 +134,8 @@ function allSettingPaths(): Map<string, string> {
  * controls use instead of writing their dot path inline (e.g.
  * `path={SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_ENABLED}`).
  * Defining a value there is not itself proof of a live control — the registry
- * also backs non-UI config plumbing (see `usageTracking.enabled`, which is
- * registered but has no dashboard row) — so this only maps path -> constant
- * name; the caller still has to confirm the constant is referenced from
- * webview source.
+ * also backs config plumbing — so this only maps path -> constant name; the
+ * caller still has to confirm the constant is referenced from webview source.
  */
 function settingPathConstants(): Map<string, string> {
   const source = readFileSync(DASHBOARD_CONSTANTS_PATH, "utf8");
@@ -170,10 +168,6 @@ const PENDING_UI_PARITY: readonly string[] = [
   "modelPricing",
   "server.standalonePort",
   "server.theme",
-  "usageTracking.enabled",
-  "usageTracking.persistObservedUsage",
-  "usageTracking.providerRefreshEnabled",
-  "usageTracking.warningPercentUsed",
 ];
 
 const WEBVIEW_TEST_DIRECTORIES = new Set(["test", "__tests__"]);

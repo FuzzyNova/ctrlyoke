@@ -228,6 +228,7 @@ export function GlobalSettingsDrawer() {
                   hideCost={fullSettings.settings.ui.hideCost}
                   isNarrow={isNarrow}
                   settings={fullSettings}
+                  {...sectionProps}
                 />
               )}
               {fullSettings && effectiveActiveTab === "permissions" && (

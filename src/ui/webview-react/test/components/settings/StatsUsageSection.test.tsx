@@ -9,7 +9,26 @@ import {
   HARNESS_IDS,
   HARNESS_INFO,
   MESSAGE_TYPES,
+  SETTING_SCOPES,
 } from "@root/types/DashboardConstants";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
+import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+
+function createSettings(
+  usageTracking: Partial<typeof CTRLYOKE_SETTINGS_DEFAULTS.usageTracking> = {}
+): FullGlobalSettings {
+  return {
+    settings: {
+      ...CTRLYOKE_SETTINGS_DEFAULTS,
+      usageTracking: {
+        ...CTRLYOKE_SETTINGS_DEFAULTS.usageTracking,
+        ...usageTracking,
+      },
+    },
+    sources: {},
+    isMultiRoot: false,
+  };
+}
 
 describe("StatsUsageSection", () => {
   beforeEach(() => {
@@ -102,5 +121,124 @@ describe("StatsUsageSection", () => {
     render(<StatsUsageSection hideCost={false} />);
 
     expect(screen.getByText("1.5k tokens")).toBeInTheDocument();
+  });
+
+  it("renders the usage collection controls", () => {
+    render(
+      <StatsUsageSection
+        hideCost={false}
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Usage collection" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: /^Enable usage collection/ })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: /^Refresh provider usage/ })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: /^Persist observed usage/ })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("spinbutton", { name: "Usage warning threshold" })
+    ).toBeInTheDocument();
+  });
+
+  it("updates each usage collection setting through the section callback", async () => {
+    const user = userEvent.setup();
+    const onUpdate = vi.fn();
+
+    render(
+      <StatsUsageSection
+        hideCost={false}
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={onUpdate}
+        onReset={vi.fn()}
+      />
+    );
+
+    await user.click(
+      screen.getByRole("checkbox", { name: /^Enable usage collection/ })
+    );
+    await user.click(
+      screen.getByRole("checkbox", { name: /^Refresh provider usage/ })
+    );
+    await user.click(
+      screen.getByRole("checkbox", { name: /^Persist observed usage/ })
+    );
+    const threshold = screen.getByRole("spinbutton", {
+      name: "Usage warning threshold",
+    });
+    await user.clear(threshold);
+    await user.type(threshold, "95");
+    await user.tab();
+
+    expect(onUpdate).toHaveBeenNthCalledWith(1, "usageTracking.enabled", false);
+    expect(onUpdate).toHaveBeenNthCalledWith(
+      2,
+      "usageTracking.providerRefreshEnabled",
+      false
+    );
+    expect(onUpdate).toHaveBeenNthCalledWith(
+      3,
+      "usageTracking.persistObservedUsage",
+      false
+    );
+    expect(onUpdate).toHaveBeenNthCalledWith(
+      4,
+      "usageTracking.warningPercentUsed",
+      95
+    );
+  });
+
+  it("disables usage collection at workspace scope with a user-scope note", () => {
+    render(
+      <StatsUsageSection
+        hideCost={false}
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.WORKSPACE}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByRole("checkbox", { name: /^Enable usage collection/ })
+    ).toBeDisabled();
+    expect(
+      screen.getByText(
+        /user-scoped and cannot be changed from workspace scope/i
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("disables provider refresh and persistence when collection is disabled", () => {
+    render(
+      <StatsUsageSection
+        hideCost={false}
+        settings={createSettings({ enabled: false })}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByRole("checkbox", { name: /^Enable usage collection/ })
+    ).not.toBeDisabled();
+    expect(
+      screen.getByRole("checkbox", { name: /^Refresh provider usage/ })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("checkbox", { name: /^Persist observed usage/ })
+    ).toBeDisabled();
   });
 });

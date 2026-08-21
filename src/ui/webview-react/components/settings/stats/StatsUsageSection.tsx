@@ -4,6 +4,7 @@ import {
   HARNESS_INFO,
   HARNESS_SHARE_METRICS,
   MESSAGE_TYPES,
+  SETTING_SCOPES,
 } from "@root/types/DashboardConstants";
 import type {
   HarnessId,
@@ -11,9 +12,14 @@ import type {
   StatusLineTrackingHarnessId,
 } from "@root/types/DashboardConstants";
 import type { WorkspaceStatsSnapshot } from "@root/types/UsageTypes";
-import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import type {
+  FullGlobalSettings,
+  SettingWriteScope,
+} from "@root/types/WebviewMessageTypes";
 import {
   HarnessIcon,
+  NumberField,
+  SettingToggleRow,
   ScopeToggle,
   SplitButton,
   type SplitButtonOption,
@@ -44,12 +50,18 @@ interface Props {
   hideCost: boolean;
   isNarrow?: boolean;
   settings?: FullGlobalSettings;
+  activeScope?: SettingWriteScope;
+  onUpdate?: (path: string, value: unknown) => void;
+  onReset?: (path: string) => void;
 }
 
 export function StatsUsageSection({
   hideCost,
   isNarrow = false,
   settings,
+  activeScope,
+  onUpdate,
+  onReset,
 }: Props) {
   const [shareMetric, setShareMetric] = useState<HarnessShareMetric>(
     HARNESS_SHARE_METRICS.AI_STEPS
@@ -148,8 +160,92 @@ export function StatsUsageSection({
     },
   ];
 
+  const usageTracking = settings?.settings.usageTracking;
+  const sources = settings?.sources;
+  const userScopeOnly = activeScope === SETTING_SCOPES.WORKSPACE;
+
   return (
     <div className="space-y-4">
+      {usageTracking && (
+        <section
+          className="space-y-3"
+          aria-labelledby="usage-collection-heading"
+        >
+          <div>
+            <h3
+              id="usage-collection-heading"
+              className="text-xs font-semibold uppercase text-description-fg tracking-wide"
+            >
+              Usage collection
+            </h3>
+            <p className="text-xs text-description-fg mt-1">
+              Controls workspace-local provider quota and observed-usage
+              collection.
+            </p>
+          </div>
+          <div className="space-y-3">
+            <SettingToggleRow
+              label="Enable usage collection"
+              description="Enable usage collection for ctrlyoke-started harness sessions."
+              checked={usageTracking.enabled}
+              onChange={(value) => onUpdate?.("usageTracking.enabled", value)}
+              disabled={userScopeOnly}
+              path="usageTracking.enabled"
+              sources={sources}
+              onReset={onReset}
+              activeScope={activeScope}
+            />
+            {userScopeOnly && (
+              <p className="text-xs text-warning-fg -mt-2" role="note">
+                Usage collection is user-scoped and cannot be changed from
+                workspace scope. Switch the scope selector to User to edit it.
+              </p>
+            )}
+            <SettingToggleRow
+              label="Refresh provider usage"
+              description="Allow provider quota refreshes from configured collectors."
+              checked={usageTracking.providerRefreshEnabled}
+              onChange={(value) =>
+                onUpdate?.("usageTracking.providerRefreshEnabled", value)
+              }
+              disabled={!usageTracking.enabled}
+              path="usageTracking.providerRefreshEnabled"
+              sources={sources}
+              onReset={onReset}
+              activeScope={activeScope}
+            />
+            <SettingToggleRow
+              label="Persist observed usage"
+              description="Persist normalized observed usage in the workspace."
+              checked={usageTracking.persistObservedUsage}
+              onChange={(value) =>
+                onUpdate?.("usageTracking.persistObservedUsage", value)
+              }
+              disabled={!usageTracking.enabled}
+              path="usageTracking.persistObservedUsage"
+              sources={sources}
+              onReset={onReset}
+              activeScope={activeScope}
+            />
+            <NumberField
+              id="usage-tracking-warning-percent-used"
+              label="Usage warning threshold"
+              value={usageTracking.warningPercentUsed}
+              min={0}
+              max={100}
+              step={1}
+              onChange={(value) =>
+                onUpdate?.("usageTracking.warningPercentUsed", value)
+              }
+              note="Percentage of quota used at which near-limit warnings are shown."
+              path="usageTracking.warningPercentUsed"
+              sources={sources}
+              onReset={onReset}
+              activeScope={activeScope}
+            />
+          </div>
+        </section>
+      )}
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
@@ -223,8 +319,8 @@ export function StatsUsageSection({
               Statusline Tracking
             </h3>
             <p className="text-xs text-description-fg mt-1">
-              Configure provider statusline integration to capture token,
-              quota, and context-window metrics.
+              Configure provider statusline integration to capture token, quota,
+              and context-window metrics.
             </p>
           </div>
           <div className="space-y-3">
