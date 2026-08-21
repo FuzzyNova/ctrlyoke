@@ -14,6 +14,10 @@ import {
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import type { StatusLineTrackingHarnessId } from "@root/types/DashboardConstants";
+import {
+  DEFAULT_STATUS_LINE_FORMAT,
+  STATUS_LINE_FIELD_IDS,
+} from "@root/utils/StatuslineFormat";
 
 function makeSettings(
   harnessId: StatusLineTrackingHarnessId,
@@ -169,6 +173,52 @@ describe("StatusLineTrackingControls", () => {
         "Show ctrlyoke's branded statusline. Turn off to show your custom command's output instead — or leave the statusline blank when no custom command is set. Usage tracking keeps collecting data either way."
       )
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Status line format" })
+    ).toBeInTheDocument();
+  });
+
+  it("hides the format editor when ctrlyoke-style output is disabled", () => {
+    render(
+      <StatusLineTrackingControls
+        harnessId={HARNESS_IDS.CLAUDE_CLI}
+        settings={makeSettings(HARNESS_IDS.CLAUDE_CLI, {
+          customCommand: "claude-line.js",
+          useCtrlyokeStyle: false,
+        })}
+      />
+    );
+
+    expect(
+      screen.queryByRole("region", { name: "Status line format" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("persists an editor field edit as one whole-array user setting update", async () => {
+    const user = userEvent.setup();
+    render(
+      <StatusLineTrackingControls
+        harnessId={HARNESS_IDS.CLAUDE_CLI}
+        settings={makeSettings(HARNESS_IDS.CLAUDE_CLI)}
+      />
+    );
+
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: "Include Harness/CLI version",
+      })
+    );
+
+    expect(getVsCodeApi().postMessage).toHaveBeenCalledTimes(1);
+    expect(getVsCodeApi().postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+      path: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_FORMAT,
+      value: [
+        ...DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
+        { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
+      ],
+      scope: SETTING_SCOPES.USER,
+    });
   });
 
   it("opens the modal from disable, cancels without sending a message, and defaults restore on reopen", async () => {

@@ -18,6 +18,7 @@ import { LocalTextInput } from "@components/shared/LocalInputs";
 import { Modal } from "@components/shared/Modal";
 import { SettingInputRow } from "@components/shared/SettingInputRow";
 import { SettingToggleRow } from "@components/shared/SettingToggleRow";
+import { StatusLineFormatEditor } from "./StatusLineFormatEditor";
 
 interface Props {
   harnessId: StatusLineTrackingHarnessId;
@@ -28,6 +29,7 @@ interface StatusLineSettingPaths {
   enabled: string;
   customCommand: string;
   useCtrlyokeStyle: string;
+  format: string;
 }
 
 const STATUS_LINE_SETTING_PATHS: Record<
@@ -40,6 +42,7 @@ const STATUS_LINE_SETTING_PATHS: Record<
       SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_CUSTOM_COMMAND,
     useCtrlyokeStyle:
       SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_USE_CTRLYOKE_STYLE,
+    format: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_FORMAT,
   },
   [STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY]: {
     enabled: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_ENABLED,
@@ -47,6 +50,7 @@ const STATUS_LINE_SETTING_PATHS: Record<
       SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_CUSTOM_COMMAND,
     useCtrlyokeStyle:
       SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_USE_CTRLYOKE_STYLE,
+    format: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_FORMAT,
   },
 };
 
@@ -194,6 +198,12 @@ export function StatusLineTrackingControls({ harnessId, settings }: Props) {
         onReset={(path) => sendGlobalSetting(path, undefined)}
         activeScope={SETTING_SCOPES.USER}
       />
+      {tracking.useCtrlyokeStyle && (
+        <StatusLineFormatEditor
+          format={tracking.format}
+          onCommit={(format) => sendGlobalSetting(paths.format, format)}
+        />
+      )}
       <Modal
         isOpen={isDisableModalOpen}
         onClose={() => setIsDisableModalOpen(false)}
