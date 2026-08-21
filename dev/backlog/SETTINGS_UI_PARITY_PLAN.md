@@ -1,6 +1,6 @@
 # Settings Schema UI Parity Plan
 
-> **Status:** Not implemented. Tracked by
+> **Status:** Partially implemented. Tracked by
 > `src/test/integration/settingsSchemaUiParity.integration.test.ts`
 > (`Settings schema -> Global Settings dashboard control parity` ›
 > `every leaf settings-schema property has a live dashboard control`), which
@@ -39,18 +39,17 @@ npm run compile-tests
 $env:MOCHA_GREP = "Settings schema"; node ./out/test/runTest.js; $env:MOCHA_GREP = $null
 ```
 
-## Current gaps (3)
+## Current gaps (2)
 
 | Setting | Section it belongs in | Disposition |
 | --- | --- | --- |
 | `server.theme` | intentionally not surfaced (for now) | **Not a gap yet — leave as-is.** The VS Code-hosted dashboard (`ServerSection.tsx`'s process) always follows the VS Code theme; there's nothing for this setting to control there. It's meant for the standalone `ctrlyoke server` headless CLI process's own dashboard, which doesn't exist yet — same story as `server.standalonePort` below. Give it a control once the standalone server ships and gets its own settings surface. |
-| `modelPricing` | none yet — needs its own editor | Per-harness/per-model USD rate overrides (`inputPerMTok`, `outputPerMTok`, `cachedInputPerMTok`, `cacheWritePerMTok`, `reasoningPerMTok`) keyed by an open-ended `harness -> model -> rates` map. There's no natural fixed-key list to render (unlike `defaults.models`, which iterates the 6 known harnesses) since model IDs are freeform strings. Needs its own small editor (add/remove harness, add/remove model, five rate fields per model) before it can get a control — worth scoping as its own task rather than folding into the `usageTracking` batch above. **Design resolved (2026-08-21): the setting is a generic per-harness/per-model override of whatever `getModelPricing` would otherwise resolve from the downloaded models.dev registry (`src/utils/ModelPricingRegistry.ts`) — it must not special-case which harnesses are eligible.** What blocked two harnesses from calculating an estimate at all turned out to be separate bugs, not reasons to scope them out of the editor — see "Related fixes" below. |
 | `server.standalonePort` | intentionally not surfaced | **Not a gap — leave as-is.** `ServerSection.tsx` already documents why: it configures the standalone `ctrlyoke server` headless CLI process, which doesn't exist yet (`dev/active/STANDALONE_SERVER_PLAN.md` Phases 5–10 are unimplemented). The schema/type/default are kept so the standalone feature can use it later with no config migration. This test will keep flagging it until the standalone server ships and gets its own settings surface (not the VS Code `ServerSection`, which controls a different process) — that's expected, not a bug in the test. |
 
-`defaults.secrets` and the four `usageTracking.*` controls are done — see "Completed" below. Of
-the remaining 3, `modelPricing` needs its own small editor now that its design is resolved;
-`server.theme` and `server.standalonePort` are both intentionally deferred until the standalone
-server ships and should stay in `PENDING_UI_PARITY` as markers until then.
+`defaults.secrets`, the four `usageTracking.*` controls, and `modelPricing` are done — see
+"Completed" below. The remaining 2 settings, `server.theme` and `server.standalonePort`, are
+intentionally deferred until the standalone server ships and should stay in
+`PENDING_UI_PARITY` as markers until then.
 
 ### Related fixes surfaced while scoping `modelPricing`
 
@@ -118,6 +117,7 @@ is "this harness's billing model makes an estimate meaningless":
 | `usageTracking.providerRefreshEnabled` | `StatsUsageSection.tsx`, "Usage collection" block | Controls provider quota refreshes. |
 | `usageTracking.persistObservedUsage` | `StatsUsageSection.tsx`, "Usage collection" block | Controls persistence of normalized observed usage. |
 | `usageTracking.warningPercentUsed` | `StatsUsageSection.tsx`, "Usage collection" block | Sets the 0–100 near-limit warning threshold. |
+| `modelPricing` | `StatsUsageSection.tsx`, "Model pricing overrides" block | Uses `ModelPricingEditor` for all six harnesses and open-ended model IDs. The editor emits the complete object through `onUpdate("modelPricing", nextWholeObject)` so dotted model IDs remain single keys. |
 
 ## Rejected
 
@@ -131,22 +131,23 @@ is "this harness's billing model makes an estimate meaningless":
 1. ~~`defaults.secrets` — reuse `SecretGrantsEditor`, same page as `defaults.agent`/`defaults.skills`.~~ Done.
 2. ~~The four simple `usageTracking.*` toggles/numbers (`enabled`, `providerRefreshEnabled`,
    `persistObservedUsage`, `warningPercentUsed`) as one batch in `StatsUsageSection`.~~ Done.
-3. `modelPricing` — scope its own editor as a separate task.
+3. ~~`modelPricing` — scope its own editor as a separate task.~~ Done. The editor lives in
+   `StatsUsageSection.tsx` and writes the whole object at `modelPricing`.
 4. Leave `server.theme` and `server.standalonePort` in `PENDING_UI_PARITY` until
    `dev/active/STANDALONE_SERVER_PLAN.md` ships.
 
 ### Staging vs. `STATUSLINE_FORMAT_CUSTOMIZATION_PLAN.md`
 
 **No strict dependency either direction — the two plans can be worked in parallel, or in either
-order.** Checked for real coupling (2026-08-21) and found none: this plan's remaining work (the
-four `usageTracking.*` toggles above, the `modelPricing` editor) is about data-collection/cost
+order.** Checked for real coupling (2026-08-21) and found none: this plan's settings (the four
+`usageTracking.*` toggles above and the `modelPricing` editor) are about data-collection/cost
 settings; the statusline plan is about display formatting. Neither reads or depends on the other's
 settings or code paths.
 
-Both plans edit `StatsUsageSection.tsx`, but in disjoint regions: this plan's toggles land near
-the top (where they gate the stats rendered below); the statusline plan's only edit to that file
-is *removing* its "Statusline Tracking" block (moved to a new dedicated "Status Line" settings
-tab) and adding a `percentDirection` control. Whichever plan lands first, the other's diff doesn't
+Both plans edit `StatsUsageSection.tsx`, but in disjoint regions: this plan's usage controls and
+pricing editor occupy the stats surface; the statusline plan's only edit to that file is *removing*
+its "Statusline Tracking" block (moved to a new dedicated "Status Line" settings tab) and adding a
+`percentDirection` control. Whichever plan lands first, the other's diff doesn't
 meaningfully conflict with it.
 
 **One operational watch-item, not a blocker.** The statusline plan introduces a brand-new schema

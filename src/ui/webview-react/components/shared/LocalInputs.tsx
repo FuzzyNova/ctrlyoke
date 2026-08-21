@@ -22,19 +22,25 @@ type LocalNumberInputProps = Omit<
   React.InputHTMLAttributes<HTMLInputElement>,
   "onChange" | "type" | "value"
 > & {
-  value: number;
-  onCommit: (value: number) => void;
-  parse?: (raw: string) => number;
+  value: number | undefined;
+  onCommit: (value: number | undefined) => void;
+  parse?: (raw: string) => number | undefined;
+  allowEmpty?: boolean;
 };
 
 export function LocalNumberInput({
   value,
   onCommit,
   parse,
+  allowEmpty = false,
   ...props
 }: LocalNumberInputProps) {
-  const local = useLocalInput(String(value), (v) =>
-    onCommit(parse ? parse(v) : Number(v))
+  const local = useLocalInput(
+    allowEmpty ? String(value ?? "") : String(value),
+    (v) =>
+      onCommit(
+        parse ? parse(v) : allowEmpty && v.trim() === "" ? undefined : Number(v)
+      )
   );
   return <input type="number" {...props} {...local} />;
 }

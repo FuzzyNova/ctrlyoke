@@ -165,7 +165,6 @@ function settingPathConstants(): Map<string, string> {
  * rather than silently masking future gaps in the same setting.
  */
 const PENDING_UI_PARITY: readonly string[] = [
-  "modelPricing",
   "server.standalonePort",
   "server.theme",
 ];

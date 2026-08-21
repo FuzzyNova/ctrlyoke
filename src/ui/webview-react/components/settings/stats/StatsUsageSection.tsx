@@ -18,7 +18,9 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import {
   HarnessIcon,
+  ModelPricingEditor,
   NumberField,
+  SettingInputRow,
   SettingToggleRow,
   ScopeToggle,
   SplitButton,
@@ -306,6 +308,38 @@ export function StatsUsageSection({
         outside ctrlyoke. Costs are estimates at API list prices, not
         subscription spend.
       </p>
+      {settings && (
+        <section
+          className="pt-3 border-t border-panel-border space-y-3"
+          aria-labelledby="model-pricing-heading"
+        >
+          <div>
+            <h3
+              id="model-pricing-heading"
+              className="text-xs font-semibold uppercase text-description-fg tracking-wide"
+            >
+              Model pricing overrides
+            </h3>
+            <p className="text-xs text-description-fg mt-1">
+              Override USD-per-million-token rates for a harness and model.
+              Leave optional cache and reasoning rates blank when they are not
+              reported separately.
+            </p>
+          </div>
+          <SettingInputRow
+            label="Rates"
+            path="modelPricing"
+            sources={sources}
+            onReset={onReset}
+            activeScope={activeScope}
+          >
+            <ModelPricingEditor
+              value={settings.settings.modelPricing}
+              onChange={(value) => onUpdate?.("modelPricing", value)}
+            />
+          </SettingInputRow>
+        </section>
+      )}
       {settings && (
         <section
           className="pt-3 border-t border-panel-border space-y-3"
