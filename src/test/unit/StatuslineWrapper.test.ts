@@ -6,6 +6,8 @@ import * as path from "path";
 import { suite, teardown, test } from "mocha";
 
 type SharedWrapper = {
+  ANSI_RESET: string;
+  CONTEXT_COLORS: Record<string, string>;
   FORWARD_TIMEOUT_MS: number;
   STATUSLINE_PROVIDERS: {
     CLAUDE: string;
@@ -13,7 +15,9 @@ type SharedWrapper = {
   };
   formatBrandedStatusLine(
     provider: string,
-    payload: Record<string, unknown>
+    payload: Record<string, unknown>,
+    format?: unknown,
+    percentDirection?: "used" | "remaining"
   ): string;
   formatUsagePercentForDisplay(
     usedPercent: number,
@@ -25,6 +29,20 @@ type SharedWrapper = {
     timeoutMs?: number
   ): Promise<Buffer>;
   parsePayload(input: string): Record<string, unknown>;
+  getQuotaPercentage(
+    payload: Record<string, unknown>,
+    provider: string
+  ): number | undefined;
+  resolveStatusLineSettings(
+    provider: string,
+    homeDirectory?: string
+  ): {
+    enabled: boolean;
+    customCommand: string;
+    useCtrlyokeStyle: boolean;
+    format: unknown[];
+    percentDirection: "used" | "remaining";
+  };
   writeSnapshotAtomic(
     directory: string,
     filePrefix: string,
@@ -90,6 +108,8 @@ async function writeMachineSettings(
     enabled?: boolean;
     customCommand?: string;
     useCtrlyokeStyle?: boolean;
+    format?: unknown[];
+    percentDirection?: "used" | "remaining";
   }
 ): Promise<void> {
   const filePath = path.join(homeDirectory, ".ctrlyoke", "settings.json");
@@ -106,6 +126,9 @@ async function writeMachineSettings(
             ...settings,
           },
         },
+      },
+      usageTracking: {
+        percentDirection: settings.percentDirection,
       },
     })
   );
@@ -211,8 +234,189 @@ suite("Shared statusline wrappers", () => {
     );
     assert.match(claudeLine, /claude-test/);
     assert.match(claudeLine, /12\.4k\/1\.0M ctx \(1\.2%\)/);
-    assert.match(claudeLine, /rate 25% · idle/);
-    assert.match(agyLine, /quota 98% · idle/);
+    assert.match(claudeLine, /rate 75%/);
+    assert.doesNotMatch(claudeLine, /idle/);
+    assert.match(agyLine, /quota 2%/);
+    assert.doesNotMatch(agyLine, /idle/);
+  });
+
+  test("uses the shared default format for missing, empty, or malformed formats", () => {
+    const payload = {
+      model: { id: "default-model" },
+      context_window: {
+        total_input_tokens: 100,
+        total_output_tokens: 20,
+        context_window_size: 1_000,
+      },
+      rate_limits: { five_hour: { used_percentage: 25 } },
+    };
+    const defaultLine = shared.formatBrandedStatusLine(
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      payload
+    );
+
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        payload,
+        []
+      ),
+      defaultLine
+    );
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        payload,
+        { malformed: true }
+      ),
+      defaultLine
+    );
+  });
+
+  test("skips unknown and deferred fields without breaking the line", () => {
+    const line = shared.formatBrandedStatusLine(
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      {},
+      [
+        { type: "field", field: "removed-field" },
+        { type: "field", field: "usage1" },
+        { type: "literal", text: "kept" },
+      ]
+    );
+
+    assert.strictEqual(line, "kept");
+  });
+
+  test("renders all-literal formats as one newline-free line", () => {
+    const line = shared.formatBrandedStatusLine(
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      {},
+      [{ type: "literal", text: "hello\r\nworld", color: "red" }]
+    );
+
+    assert.strictEqual(line, "\u001b[31mhello world\u001b[0m");
+    assert.strictEqual(line.includes("\n"), false);
+  });
+
+  test("renders the new payload fields for both providers", () => {
+    const payload = {
+      version: "1.2.3",
+      cwd: path.join("parent", "workspace"),
+      session_id: "123456789abcdef",
+    };
+    const format = [
+      { type: "field", field: "version" },
+      { type: "field", field: "cwd" },
+      { type: "field", field: "sessionId" },
+    ];
+
+    for (const provider of [
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      shared.STATUSLINE_PROVIDERS.ANTIGRAVITY,
+    ]) {
+      assert.strictEqual(
+        shared.formatBrandedStatusLine(provider, payload, format),
+        "1.2.3 workspace 12345678"
+      );
+    }
+  });
+
+  test("renders usage percentages in either direction while keeping used values canonical", () => {
+    const formats = [{ type: "field", field: "usage" }];
+    const payloads = [
+      {
+        provider: shared.STATUSLINE_PROVIDERS.CLAUDE,
+        payload: { rate_limits: { five_hour: { used_percentage: 25 } } },
+        used: "rate 25%",
+        remaining: "rate 75%",
+      },
+      {
+        provider: shared.STATUSLINE_PROVIDERS.ANTIGRAVITY,
+        payload: { quota: { weekly: { remaining_fraction: 0.8 } } },
+        used: "quota 20%",
+        remaining: "quota 80%",
+      },
+    ];
+
+    for (const { provider, payload, used, remaining } of payloads) {
+      assert.strictEqual(
+        shared.formatBrandedStatusLine(provider, payload, formats, "used"),
+        used
+      );
+      assert.strictEqual(
+        shared.formatBrandedStatusLine(provider, payload, formats, "remaining"),
+        remaining
+      );
+    }
+  });
+
+  test("explicit colors override context band coloring, while unset colors preserve it", () => {
+    const payload = {
+      context_window: {
+        total_input_tokens: 900,
+        context_window_size: 1_000,
+      },
+    };
+    const context = [{ type: "field", field: "context" }];
+    const defaultColorLine = shared.formatBrandedStatusLine(
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      payload,
+      context
+    );
+    const explicitColorLine = shared.formatBrandedStatusLine(
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      payload,
+      [{ type: "field", field: "context", color: "yellow" }]
+    );
+
+    assert.ok(defaultColorLine.startsWith(shared.CONTEXT_COLORS.danger));
+    assert.ok(explicitColorLine.startsWith("\u001b[33m"));
+    assert.strictEqual(
+      explicitColorLine.includes(shared.CONTEXT_COLORS.danger),
+      false
+    );
+    assert.ok(explicitColorLine.endsWith(shared.ANSI_RESET));
+  });
+
+  test("labels replace internal labels and are no-ops for bare fields", () => {
+    const line = shared.formatBrandedStatusLine(
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      {
+        model: { id: "model-name" },
+        context_window: {
+          total_input_tokens: 100,
+          context_window_size: 1_000,
+        },
+        rate_limits: { five_hour: { used_percentage: 25 } },
+      },
+      [
+        { type: "field", field: "context", label: "window" },
+        { type: "field", field: "usage", label: "budget" },
+        { type: "field", field: "model", label: "ignored" },
+      ]
+    );
+
+    assert.match(line, /window/);
+    assert.match(line, /budget 25%/);
+    assert.match(line, /model-name/);
+    assert.doesNotMatch(line, /ignored/);
+    assert.doesNotMatch(line, / ctx /);
+  });
+
+  test("resolves format and global percent direction from settings.json", async () => {
+    await createHome();
+    const format = [{ type: "field", field: "usage" }];
+    await writeMachineSettings(tempHome, "claude", {
+      format,
+      percentDirection: "remaining",
+    });
+
+    const settings = shared.resolveStatusLineSettings(
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      tempHome
+    );
+    assert.deepStrictEqual(settings.format, format);
+    assert.strictEqual(settings.percentDirection, "remaining");
   });
 
   test("loads the shared formatter sibling and uses it in a child process", async () => {

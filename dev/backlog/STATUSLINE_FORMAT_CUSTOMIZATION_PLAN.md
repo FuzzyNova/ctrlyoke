@@ -651,23 +651,14 @@ wrapper reuses these conventions without importing across that boundary.
    module architecture. Include `formatUsagePercentForDisplay` (Decision 6) in that spike's scope
    alongside the window-ordering/labeling functions, since it's a candidate for the same
    extraction.
-2. Field registry + segment-driven `formatBrandedStatusLine` rewrite in
-   `ctrlyoke-statusline-wrapper.js`, including the `usage1`/`usage2` extractor (Decisions 4-5), the
-   `percentDirection` read (Decision 6, wrapper side only — resolved the same tolerant way as the
-   rest of `resolveStatusLineSettings`, defaulting to `"used"` on anything malformed), the
-   Decision 3 shared default array, the Decision 7 tolerance rules, the `branch`/`date`/`time`
-   extractors (Decision 15 — `branch` via `.git/HEAD` read with worktree-gitdir-redirect and
-   detached-HEAD handling; `date`/`time` via `new Date()`), and `color`/`label` segment resolution
-   (Decisions 13-14). Extend the existing wrapper test suite (already covers both providers'
-   settings resolution, stdout, failure/timeout, malformed input) with segment-driven cases: empty
-   format, unknown/removed field id, all-literal format, format with only a subset of fields, each
-   new field (`version`/`cwd`/`sessionId`/`branch`/`date`/`time`) rendered correctly for both
-   providers, `branch` specifically covering a plain repo, a worktree
-   (`gitdir:` redirect), a detached HEAD, and a non-repo `cwd`, `usage1`/`usage2` ordering +
-   absence-handling for both the fixed-enum (Claude) and dynamic-tier (Antigravity, including the
-   single-tier case) paths, both `percentDirection` values for `usage`/`usage1`/`usage2`, `color`
-   overriding (and not overriding, when unset) `context`'s band coloring, and `label` substituting
-   a field's internal label slot where one exists and no-oping where one doesn't.
+2. **[Core segment-driven formatting done]** Field registry + segment-driven
+   `formatBrandedStatusLine` rewrite in `ctrlyoke-statusline-wrapper.js`, the `percentDirection`
+   read (Decision 6, wrapper side only), Decision 3's shared default array, Decision 7's tolerance
+   rules, the `version`/`cwd`/`sessionId` extractors, and `color`/`label` segment resolution
+   (Decisions 13-14) are implemented and covered by the wrapper tests. The remaining Phase 2 work
+   is intentionally deferred to the next step: `usage1`/`usage2` plus the locally-computed
+   `branch`/`date`/`time` fields remain registered but unimplemented in the wrapper and therefore
+   skip silently when selected.
 3. **[Done]** Settings/schema/type plumbing: `format` field, `percentDirection` field, new
    `SETTING_PATHS` entries, schema definitions, defaults. The schema leaves
    `usageTracking.percentDirection`, `permissions.statusLineTracking.claude.format`, and

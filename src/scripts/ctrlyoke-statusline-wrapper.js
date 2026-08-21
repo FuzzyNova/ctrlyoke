@@ -12,6 +12,10 @@ const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
 const {
+  DEFAULT_STATUS_LINE_FORMAT,
+  STATUS_LINE_COLOR_IDS,
+  STATUS_LINE_FIELD_IDS,
+  STATUS_LINE_FIELD_REGISTRY,
   formatUsagePercentForDisplay,
 } = require("./ctrlyoke-statusline-format.js");
 
@@ -19,6 +23,11 @@ const {
 // the documented ~300 ms Antigravity poll cadence for a consistent contract.
 const FORWARD_TIMEOUT_MS = 200;
 const ANSI_RESET = "\u001b[0m";
+const DEFAULT_PERCENT_DIRECTION = "used";
+const STATUSLINE_SEGMENT_TYPES = Object.freeze({
+  FIELD: "field",
+  LITERAL: "literal",
+});
 
 const STATUSLINE_PROVIDERS = Object.freeze({
   CLAUDE: "claude",
@@ -29,6 +38,8 @@ const DEFAULT_STATUSLINE_SETTINGS = Object.freeze({
   enabled: true,
   customCommand: "",
   useCtrlyokeStyle: true,
+  format: DEFAULT_STATUS_LINE_FORMAT,
+  percentDirection: DEFAULT_PERCENT_DIRECTION,
 });
 
 const CONTEXT_THRESHOLDS = Object.freeze({
@@ -51,28 +62,51 @@ let snapshotSequence = 0;
  * environment. Missing, malformed, and partial settings remain harmless.
  */
 function resolveStatusLineSettings(provider, homeDirectory = os.homedir()) {
-  let configured;
+  let parsed;
   try {
     const settingsPath = path.join(homeDirectory, ".ctrlyoke", "settings.json");
-    const parsed = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
-    const permissions =
-      parsed && typeof parsed === "object" ? parsed.permissions : undefined;
-    const tracking =
-      permissions && typeof permissions === "object"
-        ? permissions.statusLineTracking
-        : undefined;
-    configured =
-      tracking && typeof tracking === "object" ? tracking[provider] : undefined;
+    parsed = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
   } catch {
-    configured = undefined;
+    parsed = undefined;
   }
+
+  const settings =
+    parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : {};
+  const permissions = settings.permissions;
+  const tracking =
+    permissions &&
+    typeof permissions === "object" &&
+    !Array.isArray(permissions)
+      ? permissions.statusLineTracking
+      : undefined;
+  const configured =
+    tracking && typeof tracking === "object" && !Array.isArray(tracking)
+      ? tracking[provider]
+      : undefined;
+  const usageTracking = settings.usageTracking;
+  const percentDirection =
+    usageTracking &&
+    typeof usageTracking === "object" &&
+    !Array.isArray(usageTracking) &&
+    (usageTracking.percentDirection === "used" ||
+      usageTracking.percentDirection === "remaining")
+      ? usageTracking.percentDirection
+      : DEFAULT_PERCENT_DIRECTION;
+
+  const defaults = {
+    ...DEFAULT_STATUSLINE_SETTINGS,
+    format: cloneDefaultStatuslineFormat(),
+    percentDirection,
+  };
 
   if (
     !configured ||
     typeof configured !== "object" ||
     Array.isArray(configured)
   ) {
-    return { ...DEFAULT_STATUSLINE_SETTINGS };
+    return defaults;
   }
 
   return {
@@ -88,7 +122,16 @@ function resolveStatusLineSettings(provider, homeDirectory = os.homedir()) {
       typeof configured.useCtrlyokeStyle === "boolean"
         ? configured.useCtrlyokeStyle
         : DEFAULT_STATUSLINE_SETTINGS.useCtrlyokeStyle,
+    format:
+      Array.isArray(configured.format) && configured.format.length > 0
+        ? configured.format
+        : cloneDefaultStatuslineFormat(),
+    percentDirection,
   };
+}
+
+function cloneDefaultStatuslineFormat() {
+  return DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment }));
 }
 
 function asFiniteNumber(value) {
@@ -288,21 +331,17 @@ function getQuotaPercentage(payload, provider) {
     ) {
       return undefined;
     }
-    const remainingPercentages = Object.values(rateLimits)
+    const usedPercentages = Object.values(rateLimits)
       .map((entry) =>
         entry && typeof entry === "object"
           ? asFiniteNumber(entry.used_percentage)
           : undefined
       )
-      .filter((value) => value !== undefined)
-      .map((value) => formatUsagePercentForDisplay(value, "remaining"));
-    if (remainingPercentages.length === 0) {
+      .filter((value) => value !== undefined);
+    if (usedPercentages.length === 0) {
       return undefined;
     }
-    return Math.max(
-      0,
-      Math.min(100, Math.round(Math.min(...remainingPercentages)))
-    );
+    return Math.max(0, Math.min(100, Math.round(Math.max(...usedPercentages))));
   }
 
   const quota = normalized.quota;
@@ -320,19 +359,7 @@ function getQuotaPercentage(payload, provider) {
   if (usedPercentages.length === 0) {
     return undefined;
   }
-  return Math.max(
-    0,
-    Math.min(
-      100,
-      Math.round(
-        Math.min(
-          ...usedPercentages.map((value) =>
-            formatUsagePercentForDisplay(value, "remaining")
-          )
-        )
-      )
-    )
-  );
+  return Math.max(0, Math.min(100, Math.round(Math.max(...usedPercentages))));
 }
 
 function safeStatusLabel(value, fallback) {
@@ -341,46 +368,155 @@ function safeStatusLabel(value, fallback) {
     : fallback;
 }
 
-/** Format both providers using one branded statusline shape. */
-function formatBrandedStatusLine(providerOrPayload, payloadOrProvider) {
-  // Preserve the old one-argument Antigravity call shape for existing callers.
-  const provider =
-    typeof providerOrPayload === "string"
-      ? providerOrPayload
-      : typeof payloadOrProvider === "string"
-        ? payloadOrProvider
-        : STATUSLINE_PROVIDERS.ANTIGRAVITY;
-  const payload =
-    typeof providerOrPayload === "string"
-      ? payloadOrProvider
-      : providerOrPayload;
-  const normalized = normalizePayload(payload);
-  const model = normalizePayload(normalized.model);
-  const modelLabel = safeStatusLabel(
-    model.id,
-    model.display_name ?? "unknown-model"
-  );
-  const agentState = safeStatusLabel(normalized.agent_state, "unknown");
-  const { used, size } = getContextValues(normalized);
-  const percentage = calculateContextPercentage(used, size);
-  const band = getContextBand(percentage);
-  const quotaPercentage = getQuotaPercentage(normalized, provider);
-  const quotaLabel =
-    quotaPercentage === undefined ? "—" : `${quotaPercentage}%`;
-  const contextLabel = `${formatCompactTokenCount(used)}/${formatCompactTokenCount(size)} ctx (${formatPercentage(percentage)})`;
+function applySegmentColor(text, color) {
+  if (
+    typeof color === "string" &&
+    color !== "default" &&
+    Object.prototype.hasOwnProperty.call(STATUS_LINE_COLOR_IDS, color) &&
+    STATUS_LINE_COLOR_IDS[color]
+  ) {
+    return `${STATUS_LINE_COLOR_IDS[color]}${text}${ANSI_RESET}`;
+  }
+  return text;
+}
 
-  return [
-    "ctrlyoke ⚡",
-    modelLabel,
-    "·",
-    `${CONTEXT_COLORS[band]}${contextLabel}${ANSI_RESET}`,
-    "·",
-    provider === STATUSLINE_PROVIDERS.CLAUDE
-      ? `rate ${quotaLabel}`
-      : `quota ${quotaLabel}`,
-    "·",
-    agentState,
-  ].join(" ");
+function renderField(field, segment, provider, context) {
+  const normalized = context.normalized;
+  const label = safeStatusLabel(segment.label, "");
+  switch (field) {
+    case STATUS_LINE_FIELD_IDS.BRAND:
+      return "ctrlyoke ⚡";
+    case STATUS_LINE_FIELD_IDS.MODEL: {
+      const model = normalizePayload(normalized.model);
+      return safeStatusLabel(
+        model.id,
+        typeof model.display_name === "string"
+          ? model.display_name
+          : "unknown-model"
+      );
+    }
+    case STATUS_LINE_FIELD_IDS.CONTEXT: {
+      const contextLabel = `${formatCompactTokenCount(context.used)}/${formatCompactTokenCount(context.size)} ${label || "ctx"} (${formatPercentage(context.percentage)})`;
+      return contextLabel;
+    }
+    case STATUS_LINE_FIELD_IDS.USAGE: {
+      const quotaPercentage = getQuotaPercentage(normalized, provider);
+      const quotaLabel =
+        quotaPercentage === undefined
+          ? "—"
+          : `${formatUsagePercentForDisplay(
+              quotaPercentage,
+              context.percentDirection
+            )}%`;
+      const usageLabel =
+        label || (provider === STATUSLINE_PROVIDERS.CLAUDE ? "rate" : "quota");
+      return `${usageLabel} ${quotaLabel}`;
+    }
+    case STATUS_LINE_FIELD_IDS.VERSION:
+      return safeStatusLabel(normalized.version, "—");
+    case STATUS_LINE_FIELD_IDS.CWD:
+      return typeof normalized.cwd === "string" && normalized.cwd.length > 0
+        ? safeStatusLabel(path.basename(normalized.cwd), "—")
+        : "—";
+    case STATUS_LINE_FIELD_IDS.SESSION_ID:
+      return safeStatusLabel(normalized.session_id, "—").slice(0, 8);
+    case STATUS_LINE_FIELD_IDS.USAGE_1:
+    case STATUS_LINE_FIELD_IDS.USAGE_2:
+    case STATUS_LINE_FIELD_IDS.BRANCH:
+    case STATUS_LINE_FIELD_IDS.DATE:
+    case STATUS_LINE_FIELD_IDS.TIME:
+      // These fields are registered for the editor but are implemented by the
+      // follow-up statusline phase.
+      return undefined;
+    default:
+      return undefined;
+  }
+}
+
+/** Format both providers from the shared segment vocabulary. */
+function formatBrandedStatusLine(
+  provider,
+  payload,
+  format,
+  percentDirection = DEFAULT_PERCENT_DIRECTION
+) {
+  try {
+    const normalized = normalizePayload(payload);
+    const { used, size } = getContextValues(normalized);
+    const percentage = calculateContextPercentage(used, size);
+    const band = getContextBand(percentage);
+    const segments =
+      Array.isArray(format) && format.length > 0
+        ? format
+        : DEFAULT_STATUS_LINE_FORMAT;
+    const context = {
+      normalized,
+      used,
+      size,
+      percentage,
+      percentDirection:
+        percentDirection === "remaining"
+          ? "remaining"
+          : DEFAULT_PERCENT_DIRECTION,
+    };
+
+    return segments
+      .reduce((rendered, segment) => {
+        if (!segment || typeof segment !== "object") {
+          return rendered;
+        }
+
+        if (segment.type === STATUSLINE_SEGMENT_TYPES.LITERAL) {
+          const literal = safeStatusLabel(segment.text, "");
+          if (literal.length > 0) {
+            rendered.push(applySegmentColor(literal, segment.color));
+          }
+          return rendered;
+        }
+
+        if (
+          segment.type !== STATUSLINE_SEGMENT_TYPES.FIELD ||
+          typeof segment.field !== "string" ||
+          !Object.prototype.hasOwnProperty.call(
+            STATUS_LINE_FIELD_REGISTRY,
+            segment.field
+          )
+        ) {
+          return rendered;
+        }
+
+        const fieldText = renderField(
+          segment.field,
+          segment,
+          provider,
+          context
+        );
+        if (fieldText === undefined || fieldText.length === 0) {
+          return rendered;
+        }
+
+        const builtInColor =
+          segment.field === STATUS_LINE_FIELD_IDS.CONTEXT
+            ? CONTEXT_COLORS[band]
+            : "";
+        const text =
+          typeof segment.color === "string" &&
+          segment.color !== "default" &&
+          Object.prototype.hasOwnProperty.call(
+            STATUS_LINE_COLOR_IDS,
+            segment.color
+          )
+            ? applySegmentColor(fieldText, segment.color)
+            : builtInColor
+              ? `${builtInColor}${fieldText}${ANSI_RESET}`
+              : fieldText;
+        rendered.push(text);
+        return rendered;
+      }, [])
+      .join(" ");
+  } catch {
+    return "";
+  }
 }
 
 function writeStdoutSafely(value) {

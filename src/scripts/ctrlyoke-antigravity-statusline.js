@@ -48,7 +48,12 @@ async function runStatusline(input, env = process.env) {
   );
   if (settings.enabled && settings.useCtrlyokeStyle) {
     writeStdoutSafely(
-      formatBrandedStatusLine(STATUSLINE_PROVIDERS.ANTIGRAVITY, payload)
+      formatBrandedStatusLine(
+        STATUSLINE_PROVIDERS.ANTIGRAVITY,
+        payload,
+        settings.format,
+        settings.percentDirection
+      )
     );
     return;
   }
