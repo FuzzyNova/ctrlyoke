@@ -1,6 +1,11 @@
 # Statusline Format Customization Plan
 
-**Related:** [`STATUSLINE_USER_CONTROLS_PLAN.md`](../implemented/STATUSLINE_USER_CONTROLS_PLAN.md)
+> **Status:** Implemented and closed (2026-08-21). Phases 1–6 shipped, including the
+> shared detached-wrapper formatter, segment editor, live preview, and used/remaining
+> percentage direction. Copilot/Qwen statusline support remains an explicitly out-of-scope
+> follow-up.
+
+**Related:** [`STATUSLINE_USER_CONTROLS_PLAN.md`](STATUSLINE_USER_CONTROLS_PLAN.md)
 (implemented — gives users enable/disable, a custom forward command, and the
 `useCtrlyokeStyle` switch this plan builds on top of)
 
@@ -587,12 +592,10 @@ wrapper reuses these conventions without importing across that boundary.
   `StatsUsageSection.tsx:230-238`) plus this plan's new `StatusLineFormatEditor` sub-component,
   rendered directly below the existing `useCtrlyokeStyle` toggle block within each provider's
   `StatusLineTrackingControls` (currently lines 185-198).
-- **Visible only when `tracking.useCtrlyokeStyle === true`** — mirrors the existing pattern one
-  level up, where the `useCtrlyokeStyle` toggle itself is only shown once `customCommand` is
-  non-empty (`StatusLineTrackingControls.tsx:185`): don't show controls for output that isn't
-  currently reaching the terminal. When `customCommand` is empty, `useCtrlyokeStyle` is always
-  effectively `true` (that toggle is hidden, not off), so the format editor is visible in that
-  case too.
+- **Visible only when `tracking.useCtrlyokeStyle === true`**: don't show format controls for
+  output that isn't currently reaching the terminal. The `useCtrlyokeStyle` toggle itself is
+  always visible per Decision 16; when it is off, the wrapper emits the custom command's output,
+  or a blank line when no custom command is configured, while usage collection continues.
 - Per-segment row: a `field` segment shows its label with an include/exclude checkbox, an
   optional custom-label text input (Decision 14, shown only for fields with an internal label
   slot — `usage`/`usage1`/`usage2`/`context` — so the control isn't offered where it would be a
@@ -663,9 +666,9 @@ wrapper reuses these conventions without importing across that boundary.
 3. **[Done]** Settings/schema/type plumbing: `format` field, `percentDirection` field, new
    `SETTING_PATHS` entries, schema definitions, defaults. The schema leaves
    `usageTracking.percentDirection`, `permissions.statusLineTracking.claude.format`, and
-   `permissions.statusLineTracking.antigravity.format` are temporarily listed in
-   `PENDING_UI_PARITY` in `settingsSchemaUiParity.integration.test.ts`; later UI steps must
-   remove those entries when their controls land.
+   `permissions.statusLineTracking.antigravity.format`; these were temporarily listed in
+   `PENDING_UI_PARITY` in `settingsSchemaUiParity.integration.test.ts`, and the later UI phase
+   removed those entries when the controls landed.
 4. **[Done]** `UsageCard.tsx`/`usageBarColor.ts` changes: read `percentDirection` for the displayed
    quota number/label, while confirming every `getUsageBarColorClass` call site — including
    `WorkflowStep.tsx:388-390`'s unrelated context-bar usage — still receives a used%-oriented
@@ -680,9 +683,11 @@ wrapper reuses these conventions without importing across that boundary.
    Phase 1's architecture decision) are now wired into each provider's editor. The
    `percentDirection` control stays in `StatsUsageSection.tsx` (Decision 6), with focused
    component coverage for both editor providers, preview fallback/direction, and setting writes.
-6. Update `STATUSLINE_USER_CONTROLS_PLAN.md`'s "UX Risks Found In Review" section, which
-   currently frames "write your own script" as the only escape hatch from ctrlyoke's fixed line
-   — note this plan as the closing answer once shipped.
+6. **[Done]** Update `STATUSLINE_USER_CONTROLS_PLAN.md`'s "UX Risks Found In Review" section,
+   which previously framed "write your own script" as the only escape hatch from ctrlyoke's
+   fixed line. The closing answer is now shipped: users can keep ctrlyoke's line while shaping
+   its fields, labels, colors, and order; writing a script remains the escape hatch for output
+   outside the structured editor's vocabulary.
 
 ## Staging vs. `SETTINGS_UI_PARITY_PLAN.md`
 

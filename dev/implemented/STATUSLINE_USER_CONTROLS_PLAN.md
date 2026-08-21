@@ -440,6 +440,12 @@ each provider reaching for a global.
 
 ## UX Risks Found In Review
 
+- **The fixed branded line had no middle ground.** **Closed by the implemented
+  [`STATUSLINE_FORMAT_CUSTOMIZATION_PLAN.md`](STATUSLINE_FORMAT_CUSTOMIZATION_PLAN.md):** users
+  can now keep ctrlyoke's statusline and shape its fields, labels, colors, and order from the
+  settings UI. Writing a custom script remains the escape hatch for output beyond the structured
+  editor's vocabulary. Extending this support to Copilot CLI and Qwen Code is an explicitly
+  out-of-scope follow-up in that plan.
 - **Silent staleness of the forwarded custom command.** With `useCtrlyokeStyle: true` (the
   default), the custom command's stdout is discarded — it still runs, but nothing in the UI
   confirms it's still working. If the user later moves/renames/breaks that script (reinstalls a
