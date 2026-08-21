@@ -9,26 +9,30 @@ const {
   forwardToCommand,
   parsePayload,
   readStdinBytes,
+  resolveStatusLineSettings,
   writeSnapshotAtomic,
   writeStdoutSafely,
 } = require("./ctrlyoke-statusline-wrapper.js");
 
 async function runStatusline(input, env = process.env) {
   const payload = parsePayload(input);
-  writeSnapshotAtomic(
-    env.CTRLYOKE_CLAUDE_STATUSLINE_DIR,
-    "claude-statusline",
-    env.CTRLYOKE_CLAUDE_STATUSLINE_TOKEN,
-    payload,
-    Date.now()
-  );
+  const settings = resolveStatusLineSettings(STATUSLINE_PROVIDERS.CLAUDE);
+  if (settings.enabled) {
+    writeSnapshotAtomic(
+      env.CTRLYOKE_CLAUDE_STATUSLINE_DIR,
+      "claude-statusline",
+      env.CTRLYOKE_CLAUDE_STATUSLINE_TOKEN,
+      payload,
+      Date.now()
+    );
+  }
 
   const forwardedOutput = await forwardToCommand(
-    env.CTRLYOKE_CLAUDE_STATUSLINE_FORWARD,
+    settings.customCommand,
     input,
     FORWARD_TIMEOUT_MS
   );
-  if (env.CTRLYOKE_CLAUDE_STATUSLINE_USE_CTRLYOKE_STYLE === "true") {
+  if (settings.enabled && settings.useCtrlyokeStyle) {
     writeStdoutSafely(
       formatBrandedStatusLine(STATUSLINE_PROVIDERS.CLAUDE, payload)
     );

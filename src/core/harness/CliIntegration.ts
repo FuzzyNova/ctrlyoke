@@ -1146,10 +1146,13 @@ export class CliIntegration extends HarnessIntegration {
     session.workflowContext?.reportCompatibilityDiagnostics?.(
       routedDiagnostics
     );
-    await this.executionPlanBuilder.apply(executionPlan);
-    this.notifyStatuslineInstall(
-      this.provider.consumeStatuslineInstallResult?.()
-    );
+    try {
+      await this.executionPlanBuilder.apply(executionPlan);
+    } finally {
+      this.notifyStatuslineInstall(
+        this.provider.consumeStatuslineInstallResult?.()
+      );
+    }
     const executionSidecar = this.startProviderExecutionSidecar(
       session,
       workspaceRoot
@@ -1196,7 +1199,7 @@ export class CliIntegration extends HarnessIntegration {
     if (!result || result.kind !== "written") {
       return;
     }
-    const harness = this.provider.config.displayName;
+    const harness = this.provider.config.terminalName;
     const message = result.captured
       ? `ctrlyoke is now managing your ${harness} statusline and forwarding to your existing script unchanged. Settings → Usage to change this.`
       : `ctrlyoke is now showing its own statusline for ${harness}. Settings → Usage to change this.`;

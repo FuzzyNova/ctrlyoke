@@ -10,6 +10,7 @@ import type {
   HarnessShareMetric,
 } from "@root/types/DashboardConstants";
 import type { WorkspaceStatsSnapshot } from "@root/types/UsageTypes";
+import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import {
   HarnessIcon,
   ScopeToggle,
@@ -23,6 +24,7 @@ import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
 import { WebviewLog } from "@utils/logger";
 import { buildWorkspaceStatsExport } from "@utils/workspaceStatsExport";
 import { UsageCard } from "./UsageCard";
+import { StatusLineTrackingControls } from "./StatusLineTrackingControls";
 import { StatTileGrid } from "./StatTileGrid";
 import {
   HarnessShareBar,
@@ -36,9 +38,14 @@ const ALL_HARNESS_IDS = Object.values(HARNESS_IDS) as HarnessId[];
 interface Props {
   hideCost: boolean;
   isNarrow?: boolean;
+  settings?: FullGlobalSettings;
 }
 
-export function StatsUsageSection({ hideCost, isNarrow = false }: Props) {
+export function StatsUsageSection({
+  hideCost,
+  isNarrow = false,
+  settings,
+}: Props) {
   const [shareMetric, setShareMetric] = useState<HarnessShareMetric>(
     HARNESS_SHARE_METRICS.AI_STEPS
   );
@@ -190,6 +197,14 @@ export function StatsUsageSection({ hideCost, isNarrow = false }: Props) {
               snapshot={snapshotsByHarness[harnessId]}
               hideCost={hideCost}
             />
+            {settings &&
+              (harnessId === HARNESS_IDS.CLAUDE_CLI ||
+                harnessId === HARNESS_IDS.ANTIGRAVITY_CLI) && (
+                <StatusLineTrackingControls
+                  harnessId={harnessId}
+                  settings={settings}
+                />
+              )}
           </div>
         ))}
       </div>

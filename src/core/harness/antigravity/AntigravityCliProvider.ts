@@ -145,9 +145,6 @@ export class AntigravityCliProvider implements ICliProvider {
   private statusLineDirectory: string | undefined;
   /** Whether the current prompt successfully acquired the statusline lease. */
   private statusLineEnabledForPrompt = false;
-  /** Baseline user command forwarded by the wrapper, when one existed. */
-  private statusLineForwardCommand: string | undefined;
-  private statusLineUseCtrlyokeStyle = true;
   /** Sidecar for the current prompt, retained for final snapshot consumers. */
   private statusLineSidecar: AntigravityStatuslineSidecar | undefined;
   private statuslineInstallResult: StatuslineInstallResult | undefined;
@@ -280,8 +277,6 @@ export class AntigravityCliProvider implements ICliProvider {
             this.statusLineToken = statusLineToken;
             this.statusLineDirectory = undefined;
             this.statusLineEnabledForPrompt = false;
-            this.statusLineForwardCommand = undefined;
-            this.statusLineUseCtrlyokeStyle = true;
             this.statuslineInstallResult = undefined;
             this.statusLineSidecar = undefined;
             this.streamJsonUsage.reset();
@@ -375,6 +370,7 @@ export class AntigravityCliProvider implements ICliProvider {
       model: deps.model,
       parser: this.logParser,
       onContextWindowUpdate: deps.onContextWindowUpdate,
+      onProviderUsageUpdate: deps.onProviderUsageUpdate,
       onSnapshot: (snapshot) => this.logParser.setStatuslineSnapshot(snapshot),
     });
     return this.statusLineSidecar;
@@ -839,9 +835,6 @@ export class AntigravityCliProvider implements ICliProvider {
         workspaceRoot,
         command
       );
-      const settings = AntigravityCliProvider.statuslineManager.getSettings();
-      this.statusLineForwardCommand = settings.customCommand || undefined;
-      this.statusLineUseCtrlyokeStyle = settings.useCtrlyokeStyle;
       this.statusLineDirectory = snapshotDirectory;
       this.statusLineEnabledForPrompt = true;
       return result;
@@ -866,12 +859,6 @@ export class AntigravityCliProvider implements ICliProvider {
       CTRLYOKE_AGY_STATUSLINE_TOKEN: this.statusLineToken,
       CTRLYOKE_AGY_STATUSLINE_DIR: this.statusLineDirectory,
     };
-    if (this.statusLineForwardCommand) {
-      env.CTRLYOKE_AGY_STATUSLINE_FORWARD = this.statusLineForwardCommand;
-    }
-    env.CTRLYOKE_AGY_STATUSLINE_USE_CTRLYOKE_STYLE = String(
-      this.statusLineUseCtrlyokeStyle
-    );
     return env;
   }
 

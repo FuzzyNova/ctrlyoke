@@ -123,7 +123,8 @@ suite("AntigravityCliProvider", () => {
     provider: AntigravityCliProvider,
     conversationId: string,
     writtenAt: number,
-    contextWindow?: Record<string, unknown>
+    contextWindow?: Record<string, unknown>,
+    quota?: Record<string, unknown>
   ) {
     const env = provider.getHeadlessSpawnEnv();
     const token = env.CTRLYOKE_AGY_STATUSLINE_TOKEN;
@@ -138,6 +139,7 @@ suite("AntigravityCliProvider", () => {
       JSON.stringify({
         conversation_id: conversationId,
         ...(contextWindow ? { context_window: contextWindow } : {}),
+        ...(quota ? { quota } : {}),
         _ctrlyoke: { sequence: 1, writtenAt },
       })
     );
@@ -290,12 +292,12 @@ suite("AntigravityCliProvider", () => {
       assert.ok(!settings.statusLine.command.includes('"'));
       assert.strictEqual(
         provider.getHeadlessSpawnEnv().CTRLYOKE_AGY_STATUSLINE_FORWARD,
-        "node user-statusline.js"
+        undefined
       );
       assert.strictEqual(
         provider.getHeadlessSpawnEnv()
           .CTRLYOKE_AGY_STATUSLINE_USE_CTRLYOKE_STYLE,
-        "false"
+        undefined
       );
     } finally {
       await provider.cleanupWorkspaceArtifacts(
@@ -374,11 +376,11 @@ suite("AntigravityCliProvider", () => {
       settings.statusLine.command,
       "node C:/extension root/out/scripts/ctrlyoke-antigravity-statusline.js"
     );
-    assert.strictEqual(first.consumeStatuslineInstallResult()?.captured, true);
-    assert.strictEqual(
+    const installResults = [
+      first.consumeStatuslineInstallResult()?.captured,
       second.consumeStatuslineInstallResult()?.captured,
-      false
-    );
+    ].sort();
+    assert.deepStrictEqual(installResults, [false, true]);
     assert.strictEqual(
       configService.get("permissions").statusLineTracking[
         STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
@@ -390,6 +392,86 @@ suite("AntigravityCliProvider", () => {
     await second.cleanupWorkspaceArtifacts(workspaceRoot);
     assert.ok(
       (await fs.readFile(settingsPath(), "utf8")).includes("statusLine")
+    );
+  });
+
+  test("updates an older ctrlyoke wrapper without capturing it as custom", async () => {
+    await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
+    await fs.writeFile(
+      settingsPath(),
+      JSON.stringify({
+        statusLine: {
+          type: "command",
+          command:
+            "node C:/old-extension/out/scripts/ctrlyoke-antigravity-statusline.js",
+        },
+      })
+    );
+    const provider = new AntigravityCliProvider();
+
+    await buildArgs(provider);
+
+    const harnessSettings = JSON.parse(
+      await fs.readFile(settingsPath(), "utf8")
+    );
+    assert.strictEqual(
+      harnessSettings.statusLine.command,
+      "node C:/extension root/out/scripts/ctrlyoke-antigravity-statusline.js"
+    );
+    assert.deepStrictEqual(provider.consumeStatuslineInstallResult(), {
+      kind: "written",
+      captured: false,
+    });
+    assert.deepStrictEqual(
+      configService.get("permissions").statusLineTracking[
+        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      ],
+      {
+        enabled: true,
+        customCommand: "",
+        useCtrlyokeStyle: true,
+      }
+    );
+  });
+
+  test("reports preserved custom output when refreshing an older wrapper", async () => {
+    configService.setUserBackend(
+      makeBackend({
+        permissions: {
+          statusLineTracking: {
+            antigravity: {
+              enabled: true,
+              customCommand: "node user-statusline.js",
+              useCtrlyokeStyle: false,
+            },
+          },
+        },
+      })
+    );
+    await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
+    await fs.writeFile(
+      settingsPath(),
+      JSON.stringify({
+        statusLine: {
+          type: "command",
+          command:
+            "node C:/old-extension/out/scripts/ctrlyoke-antigravity-statusline.js",
+        },
+      })
+    );
+    const provider = new AntigravityCliProvider();
+
+    await buildArgs(provider);
+
+    assert.deepStrictEqual(provider.consumeStatuslineInstallResult(), {
+      kind: "written",
+      captured: true,
+    });
+    assert.strictEqual(
+      configService.get("permissions").statusLineTracking[
+        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      ].customCommand,
+      "node user-statusline.js"
     );
   });
 
@@ -412,7 +494,7 @@ suite("AntigravityCliProvider", () => {
 
     assert.strictEqual(
       provider.getHeadlessSpawnEnv().CTRLYOKE_AGY_STATUSLINE_USE_CTRLYOKE_STYLE,
-      "false"
+      undefined
     );
   });
 
@@ -540,6 +622,47 @@ suite("AntigravityCliProvider", () => {
         );
       }
     });
+  });
+
+  test("threads provider-live quota updates from the execution sidecar", async () => {
+    const provider = new AntigravityCliProvider();
+    const updates: Array<{ id: string; percentUsed?: number }> = [];
+    try {
+      await buildArgs(provider);
+      const sidecar = provider.startExecutionSidecar({
+        workspaceRoot,
+        model: "gemini-3.6-flash-low",
+        onStreamingEvents: () => {},
+        onContextWindowUpdate: () => {},
+        onProviderUsageUpdate: (quota) =>
+          updates.push({
+            id: quota.windows[0]?.id ?? "",
+            percentUsed: quota.windows[0]?.percentUsed,
+          }),
+      });
+      assert.ok(sidecar);
+
+      await publishSnapshot(provider, "quota-session-id", 2_000, undefined, {
+        "custom-weekly": { remaining_fraction: 0.2 },
+      });
+      for (
+        let attempt = 0;
+        attempt < 50 && updates.length === 0;
+        attempt += 1
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+
+      assert.deepStrictEqual(updates, [
+        { id: "custom-weekly", percentUsed: 80 },
+      ]);
+      sidecar.stop();
+    } finally {
+      await provider.cleanupWorkspaceArtifacts(
+        workspaceRoot,
+        path.join(workspaceRoot, "workflow.md")
+      );
+    }
   });
 
   suite("extractSessionIdFromLogs", () => {

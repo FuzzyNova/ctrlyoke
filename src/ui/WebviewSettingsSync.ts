@@ -19,6 +19,9 @@ import {
   type HarnessId,
   type HarnessStatusString,
   type SettingWriteScope,
+  USER_FEEDBACK_SEVERITY,
+  isStatusLineTrackingHarnessId,
+  type StatusLineTrackingHarnessId,
 } from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
@@ -59,10 +62,20 @@ import type { SkillInfo } from "../utils/SkillDiscovery";
 import { configService } from "../config/CtrlYokeConfigService";
 import type {
   DevStatus,
+  DisableStatusLineTrackingMessage,
   WorkflowDefinitionMutation,
 } from "../types/WebviewMessageTypes";
+import type { StatusLineTrackingSettings } from "../types/CtrlYokeSettings";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
+import {
+  StatuslineManager,
+  type StatuslineManagerLike,
+} from "../core/harness/shared/StatuslineManager";
+import {
+  notifyUserFeedback,
+  type UserFeedbackSink,
+} from "../core/UserFeedbackSink";
 
 /**
  * Harness availability status
@@ -79,6 +92,10 @@ export interface HarnessStatus {
  * Callback for posting messages to the webview.
  */
 export type PostMessageFn = (message: any) => void;
+
+type StatuslineManagerFactory = (
+  harnessId: StatusLineTrackingHarnessId
+) => StatuslineManagerLike;
 
 /**
  * WebviewSettingsSync
@@ -142,7 +159,10 @@ export class WebviewSettingsSync {
   constructor(
     private readonly postMessage: PostMessageFn,
     private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
-    private readonly getDevStatus?: () => Promise<DevStatus | undefined>
+    private readonly getDevStatus?: () => Promise<DevStatus | undefined>,
+    private readonly getStatuslineManager: StatuslineManagerFactory = (
+      harnessId
+    ) => StatuslineManager.forHarness(harnessId)
   ) {}
 
   private emitMessage(
@@ -1029,6 +1049,120 @@ export class WebviewSettingsSync {
       },
       postMessage
     );
+  }
+
+  /**
+   * Disable a machine-global harness statusline and optionally restore the
+   * persisted custom command. The config write happens first so a failed
+   * harness-file mutation can be rolled back to the installed/enabled state.
+   */
+  async handleDisableStatusLineTracking(
+    request: DisableStatusLineTrackingMessage,
+    postMessage: PostMessageFn = this.postMessage
+  ): Promise<void> {
+    if (
+      !isStatusLineTrackingHarnessId(request?.harnessId) ||
+      typeof request?.restoreCustomCommand !== "boolean"
+    ) {
+      this.reportStatuslineFailure(
+        "Unsupported statusline tracking disable request."
+      );
+      return;
+    }
+
+    const { harnessId, restoreCustomCommand } = request;
+    const statuslineProvider = StatuslineManager.providerForHarness(harnessId);
+    let manager: StatuslineManagerLike;
+    let currentSettings: StatusLineTrackingSettings;
+    try {
+      manager = this.getStatuslineManager(harnessId);
+      currentSettings = manager.getSettings();
+    } catch (error) {
+      this.reportStatuslineFailure(
+        "Could not read statusline tracking settings.",
+        error
+      );
+      return;
+    }
+    let configDisabled = false;
+
+    try {
+      await ConfigurationUtils.setStatusLineTrackingSettings(
+        statuslineProvider,
+        {
+          ...currentSettings,
+          enabled: false,
+        }
+      );
+      configDisabled = true;
+    } catch (error) {
+      this.reportStatuslineFailure(
+        "Could not disable statusline tracking.",
+        error
+      );
+      return;
+    }
+
+    try {
+      await manager.uninstall(getVsCodeWorkspaceRoot(), restoreCustomCommand);
+    } catch (error) {
+      let rollbackError: unknown;
+      if (configDisabled) {
+        try {
+          await ConfigurationUtils.setStatusLineTrackingSettings(
+            statuslineProvider,
+            currentSettings
+          );
+        } catch (rollbackFailure) {
+          rollbackError = rollbackFailure;
+        }
+      }
+
+      this.reportStatuslineFailure(
+        rollbackError
+          ? "Could not disable statusline tracking or restore its enabled setting."
+          : "Could not update the harness statusline; tracking remains enabled.",
+        rollbackError ?? error
+      );
+      return;
+    }
+
+    try {
+      await this.handleGlobalSettingsLoadRequest(postMessage);
+    } catch (error) {
+      this.reportStatuslineFailure(
+        "Statusline tracking was disabled, but settings could not be refreshed.",
+        error
+      );
+      return;
+    }
+
+    this.emitMessage(
+      {
+        type: MESSAGE_TYPES.GLOBAL_SETTING_UPDATED,
+        path: `${CONFIG_KEYS.PERMISSIONS_STATUS_LINE_TRACKING}.${statuslineProvider}`,
+        value: {
+          ...currentSettings,
+          enabled: false,
+        },
+        source: CONFIG_SCOPE.USER,
+      },
+      postMessage
+    );
+  }
+
+  private reportStatuslineFailure(message: string, error?: unknown): void {
+    const detail = error ? getErrorMessage(error) : undefined;
+    const orchestrator = this.getOrchestrator();
+    const feedbackSink: UserFeedbackSink | undefined =
+      orchestrator?.getUserFeedbackSink?.();
+    notifyUserFeedback(
+      feedbackSink,
+      USER_FEEDBACK_SEVERITY.ERROR,
+      message,
+      detail
+    );
+    Log.error(message, detail ?? "");
   }
 
   async handleUpdateGlobalSetting(

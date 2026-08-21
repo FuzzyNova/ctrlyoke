@@ -154,12 +154,12 @@ suite("ClaudeCliProvider", () => {
 
     assert.strictEqual(
       provider.getHeadlessSpawnEnv().CTRLYOKE_CLAUDE_STATUSLINE_FORWARD,
-      "node user-statusline.js"
+      undefined
     );
     assert.strictEqual(
       provider.getHeadlessSpawnEnv()
         .CTRLYOKE_CLAUDE_STATUSLINE_USE_CTRLYOKE_STYLE,
-      "false"
+      undefined
     );
     assert.strictEqual(
       provider.consumeStatuslineInstallResult()?.kind,

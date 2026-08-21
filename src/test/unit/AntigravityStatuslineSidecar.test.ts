@@ -110,4 +110,47 @@ suite("AntigravityStatuslineSidecar", () => {
     await new Promise((resolve) => setTimeout(resolve, 80));
     assert.strictEqual(updates.length, 1);
   });
+
+  test("pushes quota from a quota-only snapshot independently of context updates", async () => {
+    const contextUpdates: Array<{ used: number; size: number }> = [];
+    const quotaUpdates: Array<
+      {
+        id: string;
+        label: string;
+        percentUsed?: number;
+      }[]
+    > = [];
+    const snapshotPath = path.join(tempDirectory, "agy-statusline-token.json");
+    sidecar = new AntigravityStatuslineSidecar({
+      snapshotPath,
+      model: "resolved-model",
+      parser: new AntigravityLogParser(),
+      onContextWindowUpdate: (used, size) =>
+        contextUpdates.push({ used, size }),
+      onProviderUsageUpdate: (quota) =>
+        quotaUpdates.push(
+          quota.windows.map(({ id, label, percentUsed }) => ({
+            id,
+            label,
+            percentUsed,
+          }))
+        ),
+    });
+
+    await writeSnapshot({
+      quota: {
+        "new-tier-weekly": {
+          remaining_fraction: 0.4,
+          reset_time: "2026-08-22T00:00:00.000Z",
+        },
+      },
+      _ctrlyoke: { sequence: 1, writtenAt: 100 },
+    });
+    await waitFor(() => quotaUpdates.length === 1);
+
+    assert.deepStrictEqual(quotaUpdates[0], [
+      { id: "new-tier-weekly", label: "New Tier Weekly", percentUsed: 60 },
+    ]);
+    assert.deepStrictEqual(contextUpdates, []);
+  });
 });

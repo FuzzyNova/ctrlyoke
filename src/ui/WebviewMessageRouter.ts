@@ -12,6 +12,7 @@ import {
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
   USER_FEEDBACK_SEVERITY,
+  isStatusLineTrackingHarnessId,
   END_CONDITION_SCRIPT_TYPES,
   type EndConditionScriptType,
   type UserFeedbackSeverity,
@@ -53,6 +54,7 @@ import type {
   DeleteAllFromHarnessMessage,
   OpenHarnessDirMessage,
   ShowNativeFeedbackMessage,
+  DisableStatusLineTrackingMessage,
   CreateEndConditionScriptMessage,
   RetryHarnessDetectionMessage,
   DeleteSecretMessage,
@@ -1543,6 +1545,24 @@ export class WebviewMessageRouter {
         ctx.postMessage
       );
     });
+
+    table.set(
+      MESSAGE_TYPES.DISABLE_STATUS_LINE_TRACKING,
+      async (message, ctx) => {
+        if (
+          !isStatusLineTrackingHarnessId(message.harnessId) ||
+          typeof message.restoreCustomCommand !== "boolean"
+        ) {
+          Log.warn("Rejected unsupported statusline tracking disable request");
+          return;
+        }
+
+        await this.settingsSync.handleDisableStatusLineTracking(
+          message as DisableStatusLineTrackingMessage,
+          ctx.postMessage
+        );
+      }
+    );
 
     const sendWorktreeManagementState = async (
       refresh: boolean,

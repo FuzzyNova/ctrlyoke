@@ -109,8 +109,6 @@ export class ClaudeCliProvider implements ICliProvider {
   private statusLineToken: string | undefined;
   private statusLineDirectory: string | undefined;
   private statusLineEnabledForPrompt = false;
-  private statusLineForwardCommand: string | undefined;
-  private statusLineUseCtrlyokeStyle = true;
   private statusLineSidecar: ClaudeStatuslineSidecar | undefined;
   private statuslineInstallResult: StatuslineInstallResult | undefined;
 
@@ -404,8 +402,6 @@ export class ClaudeCliProvider implements ICliProvider {
             this.statusLineToken = statusLineToken;
             this.statusLineDirectory = undefined;
             this.statusLineEnabledForPrompt = false;
-            this.statusLineForwardCommand = undefined;
-            this.statusLineUseCtrlyokeStyle = true;
             this.statuslineInstallResult = undefined;
             if (
               workspaceRoot &&
@@ -945,9 +941,6 @@ export class ClaudeCliProvider implements ICliProvider {
         workspaceRoot,
         command
       );
-      const settings = ClaudeCliProvider.statuslineManager.getSettings();
-      this.statusLineForwardCommand = settings.customCommand || undefined;
-      this.statusLineUseCtrlyokeStyle = settings.useCtrlyokeStyle;
       this.statusLineDirectory = snapshotDirectory;
       this.statusLineEnabledForPrompt = true;
       return result;
@@ -970,12 +963,6 @@ export class ClaudeCliProvider implements ICliProvider {
       CTRLYOKE_CLAUDE_STATUSLINE_TOKEN: this.statusLineToken,
       CTRLYOKE_CLAUDE_STATUSLINE_DIR: this.statusLineDirectory,
     };
-    if (this.statusLineForwardCommand) {
-      env.CTRLYOKE_CLAUDE_STATUSLINE_FORWARD = this.statusLineForwardCommand;
-    }
-    env.CTRLYOKE_CLAUDE_STATUSLINE_USE_CTRLYOKE_STYLE = String(
-      this.statusLineUseCtrlyokeStyle
-    );
     return env;
   }
 

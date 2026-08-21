@@ -1,0 +1,285 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { StatusLineTrackingControls } from "@components/settings/stats/StatusLineTrackingControls";
+import { StatsUsageSection } from "@components/settings/stats/StatsUsageSection";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import {
+  HARNESS_IDS,
+  MESSAGE_TYPES,
+  SETTING_PATHS,
+  SETTING_SCOPES,
+  STATUS_LINE_TRACKING_PROVIDERS,
+} from "@root/types/DashboardConstants";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
+import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import type { StatusLineTrackingHarnessId } from "@root/types/DashboardConstants";
+
+function makeSettings(
+  harnessId: StatusLineTrackingHarnessId,
+  overrides: Partial<
+    (typeof CTRLYOKE_SETTINGS_DEFAULTS.permissions.statusLineTracking)[keyof typeof CTRLYOKE_SETTINGS_DEFAULTS.permissions.statusLineTracking]
+  > = {}
+): FullGlobalSettings {
+  const provider =
+    harnessId === HARNESS_IDS.CLAUDE_CLI
+      ? STATUS_LINE_TRACKING_PROVIDERS.CLAUDE
+      : STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY;
+  return {
+    settings: {
+      ...CTRLYOKE_SETTINGS_DEFAULTS,
+      permissions: {
+        ...CTRLYOKE_SETTINGS_DEFAULTS.permissions,
+        statusLineTracking: {
+          ...CTRLYOKE_SETTINGS_DEFAULTS.permissions.statusLineTracking,
+          [provider]: {
+            ...CTRLYOKE_SETTINGS_DEFAULTS.permissions.statusLineTracking[
+              provider
+            ],
+            ...overrides,
+          },
+        },
+      },
+    },
+    sources: {},
+    isMultiRoot: false,
+  };
+}
+
+function getStatuslineToggle(harnessName: string): HTMLElement {
+  return screen.getByRole("checkbox", {
+    name: new RegExp(`^Enable ${harnessName} statusline tracking`),
+  });
+}
+
+describe("StatusLineTrackingControls", () => {
+  beforeEach(() => {
+    vi.mocked(getVsCodeApi().postMessage).mockClear();
+  });
+
+  it.each([
+    [
+      HARNESS_IDS.CLAUDE_CLI,
+      "Claude",
+      "Disabling Claude statusline tracking loses token/quota data.",
+    ],
+    [
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+      "Antigravity",
+      "Disabling Antigravity statusline tracking loses token/quota and context-window data.",
+    ],
+  ] as const)(
+    "shows the %s loss warning",
+    (harnessId, providerName, warning) => {
+      render(
+        <StatusLineTrackingControls
+          harnessId={harnessId}
+          settings={makeSettings(harnessId)}
+        />
+      );
+
+      expect(screen.getByText(warning)).toBeInTheDocument();
+      expect(
+        screen.getByRole("checkbox", {
+          name: new RegExp(
+            `^Enable ${providerName === "Claude" ? "Claude Code" : "Antigravity CLI"} statusline tracking`
+          ),
+        })
+      ).toBeInTheDocument();
+    }
+  );
+
+  it("writes enabling through the user-scoped global setting message", async () => {
+    const user = userEvent.setup();
+    render(
+      <StatusLineTrackingControls
+        harnessId={HARNESS_IDS.CLAUDE_CLI}
+        settings={makeSettings(HARNESS_IDS.CLAUDE_CLI, { enabled: false })}
+      />
+    );
+
+    await user.click(getStatuslineToggle("Claude Code"));
+
+    expect(getVsCodeApi().postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+      path: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_ENABLED,
+      value: true,
+      scope: SETTING_SCOPES.USER,
+    });
+  });
+
+  it("edits the custom command and writes the style setting only when a command exists", async () => {
+    const user = userEvent.setup();
+    render(
+      <StatusLineTrackingControls
+        harnessId={HARNESS_IDS.ANTIGRAVITY_CLI}
+        settings={makeSettings(HARNESS_IDS.ANTIGRAVITY_CLI, {
+          customCommand: "agy-line.js",
+          useCtrlyokeStyle: false,
+        })}
+      />
+    );
+
+    const input = screen.getByRole("textbox", {
+      name: "Custom statusline command",
+    });
+    await user.clear(input);
+    await user.type(input, "node agy-line.js --compact");
+    await user.tab();
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: /^Use ctrlyoke-style statusline/,
+      })
+    );
+
+    expect(getVsCodeApi().postMessage).toHaveBeenNthCalledWith(1, {
+      type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+      path: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_CUSTOM_COMMAND,
+      value: "node agy-line.js --compact",
+      scope: SETTING_SCOPES.USER,
+    });
+    expect(getVsCodeApi().postMessage).toHaveBeenNthCalledWith(2, {
+      type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+      path: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_USE_CTRLYOKE_STYLE,
+      value: true,
+      scope: SETTING_SCOPES.USER,
+    });
+  });
+
+  it("hides the style toggle when no custom command is configured", () => {
+    render(
+      <StatusLineTrackingControls
+        harnessId={HARNESS_IDS.CLAUDE_CLI}
+        settings={makeSettings(HARNESS_IDS.CLAUDE_CLI)}
+      />
+    );
+
+    expect(
+      screen.queryByRole("checkbox", {
+        name: /^Use ctrlyoke-style statusline/,
+      })
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens the modal from disable, cancels without sending a message, and defaults restore on reopen", async () => {
+    const user = userEvent.setup();
+    render(
+      <StatusLineTrackingControls
+        harnessId={HARNESS_IDS.CLAUDE_CLI}
+        settings={makeSettings(HARNESS_IDS.CLAUDE_CLI, {
+          customCommand: "/tools/ctrlyoke-old-line.js",
+        })}
+      />
+    );
+
+    await user.click(getStatuslineToggle("Claude Code"));
+    expect(
+      screen.getByRole("dialog", {
+        name: "Disable Claude Code statusline tracking?",
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", {
+        name: "Restore ctrlyoke-old-line.js as the statusline command",
+      })
+    ).toBeChecked();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(getVsCodeApi().postMessage).not.toHaveBeenCalled();
+
+    await user.click(getStatuslineToggle("Claude Code"));
+    expect(
+      screen.getByRole("checkbox", {
+        name: "Restore ctrlyoke-old-line.js as the statusline command",
+      })
+    ).toBeChecked();
+  });
+
+  it("sends one disable message with restore false when the checkbox is cleared", async () => {
+    const user = userEvent.setup();
+    render(
+      <StatusLineTrackingControls
+        harnessId={HARNESS_IDS.ANTIGRAVITY_CLI}
+        settings={makeSettings(HARNESS_IDS.ANTIGRAVITY_CLI, {
+          customCommand: "node /tools/my-line.js --compact",
+          useCtrlyokeStyle: true,
+        })}
+      />
+    );
+
+    await user.click(getStatuslineToggle("Antigravity CLI"));
+    expect(
+      screen.getByText(
+        'Restore "node /tools/my-line.js --compact" as the statusline command'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The visible statusline text will change back too because ctrlyoke style is on."
+      )
+    ).toBeInTheDocument();
+
+    const restore = screen.getByRole("checkbox", {
+      name: 'Restore "node /tools/my-line.js --compact" as the statusline command',
+    });
+    await user.click(restore);
+    await user.click(screen.getByRole("button", { name: "Disable tracking" }));
+
+    expect(getVsCodeApi().postMessage).toHaveBeenCalledTimes(1);
+    expect(getVsCodeApi().postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.DISABLE_STATUS_LINE_TRACKING,
+      harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,
+      restoreCustomCommand: false,
+    });
+  });
+
+  it("sends restore false without a checkbox when no custom command exists", async () => {
+    const user = userEvent.setup();
+    render(
+      <StatusLineTrackingControls
+        harnessId={HARNESS_IDS.CLAUDE_CLI}
+        settings={makeSettings(HARNESS_IDS.CLAUDE_CLI)}
+      />
+    );
+
+    await user.click(getStatuslineToggle("Claude Code"));
+    expect(
+      screen.queryByText(/Restore .*statusline command/)
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Disable tracking" }));
+
+    expect(getVsCodeApi().postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.DISABLE_STATUS_LINE_TRACKING,
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      restoreCustomCommand: false,
+    });
+  });
+
+  it("uses a tooltip for a truncated command label", async () => {
+    const user = userEvent.setup();
+    const command = `node /tools/my-line.js --profile ${"x".repeat(80)}`;
+    render(
+      <StatusLineTrackingControls
+        harnessId={HARNESS_IDS.CLAUDE_CLI}
+        settings={makeSettings(HARNESS_IDS.CLAUDE_CLI, {
+          customCommand: command,
+        })}
+      />
+    );
+
+    await user.click(getStatuslineToggle("Claude Code"));
+    expect(screen.getByTitle(command)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Restore "node \/tools\/my-line\.js/)
+    ).toBeInTheDocument();
+  });
+
+  it("renders controls only for the two statusline harnesses in the stats section", () => {
+    const settings = makeSettings(HARNESS_IDS.CLAUDE_CLI);
+    render(<StatsUsageSection hideCost={false} settings={settings} />);
+
+    expect(
+      screen.getAllByRole("textbox", { name: "Custom statusline command" })
+    ).toHaveLength(2);
+  });
+});

@@ -134,13 +134,26 @@ suite("ClaudeUsageProvider", () => {
     }
   });
 
-  test("preserves the prior Claude statusline and releases its lease", async () => {
+  test("keeps the Claude statusline installed across cleanup", async () => {
     tempDirectory = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-claude-settings-")
     );
     process.env.HOME = tempDirectory;
     process.env.USERPROFILE = tempDirectory;
-    configService.setUserBackend(backend({}));
+    configService.setUserBackend(
+      backend({
+        permissions: {
+          statusLineTracking: {
+            claude: {
+              enabled: true,
+              customCommand: "",
+              useCtrlyokeStyle: true,
+            },
+          },
+        },
+        usageTracking: { enabled: false },
+      })
+    );
     configService.setWorkspaceBackend(backend({}));
 
     const settingsPath = path.join(tempDirectory, ".claude", "settings.json");
@@ -170,30 +183,38 @@ suite("ClaudeUsageProvider", () => {
     );
     assert.strictEqual(
       provider.getHeadlessSpawnEnv().CTRLYOKE_CLAUDE_STATUSLINE_FORWARD,
-      "node user-statusline.js"
+      undefined
     );
 
     await provider.cleanupWorkspaceArtifacts(
       path.join(tempDirectory, "workspace"),
       "workflow.md"
     );
-    assert.deepStrictEqual(
-      JSON.parse(await fs.readFile(settingsPath, "utf8")),
-      {
-        statusLine: { type: "command", command: "node user-statusline.js" },
-        theme: "dark",
-      }
+    assert.match(
+      JSON.parse(await fs.readFile(settingsPath, "utf8")).statusLine.command,
+      /ctrlyoke-claude-statusline\.js/
     );
   });
 
-  test("does not install the statusline collector when usage tracking is disabled", async () => {
+  test("does not install the statusline collector when Claude tracking is disabled", async () => {
     tempDirectory = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-claude-usage-disabled-")
     );
     process.env.HOME = tempDirectory;
     process.env.USERPROFILE = tempDirectory;
     configService.setUserBackend(
-      backend({ usageTracking: { enabled: false } })
+      backend({
+        permissions: {
+          statusLineTracking: {
+            claude: {
+              enabled: false,
+              customCommand: "",
+              useCtrlyokeStyle: true,
+            },
+          },
+        },
+        usageTracking: { enabled: true },
+      })
     );
     configService.setWorkspaceBackend(backend({}));
 
