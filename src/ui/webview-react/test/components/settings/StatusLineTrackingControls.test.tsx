@@ -123,6 +123,11 @@ describe("StatusLineTrackingControls", () => {
     const input = screen.getByRole("textbox", {
       name: "Custom statusline command",
     });
+    expect(
+      screen.getByRole("checkbox", {
+        name: /^Use ctrlyoke-style statusline/,
+      })
+    ).toBeInTheDocument();
     await user.clear(input);
     await user.type(input, "node agy-line.js --compact");
     await user.tab();
@@ -146,7 +151,7 @@ describe("StatusLineTrackingControls", () => {
     });
   });
 
-  it("hides the style toggle when no custom command is configured", () => {
+  it("shows the style toggle when no custom command is configured", () => {
     render(
       <StatusLineTrackingControls
         harnessId={HARNESS_IDS.CLAUDE_CLI}
@@ -155,10 +160,15 @@ describe("StatusLineTrackingControls", () => {
     );
 
     expect(
-      screen.queryByRole("checkbox", {
+      screen.getByRole("checkbox", {
         name: /^Use ctrlyoke-style statusline/,
       })
-    ).not.toBeInTheDocument();
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Show ctrlyoke's branded statusline. Turn off to show your custom command's output instead — or leave the statusline blank when no custom command is set. Usage tracking keeps collecting data either way."
+      )
+    ).toBeInTheDocument();
   });
 
   it("opens the modal from disable, cancels without sending a message, and defaults restore on reopen", async () => {

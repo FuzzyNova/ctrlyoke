@@ -603,7 +603,7 @@ wrapper reuses these conventions without importing across that boundary.
       motivation here. Not built — no `StatusLineFieldId` entry, no OS-username or git-identity
       extraction.
 
-16. **Always show the `useCtrlyokeStyle` toggle in `StatusLineTrackingControls.tsx`, not just when
+16. **[Done] Always show the `useCtrlyokeStyle` toggle in `StatusLineTrackingControls.tsx`, not just when
     `customCommand` is non-empty.** Fixes a real gap, not a cosmetic one: today
     (`StatusLineTrackingControls.tsx:185`) the toggle only renders inside
     `{tracking.customCommand.length > 0 && (...)}`, per `STATUSLINE_USER_CONTROLS_PLAN.md`'s
@@ -627,29 +627,26 @@ wrapper reuses these conventions without importing across that boundary.
     false` with no custom command already prints nothing today, in the one state the UI currently
     prevents a user from reaching.
 
-    **"Nothing printed" as "the harness's own default" — reasonable, but worth a one-line
-    verification, not an assumption.** Since ctrlyoke's wrapper is installed as the harness's
-    entire `statusLine.command` (`STATUSLINE_USER_CONTROLS_PLAN.md`'s "single-statusline
-    harnesses" framing — there is no separate harness-native renderer running underneath), the
-    wrapper printing nothing is the closest thing to "no statusline configured" that's reachable
-    once ctrlyoke owns the command slot; that's a fair reading of "go back to the default status
-    line (not ours)." The one thing not yet independently confirmed is whether either CLI
-    genuinely shows *nothing* when its `statusLine` key is entirely absent, or whether it has some
-    other built-in placeholder that only appears in the fully-unconfigured case and would look
-    different from an installed command emitting empty stdout — worth a quick check against each
-    CLI's own behavior/docs before or during implementation, since it changes what the toggle's
-    description copy should promise.
+    **Verification of the unconfigured CLI states.** Claude Code's official statusline
+    documentation says deleting `statusLine` disables the custom statusline; it does not show a
+    built-in default statusline in that state. Antigravity's official documentation explicitly says
+    deleting its custom statusline configuration restores the built-in default statusline. ctrlyoke
+    does not delete either CLI's `statusLine` block when this toggle is turned off: its wrapper owns
+    the command slot and emits empty stdout when no `customCommand` is set. Therefore the reachable
+    no-command off-state is a blank statusline for both providers, not Antigravity's built-in
+    default. The UI copy promises a blank line rather than a harness default, while usage tracking
+    continues independently.
 
-    **UI changes**: remove the `tracking.customCommand.length > 0 &&` gate around the
+    **Implemented:** remove the `tracking.customCommand.length > 0 &&` gate around the
     `SettingToggleRow` in `StatusLineTrackingControls.tsx` so it always renders. Update its
     description text, which currently reads "Show ctrlyoke's branded statusline instead of
     custom-command output" — accurate only when a custom command exists. Reword to cover both
     reachable off-states and make the data-collection guarantee explicit, e.g.: "Show ctrlyoke's
     branded statusline. Turn off to show your custom command's output instead — or, with no
-    custom command set, the harness's own default statusline. Usage tracking keeps collecting
-    data either way." No settings-shape or wrapper-script change needed beyond the verification
-    above; this is a standalone UI fix that doesn't depend on the tab split (Decision 12) or the
-    format editor and can ship independently of the rest of this plan.
+    custom command set, leave the statusline blank. Usage tracking keeps collecting data either
+    way." No settings-shape or wrapper-script change was needed; this is a standalone UI fix that
+    doesn't depend on the tab split (Decision 12) or the format editor and can ship independently
+    of the rest of the plan.
 
 ## UI Placement
 

@@ -182,20 +182,18 @@ export function StatusLineTrackingControls({ harnessId, settings }: Props) {
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border font-mono"
         />
       </SettingInputRow>
-      {tracking.customCommand.length > 0 && (
-        <SettingToggleRow
-          label="Use ctrlyoke-style statusline"
-          description="Show ctrlyoke's branded statusline instead of custom-command output."
-          checked={tracking.useCtrlyokeStyle}
-          onChange={(enabled) =>
-            sendGlobalSetting(paths.useCtrlyokeStyle, enabled)
-          }
-          path={paths.useCtrlyokeStyle}
-          sources={settings.sources}
-          onReset={(path) => sendGlobalSetting(path, undefined)}
-          activeScope={SETTING_SCOPES.USER}
-        />
-      )}
+      <SettingToggleRow
+        label="Use ctrlyoke-style statusline"
+        description="Show ctrlyoke's branded statusline. Turn off to show your custom command's output instead — or leave the statusline blank when no custom command is set. Usage tracking keeps collecting data either way."
+        checked={tracking.useCtrlyokeStyle}
+        onChange={(enabled) =>
+          sendGlobalSetting(paths.useCtrlyokeStyle, enabled)
+        }
+        path={paths.useCtrlyokeStyle}
+        sources={settings.sources}
+        onReset={(path) => sendGlobalSetting(path, undefined)}
+        activeScope={SETTING_SCOPES.USER}
+      />
       <Modal
         isOpen={isDisableModalOpen}
         onClose={() => setIsDisableModalOpen(false)}
