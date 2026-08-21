@@ -39,7 +39,7 @@ npm run compile-tests
 MOCHA_GREP="Settings schema" node ./out/test/runTest.js
 ```
 
-## Current gaps (9)
+## Current gaps (8)
 
 | Setting | Section it belongs in | Disposition |
 | --- | --- | --- |
@@ -47,13 +47,12 @@ MOCHA_GREP="Settings schema" node ./out/test/runTest.js
 | `usageTracking.enabled` | `StatsUsageSection` (or `AdvancedPermissionsSection`) | **Add control.** Master switch for workspace quota/observed-usage collection; currently only settable by hand-editing `settings.json`. |
 | `usageTracking.providerRefreshEnabled` | `StatsUsageSection` | **Add control.** Gate for provider quota refresh calls. |
 | `usageTracking.persistObservedUsage` | `StatsUsageSection` | **Add control.** Whether normalized observed usage is persisted to the workspace. |
-| `usageTracking.enterpriseUsageApisEnabled` | `StatsUsageSection` | **Add control.** Opt-in for enterprise usage API calls — should probably sit near the provider-refresh toggle with a short explanation of what it contacts. |
 | `usageTracking.warningPercentUsed` | `StatsUsageSection` | **Add control.** Numeric threshold (0–100) for quota warnings. |
-| `usageTracking.preferredFallbackOrder` | `StatsUsageSection` | **Add control.** Ordered harness fallback list — needs a reorderable multi-select, more UI work than the others in this group; consider bundling all six `usageTracking.*` gaps into one PR since they share a section and a mental model. |
+| `usageTracking.preferredFallbackOrder` | `StatsUsageSection` | **Add control.** Ordered harness fallback list — needs a reorderable multi-select, more UI work than the others in this group; consider bundling the `usageTracking.*` gaps into one PR since they share a section and a mental model. |
 | `modelPricing` | none yet — needs a decision | **Needs a decision**, not a small add. Per-harness/per-model USD rate overrides (`inputPerMTok`, `outputPerMTok`, `cachedInputPerMTok`, `cacheWritePerMTok`, `reasoningPerMTok`) keyed by an open-ended `harness -> model -> rates` map. There's no natural fixed-key list to render (unlike `defaults.models`, which iterates the 6 known harnesses) since model IDs are freeform strings. Needs its own small editor (add/remove harness, add/remove model, five rate fields per model) before it can get a control — worth scoping as its own task rather than folding into the `usageTracking` batch above. |
 | `server.standalonePort` | intentionally not surfaced | **Not a gap — leave as-is.** `ServerSection.tsx` already documents why: it configures the standalone `ctrlyoke server` headless CLI process, which doesn't exist yet (`dev/active/STANDALONE_SERVER_PLAN.md` Phases 5–10 are unimplemented). The schema/type/default are kept so the standalone feature can use it later with no config migration. This test will keep flagging it until the standalone server ships and gets its own settings surface (not the VS Code `ServerSection`, which controls a different process) — that's expected, not a bug in the test. |
 
-`defaults.secrets` is done — see "Completed" below. Of the remaining 9, 7 are straightforward
+`defaults.secrets` is done — see "Completed" below. Of the remaining 8, 6 are straightforward
 additive UI work; `modelPricing` needs its own small design pass first; `server.theme` and
 `server.standalonePort` are both intentionally deferred until the standalone server ships and
 should stay in `PENDING_UI_PARITY` as markers until then.
@@ -64,12 +63,17 @@ should stay in `PENDING_UI_PARITY` as markers until then.
 | --- | --- | --- |
 | `defaults.secrets` | `DefaultsHarnessPage.tsx`, "Agent & Skill Defaults" section | Reuses `SecretGrantsEditor` (shared with `PropertiesDrawer.tsx`/`PromptEditor.tsx`) inside a `SettingInputRow` for the source badge/reset button. Added a `hideLabel` prop to `SecretGrantsEditor` so it doesn't duplicate the row's own label. |
 
+## Rejected
+
+| Setting | Reason |
+| --- | --- |
+| `usageTracking.enterpriseUsageApisEnabled` | **Removed from the schema entirely (2026-08-21), not deferred.** Researched what it would actually gate: every provider's "enterprise" usage surface (Anthropic's Admin/Enterprise Analytics API, GitHub's org/enterprise Copilot usage-metrics REST API, ChatGPT Enterprise's Analytics/Compliance APIs) requires a separate org-admin-provisioned credential for cross-user/org-wide reporting, not a richer view of one developer's own usage — confirmed empirically for Copilot, where the personal `account.getQuota` response is identical on a personal vs. enterprise seat. ctrlyoke is an individual-developer tool; org-wide reporting is what the provider's own admin console is for. The setting was also unwired dead scaffolding — never read outside its own schema/type/default declarations. See `dev/implemented/HARNESS_USAGE_TRACKING_PLAN.md` Phase 3 for the full writeup. |
+
 ## Suggested sequencing
 
 1. ~~`defaults.secrets` — reuse `SecretGrantsEditor`, same page as `defaults.agent`/`defaults.skills`.~~ Done.
-2. The five simple `usageTracking.*` toggles/numbers (`enabled`, `providerRefreshEnabled`,
-   `persistObservedUsage`, `enterpriseUsageApisEnabled`, `warningPercentUsed`) as one batch in
-   `StatsUsageSection`.
+2. The four simple `usageTracking.*` toggles/numbers (`enabled`, `providerRefreshEnabled`,
+   `persistObservedUsage`, `warningPercentUsed`) as one batch in `StatsUsageSection`.
 3. `usageTracking.preferredFallbackOrder` — needs a reorderable list control; do after the
    simple toggles land so the section has a home for it.
 4. `modelPricing` — scope its own editor as a separate task.

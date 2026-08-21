@@ -272,8 +272,8 @@ wrapper reuses these conventions without importing across that boundary.
    - **Placement**: `usageTracking.percentDirection`, not nested under
      `permissions.statusLineTracking.*` — it is not provider-specific and (see below) also
      governs `UsageCard.tsx`, not just the two statusline-tracked harnesses. Sits alongside the
-     existing `usageTracking.{enabled,providerRefreshEnabled,persistObservedUsage,enterpriseUsageApisEnabled}`
-     siblings (`schemas/settings-schema.json:442-462`).
+     existing `usageTracking.{enabled,providerRefreshEnabled,persistObservedUsage}`
+     siblings (`schemas/settings-schema.json:442-479`).
    - **Scope of effect — genuinely global, not statusline-only.** It must govern both (a) the
      statusline wrapper's `usage`/`usage1`/`usage2` rendering and (b) `UsageCard.tsx`'s displayed
      quota numbers, for every harness, not only Claude/Antigravity — leaving UsageCard fixed at
@@ -426,8 +426,8 @@ wrapper reuses these conventions without importing across that boundary.
 - `ConfigurationUtils.getStatusLineTrackingSettings(provider)` needs no change — it already
   returns the whole typed object generically.
 - `schemas/settings-schema.json`'s `usageTracking` definition (currently
-  `enabled`/`providerRefreshEnabled`/`persistObservedUsage`/`enterpriseUsageApisEnabled`, lines
-  442-462) gains `percentDirection: "used" | "remaining"` (default `"used"`), normal (non-machine)
+  `enabled`/`providerRefreshEnabled`/`persistObservedUsage`, lines
+  442-479) gains `percentDirection: "used" | "remaining"` (default `"used"`), normal (non-machine)
   scope. `CtrlYokeSettings.ts`'s `usageTracking` interface and defaults block gain the matching
   field; a new `SETTING_PATHS.USAGE_TRACKING_PERCENT_DIRECTION` entry alongside the existing
   `USAGE_TRACKING_ENABLED`.

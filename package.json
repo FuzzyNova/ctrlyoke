@@ -115,12 +115,6 @@
           "scope": "machine",
           "markdownDescription": "Persist normalized ctrlyoke-observed usage totals in the workspace."
         },
-        "ctrlyoke.usageTracking.enterpriseUsageApisEnabled": {
-          "type": "boolean",
-          "default": false,
-          "scope": "machine",
-          "markdownDescription": "Allow explicitly configured enterprise usage APIs."
-        },
         "ctrlyoke.usageTracking.warningPercentUsed": {
           "type": "number",
           "default": 80,

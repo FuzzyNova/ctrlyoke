@@ -104,8 +104,6 @@ export const CONFIG_KEYS = {
   USAGE_TRACKING_PROVIDER_REFRESH_ENABLED:
     "usageTracking.providerRefreshEnabled",
   USAGE_TRACKING_PERSIST_OBSERVED_USAGE: "usageTracking.persistObservedUsage",
-  USAGE_TRACKING_ENTERPRISE_APIS_ENABLED:
-    "usageTracking.enterpriseUsageApisEnabled",
   USAGE_TRACKING_WARNING_PERCENT_USED: "usageTracking.warningPercentUsed",
   USAGE_TRACKING_PREFERRED_FALLBACK_ORDER:
     "usageTracking.preferredFallbackOrder",

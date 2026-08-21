@@ -137,7 +137,6 @@ export interface CtrlYokeGlobalSettings {
     enabled: boolean;
     providerRefreshEnabled: boolean;
     persistObservedUsage: boolean;
-    enterpriseUsageApisEnabled: boolean;
     warningPercentUsed: number;
     preferredFallbackOrder: HarnessId[];
   };
@@ -395,7 +394,6 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     enabled: true,
     providerRefreshEnabled: true,
     persistObservedUsage: true,
-    enterpriseUsageApisEnabled: false,
     warningPercentUsed: 80,
     preferredFallbackOrder: [],
   },

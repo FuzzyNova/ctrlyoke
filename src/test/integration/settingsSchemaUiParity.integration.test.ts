@@ -171,7 +171,6 @@ const PENDING_UI_PARITY: readonly string[] = [
   "server.standalonePort",
   "server.theme",
   "usageTracking.enabled",
-  "usageTracking.enterpriseUsageApisEnabled",
   "usageTracking.persistObservedUsage",
   "usageTracking.preferredFallbackOrder",
   "usageTracking.providerRefreshEnabled",

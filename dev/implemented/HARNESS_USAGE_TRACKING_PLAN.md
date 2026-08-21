@@ -275,8 +275,11 @@ ai-used` can emit structured data. The help topic confirms item
 - For personal account quota, use the CLI `account.getQuota` capability and its
   normalized last-known snapshot; retain the "Open GitHub usage dashboard"
   link as a user-facing reference. Avoid undocumented GitHub private endpoints.
-- Add optional enterprise/org metrics integration only when a user supplies an
-  authorized token and explicitly chooses org/enterprise scope.
+- **Rejected: org/enterprise metrics integration.** GitHub's org/enterprise
+  Copilot usage-metrics REST API needs a PAT with `manage_billing:copilot`/
+  `read:org`/`read:enterprise` scope for org-wide, cross-user reporting — a
+  sysadmin workflow already served by GitHub's own admin console, not a richer
+  view of the individual developer's own usage. Out of scope for ctrlyoke.
 
 Confidence: high for CLI TUI/session surfaces; high that documented REST APIs are
 admin/org oriented; medium-high that no documented personal credit API exists.
@@ -599,8 +602,21 @@ exact duplication both plans warn against.
 - [x] Add the server-scoped `account.getQuota` collector over the installed
       Copilot CLI JSON-RPC boundary; it uses no session or model turn and treats
       method-not-found as an unsupported capability
-- [ ] Optional enterprise/org metrics integration behind explicit auth + scope
-      prompts
+- [x] ~~Optional enterprise/org metrics integration behind explicit auth + scope
+      prompts~~ — **rejected.** Researched August 21, 2026: every provider's
+      "enterprise" usage surface (Anthropic's Admin/Enterprise Analytics API,
+      GitHub's org/enterprise Copilot usage-metrics REST API, ChatGPT
+      Enterprise's Analytics/Compliance APIs) requires a separate org-admin-
+      provisioned credential — an Anthropic `sk-ant-admin-*` key, a GitHub PAT
+      with `manage_billing:copilot`/`read:org`/`read:enterprise` scope, or an
+      OpenAI Global Admin Console key — for cross-user/org-wide reporting, not
+      a richer view of one developer's own usage. A user's personal quota
+      (confirmed empirically for Copilot: identical RPC response on a personal
+      vs. enterprise seat) is unaffected. ctrlyoke is an individual-developer
+      tool; org-wide reporting is what the provider's own admin console is for.
+      The corresponding `usageTracking.enterpriseUsageApisEnabled` setting was
+      unwired dead scaffolding (never read outside its own schema/type/default
+      declarations) and has been removed rather than deferred.
 
 Phase 3 conclusion: Copilot now has a provider-live account-quota path in
 addition to its existing OTel path. `account.getQuota` supplies authenticated
@@ -660,7 +676,6 @@ Potential setting:
   "enabled": true,
   "providerRefreshEnabled": true,
   "persistObservedUsage": true,
-  "enterpriseUsageApisEnabled": false,
   "warningPercentUsed": 80,
   "preferredFallbackOrder": []
 }

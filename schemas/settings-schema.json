@@ -456,10 +456,6 @@
           "type": "boolean",
           "description": "Persist normalized observed usage in the workspace."
         },
-        "enterpriseUsageApisEnabled": {
-          "type": "boolean",
-          "description": "Allow explicitly configured enterprise usage APIs."
-        },
         "warningPercentUsed": {
           "type": "number",
           "minimum": 0,
