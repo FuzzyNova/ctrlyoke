@@ -4,6 +4,7 @@ import { configService } from "../../config/CtrlYokeConfigService";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
+import { STATUS_LINE_TRACKING_PROVIDERS } from "../../types/DashboardConstants";
 
 function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
   return {
@@ -170,7 +171,7 @@ suite("ConfigurationUtils — context resolution failure mode", () => {
   });
 });
 
-suite("ConfigurationUtils — Antigravity statusline tracking", () => {
+suite("ConfigurationUtils — statusline tracking", () => {
   teardown(() => {
     configService.setUserBackend(makeBackend({}));
     configService.setWorkspaceBackend(makeBackend({}));
@@ -181,7 +182,9 @@ suite("ConfigurationUtils — Antigravity statusline tracking", () => {
     configService.setWorkspaceBackend(makeBackend({}));
 
     assert.strictEqual(
-      ConfigurationUtils.shouldTrackAntigravityStatusLine(),
+      ConfigurationUtils.getStatusLineTrackingSettings(
+        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      ).enabled,
       true
     );
   });
@@ -189,23 +192,43 @@ suite("ConfigurationUtils — Antigravity statusline tracking", () => {
   test("reads the effective value from the config hierarchy", () => {
     configService.setUserBackend(
       makeBackend({
-        permissions: { antigravityStatusLineTracking: false },
+        permissions: {
+          statusLineTracking: {
+            antigravity: {
+              enabled: false,
+              customCommand: "",
+              useCtrlyokeStyle: true,
+            },
+          },
+        },
       })
     );
     configService.setWorkspaceBackend(makeBackend({}));
     assert.strictEqual(
-      ConfigurationUtils.shouldTrackAntigravityStatusLine(),
+      ConfigurationUtils.getStatusLineTrackingSettings(
+        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      ).enabled,
       false
     );
 
     configService.setWorkspaceBackend(
       makeBackend({
-        permissions: { antigravityStatusLineTracking: true },
+        permissions: {
+          statusLineTracking: {
+            antigravity: {
+              enabled: true,
+              customCommand: "",
+              useCtrlyokeStyle: true,
+            },
+          },
+        },
       })
     );
     assert.strictEqual(
-      ConfigurationUtils.shouldTrackAntigravityStatusLine(),
-      true
+      ConfigurationUtils.getStatusLineTrackingSettings(
+        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      ).enabled,
+      false
     );
   });
 });

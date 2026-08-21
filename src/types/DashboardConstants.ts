@@ -31,6 +31,15 @@ export const RUN_HISTORY_LOCATIONS = {
   WORKSPACE: "workspace",
 } as const;
 
+/** Providers that install a global statusline command. */
+export const STATUS_LINE_TRACKING_PROVIDERS = {
+  CLAUDE: "claude",
+  ANTIGRAVITY: "antigravity",
+} as const;
+
+export type StatusLineTrackingProvider =
+  (typeof STATUS_LINE_TRACKING_PROVIDERS)[keyof typeof STATUS_LINE_TRACKING_PROVIDERS];
+
 // ============================================================================
 // MESSAGE TYPES - Communication between extension and webview
 // ============================================================================
@@ -1064,8 +1073,20 @@ export const SETTING_PATHS = {
   STORAGE: "storage",
   WORKTREES: "worktrees",
   STORAGE_RUN_HISTORY_LOCATION: "storage.runHistoryLocation",
-  PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING:
-    "permissions.antigravityStatusLineTracking",
+  PERMISSIONS_STATUS_LINE_TRACKING: "permissions.statusLineTracking",
+  PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_ENABLED:
+    "permissions.statusLineTracking.claude.enabled",
+  PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_CUSTOM_COMMAND:
+    "permissions.statusLineTracking.claude.customCommand",
+  PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_USE_CTRLYOKE_STYLE:
+    "permissions.statusLineTracking.claude.useCtrlyokeStyle",
+  PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_ENABLED:
+    "permissions.statusLineTracking.antigravity.enabled",
+  PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_CUSTOM_COMMAND:
+    "permissions.statusLineTracking.antigravity.customCommand",
+  PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_USE_CTRLYOKE_STYLE:
+    "permissions.statusLineTracking.antigravity.useCtrlyokeStyle",
+  USAGE_TRACKING_ENABLED: "usageTracking.enabled",
 } as const;
 
 // ============================================================================

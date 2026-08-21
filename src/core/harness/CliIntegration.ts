@@ -41,6 +41,7 @@ import {
   type ExecutionMode,
   type HarnessId,
   HOOK_EVENT_ORDER,
+  USER_FEEDBACK_SEVERITY,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
 import type {
@@ -1146,6 +1147,9 @@ export class CliIntegration extends HarnessIntegration {
       routedDiagnostics
     );
     await this.executionPlanBuilder.apply(executionPlan);
+    this.notifyStatuslineInstall(
+      this.provider.consumeStatuslineInstallResult?.()
+    );
     const executionSidecar = this.startProviderExecutionSidecar(
       session,
       workspaceRoot
@@ -1182,6 +1186,25 @@ export class CliIntegration extends HarnessIntegration {
     }
 
     return success;
+  }
+
+  private notifyStatuslineInstall(
+    result:
+      | ReturnType<NonNullable<ICliProvider["consumeStatuslineInstallResult"]>>
+      | undefined
+  ): void {
+    if (!result || result.kind !== "written") {
+      return;
+    }
+    const harness = this.provider.config.displayName;
+    const message = result.captured
+      ? `ctrlyoke is now managing your ${harness} statusline and forwarding to your existing script unchanged. Settings → Usage to change this.`
+      : `ctrlyoke is now showing its own statusline for ${harness}. Settings → Usage to change this.`;
+    notifyUserFeedback(
+      this.userFeedbackSink,
+      USER_FEEDBACK_SEVERITY.INFO,
+      message
+    );
   }
 
   private startProviderExecutionSidecar(

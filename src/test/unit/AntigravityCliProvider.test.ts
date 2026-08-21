@@ -4,13 +4,33 @@ import * as os from "os";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
 import { configService } from "../../config/CtrlYokeConfigService";
+import { STATUS_LINE_TRACKING_PROVIDERS } from "../../types/DashboardConstants";
 import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
 import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
 import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 
 function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
-  return { getAll: () => data, set: async () => {} };
+  return {
+    getAll: () => data,
+    set: async (settingPath, value) => {
+      const parts = settingPath.split(".");
+      let current = data as Record<string, unknown>;
+      for (const part of parts.slice(0, -1)) {
+        const next = current[part];
+        if (!next || typeof next !== "object" || Array.isArray(next)) {
+          current[part] = {};
+        }
+        current = current[part] as Record<string, unknown>;
+      }
+      const leaf = parts[parts.length - 1];
+      if (value === undefined) {
+        delete current[leaf];
+      } else {
+        current[leaf] = value;
+      }
+    },
+  };
 }
 
 suite("AntigravityCliProvider", () => {
@@ -249,7 +269,7 @@ suite("AntigravityCliProvider", () => {
     }
   });
 
-  test("registers an unquoted forward-slash command and forwards the baseline command", async () => {
+  test("captures the baseline once and keeps the install through cleanup", async () => {
     await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
     await fs.writeFile(
       settingsPath(),
@@ -272,6 +292,11 @@ suite("AntigravityCliProvider", () => {
         provider.getHeadlessSpawnEnv().CTRLYOKE_AGY_STATUSLINE_FORWARD,
         "node user-statusline.js"
       );
+      assert.strictEqual(
+        provider.getHeadlessSpawnEnv()
+          .CTRLYOKE_AGY_STATUSLINE_USE_CTRLYOKE_STYLE,
+        "false"
+      );
     } finally {
       await provider.cleanupWorkspaceArtifacts(
         workspaceRoot,
@@ -279,12 +304,10 @@ suite("AntigravityCliProvider", () => {
       );
     }
 
-    assert.deepStrictEqual(
-      JSON.parse(await fs.readFile(settingsPath(), "utf8")),
-      {
-        statusLine: { type: "command", command: "node user-statusline.js" },
-        theme: "dark",
-      }
+    const persisted = JSON.parse(await fs.readFile(settingsPath(), "utf8"));
+    assert.strictEqual(
+      persisted.statusLine.command,
+      "node C:/extension root/out/scripts/ctrlyoke-antigravity-statusline.js"
     );
   });
 
@@ -293,7 +316,17 @@ suite("AntigravityCliProvider", () => {
     await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
     await fs.writeFile(settingsPath(), JSON.stringify(original));
     configService.setUserBackend(
-      makeBackend({ permissions: { antigravityStatusLineTracking: false } })
+      makeBackend({
+        permissions: {
+          statusLineTracking: {
+            antigravity: {
+              enabled: false,
+              customCommand: "",
+              useCtrlyokeStyle: true,
+            },
+          },
+        },
+      })
     );
     const provider = new AntigravityCliProvider();
 
@@ -320,6 +353,66 @@ suite("AntigravityCliProvider", () => {
         { type: "response.text", line: "answer" },
       ]).metadata.usage,
       undefined
+    );
+  });
+
+  test("serializes two first-install hosts without recapturing ctrlyoke", async () => {
+    await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
+    await fs.writeFile(
+      settingsPath(),
+      JSON.stringify({
+        statusLine: { type: "command", command: "node user-statusline.js" },
+      })
+    );
+    const first = new AntigravityCliProvider();
+    const second = new AntigravityCliProvider();
+
+    await Promise.all([buildArgs(first), buildArgs(second)]);
+
+    const settings = JSON.parse(await fs.readFile(settingsPath(), "utf8"));
+    assert.strictEqual(
+      settings.statusLine.command,
+      "node C:/extension root/out/scripts/ctrlyoke-antigravity-statusline.js"
+    );
+    assert.strictEqual(first.consumeStatuslineInstallResult()?.captured, true);
+    assert.strictEqual(
+      second.consumeStatuslineInstallResult()?.captured,
+      false
+    );
+    assert.strictEqual(
+      configService.get("permissions").statusLineTracking[
+        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      ].customCommand,
+      "node user-statusline.js"
+    );
+
+    await first.cleanupWorkspaceArtifacts(workspaceRoot);
+    await second.cleanupWorkspaceArtifacts(workspaceRoot);
+    assert.ok(
+      (await fs.readFile(settingsPath(), "utf8")).includes("statusLine")
+    );
+  });
+
+  test("preserves a live style override when nothing is captured", async () => {
+    configService.setUserBackend(
+      makeBackend({
+        permissions: {
+          statusLineTracking: {
+            antigravity: {
+              enabled: true,
+              customCommand: "",
+              useCtrlyokeStyle: false,
+            },
+          },
+        },
+      })
+    );
+    const provider = new AntigravityCliProvider();
+    await buildArgs(provider);
+
+    assert.strictEqual(
+      provider.getHeadlessSpawnEnv().CTRLYOKE_AGY_STATUSLINE_USE_CTRLYOKE_STYLE,
+      "false"
     );
   });
 
@@ -554,7 +647,17 @@ suite("AntigravityCliProvider", () => {
 
     test("does not consult the snapshot when tracking is disabled", async () => {
       configService.setUserBackend(
-        makeBackend({ permissions: { antigravityStatusLineTracking: false } })
+        makeBackend({
+          permissions: {
+            statusLineTracking: {
+              antigravity: {
+                enabled: false,
+                customCommand: "",
+                useCtrlyokeStyle: true,
+              },
+            },
+          },
+        })
       );
       const provider = new AntigravityCliProvider();
       const calls = stubSessionRecovery(
@@ -588,57 +691,7 @@ suite("AntigravityCliProvider", () => {
     });
   });
 
-  suite("pruneOrphanedStatusLine", () => {
-    test("restores the baseline left by a dead ctrlyoke process", async () => {
-      const settingsDir = path.dirname(settingsPath());
-      await fs.mkdir(settingsDir, { recursive: true });
-      await fs.writeFile(
-        settingsPath(),
-        JSON.stringify({
-          statusLine: {
-            type: "command",
-            command: "node ctrlyoke-installed.js",
-          },
-        })
-      );
-      const leasePath = path.join(
-        settingsDir,
-        ".ctrlyoke-lease-statusLine.json"
-      );
-      await fs.writeFile(
-        leasePath,
-        JSON.stringify({
-          baseline: { type: "command", command: "node user-statusline.js" },
-          baselineHadKey: true,
-          // A PID that cannot be alive, standing in for a crashed host.
-          owners: [{ pid: 99999999, workflowKey: "crashed", ts: Date.now() }],
-        })
-      );
-
-      await AntigravityCliProvider.pruneOrphanedStatusLine(workspaceRoot);
-
-      const restored = JSON.parse(await fs.readFile(settingsPath(), "utf-8"));
-      assert.deepStrictEqual(restored.statusLine, {
-        type: "command",
-        command: "node user-statusline.js",
-      });
-      await assert.rejects(fs.access(leasePath), /ENOENT/);
-    });
-
-    test("is a no-op when no lease state exists", async () => {
-      await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
-      await fs.writeFile(settingsPath(), JSON.stringify({ other: "value" }));
-
-      await AntigravityCliProvider.pruneOrphanedStatusLine(workspaceRoot);
-
-      assert.deepStrictEqual(
-        JSON.parse(await fs.readFile(settingsPath(), "utf-8")),
-        { other: "value" }
-      );
-    });
-  });
-
-  test("unregisters the statusline lease during cleanup", async () => {
+  test("keeps the installed statusline during cleanup", async () => {
     const provider = new AntigravityCliProvider();
     await buildArgs(provider);
     assert.ok(
@@ -650,7 +703,9 @@ suite("AntigravityCliProvider", () => {
       path.join(workspaceRoot, "workflow.md")
     );
 
-    await assert.rejects(fs.access(settingsPath()), /ENOENT/);
+    assert.ok(
+      (await fs.readFile(settingsPath(), "utf8")).includes("statusLine")
+    );
     assert.strictEqual(
       provider.getAdditionalCleanupFilePaths(workspaceRoot).length,
       1

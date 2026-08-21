@@ -2,7 +2,10 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
-import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
+import {
+  SettingsJsonMcpTracker,
+  STATUS_LINE_SETTING_KEY,
+} from "../../core/harness/shared/SettingsJsonMcpTracker";
 
 suite("SettingsJsonMcpTracker", () => {
   let tmpDir: string;
@@ -19,6 +22,209 @@ suite("SettingsJsonMcpTracker", () => {
   teardown(async () => {
     SettingsJsonMcpTracker.resetAll();
     await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("installs a persistent value idempotently", async () => {
+    await fs.mkdir(settingsDir, { recursive: true });
+    const value = { type: "command", command: "node ctrlyoke.js" };
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ statusLine: value, theme: "dark" })
+    );
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    let captureCalls = 0;
+
+    const result = await tracker.installPersistentValue(
+      tmpDir,
+      STATUS_LINE_SETTING_KEY,
+      value,
+      async () => {
+        captureCalls++;
+      }
+    );
+
+    assert.strictEqual(result.kind, "no-op");
+    assert.deepStrictEqual(result.preexistingValue, value);
+    assert.strictEqual(result.hadKey, true);
+    assert.strictEqual(captureCalls, 0);
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")),
+      { statusLine: value, theme: "dark" }
+    );
+  });
+
+  test("reports the preexisting value when it performs an install write", async () => {
+    await fs.mkdir(settingsDir, { recursive: true });
+    const preexistingValue = {
+      type: "command",
+      command: "node user-statusline.js",
+    };
+    const installedValue = {
+      type: "command",
+      command: "node ctrlyoke-statusline.js",
+    };
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ statusLine: preexistingValue })
+    );
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+
+    const result = await tracker.installPersistentValue(
+      tmpDir,
+      STATUS_LINE_SETTING_KEY,
+      installedValue
+    );
+
+    assert.strictEqual(result.kind, "written");
+    assert.deepStrictEqual(result.preexistingValue, preexistingValue);
+    assert.strictEqual(result.hadKey, true);
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")).statusLine,
+      installedValue
+    );
+  });
+
+  test("does not install when capture persistence fails", async () => {
+    await fs.mkdir(settingsDir, { recursive: true });
+    const preexistingValue = {
+      type: "command",
+      command: "node user-statusline.js",
+    };
+    const installedValue = {
+      type: "command",
+      command: "node ctrlyoke-statusline.js",
+    };
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ statusLine: preexistingValue })
+    );
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+
+    await assert.rejects(
+      tracker.installPersistentValue(
+        tmpDir,
+        STATUS_LINE_SETTING_KEY,
+        installedValue,
+        async (capturedValue) => {
+          assert.deepStrictEqual(capturedValue, preexistingValue);
+          throw new Error("user settings capture failed");
+        }
+      ),
+      /user settings capture failed/
+    );
+
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")).statusLine,
+      preexistingValue
+    );
+  });
+
+  test("restores a persistent value or deletes it as requested", async () => {
+    await fs.mkdir(settingsDir, { recursive: true });
+    const installedValue = {
+      type: "command",
+      command: "node ctrlyoke-statusline.js",
+    };
+    const restoredValue = {
+      type: "command",
+      command: "node user-statusline.js",
+    };
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ statusLine: installedValue, theme: "dark" })
+    );
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+
+    await tracker.uninstallPersistentValue(tmpDir, STATUS_LINE_SETTING_KEY, {
+      action: "restore",
+      value: restoredValue,
+    });
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")),
+      { statusLine: restoredValue, theme: "dark" }
+    );
+
+    await tracker.uninstallPersistentValue(tmpDir, STATUS_LINE_SETTING_KEY, {
+      action: "delete",
+    });
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")),
+      { theme: "dark" }
+    );
+  });
+
+  test("removes only the obsolete statusLine sidecar", async () => {
+    await fs.mkdir(settingsDir, { recursive: true });
+    await fs.writeFile(settingsPath, JSON.stringify({ statusLine: "old" }));
+    const statusLineSidecar = path.join(
+      settingsDir,
+      ".ctrlyoke-lease-statusLine.json"
+    );
+    const otherSidecar = path.join(
+      settingsDir,
+      ".ctrlyoke-lease-permission.json"
+    );
+    await fs.writeFile(statusLineSidecar, "statusline lease");
+    await fs.writeFile(otherSidecar, "permission lease");
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+
+    await tracker.installPersistentValue(
+      tmpDir,
+      STATUS_LINE_SETTING_KEY,
+      "installed"
+    );
+    await assert.rejects(fs.access(statusLineSidecar), /ENOENT/);
+    await fs.access(otherSidecar);
+
+    await fs.writeFile(statusLineSidecar, "statusline lease");
+    await tracker.uninstallPersistentValue(tmpDir, STATUS_LINE_SETTING_KEY, {
+      action: "delete",
+    });
+    await assert.rejects(fs.access(statusLineSidecar), /ENOENT/);
+    await fs.access(otherSidecar);
+  });
+
+  test("serializes concurrent persistent installs and captures once", async () => {
+    await fs.mkdir(settingsDir, { recursive: true });
+    const installedValue = {
+      type: "command",
+      command: "node ctrlyoke-statusline.js",
+    };
+    const preexistingValue = {
+      type: "command",
+      command: "node user-statusline.js",
+    };
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ statusLine: preexistingValue })
+    );
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+    let captureCalls = 0;
+
+    const results = await Promise.all(
+      [1, 2].map(() =>
+        tracker.installPersistentValue(
+          tmpDir,
+          STATUS_LINE_SETTING_KEY,
+          installedValue,
+          async (capturedValue) => {
+            captureCalls++;
+            assert.deepStrictEqual(capturedValue, preexistingValue);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+        )
+      )
+    );
+
+    assert.deepStrictEqual(results.map((result) => result.kind).sort(), [
+      "no-op",
+      "written",
+    ]);
+    assert.strictEqual(captureCalls, 1);
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")).statusLine,
+      installedValue
+    );
   });
 
   test("should remove settings.json when ctrlyoke created it for MCP", async () => {

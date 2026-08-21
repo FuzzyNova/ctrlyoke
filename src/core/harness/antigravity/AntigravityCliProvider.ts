@@ -14,7 +14,11 @@ import {
   ToolPermissionApplication,
   ToolPermissionConfig,
 } from "../shared/interfaces/IToolPermissionMapper";
-import { HARNESS_IDS, type HookEvent } from "../../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  STATUS_LINE_TRACKING_PROVIDERS,
+  type HookEvent,
+} from "../../../types/DashboardConstants";
 import type {
   McpServerConfig,
   PromptStep,
@@ -35,6 +39,10 @@ import {
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
+import {
+  StatuslineManager,
+  type StatuslineInstallResult,
+} from "../shared/StatuslineManager";
 import { Log } from "../../../utils/Log";
 import { parseArgString } from "../../../utils/CliArgParser";
 import { withFileLock } from "../../../utils/FileLockUtils";
@@ -96,30 +104,9 @@ export class AntigravityCliProvider implements ICliProvider {
    * MCP settings which are workspace-scoped. Keep a separate tracker so the
    * two leases cannot interfere with each other's files or baselines.
    */
-  private static readonly statusLineTracker =
-    SettingsJsonMcpTracker.getInstance("antigravity-cli-settings", {
-      // Deliberately ignore workspaceRoot: agy reads this file globally.
-      projectConfigPath: () =>
-        path.join(os.homedir(), ".gemini", "antigravity-cli", "settings.json"),
-    });
-
-  /** Top-level key ctrlyoke leases in agy's global settings file. */
-  private static readonly STATUS_LINE_KEY = "statusLine";
-
-  /**
-   * Restore a statusline left installed by a ctrlyoke process that died before
-   * releasing its lease.
-   *
-   * The lease's own register/unregister paths already prune dead owners, so
-   * this only makes recovery happen sooner — at host startup rather than at the
-   * next Antigravity run. Safe to call when no lease exists.
-   */
-  static async pruneOrphanedStatusLine(workspaceRoot: string): Promise<void> {
-    await AntigravityCliProvider.statusLineTracker.pruneDeadOwners(
-      workspaceRoot,
-      AntigravityCliProvider.STATUS_LINE_KEY
-    );
-  }
+  private static readonly statuslineManager = StatuslineManager.forProvider(
+    STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+  );
 
   readonly config: HarnessConfig = {
     name: "agy",
@@ -160,8 +147,16 @@ export class AntigravityCliProvider implements ICliProvider {
   private statusLineEnabledForPrompt = false;
   /** Baseline user command forwarded by the wrapper, when one existed. */
   private statusLineForwardCommand: string | undefined;
+  private statusLineUseCtrlyokeStyle = true;
   /** Sidecar for the current prompt, retained for final snapshot consumers. */
   private statusLineSidecar: AntigravityStatuslineSidecar | undefined;
+  private statuslineInstallResult: StatuslineInstallResult | undefined;
+
+  consumeStatuslineInstallResult(): StatuslineInstallResult | undefined {
+    const result = this.statuslineInstallResult;
+    this.statuslineInstallResult = undefined;
+    return result;
+  }
 
   shouldRetainWorkflowArtifactsForReuse(): boolean {
     // Injected turns do not rebuild CLI arguments or hook registration, and
@@ -286,15 +281,19 @@ export class AntigravityCliProvider implements ICliProvider {
             this.statusLineDirectory = undefined;
             this.statusLineEnabledForPrompt = false;
             this.statusLineForwardCommand = undefined;
+            this.statusLineUseCtrlyokeStyle = true;
+            this.statuslineInstallResult = undefined;
             this.statusLineSidecar = undefined;
             this.streamJsonUsage.reset();
             this.logParser.setStatuslineSnapshot();
             this.logParser.setStreamJsonUsage();
             if (
               workspaceRoot &&
-              ConfigurationUtils.shouldTrackAntigravityStatusLine()
+              ConfigurationUtils.getStatusLineTrackingSettings(
+                STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+              ).enabled
             ) {
-              await this.registerStatusLine(
+              this.statuslineInstallResult = await this.registerStatusLine(
                 extensionPath,
                 workspaceRoot,
                 workflowContext?.workingFilePath ?? workspaceRoot
@@ -339,7 +338,11 @@ export class AntigravityCliProvider implements ICliProvider {
 
   /** Observe stream-json usage without adding a second event-mapping path. */
   observeHeadlessStdout(chunk: string): void {
-    if (!ConfigurationUtils.shouldTrackAntigravityStatusLine()) {
+    if (
+      !ConfigurationUtils.getStatusLineTrackingSettings(
+        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      ).enabled
+    ) {
       this.streamJsonUsage.reset();
       this.logParser.setStreamJsonUsage();
       return;
@@ -617,14 +620,6 @@ export class AntigravityCliProvider implements ICliProvider {
       workspaceRoot
     );
 
-    // Release the global statusline value lease. The tracker restores the
-    // user's baseline only after the last workflow releases it.
-    await AntigravityCliProvider.statusLineTracker.unregisterValueLease(
-      workflowKey,
-      workspaceRoot,
-      AntigravityCliProvider.STATUS_LINE_KEY
-    );
-
     // Remove this workflow's hook group from the global hooks.json.
     const groupName = this.getHookGroupName(workflowKey);
     const hooksPath = this.getGlobalHooksPath();
@@ -812,8 +807,8 @@ export class AntigravityCliProvider implements ICliProvider {
   private async registerStatusLine(
     extensionPath: string,
     workspaceRoot: string,
-    workflowKey: string
-  ): Promise<void> {
+    _workflowKey: string
+  ): Promise<StatuslineInstallResult> {
     const scriptPath = path.join(
       extensionPath,
       "out",
@@ -840,24 +835,21 @@ export class AntigravityCliProvider implements ICliProvider {
     this.statusLineSnapshotPaths.add(snapshotPath);
 
     try {
-      await AntigravityCliProvider.statusLineTracker.registerValueLease(
-        workflowKey,
+      const result = await AntigravityCliProvider.statuslineManager.install(
         workspaceRoot,
-        AntigravityCliProvider.STATUS_LINE_KEY,
-        { type: "command", command }
+        command
       );
-      const baseline =
-        AntigravityCliProvider.statusLineTracker.getValueLeaseBaseline(
-          workspaceRoot,
-          AntigravityCliProvider.STATUS_LINE_KEY
-        );
-      this.statusLineForwardCommand = this.extractStatusLineCommand(baseline);
+      const settings = AntigravityCliProvider.statuslineManager.getSettings();
+      this.statusLineForwardCommand = settings.customCommand || undefined;
+      this.statusLineUseCtrlyokeStyle = settings.useCtrlyokeStyle;
       this.statusLineDirectory = snapshotDirectory;
       this.statusLineEnabledForPrompt = true;
+      return result;
     } catch (error) {
       // agy treats a broken statusline as non-fatal. Match that behavior so a
       // settings-file problem never prevents the harness itself from running.
       Log.warn(`Failed to register Antigravity statusline: ${error}`);
+      return { kind: "no-op", captured: false };
     }
   }
 
@@ -877,17 +869,10 @@ export class AntigravityCliProvider implements ICliProvider {
     if (this.statusLineForwardCommand) {
       env.CTRLYOKE_AGY_STATUSLINE_FORWARD = this.statusLineForwardCommand;
     }
+    env.CTRLYOKE_AGY_STATUSLINE_USE_CTRLYOKE_STYLE = String(
+      this.statusLineUseCtrlyokeStyle
+    );
     return env;
-  }
-
-  private extractStatusLineCommand(value: unknown): string | undefined {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      return undefined;
-    }
-    const command = (value as { command?: unknown }).command;
-    return typeof command === "string" && command.length > 0
-      ? command
-      : undefined;
   }
 
   private asFiniteNumber(value: unknown): number | undefined {

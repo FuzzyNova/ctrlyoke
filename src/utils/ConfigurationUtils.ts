@@ -11,12 +11,14 @@ import type {
   CtrlYokeGlobalSettings,
   ModelPricingOverride,
   RunHistoryLocation,
+  StatusLineTrackingSettings,
   TerminalSettings,
 } from "../types/CtrlYokeSettings";
 import {
   HARNESS_IDS,
   DEFAULT_MODELS,
   SETTING_PATHS,
+  type StatusLineTrackingProvider,
   type HarnessId,
   type ContextResolutionFailureMode,
   type PermissionMode,
@@ -95,10 +97,10 @@ export const CONFIG_KEYS = {
   UI_HIDE_COST: "ui.hideCost",
   PERMISSIONS_ALLOWED_EXTERNAL_FILE_ROOTS:
     "permissions.allowedExternalFileRoots",
-  PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING:
-    SETTING_PATHS.PERMISSIONS_ANTIGRAVITY_STATUS_LINE_TRACKING,
+  PERMISSIONS_STATUS_LINE_TRACKING:
+    SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING,
   USAGE_TRACKING: "usageTracking",
-  USAGE_TRACKING_ENABLED: "usageTracking.enabled",
+  USAGE_TRACKING_ENABLED: SETTING_PATHS.USAGE_TRACKING_ENABLED,
   USAGE_TRACKING_PROVIDER_REFRESH_ENABLED:
     "usageTracking.providerRefreshEnabled",
   USAGE_TRACKING_PERSIST_OBSERVED_USAGE: "usageTracking.persistObservedUsage",
@@ -767,10 +769,25 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.PERMISSIONS).codexApprovalPolicy;
   },
 
-  /** Whether the Antigravity statusline wrapper should be installed. */
-  shouldTrackAntigravityStatusLine(): boolean {
-    return configService.get(CONFIG_KEYS.PERMISSIONS)
-      .antigravityStatusLineTracking;
+  /** Get the settings for a provider that installs a global statusline command. */
+  getStatusLineTrackingSettings(
+    provider: StatusLineTrackingProvider
+  ): StatusLineTrackingSettings {
+    return configService.get(CONFIG_KEYS.PERMISSIONS).statusLineTracking[
+      provider
+    ];
+  },
+
+  /** Persist one complete machine-scoped statusline provider object. */
+  async setStatusLineTrackingSettings(
+    provider: StatusLineTrackingProvider,
+    settings: StatusLineTrackingSettings
+  ): Promise<void> {
+    await configService.set(
+      `${SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING}.${provider}`,
+      settings,
+      CONFIG_SCOPE.USER
+    );
   },
 
   /**

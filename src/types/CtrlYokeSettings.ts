@@ -13,6 +13,8 @@ import {
   type HookEvent,
   type ExecutionMode,
   RUN_HISTORY_LOCATIONS,
+  STATUS_LINE_TRACKING_PROVIDERS,
+  type StatusLineTrackingProvider,
   WORKTREE_MODES,
 } from "./DashboardConstants";
 import {
@@ -44,6 +46,14 @@ export interface ModelPricingOverride {
 
 /** Default number of lines shown before a tool result is collapsed. */
 export const DEFAULT_COLLAPSED_TOOL_OUTPUT_LINE_COUNT = 3;
+
+export interface StatusLineTrackingSettings {
+  enabled: boolean;
+  /** Empty string = no custom command detected/configured. */
+  customCommand: string;
+  /** Whether ctrlyoke's own branded line wins over custom command output. */
+  useCtrlyokeStyle: boolean;
+}
 
 export interface CtrlYokeGlobalSettings {
   // General (format/template/behavior toggles)
@@ -98,8 +108,11 @@ export interface CtrlYokeGlobalSettings {
     // Codex CLI-specific
     codexSandboxMode: "read-only" | "workspace-write" | "danger-full-access";
     codexApprovalPolicy: "untrusted" | "on-request" | "never";
-    /** Whether ctrlyoke installs its Antigravity statusline tracking wrapper. */
-    antigravityStatusLineTracking: boolean;
+    /** Settings for providers that install a global statusline command. */
+    statusLineTracking: Record<
+      StatusLineTrackingProvider,
+      StatusLineTrackingSettings
+    >;
     /**
      * Absolute directory paths outside the workspace that ctrlyoke may read for
      * prompt attachments and open from file links. Workspace files are always
@@ -278,16 +291,14 @@ export interface TerminalShortcut {
   sequence: string;
 }
 
-/** Partial version of CtrlYokeGlobalSettings for config file contents (3-level deep partial) */
-export type PartialCtrlYokeSettings = {
-  [K in keyof CtrlYokeGlobalSettings]?: CtrlYokeGlobalSettings[K] extends object
-    ? {
-        [J in keyof CtrlYokeGlobalSettings[K]]?: CtrlYokeGlobalSettings[K][J] extends object
-          ? Partial<CtrlYokeGlobalSettings[K][J]>
-          : CtrlYokeGlobalSettings[K][J];
-      }
-    : CtrlYokeGlobalSettings[K];
-};
+/** Partial version of CtrlYokeGlobalSettings for sparse config file contents. */
+type DeepPartial<T> = T extends readonly unknown[]
+  ? T
+  : T extends object
+    ? { [K in keyof T]?: DeepPartial<T[K]> }
+    : T;
+
+export type PartialCtrlYokeSettings = DeepPartial<CtrlYokeGlobalSettings>;
 
 /** Default values for all settings */
 export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
@@ -366,7 +377,18 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   permissions: {
     codexSandboxMode: "workspace-write",
     codexApprovalPolicy: "on-request",
-    antigravityStatusLineTracking: true,
+    statusLineTracking: {
+      [STATUS_LINE_TRACKING_PROVIDERS.CLAUDE]: {
+        enabled: true,
+        customCommand: "",
+        useCtrlyokeStyle: true,
+      },
+      [STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY]: {
+        enabled: true,
+        customCommand: "",
+        useCtrlyokeStyle: true,
+      },
+    },
     allowedExternalFileRoots: [],
     heuristicSecretRedactionEnabled: true,
   },
