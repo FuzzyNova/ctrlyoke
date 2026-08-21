@@ -34,9 +34,9 @@ reason it can't yet (e.g. the feature it configures isn't built).
 
 Re-run it after adding a control to confirm the gap closed:
 
-```
+```powershell
 npm run compile-tests
-MOCHA_GREP="Settings schema" node ./out/test/runTest.js
+$env:MOCHA_GREP = "Settings schema"; node ./out/test/runTest.js; $env:MOCHA_GREP = $null
 ```
 
 ## Current gaps (7)
@@ -48,7 +48,7 @@ MOCHA_GREP="Settings schema" node ./out/test/runTest.js
 | `usageTracking.providerRefreshEnabled` | `StatsUsageSection` | **Add control.** Gate for provider quota refresh calls. |
 | `usageTracking.persistObservedUsage` | `StatsUsageSection` | **Add control.** Whether normalized observed usage is persisted to the workspace. |
 | `usageTracking.warningPercentUsed` | `StatsUsageSection` | **Add control.** Numeric threshold (0–100) for quota warnings. |
-| `modelPricing` | none yet — needs its own editor | Per-harness/per-model USD rate overrides (`inputPerMTok`, `outputPerMTok`, `cachedInputPerMTok`, `cacheWritePerMTok`, `reasoningPerMTok`) keyed by an open-ended `harness -> model -> rates` map. There's no natural fixed-key list to render (unlike `defaults.models`, which iterates the 6 known harnesses) since model IDs are freeform strings. Needs its own small editor (add/remove harness, add/remove model, five rate fields per model) before it can get a control — worth scoping as its own task rather than folding into the `usageTracking` batch above. **Design resolved (2026-08-21): the setting is a generic override of the bundled `MODEL_PRICING` table (see `src/utils/ModelPricing.ts`) for any harness — it should not special-case which harnesses are eligible.** What blocked two harnesses from calculating an estimate at all turned out to be separate bugs, not reasons to scope them out of the editor — see "Related fixes" below. |
+| `modelPricing` | none yet — needs its own editor | Per-harness/per-model USD rate overrides (`inputPerMTok`, `outputPerMTok`, `cachedInputPerMTok`, `cacheWritePerMTok`, `reasoningPerMTok`) keyed by an open-ended `harness -> model -> rates` map. There's no natural fixed-key list to render (unlike `defaults.models`, which iterates the 6 known harnesses) since model IDs are freeform strings. Needs its own small editor (add/remove harness, add/remove model, five rate fields per model) before it can get a control — worth scoping as its own task rather than folding into the `usageTracking` batch above. **Design resolved (2026-08-21): the setting is a generic per-harness/per-model override of whatever `getModelPricing` would otherwise resolve from the downloaded models.dev registry (`src/utils/ModelPricingRegistry.ts`) — it must not special-case which harnesses are eligible.** What blocked two harnesses from calculating an estimate at all turned out to be separate bugs, not reasons to scope them out of the editor — see "Related fixes" below. |
 | `server.standalonePort` | intentionally not surfaced | **Not a gap — leave as-is.** `ServerSection.tsx` already documents why: it configures the standalone `ctrlyoke server` headless CLI process, which doesn't exist yet (`dev/active/STANDALONE_SERVER_PLAN.md` Phases 5–10 are unimplemented). The schema/type/default are kept so the standalone feature can use it later with no config migration. This test will keep flagging it until the standalone server ships and gets its own settings surface (not the VS Code `ServerSection`, which controls a different process) — that's expected, not a bug in the test. |
 
 `defaults.secrets` is done — see "Completed" below. Of the remaining 7, 5 are straightforward
@@ -68,23 +68,50 @@ is "this harness's billing model makes an estimate meaningless":
   declared known cache/reasoning semantics, and `CopilotLogParser` already extracts a model ID and
   input/output token counts per attempt — every input `calculateTokenCost` needs was already
   available. `calculateAttemptCost` just short-circuited on `harnessId === COPILOT_CLI` before ever
-  consulting the price table. Fixed by removing that early return and populating
-  `MODEL_PRICING[COPILOT_CLI]` (see `ModelPricing.ts`) from the 17 model IDs in
-  `COPILOT_CLI_MODEL_IDS` (`ModelConstants.ts`), sourced from GitHub's published
-  [Copilot models and pricing](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing)
-  page. `ATTEMPT_COST_UNAVAILABLE_REASONS.COPILOT_BILLING_UNIT` was removed as part of this fix —
-  it had no other reader.
-- **Qwen — a genuine open unknown, not yet fixed.** `HARNESS_TOKEN_SEMANTICS[QWEN_CLI]` is
-  `UNKNOWN`/`UNKNOWN`: ctrlyoke does not actually know whether Qwen's cache-read tokens are
-  counted inside or on top of `prompt`, or whether reasoning tokens are folded into output. That's
-  missing empirical verification against a real `qwen` CLI run, not a policy choice — filling in a
-  guess would silently produce a confidently-wrong number, which is worse than no estimate. The
-  bundled table also has no Qwen entries yet because `qwen3.5-plus` is priced by input-length tier,
-  which the current flat-rate `ModelPricing` shape can't represent exactly (same limitation the
-  fix above accepted for Copilot's own tiered models — see the code comment above
-  `MODEL_PRICING[COPILOT_CLI]` — by pricing at the "Default" tier as a documented approximation).
-  Once semantics are verified, the same approximation is reasonable for Qwen too. Until then, Qwen
-  stays a real gap, not a `modelPricing` UI concern.
+  consulting the price table. Fixed by removing that early return and adding Copilot prices.
+  `ATTEMPT_COST_UNAVAILABLE_REASONS.COPILOT_BILLING_UNIT` was removed as part of this fix — it had
+  no other reader. **Superseded shortly after by the pricing registry:** the hand-typed
+  `MODEL_PRICING` table this bullet originally described no longer exists. `getModelPricing`
+  (`src/utils/ModelPricing.ts`) now resolves every harness through
+  `getModelPricingFromRegistry` (`src/utils/ModelPricingRegistry.ts`), backed by
+  `src/utils/generated/modelPricingRegistryData.json`, downloaded from models.dev by
+  `npm run sync-model-pricing`. There is no hand-maintained price table left to add a model to.
+- **Qwen — the price gap closed, the semantics gap did not.** The registry does carry Alibaba
+  pricing (including `qwen3.5-plus`), so "no bundled Qwen entries" is no longer why Qwen shows no
+  estimate. What still blocks it is `HARNESS_TOKEN_SEMANTICS[QWEN_CLI]` being `UNKNOWN`/`UNKNOWN`:
+  ctrlyoke does not know whether Qwen's cache-read tokens are counted inside or on top of `prompt`,
+  or whether reasoning tokens are folded into output. That's missing empirical verification against
+  a real `qwen` CLI run, not a policy choice — filling in a guess would silently produce a
+  confidently-wrong number, which is worse than no estimate. `opencode-cli` and `antigravity-cli`
+  are in the same unverified state. Verifying those three is its own task, tracked separately from
+  this plan.
+
+## Implementation constraints found while scoping the remaining work (2026-08-21)
+
+- **`StatsUsageSection` is not currently wired for settings writes.** `GlobalSettingsDrawer.tsx`
+  passes `{...sectionProps}` (`activeScope` / `onUpdate` / `onReset`) to every other settings
+  section but gives `StatsUsageSection` only `hideCost` / `isNarrow` / `settings`. Its one existing
+  settings control (`StatusLineTrackingControls`) works around that by posting
+  `UPDATE_GLOBAL_SETTING` itself with a hard-coded `SETTING_SCOPES.USER`. Any new control here
+  should thread `sectionProps` through properly rather than copying that workaround.
+- **`usageTracking.enabled` is machine-scoped.** It is listed in
+  `WORKSPACE_FORBIDDEN_SETTING_ROOTS` (`CtrlYokeConfigService.ts`), so a workspace-scope write
+  throws. Follow the `worktrees.root` pattern in `WorktreesSection.tsx`: disable the control while
+  `activeScope === SETTING_SCOPES.WORKSPACE` and render the short "switch to User scope" note. The
+  other three `usageTracking.*` settings are ordinary scope-aware settings.
+- **`modelPricing` must be written as one whole object at path `modelPricing`.** Setting writes
+  are dot-path writes (`CtrlYokeConfigService.set` → backend `set(path, value)`), and real model
+  IDs contain dots (`qwen3.5-plus`, `gpt-4.1`), so a per-model path like
+  `modelPricing.qwen-cli.qwen3.5-plus.inputPerMTok` would silently nest under bogus `5-plus` keys.
+  Use the aggregate-editor convention instead — `path="modelPricing"` on the `SettingInputRow`
+  plus `onUpdate("modelPricing", nextWholeObject)` — exactly as `DefaultsMcpPage.tsx` does for
+  `defaults.mcpServers`. `getLeafSources` records object paths as well as leaves, so the source
+  badge and reset button still work at that path.
+- **An override alone does not make an estimate appear for every harness.** `calculateAttemptCost`
+  requires *both* a price and verified token semantics; for `qwen-cli`, `opencode-cli`, and
+  `antigravity-cli` it returns `UNVERIFIED_TOKEN_SEMANTICS` regardless of any override. The editor
+  should say so where the user enters rates for those harnesses, rather than implying the override
+  will start producing a cost.
 
 ## Completed
 
