@@ -666,7 +666,7 @@ wrapper reuses these conventions without importing across that boundary.
    `permissions.statusLineTracking.antigravity.format` are temporarily listed in
    `PENDING_UI_PARITY` in `settingsSchemaUiParity.integration.test.ts`; later UI steps must
    remove those entries when their controls land.
-4. `UsageCard.tsx`/`usageBarColor.ts` changes: read `percentDirection` for the displayed
+4. **[Done]** `UsageCard.tsx`/`usageBarColor.ts` changes: read `percentDirection` for the displayed
    quota number/label, while confirming every `getUsageBarColorClass` call site — including
    `WorkflowStep.tsx:388-390`'s unrelated context-bar usage — still receives a used%-oriented
    value regardless of the setting (Decision 6's critical catch). This phase's tests should

@@ -16,8 +16,12 @@ import {
   formatTokenCount,
   formatTokenTotal,
 } from "@root/utils/TokenFormatting";
-import { formatUsagePercentForDisplay } from "@root/utils/StatuslineFormat";
+import {
+  formatUsagePercentForDisplay,
+  type UsagePercentDirection,
+} from "@root/utils/StatuslineFormat";
 import { getUsageBarColorClass } from "@utils/usageBarColor";
+import { useSettingsStore } from "@store/settingsStore";
 
 function formatTimestamp(value: number | undefined): string {
   return value === undefined
@@ -64,6 +68,12 @@ export function UsageCard({
   harnessId: HarnessId;
   hideCost: boolean;
 }) {
+  const percentDirection = useSettingsStore(
+    (state) =>
+      state.fullGlobalSettings?.settings.usageTracking.percentDirection ??
+      "used"
+  );
+
   if (!snapshot) {
     return (
       <div className="rounded border border-panel-border bg-panel-bg p-2 text-xs text-description-fg">
@@ -166,11 +176,7 @@ export function UsageCard({
                 :{" "}
                 {window.isUnlimited
                   ? "Unlimited"
-                  : `${formatQuotaValue(window.used, window.unit)}${
-                      window.limit !== undefined
-                        ? ` / ${formatQuotaValue(window.limit, window.unit)}`
-                        : ""
-                    }`}
+                  : formatQuotaDisplay(window, percentDirection)}
                 {window.resetAt !== undefined
                   ? ` · resets ${formatTimestamp(window.resetAt)}`
                   : ""}
@@ -179,7 +185,7 @@ export function UsageCard({
                   : ""}
               </div>
               {!window.isUnlimited && window.percentUsed !== undefined && (
-                <UsagePercentBar percent={window.percentUsed} />
+                <UsagePercentBar usedPercent={window.percentUsed} />
               )}
             </div>
           ))}
@@ -192,16 +198,38 @@ export function UsageCard({
   );
 }
 
-function UsagePercentBar({ percent }: { percent: number }) {
-  const clamped = Math.max(0, Math.min(100, percent));
+function UsagePercentBar({ usedPercent }: { usedPercent: number }) {
+  const clampedUsedPercent = Math.max(0, Math.min(100, usedPercent));
   return (
     <div className="mt-1 mx-1 h-1.5 rounded-full bg-ctx-bar-track overflow-hidden">
       <div
-        className={`h-full rounded-full ${getUsageBarColorClass(clamped)}`}
-        style={{ width: `${clamped}%` }}
+        className={`h-full rounded-full ${getUsageBarColorClass(
+          clampedUsedPercent
+        )}`}
+        style={{ width: `${clampedUsedPercent}%` }}
       />
     </div>
   );
+}
+
+function formatQuotaDisplay(
+  window: HarnessUsageSnapshot["quota"]["windows"][number],
+  percentDirection: UsagePercentDirection
+): string {
+  if (
+    window.unit === HARNESS_USAGE_UNITS.PERCENT &&
+    window.percentUsed !== undefined
+  ) {
+    return `${formatRoundedNumber(
+      formatUsagePercentForDisplay(window.percentUsed, percentDirection)
+    )}% ${percentDirection}`;
+  }
+
+  return `${formatQuotaValue(window.used, window.unit)}${
+    window.limit !== undefined
+      ? ` / ${formatQuotaValue(window.limit, window.unit)}`
+      : ""
+  }`;
 }
 
 function formatQuotaValue(
@@ -210,9 +238,7 @@ function formatQuotaValue(
 ): string {
   if (value === undefined) return "—";
   if (unit === HARNESS_USAGE_UNITS.TOKENS) return formatTokenCount(value);
-  if (unit === HARNESS_USAGE_UNITS.PERCENT) {
-    return formatRoundedNumber(formatUsagePercentForDisplay(value, "used"));
-  }
+  if (unit === HARNESS_USAGE_UNITS.PERCENT) return formatRoundedNumber(value);
   return String(value);
 }
 
