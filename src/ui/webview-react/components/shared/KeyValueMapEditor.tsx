@@ -154,7 +154,7 @@ export function KeyValueMapEditor({
           value=""
           onChange={(event) => insertSecretReference(event.target.value)}
           disabled={disabled}
-          className="w-full rounded border border-input-border bg-input-bg px-2 py-1 text-xxs text-input-fg focus:border-focus-border focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-7 w-full rounded border border-input-border bg-input-bg px-2 py-1 text-xs text-input-fg focus:border-focus-border focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
         >
           <option value="">Insert secret reference…</option>
           {secretNames.map((name) => (

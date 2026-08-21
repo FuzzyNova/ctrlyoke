@@ -82,6 +82,30 @@ describe("KeyValueMapEditor", () => {
     });
   });
 
+  it("uses the standard dropdown text size and height", () => {
+    useSecretRegistryStore.getState().setEntries("workspace", [
+      {
+        name: "API_TOKEN",
+        scope: "workspace",
+        state: "managed-and-set",
+        usedBy: { mcpServers: [], workflows: [] },
+      },
+    ]);
+
+    render(
+      <KeyValueMapEditor
+        label="Headers"
+        value={{}}
+        onChange={vi.fn()}
+        allowSecretReferences
+      />
+    );
+
+    const picker = screen.getByLabelText("Insert secret reference");
+    expect(picker).toHaveClass("text-xs");
+    expect(picker).toHaveClass("h-7");
+  });
+
   it("only shows the credential warning when secret references are enabled", () => {
     const props = {
       label: "Workflow variables",
