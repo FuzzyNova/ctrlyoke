@@ -5,17 +5,15 @@ import {
   HARNESS_SHARE_METRICS,
   MESSAGE_TYPES,
   SETTING_SCOPES,
+  SETTING_PATHS,
 } from "@root/types/DashboardConstants";
 import type {
   HarnessId,
   HarnessShareMetric,
-  StatusLineTrackingHarnessId,
+  SettingWriteScope,
 } from "@root/types/DashboardConstants";
 import type { WorkspaceStatsSnapshot } from "@root/types/UsageTypes";
-import type {
-  FullGlobalSettings,
-  SettingWriteScope,
-} from "@root/types/WebviewMessageTypes";
+import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import {
   HarnessIcon,
   ModelPricingEditor,
@@ -29,11 +27,11 @@ import {
 import { sendMessage } from "@hooks/useMessageHandler";
 import { getVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useHarnessUsageStore } from "@store/harnessUsageStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
 import { WebviewLog } from "@utils/logger";
 import { buildWorkspaceStatsExport } from "@utils/workspaceStatsExport";
 import { UsageCard } from "./UsageCard";
-import { StatusLineTrackingControls } from "./StatusLineTrackingControls";
 import { StatTileGrid } from "./StatTileGrid";
 import {
   HarnessShareBar,
@@ -41,18 +39,15 @@ import {
   type HarnessShareSegment,
 } from "./HarnessShareBar";
 import { HarnessShareRow } from "./HarnessShareRow";
+import type { UsagePercentDirection } from "@root/utils/StatuslineFormat";
 
 const ALL_HARNESS_IDS = Object.values(HARNESS_IDS) as HarnessId[];
-const STATUS_LINE_HARNESS_IDS: StatusLineTrackingHarnessId[] = [
-  HARNESS_IDS.CLAUDE_CLI,
-  HARNESS_IDS.ANTIGRAVITY_CLI,
-];
 
 interface Props {
   hideCost: boolean;
   isNarrow?: boolean;
   settings?: FullGlobalSettings;
-  activeScope?: SettingWriteScope;
+  activeScope: SettingWriteScope;
   onUpdate?: (path: string, value: unknown) => void;
   onReset?: (path: string) => void;
 }
@@ -78,6 +73,19 @@ export function StatsUsageSection({
   const snapshotsByHarness = useHarnessUsageStore(
     (state) => state.snapshotsByHarness
   );
+  const percentDirection = useSettingsStore(
+    (state) =>
+      state.fullGlobalSettings?.settings.usageTracking.percentDirection ??
+      "used"
+  ) as UsagePercentDirection;
+
+  const updatePercentDirection = (value: UsagePercentDirection) => {
+    sendMessage(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, {
+      path: SETTING_PATHS.USAGE_TRACKING_PERCENT_DIRECTION,
+      value,
+      scope: activeScope,
+    });
+  };
 
   const getExport = useCallback(
     () =>
@@ -248,6 +256,33 @@ export function StatsUsageSection({
           </div>
         </section>
       )}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-panel-border bg-panel-bg px-2 py-1.5">
+        <div>
+          <p className="text-sm text-foreground">Quota percent direction</p>
+          <p className="text-xs text-description-fg">
+            Choose whether usage percentages show used or remaining capacity.
+          </p>
+        </div>
+        <ScopeToggle
+          value={percentDirection}
+          onChange={updatePercentDirection}
+          ariaLabel="Quota percent direction"
+          options={[
+            {
+              value: "used",
+              label: "Used",
+              icon: "codicon-arrow-up",
+              title: "Show the percentage already used",
+            },
+            {
+              value: "remaining",
+              label: "Remaining",
+              icon: "codicon-arrow-down",
+              title: "Show the percentage remaining",
+            },
+          ]}
+        />
+      </div>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
@@ -338,34 +373,6 @@ export function StatsUsageSection({
               onChange={(value) => onUpdate?.("modelPricing", value)}
             />
           </SettingInputRow>
-        </section>
-      )}
-      {settings && (
-        <section
-          className="pt-3 border-t border-panel-border space-y-3"
-          aria-labelledby="statusline-tracking-heading"
-        >
-          <div>
-            <h3
-              id="statusline-tracking-heading"
-              className="text-xs font-semibold uppercase text-description-fg tracking-wide"
-            >
-              Statusline Tracking
-            </h3>
-            <p className="text-xs text-description-fg mt-1">
-              Configure provider statusline integration to capture token, quota,
-              and context-window metrics.
-            </p>
-          </div>
-          <div className="space-y-3">
-            {STATUS_LINE_HARNESS_IDS.map((harnessId) => (
-              <StatusLineTrackingControls
-                key={harnessId}
-                harnessId={harnessId}
-                settings={settings}
-              />
-            ))}
-          </div>
         </section>
       )}
     </div>

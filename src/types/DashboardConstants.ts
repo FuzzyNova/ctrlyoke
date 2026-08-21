@@ -12,6 +12,7 @@ import {
   ANTIGRAVITY_CLI_MODELS as MC_ANTIGRAVITY_CLI_MODELS,
   ANTIGRAVITY_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
+import { formatUsageWindowLabel as formatSharedUsageWindowLabel } from "../utils/StatuslineFormat";
 
 /** File formats supported when authoring workflows and templates. */
 export const WORKFLOW_FILE_FORMATS = {
@@ -803,22 +804,7 @@ export function usageWindowKind(
  * instead of each provider's normalizer inventing its own phrasing.
  */
 export function formatUsageWindowLabel(windowMinutes: number): string {
-  if (
-    windowMinutes % USAGE_WINDOW_WEEK_MINUTES === 0 &&
-    windowMinutes >= USAGE_WINDOW_WEEK_MINUTES
-  ) {
-    const weeks = windowMinutes / USAGE_WINDOW_WEEK_MINUTES;
-    return weeks === 1 ? "week" : `${weeks} weeks`;
-  }
-  if (windowMinutes % (24 * 60) === 0) {
-    const days = windowMinutes / (24 * 60);
-    return days === 1 ? "day" : `${days}d`;
-  }
-  if (windowMinutes % 60 === 0) {
-    const hours = windowMinutes / 60;
-    return `${hours}h`;
-  }
-  return `${windowMinutes}m`;
+  return formatSharedUsageWindowLabel(windowMinutes);
 }
 
 export const HARNESS_OBSERVED_PERIODS = {
@@ -1093,13 +1079,18 @@ export const SETTING_PATHS = {
     "permissions.statusLineTracking.claude.customCommand",
   PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_USE_CTRLYOKE_STYLE:
     "permissions.statusLineTracking.claude.useCtrlyokeStyle",
+  PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_FORMAT:
+    "permissions.statusLineTracking.claude.format",
   PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_ENABLED:
     "permissions.statusLineTracking.antigravity.enabled",
   PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_CUSTOM_COMMAND:
     "permissions.statusLineTracking.antigravity.customCommand",
   PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_USE_CTRLYOKE_STYLE:
     "permissions.statusLineTracking.antigravity.useCtrlyokeStyle",
+  PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_FORMAT:
+    "permissions.statusLineTracking.antigravity.format",
   USAGE_TRACKING_ENABLED: "usageTracking.enabled",
+  USAGE_TRACKING_PERCENT_DIRECTION: "usageTracking.percentDirection",
 } as const;
 
 // ============================================================================

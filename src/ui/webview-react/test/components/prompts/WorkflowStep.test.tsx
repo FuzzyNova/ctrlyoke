@@ -1,9 +1,16 @@
 import { render } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { WorkflowStepItem } from "@components/prompts/WorkflowStep";
 import { STEP_STATUS, type CliOutput } from "@/types/messages";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
+import { useSettingsStore } from "@store/settingsStore";
+import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import type { UsagePercentDirection } from "@root/utils/StatuslineFormat";
 
-function buildOutput(compactionCount: number | undefined): CliOutput {
+function buildOutput(
+  compactionCount: number | undefined,
+  contextWindowUsed = 10000
+): CliOutput {
   return {
     prompt: "Review the changes",
     response: "Done",
@@ -13,25 +20,48 @@ function buildOutput(compactionCount: number | undefined): CliOutput {
       prompt: 8000,
       completion: 12000,
       total: 410000,
-      contextWindowUsed: 10000,
+      contextWindowUsed,
       contextWindowSize: 200000,
       compactionCount,
     },
   };
 }
 
-function renderStep(compactionCount: number | undefined) {
+function renderStep(
+  compactionCount: number | undefined,
+  contextWindowUsed?: number
+) {
   return render(
     <WorkflowStepItem
       text="Review the changes"
       index={0}
       status={STEP_STATUS.COMPLETED}
-      latestOutput={buildOutput(compactionCount)}
+      latestOutput={buildOutput(compactionCount, contextWindowUsed)}
     />
   );
 }
 
+function setPercentDirection(direction: UsagePercentDirection) {
+  useSettingsStore.setState({
+    fullGlobalSettings: {
+      settings: {
+        ...CTRLYOKE_SETTINGS_DEFAULTS,
+        usageTracking: {
+          ...CTRLYOKE_SETTINGS_DEFAULTS.usageTracking,
+          percentDirection: direction,
+        },
+      },
+      sources: {},
+      isMultiRoot: false,
+    } satisfies FullGlobalSettings,
+  });
+}
+
 describe("WorkflowStep token usage", () => {
+  beforeEach(() => {
+    setPercentDirection("used");
+  });
+
   it("shows the attempt total beside the percentage after compaction", () => {
     const { container } = renderStep(2);
 
@@ -60,4 +90,16 @@ describe("WorkflowStep token usage", () => {
       container.querySelector("[title*='Attempt total: 410k']")
     ).not.toBeNull();
   });
+
+  it.each(["used", "remaining"] as const)(
+    "keeps context-bar danger coloring used%-based in %s mode",
+    (direction) => {
+      setPercentDirection(direction);
+      const { container } = renderStep(undefined, 180000);
+      const contextFill = container.querySelector('[style="height: 90%;"]');
+
+      expect(contextFill).toHaveClass("bg-error-fg");
+      expect(contextFill).toHaveClass("opacity-90");
+    }
+  );
 });

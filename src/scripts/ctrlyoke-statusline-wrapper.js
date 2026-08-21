@@ -11,11 +11,17 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
+const {
+  DEFAULT_STATUS_LINE_FORMAT,
+  formatUsagePercentForDisplay,
+  formatBrandedStatusLine: formatSharedBrandedStatusLine,
+} = require("./ctrlyoke-statusline-format.js");
 
 // Both harnesses refresh their statusline frequently. Keep forwarding below
 // the documented ~300 ms Antigravity poll cadence for a consistent contract.
 const FORWARD_TIMEOUT_MS = 200;
 const ANSI_RESET = "\u001b[0m";
+const DEFAULT_PERCENT_DIRECTION = "used";
 
 const STATUSLINE_PROVIDERS = Object.freeze({
   CLAUDE: "claude",
@@ -26,6 +32,8 @@ const DEFAULT_STATUSLINE_SETTINGS = Object.freeze({
   enabled: true,
   customCommand: "",
   useCtrlyokeStyle: true,
+  format: DEFAULT_STATUS_LINE_FORMAT,
+  percentDirection: DEFAULT_PERCENT_DIRECTION,
 });
 
 const CONTEXT_THRESHOLDS = Object.freeze({
@@ -41,35 +49,109 @@ const CONTEXT_COLORS = Object.freeze({
 
 let snapshotSequence = 0;
 
-/**
- * Read the machine-scoped settings directly for every wrapper invocation.
- * This script is installed into global harness settings and can therefore be
- * launched without a ctrlyoke parent process or with an old parent
- * environment. Missing, malformed, and partial settings remain harmless.
- */
-function resolveStatusLineSettings(provider, homeDirectory = os.homedir()) {
-  let configured;
+function readSettingsFile(settingsPath) {
   try {
-    const settingsPath = path.join(homeDirectory, ".ctrlyoke", "settings.json");
     const parsed = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
-    const permissions =
-      parsed && typeof parsed === "object" ? parsed.permissions : undefined;
-    const tracking =
-      permissions && typeof permissions === "object"
-        ? permissions.statusLineTracking
-        : undefined;
-    configured =
-      tracking && typeof tracking === "object" ? tracking[provider] : undefined;
+    return {
+      found: true,
+      settings:
+        parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? parsed
+          : {},
+    };
   } catch {
-    configured = undefined;
+    return { found: false, settings: {} };
   }
+}
+
+function readWorkspaceSettings(workspaceRoot) {
+  if (typeof workspaceRoot !== "string" || workspaceRoot.trim().length === 0) {
+    return {};
+  }
+
+  const settingsPath = path.join(workspaceRoot, ".ctrlyoke", "settings.json");
+  return readSettingsFile(settingsPath).settings;
+}
+
+/**
+ * Find a workspace settings file from a provider payload's cwd. This is only
+ * a fallback for statusline invocations outside a ctrlyoke-launched process;
+ * launched processes provide the exact effective root through the environment
+ * handoff below. Walking ancestors lets a harness payload cwd be a project
+ * subdirectory without mistaking it for the configured ctrlyoke root.
+ */
+function findWorkspaceSettingsFromCwd(cwd) {
+  if (typeof cwd !== "string" || cwd.trim().length === 0) {
+    return {};
+  }
+
+  let current = path.resolve(cwd);
+  while (true) {
+    const result = readSettingsFile(
+      path.join(current, ".ctrlyoke", "settings.json")
+    );
+    if (result.found) return result.settings;
+    const parent = path.dirname(current);
+    if (parent === current) return {};
+    current = parent;
+  }
+}
+
+/**
+ * Read settings directly for every wrapper invocation. Provider statusline
+ * settings remain user/machine scoped. The one normal-scope leaf,
+ * usageTracking.percentDirection, is additionally read from the effective
+ * workspace file when a launched process hands us its configured root; an
+ * external invocation falls back to the payload cwd ancestor search.
+ */
+function resolveStatusLineSettings(
+  provider,
+  homeDirectory = os.homedir(),
+  context = {}
+) {
+  const userSettings = readSettingsFile(
+    path.join(homeDirectory, ".ctrlyoke", "settings.json")
+  ).settings;
+  const workspaceSettings =
+    typeof context.workspaceRoot === "string"
+      ? readWorkspaceSettings(context.workspaceRoot)
+      : findWorkspaceSettingsFromCwd(context.payload?.cwd);
+  const settings = userSettings;
+  const permissions = settings.permissions;
+  const tracking =
+    permissions &&
+    typeof permissions === "object" &&
+    !Array.isArray(permissions)
+      ? permissions.statusLineTracking
+      : undefined;
+  const configured =
+    tracking && typeof tracking === "object" && !Array.isArray(tracking)
+      ? tracking[provider]
+      : undefined;
+  const userUsageTracking = settings.usageTracking;
+  const workspaceUsageTracking = workspaceSettings.usageTracking;
+  const percentDirection =
+    [workspaceUsageTracking, userUsageTracking].find(
+      (usageTracking) =>
+        usageTracking &&
+        typeof usageTracking === "object" &&
+        !Array.isArray(usageTracking) &&
+        (usageTracking.percentDirection === "used" ||
+          usageTracking.percentDirection === "remaining")
+    )?.percentDirection ?? DEFAULT_PERCENT_DIRECTION;
+
+  const defaults = {
+    ...DEFAULT_STATUSLINE_SETTINGS,
+    format: cloneDefaultStatuslineFormat(),
+    percentDirection,
+  };
 
   if (
     !configured ||
     typeof configured !== "object" ||
     Array.isArray(configured)
   ) {
-    return { ...DEFAULT_STATUSLINE_SETTINGS };
+    return defaults;
   }
 
   return {
@@ -85,7 +167,16 @@ function resolveStatusLineSettings(provider, homeDirectory = os.homedir()) {
       typeof configured.useCtrlyokeStyle === "boolean"
         ? configured.useCtrlyokeStyle
         : DEFAULT_STATUSLINE_SETTINGS.useCtrlyokeStyle,
+    format:
+      Array.isArray(configured.format) && configured.format.length > 0
+        ? configured.format
+        : cloneDefaultStatuslineFormat(),
+    percentDirection,
   };
+}
+
+function cloneDefaultStatuslineFormat() {
+  return DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment }));
 }
 
 function asFiniteNumber(value) {
@@ -255,10 +346,6 @@ function getContextBand(percentage) {
   return "neutral";
 }
 
-function formatPercentage(percentage) {
-  return `${percentage.toFixed(1).replace(/\.0$/, "")}%`;
-}
-
 function getContextValues(payload) {
   const contextWindow = normalizePayload(payload).context_window;
   const currentUsage = normalizePayload(contextWindow?.current_usage);
@@ -285,89 +372,89 @@ function getQuotaPercentage(payload, provider) {
     ) {
       return undefined;
     }
-    const remainingPercentages = Object.values(rateLimits)
+    const usedPercentages = Object.values(rateLimits)
       .map((entry) =>
         entry && typeof entry === "object"
           ? asFiniteNumber(entry.used_percentage)
           : undefined
       )
-      .filter((value) => value !== undefined)
-      .map((value) => 100 - value);
-    if (remainingPercentages.length === 0) {
+      .filter((value) => value !== undefined);
+    if (usedPercentages.length === 0) {
       return undefined;
     }
-    return Math.max(
-      0,
-      Math.min(100, Math.round(Math.min(...remainingPercentages)))
-    );
+    return Math.max(0, Math.min(100, Math.round(Math.max(...usedPercentages))));
   }
 
   const quota = normalized.quota;
   if (!quota || typeof quota !== "object" || Array.isArray(quota)) {
     return undefined;
   }
-  const remainingFractions = Object.values(quota)
+  const usedPercentages = Object.values(quota)
     .map((entry) =>
       entry && typeof entry === "object"
         ? asFiniteNumber(entry.remaining_fraction)
         : undefined
     )
-    .filter((value) => value !== undefined);
-  if (remainingFractions.length === 0) {
+    .filter((value) => value !== undefined)
+    .map((value) => 100 - value * 100);
+  if (usedPercentages.length === 0) {
     return undefined;
   }
-  return Math.max(
-    0,
-    Math.min(100, Math.round(Math.min(...remainingFractions) * 100))
-  );
+  return Math.max(0, Math.min(100, Math.round(Math.max(...usedPercentages))));
 }
 
-function safeStatusLabel(value, fallback) {
-  return typeof value === "string" && value.length > 0
-    ? value.replace(/[\r\n]+/g, " ")
-    : fallback;
+function getGitHeadPath(currentDirectory) {
+  if (typeof currentDirectory !== "string" || currentDirectory.length === 0) {
+    return undefined;
+  }
+
+  const gitPath = path.join(currentDirectory, ".git");
+  const gitStats = fs.statSync(gitPath);
+  if (gitStats.isDirectory()) {
+    return path.join(gitPath, "HEAD");
+  }
+  if (!gitStats.isFile()) {
+    return undefined;
+  }
+
+  const gitFile = fs.readFileSync(gitPath, "utf8").trim();
+  const gitDirectory = gitFile.match(/^gitdir:\s*(.+)$/i)?.[1]?.trim();
+  return gitDirectory
+    ? path.resolve(path.dirname(gitPath), gitDirectory, "HEAD")
+    : undefined;
 }
 
-/** Format both providers using one branded statusline shape. */
-function formatBrandedStatusLine(providerOrPayload, payloadOrProvider) {
-  // Preserve the old one-argument Antigravity call shape for existing callers.
-  const provider =
-    typeof providerOrPayload === "string"
-      ? providerOrPayload
-      : typeof payloadOrProvider === "string"
-        ? payloadOrProvider
-        : STATUSLINE_PROVIDERS.ANTIGRAVITY;
-  const payload =
-    typeof providerOrPayload === "string"
-      ? payloadOrProvider
-      : providerOrPayload;
-  const normalized = normalizePayload(payload);
-  const model = normalizePayload(normalized.model);
-  const modelLabel = safeStatusLabel(
-    model.id,
-    model.display_name ?? "unknown-model"
-  );
-  const agentState = safeStatusLabel(normalized.agent_state, "unknown");
-  const { used, size } = getContextValues(normalized);
-  const percentage = calculateContextPercentage(used, size);
-  const band = getContextBand(percentage);
-  const quotaPercentage = getQuotaPercentage(normalized, provider);
-  const quotaLabel =
-    quotaPercentage === undefined ? "—" : `${quotaPercentage}%`;
-  const contextLabel = `${formatCompactTokenCount(used)}/${formatCompactTokenCount(size)} ctx (${formatPercentage(percentage)})`;
+function getBranchName(payload) {
+  try {
+    const headPath = getGitHeadPath(normalizePayload(payload).cwd);
+    if (!headPath) {
+      return undefined;
+    }
+    const head = fs.readFileSync(headPath, "utf8").trim();
+    if (head.startsWith("ref: refs/heads/")) {
+      const branch = head.slice("ref: refs/heads/".length).trim();
+      return branch.length > 0 ? branch : undefined;
+    }
+    return head.length > 0 ? head.slice(0, 7) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
-  return [
-    "ctrlyoke ⚡",
-    modelLabel,
-    "·",
-    `${CONTEXT_COLORS[band]}${contextLabel}${ANSI_RESET}`,
-    "·",
-    provider === STATUSLINE_PROVIDERS.CLAUDE
-      ? `rate ${quotaLabel}`
-      : `quota ${quotaLabel}`,
-    "·",
-    agentState,
-  ].join(" ");
+/** Format both providers from the shared segment vocabulary. */
+function formatBrandedStatusLine(
+  provider,
+  payload,
+  format,
+  percentDirection = DEFAULT_PERCENT_DIRECTION
+) {
+  return formatSharedBrandedStatusLine(
+    provider,
+    payload,
+    Array.isArray(format) ? format : undefined,
+    percentDirection,
+    { branch: getBranchName(payload) }
+  );
 }
 
 function writeStdoutSafely(value) {
@@ -401,6 +488,7 @@ module.exports = {
   calculateContextPercentage,
   formatBrandedStatusLine,
   formatCompactTokenCount,
+  formatUsagePercentForDisplay,
   forwardToCommand,
   getContextBand,
   getContextValues,

@@ -20,6 +20,7 @@ import { configService } from "../../config/CtrlYokeConfigService";
 import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import type { StatusLineTrackingSettings } from "../../types/CtrlYokeSettings";
+import { DEFAULT_STATUS_LINE_FORMAT } from "../../utils/StatuslineFormat";
 import {
   StatuslineManager,
   type StatuslineManagerLike,
@@ -146,6 +147,7 @@ suite("WebviewSettingsSync", () => {
             enabled: true,
             customCommand: "node user-statusline.js",
             useCtrlyokeStyle: true,
+            format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
           });
           const messages: unknown[] = [];
           const sync = makeSync({ [harnessId]: manager }, messages);
@@ -174,6 +176,7 @@ suite("WebviewSettingsSync", () => {
                 enabled: false,
                 customCommand: "node user-statusline.js",
                 useCtrlyokeStyle: true,
+                format: DEFAULT_STATUS_LINE_FORMAT,
               },
               source: "user",
             },
@@ -196,6 +199,7 @@ suite("WebviewSettingsSync", () => {
               enabled: false,
               customCommand: "node user-statusline.js",
               useCtrlyokeStyle: true,
+              format: DEFAULT_STATUS_LINE_FORMAT,
             },
             scope: "user",
           },
@@ -205,6 +209,7 @@ suite("WebviewSettingsSync", () => {
               enabled: false,
               customCommand: "node user-statusline.js",
               useCtrlyokeStyle: true,
+              format: DEFAULT_STATUS_LINE_FORMAT,
             },
             scope: "user",
           },
@@ -220,6 +225,7 @@ suite("WebviewSettingsSync", () => {
         enabled: true,
         customCommand: "node user-statusline.js",
         useCtrlyokeStyle: false,
+        format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
       });
       manager.uninstall = async () => {
         throw new Error("settings file is locked");
@@ -257,6 +263,7 @@ suite("WebviewSettingsSync", () => {
             enabled: false,
             customCommand: "node user-statusline.js",
             useCtrlyokeStyle: false,
+            format: DEFAULT_STATUS_LINE_FORMAT,
           },
           scope: "user",
         },
@@ -265,6 +272,7 @@ suite("WebviewSettingsSync", () => {
             enabled: true,
             customCommand: "node user-statusline.js",
             useCtrlyokeStyle: false,
+            format: DEFAULT_STATUS_LINE_FORMAT,
           },
           scope: "user",
         },
@@ -283,6 +291,7 @@ suite("WebviewSettingsSync", () => {
         enabled: true,
         customCommand: "node user-statusline.js",
         useCtrlyokeStyle: true,
+        format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
       });
       const sync = makeSync(
         { [HARNESS_IDS.ANTIGRAVITY_CLI]: manager },
@@ -320,6 +329,7 @@ suite("WebviewSettingsSync", () => {
         enabled: true,
         customCommand: "node user-statusline.js",
         useCtrlyokeStyle: true,
+        format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
       });
       const sync = makeSync(
         { [HARNESS_IDS.CLAUDE_CLI]: manager },

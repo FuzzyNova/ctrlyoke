@@ -18,6 +18,8 @@ import { LocalTextInput } from "@components/shared/LocalInputs";
 import { Modal } from "@components/shared/Modal";
 import { SettingInputRow } from "@components/shared/SettingInputRow";
 import { SettingToggleRow } from "@components/shared/SettingToggleRow";
+import { useHarnessUsageStore } from "@store/harnessUsageStore";
+import { StatusLineFormatEditor } from "./StatusLineFormatEditor";
 
 interface Props {
   harnessId: StatusLineTrackingHarnessId;
@@ -28,6 +30,7 @@ interface StatusLineSettingPaths {
   enabled: string;
   customCommand: string;
   useCtrlyokeStyle: string;
+  format: string;
 }
 
 const STATUS_LINE_SETTING_PATHS: Record<
@@ -40,6 +43,7 @@ const STATUS_LINE_SETTING_PATHS: Record<
       SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_CUSTOM_COMMAND,
     useCtrlyokeStyle:
       SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_USE_CTRLYOKE_STYLE,
+    format: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_FORMAT,
   },
   [STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY]: {
     enabled: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_ENABLED,
@@ -47,6 +51,7 @@ const STATUS_LINE_SETTING_PATHS: Record<
       SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_CUSTOM_COMMAND,
     useCtrlyokeStyle:
       SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_USE_CTRLYOKE_STYLE,
+    format: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_FORMAT,
   },
 };
 
@@ -120,6 +125,9 @@ export function StatusLineTrackingControls({ harnessId, settings }: Props) {
   const provider = providerForHarness(harnessId);
   const paths = STATUS_LINE_SETTING_PATHS[provider];
   const tracking = settings.settings.permissions.statusLineTracking[provider];
+  const snapshot = useHarnessUsageStore(
+    (state) => state.snapshotsByHarness[harnessId]
+  );
   const harnessName = HARNESS_INFO[harnessId].name;
   const [isDisableModalOpen, setIsDisableModalOpen] = useState(false);
   const [restoreCustomCommand, setRestoreCustomCommand] = useState(true);
@@ -182,18 +190,25 @@ export function StatusLineTrackingControls({ harnessId, settings }: Props) {
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border font-mono"
         />
       </SettingInputRow>
-      {tracking.customCommand.length > 0 && (
-        <SettingToggleRow
-          label="Use ctrlyoke-style statusline"
-          description="Show ctrlyoke's branded statusline instead of custom-command output."
-          checked={tracking.useCtrlyokeStyle}
-          onChange={(enabled) =>
-            sendGlobalSetting(paths.useCtrlyokeStyle, enabled)
-          }
-          path={paths.useCtrlyokeStyle}
-          sources={settings.sources}
-          onReset={(path) => sendGlobalSetting(path, undefined)}
-          activeScope={SETTING_SCOPES.USER}
+      <SettingToggleRow
+        label="Use ctrlyoke-style statusline"
+        description="Show ctrlyoke's branded statusline. Turn off to show your custom command's output instead — or leave the statusline blank when no custom command is set. Usage tracking keeps collecting data either way."
+        checked={tracking.useCtrlyokeStyle}
+        onChange={(enabled) =>
+          sendGlobalSetting(paths.useCtrlyokeStyle, enabled)
+        }
+        path={paths.useCtrlyokeStyle}
+        sources={settings.sources}
+        onReset={(path) => sendGlobalSetting(path, undefined)}
+        activeScope={SETTING_SCOPES.USER}
+      />
+      {tracking.useCtrlyokeStyle && (
+        <StatusLineFormatEditor
+          format={tracking.format}
+          onCommit={(format) => sendGlobalSetting(paths.format, format)}
+          provider={provider}
+          snapshot={snapshot}
+          percentDirection={settings.settings.usageTracking.percentDirection}
         />
       )}
       <Modal

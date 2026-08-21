@@ -1,6 +1,11 @@
 # Statusline Format Customization Plan
 
-**Related:** [`STATUSLINE_USER_CONTROLS_PLAN.md`](../implemented/STATUSLINE_USER_CONTROLS_PLAN.md)
+> **Status:** Implemented and closed (2026-08-21). Phases 1–6 shipped, including the
+> shared detached-wrapper formatter, segment editor, live preview, and used/remaining
+> percentage direction. Copilot/Qwen statusline support remains an explicitly out-of-scope
+> follow-up.
+
+**Related:** [`STATUSLINE_USER_CONTROLS_PLAN.md`](STATUSLINE_USER_CONTROLS_PLAN.md)
 (implemented — gives users enable/disable, a custom forward command, and the
 `useCtrlyokeStyle` switch this plan builds on top of)
 
@@ -376,43 +381,18 @@ wrapper reuses these conventions without importing across that boundary.
    textarea blur, `AdvancedPermissionsSection.tsx:99-113`). No per-segment message plumbing to
    invent.
 
-11. **Preview must reuse the real formatter, not a second hand-rolled one.** A settings-UI
-    preview line that re-implements field formatting in TSX would drift from the wrapper's actual
-    output the first time either one changes — exactly the duplication this project's CLAUDE.md
-    prohibits ("Never duplicate code that can be single sourced"). The wrapper
-    (`src/scripts/ctrlyoke-statusline-wrapper.js`) is plain CommonJS with zero bundler-resolved
-    imports, by design, so it can run as a detached process outside the extension's module graph
-    (`STATUSLINE_USER_CONTROLS_PLAN.md`'s Wrapper Script Consolidation section already establishes
-    this constraint and that `esbuild.js`'s `copy-scripts` plugin only copies the flat immediate
-    children of `src/scripts/`, not nested folders). Two options, needing a build-time spike
-    before picking one:
-    - **(a)** Extract the pure, side-effect-free formatting functions (`getContextValues`,
-      `getQuotaPercentage`, `formatCompactTokenCount`, `calculateContextPercentage`,
-      `getContextBand`, the new segment-driven `formatBrandedStatusLine`, and — net-new to this
-      extraction scope, per Decisions 4-5 — `CLAUDE_RATE_LIMIT_WINDOWS`,
-      `formatUsageWindowLabel`, `humanizeQuotaKey`, and `quotaWindowKind`) into an isomorphic TS
-      module under `src/utils/`, imported both by the React preview/settings UI and, via a thin
-      CommonJS re-export, by `src/scripts/ctrlyoke-statusline-wrapper.js` **and** by
-      `ClaudeUsageProvider.ts`/`AntigravityUsageProvider.ts`, which already implement these exact
-      functions for `UsageCard.tsx`'s data path. Without this, `usage1`/`usage2` would be a
-      **third** independent reimplementation of window ordering and labeling — the wrapper
-      duplicating logic the extension host already has, purely because of the module-boundary
-      constraint, not because the logic actually differs. Preferred on DRY grounds, but needs
-      verifying the extension-host/webview bundler and the scripts copier both resolve that
-      re-export correctly — the wrapper today has intentionally zero external imports, and this
-      would be the first exception.
-    - **(b)** Push a live-rendered preview string from the extension host (which *can* `require()`
-      the compiled `out/scripts/ctrlyoke-statusline-wrapper.js` directly, no bundler involved) down
-      to the webview on every format edit, instead of rendering in React at all. Simpler
-      dependency story, slightly higher latency per keystroke (mitigated by debouncing, same as
-      any live-typed setting) — but does **not** solve the window-ordering/labeling duplication
-      called out in (a), since the wrapper would still need its own copy of that logic even if the
-      *preview* comes from the extension host. If (b) is chosen for the preview specifically, the
-      window-ordering/labeling extraction from (a) should still happen on its own merits.
-
-    Recommend (a) unless the Phase 1 spike finds a concrete bundler obstacle, since it also
-    benefits any future non-webview consumer (CLI/MCP hosts) that might want to preview a format
-    without spinning up a webview, and it closes the window-labeling duplication either way.
+11. **Preview must reuse the real formatter, not a second hand-rolled one.** The settled
+    implementation is **(a1)**: pure statusline display helpers live in an isomorphic TypeScript
+    module under `src/utils/`, imported by TypeScript consumers and compiled by a dedicated esbuild
+    entry to the flat CommonJS sibling `out/scripts/ctrlyoke-statusline-format.js`. The detached
+    `src/scripts/ctrlyoke-statusline-wrapper.js` requires that sibling, while the webview imports
+    the source module through its existing `@root/utils/*` alias. Phase 1 proves the dependency with
+    `formatUsagePercentForDisplay(usedPercent, direction)`, exercised by the wrapper and the
+    `UsageCard` TypeScript path, plus a packaging test that verifies the emitted artifact and a
+    detached child-process require after a real build. The sequential esbuild rebuild keeps the
+    `copyScriptsPlugin` flat-file copy from racing or clobbering the generated sibling. Options
+    (a2) and (c) were rejected: (a2) cannot serve the webview's TypeScript-only module boundary,
+    while (c) would preserve the duplication that this shared build proves avoidable.
 
 12. **Give statusline configuration its own top-level settings tab ("Status Line"), separate
     from Stats & Usage.** The original design (this plan's earlier draft, and where
@@ -451,6 +431,10 @@ wrapper reuses these conventions without importing across that boundary.
     end) but would add two more `StatusLineTrackingControls` + `StatusLineFormatEditor` provider
     blocks to whichever tab hosts them — a second, independent reason not to grow that content
     further inside Stats & Usage.
+
+    **Implemented:** added the flat top-level "Status Line" settings tab and moved the existing
+    statusline-tracking provider controls into `StatusLineSection`, leaving the statistics and
+    usage controls in `StatsUsageSection`.
 
 13. **Per-segment `color` override, applying to both `field` and `literal` segments** (resolves
     the former "structured color option" Open Question — decided yes, 2026-08-21). A small
@@ -555,7 +539,7 @@ wrapper reuses these conventions without importing across that boundary.
       motivation here. Not built — no `StatusLineFieldId` entry, no OS-username or git-identity
       extraction.
 
-16. **Always show the `useCtrlyokeStyle` toggle in `StatusLineTrackingControls.tsx`, not just when
+16. **[Done] Always show the `useCtrlyokeStyle` toggle in `StatusLineTrackingControls.tsx`, not just when
     `customCommand` is non-empty.** Fixes a real gap, not a cosmetic one: today
     (`StatusLineTrackingControls.tsx:185`) the toggle only renders inside
     `{tracking.customCommand.length > 0 && (...)}`, per `STATUSLINE_USER_CONTROLS_PLAN.md`'s
@@ -579,29 +563,26 @@ wrapper reuses these conventions without importing across that boundary.
     false` with no custom command already prints nothing today, in the one state the UI currently
     prevents a user from reaching.
 
-    **"Nothing printed" as "the harness's own default" — reasonable, but worth a one-line
-    verification, not an assumption.** Since ctrlyoke's wrapper is installed as the harness's
-    entire `statusLine.command` (`STATUSLINE_USER_CONTROLS_PLAN.md`'s "single-statusline
-    harnesses" framing — there is no separate harness-native renderer running underneath), the
-    wrapper printing nothing is the closest thing to "no statusline configured" that's reachable
-    once ctrlyoke owns the command slot; that's a fair reading of "go back to the default status
-    line (not ours)." The one thing not yet independently confirmed is whether either CLI
-    genuinely shows *nothing* when its `statusLine` key is entirely absent, or whether it has some
-    other built-in placeholder that only appears in the fully-unconfigured case and would look
-    different from an installed command emitting empty stdout — worth a quick check against each
-    CLI's own behavior/docs before or during implementation, since it changes what the toggle's
-    description copy should promise.
+    **Verification of the unconfigured CLI states.** Claude Code's official statusline
+    documentation says deleting `statusLine` disables the custom statusline; it does not show a
+    built-in default statusline in that state. Antigravity's official documentation explicitly says
+    deleting its custom statusline configuration restores the built-in default statusline. ctrlyoke
+    does not delete either CLI's `statusLine` block when this toggle is turned off: its wrapper owns
+    the command slot and emits empty stdout when no `customCommand` is set. Therefore the reachable
+    no-command off-state is a blank statusline for both providers, not Antigravity's built-in
+    default. The UI copy promises a blank line rather than a harness default, while usage tracking
+    continues independently.
 
-    **UI changes**: remove the `tracking.customCommand.length > 0 &&` gate around the
+    **Implemented:** remove the `tracking.customCommand.length > 0 &&` gate around the
     `SettingToggleRow` in `StatusLineTrackingControls.tsx` so it always renders. Update its
     description text, which currently reads "Show ctrlyoke's branded statusline instead of
     custom-command output" — accurate only when a custom command exists. Reword to cover both
     reachable off-states and make the data-collection guarantee explicit, e.g.: "Show ctrlyoke's
     branded statusline. Turn off to show your custom command's output instead — or, with no
-    custom command set, the harness's own default statusline. Usage tracking keeps collecting
-    data either way." No settings-shape or wrapper-script change needed beyond the verification
-    above; this is a standalone UI fix that doesn't depend on the tab split (Decision 12) or the
-    format editor and can ship independently of the rest of this plan.
+    custom command set, leave the statusline blank. Usage tracking keeps collecting data either
+    way." No settings-shape or wrapper-script change was needed; this is a standalone UI fix that
+    doesn't depend on the tab split (Decision 12) or the format editor and can ship independently
+    of the rest of the plan.
 
 ## UI Placement
 
@@ -611,12 +592,10 @@ wrapper reuses these conventions without importing across that boundary.
   `StatsUsageSection.tsx:230-238`) plus this plan's new `StatusLineFormatEditor` sub-component,
   rendered directly below the existing `useCtrlyokeStyle` toggle block within each provider's
   `StatusLineTrackingControls` (currently lines 185-198).
-- **Visible only when `tracking.useCtrlyokeStyle === true`** — mirrors the existing pattern one
-  level up, where the `useCtrlyokeStyle` toggle itself is only shown once `customCommand` is
-  non-empty (`StatusLineTrackingControls.tsx:185`): don't show controls for output that isn't
-  currently reaching the terminal. When `customCommand` is empty, `useCtrlyokeStyle` is always
-  effectively `true` (that toggle is hidden, not off), so the format editor is visible in that
-  case too.
+- **Visible only when `tracking.useCtrlyokeStyle === true`**: don't show format controls for
+  output that isn't currently reaching the terminal. The `useCtrlyokeStyle` toggle itself is
+  always visible per Decision 16; when it is off, the wrapper emits the custom command's output,
+  or a blank line when no custom command is configured, while usage collection continues.
 - Per-segment row: a `field` segment shows its label with an include/exclude checkbox, an
   optional custom-label text input (Decision 14, shown only for fields with an internal label
   slot — `usage`/`usage1`/`usage2`/`context` — so the control isn't offered where it would be a
@@ -659,57 +638,75 @@ wrapper reuses these conventions without importing across that boundary.
 - `ConfigurationUtils.getStatusLineTrackingSettings(provider)` needs no change — it already
   returns the whole typed object generically.
 - `schemas/settings-schema.json`'s `usageTracking` definition (currently
-  `enabled`/`providerRefreshEnabled`/`persistObservedUsage`, lines
-  442-465) gains `percentDirection: "used" | "remaining"` (default `"used"`), normal (non-machine)
-  scope. `CtrlYokeSettings.ts`'s `usageTracking` interface and defaults block gain the matching
+  `enabled`/`providerRefreshEnabled`/`persistObservedUsage`/`warningPercentUsed`, starting at line 442) gains `percentDirection: "used" | "remaining"` (default `"used"`), normal (non-machine)
+  scope. Note `usageTracking.enabled` specifically *is* listed in
+  `WORKSPACE_FORBIDDEN_SETTING_ROOTS` (`CtrlYokeConfigService.ts:27-32`) while its siblings are
+  not — `percentDirection` follows the siblings and must **not** be added to that list. `CtrlYokeSettings.ts`'s `usageTracking` interface and defaults block gain the matching
   field; a new `SETTING_PATHS.USAGE_TRACKING_PERCENT_DIRECTION` entry alongside the existing
   `USAGE_TRACKING_ENABLED`.
 
 ## Phases
 
-1. **Spike**: the field-availability research above already confirms every registry field's
+1. **[Done]** Spike: the field-availability research above already confirms every registry field's
    exact payload shape for both providers (no more open questions about `cost`, since it's out
    of the registry entirely) — so this spike narrows to settling the Decision 11(a) vs 11(b)
    build-dependency question with a throwaway bundler test before committing to a preview/shared-
    module architecture. Include `formatUsagePercentForDisplay` (Decision 6) in that spike's scope
    alongside the window-ordering/labeling functions, since it's a candidate for the same
    extraction.
-2. Field registry + segment-driven `formatBrandedStatusLine` rewrite in
-   `ctrlyoke-statusline-wrapper.js`, including the `usage1`/`usage2` extractor (Decisions 4-5), the
-   `percentDirection` read (Decision 6, wrapper side only — resolved the same tolerant way as the
-   rest of `resolveStatusLineSettings`, defaulting to `"used"` on anything malformed), the
-   Decision 3 shared default array, the Decision 7 tolerance rules, the `branch`/`date`/`time`
-   extractors (Decision 15 — `branch` via `.git/HEAD` read with worktree-gitdir-redirect and
-   detached-HEAD handling; `date`/`time` via `new Date()`), and `color`/`label` segment resolution
-   (Decisions 13-14). Extend the existing wrapper test suite (already covers both providers'
-   settings resolution, stdout, failure/timeout, malformed input) with segment-driven cases: empty
-   format, unknown/removed field id, all-literal format, format with only a subset of fields, each
-   new field (`version`/`cwd`/`sessionId`/`branch`/`date`/`time`) rendered correctly for both
-   providers, `branch` specifically covering a plain repo, a worktree
-   (`gitdir:` redirect), a detached HEAD, and a non-repo `cwd`, `usage1`/`usage2` ordering +
-   absence-handling for both the fixed-enum (Claude) and dynamic-tier (Antigravity, including the
-   single-tier case) paths, both `percentDirection` values for `usage`/`usage1`/`usage2`, `color`
-   overriding (and not overriding, when unset) `context`'s band coloring, and `label` substituting
-   a field's internal label slot where one exists and no-oping where one doesn't.
-3. Settings/schema/type plumbing: `format` field, `percentDirection` field, new `SETTING_PATHS`
-   entries, schema definitions, defaults.
-4. `UsageCard.tsx`/`usageBarColor.ts` changes: read `percentDirection` for the displayed
+2. **[Done]** Field registry + segment-driven
+   `formatBrandedStatusLine` rewrite in `ctrlyoke-statusline-wrapper.js`, the `percentDirection`
+   read (Decision 6, wrapper side only), Decision 3's shared default array, Decision 7's tolerance
+   rules, the `version`/`cwd`/`sessionId` extractors, and `color`/`label` segment resolution
+   (Decisions 13-14) are implemented and covered by the wrapper tests. `usage1`/`usage2` now use
+   deterministic fixed-enum or dynamic-tier ordering, shared window labels, absence-aware
+   separators, and the global display direction. The locally-computed `branch`/`date`/`time`
+   fields now render from the workspace filesystem and local clock, with git failures skipped
+   silently as designed by Decision 15.
+3. **[Done]** Settings/schema/type plumbing: `format` field, `percentDirection` field, new
+   `SETTING_PATHS` entries, schema definitions, defaults. The schema leaves
+   `usageTracking.percentDirection`, `permissions.statusLineTracking.claude.format`, and
+   `permissions.statusLineTracking.antigravity.format`; these were temporarily listed in
+   `PENDING_UI_PARITY` in `settingsSchemaUiParity.integration.test.ts`, and the later UI phase
+   removed those entries when the controls landed.
+4. **[Done]** `UsageCard.tsx`/`usageBarColor.ts` changes: read `percentDirection` for the displayed
    quota number/label, while confirming every `getUsageBarColorClass` call site — including
    `WorkflowStep.tsx:388-390`'s unrelated context-bar usage — still receives a used%-oriented
    value regardless of the setting (Decision 6's critical catch). This phase's tests should
    specifically assert the context bar's coloring is unaffected by `percentDirection`.
-5. UI: new "Status Line" settings tab (`ALL_TABS` entry + render switch in
+5. **[Done]** UI: new "Status Line" settings tab (`ALL_TABS` entry + render switch in
    `GlobalSettingsDrawer.tsx`, mirroring how "Stats & Usage" was added — Decision 12) hosting the
-   relocated `StatusLineTrackingControls` blocks; `StatusLineFormatEditor`, live preview (per
-   Phase 1's architecture decision), reset, wired into each provider's `StatusLineTrackingControls`
-   on that new tab; the per-segment color swatch picker (Decision 13) and custom-label input
-   (Decision 14, shown conditionally); the `percentDirection` control stays in
-   `StatsUsageSection.tsx` (Decision 6); focused component tests alongside the existing
-   `StatusLineTrackingControls`/`UsageCard` coverage, plus a test confirming the new tab appears
-   in the settings drawer's tab list.
-6. Update `STATUSLINE_USER_CONTROLS_PLAN.md`'s "UX Risks Found In Review" section, which
-   currently frames "write your own script" as the only escape hatch from ctrlyoke's fixed line
-   — note this plan as the closing answer once shipped.
+   relocated `StatusLineTrackingControls` blocks; the core ordered-array `StatusLineFormatEditor`
+   with field inclusion/exclusion, literal editing, reordering, reset, and whole-array persistence
+   is now wired into each provider's controls on that tab. The per-segment color swatch picker
+   (Decision 13), custom-label input (Decision 14, shown conditionally), and live preview (per
+   Phase 1's architecture decision) are now wired into each provider's editor. The
+   `percentDirection` control stays in `StatsUsageSection.tsx` (Decision 6), with focused
+   component coverage for both editor providers, preview fallback/direction, and setting writes.
+6. **[Done]** Update `STATUSLINE_USER_CONTROLS_PLAN.md`'s "UX Risks Found In Review" section,
+   which previously framed "write your own script" as the only escape hatch from ctrlyoke's
+   fixed line. The closing answer is now shipped: users can keep ctrlyoke's line while shaping
+   its fields, labels, colors, and order; writing a script remains the escape hatch for output
+   outside the structured editor's vocabulary.
+
+## Final review corrections (2026-08-21)
+
+- `usageTracking.percentDirection` remains a normal-scope setting end to end: the Stats & Usage
+  control writes to the drawer's selected user/workspace scope, and the detached wrappers apply
+  default < user < workspace precedence for this leaf only. A ctrlyoke-launched Claude or
+  Antigravity process receives the exact effective workspace root through
+  `CTRLYOKE_STATUSLINE_WORKSPACE_ROOT`; an independently invoked wrapper falls back to searching
+  ancestors of the provider payload's `cwd`. Missing or malformed workspace files are harmless,
+  and workspace files are never consulted for machine-scoped `permissions.statusLineTracking.*`.
+- Usage cards preserve real non-percent quota counts (notably Copilot requests): used mode shows
+  a labeled used count and remaining mode uses the normalized `remaining` count when present;
+  otherwise the canonical used percentage transform is used. Bar width and color always remain
+  based on canonical used percent.
+- Claude's `usage1`/`usage2` slots retain their fixed `five_hour`/`seven_day` identity when the
+  first window is absent; Antigravity's dynamically sorted tiers remain compact. Invalid explicit
+  colors are treated as unset so context's automatic warning/danger coloring still applies.
+- Cached preview payloads retain representative version, cwd, session id, and branch values while
+  replacing only quota data, so opt-in fields do not disappear when a usage snapshot is available.
 
 ## Staging vs. `SETTINGS_UI_PARITY_PLAN.md`
 
@@ -738,7 +735,18 @@ Phase breakdown already intends) avoids needing that at all.
 **Recommended build order, within this plan, independent of the parity plan's own schedule**:
 Decision 16 (always-show `useCtrlyokeStyle`) and Decision 12 (the "Status Line" tab itself) have
 zero dependencies on anything else in this plan — including Phase 1's spike — and can ship as
-standalone changes before the rest: **16 → 12 → Phase 1 spike → 2 → 3 → 4 → 5 → 6.**
+standalone changes before the rest: **16 → 12 → Phase 1 spike → 3 → 2 → 4 → 5 → 6.**
+
+**Phase 3 moves ahead of Phase 2 (revised in the orchestration pass, 2026-08-21).** The phase list
+below is written 2-before-3 (wrapper first, then types/schema), but the wrapper is a *consumer* of
+this plan's new contracts — `StatusLineSegment`, the `StatusLineFieldId` registry, the
+`StatusLineColorId` registry, the shared default array, and `percentDirection` — and those
+contracts have to be single-sourced somewhere before two independent implementations start
+guessing at them. Building the wrapper first means the wrapper's hand-rolled shapes become the de
+facto source of truth and the TS types get retrofitted to match, which is backwards for a codebase
+whose stated rule is that contracts live in `src/types` / `schemas`. Land the type/schema/defaults
+plumbing first, then implement the wrapper against it. Nothing in Phase 3 depends on Phase 2, so
+this reorder costs nothing.
 
 ## Follow-up: extend statusline tracking to Copilot and Qwen (not in this plan's scope)
 

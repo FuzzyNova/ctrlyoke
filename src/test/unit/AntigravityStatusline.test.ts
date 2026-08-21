@@ -105,7 +105,8 @@ suite("Antigravity statusline script", () => {
 
     assert.match(line, /ctrlyoke ⚡ gemini-test/);
     assert.match(line, /12\.4k\/1\.0M ctx \(1\.2%\)/);
-    assert.match(line, /quota 98% · idle/);
+    assert.match(line, /quota 2%/);
+    assert.doesNotMatch(line, /idle/);
     assert.match(line, /\u001b\[36m/);
   });
 
@@ -115,7 +116,7 @@ suite("Antigravity statusline script", () => {
     assert.deepStrictEqual(statusline.parsePayload("[]"), {});
     assert.match(
       statusline.formatBrandedStatusLine(statusline.parsePayload("")),
-      /^ctrlyoke ⚡ unknown-model · .* · quota — · unknown$/
+      /^ctrlyoke ⚡ unknown-model · .* · quota —$/
     );
   });
 });

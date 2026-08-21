@@ -9,6 +9,7 @@ import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
 import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
 import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
+import { DEFAULT_STATUS_LINE_FORMAT } from "../../utils/StatuslineFormat";
 
 function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
   return {
@@ -131,6 +132,7 @@ suite("AntigravityCliProvider", () => {
     const directory = env.CTRLYOKE_AGY_STATUSLINE_DIR;
     assert.ok(token);
     assert.ok(directory);
+    assert.strictEqual(env.CTRLYOKE_STATUSLINE_WORKSPACE_ROOT, workspaceRoot);
 
     const snapshotPath = path.join(directory, `agy-statusline-${token}.json`);
     await fs.mkdir(directory, { recursive: true });
@@ -430,6 +432,7 @@ suite("AntigravityCliProvider", () => {
         enabled: true,
         customCommand: "",
         useCtrlyokeStyle: true,
+        format: DEFAULT_STATUS_LINE_FORMAT,
       }
     );
   });

@@ -9,6 +9,7 @@ import {
   HARNESS_IDS,
   HARNESS_INFO,
   MESSAGE_TYPES,
+  SETTING_PATHS,
   SETTING_SCOPES,
 } from "@root/types/DashboardConstants";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
@@ -54,7 +55,9 @@ describe("StatsUsageSection", () => {
       },
     ]);
 
-    render(<StatsUsageSection hideCost={false} />);
+    render(
+      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+    );
 
     expect(screen.getByText("Workspace statistics")).toBeInTheDocument();
     expect(screen.getByText("This workspace only")).toBeInTheDocument();
@@ -86,7 +89,9 @@ describe("StatsUsageSection", () => {
 
   it("refreshes harness usage from the page button", async () => {
     const user = userEvent.setup();
-    render(<StatsUsageSection hideCost={true} />);
+    render(
+      <StatsUsageSection hideCost={true} activeScope={SETTING_SCOPES.USER} />
+    );
 
     vi.mocked(getVsCodeApi().postMessage).mockClear();
     await user.click(screen.getByRole("button", { name: "Refresh" }));
@@ -118,7 +123,9 @@ describe("StatsUsageSection", () => {
       },
     ]);
 
-    render(<StatsUsageSection hideCost={false} />);
+    render(
+      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+    );
 
     expect(screen.getByText("1.5k tokens")).toBeInTheDocument();
   });
@@ -240,5 +247,35 @@ describe("StatsUsageSection", () => {
     expect(
       screen.getByRole("checkbox", { name: /^Persist observed usage/ })
     ).toBeDisabled();
+  });
+
+  it("does not render statusline tracking controls", () => {
+    render(
+      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+    );
+
+    expect(screen.queryByText("Statusline Tracking")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "Custom statusline command" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("writes the global percent direction setting at the active scope", async () => {
+    const user = userEvent.setup();
+    render(
+      <StatsUsageSection
+        hideCost={false}
+        activeScope={SETTING_SCOPES.WORKSPACE}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Remaining" }));
+
+    expect(getVsCodeApi().postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+      path: SETTING_PATHS.USAGE_TRACKING_PERCENT_DIRECTION,
+      value: "remaining",
+      scope: SETTING_SCOPES.WORKSPACE,
+    });
   });
 });

@@ -108,6 +108,7 @@ export class ClaudeCliProvider implements ICliProvider {
   private readonly statusLineSnapshotPaths = new Set<string>();
   private statusLineToken: string | undefined;
   private statusLineDirectory: string | undefined;
+  private statusLineWorkspaceRoot: string | undefined;
   private statusLineEnabledForPrompt = false;
   private statusLineSidecar: ClaudeStatuslineSidecar | undefined;
   private statuslineInstallResult: StatuslineInstallResult | undefined;
@@ -401,6 +402,7 @@ export class ClaudeCliProvider implements ICliProvider {
             this.statusLineSidecar = undefined;
             this.statusLineToken = statusLineToken;
             this.statusLineDirectory = undefined;
+            this.statusLineWorkspaceRoot = undefined;
             this.statusLineEnabledForPrompt = false;
             this.statuslineInstallResult = undefined;
             if (
@@ -942,6 +944,7 @@ export class ClaudeCliProvider implements ICliProvider {
         command
       );
       this.statusLineDirectory = snapshotDirectory;
+      this.statusLineWorkspaceRoot = workspaceRoot;
       this.statusLineEnabledForPrompt = true;
       return result;
     } catch (error) {
@@ -962,6 +965,9 @@ export class ClaudeCliProvider implements ICliProvider {
     const env: NodeJS.ProcessEnv = {
       CTRLYOKE_CLAUDE_STATUSLINE_TOKEN: this.statusLineToken,
       CTRLYOKE_CLAUDE_STATUSLINE_DIR: this.statusLineDirectory,
+      ...(this.statusLineWorkspaceRoot
+        ? { CTRLYOKE_STATUSLINE_WORKSPACE_ROOT: this.statusLineWorkspaceRoot }
+        : {}),
     };
     return env;
   }

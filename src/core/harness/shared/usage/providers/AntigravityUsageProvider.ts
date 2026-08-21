@@ -4,12 +4,15 @@ import {
   HARNESS_USAGE_CONFIDENCE,
   HARNESS_USAGE_FRESHNESS_MS,
   HARNESS_USAGE_UNITS,
-  HARNESS_USAGE_WINDOW_KINDS,
 } from "../../../../../types/DashboardConstants";
 import type {
   HarnessQuotaSnapshot,
   HarnessUsageWindow,
 } from "../../../../../types/UsageTypes";
+import {
+  humanizeQuotaKey,
+  quotaWindowKind,
+} from "../../../../../utils/StatuslineFormat";
 import { normalizeUsageTimestamp } from "../UsageTimestampUtils";
 import type { IHarnessUsageProvider } from "../IHarnessUsageProvider";
 
@@ -38,37 +41,6 @@ function asFiniteNumber(value: unknown): number | undefined {
     return Number.isFinite(parsed) ? parsed : undefined;
   }
   return undefined;
-}
-
-function humanizeQuotaKey(key: string): string {
-  return key
-    .split(/[-_\s]+/u)
-    .filter((part) => part.length > 0)
-    .map((part) => {
-      const lower = part.toLowerCase();
-      if (/^\d+p$/u.test(lower)) {
-        return `${lower.slice(0, -1)}P`;
-      }
-      return `${lower.slice(0, 1).toUpperCase()}${lower.slice(1)}`;
-    })
-    .join(" ");
-}
-
-function quotaWindowKind(key: string): HarnessUsageWindow["kind"] {
-  const normalized = key.toLowerCase();
-  if (normalized.includes("weekly")) {
-    return HARNESS_USAGE_WINDOW_KINDS.WEEKLY;
-  }
-  if (normalized.includes("daily")) {
-    return HARNESS_USAGE_WINDOW_KINDS.DAILY;
-  }
-  if (normalized.includes("monthly")) {
-    return HARNESS_USAGE_WINDOW_KINDS.MONTHLY;
-  }
-  if (normalized.includes("rolling") || normalized.includes("hour")) {
-    return HARNESS_USAGE_WINDOW_KINDS.ROLLING;
-  }
-  return HARNESS_USAGE_WINDOW_KINDS.UNKNOWN;
 }
 
 /** Parse dynamic Antigravity plan tiers into the normalized live quota contract. */

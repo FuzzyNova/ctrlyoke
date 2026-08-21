@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StatusLineTrackingControls } from "@components/settings/stats/StatusLineTrackingControls";
-import { StatsUsageSection } from "@components/settings/stats/StatsUsageSection";
+import { StatusLineSection } from "@components/settings/StatusLineSection";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import {
   HARNESS_IDS,
@@ -14,6 +14,10 @@ import {
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import type { StatusLineTrackingHarnessId } from "@root/types/DashboardConstants";
+import {
+  DEFAULT_STATUS_LINE_FORMAT,
+  STATUS_LINE_FIELD_IDS,
+} from "@root/utils/StatuslineFormat";
 
 function makeSettings(
   harnessId: StatusLineTrackingHarnessId,
@@ -123,6 +127,11 @@ describe("StatusLineTrackingControls", () => {
     const input = screen.getByRole("textbox", {
       name: "Custom statusline command",
     });
+    expect(
+      screen.getByRole("checkbox", {
+        name: /^Use ctrlyoke-style statusline/,
+      })
+    ).toBeInTheDocument();
     await user.clear(input);
     await user.type(input, "node agy-line.js --compact");
     await user.tab();
@@ -146,7 +155,7 @@ describe("StatusLineTrackingControls", () => {
     });
   });
 
-  it("hides the style toggle when no custom command is configured", () => {
+  it("shows the style toggle when no custom command is configured", () => {
     render(
       <StatusLineTrackingControls
         harnessId={HARNESS_IDS.CLAUDE_CLI}
@@ -155,10 +164,61 @@ describe("StatusLineTrackingControls", () => {
     );
 
     expect(
-      screen.queryByRole("checkbox", {
+      screen.getByRole("checkbox", {
         name: /^Use ctrlyoke-style statusline/,
       })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Show ctrlyoke's branded statusline. Turn off to show your custom command's output instead — or leave the statusline blank when no custom command is set. Usage tracking keeps collecting data either way."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Status line format" })
+    ).toBeInTheDocument();
+  });
+
+  it("hides the format editor when ctrlyoke-style output is disabled", () => {
+    render(
+      <StatusLineTrackingControls
+        harnessId={HARNESS_IDS.CLAUDE_CLI}
+        settings={makeSettings(HARNESS_IDS.CLAUDE_CLI, {
+          customCommand: "claude-line.js",
+          useCtrlyokeStyle: false,
+        })}
+      />
+    );
+
+    expect(
+      screen.queryByRole("region", { name: "Status line format" })
     ).not.toBeInTheDocument();
+  });
+
+  it("persists an editor field edit as one whole-array user setting update", async () => {
+    const user = userEvent.setup();
+    render(
+      <StatusLineTrackingControls
+        harnessId={HARNESS_IDS.CLAUDE_CLI}
+        settings={makeSettings(HARNESS_IDS.CLAUDE_CLI)}
+      />
+    );
+
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: "Include Harness/CLI version",
+      })
+    );
+
+    expect(getVsCodeApi().postMessage).toHaveBeenCalledTimes(1);
+    expect(getVsCodeApi().postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+      path: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_FORMAT,
+      value: [
+        ...DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
+        { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
+      ],
+      scope: SETTING_SCOPES.USER,
+    });
   });
 
   it("opens the modal from disable, cancels without sending a message, and defaults restore on reopen", async () => {
@@ -274,9 +334,9 @@ describe("StatusLineTrackingControls", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders controls only for the two statusline harnesses in the stats section", () => {
+  it("renders controls only for the two statusline harnesses in the status line section", () => {
     const settings = makeSettings(HARNESS_IDS.CLAUDE_CLI);
-    render(<StatsUsageSection hideCost={false} settings={settings} />);
+    render(<StatusLineSection settings={settings} />);
 
     expect(
       screen.getAllByRole("textbox", { name: "Custom statusline command" })

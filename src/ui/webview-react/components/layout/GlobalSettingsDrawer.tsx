@@ -24,6 +24,7 @@ import {
   McpManagerSection,
   CommitSection,
   SecretsSection,
+  StatusLineSection,
 } from "../settings";
 import { StatsUsageSection } from "../settings/stats/StatsUsageSection";
 import { ExitButton, ScopeToggle } from "../shared";
@@ -47,6 +48,7 @@ const ALL_TABS = [
   { id: "mcpmanager", label: "MCP Manager", icon: "codicon-mcp" },
   { id: "commit", label: "Commit Message", icon: "codicon-git-commit" },
   { id: "stats", label: "Stats & Usage", icon: "codicon-graph" },
+  { id: "statusline", label: "Status Line", icon: "codicon-list-flat" },
   { id: "developer", label: "Developer", icon: "codicon-tools" },
 ];
 
@@ -230,6 +232,9 @@ export function GlobalSettingsDrawer() {
                   settings={fullSettings}
                   {...sectionProps}
                 />
+              )}
+              {fullSettings && effectiveActiveTab === "statusline" && (
+                <StatusLineSection settings={fullSettings} />
               )}
               {fullSettings && effectiveActiveTab === "permissions" && (
                 <AdvancedPermissionsSection

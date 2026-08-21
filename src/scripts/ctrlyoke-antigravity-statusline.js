@@ -30,7 +30,14 @@ function writeSnapshot(directory, token, payload, writtenAt) {
 
 async function runStatusline(input, env = process.env) {
   const payload = parsePayload(input);
-  const settings = resolveStatusLineSettings(STATUSLINE_PROVIDERS.ANTIGRAVITY);
+  const settings = resolveStatusLineSettings(
+    STATUSLINE_PROVIDERS.ANTIGRAVITY,
+    undefined,
+    {
+      payload,
+      workspaceRoot: env.CTRLYOKE_STATUSLINE_WORKSPACE_ROOT,
+    }
+  );
   if (settings.enabled) {
     writeSnapshotAtomic(
       env.CTRLYOKE_AGY_STATUSLINE_DIR,
@@ -48,7 +55,12 @@ async function runStatusline(input, env = process.env) {
   );
   if (settings.enabled && settings.useCtrlyokeStyle) {
     writeStdoutSafely(
-      formatBrandedStatusLine(STATUSLINE_PROVIDERS.ANTIGRAVITY, payload)
+      formatBrandedStatusLine(
+        STATUSLINE_PROVIDERS.ANTIGRAVITY,
+        payload,
+        settings.format,
+        settings.percentDirection
+      )
     );
     return;
   }
