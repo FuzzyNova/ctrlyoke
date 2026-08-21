@@ -1093,13 +1093,18 @@ export const SETTING_PATHS = {
     "permissions.statusLineTracking.claude.customCommand",
   PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_USE_CTRLYOKE_STYLE:
     "permissions.statusLineTracking.claude.useCtrlyokeStyle",
+  PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_FORMAT:
+    "permissions.statusLineTracking.claude.format",
   PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_ENABLED:
     "permissions.statusLineTracking.antigravity.enabled",
   PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_CUSTOM_COMMAND:
     "permissions.statusLineTracking.antigravity.customCommand",
   PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_USE_CTRLYOKE_STYLE:
     "permissions.statusLineTracking.antigravity.useCtrlyokeStyle",
+  PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_FORMAT:
+    "permissions.statusLineTracking.antigravity.format",
   USAGE_TRACKING_ENABLED: "usageTracking.enabled",
+  USAGE_TRACKING_PERCENT_DIRECTION: "usageTracking.percentDirection",
 } as const;
 
 // ============================================================================

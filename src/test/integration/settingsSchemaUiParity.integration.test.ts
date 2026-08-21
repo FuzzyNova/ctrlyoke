@@ -174,6 +174,11 @@ const PENDING_UI_PARITY: readonly string[] = [
   "usageTracking.persistObservedUsage",
   "usageTracking.providerRefreshEnabled",
   "usageTracking.warningPercentUsed",
+  // Temporary Phase 3 gaps; remove when the format editor and direction control
+  // land per dev/backlog/STATUSLINE_FORMAT_CUSTOMIZATION_PLAN.md.
+  "usageTracking.percentDirection",
+  "permissions.statusLineTracking.claude.format",
+  "permissions.statusLineTracking.antigravity.format",
 ];
 
 const WEBVIEW_TEST_DIRECTORIES = new Set(["test", "__tests__"]);

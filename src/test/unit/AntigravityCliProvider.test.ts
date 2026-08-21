@@ -9,6 +9,7 @@ import type { ConfigBackend } from "../../config/CtrlYokeConfigService";
 import { AntigravityCliProvider } from "../../core/harness/antigravity/AntigravityCliProvider";
 import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
 import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
+import { DEFAULT_STATUS_LINE_FORMAT } from "../../utils/StatuslineFormat";
 
 function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
   return {
@@ -430,6 +431,7 @@ suite("AntigravityCliProvider", () => {
         enabled: true,
         customCommand: "",
         useCtrlyokeStyle: true,
+        format: DEFAULT_STATUS_LINE_FORMAT,
       }
     );
   });

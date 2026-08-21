@@ -460,6 +460,12 @@
           "type": "number",
           "minimum": 0,
           "maximum": 100
+        },
+        "percentDirection": {
+          "type": "string",
+          "enum": ["used", "remaining"],
+          "default": "used",
+          "description": "Whether quota percentages are displayed as used or remaining."
         }
       }
     },
@@ -895,6 +901,76 @@
           "type": "boolean",
           "default": true,
           "description": "Show ctrlyoke's branded statusline instead of custom-command output."
+        },
+        "format": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["type", "field"],
+                "properties": {
+                  "type": { "const": "field" },
+                  "field": {
+                    "type": "string",
+                    "enum": [
+                      "brand",
+                      "model",
+                      "context",
+                      "usage",
+                      "usage1",
+                      "usage2",
+                      "version",
+                      "cwd",
+                      "sessionId",
+                      "branch",
+                      "date",
+                      "time"
+                    ]
+                  },
+                  "label": { "type": "string", "maxLength": 64 },
+                  "color": {
+                    "type": "string",
+                    "enum": [
+                      "default",
+                      "red",
+                      "yellow",
+                      "green",
+                      "cyan",
+                      "blue",
+                      "magenta",
+                      "white",
+                      "gray"
+                    ]
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["type", "text"],
+                "properties": {
+                  "type": { "const": "literal" },
+                  "text": { "type": "string", "maxLength": 64 },
+                  "color": {
+                    "type": "string",
+                    "enum": [
+                      "default",
+                      "red",
+                      "yellow",
+                      "green",
+                      "cyan",
+                      "blue",
+                      "magenta",
+                      "white",
+                      "gray"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
         }
       }
     }

@@ -635,8 +635,7 @@ wrapper reuses these conventions without importing across that boundary.
 - `ConfigurationUtils.getStatusLineTrackingSettings(provider)` needs no change — it already
   returns the whole typed object generically.
 - `schemas/settings-schema.json`'s `usageTracking` definition (currently
-  `enabled`/`providerRefreshEnabled`/`persistObservedUsage`/`warningPercentUsed`, starting at line
-  442) gains `percentDirection: "used" | "remaining"` (default `"used"`), normal (non-machine)
+  `enabled`/`providerRefreshEnabled`/`persistObservedUsage`/`warningPercentUsed`, starting at line 442) gains `percentDirection: "used" | "remaining"` (default `"used"`), normal (non-machine)
   scope. Note `usageTracking.enabled` specifically *is* listed in
   `WORKSPACE_FORBIDDEN_SETTING_ROOTS` (`CtrlYokeConfigService.ts:27-32`) while its siblings are
   not — `percentDirection` follows the siblings and must **not** be added to that list. `CtrlYokeSettings.ts`'s `usageTracking` interface and defaults block gain the matching
@@ -669,8 +668,12 @@ wrapper reuses these conventions without importing across that boundary.
    single-tier case) paths, both `percentDirection` values for `usage`/`usage1`/`usage2`, `color`
    overriding (and not overriding, when unset) `context`'s band coloring, and `label` substituting
    a field's internal label slot where one exists and no-oping where one doesn't.
-3. Settings/schema/type plumbing: `format` field, `percentDirection` field, new `SETTING_PATHS`
-   entries, schema definitions, defaults.
+3. **[Done]** Settings/schema/type plumbing: `format` field, `percentDirection` field, new
+   `SETTING_PATHS` entries, schema definitions, defaults. The schema leaves
+   `usageTracking.percentDirection`, `permissions.statusLineTracking.claude.format`, and
+   `permissions.statusLineTracking.antigravity.format` are temporarily listed in
+   `PENDING_UI_PARITY` in `settingsSchemaUiParity.integration.test.ts`; later UI steps must
+   remove those entries when their controls land.
 4. `UsageCard.tsx`/`usageBarColor.ts` changes: read `percentDirection` for the displayed
    quota number/label, while confirming every `getUsageBarColorClass` call site — including
    `WorkflowStep.tsx:388-390`'s unrelated context-bar usage — still receives a used%-oriented

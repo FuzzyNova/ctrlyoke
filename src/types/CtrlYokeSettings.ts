@@ -29,6 +29,11 @@ import type {
   UserHookConfig,
   WorktreeDefaultConfig,
 } from "./CtrlYokeTypes";
+import {
+  DEFAULT_STATUS_LINE_FORMAT,
+  type StatusLineSegment,
+  type UsagePercentDirection,
+} from "../utils/StatuslineFormat";
 
 export type { WorktreeDefaultConfig } from "./CtrlYokeTypes";
 
@@ -53,6 +58,7 @@ export interface StatusLineTrackingSettings {
   customCommand: string;
   /** Whether ctrlyoke's own branded line wins over custom command output. */
   useCtrlyokeStyle: boolean;
+  format: StatusLineSegment[];
 }
 
 export interface CtrlYokeGlobalSettings {
@@ -138,6 +144,7 @@ export interface CtrlYokeGlobalSettings {
     providerRefreshEnabled: boolean;
     persistObservedUsage: boolean;
     warningPercentUsed: number;
+    percentDirection: UsagePercentDirection;
   };
 
   /** Explicit price overrides for models absent from the bundled table. */
@@ -379,11 +386,13 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
         enabled: true,
         customCommand: "",
         useCtrlyokeStyle: true,
+        format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
       },
       [STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY]: {
         enabled: true,
         customCommand: "",
         useCtrlyokeStyle: true,
+        format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
       },
     },
     allowedExternalFileRoots: [],
@@ -394,6 +403,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     providerRefreshEnabled: true,
     persistObservedUsage: true,
     warningPercentUsed: 80,
+    percentDirection: "used",
   },
   modelPricing: {},
   execution: {
