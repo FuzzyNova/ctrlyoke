@@ -689,6 +689,25 @@ wrapper reuses these conventions without importing across that boundary.
    its fields, labels, colors, and order; writing a script remains the escape hatch for output
    outside the structured editor's vocabulary.
 
+## Final review corrections (2026-08-21)
+
+- `usageTracking.percentDirection` remains a normal-scope setting end to end: the Stats & Usage
+  control writes to the drawer's selected user/workspace scope, and the detached wrappers apply
+  default < user < workspace precedence for this leaf only. A ctrlyoke-launched Claude or
+  Antigravity process receives the exact effective workspace root through
+  `CTRLYOKE_STATUSLINE_WORKSPACE_ROOT`; an independently invoked wrapper falls back to searching
+  ancestors of the provider payload's `cwd`. Missing or malformed workspace files are harmless,
+  and workspace files are never consulted for machine-scoped `permissions.statusLineTracking.*`.
+- Usage cards preserve real non-percent quota counts (notably Copilot requests): used mode shows
+  a labeled used count and remaining mode uses the normalized `remaining` count when present;
+  otherwise the canonical used percentage transform is used. Bar width and color always remain
+  based on canonical used percent.
+- Claude's `usage1`/`usage2` slots retain their fixed `five_hour`/`seven_day` identity when the
+  first window is absent; Antigravity's dynamically sorted tiers remain compact. Invalid explicit
+  colors are treated as unset so context's automatic warning/danger coloring still applies.
+- Cached preview payloads retain representative version, cwd, session id, and branch values while
+  replacing only quota data, so opt-in fields do not disappear when a usage snapshot is available.
+
 ## Staging vs. `SETTINGS_UI_PARITY_PLAN.md`
 
 **No strict dependency either direction — the two plans can be worked in parallel, or in either

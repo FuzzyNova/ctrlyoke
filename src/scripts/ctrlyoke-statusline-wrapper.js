@@ -49,25 +49,74 @@ const CONTEXT_COLORS = Object.freeze({
 
 let snapshotSequence = 0;
 
-/**
- * Read the machine-scoped settings directly for every wrapper invocation.
- * This script is installed into global harness settings and can therefore be
- * launched without a ctrlyoke parent process or with an old parent
- * environment. Missing, malformed, and partial settings remain harmless.
- */
-function resolveStatusLineSettings(provider, homeDirectory = os.homedir()) {
-  let parsed;
+function readSettingsFile(settingsPath) {
   try {
-    const settingsPath = path.join(homeDirectory, ".ctrlyoke", "settings.json");
-    parsed = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+    const parsed = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+    return {
+      found: true,
+      settings:
+        parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? parsed
+          : {},
+    };
   } catch {
-    parsed = undefined;
+    return { found: false, settings: {} };
+  }
+}
+
+function readWorkspaceSettings(workspaceRoot) {
+  if (typeof workspaceRoot !== "string" || workspaceRoot.trim().length === 0) {
+    return {};
   }
 
-  const settings =
-    parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed
-      : {};
+  const settingsPath = path.join(workspaceRoot, ".ctrlyoke", "settings.json");
+  return readSettingsFile(settingsPath).settings;
+}
+
+/**
+ * Find a workspace settings file from a provider payload's cwd. This is only
+ * a fallback for statusline invocations outside a ctrlyoke-launched process;
+ * launched processes provide the exact effective root through the environment
+ * handoff below. Walking ancestors lets a harness payload cwd be a project
+ * subdirectory without mistaking it for the configured ctrlyoke root.
+ */
+function findWorkspaceSettingsFromCwd(cwd) {
+  if (typeof cwd !== "string" || cwd.trim().length === 0) {
+    return {};
+  }
+
+  let current = path.resolve(cwd);
+  while (true) {
+    const result = readSettingsFile(
+      path.join(current, ".ctrlyoke", "settings.json")
+    );
+    if (result.found) return result.settings;
+    const parent = path.dirname(current);
+    if (parent === current) return {};
+    current = parent;
+  }
+}
+
+/**
+ * Read settings directly for every wrapper invocation. Provider statusline
+ * settings remain user/machine scoped. The one normal-scope leaf,
+ * usageTracking.percentDirection, is additionally read from the effective
+ * workspace file when a launched process hands us its configured root; an
+ * external invocation falls back to the payload cwd ancestor search.
+ */
+function resolveStatusLineSettings(
+  provider,
+  homeDirectory = os.homedir(),
+  context = {}
+) {
+  const userSettings = readSettingsFile(
+    path.join(homeDirectory, ".ctrlyoke", "settings.json")
+  ).settings;
+  const workspaceSettings =
+    typeof context.workspaceRoot === "string"
+      ? readWorkspaceSettings(context.workspaceRoot)
+      : findWorkspaceSettingsFromCwd(context.payload?.cwd);
+  const settings = userSettings;
   const permissions = settings.permissions;
   const tracking =
     permissions &&
@@ -79,15 +128,17 @@ function resolveStatusLineSettings(provider, homeDirectory = os.homedir()) {
     tracking && typeof tracking === "object" && !Array.isArray(tracking)
       ? tracking[provider]
       : undefined;
-  const usageTracking = settings.usageTracking;
+  const userUsageTracking = settings.usageTracking;
+  const workspaceUsageTracking = workspaceSettings.usageTracking;
   const percentDirection =
-    usageTracking &&
-    typeof usageTracking === "object" &&
-    !Array.isArray(usageTracking) &&
-    (usageTracking.percentDirection === "used" ||
-      usageTracking.percentDirection === "remaining")
-      ? usageTracking.percentDirection
-      : DEFAULT_PERCENT_DIRECTION;
+    [workspaceUsageTracking, userUsageTracking].find(
+      (usageTracking) =>
+        usageTracking &&
+        typeof usageTracking === "object" &&
+        !Array.isArray(usageTracking) &&
+        (usageTracking.percentDirection === "used" ||
+          usageTracking.percentDirection === "remaining")
+    )?.percentDirection ?? DEFAULT_PERCENT_DIRECTION;
 
   const defaults = {
     ...DEFAULT_STATUSLINE_SETTINGS,

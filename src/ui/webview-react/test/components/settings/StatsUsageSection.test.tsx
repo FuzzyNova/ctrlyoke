@@ -37,7 +37,9 @@ describe("StatsUsageSection", () => {
       },
     ]);
 
-    render(<StatsUsageSection hideCost={false} />);
+    render(
+      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+    );
 
     expect(screen.getByText("Workspace statistics")).toBeInTheDocument();
     expect(screen.getByText("This workspace only")).toBeInTheDocument();
@@ -69,7 +71,9 @@ describe("StatsUsageSection", () => {
 
   it("refreshes harness usage from the page button", async () => {
     const user = userEvent.setup();
-    render(<StatsUsageSection hideCost={true} />);
+    render(
+      <StatsUsageSection hideCost={true} activeScope={SETTING_SCOPES.USER} />
+    );
 
     vi.mocked(getVsCodeApi().postMessage).mockClear();
     await user.click(screen.getByRole("button", { name: "Refresh" }));
@@ -101,13 +105,17 @@ describe("StatsUsageSection", () => {
       },
     ]);
 
-    render(<StatsUsageSection hideCost={false} />);
+    render(
+      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+    );
 
     expect(screen.getByText("1.5k tokens")).toBeInTheDocument();
   });
 
   it("does not render statusline tracking controls", () => {
-    render(<StatsUsageSection hideCost={false} />);
+    render(
+      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+    );
 
     expect(screen.queryByText("Statusline Tracking")).not.toBeInTheDocument();
     expect(
@@ -115,9 +123,14 @@ describe("StatsUsageSection", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("writes the global percent direction setting at user scope", async () => {
+  it("writes the global percent direction setting at the active scope", async () => {
     const user = userEvent.setup();
-    render(<StatsUsageSection hideCost={false} />);
+    render(
+      <StatsUsageSection
+        hideCost={false}
+        activeScope={SETTING_SCOPES.WORKSPACE}
+      />
+    );
 
     await user.click(screen.getByRole("button", { name: "Remaining" }));
 
@@ -125,7 +138,7 @@ describe("StatsUsageSection", () => {
       type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
       path: SETTING_PATHS.USAGE_TRACKING_PERCENT_DIRECTION,
       value: "remaining",
-      scope: SETTING_SCOPES.USER,
+      scope: SETTING_SCOPES.WORKSPACE,
     });
   });
 });

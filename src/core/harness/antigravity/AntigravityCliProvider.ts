@@ -149,6 +149,8 @@ export class AntigravityCliProvider implements ICliProvider {
   private readonly statusLineSnapshotPaths = new Set<string>();
   /** Workspace temp directory for the current statusline invocation. */
   private statusLineDirectory: string | undefined;
+  /** Effective ctrlyoke root for workspace-scoped statusline settings. */
+  private statusLineWorkspaceRoot: string | undefined;
   /** Whether the current prompt successfully acquired the statusline lease. */
   private statusLineEnabledForPrompt = false;
   /** Sidecar for the current prompt, retained for final snapshot consumers. */
@@ -282,6 +284,7 @@ export class AntigravityCliProvider implements ICliProvider {
           apply: async () => {
             this.statusLineToken = statusLineToken;
             this.statusLineDirectory = undefined;
+            this.statusLineWorkspaceRoot = undefined;
             this.statusLineEnabledForPrompt = false;
             this.statuslineInstallResult = undefined;
             this.statusLineSidecar = undefined;
@@ -842,6 +845,7 @@ export class AntigravityCliProvider implements ICliProvider {
         command
       );
       this.statusLineDirectory = snapshotDirectory;
+      this.statusLineWorkspaceRoot = workspaceRoot;
       this.statusLineEnabledForPrompt = true;
       return result;
     } catch (error) {
@@ -864,6 +868,9 @@ export class AntigravityCliProvider implements ICliProvider {
     const env: NodeJS.ProcessEnv = {
       CTRLYOKE_AGY_STATUSLINE_TOKEN: this.statusLineToken,
       CTRLYOKE_AGY_STATUSLINE_DIR: this.statusLineDirectory,
+      ...(this.statusLineWorkspaceRoot
+        ? { CTRLYOKE_STATUSLINE_WORKSPACE_ROOT: this.statusLineWorkspaceRoot }
+        : {}),
     };
     return env;
   }

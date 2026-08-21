@@ -229,6 +229,7 @@ export function GlobalSettingsDrawer() {
                 <StatsUsageSection
                   hideCost={fullSettings.settings.ui.hideCost}
                   isNarrow={isNarrow}
+                  activeScope={activeScope}
                 />
               )}
               {fullSettings && effectiveActiveTab === "statusline" && (

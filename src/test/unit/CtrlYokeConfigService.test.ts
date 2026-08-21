@@ -127,6 +127,20 @@ suite("CtrlYokeConfigService", () => {
     assert.strictEqual(service.get("defaults").harness, "codex-cli");
   });
 
+  test("allows workspace overrides for the normal-scope percent direction", () => {
+    service.setUserBackend(
+      makeBackend({ usageTracking: { percentDirection: "used" } })
+    );
+    service.setWorkspaceBackend(
+      makeBackend({ usageTracking: { percentDirection: "remaining" } })
+    );
+
+    assert.strictEqual(
+      service.get("usageTracking").percentDirection,
+      "remaining"
+    );
+  });
+
   test("CLI overlay overrides workspace backend", () => {
     service.setUserBackend(
       makeBackend({ defaults: { harness: "claude-cli" } })

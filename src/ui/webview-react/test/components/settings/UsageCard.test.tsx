@@ -14,7 +14,11 @@ import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { UsagePercentDirection } from "@root/utils/StatuslineFormat";
 import { useSettingsStore } from "@store/settingsStore";
 
-function makeSnapshot(harnessId: HarnessId): HarnessUsageSnapshot {
+function makeSnapshot(
+  harnessId: HarnessId,
+  unit: (typeof HARNESS_USAGE_UNITS)[keyof typeof HARNESS_USAGE_UNITS] = HARNESS_USAGE_UNITS.PERCENT
+): HarnessUsageSnapshot {
+  const isPercent = unit === HARNESS_USAGE_UNITS.PERCENT;
   return {
     harnessId,
     updatedAt: Date.now(),
@@ -27,11 +31,11 @@ function makeSnapshot(harnessId: HarnessId): HarnessUsageSnapshot {
           id: "weekly",
           kind: HARNESS_USAGE_WINDOW_KINDS.WEEKLY,
           label: "week",
-          used: 75,
-          limit: 100,
-          remaining: 25,
+          used: isPercent ? 75 : 555,
+          limit: isPercent ? 100 : 1_500,
+          remaining: isPercent ? 25 : 945,
           percentUsed: 75,
-          unit: HARNESS_USAGE_UNITS.PERCENT,
+          unit,
           confidence: HARNESS_USAGE_CONFIDENCE.EXACT,
         },
       ],
@@ -61,36 +65,69 @@ describe("UsageCard percent direction", () => {
     setPercentDirection("used");
   });
 
-  it.each(Object.values(HARNESS_IDS) as HarnessId[])(
-    "labels %s quota percentages as used by default",
-    (harnessId) => {
-      const { container } = render(
-        <UsageCard
-          harnessId={harnessId}
-          snapshot={makeSnapshot(harnessId)}
-          hideCost={true}
-        />
-      );
+  it("labels percent quota as used by default", () => {
+    const { container } = render(
+      <UsageCard
+        harnessId={HARNESS_IDS.CLAUDE_CLI}
+        snapshot={makeSnapshot(
+          HARNESS_IDS.CLAUDE_CLI,
+          HARNESS_USAGE_UNITS.PERCENT
+        )}
+        hideCost={true}
+      />
+    );
 
-      expect(container).toHaveTextContent("75% used");
-      expect(container).not.toHaveTextContent("25% remaining");
-    }
-  );
+    expect(container).toHaveTextContent("75% used");
+    expect(container).not.toHaveTextContent("25% remaining");
+  });
 
-  it.each(Object.values(HARNESS_IDS) as HarnessId[])(
-    "labels %s quota percentages as remaining when configured",
-    (harnessId) => {
-      setPercentDirection("remaining");
-      const { container } = render(
-        <UsageCard
-          harnessId={harnessId}
-          snapshot={makeSnapshot(harnessId)}
-          hideCost={true}
-        />
-      );
+  it("labels percent quota as remaining when configured", () => {
+    setPercentDirection("remaining");
+    const { container } = render(
+      <UsageCard
+        harnessId={HARNESS_IDS.ANTIGRAVITY_CLI}
+        snapshot={makeSnapshot(
+          HARNESS_IDS.ANTIGRAVITY_CLI,
+          HARNESS_USAGE_UNITS.PERCENT
+        )}
+        hideCost={true}
+      />
+    );
 
-      expect(container).toHaveTextContent("25% remaining");
-      expect(container).not.toHaveTextContent("75% used");
-    }
-  );
+    expect(container).toHaveTextContent("25% remaining");
+    expect(container).not.toHaveTextContent("75% used");
+  });
+
+  it("preserves Copilot request counts in used mode", () => {
+    const { container } = render(
+      <UsageCard
+        harnessId={HARNESS_IDS.COPILOT_CLI}
+        snapshot={makeSnapshot(
+          HARNESS_IDS.COPILOT_CLI,
+          HARNESS_USAGE_UNITS.REQUESTS
+        )}
+        hideCost={true}
+      />
+    );
+
+    expect(container).toHaveTextContent("555 used requests");
+    expect(container).not.toHaveTextContent("555 / 1,500");
+  });
+
+  it("preserves Copilot remaining request counts in remaining mode", () => {
+    setPercentDirection("remaining");
+    const { container } = render(
+      <UsageCard
+        harnessId={HARNESS_IDS.COPILOT_CLI}
+        snapshot={makeSnapshot(
+          HARNESS_IDS.COPILOT_CLI,
+          HARNESS_USAGE_UNITS.REQUESTS
+        )}
+        hideCost={true}
+      />
+    );
+
+    expect(container).toHaveTextContent("945 remaining requests");
+    expect(container).not.toHaveTextContent("25% remaining");
+  });
 });

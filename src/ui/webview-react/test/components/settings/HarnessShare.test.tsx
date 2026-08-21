@@ -6,6 +6,7 @@ import { useWorkspaceStatsStore } from "@store/workspaceStatsStore";
 import {
   HARNESS_IDS,
   RUN_OUTCOME_BUCKETS,
+  SETTING_SCOPES,
   WORKSPACE_STATS_BACKFILL_STATES,
 } from "@root/types/DashboardConstants";
 import type { HarnessId } from "@root/types/DashboardConstants";
@@ -94,7 +95,9 @@ describe("Harness share", () => {
     });
 
     const user = userEvent.setup();
-    render(<StatsUsageSection hideCost={false} />);
+    render(
+      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+    );
     const share = getShareSection();
 
     expect(share.querySelector('[aria-label^="Claude Code,"]')).toBeTruthy();
@@ -124,7 +127,9 @@ describe("Harness share", () => {
       }),
     });
 
-    render(<StatsUsageSection hideCost={false} />);
+    render(
+      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+    );
     const share = getShareSection();
     const bar = share.querySelector('[aria-hidden="true"]');
 
@@ -142,7 +147,9 @@ describe("Harness share", () => {
       }),
     });
 
-    render(<StatsUsageSection hideCost={false} />);
+    render(
+      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+    );
     const share = getShareSection();
 
     expect(
@@ -159,7 +166,9 @@ describe("Harness share", () => {
   it("handles an empty workspace without NaN or zero-width segments", () => {
     useWorkspaceStatsStore.setState({ snapshot: snapshot({}) });
 
-    render(<StatsUsageSection hideCost={false} />);
+    render(
+      <StatsUsageSection hideCost={false} activeScope={SETTING_SCOPES.USER} />
+    );
     const share = getShareSection();
 
     expect(
@@ -176,7 +185,9 @@ describe("Harness share", () => {
       }),
     });
 
-    render(<StatsUsageSection hideCost={true} />);
+    render(
+      <StatsUsageSection hideCost={true} activeScope={SETTING_SCOPES.USER} />
+    );
 
     expect(screen.queryByText("≈$38.20")).not.toBeInTheDocument();
     expect(screen.getByText("10 steps · 100 tokens")).toBeInTheDocument();

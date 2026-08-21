@@ -5,8 +5,16 @@ import { StatusLineFormatEditor } from "@components/settings/stats/StatusLineFor
 import {
   DEFAULT_STATUS_LINE_FORMAT,
   STATUS_LINE_FIELD_IDS,
+  STATUS_LINE_FORMAT_PROVIDERS,
   type StatusLineSegment,
 } from "@root/utils/StatuslineFormat";
+import {
+  HARNESS_IDS,
+  HARNESS_QUOTA_SOURCES,
+  HARNESS_USAGE_CONFIDENCE,
+  HARNESS_USAGE_UNITS,
+} from "@root/types/DashboardConstants";
+import type { HarnessUsageSnapshot } from "@root/types/UsageTypes";
 
 function renderEditor(format: StatusLineSegment[]) {
   const onCommit = vi.fn<(nextFormat: StatusLineSegment[]) => void>();
@@ -186,5 +194,48 @@ describe("StatusLineFormatEditor", () => {
         /uses your Stats & Usage percent-direction setting \(remaining\)/i
       )
     ).toBeInTheDocument();
+  });
+
+  it("keeps representative fields visible when quota comes from a cached snapshot", () => {
+    const snapshot: HarnessUsageSnapshot = {
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      updatedAt: Date.now(),
+      quota: {
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        source: HARNESS_QUOTA_SOURCES.PROVIDER_LIVE,
+        staleAfterMs: 60_000,
+        windows: [
+          {
+            id: "five-hour",
+            kind: "rolling",
+            label: "5h",
+            percentUsed: 33,
+            unit: HARNESS_USAGE_UNITS.PERCENT,
+            confidence: HARNESS_USAGE_CONFIDENCE.EXACT,
+          },
+        ],
+      },
+      observed: {},
+    };
+
+    render(
+      <StatusLineFormatEditor
+        provider={STATUS_LINE_FORMAT_PROVIDERS.CLAUDE}
+        format={[
+          { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
+          { type: "field", field: STATUS_LINE_FIELD_IDS.CWD },
+          { type: "field", field: STATUS_LINE_FIELD_IDS.SESSION_ID },
+          { type: "field", field: STATUS_LINE_FIELD_IDS.BRANCH },
+          { type: "field", field: STATUS_LINE_FIELD_IDS.USAGE },
+        ]}
+        snapshot={snapshot}
+        onCommit={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByText(/preview project preview- feature\/statusline/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/rate 33%/)).toBeInTheDocument();
   });
 });

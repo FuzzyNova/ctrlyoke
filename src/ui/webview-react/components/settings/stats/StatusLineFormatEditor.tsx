@@ -53,8 +53,8 @@ function previewPayload(
   provider: StatusLineFormatProvider,
   snapshot: HarnessUsageSnapshot | undefined
 ): Record<string, unknown> {
-  if (!snapshot) {
-    return provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE
+  const representativePayload =
+    provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE
       ? {
           model: { id: "claude-sonnet-4.5" },
           context_window: {
@@ -85,17 +85,16 @@ function previewPayload(
           cwd: "/workspace/project",
           session_id: "preview-session",
         };
+
+  if (!snapshot) {
+    return representativePayload;
   }
 
   const windows = snapshot.quota.windows;
   if (provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE) {
     return {
+      ...representativePayload,
       model: { id: "cached model" },
-      context_window: {
-        total_input_tokens: 68_000,
-        total_output_tokens: 12_000,
-        context_window_size: 200_000,
-      },
       rate_limits: Object.fromEntries(
         windows
           .slice(0, 2)
@@ -107,12 +106,8 @@ function previewPayload(
     };
   }
   return {
+    ...representativePayload,
     model: { id: "cached model" },
-    context_window: {
-      total_input_tokens: 68_000,
-      total_output_tokens: 12_000,
-      context_window_size: 200_000,
-    },
     quota: Object.fromEntries(
       windows.map((window) => [
         window.id,
@@ -223,7 +218,8 @@ export function StatusLineFormatEditor({
             provider,
             previewPayload(provider, snapshot),
             draftFormat,
-            percentDirection
+            percentDirection,
+            { branch: "feature/statusline" }
           ) || "—"}
         </code>
         <p className="mt-1 text-xs text-description-fg">

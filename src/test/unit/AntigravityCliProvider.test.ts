@@ -132,6 +132,7 @@ suite("AntigravityCliProvider", () => {
     const directory = env.CTRLYOKE_AGY_STATUSLINE_DIR;
     assert.ok(token);
     assert.ok(directory);
+    assert.strictEqual(env.CTRLYOKE_STATUSLINE_WORKSPACE_ROOT, workspaceRoot);
 
     const snapshotPath = path.join(directory, `agy-statusline-${token}.json`);
     await fs.mkdir(directory, { recursive: true });

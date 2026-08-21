@@ -35,7 +35,8 @@ type SharedWrapper = {
   ): number | undefined;
   resolveStatusLineSettings(
     provider: string,
-    homeDirectory?: string
+    homeDirectory?: string,
+    context?: { payload?: Record<string, unknown>; workspaceRoot?: string }
   ): {
     enabled: boolean;
     customCommand: string;
@@ -132,6 +133,15 @@ async function writeMachineSettings(
       },
     })
   );
+}
+
+async function writeWorkspaceSettings(
+  workspaceRoot: string,
+  value: unknown
+): Promise<void> {
+  const filePath = path.join(workspaceRoot, ".ctrlyoke", "settings.json");
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, JSON.stringify(value));
 }
 
 suite("Shared statusline wrappers", () => {
@@ -382,6 +392,14 @@ suite("Shared statusline wrappers", () => {
     assert.strictEqual(
       shared.formatBrandedStatusLine(
         shared.STATUSLINE_PROVIDERS.CLAUDE,
+        { rate_limits: { seven_day: { used_percentage: 41.2 } } },
+        format
+      ),
+      "week 41%"
+    );
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
         {},
         format
       ),
@@ -495,10 +513,7 @@ suite("Shared statusline wrappers", () => {
     );
     const redirectedGitDirectory = path.join(tempDirectory, "metadata");
     await fs.mkdir(redirectedGitDirectory);
-    await fs.writeFile(
-      path.join(tempDirectory, ".git"),
-      "gitdir: metadata\n"
-    );
+    await fs.writeFile(path.join(tempDirectory, ".git"), "gitdir: metadata\n");
     await fs.writeFile(
       path.join(redirectedGitDirectory, "HEAD"),
       "ref: refs/heads/worktree-branch\n"
@@ -578,6 +593,13 @@ suite("Shared statusline wrappers", () => {
       false
     );
     assert.ok(explicitColorLine.endsWith(shared.ANSI_RESET));
+
+    const malformedColorLine = shared.formatBrandedStatusLine(
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      payload,
+      [{ type: "field", field: "context", color: "not-a-color" }]
+    );
+    assert.ok(malformedColorLine.startsWith(shared.CONTEXT_COLORS.danger));
   });
 
   test("labels replace internal labels and are no-ops for bare fields", () => {
@@ -619,6 +641,86 @@ suite("Shared statusline wrappers", () => {
     );
     assert.deepStrictEqual(settings.format, format);
     assert.strictEqual(settings.percentDirection, "remaining");
+  });
+
+  test("uses a workspace percent direction over the user fallback", async () => {
+    await createHome();
+    tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-statusline-workspace-")
+    );
+    await writeMachineSettings(tempHome, "claude", {
+      percentDirection: "used",
+    });
+    await writeWorkspaceSettings(tempDirectory, {
+      usageTracking: { percentDirection: "remaining" },
+      permissions: {
+        statusLineTracking: {
+          claude: { enabled: false },
+        },
+      },
+    });
+
+    const settings = shared.resolveStatusLineSettings(
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      tempHome,
+      { workspaceRoot: tempDirectory }
+    );
+    assert.strictEqual(settings.percentDirection, "remaining");
+    assert.strictEqual(settings.enabled, true);
+  });
+
+  test("falls back to the user direction when workspace settings are missing or malformed", async () => {
+    await createHome();
+    tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-statusline-workspace-")
+    );
+    await writeMachineSettings(tempHome, "claude", {
+      percentDirection: "remaining",
+    });
+
+    const missing = shared.resolveStatusLineSettings(
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      tempHome,
+      { workspaceRoot: tempDirectory }
+    );
+    assert.strictEqual(missing.percentDirection, "remaining");
+
+    await fs.mkdir(path.join(tempDirectory, ".ctrlyoke"), { recursive: true });
+    await fs.writeFile(
+      path.join(tempDirectory, ".ctrlyoke", "settings.json"),
+      "{malformed"
+    );
+    const malformed = shared.resolveStatusLineSettings(
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      tempHome,
+      { workspaceRoot: tempDirectory }
+    );
+    assert.strictEqual(malformed.percentDirection, "remaining");
+  });
+
+  test("discovers a workspace override from either provider payload cwd", async () => {
+    await createHome();
+    tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-statusline-workspace-")
+    );
+    const nestedDirectory = path.join(tempDirectory, "src", "nested");
+    await fs.mkdir(nestedDirectory, { recursive: true });
+    await writeMachineSettings(tempHome, "antigravity", {
+      percentDirection: "used",
+    });
+    await writeWorkspaceSettings(tempDirectory, {
+      usageTracking: { percentDirection: "remaining" },
+    });
+
+    for (const provider of [
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      shared.STATUSLINE_PROVIDERS.ANTIGRAVITY,
+    ]) {
+      const settings = shared.resolveStatusLineSettings(provider, tempHome, {
+        payload: { cwd: nestedDirectory },
+      });
+      assert.strictEqual(settings.percentDirection, "remaining");
+    }
   });
 
   test("loads the shared formatter sibling and uses it in a child process", async () => {

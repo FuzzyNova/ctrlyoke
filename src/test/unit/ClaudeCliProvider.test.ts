@@ -162,6 +162,10 @@ suite("ClaudeCliProvider", () => {
       undefined
     );
     assert.strictEqual(
+      provider.getHeadlessSpawnEnv().CTRLYOKE_STATUSLINE_WORKSPACE_ROOT,
+      workspaceRoot
+    );
+    assert.strictEqual(
       provider.consumeStatuslineInstallResult()?.kind,
       "written"
     );

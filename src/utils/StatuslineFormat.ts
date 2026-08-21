@@ -340,7 +340,7 @@ function normalizeUsedPercentage(value: number): number {
 function usageWindows(
   payload: Record<string, unknown>,
   provider: StatusLineFormatProvider
-): Array<{ id?: string; label: string; usedPercentage: number }> {
+): Array<{ id?: string; label: string; usedPercentage: number } | undefined> {
   const source =
     provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE
       ? payload.rate_limits
@@ -348,19 +348,17 @@ function usageWindows(
   if (!isRecord(source)) return [];
 
   if (provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE) {
-    return STATUS_LINE_CLAUDE_WINDOWS.flatMap((definition) => {
+    return STATUS_LINE_CLAUDE_WINDOWS.map((definition) => {
       const entry = source[definition.key];
       const value = isRecord(entry)
         ? finiteNumber(entry.used_percentage)
         : undefined;
       return value === undefined
-        ? []
-        : [
-            {
-              label: formatUsageWindowLabel(definition.windowMinutes),
-              usedPercentage: normalizeUsedPercentage(value),
-            },
-          ];
+        ? undefined
+        : {
+            label: formatUsageWindowLabel(definition.windowMinutes),
+            usedPercentage: normalizeUsedPercentage(value),
+          };
     });
   }
 
@@ -403,6 +401,14 @@ function applyColor(text: string, color: unknown): string {
     return ansi ? `${ansi}${text}${ANSI_RESET}` : text;
   }
   return text;
+}
+
+function isStatusLineColor(value: unknown): value is StatusLineColorId {
+  return (
+    typeof value === "string" &&
+    value !== "default" &&
+    Object.prototype.hasOwnProperty.call(STATUS_LINE_COLOR_IDS, value)
+  );
 }
 
 /** Format statusline segments for both the detached wrapper and the webview preview. */
@@ -506,8 +512,7 @@ export function formatBrandedStatusLine(
             break;
         }
         if (text !== undefined) {
-          const explicitColor =
-            typeof segment.color === "string" && segment.color !== "default";
+          const explicitColor = isStatusLineColor(segment.color);
           text = explicitColor
             ? applyColor(text, segment.color)
             : field === STATUS_LINE_FIELD_IDS.CONTEXT

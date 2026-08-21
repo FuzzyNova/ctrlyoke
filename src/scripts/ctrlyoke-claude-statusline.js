@@ -16,7 +16,14 @@ const {
 
 async function runStatusline(input, env = process.env) {
   const payload = parsePayload(input);
-  const settings = resolveStatusLineSettings(STATUSLINE_PROVIDERS.CLAUDE);
+  const settings = resolveStatusLineSettings(
+    STATUSLINE_PROVIDERS.CLAUDE,
+    undefined,
+    {
+      payload,
+      workspaceRoot: env.CTRLYOKE_STATUSLINE_WORKSPACE_ROOT,
+    }
+  );
   if (settings.enabled) {
     writeSnapshotAtomic(
       env.CTRLYOKE_CLAUDE_STATUSLINE_DIR,

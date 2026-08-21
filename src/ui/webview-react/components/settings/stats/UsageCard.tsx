@@ -225,11 +225,36 @@ function formatQuotaDisplay(
     )}% ${percentDirection}`;
   }
 
-  return `${formatQuotaValue(window.used, window.unit)}${
-    window.limit !== undefined
-      ? ` / ${formatQuotaValue(window.limit, window.unit)}`
-      : ""
-  }`;
+  const directedValue =
+    percentDirection === "remaining" ? window.remaining : window.used;
+  if (directedValue !== undefined) {
+    return `${formatQuotaValue(directedValue, window.unit)} ${percentDirection} ${quotaUnitLabel(window.unit)}`;
+  }
+
+  if (window.percentUsed !== undefined) {
+    return `${formatRoundedNumber(
+      formatUsagePercentForDisplay(window.percentUsed, percentDirection)
+    )}% ${percentDirection}`;
+  }
+
+  return `${formatQuotaValue(window.used, window.unit)} used ${quotaUnitLabel(
+    window.unit
+  )}`;
+}
+
+function quotaUnitLabel(
+  unit: (typeof HARNESS_USAGE_UNITS)[keyof typeof HARNESS_USAGE_UNITS]
+): string {
+  switch (unit) {
+    case HARNESS_USAGE_UNITS.REQUESTS:
+      return "requests";
+    case HARNESS_USAGE_UNITS.TOKENS:
+      return "tokens";
+    case HARNESS_USAGE_UNITS.CREDITS:
+      return "credits";
+    default:
+      return "units";
+  }
 }
 
 function formatQuotaValue(

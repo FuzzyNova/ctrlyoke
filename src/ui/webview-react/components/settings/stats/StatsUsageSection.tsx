@@ -5,7 +5,6 @@ import {
   HARNESS_SHARE_METRICS,
   MESSAGE_TYPES,
   SETTING_PATHS,
-  SETTING_SCOPES,
 } from "@root/types/DashboardConstants";
 import type {
   HarnessId,
@@ -34,15 +33,21 @@ import {
 } from "./HarnessShareBar";
 import { HarnessShareRow } from "./HarnessShareRow";
 import type { UsagePercentDirection } from "@root/utils/StatuslineFormat";
+import type { SettingWriteScope } from "@root/types/DashboardConstants";
 
 const ALL_HARNESS_IDS = Object.values(HARNESS_IDS) as HarnessId[];
 
 interface Props {
   hideCost: boolean;
   isNarrow?: boolean;
+  activeScope: SettingWriteScope;
 }
 
-export function StatsUsageSection({ hideCost, isNarrow = false }: Props) {
+export function StatsUsageSection({
+  hideCost,
+  isNarrow = false,
+  activeScope,
+}: Props) {
   const [shareMetric, setShareMetric] = useState<HarnessShareMetric>(
     HARNESS_SHARE_METRICS.AI_STEPS
   );
@@ -66,7 +71,7 @@ export function StatsUsageSection({ hideCost, isNarrow = false }: Props) {
     sendMessage(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, {
       path: SETTING_PATHS.USAGE_TRACKING_PERCENT_DIRECTION,
       value,
-      scope: SETTING_SCOPES.USER,
+      scope: activeScope,
     });
   };
 
