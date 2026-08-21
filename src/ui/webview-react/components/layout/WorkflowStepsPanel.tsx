@@ -1166,6 +1166,7 @@ const WorkflowStepsPanelInner: React.FC<{
         isSelected={selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP}
         isReadOnly={finalStepIsReadOnly}
         isSelectionReadOnly={finalStepSelectionIsReadOnly}
+        isNarrow={isHeaderNarrow}
         isDisabled={finalStep?.enabled === false}
         onSelect={handleFinalStepSelect}
         onToggleExpanded={toggleFinalStepFooterExpanded}

@@ -29,6 +29,8 @@ interface FinalStepFooterProps {
   isSelected: boolean;
   /** Whether selecting this final step in the editor is unavailable. */
   isSelectionReadOnly?: boolean;
+  /** Whether the footer is narrow enough for compact status labels. */
+  isNarrow?: boolean;
   isReadOnly: boolean;
   isDisabled: boolean;
   onSelect: () => void;
@@ -67,6 +69,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
   isSelected,
   isReadOnly,
   isSelectionReadOnly = isReadOnly,
+  isNarrow = false,
   isDisabled,
   onSelect,
   onToggleExpanded,
@@ -85,6 +88,11 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
     : "pending";
   const longPressHandlers = useLongPress(onContextMenu);
   const showDisabledState = !hasFinalStep || isDisabled;
+  const finalStepTooltip = hasFinalStep
+    ? `Final Step — ${isDisabled ? "Disabled" : "Enabled"}${
+        loopCount > 0 ? ` — Loop ${loopCount + 1}` : ""
+      }`
+    : "Final Step — Disabled";
 
   return (
     <div className="border-t border-panel-border bg-sidebar-bg flex-shrink-0">
@@ -165,6 +173,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
         } ${isSelectionReadOnly ? "opacity-75" : "cursor-pointer"}`}
         role="button"
         tabIndex={0}
+        title={finalStepTooltip}
         onClick={() => {
           if (!isSelectionReadOnly) {
             onSelect();
@@ -211,8 +220,8 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
           </span>
         )}
         {loopCount > 0 && (
-          <span className="ml-1 px-1.5 py-px rounded bg-badge-bg text-badge-fg text-xxs">
-            Loop {loopCount + 1}
+          <span className="ml-1 flex-shrink-0 whitespace-nowrap rounded bg-badge-bg px-1.5 py-px text-xxs text-badge-fg">
+            {isNarrow ? loopCount + 1 : `Loop ${loopCount + 1}`}
           </span>
         )}
         <div className="ml-auto flex items-center gap-1">
