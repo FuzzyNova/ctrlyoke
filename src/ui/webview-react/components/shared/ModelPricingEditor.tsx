@@ -314,6 +314,23 @@ export const ModelPricingEditor: React.FC<{
                     <span className="sr-only">Remove model</span>
                   </Button>
                 </div>
+                {override.inputPerMTok === 0 &&
+                  override.outputPerMTok === 0 && (
+                    <p
+                      className="flex items-start gap-1 text-xs text-warning-fg"
+                      role="note"
+                    >
+                      <i
+                        className="codicon codicon-warning mt-px"
+                        aria-hidden="true"
+                      />
+                      <span>
+                        Both required rates are 0, so this override prices the
+                        model at $0 instead of using the bundled price registry.
+                        Enter real rates, or remove the model.
+                      </span>
+                    </p>
+                  )}
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {RATE_FIELDS.map(({ key, label, optional }) => {
                     const id = inputId(harnessId, modelId, key);

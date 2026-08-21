@@ -188,7 +188,7 @@ updated.
 
 **This does not, by itself, unlock cost estimates for Qwen/Antigravity.** Both still have
 `HARNESS_TOKEN_SEMANTICS` set to `UNKNOWN` in `ModelPricing.ts` (cache-read/reasoning-token
-relationships unverified against a live CLI run — see `dev/backlog/SETTINGS_UI_PARITY_PLAN.md`
+relationships unverified against a live CLI run — see `dev/implemented/SETTINGS_UI_PARITY_PLAN.md`
 and `dev/implemented/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`), and `calculateAttemptCost` refuses to
 compute a cost whenever semantics are `UNKNOWN`, on purpose — a guessed cache/reasoning formula
 would produce a confidently wrong number, which is worse than no estimate. What the registry

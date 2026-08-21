@@ -37,6 +37,34 @@ describe("ModelPricingEditor", () => {
     ).toHaveValue(2);
   });
 
+  it("flags an override whose required rates are both still zero", () => {
+    const { rerender } = render(
+      <ModelPricingEditor
+        value={{
+          [HARNESS_IDS.CLAUDE_CLI]: {
+            "gpt-4.1": { inputPerMTok: 0, outputPerMTok: 0 },
+          },
+        }}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/prices the model at \$0/)).toBeInTheDocument();
+
+    rerender(
+      <ModelPricingEditor
+        value={{
+          [HARNESS_IDS.CLAUDE_CLI]: {
+            "gpt-4.1": { inputPerMTok: 0, outputPerMTok: 8 },
+          },
+        }}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText(/prices the model at \$0/)).toBeNull();
+  });
+
   it("adds a harness and a freeform model", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

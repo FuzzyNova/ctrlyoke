@@ -1,6 +1,9 @@
 # Settings Schema UI Parity Plan
 
-> **Status:** Partially implemented. Tracked by
+> **Status:** Implemented (2026-08-21). Every schema-authorable setting now has a
+> live dashboard control except `server.theme` and `server.standalonePort`, which
+> are deliberately deferred until the standalone server ships — see "Current gaps"
+> below. Those two stay in `PENDING_UI_PARITY` as markers. Tracked by
 > `src/test/integration/settingsSchemaUiParity.integration.test.ts`
 > (`Settings schema -> Global Settings dashboard control parity` ›
 > `every leaf settings-schema property has a live dashboard control`), which
@@ -81,32 +84,39 @@ is "this harness's billing model makes an estimate meaningless":
   are in the same unverified state. Verifying those three is its own task, tracked separately from
   this plan.
 
-## Implementation constraints found while scoping the remaining work (2026-08-21)
+## Implementation notes (as built, 2026-08-21)
 
-- **`StatsUsageSection` is not currently wired for settings writes.** `GlobalSettingsDrawer.tsx`
-  passes `{...sectionProps}` (`activeScope` / `onUpdate` / `onReset`) to every other settings
-  section but gives `StatsUsageSection` only `hideCost` / `isNarrow` / `settings`. Its one existing
-  settings control (`StatusLineTrackingControls`) works around that by posting
-  `UPDATE_GLOBAL_SETTING` itself with a hard-coded `SETTING_SCOPES.USER`. Any new control here
-  should thread `sectionProps` through properly rather than copying that workaround.
+These were the constraints found while scoping the work; each is now reflected in the shipped code.
+
+- **`StatsUsageSection` is now wired for settings writes.** It previously received only
+  `hideCost` / `isNarrow` / `settings` while every other section got `{...sectionProps}`
+  (`activeScope` / `onUpdate` / `onReset`) from `GlobalSettingsDrawer.tsx`; those props are now
+  threaded through and the new controls use them. `StatusLineTrackingControls` still posts
+  `UPDATE_GLOBAL_SETTING` itself with a hard-coded `SETTING_SCOPES.USER` — that pre-existing
+  workaround was deliberately left alone, and should not be copied by new controls.
 - **`usageTracking.enabled` is machine-scoped.** It is listed in
   `WORKSPACE_FORBIDDEN_SETTING_ROOTS` (`CtrlYokeConfigService.ts`), so a workspace-scope write
-  throws. Follow the `worktrees.root` pattern in `WorktreesSection.tsx`: disable the control while
-  `activeScope === SETTING_SCOPES.WORKSPACE` and render the short "switch to User scope" note. The
+  throws. The control follows the `worktrees.root` pattern in `WorktreesSection.tsx`: disabled
+  while `activeScope === SETTING_SCOPES.WORKSPACE`, with a short "switch to User scope" note. The
   other three `usageTracking.*` settings are ordinary scope-aware settings.
-- **`modelPricing` must be written as one whole object at path `modelPricing`.** Setting writes
-  are dot-path writes (`CtrlYokeConfigService.set` → backend `set(path, value)`), and real model
-  IDs contain dots (`qwen3.5-plus`, `gpt-4.1`), so a per-model path like
+- **`modelPricing` is written as one whole object at path `modelPricing`.** Setting writes are
+  dot-path writes (`CtrlYokeConfigService.set` → backend `set(path, value)`), and real model IDs
+  contain dots (`qwen3.5-plus`, `gpt-4.1`), so a per-model path like
   `modelPricing.qwen-cli.qwen3.5-plus.inputPerMTok` would silently nest under bogus `5-plus` keys.
-  Use the aggregate-editor convention instead — `path="modelPricing"` on the `SettingInputRow`
-  plus `onUpdate("modelPricing", nextWholeObject)` — exactly as `DefaultsMcpPage.tsx` does for
-  `defaults.mcpServers`. `getLeafSources` records object paths as well as leaves, so the source
-  badge and reset button still work at that path.
+  `ModelPricingEditor` therefore emits the complete object through
+  `onUpdate("modelPricing", nextWholeObject)` under a `path="modelPricing"` `SettingInputRow` —
+  the same aggregate-editor convention `DefaultsMcpPage.tsx` uses for `defaults.mcpServers`.
+  `getLeafSources` records object paths as well as leaves, so the source badge and reset button
+  still work at that path.
 - **An override alone does not make an estimate appear for every harness.** `calculateAttemptCost`
   requires *both* a price and verified token semantics; for `qwen-cli`, `opencode-cli`, and
   `antigravity-cli` it returns `UNVERIFIED_TOKEN_SEMANTICS` regardless of any override. The editor
-  should say so where the user enters rates for those harnesses, rather than implying the override
-  will start producing a cost.
+  says so inline when rates are entered for one of those harnesses, rather than implying the
+  override will start producing a cost.
+- **A saved override replaces the registry price outright, including a `0` rate.** Zero is a
+  legitimate rate (free-tier models), so the editor does not reject it; it flags a newly added,
+  still-untouched row (both required rates `0`) so a half-filled override isn't mistaken for a
+  real $0 price.
 
 ## Completed
 
@@ -154,6 +164,6 @@ meaningfully conflict with it.
 leaf, `usageTracking.percentDirection`, sitting in the same `usageTracking` object this plan's
 `settingsSchemaUiParity.integration.test.ts` already inventories. If that plan's schema addition
 and its own UI control for that setting ever land in *separate* merges, this test will flag a new
-gap in the interim — fix, if it happens, is adding `permissions.usageTracking.percentDirection` to
+gap in the interim — fix, if it happens, is adding `usageTracking.percentDirection` to
 `PENDING_UI_PARITY` here, same as any other tracked-but-not-yet-controlled setting, until the
 statusline plan's own UI phase lands.
