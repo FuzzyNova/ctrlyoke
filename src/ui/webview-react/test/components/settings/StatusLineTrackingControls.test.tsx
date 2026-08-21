@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StatusLineTrackingControls } from "@components/settings/stats/StatusLineTrackingControls";
-import { StatsUsageSection } from "@components/settings/stats/StatsUsageSection";
+import { StatusLineSection } from "@components/settings/StatusLineSection";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import {
   HARNESS_IDS,
@@ -284,9 +284,9 @@ describe("StatusLineTrackingControls", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders controls only for the two statusline harnesses in the stats section", () => {
+  it("renders controls only for the two statusline harnesses in the status line section", () => {
     const settings = makeSettings(HARNESS_IDS.CLAUDE_CLI);
-    render(<StatsUsageSection hideCost={false} settings={settings} />);
+    render(<StatusLineSection settings={settings} />);
 
     expect(
       screen.getAllByRole("textbox", { name: "Custom statusline command" })

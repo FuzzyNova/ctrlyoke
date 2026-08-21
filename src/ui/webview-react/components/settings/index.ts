@@ -14,6 +14,7 @@ export { AgentSkillsManagerSection } from "./AgentSkillsManagerSection";
 export { McpManagerSection } from "./McpManagerSection";
 export { CommitSection } from "./CommitSection";
 export { RunHistorySection } from "./RunHistorySection";
+export { StatusLineSection } from "./StatusLineSection";
 // Defaults sub-pages
 export { DefaultsHarnessPage } from "./defaults/DefaultsHarnessPage";
 export { DefaultsContextPage } from "./defaults/DefaultsContextPage";

@@ -500,6 +500,10 @@ wrapper reuses these conventions without importing across that boundary.
     blocks to whichever tab hosts them — a second, independent reason not to grow that content
     further inside Stats & Usage.
 
+    **Implemented:** added the flat top-level "Status Line" settings tab and moved the existing
+    statusline-tracking provider controls into `StatusLineSection`, leaving the statistics and
+    usage controls in `StatsUsageSection`.
+
 13. **Per-segment `color` override, applying to both `field` and `literal` segments** (resolves
     the former "structured color option" Open Question — decided yes, 2026-08-21). A small
     curated `StatusLineColorId` enum, not free-form RGB/truecolor, keeping the picker a simple

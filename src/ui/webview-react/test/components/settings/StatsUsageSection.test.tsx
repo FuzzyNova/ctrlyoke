@@ -103,4 +103,13 @@ describe("StatsUsageSection", () => {
 
     expect(screen.getByText("1.5k tokens")).toBeInTheDocument();
   });
+
+  it("does not render statusline tracking controls", () => {
+    render(<StatsUsageSection hideCost={false} />);
+
+    expect(screen.queryByText("Statusline Tracking")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "Custom statusline command" })
+    ).not.toBeInTheDocument();
+  });
 });
