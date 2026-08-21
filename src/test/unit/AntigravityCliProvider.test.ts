@@ -395,6 +395,86 @@ suite("AntigravityCliProvider", () => {
     );
   });
 
+  test("updates an older ctrlyoke wrapper without capturing it as custom", async () => {
+    await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
+    await fs.writeFile(
+      settingsPath(),
+      JSON.stringify({
+        statusLine: {
+          type: "command",
+          command:
+            "node C:/old-extension/out/scripts/ctrlyoke-antigravity-statusline.js",
+        },
+      })
+    );
+    const provider = new AntigravityCliProvider();
+
+    await buildArgs(provider);
+
+    const harnessSettings = JSON.parse(
+      await fs.readFile(settingsPath(), "utf8")
+    );
+    assert.strictEqual(
+      harnessSettings.statusLine.command,
+      "node C:/extension root/out/scripts/ctrlyoke-antigravity-statusline.js"
+    );
+    assert.deepStrictEqual(provider.consumeStatuslineInstallResult(), {
+      kind: "written",
+      captured: false,
+    });
+    assert.deepStrictEqual(
+      configService.get("permissions").statusLineTracking[
+        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      ],
+      {
+        enabled: true,
+        customCommand: "",
+        useCtrlyokeStyle: true,
+      }
+    );
+  });
+
+  test("reports preserved custom output when refreshing an older wrapper", async () => {
+    configService.setUserBackend(
+      makeBackend({
+        permissions: {
+          statusLineTracking: {
+            antigravity: {
+              enabled: true,
+              customCommand: "node user-statusline.js",
+              useCtrlyokeStyle: false,
+            },
+          },
+        },
+      })
+    );
+    await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
+    await fs.writeFile(
+      settingsPath(),
+      JSON.stringify({
+        statusLine: {
+          type: "command",
+          command:
+            "node C:/old-extension/out/scripts/ctrlyoke-antigravity-statusline.js",
+        },
+      })
+    );
+    const provider = new AntigravityCliProvider();
+
+    await buildArgs(provider);
+
+    assert.deepStrictEqual(provider.consumeStatuslineInstallResult(), {
+      kind: "written",
+      captured: true,
+    });
+    assert.strictEqual(
+      configService.get("permissions").statusLineTracking[
+        STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+      ].customCommand,
+      "node user-statusline.js"
+    );
+  });
+
   test("preserves a live style override when nothing is captured", async () => {
     configService.setUserBackend(
       makeBackend({

@@ -1,6 +1,7 @@
 import * as os from "os";
 import * as path from "path";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
+import { parseArgString } from "../../../utils/CliArgParser";
 import {
   STATUS_LINE_TRACKING_PROVIDERS,
   HARNESS_IDS,
@@ -119,7 +120,7 @@ export class StatuslineManager implements StatuslineManagerLike {
         if (
           settings.customCommand.length === 0 &&
           customCommand !== undefined &&
-          customCommand !== command
+          !this.isCtrlyokeStatuslineCommand(customCommand)
         ) {
           captured = true;
           await ConfigurationUtils.setStatusLineTrackingSettings(
@@ -135,6 +136,16 @@ export class StatuslineManager implements StatuslineManagerLike {
       (currentValue, hadKey) =>
         this.extractCommand(currentValue, hadKey) === command
     );
+
+    // A wrapper path changes when an extension update moves the installed
+    // files. Updating that owned command is still a real write, but the
+    // notification must reflect an already-preserved custom output rather
+    // than claim ctrlyoke styling will become visible.
+    if (result.kind === "written" && !captured) {
+      const settings = this.getSettings();
+      captured =
+        settings.customCommand.length > 0 && !settings.useCtrlyokeStyle;
+    }
 
     return { kind: result.kind, captured };
   }
@@ -174,5 +185,20 @@ export class StatuslineManager implements StatuslineManagerLike {
     return typeof command === "string" && command.length > 0
       ? command
       : undefined;
+  }
+
+  /** Recognize an older ctrlyoke wrapper without depending on its absolute path. */
+  private isCtrlyokeStatuslineCommand(command: string): boolean {
+    const [runtime, script] = parseArgString(command);
+    if (
+      !runtime ||
+      !script ||
+      !/^node(?:\.exe)?$/iu.test(path.basename(runtime))
+    ) {
+      return false;
+    }
+
+    const scriptName = script.replace(/\\/gu, "/").split("/").pop();
+    return scriptName === `ctrlyoke-${this.provider}-statusline.js`;
   }
 }

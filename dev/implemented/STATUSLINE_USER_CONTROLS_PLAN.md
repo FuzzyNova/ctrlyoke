@@ -512,6 +512,9 @@ Mirror `ClaudeUsageProvider.parseClaudeRateLimitWindows` (`src/core/harness/shar
    use the shared `StatuslineManager`, which keeps capture-before-write, command parsing,
    restore/delete, and global settings paths single-sourced. Statusline leases, orphan pruning,
    and owner sidecars are no longer involved; MCP and permission leases remain unchanged.
+   Wrapper ownership is recognized independently of its absolute extension path, so an extension
+   upgrade refreshes the installed command without ever recapturing an older ctrlyoke wrapper as
+   the user's custom forward target.
 3. **Custom-command auto-detect-once + live read + install notification (completed)**:
    `customCommand` and `useCtrlyokeStyle` are captured together before first install writes the
    harness file; the wrapper now resolves the current machine-scoped settings from
