@@ -647,7 +647,7 @@ wrapper reuses these conventions without importing across that boundary.
 
 ## Phases
 
-1. **Spike**: the field-availability research above already confirms every registry field's
+1. **[Done]** Spike: the field-availability research above already confirms every registry field's
    exact payload shape for both providers (no more open questions about `cost`, since it's out
    of the registry entirely) — so this spike narrows to settling the Decision 11(a) vs 11(b)
    build-dependency question with a throwaway bundler test before committing to a preview/shared-
