@@ -283,6 +283,29 @@ async function syncModels() {
 }
 
 /**
+ * Task: Sync model pricing registry (all harnesses)
+ *
+ * `src/utils/ModelPricing.ts` has no hand-typed price table for any harness
+ * — every harness is priced by looking the model up in a models.dev
+ * registry snapshot regenerated here, read at runtime by
+ * src/utils/ModelPricingRegistry.ts.
+ */
+async function syncModelPricing() {
+  logHeader("Syncing Model Pricing Registry (all harnesses)");
+
+  try {
+    await runCommand("npm", ["run", "sync-model-pricing"]);
+    console.log();
+    logSuccess("Model pricing registry updated");
+    logInfo("File updated:");
+    logInfo("  - src/utils/generated/modelPricingRegistryData.json");
+  } catch (error) {
+    logError(`Failed to sync model pricing: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
  * Task: Run all checks (lint, format, test)
  */
 async function runAllChecks() {
@@ -333,6 +356,7 @@ ${colors.cyan}Available Tasks:${colors.reset}
   ${colors.green}update-clis${colors.reset}     Update CLI tools (copilot, claude, codex)
   ${colors.green}check-clis${colors.reset}      Check installed CLI tool versions
   ${colors.green}sync-models${colors.reset}     Discover Copilot CLI models + sync registry (Chat models imported if exported)
+  ${colors.green}sync-model-pricing${colors.reset}  Re-download the models.dev pricing registry for all harnesses
   ${colors.green}check-all${colors.reset}       Run all checks (lint, format, tests)
   ${colors.green}all${colors.reset}             Run all automated chores
 
@@ -340,6 +364,7 @@ ${colors.cyan}Examples:${colors.reset}
   npm run chores -- --task update-deps
   npm run chores -- --task update-clis
   npm run chores -- --task sync-models
+  npm run chores -- --task sync-model-pricing
   npm run chores -- --task all
 
 ${colors.cyan}Manual Tasks:${colors.reset}
@@ -392,6 +417,10 @@ async function main() {
         await syncModels();
         break;
 
+      case "sync-model-pricing":
+        await syncModelPricing();
+        break;
+
       case "check-all":
         await runAllChecks();
         break;
@@ -400,6 +429,7 @@ async function main() {
         logHeader("Running All Automated Chores");
         await updateClis();
         await syncModels();
+        await syncModelPricing();
         await updateDependencies();
         await runAllChecks();
         logHeader("All Automated Chores Complete");

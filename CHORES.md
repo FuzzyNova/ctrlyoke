@@ -61,6 +61,42 @@ codex --version
 npm install -g @openai/codex
 ```
 
+#### Qwen CLI
+
+Qwen CLI is an npm package:
+
+```bash
+# Check current version
+qwen --version
+
+# Update to latest
+qwen update
+```
+
+#### OpenCode CLI
+
+OpenCode CLI is an npm package:
+
+```bash
+# Check current version
+opencode --version
+
+# Update to latest
+opencode upgrade
+```
+
+#### Antigravity CLI
+
+Antigravity CLI is an npm package:
+
+```bash
+# Check current version
+agy --version
+
+# Update to latest
+agy update
+```
+
 **After updating**: Test CLI integrations with manual test files in `manual-test/`
 
 ---
@@ -124,10 +160,77 @@ When these change, update `CODEX_CLI_MODELS` or `CLAUDE_CLI_MODELS`
 in `src/utils/ModelConstants.ts` directly, based on vendor release notes or docs, then run
 `npm run sync-models` to propagate the change.
 
+#### 2d. Model pricing — fully automated, no hand-maintained table
+
+`src/utils/ModelPricing.ts` has **no hand-typed price table for any harness.** Every harness
+(Copilot, Claude, Codex, OpenCode, Qwen, Antigravity) is priced by looking the model up in a
+downloaded registry snapshot via `getModelPricingFromRegistry()`
+(`src/utils/ModelPricingRegistry.ts`). Adding/removing a model ID in `ModelConstants.ts` never
+requires touching `ModelPricing.ts` — there's nothing to edit there.
+
+The registry comes from [models.dev](https://models.dev) — a single, MIT-licensed,
+community-maintained model/pricing database
+([source](https://github.com/anomalyco/models.dev)) that covers every vendor ctrlyoke's six
+harnesses touch, including a `github-copilot` provider bucket that tracks GitHub's own Copilot
+billing docs and an `opencode` provider bucket that is the literal upstream catalog OpenCode's
+own CLI uses for its model list and cost display (confirmed 2026-08-21) — so OpenCode's own
+`<provider>/<model>` IDs match its provider buckets natively.
+
+```bash
+npm run sync-model-pricing                      # re-downloads models.dev, regenerates the snapshot
+npm run chores -- --task sync-model-pricing      # same, via chores
+```
+
+This writes `src/utils/generated/modelPricingRegistryData.json` — a trimmed (cost-fields-only)
+snapshot of the full registry, committed to the repo. It is **read at build time via a normal
+`import`, never fetched over the network at runtime** — ctrlyoke's cost estimation stays offline
+by design (see the "Cost is not spend" notes in
+`dev/implemented/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`). Re-run the sync task periodically (it's
+covered by `--task all`) to pick up new models/rates; there is no per-model editing to do by hand
+for any harness.
+
+`src/utils/ModelPricingRegistry.ts` matches ctrlyoke's internal model IDs against the registry
+per harness:
+
+- **Copilot CLI**: exact/near-exact match against the `github-copilot` provider bucket.
+- **Codex CLI**: exact match against the `openai` provider bucket (Codex's own model IDs are
+  already fully versioned, e.g. `gpt-5.6-sol`).
+- **Claude CLI**: its short aliases (`sonnet`/`opus`/`haiku`/`fable`, plus the `[1m]` variants)
+  name a *family*, not a specific dated model — the resolver picks whichever version of that
+  family is newest in the `anthropic` bucket every time pricing is resolved, so there's no
+  "current version" fact to hand-update as Anthropic ships new models.
+- **OpenCode**: its own model IDs are literally `<provider>/<model>` — the resolver uses that
+  prefix as an explicit provider hint straight into the matching bucket.
+- **Qwen**: matched against the `alibaba` provider bucket.
+- **Antigravity**: strips its own reasoning-effort ID suffix (`-high`/`-medium`/`-low`/
+  `-thinking`) before matching across the `anthropic`/`google`/`groq` buckets (its fixed model
+  list spans those three vendors).
+
+Every match falls back to an exact-only sweep across the rest of the registry as a last resort,
+so an unexpected new model ID still has a chance of resolving even before the buckets above are
+updated.
+
+**This does not, by itself, unlock cost estimates for Qwen/Antigravity.** Both still have
+`HARNESS_TOKEN_SEMANTICS` set to `UNKNOWN` in `ModelPricing.ts` (cache-read/reasoning-token
+relationships unverified against a live CLI run — see `dev/backlog/SETTINGS_UI_PARITY_PLAN.md`
+and `dev/implemented/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`), and `calculateAttemptCost` refuses to
+compute a cost whenever semantics are `UNKNOWN`, on purpose — a guessed cache/reasoning formula
+would produce a confidently wrong number, which is worse than no estimate. What the registry
+does change is the *reason* shown when cost is unavailable, from "unknown model" to "unverified
+token semantics" — and once someone verifies those semantics against a live run and updates
+`HARNESS_TOKEN_SEMANTICS`, estimates start flowing immediately with no further pricing work
+needed. OpenCode doesn't have this blocker in practice: `OpenCodeLogParser` already reads a
+self-reported `part.cost` per attempt, which `calculateAttemptCost` prefers over any registry
+price, so the registry only matters there as a rare gap-filler when `part.cost` is missing.
+
+Run `npm test` (`src/test/unit/ModelPricing.test.ts` and
+`src/test/unit/ModelPricingRegistry.test.ts`) after re-syncing pricing.
+
 #### Verify + commit (all tracks)
 
 1. **Verify changes**:
    - Check `src/utils/ModelConstants.ts`
+   - Check `src/utils/generated/modelPricingRegistryData.json` if 2d was re-run
    - Check `package.json` settings
    - Check `schemas/workflow-schema.json`
    - Check `schemas/workflow-schema.yaml`
@@ -136,7 +239,7 @@ in `src/utils/ModelConstants.ts` directly, based on vendor release notes or docs
 
 2. **Commit all updated files**:
    ```bash
-   git add src/utils/ModelConstants.ts package.json schemas/
+   git add src/utils/ModelConstants.ts src/utils/ModelPricing.ts src/utils/generated/ package.json schemas/
    git commit -m "chore: update model registry with latest models"
    ```
 
@@ -332,6 +435,7 @@ npm run chores -- --task all
 
 # Run specific tasks
 npm run chores -- --task sync-models
+npm run chores -- --task sync-model-pricing
 npm run chores -- --task update-clis
 npm run chores -- --task check-clis
 npm run chores -- --task update-deps
@@ -343,11 +447,13 @@ npm run chores -- --task check-all
 - `sync-models` - Discover Copilot CLI models (`copilot help config`) + sync the model
   registry to `package.json`/schema; also imports Chat models if `discovered-models.json`
   has been exported from VS Code
+- `sync-model-pricing` - Re-download the models.dev registry snapshot used to price every
+  harness's models (see section 2d)
 - `update-clis` - Update CLI tools (copilot, claude, codex) via their native updaters
 - `check-clis` - Check installed CLI tool versions
 - `update-deps` - Update and audit dependencies
 - `check-all` - Run all checks (lint, format, tests)
-- `all` - Run all automated chores (CLI tools, model sync, deps, checks)
+- `all` - Run all automated chores (CLI tools, model sync, fallback pricing sync, deps, checks)
 
 ---
 
