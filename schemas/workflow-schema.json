@@ -109,13 +109,6 @@
             },
             "_runtime": {
               "$ref": "#/definitions/runtimeMetadata"
-            },
-            "vars": {
-              "type": "object",
-              "description": "Workflow-level variable defaults for {{varName}} substitution. CLI --var key=value flags override these at runtime. Substituted into: prompt text, model, additionalArgs, hook command/env, preCondition script/env, endCondition script/env/retryPrompt/passRetryPrompt, script-step script/env, and worktree setup commands. Every script and condition process also receives each var as a CTRLYOKE_VAR_<KEY> environment variable regardless of {{varName}} usage.",
-              "additionalProperties": {
-                "type": "string"
-              }
             }
           },
           "required": [
@@ -294,12 +287,22 @@
         }
       ]
     },
+    "varsConfig": {
+      "type": "object",
+      "description": "Workflow-level variable defaults for {{varName}} substitution. CLI --var key=value flags override these at runtime. Substituted into: prompt text, model, additionalArgs, hook command/env, preCondition script/env, endCondition script/env/retryPrompt/passRetryPrompt, script-step script/env, and worktree setup commands. Every script and condition process also receives each var as a CTRLYOKE_VAR_<KEY> environment variable regardless of {{varName}} usage.",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
     "workflowOnlyProperties": {
       "type": "object",
       "description": "Properties authored only at the workflow root.",
       "properties": {
         "worktree": {
           "$ref": "#/definitions/worktreeConfig"
+        },
+        "vars": {
+          "$ref": "#/definitions/varsConfig"
         }
       }
     },
@@ -375,6 +378,9 @@
         },
         "worktree": {
           "$ref": "#/definitions/worktreeConfig"
+        },
+        "vars": {
+          "$ref": "#/definitions/varsConfig"
         }
       },
       "required": [
