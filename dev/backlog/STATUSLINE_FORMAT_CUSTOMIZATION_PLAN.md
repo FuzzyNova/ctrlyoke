@@ -713,16 +713,17 @@ wrapper reuses these conventions without importing across that boundary.
 
 ## Staging vs. `SETTINGS_UI_PARITY_PLAN.md`
 
-**No strict dependency either direction — the two plans can be worked in parallel, or in either
-order.** Checked for real coupling (2026-08-21) and found none: `SETTINGS_UI_PARITY_PLAN.md`'s
-remaining work (the four `usageTracking.*` toggles, the `modelPricing` editor) is about
+**No dependency — and the parity plan has now shipped** (2026-08-21, moved to
+`dev/implemented/SETTINGS_UI_PARITY_PLAN.md`). Checked for real coupling and found none: that
+plan's work (the four `usageTracking.*` toggles, the `modelPricing` editor) is about
 data-collection/cost settings; this plan is about display formatting. Neither reads or depends on
 the other's settings or code paths.
 
-Both plans edit `StatsUsageSection.tsx`, but in disjoint regions: the parity plan adds toggles near
-the top (where they gate the stats rendered below); this plan's only edit to that file is
-*removing* the statusline block (Decision 12) and adding the `percentDirection` control. Whichever
-lands first, the other's diff doesn't meaningfully conflict with it.
+Both plans edit `StatsUsageSection.tsx`, but in disjoint regions. As shipped, the parity plan's
+"Usage collection" block sits at the top of that file (where it gates the stats rendered below)
+and its "Model pricing overrides" block sits below the usage cards; this plan's only edit to that
+file is *removing* the statusline block (Decision 12) and adding the `percentDirection` control,
+so the two diffs do not meaningfully conflict.
 
 **One operational watch-item, not a blocker.** This plan introduces a brand-new schema leaf,
 `usageTracking.percentDirection` (Decision 6), sitting in the same `usageTracking` object
@@ -730,7 +731,7 @@ lands first, the other's diff doesn't meaningfully conflict with it.
 `SETTINGS_UI_PARITY_PLAN.md`'s `PENDING_UI_PARITY` list). If this plan's Phase 3 (schema) and its
 `percentDirection` UI control (Phase 5) ever land in *separate* merges instead of together, that
 test will flag a new gap in the interim — fix, if it happens, is adding
-`permissions.usageTracking.percentDirection` to `PENDING_UI_PARITY`, same as any other
+`usageTracking.percentDirection` to `PENDING_UI_PARITY`, same as any other
 tracked-but-not-yet-controlled setting. Landing schema and control together (as this plan's own
 Phase breakdown already intends) avoids needing that at all.
 

@@ -33,7 +33,7 @@ import * as path from "path";
  * path, since the substituted value never appears verbatim in source.
  *
  * Known gaps are tracked in `PENDING_UI_PARITY` below rather than left
- * failing outright — see dev/backlog/SETTINGS_UI_PARITY_PLAN.md for the
+ * failing outright — see dev/implemented/SETTINGS_UI_PARITY_PLAN.md for the
  * disposition of each entry. As a gap gets a dashboard control, remove its
  * path from `PENDING_UI_PARITY` and re-run this suite: the second check
  * below fails if a listed path is no longer missing, so the list can't go
@@ -134,10 +134,8 @@ function allSettingPaths(): Map<string, string> {
  * controls use instead of writing their dot path inline (e.g.
  * `path={SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_ENABLED}`).
  * Defining a value there is not itself proof of a live control — the registry
- * also backs non-UI config plumbing (see `usageTracking.enabled`, which is
- * registered but has no dashboard row) — so this only maps path -> constant
- * name; the caller still has to confirm the constant is referenced from
- * webview source.
+ * also backs config plumbing — so this only maps path -> constant name; the
+ * caller still has to confirm the constant is referenced from webview source.
  */
 function settingPathConstants(): Map<string, string> {
   const source = readFileSync(DASHBOARD_CONSTANTS_PATH, "utf8");
@@ -158,7 +156,7 @@ function settingPathConstants(): Map<string, string> {
  * Settings-schema properties intentionally excluded from the live-dashboard-
  * control check below, either because the UI work described in the plan
  * hasn't landed yet, or (for `server.standalonePort`) because the feature it
- * configures doesn't exist yet. See dev/backlog/SETTINGS_UI_PARITY_PLAN.md
+ * configures doesn't exist yet. See dev/implemented/SETTINGS_UI_PARITY_PLAN.md
  * for the disposition of each entry.
  *
  * As each gap gets a dashboard control, remove its path from this list and
@@ -167,13 +165,8 @@ function settingPathConstants(): Map<string, string> {
  * rather than silently masking future gaps in the same setting.
  */
 const PENDING_UI_PARITY: readonly string[] = [
-  "modelPricing",
   "server.standalonePort",
   "server.theme",
-  "usageTracking.enabled",
-  "usageTracking.persistObservedUsage",
-  "usageTracking.providerRefreshEnabled",
-  "usageTracking.warningPercentUsed",
 ];
 
 const WEBVIEW_TEST_DIRECTORIES = new Set(["test", "__tests__"]);
@@ -237,7 +230,7 @@ suite("Settings schema -> Global Settings dashboard control parity", () => {
       `Settings-schema properties with no live dashboard control and no entry ` +
         `in PENDING_UI_PARITY (${unexpectedlyMissing.length}):\n` +
         unexpectedlyMissing.map((p) => `  - ${p}`).join("\n") +
-        "\nSee dev/backlog/SETTINGS_UI_PARITY_PLAN.md."
+        "\nSee dev/implemented/SETTINGS_UI_PARITY_PLAN.md."
     );
 
     assert.deepStrictEqual(
