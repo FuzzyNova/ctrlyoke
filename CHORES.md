@@ -106,48 +106,24 @@ agy update
 **Frequency**: When new Copilot/Claude/Codex/Gemini models are released
 
 Model lists split into two tracks with very different levels of automation. Copilot CLI
-models are fully scriptable; everything else either needs one manual VS Code step or is
-inherently manual because the vendor CLI has no scriptable "list models" command.
+models are fully scriptable; everything else is inherently manual because the vendor CLI
+has no scriptable "list models" command. ctrlyoke does not query VS Code's Language Model
+API or support a chat harness — every model list here is a CLI-facing constant.
 
-#### 2a. Copilot CLI models — fully automated, no VS Code needed
+#### 2a. Copilot CLI models — fully automated
 
 `COPILOT_CLI_MODEL_IDS` comes straight from `copilot help config`, which is a plain CLI
-command. This can be run headlessly and needs no F5/export step at all:
+command. This can be run headlessly with no manual step at all:
 
 ```bash
 npm run sync-models:discover   # updates COPILOT_CLI_MODEL_IDS in ModelConstants.ts
-npm run sync-models            # propagates to package.json + workflow-schema.json
+npm run sync-models            # auto-derives COPILOT_CLI_MODEL_LABELS, propagates to
+                                # package.json + workflow-schema.json
 ```
 
 Or just run `npm run chores -- --task sync-models`, which does both automatically.
 
-#### 2b. `COPILOT_MODELS` superset — requires one manual VS Code step
-
-`COPILOT_MODELS` is the full display-name superset used to populate workflow-schema model
-examples for autocomplete. (It no longer backs a harness — the copilot-chat harness was
-removed — but the schema still uses it.) It can only be read from VS Code's
-`vscode.lm.selectChatModels()` Language Model API, which isn't reachable outside the
-extension host. This one step can't be scripted:
-
-1. **Launch extension in dev mode**:
-   - Press `F5` in VS Code to start debugging session
-
-2. **Export discovered models**:
-   - Open Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
-   - Run: `ctrlyoke: Export Discovered Models`
-   - This creates/updates `scripts/discovered-models.json`
-
-Once that file exists, the rest is scriptable again:
-
-```bash
-npm run sync-models:import   # imports COPILOT_MODELS from discovered-models.json
-npm run sync-models          # propagates to package.json + workflow-schema.json
-```
-
-`npm run chores -- --task sync-models` also picks this up automatically if
-`scripts/discovered-models.json` is present (and skips it with a reminder if not).
-
-#### 2c. Codex / Claude CLI models — inherently manual
+#### 2b. Codex / Claude CLI models — inherently manual
 
 None of these have a scriptable model-list command to discover from:
 
@@ -160,7 +136,7 @@ When these change, update `CODEX_CLI_MODELS` or `CLAUDE_CLI_MODELS`
 in `src/utils/ModelConstants.ts` directly, based on vendor release notes or docs, then run
 `npm run sync-models` to propagate the change.
 
-#### 2d. Model pricing — fully automated, no hand-maintained table
+#### 2c. Model pricing — fully automated, no hand-maintained table
 
 `src/utils/ModelPricing.ts` has **no hand-typed price table for any harness.** Every harness
 (Copilot, Claude, Codex, OpenCode, Qwen, Antigravity) is priced by looking the model up in a
@@ -196,7 +172,7 @@ per harness:
 - **Codex CLI**: exact match against the `openai` provider bucket (Codex's own model IDs are
   already fully versioned, e.g. `gpt-5.6-sol`).
 - **Claude CLI**: its short aliases (`sonnet`/`opus`/`haiku`/`fable`, plus the `[1m]` variants)
-  name a *family*, not a specific dated model — the resolver picks whichever version of that
+  name a _family_, not a specific dated model — the resolver picks whichever version of that
   family is newest in the `anthropic` bucket every time pricing is resolved, so there's no
   "current version" fact to hand-update as Anthropic ships new models.
 - **OpenCode**: its own model IDs are literally `<provider>/<model>` — the resolver uses that
@@ -216,7 +192,7 @@ relationships unverified against a live CLI run — see `dev/backlog/SETTINGS_UI
 and `dev/implemented/PROMPT_TOTAL_TOKEN_USAGE_PLAN.md`), and `calculateAttemptCost` refuses to
 compute a cost whenever semantics are `UNKNOWN`, on purpose — a guessed cache/reasoning formula
 would produce a confidently wrong number, which is worse than no estimate. What the registry
-does change is the *reason* shown when cost is unavailable, from "unknown model" to "unverified
+does change is the _reason_ shown when cost is unavailable, from "unknown model" to "unverified
 token semantics" — and once someone verifies those semantics against a live run and updates
 `HARNESS_TOKEN_SEMANTICS`, estimates start flowing immediately with no further pricing work
 needed. OpenCode doesn't have this blocker in practice: `OpenCodeLogParser` already reads a
@@ -230,7 +206,7 @@ Run `npm test` (`src/test/unit/ModelPricing.test.ts` and
 
 1. **Verify changes**:
    - Check `src/utils/ModelConstants.ts`
-   - Check `src/utils/generated/modelPricingRegistryData.json` if 2d was re-run
+   - Check `src/utils/generated/modelPricingRegistryData.json` if 2c was re-run
    - Check `package.json` settings
    - Check `schemas/workflow-schema.json`
    - Check `schemas/workflow-schema.yaml`
@@ -247,9 +223,10 @@ Run `npm test` (`src/test/unit/ModelPricing.test.ts` and
 
 ### 3. Update VS Code Commands
 
-**Frequency**: When VS Code updates or when we need to refresh command lists
+**Frequency**: When VS Code updates or when we need to refresh the command reference
 
-ctrlyoke references VS Code commands (especially chat commands). Keep these up-to-date.
+Keep the checked-in VS Code command dump up-to-date. This is purely a reference artifact —
+ctrlyoke doesn't drive VS Code commands as part of any harness.
 
 #### Steps:
 
@@ -259,19 +236,9 @@ ctrlyoke references VS Code commands (especially chat commands). Keep these up-t
 2. **List all VS Code commands**:
    - Open Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
    - Run: `ctrlyoke: List All Commands`
-   - This outputs all commands to Output panel
+   - This writes the full command list to `dev/reference/VSCODE_COMMANDS.md`
 
-3. **List chat-specific commands**:
-   - Run: `ctrlyoke: List Chat Commands`
-   - Outputs chat-related commands
-
-4. **Update reference documentation**:
-   - Copy relevant commands to `docs/reference/VSCODE_COMMANDS.md`
-   - Copy chat commands to `docs/reference/CHAT_COMMANDS.md`
-
-5. **Check for new useful commands**:
-   - Look for new `workbench.action.chat.*` commands
-   - Update `src/core/chat/CopilotChatIntegration.ts` if needed
+3. **Commit the updated reference file**.
 
 ---
 
@@ -406,7 +373,7 @@ See [images/README.md](images/README.md) for design recommendations.
 Before releasing a new version, run these tasks:
 
 - [ ] Update CLI tools (check for latest versions)
-- [ ] Update models (`npm run chores -- --task sync-models`; export Chat models from VS Code first if needed)
+- [ ] Update models (`npm run chores -- --task sync-models`)
 - [ ] Update VS Code commands (list and document)
 - [ ] Update dependencies (`npm update` + `npm audit`)
 - [ ] Run full test suite (`npm test`)
@@ -444,12 +411,12 @@ npm run chores -- --task check-all
 
 **Available tasks**:
 
-- `sync-models` - Discover Copilot CLI models (`copilot help config`) + sync the model
-  registry to `package.json`/schema; also imports Chat models if `discovered-models.json`
-  has been exported from VS Code
+- `sync-models` - Discover Copilot CLI models (`copilot help config`), auto-derive their
+  display labels, and sync the model registry to `package.json`/schema
 - `sync-model-pricing` - Re-download the models.dev registry snapshot used to price every
-  harness's models (see section 2d)
-- `update-clis` - Update CLI tools (copilot, claude, codex) via their native updaters
+  harness's models (see section 2c)
+- `update-clis` - Update CLI tools (copilot, claude, codex, qwen, opencode, antigravity)
+  via their native updaters
 - `check-clis` - Check installed CLI tool versions
 - `update-deps` - Update and audit dependencies
 - `check-all` - Run all checks (lint, format, tests)
@@ -461,7 +428,7 @@ npm run chores -- --task check-all
 
 - **Schedule regular maintenance**: Set a monthly reminder to run through these chores
 - **After VS Code updates**: Check for new commands and API changes
-- **After Copilot updates**: Copilot CLI models refresh automatically via `sync-models`; export from VS Code only if the Chat model superset changed
+- **After Copilot updates**: Copilot CLI models refresh automatically via `sync-models`
 - **Before major releases**: Run all chores and full test suite
 - **Document breaking changes**: Update CHANGELOG.md when CLIs introduce breaking changes
 

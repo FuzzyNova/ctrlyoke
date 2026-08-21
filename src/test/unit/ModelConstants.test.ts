@@ -10,7 +10,8 @@ import {
   getQwenContextWindowSize,
   getAntigravityModelName,
   getAntigravityContextWindowSize,
-  COPILOT_MODELS,
+  COPILOT_CLI_MODEL_IDS,
+  COPILOT_CLI_MODEL_LABELS,
   CLAUDE_CLI_MODELS,
   QWEN_CLI_MODELS,
   ANTIGRAVITY_CLI_MODELS,
@@ -21,7 +22,7 @@ import {
 suite("ModelConstants", () => {
   suite("getModelDisplayName", () => {
     test("returns display name for known Copilot model", () => {
-      assert.strictEqual(getModelDisplayName("gpt-4o-mini"), "GPT-4o Mini");
+      assert.strictEqual(getModelDisplayName("gpt-5-mini"), "GPT 5 Mini");
     });
 
     test("returns display name for another known model", () => {
@@ -41,19 +42,11 @@ suite("ModelConstants", () => {
     test("handles single-word unknown model", () => {
       assert.strictEqual(getModelDisplayName("turbo"), "Turbo");
     });
-
-    test("returns 'Auto' for auto model", () => {
-      assert.strictEqual(getModelDisplayName("auto"), "Auto");
-    });
   });
 
   suite("isKnownCopilotModel", () => {
     test("returns true for known model", () => {
-      assert.strictEqual(isKnownCopilotModel("gpt-4o-mini"), true);
-    });
-
-    test("returns true for auto", () => {
-      assert.strictEqual(isKnownCopilotModel("auto"), true);
+      assert.strictEqual(isKnownCopilotModel("claude-sonnet-4.5"), true);
     });
 
     test("returns false for unknown model", () => {
@@ -258,8 +251,14 @@ suite("ModelConstants", () => {
   });
 
   suite("constant arrays", () => {
-    test("COPILOT_MODELS has entries", () => {
-      assert.ok(Object.keys(COPILOT_MODELS).length > 0);
+    test("COPILOT_CLI_MODEL_IDS has entries", () => {
+      assert.ok(COPILOT_CLI_MODEL_IDS.length > 0);
+    });
+
+    test("every COPILOT_CLI_MODEL_IDS id has a display label", () => {
+      for (const id of COPILOT_CLI_MODEL_IDS) {
+        assert.ok(COPILOT_CLI_MODEL_LABELS[id], `missing label for ${id}`);
+      }
     });
 
     test("CLAUDE_CLI_MODELS includes fable", () => {

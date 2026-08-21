@@ -3,7 +3,7 @@ applyTo: "src/dev/**"
 ---
 
 <purpose>
-Development-only tooling only. `src/dev/` is currently a single module (`DevCommands.ts`) for diagnostics, VS Code API probes, model export, and dashboard-triggered build/test actions. Production builds must not import or ship this code.
+Development-only tooling only. `src/dev/` is currently a single module (`DevCommands.ts`) for diagnostics, VS Code API probes, and dashboard-triggered build/test actions. Production builds must not import or ship this code.
 </purpose>
 
 <architecture>
@@ -29,21 +29,12 @@ Dashboard build actions are intentionally in-process and serialized by the modul
 Keep the command surface focused on a few categories:
 
 - **VS Code API probes**: the `ctrlyoke.test.*` commands are exploratory/diagnostic helpers, not production features.
-- **Reference artifact generation**: command dumps go to `dev/reference/`; discovered models go to `scripts/discovered-models.json`.
+- **Reference artifact generation**: command dumps go to `dev/reference/`.
 - **Dashboard dev actions**: build/test/restart actions stream `DEV_BUILD_*` / `DEV_RESTARTING` / `DEV_COMMAND_UNAVAILABLE` messages back to the UI.
 - **Optional notification testing**: `ctrlyoke.dev.sendTestNotification` only exists when a handler is injected from `extension.ts`; keep server/notification dependencies out of `DevCommands.ts` itself.
   </highValueCommands>
 
-<modelUpdateWorkflow>
-`ctrlyoke.exportDiscoveredModels` is the front door for refreshing checked-in model lists:
-
-1. Run extension (`F5`)
-2. Run command: **ctrlyoke: Export Discovered Models** → writes `scripts/discovered-models.json`
-3. `npm run sync-models -- --import` → updates `src/utils/ModelConstants.ts`
-4. `npm run sync-models` → syncs `package.json` enums and `schemas/workflow-schema.json`
-5. `npm run generate-schema` → regenerates YAML schema from JSON
-6. Commit all updated files
-   </modelUpdateWorkflow>
+Model lists are checked-in constants in `src/utils/ModelConstants.ts`, kept in sync with `package.json`/schema via `npm run sync-models` (see CHORES.md section 2). There is no VS Code-side export step — ctrlyoke never queries VS Code's Language Model API — Copilot CLI models come straight from `npm run sync-models -- --discover` (`copilot help config`), and every other harness's models are either CLI-discoverable at runtime or hand-maintained per CHORES.md.
 
 <conventions>
 - Never register dev commands outside the `IS_DEV_MODE` guard.

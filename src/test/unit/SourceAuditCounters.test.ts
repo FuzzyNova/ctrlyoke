@@ -6,7 +6,7 @@ import { suite, test } from "mocha";
 
 export const FEEDBACK_SOURCE_AUDIT_BASELINES = {
   directMessage: {
-    boundary: 53,
+    boundary: 49,
     reusable: 0,
     boundaryFiles: [
       "src/completions/ContextMenuReferenceCommands.ts",

@@ -182,7 +182,6 @@
 - `ctrlyoke.dumpCssVars`
 - `ctrlyoke.editCurrentPromptFile`
 - `ctrlyoke.enableServer`
-- `ctrlyoke.exportDiscoveredModels`
 - `ctrlyoke.generateCommitMessage`
 - `ctrlyoke.importWorkflowTemplates`
 - `ctrlyoke.initWorkspace`

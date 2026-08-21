@@ -34,7 +34,7 @@ If you add a new trigger or reference form, update all of these together:
 
 For YAML, explicit replacement ranges are required; without `calculateCompletionRange()` the YAML extension suppresses completions. Keep `CompletionList(..., true)` for trigger-based completions even though VS Code may visually duplicate entries; `false` breaks live refresh for symbol filtering.
 
-Model completions are JSON/JSONC-only and replace the entire quoted model value via `getAvailableModelsSync()`.
+Model completions are JSON/JSONC-only and replace the entire quoted model value, sourced from `COPILOT_CLI_MODEL_IDS`/`COPILOT_CLI_MODEL_LABELS` in `ModelConstants.ts` — ctrlyoke doesn't query VS Code's Language Model API.
 </promptCompletionProvider>
 
 <completionHelpers>

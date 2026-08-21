@@ -13,7 +13,6 @@
  */
 
 import { spawn } from "child_process";
-import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -144,6 +143,9 @@ async function checkCliUpdates() {
     { command: "copilot", name: "GitHub Copilot CLI" },
     { command: "claude", name: "Claude Code CLI" },
     { command: "codex", name: "Codex CLI" },
+    { command: "qwen", name: "Qwen CLI" },
+    { command: "opencode", name: "OpenCode CLI" },
+    { command: "agy", name: "Antigravity CLI" },
   ];
 
   for (const cli of clis) {
@@ -161,9 +163,12 @@ async function checkCliUpdates() {
   console.log();
   console.log();
   logInfo("To update CLIs:");
-  logInfo("  - Copilot CLI:  copilot update");
-  logInfo("  - Claude CLI:   claude upgrade");
-  logInfo("  - Codex CLI:    npm install -g @openai/codex");
+  logInfo("  - Copilot CLI:     copilot update");
+  logInfo("  - Claude CLI:      claude upgrade");
+  logInfo("  - Codex CLI:       npm install -g @openai/codex");
+  logInfo("  - Qwen CLI:        qwen update");
+  logInfo("  - OpenCode CLI:    opencode upgrade");
+  logInfo("  - Antigravity CLI: agy update");
   logWarning("Copilot and Claude use native installers, not npm");
 }
 
@@ -220,6 +225,51 @@ async function updateClis() {
   }
 
   console.log();
+
+  // Qwen CLI - native updater
+  const qwenInstalled = await checkCliInstalled("qwen", "Qwen CLI");
+  if (qwenInstalled) {
+    logInfo("Updating Qwen CLI...");
+    try {
+      await runCommand("qwen", ["update"]);
+      logSuccess("Qwen CLI updated");
+    } catch {
+      logWarning("Qwen CLI update may have failed");
+    }
+  }
+
+  console.log();
+
+  // OpenCode CLI - native updater
+  const opencodeInstalled = await checkCliInstalled("opencode", "OpenCode CLI");
+  if (opencodeInstalled) {
+    logInfo("Updating OpenCode CLI...");
+    try {
+      await runCommand("opencode", ["upgrade"]);
+      logSuccess("OpenCode CLI updated");
+    } catch {
+      logWarning("OpenCode CLI upgrade may have failed");
+    }
+  }
+
+  console.log();
+
+  // Antigravity CLI - native updater
+  const antigravityInstalled = await checkCliInstalled(
+    "agy",
+    "Antigravity CLI"
+  );
+  if (antigravityInstalled) {
+    logInfo("Updating Antigravity CLI...");
+    try {
+      await runCommand("agy", ["update"]);
+      logSuccess("Antigravity CLI updated");
+    } catch {
+      logWarning("Antigravity CLI update may have failed");
+    }
+  }
+
+  console.log();
   logInfo(
     "Run 'npm run chores -- --task check-clis' to verify versions after update"
   );
@@ -228,39 +278,16 @@ async function updateClis() {
 /**
  * Task: Sync models
  *
- * Order matters here: --import overwrites COPILOT_CLI_MODEL_IDS too (it comes
- * bundled in discovered-models.json), but that file is only ever as fresh as
- * the last VS Code export. --discover queries `copilot help config` live, so
- * it must run AFTER --import to have the final say on COPILOT_CLI_MODEL_IDS -
- * otherwise a stale export silently clobbers the live discovery.
- *
- * The Chat model superset (COPILOT_MODELS) only comes from VS Code's Language
- * Model API, so it's imported from discovered-models.json when present, and
- * skipped (with a reminder) otherwise.
+ * `--discover` queries `copilot help config` live and updates
+ * COPILOT_CLI_MODEL_IDS — the sole source of truth for Copilot models
+ * (ctrlyoke does not query VS Code's Language Model API or support a chat
+ * harness). `npm run sync-models` then auto-derives COPILOT_CLI_MODEL_LABELS
+ * from that array and propagates everything to package.json/schema.
  */
 async function syncModels() {
   logHeader("Syncing Model Registry");
 
   try {
-    const discoveredModelsPath = path.join(
-      ROOT_DIR,
-      "scripts",
-      "discovered-models.json"
-    );
-
-    if (fs.existsSync(discoveredModelsPath)) {
-      logInfo("Importing Chat models from discovered-models.json...");
-      await runCommand("npm", ["run", "sync-models:import"]);
-    } else {
-      logWarning(
-        "No discovered-models.json found - skipping Chat model import"
-      );
-      logInfo(
-        "Run 'ctrlyoke: Export Discovered Models' in VS Code (F5) to refresh the Chat model superset (COPILOT_MODELS)"
-      );
-    }
-
-    console.log();
     logInfo("Discovering Copilot CLI models from `copilot help config`...");
     await runCommand("npm", ["run", "sync-models:discover"]);
 
@@ -353,9 +380,9 @@ ${colors.cyan}Usage:${colors.reset}
 
 ${colors.cyan}Available Tasks:${colors.reset}
   ${colors.green}update-deps${colors.reset}     Update dependencies and run npm audit
-  ${colors.green}update-clis${colors.reset}     Update CLI tools (copilot, claude, codex)
+  ${colors.green}update-clis${colors.reset}     Update CLI tools (copilot, claude, codex, qwen, opencode, antigravity)
   ${colors.green}check-clis${colors.reset}      Check installed CLI tool versions
-  ${colors.green}sync-models${colors.reset}     Discover Copilot CLI models + sync registry (Chat models imported if exported)
+  ${colors.green}sync-models${colors.reset}     Discover Copilot CLI models + sync registry
   ${colors.green}sync-model-pricing${colors.reset}  Re-download the models.dev pricing registry for all harnesses
   ${colors.green}check-all${colors.reset}       Run all checks (lint, format, tests)
   ${colors.green}all${colors.reset}             Run all automated chores
@@ -368,9 +395,7 @@ ${colors.cyan}Examples:${colors.reset}
   npm run chores -- --task all
 
 ${colors.cyan}Manual Tasks:${colors.reset}
-  Only two things still require manual steps - see ${colors.blue}CHORES.md${colors.reset} for details:
-  - Exporting the Chat model superset from VS Code (section 2) - Copilot CLI models
-    no longer need this, they're discovered automatically by 'sync-models'
+  One thing still requires a manual step - see ${colors.blue}CHORES.md${colors.reset} for details:
   - Updating VS Code commands (section 3)
 
 ${colors.cyan}Documentation:${colors.reset}
@@ -434,10 +459,7 @@ async function main() {
         await runAllChecks();
         logHeader("All Automated Chores Complete");
         logInfo("Remaining manual steps:");
-        logInfo(
-          "  1. If you need the Chat model superset refreshed, export it in VS Code (F5 -> ctrlyoke: Export Discovered Models), then re-run: npm run chores -- --task sync-models"
-        );
-        logInfo("  2. Update VS Code commands (see CHORES.md section 3)");
+        logInfo("  1. Update VS Code commands (see CHORES.md section 3)");
         break;
 
       default:

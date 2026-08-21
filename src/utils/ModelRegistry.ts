@@ -2,8 +2,7 @@
  * ModelRegistry - Dynamic model discovery and caching
  *
  * Queries available models via:
- * 1. VS Code's Language Model API (for Copilot models) - User-specific availability
- * 2. `copilot help config` output (for Copilot CLI models) - Parsed dynamically
+ * 1. `copilot help config` output (for Copilot CLI models) - Parsed dynamically
  *
  * Claude Code CLI models are maintained as a static list because:
  * - Claude CLI has no `claude model list` command (feature request: github.com/anthropics/claude-code/issues/12612)
@@ -25,7 +24,6 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { promises as fsPromises } from "fs";
 import {
-  COPILOT_LM_MODEL_IDS,
   COPILOT_CLI_MODEL_IDS,
   OPENCODE_CLI_FALLBACK_MODELS,
 } from "./ModelConstants";
@@ -44,24 +42,9 @@ const modelsLoadedEmitter = new vscode.EventEmitter<void>();
  */
 export const onModelsLoaded = modelsLoadedEmitter.event;
 
-/**
- * Represents a discovered Copilot model
- */
-export interface CopilotModel {
-  /** Model ID (e.g., "claude-sonnet-4.5", "gpt-4o") */
-  id: string;
-  /** Model family (e.g., "claude-sonnet-4.5", "gpt-4o") */
-  family: string;
-  /** Model vendor (typically "copilot") */
-  vendor: string;
-  /** Whether this model is available for Copilot CLI use */
-  cliSupported: boolean;
-}
-
 const QWEN_CLI_FALLBACK_MODEL = "qwen3.5-plus";
 
 // In-memory cache of discovered models
-let cachedModels: CopilotModel[] = [];
 let cachedCopilotCliModelIds: string[] = [];
 let cachedOpenCodeModelIds: string[] = [];
 let cachedQwenModelIds: string[] = [];
@@ -70,13 +53,11 @@ const cachedOpenCodeContextWindows = new Map<string, number>();
 let isInitialized = false;
 let initializationPromise: Promise<void> | null = null;
 
-// Fallback model lists - imported from ModelConstants (single source of truth)
-const FALLBACK_LM_MODELS = COPILOT_LM_MODEL_IDS;
+// Fallback model list - imported from ModelConstants (single source of truth)
 const FALLBACK_COPILOT_CLI_MODELS = [...COPILOT_CLI_MODEL_IDS];
 
 /**
  * Initialize the model registry by querying available models
- * Queries both VS Code LM API and Copilot CLI for model availability
  * Safe to call multiple times - only queries once
  *
  * @returns Promise that resolves when models are loaded
@@ -93,9 +74,7 @@ export async function initializeModelRegistry(): Promise<void> {
   }
 
   initializationPromise = (async () => {
-    // Query Copilot CLI first, then LM API models (so we can set cliSupported correctly)
     await queryCopilotCliModels();
-    await queryLmModels();
     await queryOpenCodeModels();
     await queryQwenModels();
     isInitialized = true;
@@ -178,38 +157,6 @@ async function queryCopilotCliModels(): Promise<void> {
   } catch (error) {
     Log.warn(`Failed to query Copilot CLI models: ${error}`);
     cachedCopilotCliModelIds = [...FALLBACK_COPILOT_CLI_MODELS];
-  }
-}
-
-/**
- * Query available models from VS Code Language Model API
- */
-async function queryLmModels(): Promise<void> {
-  try {
-    Log.debug("Querying VS Code LM API for available models...");
-
-    const models = await vscode.lm.selectChatModels({
-      vendor: "copilot",
-    });
-
-    if (models && models.length > 0) {
-      cachedModels = models.map((model) => ({
-        id: model.id,
-        family: model.family,
-        vendor: model.vendor,
-        cliSupported: cachedCopilotCliModelIds.includes(model.id),
-      }));
-
-      Log.debug(
-        `Discovered ${cachedModels.length} LM API models: ${cachedModels.map((m) => m.id).join(", ")}`
-      );
-    } else {
-      Log.info("No models returned from LM API, using fallback list");
-      useFallbackModels();
-    }
-  } catch (error) {
-    Log.warn(`Failed to query LM API models, using fallback: ${error}`);
-    useFallbackModels();
   }
 }
 
@@ -370,29 +317,6 @@ async function queryQwenModels(): Promise<void> {
     );
     cachedQwenModelIds = [QWEN_CLI_FALLBACK_MODEL];
   }
-}
-
-/**
- * Populate cache with static fallback models
- */
-function useFallbackModels(): void {
-  cachedModels = FALLBACK_LM_MODELS.map((id) => ({
-    id,
-    family: id,
-    vendor: "copilot",
-    cliSupported: cachedCopilotCliModelIds.includes(id),
-  }));
-}
-
-/**
- * Get available models synchronously (from cache)
- * Returns empty array if not yet initialized
- * Use getAvailableModels() for guaranteed results
- *
- * @returns Array of cached models, or empty if not initialized
- */
-export function getAvailableModelsSync(): CopilotModel[] {
-  return cachedModels;
 }
 
 /**

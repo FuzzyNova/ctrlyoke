@@ -24,15 +24,9 @@ const DEV_COMMAND_CATEGORIES = ["ctrlyoke Test"];
 
 // List of dev command IDs to remove (as a fallback if category isn't used)
 const DEV_COMMAND_IDS = [
-  "ctrlyoke.test.copilotAutomation",
-  "ctrlyoke.test.fileAttachment",
-  "ctrlyoke.test.chatModelSelection",
-  "ctrlyoke.test.chatAgentSelection",
-  "ctrlyoke.listChatCommands",
   "ctrlyoke.listAllCommands",
-  "ctrlyoke.investigateChatLogs",
-  "ctrlyoke.exportDiscoveredModels",
   "ctrlyoke.showLanguageId",
+  "ctrlyoke.dumpCssVars",
   "ctrlyoke.devMenu",
 ];
 

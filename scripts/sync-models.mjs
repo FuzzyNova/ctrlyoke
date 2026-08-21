@@ -5,42 +5,32 @@
  *
  * This script reads model constants from ModelConstants.ts and updates:
  * 1. package.json enum arrays for settings:
- *    - ctrlyoke.copilotCliModel (uses COPILOT_CLI_MODEL_IDS - smaller set)
+ *    - ctrlyoke.copilotCliModel (uses COPILOT_CLI_MODEL_IDS)
  *    - ctrlyoke.claudeCliModel (uses CLAUDE_CLI_MODELS - Claude models)
  *    - ctrlyoke.codexCliModel (uses CODEX_CLI_MODELS - Codex models)
  * 2. workflow-schema.json model examples (combines all models for autocomplete)
  *
  * IMPORTANT: Different providers support different model sets!
- * - Copilot CLI models come from `copilot help config` (smaller subset)
+ * - Copilot CLI models come from `copilot help config` (only source — there is
+ *   no separate Chat-model superset; ctrlyoke doesn't query VS Code's Language
+ *   Model API or support a chat harness)
  * - Claude CLI models come from Anthropic's Claude Code CLI (separate)
  * - Codex CLI models come from OpenAI's Codex CLI (separate)
- *
- * COPILOT_MODELS (parsed here as `chatModels`) is the broader set discoverable
- * via VS Code's Language Model API. It no longer backs a harness — the
- * copilot-chat harness was removed — but it is still used to populate
- * workflow-schema.json model examples for autocomplete.
  *
  * Usage:
  *   node scripts/sync-models.mjs             # Sync all models from ModelConstants.ts
  *   node scripts/sync-models.mjs --check     # Check if in sync (CI mode)
  *   node scripts/sync-models.mjs --discover  # Query `copilot help config` directly and
  *                                             # update COPILOT_CLI_MODEL_IDS from it
- *   node scripts/sync-models.mjs --import    # Import from discovered-models.json and update ModelConstants.ts
  *
  * Workflow for updating CLI models (authoritative, no extension needed):
  *   1. Run: npm run sync-models -- --discover  (updates COPILOT_CLI_MODEL_IDS)
  *   2. Run: npm run sync-models (to update package.json and schema)
  *
- * Workflow for updating Chat models (requires the VS Code Language Model API):
- *   1. Run extension (F5)
- *   2. Run "ctrlyoke: Export Discovered Models" command
- *   3. Run: npm run sync-models -- --import
- *   4. Run: npm run sync-models (to update package.json and schema)
- *
  * The script preserves formatting and only updates the enum arrays and schema examples.
  */
 
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
@@ -53,43 +43,10 @@ const ROOT_DIR = resolve(__dirname, "..");
 
 const MODEL_CONSTANTS_PATH = resolve(ROOT_DIR, "src/utils/ModelConstants.ts");
 const PACKAGE_JSON_PATH = resolve(ROOT_DIR, "package.json");
-const DISCOVERED_MODELS_PATH = resolve(__dirname, "discovered-models.json");
 const SCHEMA_PATH = resolve(ROOT_DIR, "schemas/workflow-schema.json");
 
 /**
- * Parse COPILOT_MODELS (Chat models - full set) from ModelConstants.ts
- */
-function parseChatModels(content) {
-  // Find the COPILOT_MODELS object literal
-  const modelBlockMatch = content.match(
-    /export\s+const\s+COPILOT_MODELS[^=]*=\s*\{([^}]+(?:\{[^}]*\}[^}]*)*)\}/s
-  );
-
-  if (!modelBlockMatch) {
-    throw new Error("Could not find COPILOT_MODELS in ModelConstants.ts");
-  }
-
-  const modelBlock = modelBlockMatch[1];
-  const modelIds = [];
-
-  // Match both quoted keys ("key": ...) and unquoted keys (key: ...)
-  // Handles: "model-id": "Name", 'model-id': 'Name', modelId: "Name"
-  const keyRegex = /(?:["']([^"']+)["']|(\w+))\s*:/g;
-  let match;
-
-  while ((match = keyRegex.exec(modelBlock)) !== null) {
-    // match[1] is quoted key, match[2] is unquoted key
-    const key = match[1] || match[2];
-    if (key) {
-      modelIds.push(key);
-    }
-  }
-
-  return modelIds;
-}
-
-/**
- * Parse COPILOT_CLI_MODEL_IDS (CLI models - smaller set) from ModelConstants.ts
+ * Parse COPILOT_CLI_MODEL_IDS (CLI models) from ModelConstants.ts
  */
 function parseCliModels(content) {
   // Find the COPILOT_CLI_MODEL_IDS array literal
@@ -179,7 +136,6 @@ function parseCodexModels(content) {
 function parseModelConstants() {
   const content = readFileSync(MODEL_CONSTANTS_PATH, "utf-8");
 
-  const chatModels = parseChatModels(content);
   const cliModels = parseCliModels(content);
   const claudeModels = parseClaudeModels(content);
   const codexModels = parseCodexModels(content);
@@ -193,7 +149,6 @@ function parseModelConstants() {
     "OPENCODE_CLI_FALLBACK_MODELS"
   );
 
-  console.log(`Found ${chatModels.length} Chat models in COPILOT_MODELS`);
   console.log(`Found ${cliModels.length} CLI models in COPILOT_CLI_MODEL_IDS`);
   console.log(
     `Found ${claudeModels.length} Claude models in CLAUDE_CLI_MODELS`
@@ -208,7 +163,6 @@ function parseModelConstants() {
   );
 
   return {
-    chatModels,
     cliModels,
     claudeModels,
     codexModels,
@@ -219,33 +173,41 @@ function parseModelConstants() {
 }
 
 /**
- * Auto-derive CODEX_CLI_MODEL_LABELS from CODEX_CLI_MODELS
+ * Auto-derive a `<X>_MODEL_LABELS` map from its matching `<X>_MODELS`/`<X>_MODEL_IDS`
+ * array in ModelConstants.ts, so only the ID array needs hand-editing.
  *
- * This ensures you only need to update CODEX_CLI_MODELS array, and the
- * labels are automatically generated.
+ * Shared by Codex and Copilot CLI models — both use the same "id -> generated
+ * title-case label" convention.
  */
-function updateCodexDerivedConstants(checkOnly = false) {
-  console.log("\nUpdating Codex derived constants...");
+function updateDerivedLabels(
+  modelsConstantName,
+  labelsConstantName,
+  checkOnly = false
+) {
+  console.log(`\nUpdating ${labelsConstantName}...`);
 
   let content = readFileSync(MODEL_CONSTANTS_PATH, "utf-8");
-  const codexModels = parseCodexModels(content);
+  const modelIds = parseStringArrayConstant(content, modelsConstantName);
 
-  if (codexModels.length === 0) {
-    console.log("  ⚠ No Codex models found, skipping");
+  if (modelIds.length === 0) {
+    console.log(`  ⚠ No ${modelsConstantName} models found, skipping`);
     return;
   }
 
   let needsUpdate = false;
 
-  // === Update CODEX_CLI_MODEL_LABELS (auto-generate from model IDs) ===
+  // Auto-generate the expected labels from the model IDs
   const expectedLabels = {};
-  codexModels.forEach((id) => {
+  modelIds.forEach((id) => {
     expectedLabels[id] = generateDisplayName(id);
   });
 
   // Parse current labels
   const labelsMatch = content.match(
-    /export\s+const\s+CODEX_CLI_MODEL_LABELS[^=]*=\s*\{([^}]+)\}/s
+    new RegExp(
+      `export\\s+const\\s+${labelsConstantName}[^=]*=\\s*\\{([^}]+)\\}`,
+      "s"
+    )
   );
   const currentLabels = {};
   if (labelsMatch) {
@@ -266,29 +228,32 @@ function updateCodexDerivedConstants(checkOnly = false) {
   if (labelsDiffer) {
     needsUpdate = true;
     console.log(
-      `  CODEX_CLI_MODEL_LABELS: ${Object.keys(currentLabels).length} → ${Object.keys(expectedLabels).length} entries`
+      `  ${labelsConstantName}: ${Object.keys(currentLabels).length} → ${Object.keys(expectedLabels).length} entries`
     );
 
     if (!checkOnly) {
       const labelEntries = Object.entries(expectedLabels)
         .map(([id, label]) => `  "${id}": "${label}"`)
         .join(",\n");
-      const newLabelsBlock = `export const CODEX_CLI_MODEL_LABELS: Record<string, string> = {\n${labelEntries},\n}`;
+      const newLabelsBlock = `export const ${labelsConstantName}: Record<string, string> = {\n${labelEntries},\n}`;
 
       content = content.replace(
-        /export\s+const\s+CODEX_CLI_MODEL_LABELS[^=]*=\s*\{[^}]+\}/s,
+        new RegExp(
+          `export\\s+const\\s+${labelsConstantName}[^=]*=\\s*\\{[^}]+\\}`,
+          "s"
+        ),
         newLabelsBlock
       );
     }
   } else {
-    console.log(`  CODEX_CLI_MODEL_LABELS: ✓ already in sync`);
+    console.log(`  ${labelsConstantName}: ✓ already in sync`);
   }
 
   if (needsUpdate && !checkOnly) {
     writeFileSync(MODEL_CONSTANTS_PATH, content);
     console.log("  ✓ ModelConstants.ts updated");
   } else if (needsUpdate && checkOnly) {
-    console.log("\n✗ Codex derived constants are out of sync");
+    console.log(`\n✗ ${labelsConstantName} is out of sync`);
     process.exit(1);
   }
 }
@@ -321,7 +286,7 @@ function generateDisplayName(modelId, existingLabels = {}) {
  * Update enum arrays in package.json
  */
 function updatePackageJson(
-  { chatModels, cliModels, claudeModels, codexModels },
+  { cliModels, claudeModels, codexModels },
   checkOnly = false
 ) {
   const content = readFileSync(PACKAGE_JSON_PATH, "utf-8");
@@ -391,7 +356,6 @@ function updatePackageJson(
  */
 function updateSchema(
   {
-    chatModels,
     cliModels,
     claudeModels,
     codexModels,
@@ -410,7 +374,6 @@ function updateSchema(
   const allModels = [
     ...new Set([
       "none",
-      ...chatModels,
       ...cliModels,
       ...claudeModels,
       ...codexModels,
@@ -465,10 +428,8 @@ function updateSchema(
  * Discover models directly from `copilot help config` and write them straight
  * into COPILOT_CLI_MODEL_IDS in ModelConstants.ts.
  *
- * This is the authoritative source for Copilot CLI models — it doesn't depend
- * on the VS Code extension's "Export Discovered Models" command (which only
- * covers models the Chat Language Model API happens to expose, and can lag
- * behind what the CLI itself actually supports).
+ * This is the sole authoritative source for Copilot CLI models — it queries
+ * the CLI directly rather than any VS Code extension host API.
  */
 async function discoverFromCli() {
   console.log("Discovering models from Copilot CLI...\n");
@@ -526,10 +487,6 @@ async function discoverFromCli() {
  * Replace the COPILOT_CLI_MODEL_IDS array in ModelConstants.ts source content
  * with `cliModelIds`, returning the updated content plus the added/removed
  * model IDs relative to what was previously there.
- *
- * Shared by --import (source: discovered-models.json) and --discover
- * (source: live `copilot help config` output) so both paths update the
- * array identically.
  */
 function updateCopilotCliModelIds(content, cliModelIds) {
   const currentCliMatch = content.match(
@@ -558,112 +515,11 @@ function updateCopilotCliModelIds(content, cliModelIds) {
   return { content: updatedContent, added, removed };
 }
 
-/**
- * Import models from discovered-models.json and update ModelConstants.ts
- *
- * This reads the JSON file exported by the "ctrlyoke: Export Discovered Models"
- * command and updates:
- * - COPILOT_MODELS object (chat models with display names)
- * - COPILOT_CLI_MODEL_IDS array (CLI-supported subset)
- */
-function importDiscoveredModels() {
-  console.log("Importing models from discovered-models.json...\n");
-
-  if (!existsSync(DISCOVERED_MODELS_PATH)) {
-    console.error("❌ discovered-models.json not found!");
-    console.log("\nTo generate this file:");
-    console.log("  1. Run the ctrlyoke extension (F5)");
-    console.log('  2. Run command: "ctrlyoke: Export Discovered Models"');
-    console.log("  3. Then run: npm run sync-models -- --import");
-    process.exit(1);
-  }
-
-  // Read discovered models
-  const discovered = JSON.parse(readFileSync(DISCOVERED_MODELS_PATH, "utf-8"));
-  console.log(`Exported at: ${discovered.exportedAt}`);
-  console.log(`Chat models: ${discovered.chatModelIds?.length || 0}`);
-  console.log(`CLI models: ${discovered.cliModelIds?.length || 0}`);
-
-  if (!discovered.chatModelIds || discovered.chatModelIds.length === 0) {
-    console.error("\n❌ No chat models found in discovered-models.json");
-    process.exit(1);
-  }
-
-  // Read current ModelConstants.ts
-  let content = readFileSync(MODEL_CONSTANTS_PATH, "utf-8");
-
-  // === Update COPILOT_MODELS ===
-  // Extract existing display names to preserve them
-  const existingLabels = {};
-  const labelMatch = content.match(
-    /export\s+const\s+COPILOT_MODELS[^=]*=\s*\{([^}]+(?:\{[^}]*\}[^}]*)*)\}/s
-  );
-  if (labelMatch) {
-    const kvRegex = /["']?([^"'\s:]+)["']?\s*:\s*["']([^"']+)["']/g;
-    let match;
-    while ((match = kvRegex.exec(labelMatch[1])) !== null) {
-      existingLabels[match[1]] = match[2];
-    }
-  }
-
-  // Build the new COPILOT_MODELS entries
-  const chatEntries = discovered.chatModelIds.map((id) => {
-    const label = generateDisplayName(id, existingLabels);
-    return `  "${id}": "${label}"`;
-  });
-
-  const newCopilotModelsBlock = `export const COPILOT_MODELS: Record<string, string> = {\n${chatEntries.join(",\n")},\n}`;
-
-  content = content.replace(
-    /export\s+const\s+COPILOT_MODELS[^=]*=\s*\{[^}]+(?:\{[^}]*\}[^}]*)*\}/s,
-    newCopilotModelsBlock
-  );
-
-  console.log(
-    `\n✓ Updated COPILOT_MODELS with ${discovered.chatModelIds.length} models`
-  );
-  const newChatModels = discovered.chatModelIds.filter(
-    (id) => !existingLabels[id]
-  );
-  if (newChatModels.length > 0) {
-    console.log("  New chat models:");
-    newChatModels.forEach((id) => console.log(`    + ${id}`));
-  }
-
-  // === Update COPILOT_CLI_MODEL_IDS ===
-  if (discovered.cliModelIds && discovered.cliModelIds.length > 0) {
-    const {
-      content: updatedContent,
-      added: newCliModels,
-      removed: removedCliModels,
-    } = updateCopilotCliModelIds(content, discovered.cliModelIds);
-    content = updatedContent;
-
-    console.log(
-      `\n✓ Updated COPILOT_CLI_MODEL_IDS with ${discovered.cliModelIds.length} models`
-    );
-    if (newCliModels.length > 0) {
-      console.log("  New CLI models:");
-      newCliModels.forEach((id) => console.log(`    + ${id}`));
-    }
-    if (removedCliModels.length > 0) {
-      console.log("  Removed CLI models:");
-      removedCliModels.forEach((id) => console.log(`    - ${id}`));
-    }
-  }
-
-  // Write back
-  writeFileSync(MODEL_CONSTANTS_PATH, content);
-
-  console.log("\nNext step: Run 'npm run sync-models' to update package.json");
-}
-
 // Main
 async function main() {
   const args = process.argv.slice(2);
   const checkOnly = args.includes("--check");
   const discover = args.includes("--discover");
-  const importModels = args.includes("--import");
 
   console.log("ctrlyoke Model Sync\n");
 
@@ -672,15 +528,19 @@ async function main() {
     return;
   }
 
-  if (importModels) {
-    importDiscoveredModels();
-    return;
-  }
-
   try {
-    // First, auto-derive Codex constants from CODEX_CLI_MODELS
-    // This ensures you only need to update the CODEX_CLI_MODELS array
-    updateCodexDerivedConstants(checkOnly);
+    // First, auto-derive the Codex and Copilot label maps from their model ID arrays
+    // This ensures you only need to update the CODEX_CLI_MODELS / COPILOT_CLI_MODEL_IDS arrays
+    updateDerivedLabels(
+      "CODEX_CLI_MODELS",
+      "CODEX_CLI_MODEL_LABELS",
+      checkOnly
+    );
+    updateDerivedLabels(
+      "COPILOT_CLI_MODEL_IDS",
+      "COPILOT_CLI_MODEL_LABELS",
+      checkOnly
+    );
 
     // Then parse and sync all models to package.json and schema
     const models = parseModelConstants();

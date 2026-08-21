@@ -1,5 +1,8 @@
 import * as vscode from "vscode";
-import { getAvailableModelsSync } from "../utils/ModelRegistry";
+import {
+  COPILOT_CLI_MODEL_IDS,
+  COPILOT_CLI_MODEL_LABELS,
+} from "../utils/ModelConstants";
 import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { findWordStartTriggerIndex } from "../utils/ReferenceBoundary";
@@ -423,7 +426,6 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     document: vscode.TextDocument,
     position: vscode.Position
   ): vscode.CompletionList {
-    const models = getAvailableModelsSync();
     const items: vscode.CompletionItem[] = [];
 
     // Get the current partial text for filtering
@@ -436,9 +438,10 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     const colonIndex = line.indexOf(":", modelMatch.index!);
     const openQuoteIndex = line.indexOf('"', colonIndex);
 
-    for (const model of models) {
+    for (const modelId of COPILOT_CLI_MODEL_IDS) {
+      const label = COPILOT_CLI_MODEL_LABELS[modelId] ?? modelId;
       const item = new vscode.CompletionItem(
-        model.id,
+        modelId,
         vscode.CompletionItemKind.EnumMember
       );
 
@@ -451,26 +454,15 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
           : position;
 
       item.range = new vscode.Range(startPos, endPos);
-      item.insertText = model.id;
+      item.insertText = modelId;
+      item.detail = label;
 
-      // Show CLI support indicator
-      item.detail = model.cliSupported ? "CLI & Chat" : "Chat only";
-
-      // Documentation with model info
       const doc = new vscode.MarkdownString();
-      doc.appendMarkdown(`**${model.id}**\n\n`);
-      doc.appendMarkdown(`- Vendor: ${model.vendor}\n`);
-      doc.appendMarkdown(`- Family: ${model.family}\n`);
-      doc.appendMarkdown(
-        `- CLI Support: ${model.cliSupported ? "✅ Yes" : "❌ No (Chat mode only)"}\n`
-      );
+      doc.appendMarkdown(`**${label}**\n\n`);
+      doc.appendMarkdown(`- Model ID: \`${modelId}\`\n`);
       item.documentation = doc;
 
-      // Sort CLI-supported models first
-      item.sortText = model.cliSupported ? `0_${model.id}` : `1_${model.id}`;
-
-      // Filter text includes partial for search
-      item.filterText = model.id;
+      item.filterText = modelId;
 
       items.push(item);
     }

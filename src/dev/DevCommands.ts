@@ -4,9 +4,8 @@
  * This module contains commands that are only registered in development mode.
  * These are useful for:
  * - Testing VS Code API behavior
- * - Discovering available commands and models
+ * - Discovering available commands
  * - Debugging integration issues
- * - Updating model constants and documentation
  *
  * In production builds, this module is not imported and the code is eliminated
  * by esbuild's dead code elimination.
@@ -22,10 +21,6 @@ import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
 import { spawn } from "child_process";
-import {
-  getAvailableModelsSync,
-  getCliSupportedModelIdsSync,
-} from "../utils/ModelRegistry";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
@@ -389,81 +384,6 @@ ${filteredCommands.map((cmd) => `- \`${cmd}\``).join("\n")}
 }
 
 /**
- * Export discovered models to a JSON file for use by sync-models.mjs
- *
- * This allows updating ModelConstants.ts without manual copy-paste:
- * 1. Run extension (F5)
- * 2. Run "ctrlyoke: Export Discovered Models" command
- * 3. Run: npm run sync-models -- --import
- */
-async function exportDiscoveredModels(): Promise<void> {
-  Log.info("📤 Exporting discovered models...");
-
-  // Get models from registry
-  const chatModels = getAvailableModelsSync();
-  const cliModelIds = getCliSupportedModelIdsSync();
-
-  if (chatModels.length === 0) {
-    vscode.window.showWarningMessage(
-      "No models discovered yet. Wait for extension to initialize or run 'ctrlyoke: Retry Copilot Detection'."
-    );
-    return;
-  }
-
-  // Build export object
-  const exportData = {
-    exportedAt: new Date().toISOString(),
-    source: "vscode.lm.selectChatModels({ vendor: 'copilot' })",
-    chatModels: chatModels.map((m) => ({
-      id: m.id,
-      family: m.family,
-      vendor: m.vendor,
-      cliSupported: m.cliSupported,
-    })),
-    cliModelIds: cliModelIds,
-    // Just the IDs for easy reference
-    chatModelIds: chatModels.map((m) => m.id),
-  };
-
-  // Find workspace root
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (!workspaceFolders) {
-    vscode.window.showErrorMessage("No workspace folder open");
-    return;
-  }
-
-  const outputPath = path.join(
-    getVsCodeWorkspaceRoot(),
-    "scripts",
-    "discovered-models.json"
-  );
-
-  try {
-    fs.writeFileSync(outputPath, JSON.stringify(exportData, null, 2) + "\n");
-    Log.info(`✅ Exported ${chatModels.length} models to ${outputPath}`);
-
-    const action = await vscode.window.showInformationMessage(
-      `Exported ${chatModels.length} chat models and ${cliModelIds.length} CLI models to scripts/discovered-models.json`,
-      "Open File",
-      "Run Sync"
-    );
-
-    if (action === "Open File") {
-      const doc = await vscode.workspace.openTextDocument(outputPath);
-      await vscode.window.showTextDocument(doc);
-    } else if (action === "Run Sync") {
-      // Open terminal and run sync command
-      const terminal = vscode.window.createTerminal("ctrlyoke Sync");
-      terminal.show();
-      terminal.sendText("npm run sync-models -- --import");
-    }
-  } catch (error) {
-    Log.error("❌ Failed to export models:", error);
-    vscode.window.showErrorMessage(`Failed to export models: ${error}`);
-  }
-}
-
-/**
  * Dump all --vscode-* CSS variables injected by VS Code into a webview.
  *
  * Opens a minimal WebviewPanel, reads every --vscode-* CSS custom property
@@ -679,16 +599,6 @@ export function registerDevCommands(
     })
   );
 
-  // Export Discovered Models command (for sync-models.mjs)
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "ctrlyoke.exportDiscoveredModels",
-      async () => {
-        await exportDiscoveredModels();
-      }
-    )
-  );
-
   // Dump all --vscode-* CSS variables from active theme to a JSON file
   context.subscriptions.push(
     vscode.commands.registerCommand("ctrlyoke.dumpCssVars", async () => {
@@ -725,12 +635,6 @@ export function registerDevCommands(
           label: "$(symbol-text) Show Language ID",
           description: "Show language ID of the active editor document",
           command: "ctrlyoke.showLanguageId",
-        },
-        {
-          label: "$(export) Export Discovered Models",
-          description:
-            "Write discovered models to scripts/discovered-models.json",
-          command: "ctrlyoke.exportDiscoveredModels",
         },
         {
           label: "$(symbol-color) Dump CSS Variables",

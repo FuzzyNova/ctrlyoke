@@ -7,52 +7,22 @@
  *
  * package.json enums are synced via: `npm run sync-models`
  *
- * IMPORTANT: There are FOUR different model sets:
- * 1. COPILOT_MODELS - All models discoverable via VS Code's Language Model API (superset)
- * 2. COPILOT_CLI_MODEL_IDS - Models supported by `copilot` CLI (subset of above)
- * 3. CLAUDE_CLI_MODELS - Models for Anthropic's `claude` CLI (separate)
- * 4. CODEX_CLI_MODELS - Models for OpenAI's `codex` CLI (separate)
+ * IMPORTANT: There are THREE different model sets:
+ * 1. COPILOT_CLI_MODEL_IDS - Models supported by `copilot` CLI
+ * 2. CLAUDE_CLI_MODELS - Models for Anthropic's `claude` CLI (separate)
+ * 3. CODEX_CLI_MODELS - Models for OpenAI's `codex` CLI (separate)
  *
  * To add a new model:
- * 1. Add entry to COPILOT_MODELS (display names)
- * 2. If CLI-supported, add to COPILOT_CLI_MODEL_IDS
- * 3. Run `npm run sync-models` to update package.json
- * 4. Commit both files
+ * 1. Add entry to COPILOT_CLI_MODEL_IDS and its matching COPILOT_CLI_MODEL_LABELS entry
+ * 2. Run `npm run sync-models` to update package.json
+ * 3. Commit both files
  *
  * To discover new CLI models:
  * - Run `copilot help config` and look for model options
  */
 
 /**
- * All Copilot-supported models with display names (Language Model API superset)
- * Key: model ID (used in API calls)
- * Value: human-readable display name (shown in UI)
- *
- * This includes ALL models discoverable via VS Code's Language Model API.
- * Some of these may NOT be available via Copilot CLI.
- */
-export const COPILOT_MODELS: Record<string, string> = {
-  "claude-sonnet-4.6": "Claude Sonnet 4.6",
-  "gemini-3.1-pro-preview": "Gemini 3.1 Pro Preview",
-  "gemini-3.5-flash": "Gemini 3.5 Flash",
-  "gpt-5.3-codex": "GPT 5.3 Codex",
-  "gpt-5.4-mini": "GPT 5.4 Mini",
-  "gpt-5.4": "GPT 5.4",
-  "mai-code-1-flash-picker": "Mai Code 1 Flash Picker",
-  "gpt-5-mini": "GPT-5 Mini",
-  "gpt-4o-mini": "GPT-4o Mini",
-  "claude-sonnet-4.5": "Claude Sonnet 4.5",
-  "claude-haiku-4.5": "Claude Haiku 4.5",
-  "gemini-3-flash-preview": "Gemini 3 Flash Preview",
-  "gemini-2.5-pro": "Gemini 2.5 Pro",
-  "oswe-vscode-prime": "Raptor Mini",
-  auto: "Auto",
-  "copilot-utility-small": "Copilot Utility Small",
-  "copilot-utility": "Copilot Utility",
-};
-
-/**
- * Copilot CLI supported models (subset of COPILOT_MODELS)
+ * Copilot CLI supported models.
  *
  * This list comes from `copilot help config` output.
  * Update this when new CLI models become available.
@@ -89,6 +59,44 @@ export const COPILOT_CLI_MODEL_IDS = [
   "kimi-k3",
   "kimi-k2.7-code",
 ] as const;
+
+/**
+ * Copilot CLI model display names.
+ *
+ * Auto-derived from COPILOT_CLI_MODEL_IDS by `npm run sync-models` — see
+ * `updateCopilotDerivedConstants()` in scripts/sync-models.mjs. Hand-editing
+ * is safe but will be overwritten on the next sync if it drifts from the
+ * generated title-case form.
+ */
+export const COPILOT_CLI_MODEL_LABELS: Record<string, string> = {
+  "claude-sonnet-5": "Claude Sonnet 5",
+  "claude-fable-5": "Claude Fable 5",
+  "claude-opus-5": "Claude Opus 5",
+  "claude-opus-4.8": "Claude Opus 4.8",
+  "claude-opus-4.8-fast": "Claude Opus 4.8 Fast",
+  "claude-opus-4.7": "Claude Opus 4.7",
+  "claude-sonnet-4.6": "Claude Sonnet 4.6",
+  "claude-opus-4.6": "Claude Opus 4.6",
+  "claude-sonnet-4.5": "Claude Sonnet 4.5",
+  "claude-opus-4.5": "Claude Opus 4.5",
+  "claude-haiku-4.5": "Claude Haiku 4.5",
+  "gpt-5.6-sol": "GPT 5.6 Sol",
+  "gpt-5.6-terra": "GPT 5.6 Terra",
+  "gpt-5.6-luna": "GPT 5.6 Luna",
+  "gpt-5.5": "GPT 5.5",
+  "gpt-5.4": "GPT 5.4",
+  "gpt-5.4-mini": "GPT 5.4 Mini",
+  "gpt-5.3-codex": "GPT 5.3 Codex",
+  "gpt-5-mini": "GPT 5 Mini",
+  "mai-code-1-flash-picker": "Mai Code 1 Flash Picker",
+  "gemini-3.7-flash": "Gemini 3.7 Flash",
+  "gemini-3.6-flash": "Gemini 3.6 Flash",
+  "gemini-3.5-flash": "Gemini 3.5 Flash",
+  "gemini-3.1-pro-preview": "Gemini 3.1 Pro Preview",
+  "grok-4.5": "Grok 4.5",
+  "kimi-k3": "Kimi K3",
+  "kimi-k2.7-code": "Kimi K2.7 Code",
+};
 
 /**
  * Claude Code CLI models (Anthropic's direct CLI)
@@ -156,21 +164,13 @@ export const CODEX_CLI_MODEL_LABELS: Record<string, string> = {
  */
 export const MODEL_NONE = "none";
 
-// Derived exports for convenience
-
-/**
- * All Language Model API-discovered Copilot model IDs as an array (superset)
- * Used as the fallback list when live discovery hasn't completed yet.
- */
-export const COPILOT_LM_MODEL_IDS = Object.keys(COPILOT_MODELS);
-
 /**
  * Get display name for a model ID
  * Falls back to formatted ID if not in map
  */
 export function getModelDisplayName(modelId: string): string {
-  if (COPILOT_MODELS[modelId]) {
-    return COPILOT_MODELS[modelId];
+  if (COPILOT_CLI_MODEL_LABELS[modelId]) {
+    return COPILOT_CLI_MODEL_LABELS[modelId];
   }
 
   // Fallback: capitalize and format the ID
@@ -181,10 +181,10 @@ export function getModelDisplayName(modelId: string): string {
 }
 
 /**
- * Check if a model ID is a known Copilot model
+ * Check if a model ID is a known Copilot CLI model
  */
 export function isKnownCopilotModel(modelId: string): boolean {
-  return modelId in COPILOT_MODELS;
+  return (COPILOT_CLI_MODEL_IDS as readonly string[]).includes(modelId);
 }
 
 /**
@@ -428,6 +428,6 @@ export function getHarnessModelDisplayName(
     case "qwen-cli":
       return QWEN_CLI_MODEL_LABELS[modelId] ?? modelId;
     default:
-      return COPILOT_MODELS[modelId] ?? modelId;
+      return COPILOT_CLI_MODEL_LABELS[modelId] ?? modelId;
   }
 }
