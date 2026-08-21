@@ -651,14 +651,15 @@ wrapper reuses these conventions without importing across that boundary.
    module architecture. Include `formatUsagePercentForDisplay` (Decision 6) in that spike's scope
    alongside the window-ordering/labeling functions, since it's a candidate for the same
    extraction.
-2. **[Core segment-driven formatting done]** Field registry + segment-driven
+2. **[Done]** Field registry + segment-driven
    `formatBrandedStatusLine` rewrite in `ctrlyoke-statusline-wrapper.js`, the `percentDirection`
    read (Decision 6, wrapper side only), Decision 3's shared default array, Decision 7's tolerance
    rules, the `version`/`cwd`/`sessionId` extractors, and `color`/`label` segment resolution
-   (Decisions 13-14) are implemented and covered by the wrapper tests. The remaining Phase 2 work
-   is intentionally deferred to the next step: `usage1`/`usage2` plus the locally-computed
-   `branch`/`date`/`time` fields remain registered but unimplemented in the wrapper and therefore
-   skip silently when selected.
+   (Decisions 13-14) are implemented and covered by the wrapper tests. `usage1`/`usage2` now use
+   deterministic fixed-enum or dynamic-tier ordering, shared window labels, absence-aware
+   separators, and the global display direction. The locally-computed `branch`/`date`/`time`
+   fields now render from the workspace filesystem and local clock, with git failures skipped
+   silently as designed by Decision 15.
 3. **[Done]** Settings/schema/type plumbing: `format` field, `percentDirection` field, new
    `SETTING_PATHS` entries, schema definitions, defaults. The schema leaves
    `usageTracking.percentDirection`, `permissions.statusLineTracking.claude.format`, and

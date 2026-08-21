@@ -350,6 +350,208 @@ suite("Shared statusline wrappers", () => {
     }
   });
 
+  test("renders Claude usage windows in fixed order and skips absent windows", () => {
+    const format = [
+      { type: "field", field: "usage1" },
+      { type: "literal", text: "|" },
+      { type: "field", field: "usage2" },
+    ];
+    const payload = {
+      rate_limits: {
+        seven_day: { used_percentage: 41.2 },
+        five_hour: { used_percentage: 23.5 },
+      },
+    };
+
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        payload,
+        format
+      ),
+      "5h 24% | week 41%"
+    );
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        { rate_limits: { five_hour: { used_percentage: 23.5 } } },
+        format
+      ),
+      "5h 24%"
+    );
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        {},
+        format
+      ),
+      ""
+    );
+  });
+
+  test("sorts Antigravity windows by kind and stable key, including one tier", () => {
+    const format = [
+      { type: "field", field: "usage1" },
+      { type: "literal", text: "|" },
+      { type: "field", field: "usage2" },
+    ];
+    const twoWeeklyTiers = {
+      quota: {
+        "gemini-weekly": { remaining_fraction: 0.9378, reset_in_seconds: 1 },
+        "3p-weekly": { remaining_fraction: 0.991, reset_in_seconds: 100000 },
+      },
+    };
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.ANTIGRAVITY,
+        twoWeeklyTiers,
+        format
+      ),
+      "3P Weekly 1% | Gemini Weekly 6%"
+    );
+
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.ANTIGRAVITY,
+        {
+          quota: {
+            "gemini-weekly": { remaining_fraction: 0.9378 },
+            "studio-daily": { remaining_fraction: 0.5 },
+          },
+        },
+        format
+      ),
+      "Studio Daily 50% | Gemini Weekly 6%"
+    );
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.ANTIGRAVITY,
+        { quota: { "gemini-weekly": { remaining_fraction: 0.9378 } } },
+        format
+      ),
+      "Gemini Weekly 6%"
+    );
+  });
+
+  test("renders usage windows in either direction and accepts label overrides", () => {
+    const format = [
+      { type: "field", field: "usage1", label: "short" },
+      { type: "literal", text: "|" },
+      { type: "field", field: "usage2" },
+    ];
+    const payload = {
+      rate_limits: {
+        five_hour: { used_percentage: 24 },
+        seven_day: { used_percentage: 41 },
+      },
+    };
+
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        payload,
+        format,
+        "used"
+      ),
+      "short 24% | week 41%"
+    );
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        payload,
+        format,
+        "remaining"
+      ),
+      "short 76% | week 59%"
+    );
+  });
+
+  test("renders locally-computed branch, date, and time fields", async () => {
+    tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-statusline-git-")
+    );
+    await fs.mkdir(path.join(tempDirectory, ".git"));
+    await fs.writeFile(
+      path.join(tempDirectory, ".git", "HEAD"),
+      "ref: refs/heads/feature/statusline\n"
+    );
+
+    const fields = [
+      { type: "field", field: "branch" },
+      { type: "field", field: "date" },
+      { type: "field", field: "time" },
+    ];
+    const line = shared.formatBrandedStatusLine(
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      { cwd: tempDirectory },
+      fields
+    );
+    assert.match(line, /^feature\/statusline \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+  });
+
+  test("resolves branch names through worktree gitdir redirects", async () => {
+    tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-statusline-worktree-")
+    );
+    const redirectedGitDirectory = path.join(tempDirectory, "metadata");
+    await fs.mkdir(redirectedGitDirectory);
+    await fs.writeFile(
+      path.join(tempDirectory, ".git"),
+      "gitdir: metadata\n"
+    );
+    await fs.writeFile(
+      path.join(redirectedGitDirectory, "HEAD"),
+      "ref: refs/heads/worktree-branch\n"
+    );
+
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.ANTIGRAVITY,
+        { cwd: tempDirectory },
+        [{ type: "field", field: "branch" }]
+      ),
+      "worktree-branch"
+    );
+  });
+
+  test("renders detached HEAD short SHA and skips branch for a non-repo", async () => {
+    tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-statusline-detached-")
+    );
+    await fs.mkdir(path.join(tempDirectory, ".git"));
+    await fs.writeFile(
+      path.join(tempDirectory, ".git", "HEAD"),
+      "0123456789abcdef0123456789abcdef01234567\n"
+    );
+    assert.strictEqual(
+      shared.formatBrandedStatusLine(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        { cwd: tempDirectory },
+        [{ type: "field", field: "branch" }]
+      ),
+      "0123456"
+    );
+
+    const nonRepoDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-statusline-nonrepo-")
+    );
+    try {
+      assert.strictEqual(
+        shared.formatBrandedStatusLine(
+          shared.STATUSLINE_PROVIDERS.CLAUDE,
+          { cwd: nonRepoDirectory },
+          [
+            { type: "field", field: "branch" },
+            { type: "literal", text: "kept" },
+          ]
+        ),
+        "kept"
+      );
+    } finally {
+      await fs.rm(nonRepoDirectory, { recursive: true, force: true });
+    }
+  });
+
   test("explicit colors override context band coloring, while unset colors preserve it", () => {
     const payload = {
       context_window: {

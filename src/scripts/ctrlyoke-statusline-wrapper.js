@@ -16,6 +16,9 @@ const {
   STATUS_LINE_COLOR_IDS,
   STATUS_LINE_FIELD_IDS,
   STATUS_LINE_FIELD_REGISTRY,
+  formatUsageWindowLabel,
+  humanizeQuotaKey,
+  quotaWindowKindRank,
   formatUsagePercentForDisplay,
 } = require("./ctrlyoke-statusline-format.js");
 
@@ -52,6 +55,13 @@ const CONTEXT_COLORS = Object.freeze({
   warning: "\u001b[33m",
   danger: "\u001b[31m",
 });
+
+// Claude's rate-limit keys are a curated, stable enum. Keep this order aligned
+// with ClaudeUsageProvider's CLAUDE_RATE_LIMIT_WINDOWS definition.
+const CLAUDE_USAGE_WINDOW_DEFINITIONS = Object.freeze([
+  { key: "five_hour", windowMinutes: 5 * 60 },
+  { key: "seven_day", windowMinutes: 7 * 24 * 60 },
+]);
 
 let snapshotSequence = 0;
 
@@ -362,6 +372,131 @@ function getQuotaPercentage(payload, provider) {
   return Math.max(0, Math.min(100, Math.round(Math.max(...usedPercentages))));
 }
 
+function normalizeUsedPercentage(value) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function getUsageWindows(payload, provider) {
+  const normalized = normalizePayload(payload);
+  if (provider === STATUSLINE_PROVIDERS.CLAUDE) {
+    const rateLimits = normalized.rate_limits;
+    if (
+      !rateLimits ||
+      typeof rateLimits !== "object" ||
+      Array.isArray(rateLimits)
+    ) {
+      return [];
+    }
+
+    return CLAUDE_USAGE_WINDOW_DEFINITIONS.flatMap((definition) => {
+      const entry = rateLimits[definition.key];
+      const usedPercentage =
+        entry && typeof entry === "object" && !Array.isArray(entry)
+          ? asFiniteNumber(entry.used_percentage)
+          : undefined;
+      if (usedPercentage === undefined) {
+        return [];
+      }
+      return [
+        {
+          label: formatUsageWindowLabel(definition.windowMinutes),
+          usedPercentage: normalizeUsedPercentage(usedPercentage),
+        },
+      ];
+    });
+  }
+
+  const quota = normalized.quota;
+  if (!quota || typeof quota !== "object" || Array.isArray(quota)) {
+    return [];
+  }
+
+  return Object.entries(quota)
+    .filter(
+      ([, entry]) =>
+        entry && typeof entry === "object" && !Array.isArray(entry)
+    )
+    .map(([id, entry]) => ({
+      id,
+      label: humanizeQuotaKey(id),
+      usedPercentage:
+        asFiniteNumber(entry.remaining_fraction) === undefined
+          ? undefined
+          : normalizeUsedPercentage(
+              100 - asFiniteNumber(entry.remaining_fraction) * 100
+            ),
+    }))
+    .filter((window) => window.usedPercentage !== undefined)
+    .sort((left, right) => {
+      const kindDifference =
+        quotaWindowKindRank(left.id) - quotaWindowKindRank(right.id);
+      return kindDifference !== 0
+        ? kindDifference
+        : left.id.localeCompare(right.id);
+    });
+}
+
+function getUsageWindowIndex(field) {
+  if (field === STATUS_LINE_FIELD_IDS.USAGE_1) {
+    return 0;
+  }
+  if (field === STATUS_LINE_FIELD_IDS.USAGE_2) {
+    return 1;
+  }
+  return undefined;
+}
+
+function getGitHeadPath(currentDirectory) {
+  if (typeof currentDirectory !== "string" || currentDirectory.length === 0) {
+    return undefined;
+  }
+
+  const gitPath = path.join(currentDirectory, ".git");
+  const gitStats = fs.statSync(gitPath);
+  if (gitStats.isDirectory()) {
+    return path.join(gitPath, "HEAD");
+  }
+  if (!gitStats.isFile()) {
+    return undefined;
+  }
+
+  const gitFile = fs.readFileSync(gitPath, "utf8").trim();
+  const gitDirectory = gitFile.match(/^gitdir:\s*(.+)$/i)?.[1]?.trim();
+  return gitDirectory
+    ? path.resolve(path.dirname(gitPath), gitDirectory, "HEAD")
+    : undefined;
+}
+
+function getBranchName(payload) {
+  try {
+    const headPath = getGitHeadPath(normalizePayload(payload).cwd);
+    if (!headPath) {
+      return undefined;
+    }
+    const head = fs.readFileSync(headPath, "utf8").trim();
+    if (head.startsWith("ref: refs/heads/")) {
+      const branch = head.slice("ref: refs/heads/".length).trim();
+      return branch.length > 0 ? branch : undefined;
+    }
+    return head.length > 0 ? head.slice(0, 7) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function formatDateValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatTimeValue(date) {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
 function safeStatusLabel(value, fallback) {
   return typeof value === "string" && value.length > 0
     ? value.replace(/[\r\n]+/g, " ")
@@ -412,6 +547,19 @@ function renderField(field, segment, provider, context) {
         label || (provider === STATUSLINE_PROVIDERS.CLAUDE ? "rate" : "quota");
       return `${usageLabel} ${quotaLabel}`;
     }
+    case STATUS_LINE_FIELD_IDS.USAGE_1:
+    case STATUS_LINE_FIELD_IDS.USAGE_2: {
+      const windowIndex = getUsageWindowIndex(field);
+      const usageWindow = getUsageWindows(normalized, provider)[windowIndex];
+      if (!usageWindow || usageWindow.usedPercentage === undefined) {
+        return undefined;
+      }
+      const usageLabel = label || usageWindow.label;
+      return `${usageLabel} ${formatUsagePercentForDisplay(
+        usageWindow.usedPercentage,
+        context.percentDirection
+      )}%`;
+    }
     case STATUS_LINE_FIELD_IDS.VERSION:
       return safeStatusLabel(normalized.version, "—");
     case STATUS_LINE_FIELD_IDS.CWD:
@@ -420,14 +568,12 @@ function renderField(field, segment, provider, context) {
         : "—";
     case STATUS_LINE_FIELD_IDS.SESSION_ID:
       return safeStatusLabel(normalized.session_id, "—").slice(0, 8);
-    case STATUS_LINE_FIELD_IDS.USAGE_1:
-    case STATUS_LINE_FIELD_IDS.USAGE_2:
     case STATUS_LINE_FIELD_IDS.BRANCH:
+      return getBranchName(normalized);
     case STATUS_LINE_FIELD_IDS.DATE:
+      return formatDateValue(new Date());
     case STATUS_LINE_FIELD_IDS.TIME:
-      // These fields are registered for the editor but are implemented by the
-      // follow-up statusline phase.
-      return undefined;
+      return formatTimeValue(new Date());
     default:
       return undefined;
   }
@@ -469,7 +615,10 @@ function formatBrandedStatusLine(
         if (segment.type === STATUSLINE_SEGMENT_TYPES.LITERAL) {
           const literal = safeStatusLabel(segment.text, "");
           if (literal.length > 0) {
-            rendered.push(applySegmentColor(literal, segment.color));
+            rendered.push({
+              type: STATUSLINE_SEGMENT_TYPES.LITERAL,
+              text: applySegmentColor(literal, segment.color),
+            });
           }
           return rendered;
         }
@@ -492,6 +641,10 @@ function formatBrandedStatusLine(
           context
         );
         if (fieldText === undefined || fieldText.length === 0) {
+          rendered.push({
+            type: STATUSLINE_SEGMENT_TYPES.FIELD,
+            text: "",
+          });
           return rendered;
         }
 
@@ -510,9 +663,44 @@ function formatBrandedStatusLine(
             : builtInColor
               ? `${builtInColor}${fieldText}${ANSI_RESET}`
               : fieldText;
-        rendered.push(text);
+        rendered.push({
+          type: STATUSLINE_SEGMENT_TYPES.FIELD,
+          text,
+        });
         return rendered;
       }, [])
+      .filter((segment, index, allSegments) => {
+        if (segment.type !== STATUSLINE_SEGMENT_TYPES.LITERAL) {
+          return true;
+        }
+        let previousField;
+        for (let previousIndex = index - 1; previousIndex >= 0; previousIndex--) {
+          if (
+            allSegments[previousIndex].type === STATUSLINE_SEGMENT_TYPES.FIELD
+          ) {
+            previousField = allSegments[previousIndex];
+            break;
+          }
+        }
+        let nextField;
+        for (
+          let nextIndex = index + 1;
+          nextIndex < allSegments.length;
+          nextIndex++
+        ) {
+          if (allSegments[nextIndex].type === STATUSLINE_SEGMENT_TYPES.FIELD) {
+            nextField = allSegments[nextIndex];
+            break;
+          }
+        }
+        return !(
+          previousField &&
+          nextField &&
+          (previousField.text.length === 0 || nextField.text.length === 0)
+        );
+      })
+      .filter((segment) => segment.text.length > 0)
+      .map((segment) => segment.text)
       .join(" ");
   } catch {
     return "";
