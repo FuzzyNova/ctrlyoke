@@ -3244,6 +3244,13 @@ export class WorkflowInstance {
 
       const merged: CliOutput = {
         ...existing.output,
+        // Mirror PromptQueue.appendPromptResponseText's concatenation so the
+        // persisted timeline response (read by prior-context resolution, see
+        // RunOutputResolver.resolvePriorContextItems) stays in sync with the
+        // mutable working-file cache — otherwise $previous/$all/$step:N
+        // silently drop follow-up activity that fired after the step's Stop
+        // hook but before the next step read prior context.
+        response: existing.output.response + followUpText,
         structured: existing.output.structured
           ? {
               ...existing.output.structured,

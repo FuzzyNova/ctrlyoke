@@ -422,6 +422,11 @@ suite("WorkflowInstance session activity forwarding", () => {
           timestamp: Date.now(),
           data: { used: 4000, size: 200000 },
         },
+        {
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp: Date.now(),
+          data: { text: " and did more." },
+        },
       ]);
       // Second follow-up batch — must not insert a second divider.
       await (instance as any).handleSessionActivityResumed([
@@ -451,9 +456,14 @@ suite("WorkflowInstance session activity forwarding", () => {
           CLI_EVENT_TYPES.TEXT,
           CLI_EVENT_TYPES.FOLLOW_UP_RESUMED,
           CLI_EVENT_TYPES.USER_STEER,
+          CLI_EVENT_TYPES.TEXT,
           CLI_EVENT_TYPES.USER_STEER,
         ]
       );
+      // The persisted response text (what $previous/$all/$step:N read via
+      // RunOutputResolver.resolvePriorContextItems) must include follow-up
+      // activity, not just the pre-follow-up response.
+      assert.strictEqual(entry.cliOutput.response, "done and did more.");
       assert.deepStrictEqual(entry.cliOutput.tokens, {
         prompt: 10,
         completion: 5,
