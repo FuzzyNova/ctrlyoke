@@ -375,6 +375,7 @@ export class AntigravityCliProvider implements ICliProvider {
       model: deps.model,
       parser: this.logParser,
       onContextWindowUpdate: deps.onContextWindowUpdate,
+      onProviderUsageUpdate: deps.onProviderUsageUpdate,
       onSnapshot: (snapshot) => this.logParser.setStatuslineSnapshot(snapshot),
     });
     return this.statusLineSidecar;

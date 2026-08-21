@@ -1,6 +1,11 @@
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import { StatuslineSnapshotWatcher } from "../shared/StatuslineSnapshotWatcher";
 import type { AntigravityLogParser } from "./AntigravityLogParser";
+import {
+  parseAntigravityQuotaSnapshot,
+  type AntigravityStatuslineQuotaSnapshot,
+} from "../shared/usage/providers/AntigravityUsageProvider";
+import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 
 interface SnapshotContextWindow {
   total_input_tokens?: unknown;
@@ -67,6 +72,7 @@ export interface AntigravityStatuslineSnapshot {
   [key: string]: unknown;
   _ctrlyoke?: SnapshotMetadata;
   context_window?: SnapshotContextWindow;
+  quota?: AntigravityStatuslineQuotaSnapshot["quota"];
   model?: unknown;
   conversation_id?: unknown;
 }
@@ -76,6 +82,7 @@ export interface AntigravityStatuslineSidecarDeps {
   model: string;
   parser: Pick<AntigravityLogParser, "extractLiveContextWindow">;
   onContextWindowUpdate: (used: number, size: number) => void;
+  onProviderUsageUpdate?: (quota: HarnessQuotaSnapshot) => void;
   onSnapshot?: (snapshot: AntigravityStatuslineSnapshot) => void;
 }
 
@@ -91,12 +98,16 @@ export class AntigravityStatuslineSidecar {
     "extractLiveContextWindow"
   >;
   private readonly onContextWindowUpdate: (used: number, size: number) => void;
+  private readonly onProviderUsageUpdate:
+    | ((quota: HarnessQuotaSnapshot) => void)
+    | undefined;
   private readonly watcher: StatuslineSnapshotWatcher<AntigravityStatuslineSnapshot>;
 
   constructor(deps: AntigravityStatuslineSidecarDeps) {
     this.model = deps.model;
     this.parser = deps.parser;
     this.onContextWindowUpdate = deps.onContextWindowUpdate;
+    this.onProviderUsageUpdate = deps.onProviderUsageUpdate;
     this.watcher = new StatuslineSnapshotWatcher({
       snapshotPath: deps.snapshotPath,
       onSnapshot: (snapshot) => {
@@ -123,6 +134,14 @@ export class AntigravityStatuslineSidecar {
   }
 
   private acceptSnapshot(snapshot: AntigravityStatuslineSnapshot): void {
+    const quota = parseAntigravityQuotaSnapshot(
+      snapshot,
+      snapshot._ctrlyoke?.writtenAt ?? Date.now()
+    );
+    if (quota) {
+      this.onProviderUsageUpdate?.(quota);
+    }
+
     const contextWindow = snapshot.context_window;
     const inputTokens = this.asFiniteNumber(contextWindow?.total_input_tokens);
     const outputTokens = this.asFiniteNumber(

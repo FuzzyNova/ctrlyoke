@@ -531,9 +531,10 @@ Mirror `ClaudeUsageProvider.parseClaudeRateLimitWindows` (`src/core/harness/shar
    parameterized `StatusLineTrackingControls` beside the Claude and Antigravity usage cards,
    with user-scoped global setting writes, local custom-command editing, conditional style
    control, and the restore/delete confirmation modal covered by focused component tests.
-6. **Antigravity quota plumbing**: `parseAntigravityQuotaSnapshot`, sidecar push port,
-   `AntigravityUsageProvider` real implementation, doc correction in
-   `HARNESS_USAGE_TRACKING_PLAN.md`.
+6. **Antigravity quota plumbing (completed)**: `parseAntigravityQuotaSnapshot`, sidecar
+   push port, `AntigravityUsageProvider` real implementation, doc correction in
+   `HARNESS_USAGE_TRACKING_PLAN.md`, and focused dynamic-tier/malformed-payload/callback
+   coverage.
 
 ## Open Questions
 

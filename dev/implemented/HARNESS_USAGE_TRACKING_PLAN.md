@@ -293,18 +293,15 @@ Not covered by the June research; added here from ctrlyoke's own implementation.
 - Stream-json `result.usage` provides real billing-shaped totals
   (`input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`,
   `total_tokens`).
-- A full live statusline snapshot could not be captured without first
-  modifying the user's global `~/.gemini/antigravity-cli/settings.json` and
-  starting a new session; the current settings have no `statusLine` command,
-  and no raw statusline snapshot is persisted in the local CLI state. The
-  installed `agy` `1.1.10` help exposes no statusline JSON contract. The
-  wrapper's synthetic test payload contains an optional
-  `quota.weekly.remaining_fraction`, and the binary contains matching field
-  names, but neither is a documented/stable provider surface. Internal
-  `quota_manager` log messages are lifecycle diagnostics, not quota data.
-- **No documented or stable quota/rate-limit field was found** beyond the
-  `context_window` subtree ctrlyoke reads today. Antigravity therefore stays
-  `ctrlyoke-observed` only; absence is never rendered as available quota.
+- The live statusline payload includes an open-ended `quota` map whose entries
+  carry `remaining_fraction` and reset data alongside the context-window
+  fields. The wrapper and captured live payloads both use this shape, so the
+  sidecar normalizes each valid tier into provider-live quota windows without
+  retaining provider-specific account data. Malformed tiers are ignored while
+  valid siblings remain usable.
+- Antigravity still has no safe standalone quota probe: `refreshUsage` is an
+  explicit unavailable pull result, while active statusline sidecars push live
+  quota snapshots through the shared usage-service ingestion port.
 
 ### OpenCode CLI / Qwen CLI
 
@@ -497,8 +494,9 @@ Adapters, one per `HARNESS_IDS` entry — every adapter declares
   existing `token_count` parse site.
 - `CopilotUsageProvider` — observed totals from the shared run rollup; optional
   status-line/TUI research path; GitHub dashboard link fallback.
-- `AntigravityUsageProvider` — observed-only until a quota field is found in the
-  statusline snapshot.
+- `AntigravityUsageProvider` — provider-live dynamic quota windows from the
+  statusline sidecar, with an unavailable pull path because quota requires an
+  active statusline invocation.
 - `ObservedOnlyUsageProvider` — OpenCode and Qwen. OpenCode passes through its
   observed self-reported cost only through the shared run rollup.
 
@@ -614,11 +612,10 @@ are not combined. Enterprise/org metrics remain explicitly deferred.
 ### Phase 4: Antigravity Research
 
 - [x] Dump/check the full statusline surface for plan/quota fields beyond the
-      `context_window` subtree ctrlyoke reads today; no live snapshot was
-      available without changing global settings, and no documented/stable
-      quota field was found
-- [x] Confirm Antigravity remains observed-only because no documented/stable
-      quota surface exists
+      `context_window` subtree ctrlyoke reads today; live payloads include a
+      dynamic `quota` map with remaining fractions and reset data
+- [x] Normalize valid dynamic Antigravity quota tiers through the statusline
+      sidecar push path; keep standalone pull refresh explicitly unavailable
 
 ### Phase 5: Selection Assist — the motivating outcome
 
@@ -706,15 +703,12 @@ Resolved in the Stage 9 closeout:
    name. Use OTel-derived observed totals and the existing GitHub dashboard
    link.
 
-2. **Antigravity exposes no documented/stable quota field in the available
-   statusline surface.** `agy` `1.1.10` has no configured statusline command in
-   the current user settings, so capturing a live payload would require
-   changing global settings and starting a new session. No raw snapshot exists
-   in local state. The optional `quota.weekly.remaining_fraction` seen in the
-   synthetic wrapper test and matching binary strings are not stable provider
-   contracts; internal `quota_manager` logs contain no normalized quota data.
-   Keep `AntigravityUsageProvider` observed-only, and never render missing
-   quota as available capacity.
+2. **Antigravity quota is available only through the active statusline path.**
+   Live payloads carry an open-ended `quota` map with per-tier
+   `remaining_fraction` and reset data. The sidecar normalizes valid entries as
+   provider-live windows and ignores malformed siblings. There is no safe
+   standalone quota probe, so `refreshUsage` remains unavailable and never
+   fabricates capacity when no sidecar snapshot has arrived.
 
 3. **The provider schemas remain safe at implementation time.** Installed
    versions are Claude Code `2.1.225`, Codex CLI `0.146.0`, and Copilot CLI
