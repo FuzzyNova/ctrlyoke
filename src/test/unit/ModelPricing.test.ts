@@ -212,10 +212,22 @@ suite("ModelPricing", () => {
     assert.strictEqual(result.cost?.usd, 0.42);
   });
 
-  test("suppresses synthesized Copilot dollars in favor of billing units", () => {
+  test("calculates a token-based estimate for Copilot from the bundled table", () => {
     const result = calculateAttemptCost({
       harnessId: HARNESS_IDS.COPILOT_CLI,
       modelId: "claude-sonnet-4.6",
+      prompt: 1_000_000,
+      completion: 1_000_000,
+    });
+
+    assert.strictEqual(result.cost?.source, ATTEMPT_COST_SOURCES.PRICE_TABLE);
+    assert.strictEqual(result.cost?.usd, 3 + 15);
+  });
+
+  test("reports unknown model for a Copilot model absent from the bundled table", () => {
+    const result = calculateAttemptCost({
+      harnessId: HARNESS_IDS.COPILOT_CLI,
+      modelId: "some-future-copilot-model",
       prompt: 1_000,
       completion: 100,
     });
@@ -223,7 +235,7 @@ suite("ModelPricing", () => {
     assert.strictEqual(result.cost, undefined);
     assert.strictEqual(
       result.costUnavailableReason,
-      ATTEMPT_COST_UNAVAILABLE_REASONS.COPILOT_BILLING_UNIT
+      ATTEMPT_COST_UNAVAILABLE_REASONS.UNKNOWN_MODEL
     );
   });
 });

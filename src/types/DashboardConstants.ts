@@ -751,7 +751,6 @@ export const ATTEMPT_COST_UNAVAILABLE_REASONS = {
   PARTIAL_TOKENS: "partial-tokens",
   UNVERIFIED_TOKEN_SEMANTICS: "unverified-token-semantics",
   MISSING_HARNESS_COST: "missing-harness-cost",
-  COPILOT_BILLING_UNIT: "copilot-billing-unit",
 } as const;
 
 /** How a harness reports cache-read tokens relative to its input count. */

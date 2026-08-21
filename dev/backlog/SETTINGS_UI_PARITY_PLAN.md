@@ -48,13 +48,43 @@ MOCHA_GREP="Settings schema" node ./out/test/runTest.js
 | `usageTracking.providerRefreshEnabled` | `StatsUsageSection` | **Add control.** Gate for provider quota refresh calls. |
 | `usageTracking.persistObservedUsage` | `StatsUsageSection` | **Add control.** Whether normalized observed usage is persisted to the workspace. |
 | `usageTracking.warningPercentUsed` | `StatsUsageSection` | **Add control.** Numeric threshold (0–100) for quota warnings. |
-| `modelPricing` | none yet — needs a decision | **Needs a decision**, not a small add. Per-harness/per-model USD rate overrides (`inputPerMTok`, `outputPerMTok`, `cachedInputPerMTok`, `cacheWritePerMTok`, `reasoningPerMTok`) keyed by an open-ended `harness -> model -> rates` map. There's no natural fixed-key list to render (unlike `defaults.models`, which iterates the 6 known harnesses) since model IDs are freeform strings. Needs its own small editor (add/remove harness, add/remove model, five rate fields per model) before it can get a control — worth scoping as its own task rather than folding into the `usageTracking` batch above. |
+| `modelPricing` | none yet — needs its own editor | Per-harness/per-model USD rate overrides (`inputPerMTok`, `outputPerMTok`, `cachedInputPerMTok`, `cacheWritePerMTok`, `reasoningPerMTok`) keyed by an open-ended `harness -> model -> rates` map. There's no natural fixed-key list to render (unlike `defaults.models`, which iterates the 6 known harnesses) since model IDs are freeform strings. Needs its own small editor (add/remove harness, add/remove model, five rate fields per model) before it can get a control — worth scoping as its own task rather than folding into the `usageTracking` batch above. **Design resolved (2026-08-21): the setting is a generic override of the bundled `MODEL_PRICING` table (see `src/utils/ModelPricing.ts`) for any harness — it should not special-case which harnesses are eligible.** What blocked two harnesses from calculating an estimate at all turned out to be separate bugs, not reasons to scope them out of the editor — see "Related fixes" below. |
 | `server.standalonePort` | intentionally not surfaced | **Not a gap — leave as-is.** `ServerSection.tsx` already documents why: it configures the standalone `ctrlyoke server` headless CLI process, which doesn't exist yet (`dev/active/STANDALONE_SERVER_PLAN.md` Phases 5–10 are unimplemented). The schema/type/default are kept so the standalone feature can use it later with no config migration. This test will keep flagging it until the standalone server ships and gets its own settings surface (not the VS Code `ServerSection`, which controls a different process) — that's expected, not a bug in the test. |
 
 `defaults.secrets` is done — see "Completed" below. Of the remaining 7, 5 are straightforward
-additive UI work; `modelPricing` needs its own small design pass first; `server.theme` and
-`server.standalonePort` are both intentionally deferred until the standalone server ships and
-should stay in `PENDING_UI_PARITY` as markers until then.
+additive UI work; `modelPricing` needs its own small editor now that its design is resolved;
+`server.theme` and `server.standalonePort` are both intentionally deferred until the standalone
+server ships and should stay in `PENDING_UI_PARITY` as markers until then.
+
+### Related fixes surfaced while scoping `modelPricing`
+
+Cost estimation is a token-usage-based proxy ("what would this have cost at list price"), not a
+mirror of the harness's actual billing mechanism — ctrlyoke already shows an estimate for
+Claude/Codex even though both are commonly used on flat-rate subscriptions, not billed per token.
+Auditing why Copilot and Qwen show no estimate at all found two unrelated bugs, neither of which
+is "this harness's billing model makes an estimate meaningless":
+
+- **Copilot — pure policy bug, fixed 2026-08-21.** `HARNESS_TOKEN_SEMANTICS[COPILOT_CLI]` already
+  declared known cache/reasoning semantics, and `CopilotLogParser` already extracts a model ID and
+  input/output token counts per attempt — every input `calculateTokenCost` needs was already
+  available. `calculateAttemptCost` just short-circuited on `harnessId === COPILOT_CLI` before ever
+  consulting the price table. Fixed by removing that early return and populating
+  `MODEL_PRICING[COPILOT_CLI]` (see `ModelPricing.ts`) from the 17 model IDs in
+  `COPILOT_CLI_MODEL_IDS` (`ModelConstants.ts`), sourced from GitHub's published
+  [Copilot models and pricing](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing)
+  page. `ATTEMPT_COST_UNAVAILABLE_REASONS.COPILOT_BILLING_UNIT` was removed as part of this fix —
+  it had no other reader.
+- **Qwen — a genuine open unknown, not yet fixed.** `HARNESS_TOKEN_SEMANTICS[QWEN_CLI]` is
+  `UNKNOWN`/`UNKNOWN`: ctrlyoke does not actually know whether Qwen's cache-read tokens are
+  counted inside or on top of `prompt`, or whether reasoning tokens are folded into output. That's
+  missing empirical verification against a real `qwen` CLI run, not a policy choice — filling in a
+  guess would silently produce a confidently-wrong number, which is worse than no estimate. The
+  bundled table also has no Qwen entries yet because `qwen3.5-plus` is priced by input-length tier,
+  which the current flat-rate `ModelPricing` shape can't represent exactly (same limitation the
+  fix above accepted for Copilot's own tiered models — see the code comment above
+  `MODEL_PRICING[COPILOT_CLI]` — by pricing at the "Default" tier as a documented approximation).
+  Once semantics are verified, the same approximation is reasonable for Qwen too. Until then, Qwen
+  stays a real gap, not a `modelPricing` UI concern.
 
 ## Completed
 

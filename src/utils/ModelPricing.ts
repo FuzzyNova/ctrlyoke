@@ -70,13 +70,17 @@ const VERIFIED_ON = "2026-08-09";
 const ANTHROPIC_PRICING_URL =
   "https://platform.claude.com/docs/en/about-claude/pricing";
 const OPENAI_PRICING_URL = "https://developers.openai.com/api/docs/pricing";
+const COPILOT_PRICING_URL =
+  "https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing";
+const COPILOT_VERIFIED_ON = "2026-08-21";
 
 function pricing(
   inputPerMTok: number,
   outputPerMTok: number,
   cachedInputPerMTok: number | undefined,
   cacheWritePerMTok: number | undefined,
-  sourceUrl: string
+  sourceUrl: string,
+  verifiedOn: string = VERIFIED_ON
 ): ModelPricing {
   return {
     inputPerMTok,
@@ -84,8 +88,24 @@ function pricing(
     ...(cachedInputPerMTok === undefined ? {} : { cachedInputPerMTok }),
     ...(cacheWritePerMTok === undefined ? {} : { cacheWritePerMTok }),
     sourceUrl,
-    verifiedOn: VERIFIED_ON,
+    verifiedOn,
   };
+}
+
+function copilotPricing(
+  inputPerMTok: number,
+  outputPerMTok: number,
+  cachedInputPerMTok: number | undefined,
+  cacheWritePerMTok: number | undefined
+): ModelPricing {
+  return pricing(
+    inputPerMTok,
+    outputPerMTok,
+    cachedInputPerMTok,
+    cacheWritePerMTok,
+    COPILOT_PRICING_URL,
+    COPILOT_VERIFIED_ON
+  );
 }
 
 /**
@@ -113,7 +133,40 @@ export const MODEL_PRICING: Record<
     "gpt-5.4": pricing(2.5, 15, 0.25, undefined, OPENAI_PRICING_URL),
     "gpt-5.4-mini": pricing(0.75, 4.5, 0.075, undefined, OPENAI_PRICING_URL),
   },
-  [HARNESS_IDS.COPILOT_CLI]: {},
+  // Copilot marks up the same underlying models Claude/Codex bill directly, at
+  // its own per-token rates (1 AI credit = $0.01), so these are kept separate
+  // from the CLAUDE_CLI/CODEX_CLI tables above rather than shared. Keyed from
+  // `COPILOT_CLI_MODEL_IDS` (ModelConstants.ts) — the exact model IDs the
+  // `copilot` CLI can report — not the full GitHub billing-page catalog,
+  // which also lists models (Gemini, Grok, Kimi, ...) the CLI doesn't expose.
+  // Three of these (gpt-5.4, gpt-5.5, gemini-3.1-pro-preview) bill a higher
+  // "long context" tier past a per-model input-token threshold; that isn't
+  // representable by this flat-rate shape, so the "Default" tier rate is used
+  // as a documented approximation (same tradeoff as Qwen's tiered pricing,
+  // see HARNESS_TOKEN_SEMANTICS[QWEN_CLI] below).
+  [HARNESS_IDS.COPILOT_CLI]: (() => {
+    const claudeSonnet4x = copilotPricing(3, 15, 0.3, 3.75);
+    const claudeOpus4x = copilotPricing(5, 25, 0.5, 6.25);
+    return {
+      "claude-sonnet-5": copilotPricing(2, 10, 0.2, 2.5),
+      "claude-sonnet-4.6": claudeSonnet4x,
+      "claude-sonnet-4.5": claudeSonnet4x,
+      "claude-haiku-4.5": copilotPricing(1, 5, 0.1, 1.25),
+      "claude-fable-5": copilotPricing(10, 50, 1, 12.5),
+      "claude-opus-4.8": claudeOpus4x,
+      "claude-opus-4.8-fast": copilotPricing(10, 50, 1, 12.5),
+      "claude-opus-4.7": claudeOpus4x,
+      "claude-opus-4.6": claudeOpus4x,
+      "claude-opus-4.5": claudeOpus4x,
+      "gpt-5.5": copilotPricing(5, 30, 0.5, undefined),
+      "gpt-5.4": copilotPricing(2.5, 15, 0.25, undefined),
+      "gpt-5.3-codex": copilotPricing(1.75, 14, 0.175, undefined),
+      "gpt-5.4-mini": copilotPricing(0.75, 4.5, 0.075, undefined),
+      "gpt-5-mini": copilotPricing(0.25, 2, 0.025, undefined),
+      "gemini-3.1-pro-preview": copilotPricing(2, 12, 0.2, undefined),
+      "gemini-3.5-flash": copilotPricing(1.5, 9, 0.15, undefined),
+    };
+  })(),
   [HARNESS_IDS.OPENCODE_CLI]: {},
   [HARNESS_IDS.QWEN_CLI]: {
     // qwen3.5-plus is tiered by input length and therefore cannot be
@@ -265,13 +318,6 @@ export function calculateAttemptCost(
   if (input.totalConfidence === TOKEN_TOTAL_CONFIDENCE.PARTIAL) {
     return {
       costUnavailableReason: ATTEMPT_COST_UNAVAILABLE_REASONS.PARTIAL_TOKENS,
-    };
-  }
-
-  if (input.harnessId === HARNESS_IDS.COPILOT_CLI) {
-    return {
-      costUnavailableReason:
-        ATTEMPT_COST_UNAVAILABLE_REASONS.COPILOT_BILLING_UNIT,
     };
   }
 
