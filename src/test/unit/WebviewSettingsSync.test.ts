@@ -14,10 +14,16 @@ import {
   PERMISSION_MODES,
   PANEL_CLIENT_ID,
   type SettingWriteScope,
+  type StatusLineTrackingHarnessId,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
+import type { StatusLineTrackingSettings } from "../../types/CtrlYokeSettings";
+import {
+  StatuslineManager,
+  type StatuslineManagerLike,
+} from "../../core/harness/shared/StatuslineManager";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -74,6 +80,272 @@ suite("WebviewSettingsSync", () => {
     tempPaths.push(p);
     return p;
   }
+
+  suite("disable statusline tracking", () => {
+    class FakeStatuslineManager implements StatuslineManagerLike {
+      readonly uninstallCalls: Array<{
+        workspaceRoot: string;
+        restoreCustomCommand: boolean;
+      }> = [];
+
+      constructor(readonly settings: StatusLineTrackingSettings) {}
+
+      getSettings(): StatusLineTrackingSettings {
+        return this.settings;
+      }
+
+      async uninstall(
+        workspaceRoot: string,
+        restoreCustomCommand: boolean
+      ): Promise<void> {
+        this.uninstallCalls.push({ workspaceRoot, restoreCustomCommand });
+      }
+    }
+
+    function makeSync(
+      managers: Partial<
+        Record<StatusLineTrackingHarnessId, FakeStatuslineManager>
+      >,
+      messages: unknown[],
+      feedback: unknown[] = []
+    ): WebviewSettingsSync {
+      const sync = new WebviewSettingsSync(
+        (message) => messages.push(message),
+        () =>
+          ({
+            getUserFeedbackSink: () => ({
+              notify: (message: unknown) => feedback.push(message),
+            }),
+          }) as any,
+        undefined,
+        (harnessId) => {
+          const manager = managers[harnessId];
+          if (!manager) {
+            throw new Error(`missing fake manager for ${harnessId}`);
+          }
+          return manager;
+        }
+      );
+      return sync;
+    }
+
+    test("disables both supported harnesses with restore and delete choices", async () => {
+      const originalSet = configService.set;
+      const writes: Array<{ key: string; value: unknown; scope: string }> = [];
+
+      try {
+        configService.set = (async (key, value, scope) => {
+          writes.push({ key, value, scope });
+        }) as typeof configService.set;
+
+        for (const [harnessId, restoreCustomCommand] of [
+          [HARNESS_IDS.CLAUDE_CLI, true],
+          [HARNESS_IDS.ANTIGRAVITY_CLI, false],
+        ] as const) {
+          const manager = new FakeStatuslineManager({
+            enabled: true,
+            customCommand: "node user-statusline.js",
+            useCtrlyokeStyle: true,
+          });
+          const messages: unknown[] = [];
+          const sync = makeSync({ [harnessId]: manager }, messages);
+          let refreshCount = 0;
+          sync.handleGlobalSettingsLoadRequest = async () => {
+            refreshCount++;
+          };
+
+          await sync.handleDisableStatusLineTracking({
+            type: MESSAGE_TYPES.DISABLE_STATUS_LINE_TRACKING,
+            harnessId,
+            restoreCustomCommand,
+          });
+
+          assert.strictEqual(manager.uninstallCalls.length, 1);
+          assert.strictEqual(
+            manager.uninstallCalls[0].restoreCustomCommand,
+            restoreCustomCommand
+          );
+          assert.strictEqual(refreshCount, 1);
+          assert.deepStrictEqual(messages, [
+            {
+              type: MESSAGE_TYPES.GLOBAL_SETTING_UPDATED,
+              path: `${CONFIG_KEYS.PERMISSIONS_STATUS_LINE_TRACKING}.${StatuslineManager.providerForHarness(harnessId)}`,
+              value: {
+                enabled: false,
+                customCommand: "node user-statusline.js",
+                useCtrlyokeStyle: true,
+              },
+              source: "user",
+            },
+          ]);
+        }
+      } finally {
+        configService.set = originalSet;
+      }
+
+      assert.deepStrictEqual(
+        writes.map(({ key, value, scope }) => ({
+          key,
+          value,
+          scope,
+        })),
+        [
+          {
+            key: `${CONFIG_KEYS.PERMISSIONS_STATUS_LINE_TRACKING}.claude`,
+            value: {
+              enabled: false,
+              customCommand: "node user-statusline.js",
+              useCtrlyokeStyle: true,
+            },
+            scope: "user",
+          },
+          {
+            key: `${CONFIG_KEYS.PERMISSIONS_STATUS_LINE_TRACKING}.antigravity`,
+            value: {
+              enabled: false,
+              customCommand: "node user-statusline.js",
+              useCtrlyokeStyle: true,
+            },
+            scope: "user",
+          },
+        ]
+      );
+    });
+
+    test("rolls back the enabled setting and reports a harness-file failure", async () => {
+      const originalSet = configService.set;
+      const writes: Array<{ value: unknown; scope: string }> = [];
+      const feedback: unknown[] = [];
+      const manager = new FakeStatuslineManager({
+        enabled: true,
+        customCommand: "node user-statusline.js",
+        useCtrlyokeStyle: false,
+      });
+      manager.uninstall = async () => {
+        throw new Error("settings file is locked");
+      };
+      const messages: unknown[] = [];
+      const sync = makeSync(
+        { [HARNESS_IDS.CLAUDE_CLI]: manager },
+        messages,
+        feedback
+      );
+      let refreshCount = 0;
+      sync.handleGlobalSettingsLoadRequest = async () => {
+        refreshCount++;
+      };
+
+      try {
+        configService.set = (async (_key, value, scope) => {
+          writes.push({ value, scope });
+        }) as typeof configService.set;
+
+        await sync.handleDisableStatusLineTracking({
+          type: MESSAGE_TYPES.DISABLE_STATUS_LINE_TRACKING,
+          harnessId: HARNESS_IDS.CLAUDE_CLI,
+          restoreCustomCommand: true,
+        });
+      } finally {
+        configService.set = originalSet;
+      }
+
+      assert.strictEqual(refreshCount, 0);
+      assert.deepStrictEqual(messages, []);
+      assert.deepStrictEqual(writes, [
+        {
+          value: {
+            enabled: false,
+            customCommand: "node user-statusline.js",
+            useCtrlyokeStyle: false,
+          },
+          scope: "user",
+        },
+        {
+          value: {
+            enabled: true,
+            customCommand: "node user-statusline.js",
+            useCtrlyokeStyle: false,
+          },
+          scope: "user",
+        },
+      ]);
+      assert.strictEqual(feedback.length, 1);
+      assert.match(
+        (feedback[0] as { message: string }).message,
+        /tracking remains enabled/
+      );
+    });
+
+    test("reports a config failure without touching the harness file", async () => {
+      const originalSet = configService.set;
+      const feedback: unknown[] = [];
+      const manager = new FakeStatuslineManager({
+        enabled: true,
+        customCommand: "node user-statusline.js",
+        useCtrlyokeStyle: true,
+      });
+      const sync = makeSync(
+        { [HARNESS_IDS.ANTIGRAVITY_CLI]: manager },
+        [],
+        feedback
+      );
+
+      try {
+        configService.set = (async () => {
+          throw new Error("user settings unavailable");
+        }) as typeof configService.set;
+
+        await sync.handleDisableStatusLineTracking({
+          type: MESSAGE_TYPES.DISABLE_STATUS_LINE_TRACKING,
+          harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,
+          restoreCustomCommand: false,
+        });
+      } finally {
+        configService.set = originalSet;
+      }
+
+      assert.strictEqual(manager.uninstallCalls.length, 0);
+      assert.strictEqual(feedback.length, 1);
+      assert.match(
+        (feedback[0] as { message: string }).message,
+        /Could not disable statusline tracking/
+      );
+    });
+
+    test("rejects unsupported harness ids without changing config or files", async () => {
+      const originalSet = configService.set;
+      const writes: unknown[] = [];
+      const feedback: unknown[] = [];
+      const manager = new FakeStatuslineManager({
+        enabled: true,
+        customCommand: "node user-statusline.js",
+        useCtrlyokeStyle: true,
+      });
+      const sync = makeSync(
+        { [HARNESS_IDS.CLAUDE_CLI]: manager },
+        [],
+        feedback
+      );
+
+      try {
+        configService.set = (async (...args: unknown[]) => {
+          writes.push(args);
+        }) as typeof configService.set;
+
+        await sync.handleDisableStatusLineTracking({
+          type: MESSAGE_TYPES.DISABLE_STATUS_LINE_TRACKING,
+          harnessId: HARNESS_IDS.COPILOT_CLI,
+          restoreCustomCommand: false,
+        } as any);
+      } finally {
+        configService.set = originalSet;
+      }
+
+      assert.deepStrictEqual(writes, []);
+      assert.strictEqual(manager.uninstallCalls.length, 0);
+      assert.strictEqual(feedback.length, 1);
+    });
+  });
 
   suite("notifyHarnessAvailability", () => {
     test("should forward provider install guidance with availability updates", () => {

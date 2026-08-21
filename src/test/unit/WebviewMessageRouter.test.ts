@@ -14,6 +14,7 @@ import * as vscode from "vscode";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
 import {
   MESSAGE_TYPES,
+  HARNESS_IDS,
   END_CONDITION_SCRIPT_TYPES,
   USER_FEEDBACK_SEVERITY,
   VSCODE_COMMANDS,
@@ -207,6 +208,96 @@ suite("WebviewMessageRouter — native feedback", () => {
     });
 
     assert.deepStrictEqual(received, []);
+  });
+});
+
+suite("WebviewMessageRouter — statusline tracking", () => {
+  test("forwards the typed disable request for both supported harnesses", async () => {
+    const received: Array<{
+      harnessId: string;
+      restoreCustomCommand: boolean;
+      postMessage: (message: unknown) => void;
+    }> = [];
+    const sentinelPostMessage = () => {};
+    const settingsSync = {
+      sendWorkflowPropertiesToSettings: async () => {},
+      handleDisableStatusLineTracking: async (
+        request: {
+          harnessId: string;
+          restoreCustomCommand: boolean;
+        },
+        postMessage: (message: unknown) => void
+      ) => {
+        received.push({ ...request, postMessage });
+      },
+    } as any;
+    const router = new WebviewMessageRouter(
+      () => {},
+      settingsSync,
+      {} as any,
+      () => undefined,
+      {} as any,
+      { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+    );
+
+    for (const harnessId of [
+      HARNESS_IDS.CLAUDE_CLI,
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+    ]) {
+      await router.route(
+        {
+          type: MESSAGE_TYPES.DISABLE_STATUS_LINE_TRACKING,
+          harnessId,
+          restoreCustomCommand: true,
+        },
+        { postMessage: sentinelPostMessage }
+      );
+    }
+
+    assert.deepStrictEqual(
+      received.map(({ harnessId, restoreCustomCommand, postMessage }) => ({
+        harnessId,
+        restoreCustomCommand,
+        postMessage,
+      })),
+      [
+        {
+          harnessId: HARNESS_IDS.CLAUDE_CLI,
+          restoreCustomCommand: true,
+          postMessage: sentinelPostMessage,
+        },
+        {
+          harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,
+          restoreCustomCommand: true,
+          postMessage: sentinelPostMessage,
+        },
+      ]
+    );
+  });
+
+  test("rejects unsupported harness ids before dispatch", async () => {
+    let calls = 0;
+    const router = new WebviewMessageRouter(
+      () => {},
+      {
+        sendWorkflowPropertiesToSettings: async () => {},
+        handleDisableStatusLineTracking: async () => {
+          calls++;
+        },
+      } as any,
+      {} as any,
+      () => undefined,
+      {} as any,
+      { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+    );
+
+    await router.route({
+      type: MESSAGE_TYPES.DISABLE_STATUS_LINE_TRACKING,
+      harnessId: HARNESS_IDS.COPILOT_CLI,
+      restoreCustomCommand: false,
+    });
+
+    assert.strictEqual(calls, 0);
   });
 });
 

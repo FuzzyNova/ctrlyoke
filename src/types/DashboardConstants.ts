@@ -141,6 +141,7 @@ export const MESSAGE_TYPES = {
   UPDATE_CONFIG: "updateConfig", // Webview -> Extension: Update config value
   CONFIG_VALUE: "configValue", // Extension -> Webview: Send config value
   BROWSE_AND_ADD_EXTERNAL_ROOT: "browseAndAddExternalRoot", // Webview -> Extension: { scope } OS folder picker, appends result to permissions.allowedExternalFileRoots for that scope
+  DISABLE_STATUS_LINE_TRACKING: "disableStatusLineTracking", // Webview -> Extension: disable one harness's global statusline tracking
 
   // Secret registry - Webview <-> Extension
   REQUEST_SECRET_REGISTRY: "requestSecretRegistry",
@@ -667,6 +668,19 @@ export const HARNESS_IDS = {
   QWEN_CLI: "qwen-cli",
   ANTIGRAVITY_CLI: "antigravity-cli",
 } as const;
+
+/** Harnesses whose global statusline can be managed by ctrlyoke. */
+export type StatusLineTrackingHarnessId =
+  | typeof HARNESS_IDS.CLAUDE_CLI
+  | typeof HARNESS_IDS.ANTIGRAVITY_CLI;
+
+export function isStatusLineTrackingHarnessId(
+  value: unknown
+): value is StatusLineTrackingHarnessId {
+  return (
+    value === HARNESS_IDS.CLAUDE_CLI || value === HARNESS_IDS.ANTIGRAVITY_CLI
+  );
+}
 
 /** Claude tool names used by provider-specific execution state tracking. */
 export const CLAUDE_TOOL_NAMES = {

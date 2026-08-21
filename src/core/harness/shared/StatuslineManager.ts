@@ -3,6 +3,8 @@ import * as path from "path";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import {
   STATUS_LINE_TRACKING_PROVIDERS,
+  HARNESS_IDS,
+  type StatusLineTrackingHarnessId,
   type StatusLineTrackingProvider,
 } from "../../../types/DashboardConstants";
 import type { StatusLineTrackingSettings } from "../../../types/CtrlYokeSettings";
@@ -17,6 +19,14 @@ export interface StatuslineInstallResult {
   readonly captured: boolean;
 }
 
+export interface StatuslineManagerLike {
+  getSettings(): StatusLineTrackingSettings;
+  uninstall(
+    workspaceRoot: string,
+    restoreCustomCommand: boolean
+  ): Promise<void>;
+}
+
 interface StatuslineProviderDefinition {
   readonly tracker: SettingsJsonMcpTracker;
 }
@@ -29,7 +39,7 @@ interface StatuslineProviderDefinition {
  * first-install capture and explicit restore/delete use the same locking and
  * statusLine parsing rules for every host and provider.
  */
-export class StatuslineManager {
+export class StatuslineManager implements StatuslineManagerLike {
   private static readonly definitions = new Map<
     StatusLineTrackingProvider,
     StatuslineProviderDefinition
@@ -37,6 +47,21 @@ export class StatuslineManager {
 
   static forProvider(provider: StatusLineTrackingProvider): StatuslineManager {
     return new StatuslineManager(provider, this.getDefinition(provider));
+  }
+
+  static providerForHarness(
+    harnessId: StatusLineTrackingHarnessId
+  ): StatusLineTrackingProvider {
+    switch (harnessId) {
+      case HARNESS_IDS.CLAUDE_CLI:
+        return STATUS_LINE_TRACKING_PROVIDERS.CLAUDE;
+      case HARNESS_IDS.ANTIGRAVITY_CLI:
+        return STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY;
+    }
+  }
+
+  static forHarness(harnessId: StatusLineTrackingHarnessId): StatuslineManager {
+    return this.forProvider(this.providerForHarness(harnessId));
   }
 
   private static getDefinition(

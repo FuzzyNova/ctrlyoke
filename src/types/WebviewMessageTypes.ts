@@ -40,6 +40,7 @@ import {
   type SettingWriteScope,
   type SecretRegistryActionState,
   type SecretRegistryState,
+  type StatusLineTrackingHarnessId,
   type WorktreeManagementAction,
   type WorkflowFileFormat,
 } from "./DashboardConstants";
@@ -1431,6 +1432,13 @@ export interface UpdateGlobalSettingMessage {
   path: string;
   value: unknown;
   scope: SettingWriteScope;
+}
+
+/** Webview → Extension: disable global statusline tracking for one harness. */
+export interface DisableStatusLineTrackingMessage {
+  type: typeof MESSAGE_TYPES.DISABLE_STATUS_LINE_TRACKING;
+  harnessId: StatusLineTrackingHarnessId;
+  restoreCustomCommand: boolean;
 }
 
 /** Webview → Extension: generate a self-signed server cert for the active scope */
