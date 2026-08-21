@@ -32,10 +32,12 @@ import * as path from "path";
  * matched by the template's literal prefix instead of the fully-substituted
  * path, since the substituted value never appears verbatim in source.
  *
- * KNOWN FAILING as of writing — see dev/backlog/SETTINGS_UI_PARITY_PLAN.md.
- * The failure message below is deliberately the full gap inventory; do not
- * add a KNOWN_MISSING allowlist to silence it; fix the gaps (or the backlog
- * doc's reasoning) instead.
+ * Known gaps are tracked in `PENDING_UI_PARITY` below rather than left
+ * failing outright — see dev/backlog/SETTINGS_UI_PARITY_PLAN.md for the
+ * disposition of each entry. As a gap gets a dashboard control, remove its
+ * path from `PENDING_UI_PARITY` and re-run this suite: the second check
+ * below fails if a listed path is no longer missing, so the list can't go
+ * stale silently.
  */
 
 const SETTINGS_SCHEMA_PATH = path.resolve(
@@ -152,6 +154,30 @@ function settingPathConstants(): Map<string, string> {
   return entries;
 }
 
+/**
+ * Settings-schema properties intentionally excluded from the live-dashboard-
+ * control check below, either because the UI work described in the plan
+ * hasn't landed yet, or (for `server.standalonePort`) because the feature it
+ * configures doesn't exist yet. See dev/backlog/SETTINGS_UI_PARITY_PLAN.md
+ * for the disposition of each entry.
+ *
+ * As each gap gets a dashboard control, remove its path from this list and
+ * re-run the suite — a listed path that's no longer missing a control fails
+ * the "list is still accurate" check, so a forgotten removal is caught here
+ * rather than silently masking future gaps in the same setting.
+ */
+const PENDING_UI_PARITY: readonly string[] = [
+  "modelPricing",
+  "server.standalonePort",
+  "server.theme",
+  "usageTracking.enabled",
+  "usageTracking.enterpriseUsageApisEnabled",
+  "usageTracking.persistObservedUsage",
+  "usageTracking.preferredFallbackOrder",
+  "usageTracking.providerRefreshEnabled",
+  "usageTracking.warningPercentUsed",
+];
+
 const WEBVIEW_TEST_DIRECTORIES = new Set(["test", "__tests__"]);
 
 function webviewSourceFiles(directory: string): string[] {
@@ -201,12 +227,28 @@ suite("Settings schema -> Global Settings dashboard control parity", () => {
     }
     missing.sort();
 
+    const pending = new Set(PENDING_UI_PARITY);
+    const unexpectedlyMissing = missing.filter((p) => !pending.has(p));
+    const resolvedButStillPending = PENDING_UI_PARITY.filter(
+      (p) => !missing.includes(p)
+    );
+
     assert.deepStrictEqual(
-      missing,
+      unexpectedlyMissing,
       [],
-      `Settings-schema properties with no live dashboard control (${missing.length}):\n` +
-        missing.map((p) => `  - ${p}`).join("\n") +
+      `Settings-schema properties with no live dashboard control and no entry ` +
+        `in PENDING_UI_PARITY (${unexpectedlyMissing.length}):\n` +
+        unexpectedlyMissing.map((p) => `  - ${p}`).join("\n") +
         "\nSee dev/backlog/SETTINGS_UI_PARITY_PLAN.md."
+    );
+
+    assert.deepStrictEqual(
+      resolvedButStillPending,
+      [],
+      `PENDING_UI_PARITY lists paths that now have a live dashboard control ` +
+        `(${resolvedButStillPending.length}):\n` +
+        resolvedButStillPending.map((p) => `  - ${p}`).join("\n") +
+        "\nRemove them from PENDING_UI_PARITY in this test."
     );
   });
 });

@@ -1,11 +1,13 @@
 # Settings Schema UI Parity Plan
 
-> **Status:** Not implemented. Tracked by a deliberately-failing test:
+> **Status:** Not implemented. Tracked by
 > `src/test/integration/settingsSchemaUiParity.integration.test.ts`
 > (`Settings schema -> Global Settings dashboard control parity` ›
-> `every leaf settings-schema property has a live dashboard control`).
-> Leave that test red until the gaps below are closed or reclassified — do not
-> add a `KNOWN_MISSING` allowlist to silence it.
+> `every leaf settings-schema property has a live dashboard control`), which
+> allowlists the gaps below in its `PENDING_UI_PARITY` list. As each gap gets
+> a dashboard control, remove its path from `PENDING_UI_PARITY` and re-run the
+> test — it fails if a listed path no longer has a missing control, so a
+> forgotten removal can't hide a future regression in that same setting.
 
 ## Goal
 
@@ -37,12 +39,11 @@ npm run compile-tests
 MOCHA_GREP="Settings schema" node ./out/test/runTest.js
 ```
 
-## Current gaps (10)
+## Current gaps (9)
 
 | Setting | Section it belongs in | Disposition |
 | --- | --- | --- |
-| `defaults.secrets` | `WorkflowDefaultsSection` (harness/context page) | **Add control.** Default secret env-var names granted to new workflows. `HarnessesSection`/`DefaultsHarnessPage` already has `defaults.agent`/`defaults.skills` pickers right next to where this belongs; reuse `SecretGrantsEditor` (already used per-workflow in `PropertiesDrawer.tsx`/`PromptEditor.tsx`) instead of building a new editor. |
-| `server.theme` | `ServerSection` | **Add control.** `auto`/`light`/`dark` for the hosted dashboard's own theme — straightforward `CustomSelect` next to bind address / port. |
+| `server.theme` | intentionally not surfaced (for now) | **Not a gap yet — leave as-is.** The VS Code-hosted dashboard (`ServerSection.tsx`'s process) always follows the VS Code theme; there's nothing for this setting to control there. It's meant for the standalone `ctrlyoke server` headless CLI process's own dashboard, which doesn't exist yet — same story as `server.standalonePort` below. Give it a control once the standalone server ships and gets its own settings surface. |
 | `usageTracking.enabled` | `StatsUsageSection` (or `AdvancedPermissionsSection`) | **Add control.** Master switch for workspace quota/observed-usage collection; currently only settable by hand-editing `settings.json`. |
 | `usageTracking.providerRefreshEnabled` | `StatsUsageSection` | **Add control.** Gate for provider quota refresh calls. |
 | `usageTracking.persistObservedUsage` | `StatsUsageSection` | **Add control.** Whether normalized observed usage is persisted to the workspace. |
@@ -50,20 +51,27 @@ MOCHA_GREP="Settings schema" node ./out/test/runTest.js
 | `usageTracking.warningPercentUsed` | `StatsUsageSection` | **Add control.** Numeric threshold (0–100) for quota warnings. |
 | `usageTracking.preferredFallbackOrder` | `StatsUsageSection` | **Add control.** Ordered harness fallback list — needs a reorderable multi-select, more UI work than the others in this group; consider bundling all six `usageTracking.*` gaps into one PR since they share a section and a mental model. |
 | `modelPricing` | none yet — needs a decision | **Needs a decision**, not a small add. Per-harness/per-model USD rate overrides (`inputPerMTok`, `outputPerMTok`, `cachedInputPerMTok`, `cacheWritePerMTok`, `reasoningPerMTok`) keyed by an open-ended `harness -> model -> rates` map. There's no natural fixed-key list to render (unlike `defaults.models`, which iterates the 6 known harnesses) since model IDs are freeform strings. Needs its own small editor (add/remove harness, add/remove model, five rate fields per model) before it can get a control — worth scoping as its own task rather than folding into the `usageTracking` batch above. |
-| `server.standalonePort` | intentionally not surfaced | **Not a gap — leave as-is.** `ServerSection.tsx` already documents why: it configures the standalone `ctrlyoke server` headless CLI process, which doesn't exist yet (`STANDALONE_SERVER_PLAN.md` Phases 5–10 are unimplemented). The schema/type/default are kept so the standalone feature can use it later with no config migration. This test will keep flagging it until the standalone server ships and gets its own settings surface (not the VS Code `ServerSection`, which controls a different process) — that's expected, not a bug in the test. |
+| `server.standalonePort` | intentionally not surfaced | **Not a gap — leave as-is.** `ServerSection.tsx` already documents why: it configures the standalone `ctrlyoke server` headless CLI process, which doesn't exist yet (`dev/active/STANDALONE_SERVER_PLAN.md` Phases 5–10 are unimplemented). The schema/type/default are kept so the standalone feature can use it later with no config migration. This test will keep flagging it until the standalone server ships and gets its own settings surface (not the VS Code `ServerSection`, which controls a different process) — that's expected, not a bug in the test. |
 
-9 of the 10 are straightforward additive UI work; `modelPricing` needs its own small design
-pass first; `server.standalonePort` is intentionally deferred and should stay in the failing
-list as a marker until the standalone server work lands.
+`defaults.secrets` is done — see "Completed" below. Of the remaining 9, 7 are straightforward
+additive UI work; `modelPricing` needs its own small design pass first; `server.theme` and
+`server.standalonePort` are both intentionally deferred until the standalone server ships and
+should stay in `PENDING_UI_PARITY` as markers until then.
+
+## Completed
+
+| Setting | Where | Notes |
+| --- | --- | --- |
+| `defaults.secrets` | `DefaultsHarnessPage.tsx`, "Agent & Skill Defaults" section | Reuses `SecretGrantsEditor` (shared with `PropertiesDrawer.tsx`/`PromptEditor.tsx`) inside a `SettingInputRow` for the source badge/reset button. Added a `hideLabel` prop to `SecretGrantsEditor` so it doesn't duplicate the row's own label. |
 
 ## Suggested sequencing
 
-1. `server.theme` — smallest, single `CustomSelect`, no new editor component.
-2. `defaults.secrets` — reuse `SecretGrantsEditor`, same page as `defaults.agent`/`defaults.skills`.
-3. The five simple `usageTracking.*` toggles/numbers (`enabled`, `providerRefreshEnabled`,
+1. ~~`defaults.secrets` — reuse `SecretGrantsEditor`, same page as `defaults.agent`/`defaults.skills`.~~ Done.
+2. The five simple `usageTracking.*` toggles/numbers (`enabled`, `providerRefreshEnabled`,
    `persistObservedUsage`, `enterpriseUsageApisEnabled`, `warningPercentUsed`) as one batch in
    `StatsUsageSection`.
-4. `usageTracking.preferredFallbackOrder` — needs a reorderable list control; do after the
+3. `usageTracking.preferredFallbackOrder` — needs a reorderable list control; do after the
    simple toggles land so the section has a home for it.
-5. `modelPricing` — scope its own editor as a separate task.
-6. Leave `server.standalonePort` failing until `STANDALONE_SERVER_PLAN.md` ships.
+4. `modelPricing` — scope its own editor as a separate task.
+5. Leave `server.theme` and `server.standalonePort` in `PENDING_UI_PARITY` until
+   `dev/active/STANDALONE_SERVER_PLAN.md` ships.

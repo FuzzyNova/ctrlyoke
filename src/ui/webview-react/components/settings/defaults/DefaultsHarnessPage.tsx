@@ -17,6 +17,7 @@ import { toAgentSelectOption } from "../../shared/agentSelectOptions";
 import { MultiCheckboxDropdown } from "../../shared/MultiCheckboxDropdown";
 import { SettingInputRow } from "../../shared/SettingInputRow";
 import { FieldDiagnostic } from "../../shared/FieldDiagnostic";
+import { SecretGrantsEditor } from "../../shared/SecretGrantsEditor";
 import { fieldValidationBorderClass } from "@utils/fieldValidation";
 import { HarnessesSection } from "../HarnessesSection";
 
@@ -281,6 +282,22 @@ export function DefaultsHarnessPage({
             }))}
             placeholder="No skills selected"
             warning={skillsWarn ?? undefined}
+          />
+        </SettingInputRow>
+        <SettingInputRow
+          label="Default secrets"
+          description="Secret environment-variable names granted to new workflows by default."
+          id="defaults-secrets-control"
+          path="defaults.secrets"
+          {...rowProps}
+        >
+          <SecretGrantsEditor
+            value={wf.secrets ?? []}
+            inheritedValue={[]}
+            onChange={(value) => onUpdate("defaults.secrets", value)}
+            idPrefix="defaults-secrets"
+            title="Secret environment-variable names granted to new workflows by default."
+            hideLabel
           />
         </SettingInputRow>
       </div>

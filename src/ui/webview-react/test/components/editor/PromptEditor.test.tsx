@@ -394,6 +394,7 @@ describe("PromptEditor — prompt secret grants", () => {
     useUiStore.getState().openPropertiesDrawer();
 
     const { container } = render(<PromptEditor />);
+    fireEvent.click(screen.getByRole("button", { name: "Permissions" }));
     fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
     fireEvent.click(screen.getByText("API_TOKEN").closest("button")!);
     await userEvent

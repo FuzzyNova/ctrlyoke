@@ -48,6 +48,16 @@ function renderValidationDrawer() {
   );
 }
 
+function renderPermissionsDrawer() {
+  return render(
+    <PropertiesDrawer
+      isOpen
+      onClose={() => undefined}
+      activePage={DRAWER_PAGES.PERMISSIONS}
+    />
+  );
+}
+
 function chooseExecutionMode(label: string): void {
   const current = screen.getByRole("button", { name: "Execution Mode" });
   fireEvent.click(current);
@@ -182,7 +192,7 @@ describe("PropertiesDrawer secrets", () => {
       },
     ]);
 
-    renderHarnessDrawer();
+    renderPermissionsDrawer();
     fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
 
     expect(screen.getByText("USER_TOKEN")).toBeInTheDocument();
@@ -206,7 +216,7 @@ describe("PropertiesDrawer secrets", () => {
       },
     ]);
 
-    renderHarnessDrawer();
+    renderPermissionsDrawer();
     fireEvent.click(screen.getByRole("button", { name: "Secrets" }));
 
     const inlineRow = screen.getByRole("button", {

@@ -13,6 +13,8 @@ export interface SecretGrantsEditorProps {
   inlineSecretNames?: readonly string[];
   idPrefix?: string;
   title?: string;
+  /** Suppresses the built-in "Secrets" label — for callers (e.g. SettingInputRow) that already render one. */
+  hideLabel?: boolean;
 }
 
 /** Shared secret-grant control for prompt and script step surfaces. */
@@ -23,6 +25,7 @@ export function SecretGrantsEditor({
   inlineSecretNames = [],
   idPrefix = "secrets",
   title = "Grant named credentials to this step.",
+  hideLabel = false,
 }: SecretGrantsEditorProps) {
   const resolvedSecrets = useMemo(
     () => (value !== undefined ? (value ?? []) : [...inheritedValue]),
@@ -46,13 +49,15 @@ export function SecretGrantsEditor({
 
   return (
     <div className="flex flex-col gap-1">
-      <label
-        htmlFor={`${idPrefix}-control`}
-        className="text-xs font-semibold uppercase text-description-fg"
-        title={title}
-      >
-        Secrets
-      </label>
+      {!hideLabel && (
+        <label
+          htmlFor={`${idPrefix}-control`}
+          className="text-xs font-semibold uppercase text-description-fg"
+          title={title}
+        >
+          Secrets
+        </label>
+      )}
       <MultiCheckboxDropdown
         id={`${idPrefix}-control`}
         selectedValues={selectedValues}

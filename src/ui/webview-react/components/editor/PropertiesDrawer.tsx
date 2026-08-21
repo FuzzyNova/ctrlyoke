@@ -781,21 +781,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               </div>
               <div />
             </DrawerRow>
-
-            {/* Secrets — workflow grants plus locked inline !NAME references */}
-            <DrawerRow narrow={isNarrow}>
-              <div className="flex flex-col gap-1">
-                <SecretGrantsEditor
-                  value={properties.secrets}
-                  inheritedValue={resolvedSecrets}
-                  inlineSecretNames={inlineSecretNames}
-                  onChange={(secrets) => setProperty("secrets", secrets)}
-                  idPrefix="prop-secrets"
-                  title="Grant named credentials to this prompt. Inline !NAME references in prompt text are always granted. Reset all to inherit to remove the prompt override."
-                />
-              </div>
-              <div />
-            </DrawerRow>
           </div>
         )}
 
@@ -1097,6 +1082,18 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   ]}
                   warning={modeDiagnostics[0]?.message}
                   warningId="prop-permission-mode-diagnostic"
+                />
+              </div>
+
+              {/* Secrets — workflow grants plus locked inline !NAME references */}
+              <div className="flex flex-col gap-1 mt-2">
+                <SecretGrantsEditor
+                  value={properties.secrets}
+                  inheritedValue={resolvedSecrets}
+                  inlineSecretNames={inlineSecretNames}
+                  onChange={(secrets) => setProperty("secrets", secrets)}
+                  idPrefix="prop-secrets"
+                  title="Grant named credentials to this prompt. Inline !NAME references in prompt text are always granted. Reset all to inherit to remove the prompt override."
                 />
               </div>
 
