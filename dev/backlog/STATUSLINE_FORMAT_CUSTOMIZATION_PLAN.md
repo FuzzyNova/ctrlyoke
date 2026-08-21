@@ -414,6 +414,54 @@ wrapper reuses these conventions without importing across that boundary.
     benefits any future non-webview consumer (CLI/MCP hosts) that might want to preview a format
     without spinning up a webview, and it closes the window-labeling duplication either way.
 
+    **Verified build constraints (orchestration pass, 2026-08-21).** These were read out of the
+    build config directly so the Phase 1 spike doesn't have to rediscover them; they narrow it to
+    one open question rather than an open-ended investigation:
+    - The extension host is bundled by esbuild into a **single** `out/extension.js`
+      (`esbuild.js:306-314`, `bundle: true`), and likewise `out/mcp-server.js` / `out/cli.js`.
+      There is no `out/utils/**` on disk, so the detached wrapper can never `require()` a compiled
+      TS module by path. Option (a)'s "thin CommonJS re-export" cannot mean "require the compiled
+      `src/utils` file" — that file doesn't exist at runtime.
+    - `copyScriptsPlugin` (`esbuild.js:189-214`) copies only the **flat immediate children** of
+      `src/scripts/` via `fs.copyFileSync`, into `out/scripts/`. A nested subdirectory would throw,
+      but a *sibling* `.js` file is copied fine — so `require("./some-sibling.js")` from the wrapper
+      is viable, as is an esbuild entry point that emits a CommonJS bundle directly into
+      `out/scripts/` alongside it.
+    - **The wrapper's own test suite already runs against `out/scripts/`, not `src/scripts/`**:
+      `StatuslineWrapper.test.ts:33-37`'s `scriptPath` resolves `../../scripts/<name>` from
+      `__dirname`, which is `out/test/unit/` at runtime. So any sibling module the wrapper requires
+      is present under test too — this is *not* the blocker it would be if tests ran from source.
+    - The webview can import `src/utils/**` today: `src/ui/webview-react/tsconfig.json:24-35`
+      already maps `@root/utils/*` → `../../utils/*`, and the webview builds with Vite
+      (`vite build --config src/ui/webview-react/vite.config.ts`). The webview *cannot* import a
+      plain CommonJS `.js` out of `src/scripts/` — that tsconfig's `include` is webview-only and
+      `allowJs` is unset. So the TS half of any shared module must live under `src/utils/`, not
+      `src/scripts/`.
+    - The extension host does **not** `require()` the wrapper anywhere today (grep: only
+      `StatuslineWrapper.test.ts` does). Option (b) is therefore a net-new host↔script dependency,
+      not an extension of an existing one.
+
+    Net effect: the TS-side sharing in (a) — one isomorphic module under `src/utils/` consumed by
+    the webview preview *and* `ClaudeUsageProvider`/`AntigravityUsageProvider` — is confirmed
+    workable with no build change at all. The only genuinely open question left for the spike is
+    **how the detached wrapper gets that same logic**, with three candidates to weigh:
+    - **(a1)** Add an esbuild entry point compiling the shared `src/utils/` module to a CommonJS
+      `out/scripts/ctrlyoke-statusline-format.js`, required by the wrapper as a flat sibling.
+      True single-sourcing; costs one new build output and a check that `copyScriptsPlugin`'s
+      `onEnd` copy doesn't race or clobber it.
+    - **(a2)** Keep the shared logic as a hand-written flat CommonJS sibling in `src/scripts/`
+      (copied verbatim by the existing plugin, zero build change) and have the TS side re-export
+      from it — blocked as written, since the webview can't import it (see above), so this only
+      works if the TS side keeps its own copy.
+    - **(c)** Accept that the wrapper stays fully standalone (its current, deliberate zero-import
+      posture) and enforce parity with a **contract test**: a fixture table of payloads + formats
+      asserting the wrapper's output is byte-identical to the shared TS module's. Duplication
+      becomes tracked and CI-enforced rather than silent. Cheapest build story; the honest
+      fallback if (a1) hits a packaging snag.
+
+    The spike should pick one, prove it with a real build (`npm run compile` + the packaging test),
+    and write the outcome back into this decision before Phase 2 starts.
+
 12. **Give statusline configuration its own top-level settings tab ("Status Line"), separate
     from Stats & Usage.** The original design (this plan's earlier draft, and where
     `StatusLineTrackingControls` already lives today) nested everything inside
@@ -659,9 +707,11 @@ wrapper reuses these conventions without importing across that boundary.
 - `ConfigurationUtils.getStatusLineTrackingSettings(provider)` needs no change — it already
   returns the whole typed object generically.
 - `schemas/settings-schema.json`'s `usageTracking` definition (currently
-  `enabled`/`providerRefreshEnabled`/`persistObservedUsage`, lines
-  442-465) gains `percentDirection: "used" | "remaining"` (default `"used"`), normal (non-machine)
-  scope. `CtrlYokeSettings.ts`'s `usageTracking` interface and defaults block gain the matching
+  `enabled`/`providerRefreshEnabled`/`persistObservedUsage`/`warningPercentUsed`, starting at line
+  442) gains `percentDirection: "used" | "remaining"` (default `"used"`), normal (non-machine)
+  scope. Note `usageTracking.enabled` specifically *is* listed in
+  `WORKSPACE_FORBIDDEN_SETTING_ROOTS` (`CtrlYokeConfigService.ts:27-32`) while its siblings are
+  not — `percentDirection` follows the siblings and must **not** be added to that list. `CtrlYokeSettings.ts`'s `usageTracking` interface and defaults block gain the matching
   field; a new `SETTING_PATHS.USAGE_TRACKING_PERCENT_DIRECTION` entry alongside the existing
   `USAGE_TRACKING_ENABLED`.
 
@@ -737,7 +787,18 @@ Phase breakdown already intends) avoids needing that at all.
 **Recommended build order, within this plan, independent of the parity plan's own schedule**:
 Decision 16 (always-show `useCtrlyokeStyle`) and Decision 12 (the "Status Line" tab itself) have
 zero dependencies on anything else in this plan — including Phase 1's spike — and can ship as
-standalone changes before the rest: **16 → 12 → Phase 1 spike → 2 → 3 → 4 → 5 → 6.**
+standalone changes before the rest: **16 → 12 → Phase 1 spike → 3 → 2 → 4 → 5 → 6.**
+
+**Phase 3 moves ahead of Phase 2 (revised in the orchestration pass, 2026-08-21).** The phase list
+below is written 2-before-3 (wrapper first, then types/schema), but the wrapper is a *consumer* of
+this plan's new contracts — `StatusLineSegment`, the `StatusLineFieldId` registry, the
+`StatusLineColorId` registry, the shared default array, and `percentDirection` — and those
+contracts have to be single-sourced somewhere before two independent implementations start
+guessing at them. Building the wrapper first means the wrapper's hand-rolled shapes become the de
+facto source of truth and the TS types get retrofitted to match, which is backwards for a codebase
+whose stated rule is that contracts live in `src/types` / `schemas`. Land the type/schema/defaults
+plumbing first, then implement the wrapper against it. Nothing in Phase 3 depends on Phase 2, so
+this reorder costs nothing.
 
 ## Follow-up: extend statusline tracking to Copilot and Qwen (not in this plan's scope)
 
