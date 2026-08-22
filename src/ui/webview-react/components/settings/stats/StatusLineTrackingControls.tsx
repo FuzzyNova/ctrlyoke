@@ -57,6 +57,22 @@ const STATUS_LINE_SETTING_PATHS: Partial<
       SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_USE_CTRLYOKE_STYLE,
     format: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_FORMAT,
   },
+  [STATUS_LINE_TRACKING_PROVIDERS.COPILOT]: {
+    enabled: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_COPILOT_ENABLED,
+    customCommand:
+      SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_COPILOT_CUSTOM_COMMAND,
+    useCtrlyokeStyle:
+      SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_COPILOT_USE_CTRLYOKE_STYLE,
+    format: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_COPILOT_FORMAT,
+  },
+  [STATUS_LINE_TRACKING_PROVIDERS.QWEN]: {
+    enabled: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_QWEN_ENABLED,
+    customCommand:
+      SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_QWEN_CUSTOM_COMMAND,
+    useCtrlyokeStyle:
+      SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_QWEN_USE_CTRLYOKE_STYLE,
+    format: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_QWEN_FORMAT,
+  },
 };
 
 const RESTORE_LABEL_MAX_LENGTH = 56;
@@ -69,6 +85,10 @@ function providerForHarness(
       return STATUS_LINE_TRACKING_PROVIDERS.CLAUDE;
     case HARNESS_IDS.ANTIGRAVITY_CLI:
       return STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY;
+    case HARNESS_IDS.COPILOT_CLI:
+      return STATUS_LINE_TRACKING_PROVIDERS.COPILOT;
+    case HARNESS_IDS.QWEN_CLI:
+      return STATUS_LINE_TRACKING_PROVIDERS.QWEN;
     default:
       throw new Error(`Unsupported statusline harness: ${harnessId}`);
   }
@@ -80,6 +100,10 @@ function getDisableWarning(harnessId: StatusLineTrackingHarnessId): string {
       return "Disabling Claude statusline tracking loses token/quota data.";
     case HARNESS_IDS.ANTIGRAVITY_CLI:
       return "Disabling Antigravity statusline tracking loses token/quota and context-window data.";
+    case HARNESS_IDS.COPILOT_CLI:
+      return "Disabling Copilot statusline tracking loses token and context-window data.";
+    case HARNESS_IDS.QWEN_CLI:
+      return "Disabling Qwen statusline tracking loses token and context-window data.";
     default:
       throw new Error(`Unsupported statusline harness: ${harnessId}`);
   }
@@ -139,7 +163,9 @@ export function StatusLineTrackingControls({
   const provider = providerForHarness(harnessId);
   const paths = STATUS_LINE_SETTING_PATHS[provider];
   if (!paths) {
-    throw new Error(`Missing statusline setting paths for provider: ${provider}`);
+    throw new Error(
+      `Missing statusline setting paths for provider: ${provider}`
+    );
   }
   const tracking = settings.settings.permissions.statusLineTracking[provider];
   const snapshot = useHarnessUsageStore(

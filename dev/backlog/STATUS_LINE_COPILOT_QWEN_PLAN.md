@@ -1,6 +1,6 @@
 # Status Line Copilot & Qwen Support Plan
 
-> **Status:** Phase 6 complete; Phase 7 remains. Research completed 2026-08-22, including live, empirical probes
+> **Status:** Phase 7 complete; final review remains. Research completed 2026-08-22, including live, empirical probes
 > of GitHub Copilot CLI's and Qwen Code's real statusline payloads on this machine (not just
 > documentation).
 > Re-verified against the codebase 2026-08-22 after `STATUS_LINE_SHARED_FORMAT_TOGGLE_PLAN.md`
@@ -48,6 +48,7 @@ flag passed anywhere. Closed: no experimental gate needed.
 
 **Settings shape** — flat, top-level, same family as Claude/Antigravity. In
 `~/.copilot/settings.json`:
+
 ```json
 "statusLine": {
   "type": "command",
@@ -56,6 +57,7 @@ flag passed anywhere. Closed: no experimental gate needed.
   "refreshInterval": 1
 }
 ```
+
 - `type`: must be `"command"` when set.
 - `command`: path to an executable or shell command; receives session JSON on stdin, prints
   status text to stdout. Runs under the platform shell (`cmd.exe` on Windows, `/bin/sh`
@@ -67,6 +69,7 @@ flag passed anywhere. Closed: no experimental gate needed.
 **The statusline command only fires inside a genuine interactive TTY session — confirmed by
 elimination, not assumed.** Three escalating live attempts against a probe script wired into
 `~/.copilot/settings.json`:
+
 1. `copilot -p "..." --allow-all-tools` (headless, `-p`) — exits after one reply; probe never
    invoked.
 2. `copilot -i "..." --allow-all-tools` with stdout/stderr piped/redirected (including via
@@ -76,8 +79,8 @@ elimination, not assumed.** Three escalating live attempts against a probe scrip
 3. `copilot -i "..." --allow-all-tools` via `Start-Process` with **no** output redirection (a
    real, un-piped console) — the probe fired repeatedly on the configured 1-second
    `refreshInterval`, capturing real payloads (below) until the process was killed.
-   Bare `copilot` with no prompt and no TTY refuses outright: *"No prompt provided. Run in an
-   interactive terminal or provide a prompt with -p or via standard in."*
+   Bare `copilot` with no prompt and no TTY refuses outright: _"No prompt provided. Run in an
+   interactive terminal or provide a prompt with -p or via standard in."_
 
 This is a real constraint, not a probing inconvenience: Copilot's statusline is a footer UI
 element, and it plainly does not exist as a concept outside a rendered interactive session, the
@@ -89,6 +92,7 @@ to reproduce this probe again by piping Copilot's output through a plain (non-pt
 
 **Real captured payload** (from the live probe above, `gpt-5.6-luna`, first turn after model
 selection resolved — full shape, not paraphrased):
+
 ```json
 {
   "cwd": "C:\\dev\\ctrlyoke",
@@ -124,14 +128,17 @@ selection resolved — full shape, not paraphrased):
     "displayed_context_limit": 328000,
     "current_context_used_percentage": 8,
     "current_usage": {
-      "input_tokens": 25953, "output_tokens": 17,
-      "cache_creation_input_tokens": 25950, "cache_read_input_tokens": 0
+      "input_tokens": 25953,
+      "output_tokens": 17,
+      "cache_creation_input_tokens": 25950,
+      "cache_read_input_tokens": 0
     }
   },
   "ai_used": { "total_nano_aiu": 650850000, "formatted": "0.65" },
   "allow_all_enabled": false
 }
 ```
+
 Before the first API call completes, `model.id`/`model.display_name` are both `null` — genuinely
 observed on the very first tick, not a hypothetical. Any Copilot extractor for `model` must
 tolerate this the same way `safeLabel(..., "unknown-model")` already does for other providers.
@@ -183,6 +190,7 @@ stdin payloads, and restored the original settings file byte-for-byte (SHA-256 v
 
 **Settings shape — nested, and dual-mode.** In `~/.qwen/settings.json`, under `ui.statusLine`
 (**not** a top-level key, unlike Claude/Antigravity/Copilot):
+
 ```json
 "ui": {
   "statusLine": {
@@ -198,6 +206,7 @@ stdin payloads, and restored the original settings file byte-for-byte (SHA-256 v
   }
 }
 ```
+
 Qwen's statusline has **two mutually exclusive modes**: a built-in `"preset"` mode (curated
 display items joined with `|`, no external process at all) and a `"command"` mode structurally
 equivalent to the other three providers' mechanism. ctrlyoke only ever cares about `"command"`
@@ -207,10 +216,12 @@ Copilot's; command-mode invocations time out after 5 seconds (Qwen-side, not ctr
 
 **A real machine already has `type: "preset"` configured — this is not a hypothetical edge
 case.** This exact machine's `~/.qwen/settings.json` currently has:
+
 ```json
 "ui": { "statusLine": { "type": "preset", "useThemeColors": true,
   "items": ["project-name", "git-branch", "model-with-reasoning", "context-used"] } }
 ```
+
 `StatuslineManager.extractCommand` (`src/core/harness/shared/StatuslineManager.ts:175-188`)
 already returns `undefined` for a value with no string `command` field, which a `type: "preset"`
 object never has — so today's install logic already tolerates this shape mechanically, treating
@@ -224,6 +235,7 @@ rather than empty space being filled) — decided not to auto-replace it at all;
 
 **Real captured payload** (from the live probe, after the first API call; full shape, not
 paraphrased):
+
 ```json
 {
   "session_id": "43a8bb4c-f013-447e-9e23-c70e071fc16e",
@@ -300,16 +312,16 @@ because both existing providers (Claude, Antigravity) happened to support every 
 invariant does not survive adding Copilot/Qwen unchanged; three fields need either a corrected
 extractor or an accepted "structurally always empty for these two" outcome:
 
-| id | claude | antigravity | copilot | qwen | note |
-| --- | --- | --- | --- | --- | --- |
-| `model` | ✓ | ✓ | ✓ (nullable pre-first-turn) | ✓ (`display_name` only, no `id`) | existing fallback chain already handles both gaps |
-| `context` | ✓ | ✓ | ✓ **but needs a Copilot-specific extractor** (`current_context_tokens`/`displayed_context_limit`, not the generic pair) | ✓ **but needs a Qwen-specific preference for numeric `current_usage`/`context_window_size`; startup payloads can be partial** | see Research above |
-| `usage`/`usage1`/`usage2` | ✓ | ✓ | **no data** (renders `—` / drops silently, existing tolerance) | **no data** (same) | real Copilot quota exists but is architecturally unreachable here — see Research |
-| `version` | ✓ | ✓ | ✓ | ✓ | no change |
-| `cwd` | ✓ (`payload.cwd`) | ✓ (`payload.cwd`) | ✓ (`payload.cwd`, confirmed live) | **`payload.workspace.current_dir` only, confirmed live** | needs a fallback chain, not a new field |
-| `sessionId` | ✓ | ✓ | ✓ | ✓ | no change |
-| `branch` (locally computed) | computed via `.git/HEAD` | computed via `.git/HEAD` | computed via `.git/HEAD` | **`payload.git.branch` observed after startup; absent on initial ticks** | see Decisions — optional optimization, not required |
-| `date`/`time` (locally computed) | ✓ | ✓ | ✓ | ✓ | provider-agnostic, no change |
+| id                               | claude                   | antigravity              | copilot                                                                                                                 | qwen                                                                                                                          | note                                                                             |
+| -------------------------------- | ------------------------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `model`                          | ✓                        | ✓                        | ✓ (nullable pre-first-turn)                                                                                             | ✓ (`display_name` only, no `id`)                                                                                              | existing fallback chain already handles both gaps                                |
+| `context`                        | ✓                        | ✓                        | ✓ **but needs a Copilot-specific extractor** (`current_context_tokens`/`displayed_context_limit`, not the generic pair) | ✓ **but needs a Qwen-specific preference for numeric `current_usage`/`context_window_size`; startup payloads can be partial** | see Research above                                                               |
+| `usage`/`usage1`/`usage2`        | ✓                        | ✓                        | **no data** (renders `—` / drops silently, existing tolerance)                                                          | **no data** (same)                                                                                                            | real Copilot quota exists but is architecturally unreachable here — see Research |
+| `version`                        | ✓                        | ✓                        | ✓                                                                                                                       | ✓                                                                                                                             | no change                                                                        |
+| `cwd`                            | ✓ (`payload.cwd`)        | ✓ (`payload.cwd`)        | ✓ (`payload.cwd`, confirmed live)                                                                                       | **`payload.workspace.current_dir` only, confirmed live**                                                                      | needs a fallback chain, not a new field                                          |
+| `sessionId`                      | ✓                        | ✓                        | ✓                                                                                                                       | ✓                                                                                                                             | no change                                                                        |
+| `branch` (locally computed)      | computed via `.git/HEAD` | computed via `.git/HEAD` | computed via `.git/HEAD`                                                                                                | **`payload.git.branch` observed after startup; absent on initial ticks**                                                      | see Decisions — optional optimization, not required                              |
+| `date`/`time` (locally computed) | ✓                        | ✓                        | ✓                                                                                                                       | ✓                                                                                                                             | provider-agnostic, no change                                                     |
 
 ## Plan currency note (2026-08-22 pre-implementation review)
 
@@ -382,16 +394,16 @@ re-verification:
    `size = displayed_context_limit`, falling back to the generic pair only if either is absent
    from a given payload (keeps the same "never crash on a malformed/partial payload" posture the
    rest of this module already has).
-4a. **Qwen's `context` field also needs a provider-specific preference, though not a new size
-    field.** The live Qwen payload uses the documented generic key names, but its numeric
-    `context_window.current_usage` is the current context size and can differ from cumulative
-    `total_input_tokens + total_output_tokens`; the existing generic `contextValues()` treats
-    numeric `current_usage` as `{}` and silently ignores it. Add a Qwen branch that uses
-    `used = current_usage` and `size = context_window_size`, falling back to the generic
-    cumulative-token pair when either value is absent or invalid. As with Copilot, tolerate the
-    partial zero/omitted fields observed during startup.
+   4a. **Qwen's `context` field also needs a provider-specific preference, though not a new size
+   field.** The live Qwen payload uses the documented generic key names, but its numeric
+   `context_window.current_usage` is the current context size and can differ from cumulative
+   `total_input_tokens + total_output_tokens`; the existing generic `contextValues()` treats
+   numeric `current_usage` as `{}` and silently ignores it. Add a Qwen branch that uses
+   `used = current_usage` and `size = context_window_size`, falling back to the generic
+   cumulative-token pair when either value is absent or invalid. As with Copilot, tolerate the
+   partial zero/omitted fields observed during startup.
 5. **`cwd` gains an evidence-based fallback chain: `payload.cwd ??
-   payload.workspace?.current_dir`**, rather than a Qwen-specific branch. The live Qwen payload
+payload.workspace?.current_dir`**, rather than a Qwen-specific branch. The live Qwen payload
    has no top-level `cwd` at all, while Copilot's probe confirmed that key and the existing
    Claude/Antigravity research uses it, so the fallback is required for the four-provider
    extractor. This is strictly a generalization of the existing single-key read at
@@ -431,7 +443,7 @@ re-verification:
    narrower, purely mechanical fix that needs none of that:
    - **Detection**: `hadKey === true` and `extractCommand(preexistingValue, hadKey) === undefined`
      and the existing value isn't already ctrlyoke's own command (`isCtrlyokeStatuslineCommand`,
-     `StatuslineManager.ts:190-203`) — i.e. *something* is configured, but it isn't a forwardable
+     `StatuslineManager.ts:190-203`) — i.e. _something_ is configured, but it isn't a forwardable
      command and isn't ctrlyoke's own. Reachable in practice only via Qwen's `type: "preset"` mode
      today, but the check itself isn't Qwen-specific.
    - **Behavior on detection**: skip the write entirely (the preset config is left byte-for-byte
@@ -472,9 +484,9 @@ re-verification:
    these two providers can lag up to ~1s longer than Antigravity's, which is expected, not a bug
    to chase.
 10. **Reuse the shared 200ms `forwardToCommand` timeout unchanged** (`STATUSLINE_USER_CONTROLS_PLAN.md`'s
-   Wrapper Script Consolidation) for both new providers — no evidence either CLI's own poll
-   cadence needs a different bound, and per that plan's own reasoning, matching Antigravity's
-   already-justified value is the safe default when nothing provider-specific argues otherwise.
+    Wrapper Script Consolidation) for both new providers — no evidence either CLI's own poll
+    cadence needs a different bound, and per that plan's own reasoning, matching Antigravity's
+    already-justified value is the safe default when nothing provider-specific argues otherwise.
 
 ## Settings / Schema Plumbing
 
@@ -517,7 +529,7 @@ re-verification:
 
 ## UI Placement
 
-No new UI *mechanism* needed, but the change is not limited to growing one array. Since the
+No new UI _mechanism_ needed, but the change is not limited to growing one array. Since the
 shared/per-harness toggle work landed, `StatusLineSection.tsx` renders one
 `StatusLineTrackingControls` block per entry in `STATUS_LINE_HARNESS_IDS` (shared mode renders a
 `StatusLinePreview` inside each block instead of a full editor) — adding Copilot/Qwen to that
@@ -537,7 +549,7 @@ than a stale two-provider fixture or a runtime fallback to an unrelated provider
 `src/test/unit/StatuslineWrapper.test.ts` gains Copilot/Qwen fixtures mirroring the existing
 Claude/Antigravity cases: settings resolution, malformed-input tolerance, the `context` extractor
 divergences (Decision 4's Copilot-specific displayed limit and Decision 4a's Qwen numeric
-`current_usage`, both *not* the generic pair), the `cwd` fallback chain (Decision 5), and
+`current_usage`, both _not_ the generic pair), the `cwd` fallback chain (Decision 5), and
 `usage`/`usage1`/`usage2` rendering as absent for both new providers.
 
 ## Non-Goals
@@ -594,7 +606,7 @@ divergences (Decision 4's Copilot-specific displayed limit and Decision 4a's Qwe
    coverage for the collision path — asserting the preset value is left byte-for-byte unchanged,
    `enabled` flips to `false`, the notification fires exactly once, and a subsequent run with
    `enabled` manually restored to `true` proceeds to install normally.
-7. **UI**: add `copilot`/`qwen` to `STATUS_LINE_HARNESS_IDS`; add cases to
+7. **Complete — UI**: add `copilot`/`qwen` to `STATUS_LINE_HARNESS_IDS`; add cases to
    `StatusLineTrackingControls.tsx`'s `STATUS_LINE_SETTING_PATHS`/`providerForHarness`/
    `getDisableWarning`; add Copilot/Qwen fixture payloads to `StatusLinePreview.tsx`'s
    `previewPayload()` (UI Placement above); UI component coverage for the two new provider blocks.

@@ -27,7 +27,11 @@ function makeSettings(
   const provider =
     harnessId === HARNESS_IDS.CLAUDE_CLI
       ? STATUS_LINE_TRACKING_PROVIDERS.CLAUDE
-      : STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY;
+      : harnessId === HARNESS_IDS.ANTIGRAVITY_CLI
+        ? STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY
+        : harnessId === HARNESS_IDS.COPILOT_CLI
+          ? STATUS_LINE_TRACKING_PROVIDERS.COPILOT
+          : STATUS_LINE_TRACKING_PROVIDERS.QWEN;
   return {
     settings: {
       ...CTRLYOKE_SETTINGS_DEFAULTS,
@@ -72,6 +76,16 @@ describe("StatusLineTrackingControls", () => {
       "Antigravity",
       "Disabling Antigravity statusline tracking loses token/quota and context-window data.",
     ],
+    [
+      HARNESS_IDS.COPILOT_CLI,
+      "Copilot CLI",
+      "Disabling Copilot statusline tracking loses token and context-window data.",
+    ],
+    [
+      HARNESS_IDS.QWEN_CLI,
+      "Qwen Code",
+      "Disabling Qwen statusline tracking loses token and context-window data.",
+    ],
   ] as const)(
     "shows the %s loss warning",
     (harnessId, providerName, warning) => {
@@ -86,7 +100,7 @@ describe("StatusLineTrackingControls", () => {
       expect(
         screen.getByRole("checkbox", {
           name: new RegExp(
-            `^Enable ${providerName === "Claude" ? "Claude Code" : "Antigravity CLI"} statusline tracking`
+            `^Enable ${providerName === "Claude" ? "Claude Code" : providerName === "Antigravity" ? "Antigravity CLI" : providerName} statusline tracking`
           ),
         })
       ).toBeInTheDocument();
@@ -359,12 +373,12 @@ describe("StatusLineTrackingControls", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders controls only for the two statusline harnesses in the status line section", () => {
+  it("renders controls for every statusline harness in the status line section", () => {
     const settings = makeSettings(HARNESS_IDS.CLAUDE_CLI);
     render(<StatusLineSection settings={settings} />);
 
     expect(
       screen.getAllByRole("textbox", { name: "Custom statusline command" })
-    ).toHaveLength(2);
+    ).toHaveLength(4);
   });
 });

@@ -16,6 +16,8 @@ import { StatusLineTrackingControls } from "./stats/StatusLineTrackingControls";
 const STATUS_LINE_HARNESS_IDS: StatusLineTrackingHarnessId[] = [
   HARNESS_IDS.CLAUDE_CLI,
   HARNESS_IDS.ANTIGRAVITY_CLI,
+  HARNESS_IDS.COPILOT_CLI,
+  HARNESS_IDS.QWEN_CLI,
 ];
 
 interface Props {

@@ -54,7 +54,7 @@ describe("StatusLineSection", () => {
     ).toBeInTheDocument();
     expect(
       screen.getAllByRole("textbox", { name: "Custom statusline command" })
-    ).toHaveLength(2);
+    ).toHaveLength(4);
     expect(
       screen.getByRole("checkbox", {
         name: /^Enable Claude Code statusline tracking/,
@@ -67,13 +67,23 @@ describe("StatusLineSection", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("checkbox", {
+        name: /^Enable Copilot CLI statusline tracking/,
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", {
+        name: /^Enable Qwen Code statusline tracking/,
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", {
         name: "Use a different status line format per harness",
       })
     ).not.toBeChecked();
     expect(
       screen.getAllByRole("region", { name: "Status line format" })
     ).toHaveLength(1);
-    expect(screen.getAllByText("Live preview")).toHaveLength(2);
+    expect(screen.getAllByText("Live preview")).toHaveLength(4);
   });
 
   it("renders one editor per harness and no standalone shared editor in per-harness mode", () => {
@@ -81,8 +91,8 @@ describe("StatusLineSection", () => {
 
     expect(
       screen.getAllByRole("region", { name: "Status line format" })
-    ).toHaveLength(2);
-    expect(screen.queryAllByText("Live preview")).toHaveLength(2);
+    ).toHaveLength(4);
+    expect(screen.queryAllByText("Live preview")).toHaveLength(4);
   });
 
   it("posts the coordinated mode message instead of a raw setting update", async () => {
@@ -131,6 +141,8 @@ describe("StatusLineSection", () => {
     ).toEqual([
       expect.stringContaining("preview"),
       expect.stringContaining("preview"),
+      expect.stringContaining("1.0.80"),
+      expect.stringContaining("0.21.15"),
     ]);
   });
 
@@ -157,6 +169,8 @@ describe("StatusLineSection", () => {
     ).toEqual([
       expect.stringContaining("preview"),
       expect.stringContaining("preview"),
+      expect.stringContaining("1.0.80"),
+      expect.stringContaining("0.21.15"),
     ]);
   });
 });
