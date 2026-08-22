@@ -7,6 +7,7 @@
 export {
   getTimestamp,
   formatTime,
+  formatTimestamp,
   formatRelativeTime,
   formatRelativeTimeVerbose,
   formatDuration,

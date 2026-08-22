@@ -5,6 +5,7 @@ import {
   formatRelativeTime,
   formatRelativeTimeVerbose,
   formatTime,
+  formatTimestamp,
   getTimestamp,
 } from "@utils/time";
 
@@ -21,6 +22,18 @@ describe("getTimestamp", () => {
 describe("formatTime", () => {
   it("returns a non-empty string for a valid timestamp", () => {
     const result = formatTime(Date.now());
+    expect(result).toBeTruthy();
+    expect(typeof result).toBe("string");
+  });
+});
+
+describe("formatTimestamp", () => {
+  it("returns 'Not available' for undefined", () => {
+    expect(formatTimestamp(undefined)).toBe("Not available");
+  });
+
+  it("returns a non-empty string for a valid timestamp", () => {
+    const result = formatTimestamp(Date.now());
     expect(result).toBeTruthy();
     expect(typeof result).toBe("string");
   });
@@ -170,6 +183,13 @@ describe("formatRelativeTimeVerbose", () => {
   it("returns plural days for > 1 day ago", () => {
     expect(formatRelativeTimeVerbose(Date.now() - 172_800_000)).toBe(
       "2 days ago"
+    );
+  });
+
+  it("accepts an explicit reference time instead of the system clock", () => {
+    const now = Date.now();
+    expect(formatRelativeTimeVerbose(now - 120_000, now)).toBe(
+      "2 minutes ago"
     );
   });
 });

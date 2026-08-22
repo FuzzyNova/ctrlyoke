@@ -24,7 +24,7 @@ const WORKSPACE_SCOPE = "workspace-local" as const;
 const LIFETIME_PERIOD_START = "workspace-lifetime" as const;
 const OBSERVED_PROVENANCE = ["ctrlyoke-observed"] as const;
 const FULL_DISCLAIMER =
-  "Totals are ctrlyoke-observed only and do not include harness activity outside ctrlyoke. Cost values are estimates at API list prices, not subscription spend.";
+  "Totals are ctrlyoke-observed only and do not include harness activity outside ctrlyoke. Cost values are estimated from token counts at API list prices, or taken directly from a harness's own reported figure when one is available; either way, they are not subscription spend.";
 const HIDDEN_COST_DISCLAIMER =
   "Totals are ctrlyoke-observed only and do not include harness activity outside ctrlyoke. Cost estimates are omitted by the workspace setting.";
 
@@ -207,7 +207,7 @@ export function buildWorkspaceStatsExport(
     `- Cost estimate caveat: ${
       hideCost
         ? "Cost estimates are omitted by the workspace setting."
-        : "Cost values are estimates at API list prices, not subscription spend."
+        : "Cost values are estimated from token counts at API list prices, or taken directly from a harness's own reported figure when one is available; either way, they are not subscription spend."
     }`,
     "",
     "## Totals",

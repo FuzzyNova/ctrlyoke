@@ -74,7 +74,7 @@ describe("StatsUsageSection", () => {
     expect(screen.queryByText(/resets/i)).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        /Totals are ctrlyoke-observed only; they do not include harness activity outside ctrlyoke\. Costs are estimates at API list prices, not subscription spend\./
+        /Totals are ctrlyoke-observed only; they do not include harness activity outside ctrlyoke\. Costs are estimated from token counts at API list prices, or taken directly from a harness's own reported figure when one is available; either way, they are not subscription spend\./
       )
     ).toBeInTheDocument();
 
@@ -145,13 +145,13 @@ describe("StatsUsageSection", () => {
       screen.getByRole("heading", { name: "Usage collection" })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("checkbox", { name: /^Enable usage collection/ })
+      screen.getByRole("checkbox", { name: /^Track harness usage/ })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("checkbox", { name: /^Refresh provider usage/ })
+      screen.getByRole("checkbox", { name: /^Refresh quota from provider/ })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("checkbox", { name: /^Persist observed usage/ })
+      screen.getByRole("checkbox", { name: /^Save usage history/ })
     ).toBeInTheDocument();
     expect(
       screen.getByRole("spinbutton", { name: "Usage warning threshold" })
@@ -173,13 +173,13 @@ describe("StatsUsageSection", () => {
     );
 
     await user.click(
-      screen.getByRole("checkbox", { name: /^Enable usage collection/ })
+      screen.getByRole("checkbox", { name: /^Track harness usage/ })
     );
     await user.click(
-      screen.getByRole("checkbox", { name: /^Refresh provider usage/ })
+      screen.getByRole("checkbox", { name: /^Refresh quota from provider/ })
     );
     await user.click(
-      screen.getByRole("checkbox", { name: /^Persist observed usage/ })
+      screen.getByRole("checkbox", { name: /^Save usage history/ })
     );
     const threshold = screen.getByRole("spinbutton", {
       name: "Usage warning threshold",
@@ -218,7 +218,7 @@ describe("StatsUsageSection", () => {
     );
 
     expect(
-      screen.getByRole("checkbox", { name: /^Enable usage collection/ })
+      screen.getByRole("checkbox", { name: /^Track harness usage/ })
     ).toBeDisabled();
     expect(
       screen.getByText(
@@ -239,13 +239,13 @@ describe("StatsUsageSection", () => {
     );
 
     expect(
-      screen.getByRole("checkbox", { name: /^Enable usage collection/ })
+      screen.getByRole("checkbox", { name: /^Track harness usage/ })
     ).not.toBeDisabled();
     expect(
-      screen.getByRole("checkbox", { name: /^Refresh provider usage/ })
+      screen.getByRole("checkbox", { name: /^Refresh quota from provider/ })
     ).toBeDisabled();
     expect(
-      screen.getByRole("checkbox", { name: /^Persist observed usage/ })
+      screen.getByRole("checkbox", { name: /^Save usage history/ })
     ).toBeDisabled();
   });
 

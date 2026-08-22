@@ -189,14 +189,19 @@ export function StatsUsageSection({
               Usage collection
             </h3>
             <p className="text-xs text-description-fg mt-1">
-              Controls workspace-local provider quota and observed-usage
-              collection.
+              Tracks token, cost, and quota usage per harness for the stats on
+              this page.
+            </p>
+            <p className="text-xs text-description-fg mt-1">
+              Local only — nothing is uploaded or shared with ctrlyoke. Usage
+              is read from your own harness sessions and saved in files on
+              this machine.
             </p>
           </div>
           <div className="space-y-3">
             <SettingToggleRow
-              label="Enable usage collection"
-              description="Enable usage collection for ctrlyoke-started harness sessions."
+              label="Track harness usage"
+              description="Watch ctrlyoke-started harness sessions and record their token, cost, and quota usage. Applies machine-wide, across all your workspaces."
               checked={usageTracking.enabled}
               onChange={(value) => onUpdate?.("usageTracking.enabled", value)}
               disabled={userScopeOnly}
@@ -207,13 +212,13 @@ export function StatsUsageSection({
             />
             {userScopeOnly && (
               <p className="text-xs text-warning-fg -mt-2" role="note">
-                Usage collection is user-scoped and cannot be changed from
+                Track harness usage is user-scoped and cannot be changed from
                 workspace scope. Switch the scope selector to User to edit it.
               </p>
             )}
             <SettingToggleRow
-              label="Refresh provider usage"
-              description="Allow provider quota refreshes from configured collectors."
+              label="Refresh quota from provider"
+              description="Actively check each harness's CLI for your current quota and rate-limit usage, so the numbers on this page stay up to date."
               checked={usageTracking.providerRefreshEnabled}
               onChange={(value) =>
                 onUpdate?.("usageTracking.providerRefreshEnabled", value)
@@ -225,8 +230,8 @@ export function StatsUsageSection({
               activeScope={activeScope}
             />
             <SettingToggleRow
-              label="Persist observed usage"
-              description="Persist normalized observed usage in the workspace."
+              label="Save usage history"
+              description="Keep a running record of usage in this workspace so totals and stats survive restarts. Off keeps usage in memory for this session only."
               checked={usageTracking.persistObservedUsage}
               onChange={(value) =>
                 onUpdate?.("usageTracking.persistObservedUsage", value)
@@ -340,8 +345,9 @@ export function StatsUsageSection({
       </div>
       <p className="text-xs text-description-fg">
         Totals are ctrlyoke-observed only; they do not include harness activity
-        outside ctrlyoke. Costs are estimates at API list prices, not
-        subscription spend.
+        outside ctrlyoke. Costs are estimated from token counts at API list
+        prices, or taken directly from a harness's own reported figure when
+        one is available; either way, they are not subscription spend.
       </p>
       {settings && (
         <section

@@ -130,4 +130,37 @@ describe("UsageCard percent direction", () => {
     expect(container).toHaveTextContent("945 remaining requests");
     expect(container).not.toHaveTextContent("25% remaining");
   });
+
+  it("fills the usage bar to the used percentage in used mode", () => {
+    const { container } = render(
+      <UsageCard
+        harnessId={HARNESS_IDS.CLAUDE_CLI}
+        snapshot={makeSnapshot(
+          HARNESS_IDS.CLAUDE_CLI,
+          HARNESS_USAGE_UNITS.PERCENT
+        )}
+        hideCost={true}
+      />
+    );
+
+    const bar = container.querySelector(".bg-ctx-bar-track > div");
+    expect(bar).toHaveStyle({ width: "75%" });
+  });
+
+  it("inverts the usage bar fill in remaining mode", () => {
+    setPercentDirection("remaining");
+    const { container } = render(
+      <UsageCard
+        harnessId={HARNESS_IDS.CLAUDE_CLI}
+        snapshot={makeSnapshot(
+          HARNESS_IDS.CLAUDE_CLI,
+          HARNESS_USAGE_UNITS.PERCENT
+        )}
+        hideCost={true}
+      />
+    );
+
+    const bar = container.querySelector(".bg-ctx-bar-track > div");
+    expect(bar).toHaveStyle({ width: "25%" });
+  });
 });

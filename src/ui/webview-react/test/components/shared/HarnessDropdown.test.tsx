@@ -243,7 +243,9 @@ describe("HarnessDropdown", () => {
       );
 
       expect(screen.getByText("25%")).toBeInTheDocument();
-      expect(screen.getByTitle("Available | 25% 5-hour")).toBeInTheDocument();
+      expect(
+        screen.getByTitle(/^Available \| 25% 5-hour \(updated .+\)$/)
+      ).toBeInTheDocument();
     } finally {
       Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
     }

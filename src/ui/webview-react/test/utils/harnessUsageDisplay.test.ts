@@ -38,25 +38,27 @@ describe("getHarnessUsageDisplay", () => {
     confidence: HARNESS_USAGE_CONFIDENCE.EXACT,
   };
 
-  it("shows the last-known percentage unannotated while fresh", () => {
+  it("annotates the last-known percentage with when it was fetched, while fresh", () => {
     const display = getHarnessUsageDisplay(
       snapshot([window], fetchedAt),
       fetchedAt + 60_000
     );
     expect(display.percentOnly).toBe("63%");
-    expect(display.quotaPhrase).toBe("63% 5-hour");
+    expect(display.quotaPhrase).toMatch(/^63% 5-hour \(updated .+\)$/);
+    expect(display.quotaPhrase).not.toContain("stale");
   });
 
-  it("keeps showing the last-known percentage past the freshness window, annotated stale", () => {
+  it("keeps showing the last-known percentage past the freshness window, still annotated with the fetch time rather than 'stale'", () => {
     const display = getHarnessUsageDisplay(
       snapshot([window], fetchedAt),
       fetchedAt + 5 * 60 * 1000 + 1
     );
     expect(display.percentOnly).toBe("63%");
-    expect(display.quotaPhrase).toBe("63% 5-hour (stale)");
+    expect(display.quotaPhrase).toMatch(/^63% 5-hour \(updated .+\)$/);
+    expect(display.quotaPhrase).not.toContain("stale");
   });
 
-  it("annotates only the window whose own reset has passed, not a fresh sibling window", () => {
+  it("drops the reset time only for the window whose own reset has passed, not a fresh sibling window", () => {
     const fiveHour = {
       ...window,
       id: "five-hour",
@@ -73,20 +75,38 @@ describe("getHarnessUsageDisplay", () => {
       snapshot([fiveHour, sevenDay], fetchedAt),
       fetchedAt + 120_000
     );
-    // The stale five-hour window drops its reset time (already passed); the
-    // still-live seven-day window keeps its own.
+    // The five-hour window's own reset already passed, so its reset time is
+    // dropped; the still-live seven-day window keeps its own.
     expect(display.quotaPhrase).toMatch(
-      /^63% 5-hour \(stale\) \| 10% 7-day, resets .+$/
+      /^63% 5-hour \| 10% 7-day, resets .+ \(updated .+\)$/
     );
   });
 
-  it("falls back to a stale label with no numbers when no window ever reported a percentage", () => {
+  it("shows the fetch time with no numbers when no window ever reported a percentage", () => {
     const display = getHarnessUsageDisplay(
       snapshot([], fetchedAt),
       fetchedAt + 5 * 60 * 1000 + 1
     );
     expect(display.percentOnly).toBeUndefined();
-    expect(display.quotaPhrase).toBe("Usage data stale");
+    expect(display.quotaPhrase).toMatch(/^Usage data updated .+$/);
+    expect(display.quotaPhrase).not.toContain("stale");
+  });
+
+  it("falls back to 'No usage data' when quota was never fetched", () => {
+    const neverFetched: HarnessUsageSnapshot = {
+      harnessId: HARNESS_IDS.CLAUDE_CLI,
+      updatedAt: fetchedAt,
+      quota: {
+        harnessId: HARNESS_IDS.CLAUDE_CLI,
+        source: HARNESS_QUOTA_SOURCES.UNAVAILABLE,
+        staleAfterMs: 0,
+        windows: [],
+      },
+      observed: {},
+    };
+    const display = getHarnessUsageDisplay(neverFetched, fetchedAt);
+    expect(display.percentOnly).toBeUndefined();
+    expect(display.quotaPhrase).toBe("No usage data");
   });
 
   it("appends the reset time for a still-live window with a future resetAt", () => {
@@ -95,7 +115,9 @@ describe("getHarnessUsageDisplay", () => {
       snapshot([fiveHour], fetchedAt),
       fetchedAt + 60_000
     );
-    expect(display.quotaPhrase).toMatch(/^63% 5-hour, resets .+$/);
+    expect(display.quotaPhrase).toMatch(
+      /^63% 5-hour, resets .+ \(updated .+\)$/
+    );
   });
 
   it("shows provider monthly totals while keeping the compact badge percentage-only", () => {
@@ -116,7 +138,7 @@ describe("getHarnessUsageDisplay", () => {
     );
     expect(display.percentOnly).toBe("37%");
     expect(display.quotaPhrase).toMatch(
-      /^Provider quota: 37% monthly used \(555 \/ 1,500\), resets .+$/
+      /^Provider quota: 37% monthly used \(555 \/ 1,500\), resets .+ \(updated .+\)$/
     );
     expect(display.quotaPhrase).not.toContain("tokens");
   });
@@ -138,7 +160,9 @@ describe("getHarnessUsageDisplay", () => {
       fetchedAt + 60_000
     );
     expect(display.percentOnly).toBeUndefined();
-    expect(display.quotaPhrase).toBe("Provider quota: Unlimited");
+    expect(display.quotaPhrase).toMatch(
+      /^Provider quota: Unlimited \(updated .+\)$/
+    );
   });
 
   it("does not combine observed token totals with provider quota totals", () => {
@@ -167,13 +191,13 @@ describe("getHarnessUsageDisplay", () => {
     expect(display.quotaPhrase).not.toContain("tokens");
   });
 
-  it("omits the reset time once the window itself is stale, rather than showing a past reset", () => {
+  it("omits the reset time once a window's own reset has passed, rather than showing a past reset", () => {
     const fiveHour = { ...window, resetAt: fetchedAt + 60_000 };
     const display = getHarnessUsageDisplay(
       snapshot([fiveHour], fetchedAt),
       fetchedAt + 120_000
     );
-    expect(display.quotaPhrase).toBe("63% 5-hour (stale)");
+    expect(display.quotaPhrase).toMatch(/^63% 5-hour \(updated .+\)$/);
   });
 
   it("leaves percent-unit windows unchanged, even though they carry used/limit", () => {
@@ -186,7 +210,7 @@ describe("getHarnessUsageDisplay", () => {
       fetchedAt + 60_000
     );
     expect(display.percentOnly).toBe("63%");
-    expect(display.quotaPhrase).toBe("63% 5-hour");
+    expect(display.quotaPhrase).toMatch(/^63% 5-hour \(updated .+\)$/);
   });
 
   it("gives each window its own independent reset time when joined", () => {
@@ -207,7 +231,7 @@ describe("getHarnessUsageDisplay", () => {
       fetchedAt + 30_000
     );
     expect(display.quotaPhrase).toMatch(
-      /^63% 5-hour, resets .+ \| 10% 7-day, resets .+$/
+      /^63% 5-hour, resets .+ \| 10% 7-day, resets .+ \(updated .+\)$/
     );
   });
 });

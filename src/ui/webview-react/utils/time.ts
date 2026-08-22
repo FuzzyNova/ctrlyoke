@@ -20,6 +20,18 @@ export function formatTime(timestampMs: number): string {
 }
 
 /**
+ * Format timestamp as a locale date + time string, for contexts (like
+ * tooltips) that should show the actual moment rather than a relative label.
+ * @param value - Timestamp in milliseconds, or undefined
+ * @returns Formatted date/time string, or "Not available" when undefined
+ */
+export function formatTimestamp(value: number | undefined): string {
+  return value === undefined
+    ? "Not available"
+    : new Date(value).toLocaleString();
+}
+
+/**
  * Format timestamp as relative time ago
  *
  * @param timestampMs - Timestamp in milliseconds
@@ -61,6 +73,7 @@ export function formatRelativeTime(timestampMs: number): string {
  * Returns undefined for undefined input (no timestamp available).
  *
  * @param timestamp - Timestamp in milliseconds, or undefined
+ * @param now - Reference "current" time in milliseconds (defaults to Date.now(), pass explicitly in tests)
  * @returns Verbose relative time string, or undefined
  *
  * @example
@@ -72,13 +85,13 @@ export function formatRelativeTime(timestampMs: number): string {
  * formatRelativeTimeVerbose(undefined)             // undefined
  */
 export function formatRelativeTimeVerbose(
-  timestamp: number | undefined
+  timestamp: number | undefined,
+  now: number = Date.now()
 ): string | undefined {
   if (timestamp === undefined) {
     return undefined;
   }
 
-  const now = Date.now();
   const diff = now - timestamp;
 
   const seconds = Math.floor(diff / 1000);

@@ -3,17 +3,15 @@ import {
   HARNESS_USAGE_UNITS,
   HARNESS_USAGE_WINDOW_KINDS,
 } from "@root/types/DashboardConstants";
-import {
-  isHarnessQuotaStale,
-  isHarnessUsageWindowStale,
-  type HarnessUsageSnapshot,
-  type HarnessUsageWindow,
+import type {
+  HarnessUsageSnapshot,
+  HarnessUsageWindow,
 } from "@root/types/UsageTypes";
 import {
   HARNESS_STATUS_STRINGS,
   type HarnessStatusString,
 } from "../types/messages";
-import { formatFutureTime } from "./time";
+import { formatFutureTime, formatTimestamp } from "./time";
 
 /**
  * True only for a window whose `used`/`limit` are real provider counts worth
@@ -37,23 +35,23 @@ export interface HarnessUsageDisplay {
   /** Bare percentage for compact badges, e.g. "25%". Undefined when no usable percentage exists. */
   percentOnly?: string;
   /**
-   * Quota status phrase for tooltips, e.g. "25% 5-hour, resets 5:00 PM today",
-   * "Needs auth", "Usage data stale", "No usage data". Multiple windows (e.g.
-   * Claude's 5-hour + 7-day, Codex's primary + secondary) join with " | ",
-   * each carrying its own reset time since they reset independently.
+   * Quota status phrase for tooltips, e.g. "25% 5-hour, resets 5:00 PM today
+   * (updated 8/22/2026, 3:45:00 PM)", "Needs auth", "No usage data". Multiple
+   * windows (e.g. Claude's 5-hour + 7-day, Codex's primary + secondary) join
+   * with " | ", each carrying its own reset time since they reset
+   * independently.
    */
   quotaPhrase: string;
 }
 
 /**
  * Normalizes a harness quota snapshot into display-ready percentage/phrase
- * strings. Last-known percentages are always shown once available — a window
- * past its freshness window or its own reset time is annotated "(stale)"
- * rather than hidden, so a value is still visible between Claude turns
- * instead of disappearing every time the statusline sidecar goes quiet. A
- * still-live window's own reset time is appended; a stale window's isn't,
- * since a reset timestamp that already passed (or that predates a stale
- * refetch) would be misleading rather than informative.
+ * strings. Last-known percentages are always shown once available, annotated
+ * with the actual time they were fetched, rather than hidden — so a value is
+ * still visible between Claude turns instead of disappearing every time the
+ * statusline sidecar goes quiet. A window's own reset time is appended only
+ * while it's still in the future; once a window's own reset has passed, that
+ * timestamp would just show a reset that already happened, so it's dropped.
  */
 export function getHarnessUsageDisplay(
   snapshot: HarnessUsageSnapshot | undefined,
@@ -65,14 +63,16 @@ export function getHarnessUsageDisplay(
   if (snapshot.quota.errorCode === HARNESS_USAGE_STATUS_CODES.AUTH_REQUIRED) {
     return { quotaPhrase: "Needs auth" };
   }
+  const fetchedAt = snapshot.quota.fetchedAt;
   const windows = snapshot.quota.windows.filter(
     (window) => window.percentUsed !== undefined || window.isUnlimited === true
   );
   if (windows.length === 0) {
     return {
-      quotaPhrase: isHarnessQuotaStale(snapshot.quota, now)
-        ? "Usage data stale"
-        : "No usage data",
+      quotaPhrase:
+        fetchedAt !== undefined
+          ? `Usage data updated ${formatTimestamp(fetchedAt)}`
+          : "No usage data",
     };
   }
   const primaryPercentWindow = windows.find(
@@ -83,7 +83,8 @@ export function getHarnessUsageDisplay(
   );
   const quotaPhrase = windows
     .map((window) => {
-      const stale = isHarnessUsageWindowStale(snapshot.quota, window, now);
+      const resetPassed =
+        window.resetAt !== undefined && now >= window.resetAt;
       const finiteTotals = hasFiniteQuotaTotals(window);
       const label = window.isUnlimited
         ? "Unlimited"
@@ -95,26 +96,26 @@ export function getHarnessUsageDisplay(
       const totals = finiteTotals
         ? ` (${formatQuotaNumber(window.used!)} / ${formatQuotaNumber(window.limit!)})`
         : "";
-      // A reset time only means something for a window that's still live —
-      // once stale (including a window whose own resetAt has already
-      // passed) the timestamp would just show a reset that already happened.
       const resetSuffix =
-        !stale && window.resetAt !== undefined
+        !resetPassed && window.resetAt !== undefined
           ? `, resets ${formatFutureTime(window.resetAt, now)}`
           : "";
-      const detail = `${label}${totals}${resetSuffix}`;
-      return stale ? `${detail} (stale)` : detail;
+      return `${label}${totals}${resetSuffix}`;
     })
     .join(" | ");
+  const base = hasExplicitProviderQuotaDetails
+    ? `Provider quota: ${quotaPhrase}`
+    : quotaPhrase;
   return {
     ...(primaryPercentWindow
       ? {
           percentOnly: `${Math.round(primaryPercentWindow.percentUsed ?? 0)}%`,
         }
       : {}),
-    quotaPhrase: hasExplicitProviderQuotaDetails
-      ? `Provider quota: ${quotaPhrase}`
-      : quotaPhrase,
+    quotaPhrase:
+      fetchedAt !== undefined
+        ? `${base} (updated ${formatTimestamp(fetchedAt)})`
+        : base,
   };
 }
 

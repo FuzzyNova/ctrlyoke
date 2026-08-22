@@ -125,21 +125,39 @@ export function formatCostLabel(
   return `${partial ? "≥" : "≈"}$${usd.toFixed(2)}`;
 }
 
+function costSourceMethodLabel(source: AttemptCostSource): string {
+  switch (source) {
+    case ATTEMPT_COST_SOURCES.PRICE_TABLE:
+      return "at API list prices";
+    case ATTEMPT_COST_SOURCES.HARNESS_REPORTED:
+      return "reported by the harness";
+    case ATTEMPT_COST_SOURCES.USER_OVERRIDE:
+      return "using your configured price override";
+  }
+}
+
+/**
+ * Describe how a cost figure was computed. When multiple attempts contribute
+ * different sources (e.g. one harness reports its own dollar figure while
+ * another is priced from the table), the methods are joined into one
+ * sentence rather than concatenated with "+", which read as if the costs
+ * themselves were being added together. The "not incremental subscription
+ * spend" caveat is appended whenever a harness-reported figure is among the
+ * sources, since a raw harness-reported number is the one most likely to be
+ * mistaken for actual subscription billing.
+ */
 export function formatCostSourcePhrase(
   sources: readonly AttemptCostSource[] | undefined
 ): string {
   if (!sources?.length) return "estimated token value";
-  const phrases = sources.map((source) => {
-    switch (source) {
-      case ATTEMPT_COST_SOURCES.PRICE_TABLE:
-        return "at API list prices";
-      case ATTEMPT_COST_SOURCES.HARNESS_REPORTED:
-        return "reported by the harness; not incremental subscription spend";
-      case ATTEMPT_COST_SOURCES.USER_OVERRIDE:
-        return "using your configured price override";
-    }
-  });
-  return phrases.join(" + ");
+  const methods = sources.map(costSourceMethodLabel);
+  const joinedMethods =
+    methods.length > 1
+      ? `${methods.slice(0, -1).join(", ")} and ${methods[methods.length - 1]}`
+      : methods[0];
+  return sources.includes(ATTEMPT_COST_SOURCES.HARNESS_REPORTED)
+    ? `${joinedMethods}; not incremental subscription spend`
+    : joinedMethods;
 }
 
 export function formatCostTooltip(

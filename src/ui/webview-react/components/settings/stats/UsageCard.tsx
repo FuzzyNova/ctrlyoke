@@ -5,10 +5,6 @@ import {
   WORKFLOW_TOKEN_COVERAGE,
 } from "@root/types/DashboardConstants";
 import type { HarnessId } from "@root/types/DashboardConstants";
-import {
-  isHarnessQuotaStale,
-  isHarnessUsageWindowStale,
-} from "@root/types/UsageTypes";
 import type { HarnessUsageSnapshot } from "@root/types/UsageTypes";
 import {
   formatCostLabel,
@@ -21,13 +17,8 @@ import {
   type UsagePercentDirection,
 } from "@root/utils/StatuslineFormat";
 import { getUsageBarColorClass } from "@utils/usageBarColor";
+import { formatFutureTime, formatRelativeTimeVerbose } from "@utils/time";
 import { useSettingsStore } from "@store/settingsStore";
-
-function formatTimestamp(value: number | undefined): string {
-  return value === undefined
-    ? "Not available"
-    : new Date(value).toLocaleString();
-}
 
 function quotaSourceLabel(
   source: HarnessUsageSnapshot["quota"]["source"]
@@ -42,6 +33,11 @@ function quotaSourceLabel(
     case HARNESS_QUOTA_SOURCES.UNAVAILABLE:
       return "not reported by provider";
   }
+}
+
+function formatUpdatedSuffix(fetchedAt: number | undefined): string {
+  const relative = formatRelativeTimeVerbose(fetchedAt);
+  return relative ? ` · updated ${relative.toLowerCase()}` : "";
 }
 
 function quotaSourceDescription(
@@ -94,7 +90,6 @@ export function UsageCard({
     );
   }
 
-  const stale = isHarnessQuotaStale(snapshot.quota);
   const observed = snapshot.observed;
   return (
     <div className="rounded border border-panel-border bg-panel-bg p-2 text-xs space-y-2">
@@ -108,11 +103,8 @@ export function UsageCard({
           >
             {quotaSourceLabel(snapshot.quota.source)}
           </span>
-          {stale ? " · stale" : ""}
+          {formatUpdatedSuffix(snapshot.quota.fetchedAt)}
         </span>
-      </div>
-      <div className="text-description-fg">
-        Quota freshness: {formatTimestamp(snapshot.quota.fetchedAt)}
       </div>
       {harnessId === HARNESS_IDS.COPILOT_CLI && (
         <div className="space-y-1 text-foreground">
@@ -178,14 +170,14 @@ export function UsageCard({
                   ? "Unlimited"
                   : formatQuotaDisplay(window, percentDirection)}
                 {window.resetAt !== undefined
-                  ? ` · resets ${formatTimestamp(window.resetAt)}`
-                  : ""}
-                {isHarnessUsageWindowStale(snapshot.quota, window)
-                  ? " · stale"
+                  ? ` · resets ${formatFutureTime(window.resetAt)}`
                   : ""}
               </div>
               {!window.isUnlimited && window.percentUsed !== undefined && (
-                <UsagePercentBar usedPercent={window.percentUsed} />
+                <UsagePercentBar
+                  usedPercent={window.percentUsed}
+                  direction={percentDirection}
+                />
               )}
             </div>
           ))}
@@ -198,15 +190,23 @@ export function UsageCard({
   );
 }
 
-function UsagePercentBar({ usedPercent }: { usedPercent: number }) {
+function UsagePercentBar({
+  usedPercent,
+  direction,
+}: {
+  usedPercent: number;
+  direction: UsagePercentDirection;
+}) {
   const clampedUsedPercent = Math.max(0, Math.min(100, usedPercent));
+  const fillPercent =
+    direction === "remaining" ? 100 - clampedUsedPercent : clampedUsedPercent;
   return (
     <div className="mt-1 mx-1 h-1.5 rounded-full bg-ctx-bar-track overflow-hidden">
       <div
         className={`h-full rounded-full ${getUsageBarColorClass(
           clampedUsedPercent
         )}`}
-        style={{ width: `${clampedUsedPercent}%` }}
+        style={{ width: `${fillPercent}%` }}
       />
     </div>
   );
