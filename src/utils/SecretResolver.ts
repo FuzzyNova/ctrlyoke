@@ -16,6 +16,10 @@ import {
   userSecretKey,
   workspaceSecretKeyForRoot,
 } from "../platform/SecretKey";
+import {
+  SecretGrantsTrustStore,
+  secretGrantsTrustStore,
+} from "../config/SecretGrantsTrustStore";
 import { getEffectiveSecretGrants } from "./SecretReferenceParser";
 
 const SECRET_INTERPOLATION_PATTERN = /\$\{secret:([^}]+)\}/g;
@@ -260,6 +264,22 @@ export function getDeclaredSecretGrants(
   );
 }
 
+export function getWorkflowSecretGrants(workflow: PromptFile): string[] {
+  const grants = new Set<string>();
+  const steps = [
+    ...(workflow.steps ?? []),
+    ...(workflow.finalStep ? [workflow.finalStep] : []),
+  ];
+
+  for (const step of steps) {
+    for (const name of getDeclaredSecretGrants(step, workflow)) {
+      grants.add(name);
+    }
+  }
+
+  return [...grants];
+}
+
 function getProcessMaps(
   step: WorkflowStep,
   workflow: PromptFile
@@ -316,9 +336,19 @@ export async function preflightWorkflowSecrets(
   platform: PlatformAdapter,
   workspaceRoot: string,
   environment: NodeJS.ProcessEnv = process.env,
-  { failOnMissing = true }: { failOnMissing?: boolean } = {}
+  {
+    failOnMissing = true,
+    trustStore = secretGrantsTrustStore,
+  }: {
+    failOnMissing?: boolean;
+    trustStore?: Pick<SecretGrantsTrustStore, "getDecision">;
+  } = {}
 ): Promise<string[]> {
   const missingSecretNames = new Set<string>();
+  const workflowGrants = getWorkflowSecretGrants(workflow);
+  const unapprovedGrants = workflowGrants.filter(
+    (name) => trustStore.getDecision(workspaceRoot, name) !== "allow"
+  );
 
   // Prompt-text `${secret:NAME}` is deliberately *not* checked here. It is
   // never substituted, and a prompt merely quoting the syntax is legitimate,
@@ -342,8 +372,17 @@ export async function preflightWorkflowSecrets(
         );
       }
     }
-    if (grants.length > 0) {
-      try {
+    try {
+      if (unapprovedGrants.length > 0) {
+        for (const name of unapprovedGrants) {
+          missingSecretNames.add(name);
+        }
+        throw new MissingSecretError(
+          unapprovedGrants[0],
+          unapprovedGrants
+        );
+      }
+      if (grants.length > 0) {
         const missing = await findMissingSecretNames(grants, {
           workspaceRoot,
           secretStore: platform.getSecretStore?.(),
@@ -357,16 +396,16 @@ export async function preflightWorkflowSecrets(
             missingSecretNames.add(name);
           }
         }
-      } catch (error) {
-        if (error instanceof MissingSecretError) {
-          const missingNames = error.secretNames.map(
-            (name) =>
-              `Secret "${name}" is missing for scope "${scope}" (${error.scope}).`
-          );
-          throw new Error(missingNames.join(" "));
-        }
-        throw error;
       }
+    } catch (error) {
+      if (error instanceof MissingSecretError) {
+        const missingNames = error.secretNames.map(
+          (name) =>
+            `Secret "${name}" is missing for scope "${scope}" (${error.scope}).`
+        );
+        throw new Error(missingNames.join(" "));
+      }
+      throw error;
     }
   }
   return [...missingSecretNames];

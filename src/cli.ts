@@ -58,6 +58,7 @@ import {
   ExternalRootsTrustStore,
   externalRootsTrustStore,
 } from "./config/ExternalRootsTrustStore";
+import { secretGrantsTrustStore } from "./config/SecretGrantsTrustStore";
 import { WorkingFileManager } from "./core/WorkingFileManager";
 import { RunContinuationService } from "./core/orchestration/RunContinuationService";
 import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageRepository";
@@ -89,7 +90,9 @@ import {
   listSecretsCommand,
   removeSecretCommand,
   setSecretCommand,
+  trustSecretGrantsCommand,
 } from "./cli/SecretCommands";
+import { getWorkflowSecretGrants } from "./utils/SecretResolver";
 import { resolveCliExecutionMode } from "./cli/CliExecutionMode";
 import { ExecutionPreviewService } from "./core/ExecutionPreviewService";
 import { HarnessCapabilityRegistry } from "./core/HarnessCapabilityRegistry";
@@ -194,6 +197,17 @@ registerSecretCommands(program, {
   check: (file, options) =>
     handleSecretCommand(
       checkSecretsCommand(
+        file,
+        options,
+        createCliSecretCommandDependencies(
+          path.resolve(options.cwd ?? process.cwd())
+        ),
+        createSecretCommandIo()
+      )
+    ),
+  trustSecretGrants: (file, options) =>
+    handleSecretCommand(
+      trustSecretGrantsCommand(
         file,
         options,
         createCliSecretCommandDependencies(
@@ -680,8 +694,13 @@ async function runCommand(
       // This must happen after loading so the workflow's own vars: defaults are already set.
       if (Object.keys(config.vars).length > 0) {
         const workflowFile = instance.promptQueue.getWorkflowFile();
-        workflowFile.vars = { ...(workflowFile.vars ?? {}), ...config.vars };
+        mergeCliVarsIntoWorkflow(workflowFile, config.vars);
       }
+
+      assertSecretGrantsApproved(
+        instance.promptQueue.getWorkflowFile(),
+        workingDir
+      );
 
       // Apply --resume / --new-session overrides to the first prompt before execution.
       // getState() returns a shallow copy but prompts[] is the same array reference,
@@ -806,6 +825,44 @@ function handleSecretCommand(operation: Promise<void | number>): Promise<void> {
     });
 }
 
+function mergeCliVarsIntoWorkflow(
+  workflow: PromptFile,
+  vars: Record<string, string>
+): void {
+  if (Object.keys(vars).length === 0) {
+    return;
+  }
+  workflow.vars = { ...(workflow.vars ?? {}), ...vars };
+}
+
+function assertSecretGrantsApproved(
+  workflow: PromptFile,
+  workingDir: string
+): void {
+  const workspaceIdentity =
+    ExternalRootsTrustStore.canonicalizeRoot(workingDir);
+  const pendingGrants = secretGrantsTrustStore.getPendingGrants(
+    workspaceIdentity,
+    getWorkflowSecretGrants(workflow)
+  );
+  if (pendingGrants.length === 0) {
+    return;
+  }
+
+  console.error(
+    chalk.red(
+      "Error: This workflow requests secret grants that have not been approved yet:"
+    )
+  );
+  pendingGrants.forEach((name) => console.error(chalk.red(`  - ${name}`)));
+  console.error(
+    chalk.yellow(
+      "Run `ctrlyoke trust-secret-grants <file>` to review and approve them."
+    )
+  );
+  process.exit(2);
+}
+
 async function dryRunCommand(
   resolvedFile: string | undefined,
   options: RunOptions,
@@ -826,6 +883,9 @@ async function dryRunCommand(
     if (!workflow) {
       throw new Error(`Failed to load workflow file: ${resolvedFile}`);
     }
+
+    mergeCliVarsIntoWorkflow(workflow, config.vars);
+    assertSecretGrantsApproved(workflow, workingDir);
 
     const previewWorkflow = applyDryRunSessionOverrides(workflow, config);
     collectWorkflowHarnesses(previewWorkflow, harness);

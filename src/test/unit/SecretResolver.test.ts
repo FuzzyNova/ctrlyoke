@@ -14,9 +14,14 @@ import {
   findSecretInterpolationsInPrompt,
   expandSecretInterpolations,
   getDeclaredSecretGrants,
-  preflightWorkflowSecrets,
+  getWorkflowSecretGrants,
+  preflightWorkflowSecrets as preflightWorkflowSecretsImpl,
   resolveSecretEnvironment,
 } from "../../utils/SecretResolver";
+import {
+  SecretGrantsTrustStore,
+  type SecretGrantTrustDecision,
+} from "../../config/SecretGrantsTrustStore";
 
 class InMemorySecretStore implements SecretStore {
   constructor(private readonly values: Record<string, string>) {}
@@ -46,6 +51,42 @@ function platformWith(store: SecretStore): PlatformAdapter {
     getNamedWorkspaceRoots: () => [],
     getExtensionPath: () => "C:\\extension",
   };
+}
+
+class AllowAllSecretGrantsTrustStore
+  implements Pick<SecretGrantsTrustStore, "getDecision">
+{
+  getDecision(
+    _workspaceIdentity: string,
+    _secretName: string
+  ): SecretGrantTrustDecision {
+    return "allow";
+  }
+}
+
+type PreflightOptions = {
+  failOnMissing?: boolean;
+  trustStore?: Pick<SecretGrantsTrustStore, "getDecision">;
+};
+
+function preflightWorkflowSecrets(
+  workflow: PromptFile,
+  platform: PlatformAdapter,
+  workspaceRoot: string,
+  environment: NodeJS.ProcessEnv = process.env,
+  options: PreflightOptions = {}
+): Promise<string[]> {
+  return preflightWorkflowSecretsImpl(
+    workflow,
+    platform,
+    workspaceRoot,
+    environment,
+    {
+      ...options,
+      trustStore:
+        options.trustStore ?? new AllowAllSecretGrantsTrustStore(),
+    }
+  );
 }
 
 suite("SecretResolver", () => {
@@ -496,6 +537,99 @@ suite("SecretResolver", () => {
       assert.deepStrictEqual(
         getDeclaredSecretGrants(workflow.steps![0], workflow),
         ["INLINE_TOKEN"]
+      );
+    });
+  });
+
+  test("unions workflow-wide grants across steps and finalStep in first-seen order", () => {
+    const workflow: PromptFile = {
+      secrets: ["WORKFLOW_TOKEN", "DUPLICATE_TOKEN"],
+      steps: [
+        {
+          prompt: "Use !INLINE_TOKEN",
+          secrets: ["STEP_TOKEN", "DUPLICATE_TOKEN"],
+          mcpServers: [
+            {
+              id: "service",
+              env: { TOKEN: "${secret:MAP_TOKEN}" },
+            },
+          ],
+        },
+        { prompt: "Inherit workflow grants" },
+      ],
+      finalStep: {
+        prompt: "Use !FINAL_INLINE_TOKEN",
+        secrets: ["FINAL_TOKEN", "DUPLICATE_TOKEN"],
+        mcpServers: [
+          {
+            id: "final-service",
+            env: { TOKEN: "${secret:FINAL_MAP_TOKEN}" },
+          },
+        ],
+      },
+    };
+
+    assert.deepStrictEqual(getWorkflowSecretGrants(workflow), [
+      "INLINE_TOKEN",
+      "STEP_TOKEN",
+      "DUPLICATE_TOKEN",
+      "MAP_TOKEN",
+      "WORKFLOW_TOKEN",
+      "FINAL_INLINE_TOKEN",
+      "FINAL_TOKEN",
+      "FINAL_MAP_TOKEN",
+    ]);
+  });
+
+  suite("secret grant trust checks", () => {
+    const workflow: PromptFile = {
+      steps: [{ name: "deploy", prompt: "Use !TRUSTED_TOKEN" }],
+    };
+
+    test("blocks pending grants even when failOnMissing is false", async () => {
+      const trustStore: Pick<SecretGrantsTrustStore, "getDecision"> = {
+        getDecision: () => undefined,
+      };
+
+      await assert.rejects(
+        preflightWorkflowSecrets(
+          workflow,
+          platformWith(new InMemorySecretStore({})),
+          "C:\\workspace",
+          { TRUSTED_TOKEN: "resolved" },
+          { failOnMissing: false, trustStore }
+        ),
+        /Secret "TRUSTED_TOKEN" is missing for scope "deploy"/
+      );
+    });
+
+    test("allows an approved grant", async () => {
+      const trustStore = new AllowAllSecretGrantsTrustStore();
+      const missing = await preflightWorkflowSecrets(
+        workflow,
+        platformWith(new InMemorySecretStore({})),
+        "C:\\workspace",
+        { TRUSTED_TOKEN: "resolved" },
+        { trustStore }
+      );
+
+      assert.deepStrictEqual(missing, []);
+    });
+
+    test("blocks a denied grant", async () => {
+      const trustStore: Pick<SecretGrantsTrustStore, "getDecision"> = {
+        getDecision: () => "deny",
+      };
+
+      await assert.rejects(
+        preflightWorkflowSecrets(
+          workflow,
+          platformWith(new InMemorySecretStore({})),
+          "C:\\workspace",
+          { TRUSTED_TOKEN: "resolved" },
+          { trustStore }
+        ),
+        /Secret "TRUSTED_TOKEN" is missing for scope "deploy"/
       );
     });
   });

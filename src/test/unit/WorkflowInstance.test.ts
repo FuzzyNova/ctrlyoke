@@ -31,6 +31,7 @@ import type { OutputHistoryManager } from "../../core/orchestration/OutputHistor
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { ExecutionLeaseConflictError } from "../../core/orchestration/ExecutionRootLeaseManager";
 import { configService } from "../../config/CtrlYokeConfigService";
+import { secretGrantsTrustStore } from "../../config/SecretGrantsTrustStore";
 
 /** Test-only shim mirroring OutputHistoryManager.test.ts's initTestRun helper. */
 async function initTestRun(
@@ -1991,6 +1992,8 @@ suite("WorkflowInstance append-and-continue", () => {
     (instance as any).computeTargetRunIndices = async () => new Map();
     (instance as any).startWorkflowExecution = async () => {};
 
+    const originalGetDecision = secretGrantsTrustStore.getDecision;
+    secretGrantsTrustStore.getDecision = () => "allow";
     try {
       configService.setCliOverlay({
         execution: {
@@ -2004,6 +2007,7 @@ suite("WorkflowInstance append-and-continue", () => {
         true
       );
     } finally {
+      secretGrantsTrustStore.getDecision = originalGetDecision;
       configService.setCliOverlay({});
     }
 
@@ -2151,6 +2155,69 @@ suite("WorkflowInstance append-and-continue", () => {
     );
 
     assert.strictEqual(claudeIntegration.closeTerminalCalls, 0);
+  });
+});
+
+suite("WorkflowInstance secret-grant approval callback", () => {
+  test("invokes approval before secret preflight", async () => {
+    const secretName = `CTRLYOKE_APPROVAL_${Date.now()}`;
+    const previousSecret = process.env[secretName];
+    process.env[secretName] = "resolved";
+    const originalGetDecision = secretGrantsTrustStore.getDecision;
+    let approvalCalled = false;
+
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd(),
+      true,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      async (_workflow, _workspaceRoot) => {
+        approvalCalled = true;
+        secretGrantsTrustStore.getDecision = () => "allow";
+      }
+    );
+    const workflow = {
+      steps: [{ prompt: "use the approved secret", secrets: [secretName] }],
+    };
+    instance.promptQueue.loadPrompts(workflow);
+    instance.setCurrentPromptFile("workflow.ctrlyoke.json", workflow);
+    (instance as any).ensureRunnerLock = async () => {};
+    (instance as any).prepareExecutionWorktree = async () => {};
+    (instance as any).computeTargetRunIndices = async () => new Map();
+    (instance as any).startWorkflowExecution = async () => {};
+
+    try {
+      configService.setCliOverlay({
+        execution: {
+          strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.WARN,
+        },
+      });
+      await (instance as any).executeLoadedPromptFile(
+        undefined,
+        false,
+        "history.json",
+        true
+      );
+    } finally {
+      secretGrantsTrustStore.getDecision = originalGetDecision;
+      configService.setCliOverlay({});
+      if (previousSecret === undefined) {
+        delete process.env[secretName];
+      } else {
+        process.env[secretName] = previousSecret;
+      }
+    }
+
+    assert.strictEqual(approvalCalled, true);
   });
 });
 

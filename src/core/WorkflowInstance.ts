@@ -433,7 +433,11 @@ export class WorkflowInstance {
     /** Fire-and-forget provider refresh after a terminal Copilot attempt. */
     private readonly refreshHarnessUsage?: (
       harnessId: HarnessId
-    ) => Promise<unknown> | void
+    ) => Promise<unknown> | void,
+    private readonly approveSecretGrants?: (
+      workflow: PromptFile,
+      workspaceRoot: string
+    ) => Promise<void>
   ) {
     this.id = crypto.randomUUID();
     this.createdAt = Date.now();
@@ -1599,8 +1603,13 @@ export class WorkflowInstance {
     try {
       Log.info(`ctrlyoke: Executing loaded prompt file: ${filePath}`);
 
+      const workflow = this.promptQueue.getWorkflowFile();
+      await this.approveSecretGrants?.(
+        workflow,
+        this.platform.getWorkspaceRoot()
+      );
       missingSecretNames = await preflightWorkflowSecrets(
-        this.promptQueue.getWorkflowFile(),
+        workflow,
         this.platform,
         this.platform.getWorkspaceRoot(),
         process.env,
