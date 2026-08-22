@@ -14,6 +14,7 @@ import type {
   StatusLineTrackingSettings,
   TerminalSettings,
 } from "../types/CtrlYokeSettings";
+import type { StatusLineSegment } from "./StatuslineFormat";
 import {
   HARNESS_IDS,
   DEFAULT_MODELS,
@@ -767,6 +768,18 @@ export const ConfigurationUtils = {
     ];
   },
 
+  /** Get the shared statusline format used when per-harness formats are disabled. */
+  getSharedStatusLineFormat(): StatusLineSegment[] {
+    return configService.get(CONFIG_KEYS.PERMISSIONS).statusLineTracking
+      .sharedFormat;
+  },
+
+  /** Whether statusline formats are configured independently per harness. */
+  isUseDifferentFormatPerHarness(): boolean {
+    return configService.get(CONFIG_KEYS.PERMISSIONS).statusLineTracking
+      .useDifferentFormatPerHarness;
+  },
+
   /** Persist one complete machine-scoped statusline provider object. */
   async setStatusLineTrackingSettings(
     provider: StatusLineTrackingProvider,
@@ -775,6 +788,26 @@ export const ConfigurationUtils = {
     await configService.set(
       `${SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING}.${provider}`,
       settings,
+      CONFIG_SCOPE.USER
+    );
+  },
+
+  /** Persist the shared statusline format. */
+  async setSharedStatusLineFormat(
+    format: StatusLineSegment[]
+  ): Promise<void> {
+    await configService.set(
+      SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_SHARED_FORMAT,
+      format,
+      CONFIG_SCOPE.USER
+    );
+  },
+
+  /** Persist whether statusline formats are configured independently per harness. */
+  async setUseDifferentFormatPerHarness(value: boolean): Promise<void> {
+    await configService.set(
+      SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_USE_DIFFERENT_FORMAT_PER_HARNESS,
+      value,
       CONFIG_SCOPE.USER
     );
   },

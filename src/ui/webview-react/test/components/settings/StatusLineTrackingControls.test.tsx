@@ -12,6 +12,9 @@ import {
   STATUS_LINE_TRACKING_PROVIDERS,
 } from "@root/types/DashboardConstants";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
+import type {
+  StatusLineTrackingSettings,
+} from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import type { StatusLineTrackingHarnessId } from "@root/types/DashboardConstants";
 import {
@@ -21,9 +24,7 @@ import {
 
 function makeSettings(
   harnessId: StatusLineTrackingHarnessId,
-  overrides: Partial<
-    (typeof CTRLYOKE_SETTINGS_DEFAULTS.permissions.statusLineTracking)[keyof typeof CTRLYOKE_SETTINGS_DEFAULTS.permissions.statusLineTracking]
-  > = {}
+  overrides: Partial<StatusLineTrackingSettings> = {}
 ): FullGlobalSettings {
   const provider =
     harnessId === HARNESS_IDS.CLAUDE_CLI
@@ -204,7 +205,7 @@ describe("StatusLineTrackingControls", () => {
     );
 
     await user.click(
-      screen.getByRole("checkbox", {
+      screen.getByRole("button", {
         name: "Include CLI version",
       })
     );

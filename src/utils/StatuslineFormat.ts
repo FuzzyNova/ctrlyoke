@@ -135,6 +135,39 @@ export const DEFAULT_STATUS_LINE_FORMAT = [
   { type: "field", field: STATUS_LINE_FIELD_IDS.USAGE },
 ] satisfies readonly StatusLineSegment[];
 
+/** Return whether a format has the same ordered segments and values as the default. */
+export function isDefaultStatusLineFormat(
+  format: StatusLineSegment[]
+): boolean {
+  if (format.length !== DEFAULT_STATUS_LINE_FORMAT.length) {
+    return false;
+  }
+
+  return format.every((segment, index) => {
+    const defaultSegment: StatusLineSegment = DEFAULT_STATUS_LINE_FORMAT[index];
+    if (segment.type !== defaultSegment.type) {
+      return false;
+    }
+
+    if (segment.type === "field" && defaultSegment.type === "field") {
+      return (
+        segment.field === defaultSegment.field &&
+        segment.label === defaultSegment.label &&
+        segment.color === defaultSegment.color
+      );
+    }
+
+    if (segment.type === "literal" && defaultSegment.type === "literal") {
+      return (
+        segment.text === defaultSegment.text &&
+        segment.color === defaultSegment.color
+      );
+    }
+
+    return false;
+  });
+}
+
 export type UsagePercentDirection = "used" | "remaining";
 
 const STATUS_LINE_USAGE_WINDOW_WEEK_MINUTES = 7 * 24 * 60;

@@ -167,6 +167,9 @@ function settingPathConstants(): Map<string, string> {
 const PENDING_UI_PARITY: readonly string[] = [
   "server.standalonePort",
   "server.theme",
+  // Status line shared-format toggle UI lands in step 5 of STATUS_LINE_SHARED_FORMAT_TOGGLE_PLAN.md.
+  "permissions.statusLineTracking.useDifferentFormatPerHarness",
+  "permissions.statusLineTracking.sharedFormat",
 ];
 
 const WEBVIEW_TEST_DIRECTORIES = new Set(["test", "__tests__"]);

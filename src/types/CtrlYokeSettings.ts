@@ -118,7 +118,10 @@ export interface CtrlYokeGlobalSettings {
     statusLineTracking: Record<
       StatusLineTrackingProvider,
       StatusLineTrackingSettings
-    >;
+    > & {
+      useDifferentFormatPerHarness: boolean;
+      sharedFormat: StatusLineSegment[];
+    };
     /**
      * Absolute directory paths outside the workspace that ctrlyoke may read for
      * prompt attachments and open from file links. Workspace files are always
@@ -382,6 +385,8 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     codexSandboxMode: "workspace-write",
     codexApprovalPolicy: "on-request",
     statusLineTracking: {
+      useDifferentFormatPerHarness: false,
+      sharedFormat: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
       [STATUS_LINE_TRACKING_PROVIDERS.CLAUDE]: {
         enabled: true,
         customCommand: "",

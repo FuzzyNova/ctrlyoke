@@ -1073,6 +1073,10 @@ export const SETTING_PATHS = {
   WORKTREES: "worktrees",
   STORAGE_RUN_HISTORY_LOCATION: "storage.runHistoryLocation",
   PERMISSIONS_STATUS_LINE_TRACKING: "permissions.statusLineTracking",
+  PERMISSIONS_STATUS_LINE_TRACKING_USE_DIFFERENT_FORMAT_PER_HARNESS:
+    "permissions.statusLineTracking.useDifferentFormatPerHarness",
+  PERMISSIONS_STATUS_LINE_TRACKING_SHARED_FORMAT:
+    "permissions.statusLineTracking.sharedFormat",
   PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_ENABLED:
     "permissions.statusLineTracking.claude.enabled",
   PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_CUSTOM_COMMAND:

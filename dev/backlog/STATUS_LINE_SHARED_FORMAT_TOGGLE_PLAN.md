@@ -1,8 +1,9 @@
 # Status Line Shared/Per-Harness Format Toggle Plan
 
-> **Status:** In progress (staged 2026-08-22) — queued as five steps: (1) settings contract,
-> (2) coordinated write path, (3) statusline wrapper resolution, (4) `StatusLinePreview`
-> extraction + editor props, (5) `StatusLineSection` / `StatusLineTrackingControls` wiring.
+> **Status:** Step 1 of 5 landed (2026-08-22) — settings contract and shared helpers are complete;
+> remaining steps: (2) coordinated write path, (3) statusline wrapper resolution, (4)
+> `StatusLinePreview` extraction + editor props, and (5) `StatusLineSection` /
+> `StatusLineTrackingControls` wiring.
 > Each step updates this line as it lands. Motivated by upcoming Copilot and Qwen statusline support
 > (`STATUS_LINE_TRACKING_PROVIDERS` currently has 2 entries — `claude`, `antigravity` — and
 > is about to grow to 4), but this plan only builds the shared/per-harness toggle mechanism.

@@ -422,6 +422,11 @@
           "description": "Machine-only settings for providers that install a global statusline command.",
           "additionalProperties": false,
           "properties": {
+            "useDifferentFormatPerHarness": {
+              "type": "boolean",
+              "default": false
+            },
+            "sharedFormat": { "$ref": "#/definitions/statusLineFormat" },
             "claude": { "$ref": "#/definitions/statusLineTrackingSettings" },
             "antigravity": {
               "$ref": "#/definitions/statusLineTrackingSettings"
@@ -887,6 +892,76 @@
     }
   },
   "definitions": {
+    "statusLineFormat": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "field"],
+            "properties": {
+              "type": { "const": "field" },
+              "field": {
+                "type": "string",
+                "enum": [
+                  "brand",
+                  "model",
+                  "context",
+                  "usage",
+                  "usage1",
+                  "usage2",
+                  "version",
+                  "cwd",
+                  "sessionId",
+                  "branch",
+                  "date",
+                  "time"
+                ]
+              },
+              "label": { "type": "string", "maxLength": 64 },
+              "color": {
+                "type": "string",
+                "enum": [
+                  "default",
+                  "red",
+                  "yellow",
+                  "green",
+                  "cyan",
+                  "blue",
+                  "magenta",
+                  "white",
+                  "gray"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "text"],
+            "properties": {
+              "type": { "const": "literal" },
+              "text": { "type": "string", "maxLength": 64 },
+              "color": {
+                "type": "string",
+                "enum": [
+                  "default",
+                  "red",
+                  "yellow",
+                  "green",
+                  "cyan",
+                  "blue",
+                  "magenta",
+                  "white",
+                  "gray"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
     "statusLineTrackingSettings": {
       "type": "object",
       "additionalProperties": false,
@@ -902,76 +977,7 @@
           "default": true,
           "description": "Show ctrlyoke's branded statusline instead of custom-command output."
         },
-        "format": {
-          "type": "array",
-          "items": {
-            "oneOf": [
-              {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["type", "field"],
-                "properties": {
-                  "type": { "const": "field" },
-                  "field": {
-                    "type": "string",
-                    "enum": [
-                      "brand",
-                      "model",
-                      "context",
-                      "usage",
-                      "usage1",
-                      "usage2",
-                      "version",
-                      "cwd",
-                      "sessionId",
-                      "branch",
-                      "date",
-                      "time"
-                    ]
-                  },
-                  "label": { "type": "string", "maxLength": 64 },
-                  "color": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "red",
-                      "yellow",
-                      "green",
-                      "cyan",
-                      "blue",
-                      "magenta",
-                      "white",
-                      "gray"
-                    ]
-                  }
-                }
-              },
-              {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["type", "text"],
-                "properties": {
-                  "type": { "const": "literal" },
-                  "text": { "type": "string", "maxLength": 64 },
-                  "color": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "red",
-                      "yellow",
-                      "green",
-                      "cyan",
-                      "blue",
-                      "magenta",
-                      "white",
-                      "gray"
-                    ]
-                  }
-                }
-              }
-            ]
-          }
-        }
+        "format": { "$ref": "#/definitions/statusLineFormat" }
       }
     }
   }
