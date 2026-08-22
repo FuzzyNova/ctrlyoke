@@ -1668,7 +1668,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                             ? "settings-worktree-branch-diagnostic"
                             : undefined
                         }
-                        className={`w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono`}
+                        className={`w-full bg-input-bg text-input-fg border ${fieldValidationBorderClass(worktreeBranchDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono`}
                       />
                       <FieldDiagnostic
                         id="settings-worktree-branch-diagnostic"
@@ -1681,19 +1681,16 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     htmlFor="settings-worktree-base"
                     description="Optional Git ref used as the starting point for a new worktree."
                   >
-                    <input
-                      type="text"
+                    <BranchNameEditor
                       id="settings-worktree-base"
                       aria-label="Worktree base"
                       value={worktreeBaseInput}
-                      onChange={(event) =>
-                        setWorktreeBaseInput(event.target.value)
-                      }
+                      onChange={setWorktreeBaseInput}
                       onBlur={() =>
                         handleWorktreeFieldChange("base", worktreeBaseInput)
                       }
-                      placeholder="Default branch"
-                      className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
+                      placeholder="Current branch (HEAD)"
+                      className="w-full bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                     />
                   </FormField>
                   <FormField

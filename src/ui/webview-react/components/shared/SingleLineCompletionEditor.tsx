@@ -26,6 +26,14 @@ export interface SingleLineCompletionEditorProps {
   onBlur?: () => void;
   placeholder?: string;
   disabled?: boolean;
+  /**
+   * Classes for the wrapper div this editor mounts into (e.g. `border`,
+   * `rounded`, `bg-input-bg`). The editor already fixes its own height
+   * (see `singleLineTheme`) and pads its content horizontally via
+   * `.cm-line` — do not add `py-*`/`px-*` here, or the wrapper will grow
+   * taller/wider than sibling plain `<input>` fields styled with the same
+   * `h-7` box-sizing.
+   */
   className?: string;
   /**
    * Overrides the editor font size (any CSS font-size value). Read once at
@@ -62,11 +70,17 @@ const singleLineTransactionFilter = EditorState.transactionFilter.of(
   }
 );
 
+// Fixed to 26px (not 28px) so that adding the wrapper's 1px top/bottom
+// border (see callers' `border` class) brings the *rendered* total to 28px —
+// matching the `h-7` height Tailwind utility used by sibling plain `<input>`
+// fields. Callers must not add vertical padding (e.g. `py-1`) to the wrapper
+// className: this editor's height is fully fixed here, so any wrapper
+// padding only adds extra height on top of it instead of being absorbed.
 const singleLineTheme = EditorView.theme({
   "&": {
-    height: "28px",
-    minHeight: "28px",
-    maxHeight: "28px",
+    height: "26px",
+    minHeight: "26px",
+    maxHeight: "26px",
     overflow: "hidden",
   },
   ".cm-scroller": {

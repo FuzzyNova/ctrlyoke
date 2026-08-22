@@ -133,7 +133,7 @@ export function DefaultsHarnessPage({
                 onChange={(event) =>
                   onUpdate("defaults.worktree.base", event.target.value)
                 }
-                placeholder="Default branch"
+                placeholder="Current branch (HEAD)"
                 className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
               />
             </SettingInputRow>
@@ -173,7 +173,7 @@ export function DefaultsHarnessPage({
                 onChange={(event) =>
                   onUpdate("defaults.worktree.base", event.target.value)
                 }
-                placeholder="Default branch"
+                placeholder="Current branch (HEAD)"
                 className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
               />
             </SettingInputRow>

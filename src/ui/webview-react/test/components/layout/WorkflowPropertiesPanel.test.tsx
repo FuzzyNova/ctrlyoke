@@ -495,7 +495,7 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     expect(screen.getByLabelText("Worktree branch")).toHaveTextContent(
       "ui-work"
     );
-    expect(screen.getByLabelText("Worktree base")).toHaveValue("main");
+    expect(screen.getByLabelText("Worktree base")).toHaveTextContent("main");
     expect(screen.getByLabelText("Worktree setup")).toHaveValue("npm ci");
     expect(screen.queryByText(/Keep directory/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Merge on done/i)).not.toBeInTheDocument();
@@ -526,7 +526,7 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     render(<WorkflowPropertiesPanel />);
     chooseWorktreeMode("Managed");
 
-    expect(screen.getByLabelText("Worktree base")).toHaveValue("main");
+    expect(screen.getByLabelText("Worktree base")).toHaveTextContent("main");
     expect(screen.getByLabelText("Worktree setup")).toHaveValue("npm ci");
     expect(screen.getByLabelText("Keep directory")).toBeChecked();
     expect(screen.getByLabelText("Merge")).toBeChecked();
