@@ -57,6 +57,13 @@ Copilot's `tool.execution_complete` event starts an asynchronous shell when
 The parser then waits for `assistant.turn_start` and `assistant.turn_end` to
 confirm the resumed turn.
 
+A shell the model stops itself via `stop_powershell` never gets a
+`system.notification` — that event is reserved for a shell finishing on its
+own — so the parser also removes the shellId immediately on that tool's
+`tool.execution_start`. Without this, an explicitly-stopped shell stays
+pending for the rest of the interactive session and every later Stop hook is
+absorbed by the background-work hold instead of completing.
+
 Copilot uses the shared state machine with a two-check stale-stop guard. The
 guard covers the case where a notification and the resumed turn are caught up
 by the same monitor poll as the old turn-end event.

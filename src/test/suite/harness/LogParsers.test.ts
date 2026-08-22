@@ -2371,6 +2371,46 @@ suite("CopilotLogParser", () => {
       });
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
+
+    test("stop_powershell removes the pending shell without waiting for a notification", () => {
+      parser.trackBackgroundWorkState(asyncLaunch("shell-1"));
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      // The model stops the shell itself — Copilot never emits a
+      // system.notification for this, so removal must happen right here.
+      parser.trackBackgroundWorkState({
+        type: "tool.execution_start",
+        data: {
+          toolName: "stop_powershell",
+          arguments: { shellId: "shell-1" },
+        },
+      });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
+    test("stop_powershell only clears the matching shell when several are pending", () => {
+      parser.trackBackgroundWorkState(asyncLaunch("shell-1"));
+      parser.trackBackgroundWorkState(asyncLaunch("shell-2"));
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState({
+        type: "tool.execution_start",
+        data: {
+          toolName: "stop_powershell",
+          arguments: { shellId: "shell-1" },
+        },
+      });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState({
+        type: "tool.execution_start",
+        data: {
+          toolName: "stop_powershell",
+          arguments: { shellId: "shell-2" },
+        },
+      });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
   });
 
   suite("classifyUserEvent", () => {

@@ -96,6 +96,8 @@ type CopilotPendingTool = {
 /** Copilot records injected system reminders as user.message events too. */
 const COPILOT_SYSTEM_USER_MESSAGE_SOURCE = "system";
 const COPILOT_SESSION_USAGE_INFO_EVENT_TYPE = "session.usage_info";
+/** Tool name Copilot uses to terminate a running (including backgrounded) shell. */
+const COPILOT_STOP_SHELL_TOOL_NAME = "stop_powershell";
 
 const COPILOT_OTEL_ENTRY_TYPE_SPAN = "span";
 const COPILOT_OTEL_CHAT_SPAN_PREFIX = "chat ";
@@ -653,10 +655,14 @@ export class CopilotLogParser extends BaseLogParser {
    * shellId → still-pending async shells launched via `tool.execution_complete`
    * with `data.toolTelemetry.properties.executionMode === "async"`. Cleared by
    * a matching `system.notification` with `data.kind.type ===
-   * "shell_completed" | "shell_failed"`. Unlike Claude, "any pending shellId"
-   * is safe here — every terminating command emits a completion notification,
-   * so there is no superseded/"zombie" case to guard against (see
-   * `dev/implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`, "Copilot CLI").
+   * "shell_completed" | "shell_failed"` — or, when the model stops the shell
+   * itself via the `stop_powershell` tool, immediately on that tool's
+   * `tool.execution_start` (see `dev/implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`,
+   * "Copilot CLI"). The latter path exists because an explicitly-stopped shell
+   * never produces a `system.notification`: that event is reserved for a shell
+   * finishing on its own, so without this the shellId would stay pending for
+   * the rest of the interactive session and every later Stop hook would be
+   * absorbed by `CliLogMonitor`'s background-work hold instead of completing.
    */
   /** Background follow-up state; Copilot's provider-specific signals feed it below. */
   private readonly backgroundFollowUpState = new BackgroundFollowUpState({
@@ -685,6 +691,20 @@ export class CopilotLogParser extends BaseLogParser {
         if (shellId) {
           this.backgroundFollowUpState.launch(shellId);
         }
+      }
+      return;
+    }
+
+    // The model stopping its own background shell is a synchronous, in-turn
+    // signal — it will never be followed by a system.notification, so treat
+    // it as an immediate removal rather than waiting for one that never comes.
+    if (
+      e.type === "tool.execution_start" &&
+      e.data?.toolName === COPILOT_STOP_SHELL_TOOL_NAME
+    ) {
+      const shellId = e.data.arguments?.shellId;
+      if (typeof shellId === "string" || typeof shellId === "number") {
+        this.backgroundFollowUpState.remove(String(shellId));
       }
       return;
     }
