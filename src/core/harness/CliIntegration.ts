@@ -40,6 +40,7 @@ import {
   isContextResolutionDiagnostic,
   type ExecutionMode,
   type HarnessId,
+  HARNESS_IDS,
   HOOK_EVENT_ORDER,
   USER_FEEDBACK_SEVERITY,
 } from "../../types/DashboardConstants";
@@ -1196,7 +1197,21 @@ export class CliIntegration extends HarnessIntegration {
       | ReturnType<NonNullable<ICliProvider["consumeStatuslineInstallResult"]>>
       | undefined
   ): void {
-    if (!result || result.kind !== "written") {
+    if (!result) {
+      return;
+    }
+    if (
+      result.collision &&
+      this.provider.config.harnessId === HARNESS_IDS.QWEN_CLI
+    ) {
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.INFO,
+        "Qwen already has a status line configured (a 'preset' set up outside ctrlyoke) — ctrlyoke won't replace it automatically, and has turned off its own Qwen status line tracking. Enable it again in Settings → Status Line whenever you'd like ctrlyoke's branded line instead."
+      );
+      return;
+    }
+    if (result.kind !== "written") {
       return;
     }
     const harness = this.provider.config.terminalName;

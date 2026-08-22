@@ -114,12 +114,7 @@ function walk(
 
   const properties = resolved.properties as Record<string, SchemaNode>;
   for (const [key, childSchema] of Object.entries(properties)) {
-    walk(
-      childSchema,
-      prefix ? `${prefix}.${key}` : key,
-      out,
-      dynamicParent
-    );
+    walk(childSchema, prefix ? `${prefix}.${key}` : key, out, dynamicParent);
   }
 }
 
@@ -139,10 +134,12 @@ function allSettingPaths(): Map<string, string> {
  */
 function settingPathConstants(): Map<string, string> {
   const source = readFileSync(DASHBOARD_CONSTANTS_PATH, "utf8");
-  const blockMatch = /export const SETTING_PATHS = \{([\s\S]*?)\n\} as const;/.exec(
-    source
+  const blockMatch =
+    /export const SETTING_PATHS = \{([\s\S]*?)\n\} as const;/.exec(source);
+  assert.ok(
+    blockMatch,
+    "SETTING_PATHS block not found in DashboardConstants.ts"
   );
-  assert.ok(blockMatch, "SETTING_PATHS block not found in DashboardConstants.ts");
   const entries = new Map<string, string>();
   const entryPattern = /(\w+):\s*"([^"]+)"/g;
   let match: RegExpExecArray | null;

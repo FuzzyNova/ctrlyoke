@@ -5,9 +5,11 @@ import { parseArgString } from "../../../utils/CliArgParser";
 import {
   STATUS_LINE_TRACKING_PROVIDERS,
   HARNESS_IDS,
+  SETTING_PATHS,
   type StatusLineTrackingHarnessId,
   type StatusLineTrackingProvider,
 } from "../../../types/DashboardConstants";
+import { configService } from "../../../config/CtrlYokeConfigService";
 import type { StatusLineTrackingSettings } from "../../../types/CtrlYokeSettings";
 import { SettingsJsonMcpTracker } from "./SettingsJsonMcpTracker";
 import {
@@ -15,9 +17,13 @@ import {
   type SettingsJsonPersistentValueInstallResult,
 } from "./SettingsJsonMcpTracker";
 
+const QWEN_STATUS_LINE_SETTING_KEY = "ui.statusLine";
+
 export interface StatuslineInstallResult {
   readonly kind: SettingsJsonPersistentValueInstallResult["kind"];
   readonly captured: boolean;
+  /** True when a configured non-command statusline caused the install veto. */
+  readonly collision?: boolean;
 }
 
 export interface StatuslineManagerLike {
@@ -58,6 +64,12 @@ export class StatuslineManager implements StatuslineManagerLike {
         return STATUS_LINE_TRACKING_PROVIDERS.CLAUDE;
       case HARNESS_IDS.ANTIGRAVITY_CLI:
         return STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY;
+      case HARNESS_IDS.COPILOT_CLI:
+        return STATUS_LINE_TRACKING_PROVIDERS.COPILOT;
+      case HARNESS_IDS.QWEN_CLI:
+        return STATUS_LINE_TRACKING_PROVIDERS.QWEN;
+      default:
+        throw new Error(`Unsupported statusline harness: ${harnessId}`);
     }
   }
 
@@ -81,15 +93,29 @@ export class StatuslineManager implements StatuslineManagerLike {
             userConfigPath: () =>
               path.join(os.homedir(), ".claude", "settings.json"),
           })
-        : SettingsJsonMcpTracker.getInstance("antigravity-cli-settings", {
-            projectConfigPath: () =>
-              path.join(
-                os.homedir(),
-                ".gemini",
-                "antigravity-cli",
-                "settings.json"
-              ),
-          });
+        : provider === STATUS_LINE_TRACKING_PROVIDERS.COPILOT
+          ? SettingsJsonMcpTracker.getInstance("copilot-cli-settings", {
+              projectConfigPath: () =>
+                path.join(os.homedir(), ".copilot", "settings.json"),
+              userConfigPath: () =>
+                path.join(os.homedir(), ".copilot", "settings.json"),
+            })
+          : provider === STATUS_LINE_TRACKING_PROVIDERS.QWEN
+            ? SettingsJsonMcpTracker.getInstance("qwen-cli-settings", {
+                projectConfigPath: () =>
+                  path.join(os.homedir(), ".qwen", "settings.json"),
+                userConfigPath: () =>
+                  path.join(os.homedir(), ".qwen", "settings.json"),
+              })
+            : SettingsJsonMcpTracker.getInstance("antigravity-cli-settings", {
+                projectConfigPath: () =>
+                  path.join(
+                    os.homedir(),
+                    ".gemini",
+                    "antigravity-cli",
+                    "settings.json"
+                  ),
+              });
     const definition = { tracker };
     this.definitions.set(provider, definition);
     return definition;
@@ -110,13 +136,41 @@ export class StatuslineManager implements StatuslineManagerLike {
     command: string
   ): Promise<StatuslineInstallResult> {
     let captured = false;
+    let collision = false;
     const result = await this.definition.tracker.installPersistentValue(
       workspaceRoot,
-      STATUS_LINE_SETTING_KEY,
+      this.getPersistentValueKey(),
       { type: "command", command },
       async (preexistingValue, hadKey) => {
         const settings = this.getSettings();
         const customCommand = this.extractCommand(preexistingValue, hadKey);
+        const isCtrlyokeCommand =
+          customCommand !== undefined &&
+          this.isCtrlyokeStatuslineCommand(customCommand);
+        const enabledSettingPath = `${SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING}.${this.provider}.enabled`;
+        // The automatic veto materializes a user-scoped disabled setting. A later
+        // user-scoped re-enable is the explicit opt-in that permits replacement,
+        // so no separate persisted "already asked" flag is needed.
+        const explicitlyEnabledByUser =
+          configService.getLeafSources()[enabledSettingPath] === "user";
+        if (
+          hadKey &&
+          customCommand === undefined &&
+          !isCtrlyokeCommand &&
+          !explicitlyEnabledByUser
+        ) {
+          if (settings.enabled) {
+            collision = true;
+            await ConfigurationUtils.setStatusLineTrackingSettings(
+              this.provider,
+              {
+                ...settings,
+                enabled: false,
+              }
+            );
+          }
+          return { proceed: false };
+        }
         if (
           settings.customCommand.length === 0 &&
           customCommand !== undefined &&
@@ -147,7 +201,11 @@ export class StatuslineManager implements StatuslineManagerLike {
         settings.customCommand.length > 0 && !settings.useCtrlyokeStyle;
     }
 
-    return { kind: result.kind, captured };
+    return {
+      kind: result.kind,
+      captured,
+      ...(collision ? { collision: true } : {}),
+    };
   }
 
   /** Restore the live custom command, or remove ctrlyoke's statusline key. */
@@ -156,7 +214,7 @@ export class StatuslineManager implements StatuslineManagerLike {
     if (restoreCustomCommand && customCommand.length > 0) {
       await this.definition.tracker.uninstallPersistentValue(
         workspaceRoot,
-        STATUS_LINE_SETTING_KEY,
+        this.getPersistentValueKey(),
         {
           action: "restore",
           value: { type: "command", command: customCommand },
@@ -167,9 +225,15 @@ export class StatuslineManager implements StatuslineManagerLike {
 
     await this.definition.tracker.uninstallPersistentValue(
       workspaceRoot,
-      STATUS_LINE_SETTING_KEY,
+      this.getPersistentValueKey(),
       { action: "delete" }
     );
+  }
+
+  private getPersistentValueKey(): string {
+    return this.provider === STATUS_LINE_TRACKING_PROVIDERS.QWEN
+      ? QWEN_STATUS_LINE_SETTING_KEY
+      : STATUS_LINE_SETTING_KEY;
   }
 
   private extractCommand(value: unknown, hadKey: boolean): string | undefined {

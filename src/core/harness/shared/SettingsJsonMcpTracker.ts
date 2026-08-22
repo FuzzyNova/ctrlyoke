@@ -40,12 +40,19 @@ export type SettingsJsonPermissionPolicy = Record<
 
 /** The persistent single-value API is intentionally limited to statusLine. */
 export const STATUS_LINE_SETTING_KEY = "statusLine" as const;
-export type SettingsJsonPersistentValueKey = typeof STATUS_LINE_SETTING_KEY;
+export type SettingsJsonPersistentValueKey = string;
+
+export interface SettingsJsonPersistentValueCaptureResult {
+  readonly proceed?: boolean;
+}
 
 export type SettingsJsonPersistentValueCapture = (
   preexistingValue: unknown,
   hadKey: boolean
-) => void | Promise<void>;
+) =>
+  | void
+  | SettingsJsonPersistentValueCaptureResult
+  | Promise<void | SettingsJsonPersistentValueCaptureResult>;
 
 export type SettingsJsonPersistentValueUninstall =
   | { readonly action: "restore"; readonly value: unknown }
@@ -59,6 +66,11 @@ export type SettingsJsonPersistentValueInstallResult =
     }
   | {
       readonly kind: "written";
+      readonly preexistingValue: unknown;
+      readonly hadKey: boolean;
+    }
+  | {
+      readonly kind: "declined";
       readonly preexistingValue: unknown;
       readonly hadKey: boolean;
     };
@@ -96,6 +108,78 @@ interface BaselineState {
   hadMcpServers: boolean;
   hadSchema: boolean;
   servers: Set<string>;
+}
+
+interface PathValue {
+  readonly value: unknown;
+  readonly hadKey: boolean;
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getAtPath(
+  settings: Record<string, unknown>,
+  key: SettingsJsonPersistentValueKey
+): PathValue {
+  let current: unknown = settings;
+
+  for (const segment of key.split(".")) {
+    if (!isJsonObject(current)) {
+      return { value: undefined, hadKey: false };
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(current, segment)) {
+      return { value: undefined, hadKey: false };
+    }
+
+    current = current[segment];
+  }
+
+  return { value: current, hadKey: true };
+}
+
+function setAtPath(
+  settings: Record<string, unknown>,
+  key: SettingsJsonPersistentValueKey,
+  value: unknown
+): void {
+  const segments = key.split(".");
+  const leaf = segments.pop()!;
+  let current = settings;
+
+  for (const segment of segments) {
+    if (!isJsonObject(current[segment])) {
+      current[segment] = {};
+    }
+    current = current[segment] as Record<string, unknown>;
+  }
+
+  current[leaf] = value;
+}
+
+function deleteAtPath(
+  settings: Record<string, unknown>,
+  key: SettingsJsonPersistentValueKey
+): void {
+  const segments = key.split(".");
+  const leaf = segments.pop()!;
+  let current: unknown = settings;
+
+  for (const segment of segments) {
+    if (
+      !isJsonObject(current) ||
+      !Object.prototype.hasOwnProperty.call(current, segment)
+    ) {
+      return;
+    }
+    current = current[segment];
+  }
+
+  if (isJsonObject(current)) {
+    delete current[leaf];
+  }
 }
 
 /**
@@ -549,11 +633,12 @@ export class SettingsJsonMcpTracker {
     return this.withMutationLock(settingsPath, async () => {
       await this.deleteLeaseSidecar(settingsPath, key);
       const settings = await this.readProjectConfig(settingsPath);
-      const hadKey = Object.prototype.hasOwnProperty.call(settings, key);
-      const preexistingValue = this.cloneJson(settings[key]);
+      const existing = getAtPath(settings, key);
+      const hadKey = existing.hadKey;
+      const preexistingValue = this.cloneJson(existing.value);
 
       if (
-        alreadyInstalled?.(this.cloneJson(settings[key]), hadKey) === true ||
+        alreadyInstalled?.(this.cloneJson(existing.value), hadKey) === true ||
         (hadKey && this.jsonEquals(preexistingValue, value)) ||
         (!hadKey && value === undefined)
       ) {
@@ -564,8 +649,19 @@ export class SettingsJsonMcpTracker {
         };
       }
 
-      await capture?.(this.cloneJson(preexistingValue), hadKey);
-      settings[key] = this.cloneJson(value);
+      const captureResult = await capture?.(
+        this.cloneJson(preexistingValue),
+        hadKey
+      );
+      if (captureResult !== undefined && captureResult.proceed === false) {
+        return {
+          kind: "declined",
+          preexistingValue,
+          hadKey,
+        };
+      }
+
+      setAtPath(settings, key, this.cloneJson(value));
       await fs.mkdir(path.dirname(settingsPath), { recursive: true });
       await writeFileAtomic(settingsPath, JSON.stringify(settings, null, 2));
       return {
@@ -591,18 +687,19 @@ export class SettingsJsonMcpTracker {
     await this.withMutationLock(settingsPath, async () => {
       await this.deleteLeaseSidecar(settingsPath, key);
       const settings = await this.readProjectConfig(settingsPath);
-      const hadKey = Object.prototype.hasOwnProperty.call(settings, key);
+      const existing = getAtPath(settings, key);
+      const hadKey = existing.hadKey;
 
       if (operation.action === "restore") {
-        if (hadKey && this.jsonEquals(settings[key], operation.value)) {
+        if (hadKey && this.jsonEquals(existing.value, operation.value)) {
           return;
         }
-        settings[key] = this.cloneJson(operation.value);
+        setAtPath(settings, key, this.cloneJson(operation.value));
       } else {
         if (!hadKey) {
           return;
         }
-        delete settings[key];
+        deleteAtPath(settings, key);
       }
 
       await fs.mkdir(path.dirname(settingsPath), { recursive: true });

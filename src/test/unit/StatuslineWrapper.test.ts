@@ -15,6 +15,8 @@ type SharedWrapper = {
   STATUSLINE_PROVIDERS: {
     CLAUDE: string;
     ANTIGRAVITY: string;
+    COPILOT: string;
+    QWEN: string;
   };
   formatBrandedStatusLine(
     provider: string,
@@ -89,25 +91,36 @@ async function runWrapper(
 }
 
 function buildEnvironment(
-  provider: "claude" | "antigravity",
+  provider: "claude" | "antigravity" | "copilot" | "qwen",
   directory: string
 ): NodeJS.ProcessEnv {
-  return {
-    ...(provider === "claude"
-      ? {
-          CTRLYOKE_CLAUDE_STATUSLINE_DIR: directory,
-          CTRLYOKE_CLAUDE_STATUSLINE_TOKEN: "claude-token",
-        }
-      : {
-          CTRLYOKE_AGY_STATUSLINE_DIR: directory,
-          CTRLYOKE_AGY_STATUSLINE_TOKEN: "agy-token",
-        }),
-  };
+  switch (provider) {
+    case "claude":
+      return {
+        CTRLYOKE_CLAUDE_STATUSLINE_DIR: directory,
+        CTRLYOKE_CLAUDE_STATUSLINE_TOKEN: "claude-token",
+      };
+    case "antigravity":
+      return {
+        CTRLYOKE_AGY_STATUSLINE_DIR: directory,
+        CTRLYOKE_AGY_STATUSLINE_TOKEN: "agy-token",
+      };
+    case "copilot":
+      return {
+        CTRLYOKE_COPILOT_STATUSLINE_DIR: directory,
+        CTRLYOKE_COPILOT_STATUSLINE_TOKEN: "copilot-token",
+      };
+    case "qwen":
+      return {
+        CTRLYOKE_QWEN_STATUSLINE_DIR: directory,
+        CTRLYOKE_QWEN_STATUSLINE_TOKEN: "qwen-token",
+      };
+  }
 }
 
 async function writeMachineSettings(
   homeDirectory: string,
-  provider: "claude" | "antigravity",
+  provider: "claude" | "antigravity" | "copilot" | "qwen",
   settings: {
     enabled?: boolean;
     customCommand?: string;
@@ -342,6 +355,101 @@ suite("Shared statusline wrappers", () => {
       assert.strictEqual(
         shared.formatBrandedStatusLine(provider, payload, format),
         "1.2.3 workspace 12345678"
+      );
+    }
+  });
+
+  test("uses each new provider's user-facing context values", () => {
+    const context = [{ type: "field", field: "context" }];
+    const copilotPayload = {
+      cwd: "C:\\dev\\ctrlyoke",
+      session_id: "fadbffd9-fb8e-4a6d-9048-2fcbbd09858b",
+      model: { id: "gpt-5.6-luna", display_name: "gpt-5.6-luna · high" },
+      workspace: { current_dir: "C:\\dev\\ctrlyoke" },
+      context_window: {
+        total_input_tokens: 25_953,
+        total_output_tokens: 17,
+        context_window_size: 1_050_000,
+        used_percentage: 0,
+        current_context_tokens: 26_159,
+        displayed_context_limit: 328_000,
+        current_context_used_percentage: 8,
+      },
+    };
+    const copilotLine = shared.formatBrandedStatusLine(
+      "copilot",
+      copilotPayload,
+      context
+    );
+    assert.match(copilotLine, /26\.2k\/328\.0k ctx \(8%\)/);
+    assert.doesNotMatch(copilotLine, /\(0%\)/);
+
+    const qwenPayload = {
+      session_id: "43a8bb4c-f013-447e-9e23-c70e071fc16e",
+      version: "0.21.15",
+      model: { display_name: "[ModelStudio Standard] qwen3.5-plus" },
+      context_window: {
+        context_window_size: 1_000_000,
+        used_percentage: 4.3,
+        remaining_percentage: 95.7,
+        current_usage: 42_735,
+        total_input_tokens: 77_327,
+        total_output_tokens: 691,
+      },
+      workspace: { current_dir: tempDirectory },
+      git: { branch: "small-feature" },
+    };
+    const qwenLine = shared.formatBrandedStatusLine("qwen", qwenPayload, context);
+    assert.match(qwenLine, /42\.7k\/1\.0M ctx \(4\.3%\)/);
+    assert.doesNotMatch(qwenLine, /\(7\.8%\)/);
+  });
+
+  test("uses the cwd fallback for directory rendering and branch lookup", async () => {
+    tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-statusline-cwd-fallback-")
+    );
+    await fs.mkdir(path.join(tempDirectory, ".git"));
+    await fs.writeFile(
+      path.join(tempDirectory, ".git", "HEAD"),
+      "ref: refs/heads/fallback-branch\n"
+    );
+
+    const format = [
+      { type: "field", field: "cwd" },
+      { type: "field", field: "branch" },
+    ];
+    for (const provider of ["copilot", "qwen"] as const) {
+      const line = shared.formatBrandedStatusLine(
+        provider,
+        { workspace: { current_dir: tempDirectory } },
+        format
+      );
+      assert.strictEqual(
+        line,
+        `${path.basename(tempDirectory)} fallback-branch`
+      );
+    }
+  });
+
+  test("renders new providers' unavailable usage fields as absent", () => {
+    for (const provider of ["copilot", "qwen"] as const) {
+      assert.strictEqual(
+        shared.formatBrandedStatusLine(provider, {}, [
+          { type: "field", field: "usage" },
+        ]),
+        "quota —"
+      );
+      assert.strictEqual(
+        shared.formatBrandedStatusLine(provider, {}, [
+          { type: "field", field: "usage1" },
+        ]),
+        ""
+      );
+      assert.strictEqual(
+        shared.formatBrandedStatusLine(provider, {}, [
+          { type: "field", field: "usage2" },
+        ]),
+        ""
       );
     }
   });
@@ -899,6 +1007,8 @@ suite("Shared statusline wrappers", () => {
   for (const [provider, script] of [
     ["claude", scriptPath("ctrlyoke-claude-statusline.js")],
     ["antigravity", scriptPath("ctrlyoke-antigravity-statusline.js")],
+    ["copilot", scriptPath("ctrlyoke-copilot-statusline.js")],
+    ["qwen", scriptPath("ctrlyoke-qwen-statusline.js")],
   ] as const) {
     test(`${provider} always writes and forwards while branded style discards stdout`, async () => {
       await createHome();
@@ -935,7 +1045,9 @@ suite("Shared statusline wrappers", () => {
       const filename =
         provider === "claude"
           ? "claude-statusline-claude-token.json"
-          : "agy-statusline-agy-token.json";
+          : provider === "antigravity"
+            ? "agy-statusline-agy-token.json"
+            : `${provider}-statusline-${provider}-token.json`;
       assert.ok(
         await fs
           .access(path.join(tempDirectory, filename))
@@ -978,6 +1090,8 @@ suite("Shared statusline wrappers", () => {
   for (const [provider, script] of [
     ["claude", scriptPath("ctrlyoke-claude-statusline.js")],
     ["antigravity", scriptPath("ctrlyoke-antigravity-statusline.js")],
+    ["copilot", scriptPath("ctrlyoke-copilot-statusline.js")],
+    ["qwen", scriptPath("ctrlyoke-qwen-statusline.js")],
   ] as const) {
     test(`${provider} resolves persisted settings without a ctrlyoke launch environment`, async () => {
       await createHome();

@@ -37,38 +37,127 @@ function previewPayload(
   provider: StatusLineFormatProvider,
   snapshot: HarnessUsageSnapshot | undefined
 ): Record<string, unknown> {
-  const representativePayload =
-    provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE
-      ? {
-          model: { id: "claude-sonnet-4.5" },
-          context_window: {
-            total_input_tokens: 68_000,
-            total_output_tokens: 12_000,
-            context_window_size: 200_000,
+  let representativePayload: Record<string, unknown>;
+  switch (provider) {
+    case STATUS_LINE_FORMAT_PROVIDERS.CLAUDE:
+      representativePayload = {
+        model: { id: "claude-sonnet-4.5" },
+        context_window: {
+          total_input_tokens: 68_000,
+          total_output_tokens: 12_000,
+          context_window_size: 200_000,
+        },
+        rate_limits: {
+          five_hour: { used_percentage: 24 },
+          seven_day: { used_percentage: 41 },
+        },
+        version: "preview",
+        cwd: "/workspace/project",
+        session_id: "preview-session",
+      };
+      break;
+    case STATUS_LINE_FORMAT_PROVIDERS.ANTIGRAVITY:
+      representativePayload = {
+        model: { id: "gemini-2.5-pro" },
+        context_window: {
+          total_input_tokens: 68_000,
+          total_output_tokens: 12_000,
+          context_window_size: 200_000,
+        },
+        quota: {
+          "3p-weekly": { remaining_fraction: 0.76 },
+          "gemini-weekly": { remaining_fraction: 0.59 },
+        },
+        version: "preview",
+        cwd: "/workspace/project",
+        session_id: "preview-session",
+      };
+      break;
+    case STATUS_LINE_FORMAT_PROVIDERS.COPILOT:
+      representativePayload = {
+        cwd: "C:\\dev\\ctrlyoke",
+        session_id: "fadbffd9-fb8e-4a6d-9048-2fcbbd09858b",
+        session_name: "Implement Pong Response",
+        transcript_path:
+          "C:\\Users\\natha\\.copilot\\session-state\\<session_id>",
+        model: { id: "gpt-5.6-luna", display_name: "gpt-5.6-luna · high" },
+        workspace: { current_dir: "C:\\dev\\ctrlyoke" },
+        username: null,
+        remote: { connected: false },
+        version: "1.0.80",
+        cost: {
+          total_api_duration_ms: 2070,
+          total_lines_added: 0,
+          total_lines_removed: 0,
+          total_duration_ms: 12246,
+          total_premium_requests: 0,
+        },
+        context_window: {
+          total_input_tokens: 25953,
+          total_output_tokens: 17,
+          total_cache_read_tokens: 0,
+          total_cache_write_tokens: 25950,
+          total_reasoning_tokens: 10,
+          total_tokens: 25970,
+          context_window_size: 1050000,
+          used_percentage: 0,
+          remaining_percentage: 100,
+          remaining_tokens: 1050000,
+          last_call_input_tokens: 0,
+          last_call_output_tokens: 0,
+          current_context_tokens: 26159,
+          displayed_context_limit: 328000,
+          current_context_used_percentage: 8,
+          current_usage: {
+            input_tokens: 25953,
+            output_tokens: 17,
+            cache_creation_input_tokens: 25950,
+            cache_read_input_tokens: 0,
           },
-          rate_limits: {
-            five_hour: { used_percentage: 24 },
-            seven_day: { used_percentage: 41 },
+        },
+        ai_used: { total_nano_aiu: 650850000, formatted: "0.65" },
+        allow_all_enabled: false,
+      };
+      break;
+    case STATUS_LINE_FORMAT_PROVIDERS.QWEN:
+      representativePayload = {
+        session_id: "43a8bb4c-f013-447e-9e23-c70e071fc16e",
+        version: "0.21.15",
+        model: { display_name: "[ModelStudio Standard] qwen3.5-plus" },
+        context_window: {
+          context_window_size: 1000000,
+          used_percentage: 4.3,
+          remaining_percentage: 95.7,
+          current_usage: 42735,
+          total_input_tokens: 77327,
+          total_output_tokens: 691,
+        },
+        workspace: {
+          current_dir: "C:\\dev\\ctrlyoke.worktrees\\small-feature",
+        },
+        git: { branch: "small-feature" },
+        metrics: {
+          models: {
+            "qwen3.5-plus": {
+              api: {
+                total_requests: 4,
+                total_errors: 0,
+                total_latency_ms: 20189,
+              },
+              tokens: {
+                prompt: 77327,
+                completion: 691,
+                total: 78018,
+                cached: 16634,
+                thoughts: 433,
+              },
+            },
           },
-          version: "preview",
-          cwd: "/workspace/project",
-          session_id: "preview-session",
-        }
-      : {
-          model: { id: "gemini-2.5-pro" },
-          context_window: {
-            total_input_tokens: 68_000,
-            total_output_tokens: 12_000,
-            context_window_size: 200_000,
-          },
-          quota: {
-            "3p-weekly": { remaining_fraction: 0.76 },
-            "gemini-weekly": { remaining_fraction: 0.59 },
-          },
-          version: "preview",
-          cwd: "/workspace/project",
-          session_id: "preview-session",
-        };
+          files: { total_lines_added: 0, total_lines_removed: 0 },
+        },
+      };
+      break;
+  }
 
   if (!snapshot) {
     return representativePayload;
@@ -87,6 +176,18 @@ function previewPayload(
             { used_percentage: window.percentUsed ?? 0 },
           ])
       ),
+    };
+  }
+  if (provider === STATUS_LINE_FORMAT_PROVIDERS.COPILOT) {
+    return {
+      ...representativePayload,
+      model: { id: "cached model", display_name: "cached model" },
+    };
+  }
+  if (provider === STATUS_LINE_FORMAT_PROVIDERS.QWEN) {
+    return {
+      ...representativePayload,
+      model: { display_name: "cached model" },
     };
   }
   return {

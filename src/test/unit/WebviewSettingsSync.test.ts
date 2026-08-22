@@ -349,7 +349,7 @@ suite("WebviewSettingsSync", () => {
 
         await sync.handleDisableStatusLineTracking({
           type: MESSAGE_TYPES.DISABLE_STATUS_LINE_TRACKING,
-          harnessId: HARNESS_IDS.COPILOT_CLI,
+          harnessId: HARNESS_IDS.CODEX_CLI,
           restoreCustomCommand: false,
         } as any);
       } finally {
@@ -384,6 +384,18 @@ suite("WebviewSettingsSync", () => {
           customCommand: "",
           useCtrlyokeStyle: true,
           format: customizedFormat,
+        },
+        [STATUS_LINE_TRACKING_PROVIDERS.COPILOT]: {
+          enabled: true,
+          customCommand: "",
+          useCtrlyokeStyle: true,
+          format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
+        },
+        [STATUS_LINE_TRACKING_PROVIDERS.QWEN]: {
+          enabled: true,
+          customCommand: "",
+          useCtrlyokeStyle: true,
+          format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
         },
       };
       const modeWrites: boolean[] = [];
@@ -430,7 +442,11 @@ suite("WebviewSettingsSync", () => {
       assert.deepStrictEqual(modeWrites, [true]);
       assert.deepStrictEqual(
         providerWrites.map(({ provider }) => provider),
-        [STATUS_LINE_TRACKING_PROVIDERS.CLAUDE]
+        [
+          STATUS_LINE_TRACKING_PROVIDERS.CLAUDE,
+          STATUS_LINE_TRACKING_PROVIDERS.COPILOT,
+          STATUS_LINE_TRACKING_PROVIDERS.QWEN,
+        ]
       );
       assert.deepStrictEqual(providerWrites[0].format, sharedFormat);
       assert.strictEqual(
@@ -482,7 +498,7 @@ suite("WebviewSettingsSync", () => {
         Object.assign(ConfigurationUtils, originals);
       }
 
-      assert.strictEqual(providerWrites.length, 2);
+      assert.strictEqual(providerWrites.length, 4);
       assert.notStrictEqual(providerWrites[0], providerWrites[1]);
       assert.notStrictEqual(providerWrites[0], sharedFormat);
       assert.notStrictEqual(providerWrites[1], sharedFormat);

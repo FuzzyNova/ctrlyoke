@@ -1,8 +1,10 @@
 import * as path from "path";
 import * as fs from "fs/promises";
+import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import {
   HARNESS_IDS,
+  STATUS_LINE_TRACKING_PROVIDERS,
   TOKEN_TOTAL_CONFIDENCE,
 } from "../../../types/DashboardConstants";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
@@ -29,6 +31,11 @@ import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { CliParseUtils } from "../shared/CliParseUtils";
+import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
+import {
+  StatuslineManager,
+  type StatuslineInstallResult,
+} from "../shared/StatuslineManager";
 import type { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import type { HarnessCapabilityFacts } from "../../../types/CompatibilityTypes";
 import { parseArgString } from "../../../utils/CliArgParser";
@@ -92,6 +99,10 @@ const COPILOT_IMAGE_INPUT_CAPABILITY = {
  * ```
  */
 export class CopilotCliProvider implements ICliProvider {
+  private static readonly statuslineManager = StatuslineManager.forProvider(
+    STATUS_LINE_TRACKING_PROVIDERS.COPILOT
+  );
+
   readonly config: HarnessConfig = {
     name: "copilot",
     harnessId: HARNESS_IDS.COPILOT_CLI,
@@ -148,6 +159,18 @@ export class CopilotCliProvider implements ICliProvider {
    * OTel section) since Copilot CLI 1.0.x removed every other per-turn context signal.
    */
   private otelFilePath: string | undefined;
+  private statusLineToken: string | undefined;
+  private readonly statusLineSnapshotPaths = new Set<string>();
+  private statusLineDirectory: string | undefined;
+  private statusLineWorkspaceRoot: string | undefined;
+  private statusLineEnabledForPrompt = false;
+  private statuslineInstallResult: StatuslineInstallResult | undefined;
+
+  consumeStatuslineInstallResult(): StatuslineInstallResult | undefined {
+    const result = this.statuslineInstallResult;
+    this.statuslineInstallResult = undefined;
+    return result;
+  }
 
   constructor() {
     // No initialization needed
@@ -226,6 +249,7 @@ export class CopilotCliProvider implements ICliProvider {
     workspaceRoots?: readonly string[],
     approvedExternalRoots?: readonly string[]
   ): Promise<CliProviderPreparation> {
+    const statusLineToken = randomUUID();
     // Generate a fresh per-invocation OTel export path (or clear it) every prompt.
     // Must run unconditionally — the parser/provider instances are reused across
     // prompts, so a stale path from a previous invocation must never leak forward.
@@ -358,6 +382,27 @@ export class CopilotCliProvider implements ICliProvider {
     return {
       cliArgs: args,
       mutations: [
+        {
+          description: "Prepare Copilot statusline tracking",
+          apply: async () => {
+            this.statusLineToken = statusLineToken;
+            this.statusLineDirectory = undefined;
+            this.statusLineWorkspaceRoot = undefined;
+            this.statusLineEnabledForPrompt = false;
+            this.statuslineInstallResult = undefined;
+            if (
+              workspaceRoot &&
+              ConfigurationUtils.getStatusLineTrackingSettings(
+                STATUS_LINE_TRACKING_PROVIDERS.COPILOT
+              ).enabled
+            ) {
+              this.statuslineInstallResult = await this.registerStatusLine(
+                extensionPath,
+                workspaceRoot
+              );
+            }
+          },
+        },
         {
           description: "Prepare Copilot prompt runtime state",
           apply: async () => {
@@ -608,7 +653,11 @@ export class CopilotCliProvider implements ICliProvider {
     const env: NodeJS.ProcessEnv = this.enablePromptModeRepoHooksForHeadlessRun
       ? { GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS: "true" }
       : {};
-    return { ...env, ...this.buildOtelSpawnEnv() };
+    return {
+      ...env,
+      ...this.buildOtelSpawnEnv(),
+      ...this.buildStatusLineSpawnEnv(),
+    };
   }
 
   /**
@@ -639,6 +688,67 @@ export class CopilotCliProvider implements ICliProvider {
     return {
       ...CliProviderUtils.buildProcessEnv(),
       ...this.buildOtelSpawnEnv(),
+      ...this.buildStatusLineSpawnEnv(),
+    };
+  }
+
+  private async registerStatusLine(
+    extensionPath: string,
+    workspaceRoot: string
+  ): Promise<StatuslineInstallResult> {
+    const scriptPath = path.join(
+      extensionPath,
+      "out",
+      "scripts",
+      "ctrlyoke-copilot-statusline.js"
+    );
+    const command = CliNotificationMonitor.buildNodeCommand(
+      scriptPath,
+      ""
+    ).trim();
+    const snapshotDirectory = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
+      PATH_CONSTANTS.TEMP_DIR
+    );
+    const snapshotPath = path.join(
+      snapshotDirectory,
+      `copilot-statusline-${this.statusLineToken}.json`
+    );
+    this.statusLineSnapshotPaths.add(snapshotPath);
+
+    try {
+      const result = await CopilotCliProvider.statuslineManager.install(
+        workspaceRoot,
+        command
+      );
+      if (result.kind !== "declined") {
+        this.statusLineDirectory = snapshotDirectory;
+        this.statusLineWorkspaceRoot = workspaceRoot;
+        this.statusLineEnabledForPrompt = true;
+      }
+      return result;
+    } catch (error) {
+      Log.warn(`Failed to register Copilot statusline: ${error}`);
+      return { kind: "no-op", captured: false };
+    }
+  }
+
+  private buildStatusLineSpawnEnv(): NodeJS.ProcessEnv {
+    if (
+      !this.statusLineEnabledForPrompt ||
+      !this.statusLineToken ||
+      !this.statusLineDirectory
+    ) {
+      return {};
+    }
+
+    return {
+      CTRLYOKE_COPILOT_STATUSLINE_TOKEN: this.statusLineToken,
+      CTRLYOKE_COPILOT_STATUSLINE_DIR: this.statusLineDirectory,
+      ...(this.statusLineWorkspaceRoot
+        ? { CTRLYOKE_STATUSLINE_WORKSPACE_ROOT: this.statusLineWorkspaceRoot }
+        : {}),
     };
   }
 
@@ -688,6 +798,7 @@ export class CopilotCliProvider implements ICliProvider {
   getAdditionalCleanupFilePaths(workspaceRoot: string): string[] {
     return [
       ...this.hookFilePaths,
+      ...this.statusLineSnapshotPaths,
       ...(this.otelFilePath ? [this.otelFilePath] : []),
       // Defensive: some environments have COPILOT_OTEL_FILE_EXPORTER_PATH set globally
       // to the relative path "NUL" (observed pointed at the Windows null device via

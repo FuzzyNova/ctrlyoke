@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Shared implementation for the Claude and Antigravity statusline wrappers.
+ * Shared implementation for the supported statusline wrappers.
  *
  * These scripts run as detached CommonJS Node processes, so this module must
  * remain standalone and depend only on Node built-ins.
@@ -13,11 +13,12 @@ const path = require("path");
 const { spawn } = require("child_process");
 const {
   DEFAULT_STATUS_LINE_FORMAT,
+  getStatusLineWorkspaceDirectory,
   formatUsagePercentForDisplay,
   formatBrandedStatusLine: formatSharedBrandedStatusLine,
 } = require("./ctrlyoke-statusline-format.js");
 
-// Both harnesses refresh their statusline frequently. Keep forwarding below
+// Supported harnesses refresh their statusline frequently. Keep forwarding below
 // the documented ~300 ms Antigravity poll cadence for a consistent contract.
 const FORWARD_TIMEOUT_MS = 200;
 const ANSI_RESET = "\u001b[0m";
@@ -26,6 +27,8 @@ const DEFAULT_PERCENT_DIRECTION = "used";
 const STATUSLINE_PROVIDERS = Object.freeze({
   CLAUDE: "claude",
   ANTIGRAVITY: "antigravity",
+  COPILOT: "copilot",
+  QWEN: "qwen",
 });
 
 const DEFAULT_STATUSLINE_SETTINGS = Object.freeze({
@@ -115,7 +118,9 @@ function resolveStatusLineSettings(
   const workspaceSettings =
     typeof context.workspaceRoot === "string"
       ? readWorkspaceSettings(context.workspaceRoot)
-      : findWorkspaceSettingsFromCwd(context.payload?.cwd);
+      : findWorkspaceSettingsFromCwd(
+          getStatusLineWorkspaceDirectory(context.payload)
+        );
   const settings = userSettings;
   const permissions = settings.permissions;
   const tracking =
@@ -434,7 +439,7 @@ function getGitHeadPath(currentDirectory) {
 
 function getBranchName(payload) {
   try {
-    const headPath = getGitHeadPath(normalizePayload(payload).cwd);
+    const headPath = getGitHeadPath(getStatusLineWorkspaceDirectory(payload));
     if (!headPath) {
       return undefined;
     }
