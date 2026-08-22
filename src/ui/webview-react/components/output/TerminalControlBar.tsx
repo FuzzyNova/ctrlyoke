@@ -236,7 +236,6 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
 
   return (
     <div
-      ref={moreRef}
       className="relative z-header w-full flex-shrink-0 border-t border-panel-border"
       style={{
         background:
@@ -277,7 +276,7 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
         )}
 
         {resolvedPopupItems.length > 0 && (
-          <div className="shrink-0">
+          <div ref={moreRef} className="relative ml-auto shrink-0">
             <button
               type="button"
               className={`h-8 min-w-10 px-2 rounded border text-xs shrink-0 transition-colors ${
@@ -293,38 +292,38 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
             >
               ...
             </button>
+
+            {moreOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 bottom-full mb-1 w-48 max-h-[60vh] overflow-y-auto rounded border border-panel-border bg-editor-bg shadow-lg"
+              >
+                <div className="p-1 space-y-1">
+                  {resolvedPopupItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="menuitem"
+                      className="w-full px-2 py-1.5 text-left text-xs rounded text-foreground hover:bg-list-hover-bg"
+                      onClick={() => sendKey(item.sequence)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  className="w-full border-t border-panel-border px-2 py-1.5 text-left text-xs text-link-fg hover:bg-list-hover-bg"
+                  onClick={openShortcutSettings}
+                >
+                  Add shortcuts...
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
-
-      {moreOpen && resolvedPopupItems.length > 0 && (
-        <div
-          role="menu"
-          className="absolute right-1 bottom-full mb-1 w-48 max-h-[60vh] overflow-y-auto rounded border border-panel-border bg-editor-bg shadow-lg"
-        >
-          <div className="p-1 space-y-1">
-            {resolvedPopupItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                role="menuitem"
-                className="w-full px-2 py-1.5 text-left text-xs rounded text-foreground hover:bg-list-hover-bg"
-                onClick={() => sendKey(item.sequence)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            className="w-full border-t border-panel-border px-2 py-1.5 text-left text-xs text-link-fg hover:bg-list-hover-bg"
-            onClick={openShortcutSettings}
-          >
-            Add shortcuts...
-          </button>
-        </div>
-      )}
     </div>
   );
 };
