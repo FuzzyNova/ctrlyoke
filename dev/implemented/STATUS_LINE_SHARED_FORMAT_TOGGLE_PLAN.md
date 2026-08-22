@@ -4,7 +4,8 @@
 > contract, shared helpers, coordinated webview→extension writes, standalone statusline wrapper
 > resolution, `StatusLinePreview` extraction/editor props, and the shared/per-harness dashboard
 > wiring with live previews and animated transitions.
-> Each step updates this line as it lands. Motivated by upcoming Copilot and Qwen statusline support
+>
+> Motivated by upcoming Copilot and Qwen statusline support
 > (`STATUS_LINE_TRACKING_PROVIDERS` currently has 2 entries — `claude`, `antigravity` — and
 > is about to grow to 4), but this plan only builds the shared/per-harness toggle mechanism.
 > Adding the new providers themselves is separate, larger work and not covered here.

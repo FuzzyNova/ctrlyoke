@@ -424,7 +424,8 @@
           "properties": {
             "useDifferentFormatPerHarness": {
               "type": "boolean",
-              "default": false
+              "default": false,
+              "description": "Configure each harness's statusline format independently. When false (the default), every harness renders 'sharedFormat' and the per-harness 'format' values are left untouched but unused."
             },
             "sharedFormat": { "$ref": "#/definitions/statusLineFormat" },
             "claude": { "$ref": "#/definitions/statusLineTrackingSettings" },
@@ -893,6 +894,7 @@
   },
   "definitions": {
     "statusLineFormat": {
+      "description": "Ordered statusline segments. Used both for a provider's own 'format' and for the shared 'sharedFormat' that applies to every harness when 'useDifferentFormatPerHarness' is false.",
       "type": "array",
       "items": {
         "oneOf": [

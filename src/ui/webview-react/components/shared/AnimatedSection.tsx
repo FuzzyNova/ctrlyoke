@@ -29,7 +29,14 @@ export const AnimatedSection: React.FC<{
   // When visibility changes, manage the mount/unmount animation cycle
   useEffect(() => {
     if (visible) {
-      // Opening: render immediately, play slide-in animation
+      // Opening: render immediately, play slide-in animation. Cancel any
+      // in-flight close timer first — reopening before a previous close
+      // finished would otherwise let that timer unmount the now-visible
+      // content (and leave it unmounted until `visible` changes again).
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
       setClosing(false);
       setRendering(true);
     } else {
