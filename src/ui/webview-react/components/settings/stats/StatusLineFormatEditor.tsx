@@ -50,6 +50,7 @@ interface Props {
   percentDirection?: UsagePercentDirection;
   hidePreview?: boolean;
   onDraftChange?: (format: StatusLineSegment[]) => void;
+  title?: string;
 }
 
 function cloneDefaultFormat(): StatusLineSegment[] {
@@ -193,6 +194,7 @@ export function StatusLineFormatEditor({
   percentDirection = "used",
   hidePreview = false,
   onDraftChange,
+  title = "Status line format",
 }: Props) {
   const [draftFormat, setDraftFormat] = useState(format);
   const idCounterRef = useRef(0);
@@ -284,7 +286,7 @@ export function StatusLineFormatEditor({
     >
       <div>
         <h4 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
-          Status line format
+          {title}
         </h4>
         <p className="text-xs text-description-fg mt-1">
           Choose the fields to show and arrange them in terminal order.

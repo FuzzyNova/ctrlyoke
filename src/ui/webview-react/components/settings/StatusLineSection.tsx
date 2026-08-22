@@ -83,6 +83,7 @@ export function StatusLineSection({ settings }: Props) {
             }
             onDraftChange={setSharedDraft}
             hidePreview
+            title="Shared status line format"
           />
         </AnimatedSection>
         {STATUS_LINE_HARNESS_IDS.map((harnessId) => (

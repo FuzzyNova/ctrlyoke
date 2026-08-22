@@ -213,31 +213,27 @@ export function StatusLineTrackingControls({
         onReset={(path) => sendGlobalSetting(path, undefined)}
         activeScope={SETTING_SCOPES.USER}
       />
-      {tracking.useCtrlyokeStyle && (
-        <>
-          <AnimatedSection visible={useDifferentFormatPerHarness}>
-            <StatusLineFormatEditor
-              format={tracking.format}
-              onCommit={(format) => sendGlobalSetting(paths.format, format)}
-              provider={provider}
-              snapshot={snapshot}
-              percentDirection={
-                settings.settings.usageTracking.percentDirection
-              }
-            />
-          </AnimatedSection>
-          <AnimatedSection visible={!useDifferentFormatPerHarness}>
-            <StatusLinePreview
-              format={sharedDraft}
-              provider={provider}
-              snapshot={snapshot}
-              percentDirection={
-                settings.settings.usageTracking.percentDirection
-              }
-            />
-          </AnimatedSection>
-        </>
-      )}
+      <AnimatedSection
+        visible={tracking.useCtrlyokeStyle && useDifferentFormatPerHarness}
+      >
+        <StatusLineFormatEditor
+          format={tracking.format}
+          onCommit={(format) => sendGlobalSetting(paths.format, format)}
+          provider={provider}
+          snapshot={snapshot}
+          percentDirection={settings.settings.usageTracking.percentDirection}
+        />
+      </AnimatedSection>
+      <AnimatedSection
+        visible={tracking.useCtrlyokeStyle && !useDifferentFormatPerHarness}
+      >
+        <StatusLinePreview
+          format={sharedDraft}
+          provider={provider}
+          snapshot={snapshot}
+          percentDirection={settings.settings.usageTracking.percentDirection}
+        />
+      </AnimatedSection>
       <Modal
         isOpen={isDisableModalOpen}
         onClose={() => setIsDisableModalOpen(false)}
