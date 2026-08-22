@@ -129,7 +129,7 @@ No changes needed to the generic settings write path — `TerminalSection.tsx` a
 
 ## Implementation Steps
 
-Status: Step 3 complete — `TerminalControlBarEditor.tsx` now provides sortable bar/popup placement editing, hidden-item restoration, stable custom shortcut ids, key capture, and built-in-only reset behavior. Step 4 remains for tests.
+Status: All implementation steps complete — the terminal shortcut registry, settings plumbing, runtime rendering, editor/wiring, and test coverage are complete.
 
 1. **Registry module**: add `src/utils/TerminalControlBarFormat.ts` with the id constants, `TERMINAL_BAR_ITEM_REGISTRY`, and `DEFAULT_TERMINAL_BAR_LAYOUT`.
 2. **Settings plumbing**: add `TerminalShortcut.id`, `TerminalSettings.mobileBarLayout`, defaults, and the schema entries. Update `DEFAULT_STATE`-style fixtures/tests that construct full `TerminalSettings` objects.
