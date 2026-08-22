@@ -100,7 +100,7 @@ function SortableSegmentRow({
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-2 rounded border border-input-border bg-input-bg px-2 py-1"
+      className="flex flex-wrap items-center gap-2 rounded border border-input-border bg-input-bg px-2 py-1"
     >
       <span
         className="flex shrink-0 cursor-grab active:cursor-grabbing items-center justify-center text-description-fg hover:text-foreground"
@@ -144,7 +144,11 @@ function SortableSegmentRow({
         />
       )}
       <div
-        className="flex shrink-0 items-center gap-0.5"
+        // order-1 (mobile) drops this below the remove button onto its own
+        // full-width line so the field name/input has room to breathe on
+        // narrow screens; order-none + w-auto restores the original inline
+        // layout from the sm breakpoint up.
+        className="order-1 sm:order-none flex w-full sm:w-auto shrink-0 items-center justify-center gap-1 pt-1 sm:justify-start sm:gap-0.5 sm:pt-0"
         role="group"
         aria-label={`Color for segment ${index + 1}`}
       >
@@ -156,9 +160,9 @@ function SortableSegmentRow({
             aria-label={`${colorLabel(color)} color for segment ${index + 1}`}
             aria-pressed={(segment.color ?? "default") === color}
             title={colorLabel(color)}
-            className={`h-4 w-4 rounded-full border ${
+            className={`h-4 w-4 rounded-full border transition-transform ${
               (segment.color ?? "default") === color
-                ? "border-focus-border ring-1 ring-focus-border"
+                ? "scale-125 border-2 border-focus-border ring-2 ring-focus-border ring-offset-2 ring-offset-input-bg"
                 : "border-input-border"
             }`}
             style={{ backgroundColor: STATUS_LINE_COLOR_SWATCHES[color] }}
