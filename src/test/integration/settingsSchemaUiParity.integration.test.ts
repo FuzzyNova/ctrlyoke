@@ -165,6 +165,16 @@ function settingPathConstants(): Map<string, string> {
  * rather than silently masking future gaps in the same setting.
  */
 const PENDING_UI_PARITY: readonly string[] = [
+  // Copilot/Qwen statusline controls are intentionally deferred to Phase 7 of
+  // STATUS_LINE_COPILOT_QWEN_PLAN.md.
+  "permissions.statusLineTracking.copilot.customCommand",
+  "permissions.statusLineTracking.copilot.enabled",
+  "permissions.statusLineTracking.copilot.format",
+  "permissions.statusLineTracking.copilot.useCtrlyokeStyle",
+  "permissions.statusLineTracking.qwen.customCommand",
+  "permissions.statusLineTracking.qwen.enabled",
+  "permissions.statusLineTracking.qwen.format",
+  "permissions.statusLineTracking.qwen.useCtrlyokeStyle",
   "server.standalonePort",
   "server.theme",
 ];

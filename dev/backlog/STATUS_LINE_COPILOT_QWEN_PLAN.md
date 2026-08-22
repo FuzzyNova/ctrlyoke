@@ -565,7 +565,7 @@ divergences (Decision 4's Copilot-specific displayed limit and Decision 4a's Qwe
    above). Does not touch `STATUS_LINE_HARNESS_IDS` (webview) — that's Phase 7, so no UI is
    exposed for a provider with no backend yet. Expect `settingsSchemaUiParity` to go red for the
    two new leaf paths until Phase 7 lands; that's expected, not a regression to chase early.
-2. **`SettingsJsonMcpTracker` path + veto generalization** (Decision 3, plus Decision 8's
+2. **Complete — `SettingsJsonMcpTracker` path + veto generalization** (Decision 3, plus Decision 8's
    `capture`-callback veto plumbing bundled in since both are one-time signature changes to the
    same two methods) — the one piece of shared machinery that needs real new capability, not just
    new entries in existing maps. Land this before Phase 3 since Qwen's provider install/uninstall

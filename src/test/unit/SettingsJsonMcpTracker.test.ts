@@ -84,6 +84,96 @@ suite("SettingsJsonMcpTracker", () => {
     );
   });
 
+  test("installs and uninstalls a persistent value at a dotted path", async () => {
+    await fs.mkdir(settingsDir, { recursive: true });
+    const installedValue = {
+      type: "command",
+      command: "node ctrlyoke-statusline.js",
+    };
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({ theme: "dark", ui: { sidebar: "visible" } })
+    );
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+
+    const result = await tracker.installPersistentValue(
+      tmpDir,
+      "ui.statusLine",
+      installedValue
+    );
+
+    assert.strictEqual(result.kind, "written");
+    assert.strictEqual(result.hadKey, false);
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")),
+      {
+        theme: "dark",
+        ui: { sidebar: "visible", statusLine: installedValue },
+      }
+    );
+
+    await tracker.uninstallPersistentValue(tmpDir, "ui.statusLine", {
+      action: "delete",
+    });
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")),
+      { theme: "dark", ui: { sidebar: "visible" } }
+    );
+  });
+
+  test("creates missing intermediate objects for a dotted path", async () => {
+    await fs.mkdir(settingsDir, { recursive: true });
+    const installedValue = { type: "command", command: "node statusline.js" };
+    await fs.writeFile(settingsPath, JSON.stringify({ theme: "dark" }));
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+
+    await tracker.installPersistentValue(
+      tmpDir,
+      "ui.statusLine.command",
+      installedValue.command
+    );
+
+    assert.deepStrictEqual(
+      JSON.parse(await fs.readFile(settingsPath, "utf-8")),
+      { theme: "dark", ui: { statusLine: { command: installedValue.command } } }
+    );
+  });
+
+  test("declines a persistent install without writing after capture", async () => {
+    await fs.mkdir(settingsDir, { recursive: true });
+    const preexistingValue = { type: "preset", items: ["git-branch"] };
+    const installedValue = {
+      type: "command",
+      command: "node ctrlyoke-statusline.js",
+    };
+    const originalContents = JSON.stringify(
+      { theme: "dark", ui: { statusLine: preexistingValue } },
+      null,
+      2
+    );
+    await fs.writeFile(settingsPath, originalContents);
+    const tracker = SettingsJsonMcpTracker.getInstance("qwen");
+
+    const result = await tracker.installPersistentValue(
+      tmpDir,
+      "ui.statusLine",
+      installedValue,
+      (capturedValue, hadKey) => {
+        assert.deepStrictEqual(capturedValue, preexistingValue);
+        assert.strictEqual(hadKey, true);
+        return { proceed: false };
+      }
+    );
+
+    assert.strictEqual(result.kind, "declined");
+    assert.deepStrictEqual(result.preexistingValue, preexistingValue);
+    assert.strictEqual(result.hadKey, true);
+    assert.strictEqual(
+      await fs.readFile(settingsPath, "utf-8"),
+      originalContents
+    );
+  });
+
   test("does not install when capture persistence fails", async () => {
     await fs.mkdir(settingsDir, { recursive: true });
     const preexistingValue = {
