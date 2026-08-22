@@ -23,7 +23,7 @@ function renderEditor(format: StatusLineSegment[]) {
 }
 
 describe("StatusLineFormatEditor", () => {
-  it("includes a field through the registry checkbox and removes it via the delete button", async () => {
+  it("includes a field through the registry button and removes it via the delete button", async () => {
     const user = userEvent.setup();
     const onCommit = renderEditor([
       { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
@@ -36,7 +36,7 @@ describe("StatusLineFormatEditor", () => {
     expect(onCommit).toHaveBeenCalledTimes(1);
 
     await user.click(
-      screen.getByRole("checkbox", { name: "Include CLI version" })
+      screen.getByRole("button", { name: "Include CLI version" })
     );
     expect(onCommit).toHaveBeenLastCalledWith([
       { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },

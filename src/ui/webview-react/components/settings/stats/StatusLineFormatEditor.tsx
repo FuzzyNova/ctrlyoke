@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ActionButton } from "@components/shared/ActionButton";
 import { Button } from "@components/shared/Button";
 import { LocalTextInput } from "@components/shared/LocalInputs";
 import {
@@ -444,24 +445,18 @@ export function StatusLineFormatEditor({
       {STATUS_LINE_FIELD_LIST.some((field) => !includedFields.has(field)) && (
         <div className="border-t border-panel-border pt-2">
           <p className="text-xs text-description-fg mb-1">Available fields</p>
-          <div className="flex flex-wrap gap-x-3 gap-y-1">
+          <div className="flex flex-wrap gap-2">
             {STATUS_LINE_FIELD_LIST.filter(
               (field) => !includedFields.has(field)
             ).map((field) => (
-              <label
+              <ActionButton
                 key={field}
-                className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer"
+                label={fieldLabel(field)}
+                icon="add"
+                onClick={() => includeField(field)}
                 title={STATUS_LINE_FIELD_REGISTRY[field].description}
-              >
-                <input
-                  type="checkbox"
-                  checked={false}
-                  onChange={() => includeField(field)}
-                  aria-label={`Include ${fieldLabel(field)}`}
-                  className="w-3.5 h-3.5 accent-focus-border cursor-pointer shrink-0"
-                />
-                <span>{fieldLabel(field)}</span>
-              </label>
+                ariaLabel={`Include ${fieldLabel(field)}`}
+              />
             ))}
           </div>
         </div>
