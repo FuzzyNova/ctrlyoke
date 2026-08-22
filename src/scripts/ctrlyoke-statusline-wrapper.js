@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Shared implementation for the Claude and Antigravity statusline wrappers.
+ * Shared implementation for the supported statusline wrappers.
  *
  * These scripts run as detached CommonJS Node processes, so this module must
  * remain standalone and depend only on Node built-ins.
@@ -18,7 +18,7 @@ const {
   formatBrandedStatusLine: formatSharedBrandedStatusLine,
 } = require("./ctrlyoke-statusline-format.js");
 
-// Both harnesses refresh their statusline frequently. Keep forwarding below
+// Supported harnesses refresh their statusline frequently. Keep forwarding below
 // the documented ~300 ms Antigravity poll cadence for a consistent contract.
 const FORWARD_TIMEOUT_MS = 200;
 const ANSI_RESET = "\u001b[0m";
@@ -27,6 +27,8 @@ const DEFAULT_PERCENT_DIRECTION = "used";
 const STATUSLINE_PROVIDERS = Object.freeze({
   CLAUDE: "claude",
   ANTIGRAVITY: "antigravity",
+  COPILOT: "copilot",
+  QWEN: "qwen",
 });
 
 const DEFAULT_STATUSLINE_SETTINGS = Object.freeze({

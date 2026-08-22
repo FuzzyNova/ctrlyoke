@@ -1,6 +1,6 @@
 # Status Line Copilot & Qwen Support Plan
 
-> **Status:** Phase 4 complete; Phases 5-7 remain. Research completed 2026-08-22, including live, empirical probes
+> **Status:** Phases 4-5 complete; Phases 6-7 remain. Research completed 2026-08-22, including live, empirical probes
 > of GitHub Copilot CLI's and Qwen Code's real statusline payloads on this machine (not just
 > documentation).
 > Re-verified against the codebase 2026-08-22 after `STATUS_LINE_SHARED_FORMAT_TOGGLE_PLAN.md`
@@ -580,10 +580,12 @@ divergences (Decision 4's Copilot-specific displayed limit and Decision 4a's Qwe
    already-isomorphic-module changes per the existing Decision 11 build (no new build-dependency
    work needed, that spike already shipped). Include the wrapper fixture tests for these
    extractors (Wrapper Test Coverage above) in this same phase, alongside the behavior they cover.
-5. **New wrapper entry scripts**: `ctrlyoke-copilot-statusline.js`, `ctrlyoke-qwen-statusline.js`
+5. **Complete — new wrapper entry scripts**: `ctrlyoke-copilot-statusline.js`, `ctrlyoke-qwen-statusline.js`
    (Decision 9), extending the third `STATUSLINE_PROVIDERS` union (Plan currency note) to four,
-   verified against the `copy-scripts` esbuild plugin the same way the original two were. Include
-   the remaining wrapper fixture tests (settings resolution, malformed-input tolerance) here.
+   verified against the `copy-scripts` esbuild plugin the same way the original two were. The
+   wrappers reuse the shared 200ms forwarding timeout and are ready for the later provider
+   installation wiring to set each CLI's minimum `refreshInterval: 1`. Included the remaining
+   wrapper fixture tests (settings resolution, malformed-input tolerance).
 6. **Preset-collision skip-and-disable behavior** (Decision 8): use the Phase 2 `capture` callback
    veto in `SettingsJsonMcpTracker.installPersistentValue`, `StatuslineManager`'s detection/
    `enabled:false` write, and its one-time notification wording; plus the Copilot/Qwen provider
