@@ -31,6 +31,7 @@ import type { OutputHistoryManager } from "../../core/orchestration/OutputHistor
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { ExecutionLeaseConflictError } from "../../core/orchestration/ExecutionRootLeaseManager";
 import { configService } from "../../config/CtrlYokeConfigService";
+import { secretGrantsTrustStore } from "../../config/SecretGrantsTrustStore";
 
 /** Test-only shim mirroring OutputHistoryManager.test.ts's initTestRun helper. */
 async function initTestRun(
@@ -1991,6 +1992,8 @@ suite("WorkflowInstance append-and-continue", () => {
     (instance as any).computeTargetRunIndices = async () => new Map();
     (instance as any).startWorkflowExecution = async () => {};
 
+    const originalGetDecision = secretGrantsTrustStore.getDecision;
+    secretGrantsTrustStore.getDecision = () => "allow";
     try {
       configService.setCliOverlay({
         execution: {
@@ -2004,6 +2007,7 @@ suite("WorkflowInstance append-and-continue", () => {
         true
       );
     } finally {
+      secretGrantsTrustStore.getDecision = originalGetDecision;
       configService.setCliOverlay({});
     }
 

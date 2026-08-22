@@ -202,7 +202,7 @@ stop. That trains rubber-stamping.
 
    Implement this as the following concrete plan:
 
-   1. **Compute the workflow-wide request once, from the existing authoritative
+   1. **Implemented (2026-08-22) — compute the workflow-wide request once, from the existing authoritative
       per-step resolver.** Add
       `getWorkflowSecretGrants(workflow: PromptFile): string[]` to
       `src/utils/SecretResolver.ts`, alongside `getDeclaredSecretGrants`.
@@ -214,7 +214,7 @@ stop. That trains rubber-stamping.
       process map. Do not scan `${secret:NAME}` in prompt prose: prompt text is
       not a resolution boundary.
 
-   2. **Add a separate user-local trust store.** Create
+   2. **Implemented (2026-08-22) — add a separate user-local trust store.** Create
       `src/config/SecretGrantsTrustStore.ts` with the same platform-agnostic
       shape as `ExternalRootsTrustStore`:
       `SecretGrantTrustDecision = "allow" | "deny"`,
@@ -230,7 +230,7 @@ stop. That trains rubber-stamping.
       `CtrlYokeConfigService`: approval is local trust state, not a setting, and
       a checked-in workflow must never be able to write its own approval.
 
-   3. **Keep the shared resolver platform-agnostic, but make trust fail closed
+   3. **Implemented (2026-08-22) — keep the shared resolver platform-agnostic, but make trust fail closed
       at the core boundary.** Add an optional constructor callback to
       `src/core/WorkflowInstance.ts`, for example
       `approveSecretGrants?: (workflow: PromptFile, workspaceRoot: string) =>
@@ -292,7 +292,7 @@ stop. That trains rubber-stamping.
       `src/cli/SecretCommands.ts`, using the existing
       `SecretCommandDependencies`/`SecretCommandIo` contracts.
 
-   6. **Scope the decision by workspace and name, not by workflow file or
+   6. **Implemented (2026-08-22) — scope the decision by workspace and name, not by workflow file or
       content hash.** Use the exact `${workspaceIdentity}␟${secretName}` key:
       secret names are identifiers, not secret values, and the approval is a
       local user's trust decision for that workspace. This matches the external

@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Command } from "commander";
 import { configService } from "../../config/CtrlYokeConfigService";
+import { secretGrantsTrustStore } from "../../config/SecretGrantsTrustStore";
 import { suite, test } from "mocha";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import type { SecretStore } from "../../platform/SecretStore";
@@ -274,16 +275,30 @@ suite("Secret command handlers", () => {
 
   test("returns success for resolvable workflows and non-zero for missing names with scope", async () => {
     const resolvableIo = new TestIo();
-    const resolvable = await checkSecretsCommand(
-      "workflow.ctrlyoke.yaml",
-      {},
-      workflowDependencies(
-        new InMemorySecretStore(),
-        { steps: [{ name: "deploy", prompt: "Use !CI_TOKEN" }] },
-        { CI_TOKEN: "from-ci" }
-      ),
-      resolvableIo
-    );
+    const originalGetDecision = secretGrantsTrustStore.getDecision;
+    secretGrantsTrustStore.getDecision = (_workspaceIdentity, name) =>
+      name === "CI_TOKEN"
+        ? "allow"
+        : originalGetDecision.call(
+            secretGrantsTrustStore,
+            _workspaceIdentity,
+            name
+          );
+    let resolvable: number;
+    try {
+      resolvable = await checkSecretsCommand(
+        "workflow.ctrlyoke.yaml",
+        {},
+        workflowDependencies(
+          new InMemorySecretStore(),
+          { steps: [{ name: "deploy", prompt: "Use !CI_TOKEN" }] },
+          { CI_TOKEN: "from-ci" }
+        ),
+        resolvableIo
+      );
+    } finally {
+      secretGrantsTrustStore.getDecision = originalGetDecision;
+    }
     assert.strictEqual(resolvable, 0);
     assert.deepStrictEqual(resolvableIo.errors, []);
 
