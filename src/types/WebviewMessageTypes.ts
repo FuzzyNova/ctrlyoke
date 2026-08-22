@@ -1441,6 +1441,12 @@ export interface DisableStatusLineTrackingMessage {
   restoreCustomCommand: boolean;
 }
 
+/** Webview → Extension: set the shared/per-harness statusline format mode. */
+export interface SetStatusLineFormatModeMessage {
+  type: typeof MESSAGE_TYPES.SET_STATUS_LINE_FORMAT_MODE;
+  useDifferentFormatPerHarness: boolean;
+}
+
 /** Webview → Extension: generate a self-signed server cert for the active scope */
 export interface GenerateServerCertMessage {
   type: typeof MESSAGE_TYPES.GENERATE_SERVER_CERT;

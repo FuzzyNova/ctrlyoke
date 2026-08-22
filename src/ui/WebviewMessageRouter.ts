@@ -55,6 +55,7 @@ import type {
   OpenHarnessDirMessage,
   ShowNativeFeedbackMessage,
   DisableStatusLineTrackingMessage,
+  SetStatusLineFormatModeMessage,
   CreateEndConditionScriptMessage,
   RetryHarnessDetectionMessage,
   DeleteSecretMessage,
@@ -1563,6 +1564,18 @@ export class WebviewMessageRouter {
         );
       }
     );
+
+    table.set(MESSAGE_TYPES.SET_STATUS_LINE_FORMAT_MODE, async (message, ctx) => {
+      if (typeof message.useDifferentFormatPerHarness !== "boolean") {
+        Log.warn("Rejected unsupported statusline format mode request");
+        return;
+      }
+
+      await this.settingsSync.handleSetStatusLineFormatMode(
+        message as SetStatusLineFormatModeMessage,
+        ctx.postMessage
+      );
+    });
 
     const sendWorktreeManagementState = async (
       refresh: boolean,

@@ -1,7 +1,7 @@
 # Status Line Shared/Per-Harness Format Toggle Plan
 
-> **Status:** Step 1 of 5 landed (2026-08-22) — settings contract and shared helpers are complete;
-> remaining steps: (2) coordinated write path, (3) statusline wrapper resolution, (4)
+> **Status:** Step 2 of 5 landed (2026-08-22) — settings contract, shared helpers, and the
+> coordinated webview→extension write path are complete; remaining steps: (3) statusline wrapper resolution, (4)
 > `StatusLinePreview` extraction + editor props, and (5) `StatusLineSection` /
 > `StatusLineTrackingControls` wiring.
 > Each step updates this line as it lands. Motivated by upcoming Copilot and Qwen statusline support

@@ -16,6 +16,7 @@ import {
   PROMPT_PROPERTIES,
   WORKFLOW_PROPERTY_KEYS,
   WORKTREE_MODES,
+  STATUS_LINE_TRACKING_PROVIDERS,
   type HarnessId,
   type HarnessStatusString,
   type SettingWriteScope,
@@ -65,9 +66,11 @@ import { configService } from "../config/CtrlYokeConfigService";
 import type {
   DevStatus,
   DisableStatusLineTrackingMessage,
+  SetStatusLineFormatModeMessage,
   WorkflowDefinitionMutation,
 } from "../types/WebviewMessageTypes";
 import type { StatusLineTrackingSettings } from "../types/CtrlYokeSettings";
+import { isDefaultStatusLineFormat } from "../utils/StatuslineFormat";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
@@ -1154,6 +1157,73 @@ export class WebviewSettingsSync {
       },
       postMessage
     );
+  }
+
+  /** Set shared/per-harness statusline format mode and seed untouched formats when enabling per-harness mode. */
+  async handleSetStatusLineFormatMode(
+    request: SetStatusLineFormatModeMessage,
+    _postMessage: PostMessageFn = this.postMessage
+  ): Promise<void> {
+    if (typeof request?.useDifferentFormatPerHarness !== "boolean") {
+      this.reportStatuslineFailure(
+        "Unsupported statusline format mode request."
+      );
+      return;
+    }
+
+    let wasUsingDifferentFormatPerHarness: boolean;
+    try {
+      wasUsingDifferentFormatPerHarness =
+        ConfigurationUtils.isUseDifferentFormatPerHarness();
+    } catch (error) {
+      this.reportStatuslineFailure(
+        "Could not read statusline format mode.",
+        error
+      );
+      return;
+    }
+
+    try {
+      await ConfigurationUtils.setUseDifferentFormatPerHarness(
+        request.useDifferentFormatPerHarness
+      );
+    } catch (error) {
+      this.reportStatuslineFailure(
+        "Could not update statusline format mode.",
+        error
+      );
+      return;
+    }
+
+    if (
+      !request.useDifferentFormatPerHarness ||
+      wasUsingDifferentFormatPerHarness
+    ) {
+      return;
+    }
+
+    try {
+      const sharedFormat = ConfigurationUtils.getSharedStatusLineFormat();
+      for (const provider of Object.values(STATUS_LINE_TRACKING_PROVIDERS)) {
+        const currentSettings =
+          ConfigurationUtils.getStatusLineTrackingSettings(provider);
+        if (!isDefaultStatusLineFormat(currentSettings.format)) {
+          continue;
+        }
+
+        await ConfigurationUtils.setStatusLineTrackingSettings(provider, {
+          ...currentSettings,
+          format: sharedFormat.map((segment) => ({
+            ...segment,
+          })),
+        });
+      }
+    } catch (error) {
+      this.reportStatuslineFailure(
+        "Statusline format mode was enabled, but default formats could not be seeded.",
+        error
+      );
+    }
   }
 
   private reportStatuslineFailure(message: string, error?: unknown): void {

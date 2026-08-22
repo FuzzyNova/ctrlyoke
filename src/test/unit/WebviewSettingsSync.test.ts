@@ -10,14 +10,19 @@ import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
 import {
   MESSAGE_TYPES,
   HARNESS_IDS,
+  STATUS_LINE_TRACKING_PROVIDERS,
   PROMPT_PROPERTIES,
   PERMISSION_MODES,
   PANEL_CLIENT_ID,
   type SettingWriteScope,
+  type StatusLineTrackingProvider,
   type StatusLineTrackingHarnessId,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
-import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  CONFIG_KEYS,
+} from "../../utils/ConfigurationUtils";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 import type { StatusLineTrackingSettings } from "../../types/CtrlYokeSettings";
 import { DEFAULT_STATUS_LINE_FORMAT } from "../../utils/StatuslineFormat";
@@ -354,6 +359,190 @@ suite("WebviewSettingsSync", () => {
       assert.deepStrictEqual(writes, []);
       assert.strictEqual(manager.uninstallCalls.length, 0);
       assert.strictEqual(feedback.length, 1);
+    });
+  });
+
+  suite("statusline format mode", () => {
+    test("seeds only default provider formats when enabling per-harness mode", async () => {
+      const sharedFormat = DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({
+        ...segment,
+      }));
+      sharedFormat[0] = { type: "literal", text: "shared" };
+      const customizedFormat = DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({
+        ...segment,
+      }));
+      customizedFormat[0] = { type: "literal", text: "customized" };
+      const providerSettings = {
+        [STATUS_LINE_TRACKING_PROVIDERS.CLAUDE]: {
+          enabled: true,
+          customCommand: "",
+          useCtrlyokeStyle: true,
+          format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
+        },
+        [STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY]: {
+          enabled: true,
+          customCommand: "",
+          useCtrlyokeStyle: true,
+          format: customizedFormat,
+        },
+      };
+      const modeWrites: boolean[] = [];
+      const providerWrites: Array<{
+        provider: StatusLineTrackingProvider;
+        format: StatusLineTrackingSettings["format"];
+      }> = [];
+      const originals = {
+        isUseDifferentFormatPerHarness:
+          ConfigurationUtils.isUseDifferentFormatPerHarness,
+        getSharedStatusLineFormat: ConfigurationUtils.getSharedStatusLineFormat,
+        getStatusLineTrackingSettings:
+          ConfigurationUtils.getStatusLineTrackingSettings,
+        setUseDifferentFormatPerHarness:
+          ConfigurationUtils.setUseDifferentFormatPerHarness,
+        setStatusLineTrackingSettings:
+          ConfigurationUtils.setStatusLineTrackingSettings,
+      };
+
+      try {
+        ConfigurationUtils.isUseDifferentFormatPerHarness = () => false;
+        ConfigurationUtils.getSharedStatusLineFormat = () => sharedFormat;
+        ConfigurationUtils.getStatusLineTrackingSettings = (provider) =>
+          providerSettings[provider];
+        ConfigurationUtils.setUseDifferentFormatPerHarness = async (value) => {
+          modeWrites.push(value);
+        };
+        ConfigurationUtils.setStatusLineTrackingSettings = async (
+          provider,
+          settings
+        ) => {
+          providerWrites.push({ provider, format: settings.format });
+        };
+
+        const sync = new WebviewSettingsSync(() => {}, () => undefined);
+        await sync.handleSetStatusLineFormatMode({
+          type: MESSAGE_TYPES.SET_STATUS_LINE_FORMAT_MODE,
+          useDifferentFormatPerHarness: true,
+        });
+      } finally {
+        Object.assign(ConfigurationUtils, originals);
+      }
+
+      assert.deepStrictEqual(modeWrites, [true]);
+      assert.deepStrictEqual(
+        providerWrites.map(({ provider }) => provider),
+        [STATUS_LINE_TRACKING_PROVIDERS.CLAUDE]
+      );
+      assert.deepStrictEqual(providerWrites[0].format, sharedFormat);
+      assert.strictEqual(
+        JSON.stringify(providerSettings[STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY].format),
+        JSON.stringify(customizedFormat)
+      );
+    });
+
+    test("gives each seeded provider its own shared-format array", async () => {
+      const sharedFormat = DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({
+        ...segment,
+      }));
+      const providerWrites: StatusLineTrackingSettings["format"][] = [];
+      const originals = {
+        isUseDifferentFormatPerHarness:
+          ConfigurationUtils.isUseDifferentFormatPerHarness,
+        getSharedStatusLineFormat: ConfigurationUtils.getSharedStatusLineFormat,
+        getStatusLineTrackingSettings:
+          ConfigurationUtils.getStatusLineTrackingSettings,
+        setUseDifferentFormatPerHarness:
+          ConfigurationUtils.setUseDifferentFormatPerHarness,
+        setStatusLineTrackingSettings:
+          ConfigurationUtils.setStatusLineTrackingSettings,
+      };
+
+      try {
+        ConfigurationUtils.isUseDifferentFormatPerHarness = () => false;
+        ConfigurationUtils.getSharedStatusLineFormat = () => sharedFormat;
+        ConfigurationUtils.getStatusLineTrackingSettings = () => ({
+          enabled: true,
+          customCommand: "",
+          useCtrlyokeStyle: true,
+          format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
+        });
+        ConfigurationUtils.setUseDifferentFormatPerHarness = async () => {};
+        ConfigurationUtils.setStatusLineTrackingSettings = async (
+          _provider,
+          settings
+        ) => {
+          providerWrites.push(settings.format);
+        };
+
+        const sync = new WebviewSettingsSync(() => {}, () => undefined);
+        await sync.handleSetStatusLineFormatMode({
+          type: MESSAGE_TYPES.SET_STATUS_LINE_FORMAT_MODE,
+          useDifferentFormatPerHarness: true,
+        });
+      } finally {
+        Object.assign(ConfigurationUtils, originals);
+      }
+
+      assert.strictEqual(providerWrites.length, 2);
+      assert.notStrictEqual(providerWrites[0], providerWrites[1]);
+      assert.notStrictEqual(providerWrites[0], sharedFormat);
+      assert.notStrictEqual(providerWrites[1], sharedFormat);
+    });
+
+    test("writes only the boolean when returning to shared mode", async () => {
+      const writes: boolean[] = [];
+      const originals = {
+        isUseDifferentFormatPerHarness:
+          ConfigurationUtils.isUseDifferentFormatPerHarness,
+        getSharedStatusLineFormat: ConfigurationUtils.getSharedStatusLineFormat,
+        getStatusLineTrackingSettings:
+          ConfigurationUtils.getStatusLineTrackingSettings,
+        setUseDifferentFormatPerHarness:
+          ConfigurationUtils.setUseDifferentFormatPerHarness,
+      };
+
+      try {
+        ConfigurationUtils.isUseDifferentFormatPerHarness = () => true;
+        ConfigurationUtils.getSharedStatusLineFormat = () => {
+          throw new Error("shared format should not be read");
+        };
+        ConfigurationUtils.getStatusLineTrackingSettings = () => {
+          throw new Error("provider settings should not be read");
+        };
+        ConfigurationUtils.setUseDifferentFormatPerHarness = async (value) => {
+          writes.push(value);
+        };
+
+        const sync = new WebviewSettingsSync(() => {}, () => undefined);
+        await sync.handleSetStatusLineFormatMode({
+          type: MESSAGE_TYPES.SET_STATUS_LINE_FORMAT_MODE,
+          useDifferentFormatPerHarness: false,
+        });
+      } finally {
+        Object.assign(ConfigurationUtils, originals);
+      }
+
+      assert.deepStrictEqual(writes, [false]);
+    });
+
+    test("rejects a non-boolean payload without writing", async () => {
+      let writes = 0;
+      const originalSet = ConfigurationUtils.setUseDifferentFormatPerHarness;
+
+      try {
+        ConfigurationUtils.setUseDifferentFormatPerHarness = async () => {
+          writes++;
+        };
+
+        const sync = new WebviewSettingsSync(() => {}, () => undefined);
+        await sync.handleSetStatusLineFormatMode({
+          type: MESSAGE_TYPES.SET_STATUS_LINE_FORMAT_MODE,
+          useDifferentFormatPerHarness: "true",
+        } as any);
+      } finally {
+        ConfigurationUtils.setUseDifferentFormatPerHarness = originalSet;
+      }
+
+      assert.strictEqual(writes, 0);
     });
   });
 
