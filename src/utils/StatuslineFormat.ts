@@ -315,6 +315,21 @@ function safeLabel(value: unknown, fallback: string): string {
     : fallback;
 }
 
+/** Resolve the workspace directory represented by a provider statusline payload. */
+export function getStatusLineWorkspaceDirectory(
+  payload: unknown
+): string | undefined {
+  if (!isRecord(payload)) return undefined;
+  if (typeof payload.cwd === "string" && payload.cwd.length > 0) {
+    return payload.cwd;
+  }
+  const workspace = isRecord(payload.workspace) ? payload.workspace : {};
+  return typeof workspace.current_dir === "string" &&
+    workspace.current_dir.length > 0
+    ? workspace.current_dir
+    : undefined;
+}
+
 function compactTokenCount(value: unknown): string {
   const number = finiteNumber(value) ?? 0;
   const absolute = Math.abs(number);
@@ -327,13 +342,30 @@ function compactTokenCount(value: unknown): string {
   return `${Math.round(number)}`;
 }
 
-function contextValues(payload: Record<string, unknown>): {
+function contextValues(
+  payload: Record<string, unknown>,
+  provider: StatusLineFormatProvider
+): {
   used: number;
   size: number;
 } {
   const contextWindow = isRecord(payload.context_window)
     ? payload.context_window
     : {};
+  const size = finiteNumber(contextWindow.context_window_size);
+  if (provider === STATUS_LINE_FORMAT_PROVIDERS.COPILOT) {
+    const used = finiteNumber(contextWindow.current_context_tokens);
+    const displayedSize = finiteNumber(contextWindow.displayed_context_limit);
+    if (used !== undefined && displayedSize !== undefined) {
+      return { used, size: displayedSize };
+    }
+  }
+  if (provider === STATUS_LINE_FORMAT_PROVIDERS.QWEN) {
+    const used = finiteNumber(contextWindow.current_usage);
+    if (used !== undefined && size !== undefined) {
+      return { used, size };
+    }
+  }
   const currentUsage = isRecord(contextWindow.current_usage)
     ? contextWindow.current_usage
     : {};
@@ -347,7 +379,7 @@ function contextValues(payload: Record<string, unknown>): {
     0;
   return {
     used: input + output,
-    size: finiteNumber(contextWindow.context_window_size) ?? 0,
+    size: size ?? 0,
   };
 }
 
@@ -374,10 +406,7 @@ function quotaPercentage(
   payload: Record<string, unknown>,
   provider: StatusLineFormatProvider
 ): number | undefined {
-  const source =
-    provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE
-      ? payload.rate_limits
-      : payload.quota;
+  const source = quotaSource(payload, provider);
   if (!isRecord(source)) return undefined;
 
   const percentages = Object.values(source)
@@ -403,10 +432,7 @@ function usageWindows(
   payload: Record<string, unknown>,
   provider: StatusLineFormatProvider
 ): Array<{ id?: string; label: string; usedPercentage: number } | undefined> {
-  const source =
-    provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE
-      ? payload.rate_limits
-      : payload.quota;
+  const source = quotaSource(payload, provider);
   if (!isRecord(source)) return [];
 
   if (provider === STATUS_LINE_FORMAT_PROVIDERS.CLAUDE) {
@@ -446,6 +472,21 @@ function usageWindows(
           quotaWindowKindRank(right.id ?? "") ||
         (left.id ?? "").localeCompare(right.id ?? "")
     );
+}
+
+function quotaSource(
+  payload: Record<string, unknown>,
+  provider: StatusLineFormatProvider
+): unknown {
+  switch (provider) {
+    case STATUS_LINE_FORMAT_PROVIDERS.CLAUDE:
+      return payload.rate_limits;
+    case STATUS_LINE_FORMAT_PROVIDERS.ANTIGRAVITY:
+      return payload.quota;
+    case STATUS_LINE_FORMAT_PROVIDERS.COPILOT:
+    case STATUS_LINE_FORMAT_PROVIDERS.QWEN:
+      return undefined;
+  }
 }
 
 function basename(value: string): string {
@@ -530,7 +571,7 @@ export function formatBrandedStatusLine(
 ): string {
   try {
     const normalized = isRecord(payload) ? payload : {};
-    const { used, size } = contextValues(normalized);
+    const { used, size } = contextValues(normalized, provider);
     const percentage = contextPercentage(used, size);
     const band = contextBand(percentage);
     const segments: readonly StatusLineSegment[] =
@@ -597,12 +638,10 @@ export function formatBrandedStatusLine(
             text = safeLabel(normalized.version, "—");
             break;
           case STATUS_LINE_FIELD_IDS.CWD:
-            text = safeLabel(
-              typeof normalized.cwd === "string"
-                ? basename(normalized.cwd)
-                : undefined,
-              "—"
-            );
+            {
+              const cwd = getStatusLineWorkspaceDirectory(normalized);
+              text = safeLabel(cwd ? basename(cwd) : undefined, "—");
+            }
             break;
           case STATUS_LINE_FIELD_IDS.SESSION_ID:
             text = safeLabel(normalized.session_id, "—").slice(0, 8);

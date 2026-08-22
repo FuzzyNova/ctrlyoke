@@ -346,6 +346,101 @@ suite("Shared statusline wrappers", () => {
     }
   });
 
+  test("uses each new provider's user-facing context values", () => {
+    const context = [{ type: "field", field: "context" }];
+    const copilotPayload = {
+      cwd: "C:\\dev\\ctrlyoke",
+      session_id: "fadbffd9-fb8e-4a6d-9048-2fcbbd09858b",
+      model: { id: "gpt-5.6-luna", display_name: "gpt-5.6-luna · high" },
+      workspace: { current_dir: "C:\\dev\\ctrlyoke" },
+      context_window: {
+        total_input_tokens: 25_953,
+        total_output_tokens: 17,
+        context_window_size: 1_050_000,
+        used_percentage: 0,
+        current_context_tokens: 26_159,
+        displayed_context_limit: 328_000,
+        current_context_used_percentage: 8,
+      },
+    };
+    const copilotLine = shared.formatBrandedStatusLine(
+      "copilot",
+      copilotPayload,
+      context
+    );
+    assert.match(copilotLine, /26\.2k\/328\.0k ctx \(8%\)/);
+    assert.doesNotMatch(copilotLine, /\(0%\)/);
+
+    const qwenPayload = {
+      session_id: "43a8bb4c-f013-447e-9e23-c70e071fc16e",
+      version: "0.21.15",
+      model: { display_name: "[ModelStudio Standard] qwen3.5-plus" },
+      context_window: {
+        context_window_size: 1_000_000,
+        used_percentage: 4.3,
+        remaining_percentage: 95.7,
+        current_usage: 42_735,
+        total_input_tokens: 77_327,
+        total_output_tokens: 691,
+      },
+      workspace: { current_dir: tempDirectory },
+      git: { branch: "small-feature" },
+    };
+    const qwenLine = shared.formatBrandedStatusLine("qwen", qwenPayload, context);
+    assert.match(qwenLine, /42\.7k\/1\.0M ctx \(4\.3%\)/);
+    assert.doesNotMatch(qwenLine, /\(7\.8%\)/);
+  });
+
+  test("uses the cwd fallback for directory rendering and branch lookup", async () => {
+    tempDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-statusline-cwd-fallback-")
+    );
+    await fs.mkdir(path.join(tempDirectory, ".git"));
+    await fs.writeFile(
+      path.join(tempDirectory, ".git", "HEAD"),
+      "ref: refs/heads/fallback-branch\n"
+    );
+
+    const format = [
+      { type: "field", field: "cwd" },
+      { type: "field", field: "branch" },
+    ];
+    for (const provider of ["copilot", "qwen"] as const) {
+      const line = shared.formatBrandedStatusLine(
+        provider,
+        { workspace: { current_dir: tempDirectory } },
+        format
+      );
+      assert.strictEqual(
+        line,
+        `${path.basename(tempDirectory)} fallback-branch`
+      );
+    }
+  });
+
+  test("renders new providers' unavailable usage fields as absent", () => {
+    for (const provider of ["copilot", "qwen"] as const) {
+      assert.strictEqual(
+        shared.formatBrandedStatusLine(provider, {}, [
+          { type: "field", field: "usage" },
+        ]),
+        "quota —"
+      );
+      assert.strictEqual(
+        shared.formatBrandedStatusLine(provider, {}, [
+          { type: "field", field: "usage1" },
+        ]),
+        ""
+      );
+      assert.strictEqual(
+        shared.formatBrandedStatusLine(provider, {}, [
+          { type: "field", field: "usage2" },
+        ]),
+        ""
+      );
+    }
+  });
+
   test("renders usage percentages in either direction while keeping used values canonical", () => {
     const formats = [{ type: "field", field: "usage" }];
     const payloads = [

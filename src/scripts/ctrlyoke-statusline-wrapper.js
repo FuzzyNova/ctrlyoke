@@ -13,6 +13,7 @@ const path = require("path");
 const { spawn } = require("child_process");
 const {
   DEFAULT_STATUS_LINE_FORMAT,
+  getStatusLineWorkspaceDirectory,
   formatUsagePercentForDisplay,
   formatBrandedStatusLine: formatSharedBrandedStatusLine,
 } = require("./ctrlyoke-statusline-format.js");
@@ -115,7 +116,9 @@ function resolveStatusLineSettings(
   const workspaceSettings =
     typeof context.workspaceRoot === "string"
       ? readWorkspaceSettings(context.workspaceRoot)
-      : findWorkspaceSettingsFromCwd(context.payload?.cwd);
+      : findWorkspaceSettingsFromCwd(
+          getStatusLineWorkspaceDirectory(context.payload)
+        );
   const settings = userSettings;
   const permissions = settings.permissions;
   const tracking =
@@ -434,7 +437,7 @@ function getGitHeadPath(currentDirectory) {
 
 function getBranchName(payload) {
   try {
-    const headPath = getGitHeadPath(normalizePayload(payload).cwd);
+    const headPath = getGitHeadPath(getStatusLineWorkspaceDirectory(payload));
     if (!headPath) {
       return undefined;
     }
