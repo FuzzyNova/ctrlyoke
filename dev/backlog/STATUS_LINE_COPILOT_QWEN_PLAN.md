@@ -216,7 +216,7 @@ capture" also means `useCtrlyokeStyle` defaults to `true` — i.e. ctrlyoke's fi
 ctrlyoke's branded line, with no distinct signal beyond the generic "showing its own statusline
 now" install notification that a brand-new, never-configured user also gets. That's a materially
 different situation (an existing, working, non-forwardable configuration being overwritten,
-rather than empty space being filled) and deserves its own notification wording — see Decisions.
+rather than empty space being filled) — decided not to auto-replace it at all; see Decision 8.
 
 **JSON payload structure** (per docs, not independently reproduced):
 - `session_id`, `version`, `model.display_name` (**no `model.id`** documented for Qwen — the
@@ -328,18 +328,41 @@ extractor or an accepted "structurally always empty for these two" outcome:
    it immediately), not a hidden one. This is the same class of deliberate, called-out trade-off
    the original plan made repeatedly rather than adding a special case; revisit only if real user
    feedback says the dash reads as broken rather than "nothing to show here."
-8. **Qwen's `type: "preset"` collision gets its own install-notification branch, not silent
-   overwrite.** `StatuslineManager.install`'s capture logic already treats a preset config as
-   "nothing to capture" (Decision above), which is correct — there is no forwardable command.
-   What needs to change is the **notification wording** fired by
-   `notifyUserFeedback`/`CliIntegration` (`STATUSLINE_USER_CONTROLS_PLAN.md`'s "Install
-   Notification" design): today there are exactly two branches ("nothing captured" /
-   "existing script captured"). Add a third, Qwen-only-reachable branch — "an existing non-command
-   statusline was replaced" — detected by `hadKey && !extractCommand(...)` (a key existed, but it
-   wasn't a capturable command) rather than `!hadKey` alone. Wording:
-   _"ctrlyoke is now showing its own statusline for Qwen, replacing your existing preset-based
-   status line. Settings → Status Line to change this."_ — honest about what happened, unlike
-   reusing the "nothing captured" copy (which implies there was nothing there before).
+8. **Qwen's `type: "preset"` collision: don't auto-replace it — skip the write, disable tracking
+   for that harness, and let re-enabling be the opt-in.** Considered and rejected a general
+   pre-install consent dialog (would need new synchronous confirm plumbing, and would only cover
+   the VS Code host — CLI/MCP-server/hosted-webview would still write first regardless). This is a
+   narrower, purely mechanical fix that needs none of that:
+   - **Detection**: `hadKey === true` and `extractCommand(preexistingValue, hadKey) === undefined`
+     and the existing value isn't already ctrlyoke's own command (`isCtrlyokeStatuslineCommand`,
+     `StatuslineManager.ts:190-203`) — i.e. *something* is configured, but it isn't a forwardable
+     command and isn't ctrlyoke's own. Reachable in practice only via Qwen's `type: "preset"` mode
+     today, but the check itself isn't Qwen-specific.
+   - **Behavior on detection**: skip the write entirely (the preset config is left byte-for-byte
+     untouched) and, in the same locked capture step, set `enabled: false` for that harness's
+     `permissions.statusLineTracking.<provider>` — reusing the exact gate that already exists:
+     every provider's registration path already checks `getStatusLineTrackingSettings(...).enabled`
+     before calling `install()` at all (confirmed at `ClaudeCliProvider.ts:408-414`, same pattern
+     for Antigravity), so setting it `false` here is sufficient on its own to stop ctrlyoke from
+     retrying — and re-notifying — on every subsequent run. No new "already asked" flag needed.
+   - **Notification** (fires once, at the moment `enabled` flips to `false` this way): _"Qwen
+     already has a status line configured (a "preset" set up outside ctrlyoke) — ctrlyoke won't
+     replace it automatically, and has turned off its own Qwen status line tracking. Enable it
+     again in Settings → Status Line whenever you'd like ctrlyoke's branded line instead."_
+   - **The opt-in is the existing `enabled` toggle itself, not a new button.** If the user later
+     flips `enabled` back to `true` in Settings, that's a real, explicit action distinct from
+     ctrlyoke's own automatic first-run attempt — the very next registration attempt proceeds and
+     overwrites the preset normally, no separate "force" flag or confirmation UI required. This
+     works because the disable was ctrlyoke's own doing for a legible, stated reason; re-enabling
+     it is the user knowingly reversing that specific decision.
+   - **Plumbing**: `SettingsJsonMcpTracker.installPersistentValue`'s `capture` callback
+     (`SettingsJsonMcpTracker.ts:544`, currently `Promise<void>`) needs to be able to veto the
+     write that unconditionally follows it today (`settings[key] = value`, line 568) — widen its
+     return type to `Promise<{ proceed?: boolean }>` (default `true`/unset, so the existing
+     Claude/Antigravity/Copilot capture usage — which never needs to veto — is unaffected) and have
+     `installPersistentValue` skip the write and return a new `kind: "declined"` result when it
+     resolves `{ proceed: false }`. This is the one piece of shared machinery that needs new
+     capability; everything else in this decision is composed from behavior that already exists.
 9. **Wrapper scripts and refresh cadence**: add `ctrlyoke-copilot-statusline.js` and
    `ctrlyoke-qwen-statusline.js`, structurally identical to `ctrlyoke-claude-statusline.js`
    (`src/scripts/ctrlyoke-claude-statusline.js` — a ~60-line pass-through into the shared
@@ -449,13 +472,17 @@ new providers.
 5. **New wrapper entry scripts**: `ctrlyoke-copilot-statusline.js`, `ctrlyoke-qwen-statusline.js`
    (Decision 9), verified against the `copy-scripts` esbuild plugin the same way the original two
    were.
-6. **Install notification wording** for Qwen's preset-collision branch (Decision 8), and the
-   Copilot/Qwen provider entries in `CliIntegration`'s install-result → notification wiring
-   (mirrors the existing Claude/Antigravity wiring, no new mechanism).
+6. **Preset-collision skip-and-disable behavior** (Decision 8): the `capture` callback veto in
+   `SettingsJsonMcpTracker.installPersistentValue`, `StatuslineManager`'s detection/`enabled:false`
+   write, and its one-time notification wording; plus the Copilot/Qwen provider entries in
+   `CliIntegration`'s install-result → notification wiring for the normal (non-collision) path,
+   mirroring the existing Claude/Antigravity wiring.
 7. **UI**: add `copilot`/`qwen` to `STATUS_LINE_HARNESS_IDS`; extend the live-preview fixture set.
 8. **Tests**: wrapper fixtures (Wrapper Test Coverage above), `StatuslineManager` install/uninstall
    coverage for the new path-generalized Qwen case, UI component coverage for the two new provider
-   blocks.
+   blocks, and dedicated coverage for Decision 8's collision path — asserting the preset value is
+   left byte-for-byte unchanged, `enabled` flips to `false`, the notification fires exactly once,
+   and a subsequent run with `enabled` manually restored to `true` proceeds to install normally.
 
 ## Open Questions
 
