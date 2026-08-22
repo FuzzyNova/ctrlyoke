@@ -31,6 +31,20 @@ const execFileAsync = promisify(execFile);
 /** Polling interval (ms) between `opencode export` calls in interactive mode */
 const EXPORT_POLL_INTERVAL_MS = 1000;
 
+/**
+ * `opencode export` dumps the *entire* session transcript (every message and
+ * tool-call part) on every poll, not just the new tail. Node's execFile
+ * default maxBuffer is 1 MiB, which long-running sessions with large tool
+ * outputs/diffs blow past well before completion. When that happens execFile
+ * throws ERR_CHILD_PROCESS_STDIO_MAXBUFFER on *every subsequent poll* (the
+ * transcript only grows), silently dropping all events from that point on
+ * until the session's Stop notification fires — producing a "completed"
+ * result missing everything the model did afterward. 100 MiB comfortably
+ * covers realistic long sessions; see the OpenCode missing-output
+ * investigation for the reproducing case.
+ */
+const OPENCODE_EXPORT_MAX_BUFFER = 100 * 1024 * 1024;
+
 type OpenCodeExportRunner = (sessionId: string) => Promise<string>;
 
 /**
@@ -44,6 +58,7 @@ async function runOpenCodeExport(sessionId: string): Promise<string> {
   const { stdout } = await execFileAsync(command.command, command.args, {
     encoding: "utf8",
     timeout: 10_000,
+    maxBuffer: OPENCODE_EXPORT_MAX_BUFFER,
     windowsHide: true,
     windowsVerbatimArguments: command.requiresShellVerbatimArgs,
   });
@@ -550,7 +565,11 @@ export class OpenCodeLogParser extends BaseLogParser {
       const exportData = JSON.parse(stdout) as OpenCodeExport;
       return this.extractNewEventsFromExport(exportData);
     } catch (error) {
-      Log.debug(`[OpenCodeLogParser] opencode export failed: ${error}`);
+      // Every failed poll here means the session's events since the last
+      // successful export are silently dropped (the next successful export
+      // only yields parts newer than seenPartIds, so nothing is retried).
+      // Surface at warn — this is data loss, not routine noise.
+      Log.warn(`[OpenCodeLogParser] opencode export failed: ${error}`);
       return [];
     }
   }
