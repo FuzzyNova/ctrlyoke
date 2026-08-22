@@ -942,6 +942,112 @@ suite("CliIntegration", () => {
     integration.dispose();
   });
 
+  test("notifies a Qwen preset collision once", async () => {
+    const feedback: string[] = [];
+    let pending: {
+      kind: "declined" | "no-op";
+      captured: boolean;
+      collision?: boolean;
+    } = {
+      kind: "declined",
+      captured: false,
+      collision: true,
+    };
+    const provider = createProvider({
+      config: {
+        name: "qwen",
+        harnessId: HARNESS_IDS.QWEN_CLI,
+        displayName: "Qwen Code CLI",
+        terminalName: "Qwen Code",
+        installHint: "",
+        shouldStreamHeadlessOutput: false,
+      },
+      planCliArgs: async () => ({
+        cliArgs: [],
+        mutations: [
+          { description: "install statusline", apply: async () => {} },
+        ],
+        diagnostics: [],
+      }),
+      consumeStatuslineInstallResult: () => {
+        const result = pending;
+        pending = { kind: "no-op", captured: false };
+        return result;
+      },
+    });
+    const integration = new CliIntegration(
+      provider,
+      new MockVsCodePlatform(),
+      false,
+      { notify: ({ message }) => feedback.push(message) }
+    );
+    (integration as any).executionRunner.executeHeadless = async () => true;
+
+    await integration.sendPrompt({ prompt: "first" });
+    await integration.sendPrompt({ prompt: "second" });
+
+    assert.deepStrictEqual(feedback, [
+      "Qwen already has a status line configured (a 'preset' set up outside ctrlyoke) — ctrlyoke won't replace it automatically, and has turned off its own Qwen status line tracking. Enable it again in Settings → Status Line whenever you'd like ctrlyoke's branded line instead.",
+    ]);
+    integration.dispose();
+  });
+
+  test("uses the normal statusline install notification for Copilot and Qwen", async () => {
+    for (const harness of [
+      {
+        id: HARNESS_IDS.COPILOT_CLI,
+        name: "copilot",
+        terminalName: "Copilot",
+      },
+      {
+        id: HARNESS_IDS.QWEN_CLI,
+        name: "qwen",
+        terminalName: "Qwen Code",
+      },
+    ]) {
+      const feedback: string[] = [];
+      let first = true;
+      const provider = createProvider({
+        config: {
+          name: harness.name,
+          harnessId: harness.id,
+          displayName: harness.terminalName,
+          terminalName: harness.terminalName,
+          installHint: "",
+          shouldStreamHeadlessOutput: false,
+        },
+        planCliArgs: async () => ({
+          cliArgs: [],
+          mutations: [
+            { description: "install statusline", apply: async () => {} },
+          ],
+          diagnostics: [],
+        }),
+        consumeStatuslineInstallResult: () => {
+          if (!first) {
+            return { kind: "no-op", captured: false };
+          }
+          first = false;
+          return { kind: "written", captured: false };
+        },
+      });
+      const integration = new CliIntegration(
+        provider,
+        new MockVsCodePlatform(),
+        false,
+        { notify: ({ message }) => feedback.push(message) }
+      );
+      (integration as any).executionRunner.executeHeadless = async () => true;
+
+      await integration.sendPrompt({ prompt: "install" });
+
+      assert.deepStrictEqual(feedback, [
+        `ctrlyoke is now showing its own statusline for ${harness.terminalName}. Settings → Usage to change this.`,
+      ]);
+      integration.dispose();
+    }
+  });
+
   test("notifies an install that wrote before a later mutation failed", async () => {
     const feedback: string[] = [];
     let appliedInstall = false;

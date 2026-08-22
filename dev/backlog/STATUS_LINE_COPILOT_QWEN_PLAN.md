@@ -1,6 +1,6 @@
 # Status Line Copilot & Qwen Support Plan
 
-> **Status:** Phases 4-5 complete; Phases 6-7 remain. Research completed 2026-08-22, including live, empirical probes
+> **Status:** Phase 6 complete; Phase 7 remains. Research completed 2026-08-22, including live, empirical probes
 > of GitHub Copilot CLI's and Qwen Code's real statusline payloads on this machine (not just
 > documentation).
 > Re-verified against the codebase 2026-08-22 after `STATUS_LINE_SHARED_FORMAT_TOGGLE_PLAN.md`
@@ -586,7 +586,7 @@ divergences (Decision 4's Copilot-specific displayed limit and Decision 4a's Qwe
    wrappers reuse the shared 200ms forwarding timeout and are ready for the later provider
    installation wiring to set each CLI's minimum `refreshInterval: 1`. Included the remaining
    wrapper fixture tests (settings resolution, malformed-input tolerance).
-6. **Preset-collision skip-and-disable behavior** (Decision 8): use the Phase 2 `capture` callback
+6. **Complete — preset-collision skip-and-disable behavior** (Decision 8): use the Phase 2 `capture` callback
    veto in `SettingsJsonMcpTracker.installPersistentValue`, `StatuslineManager`'s detection/
    `enabled:false` write, and its one-time notification wording; plus the Copilot/Qwen provider
    entries in `CliIntegration`'s install-result → notification wiring for the normal

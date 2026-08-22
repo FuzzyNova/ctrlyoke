@@ -5,9 +5,11 @@ import { parseArgString } from "../../../utils/CliArgParser";
 import {
   STATUS_LINE_TRACKING_PROVIDERS,
   HARNESS_IDS,
+  SETTING_PATHS,
   type StatusLineTrackingHarnessId,
   type StatusLineTrackingProvider,
 } from "../../../types/DashboardConstants";
+import { configService } from "../../../config/CtrlYokeConfigService";
 import type { StatusLineTrackingSettings } from "../../../types/CtrlYokeSettings";
 import { SettingsJsonMcpTracker } from "./SettingsJsonMcpTracker";
 import {
@@ -20,6 +22,8 @@ const QWEN_STATUS_LINE_SETTING_KEY = "ui.statusLine";
 export interface StatuslineInstallResult {
   readonly kind: SettingsJsonPersistentValueInstallResult["kind"];
   readonly captured: boolean;
+  /** True when a configured non-command statusline caused the install veto. */
+  readonly collision?: boolean;
 }
 
 export interface StatuslineManagerLike {
@@ -132,6 +136,7 @@ export class StatuslineManager implements StatuslineManagerLike {
     command: string
   ): Promise<StatuslineInstallResult> {
     let captured = false;
+    let collision = false;
     const result = await this.definition.tracker.installPersistentValue(
       workspaceRoot,
       this.getPersistentValueKey(),
@@ -139,6 +144,33 @@ export class StatuslineManager implements StatuslineManagerLike {
       async (preexistingValue, hadKey) => {
         const settings = this.getSettings();
         const customCommand = this.extractCommand(preexistingValue, hadKey);
+        const isCtrlyokeCommand =
+          customCommand !== undefined &&
+          this.isCtrlyokeStatuslineCommand(customCommand);
+        const enabledSettingPath = `${SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING}.${this.provider}.enabled`;
+        // The automatic veto materializes a user-scoped disabled setting. A later
+        // user-scoped re-enable is the explicit opt-in that permits replacement,
+        // so no separate persisted "already asked" flag is needed.
+        const explicitlyEnabledByUser =
+          configService.getLeafSources()[enabledSettingPath] === "user";
+        if (
+          hadKey &&
+          customCommand === undefined &&
+          !isCtrlyokeCommand &&
+          !explicitlyEnabledByUser
+        ) {
+          if (settings.enabled) {
+            collision = true;
+            await ConfigurationUtils.setStatusLineTrackingSettings(
+              this.provider,
+              {
+                ...settings,
+                enabled: false,
+              }
+            );
+          }
+          return { proceed: false };
+        }
         if (
           settings.customCommand.length === 0 &&
           customCommand !== undefined &&
@@ -169,7 +201,11 @@ export class StatuslineManager implements StatuslineManagerLike {
         settings.customCommand.length > 0 && !settings.useCtrlyokeStyle;
     }
 
-    return { kind: result.kind, captured };
+    return {
+      kind: result.kind,
+      captured,
+      ...(collision ? { collision: true } : {}),
+    };
   }
 
   /** Restore the live custom command, or remove ctrlyoke's statusline key. */

@@ -1,6 +1,10 @@
 import * as path from "path";
+import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
-import { HARNESS_IDS } from "../../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  STATUS_LINE_TRACKING_PROVIDERS,
+} from "../../../types/DashboardConstants";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import {
   IToolPermissionMapper,
@@ -11,10 +15,18 @@ import {
 import { QwenNotificationMonitor } from "./QwenNotificationMonitor";
 import { QwenToolPermissionMapper } from "./QwenToolPermissionMapper";
 import { QwenLogParser } from "./QwenLogParser";
-import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../../../utils/ConfigurationUtils";
 import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
+import {
+  StatuslineManager,
+  type StatuslineInstallResult,
+} from "../shared/StatuslineManager";
 import { SettingsJsonHooksTracker } from "../shared/SettingsJsonHooksTracker";
 import { QwenTrustedHooksTracker } from "../shared/QwenTrustedHooksTracker";
 import { parseArgString } from "../../../utils/CliArgParser";
@@ -81,11 +93,28 @@ const QWEN_IMAGE_INPUT_CAPABILITY = {
  * ```
  */
 export class QwenCliProvider implements ICliProvider {
+  private static readonly statuslineManager = StatuslineManager.forProvider(
+    STATUS_LINE_TRACKING_PROVIDERS.QWEN
+  );
+
   /** Tracker for parallel-safe hooks management in .qwen/settings.json. */
   private readonly hooksTracker: SettingsJsonHooksTracker;
 
   /** Tracker for Qwen's persistent global hook approvals. */
   private readonly trustedHooksTracker: QwenTrustedHooksTracker;
+
+  private statusLineToken: string | undefined;
+  private readonly statusLineSnapshotPaths = new Set<string>();
+  private statusLineDirectory: string | undefined;
+  private statusLineWorkspaceRoot: string | undefined;
+  private statusLineEnabledForPrompt = false;
+  private statuslineInstallResult: StatuslineInstallResult | undefined;
+
+  consumeStatuslineInstallResult(): StatuslineInstallResult | undefined {
+    const result = this.statuslineInstallResult;
+    this.statuslineInstallResult = undefined;
+    return result;
+  }
 
   constructor(
     hooksTracker = SettingsJsonHooksTracker.getInstance("qwen"),
@@ -200,6 +229,7 @@ export class QwenCliProvider implements ICliProvider {
     _workspaceRoots?: readonly string[],
     _approvedExternalRoots?: readonly string[]
   ): Promise<CliProviderPreparation> {
+    const statusLineToken = randomUUID();
     const args: string[] = [];
 
     // Use resolved properties if available (from PropertyResolver three-tier precedence)
@@ -281,8 +311,102 @@ export class QwenCliProvider implements ICliProvider {
 
     return {
       cliArgs: args,
-      mutations: mcpPreparation.mutations,
+      mutations: [
+        {
+          description: "Prepare Qwen statusline tracking",
+          apply: async () => {
+            this.statusLineToken = statusLineToken;
+            this.statusLineDirectory = undefined;
+            this.statusLineWorkspaceRoot = undefined;
+            this.statusLineEnabledForPrompt = false;
+            this.statuslineInstallResult = undefined;
+            if (
+              workspaceRoot &&
+              ConfigurationUtils.getStatusLineTrackingSettings(
+                STATUS_LINE_TRACKING_PROVIDERS.QWEN
+              ).enabled
+            ) {
+              this.statuslineInstallResult = await this.registerStatusLine(
+                extensionPath,
+                workspaceRoot
+              );
+            }
+          },
+        },
+        ...mcpPreparation.mutations,
+      ],
       diagnostics: mcpPreparation.diagnostics,
+    };
+  }
+
+  getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
+    return {
+      ...CliProviderUtils.buildProcessEnv(),
+      ...this.buildStatusLineSpawnEnv(),
+    };
+  }
+
+  getHeadlessSpawnEnv(): NodeJS.ProcessEnv {
+    return this.buildStatusLineSpawnEnv();
+  }
+
+  private async registerStatusLine(
+    extensionPath: string,
+    workspaceRoot: string
+  ): Promise<StatuslineInstallResult> {
+    const scriptPath = path.join(
+      extensionPath,
+      "out",
+      "scripts",
+      "ctrlyoke-qwen-statusline.js"
+    );
+    const command = CliNotificationMonitor.buildNodeCommand(
+      scriptPath,
+      ""
+    ).trim();
+    const snapshotDirectory = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
+      PATH_CONSTANTS.TEMP_DIR
+    );
+    const snapshotPath = path.join(
+      snapshotDirectory,
+      `qwen-statusline-${this.statusLineToken}.json`
+    );
+    this.statusLineSnapshotPaths.add(snapshotPath);
+
+    try {
+      const result = await QwenCliProvider.statuslineManager.install(
+        workspaceRoot,
+        command
+      );
+      if (result.kind !== "declined") {
+        this.statusLineDirectory = snapshotDirectory;
+        this.statusLineWorkspaceRoot = workspaceRoot;
+        this.statusLineEnabledForPrompt = true;
+      }
+      return result;
+    } catch (error) {
+      Log.warn(`Failed to register Qwen statusline: ${error}`);
+      return { kind: "no-op", captured: false };
+    }
+  }
+
+  private buildStatusLineSpawnEnv(): NodeJS.ProcessEnv {
+    if (
+      !this.statusLineEnabledForPrompt ||
+      !this.statusLineToken ||
+      !this.statusLineDirectory
+    ) {
+      return {};
+    }
+
+    return {
+      CTRLYOKE_QWEN_STATUSLINE_TOKEN: this.statusLineToken,
+      CTRLYOKE_QWEN_STATUSLINE_DIR: this.statusLineDirectory,
+      ...(this.statusLineWorkspaceRoot
+        ? { CTRLYOKE_STATUSLINE_WORKSPACE_ROOT: this.statusLineWorkspaceRoot }
+        : {}),
     };
   }
 
@@ -601,6 +725,10 @@ export class QwenCliProvider implements ICliProvider {
       await this.hooksTracker.unregisterWorkflow(hookKey, workspaceRoot);
     });
     await this.trustedHooksTracker.unregisterWorkflow(hookKey);
+  }
+
+  getAdditionalCleanupFilePaths(_workspaceRoot: string): string[] {
+    return [...this.statusLineSnapshotPaths];
   }
 
   /**
