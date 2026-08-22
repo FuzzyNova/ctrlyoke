@@ -129,7 +129,7 @@ No changes needed to the generic settings write path — `TerminalSection.tsx` a
 
 ## Implementation Steps
 
-Status: Step 2 complete — `TerminalControlBar.tsx` now resolves reconciled bar and popup layouts from the registry and settings, including defensive unknown-id handling and movable Ctrl placement. Registry, settings plumbing, and schema fields from step 1 are included.
+Status: Step 3 complete — `TerminalControlBarEditor.tsx` now provides sortable bar/popup placement editing, hidden-item restoration, stable custom shortcut ids, key capture, and built-in-only reset behavior. Step 4 remains for tests.
 
 1. **Registry module**: add `src/utils/TerminalControlBarFormat.ts` with the id constants, `TERMINAL_BAR_ITEM_REGISTRY`, and `DEFAULT_TERMINAL_BAR_LAYOUT`.
 2. **Settings plumbing**: add `TerminalShortcut.id`, `TerminalSettings.mobileBarLayout`, defaults, and the schema entries. Update `DEFAULT_STATE`-style fixtures/tests that construct full `TerminalSettings` objects.
