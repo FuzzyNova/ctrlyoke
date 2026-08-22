@@ -139,10 +139,21 @@ function resolveStatusLineSettings(
         (usageTracking.percentDirection === "used" ||
           usageTracking.percentDirection === "remaining")
     )?.percentDirection ?? DEFAULT_PERCENT_DIRECTION;
+  const useDifferentFormatPerHarness =
+    typeof tracking?.useDifferentFormatPerHarness === "boolean"
+      ? tracking.useDifferentFormatPerHarness
+      : false;
+  const candidateFormat = useDifferentFormatPerHarness
+    ? configured?.format
+    : tracking?.sharedFormat;
+  const effectiveFormat =
+    Array.isArray(candidateFormat) && candidateFormat.length > 0
+      ? candidateFormat
+      : cloneDefaultStatuslineFormat();
 
   const defaults = {
     ...DEFAULT_STATUSLINE_SETTINGS,
-    format: cloneDefaultStatuslineFormat(),
+    format: effectiveFormat,
     percentDirection,
   };
 
@@ -167,10 +178,7 @@ function resolveStatusLineSettings(
       typeof configured.useCtrlyokeStyle === "boolean"
         ? configured.useCtrlyokeStyle
         : DEFAULT_STATUSLINE_SETTINGS.useCtrlyokeStyle,
-    format:
-      Array.isArray(configured.format) && configured.format.length > 0
-        ? configured.format
-        : cloneDefaultStatuslineFormat(),
+    format: effectiveFormat,
     percentDirection,
   };
 }

@@ -9,6 +9,9 @@ type SharedWrapper = {
   ANSI_RESET: string;
   CONTEXT_COLORS: Record<string, string>;
   FORWARD_TIMEOUT_MS: number;
+  DEFAULT_STATUSLINE_SETTINGS: {
+    format: unknown[];
+  };
   STATUSLINE_PROVIDERS: {
     CLAUDE: string;
     ANTIGRAVITY: string;
@@ -113,23 +116,35 @@ async function writeMachineSettings(
     percentDirection?: "used" | "remaining";
   }
 ): Promise<void> {
+  await writeStatusLineSettings(
+    homeDirectory,
+    {
+      [provider]: {
+        enabled: true,
+        customCommand: "",
+        useCtrlyokeStyle: true,
+        ...settings,
+      },
+    },
+    settings.percentDirection
+  );
+}
+
+async function writeStatusLineSettings(
+  homeDirectory: string,
+  statusLineTracking: Record<string, unknown>,
+  percentDirection?: "used" | "remaining"
+): Promise<void> {
   const filePath = path.join(homeDirectory, ".ctrlyoke", "settings.json");
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(
     filePath,
     JSON.stringify({
       permissions: {
-        statusLineTracking: {
-          [provider]: {
-            enabled: true,
-            customCommand: "",
-            useCtrlyokeStyle: true,
-            ...settings,
-          },
-        },
+        statusLineTracking,
       },
       usageTracking: {
-        percentDirection: settings.percentDirection,
+        percentDirection,
       },
     })
   );
@@ -627,13 +642,111 @@ suite("Shared statusline wrappers", () => {
     assert.doesNotMatch(line, / ctx /);
   });
 
-  test("resolves format and global percent direction from settings.json", async () => {
+  test("resolves shared format for both providers in shared mode", async () => {
+    await createHome();
+    const sharedFormat = [{ type: "literal", text: "shared" }];
+    await writeStatusLineSettings(tempHome, {
+      useDifferentFormatPerHarness: false,
+      sharedFormat,
+      claude: { format: [{ type: "literal", text: "claude" }] },
+      antigravity: { format: [{ type: "literal", text: "antigravity" }] },
+    });
+
+    for (const provider of [
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      shared.STATUSLINE_PROVIDERS.ANTIGRAVITY,
+    ]) {
+      const settings = shared.resolveStatusLineSettings(provider, tempHome);
+      assert.deepStrictEqual(settings.format, sharedFormat);
+    }
+  });
+
+  test("resolves each provider format in per-harness mode", async () => {
+    await createHome();
+    const formats = {
+      claude: [{ type: "literal", text: "claude" }],
+      antigravity: [{ type: "literal", text: "antigravity" }],
+    };
+    await writeStatusLineSettings(tempHome, {
+      useDifferentFormatPerHarness: true,
+      sharedFormat: [{ type: "literal", text: "ignored" }],
+      claude: { format: formats.claude },
+      antigravity: { format: formats.antigravity },
+    });
+
+    for (const [provider, format] of Object.entries(formats)) {
+      const settings = shared.resolveStatusLineSettings(provider, tempHome);
+      assert.deepStrictEqual(settings.format, format);
+    }
+  });
+
+  test("defaults to shared mode when the toggle is absent", async () => {
+    await createHome();
+    const sharedFormat = [{ type: "literal", text: "shared" }];
+    await writeStatusLineSettings(tempHome, {
+      sharedFormat,
+      claude: { format: [{ type: "literal", text: "claude" }] },
+      antigravity: { format: [{ type: "literal", text: "antigravity" }] },
+    });
+
+    for (const provider of [
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      shared.STATUSLINE_PROVIDERS.ANTIGRAVITY,
+    ]) {
+      const settings = shared.resolveStatusLineSettings(provider, tempHome);
+      assert.deepStrictEqual(settings.format, sharedFormat);
+    }
+  });
+
+  test("uses shared format when the provider entry is missing", async () => {
+    await createHome();
+    const sharedFormat = [{ type: "literal", text: "shared" }];
+    await writeStatusLineSettings(tempHome, {
+      useDifferentFormatPerHarness: false,
+      sharedFormat,
+    });
+
+    for (const provider of [
+      shared.STATUSLINE_PROVIDERS.CLAUDE,
+      shared.STATUSLINE_PROVIDERS.ANTIGRAVITY,
+    ]) {
+      const settings = shared.resolveStatusLineSettings(provider, tempHome);
+      assert.deepStrictEqual(settings.format, sharedFormat);
+    }
+  });
+
+  test("falls back to the default format for invalid shared formats", async () => {
+    await createHome();
+
+    for (const invalidFormat of [undefined, [], { malformed: true }]) {
+      const tracking: Record<string, unknown> = {
+        useDifferentFormatPerHarness: false,
+      };
+      if (invalidFormat !== undefined) tracking.sharedFormat = invalidFormat;
+      await writeStatusLineSettings(tempHome, tracking);
+
+      const settings = shared.resolveStatusLineSettings(
+        shared.STATUSLINE_PROVIDERS.CLAUDE,
+        tempHome
+      );
+      assert.deepStrictEqual(
+        settings.format,
+        shared.DEFAULT_STATUSLINE_SETTINGS.format
+      );
+    }
+  });
+
+  test("resolves per-harness format and global percent direction from settings.json", async () => {
     await createHome();
     const format = [{ type: "field", field: "usage" }];
-    await writeMachineSettings(tempHome, "claude", {
-      format,
-      percentDirection: "remaining",
-    });
+    await writeStatusLineSettings(
+      tempHome,
+      {
+        useDifferentFormatPerHarness: true,
+        claude: { format },
+      },
+      "remaining"
+    );
 
     const settings = shared.resolveStatusLineSettings(
       shared.STATUSLINE_PROVIDERS.CLAUDE,
