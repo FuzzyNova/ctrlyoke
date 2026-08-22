@@ -1,8 +1,8 @@
 # Overzealous Step Failures Plan
 
-> **Status:** Items 2, 3, and 4 implemented (2026-08-20); the cross-cutting
+> **Status:** Items 2, 3, and 4 implemented (2026-08-22); the cross-cutting
 > "documents every syntax" regression test is implemented. Remaining work is
-> deliberately deferred: item 3 recommendations 2 and 3.
+> deliberately deferred: none of item 3's recommendations.
 > **Items 2 and 3 were staged inside
 > `dev/implemented/WORKFLOW_SCHEMA_UI_PARITY_PLAN.md`'s step queue** (2026-08-20):
 > that plan added the UI controls which make both failures reachable for a
@@ -193,7 +193,7 @@ stop. That trains rubber-stamping.
    Process-map references are now authoritative grants with scope-preserving
    coverage for script env, hooks, conditions, MCP env/headers, workflow maps,
    and unrelated steps; the invariant guards remain in place.
-2. **Outstanding — put the cloned-repo protection where it belongs:** a one-time trust
+2. **Implemented (2026-08-22) — put the cloned-repo protection where it belongs:** a one-time trust
    approval that surfaces _every_ grant a workflow wants — inline and env-map
    alike — reusing the `permissions.allowedExternalFileRoots` approval pattern.
    `SECRETS_AND_REDACTION_PLAN.md`'s own open questions already propose this
@@ -252,7 +252,7 @@ stop. That trains rubber-stamping.
       as the CLI pass no UI callback. The adapters own only the pending-review
       UX; the core check prevents any non-UI execution path from bypassing it.
 
-   4. **Wire the VS Code prompt at execution time, not extension activation.**
+   4. **Implemented (2026-08-22) — wire the VS Code prompt at execution time, not extension activation.**
       Add `promptBatchApprovalForPendingWorkspaceSecretGrants(workflow:
       PromptFile, workspaceRoot: string, store: SecretGrantsTrustStore =
       secretGrantsTrustStore): Promise<void>` to a new
@@ -303,7 +303,7 @@ stop. That trains rubber-stamping.
       repetitive rubber-stamping without improving the stated cloned-repository
       boundary.
 
-   7. **Test each boundary.** Extend
+   7. **Implemented (2026-08-22) — test each boundary.** Extend
       `src/test/unit/SecretResolver.test.ts` with workflow-wide union coverage
       across multiple steps and `finalStep`, including inline and process-map
       grants. Add `src/test/unit/SecretGrantsTrustStore.test.ts` by copying the
@@ -318,6 +318,12 @@ stop. That trains rubber-stamping.
       injected-store/stub patterns: all names are shown in one picker,
       checked/unchecked decisions persist, Escape leaves names pending, and
       the execution callback is invoked before `preflightWorkflowSecrets`.
+      The VS Code prompt behavior is covered by
+      `src/test/unit/SecretGrantsTrustPrompt.test.ts`; a separate
+      `WorkflowOrchestrator` execution test was not added because constructing
+      that seam requires broad live VS Code/orchestrator integration mocking.
+      The existing `WorkflowInstance` execution path remains the focused
+      callback-order seam.
 3. **Honored (2026-08-20), not outstanding work** — this was a constraint on the
    fix, not a task. The invalid-name throw (`isValidSecretName`) and the runtime
    `MissingSecretError` are both still in place: they are real resolution

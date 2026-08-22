@@ -6,7 +6,7 @@ import { suite, test } from "mocha";
 
 export const FEEDBACK_SOURCE_AUDIT_BASELINES = {
   directMessage: {
-    boundary: 49,
+    boundary: 50,
     reusable: 0,
     boundaryFiles: [
       "src/completions/ContextMenuReferenceCommands.ts",
@@ -16,6 +16,7 @@ export const FEEDBACK_SOURCE_AUDIT_BASELINES = {
       "src/scm/ScmCommitCommand.ts",
       "src/ui/ExternalFileTrustPrompt.ts",
       "src/ui/NotificationManager.ts",
+      "src/ui/SecretGrantsTrustPrompt.ts",
       "src/ui/WebviewMessageRouter.ts",
     ] as readonly string[],
   },
