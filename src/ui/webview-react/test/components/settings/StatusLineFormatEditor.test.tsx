@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { StatusLineFormatEditor } from "@components/settings/stats/StatusLineFormatEditor";
@@ -29,9 +29,7 @@ describe("StatusLineFormatEditor", () => {
       { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
     ]);
 
-    await user.click(
-      screen.getByRole("button", { name: "Remove segment 1" })
-    );
+    await user.click(screen.getByRole("button", { name: "Remove segment 1" }));
     expect(onCommit).toHaveBeenLastCalledWith([]);
     expect(onCommit).toHaveBeenCalledTimes(1);
 
@@ -192,6 +190,105 @@ describe("StatusLineFormatEditor", () => {
       screen.getByText(
         /uses your Stats & Usage percent-direction setting \(remaining\)/i
       )
+    ).toBeInTheDocument();
+  });
+
+  it("can suppress the preview when requested", () => {
+    render(
+      <StatusLineFormatEditor
+        format={[{ type: "field", field: STATUS_LINE_FIELD_IDS.USAGE }]}
+        onCommit={vi.fn()}
+        hidePreview
+      />
+    );
+
+    expect(screen.queryByText("Live preview")).not.toBeInTheDocument();
+  });
+
+  it("notifies onDraftChange for an edit", async () => {
+    const user = userEvent.setup();
+    const onDraftChange = vi.fn<(nextFormat: StatusLineSegment[]) => void>();
+    render(
+      <StatusLineFormatEditor
+        format={[{ type: "literal", text: "before" }]}
+        onCommit={vi.fn()}
+        onDraftChange={onDraftChange}
+      />
+    );
+
+    const input = screen.getByRole("textbox", {
+      name: "Custom text segment 1",
+    });
+    await user.clear(input);
+    await user.type(input, "after");
+    await user.tab();
+
+    expect(onDraftChange).toHaveBeenLastCalledWith([
+      { type: "literal", text: "after" },
+    ]);
+  });
+
+  it("notifies onDraftChange when segments are reordered", async () => {
+    const onDraftChange = vi.fn<(nextFormat: StatusLineSegment[]) => void>();
+    render(
+      <StatusLineFormatEditor
+        format={[
+          { type: "literal", text: "first" },
+          { type: "literal", text: "second" },
+        ]}
+        onCommit={vi.fn()}
+        onDraftChange={onDraftChange}
+      />
+    );
+
+    const segmentRows = screen
+      .getAllByRole("button", { name: /Drag to reorder segment/u })
+      .map((handle) => handle.parentElement);
+    const rect = (top: number): DOMRect =>
+      ({
+        x: 0,
+        y: top,
+        top,
+        left: 0,
+        right: 200,
+        bottom: top + 20,
+        width: 200,
+        height: 20,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    segmentRows.forEach((row, index) => {
+      if (row) {
+        vi.spyOn(row, "getBoundingClientRect").mockReturnValue(
+          rect(index * 40)
+        );
+      }
+    });
+
+    const firstHandle = screen.getByRole("button", {
+      name: "Drag to reorder segment 1",
+    });
+    firstHandle.focus();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fireEvent.keyDown(firstHandle, { code: "Space", key: " " });
+    expect(firstHandle).toHaveAttribute("aria-pressed", "true");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fireEvent.keyDown(document, { code: "ArrowDown", key: "ArrowDown" });
+    fireEvent.keyDown(document, { code: "Space", key: " " });
+
+    expect(onDraftChange).toHaveBeenLastCalledWith([
+      { type: "literal", text: "second" },
+      { type: "literal", text: "first" },
+    ]);
+  });
+
+  it("allows edits when onDraftChange is omitted", async () => {
+    const user = userEvent.setup();
+    renderEditor([{ type: "literal", text: "before" }]);
+
+    await user.click(screen.getByRole("button", { name: "Add custom text" }));
+
+    expect(
+      screen.getByRole("textbox", { name: "Custom text segment 2" })
     ).toBeInTheDocument();
   });
 

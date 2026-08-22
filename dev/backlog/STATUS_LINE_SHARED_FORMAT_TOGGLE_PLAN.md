@@ -1,8 +1,8 @@
 # Status Line Shared/Per-Harness Format Toggle Plan
 
-> **Status:** Step 3 of 5 landed (2026-08-22) — settings contract, shared helpers, coordinated
-> webview→extension writes, and standalone statusline wrapper resolution are complete; remaining
-> steps: (4) `StatusLinePreview` extraction + editor props, and (5) `StatusLineSection` /
+> **Status:** Step 4 of 5 landed (2026-08-22) — settings contract, shared helpers, coordinated
+> webview→extension writes, standalone statusline wrapper resolution, and `StatusLinePreview`
+> extraction/editor props are complete; remaining step: (5) `StatusLineSection` /
 > `StatusLineTrackingControls` wiring.
 > Each step updates this line as it lands. Motivated by upcoming Copilot and Qwen statusline support
 > (`STATUS_LINE_TRACKING_PROVIDERS` currently has 2 entries — `claude`, `antigravity` — and
@@ -160,7 +160,7 @@ the toggle doesn't leave 4 harnesses silently unaccounted for.
 - `StatusLineSection.tsx` — add the `SettingToggleRow` for `useDifferentFormatPerHarness`.
   When `false` (shared mode): keep local state `sharedDraft` seeded from `sharedFormat` and
   render one `<StatusLineFormatEditor format={sharedFormat} onCommit={...→ sharedFormat...}
-  onDraftChange={setSharedDraft} hidePreview />` above the harness list, then pass `sharedDraft`
+onDraftChange={setSharedDraft} hidePreview />` above the harness list, then pass `sharedDraft`
   down into each `StatusLineTrackingControls`. `sharedDraft` must **also** resync from the
   `sharedFormat` prop in a `useEffect` keyed on it, not only from `onDraftChange` — the editor
   itself already re-seeds its internal `draftFormat` whenever the `format` prop changes
@@ -171,7 +171,7 @@ the toggle doesn't leave 4 harnesses silently unaccounted for.
 - `StatusLineTrackingControls.tsx` — when shared mode is active, don't render
   `StatusLineFormatEditor` at all (`StatusLineTrackingControls.tsx:205-213`); render
   `<StatusLinePreview format={sharedDraft} provider={...} snapshot={snapshot}
-  percentDirection={...} />` in its place, gated behind `tracking.useCtrlyokeStyle` exactly
+percentDirection={...} />` in its place, gated behind `tracking.useCtrlyokeStyle` exactly
   like the existing editor already is — a harness with ctrlyoke styling turned off wouldn't
   show this format anyway, so previewing it there would be misleading. The
   `enabled` / `customCommand` / `useCtrlyokeStyle` rows are untouched either way — only the
@@ -234,20 +234,20 @@ issuing several raw `UPDATE_GLOBAL_SETTING` calls from the webview:
 
 ## Affected components
 
-| Component | Planned role |
-| --- | --- |
-| `CtrlYokeSettings.ts` | New `useDifferentFormatPerHarness` / `sharedFormat` fields + defaults |
-| `settings-schema.json` | Schema for the two new fields; extract shared `format` array definition |
-| `DashboardConstants.ts` | New `SETTING_PATHS` entries, new `MESSAGE_TYPES` entry |
-| `ConfigurationUtils.ts` | Getters/setter for the new fields |
-| `StatuslineFormat.ts` | `isDefaultStatusLineFormat` helper |
-| `ctrlyoke-statusline-wrapper.js` | Mirror the shared/per-harness resolution rule (standalone copy, can't import) |
-| `StatusLineFormatEditor.tsx` | New `hidePreview` / `onDraftChange` props; extract `StatusLinePreview` out of it |
-| `StatusLinePreview.tsx` (new) | Preview-only component reused by the editor (default) and by each harness block in shared mode |
-| `AnimatedSection.tsx` (existing, reused) | Wraps the shared editor and each per-harness editor/preview swap to animate the toggle transition |
-| `StatusLineSection.tsx` | Toggle row; owns `sharedDraft` state; single shared editor (no preview) vs. per-harness blocks, wrapped in `AnimatedSection` |
-| `StatusLineTrackingControls.tsx` | In shared mode, renders `StatusLinePreview` instead of `StatusLineFormatEditor`, gated on `useCtrlyokeStyle`; both wrapped in `AnimatedSection` |
-| `WebviewMessageRouter.ts` / `WebviewSettingsSync.ts` | New coordinated message for the false→true seed-defaults write |
+| Component                                            | Planned role                                                                                                                                    |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CtrlYokeSettings.ts`                                | New `useDifferentFormatPerHarness` / `sharedFormat` fields + defaults                                                                           |
+| `settings-schema.json`                               | Schema for the two new fields; extract shared `format` array definition                                                                         |
+| `DashboardConstants.ts`                              | New `SETTING_PATHS` entries, new `MESSAGE_TYPES` entry                                                                                          |
+| `ConfigurationUtils.ts`                              | Getters/setter for the new fields                                                                                                               |
+| `StatuslineFormat.ts`                                | `isDefaultStatusLineFormat` helper                                                                                                              |
+| `ctrlyoke-statusline-wrapper.js`                     | Mirror the shared/per-harness resolution rule (standalone copy, can't import)                                                                   |
+| `StatusLineFormatEditor.tsx`                         | New `hidePreview` / `onDraftChange` props; extract `StatusLinePreview` out of it                                                                |
+| `StatusLinePreview.tsx`                              | Preview-only component reused by the editor (default) and by each harness block in shared mode                                                  |
+| `AnimatedSection.tsx` (existing, reused)             | Wraps the shared editor and each per-harness editor/preview swap to animate the toggle transition                                               |
+| `StatusLineSection.tsx`                              | Toggle row; owns `sharedDraft` state; single shared editor (no preview) vs. per-harness blocks, wrapped in `AnimatedSection`                    |
+| `StatusLineTrackingControls.tsx`                     | In shared mode, renders `StatusLinePreview` instead of `StatusLineFormatEditor`, gated on `useCtrlyokeStyle`; both wrapped in `AnimatedSection` |
+| `WebviewMessageRouter.ts` / `WebviewSettingsSync.ts` | New coordinated message for the false→true seed-defaults write                                                                                  |
 
 ## Known fallout to handle
 
