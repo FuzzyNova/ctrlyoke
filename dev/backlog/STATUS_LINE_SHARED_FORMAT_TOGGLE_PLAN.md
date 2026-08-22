@@ -144,7 +144,11 @@ the toggle doesn't leave 4 harnesses silently unaccounted for.
   like the existing editor already is — a harness with ctrlyoke styling turned off wouldn't
   show this format anyway, so previewing it there would be misleading. The
   `enabled` / `customCommand` / `useCtrlyokeStyle` rows are untouched either way — only the
-  format section (editor vs. preview-only) is conditional.
+  format section (editor vs. preview-only) is conditional. `StatusLinePreview` itself needs no
+  harness-name label: it renders inside the same card whose `SettingToggleRow` already reads
+  "Enable `{harnessName}` statusline tracking" (`StatusLineTrackingControls.tsx:166-175`), so a
+  second label on the preview immediately below would just repeat context the card already
+  gives for free.
 - The global shared editor itself doesn't get its own preview (`hidePreview` above) — the 4
   per-harness previews underneath already show it live as it's edited, and a 5th generic one
   next to the editor would be redundant and cost back exactly the vertical space this feature
@@ -153,6 +157,23 @@ the toggle doesn't leave 4 harnesses silently unaccounted for.
   slightly differently (compare `text = ${label || (provider === CLAUDE ? "rate" : "quota")}`
   at `StatuslineFormat.ts:549`) — showing one preview per actual harness means each preview is
   already correct for that harness's payload shape, with no separate handling needed.
+- **Animate the toggle transition.** Reuse the existing `AnimatedSection`
+  (`src/ui/webview-react/components/shared/AnimatedSection.tsx`) rather than building new
+  animation plumbing — it already does exactly this: a `visible` boolean drives a CSS
+  grid-rows (`0fr` ↔ `1fr`) mount/unmount animation (`animate-slide-down-in` /
+  `animate-slide-down-out`, defined in `tailwind.config.js`) that expands new content down from
+  the row above it and collapses removed content back up before unmounting, with no measured
+  heights or JS animation loop needed. Wrap each block whose presence is driven by
+  `useDifferentFormatPerHarness`:
+  - In `StatusLineSection.tsx`, wrap the single shared `StatusLineFormatEditor` in
+    `<AnimatedSection visible={!useDifferentFormatPerHarness}>` so it expands open directly
+    beneath the toggle row when the toggle turns off, and collapses up when it turns on.
+  - In `StatusLineTrackingControls.tsx`, wrap the per-harness `StatusLineFormatEditor` in
+    `<AnimatedSection visible={useDifferentFormatPerHarness}>` and the per-harness
+    `StatusLinePreview` in `<AnimatedSection visible={!useDifferentFormatPerHarness}>`, both
+    still nested inside the existing `tracking.useCtrlyokeStyle` gate. The two swap in place —
+    one collapses up as the other expands down — so each harness card visibly grows or shrinks
+    to reveal which mode it's now in, instead of the content just changing instantaneously.
 
 ## Coordinated write path
 
@@ -192,8 +213,9 @@ issuing several raw `UPDATE_GLOBAL_SETTING` calls from the webview:
 | `ctrlyoke-statusline-wrapper.js` | Mirror the shared/per-harness resolution rule (standalone copy, can't import) |
 | `StatusLineFormatEditor.tsx` | New `hidePreview` / `onDraftChange` props; extract `StatusLinePreview` out of it |
 | `StatusLinePreview.tsx` (new) | Preview-only component reused by the editor (default) and by each harness block in shared mode |
-| `StatusLineSection.tsx` | Toggle row; owns `sharedDraft` state; single shared editor (no preview) vs. per-harness blocks |
-| `StatusLineTrackingControls.tsx` | In shared mode, renders `StatusLinePreview` instead of `StatusLineFormatEditor`, gated on `useCtrlyokeStyle` |
+| `AnimatedSection.tsx` (existing, reused) | Wraps the shared editor and each per-harness editor/preview swap to animate the toggle transition |
+| `StatusLineSection.tsx` | Toggle row; owns `sharedDraft` state; single shared editor (no preview) vs. per-harness blocks, wrapped in `AnimatedSection` |
+| `StatusLineTrackingControls.tsx` | In shared mode, renders `StatusLinePreview` instead of `StatusLineFormatEditor`, gated on `useCtrlyokeStyle`; both wrapped in `AnimatedSection` |
 | `WebviewMessageRouter.ts` / `WebviewSettingsSync.ts` | New coordinated message for the false→true seed-defaults write |
 
 ## Non-goals
@@ -204,10 +226,3 @@ issuing several raw `UPDATE_GLOBAL_SETTING` calls from the webview:
   `STATUS_LINE_TRACKING_PROVIDERS` grows.
 - A first-run migration that inspects existing per-harness formats to pick a smarter initial
   `useDifferentFormatPerHarness` default — moot pre-release (see Data model changes above).
-
-## Open questions
-
-- Small implementation detail: each per-harness preview in shared mode should probably carry
-  a short label (e.g. the harness name) so it's clear which harness it's previewing, since the
-  block around it no longer has an editor giving that context implicitly. Exact placement/
-  wording left to implementation.
