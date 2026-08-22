@@ -15,6 +15,8 @@ import {
   type SettingsJsonPersistentValueInstallResult,
 } from "./SettingsJsonMcpTracker";
 
+const QWEN_STATUS_LINE_SETTING_KEY = "ui.statusLine";
+
 export interface StatuslineInstallResult {
   readonly kind: SettingsJsonPersistentValueInstallResult["kind"];
   readonly captured: boolean;
@@ -58,6 +60,10 @@ export class StatuslineManager implements StatuslineManagerLike {
         return STATUS_LINE_TRACKING_PROVIDERS.CLAUDE;
       case HARNESS_IDS.ANTIGRAVITY_CLI:
         return STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY;
+      case HARNESS_IDS.COPILOT_CLI:
+        return STATUS_LINE_TRACKING_PROVIDERS.COPILOT;
+      case HARNESS_IDS.QWEN_CLI:
+        return STATUS_LINE_TRACKING_PROVIDERS.QWEN;
       default:
         throw new Error(`Unsupported statusline harness: ${harnessId}`);
     }
@@ -83,15 +89,29 @@ export class StatuslineManager implements StatuslineManagerLike {
             userConfigPath: () =>
               path.join(os.homedir(), ".claude", "settings.json"),
           })
-        : SettingsJsonMcpTracker.getInstance("antigravity-cli-settings", {
-            projectConfigPath: () =>
-              path.join(
-                os.homedir(),
-                ".gemini",
-                "antigravity-cli",
-                "settings.json"
-              ),
-          });
+        : provider === STATUS_LINE_TRACKING_PROVIDERS.COPILOT
+          ? SettingsJsonMcpTracker.getInstance("copilot-cli-settings", {
+              projectConfigPath: () =>
+                path.join(os.homedir(), ".copilot", "settings.json"),
+              userConfigPath: () =>
+                path.join(os.homedir(), ".copilot", "settings.json"),
+            })
+          : provider === STATUS_LINE_TRACKING_PROVIDERS.QWEN
+            ? SettingsJsonMcpTracker.getInstance("qwen-cli-settings", {
+                projectConfigPath: () =>
+                  path.join(os.homedir(), ".qwen", "settings.json"),
+                userConfigPath: () =>
+                  path.join(os.homedir(), ".qwen", "settings.json"),
+              })
+            : SettingsJsonMcpTracker.getInstance("antigravity-cli-settings", {
+                projectConfigPath: () =>
+                  path.join(
+                    os.homedir(),
+                    ".gemini",
+                    "antigravity-cli",
+                    "settings.json"
+                  ),
+              });
     const definition = { tracker };
     this.definitions.set(provider, definition);
     return definition;
@@ -114,7 +134,7 @@ export class StatuslineManager implements StatuslineManagerLike {
     let captured = false;
     const result = await this.definition.tracker.installPersistentValue(
       workspaceRoot,
-      STATUS_LINE_SETTING_KEY,
+      this.getPersistentValueKey(),
       { type: "command", command },
       async (preexistingValue, hadKey) => {
         const settings = this.getSettings();
@@ -158,7 +178,7 @@ export class StatuslineManager implements StatuslineManagerLike {
     if (restoreCustomCommand && customCommand.length > 0) {
       await this.definition.tracker.uninstallPersistentValue(
         workspaceRoot,
-        STATUS_LINE_SETTING_KEY,
+        this.getPersistentValueKey(),
         {
           action: "restore",
           value: { type: "command", command: customCommand },
@@ -169,9 +189,15 @@ export class StatuslineManager implements StatuslineManagerLike {
 
     await this.definition.tracker.uninstallPersistentValue(
       workspaceRoot,
-      STATUS_LINE_SETTING_KEY,
+      this.getPersistentValueKey(),
       { action: "delete" }
     );
+  }
+
+  private getPersistentValueKey(): string {
+    return this.provider === STATUS_LINE_TRACKING_PROVIDERS.QWEN
+      ? QWEN_STATUS_LINE_SETTING_KEY
+      : STATUS_LINE_SETTING_KEY;
   }
 
   private extractCommand(value: unknown, hadKey: boolean): string | undefined {

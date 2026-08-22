@@ -570,9 +570,9 @@ divergences (Decision 4's Copilot-specific displayed limit and Decision 4a's Qwe
    same two methods) — the one piece of shared machinery that needs real new capability, not just
    new entries in existing maps. Land this before Phase 3 since Qwen's provider install/uninstall
    depends on the path support.
-3. **`StatuslineManager` provider definitions** (Settings/Schema Plumbing) for both new providers,
-   using the Phase 2 path support for Qwen. Include `StatuslineManager` install/uninstall test
-   coverage for the new path-generalized Qwen case here, alongside the behavior it covers.
+3. **Complete — `StatuslineManager` provider definitions** (Settings/Schema Plumbing) for both new
+   providers, using the Phase 2 path support for Qwen. Includes `StatuslineManager` install/uninstall
+   test coverage for the new path-generalized Qwen case alongside the behavior it covers.
 4. **`StatuslineFormat.ts` extractor updates**: extend `STATUS_LINE_FORMAT_PROVIDERS`,
    Copilot's dedicated `context` extractor (Decision 4), Qwen's numeric `current_usage` context
    preference (Decision 4a), the `cwd` fallback chain (Decision 5),
