@@ -109,8 +109,9 @@ export function UsageCard({
       {harnessId === HARNESS_IDS.COPILOT_CLI && (
         <div className="space-y-1 text-foreground">
           <div className="text-description-fg">
-            Tokens are secondary context for Copilot; billing uses AI credits or
-            premium requests.
+            Copilot bills in AI credits or premium requests, not raw tokens —
+            the estimate below is a list-price equivalent, not your actual
+            spend.
           </div>
           <a
             className="text-link-fg hover:underline"
@@ -138,18 +139,18 @@ export function UsageCard({
           </div>
         ))}
       </div>
-      {!hideCost &&
-        harnessId !== HARNESS_IDS.COPILOT_CLI &&
-        observed.monthly?.costUsd !== undefined && (
-          <div className="text-description-fg">
-            Observed token value:{" "}
-            {formatCostLabel(
-              observed.monthly.costUsd,
-              observed.monthly.costPartial === true
-            )}{" "}
-            {formatCostSourcePhrase(observed.monthly.costSources)}
-          </div>
-        )}
+      {!hideCost && observed.monthly?.costUsd !== undefined && (
+        <div className="text-description-fg">
+          Observed token value:{" "}
+          {formatCostLabel(
+            observed.monthly.costUsd,
+            observed.monthly.costPartial === true
+          )}{" "}
+          {formatCostSourcePhrase(observed.monthly.costSources)}
+          {harnessId === HARNESS_IDS.COPILOT_CLI &&
+            " — actual AI credit/premium request spend may be lower (e.g. Auto model discounts)."}
+        </div>
+      )}
       {snapshot.quota.windows.length > 0 && (
         <div className="space-y-2">
           {snapshot.quota.windows.map((window) => (
@@ -225,10 +226,18 @@ function formatQuotaDisplay(
     )}% ${percentDirection}`;
   }
 
+  // The provider's entitlement total, e.g. " / 7000" — shown alongside used
+  // or remaining so it's clear what the quota is out of (this changes with
+  // subscription tier and can't be inferred from the used/remaining figure alone).
+  const totalSuffix =
+    window.limit !== undefined
+      ? ` / ${formatQuotaValue(window.limit, window.unit)}`
+      : "";
+
   const directedValue =
     percentDirection === "remaining" ? window.remaining : window.used;
   if (directedValue !== undefined) {
-    return `${formatQuotaValue(directedValue, window.unit)} ${percentDirection} ${quotaUnitLabel(window.unit)}`;
+    return `${formatQuotaValue(directedValue, window.unit)}${totalSuffix} ${percentDirection} ${quotaUnitLabel(window.unit)}`;
   }
 
   if (window.percentUsed !== undefined) {
@@ -237,7 +246,7 @@ function formatQuotaDisplay(
     )}% ${percentDirection}`;
   }
 
-  return `${formatQuotaValue(window.used, window.unit)} used ${quotaUnitLabel(
+  return `${formatQuotaValue(window.used, window.unit)}${totalSuffix} used ${quotaUnitLabel(
     window.unit
   )}`;
 }

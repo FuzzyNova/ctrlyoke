@@ -62,6 +62,7 @@ suite("Copilot usage normalization", () => {
     );
     assert.strictEqual(aiCredits?.windows[0].label, "AI credits");
     assert.strictEqual(aiCredits?.windows[0].note, undefined);
+    assert.strictEqual(aiCredits?.windows[0].unit, HARNESS_USAGE_UNITS.CREDITS);
 
     const premiumRequests = normalizeCopilotAccountQuota(
       quotaSnapshots({
@@ -76,6 +77,10 @@ suite("Copilot usage normalization", () => {
     );
     assert.strictEqual(premiumRequests?.windows[0].label, "Premium requests");
     assert.strictEqual(premiumRequests?.windows[0].note, undefined);
+    assert.strictEqual(
+      premiumRequests?.windows[0].unit,
+      HARNESS_USAGE_UNITS.REQUESTS
+    );
   });
 
   test("keeps chat and completions independent in their documented order", () => {

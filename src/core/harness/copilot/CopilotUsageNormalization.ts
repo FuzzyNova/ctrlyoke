@@ -5,6 +5,7 @@ import {
   HARNESS_USAGE_FRESHNESS_MS,
   HARNESS_USAGE_UNITS,
   HARNESS_USAGE_WINDOW_KINDS,
+  type HarnessUsageUnit,
 } from "../../../types/DashboardConstants";
 import type {
   HarnessQuotaSnapshot,
@@ -45,12 +46,13 @@ const PREMIUM_INTERACTIONS_AMBIGUOUS_NOTE =
  * `premium_interactions` bucket: it can represent either AI credits or
  * legacy premium requests depending on the account's plan. An undocumented
  * `tokenBasedBilling` flag has been observed on the wire and, when present,
- * says which one — use it to show the real unit instead of the ambiguous
- * bucket name, and fall back to a tooltip note when it's absent.
+ * says which one — use it to show the real unit (and label) instead of the
+ * ambiguous bucket name, and fall back to a tooltip note when it's absent.
  */
 function resolvePremiumInteractionsLabel(bucket: Record<string, unknown>): {
   label: string;
   note?: string;
+  unit: HarnessUsageUnit;
 } {
   const tokenBasedBilling = readOptionalBoolean(
     bucket,
@@ -58,14 +60,15 @@ function resolvePremiumInteractionsLabel(bucket: Record<string, unknown>): {
     "token_based_billing"
   );
   if (tokenBasedBilling.value === true) {
-    return { label: "AI credits" };
+    return { label: "AI credits", unit: HARNESS_USAGE_UNITS.CREDITS };
   }
   if (tokenBasedBilling.value === false) {
-    return { label: "Premium requests" };
+    return { label: "Premium requests", unit: HARNESS_USAGE_UNITS.REQUESTS };
   }
   return {
     label: BUCKET_LABELS[COPILOT_QUOTA_BUCKET_KEYS.PREMIUM_INTERACTIONS],
     note: PREMIUM_INTERACTIONS_AMBIGUOUS_NOTE,
+    unit: HARNESS_USAGE_UNITS.REQUESTS,
   };
 }
 
@@ -284,10 +287,14 @@ function normalizeBucketWindow(
 
   const baseLabel = BUCKET_LABELS[bucketKey] ?? humanizeBucketKey(bucketKey);
   if (baseLabel === undefined) return undefined;
-  const { label, note } =
+  const { label, note, unit } =
     bucketKey === COPILOT_QUOTA_BUCKET_KEYS.PREMIUM_INTERACTIONS
       ? resolvePremiumInteractionsLabel(bucket)
-      : { label: baseLabel, note: undefined };
+      : {
+          label: baseLabel,
+          note: undefined,
+          unit: HARNESS_USAGE_UNITS.REQUESTS,
+        };
 
   const window: HarnessUsageWindow = {
     id: `copilot:${bucketKey}`,
@@ -304,7 +311,7 @@ function normalizeBucketWindow(
     ...(overage.value !== undefined ? { overage: overage.value } : {}),
     ...(usageAllowedAfterLimit !== undefined ? { usageAllowedAfterLimit } : {}),
     ...(resetAt !== undefined ? { resetAt } : {}),
-    unit: HARNESS_USAGE_UNITS.REQUESTS,
+    unit,
     confidence: HARNESS_USAGE_CONFIDENCE.EXACT,
   };
 

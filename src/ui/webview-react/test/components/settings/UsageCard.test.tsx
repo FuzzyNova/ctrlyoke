@@ -2,6 +2,7 @@ import { render } from "@testing-library/react";
 import { describe, expect, it, beforeEach } from "vitest";
 import { UsageCard } from "@components/settings/stats/UsageCard";
 import {
+  ATTEMPT_COST_SOURCES,
   HARNESS_IDS,
   HARNESS_QUOTA_SOURCES,
   HARNESS_USAGE_CONFIDENCE,
@@ -98,7 +99,7 @@ describe("UsageCard percent direction", () => {
     expect(container).not.toHaveTextContent("75% used");
   });
 
-  it("preserves Copilot request counts in used mode", () => {
+  it("shows Copilot used requests against the entitlement total in used mode", () => {
     const { container } = render(
       <UsageCard
         harnessId={HARNESS_IDS.COPILOT_CLI}
@@ -110,11 +111,10 @@ describe("UsageCard percent direction", () => {
       />
     );
 
-    expect(container).toHaveTextContent("555 used requests");
-    expect(container).not.toHaveTextContent("555 / 1,500");
+    expect(container).toHaveTextContent("555 / 1500 used requests");
   });
 
-  it("preserves Copilot remaining request counts in remaining mode", () => {
+  it("shows Copilot remaining requests against the entitlement total in remaining mode", () => {
     setPercentDirection("remaining");
     const { container } = render(
       <UsageCard
@@ -127,8 +127,36 @@ describe("UsageCard percent direction", () => {
       />
     );
 
-    expect(container).toHaveTextContent("945 remaining requests");
+    expect(container).toHaveTextContent("945 / 1500 remaining requests");
     expect(container).not.toHaveTextContent("25% remaining");
+  });
+
+  it("shows the estimated list-price cost for Copilot with a spend-may-differ note", () => {
+    const snapshot = makeSnapshot(
+      HARNESS_IDS.COPILOT_CLI,
+      HARNESS_USAGE_UNITS.CREDITS
+    );
+    snapshot.observed.monthly = {
+      input: 1_000,
+      output: 1_000,
+      total: 2_000,
+      since: Date.now(),
+      costUsd: 12.34,
+      costSources: [ATTEMPT_COST_SOURCES.PRICE_TABLE],
+    };
+
+    const { container } = render(
+      <UsageCard
+        harnessId={HARNESS_IDS.COPILOT_CLI}
+        snapshot={snapshot}
+        hideCost={false}
+      />
+    );
+
+    expect(container).toHaveTextContent("Observed token value: ≈$12.34");
+    expect(container).toHaveTextContent(
+      "actual AI credit/premium request spend may be lower"
+    );
   });
 
   it("fills the usage bar to the used percentage in used mode", () => {
