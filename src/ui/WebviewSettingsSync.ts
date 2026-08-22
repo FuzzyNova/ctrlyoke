@@ -1162,7 +1162,7 @@ export class WebviewSettingsSync {
   /** Set shared/per-harness statusline format mode and seed untouched formats when enabling per-harness mode. */
   async handleSetStatusLineFormatMode(
     request: SetStatusLineFormatModeMessage,
-    _postMessage: PostMessageFn = this.postMessage
+    postMessage: PostMessageFn = this.postMessage
   ): Promise<void> {
     if (typeof request?.useDifferentFormatPerHarness !== "boolean") {
       this.reportStatuslineFailure(
@@ -1196,31 +1196,38 @@ export class WebviewSettingsSync {
     }
 
     if (
-      !request.useDifferentFormatPerHarness ||
-      wasUsingDifferentFormatPerHarness
+      request.useDifferentFormatPerHarness &&
+      !wasUsingDifferentFormatPerHarness
     ) {
-      return;
+      try {
+        const sharedFormat = ConfigurationUtils.getSharedStatusLineFormat();
+        for (const provider of Object.values(STATUS_LINE_TRACKING_PROVIDERS)) {
+          const currentSettings =
+            ConfigurationUtils.getStatusLineTrackingSettings(provider);
+          if (!isDefaultStatusLineFormat(currentSettings.format)) {
+            continue;
+          }
+
+          await ConfigurationUtils.setStatusLineTrackingSettings(provider, {
+            ...currentSettings,
+            format: sharedFormat.map((segment) => ({
+              ...segment,
+            })),
+          });
+        }
+      } catch (error) {
+        this.reportStatuslineFailure(
+          "Statusline format mode was enabled, but default formats could not be seeded.",
+          error
+        );
+      }
     }
 
     try {
-      const sharedFormat = ConfigurationUtils.getSharedStatusLineFormat();
-      for (const provider of Object.values(STATUS_LINE_TRACKING_PROVIDERS)) {
-        const currentSettings =
-          ConfigurationUtils.getStatusLineTrackingSettings(provider);
-        if (!isDefaultStatusLineFormat(currentSettings.format)) {
-          continue;
-        }
-
-        await ConfigurationUtils.setStatusLineTrackingSettings(provider, {
-          ...currentSettings,
-          format: sharedFormat.map((segment) => ({
-            ...segment,
-          })),
-        });
-      }
+      await this.handleGlobalSettingsLoadRequest(postMessage);
     } catch (error) {
       this.reportStatuslineFailure(
-        "Statusline format mode was enabled, but default formats could not be seeded.",
+        "Statusline format mode was updated, but settings could not be refreshed.",
         error
       );
     }
