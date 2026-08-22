@@ -1,6 +1,9 @@
 # Status Line Shared/Per-Harness Format Toggle Plan
 
-> **Status:** Not implemented. Motivated by upcoming Copilot and Qwen statusline support
+> **Status:** In progress (staged 2026-08-22) — queued as five steps: (1) settings contract,
+> (2) coordinated write path, (3) statusline wrapper resolution, (4) `StatusLinePreview`
+> extraction + editor props, (5) `StatusLineSection` / `StatusLineTrackingControls` wiring.
+> Each step updates this line as it lands. Motivated by upcoming Copilot and Qwen statusline support
 > (`STATUS_LINE_TRACKING_PROVIDERS` currently has 2 entries — `claude`, `antigravity` — and
 > is about to grow to 4), but this plan only builds the shared/per-harness toggle mechanism.
 > Adding the new providers themselves is separate, larger work and not covered here.
@@ -99,19 +102,40 @@ directly and returns `configured.format` per provider; the two per-harness entry
 `formatBrandedStatusLine`. This resolution needs the same shared/per-harness branch:
 
 ```js
-const useDifferentFormatPerHarness = typeof tracking?.useDifferentFormatPerHarness === "boolean"
-  ? tracking.useDifferentFormatPerHarness
-  : false;
-const effectiveFormat = useDifferentFormatPerHarness
+const useDifferentFormatPerHarness =
+  typeof tracking?.useDifferentFormatPerHarness === "boolean"
+    ? tracking.useDifferentFormatPerHarness
+    : false;
+const candidateFormat = useDifferentFormatPerHarness
   ? configured?.format
   : tracking?.sharedFormat;
+const effectiveFormat =
+  Array.isArray(candidateFormat) && candidateFormat.length > 0
+    ? candidateFormat
+    : cloneDefaultStatuslineFormat();
 ```
+
+Two details the naive branch above gets wrong, both of which the implementation must handle:
+
+- **`sharedFormat` needs the same validation `configured.format` already gets.** The existing
+  code guards with `Array.isArray(configured.format) && configured.format.length > 0` before
+  using it (`ctrlyoke-statusline-wrapper.js:170-173`); `sharedFormat` is read from the same
+  hand-edited JSON file and needs an identical guard with the same
+  `cloneDefaultStatuslineFormat()` fallback.
+- **The early return has to honor shared mode too.** `resolveStatusLineSettings` returns
+  `defaults` outright when `configured` is missing or not a plain object
+  (`ctrlyoke-statusline-wrapper.js:148-155`) — a provider absent from `settings.json` entirely.
+  In shared mode the format still comes from `tracking.sharedFormat`, which is present
+  independent of any provider entry, so `effectiveFormat` must be computed **before** that
+  early return and folded into `defaults.format`. Otherwise a provider with no entry silently
+  renders the generic default instead of the user's shared format.
 
 This file's header comment is explicit that it "must remain standalone and depend only on Node
 built-ins" — it can't `require` `ConfigurationUtils`. So this branch has to be a second,
 hand-kept copy of the same rule the webview/extension side applies, not a shared import. Keep
-`src/test/unit/StatuslineWrapper.test.ts` (already exists) covering both toggle states so drift
-between the two copies gets caught.
+`src/test/unit/StatuslineWrapper.test.ts` (already exists) covering both toggle states — plus
+the missing-provider-entry and invalid-`sharedFormat` cases above — so drift between the two
+copies gets caught.
 
 ## UI changes
 
@@ -136,7 +160,13 @@ the toggle doesn't leave 4 harnesses silently unaccounted for.
   When `false` (shared mode): keep local state `sharedDraft` seeded from `sharedFormat` and
   render one `<StatusLineFormatEditor format={sharedFormat} onCommit={...→ sharedFormat...}
   onDraftChange={setSharedDraft} hidePreview />` above the harness list, then pass `sharedDraft`
-  down into each `StatusLineTrackingControls`.
+  down into each `StatusLineTrackingControls`. `sharedDraft` must **also** resync from the
+  `sharedFormat` prop in a `useEffect` keyed on it, not only from `onDraftChange` — the editor
+  itself already re-seeds its internal `draftFormat` whenever the `format` prop changes
+  (`StatusLineFormatEditor.tsx:280-283`) without firing `commit()`, so a settings value that
+  changes underneath the webview (round-trip, reset button, external `settings.json` edit) would
+  otherwise leave the per-harness previews showing a stale draft the editor is no longer
+  displaying.
 - `StatusLineTrackingControls.tsx` — when shared mode is active, don't render
   `StatusLineFormatEditor` at all (`StatusLineTrackingControls.tsx:205-213`); render
   `<StatusLinePreview format={sharedDraft} provider={...} snapshot={snapshot}
@@ -217,6 +247,36 @@ issuing several raw `UPDATE_GLOBAL_SETTING` calls from the webview:
 | `StatusLineSection.tsx` | Toggle row; owns `sharedDraft` state; single shared editor (no preview) vs. per-harness blocks, wrapped in `AnimatedSection` |
 | `StatusLineTrackingControls.tsx` | In shared mode, renders `StatusLinePreview` instead of `StatusLineFormatEditor`, gated on `useCtrlyokeStyle`; both wrapped in `AnimatedSection` |
 | `WebviewMessageRouter.ts` / `WebviewSettingsSync.ts` | New coordinated message for the false→true seed-defaults write |
+
+## Known fallout to handle
+
+- **Settings/UI parity is enforced by a test.**
+  `src/test/integration/settingsSchemaUiParity.integration.test.ts` walks every leaf property in
+  `settings-schema.json` and fails unless the webview source references that dot path — either
+  inline as `path="..."` or indirectly as `SETTING_PATHS.SOME_KEY`. Both new leaves therefore
+  need their `SETTING_PATHS` constant referenced from webview source:
+  `…USE_DIFFERENT_FORMAT_PER_HARNESS` via the new `SettingToggleRow`'s `path` prop, and
+  `…SHARED_FORMAT` via the shared editor's `onCommit` write in `StatusLineSection.tsx`. Adding
+  the schema properties without the UI references is a failing build, not a silent gap.
+- **The intersection type widens `keyof statusLineTracking`.** Because the two new keys are
+  siblings of the provider keys, anything written as
+  `(typeof …statusLineTracking)[keyof typeof …statusLineTracking]` now resolves to
+  `StatusLineTrackingSettings | boolean | StatusLineSegment[]` instead of just
+  `StatusLineTrackingSettings`. One existing use needs fixing:
+  `src/ui/webview-react/test/components/settings/StatusLineTrackingControls.test.tsx:23-26`,
+  which should become a plain `Partial<StatusLineTrackingSettings>`. Production code only ever
+  indexes `statusLineTracking[provider]` with a `StatusLineTrackingProvider`-typed key
+  (`ConfigurationUtils.ts:765`, `StatusLineTrackingControls.tsx:127`) and nothing iterates its
+  keys generically, so the mixed-map shape is safe everywhere else and keeps every existing
+  `permissions.statusLineTracking.<provider>.*` setting path unchanged.
+- **No new scope plumbing is needed.** `SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING` is
+  already listed in `WORKSPACE_FORBIDDEN_SETTING_ROOTS` (`CtrlYokeConfigService.ts:27-32`), which
+  matches on prefix, so both new keys are automatically user/machine-scope-only like their
+  provider siblings.
+- **The per-harness entry scripts need no changes.** `ctrlyoke-claude-statusline.js:44` and
+  `ctrlyoke-antigravity-statusline.js:58` pass `settings.format` straight through from
+  `resolveStatusLineSettings`, so resolving the shared/per-harness branch inside that one
+  function covers both harnesses.
 
 ## Non-goals
 
