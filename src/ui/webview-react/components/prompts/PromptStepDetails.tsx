@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from "react";
 import { STEP_STATUS } from "../../types/messages";
-import type { StepStatus } from "../../types/messages";
+import type { HarnessId, StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
 import type { StepDetails } from "./WorkflowStep";
+import { HarnessIcon } from "@components/shared/HarnessIcon";
 
 /**
  * A single prompt-level property override to display in the overrides row.
@@ -17,6 +18,8 @@ export interface PromptOverride {
 
 interface PromptStepDetailsProps {
   status: StepStatus;
+  /** Harness ID for the icon shown before the harness label */
+  harnessId?: HarnessId;
   harnessLabel?: string;
   harnessIsDefault?: boolean;
   modelLabel?: string;
@@ -43,6 +46,7 @@ interface PromptStepDetailsProps {
  */
 export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
   status,
+  harnessId,
   harnessLabel,
   harnessIsDefault,
   modelLabel,
@@ -94,15 +98,20 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
         >
           {harnessLabel && (
             <span
-              className="min-w-0 truncate"
+              className="min-w-0 inline-flex items-center gap-1 truncate"
               title={
                 harnessIsDefault ? `${harnessLabel} (default)` : harnessLabel
               }
             >
-              {harnessLabel}
-              {harnessIsDefault && (
-                <span className="opacity-60"> (default)</span>
+              {harnessId && (
+                <HarnessIcon harnessId={harnessId} size={12} className="opacity-90" />
               )}
+              <span className="truncate">
+                {harnessLabel}
+                {harnessIsDefault && (
+                  <span className="opacity-60"> (default)</span>
+                )}
+              </span>
             </span>
           )}
           {harnessLabel && modelLabel && (

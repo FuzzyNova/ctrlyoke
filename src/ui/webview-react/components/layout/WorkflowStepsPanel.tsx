@@ -17,6 +17,7 @@ import {
   useSortableDndSensors,
 } from "@hooks/index";
 import { HARNESS_INFO } from "../../types/messages";
+import type { HarnessId } from "../../types/messages";
 import {
   WorkflowStepItem,
   type StepDetails,
@@ -77,7 +78,11 @@ type WorkflowStepDragHandleProps =
 
 type StepHarnessModel = Pick<
   WorkflowStepComponentProps,
-  "harnessLabel" | "harnessIsDefault" | "modelLabel" | "modelIsDefault"
+  | "harnessId"
+  | "harnessLabel"
+  | "harnessIsDefault"
+  | "modelLabel"
+  | "modelIsDefault"
 >;
 
 type StepContextMenuRequest = {
@@ -208,6 +213,7 @@ const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
         isCurrent={isCurrent}
         isSelected={isSelected}
         onClick={() => onStepClick(index)}
+        harnessId={harnessModel.harnessId}
         harnessLabel={harnessModel.harnessLabel}
         harnessIsDefault={harnessModel.harnessIsDefault}
         modelLabel={harnessModel.modelLabel}
@@ -379,6 +385,7 @@ const WorkflowStepsPanelInner: React.FC<{
     (step: (typeof steps)[0], status?: StepStatus) => {
       if (isScriptStep(step))
         return {
+          harnessId: undefined,
           harnessLabel: undefined,
           harnessIsDefault: true,
           modelLabel: undefined,
@@ -400,6 +407,7 @@ const WorkflowStepsPanelInner: React.FC<{
         const h = step._runtime?.harness;
         const m = step._runtime?.model;
         return {
+          harnessId: h as HarnessId | undefined,
           harnessLabel: h
             ? (HARNESS_INFO[h as keyof typeof HARNESS_INFO]?.name ?? h)
             : undefined,
@@ -417,6 +425,7 @@ const WorkflowStepsPanelInner: React.FC<{
       const effectiveModel =
         step.model ?? workflowProperties.model ?? globalSettings.model;
       return {
+        harnessId: effectiveHarness as HarnessId | undefined,
         harnessLabel:
           HARNESS_INFO[effectiveHarness as keyof typeof HARNESS_INFO]?.name ??
           effectiveHarness,
@@ -739,6 +748,7 @@ const WorkflowStepsPanelInner: React.FC<{
       const h = finalStep._runtime!.harness;
       const m = finalStep._runtime!.model;
       return {
+        harnessId: h as HarnessId | undefined,
         harnessLabel: h
           ? (HARNESS_INFO[h as keyof typeof HARNESS_INFO]?.name ?? h)
           : undefined,
@@ -754,6 +764,7 @@ const WorkflowStepsPanelInner: React.FC<{
     const effectiveModel =
       finalStep.model ?? workflowProperties.model ?? globalSettings.model;
     return {
+      harnessId: effectiveHarness as HarnessId | undefined,
       harnessLabel:
         HARNESS_INFO[effectiveHarness as keyof typeof HARNESS_INFO]?.name ??
         effectiveHarness,

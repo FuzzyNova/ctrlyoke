@@ -6,7 +6,7 @@ import { StatusIcon } from "./StatusIcon";
 import { PromptStepDetails } from "./PromptStepDetails";
 import type { PromptOverride } from "./PromptStepDetails";
 export type { PromptOverride };
-import type { StepStatus } from "../../types/messages";
+import type { HarnessId, StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
 import {
   formatTokenBreakdown,
@@ -52,6 +52,8 @@ interface WorkflowStepProps {
   isSelected?: boolean;
   /** Click handler for selection */
   onClick?: () => void;
+  /** Harness ID for the icon shown before the harness label */
+  harnessId?: HarnessId;
   /** Harness display name (e.g. "Claude Code") */
   harnessLabel?: string;
   /** True when harness is inherited (not set at prompt level) */
@@ -131,6 +133,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
   isCurrent = false,
   isSelected = false,
   onClick,
+  harnessId,
   harnessLabel,
   harnessIsDefault,
   modelLabel,
@@ -362,6 +365,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
               <div className={detailsClass}>
                 <PromptStepDetails
                   status={status}
+                  harnessId={harnessId}
                   harnessLabel={harnessLabel}
                   harnessIsDefault={harnessIsDefault}
                   modelLabel={modelLabel}

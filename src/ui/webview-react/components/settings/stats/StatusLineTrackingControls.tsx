@@ -16,6 +16,7 @@ import type { StatusLineSegment } from "@root/utils/StatuslineFormat";
 import { AnimatedSection } from "@components/shared/AnimatedSection";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { Button } from "@components/shared/Button";
+import { HarnessIcon } from "@components/shared/HarnessIcon";
 import { LocalTextInput } from "@components/shared/LocalInputs";
 import { Modal } from "@components/shared/Modal";
 import { SettingInputRow } from "@components/shared/SettingInputRow";
@@ -206,8 +207,12 @@ export function StatusLineTrackingControls({
 
   return (
     <div className="rounded border border-panel-border bg-panel-bg p-2 space-y-2">
+      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+        <HarnessIcon harnessId={harnessId} size={16} />
+        <span>{harnessName}</span>
+      </div>
       <SettingToggleRow
-        label={`Enable ${harnessName} statusline tracking`}
+        label="Enable statusline tracking"
         description={getDisableWarning(harnessId)}
         checked={tracking.enabled}
         onChange={handleEnabledChange}

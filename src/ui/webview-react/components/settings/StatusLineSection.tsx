@@ -97,6 +97,9 @@ export function StatusLineSection({ settings }: Props) {
             useDifferentFormatPerHarness={useDifferentFormatPerHarness}
           />
         ))}
+        <p className="text-xs text-description-fg">
+          OpenCode and Codex don't currently support statusline overrides.
+        </p>
       </div>
     </section>
   );

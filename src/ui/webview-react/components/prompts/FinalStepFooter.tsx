@@ -5,6 +5,7 @@ import { PromptStepDetails } from "./PromptStepDetails";
 import type { PromptOverride } from "./PromptStepDetails";
 import {
   FINAL_STEP_PHASES,
+  type HarnessId,
   type StepStatus,
   type FinalStepPhase,
 } from "../../types/messages";
@@ -36,6 +37,8 @@ interface FinalStepFooterProps {
   onSelect: () => void;
   onToggleExpanded: () => void;
   onToggleEnabled: () => void;
+  /** Harness ID for the icon shown before the harness label */
+  harnessId?: HarnessId;
   /** Resolved harness display name (accounting for workflow/global defaults) */
   harnessLabel?: string;
   /** True when harness is inherited (not set at prompt level) */
@@ -74,6 +77,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
   onSelect,
   onToggleExpanded,
   onToggleEnabled,
+  harnessId,
   harnessLabel,
   harnessIsDefault,
   modelLabel,
@@ -150,6 +154,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
           {/* Shared metadata rows: harness/model (prompt only), stats, end condition, overrides */}
           <PromptStepDetails
             status={effectiveStatus}
+            harnessId={isScriptStep(finalStep) ? undefined : harnessId}
             harnessLabel={isScriptStep(finalStep) ? undefined : harnessLabel}
             harnessIsDefault={
               isScriptStep(finalStep) ? undefined : harnessIsDefault
