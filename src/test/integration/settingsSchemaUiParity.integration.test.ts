@@ -167,6 +167,9 @@ function settingPathConstants(): Map<string, string> {
 const PENDING_UI_PARITY: readonly string[] = [
   "server.standalonePort",
   "server.theme",
+  "terminal.mobileBarLayout.bar",
+  "terminal.mobileBarLayout.hidden",
+  "terminal.mobileBarLayout.popup",
 ];
 
 const WEBVIEW_TEST_DIRECTORIES = new Set(["test", "__tests__"]);
