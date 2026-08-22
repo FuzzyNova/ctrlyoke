@@ -1,9 +1,11 @@
 # Settings Schema UI Parity Plan
 
 > **Status:** Implemented (2026-08-21). Every schema-authorable setting now has a
-> live dashboard control except `server.theme` and `server.standalonePort`, which
-> are deliberately deferred until the standalone server ships — see "Current gaps"
-> below. Those two stay in `PENDING_UI_PARITY` as markers. Tracked by
+> live dashboard control except `server.theme` and `server.standalonePort`
+> (deliberately deferred until the standalone server ships) and the three
+> `terminal.mobileBarLayout.*` leaves (always written together as one object,
+> like `modelPricing`) — see "Current gaps" below. Those stay in
+> `PENDING_UI_PARITY` as markers. Tracked by
 > `src/test/integration/settingsSchemaUiParity.integration.test.ts`
 > (`Settings schema -> Global Settings dashboard control parity` ›
 > `every leaf settings-schema property has a live dashboard control`), which
@@ -42,17 +44,21 @@ npm run compile-tests
 $env:MOCHA_GREP = "Settings schema"; node ./out/test/runTest.js; $env:MOCHA_GREP = $null
 ```
 
-## Current gaps (2)
+## Current gaps (5)
 
 | Setting | Section it belongs in | Disposition |
 | --- | --- | --- |
 | `server.theme` | intentionally not surfaced (for now) | **Not a gap yet — leave as-is.** The VS Code-hosted dashboard (`ServerSection.tsx`'s process) always follows the VS Code theme; there's nothing for this setting to control there. It's meant for the standalone `ctrlyoke server` headless CLI process's own dashboard, which doesn't exist yet — same story as `server.standalonePort` below. Give it a control once the standalone server ships and gets its own settings surface. |
 | `server.standalonePort` | intentionally not surfaced | **Not a gap — leave as-is.** `ServerSection.tsx` already documents why: it configures the standalone `ctrlyoke server` headless CLI process, which doesn't exist yet (`dev/active/STANDALONE_SERVER_PLAN.md` Phases 5–10 are unimplemented). The schema/type/default are kept so the standalone feature can use it later with no config migration. This test will keep flagging it until the standalone server ships and gets its own settings surface (not the VS Code `ServerSection`, which controls a different process) — that's expected, not a bug in the test. |
+| `terminal.mobileBarLayout.bar` | `TerminalSection.tsx` → `TerminalControlBarEditor.tsx` | **Not a gap — leave as-is.** Same shape as `modelPricing` below: `bar`/`popup`/`hidden` are always read and written together as one `TerminalMobileBarLayout` object (`onUpdate("terminal.mobileBarLayout", nextLayout)`), never as individual leaf paths, so no literal `path="terminal.mobileBarLayout.bar"` will ever appear in source. See `dev/implemented/MOBILE_TERMINAL_BAR_CUSTOMIZATION_PLAN.md`. |
+| `terminal.mobileBarLayout.popup` | `TerminalSection.tsx` → `TerminalControlBarEditor.tsx` | Same disposition as `terminal.mobileBarLayout.bar` above — one shared object write, not a per-leaf control. |
+| `terminal.mobileBarLayout.hidden` | `TerminalSection.tsx` → `TerminalControlBarEditor.tsx` | Same disposition as `terminal.mobileBarLayout.bar` above — one shared object write, not a per-leaf control. |
 
 `defaults.secrets`, the four `usageTracking.*` controls, and `modelPricing` are done — see
-"Completed" below. The remaining 2 settings, `server.theme` and `server.standalonePort`, are
-intentionally deferred until the standalone server ships and should stay in
-`PENDING_UI_PARITY` as markers until then.
+"Completed" below. `server.theme` and `server.standalonePort` are intentionally deferred until
+the standalone server ships; the three `terminal.mobileBarLayout.*` leaves are a permanent,
+structural exemption (whole-object write, not a missing control) — all five should stay in
+`PENDING_UI_PARITY` as markers.
 
 ### Related fixes surfaced while scoping `modelPricing`
 
