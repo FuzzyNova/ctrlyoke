@@ -12,6 +12,8 @@ import type {
   StatusLineTrackingProvider,
 } from "@root/types/DashboardConstants";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import type { StatusLineSegment } from "@root/utils/StatuslineFormat";
+import { AnimatedSection } from "@components/shared/AnimatedSection";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { Button } from "@components/shared/Button";
 import { LocalTextInput } from "@components/shared/LocalInputs";
@@ -20,10 +22,13 @@ import { SettingInputRow } from "@components/shared/SettingInputRow";
 import { SettingToggleRow } from "@components/shared/SettingToggleRow";
 import { useHarnessUsageStore } from "@store/harnessUsageStore";
 import { StatusLineFormatEditor } from "./StatusLineFormatEditor";
+import { StatusLinePreview } from "./StatusLinePreview";
 
 interface Props {
   harnessId: StatusLineTrackingHarnessId;
   settings: FullGlobalSettings;
+  sharedDraft?: StatusLineSegment[];
+  useDifferentFormatPerHarness?: boolean;
 }
 
 interface StatusLineSettingPaths {
@@ -121,7 +126,13 @@ function sendGlobalSetting(path: string, value: unknown): void {
   });
 }
 
-export function StatusLineTrackingControls({ harnessId, settings }: Props) {
+export function StatusLineTrackingControls({
+  harnessId,
+  settings,
+  sharedDraft = settings.settings.permissions.statusLineTracking.sharedFormat,
+  useDifferentFormatPerHarness = settings.settings.permissions
+    .statusLineTracking.useDifferentFormatPerHarness,
+}: Props) {
   const provider = providerForHarness(harnessId);
   const paths = STATUS_LINE_SETTING_PATHS[provider];
   const tracking = settings.settings.permissions.statusLineTracking[provider];
@@ -203,13 +214,29 @@ export function StatusLineTrackingControls({ harnessId, settings }: Props) {
         activeScope={SETTING_SCOPES.USER}
       />
       {tracking.useCtrlyokeStyle && (
-        <StatusLineFormatEditor
-          format={tracking.format}
-          onCommit={(format) => sendGlobalSetting(paths.format, format)}
-          provider={provider}
-          snapshot={snapshot}
-          percentDirection={settings.settings.usageTracking.percentDirection}
-        />
+        <>
+          <AnimatedSection visible={useDifferentFormatPerHarness}>
+            <StatusLineFormatEditor
+              format={tracking.format}
+              onCommit={(format) => sendGlobalSetting(paths.format, format)}
+              provider={provider}
+              snapshot={snapshot}
+              percentDirection={
+                settings.settings.usageTracking.percentDirection
+              }
+            />
+          </AnimatedSection>
+          <AnimatedSection visible={!useDifferentFormatPerHarness}>
+            <StatusLinePreview
+              format={sharedDraft}
+              provider={provider}
+              snapshot={snapshot}
+              percentDirection={
+                settings.settings.usageTracking.percentDirection
+              }
+            />
+          </AnimatedSection>
+        </>
       )}
       <Modal
         isOpen={isDisableModalOpen}

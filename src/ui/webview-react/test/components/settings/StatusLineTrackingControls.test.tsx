@@ -12,9 +12,7 @@ import {
   STATUS_LINE_TRACKING_PROVIDERS,
 } from "@root/types/DashboardConstants";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
-import type {
-  StatusLineTrackingSettings,
-} from "@root/types/CtrlYokeSettings";
+import type { StatusLineTrackingSettings } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import type { StatusLineTrackingHarnessId } from "@root/types/DashboardConstants";
 import {
@@ -37,6 +35,7 @@ function makeSettings(
         ...CTRLYOKE_SETTINGS_DEFAULTS.permissions,
         statusLineTracking: {
           ...CTRLYOKE_SETTINGS_DEFAULTS.permissions.statusLineTracking,
+          useDifferentFormatPerHarness: true,
           [provider]: {
             ...CTRLYOKE_SETTINGS_DEFAULTS.permissions.statusLineTracking[
               provider
@@ -194,6 +193,31 @@ describe("StatusLineTrackingControls", () => {
       screen.queryByRole("region", { name: "Status line format" })
     ).not.toBeInTheDocument();
   });
+
+  it.each([true, false])(
+    "renders neither a format editor nor a preview when ctrlyoke style is disabled in %s mode",
+    (useDifferentFormatPerHarness) => {
+      const settings = makeSettings(HARNESS_IDS.CLAUDE_CLI, {
+        useCtrlyokeStyle: false,
+      });
+
+      render(
+        <StatusLineTrackingControls
+          harnessId={HARNESS_IDS.CLAUDE_CLI}
+          settings={settings}
+          sharedDraft={
+            settings.settings.permissions.statusLineTracking.sharedFormat
+          }
+          useDifferentFormatPerHarness={useDifferentFormatPerHarness}
+        />
+      );
+
+      expect(
+        screen.queryByRole("region", { name: "Status line format" })
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText("Live preview")).not.toBeInTheDocument();
+    }
+  );
 
   it("persists an editor field edit as one whole-array user setting update", async () => {
     const user = userEvent.setup();

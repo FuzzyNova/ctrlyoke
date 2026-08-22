@@ -1,8 +1,16 @@
+import { useEffect, useState } from "react";
 import {
   HARNESS_IDS,
+  MESSAGE_TYPES,
+  SETTING_PATHS,
+  SETTING_SCOPES,
   type StatusLineTrackingHarnessId,
 } from "@root/types/DashboardConstants";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import { AnimatedSection } from "@components/shared/AnimatedSection";
+import { SettingToggleRow } from "@components/shared/SettingToggleRow";
+import { sendMessage } from "@hooks/useMessageHandler";
+import { StatusLineFormatEditor } from "./stats/StatusLineFormatEditor";
 import { StatusLineTrackingControls } from "./stats/StatusLineTrackingControls";
 
 const STATUS_LINE_HARNESS_IDS: StatusLineTrackingHarnessId[] = [
@@ -15,6 +23,22 @@ interface Props {
 }
 
 export function StatusLineSection({ settings }: Props) {
+  const { useDifferentFormatPerHarness, sharedFormat } =
+    settings.settings.permissions.statusLineTracking;
+  const [sharedDraft, setSharedDraft] = useState(sharedFormat);
+
+  useEffect(() => {
+    setSharedDraft(sharedFormat);
+  }, [sharedFormat]);
+
+  const sendGlobalSetting = (path: string, value: unknown): void => {
+    sendMessage(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, {
+      path,
+      value,
+      scope: SETTING_SCOPES.USER,
+    });
+  };
+
   return (
     <section
       className="space-y-3"
@@ -33,11 +57,41 @@ export function StatusLineSection({ settings }: Props) {
         </p>
       </div>
       <div className="space-y-3">
+        <SettingToggleRow
+          label="Use a different status line format per harness"
+          checked={useDifferentFormatPerHarness}
+          onChange={(useDifferentFormatPerHarness) =>
+            sendMessage(MESSAGE_TYPES.SET_STATUS_LINE_FORMAT_MODE, {
+              useDifferentFormatPerHarness,
+            })
+          }
+          path={
+            SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_USE_DIFFERENT_FORMAT_PER_HARNESS
+          }
+          sources={settings.sources}
+          onReset={(path) => sendGlobalSetting(path, undefined)}
+          activeScope={SETTING_SCOPES.USER}
+        />
+        <AnimatedSection visible={!useDifferentFormatPerHarness}>
+          <StatusLineFormatEditor
+            format={sharedFormat}
+            onCommit={(format) =>
+              sendGlobalSetting(
+                SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_SHARED_FORMAT,
+                format
+              )
+            }
+            onDraftChange={setSharedDraft}
+            hidePreview
+          />
+        </AnimatedSection>
         {STATUS_LINE_HARNESS_IDS.map((harnessId) => (
           <StatusLineTrackingControls
             key={harnessId}
             harnessId={harnessId}
             settings={settings}
+            sharedDraft={sharedDraft}
+            useDifferentFormatPerHarness={useDifferentFormatPerHarness}
           />
         ))}
       </div>

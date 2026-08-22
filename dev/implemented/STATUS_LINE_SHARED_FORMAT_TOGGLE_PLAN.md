@@ -1,9 +1,9 @@
 # Status Line Shared/Per-Harness Format Toggle Plan
 
-> **Status:** Step 4 of 5 landed (2026-08-22) — settings contract, shared helpers, coordinated
-> webview→extension writes, standalone statusline wrapper resolution, and `StatusLinePreview`
-> extraction/editor props are complete; remaining step: (5) `StatusLineSection` /
-> `StatusLineTrackingControls` wiring.
+> **Status:** Fully implemented (2026-08-22). All five steps are complete: the settings
+> contract, shared helpers, coordinated webview→extension writes, standalone statusline wrapper
+> resolution, `StatusLinePreview` extraction/editor props, and the shared/per-harness dashboard
+> wiring with live previews and animated transitions.
 > Each step updates this line as it lands. Motivated by upcoming Copilot and Qwen statusline support
 > (`STATUS_LINE_TRACKING_PROVIDERS` currently has 2 entries — `claude`, `antigravity` — and
 > is about to grow to 4), but this plan only builds the shared/per-harness toggle mechanism.
