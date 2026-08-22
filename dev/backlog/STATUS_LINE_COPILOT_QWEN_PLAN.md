@@ -1,7 +1,10 @@
 # Status Line Copilot & Qwen Support Plan
 
-> **Status:** Not implemented. Research completed 2026-08-21, including a live, empirical probe
-> of GitHub Copilot CLI's real statusline payload on this machine (not just documentation).
+> **Status:** Not implemented. Research completed 2026-08-22, including live, empirical probes
+> of GitHub Copilot CLI's and Qwen Code's real statusline payloads on this machine (not just
+> documentation).
+> Re-verified against the codebase 2026-08-22 after `STATUS_LINE_SHARED_FORMAT_TOGGLE_PLAN.md`
+> landed — see "Plan currency note" below the Research section for what changed.
 
 **Related:** [`STATUSLINE_USER_CONTROLS_PLAN.md`](../implemented/STATUSLINE_USER_CONTROLS_PLAN.md)
 (implemented — enable/disable, custom forward command, `useCtrlyokeStyle`, install/uninstall
@@ -172,10 +175,11 @@ worth doing. See Decisions below.
 
 ### Qwen Code
 
-Sourced from official docs (`https://qwenlm.github.io/qwen-code-docs/en/users/features/status-line/`)
-plus inspection of a **real, already-configured** `~/.qwen/settings.json` on this machine — not
-independently probed live the way Copilot was (out of this plan's research scope as asked;
-flagged as residual risk in Open Questions).
+Sourced from the official docs (`https://qwenlm.github.io/qwen-code-docs/en/users/features/status-line/`),
+inspection of a **real, already-configured** `~/.qwen/settings.json` on this machine, and a live
+probe of Qwen Code `0.21.15` on 2026-08-22. The probe temporarily changed only `ui.statusLine`
+to command mode, ran a genuine interactive TTY session in this repository, captured repeated
+stdin payloads, and restored the original settings file byte-for-byte (SHA-256 verified).
 
 **Settings shape — nested, and dual-mode.** In `~/.qwen/settings.json`, under `ui.statusLine`
 (**not** a top-level key, unlike Claude/Antigravity/Copilot):
@@ -218,32 +222,75 @@ now" install notification that a brand-new, never-configured user also gets. Tha
 different situation (an existing, working, non-forwardable configuration being overwritten,
 rather than empty space being filled) — decided not to auto-replace it at all; see Decision 8.
 
-**JSON payload structure** (per docs, not independently reproduced):
-- `session_id`, `version`, `model.display_name` (**no `model.id`** documented for Qwen — the
-  existing `MODEL` field already tries `id` before falling back to `display_name`
-  (`StatuslineFormat.ts:532-538`), so this needs no code change, just confirmation it degrades
-  correctly).
-- `context_window.{context_window_size, used_percentage, remaining_percentage, current_usage,
-  total_input_tokens, total_output_tokens}` — **same key names as Claude/Antigravity's existing
-  shape**, per the docs summary. Unlike Copilot, this suggests Qwen's `context` field can likely
-  reuse the existing generic `contextValues()` extractor unchanged — flagged as an assumption to
-  verify with a live probe before shipping, precisely because Copilot's version of "matches the
-  existing shape" turned out to be misleading once actually run.
-- `workspace.current_dir` — **no top-level `cwd`** documented for Qwen, unlike the other three
-  providers (Copilot confirmed live; Claude/Antigravity confirmed by the original plan's own
-  research). The `CWD` field extractor needs a fallback chain (`cwd ?? workspace.current_dir`)
-  rather than a Qwen-specific branch — see Decisions.
-- `git.branch` — Qwen's payload **already includes the current git branch directly**, unlike the
-  other three providers, where ctrlyoke's `branch` field is computed by reading `.git/HEAD` off
-  disk itself (Decision 15, `STATUSLINE_FORMAT_CUSTOMIZATION_PLAN.md`). For Qwen this is strictly
-  cheaper to read straight from the payload than to duplicate a filesystem git read the CLI has
-  already done — see Decisions.
-- No rate-limit/quota field of any kind — only `metrics.models.<id>` (per-model API/token stats)
-  and `metrics.files` (lines added/removed). Same conclusion as Copilot: `usage`/`usage1`/`usage2`
-  have no payload-provided data source for Qwen either.
-- Qwen-only, no cross-provider equivalent, **not added to the registry** (same exclusion rule as
-  the original plan applied to Claude's `cost`/`prompt_id`/etc.): `worktree`, `vim.mode`,
-  `metrics.files`, `metrics.models.<id>` detail.
+**Real captured payload** (from the live probe, after the first API call; full shape, not
+paraphrased):
+```json
+{
+  "session_id": "43a8bb4c-f013-447e-9e23-c70e071fc16e",
+  "version": "0.21.15",
+  "model": {
+    "display_name": "[ModelStudio Standard] qwen3.5-plus"
+  },
+  "context_window": {
+    "context_window_size": 1000000,
+    "used_percentage": 4.3,
+    "remaining_percentage": 95.7,
+    "current_usage": 42735,
+    "total_input_tokens": 77327,
+    "total_output_tokens": 691
+  },
+  "workspace": {
+    "current_dir": "C:\\dev\\ctrlyoke.worktrees\\small-feature"
+  },
+  "git": {
+    "branch": "small-feature"
+  },
+  "metrics": {
+    "models": {
+      "qwen3.5-plus": {
+        "api": {
+          "total_requests": 4,
+          "total_errors": 0,
+          "total_latency_ms": 20189
+        },
+        "tokens": {
+          "prompt": 77327,
+          "completion": 691,
+          "total": 78018,
+          "cached": 16634,
+          "thoughts": 433
+        }
+      }
+    },
+    "files": {
+      "total_lines_added": 0,
+      "total_lines_removed": 0
+    }
+  }
+}
+```
+
+The live payload confirms the documented `context_window` key names and values, but it also
+confirms a semantic detail the generic extractor must not ignore: `current_usage` is a **number**
+(the current context size), not an object. It differs from the cumulative
+`total_input_tokens + total_output_tokens` in the captured turn (`42735` versus `78018`), so a
+Qwen context extractor should prefer `current_usage`/`context_window_size` and fall back to the
+shared cumulative-token calculation only for partial or older payloads. The native
+`used_percentage`/`remaining_percentage` values are also present.
+
+The first startup payloads had `context_window` totals at zero and omitted `git` entirely; `git`
+appeared on subsequent refreshes once session state initialized. Therefore `git.branch` is really
+provided directly in normal repository payloads, but it is not guaranteed on every tick. There is
+still no top-level `cwd` — only `workspace.current_dir` — and no `model.id`; `model.display_name`
+is the only model identifier observed. The payload also has no `rate_limits`, `quota`, `cost`, or
+`transcript_path` field. Its additional structures are `metrics.models.<id>` and `metrics.files`;
+the documented optional `worktree` and `vim` structures were absent in this ordinary session.
+
+The settings and invocation claims are also confirmed live: `ui.statusLine` is nested, `type:
+"command"` receives JSON on stdin, and `refreshInterval: 1` caused repeated command invocations
+inside the interactive TTY. No Qwen-specific quota source is available to the wrapper, so
+`usage`/`usage1`/`usage2` remain empty as planned. Qwen-only fields remain excluded from the
+registry: `worktree`, `vim.mode`, `metrics.files`, and `metrics.models.<id>` detail.
 
 ### Field availability across all four providers (updated)
 
@@ -256,22 +303,60 @@ extractor or an accepted "structurally always empty for these two" outcome:
 | id | claude | antigravity | copilot | qwen | note |
 | --- | --- | --- | --- | --- | --- |
 | `model` | ✓ | ✓ | ✓ (nullable pre-first-turn) | ✓ (`display_name` only, no `id`) | existing fallback chain already handles both gaps |
-| `context` | ✓ | ✓ | ✓ **but needs a Copilot-specific extractor** (`current_context_tokens`/`displayed_context_limit`, not the generic pair) | ✓ assumed (same key names per docs — needs live verification) | see Research above |
+| `context` | ✓ | ✓ | ✓ **but needs a Copilot-specific extractor** (`current_context_tokens`/`displayed_context_limit`, not the generic pair) | ✓ **but needs a Qwen-specific preference for numeric `current_usage`/`context_window_size`; startup payloads can be partial** | see Research above |
 | `usage`/`usage1`/`usage2` | ✓ | ✓ | **no data** (renders `—` / drops silently, existing tolerance) | **no data** (same) | real Copilot quota exists but is architecturally unreachable here — see Research |
 | `version` | ✓ | ✓ | ✓ | ✓ | no change |
-| `cwd` | ✓ (`payload.cwd`) | ✓ (`payload.cwd`) | ✓ (`payload.cwd`, confirmed live) | **`payload.workspace.current_dir` only** | needs a fallback chain, not a new field |
+| `cwd` | ✓ (`payload.cwd`) | ✓ (`payload.cwd`) | ✓ (`payload.cwd`, confirmed live) | **`payload.workspace.current_dir` only, confirmed live** | needs a fallback chain, not a new field |
 | `sessionId` | ✓ | ✓ | ✓ | ✓ | no change |
-| `branch` (locally computed) | computed via `.git/HEAD` | computed via `.git/HEAD` | computed via `.git/HEAD` | **could read `payload.git.branch` directly instead** | see Decisions — optional optimization, not required |
+| `branch` (locally computed) | computed via `.git/HEAD` | computed via `.git/HEAD` | computed via `.git/HEAD` | **`payload.git.branch` observed after startup; absent on initial ticks** | see Decisions — optional optimization, not required |
 | `date`/`time` (locally computed) | ✓ | ✓ | ✓ | ✓ | provider-agnostic, no change |
 
+## Plan currency note (2026-08-22 pre-implementation review)
+
+Re-verified against the codebase after `STATUS_LINE_SHARED_FORMAT_TOGGLE_PLAN.md` fully landed.
+The toggle plan's `useDifferentFormatPerHarness`/`sharedFormat` fields landed exactly as that
+plan described (no deviation), and this plan's own premises (no dotted-path support in
+`SettingsJsonMcpTracker`, no capture veto, no copilot/qwen branches anywhere) all still hold
+unchanged — nothing here has been implemented out from under it. Two corrections from that
+re-verification:
+
+- **`StatuslineFormat.ts` line citations below are stale by +33 lines** (something unrelated
+  shifted the file since this plan was last touched): `contextValues()` is now at
+  `StatuslineFormat.ts:328-350` (not 295-317), `STATUS_LINE_FORMAT_PROVIDERS` is now at
+  `StatuslineFormat.ts:260-266` (not 227-233), `quotaPercentage`/`usageWindows` are now at
+  `StatuslineFormat.ts:371-447` (not 338-414), and the `cwd` read in the format switch is now at
+  `StatuslineFormat.ts:597-604` (not 564-570). `DashboardConstants.ts`, `StatuslineManager.ts`,
+  `SettingsJsonMcpTracker.ts`, and `ClaudeCliProvider.ts` citations are all still exact.
+- **There is a third closed 2-entry provider union**, not accounted for by Decision 1's "two
+  separate closed unions" framing: `STATUSLINE_PROVIDERS = {CLAUDE, ANTIGRAVITY}` in
+  `src/scripts/ctrlyoke-statusline-wrapper.js:26-29` (plain CommonJS, no TS enforcement). It grows
+  to four in Phase 5 alongside the new wrapper entry scripts — see that phase.
+- **The UI surface is wider than "grow `STATUS_LINE_HARNESS_IDS`."**
+  `StatusLineTrackingControls.tsx` has three more provider-keyed switches/maps that each need a
+  copilot/qwen case: `STATUS_LINE_SETTING_PATHS` (~lines 41-61), a private `providerForHarness`
+  switch (~65-74), and `getDisableWarning` (~76-83). `StatusLinePreview.tsx` (new since this plan
+  was last touched) has its own `previewPayload()` provider ternary (~36-102) that needs
+  copilot/qwen fixture payloads for the live preview — this is the concrete place the "UI
+  Placement" section's fixture requirement lands, not just a general note. See Phase 7.
+
 ## Decisions
+
+0. **Complete the live Qwen Code payload probe before building its extractor logic.** The
+   2026-08-22 probe of Qwen Code `0.21.15` confirmed the documented `context_window.*` names,
+   nested `workspace.current_dir`, direct `git.branch` after startup, and the absence of both a
+   top-level `cwd` and `model.id`. It corrected one implementation assumption: numeric
+   `context_window.current_usage` is the current context size and must be preferred over the
+   cumulative input/output totals. It also found that `git` and token totals can be absent/zero on
+   initial refreshes. The Research section now contains the captured JSON; Phase 0 is complete,
+   and Phase 4 must include the Qwen context branch below.
 
 1. **Extend `STATUS_LINE_TRACKING_PROVIDERS` and `STATUS_LINE_FORMAT_PROVIDERS` to four entries
    each**, adding `COPILOT: "copilot"` and `QWEN: "qwen"` (short ids, matching the existing
    `claude`/`antigravity` convention of dropping the `-cli` suffix from `HARNESS_IDS`). These are
-   two separate closed unions today (`DashboardConstants.ts:36-39` vs `StatuslineFormat.ts:227-233`)
+   two separate closed unions today (`DashboardConstants.ts:36-39` vs `StatuslineFormat.ts:260-266`)
    for settings/tracking vs. formatting concerns respectively — keep that separation, just grow
-   both in lockstep, same as the existing two entries already are.
+   both in lockstep, same as the existing two entries already are. (A third, `STATUSLINE_PROVIDERS`
+   in the standalone wrapper script, also grows to four — see Plan currency note above and Phase 5.)
 2. **Extend `StatusLineTrackingHarnessId`** (`DashboardConstants.ts:674-684`) to include
    `HARNESS_IDS.COPILOT_CLI` and `HARNESS_IDS.QWEN_CLI`, and `isStatusLineTrackingHarnessId`'s
    check accordingly. Extend `StatuslineManager.providerForHarness`'s switch
@@ -297,14 +382,25 @@ extractor or an accepted "structurally always empty for these two" outcome:
    `size = displayed_context_limit`, falling back to the generic pair only if either is absent
    from a given payload (keeps the same "never crash on a malformed/partial payload" posture the
    rest of this module already has).
-5. **`cwd` (and the `branch` field's repo-root lookup) gain a fallback chain: `payload.cwd ??
-   payload.workspace?.current_dir`**, rather than a Qwen-specific branch. This is strictly a
-   generalization of the existing single-key read at `StatuslineFormat.ts:564-570` and mirrors
-   the fallback-chaining style the `model` field extractor already uses
-   (`safeLabel(model.id, safeLabel(model.display_name, ...))`). Both the `CWD` field renderer and
-   the locally-computed `branch` field's on-disk `.git/HEAD` lookup must resolve "the workspace
-   directory" through this same one helper — implementing it twice (once per call site) would
-   silently drift the moment either one changes.
+4a. **Qwen's `context` field also needs a provider-specific preference, though not a new size
+    field.** The live Qwen payload uses the documented generic key names, but its numeric
+    `context_window.current_usage` is the current context size and can differ from cumulative
+    `total_input_tokens + total_output_tokens`; the existing generic `contextValues()` treats
+    numeric `current_usage` as `{}` and silently ignores it. Add a Qwen branch that uses
+    `used = current_usage` and `size = context_window_size`, falling back to the generic
+    cumulative-token pair when either value is absent or invalid. As with Copilot, tolerate the
+    partial zero/omitted fields observed during startup.
+5. **`cwd` gains an evidence-based fallback chain: `payload.cwd ??
+   payload.workspace?.current_dir`**, rather than a Qwen-specific branch. The live Qwen payload
+   has no top-level `cwd` at all, while Copilot's probe confirmed that key and the existing
+   Claude/Antigravity research uses it, so the fallback is required for the four-provider
+   extractor. This is strictly a generalization of the existing single-key read at
+   `StatuslineFormat.ts:597-604` and mirrors the fallback-chaining style the `model` field
+   extractor already uses (`safeLabel(model.id, safeLabel(model.display_name, ...))`). Do not
+   infer cwd from Qwen's `git.branch`: the branch is a separate field, and the live probe omitted
+   `git` on initial refreshes. The locally-computed `branch` field's on-disk `.git/HEAD` lookup
+   should resolve the workspace directory through this same helper; optionally preferring
+   `payload.git.branch` for Qwen remains a separate optimization decision.
 6. **`usage`/`usage1`/`usage2` need no new code to handle Copilot/Qwen's missing data — the
    existing absence-tolerance already covers it.** `quotaPercentage`/`usageWindows`
    (`StatuslineFormat.ts:338-414`) already branch on `provider` and already return
@@ -421,24 +517,28 @@ extractor or an accepted "structurally always empty for these two" outcome:
 
 ## UI Placement
 
-No new UI mechanism needed. `StatusLineSection.tsx` already renders one
-`StatusLineTrackingControls` + `StatusLineFormatEditor` block per entry in
-`STATUS_LINE_HARNESS_IDS` (Decision 12, `STATUSLINE_FORMAT_CUSTOMIZATION_PLAN.md`) — adding
-Copilot/Qwen to that list is the only UI-layer change, producing two more provider blocks on the
-existing "Status Line" tab automatically. The live preview's fixture/cached-snapshot fallback
-should include a representative Copilot and Qwen payload (using the real captured shape above for
-Copilot) so a new user previewing the default format sees accurate output, including the `usage —`
-gap called out in Decision 7, rather than a stale two-provider fixture.
+No new UI *mechanism* needed, but the change is not limited to growing one array. Since the
+shared/per-harness toggle work landed, `StatusLineSection.tsx` renders one
+`StatusLineTrackingControls` block per entry in `STATUS_LINE_HARNESS_IDS` (shared mode renders a
+`StatusLinePreview` inside each block instead of a full editor) — adding Copilot/Qwen to that
+list is necessary but not sufficient. `StatusLineTrackingControls.tsx` has three more
+provider-keyed switches/maps that each need a `copilot`/`qwen` case: `STATUS_LINE_SETTING_PATHS`
+(~lines 41-61, the per-provider `SETTING_PATHS` lookup used by both the toggle and format-editor
+paths), a private `providerForHarness` switch (~65-74), and `getDisableWarning` (~76-83). And
+`StatusLinePreview.tsx`'s `previewPayload()` (~36-102) — the function that fabricates a
+representative fixture payload per provider for the live preview in both per-harness and shared
+mode — needs Copilot and Qwen cases added, using the real captured shape from the Research section
+above for Copilot (and the Phase 0 live-probed shape for Qwen) so a new user previewing the
+default format sees accurate output, including the `usage —` gap called out in Decision 7, rather
+than a stale two-provider fixture or a runtime fallback to an unrelated provider's shape.
 
 ## Wrapper Test Coverage
 
 `src/test/unit/StatuslineWrapper.test.ts` gains Copilot/Qwen fixtures mirroring the existing
 Claude/Antigravity cases: settings resolution, malformed-input tolerance, the `context` extractor
-divergence (Decision 4 — a dedicated test asserting Copilot's `context` field reads
-`current_context_used_percentage`-equivalent data and *not* the generic pair, since this is the
-one finding a naive "just add a provider" implementation would most easily get wrong silently),
-the `cwd` fallback chain (Decision 5), and `usage`/`usage1`/`usage2` rendering as absent for both
-new providers.
+divergences (Decision 4's Copilot-specific displayed limit and Decision 4a's Qwen numeric
+`current_usage`, both *not* the generic pair), the `cwd` fallback chain (Decision 5), and
+`usage`/`usage1`/`usage2` rendering as absent for both new providers.
 
 ## Non-Goals
 
@@ -456,41 +556,50 @@ new providers.
 
 ## Phases
 
+0. **Complete — live-probe Qwen Code CLI's statusline payload** (Decision 0). The probe ran on
+   2026-08-22 against Qwen Code `0.21.15`, captured real interactive payloads, and restored the
+   original `~/.qwen/settings.json`. Phase 4 now depends on the documented shape plus the
+   Qwen-specific numeric-`current_usage` context preference recorded in Decision 4a.
 1. **Settings & schema**: extend the two provider enums (Decision 1), `StatusLineTrackingHarnessId`
    (Decision 2), schema/defaults/`SETTING_PATHS` for `copilot`/`qwen` (Settings/Schema Plumbing
-   above).
-2. **`SettingsJsonMcpTracker` path generalization** (Decision 3) — the one piece of shared
-   machinery that needs real new capability, not just new entries in existing maps. Land this
-   before Phase 3 since Qwen's provider install/uninstall depends on it.
+   above). Does not touch `STATUS_LINE_HARNESS_IDS` (webview) — that's Phase 7, so no UI is
+   exposed for a provider with no backend yet. Expect `settingsSchemaUiParity` to go red for the
+   two new leaf paths until Phase 7 lands; that's expected, not a regression to chase early.
+2. **`SettingsJsonMcpTracker` path + veto generalization** (Decision 3, plus Decision 8's
+   `capture`-callback veto plumbing bundled in since both are one-time signature changes to the
+   same two methods) — the one piece of shared machinery that needs real new capability, not just
+   new entries in existing maps. Land this before Phase 3 since Qwen's provider install/uninstall
+   depends on the path support.
 3. **`StatuslineManager` provider definitions** (Settings/Schema Plumbing) for both new providers,
-   using the Phase 2 path support for Qwen.
+   using the Phase 2 path support for Qwen. Include `StatuslineManager` install/uninstall test
+   coverage for the new path-generalized Qwen case here, alongside the behavior it covers.
 4. **`StatuslineFormat.ts` extractor updates**: extend `STATUS_LINE_FORMAT_PROVIDERS`,
-   Copilot's dedicated `context` extractor (Decision 4), the `cwd` fallback chain (Decision 5),
+   Copilot's dedicated `context` extractor (Decision 4), Qwen's numeric `current_usage` context
+   preference (Decision 4a), the `cwd` fallback chain (Decision 5),
    and the `quotaPercentage`/`usageWindows` provider switch extension (Decision 6) — all pure,
    already-isomorphic-module changes per the existing Decision 11 build (no new build-dependency
-   work needed, that spike already shipped).
+   work needed, that spike already shipped). Include the wrapper fixture tests for these
+   extractors (Wrapper Test Coverage above) in this same phase, alongside the behavior they cover.
 5. **New wrapper entry scripts**: `ctrlyoke-copilot-statusline.js`, `ctrlyoke-qwen-statusline.js`
-   (Decision 9), verified against the `copy-scripts` esbuild plugin the same way the original two
-   were.
-6. **Preset-collision skip-and-disable behavior** (Decision 8): the `capture` callback veto in
-   `SettingsJsonMcpTracker.installPersistentValue`, `StatuslineManager`'s detection/`enabled:false`
-   write, and its one-time notification wording; plus the Copilot/Qwen provider entries in
-   `CliIntegration`'s install-result → notification wiring for the normal (non-collision) path,
-   mirroring the existing Claude/Antigravity wiring.
-7. **UI**: add `copilot`/`qwen` to `STATUS_LINE_HARNESS_IDS`; extend the live-preview fixture set.
-8. **Tests**: wrapper fixtures (Wrapper Test Coverage above), `StatuslineManager` install/uninstall
-   coverage for the new path-generalized Qwen case, UI component coverage for the two new provider
-   blocks, and dedicated coverage for Decision 8's collision path — asserting the preset value is
-   left byte-for-byte unchanged, `enabled` flips to `false`, the notification fires exactly once,
-   and a subsequent run with `enabled` manually restored to `true` proceeds to install normally.
+   (Decision 9), extending the third `STATUSLINE_PROVIDERS` union (Plan currency note) to four,
+   verified against the `copy-scripts` esbuild plugin the same way the original two were. Include
+   the remaining wrapper fixture tests (settings resolution, malformed-input tolerance) here.
+6. **Preset-collision skip-and-disable behavior** (Decision 8): use the Phase 2 `capture` callback
+   veto in `SettingsJsonMcpTracker.installPersistentValue`, `StatuslineManager`'s detection/
+   `enabled:false` write, and its one-time notification wording; plus the Copilot/Qwen provider
+   entries in `CliIntegration`'s install-result → notification wiring for the normal
+   (non-collision) path, mirroring the existing Claude/Antigravity wiring. Include dedicated
+   coverage for the collision path — asserting the preset value is left byte-for-byte unchanged,
+   `enabled` flips to `false`, the notification fires exactly once, and a subsequent run with
+   `enabled` manually restored to `true` proceeds to install normally.
+7. **UI**: add `copilot`/`qwen` to `STATUS_LINE_HARNESS_IDS`; add cases to
+   `StatusLineTrackingControls.tsx`'s `STATUS_LINE_SETTING_PATHS`/`providerForHarness`/
+   `getDisableWarning`; add Copilot/Qwen fixture payloads to `StatusLinePreview.tsx`'s
+   `previewPayload()` (UI Placement above); UI component coverage for the two new provider blocks.
+   This is what turns `settingsSchemaUiParity` green again.
 
 ## Open Questions
 
-- **Qwen's payload shape above is doc-sourced, not independently probed** (this plan's ask
-  specifically scoped the live-probe requirement to Copilot). Given how materially the Copilot
-  probe's `context` finding diverged from what a docs-only read would have assumed, a live Qwen
-  probe should happen before or during Phase 4, not skipped on the assumption the docs are
-  complete — mirroring exactly the caution this plan's own Copilot research vindicated.
 - **Should the `branch` field read `payload.git.branch` directly for Qwen** instead of doing its
   own `.git/HEAD` disk read (Research/Decision 5's optional optimization)? Both are correct;
   reading the payload is cheaper and avoids a second git-detection code path running per tick, but
