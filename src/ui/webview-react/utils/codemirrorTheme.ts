@@ -3,6 +3,15 @@ import { SYMBOL_ICON_COLORS } from "@utils/atomicReferences";
 
 type ThemeSurface = "editor" | "input";
 
+export interface ThemeExtensionOptions {
+  /**
+   * Overrides .cm-content's font size, which otherwise follows the VS Code
+   * editor font size. Any CSS font-size value is accepted (e.g. "0.75rem"
+   * to match the text-xs control typography used across form controls).
+   */
+  fontSize?: string;
+}
+
 // Expands SYMBOL_ICON_COLORS into the two selector shapes that actually need the
 // color: the completions dropdown icon (`.cm-completion-<kind> .cm-completionIcon`,
 // where `.cm-completion-<kind>` comes from autocompletion()'s optionClass) and the
@@ -40,7 +49,10 @@ function buildChipAccentShadowRules(): Record<string, { boxShadow: string }> {
 }
 
 /** VS Code themed base extension for CodeMirror 6.  Shared by the prompt editor and workspace file editor. */
-export function createThemeExtension(surface: ThemeSurface = "editor") {
+export function createThemeExtension(
+  surface: ThemeSurface = "editor",
+  options: ThemeExtensionOptions = {}
+) {
   const backgroundColor =
     surface === "input"
       ? "var(--vscode-input-background)"
@@ -87,7 +99,7 @@ export function createThemeExtension(surface: ThemeSurface = "editor") {
       ".cm-content": {
         caretColor: "var(--vscode-editorCursor-foreground)",
         fontFamily: "var(--vscode-editor-font-family, 'Consolas, monospace')",
-        fontSize: "var(--vscode-editor-font-size, 14px)",
+        fontSize: options.fontSize ?? "var(--vscode-editor-font-size, 14px)",
         padding: "8px 0",
       },
       ".cm-line": {

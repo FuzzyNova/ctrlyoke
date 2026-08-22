@@ -16,6 +16,7 @@ import {
 } from "@codemirror/view";
 import { minimalSetup } from "codemirror";
 import { createThemeExtension } from "@utils/codemirrorTheme";
+import type { ThemeExtensionOptions } from "@utils/codemirrorTheme";
 import { keyboardTooltipSpace } from "@utils/keyboardTooltipSpace";
 
 export interface SingleLineCompletionEditorProps {
@@ -26,6 +27,11 @@ export interface SingleLineCompletionEditorProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /**
+   * Overrides the editor font size (any CSS font-size value). Read once at
+   * mount; omit to follow the VS Code editor font size.
+   */
+  fontSize?: string;
   "aria-label"?: string;
   "aria-describedby"?: string;
   completionSource: (
@@ -136,6 +142,7 @@ export function SingleLineCompletionEditor({
   placeholder: placeholderText,
   disabled = false,
   className,
+  fontSize,
   "aria-label": ariaLabel,
   "aria-describedby": ariaDescribedby,
   completionSource,
@@ -153,6 +160,7 @@ export function SingleLineCompletionEditor({
     ariaDescribedby,
     placeholderText,
     disabled,
+    fontSize,
   });
   const editableCompartmentRef = useRef(new Compartment());
   const contentAttributesCompartmentRef = useRef(new Compartment());
@@ -214,7 +222,9 @@ export function SingleLineCompletionEditor({
           ])
         ),
         placeholder(initialProps.placeholderText ?? ""),
-        createThemeExtension("input"),
+        createThemeExtension("input", {
+          fontSize: initialProps.fontSize,
+        } satisfies ThemeExtensionOptions),
         singleLineTheme,
         tooltips({ parent: document.body, tooltipSpace: keyboardTooltipSpace }),
         EditorView.domEventHandlers({
