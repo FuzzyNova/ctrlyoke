@@ -47,10 +47,10 @@ Three parallel ordered arrays (rather than one flat list with a per-item `placem
 - Promote/demote/hide become "move this id from one array to another, appended at the end," which is simple to implement and simple to reason about (no ordering ambiguity about where a promoted item should land in a merged list).
 - Schema/validation stays simple: three arrays of known ids.
 
-Default value reproduces exactly today's hardcoded layout:
+Default value reproduces exactly today's hardcoded layout — including `TERMINAL_BAR_CTRL_ID` pinned first in `bar`, matching its current always-first rendering and the "insert at front of bar" fallback in the Defensive/Edge-Case Handling section below:
 
 ```typescript
-bar: ["key:esc", "key:tab", "key:up", "key:down", "key:left", "key:right", "key:enter"],
+bar: ["modifier:ctrl", "key:esc", "key:tab", "key:up", "key:down", "key:left", "key:right", "key:enter"],
 popup: ["shortcut:shift-tab", "shortcut:ctrl-c", "shortcut:ctrl-z", "shortcut:ctrl-l", "shortcut:ctrl-r", "shortcut:ctrl-a"],
 hidden: [],
 ```
@@ -129,9 +129,11 @@ No changes needed to the generic settings write path — `TerminalSection.tsx` a
 
 ## Implementation Steps
 
+Status: Step 1 landed in `src/utils/TerminalControlBarFormat.ts`; settings plumbing and schema fields are included.
+
 1. **Registry module**: add `src/utils/TerminalControlBarFormat.ts` with the id constants, `TERMINAL_BAR_ITEM_REGISTRY`, and `DEFAULT_TERMINAL_BAR_LAYOUT`.
 2. **Settings plumbing**: add `TerminalShortcut.id`, `TerminalSettings.mobileBarLayout`, defaults, and the schema entries. Update `DEFAULT_STATE`-style fixtures/tests that construct full `TerminalSettings` objects.
-3. **Runtime rendering**: update `TerminalControlBar.tsx` to resolve `bar`/`popup` ids through the registry + `mobileCustomShortcuts`, keep the Ctrl button pinned, hide "..." when popup resolves empty, decode custom-shortcut sequences as today.
+3. **Runtime rendering**: update `TerminalControlBar.tsx` to resolve `bar`/`popup` ids through the registry + `mobileCustomShortcuts`. The Ctrl button is no longer hardcoded first — render it at its resolved position within `mobileBarLayout.bar` (per the Ctrl decision above, it's a sortable bar member, not a pinned leading element). Hide "..." when popup resolves empty, decode custom-shortcut sequences as today.
 4. **Settings editor**: build `TerminalControlBarEditor.tsx` with two `DndContext`/`SortableContext` pairs — horizontal (`horizontalListSortingStrategy`, x-only transform restriction) for `bar`, with the Ctrl chip's demote button replaced by a hide button + tooltip; vertical (`verticalListSortingStrategy`, y-only transform restriction, matching `StatusLineFormatEditor.tsx:271-274`) for `popup`, with per-row promote-to-bar and hide controls, plus the relocated custom-shortcut add form appending to `popup`. Below the vertical list, render the flat, non-sortable hidden pool (grayed rows, one restore button each, no bulk unhide; Ctrl's restore targets `bar`, everything else targets `popup`). Add a "Reset to default" action per the Decisions section above.
 5. **Wire into `TerminalSection.tsx`**: replace the current shortcuts UI block (`TerminalSection.tsx:671-765`) with `<TerminalControlBarEditor ... />`, keep the control-bar-visibility `SettingInputRow`/`CustomSelect` above it unchanged.
 6. **Tests**: extend `src/ui/webview-react/test/**` coverage for `TerminalControlBar.tsx` (renders configured bar order, hides "..." when popup empty, ignores unknown ids) and add new tests for `TerminalControlBarEditor.tsx` (drag reorder in both the bar and the popup list, promote, hide/restore including the Ctrl-specific restore-to-bar path, permanent delete, reset-to-default preserves custom shortcuts, `TERMINAL_BAR_CTRL_ID` never offered a "move to popup" control). Follow `.github/instructions/webview-react-components.instructions.md` for component-vs-hook boundaries.

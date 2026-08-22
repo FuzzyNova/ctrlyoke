@@ -616,6 +616,25 @@
           "enum": ["auto", "always", "never"],
           "description": "When to show the mobile terminal control bar."
         },
+        "mobileBarLayout": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "bar": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "popup": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "hidden": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          },
+          "required": ["bar", "popup", "hidden"]
+        },
         "mobileCustomShortcuts": {
           "type": "array",
           "description": "Custom shortcuts in the mobile terminal control bar More menu.",
@@ -623,10 +642,11 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
+              "id": { "type": "string" },
               "label": { "type": "string" },
               "sequence": { "type": "string" }
             },
-            "required": ["label", "sequence"]
+            "required": ["id", "label", "sequence"]
           }
         }
       }

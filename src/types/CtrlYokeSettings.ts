@@ -34,6 +34,7 @@ import {
   type StatusLineSegment,
   type UsagePercentDirection,
 } from "../utils/StatuslineFormat";
+import { DEFAULT_TERMINAL_BAR_LAYOUT } from "../utils/TerminalControlBarFormat";
 
 export type { WorktreeDefaultConfig } from "./CtrlYokeTypes";
 
@@ -290,10 +291,18 @@ export interface TerminalSettings {
   replayBufferKb: number;
   shellExecutable: string;
   mobileControlBar: TerminalMobileControlBar;
+  mobileBarLayout: TerminalMobileBarLayout;
   mobileCustomShortcuts: TerminalShortcut[];
 }
 
+export interface TerminalMobileBarLayout {
+  bar: string[];
+  popup: string[];
+  hidden: string[];
+}
+
 export interface TerminalShortcut {
+  id: string;
   label: string;
   sequence: string;
 }
@@ -439,6 +448,11 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     replayBufferKb: 50,
     shellExecutable: "",
     mobileControlBar: TERMINAL_MOBILE_CONTROL_BAR.AUTO,
+    mobileBarLayout: {
+      bar: [...DEFAULT_TERMINAL_BAR_LAYOUT.bar],
+      popup: [...DEFAULT_TERMINAL_BAR_LAYOUT.popup],
+      hidden: [...DEFAULT_TERMINAL_BAR_LAYOUT.hidden],
+    },
     mobileCustomShortcuts: [],
   },
   ui: {

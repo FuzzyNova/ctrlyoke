@@ -24,6 +24,7 @@ import {
   TERMINAL_MOBILE_CONTROL_BAR,
 } from "@root/types/DashboardConstants";
 import type { TerminalSettings } from "@root/types/WebviewMessageTypes";
+import { DEFAULT_TERMINAL_BAR_LAYOUT } from "@root/utils/TerminalControlBarFormat";
 import { WebviewLog } from "./utils/logger";
 
 export type { Terminal, ITheme };
@@ -103,6 +104,11 @@ let currentTerminalSettings: TerminalSettings = {
   replayBufferKb: 50,
   shellExecutable: "",
   mobileControlBar: TERMINAL_MOBILE_CONTROL_BAR.AUTO,
+  mobileBarLayout: {
+    bar: [...DEFAULT_TERMINAL_BAR_LAYOUT.bar],
+    popup: [...DEFAULT_TERMINAL_BAR_LAYOUT.popup],
+    hidden: [...DEFAULT_TERMINAL_BAR_LAYOUT.hidden],
+  },
   mobileCustomShortcuts: [],
 };
 
