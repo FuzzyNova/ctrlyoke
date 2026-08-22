@@ -1,8 +1,9 @@
 # Overzealous Step Failures Plan
 
-> **Status:** Items 2, 3, and 4 implemented (2026-08-22); the cross-cutting
-> "documents every syntax" regression test is implemented. Remaining work is
-> deliberately deferred: none of item 3's recommendations.
+> **Status: DONE (2026-08-22).** All four items, the cross-cutting
+> "documents every syntax" regression test, and all of item 3's
+> recommendations (including recommendation 2's one-time secret-grant trust
+> approval) are implemented. Nothing in this plan is outstanding.
 > **Items 2 and 3 were staged inside
 > `dev/implemented/WORKFLOW_SCHEMA_UI_PARITY_PLAN.md`'s step queue** (2026-08-20):
 > that plan added the UI controls which make both failures reachable for a
@@ -378,6 +379,11 @@ item above would have been caught by it.
 | ------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | `src/utils/VarSubstitutor.ts`                                             | Stop throwing on unresolved placeholders; mask fenced blocks (item 2)       |
 | `src/utils/SecretReferenceParser.ts`                                      | Union process-map secret references into the effective grant (item 3)       |
-| `src/utils/SecretResolver.ts`                                             | `getDeclaredSecretGrants` / `getProcessMaps` wiring for the above           |
+| `src/utils/SecretResolver.ts`                                             | `getDeclaredSecretGrants`/`getProcessMaps` wiring; `getWorkflowSecretGrants` and trust-store check in `preflightWorkflowSecrets` (item 3 rec. 2) |
 | `src/types/PreviewRedactor.ts`                                            | **Done.** Narrowed `credential-assignment` so it does not eat `${secret:NAME}` (item 4) |
 | `src/test/unit/WorkflowExecutor.test.ts`                                  | Documents-every-syntax regression test                                     |
+| `src/config/SecretGrantsTrustStore.ts`                                    | New user-local trust store for workflow secret grants (item 3 rec. 2)      |
+| `src/core/WorkflowInstance.ts`, `src/core/WorkflowOrchestrator.ts`        | `approveSecretGrants` callback wired before `preflightWorkflowSecrets` (item 3 rec. 2) |
+| `src/ui/SecretGrantsTrustPrompt.ts`                                       | VS Code batch-approval picker for pending secret grants (item 3 rec. 2)    |
+| `src/cli.ts`, `src/cli/SecretCommands.ts`, `src/cli/SecretCommandDefinitions.ts` | CLI fail-closed gate and `trust-secret-grants` command (item 3 rec. 2) |
+| `src/test/unit/SecretGrantsTrustStore.test.ts`, `SecretGrantsTrustPrompt.test.ts`, `SecretResolver.test.ts`, `SecretCommands.test.ts`, `WorkflowInstance.test.ts` | Coverage for the trust store, prompt, resolver, CLI command, and execution wiring |
