@@ -1,8 +1,8 @@
 # Overzealous Step Failures Plan
 
-> **Status:** Items 2, 3, and 4 implemented (2026-08-20). Remaining work is
-> deliberately deferred: item 3 recommendations 2 and 3, and the cross-cutting
-> "documents every syntax" test.
+> **Status:** Items 2, 3, and 4 implemented (2026-08-20); the cross-cutting
+> "documents every syntax" regression test is implemented. Remaining work is
+> deliberately deferred: item 3 recommendations 2 and 3.
 > **Items 2 and 3 were staged inside
 > `dev/implemented/WORKFLOW_SCHEMA_UI_PARITY_PLAN.md`'s step queue** (2026-08-20):
 > that plan added the UI controls which make both failures reachable for a
@@ -255,4 +255,4 @@ item above would have been caught by it.
 | `src/utils/SecretReferenceParser.ts`                                      | Union process-map secret references into the effective grant (item 3)       |
 | `src/utils/SecretResolver.ts`                                             | `getDeclaredSecretGrants` / `getProcessMaps` wiring for the above           |
 | `src/types/PreviewRedactor.ts`                                            | **Done.** Narrowed `credential-assignment` so it does not eat `${secret:NAME}` (item 4) |
-| `src/test/**`                                                             | The documents-every-syntax regression test (still outstanding)             |
+| `src/test/unit/WorkflowExecutor.test.ts`                                  | Documents-every-syntax regression test                                     |

@@ -399,6 +399,63 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     );
   });
 
+  test("runs prompts documenting every reference syntax without blocking", async () => {
+    const promptText = [
+      "Document these ctrlyoke reference syntaxes:",
+      "```text",
+      "!NAME",
+      "${secret:NAME}",
+      "{{var}}",
+      "@src/example.ts",
+      "#sym:src/example.ts:Example:1-2",
+      "~diff",
+      "/skill:name",
+      "/mcp:name",
+      "$step:1,3-5",
+      "```",
+    ].join("\n");
+
+    const run = async (strictContextResolution: boolean): Promise<void> => {
+      const queue = new PromptQueue();
+      queue.loadPrompts({ steps: [{ prompt: promptText }] });
+      const integration = new MockHarnessIntegration(undefined, false);
+      const diagnostics: CompatibilityDiagnostic[] = [];
+
+      configService.setCliOverlay(
+        strictContextResolution
+          ? {
+              execution: {
+                strictContextResolution:
+                  CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+              },
+            }
+          : {}
+      );
+      try {
+        await makeExecutor(queue).execute(integration, {
+          ...makeContext(integration),
+          reportCompatibilityDiagnostics: (reported) =>
+            diagnostics.push(...reported),
+        });
+      } finally {
+        configService.setCliOverlay({});
+      }
+
+      assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+      assert.deepStrictEqual(integration.sentPrompts, [promptText]);
+      assert.strictEqual(
+        diagnostics.some((diagnostic) =>
+          isContextResolutionDiagnostic(diagnostic.code)
+        ),
+        false,
+        "fenced reference examples must not produce blocking diagnostics"
+      );
+    };
+
+    await run(false);
+    await run(true);
+  });
+
   test("leaves unresolved script-step variables literal and reports script fields", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
