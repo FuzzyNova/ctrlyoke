@@ -2,18 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { ActionButton } from "@components/shared/ActionButton";
 import { Button } from "@components/shared/Button";
 import { LocalTextInput } from "@components/shared/LocalInputs";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
   useSortable,
   arrayMove,
@@ -32,6 +23,8 @@ import {
   type UsagePercentDirection,
 } from "@root/utils/StatuslineFormat";
 import type { HarnessUsageSnapshot } from "@root/types/UsageTypes";
+import { DRAG_HANDLE_TOUCH_ACTION_STYLE } from "@utils/dndKit";
+import { useSortableDndSensors } from "@hooks/useSortableDndSensors";
 import { StatusLinePreview } from "./StatusLinePreview";
 
 const MAX_LITERAL_LENGTH = 64;
@@ -111,6 +104,7 @@ function SortableSegmentRow({
     >
       <span
         className="flex shrink-0 cursor-grab active:cursor-grabbing items-center justify-center text-description-fg hover:text-foreground"
+        style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
         {...listeners}
         {...attributes}
         aria-label={`Drag to reorder segment ${index + 1}`}
@@ -268,10 +262,7 @@ export function StatusLineFormatEditor({
     commit(arrayMove(draftFormat, oldIndex, newIndex));
   };
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const sensors = useSortableDndSensors();
 
   const includedFields = new Set(
     draftFormat.flatMap((segment) =>

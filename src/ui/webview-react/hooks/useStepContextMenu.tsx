@@ -7,10 +7,13 @@ import { ResetConfirmModal } from "../components/shared/ResetConfirmModal";
 import { sendMessage } from "./useMessageHandler";
 import {
   EXECUTION_STATES,
+  FINAL_STEP_PHASES,
   MESSAGE_TYPES,
   type ExecutionState,
 } from "../types/messages";
 import type { WorkflowStep } from "@store/workflowStore";
+import { useEditorStore } from "@store/editorStore";
+import { isExecutionBusy } from "@utils/status";
 import {
   buildWorkflowStepEnabledUpdate,
   getWorkflowStepRawText,
@@ -59,6 +62,17 @@ const lifecycleMessageTarget = {
   },
 };
 
+/** Pending-slice order (0..pendingCount-1) with two positions swapped. */
+function buildAdjacentSwapOrder(
+  pendingCount: number,
+  fromIndex: number,
+  toIndex: number
+): number[] {
+  const order = Array.from({ length: pendingCount }, (_, i) => i);
+  [order[fromIndex], order[toIndex]] = [order[toIndex], order[fromIndex]];
+  return order;
+}
+
 export function useStepContextMenu({
   isCLIManaged,
   canChangeStartPosition,
@@ -88,6 +102,28 @@ export function useStepContextMenu({
     [confirmResetOperations]
   );
 
+  // Swaps a pending step with its neighbor. Used by the Move Up/Down menu
+  // items — a keyboard/tap-friendly alternative to drag-to-reorder, notably
+  // for PromptChipRail which has no drag surface of its own.
+  const moveQueueStep = useCallback(
+    (pendingIndex: number, targetPendingIndex: number) => {
+      const pendingCount = totalSteps - currentStep;
+      if (targetPendingIndex < 0 || targetPendingIndex >= pendingCount) return;
+      sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, {
+        newPendingOrder: buildAdjacentSwapOrder(
+          pendingCount,
+          pendingIndex,
+          targetPendingIndex
+        ),
+      });
+      const editorStore = useEditorStore.getState();
+      if (editorStore.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
+        editorStore.cancelEdit();
+      }
+    },
+    [totalSteps, currentStep]
+  );
+
   const openContextMenu = useCallback(
     (
       x: number,
@@ -111,6 +147,47 @@ export function useStepContextMenu({
         : executionState === EXECUTION_STATES.CANCELLING
           ? "Cannot paste steps while workflow is cancelling"
           : undefined;
+
+      // Move Up/Down only applies to the pending queue (direction "forward");
+      // done/completed steps (direction "rewind") can't be reordered.
+      const pendingIndex = deleteIndex - currentStep;
+      const pendingCount = totalSteps - currentStep;
+      const queueLockedTitle = isCLIManaged
+        ? "Read-only — workflow is running via ctrlyoke CLI"
+        : "Cannot reorder steps while workflow is cancelling";
+      const queueLocked =
+        isCLIManaged || executionState === EXECUTION_STATES.CANCELLING;
+      // A running step stays pinned at pending position 0 (mirrors the drag
+      // pinning in WorkflowStepsPanel/PromptChipRail): it can't move, and
+      // nothing else can move into its slot.
+      const executionOwnsCurrentStep = isExecutionBusy(executionState);
+      const moveUpBlockedByPin =
+        executionOwnsCurrentStep && pendingIndex - 1 === 0;
+      const moveUpDisabled =
+        queueLocked ||
+        isExecutionTargetLocked ||
+        pendingIndex <= 0 ||
+        moveUpBlockedByPin;
+      const moveUpDisabledTitle = queueLocked
+        ? queueLockedTitle
+        : isExecutionTargetLocked
+          ? "Cannot move the currently executing step"
+          : pendingIndex <= 0
+            ? "Already at the top of the queue"
+            : moveUpBlockedByPin
+              ? "Cannot move above the currently executing step"
+              : undefined;
+      const moveDownDisabled =
+        queueLocked ||
+        isExecutionTargetLocked ||
+        pendingIndex >= pendingCount - 1;
+      const moveDownDisabledTitle = queueLocked
+        ? queueLockedTitle
+        : isExecutionTargetLocked
+          ? "Cannot move the currently executing step"
+          : pendingIndex >= pendingCount - 1
+            ? "Already at the bottom of the queue"
+            : undefined;
 
       setContextMenu({
         x,
@@ -204,6 +281,25 @@ export function useStepContextMenu({
                 },
               ]
             : []),
+          ...(direction === "forward"
+            ? [
+                { type: "divider" as const },
+                {
+                  label: "Move Up",
+                  icon: "codicon-arrow-up",
+                  disabled: moveUpDisabled,
+                  disabledTitle: moveUpDisabledTitle,
+                  onClick: () => moveQueueStep(pendingIndex, pendingIndex - 1),
+                },
+                {
+                  label: "Move Down",
+                  icon: "codicon-arrow-down",
+                  disabled: moveDownDisabled,
+                  disabledTitle: moveDownDisabledTitle,
+                  onClick: () => moveQueueStep(pendingIndex, pendingIndex + 1),
+                },
+              ]
+            : []),
           { type: "divider" },
           {
             label: stepToggleLabel,
@@ -239,10 +335,13 @@ export function useStepContextMenu({
     [
       canChangeStartPosition,
       canPasteStep,
+      currentStep,
       executionState,
       handleSetStartPosition,
       isCLIManaged,
+      moveQueueStep,
       pendingRewind?.fromStepIndex,
+      totalSteps,
     ]
   );
 

@@ -16,6 +16,7 @@ import {
 } from "@root/utils/TokenFormatting";
 import { useSettingsStore } from "@store/settingsStore";
 import { getUsageBarColorClass } from "@utils/usageBarColor";
+import { DRAG_HANDLE_TOUCH_ACTION_STYLE } from "@utils/dndKit";
 
 export interface EndConditionResult {
   passed: boolean;
@@ -274,6 +275,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
         {dragHandleProps && (
           <span
             className="flex-shrink-0 cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-0.5"
+            style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
             {...dragHandleProps.listeners}
             {...dragHandleProps.attributes}
             aria-label="Drag to reorder"

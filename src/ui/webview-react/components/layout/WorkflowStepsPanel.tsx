@@ -14,6 +14,7 @@ import {
   useLatestStepOutput,
   usePasteToEndContextMenu,
   useLongPress,
+  useSortableDndSensors,
 } from "@hooks/index";
 import { HARNESS_INFO } from "../../types/messages";
 import {
@@ -39,18 +40,9 @@ import {
   type StepStatus,
 } from "../../types/messages";
 import { sendMessage } from "../../hooks/useMessageHandler";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
   useSortable,
   arrayMove,
@@ -789,10 +781,7 @@ const WorkflowStepsPanelInner: React.FC<{
     ? getStepOverrides(finalStep)
     : undefined;
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const sensors = useSortableDndSensors();
   // While a step is in flight (RUNNING/PAUSING/CANCELLING), the step at
   // `currentStep` is the running step: it stays pinned at pending-slice position
   // 0 and is not draggable, but the pending tail after it can still be reordered.

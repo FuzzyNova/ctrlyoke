@@ -32,6 +32,7 @@ export {
   type WorkflowContextMenuTarget,
 } from "./useWorkflowContextMenu";
 export { useLongPress } from "./useLongPress";
+export { useSortableDndSensors } from "./useSortableDndSensors";
 export { useLatestStepOutput } from "./useLatestStepOutput";
 export {
   useHideableOptions,

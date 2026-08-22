@@ -8,9 +8,11 @@ import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 function TestHarness({
   step,
   pendingRewind,
+  direction = "forward",
 }: {
   step: WorkflowStep;
   pendingRewind?: { fromStepIndex: number };
+  direction?: "rewind" | "forward";
 }) {
   const { openContextMenu, contextMenuPortal } = useStepContextMenu({
     isCLIManaged: false,
@@ -33,7 +35,7 @@ function TestHarness({
             deleteIndex: 0,
             isCurrentStep: false,
             isExecutionTargetLocked: false,
-            direction: "forward",
+            direction,
             outputText: "step output",
           })
         }
@@ -84,10 +86,34 @@ describe("useStepContextMenu", () => {
       "Dry Run Step",
       "Paste Step",
       "Set Start Position",
+      "Move Up",
+      "Move Down",
       "Disable",
       "Delete",
     ]);
-    expect(screen.getAllByRole("separator")).toHaveLength(2);
+    expect(screen.getAllByRole("separator")).toHaveLength(3);
+  });
+
+  it("disables Move Up at the front of the queue and omits both for a done step", () => {
+    render(<TestHarness step={{ prompt: "Original prompt" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(screen.getByRole("button", { name: "Move Up" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Move Down" })
+    ).not.toBeDisabled();
+  });
+
+  it("omits Move Up/Down for a rewind-direction (done) step", () => {
+    render(<TestHarness step={{ prompt: "Done prompt" }} direction="rewind" />);
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(
+      screen.queryByRole("button", { name: "Move Up" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Move Down" })
+    ).not.toBeInTheDocument();
   });
 
   it("switches the content/toggle labels for disabled script steps", () => {

@@ -8,7 +8,7 @@
  * Width is determined by the parent container. Internal layout adapts to the
  * available space — no fixed width is applied here.
  */
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useEditorStore } from "@store/editorStore";
 import { useUiStore } from "@store/uiStore";
@@ -44,22 +44,6 @@ import {
   ExecutingStepHighlight,
   PauseBoundary,
 } from "./ExecutingStepHighlight";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-  arrayMove,
-} from "@dnd-kit/sortable";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -87,7 +71,6 @@ type ChipProps = {
   slotNumber: number;
   status: ReturnType<ReturnType<typeof usePromptStatus>>;
   contextPct: number | undefined;
-  canReorder: boolean;
   isExecuting: boolean;
   showPauseBoundaryBefore: boolean;
   isScript: boolean;
@@ -100,7 +83,6 @@ function ChipContent({
   slotNumber,
   status,
   contextPct,
-  canReorder,
   isExecuting,
   showPauseBoundaryBefore,
   isScript,
@@ -112,7 +94,7 @@ function ChipContent({
   return (
     <div
       data-workflow-chip-index={stepIndex}
-      className={`relative flex flex-col px-1 py-1 border-b border-panel-border hover:bg-toolbar-hover-bg transition-colors${canReorder ? " cursor-grab active:cursor-grabbing" : " cursor-pointer"}`}
+      className="relative flex flex-col px-1 py-1 border-b border-panel-border hover:bg-toolbar-hover-bg transition-colors cursor-pointer"
       role="button"
       tabIndex={0}
       onClick={onChipClick}
@@ -245,35 +227,6 @@ function FinalStepChip({
   );
 }
 
-// ─── SortableChip ─────────────────────────────────────────────────────────────
-
-function SortableChip({
-  id,
-  disabled,
-  ...chipProps
-}: ChipProps & { id: string; disabled: boolean }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id, disabled });
-
-  const style = {
-    transform: transform ? `translate3d(0, ${transform.y}px, 0)` : undefined,
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <ChipContent {...chipProps} />
-    </div>
-  );
-}
-
 // ─── PromptChipRail ───────────────────────────────────────────────────────────
 
 interface PromptChipRailProps {
@@ -282,12 +235,14 @@ interface PromptChipRailProps {
 }
 
 /**
- * Compact sortable chip list. Width is owned by the parent container.
+ * Compact chip list. Width is owned by the parent container.
  *
- * The header is a single clickable row that triggers `onExpand`. Pending
- * prompts support drag-to-reorder (same logic as WorkflowStepsPanel).
- * Right-clicking a chip opens a single shared context menu with
- * position-management options. A final step chip is rendered at the bottom.
+ * The header is a single clickable row that triggers `onExpand`. This rail is
+ * "info at a glance" only — reordering requires expanding to the full
+ * WorkflowStepsPanel, or the Move Up/Down context menu items below.
+ * Right-clicking (or long-pressing) a chip opens a single shared context menu
+ * with position-management options. A final step chip is rendered at the
+ * bottom.
  */
 export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   const {
@@ -312,7 +267,6 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   const canChangeStartPosition =
     !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
   const canPasteStep = executionState !== EXECUTION_STATES.CANCELLING;
-  const canReorder = canChangeStartPosition && prompts.length - currentStep > 1;
 
   const getLatestOutput = useLatestStepOutput();
 
@@ -385,48 +339,6 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
       onToggleEnabled: handleToggleFinalStepEnabled,
     });
 
-  const [sortableIds, setSortableIds] = useState<string[]>(() =>
-    prompts.slice(currentStep).map((_, i) => `chip-pending-${currentStep + i}`)
-  );
-
-  useEffect(() => {
-    setSortableIds(
-      prompts
-        .slice(currentStep)
-        .map((_, i) => `chip-pending-${currentStep + i}`)
-    );
-  }, [prompts, currentStep]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (!over || active.id === over.id) return;
-
-      const oldIdx = sortableIds.indexOf(String(active.id));
-      const newIdx = sortableIds.indexOf(String(over.id));
-      if (oldIdx === -1 || newIdx === -1) return;
-
-      const newSortableIds = arrayMove(sortableIds, oldIdx, newIdx);
-      setSortableIds(newSortableIds);
-
-      const newPendingOrder = newSortableIds.map((id) =>
-        sortableIds.indexOf(id)
-      );
-      sendMessage(MESSAGE_TYPES.REORDER_PROMPTS, { newPendingOrder });
-
-      const editorStore = useEditorStore.getState();
-      if (editorStore.selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
-        editorStore.cancelEdit();
-      }
-    },
-    [sortableIds]
-  );
-
   return (
     <div className="flex flex-col h-full">
       {/* Header: chevron + list icon stacked, expands to full panel on click */}
@@ -487,7 +399,6 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                   slotNumber={i + 1}
                   status={status}
                   contextPct={contextPct}
-                  canReorder={false}
                   isExecuting={false}
                   showPauseBoundaryBefore={false}
                   isScript={isScriptStep(prompt)}
@@ -509,62 +420,47 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
               );
             })}
 
-            {/* Pending chips — sortable */}
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={sortableIds}
-                strategy={verticalListSortingStrategy}
-              >
-                {sortableIds.map((id, visualIdx) => {
-                  const index = parseInt(id.replace("chip-pending-", ""));
-                  const prompt = prompts[index];
-                  if (!prompt) return null;
-                  const isCurrentStep = visualIdx === 0;
-                  const status = getPromptStatus(prompt, index);
-                  const contextPct = getContextPct(index);
-                  const slotNumber = currentStep + visualIdx + 1;
-                  // Only an in-flight step is locked; PAUSED stops at a step
-                  // boundary, so the current chip is the next PENDING step.
-                  const isExecutionTargetLocked =
-                    isExecutionBusy(executionState) && isCurrentStep;
-                  return (
-                    <SortableChip
-                      key={id}
-                      id={id}
-                      disabled={!canReorder}
-                      stepIndex={index}
-                      slotNumber={slotNumber}
-                      status={status}
-                      contextPct={contextPct}
-                      canReorder={canReorder && !isExecutionTargetLocked}
-                      isExecuting={isRunning && isCurrentStep}
-                      showPauseBoundaryBefore={
-                        isPaused && currentStep > 0 && visualIdx === 0
-                      }
-                      isScript={isScriptStep(prompt)}
-                      onChipClick={() => handleStepClick(index)}
-                      onOpenContextMenu={(x, y) =>
-                        openContextMenu(x, y, {
-                          step: prompt,
-                          setPositionTarget: currentStep + visualIdx,
-                          deleteIndex: index,
-                          isCurrentStep,
-                          isExecutionTargetLocked,
-                          direction: "forward",
-                          outputText: getLatestOutput(index)?.response as
-                            | string
-                            | undefined,
-                        })
-                      }
-                    />
-                  );
-                })}
-              </SortableContext>
-            </DndContext>
+            {/* Pending chips — static; reorder via Move Up/Down in the
+                context menu, or expand to the full panel to drag. */}
+            {prompts.slice(currentStep).map((prompt, visualIdx) => {
+              const index = currentStep + visualIdx;
+              const isCurrentStep = visualIdx === 0;
+              const status = getPromptStatus(prompt, index);
+              const contextPct = getContextPct(index);
+              const slotNumber = index + 1;
+              // Only an in-flight step is locked; PAUSED stops at a step
+              // boundary, so the current chip is the next PENDING step.
+              const isExecutionTargetLocked =
+                isExecutionBusy(executionState) && isCurrentStep;
+              return (
+                <ChipContent
+                  key={index}
+                  stepIndex={index}
+                  slotNumber={slotNumber}
+                  status={status}
+                  contextPct={contextPct}
+                  isExecuting={isRunning && isCurrentStep}
+                  showPauseBoundaryBefore={
+                    isPaused && currentStep > 0 && visualIdx === 0
+                  }
+                  isScript={isScriptStep(prompt)}
+                  onChipClick={() => handleStepClick(index)}
+                  onOpenContextMenu={(x, y) =>
+                    openContextMenu(x, y, {
+                      step: prompt,
+                      setPositionTarget: index,
+                      deleteIndex: index,
+                      isCurrentStep,
+                      isExecutionTargetLocked,
+                      direction: "forward",
+                      outputText: getLatestOutput(index)?.response as
+                        | string
+                        | undefined,
+                    })
+                  }
+                />
+              );
+            })}
           </div>
         )}
       </div>

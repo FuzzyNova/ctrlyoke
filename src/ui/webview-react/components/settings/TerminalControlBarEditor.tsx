@@ -4,20 +4,11 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent,
 } from "react";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
   SortableContext,
   arrayMove,
   horizontalListSortingStrategy,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
@@ -37,6 +28,8 @@ import {
   reconcileTerminalBarLayout,
 } from "@root/utils/TerminalControlBarFormat";
 import { generateId } from "@utils/string";
+import { DRAG_HANDLE_TOUCH_ACTION_STYLE } from "@utils/dndKit";
+import { useSortableDndSensors } from "@hooks/useSortableDndSensors";
 import { Button } from "../shared/Button";
 import { LocalTextInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
@@ -451,6 +444,7 @@ function SortableBarChip({
       <button
         type="button"
         className="cursor-grab text-description-fg hover:text-foreground active:cursor-grabbing"
+        style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
         {...listeners}
         {...attributes}
         aria-label={`Drag to reorder ${item.label}, position ${index + 1}`}
@@ -527,6 +521,7 @@ function SortablePopupRow({
       <button
         type="button"
         className="shrink-0 cursor-grab text-description-fg hover:text-foreground active:cursor-grabbing"
+        style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
         {...listeners}
         {...attributes}
         aria-label={`Drag to reorder ${item.label}, position ${index + 1}`}
@@ -652,10 +647,7 @@ export function TerminalControlBarEditor({
     onUpdate(BAR_LAYOUT_PATH, nextLayout);
   };
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const sensors = useSortableDndSensors();
 
   const customShortcutsById = useMemo(
     () => new Map(customShortcuts.map((shortcut) => [shortcut.id, shortcut])),
