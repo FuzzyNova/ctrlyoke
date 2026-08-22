@@ -199,6 +199,125 @@ stop. That trains rubber-stamping.
    `SECRETS_AND_REDACTION_PLAN.md`'s own open questions already propose this
    ("Leaning yes for grants") and it was never built. One coherent gate beats
    one silent path plus one noisy one.
+
+   Implement this as the following concrete plan:
+
+   1. **Compute the workflow-wide request once, from the existing authoritative
+      per-step resolver.** Add
+      `getWorkflowSecretGrants(workflow: PromptFile): string[]` to
+      `src/utils/SecretResolver.ts`, alongside `getDeclaredSecretGrants`.
+      Iterate `workflow.steps ?? []` followed by `workflow.finalStep` when
+      present, call `getDeclaredSecretGrants(step, workflow)` for each, and
+      union the names in first-seen order. This automatically includes inline
+      `!NAME`, the effective `secrets` array (including inherited workflow
+      declarations), and valid `${secret:NAME}` references in every effective
+      process map. Do not scan `${secret:NAME}` in prompt prose: prompt text is
+      not a resolution boundary.
+
+   2. **Add a separate user-local trust store.** Create
+      `src/config/SecretGrantsTrustStore.ts` with the same platform-agnostic
+      shape as `ExternalRootsTrustStore`:
+      `SecretGrantTrustDecision = "allow" | "deny"`,
+      `getDecision(workspaceIdentity: string, name: string)`,
+      `getApprovedGrants(workspaceIdentity: string, candidateNames:
+      readonly string[])`, `getPendingGrants(...)`, and
+      `setDecisions(workspaceIdentity: string, names: readonly string[],
+      decision: SecretGrantTrustDecision)`. Canonicalize the workspace identity
+      with `ExternalRootsTrustStore.canonicalizeRoot`. Persist atomically at
+      `~/.ctrlyoke/secret-grants-trust.json`, with the exact key shape
+      `${workspaceIdentity}␟${secretName}`. Export a process-wide
+      `secretGrantsTrustStore` singleton. Keep this out of
+      `CtrlYokeConfigService`: approval is local trust state, not a setting, and
+      a checked-in workflow must never be able to write its own approval.
+
+   3. **Keep the shared resolver platform-agnostic, but make trust fail closed
+      at the core boundary.** Add an optional constructor callback to
+      `src/core/WorkflowInstance.ts`, for example
+      `approveSecretGrants?: (workflow: PromptFile, workspaceRoot: string) =>
+      Promise<void>`. Invoke it in `WorkflowInstance.executeLoadedPromptFile`
+      immediately before the existing `preflightWorkflowSecrets(...)` call.
+      The callback resolves pending approvals; `preflightWorkflowSecrets`
+      itself must then verify that every name returned by
+      `getWorkflowSecretGrants` has an `"allow"` decision for the canonical
+      workspace identity before resolving values. Add the trust store as an
+      injectable field in its existing options object, defaulting to
+      `secretGrantsTrustStore`, so unit tests do not depend on the user's
+      singleton file. A pending or denied name is treated as unavailable and
+      must use the existing `MissingSecretError`/ungranted process-map failure
+      path, not a new trust-specific execution result. This check is
+      unconditional even when `failOnMissing` is false: a denial must never
+      become a warning that lets execution continue. The same core path
+      therefore covers normal runs, retries, continuations, seeded re-runs,
+      and ephemeral dashboard prompts. Direct `WorkflowInstance` callers such
+      as the CLI pass no UI callback. The adapters own only the pending-review
+      UX; the core check prevents any non-UI execution path from bypassing it.
+
+   4. **Wire the VS Code prompt at execution time, not extension activation.**
+      Add `promptBatchApprovalForPendingWorkspaceSecretGrants(workflow:
+      PromptFile, workspaceRoot: string, store: SecretGrantsTrustStore =
+      secretGrantsTrustStore): Promise<void>` to a new
+      `src/ui/SecretGrantsTrustPrompt.ts`, mirroring
+      `promptBatchApprovalForPendingWorkspaceExternalRoots` in
+      `src/ui/ExternalFileTrustPrompt.ts`. Require
+      `vscode.workspace.isTrusted`; display one `showQuickPick` with every
+      pending name checked by default; Enter records allow for checked names
+      and deny for unchecked names; Escape records nothing so the next attempt
+      asks again. In `WorkflowOrchestrator.buildWorkflowInstance`, pass this
+      function as the new `WorkflowInstance` callback. The callback is reached
+      from the real dashboard paths (`extension.ts`'s `ctrlyoke.run` and
+      `runFromContext`, plus `WebviewMessageRouter` →
+      `WorkflowStepHandlers`' addressed draft/re-run/continue handlers) because
+      they all ultimately call `WorkflowInstance.executeLoadedPromptFile`;
+      do not put a native prompt in extension activation, where the workflow
+      definition is not known.
+
+   5. **Add the CLI fail-closed gate and approval command.** In `src/cli.ts`'s
+      `runCommand`, perform the new gate only after the file or inline workflow
+      has loaded and CLI `--var` values have been merged, but before
+      `executeLoadedPromptFile` (and before the dry-run path if that path is
+      given a loaded workflow). Use `getWorkflowSecretGrants`, the canonical
+      working-directory identity, and `secretGrantsTrustStore.getPendingGrants`.
+      List every pending name and exit 2 with
+      `Run \`ctrlyoke trust-secret-grants <file>\` to review and approve them.`
+      Keep the existing external-root gate unchanged. Register a top-level
+      `trust-secret-grants <file>` command in `src/cli.ts`, with `-d, --cwd`
+      and `-y, --yes`, and implement its parse/load, pending-name listing,
+      interactive confirmation, and allow/deny persistence by reusing the
+      `PromptFileParser` and the store. The command is deliberately scoped to
+      one workflow file because grants are per-workflow; an inline `--prompt`
+      with pending names remains fail closed and must be moved to a file before
+      it can be approved durably. Add the command's options/handler types to
+      `src/cli/SecretCommandDefinitions.ts` (`TrustSecretGrantsOptions`) and
+      its testable `trustSecretGrantsCommand(...)` handler in
+      `src/cli/SecretCommands.ts`, using the existing
+      `SecretCommandDependencies`/`SecretCommandIo` contracts.
+
+   6. **Scope the decision by workspace and name, not by workflow file or
+      content hash.** Use the exact `${workspaceIdentity}␟${secretName}` key:
+      secret names are identifiers, not secret values, and the approval is a
+      local user's trust decision for that workspace. This matches the external
+      roots precedent and avoids re-prompting for every workflow that
+      legitimately uses the same credential. A workflow cloned into another
+      checkout/workspace gets a different identity and must be reviewed again;
+      finer workflow/content scoping would turn the one-time review into
+      repetitive rubber-stamping without improving the stated cloned-repository
+      boundary.
+
+   7. **Test each boundary.** Extend
+      `src/test/unit/SecretResolver.test.ts` with workflow-wide union coverage
+      across multiple steps and `finalStep`, including inline and process-map
+      grants. Add `src/test/unit/SecretGrantsTrustStore.test.ts` by copying the
+      isolated temporary-file patterns from
+      `src/test/unit/ExternalRootsTrustStore.test.ts`: allow/deny/pending
+      behavior, workspace isolation, persistence, corrupt-file recovery, and
+      the exact separator key. Extend `src/test/unit/SecretCommands.test.ts`
+      (and the CLI run integration/parser coverage where appropriate) for
+      `trust-secret-grants`, `--yes`, pending-name output, and the run gate's
+      exit-2 fail-closed behavior. Add focused VS Code prompt/wiring coverage
+      using the existing `src/test/unit/ConfigurationUtils.test.ts`-style
+      injected-store/stub patterns: all names are shown in one picker,
+      checked/unchecked decisions persist, Escape leaves names pending, and
+      the execution callback is invoked before `preflightWorkflowSecrets`.
 3. **Honored (2026-08-20), not outstanding work** — this was a constraint on the
    fix, not a task. The invalid-name throw (`isValidSecretName`) and the runtime
    `MissingSecretError` are both still in place: they are real resolution
