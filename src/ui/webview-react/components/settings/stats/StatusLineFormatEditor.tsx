@@ -198,7 +198,12 @@ function SortableSegmentRow({
       </span>
       {segment.type === "field" ? (
         <div className="flex min-w-0 flex-1 items-center gap-2 text-sm text-foreground">
-          <span className="truncate">{fieldLabel(segment.field)}</span>
+          <span
+            className="truncate"
+            title={STATUS_LINE_FIELD_REGISTRY[segment.field].description}
+          >
+            {fieldLabel(segment.field)}
+          </span>
           {STATUS_LINE_FIELD_REGISTRY[segment.field].labelSlot && (
             <LocalTextInput
               value={segment.label ?? ""}
@@ -446,6 +451,7 @@ export function StatusLineFormatEditor({
               <label
                 key={field}
                 className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer"
+                title={STATUS_LINE_FIELD_REGISTRY[field].description}
               >
                 <input
                   type="checkbox"

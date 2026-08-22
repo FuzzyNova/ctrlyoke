@@ -1,6 +1,5 @@
 /** Closed vocabulary of fields that can appear in a customized statusline. */
 export const STATUS_LINE_FIELD_IDS = {
-  BRAND: "brand",
   MODEL: "model",
   CONTEXT: "context",
   USAGE: "usage",
@@ -19,42 +18,66 @@ export type StatusLineFieldId =
 
 /** Field metadata shared by the formatter and the format editor. */
 export const STATUS_LINE_FIELD_REGISTRY = {
-  [STATUS_LINE_FIELD_IDS.BRAND]: { label: "ctrlyoke ⚡", labelSlot: false },
-  [STATUS_LINE_FIELD_IDS.MODEL]: { label: "Model name", labelSlot: false },
+  [STATUS_LINE_FIELD_IDS.MODEL]: {
+    label: "Model",
+    labelSlot: false,
+    description: undefined,
+  },
   [STATUS_LINE_FIELD_IDS.CONTEXT]: {
-    label: "Context usage (colored band)",
+    label: "Context usage",
     labelSlot: true,
+    description:
+      "Token usage against the context window. Auto-colors as it approaches the limit.",
   },
   [STATUS_LINE_FIELD_IDS.USAGE]: {
-    label: "Rate/quota used % (worst of all windows)",
+    label: "Peak usage %",
     labelSlot: true,
+    description:
+      "The most-used rate/quota window, so you always see whichever one is closest to its limit.",
   },
   [STATUS_LINE_FIELD_IDS.USAGE_1]: {
-    label: "First usage window, used % + short label",
+    label: "Usage window 1",
     labelSlot: true,
+    description: "The first rate/quota window's used % and short label.",
   },
   [STATUS_LINE_FIELD_IDS.USAGE_2]: {
-    label: "Second usage window, used % + short label",
+    label: "Usage window 2",
     labelSlot: true,
+    description: "The second rate/quota window's used % and short label.",
   },
   [STATUS_LINE_FIELD_IDS.VERSION]: {
-    label: "Harness/CLI version",
+    label: "CLI version",
     labelSlot: false,
+    description: undefined,
   },
   [STATUS_LINE_FIELD_IDS.CWD]: {
-    label: "Current directory (basename)",
+    label: "Directory",
     labelSlot: false,
+    description: "Current working directory (basename only).",
   },
   [STATUS_LINE_FIELD_IDS.SESSION_ID]: {
-    label: "Session id (truncated)",
+    label: "Session ID",
     labelSlot: false,
+    description: "Truncated session id.",
   },
-  [STATUS_LINE_FIELD_IDS.BRANCH]: { label: "Git branch", labelSlot: false },
-  [STATUS_LINE_FIELD_IDS.DATE]: { label: "Date", labelSlot: false },
-  [STATUS_LINE_FIELD_IDS.TIME]: { label: "Time", labelSlot: false },
+  [STATUS_LINE_FIELD_IDS.BRANCH]: {
+    label: "Git branch",
+    labelSlot: false,
+    description: undefined,
+  },
+  [STATUS_LINE_FIELD_IDS.DATE]: {
+    label: "Date",
+    labelSlot: false,
+    description: undefined,
+  },
+  [STATUS_LINE_FIELD_IDS.TIME]: {
+    label: "Time",
+    labelSlot: false,
+    description: undefined,
+  },
 } as const satisfies Record<
   StatusLineFieldId,
-  { label: string; labelSlot: boolean }
+  { label: string; labelSlot: boolean; description?: string }
 >;
 
 /** ANSI prefixes for the curated statusline color vocabulary. */
@@ -98,9 +121,13 @@ export type StatusLineSegment =
       color?: StatusLineColorId;
     };
 
-/** Shared zero-visible-change default format for both statusline providers. */
+/**
+ * Shared default format for both statusline providers. The leading brand
+ * segment is a plain literal (not a field) so it renders as an editable text
+ * box from the start, hinting that it can be customized in place.
+ */
 export const DEFAULT_STATUS_LINE_FORMAT = [
-  { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
+  { type: "literal", text: "ctrlyoke" },
   { type: "field", field: STATUS_LINE_FIELD_IDS.MODEL },
   { type: "literal", text: "·" },
   { type: "field", field: STATUS_LINE_FIELD_IDS.CONTEXT },
@@ -502,9 +529,6 @@ export function formatBrandedStatusLine(
         const field = segment.field as StatusLineFieldId;
         const label = safeLabel(segment.label, "");
         switch (field) {
-          case STATUS_LINE_FIELD_IDS.BRAND:
-            text = "ctrlyoke ⚡";
-            break;
           case STATUS_LINE_FIELD_IDS.MODEL: {
             const model = isRecord(normalized.model) ? normalized.model : {};
             text = safeLabel(

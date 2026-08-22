@@ -817,7 +817,7 @@ suite("Shared statusline wrappers", () => {
 
       assert.strictEqual(result.code, 0);
       assert.strictEqual(await fs.readFile(marker, "utf8"), "ran");
-      assert.match(result.stdout, /^ctrlyoke ⚡/);
+      assert.match(result.stdout, /^ctrlyoke /);
       assert.doesNotMatch(result.stdout, /custom/);
       const filename =
         provider === "claude"
@@ -901,7 +901,7 @@ suite("Shared statusline wrappers", () => {
         JSON.stringify({ model: { id: `${provider}-model` } }),
         { HOME: tempHome, USERPROFILE: tempHome }
       );
-      assert.match(missing.stdout, /^ctrlyoke ⚡/);
+      assert.match(missing.stdout, /^ctrlyoke /);
 
       await fs.mkdir(path.dirname(settingsPath), { recursive: true });
       await fs.writeFile(settingsPath, "{}");
@@ -910,7 +910,7 @@ suite("Shared statusline wrappers", () => {
         JSON.stringify({ model: { id: `${provider}-model` } }),
         { HOME: tempHome, USERPROFILE: tempHome }
       );
-      assert.match(empty.stdout, /^ctrlyoke ⚡/);
+      assert.match(empty.stdout, /^ctrlyoke /);
 
       await fs.writeFile(settingsPath, "{ malformed");
       const malformed = await runWrapper(
@@ -918,7 +918,7 @@ suite("Shared statusline wrappers", () => {
         JSON.stringify({ model: { id: `${provider}-model` } }),
         { HOME: tempHome, USERPROFILE: tempHome }
       );
-      assert.match(malformed.stdout, /^ctrlyoke ⚡/);
+      assert.match(malformed.stdout, /^ctrlyoke /);
     });
 
     test(`${provider} forwards without snapshot or branding when disabled`, async () => {

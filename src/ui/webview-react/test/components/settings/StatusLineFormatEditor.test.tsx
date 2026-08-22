@@ -26,7 +26,7 @@ describe("StatusLineFormatEditor", () => {
   it("includes a field through the registry checkbox and removes it via the delete button", async () => {
     const user = userEvent.setup();
     const onCommit = renderEditor([
-      { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
+      { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
     ]);
 
     await user.click(
@@ -36,17 +36,17 @@ describe("StatusLineFormatEditor", () => {
     expect(onCommit).toHaveBeenCalledTimes(1);
 
     await user.click(
-      screen.getByRole("checkbox", { name: "Include ctrlyoke ⚡" })
+      screen.getByRole("checkbox", { name: "Include CLI version" })
     );
     expect(onCommit).toHaveBeenLastCalledWith([
-      { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
+      { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
     ]);
     expect(onCommit).toHaveBeenCalledTimes(2);
   });
 
   it("renders a drag handle and delete button for every segment", () => {
     renderEditor([
-      { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
+      { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
       { type: "field", field: STATUS_LINE_FIELD_IDS.MODEL },
       { type: "literal", text: "·" },
     ]);
@@ -66,13 +66,13 @@ describe("StatusLineFormatEditor", () => {
   it("removes a literal segment via its delete button", async () => {
     const user = userEvent.setup();
     const onCommit = renderEditor([
-      { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
+      { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
       { type: "literal", text: "·" },
     ]);
 
     await user.click(screen.getByRole("button", { name: "Remove segment 2" }));
     expect(onCommit).toHaveBeenLastCalledWith([
-      { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
+      { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
     ]);
     expect(onCommit).toHaveBeenCalledTimes(1);
   });
@@ -80,12 +80,12 @@ describe("StatusLineFormatEditor", () => {
   it("adds a literal and caps committed custom text at 64 characters", async () => {
     const user = userEvent.setup();
     const onCommit = renderEditor([
-      { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
+      { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
     ]);
 
     await user.click(screen.getByRole("button", { name: "Add custom text" }));
     expect(onCommit).toHaveBeenLastCalledWith([
-      { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
+      { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
       { type: "literal", text: "" },
     ]);
     expect(onCommit).toHaveBeenCalledTimes(1);
@@ -99,7 +99,7 @@ describe("StatusLineFormatEditor", () => {
 
     expect(onCommit).toHaveBeenCalledTimes(1);
     expect(onCommit).toHaveBeenLastCalledWith([
-      { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
+      { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
       { type: "literal", text: "x".repeat(64) },
     ]);
   });
@@ -149,21 +149,21 @@ describe("StatusLineFormatEditor", () => {
   it("shows and persists custom labels only for registry label-slot fields", async () => {
     const user = userEvent.setup();
     const onCommit = renderEditor([
-      { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
+      { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
       { type: "field", field: STATUS_LINE_FIELD_IDS.CONTEXT },
     ]);
 
     expect(
-      screen.queryByRole("textbox", { name: "Custom label for ctrlyoke ⚡" })
+      screen.queryByRole("textbox", { name: "Custom label for CLI version" })
     ).not.toBeInTheDocument();
     const labelInput = screen.getByRole("textbox", {
-      name: "Custom label for Context usage (colored band)",
+      name: "Custom label for Context usage",
     });
     await user.type(labelInput, "window");
     await user.tab();
 
     expect(onCommit).toHaveBeenLastCalledWith([
-      { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
+      { type: "field", field: STATUS_LINE_FIELD_IDS.VERSION },
       { type: "field", field: STATUS_LINE_FIELD_IDS.CONTEXT, label: "window" },
     ]);
   });

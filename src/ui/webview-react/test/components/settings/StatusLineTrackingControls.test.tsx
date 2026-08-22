@@ -205,7 +205,7 @@ describe("StatusLineTrackingControls", () => {
 
     await user.click(
       screen.getByRole("checkbox", {
-        name: "Include Harness/CLI version",
+        name: "Include CLI version",
       })
     );
 
