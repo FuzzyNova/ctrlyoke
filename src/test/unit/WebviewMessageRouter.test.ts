@@ -293,7 +293,7 @@ suite("WebviewMessageRouter — statusline tracking", () => {
 
     await router.route({
       type: MESSAGE_TYPES.DISABLE_STATUS_LINE_TRACKING,
-      harnessId: HARNESS_IDS.COPILOT_CLI,
+      harnessId: HARNESS_IDS.CODEX_CLI,
       restoreCustomCommand: false,
     });
 

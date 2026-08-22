@@ -260,6 +260,8 @@ export function formatUsagePercentForDisplay(
 export const STATUS_LINE_FORMAT_PROVIDERS = {
   CLAUDE: "claude",
   ANTIGRAVITY: "antigravity",
+  COPILOT: "copilot",
+  QWEN: "qwen",
 } as const;
 
 export type StatusLineFormatProvider =

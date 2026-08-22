@@ -38,9 +38,8 @@ interface StatusLineSettingPaths {
   format: string;
 }
 
-const STATUS_LINE_SETTING_PATHS: Record<
-  StatusLineTrackingProvider,
-  StatusLineSettingPaths
+const STATUS_LINE_SETTING_PATHS: Partial<
+  Record<StatusLineTrackingProvider, StatusLineSettingPaths>
 > = {
   [STATUS_LINE_TRACKING_PROVIDERS.CLAUDE]: {
     enabled: SETTING_PATHS.PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_ENABLED,
@@ -70,6 +69,8 @@ function providerForHarness(
       return STATUS_LINE_TRACKING_PROVIDERS.CLAUDE;
     case HARNESS_IDS.ANTIGRAVITY_CLI:
       return STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY;
+    default:
+      throw new Error(`Unsupported statusline harness: ${harnessId}`);
   }
 }
 
@@ -79,6 +80,8 @@ function getDisableWarning(harnessId: StatusLineTrackingHarnessId): string {
       return "Disabling Claude statusline tracking loses token/quota data.";
     case HARNESS_IDS.ANTIGRAVITY_CLI:
       return "Disabling Antigravity statusline tracking loses token/quota and context-window data.";
+    default:
+      throw new Error(`Unsupported statusline harness: ${harnessId}`);
   }
 }
 
@@ -135,6 +138,9 @@ export function StatusLineTrackingControls({
 }: Props) {
   const provider = providerForHarness(harnessId);
   const paths = STATUS_LINE_SETTING_PATHS[provider];
+  if (!paths) {
+    throw new Error(`Missing statusline setting paths for provider: ${provider}`);
+  }
   const tracking = settings.settings.permissions.statusLineTracking[provider];
   const snapshot = useHarnessUsageStore(
     (state) => state.snapshotsByHarness[harnessId]

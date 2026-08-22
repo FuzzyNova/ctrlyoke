@@ -560,7 +560,7 @@ divergences (Decision 4's Copilot-specific displayed limit and Decision 4a's Qwe
    2026-08-22 against Qwen Code `0.21.15`, captured real interactive payloads, and restored the
    original `~/.qwen/settings.json`. Phase 4 now depends on the documented shape plus the
    Qwen-specific numeric-`current_usage` context preference recorded in Decision 4a.
-1. **Settings & schema**: extend the two provider enums (Decision 1), `StatusLineTrackingHarnessId`
+1. **Complete — settings & schema**: extend the two provider enums (Decision 1), `StatusLineTrackingHarnessId`
    (Decision 2), schema/defaults/`SETTING_PATHS` for `copilot`/`qwen` (Settings/Schema Plumbing
    above). Does not touch `STATUS_LINE_HARNESS_IDS` (webview) — that's Phase 7, so no UI is
    exposed for a provider with no backend yet. Expect `settingsSchemaUiParity` to go red for the

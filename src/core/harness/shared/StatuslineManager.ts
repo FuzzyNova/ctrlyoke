@@ -58,6 +58,8 @@ export class StatuslineManager implements StatuslineManagerLike {
         return STATUS_LINE_TRACKING_PROVIDERS.CLAUDE;
       case HARNESS_IDS.ANTIGRAVITY_CLI:
         return STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY;
+      default:
+        throw new Error(`Unsupported statusline harness: ${harnessId}`);
     }
   }
 

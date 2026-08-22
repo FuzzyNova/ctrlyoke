@@ -36,6 +36,8 @@ export const RUN_HISTORY_LOCATIONS = {
 export const STATUS_LINE_TRACKING_PROVIDERS = {
   CLAUDE: "claude",
   ANTIGRAVITY: "antigravity",
+  COPILOT: "copilot",
+  QWEN: "qwen",
 } as const;
 
 export type StatusLineTrackingProvider =
@@ -674,13 +676,18 @@ export const HARNESS_IDS = {
 /** Harnesses whose global statusline can be managed by ctrlyoke. */
 export type StatusLineTrackingHarnessId =
   | typeof HARNESS_IDS.CLAUDE_CLI
-  | typeof HARNESS_IDS.ANTIGRAVITY_CLI;
+  | typeof HARNESS_IDS.ANTIGRAVITY_CLI
+  | typeof HARNESS_IDS.COPILOT_CLI
+  | typeof HARNESS_IDS.QWEN_CLI;
 
 export function isStatusLineTrackingHarnessId(
   value: unknown
 ): value is StatusLineTrackingHarnessId {
   return (
-    value === HARNESS_IDS.CLAUDE_CLI || value === HARNESS_IDS.ANTIGRAVITY_CLI
+    value === HARNESS_IDS.CLAUDE_CLI ||
+    value === HARNESS_IDS.ANTIGRAVITY_CLI ||
+    value === HARNESS_IDS.COPILOT_CLI ||
+    value === HARNESS_IDS.QWEN_CLI
   );
 }
 
@@ -1094,6 +1101,22 @@ export const SETTING_PATHS = {
     "permissions.statusLineTracking.antigravity.useCtrlyokeStyle",
   PERMISSIONS_STATUS_LINE_TRACKING_ANTIGRAVITY_FORMAT:
     "permissions.statusLineTracking.antigravity.format",
+  PERMISSIONS_STATUS_LINE_TRACKING_COPILOT_ENABLED:
+    "permissions.statusLineTracking.copilot.enabled",
+  PERMISSIONS_STATUS_LINE_TRACKING_COPILOT_CUSTOM_COMMAND:
+    "permissions.statusLineTracking.copilot.customCommand",
+  PERMISSIONS_STATUS_LINE_TRACKING_COPILOT_USE_CTRLYOKE_STYLE:
+    "permissions.statusLineTracking.copilot.useCtrlyokeStyle",
+  PERMISSIONS_STATUS_LINE_TRACKING_COPILOT_FORMAT:
+    "permissions.statusLineTracking.copilot.format",
+  PERMISSIONS_STATUS_LINE_TRACKING_QWEN_ENABLED:
+    "permissions.statusLineTracking.qwen.enabled",
+  PERMISSIONS_STATUS_LINE_TRACKING_QWEN_CUSTOM_COMMAND:
+    "permissions.statusLineTracking.qwen.customCommand",
+  PERMISSIONS_STATUS_LINE_TRACKING_QWEN_USE_CTRLYOKE_STYLE:
+    "permissions.statusLineTracking.qwen.useCtrlyokeStyle",
+  PERMISSIONS_STATUS_LINE_TRACKING_QWEN_FORMAT:
+    "permissions.statusLineTracking.qwen.format",
   USAGE_TRACKING_ENABLED: "usageTracking.enabled",
   USAGE_TRACKING_PERCENT_DIRECTION: "usageTracking.percentDirection",
 } as const;

@@ -431,7 +431,9 @@
             "claude": { "$ref": "#/definitions/statusLineTrackingSettings" },
             "antigravity": {
               "$ref": "#/definitions/statusLineTrackingSettings"
-            }
+            },
+            "copilot": { "$ref": "#/definitions/statusLineTrackingSettings" },
+            "qwen": { "$ref": "#/definitions/statusLineTrackingSettings" }
           }
         },
         "allowedExternalFileRoots": {

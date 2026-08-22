@@ -399,6 +399,18 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
         useCtrlyokeStyle: true,
         format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
       },
+      [STATUS_LINE_TRACKING_PROVIDERS.COPILOT]: {
+        enabled: true,
+        customCommand: "",
+        useCtrlyokeStyle: true,
+        format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
+      },
+      [STATUS_LINE_TRACKING_PROVIDERS.QWEN]: {
+        enabled: true,
+        customCommand: "",
+        useCtrlyokeStyle: true,
+        format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
+      },
     },
     allowedExternalFileRoots: [],
     heuristicSecretRedactionEnabled: true,
