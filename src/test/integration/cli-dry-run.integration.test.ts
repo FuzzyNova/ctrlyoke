@@ -107,6 +107,42 @@ suite("CLI dry-run process", () => {
       /Failed to load workflow file|Validation failed/
     );
   });
+
+  test("fails closed with exit code 2 when workflow secret grants are pending", async function () {
+    this.timeout(30000);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "ctrlyoke-dry-run-"));
+    temporaryRoots.push(root);
+    const workflow = path.join(root, "pending-grants.ctrlyoke.json");
+    const grantName = `PENDING_CLI_GATE_${path
+      .basename(root)
+      .replace(/[^A-Za-z0-9_]/g, "_")
+      .toUpperCase()}`;
+    await fs.writeFile(
+      workflow,
+      JSON.stringify({
+        steps: [
+          {
+            name: "deploy",
+            secrets: [grantName],
+            prompt: "This must not execute",
+          },
+        ],
+      }),
+      "utf8"
+    );
+
+    const result = await runCli(
+      ["run", workflow, "--dry-run", "--json", "--cwd", root],
+      root
+    );
+
+    assert.strictEqual(result.code, 2, result.stderr);
+    assert.match(result.stderr, new RegExp(grantName));
+    assert.match(
+      result.stderr,
+      /Run `ctrlyoke trust-secret-grants <file>` to review and approve them\./
+    );
+  });
 });
 
 async function pathExists(filePath: string): Promise<boolean> {

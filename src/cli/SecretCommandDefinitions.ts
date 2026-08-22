@@ -24,11 +24,20 @@ export interface SecretCheckOptions {
   cwd?: string;
 }
 
+export interface TrustSecretGrantsOptions {
+  cwd?: string;
+  yes?: boolean;
+}
+
 export interface SecretCommandHandlers {
   set(name: string, options: SecretSetOptions): Promise<void>;
   list(options: SecretListOptions): Promise<void>;
   remove(name: string, options: SecretRemoveOptions): Promise<void>;
   check(file: string | undefined, options: SecretCheckOptions): Promise<void>;
+  trustSecretGrants(
+    file: string,
+    options: TrustSecretGrantsOptions
+  ): Promise<void | number>;
 }
 
 /** Registers the value-free CLI surface for managed secrets. */
@@ -99,4 +108,16 @@ export function registerSecretCommands(
     .action(async (file: string | undefined, options: SecretCheckOptions) =>
       handlers.check(file, options)
     );
+
+  program
+    .command("trust-secret-grants <file>")
+    .description("Review and approve a workflow's declared secret grants")
+    .option(
+      "-d, --cwd <path>",
+      "Workspace directory (default: current directory)"
+    )
+    .option("-y, --yes", "Approve all pending grants without prompting")
+    .action(async (file: string, options: TrustSecretGrantsOptions) => {
+      await handlers.trustSecretGrants(file, options);
+    });
 }

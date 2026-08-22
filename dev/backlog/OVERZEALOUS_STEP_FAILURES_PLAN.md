@@ -271,7 +271,7 @@ stop. That trains rubber-stamping.
       do not put a native prompt in extension activation, where the workflow
       definition is not known.
 
-   5. **Add the CLI fail-closed gate and approval command.** In `src/cli.ts`'s
+   5. **Implemented (2026-08-22) — add the CLI fail-closed gate and approval command.** In `src/cli.ts`'s
       `runCommand`, perform the new gate only after the file or inline workflow
       has loaded and CLI `--var` values have been merged, but before
       `executeLoadedPromptFile` (and before the dry-run path if that path is

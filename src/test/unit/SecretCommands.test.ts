@@ -4,7 +4,10 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Command } from "commander";
 import { configService } from "../../config/CtrlYokeConfigService";
-import { secretGrantsTrustStore } from "../../config/SecretGrantsTrustStore";
+import {
+  SecretGrantsTrustStore,
+  secretGrantsTrustStore,
+} from "../../config/SecretGrantsTrustStore";
 import { suite, test } from "mocha";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 import type { SecretStore } from "../../platform/SecretStore";
@@ -19,6 +22,7 @@ import {
   listSecretsCommand,
   removeSecretCommand,
   setSecretCommand,
+  trustSecretGrantsCommand,
   type SecretCommandDependencies,
   type SecretCommandIo,
 } from "../../cli/SecretCommands";
@@ -28,6 +32,7 @@ import {
   type SecretListOptions,
   type SecretRemoveOptions,
   type SecretSetOptions,
+  type TrustSecretGrantsOptions,
 } from "../../cli/SecretCommandDefinitions";
 
 class InMemorySecretStore implements SecretStore {
@@ -80,6 +85,7 @@ class TestIo implements SecretCommandIo {
   readonly hiddenPrompts: string[] = [];
   isInteractive = false;
   confirmed = false;
+  confirmCalls = 0;
   stdinValue = "";
   hiddenValue = "";
 
@@ -92,6 +98,7 @@ class TestIo implements SecretCommandIo {
   }
 
   confirm(): Promise<boolean> {
+    this.confirmCalls++;
     return Promise.resolve(this.confirmed);
   }
 
@@ -123,6 +130,10 @@ function createParserProgram(calls: {
   list?: SecretListOptions;
   remove?: { name: string; options: SecretRemoveOptions };
   check?: { file: string | undefined; options: SecretCheckOptions };
+  trustSecretGrants?: {
+    file: string;
+    options: TrustSecretGrantsOptions;
+  };
 }): Command {
   const program = new Command();
   program.exitOverride();
@@ -139,6 +150,9 @@ function createParserProgram(calls: {
     },
     check: async (file, options) => {
       calls.check = { file, options };
+    },
+    trustSecretGrants: async (file, options) => {
+      calls.trustSecretGrants = { file, options };
     },
   });
   return program;
@@ -200,6 +214,24 @@ suite("Secret command parser", () => {
       from: "user",
     });
     assert.strictEqual(checkCalls.check?.file, undefined);
+  });
+
+  test("parses top-level trust-secret-grants options", async () => {
+    const calls: Parameters<typeof createParserProgram>[0] = {};
+    await createParserProgram(calls).parseAsync(
+      [
+        "trust-secret-grants",
+        "workflow.ctrlyoke.yaml",
+        "--cwd",
+        "workspace",
+        "-y",
+      ],
+      { from: "user" }
+    );
+
+    assert.strictEqual(calls.trustSecretGrants?.file, "workflow.ctrlyoke.yaml");
+    assert.strictEqual(calls.trustSecretGrants?.options.cwd, "workspace");
+    assert.strictEqual(calls.trustSecretGrants?.options.yes, true);
   });
 });
 
@@ -342,6 +374,149 @@ suite("Secret command handlers", () => {
       assert.match(io.errors.join("\n"), /MISSING_TOKEN/);
     } finally {
       configService.setCliOverlay({});
+    }
+  });
+
+  test("lists pending workflow grants and persists an injected decision store", async () => {
+    const tempRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-secret-grants-test-")
+    );
+    try {
+      const trustStore = new SecretGrantsTrustStore(
+        path.join(tempRoot, "trust.json")
+      );
+      const io = new TestIo();
+      await trustSecretGrantsCommand(
+        "workflow.ctrlyoke.yaml",
+        {},
+        {
+          ...workflowDependencies(new InMemorySecretStore(), {
+            steps: [
+              {
+                name: "deploy",
+                secrets: ["FIRST_TOKEN", "SECOND_TOKEN"],
+                prompt: "deploy",
+              },
+            ],
+          }),
+          workspaceRoot: tempRoot,
+          secretGrantsTrustStore: trustStore,
+        },
+        io
+      );
+
+      assert.match(io.output.join("\n"), /FIRST_TOKEN/);
+      assert.match(io.output.join("\n"), /SECOND_TOKEN/);
+      assert.strictEqual(
+        trustStore.getDecision(tempRoot, "FIRST_TOKEN"),
+        "deny"
+      );
+      assert.strictEqual(
+        trustStore.getDecision(tempRoot, "SECOND_TOKEN"),
+        "deny"
+      );
+    } finally {
+      await fs.rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("approves all pending workflow grants with --yes without prompting", async () => {
+    const tempRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-secret-grants-test-")
+    );
+    try {
+      const trustStore = new SecretGrantsTrustStore(
+        path.join(tempRoot, "trust.json")
+      );
+      const io = new TestIo();
+      const result = await trustSecretGrantsCommand(
+        "workflow.ctrlyoke.yaml",
+        { yes: true },
+        {
+          ...workflowDependencies(new InMemorySecretStore(), {
+            steps: [
+              {
+                name: "deploy",
+                secrets: ["CI_TOKEN"],
+                prompt: "deploy",
+              },
+            ],
+          }),
+          workspaceRoot: tempRoot,
+          secretGrantsTrustStore: trustStore,
+        },
+        io
+      );
+
+      assert.strictEqual(result, 0);
+      assert.strictEqual(io.confirmCalls, 0);
+      assert.strictEqual(trustStore.getDecision(tempRoot, "CI_TOKEN"), "allow");
+    } finally {
+      await fs.rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("persists allow and deny decisions from interactive confirmation", async () => {
+    const tempRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-secret-grants-test-")
+    );
+    try {
+      const trustStore = new SecretGrantsTrustStore(
+        path.join(tempRoot, "trust.json")
+      );
+      const workflow = {
+        steps: [
+          {
+            name: "deploy",
+            secrets: ["ALLOWED_TOKEN"],
+            prompt: "deploy",
+          },
+        ],
+      };
+      const io = new TestIo();
+      io.isInteractive = true;
+      io.confirmed = true;
+      await trustSecretGrantsCommand(
+        "workflow.ctrlyoke.yaml",
+        {},
+        {
+          ...workflowDependencies(new InMemorySecretStore(), workflow),
+          workspaceRoot: tempRoot,
+          secretGrantsTrustStore: trustStore,
+        },
+        io
+      );
+      assert.strictEqual(
+        trustStore.getDecision(tempRoot, "ALLOWED_TOKEN"),
+        "allow"
+      );
+
+      io.confirmed = false;
+      await trustSecretGrantsCommand(
+        "workflow.ctrlyoke.yaml",
+        {},
+        {
+          ...workflowDependencies(new InMemorySecretStore(), {
+            steps: [
+              {
+                name: "deploy",
+                secrets: ["DENIED_TOKEN"],
+                prompt: "deploy",
+              },
+            ],
+          }),
+          workspaceRoot: tempRoot,
+          secretGrantsTrustStore: trustStore,
+        },
+        io
+      );
+      assert.strictEqual(
+        trustStore.getDecision(tempRoot, "DENIED_TOKEN"),
+        "deny"
+      );
+      assert.strictEqual(io.confirmCalls, 2);
+    } finally {
+      await fs.rm(tempRoot, { recursive: true, force: true });
     }
   });
 });

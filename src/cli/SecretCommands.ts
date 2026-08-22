@@ -7,7 +7,15 @@ import {
 import { OsCredentialStore } from "../platform/OsCredentialStore";
 import { CliAdapter, type ResolvedCliConfig } from "../platform/CliAdapter";
 import { PromptFileParser } from "../core/PromptFileParser";
-import { preflightWorkflowSecrets } from "../utils/SecretResolver";
+import {
+  getWorkflowSecretGrants,
+  preflightWorkflowSecrets,
+} from "../utils/SecretResolver";
+import {
+  secretGrantsTrustStore,
+  type SecretGrantsTrustStore,
+} from "../config/SecretGrantsTrustStore";
+import { ExternalRootsTrustStore } from "../config/ExternalRootsTrustStore";
 import {
   userSecretKey,
   validateSecretName,
@@ -30,6 +38,7 @@ import type {
   SecretListOptions,
   SecretRemoveOptions,
   SecretSetOptions,
+  TrustSecretGrantsOptions,
 } from "./SecretCommandDefinitions";
 
 export interface SecretCommandIo {
@@ -47,6 +56,10 @@ export interface SecretCommandDependencies {
   platform: PlatformAdapter;
   environment?: NodeJS.ProcessEnv;
   parseWorkflow?(filePath: string): Promise<PromptFile | null>;
+  secretGrantsTrustStore?: Pick<
+    SecretGrantsTrustStore,
+    "getPendingGrants" | "setDecisions"
+  >;
 }
 
 /** Construct the CLI platform contract without introducing a plaintext fallback. */
@@ -209,6 +222,75 @@ export async function checkSecretsCommand(
 
   io.writeOut(
     `✓ ${path.basename(filePath)}: all declared secrets are resolvable.`
+  );
+  return 0;
+}
+
+export async function trustSecretGrantsCommand(
+  file: string,
+  options: TrustSecretGrantsOptions,
+  dependencies: SecretCommandDependencies,
+  io: SecretCommandIo
+): Promise<number> {
+  const workspaceRoot = resolveWorkspaceRoot(
+    options.cwd,
+    dependencies.workspaceRoot
+  );
+  const filePath = path.resolve(workspaceRoot, file);
+  let workflow: PromptFile | null;
+  try {
+    workflow = dependencies.parseWorkflow
+      ? await dependencies.parseWorkflow(filePath)
+      : await new PromptFileParser(dependencies.platform).parsePromptFile(
+          filePath
+        );
+  } catch (error) {
+    io.writeErr(`Error: ${errorMessage(error)}`);
+    return 2;
+  }
+  if (!workflow) {
+    io.writeErr(`Error: Workflow failed validation: ${filePath}`);
+    return 2;
+  }
+
+  const workspaceIdentity =
+    ExternalRootsTrustStore.canonicalizeRoot(workspaceRoot);
+  const trustStore =
+    dependencies.secretGrantsTrustStore ?? secretGrantsTrustStore;
+  const pendingGrants = trustStore.getPendingGrants(
+    workspaceIdentity,
+    getWorkflowSecretGrants(workflow)
+  );
+  if (pendingGrants.length === 0) {
+    io.writeOut("No pending secret grants to approve for this workflow.");
+    return 0;
+  }
+
+  io.writeOut(
+    `This workflow requests ${pendingGrants.length} secret grant(s):`
+  );
+  for (const name of pendingGrants) {
+    io.writeOut(`  - ${name}`);
+  }
+  io.writeOut("");
+
+  const approved = await confirmMutation(
+    options.yes === true,
+    io,
+    `Trust all ${pendingGrants.length} listed secret grant(s)? [y/N] `
+  );
+  const decision = approved ? "allow" : "deny";
+  await trustStore.setDecisions(workspaceIdentity, pendingGrants, decision);
+
+  if (!approved) {
+    io.writeOut(
+      "No grants were approved. They remain blocked — rerun with --yes or approve interactively."
+    );
+    return 0;
+  }
+
+  io.writeOut(
+    `Approved ${pendingGrants.length} secret grant(s) for this workflow.`
   );
   return 0;
 }
