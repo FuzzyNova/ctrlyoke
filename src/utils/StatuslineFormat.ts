@@ -411,6 +411,53 @@ function isStatusLineColor(value: unknown): value is StatusLineColorId {
   );
 }
 
+/** Reverse lookup from an ANSI SGR code (e.g. "31") to its statusline color id. */
+const ANSI_COLOR_ID_BY_CODE: Record<string, StatusLineColorId> =
+  Object.fromEntries(
+    Object.entries(STATUS_LINE_COLOR_IDS)
+      .filter(([id]) => id !== "default")
+      .map(([id, ansi]) => [
+        /\[(\d+)m/u.exec(ansi)?.[1] ?? "",
+        id as StatusLineColorId,
+      ])
+  );
+
+const ANSI_SGR_PATTERN = /\[(\d+)m/gu;
+
+export interface AnsiStatusLineChunk {
+  text: string;
+  color?: StatusLineColorId;
+}
+
+/**
+ * Split a statusline string containing ANSI SGR color codes (as produced by
+ * `formatBrandedStatusLine`) into plain-text chunks tagged with the
+ * statusline color id in effect, for rendering outside a real terminal
+ * (e.g. the webview preview).
+ */
+export function parseAnsiStatusLine(text: string): AnsiStatusLineChunk[] {
+  const chunks: AnsiStatusLineChunk[] = [];
+  let currentColor: StatusLineColorId | undefined;
+  let lastIndex = 0;
+  ANSI_SGR_PATTERN.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = ANSI_SGR_PATTERN.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      chunks.push({
+        text: text.slice(lastIndex, match.index),
+        color: currentColor,
+      });
+    }
+    const code = match[1];
+    currentColor = code === "0" ? undefined : ANSI_COLOR_ID_BY_CODE[code];
+    lastIndex = ANSI_SGR_PATTERN.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    chunks.push({ text: text.slice(lastIndex), color: currentColor });
+  }
+  return chunks.filter((chunk) => chunk.text.length > 0);
+}
+
 /** Format statusline segments for both the detached wrapper and the webview preview. */
 export function formatBrandedStatusLine(
   provider: StatusLineFormatProvider,

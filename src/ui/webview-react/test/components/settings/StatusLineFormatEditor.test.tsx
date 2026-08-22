@@ -23,14 +23,14 @@ function renderEditor(format: StatusLineSegment[]) {
 }
 
 describe("StatusLineFormatEditor", () => {
-  it("includes and excludes fields through the registry-backed checkbox", async () => {
+  it("includes a field through the registry checkbox and removes it via the delete button", async () => {
     const user = userEvent.setup();
     const onCommit = renderEditor([
       { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
     ]);
 
     await user.click(
-      screen.getByRole("checkbox", { name: "Include ctrlyoke ⚡" })
+      screen.getByRole("button", { name: "Remove segment 1" })
     );
     expect(onCommit).toHaveBeenLastCalledWith([]);
     expect(onCommit).toHaveBeenCalledTimes(1);
@@ -44,38 +44,37 @@ describe("StatusLineFormatEditor", () => {
     expect(onCommit).toHaveBeenCalledTimes(2);
   });
 
-  it("moves segments and disables controls at both list boundaries", async () => {
+  it("renders a drag handle and delete button for every segment", () => {
+    renderEditor([
+      { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
+      { type: "field", field: STATUS_LINE_FIELD_IDS.MODEL },
+      { type: "literal", text: "·" },
+    ]);
+
+    for (const index of [1, 2, 3]) {
+      expect(
+        screen.getByRole("button", {
+          name: `Drag to reorder segment ${index}`,
+        })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: `Remove segment ${index}` })
+      ).toBeInTheDocument();
+    }
+  });
+
+  it("removes a literal segment via its delete button", async () => {
     const user = userEvent.setup();
     const onCommit = renderEditor([
       { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
-      { type: "field", field: STATUS_LINE_FIELD_IDS.MODEL },
       { type: "literal", text: "·" },
     ]);
 
-    expect(
-      screen.getByRole("button", { name: "Move segment 1 up" })
-    ).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "Move segment 3 down" })
-    ).toBeDisabled();
-
-    await user.click(screen.getByRole("button", { name: "Move segment 2 up" }));
+    await user.click(screen.getByRole("button", { name: "Remove segment 2" }));
     expect(onCommit).toHaveBeenLastCalledWith([
-      { type: "field", field: STATUS_LINE_FIELD_IDS.MODEL },
       { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
-      { type: "literal", text: "·" },
     ]);
     expect(onCommit).toHaveBeenCalledTimes(1);
-
-    await user.click(
-      screen.getByRole("button", { name: "Move segment 1 down" })
-    );
-    expect(onCommit).toHaveBeenLastCalledWith([
-      { type: "field", field: STATUS_LINE_FIELD_IDS.BRAND },
-      { type: "field", field: STATUS_LINE_FIELD_IDS.MODEL },
-      { type: "literal", text: "·" },
-    ]);
-    expect(onCommit).toHaveBeenCalledTimes(2);
   });
 
   it("adds a literal and caps committed custom text at 64 characters", async () => {
@@ -194,6 +193,31 @@ describe("StatusLineFormatEditor", () => {
         /uses your Stats & Usage percent-direction setting \(remaining\)/i
       )
     ).toBeInTheDocument();
+  });
+
+  it("renders colored segments instead of raw ANSI escape bytes in the preview", () => {
+    render(
+      <StatusLineFormatEditor
+        format={[
+          {
+            type: "field",
+            field: STATUS_LINE_FIELD_IDS.CONTEXT,
+            color: undefined,
+          },
+          { type: "literal", text: "·", color: "magenta" },
+        ]}
+        onCommit={vi.fn()}
+      />
+    );
+
+    const preview = screen.getByText(/ctx \(40%\)/);
+    expect(preview.textContent).not.toMatch(/\[\d+m/);
+    // Context defaults to the cyan neutral band color when no explicit color is set.
+    expect(preview).toHaveStyle({ color: "#29b8db" });
+
+    const dot = screen.getByText("·");
+    expect(dot.textContent).not.toMatch(/\[\d+m/);
+    expect(dot).toHaveStyle({ color: "#bc3fbc" });
   });
 
   it("keeps representative fields visible when quota comes from a cached snapshot", () => {
