@@ -647,6 +647,7 @@
     "sync-models:import": "node scripts/sync-models.mjs --import",
     "sync-models:discover": "node scripts/sync-models.mjs --discover",
     "sync-model-pricing": "node scripts/sync-model-pricing.mjs",
+    "manual-test:large-directory": "node scripts/generate-large-directory.mjs",
     "chores": "node scripts/chores.mjs",
     "compile:prod": "npm run compile:extension && npm run build:webview",
     "knip": "knip",
