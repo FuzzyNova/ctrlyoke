@@ -203,7 +203,10 @@ export const WorkspaceExplorerPane: React.FC = () => {
     async (dirPath: string) => {
       setExplorerLoading(true);
       try {
-        const result = await workspaceTree(dirPath);
+        const result = await workspaceTree({
+          path: dirPath,
+          includeGitIgnored: !hideGitIgnoredFiles,
+        });
         const fwd = (p: string) => p.replace(/\\/g, "/");
         setExplorerEntries(
           result.entries.map((e) => ({ ...e, path: fwd(e.path) }))
@@ -227,6 +230,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
       setExplorerPath,
       setExplorerIsGitRepo,
       setError,
+      hideGitIgnoredFiles,
     ]
   );
 

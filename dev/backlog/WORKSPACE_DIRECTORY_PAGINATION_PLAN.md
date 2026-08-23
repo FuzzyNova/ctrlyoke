@@ -409,13 +409,13 @@ same.
 
 ### Phase 1 — Paged contracts and snapshot service
 
-1. Add shared initial/range request and page-response types.
-2. Add the git-ignore filter to the initial request and keep the contract ready
-   for the sorting plan's later `sort` field.
-3. Build a workspace-scoped listing snapshot cache with TTL/LRU eviction.
-4. Implement page-aligned random-access ranges and anchored initial pages.
-5. Preserve the current plain Name-ascending behavior as the default contract.
-6. Remove `MAX_ENTRIES` only after the paged response path is covered by tests.
+1. [x] Add shared initial/range request and page-response types.
+2. [x] Add the git-ignore filter to the initial request and keep the contract ready
+       for the sorting plan's later `sort` field.
+3. [x] Build a workspace-scoped listing snapshot cache with TTL/LRU eviction.
+4. [x] Implement page-aligned random-access ranges and anchored initial pages.
+5. [x] Preserve the current plain Name-ascending behavior as the default contract.
+6. [x] Remove `MAX_ENTRIES` only after the paged response path is covered by tests.
 
 ### Phase 2 — Generalize virtualization
 

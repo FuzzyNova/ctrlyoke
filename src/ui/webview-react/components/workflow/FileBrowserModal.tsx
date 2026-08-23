@@ -57,7 +57,10 @@ export const FileBrowserModal: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await workspaceTree(dirPath);
+      const result = await workspaceTree({
+        path: dirPath,
+        includeGitIgnored: true,
+      });
       const fwd = (p: string) => p.replace(/\\/g, "/");
       setEntries(result.entries.map((e) => ({ ...e, path: fwd(e.path) })));
       setPath(fwd(result.path));

@@ -10,8 +10,9 @@ import {
 } from "../git/CommitMessageGenerator";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 import type {
-  WorkspaceTreeResponse,
-  WorkspaceTreeEntry,
+  WorkspaceTreePageRequest,
+  WorkspaceTreeRangeRequest,
+  WorkspaceTreePageResponse,
   WorkspaceFileResponse,
   WorkspaceFileSaveRequest,
   WorkspaceScmStatusResponse,
@@ -33,6 +34,10 @@ import type {
   WorkspaceSearchResult,
   WorkspaceSearchScope,
   WorkspaceSearchContentMatch,
+} from "../types/HostedWorkspaceViewerTypes";
+import {
+  WORKSPACE_TREE_DEFAULT_PAGE_SIZE,
+  WORKSPACE_TREE_MAX_PAGE_SIZE,
 } from "../types/HostedWorkspaceViewerTypes";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {
@@ -67,13 +72,20 @@ import {
   imageExtensionToMimeType,
 } from "../types/DashboardConstants";
 import { pathsEqual } from "../utils/PathCasing";
-import { WorkspaceListingSnapshotCache } from "./WorkspaceListingSnapshotCache";
+import {
+  WorkspaceListingSnapshotCache,
+  WORKSPACE_LISTING_SNAPSHOT_DEFAULT_ORDER,
+} from "./WorkspaceListingSnapshotCache";
+import {
+  WorkspaceTreeBadRequestError,
+  WorkspaceTreeExpiredError,
+} from "./WorkspaceTreeErrors";
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 const BINARY_CHECK_BYTES = 8192;
-const MAX_ENTRIES = 1000;
+const WORKSPACE_TREE_STAT_CONCURRENCY = 8;
 const SEARCH_MAX_FILES = 5000;
 const SEARCH_MAX_DURATION_MS = 3000;
 const SEARCH_MAX_FILENAME_MATCHES = 30;
@@ -90,6 +102,27 @@ const SEARCH_FALLBACK_SKIP_DIRECTORIES = new Set([
   "out",
   "coverage",
 ]);
+
+/** Run metadata work with a fixed number of concurrent filesystem operations. */
+async function mapWithBoundedConcurrency<T, R>(
+  values: readonly T[],
+  concurrency: number,
+  mapper: (value: T) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= values.length) return;
+      results[index] = await mapper(values[index]);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, values.length) }, () => worker())
+  );
+  return results;
+}
 
 interface SearchCandidate {
   absolutePath: string;
@@ -741,149 +774,236 @@ export class HostedWorkspaceViewerService {
    * entry per open root, named after the root's folder name. Browsing into
    * one produces folder-name-prefixed paths for everything below it.
    */
-  private listRoots(): WorkspaceTreeResponse {
-    const entries: WorkspaceTreeEntry[] = this.namedRoots.map((root) => ({
-      name: root.name,
-      path: root.name,
-      kind: "directory" as const,
-    }));
-    return {
-      rootLabel: "workspace",
-      path: "",
-      parentPath: null,
-      entries,
-      isGitRepo: false,
-      isRootsList: true,
-    };
+  async listDirectory(
+    request: WorkspaceTreePageRequest | WorkspaceTreeRangeRequest
+  ): Promise<WorkspaceTreePageResponse> {
+    if (this.isRangeRequest(request)) {
+      return this.getListingPage(request);
+    }
+    return this.createListingPage(request);
   }
 
-  async listDirectory(requestedPath: string): Promise<WorkspaceTreeResponse> {
-    if (this.isMultiRoot && requestedPath.trim() === "") {
-      return this.listRoots();
+  private isRangeRequest(
+    request: WorkspaceTreePageRequest | WorkspaceTreeRangeRequest
+  ): request is WorkspaceTreeRangeRequest {
+    return "listingId" in request;
+  }
+
+  private async createListingPage(
+    request: WorkspaceTreePageRequest
+  ): Promise<WorkspaceTreePageResponse> {
+    if (typeof request.path !== "string") {
+      throw new WorkspaceTreeBadRequestError("path is required");
+    }
+    if (typeof request.includeGitIgnored !== "boolean") {
+      throw new WorkspaceTreeBadRequestError(
+        "includeGitIgnored must be a boolean"
+      );
+    }
+    if (
+      request.anchorPath !== undefined &&
+      typeof request.anchorPath !== "string"
+    ) {
+      throw new WorkspaceTreeBadRequestError("anchorPath is invalid");
+    }
+    const pageSize = this.resolvePageSize(request.pageSize);
+    const snapshot = await this.createListingSnapshot(request, pageSize);
+    let offset = 0;
+    if (request.anchorPath !== undefined) {
+      const anchorIndex = snapshot.entries.findIndex(
+        (entry) =>
+          normalizeViewerPath(entry.path) ===
+          normalizeViewerPath(request.anchorPath!)
+      );
+      if (anchorIndex >= 0) {
+        offset =
+          Math.floor(anchorIndex / snapshot.pageSize) * snapshot.pageSize;
+      }
+    }
+    return this.materializeListingPage(snapshot, offset);
+  }
+
+  private async createListingSnapshot(
+    request: WorkspaceTreePageRequest,
+    pageSize: number
+  ) {
+    const resolved = this.safeResolve(request.path);
+    if (!resolved) {
+      Log.warn(
+        `WorkspaceViewer: path escape attempt rejected: ${request.path}`
+      );
+      throw new WorkspaceTreeBadRequestError("Path is not allowed");
+    }
+    if (this.isMultiRoot && request.path.trim() === "") {
+      const entries = this.namedRoots.map((root) => ({
+        name: root.name,
+        path: root.name,
+        kind: "directory" as const,
+      }));
+      return this.listingSnapshotCache.create({
+        resolvedDirectory: resolved,
+        rootLabel: "workspace",
+        path: "",
+        parentPath: null,
+        isGitRepo: false,
+        isRootsList: true,
+        includeGitIgnored: request.includeGitIgnored,
+        order: WORKSPACE_LISTING_SNAPSHOT_DEFAULT_ORDER,
+        pageSize,
+        entries,
+      });
     }
 
     const rootLabel = this.isMultiRoot
       ? "workspace"
       : path.basename(this.workspaceRoot);
 
-    const resolved = this.safeResolve(requestedPath);
-    if (!resolved) {
-      Log.warn(
-        `WorkspaceViewer: path escape attempt rejected: ${requestedPath}`
-      );
-      return {
-        rootLabel,
-        path: "",
-        parentPath: null,
-        entries: [],
-        isGitRepo: false,
-        isRootsList: false,
-      };
-    }
-
     const relDir = this.relativePath(resolved);
-    let parentPath: string | null;
-    if (relDir === "") {
-      parentPath = null;
-    } else if (this.isMultiRoot && !relDir.includes("/")) {
-      // relDir is a bare root name — its parent is the virtual roots list.
-      parentPath = "";
-    } else {
-      parentPath = this.relativePath(path.dirname(resolved));
+    const parentPath =
+      relDir === ""
+        ? null
+        : this.isMultiRoot && !relDir.includes("/")
+          ? ""
+          : this.relativePath(path.dirname(resolved));
+    let dirents: fs.Dirent[];
+    try {
+      dirents = await fs.promises.readdir(resolved, { withFileTypes: true });
+    } catch (error) {
+      Log.error(
+        `WorkspaceViewer: listDirectory failed for ${resolved}: ${String(error)}`
+      );
+      throw new WorkspaceTreeBadRequestError("Directory could not be read");
     }
 
-    try {
-      const dirents = await fs.promises.readdir(resolved, {
-        withFileTypes: true,
+    const containingRoot = this.isMultiRoot
+      ? (this.findRootFor(resolved)?.fsPath ?? this.workspaceRoot)
+      : this.workspaceRoot;
+    const rootRelativeDir = this.isMultiRoot
+      ? path
+          .relative(path.resolve(containingRoot), resolved)
+          .split(path.sep)
+          .join("/")
+      : relDir;
+    const ignoredNames = await getIgnoredEntryNames(
+      containingRoot,
+      rootRelativeDir
+    );
+    const isGitRepo = ignoredNames !== null;
+    const candidates = dirents
+      .filter((dirent) => dirent.isDirectory() || dirent.isFile())
+      .map((dirent) => {
+        const gitIgnored =
+          dirent.name === ".git"
+            ? isGitRepo
+            : dirent.isDirectory()
+              ? (ignoredNames?.has(`${dirent.name}/`) ?? false)
+              : (ignoredNames?.has(dirent.name) ?? false);
+        return {
+          name: dirent.name,
+          path: this.relativePath(path.join(resolved, dirent.name)),
+          kind: dirent.isDirectory()
+            ? ("directory" as const)
+            : ("file" as const),
+          gitIgnored,
+        };
+      })
+      .filter((entry) => request.includeGitIgnored || !entry.gitIgnored)
+      .sort((a, b) => {
+        if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
+        return a.name.localeCompare(b.name);
       });
 
-      const dirs = dirents
-        .filter((d) => d.isDirectory())
-        .sort((a, b) => a.name.localeCompare(b.name));
-      const files = dirents
-        .filter((d) => d.isFile())
-        .sort((a, b) => a.name.localeCompare(b.name));
+    return this.listingSnapshotCache.create({
+      resolvedDirectory: resolved,
+      rootLabel,
+      path: relDir,
+      parentPath,
+      isGitRepo,
+      isRootsList: false,
+      includeGitIgnored: request.includeGitIgnored,
+      order: WORKSPACE_LISTING_SNAPSHOT_DEFAULT_ORDER,
+      pageSize,
+      entries: candidates,
+    });
+  }
 
-      const allEntries = [...dirs, ...files].slice(0, MAX_ENTRIES);
-
-      // Each root can be its own git repo, so gitignore status is always
-      // computed against the root that actually contains `resolved`, not the
-      // primary root — the `relDir` used elsewhere is folder-name-prefixed in
-      // multi-root and would resolve to the wrong repo if passed directly.
-      const containingRoot = this.isMultiRoot
-        ? (this.findRootFor(resolved)?.fsPath ?? this.workspaceRoot)
-        : this.workspaceRoot;
-      const rootRelativeDir = this.isMultiRoot
-        ? path
-            .relative(path.resolve(containingRoot), resolved)
-            .split(path.sep)
-            .join("/")
-        : relDir;
-      const ignoredNames = await getIgnoredEntryNames(
-        containingRoot,
-        rootRelativeDir
-      );
-      const isGitRepo = ignoredNames !== null;
-
-      const entries = await Promise.all(
-        allEntries.map(async (dirent) => {
-          const entryAbsolute = path.join(resolved, dirent.name);
-          const entryRelative = this.relativePath(entryAbsolute);
-          // git never lists ".git" itself via ls-files, so it can't appear in
-          // ignoredNames — treat it as ignored explicitly (it's always a
-          // VCS-internal directory the user doesn't want to browse/track).
-          const gitIgnored =
-            dirent.name === ".git"
-              ? isGitRepo
-              : dirent.isDirectory()
-                ? (ignoredNames?.has(`${dirent.name}/`) ?? false)
-                : (ignoredNames?.has(dirent.name) ?? false);
-          if (dirent.isDirectory()) {
-            return {
-              name: dirent.name,
-              path: entryRelative,
-              kind: "directory" as const,
-              gitIgnored,
-            };
-          }
-          let size: number | undefined;
-          try {
-            const stat = await fs.promises.stat(entryAbsolute);
-            size = stat.size;
-          } catch {
-            // ignore stat failures
-          }
-          return {
-            name: dirent.name,
-            path: entryRelative,
-            kind: "file" as const,
-            size,
-            gitIgnored,
-          };
-        })
-      );
-
-      return {
-        rootLabel,
-        path: relDir,
-        parentPath,
-        entries,
-        isGitRepo,
-        isRootsList: false,
-      };
-    } catch (err) {
-      Log.error(
-        `WorkspaceViewer: listDirectory failed for ${resolved}: ${String(err)}`
-      );
-      return {
-        rootLabel,
-        path: relDir,
-        parentPath,
-        entries: [],
-        isGitRepo: false,
-        isRootsList: false,
-      };
+  private async getListingPage(
+    request: WorkspaceTreeRangeRequest
+  ): Promise<WorkspaceTreePageResponse> {
+    if (!isValidListingId(request.listingId)) {
+      throw new WorkspaceTreeBadRequestError("listingId is invalid");
     }
+    if (!Number.isSafeInteger(request.offset) || request.offset < 0) {
+      throw new WorkspaceTreeBadRequestError(
+        "offset must be a non-negative integer"
+      );
+    }
+    const snapshot = this.listingSnapshotCache.get(request.listingId);
+    if (!snapshot) throw new WorkspaceTreeExpiredError();
+    if (request.offset % snapshot.pageSize !== 0) {
+      throw new WorkspaceTreeBadRequestError(
+        "offset must be aligned to pageSize"
+      );
+    }
+    if (request.offset > snapshot.entries.length) {
+      throw new WorkspaceTreeBadRequestError("offset is outside the listing");
+    }
+    return this.materializeListingPage(snapshot, request.offset);
+  }
+
+  private resolvePageSize(requestedPageSize: number | undefined): number {
+    if (requestedPageSize === undefined) {
+      return WORKSPACE_TREE_DEFAULT_PAGE_SIZE;
+    }
+    if (!Number.isSafeInteger(requestedPageSize) || requestedPageSize < 1) {
+      throw new WorkspaceTreeBadRequestError(
+        "pageSize must be a positive integer"
+      );
+    }
+    return Math.min(WORKSPACE_TREE_MAX_PAGE_SIZE, requestedPageSize);
+  }
+
+  private async materializeListingPage(
+    snapshot: Awaited<ReturnType<WorkspaceListingSnapshotCache["create"]>>,
+    offset: number
+  ): Promise<WorkspaceTreePageResponse> {
+    const pageEntries = snapshot.entries.slice(
+      offset,
+      offset + snapshot.pageSize
+    );
+    const fileEntries = pageEntries.filter((entry) => entry.kind === "file");
+    const sizes = await mapWithBoundedConcurrency(
+      fileEntries,
+      WORKSPACE_TREE_STAT_CONCURRENCY,
+      async (entry) => {
+        try {
+          const stat = await fs.promises.stat(
+            path.join(snapshot.resolvedDirectory, entry.name)
+          );
+          return stat.size;
+        } catch {
+          return undefined;
+        }
+      }
+    );
+    const sizeByPath = new Map(
+      fileEntries.map((entry, index) => [entry.path, sizes[index]])
+    );
+    return {
+      listingId: snapshot.listingId,
+      pageSize: snapshot.pageSize,
+      rootLabel: snapshot.rootLabel,
+      path: snapshot.path,
+      parentPath: snapshot.parentPath,
+      isGitRepo: snapshot.isGitRepo,
+      isRootsList: snapshot.isRootsList,
+      totalEntries: snapshot.entries.length,
+      offset,
+      entries: pageEntries.map((entry) => {
+        const size = sizeByPath.get(entry.path);
+        return size === undefined ? { ...entry } : { ...entry, size };
+      }),
+    };
   }
 
   // ── File read ────────────────────────────────────────────────────────────
@@ -1691,4 +1811,18 @@ export class HostedWorkspaceViewerService {
   dispose(): void {
     this.listingSnapshotCache.dispose();
   }
+
+  clear(): void {
+    this.listingSnapshotCache.clear();
+  }
+}
+
+function normalizeViewerPath(value: string): string {
+  return value.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+}
+
+function isValidListingId(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
 }

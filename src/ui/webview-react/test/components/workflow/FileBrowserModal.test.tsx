@@ -11,7 +11,11 @@ import userEvent from "@testing-library/user-event";
 import { FileBrowserModal } from "@components/workflow/FileBrowserModal";
 import { useUiStore } from "@store/uiStore";
 import { workspaceTree } from "@utils/hostedApi";
-import type { WorkspaceTreeResponse } from "@root/types/HostedWorkspaceViewerTypes";
+import type {
+  WorkspaceTreePageRequest,
+  WorkspaceTreePageResponse,
+  WorkspaceTreeRangeRequest,
+} from "@root/types/HostedWorkspaceViewerTypes";
 
 vi.mock("@utils/hostedApi", () => ({
   workspaceTree: vi.fn(),
@@ -19,21 +23,32 @@ vi.mock("@utils/hostedApi", () => ({
 
 const workspaceTreeMock = vi.mocked(workspaceTree);
 
-function mockTree(dirPath: string): Promise<WorkspaceTreeResponse> {
+function mockTree(
+  request: WorkspaceTreePageRequest | WorkspaceTreeRangeRequest
+): Promise<WorkspaceTreePageResponse> {
+  const dirPath = "listingId" in request ? "" : request.path;
   if (dirPath === "src") {
     return Promise.resolve({
+      listingId: "00000000-0000-4000-8000-000000000001",
+      pageSize: 100,
       rootLabel: "workspace",
       path: "src",
       parentPath: "",
+      totalEntries: 1,
+      offset: 0,
       entries: [{ name: "index.ts", path: "src/index.ts", kind: "file" }],
       isGitRepo: false,
       isRootsList: false,
     });
   }
   return Promise.resolve({
+    listingId: "00000000-0000-4000-8000-000000000001",
+    pageSize: 100,
     rootLabel: "workspace",
     path: "",
     parentPath: null,
+    totalEntries: 3,
+    offset: 0,
     entries: [
       { name: "src", path: "src", kind: "directory" },
       { name: "readme.md", path: "readme.md", kind: "file" },
@@ -46,7 +61,7 @@ function mockTree(dirPath: string): Promise<WorkspaceTreeResponse> {
 
 beforeEach(() => {
   workspaceTreeMock.mockReset();
-  workspaceTreeMock.mockImplementation((dirPath: string) => mockTree(dirPath));
+  workspaceTreeMock.mockImplementation((request) => mockTree(request));
   useUiStore.setState({
     fileBrowserState: null,
     fileBrowserLastDirectory: null,
@@ -63,7 +78,12 @@ describe("FileBrowserModal — visibility", () => {
     useUiStore.getState().openFileBrowser({ mode: "file", onSelect: vi.fn() });
     render(<FileBrowserModal />);
 
-    await waitFor(() => expect(workspaceTreeMock).toHaveBeenCalledWith(""));
+    await waitFor(() =>
+      expect(workspaceTreeMock).toHaveBeenCalledWith({
+        path: "",
+        includeGitIgnored: true,
+      })
+    );
     expect(await screen.findByText("readme.md")).toBeInTheDocument();
     expect(screen.getByText("src/")).toBeInTheDocument();
   });
@@ -78,7 +98,12 @@ describe("FileBrowserModal — navigation", () => {
     const folderRow = await screen.findByText("src/");
     await user.click(folderRow);
 
-    await waitFor(() => expect(workspaceTreeMock).toHaveBeenCalledWith("src"));
+    await waitFor(() =>
+      expect(workspaceTreeMock).toHaveBeenCalledWith({
+        path: "src",
+        includeGitIgnored: true,
+      })
+    );
     expect(await screen.findByText("index.ts")).toBeInTheDocument();
   });
 
@@ -100,26 +125,32 @@ describe("FileBrowserModal — navigation", () => {
         .openFileBrowser({ mode: "file", onSelect: vi.fn() });
     });
 
-    await waitFor(() => expect(workspaceTreeMock).toHaveBeenCalledWith("src"));
+    await waitFor(() =>
+      expect(workspaceTreeMock).toHaveBeenCalledWith({
+        path: "src",
+        includeGitIgnored: true,
+      })
+    );
     expect(await screen.findByText("index.ts")).toBeInTheDocument();
   });
 
   it("falls back to the workspace root when the remembered directory is stale", async () => {
     useUiStore.setState({ fileBrowserLastDirectory: "deleted" });
-    workspaceTreeMock.mockImplementation((dirPath: string) => {
+    workspaceTreeMock.mockImplementation((request) => {
+      const dirPath = "listingId" in request ? "" : request.path;
       if (dirPath === "deleted") {
         return Promise.reject(new Error("Directory not found"));
       }
-      return mockTree(dirPath);
+      return mockTree(request);
     });
     useUiStore.getState().openFileBrowser({ mode: "file", onSelect: vi.fn() });
 
     render(<FileBrowserModal />);
 
     await waitFor(() => {
-      expect(workspaceTreeMock.mock.calls.map(([path]) => path)).toEqual([
-        "deleted",
-        "",
+      expect(workspaceTreeMock.mock.calls.map(([request]) => request)).toEqual([
+        { path: "deleted", includeGitIgnored: true },
+        { path: "", includeGitIgnored: true },
       ]);
     });
     expect(await screen.findByText("readme.md")).toBeInTheDocument();
@@ -193,7 +224,12 @@ describe("FileBrowserModal — directory mode", () => {
 
     const folderRow = await screen.findByText("src/");
     await user.click(folderRow);
-    await waitFor(() => expect(workspaceTreeMock).toHaveBeenCalledWith("src"));
+    await waitFor(() =>
+      expect(workspaceTreeMock).toHaveBeenCalledWith({
+        path: "src",
+        includeGitIgnored: true,
+      })
+    );
 
     const confirmButton = await screen.findByRole("button", {
       name: "Select Folder",

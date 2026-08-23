@@ -63,6 +63,8 @@ import {
 } from "./WebPushService";
 import { pngIconService } from "./PngIconService";
 import { HostedWorkspaceViewerService } from "./HostedWorkspaceViewerService";
+import { parseWorkspaceTreeQuery } from "./WorkspaceTreeRoute";
+import { WorkspaceTreeHttpError } from "./WorkspaceTreeErrors";
 import type {
   WorkspaceDeleteRequest,
   WorkspaceCopyRequest,
@@ -791,11 +793,16 @@ export class CtrlYokeHostedServer
       "/api/workspace-viewer/tree",
       requireToken,
       async (req, res) => {
-        const dirPath =
-          typeof req.query.path === "string" ? req.query.path : "";
         try {
-          res.json(await this.viewerService.listDirectory(dirPath));
+          const request = parseWorkspaceTreeQuery(
+            req.query as Record<string, unknown>
+          );
+          res.json(await this.viewerService.listDirectory(request));
         } catch (err) {
+          if (err instanceof WorkspaceTreeHttpError) {
+            res.status(err.statusCode).json({ error: err.message });
+            return;
+          }
           Log.error(`workspace-viewer /tree error: ${String(err)}`);
           res.status(500).json({ error: "Internal server error" });
         }

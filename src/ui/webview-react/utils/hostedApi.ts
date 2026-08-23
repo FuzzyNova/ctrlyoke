@@ -1,5 +1,7 @@
 import type {
-  WorkspaceTreeResponse,
+  WorkspaceTreePageRequest,
+  WorkspaceTreeRangeRequest,
+  WorkspaceTreePageResponse,
   WorkspaceFileResponse,
   WorkspaceFileSaveRequest,
   WorkspaceScmStatusResponse,
@@ -22,6 +24,16 @@ import type {
   WorkspaceSearchRequest,
   WorkspaceSearchResponse,
 } from "@root/types/HostedWorkspaceViewerTypes";
+
+export class HostedHttpError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string
+  ) {
+    super(message);
+    this.name = "HostedHttpError";
+  }
+}
 
 const token = new URLSearchParams(window.location.search).get("token") ?? "";
 
@@ -55,7 +67,10 @@ export async function hostedFetch<T>(
   const response = await fetch(path, { ...options, headers });
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`HTTP ${response.status}: ${text}`);
+    throw new HostedHttpError(
+      response.status,
+      `HTTP ${response.status}: ${text}`
+    );
   }
 
   const text = await response.text();
@@ -66,10 +81,26 @@ export async function hostedFetch<T>(
 }
 
 export async function workspaceTree(
-  dirPath: string
-): Promise<WorkspaceTreeResponse> {
-  return hostedFetch<WorkspaceTreeResponse>(
-    `/api/workspace-viewer/tree?path=${encodeURIComponent(dirPath)}`
+  request: WorkspaceTreePageRequest | WorkspaceTreeRangeRequest,
+  signal?: AbortSignal
+): Promise<WorkspaceTreePageResponse> {
+  const params = new URLSearchParams();
+  if ("listingId" in request) {
+    params.set("listingId", request.listingId);
+    params.set("offset", String(request.offset));
+  } else {
+    params.set("path", request.path);
+    params.set("includeGitIgnored", String(request.includeGitIgnored));
+    if (request.pageSize !== undefined) {
+      params.set("pageSize", String(request.pageSize));
+    }
+    if (request.anchorPath !== undefined) {
+      params.set("anchorPath", request.anchorPath);
+    }
+  }
+  return hostedFetch<WorkspaceTreePageResponse>(
+    `/api/workspace-viewer/tree?${params.toString()}`,
+    { signal }
   );
 }
 

@@ -10,6 +10,10 @@ import {
   type CommitResult,
 } from "../../git/CommitMessageGenerator";
 import type { WorkspaceSearchContentMatch } from "../../types/HostedWorkspaceViewerTypes";
+import {
+  WorkspaceTreeBadRequestError,
+  WorkspaceTreeExpiredError,
+} from "../../server/WorkspaceTreeErrors";
 
 suite("HostedWorkspaceViewerService", function () {
   // Most tests here shell out to real git (init/config/commit/clone/push/
@@ -78,7 +82,10 @@ suite("HostedWorkspaceViewerService", function () {
       fs.mkdirSync(path.join(root, "subdir"));
 
       const svc = new HostedWorkspaceViewerService(root);
-      const result = await svc.listDirectory("");
+      const result = await svc.listDirectory({
+        path: "",
+        includeGitIgnored: true,
+      });
 
       assert.strictEqual(result.path, "");
       assert.strictEqual(result.parentPath, null);
@@ -93,7 +100,10 @@ suite("HostedWorkspaceViewerService", function () {
       fs.mkdirSync(path.join(root, "zeta"));
 
       const svc = new HostedWorkspaceViewerService(root);
-      const result = await svc.listDirectory("");
+      const result = await svc.listDirectory({
+        path: "",
+        includeGitIgnored: true,
+      });
 
       const kinds = result.entries.map((e) => e.kind);
       const firstDir = kinds.indexOf("directory");
@@ -105,9 +115,9 @@ suite("HostedWorkspaceViewerService", function () {
       const root = createWorkspace();
       const svc = new HostedWorkspaceViewerService(root);
 
-      const result = await svc.listDirectory("../escape");
-
-      assert.deepStrictEqual(result.entries, []);
+      await assert.rejects(
+        svc.listDirectory({ path: "../escape", includeGitIgnored: true })
+      );
     });
 
     test("returns parentPath for a subdirectory", async () => {
@@ -115,7 +125,10 @@ suite("HostedWorkspaceViewerService", function () {
       fs.mkdirSync(path.join(root, "subdir"));
 
       const svc = new HostedWorkspaceViewerService(root);
-      const result = await svc.listDirectory("subdir");
+      const result = await svc.listDirectory({
+        path: "subdir",
+        includeGitIgnored: true,
+      });
 
       assert.strictEqual(result.parentPath, "");
     });
@@ -123,7 +136,10 @@ suite("HostedWorkspaceViewerService", function () {
     test("rootLabel matches workspace directory name", async () => {
       const root = createWorkspace();
       const svc = new HostedWorkspaceViewerService(root);
-      const result = await svc.listDirectory("");
+      const result = await svc.listDirectory({
+        path: "",
+        includeGitIgnored: true,
+      });
 
       assert.strictEqual(result.rootLabel, path.basename(root));
     });
@@ -131,7 +147,10 @@ suite("HostedWorkspaceViewerService", function () {
     test("isGitRepo is false outside a git repository", async () => {
       const root = createWorkspace();
       const svc = new HostedWorkspaceViewerService(root);
-      const result = await svc.listDirectory("");
+      const result = await svc.listDirectory({
+        path: "",
+        includeGitIgnored: true,
+      });
 
       assert.strictEqual(result.isGitRepo, false);
     });
@@ -150,7 +169,10 @@ suite("HostedWorkspaceViewerService", function () {
       fs.writeFileSync(path.join(root, "ignored_dir", "inner.txt"), "secret\n");
 
       const svc = new HostedWorkspaceViewerService(root);
-      const result = await svc.listDirectory("");
+      const result = await svc.listDirectory({
+        path: "",
+        includeGitIgnored: true,
+      });
 
       assert.strictEqual(result.isGitRepo, true);
       const byName = new Map(result.entries.map((e) => [e.name, e]));
@@ -158,6 +180,260 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(byName.get("ignored.txt")?.gitIgnored, true);
       assert.strictEqual(byName.get("ignored_dir")?.gitIgnored, true);
       assert.strictEqual(byName.get(".git")?.gitIgnored, true);
+    });
+
+    test("makes every entry beyond the old 1,000-entry cutoff reachable", async () => {
+      const root = createWorkspace();
+      for (let index = 0; index < 1_005; index++) {
+        fs.writeFileSync(
+          path.join(root, `file-${String(index).padStart(4, "0")}.txt`),
+          "x"
+        );
+      }
+      const svc = new HostedWorkspaceViewerService(root);
+      const first = await svc.listDirectory({
+        path: "",
+        pageSize: 100,
+        includeGitIgnored: true,
+      });
+      const entries = [...first.entries];
+      for (
+        let offset = first.pageSize;
+        offset < first.totalEntries;
+        offset += first.pageSize
+      ) {
+        const page = await svc.listDirectory({
+          listingId: first.listingId,
+          offset,
+        });
+        entries.push(...page.entries);
+      }
+      assert.strictEqual(first.totalEntries, 1_005);
+      assert.strictEqual(entries.length, 1_005);
+      assert.strictEqual(
+        new Set(entries.map((entry) => entry.path)).size,
+        1_005
+      );
+      assert.strictEqual(entries.at(-1)?.name, "file-1004.txt");
+    });
+
+    test("keeps directories before files across page boundaries", async () => {
+      const root = createWorkspace();
+      fs.mkdirSync(path.join(root, "z-directory"));
+      fs.mkdirSync(path.join(root, "a-directory"));
+      for (let index = 0; index < 101; index++) {
+        fs.writeFileSync(
+          path.join(root, `file-${String(index).padStart(3, "0")}.txt`),
+          "x"
+        );
+      }
+      const svc = new HostedWorkspaceViewerService(root);
+      const first = await svc.listDirectory({
+        path: "",
+        pageSize: 1,
+        includeGitIgnored: true,
+      });
+      const all = [first.entries[0]];
+      for (let offset = 1; offset < first.totalEntries; offset++) {
+        all.push(
+          ...(await svc.listDirectory({ listingId: first.listingId, offset }))
+            .entries
+        );
+      }
+      assert.deepStrictEqual(
+        all.slice(0, 2).map((entry) => entry.name),
+        ["a-directory", "z-directory"]
+      );
+      assert.ok(all.slice(0, 2).every((entry) => entry.kind === "directory"));
+      assert.ok(all.slice(2).every((entry) => entry.kind === "file"));
+    });
+
+    test("anchors an initial page to an immediate child", async () => {
+      const root = createWorkspace();
+      for (let index = 0; index < 30; index++) {
+        fs.writeFileSync(
+          path.join(root, `file-${String(index).padStart(2, "0")}.txt`),
+          "x"
+        );
+      }
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.listDirectory({
+        path: "",
+        pageSize: 10,
+        includeGitIgnored: true,
+        anchorPath: "file-23.txt",
+      });
+      assert.strictEqual(result.offset, 20);
+      assert.strictEqual(result.entries[0]?.name, "file-20.txt");
+      assert.ok(result.entries.some((entry) => entry.name === "file-23.txt"));
+    });
+
+    test("filters ignored entries before counting and paging", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      fs.writeFileSync(path.join(root, ".gitignore"), "ignored-*.txt\n");
+      for (const name of ["ignored-a.txt", "ignored-b.txt", "visible.txt"]) {
+        fs.writeFileSync(path.join(root, name), "x");
+      }
+      const svc = new HostedWorkspaceViewerService(root);
+      const hidden = await svc.listDirectory({
+        path: "",
+        pageSize: 1,
+        includeGitIgnored: false,
+      });
+      const shown = await svc.listDirectory({
+        path: "",
+        pageSize: 1,
+        includeGitIgnored: true,
+      });
+      assert.strictEqual(hidden.totalEntries, 2);
+      assert.deepStrictEqual(
+        hidden.entries.map((entry) => entry.name),
+        [".gitignore"]
+      );
+      const hiddenSecondPage = await svc.listDirectory({
+        listingId: hidden.listingId,
+        offset: 1,
+      });
+      assert.deepStrictEqual(
+        hiddenSecondPage.entries.map((entry) => entry.name),
+        ["visible.txt"]
+      );
+      assert.strictEqual(shown.totalEntries, 5);
+    });
+
+    test("keeps a snapshot stable while a refreshed listing sees mutations", async () => {
+      const root = createWorkspace();
+      fs.writeFileSync(path.join(root, "a.txt"), "a");
+      const svc = new HostedWorkspaceViewerService(root);
+      const snapshot = await svc.listDirectory({
+        path: "",
+        pageSize: 1,
+        includeGitIgnored: true,
+      });
+      fs.writeFileSync(path.join(root, "b.txt"), "b");
+      fs.rmSync(path.join(root, "a.txt"));
+      const oldPage = await svc.listDirectory({
+        listingId: snapshot.listingId,
+        offset: 0,
+      });
+      const refreshed = await svc.listDirectory({
+        path: "",
+        pageSize: 1,
+        includeGitIgnored: true,
+      });
+      assert.deepStrictEqual(
+        oldPage.entries.map((entry) => entry.name),
+        ["a.txt"]
+      );
+      assert.deepStrictEqual(
+        refreshed.entries.map((entry) => entry.name),
+        ["b.txt"]
+      );
+    });
+
+    test("clamps page size and rejects malformed or expired ranges", async () => {
+      const root = createWorkspace();
+      for (let index = 0; index < 3; index++) {
+        fs.writeFileSync(path.join(root, `file-${index}.txt`), "x");
+      }
+      const svc = new HostedWorkspaceViewerService(root);
+      const listing = await svc.listDirectory({
+        path: "",
+        pageSize: 999,
+        includeGitIgnored: true,
+      });
+      assert.strictEqual(listing.pageSize, 500);
+      await assert.rejects(
+        svc.listDirectory({ listingId: listing.listingId, offset: 1 }),
+        (error: unknown) => error instanceof WorkspaceTreeBadRequestError
+      );
+      await assert.rejects(
+        svc.listDirectory({
+          listingId: "00000000-0000-4000-8000-000000000099",
+          offset: 0,
+        }),
+        (error: unknown) => error instanceof WorkspaceTreeExpiredError
+      );
+      await assert.rejects(
+        svc.listDirectory({ listingId: "not-an-id", offset: 0 }),
+        (error: unknown) => error instanceof WorkspaceTreeBadRequestError
+      );
+    });
+
+    test("bounds file stat concurrency to the named worker limit", async () => {
+      const root = createWorkspace();
+      for (let index = 0; index < 40; index++) {
+        fs.writeFileSync(path.join(root, `file-${index}.txt`), "x");
+      }
+      const originalStat = fs.promises.stat;
+      let active = 0;
+      let maximum = 0;
+      fs.promises.stat = (async (...args: Parameters<typeof originalStat>) => {
+        active++;
+        maximum = Math.max(maximum, active);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        try {
+          return await originalStat(...args);
+        } finally {
+          active--;
+        }
+      }) as typeof originalStat;
+      try {
+        const svc = new HostedWorkspaceViewerService(root);
+        await svc.listDirectory({
+          path: "",
+          pageSize: 40,
+          includeGitIgnored: true,
+        });
+        assert.ok(maximum <= 8, `stat concurrency was ${maximum}`);
+      } finally {
+        fs.promises.stat = originalStat;
+      }
+    });
+
+    test("uses the same page contract for multi-root virtual listings", async () => {
+      const primary = createWorkspace();
+      const secondary = createWorkspace();
+      const svc = new HostedWorkspaceViewerService(primary, [
+        { name: "primary", fsPath: primary },
+        { name: "secondary", fsPath: secondary },
+      ]);
+      const first = await svc.listDirectory({
+        path: "",
+        pageSize: 1,
+        includeGitIgnored: true,
+      });
+      const second = await svc.listDirectory({
+        listingId: first.listingId,
+        offset: 1,
+      });
+      assert.strictEqual(first.isRootsList, true);
+      assert.strictEqual(first.totalEntries, 2);
+      assert.strictEqual(second.entries[0]?.path, "secondary");
+    });
+
+    test("clears listing snapshots on request and disposal", async () => {
+      const root = createWorkspace();
+      const svc = new HostedWorkspaceViewerService(root);
+      const listing = await svc.listDirectory({
+        path: "",
+        includeGitIgnored: true,
+      });
+      svc.clear();
+      await assert.rejects(
+        svc.listDirectory({ listingId: listing.listingId, offset: 0 }),
+        (error: unknown) => error instanceof WorkspaceTreeExpiredError
+      );
+      const fresh = await svc.listDirectory({
+        path: "",
+        includeGitIgnored: true,
+      });
+      svc.dispose();
+      await assert.rejects(
+        svc.listDirectory({ listingId: fresh.listingId, offset: 0 }),
+        (error: unknown) => error instanceof WorkspaceTreeExpiredError
+      );
     });
   });
 
@@ -798,7 +1074,10 @@ suite("HostedWorkspaceViewerService", function () {
       const { svc, primary } = createMultiRootService();
       fs.writeFileSync(path.join(primary, "hello.txt"), "hello");
 
-      const result = await svc.listDirectory("");
+      const result = await svc.listDirectory({
+        path: "",
+        includeGitIgnored: true,
+      });
 
       assert.strictEqual(result.isRootsList, true);
       assert.strictEqual(result.parentPath, null);
@@ -817,7 +1096,10 @@ suite("HostedWorkspaceViewerService", function () {
       fs.writeFileSync(path.join(secondary, "foo.txt"), "foo");
       fs.mkdirSync(path.join(secondary, "sub"));
 
-      const result = await svc.listDirectory("secondary");
+      const result = await svc.listDirectory({
+        path: "secondary",
+        includeGitIgnored: true,
+      });
 
       assert.strictEqual(result.isRootsList, false);
       assert.strictEqual(result.parentPath, "");
@@ -1012,7 +1294,10 @@ suite("HostedWorkspaceViewerService", function () {
       ]);
 
       for (const svc of [svcNoRoots, svcOneRoot]) {
-        const result = await svc.listDirectory("");
+        const result = await svc.listDirectory({
+          path: "",
+          includeGitIgnored: true,
+        });
         assert.strictEqual(result.isRootsList, false);
         assert.strictEqual(result.parentPath, null);
         assert.ok(result.entries.some((e) => e.name === "hello.txt"));
