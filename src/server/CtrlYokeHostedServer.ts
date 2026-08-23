@@ -1987,6 +1987,7 @@ export class CtrlYokeHostedServer
   }
 
   dispose(): void {
+    this.viewerService.dispose();
     this.hub.removeClient(this);
     if (this.heartbeatInterval !== undefined) {
       clearInterval(this.heartbeatInterval);

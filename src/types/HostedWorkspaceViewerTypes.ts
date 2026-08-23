@@ -16,6 +16,25 @@ export interface WorkspaceEntry {
 /** Alias kept for API naming consistency — same shape as WorkspaceEntry. */
 export type WorkspaceTreeEntry = WorkspaceEntry;
 
+/** Default and supported bounds for the future paged directory API. */
+export const WORKSPACE_TREE_DEFAULT_PAGE_SIZE = 100;
+export const WORKSPACE_TREE_MIN_PAGE_SIZE = 1;
+export const WORKSPACE_TREE_MAX_PAGE_SIZE = 500;
+
+/** Initial request for a workspace directory listing snapshot. */
+export interface WorkspaceTreePageRequest {
+  path: string;
+  pageSize?: number;
+  includeGitIgnored: boolean;
+  anchorPath?: string;
+}
+
+/** Random-access request for a page in an existing immutable listing. */
+export interface WorkspaceTreeRangeRequest {
+  listingId: string;
+  offset: number;
+}
+
 export interface WorkspaceTreeResponse {
   rootLabel: string;
   /** Workspace-relative path (folder-name-prefixed in multi-root, e.g. "root2/src"); "" for the top level. */
@@ -32,6 +51,24 @@ export interface WorkspaceTreeResponse {
    * this listing since each entry represents an entire workspace root.
    */
   isRootsList: boolean;
+}
+
+/** A page from an immutable workspace directory listing snapshot. */
+export interface WorkspaceTreePageResponse {
+  listingId: string;
+  /** Server-clamped size fixed when the listing snapshot was created. */
+  pageSize: number;
+  rootLabel: string;
+  /** Workspace-relative path, or the empty path for the virtual roots list. */
+  path: string;
+  parentPath: string | null;
+  isGitRepo: boolean;
+  isRootsList: boolean;
+  /** Number of entries in the filtered snapshot, not just this page. */
+  totalEntries: number;
+  /** Virtual index of the first entry in `entries`. */
+  offset: number;
+  entries: WorkspaceTreeEntry[];
 }
 
 export interface WorkspaceFileResponse {

@@ -561,7 +561,7 @@ npm run format:check
 - [ ] Both browser surfaces share the paging controller and virtual list.
 - [ ] Loading, progress, retry, refresh, and expired-snapshot states are visible
       and recoverable.
-- [ ] The listing contract/snapshot identity is ready for the sorting plan to
+- [x] The listing contract/snapshot identity is ready for the sorting plan to
       add server-wide ordering without changing the paging model.
 - [ ] Git-ignore and picker-filter semantics are preserved.
 - [ ] Tests cover directories beyond 1,000 entries and prove bounded DOM/network

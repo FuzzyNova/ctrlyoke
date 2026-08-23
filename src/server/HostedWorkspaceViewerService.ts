@@ -67,6 +67,7 @@ import {
   imageExtensionToMimeType,
 } from "../types/DashboardConstants";
 import { pathsEqual } from "../utils/PathCasing";
+import { WorkspaceListingSnapshotCache } from "./WorkspaceListingSnapshotCache";
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
@@ -211,6 +212,7 @@ function classifyRefNames(refNames: string[]): GitRefLabel[] {
 
 export class HostedWorkspaceViewerService {
   private readonly commitGenerator = new CommitMessageGenerator();
+  private readonly listingSnapshotCache = new WorkspaceListingSnapshotCache();
 
   constructor(
     private readonly workspaceRoot: string,
@@ -1684,5 +1686,9 @@ export class HostedWorkspaceViewerService {
       `refs/heads/${branchName}`
     );
     return { unifiedDiff };
+  }
+
+  dispose(): void {
+    this.listingSnapshotCache.dispose();
   }
 }
