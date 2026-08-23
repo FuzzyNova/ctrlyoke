@@ -17,14 +17,14 @@ The user-visible alert should preserve the harness's notification text. A generi
 
 ## Confirmed Native Contracts
 
-| Harness         | Native event                                                                       | Relevant payload                                                                                                                                             | Support decision                                           |
-| --------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| Claude CLI      | `Notification`                                                                     | `message`, optional `title`, `notification_type`; documented types include `permission_prompt`, `idle_prompt`, `elicitation_dialog`, and `agent_needs_input` | Supported                                                  |
-| Copilot CLI     | `notification` config key; input reports `hook_event_name: "Notification"`         | `message`, optional `title`, `notification_type`; documented types include `permission_prompt` and `elicitation_dialog`                                      | Supported                                                  |
-| Qwen Code       | `Notification`                                                                     | `message`, optional `title`, `notification_type`; documented types include `permission_prompt`, `idle_prompt`, and `auth_success`                            | Supported                                                  |
-| OpenCode        | `tui.toast.show` event-bus event (considered and rejected)                         | optional `title`, `message`, `variant`, optional `duration`; no session ID                                                                                     | Unsupported — not a semantic match (see below)             |
-| Codex CLI       | No equivalent general notification hook in ctrlyoke's supported Codex hook surface | n/a                                                                                                                                                          | Unsupported                                                |
-| Antigravity CLI | No equivalent notification hook in ctrlyoke's supported hook groups                | n/a                                                                                                                                                          | Unsupported                                                |
+| Harness         | Native event                                                                       | Relevant payload                                                                                                                                             | Support decision                               |
+| --------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| Claude CLI      | `Notification`                                                                     | `message`, optional `title`, `notification_type`; documented types include `permission_prompt`, `idle_prompt`, `elicitation_dialog`, and `agent_needs_input` | Supported                                      |
+| Copilot CLI     | `notification` config key; input reports `hook_event_name: "Notification"`         | `message`, optional `title`, `notification_type`; documented types include `permission_prompt` and `elicitation_dialog`                                      | Supported                                      |
+| Qwen Code       | `Notification`                                                                     | `message`, optional `title`, `notification_type`; documented types include `permission_prompt`, `idle_prompt`, and `auth_success`                            | Supported                                      |
+| OpenCode        | `tui.toast.show` event-bus event (considered and rejected)                         | optional `title`, `message`, `variant`, optional `duration`; no session ID                                                                                   | Unsupported — not a semantic match (see below) |
+| Codex CLI       | No equivalent general notification hook in ctrlyoke's supported Codex hook surface | n/a                                                                                                                                                          | Unsupported                                    |
+| Antigravity CLI | No equivalent notification hook in ctrlyoke's supported hook groups                | n/a                                                                                                                                                          | Unsupported                                    |
 
 OpenCode rationale: `tui.toast.show` represents all TUI toasts, not specifically “waiting for input,” and its official event shape has no session identifier. Treating it as equivalent to Claude/Copilot/Qwen's `Notification` hook would misrepresent OpenCode's actual capability and would surface toasts unrelated to any attention-needed state. ctrlyoke instead declares `notification` explicitly unsupported for OpenCode, the same way it already declares other logical events unsupported for harnesses that lack a real analog (e.g. `error` for Antigravity/Codex, `userPromptSubmit` for Antigravity).
 
@@ -238,29 +238,30 @@ Do not make `notification` a universally required event in the live harness suit
 
 ### Session update (2026-08-22)
 
-This session completed the shared contract, settings default/schema, generated
-workflow schema, all six capability declarations, supported native registration
-maps, unsupported-provider filtering, and focused extension-host coverage. The
-registry completeness invariant remains enforced for the new event. Verified
-behavior keeps OpenCode's completion plugin loaded while omitting unsupported
-notification-only user hooks; `tui.toast.show` remains deliberately unmapped.
+Implementation and automated verification are complete. The shared contract,
+settings default/schema, generated workflow schema, all six capability
+declarations, supported native registration maps, unsupported-provider
+filtering, artifact normalization, notification factory, and React UI are all
+covered. The registry completeness invariant remains enforced for the new
+event. OpenCode's completion plugin stays loaded while unsupported notification
+hooks are omitted; `tui.toast.show` remains deliberately unmapped.
 
-The plan remains open for React UI coverage and stimulus-dependent live/manual
-verification. The supported notification artifact normalization and factory
-work are now complete: the factory keeps the stable `ctrlyoke - Notification`
-title, preserves workflow/prompt context, and includes the normalized native
-title/message/type detail without exposing `rawHookData`.
-
-This session also completed the supported stdin-hook script/artifact scope:
-Claude, Copilot, and Qwen now map native `Notification` payloads to opt-in
+Claude, Copilot, and Qwen map their native notification payloads to opt-in
 `notification` artifacts with normalized title/message/type fields and intact
-raw payloads. Notification events are side-effect-only and do not require a
+raw payloads. Notification events are side-effect-only: they do not require a
 session ID or write lifecycle files. Copilot intentionally uses its lowercase
 `notification` argv/config key to select the logical event while retaining the
-PascalCase `hook_event_name` from stdin as the native event. The focused
-extension-host test covers enabled/disabled artifacts, lifecycle files, and
-decision-hook stdout for all three scripts. No changes were made to the
-OpenCode plugin.
+PascalCase `hook_event_name` from stdin as the native event. Factory output
+keeps the stable `ctrlyoke - Notification` title, preserves workflow/prompt
+context, includes normalized native detail, and does not expose `rawHookData`.
+
+Automated process-spawn tests exercise the supported native payload shapes,
+enabled/disabled artifact behavior, lifecycle isolation, and unchanged
+decision-hook stdout. Capability and provider tests record Codex, Antigravity,
+and OpenCode as unsupported skips rather than expecting runtime notification
+stimulus. Stimulus-dependent live harness runs were not executed during the
+final review. The final gate passed with 3,481 extension-host tests (3 pending)
+and 2,109 webview tests.
 
 ## Acceptance Criteria
 
