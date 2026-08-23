@@ -234,6 +234,40 @@ describe("usePagedWorkspaceDirectory", () => {
     expect(result.current.path).toBe("other");
   });
 
+  it("does not let an old path effect abort an imperative navigation", async () => {
+    const first = deferred<WorkspaceTreePageResponse>();
+    const second = deferred<WorkspaceTreePageResponse>();
+    const fetchPage = vi
+      .fn<PagedWorkspaceDirectoryFetcher>()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const { result, rerender } = renderHook(
+      (props: { path: string }) =>
+        usePagedWorkspaceDirectory({
+          path: props.path,
+          includeGitIgnored: true,
+          fetchPage,
+        }),
+      { initialProps: { path: "src" } }
+    );
+
+    await waitFor(() => expect(fetchPage).toHaveBeenCalledOnce());
+    act(() => {
+      result.current.navigate("other");
+      rerender({ path: "other" });
+    });
+
+    expect((fetchPage.mock.calls[0]?.[1] as AbortSignal).aborted).toBe(true);
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    expect((fetchPage.mock.calls[1]?.[1] as AbortSignal).aborted).toBe(false);
+
+    await act(async () => {
+      second.resolve(initialResponse(LISTING_B, "other"));
+      await second.promise;
+    });
+    await waitFor(() => expect(result.current.listingId).toBe(LISTING_B));
+  });
+
   it("clears the initial loading state when an in-flight request is cancelled", async () => {
     const initial = deferred<WorkspaceTreePageResponse>();
     const fetchPage = vi

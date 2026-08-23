@@ -714,7 +714,16 @@ export function usePagedWorkspaceDirectory(
           findAnchor(lastVisibleStartRef.current ?? 0)?.path)
         : anchorPathRef.current;
     startListing(normalizedOptionPath, anchorPath);
-    return abortRequests;
+    const effectGeneration = generationRef.current;
+    return () => {
+      // An imperative navigate can start a newer listing before this effect's
+      // cleanup runs for the resulting path-prop update. Only abort the
+      // generation owned by this effect; otherwise cleanup cancels the newer
+      // request and leaves the reset state looking like an empty directory.
+      if (generationRef.current === effectGeneration) {
+        abortRequests();
+      }
+    };
   }, [
     abortRequests,
     findAnchor,
