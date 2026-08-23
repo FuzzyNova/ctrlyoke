@@ -431,10 +431,10 @@ same.
 
 ### Phase 3 — Shared paged-directory hook
 
-1. Implement request generation, page maps, O(1) index access, loading/error
-   ranges, Refresh, and expiration recovery.
-2. Add anchored listings and scroll restoration.
-3. Add progress and retry state suitable for both consumers.
+1. [x] Implement request generation, page maps, O(1) index access, loading/error
+       ranges, Refresh, and expiration recovery.
+2. [x] Add anchored listings and scroll restoration.
+3. [x] Add progress and retry state suitable for both consumers.
 4. Remove or reshape `workspaceViewerStore.explorerEntries` so there is one
    source of listing truth.
 
