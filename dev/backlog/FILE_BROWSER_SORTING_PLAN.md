@@ -20,7 +20,7 @@ is Name. File size is deliberately deferred.
 ## Dependency and Recommended Cross-Plan Order
 
 This plan depends on
-[`WORKSPACE_DIRECTORY_PAGINATION_PLAN.md`](./WORKSPACE_DIRECTORY_PAGINATION_PLAN.md)
+[`WORKSPACE_DIRECTORY_PAGINATION_PLAN.md`](../implemented/WORKSPACE_DIRECTORY_PAGINATION_PLAN.md)
 and must be staged after its paged-listing foundation. Date modified ordering
 must operate on a complete listing snapshot so page boundaries remain stable as
 later ranges arrive.
@@ -42,24 +42,25 @@ same.
 
 ## Current Behavior
 
-`HostedWorkspaceViewerService.listDirectory()` currently:
+The pagination prerequisite is implemented. `HostedWorkspaceViewerService`
+now creates immutable, complete directory snapshots in
+`WorkspaceListingSnapshotCache`, ordered as directory names A-Z followed by
+file names A-Z. `materializeListingPage()` stats only files in the requested
+range, with bounded concurrency, to populate optional `size`; directories and
+virtual multi-root entries are not statted.
 
-1. reads the directory with `readdir({ withFileTypes: true })`;
-2. sorts directories by name;
-3. sorts files by name;
-4. concatenates directories before files;
-5. limits the response to `MAX_ENTRIES` (1,000); and
-6. stats only the returned files, currently to populate optional `size`.
+Both `WorkspaceExplorerPane` and `FileBrowserModal` use
+`usePagedWorkspaceDirectory()` and `VirtualizedPagedList`. They share
+`EntryRow`, page-failure UI, and breadcrumb rendering through
+`components/workspace-viewer/fileBrowserShared.tsx`. The initial tree request
+contains path, git-ignore, page-size, and optional anchor fields; range requests
+remain bound to the immutable order captured by `listingId`.
 
-Both `WorkspaceExplorerPane` and `FileBrowserModal` call the same
-`workspaceTree()` API and render `result.entries` without further sorting.
-They already share `EntryRow` and breadcrumb rendering through
-`components/workspace-viewer/fileBrowserShared.tsx`, but each owns its own list
-wrapper and loading/navigation state.
-
-This means the current effective sort is directory names A-Z followed by file
-names A-Z. There is no modification timestamp in `WorkspaceEntry`, so the
-browser cannot display or sort on it yet.
+There is still no modification timestamp or sort preference in the shared
+contract, so the effective sort remains Name ascending and neither browser can
+display or select another order. `WorkspaceExplorerPane` already starts a new
+anchored listing after a successful save, so sorting only needs to preserve and
+verify that refresh behavior.
 
 ## Product Decisions
 
@@ -192,11 +193,19 @@ stat the complete immediate directory before ordering because modification time
 is the sort key. Use the pagination plan's bounded metadata concurrency; never
 replace the old cap with an unbounded `Promise.all`.
 
-Also stat the backing directories used by `listRoots()` so multi-root entries
-can display modification times. If a root disappears or cannot be statted,
-return it with `modifiedAt` omitted instead of failing the complete virtual-root
-listing. This will require making the virtual-root entry construction async or
-having the paged listing service enrich those entries before returning them.
+Also stat the `namedRoots` backing directories while constructing the virtual
+multi-root snapshot so root entries can display and sort by modification time.
+If a root disappears or cannot be statted, return it with `modifiedAt` omitted
+instead of failing the complete virtual-root listing. Do not derive a root's
+filesystem path by joining its display name to the primary root; use the
+corresponding `ResolverWorkspaceFolder.fsPath`.
+
+For Name sorting, keep ordered entries immutable while maintaining a
+snapshot-scoped metadata cache (including in-flight work) so repeated or
+overlapping page requests reuse one stat attempt per entry. Date modified
+sorting eagerly resolves that same metadata for every candidate before the
+snapshot order is frozen. A failed stat is cached as missing metadata for the
+snapshot lifetime rather than retried on every range request.
 
 No new endpoint beyond the pagination plan's tree-range contract is required.
 Extend its initial request with the sort value and keep range requests bound to
@@ -290,7 +299,8 @@ Begin only after Steps 1-2 in the cross-plan order above are complete.
 2. Send sort changes from `FileBrowserModal` through the same controller
    without changing picker selection/navigation behavior.
 3. Render the shared header in both locations.
-4. Refresh explorer metadata after a successful editor save.
+4. Preserve and verify the existing anchored explorer refresh after a
+   successful editor save so it uses the active sort.
 5. Add focused interaction tests proving each surface reads and updates the
    same persisted preference.
 
