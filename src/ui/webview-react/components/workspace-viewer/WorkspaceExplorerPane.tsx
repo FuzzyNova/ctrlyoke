@@ -16,6 +16,7 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useIsMobile } from "@hooks/useMediaQuery";
+import { useElementNarrow } from "@hooks/useElementNarrow";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useWorkspaceEditorContextMenu } from "@hooks/useWorkspaceEditorContextMenu";
 import { useWorkspaceExplorerContextMenu } from "@hooks/useWorkspaceExplorerContextMenu";
@@ -45,6 +46,7 @@ import {
 import {
   DirectoryPageFailureNotice,
   EntryRow,
+  FILE_BROWSER_NARROW_THRESHOLD,
   FileBrowserSortHeader,
   renderBreadcrumb as renderBreadcrumbShared,
   toWorkspaceRelative,
@@ -146,6 +148,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const setWorkspaceEntrySort = useUiStore((s) => s.setWorkspaceEntrySort);
 
   const isMobile = useIsMobile();
+  const [narrowColumnRef, isNarrowColumnLayout] =
+    useElementNarrow<HTMLDivElement>(FILE_BROWSER_NARROW_THRESHOLD);
 
   const editorRef = useRef<WorkspaceFileEditorHandle>(null);
   const [canUndo, setCanUndo] = useState(false);
@@ -469,7 +473,10 @@ export const WorkspaceExplorerPane: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const directoryListColumn = (
-    <div className="flex flex-col h-full w-full overflow-hidden select-none [-webkit-touch-callout:none]">
+    <div
+      ref={narrowColumnRef}
+      className="flex flex-col h-full w-full overflow-hidden select-none [-webkit-touch-callout:none]"
+    >
       {/* Navigation toolbar */}
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-panel-border flex-shrink-0">
         <button
@@ -566,6 +573,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
       <FileBrowserSortHeader
         sort={workspaceEntrySort}
         onSortKeyRequest={handleSortKeyRequest}
+        isNarrow={isNarrowColumnLayout}
       />
 
       {/* Entry list */}
@@ -627,6 +635,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                         }
                       }}
                       openContextMenu={openContextMenu}
+                      isNarrow={isNarrowColumnLayout}
                     />
                   </div>
                 );

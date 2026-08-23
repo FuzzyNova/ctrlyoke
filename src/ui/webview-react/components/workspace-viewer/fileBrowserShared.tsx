@@ -11,16 +11,41 @@ import {
   WORKSPACE_ENTRY_SORT_KEYS,
 } from "@root/types/HostedWorkspaceViewerTypes";
 
-/** Shared tracks keep the sort header and every entry row aligned. */
+/**
+ * Shared tracks keep the sort header and every entry row aligned. At the
+ * normal tier the date column is sized to the compact formatter's output,
+ * not a large percentage of the row, so wide panes give the name column its
+ * space back instead of leaving blank room to the right of the date text.
+ * The narrow variant shrinks the date column further still — it pairs with
+ * `formatWorkspaceEntryModifiedAt`'s narrow (date-only) text below — because
+ * below `FILE_BROWSER_NARROW_THRESHOLD` there isn't room for both a readable
+ * name and a full date/time; the name wins and the date degrades gracefully
+ * rather than the reverse. The full date/time is never lost — it's always in
+ * the row's title/aria-label.
+ */
 export const FILE_BROWSER_GRID_TEMPLATE =
-  "1.25rem minmax(0, 1fr) clamp(9rem, 32%, 12rem)";
+  "1.25rem minmax(0, 1fr) clamp(6.25rem, 22%, 7.5rem)";
+export const FILE_BROWSER_GRID_TEMPLATE_NARROW =
+  "1.25rem minmax(0, 1fr) clamp(2.5rem, 16%, 3.5rem)";
+
+/**
+ * Width (px) below which a file browser column layout switches to the
+ * narrow tier. The default panel width (256px, see `constants.ts`) and
+ * common mobile viewports both fall under this — the narrow tier is the
+ * common case; the wide tier is what a manually-widened panel gets.
+ */
+export const FILE_BROWSER_NARROW_THRESHOLD = 440;
 
 const modifiedAtCompactFormatter = new Intl.DateTimeFormat(undefined, {
-  year: "numeric",
+  year: "2-digit",
   month: "numeric",
   day: "numeric",
   hour: "numeric",
   minute: "2-digit",
+});
+const modifiedAtNarrowFormatter = new Intl.DateTimeFormat(undefined, {
+  month: "numeric",
+  day: "numeric",
 });
 const modifiedAtFullFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "full",
@@ -36,9 +61,14 @@ export interface WorkspaceEntryModifiedAtPresentation {
  * Format a workspace entry timestamp for both its visible cell and its full
  * tooltip/accessibility value. Filesystem metadata is best-effort, so invalid
  * and absent timestamps deliberately share the same safe fallback.
+ *
+ * `isNarrow` drops the compact value to date-only (no year, no time) so the
+ * narrow grid column never needs to truncate mid-string; the full value
+ * (used in tooltips/aria-labels) is unaffected.
  */
 export function formatWorkspaceEntryModifiedAt(
-  modifiedAt: number | undefined
+  modifiedAt: number | undefined,
+  isNarrow: boolean = false
 ): WorkspaceEntryModifiedAtPresentation {
   if (modifiedAt === undefined || !Number.isFinite(modifiedAt)) {
     return { compact: "—", full: "—" };
@@ -50,7 +80,10 @@ export function formatWorkspaceEntryModifiedAt(
   }
 
   return {
-    compact: modifiedAtCompactFormatter.format(date),
+    compact: (isNarrow
+      ? modifiedAtNarrowFormatter
+      : modifiedAtCompactFormatter
+    ).format(date),
     full: modifiedAtFullFormatter.format(date),
   };
 }
@@ -58,6 +91,10 @@ export function formatWorkspaceEntryModifiedAt(
 const SORT_LABELS: Record<WorkspaceEntrySortKey, string> = {
   [WORKSPACE_ENTRY_SORT_KEYS.NAME]: "Name",
   [WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT]: "Date modified",
+};
+const SORT_LABELS_NARROW: Record<WorkspaceEntrySortKey, string> = {
+  [WORKSPACE_ENTRY_SORT_KEYS.NAME]: "Name",
+  [WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT]: "Date",
 };
 
 function sortDirectionLabel(sort: WorkspaceEntrySort): string {
@@ -69,16 +106,22 @@ function sortDirectionLabel(sort: WorkspaceEntrySort): string {
 export interface FileBrowserSortHeaderProps {
   sort: WorkspaceEntrySort;
   onSortKeyRequest: (key: WorkspaceEntrySortKey) => void;
+  /** Defaults to false. See `FILE_BROWSER_NARROW_THRESHOLD`. */
+  isNarrow?: boolean;
 }
 
 /** Shared, stateless sort controls for the workspace file browsers. */
 export function FileBrowserSortHeader({
   sort,
   onSortKeyRequest,
+  isNarrow = false,
 }: FileBrowserSortHeaderProps): React.ReactElement {
   const renderSortButton = (key: WorkspaceEntrySortKey): React.ReactElement => {
     const isActive = sort.key === key;
-    const label = SORT_LABELS[key];
+    // Visible text shrinks at the narrow tier; the accessible name stays
+    // full-length regardless of how much of it is visually truncated.
+    const fullLabel = SORT_LABELS[key];
+    const visibleLabel = (isNarrow ? SORT_LABELS_NARROW : SORT_LABELS)[key];
     const direction = sortDirectionLabel(sort);
     const activationDirection =
       key === WORKSPACE_ENTRY_SORT_KEYS.NAME ? "ascending" : "descending";
@@ -90,12 +133,12 @@ export function FileBrowserSortHeader({
       <button
         key={key}
         type="button"
-        aria-label={`${label}, ${accessibleDirection}`}
+        aria-label={`${fullLabel}, ${accessibleDirection}`}
         aria-pressed={isActive}
         onClick={() => onSortKeyRequest(key)}
         className="flex min-w-0 items-center gap-1 truncate rounded px-1 py-1 text-left text-xs font-medium text-description-fg hover:bg-btn-secondary-hover hover:text-editor-fg"
       >
-        <span className="truncate">{label}</span>
+        <span className="truncate">{visibleLabel}</span>
         {isActive && (
           <i
             aria-hidden="true"
@@ -114,7 +157,11 @@ export function FileBrowserSortHeader({
     <div
       data-testid="file-browser-sort-header"
       className="grid w-full items-center gap-1.5 border-b border-panel-border px-3 py-1 text-xs"
-      style={{ gridTemplateColumns: FILE_BROWSER_GRID_TEMPLATE }}
+      style={{
+        gridTemplateColumns: isNarrow
+          ? FILE_BROWSER_GRID_TEMPLATE_NARROW
+          : FILE_BROWSER_GRID_TEMPLATE,
+      }}
     >
       <span aria-hidden="true" />
       {renderSortButton(WORKSPACE_ENTRY_SORT_KEYS.NAME)}
@@ -160,6 +207,8 @@ export interface EntryRowProps {
   onClick: () => void;
   /** Defaults to a no-op — only the explorer's right-click/long-press context menu needs this. */
   openContextMenu?: (x: number, y: number, entry: WorkspaceEntry) => void;
+  /** Defaults to false. See `FILE_BROWSER_NARROW_THRESHOLD`. */
+  isNarrow?: boolean;
 }
 
 const noopOpenContextMenu = () => {};
@@ -172,11 +221,12 @@ export function EntryRow({
   statusColorClass,
   onClick,
   openContextMenu = noopOpenContextMenu,
+  isNarrow = false,
 }: EntryRowProps) {
   const longPressHandlers = useLongPress((x, y) =>
     openContextMenu(x, y, entry)
   );
-  const modifiedAt = formatWorkspaceEntryModifiedAt(entry.modifiedAt);
+  const modifiedAt = formatWorkspaceEntryModifiedAt(entry.modifiedAt, isNarrow);
   const entryLabel = `${entry.name}${entry.kind === "directory" ? "/" : ""}, ${entry.path}, modified ${modifiedAt.full}`;
 
   return (
@@ -200,7 +250,9 @@ export function EntryRow({
       }`}
       style={{
         ...(isCut ? { opacity: 0.5 } : {}),
-        gridTemplateColumns: FILE_BROWSER_GRID_TEMPLATE,
+        gridTemplateColumns: isNarrow
+          ? FILE_BROWSER_GRID_TEMPLATE_NARROW
+          : FILE_BROWSER_GRID_TEMPLATE,
       }}
       title={`${entry.path} — Modified ${modifiedAt.full}`}
       aria-label={entryLabel}

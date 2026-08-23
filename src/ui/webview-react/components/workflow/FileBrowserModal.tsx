@@ -9,11 +9,13 @@ import { Modal, Button } from "../shared";
 import { useUiStore } from "@store/uiStore";
 import { extractExtensionsFromGlobs } from "@root/utils/fileFilterUtils";
 import { usePagedWorkspaceDirectory } from "@hooks/usePagedWorkspaceDirectory";
+import { useElementNarrow } from "@hooks/useElementNarrow";
 import { VirtualizedPagedList } from "@components/shared";
 import type { WorkspaceTreeEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import {
   DirectoryPageFailureNotice,
   EntryRow,
+  FILE_BROWSER_NARROW_THRESHOLD,
   FileBrowserSortHeader,
   renderBreadcrumb,
 } from "../workspace-viewer/fileBrowserShared";
@@ -45,6 +47,8 @@ export const FileBrowserModal: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rememberedDirectoryFallbackRef = useRef(false);
+  const [narrowColumnRef, isNarrowColumnLayout] =
+    useElementNarrow<HTMLDivElement>(FILE_BROWSER_NARROW_THRESHOLD);
 
   const mode = fileBrowserState?.mode;
   const initialDirectoryPath =
@@ -192,7 +196,7 @@ export const FileBrowserModal: React.FC = () => {
         </div>
       }
     >
-      <div className="space-y-3">
+      <div ref={narrowColumnRef} className="space-y-3">
         <div className="flex items-center gap-1 px-1 py-1 border-b border-panel-border">
           <button
             onClick={handleBack}
@@ -217,6 +221,7 @@ export const FileBrowserModal: React.FC = () => {
         <FileBrowserSortHeader
           sort={workspaceEntrySort}
           onSortKeyRequest={handleSortKeyRequest}
+          isNarrow={isNarrowColumnLayout}
         />
 
         <div
@@ -270,6 +275,7 @@ export const FileBrowserModal: React.FC = () => {
                         disabled={isUnselectable}
                         statusColorClass={undefined}
                         onClick={() => handleEntryClick(entry)}
+                        isNarrow={isNarrowColumnLayout}
                       />
                     </div>
                   );
