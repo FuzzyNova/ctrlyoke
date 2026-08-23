@@ -461,6 +461,37 @@ describe("generateMarkdownExport", () => {
     expect(md).toContain("/workspace> claude --model sonnet");
   });
 
+  it("renders MCP tool parameters and results in structured output", () => {
+    const outputs = [
+      {
+        type: "cli" as const,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1000,
+        attemptIndex: 0,
+        data: {
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+                data: {
+                  server: "queue",
+                  tool: "append",
+                  parameters: { prompt: "mcp parameter output" },
+                  result: { success: true, output: "mcp result output" },
+                },
+              },
+            ],
+            metadata: {},
+          },
+        },
+      },
+    ];
+
+    const md = generateMarkdownExport(outputs, metadata);
+    expect(md).toContain("● MCP: queue.append(prompt: mcp parameter output)");
+    expect(md).toContain("⎿  mcp result output");
+  });
+
   it("does not export script prompts and keeps script commands when command export is disabled", () => {
     for (const source of Object.values(SCRIPT_OUTPUT_SOURCES)) {
       const md = generateMarkdownExport(

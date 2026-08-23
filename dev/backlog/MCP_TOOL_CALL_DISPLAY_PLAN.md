@@ -1,6 +1,6 @@
 # MCP Tool Call Display & Expand-Toggle Plan
 
-**Status:** Proposed
+**Status:** Implemented
 **Priority:** P2
 
 ## Context
@@ -259,18 +259,18 @@ formatting decisions.
 
 ## Acceptance criteria
 
-- MCP tool call rows show a discoverable input/parameters toggle and render the
+- [x] MCP tool call rows show a discoverable input/parameters toggle and render the
   same raw-text content `GenericToolCallOutput` already shows for generic tool
   call parameters, collapsed by default and revealing everything in one click
   (no nested "show more" step).
-- Bash command, generic tool call, and MCP tool call expand toggles all use one
+- [x] Bash command, generic tool call, and MCP tool call expand toggles all use one
   shared codicon-chevron component instead of three separate `▼`/`▲` buttons, and
   the "Show input" label appears once the row is at least 400px wide (matching
   `OutputSectionHeader.tsx`'s existing `isHeaderVeryNarrow` threshold).
-- Expanding/collapsing generic or MCP tool call parameters does not cause
+- [x] Expanding/collapsing generic or MCP tool call parameters does not cause
   virtualized scroll-position jumps.
-- "Find in output" matches text that exists only inside a tool call's (generic or
+- [x] "Find in output" matches text that exists only inside a tool call's (generic or
   MCP) parameters.
-- Exported markdown, the CLI terminal fallback, and history-search results all
+- [x] Exported markdown, the CLI terminal fallback, and history-search results all
   include MCP tool call parameters, matching what `TOOL_CALL` already includes in
   each of those three surfaces.

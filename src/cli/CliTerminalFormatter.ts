@@ -420,7 +420,20 @@ export class CliTerminalFormatter {
         CliTerminalFormatter.flushStreamingBuffer();
         const data = event.data as McpToolCallData;
         if (data.server && data.tool) {
-          console.log(chalk.magenta("⚙ " + data.server + ":" + data.tool));
+          const params = data.parameters
+            ? JSON.stringify(data.parameters).slice(0, 80)
+            : "";
+          console.log(
+            chalk.magenta("⚙ " + data.server + ":" + data.tool) +
+              (params ? " " + chalk.dim(params) : "")
+          );
+          if (data.result) {
+            const text = data.result.success
+              ? (data.result.output?.substring(0, 100) ?? "Success")
+              : (data.result.error?.substring(0, 200) ?? "Failed");
+            const color = data.result.success ? chalk.dim : chalk.red;
+            console.log(color("  ⎿  " + text));
+          }
           console.log();
         }
         break;

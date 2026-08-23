@@ -264,7 +264,13 @@ function renderStructuredEventsToMarkdown(
 
       case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
         const data = event.data as McpToolCallData;
-        lines.push(`● MCP: ${data.server}.${data.tool}`);
+        lines.push(
+          formatToolCallForMarkdown(
+            `MCP: ${data.server}.${data.tool}`,
+            data.parameters
+          )
+        );
+        if (data.result) lines.push(formatToolResultForMarkdown(data.result));
         lines.push("");
         break;
       }

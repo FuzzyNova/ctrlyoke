@@ -177,7 +177,11 @@ export class HistoryCandidateExtractor {
         break;
       }
       case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
-        const data = event.data as { server?: unknown; tool?: unknown };
+        const data = event.data as {
+          server?: unknown;
+          tool?: unknown;
+          parameters?: unknown;
+        };
         candidates.push(
           ...this.toCandidate(
             HISTORY_EVENT_KINDS.MCP_TOOL,
@@ -190,6 +194,13 @@ export class HistoryCandidateExtractor {
             HISTORY_EVENT_KINDS.MCP_TOOL,
             HISTORY_MATCH_FIELDS.CONTENT,
             this.getStringValue(data.tool)
+          )
+        );
+        candidates.push(
+          ...this.toCandidate(
+            HISTORY_EVENT_KINDS.MCP_TOOL,
+            HISTORY_MATCH_FIELDS.CONTENT,
+            this.stringifyValue(data.parameters)
           )
         );
         break;

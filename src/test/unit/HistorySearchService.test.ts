@@ -137,6 +137,7 @@ suite("HistorySearchService", () => {
                 data: {
                   server: "history-server",
                   tool: "tool-call-term",
+                  parameters: { prompt: "mcp-parameter-term" },
                 },
               },
               {
@@ -175,6 +176,12 @@ suite("HistorySearchService", () => {
     ).results;
     assert.strictEqual(toolResults[0]?.eventKind, "tool");
     assert.strictEqual(toolResults[0]?.matchField, "output");
+
+    const mcpParameterResults = (
+      await service.search("mcp-parameter-term", workspaceRoot)
+    ).results;
+    assert.strictEqual(mcpParameterResults[0]?.eventKind, "mcpTool");
+    assert.strictEqual(mcpParameterResults[0]?.matchField, "content");
 
     const diffResults = (await service.search("diff-term", workspaceRoot))
       .results;

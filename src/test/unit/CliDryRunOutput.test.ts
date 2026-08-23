@@ -1,5 +1,7 @@
 import * as assert from "assert";
+import { execFileSync } from "child_process";
 import chalk from "chalk";
+import * as path from "path";
 import { suite, test } from "mocha";
 import { buildCliPreviewJsonResult } from "../../cli/CliJsonResultBuilder";
 import { CliTerminalFormatter } from "../../cli/CliTerminalFormatter";
@@ -84,6 +86,46 @@ function previewFixture(): WorkflowExecutionPreview {
 }
 
 suite("CLI dry-run output", () => {
+  test("renders MCP parameters and results in terminal output", () => {
+    const repoRoot = path.resolve(__dirname, "..", "..", "..");
+    const formatterPath = path.join(
+      repoRoot,
+      "out",
+      "cli",
+      "CliTerminalFormatter.js"
+    );
+    const constantsPath = path.join(
+      repoRoot,
+      "out",
+      "types",
+      "DashboardConstants.js"
+    );
+    const output = execFileSync(
+      process.execPath,
+      [
+        "-e",
+        `const { CliTerminalFormatter } = require(${JSON.stringify(formatterPath)});
+const { CLI_EVENT_TYPES } = require(${JSON.stringify(constantsPath)});
+CliTerminalFormatter.renderEvent({
+  type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+  data: {
+    server: "queue",
+    tool: "append",
+    parameters: { prompt: "terminal parameter output" },
+    result: { success: true, output: "terminal result output" },
+  },
+});`,
+      ],
+      { encoding: "utf8" }
+    );
+
+    assert.ok(output.includes("⚙ queue:append"));
+    assert.ok(
+      output.includes('{"prompt":"terminal parameter output"}')
+    );
+    assert.ok(output.includes("⎿  terminal result output"));
+  });
+
   test("keeps category labels exhaustive", () => {
     const labels: Record<PreviewPromptCategory, string> =
       PREVIEW_PROMPT_CATEGORY_LABELS;
