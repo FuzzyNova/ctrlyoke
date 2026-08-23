@@ -147,6 +147,7 @@ export function VirtualizedPagedList<T>({
     return () => cancelAnimationFrame(frame);
   }, [
     count,
+    estimateItemSize,
     listingId,
     rowVirtualizer,
     scrollContainerRef,

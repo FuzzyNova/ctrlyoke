@@ -16,8 +16,8 @@ export interface WorkspaceEntry {
 /** Alias kept for API naming consistency — same shape as WorkspaceEntry. */
 export type WorkspaceTreeEntry = WorkspaceEntry;
 
-/** Default and supported bounds for the future paged directory API. */
-export const WORKSPACE_TREE_DEFAULT_PAGE_SIZE = 100;
+/** Default and supported bounds for the paged directory API. */
+export const WORKSPACE_TREE_DEFAULT_PAGE_SIZE = 250;
 export const WORKSPACE_TREE_MIN_PAGE_SIZE = 1;
 export const WORKSPACE_TREE_MAX_PAGE_SIZE = 500;
 

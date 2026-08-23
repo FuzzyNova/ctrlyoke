@@ -397,7 +397,7 @@ describe("FileBrowserModal — file mode", () => {
   });
 
   it("shows a failed later page and retries only that page", async () => {
-    const entries = Array.from({ length: 120 }, (_, index) => entry(index));
+    const entries = Array.from({ length: 220 }, (_, index) => entry(index));
     let failed = true;
     workspaceTreeMock.mockImplementation((request) => {
       if ("listingId" in request && request.offset === 100 && failed) {
@@ -411,7 +411,9 @@ describe("FileBrowserModal — file mode", () => {
 
     await screen.findByText("file-0.ts");
     const scroller = screen.getByTestId("file-browser-directory-list");
-    scroller.scrollTop = 100 * 36;
+    // Jump into the middle of the page. Its first absolute row (100) is not
+    // mounted, so Retry must not depend on that row being in overscan.
+    scroller.scrollTop = 150 * 36;
     fireEvent.scroll(scroller);
 
     expect(
@@ -420,7 +422,7 @@ describe("FileBrowserModal — file mode", () => {
     await userEvent
       .setup()
       .click(screen.getByRole("button", { name: "Retry / Load page" }));
-    expect(await screen.findByText("file-100.ts")).toBeInTheDocument();
+    expect(await screen.findByText("file-150.ts")).toBeInTheDocument();
     expect(
       workspaceTreeMock.mock.calls.filter(
         ([request]) => "listingId" in request && request.offset === 100

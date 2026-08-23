@@ -42,6 +42,7 @@ import {
   type WorkspaceFileEditorPendingSelection,
 } from "./WorkspaceFileEditor";
 import {
+  DirectoryPageFailureNotice,
   EntryRow,
   renderBreadcrumb as renderBreadcrumbShared,
   toWorkspaceRelative,
@@ -179,6 +180,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const parentPath = directory.parentPath;
   const rootLabel = directory.rootLabel;
   const isRootsList = directory.isRootsList;
+  const navigateDirectory = directory.navigate;
+  const refreshPagedDirectory = directory.refresh;
 
   // The hook is the listing source; explorerPath remains in the store only so
   // navigation URLs can describe the directory currently shown.
@@ -190,9 +193,9 @@ export const WorkspaceExplorerPane: React.FC = () => {
 
   const loadDirectory = useCallback(
     (dirPath: string, anchorPath?: string) => {
-      directory.navigate(dirPath, anchorPath ? { anchorPath } : undefined);
+      navigateDirectory(dirPath, anchorPath ? { anchorPath } : undefined);
     },
-    [directory.navigate]
+    [navigateDirectory]
   );
 
   const refreshDirectory = useCallback(
@@ -206,9 +209,9 @@ export const WorkspaceExplorerPane: React.FC = () => {
         normalizedCandidate && candidateParent === directory.path
           ? normalizedCandidate
           : undefined;
-      directory.refresh(anchorPath ? { anchorPath } : undefined);
+      refreshPagedDirectory(anchorPath ? { anchorPath } : undefined);
     },
-    [directory.path, directory.refresh, selectedFilePath]
+    [directory.path, refreshPagedDirectory, selectedFilePath]
   );
 
   // Loads git status for the whole workspace, used to color explorer entries
@@ -598,26 +601,6 @@ export const WorkspaceExplorerPane: React.FC = () => {
                 );
               }}
               renderPlaceholder={(index) => {
-                const failedRange = directory.failedRanges.find(
-                  (range) => index >= range.offset && index < range.endOffset
-                );
-                if (failedRange && index === failedRange.offset) {
-                  return (
-                    <div
-                      role="listitem"
-                      className="flex min-h-[36px] items-center justify-between gap-2 px-3 py-1 text-sm text-warning-fg"
-                    >
-                      <span>Unable to load this page.</span>
-                      <button
-                        type="button"
-                        className="rounded border border-btn-border px-2 py-1 hover:bg-btn-secondary-hover"
-                        onClick={() => directory.retryPage(failedRange.offset)}
-                      >
-                        Retry / Load page
-                      </button>
-                    </div>
-                  );
-                }
                 return (
                   <div
                     role="listitem"
@@ -640,6 +623,10 @@ export const WorkspaceExplorerPane: React.FC = () => {
           </div>
         )}
       </div>
+      <DirectoryPageFailureNotice
+        failedRange={directory.failedRanges[0]}
+        onRetry={directory.retryPage}
+      />
       {!directory.isInitialLoading &&
         directory.totalCount > 0 &&
         directory.uniqueLoadedCount < directory.totalCount && (

@@ -146,7 +146,7 @@ function errorFrom(value: unknown): Error {
 }
 
 function isAbortError(value: unknown): boolean {
-  return value instanceof DOMException && value.name === "AbortError";
+  return value instanceof Error && value.name === "AbortError";
 }
 
 function isExpiredError(value: unknown): boolean {
@@ -660,8 +660,6 @@ export function usePagedWorkspaceDirectory(
     skipOptionStartRef.current = null;
     startListing(normalizedOptionPath, options.anchorPath);
     return abortRequests;
-    // Option changes intentionally begin a new request generation.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     abortRequests,
     normalizedOptionPath,

@@ -217,6 +217,18 @@ suite("HostedWorkspaceViewerService", function () {
       assert.strictEqual(entries.at(-1)?.name, "file-1004.txt");
     });
 
+    test("uses the specified 250-entry default page size", async () => {
+      const root = createWorkspace();
+      const svc = new HostedWorkspaceViewerService(root);
+
+      const result = await svc.listDirectory({
+        path: "",
+        includeGitIgnored: true,
+      });
+
+      assert.strictEqual(result.pageSize, 250);
+    });
+
     test("keeps directories before files across page boundaries", async () => {
       const root = createWorkspace();
       fs.mkdirSync(path.join(root, "z-directory"));

@@ -12,6 +12,7 @@ import { usePagedWorkspaceDirectory } from "@hooks/usePagedWorkspaceDirectory";
 import { VirtualizedPagedList } from "@components/shared";
 import type { WorkspaceTreeEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import {
+  DirectoryPageFailureNotice,
   EntryRow,
   renderBreadcrumb,
 } from "../workspace-viewer/fileBrowserShared";
@@ -49,6 +50,7 @@ export const FileBrowserModal: React.FC = () => {
     includeGitIgnored: true,
     enabled: fileBrowserState !== null,
   });
+  const navigateDirectory = directory.navigate;
 
   // Extensions extracted from fileFilter globs; null means "no filter" (either
   // no filter was given, or the globs didn't reduce to plain extensions).
@@ -93,8 +95,8 @@ export const FileBrowserModal: React.FC = () => {
       return;
     }
     rememberedDirectoryFallbackRef.current = false;
-    directory.navigate("");
-  }, [directory.initialError, directory.navigate, fileBrowserState]);
+    navigateDirectory("");
+  }, [directory.initialError, fileBrowserState, navigateDirectory]);
 
   const handleCancel = useCallback(() => {
     closeFileBrowser();
@@ -122,19 +124,19 @@ export const FileBrowserModal: React.FC = () => {
   const handleEntryClick = useCallback(
     (entry: WorkspaceTreeEntry) => {
       if (entry.kind === "directory") {
-        directory.navigate(entry.path);
+        navigateDirectory(entry.path);
         return;
       }
       if (mode === "file" && matchesFilter(entry)) {
         setSelectedFile(entry.path);
       }
     },
-    [directory.navigate, mode, matchesFilter]
+    [matchesFilter, mode, navigateDirectory]
   );
 
   const handleBack = useCallback(() => {
-    if (directory.parentPath !== null) directory.navigate(directory.parentPath);
-  }, [directory.navigate, directory.parentPath]);
+    if (directory.parentPath !== null) navigateDirectory(directory.parentPath);
+  }, [directory.parentPath, navigateDirectory]);
 
   if (!fileBrowserState) return null;
 
@@ -254,27 +256,6 @@ export const FileBrowserModal: React.FC = () => {
                   );
                 }}
                 renderPlaceholder={(index) => {
-                  const failedRange = directory.failedRanges.find(
-                    (range) => index >= range.offset && index < range.endOffset
-                  );
-                  if (failedRange && index === failedRange.offset) {
-                    return (
-                      <div
-                        role="listitem"
-                        className="flex min-h-[44px] items-center justify-between gap-2 px-3 py-1 text-sm text-warning-fg"
-                      >
-                        <span>Unable to load this page.</span>
-                        <Button
-                          variant="secondary"
-                          onClick={() =>
-                            directory.retryPage(failedRange.offset)
-                          }
-                        >
-                          Retry / Load page
-                        </Button>
-                      </div>
-                    );
-                  }
                   return (
                     <div
                       role="listitem"
@@ -295,6 +276,11 @@ export const FileBrowserModal: React.FC = () => {
             </div>
           )}
         </div>
+
+        <DirectoryPageFailureNotice
+          failedRange={directory.failedRanges[0]}
+          onRetry={directory.retryPage}
+        />
 
         {!directory.isInitialLoading &&
           directory.totalCount > 0 &&

@@ -1,5 +1,6 @@
 import React from "react";
 import { useLongPress } from "@hooks/useLongPress";
+import type { FailedWorkspaceDirectoryRange } from "@hooks/usePagedWorkspaceDirectory";
 import type { WorkspaceEntry } from "@root/types/HostedWorkspaceViewerTypes";
 
 /**
@@ -90,6 +91,42 @@ export function EntryRow({
         {entry.kind === "directory" ? "/" : ""}
       </span>
     </button>
+  );
+}
+
+export interface DirectoryPageFailureNoticeProps {
+  failedRange: FailedWorkspaceDirectoryRange | undefined;
+  onRetry: (offset: number) => void;
+}
+
+/**
+ * Persistent recovery control for a failed sparse page. Keeping this outside
+ * the virtual rows makes Retry reachable even when the page's first absolute
+ * index is outside the mounted overscan range after a direct scrollbar jump.
+ */
+export function DirectoryPageFailureNotice({
+  failedRange,
+  onRetry,
+}: DirectoryPageFailureNoticeProps): React.ReactElement | null {
+  if (!failedRange) return null;
+
+  return (
+    <div
+      role="alert"
+      className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-panel-border px-3 py-1.5 text-sm text-warning-fg"
+    >
+      <span>
+        Unable to load entries {failedRange.offset + 1}–
+        {failedRange.endOffset.toLocaleString()}.
+      </span>
+      <button
+        type="button"
+        className="rounded border border-btn-border px-2 py-1 hover:bg-btn-secondary-hover"
+        onClick={() => onRetry(failedRange.offset)}
+      >
+        Retry / Load page
+      </button>
+    </div>
   );
 }
 
