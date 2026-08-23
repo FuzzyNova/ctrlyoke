@@ -26,6 +26,8 @@ import type {
 } from "@root/types/CtrlYokeTypes";
 import type { CreateWorkflowVariantRequest } from "@root/types/WebviewMessageTypes";
 import type { SaveWorkflowBundlePreview } from "../types/messages";
+import type { WorkspaceEntrySort } from "@root/types/HostedWorkspaceViewerTypes";
+import { DEFAULT_WORKSPACE_ENTRY_SORT } from "@root/types/HostedWorkspaceViewerTypes";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
 import { isWorkflowRunning } from "@utils/status";
 import {
@@ -543,6 +545,8 @@ interface UiState {
   fileBrowserState: FileBrowserRequest | null;
   /** Last successfully selected directory in the web-native file browser. */
   fileBrowserLastDirectory: string | null;
+  /** Shared persisted sort preference for hosted workspace entry listings. */
+  workspaceEntrySort: WorkspaceEntrySort;
   /** Last folder selected via the native OS picker for Save As location; cleared after SaveWorkflowDialog consumes it */
   saveLocationSelection: { path: string } | null;
 
@@ -767,6 +771,7 @@ interface UiActions {
   openFileBrowser: (request: FileBrowserRequest) => void;
   closeFileBrowser: () => void;
   setFileBrowserLastDirectory: (path: string) => void;
+  setWorkspaceEntrySort: (sort: WorkspaceEntrySort) => void;
   setSaveLocationSelection: (selection: { path: string } | null) => void;
 
   // New workflow modal
@@ -957,6 +962,7 @@ const initialState: UiState = {
   duplicateWorkflowError: null,
   fileBrowserState: null,
   fileBrowserLastDirectory: null,
+  workspaceEntrySort: DEFAULT_WORKSPACE_ENTRY_SORT,
   saveLocationSelection: null,
   stepsCollapsed: false,
   finalStepFooterExpanded: false,
@@ -1063,6 +1069,7 @@ const persistedFields = [
   "mobileStepsMode",
   "uxSnapshotButtonVisible",
   "fileBrowserLastDirectory",
+  "workspaceEntrySort",
 ] as const;
 
 export const useUiStore = create<UiState & UiActions>()(
@@ -1350,6 +1357,14 @@ export const useUiStore = create<UiState & UiActions>()(
 
       setFileBrowserLastDirectory: (path) =>
         set({ fileBrowserLastDirectory: path }),
+
+      setWorkspaceEntrySort: (sort) =>
+        set((state) =>
+          state.workspaceEntrySort.key === sort.key &&
+          state.workspaceEntrySort.direction === sort.direction
+            ? state
+            : { workspaceEntrySort: { ...sort } }
+        ),
 
       setSaveLocationSelection: (selection) =>
         set({ saveLocationSelection: selection }),
@@ -2004,6 +2019,7 @@ export const useUiStore = create<UiState & UiActions>()(
           outputFontSize: initialState.outputFontSize,
           terminalFontSize: initialState.terminalFontSize,
           runBannerPinned: initialState.runBannerPinned,
+          workspaceEntrySort: { ...initialState.workspaceEntrySort },
         });
       },
     }),

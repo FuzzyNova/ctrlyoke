@@ -97,6 +97,10 @@ export async function workspaceTree(
     if (request.anchorPath !== undefined) {
       params.set("anchorPath", request.anchorPath);
     }
+    if (request.sort !== undefined) {
+      params.set("sortKey", request.sort.key);
+      params.set("sortDirection", request.sort.direction);
+    }
   }
   return hostedFetch<WorkspaceTreePageResponse>(
     `/api/workspace-viewer/tree?${params.toString()}`,

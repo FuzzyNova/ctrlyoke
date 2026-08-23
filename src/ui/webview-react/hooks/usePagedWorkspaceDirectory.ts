@@ -4,8 +4,12 @@ import type {
   WorkspaceTreePageResponse,
   WorkspaceTreeRangeRequest,
   WorkspaceTreeEntry,
+  WorkspaceEntrySort,
 } from "@root/types/HostedWorkspaceViewerTypes";
-import { WORKSPACE_TREE_DEFAULT_PAGE_SIZE } from "@root/types/HostedWorkspaceViewerTypes";
+import {
+  DEFAULT_WORKSPACE_ENTRY_SORT,
+  WORKSPACE_TREE_DEFAULT_PAGE_SIZE,
+} from "@root/types/HostedWorkspaceViewerTypes";
 import { HostedHttpError, workspaceTree } from "@utils/hostedApi";
 import type { VirtualizedListRange } from "@components/shared/VirtualizedListFoundation";
 
@@ -14,6 +18,8 @@ export interface PagedWorkspaceDirectoryOptions {
   path: string;
   includeGitIgnored: boolean;
   pageSize?: number;
+  /** Server-side ordering for the immutable listing snapshot. */
+  sort?: WorkspaceEntrySort;
   /** Initial anchor, or an anchor supplied by a consumer before first load. */
   anchorPath?: string;
   enabled?: boolean;
@@ -95,6 +101,7 @@ interface DirectoryConfig {
   path: string;
   includeGitIgnored: boolean;
   pageSize: number | undefined;
+  sort: WorkspaceEntrySort;
 }
 
 interface DirectoryState {
@@ -135,6 +142,21 @@ const EMPTY_STATE = (path: string, pageSize: number): DirectoryState => ({
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, "/").replace(/^\.\//, "");
+}
+
+function normalizeSort(
+  sort: WorkspaceEntrySort | undefined
+): WorkspaceEntrySort {
+  return sort === undefined
+    ? DEFAULT_WORKSPACE_ENTRY_SORT
+    : { key: sort.key, direction: sort.direction };
+}
+
+function sameSort(
+  left: WorkspaceEntrySort,
+  right: WorkspaceEntrySort
+): boolean {
+  return left.key === right.key && left.direction === right.direction;
 }
 
 function pageOffset(index: number, pageSize: number): number {
@@ -208,6 +230,7 @@ export function usePagedWorkspaceDirectory(
   options: PagedWorkspaceDirectoryOptions
 ): PagedWorkspaceDirectoryController {
   const normalizedOptionPath = normalizePath(options.path);
+  const normalizedOptionSort = normalizeSort(options.sort);
   const requestedPageSize =
     options.pageSize ?? WORKSPACE_TREE_DEFAULT_PAGE_SIZE;
   const fetcherRef = useRef<PagedWorkspaceDirectoryFetcher>(
@@ -219,14 +242,19 @@ export function usePagedWorkspaceDirectory(
     path: normalizedOptionPath,
     includeGitIgnored: options.includeGitIgnored,
     pageSize: options.pageSize,
+    sort: normalizedOptionSort,
   });
+  const sortChanged = !sameSort(configRef.current.sort, normalizedOptionSort);
   configRef.current = {
     path: normalizedOptionPath,
     includeGitIgnored: options.includeGitIgnored,
     pageSize: options.pageSize,
+    sort: normalizedOptionSort,
   };
 
   const currentPathRef = useRef(normalizedOptionPath);
+  const anchorPathRef = useRef(options.anchorPath);
+  anchorPathRef.current = options.anchorPath;
   const skipOptionStartRef = useRef<DirectoryConfig | null>(null);
   const generationRef = useRef(0);
   const stateRef = useRef<DirectoryState | null>(null);
@@ -263,6 +291,7 @@ export function usePagedWorkspaceDirectory(
       generation: number,
       path: string,
       includeGitIgnored: boolean,
+      sort: WorkspaceEntrySort,
       listingId?: string
     ): boolean => {
       const current = stateRef.current;
@@ -270,6 +299,7 @@ export function usePagedWorkspaceDirectory(
         generationRef.current === generation &&
         currentPathRef.current === path &&
         configRef.current.includeGitIgnored === includeGitIgnored &&
+        sameSort(configRef.current.sort, sort) &&
         (listingId === undefined || current?.listingId === listingId)
       );
     },
@@ -338,9 +368,11 @@ export function usePagedWorkspaceDirectory(
       const controller = new AbortController();
       initialControllerRef.current = controller;
       const includeGitIgnored = configRef.current.includeGitIgnored;
+      const sort = configRef.current.sort;
       const request: WorkspaceTreePageRequest = {
         path: normalizedPath,
         includeGitIgnored,
+        sort,
         ...(configRef.current.pageSize === undefined
           ? {}
           : { pageSize: configRef.current.pageSize }),
@@ -354,7 +386,7 @@ export function usePagedWorkspaceDirectory(
         .then((rawResponse) => {
           const response = normalizeResponse(rawResponse);
           if (
-            !isCurrent(generation, normalizedPath, includeGitIgnored) ||
+            !isCurrent(generation, normalizedPath, includeGitIgnored, sort) ||
             !responseIsUsable(response, normalizedPath) ||
             response.offset % response.pageSize !== 0
           ) {
@@ -403,7 +435,7 @@ export function usePagedWorkspaceDirectory(
         .catch((value: unknown) => {
           if (
             isAbortError(value) ||
-            !isCurrent(generation, normalizedPath, includeGitIgnored)
+            !isCurrent(generation, normalizedPath, includeGitIgnored, sort)
           ) {
             return;
           }
@@ -457,6 +489,7 @@ export function usePagedWorkspaceDirectory(
       const generation = generationRef.current;
       const path = current.path;
       const includeGitIgnored = configRef.current.includeGitIgnored;
+      const sort = configRef.current.sort;
       const listingId = current.listingId;
       const controller = new AbortController();
       controllersRef.current.set(offset, controller);
@@ -475,7 +508,7 @@ export function usePagedWorkspaceDirectory(
         .then((rawResponse) => {
           const response = normalizeResponse(rawResponse);
           if (
-            !isCurrent(generation, path, includeGitIgnored, listingId) ||
+            !isCurrent(generation, path, includeGitIgnored, sort, listingId) ||
             !responseIsUsable(
               response,
               path,
@@ -499,7 +532,7 @@ export function usePagedWorkspaceDirectory(
         .catch((value: unknown) => {
           if (
             isAbortError(value) ||
-            !isCurrent(generation, path, includeGitIgnored, listingId)
+            !isCurrent(generation, path, includeGitIgnored, sort, listingId)
           ) {
             return;
           }
@@ -548,6 +581,7 @@ export function usePagedWorkspaceDirectory(
         path: normalizePath(path),
         includeGitIgnored: configRef.current.includeGitIgnored,
         pageSize: configRef.current.pageSize,
+        sort: configRef.current.sort,
       };
       startListing(path, options?.anchorPath);
     },
@@ -652,21 +686,29 @@ export function usePagedWorkspaceDirectory(
       skipOptionStart &&
       skipOptionStart.path === normalizedOptionPath &&
       skipOptionStart.includeGitIgnored === options.includeGitIgnored &&
-      skipOptionStart.pageSize === options.pageSize
+      skipOptionStart.pageSize === options.pageSize &&
+      sameSort(skipOptionStart.sort, normalizedOptionSort)
     ) {
       skipOptionStartRef.current = null;
       return;
     }
     skipOptionStartRef.current = null;
-    startListing(normalizedOptionPath, options.anchorPath);
+    const anchorPath =
+      sortChanged && currentPathRef.current === normalizedOptionPath
+        ? (anchorPathRef.current ??
+          findAnchor(lastVisibleStartRef.current ?? 0)?.path)
+        : anchorPathRef.current;
+    startListing(normalizedOptionPath, anchorPath);
     return abortRequests;
   }, [
     abortRequests,
+    findAnchor,
     normalizedOptionPath,
-    options.anchorPath,
     options.enabled,
     options.includeGitIgnored,
     options.pageSize,
+    normalizedOptionSort.key,
+    normalizedOptionSort.direction,
     startListing,
   ]);
 

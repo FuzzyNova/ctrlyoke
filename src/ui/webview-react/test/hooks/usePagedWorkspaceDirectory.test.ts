@@ -5,7 +5,13 @@ import {
   usePagedWorkspaceDirectory,
 } from "@hooks/usePagedWorkspaceDirectory";
 import { HostedHttpError } from "@utils/hostedApi";
+import {
+  DEFAULT_WORKSPACE_ENTRY_SORT,
+  WORKSPACE_ENTRY_SORT_DIRECTIONS,
+  WORKSPACE_ENTRY_SORT_KEYS,
+} from "@root/types/HostedWorkspaceViewerTypes";
 import type {
+  WorkspaceEntrySort,
   WorkspaceTreeEntry,
   WorkspaceTreePageResponse,
 } from "@root/types/HostedWorkspaceViewerTypes";
@@ -54,17 +60,33 @@ function initialResponse(listingId = LISTING_A, path = "src") {
 
 function renderDirectory(
   fetchPage: PagedWorkspaceDirectoryFetcher,
-  pageSize?: number
+  pageSize?: number,
+  options: { sort?: WorkspaceEntrySort; anchorPath?: string } = {}
 ) {
   return renderHook(
-    (props: { path: string; includeGitIgnored?: boolean }) =>
+    (props: {
+      path: string;
+      includeGitIgnored?: boolean;
+      sort?: WorkspaceEntrySort;
+      anchorPath?: string;
+    }) =>
       usePagedWorkspaceDirectory({
         path: props.path,
         includeGitIgnored: props.includeGitIgnored ?? true,
         ...(pageSize === undefined ? {} : { pageSize }),
+        ...(props.sort === undefined ? {} : { sort: props.sort }),
+        ...(props.anchorPath === undefined
+          ? {}
+          : { anchorPath: props.anchorPath }),
         fetchPage,
       }),
-    { initialProps: { path: "src", includeGitIgnored: true } }
+    {
+      initialProps: {
+        path: "src",
+        includeGitIgnored: true,
+        ...options,
+      },
+    }
   );
 }
 
@@ -80,6 +102,10 @@ describe("usePagedWorkspaceDirectory", () => {
     const { result } = renderDirectory(fetchPage);
 
     await waitFor(() => expect(result.current.listingId).toBe(LISTING_A));
+    expect(fetchPage.mock.calls[0]?.[0]).toMatchObject({
+      path: "src",
+      sort: DEFAULT_WORKSPACE_ENTRY_SORT,
+    });
     expect(result.current.getEntry(1)?.path).toBe("file-1.ts");
     expect(result.current.getEntry(4)).toBeUndefined();
 
@@ -233,6 +259,101 @@ describe("usePagedWorkspaceDirectory", () => {
     });
     await waitFor(() => expect(result.current.listingId).toBe(LISTING_B));
     expect(result.current.getEntry(3)).toBeUndefined();
+  });
+
+  it("restarts exactly once for a sort change, preserves the path, and restores the visible anchor", async () => {
+    const fetchPage = vi
+      .fn<PagedWorkspaceDirectoryFetcher>()
+      .mockResolvedValueOnce(initialResponse())
+      .mockResolvedValueOnce(
+        response(LISTING_B, 0, [entry(0), entry(1), entry(2)], 10)
+      );
+    const { result, rerender } = renderDirectory(fetchPage, 3);
+
+    await waitFor(() => expect(result.current.listingId).toBe(LISTING_A));
+    act(() => {
+      result.current.onRangeChange({
+        visibleStartIndex: 1,
+        visibleEndIndex: 2,
+        overscanStartIndex: 0,
+        overscanEndIndex: 2,
+        startIndex: 1,
+        endIndex: 2,
+      });
+    });
+
+    rerender({
+      path: "src",
+      includeGitIgnored: true,
+      sort: {
+        key: WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT,
+        direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING,
+      },
+    });
+
+    await waitFor(() => expect(result.current.listingId).toBe(LISTING_B));
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    expect(result.current.path).toBe("src");
+    expect(fetchPage.mock.calls[1]?.[0]).toMatchObject({
+      path: "src",
+      anchorPath: "file-1.ts",
+      sort: {
+        key: WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT,
+        direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING,
+      },
+    });
+    expect(result.current.scrollRestoration).toMatchObject({
+      index: 1,
+      offset: 0,
+    });
+  });
+
+  it("does not reload for an anchor-only prop change", async () => {
+    const fetchPage = vi
+      .fn<PagedWorkspaceDirectoryFetcher>()
+      .mockResolvedValue(initialResponse());
+    const { result, rerender } = renderDirectory(fetchPage, undefined, {
+      anchorPath: "file-0.ts",
+    });
+
+    await waitFor(() => expect(result.current.listingId).toBe(LISTING_A));
+    rerender({
+      path: "src",
+      includeGitIgnored: true,
+      anchorPath: "file-2.ts",
+    });
+
+    await waitFor(() => expect(result.current.listingId).toBe(LISTING_A));
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a stale sort response after aborting the previous generation", async () => {
+    const first = deferred<WorkspaceTreePageResponse>();
+    const second = deferred<WorkspaceTreePageResponse>();
+    const fetchPage = vi
+      .fn<PagedWorkspaceDirectoryFetcher>()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const { result, rerender } = renderDirectory(fetchPage);
+
+    rerender({
+      path: "src",
+      includeGitIgnored: true,
+      sort: {
+        key: WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT,
+        direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING,
+      },
+    });
+    expect((fetchPage.mock.calls[0]?.[1] as AbortSignal).aborted).toBe(true);
+
+    await act(async () => {
+      first.resolve(initialResponse(LISTING_A));
+      second.resolve(initialResponse(LISTING_B));
+      await Promise.all([first.promise, second.promise]);
+    });
+
+    await waitFor(() => expect(result.current.listingId).toBe(LISTING_B));
+    expect(fetchPage).toHaveBeenCalledTimes(2);
   });
 
   it("reports progress and preserves loaded rows when a page fails", async () => {

@@ -3,11 +3,18 @@ import { useUiStore } from "@store/uiStore";
 import { EXECUTION_STATES } from "@/types/messages";
 import type { ExecutionState, WorkflowSummary } from "@/types/messages";
 import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import {
+  DEFAULT_WORKSPACE_ENTRY_SORT,
+  WORKSPACE_ENTRY_SORT_DIRECTIONS,
+  WORKSPACE_ENTRY_SORT_KEYS,
+} from "@root/types/HostedWorkspaceViewerTypes";
+import { nextWorkspaceEntrySort } from "@utils/workspaceEntrySort";
 import { TOAST_MAX_QUEUE_SIZE } from "@/constants";
 
 // Zustand store is a module singleton — reset between tests.
 beforeEach(() => {
   useUiStore.getState().resetUi();
+  useUiStore.setState({ workspaceEntrySort: DEFAULT_WORKSPACE_ENTRY_SORT });
 });
 
 function store() {
@@ -52,6 +59,59 @@ describe("setPromptsCollapsed / setOutputCollapsed / setEditorCollapsed", () => 
     expect(store().outputCollapsed).toBe(true);
     store().setEditorCollapsed(true);
     expect(store().editorCollapsed).toBe(true);
+  });
+});
+
+describe("workspace entry sorting", () => {
+  it("defaults to the shared Name-ascending selection", () => {
+    expect(store().workspaceEntrySort).toEqual(DEFAULT_WORKSPACE_ENTRY_SORT);
+  });
+
+  it("persists the preference and updates it through its defined action", () => {
+    const sort = {
+      key: WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT,
+      direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING,
+    };
+    store().setWorkspaceEntrySort(sort);
+
+    expect(store().workspaceEntrySort).toEqual(sort);
+    const persisted = useUiStore.persist.getOptions().partialize?.(store());
+    expect(persisted).toMatchObject({ workspaceEntrySort: sort });
+  });
+
+  it("keeps the four header transition outcomes single-sourced", () => {
+    const nameAscending = DEFAULT_WORKSPACE_ENTRY_SORT;
+    const nameDescending = {
+      key: WORKSPACE_ENTRY_SORT_KEYS.NAME,
+      direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING,
+    };
+    const modifiedDescending = {
+      key: WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT,
+      direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING,
+    };
+    const modifiedAscending = {
+      key: WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT,
+      direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.ASCENDING,
+    };
+
+    expect(
+      nextWorkspaceEntrySort(nameAscending, WORKSPACE_ENTRY_SORT_KEYS.NAME)
+    ).toEqual(nameDescending);
+    expect(
+      nextWorkspaceEntrySort(
+        nameAscending,
+        WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT
+      )
+    ).toEqual(modifiedDescending);
+    expect(
+      nextWorkspaceEntrySort(
+        modifiedDescending,
+        WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT
+      )
+    ).toEqual(modifiedAscending);
+    expect(
+      nextWorkspaceEntrySort(modifiedAscending, WORKSPACE_ENTRY_SORT_KEYS.NAME)
+    ).toEqual(nameAscending);
   });
 });
 

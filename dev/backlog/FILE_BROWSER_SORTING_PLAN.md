@@ -277,9 +277,9 @@ Begin only after Steps 1-2 in the cross-plan order above are complete.
 ### Phase 2 — Server-wide sorting and preference
 
 1. [x] Define the sort constants/types and default `{ Name, Ascending }` value.
-2. Add the shared preference and action to `uiStore` and persist it.
-3. Thread the preference through the paged initial-listing request and make a
-   header change create a fresh snapshot.
+2. [x] Add the shared preference and action to `uiStore` and persist it.
+3. [x] Thread the preference through the paged initial-listing request and make a
+       header change create a fresh snapshot.
    - [x] Parse and validate the server's initial-listing sort selection and
          capture it in immutable snapshots; range requests inherit it from
          `listingId`.

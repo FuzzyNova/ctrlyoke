@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { HostedHttpError, workspaceTree } from "@utils/hostedApi";
+import {
+  WORKSPACE_ENTRY_SORT_DIRECTIONS,
+  WORKSPACE_ENTRY_SORT_KEYS,
+} from "@root/types/HostedWorkspaceViewerTypes";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -20,11 +24,15 @@ describe("hostedApi workspaceTree", () => {
         pageSize: 25,
         includeGitIgnored: false,
         anchorPath: "src/index.ts",
+        sort: {
+          key: WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT,
+          direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING,
+        },
       },
       signal
     );
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      "/api/workspace-viewer/tree?path=src&includeGitIgnored=false&pageSize=25&anchorPath=src%2Findex.ts"
+      "/api/workspace-viewer/tree?path=src&includeGitIgnored=false&pageSize=25&anchorPath=src%2Findex.ts&sortKey=modifiedAt&sortDirection=descending"
     );
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ signal });
 
