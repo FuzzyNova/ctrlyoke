@@ -144,12 +144,13 @@ Verify that selecting `Notification` in `HooksEditor` creates an additional user
 
 ## Phase 3: Explicit Non-Support for Codex, Antigravity, and OpenCode
 
-No script or plugin changes are required for these three harnesses — there is no native event to wire. This phase is limited to the capability declarations already specified above:
+No hook-script or OpenCode-plugin changes are required for these three harnesses — there is no native event to wire. This phase includes the capability declarations above plus the provider-side filtering needed to make unsupported custom hooks a true no-op:
 
 - `CodexNotificationMonitor.CAPABILITIES.notification` and `AntigravityNotificationMonitor.CAPABILITIES.notification`: `unsupportedHook()`.
 - `OpenCodeNotificationMonitor.CAPABILITIES.notification`: new `unsupportedHook()` helper, added alongside the existing `verifiedHook()`/`partialHook()` helpers.
+- `OpenCodeCliProvider.serializeUserHooks`: filter user hooks through `OpenCodeNotificationMonitor.EVENT_MAP` before serializing `CTRLYOKE_OPENCODE_HOOKS`, so a `notification`-only custom hook is omitted rather than shipped to a plugin that has no corresponding handler. Keep the map as the single source of truth for this filter.
 - Do not touch `src/scripts/ctrlyoke-opencode-plugin.ts`. Its `tui.toast.show` event remains unmapped to any logical ctrlyoke hook event; it is not equivalent to "the harness is waiting for input" and forwarding it under the `notification` name would misrepresent OpenCode's actual capability (see Non-Goals).
-- Verify `OpenCodeCliProvider`'s existing plugin-deployment condition (activates when custom hooks or any hook-notification setting is enabled) still behaves correctly when `notification` is the only enabled setting for a workflow targeting OpenCode: the plugin must not deploy a `notification` handler, and `HooksEditor`/`NotificationsSection` must both report it unsupported through the shared capability diagnostics rather than silently doing nothing.
+- `OpenCodeCliProvider` always loads its inline plugin because that plugin owns normal session start/stop completion detection; there is no hook-setting-gated plugin-deployment condition. Verify that when `notification` is the only enabled hook-notification setting for an OpenCode workflow, the existing plugin remains loaded for completion detection but registers/emits no `notification` handler or artifact. `HooksEditor` must report a configured custom hook as unsupported through the shared capability diagnostics; `NotificationsSection` remains harness-agnostic and keeps its existing generic support guidance.
 
 ## Phase 4: Actionable ctrlyoke Notification Content
 
@@ -196,7 +197,8 @@ Do not add a `formatUnsupportedHarnesses`/`supportedHarnesses` helper anywhere i
 - Copilot: `notification` produces the lowercase `notification` hook key and passes that native key to the wrapper command.
 - Qwen: `notification` produces a `Notification` hook group and participates in trusted-hook registration.
 - Codex, Antigravity, OpenCode: explicit negative tests confirm that a `notification` user hook or selected notification source produces no native registration (no `EVENT_MAP` entry, no plugin/script wiring), and that each harness's `CAPABILITIES.notification` reports `fidelity: "unsupported"` / `mechanism: "none"`. This protects the support boundary from accidental aliasing.
-- `HarnessCapabilityRegistry`: confirm the existing completeness test still passes with `notification` present in `HOOK_EVENT_ORDER` for all six harnesses, and add a targeted assertion that the shared analyzer emits `HOOK_EVENT_UNSUPPORTED` for `notification` on Codex/Antigravity/OpenCode, matching the existing assertions for other partially-supported events.
+- `HarnessCapabilityRegistry`: confirm the existing completeness test still passes with `notification` present in `HOOK_EVENT_ORDER` for all six harnesses.
+- `CompatibilityAnalyzer`: add targeted assertions that the shared analyzer emits `HOOK_EVENT_UNSUPPORTED` for `notification` on Codex/Antigravity/OpenCode, matching the existing assertions for other partially-supported events.
 
 ### Script/artifact tests
 
