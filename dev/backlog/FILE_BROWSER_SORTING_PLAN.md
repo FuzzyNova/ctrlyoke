@@ -17,6 +17,29 @@ The first release supports the four useful states requested:
 Every entry row shows its modification date and time even when the active sort
 is Name. File size is deliberately deferred.
 
+## Dependency and Recommended Cross-Plan Order
+
+This plan depends on
+[`WORKSPACE_DIRECTORY_PAGINATION_PLAN.md`](./WORKSPACE_DIRECTORY_PAGINATION_PLAN.md)
+and must be staged after its paged-listing foundation. Date modified ordering
+must operate on a complete listing snapshot so page boundaries remain stable as
+later ranges arrive.
+
+Use this order for the two initiatives:
+
+1. Stage the paged tree contracts and server-side listing-snapshot foundation,
+   preserving Name ascending as the default order and returning metadata only.
+2. Stage shared sparse-list virtualization and the paged-directory controller,
+   migrate both browser surfaces, and then remove `MAX_ENTRIES`.
+3. Stage the sorting contract and modification metadata, and globally order
+   complete server snapshots with bounded stat concurrency.
+4. Stage the shared persisted sort preference, headers, date column, consumer
+   wiring, and sorting-focused tests.
+
+Steps 1-2 belong to the pagination plan. Steps 3-4 belong to this plan. They may
+ship in one coordinated initiative, but their dependency direction stays the
+same.
+
 ## Current Behavior
 
 `HostedWorkspaceViewerService.listDirectory()` currently:
@@ -93,21 +116,20 @@ hit a permission error, or fail for a virtual root. A missing timestamp renders
 as an em dash and always sorts after known timestamps in either direction.
 Name is the deterministic tie-breaker for equal timestamps.
 
-### Sort the returned page in v1
+### Sort complete listing snapshots on the server
 
-Sort client-side from the metadata already returned by `workspaceTree()`.
-Header changes should be immediate and should not issue another HTTP request.
-Directory navigation and Refresh continue to replace the entry set; the stored
-sort is then reapplied through a memoized derived list.
+The pagination plan replaces the 1,000-entry response with immutable,
+server-side directory snapshots exposed through virtual range pages. Apply the
+selected key/direction to the complete snapshot before returning any page.
 
-There is one existing boundary to state explicitly: the server chooses and
-returns at most 1,000 entries after its current directory-first/name ordering.
-V1 sorts that returned page; it does not guarantee that “newest” finds an entry
-outside the server's 1,000-entry window. Correct server-wide date sorting would
-require server-side sort parameters or pagination plus bounded stat concurrency,
-which is materially larger than this first pass. Add that only with pagination
-instead of issuing an unbounded `stat` across enormous directories such as
-`node_modules`.
+The persisted sort preference becomes part of the initial listing request.
+Changing a header starts a new listing, resets sparse page state, and preserves
+the current directory.
+
+This makes newest/oldest results correct across the whole directory, keeps page
+boundaries stable, and prevents rows from moving as additional ranges load. Use
+the paged controller's normal loading/anchor behavior so the refresh is visible
+and a selected file can be restored in its newly sorted position.
 
 ## UX and Layout
 
@@ -154,31 +176,39 @@ Extend `WorkspaceEntry` in `src/types/HostedWorkspaceViewerTypes.ts` with:
 modifiedAt?: number;
 ```
 
-Refactor `HostedWorkspaceViewerService.listDirectory()` so every returned entry
-is statted at most once:
+Extend the paged snapshot construction in
+`HostedWorkspaceViewerService.listDirectory()` so every returned entry is
+statted at most once per listing snapshot:
 
 - files receive `size` and `modifiedAt` from the same stat;
 - directories receive `modifiedAt` but no `size`;
 - a stat failure still returns the entry with its metadata omitted; and
-- the existing workspace containment, git-ignore calculation, directory-first
-  ordering, and `MAX_ENTRIES` protection remain intact.
+- the pagination plan's workspace containment, git-ignore filtering,
+  directory-first grouping, and range contract remain intact.
+
+Name sorting can order lightweight directory entries before paging and lazily
+stat only requested ranges for display metadata. Date modified sorting must
+stat the complete immediate directory before ordering because modification time
+is the sort key. Use the pagination plan's bounded metadata concurrency; never
+replace the old cap with an unbounded `Promise.all`.
 
 Also stat the backing directories used by `listRoots()` so multi-root entries
 can display modification times. If a root disappears or cannot be statted,
 return it with `modifiedAt` omitted instead of failing the complete virtual-root
 listing. This will require making the virtual-root entry construction async or
-having `listDirectory()` enrich those entries before returning them.
+having the paged listing service enrich those entries before returning them.
 
-No new endpoint or message type is required. `workspaceTree()` already carries
-the shared response unchanged.
+No new endpoint beyond the pagination plan's tree-range contract is required.
+Extend its initial request with the sort value and keep range requests bound to
+the immutable ordering captured by their `listingId`.
 
 ### Shared sorting and presentation
 
-Keep the behavior in `fileBrowserShared.tsx` (or small focused modules beside
-it), not duplicated in the two consumers:
+Single-source server ordering and client presentation rather than duplicating
+either across the two consumers:
 
-- `sortWorkspaceEntries(entries, sort)` returns a new array and never mutates
-  Zustand/server-owned arrays.
+- a shared server-side comparator orders complete snapshot entries without
+  mutating the enumerated source array;
 - `nextWorkspaceEntrySort(current, requestedKey)` implements the default and
   toggle behavior once.
 - `formatWorkspaceEntryModifiedAt()` owns compact visible formatting and the
@@ -187,7 +217,7 @@ it), not duplicated in the two consumers:
 - `EntryRow` renders the shared modified-time column.
 
 Use a memoized `Intl.Collator` or the current `localeCompare` semantics for
-names. Comparators must apply, in order:
+names. The server comparator must apply, in order:
 
 1. directory-before-file grouping;
 2. known-before-unknown for the selected key;
@@ -198,8 +228,9 @@ names. Comparators must apply, in order:
 
 `WorkspaceExplorerPane`:
 
-- keep `explorerEntries` as the server snapshot in `workspaceViewerStore`;
-- apply `hideGitIgnoredFiles` first and shared sorting second in `useMemo`;
+- pass the persisted sort preference to the paged-directory controller;
+- let `includeGitIgnored` remain part of the pagination request rather than
+  sorting a filtered local subset;
 - render `FileBrowserSortHeader` above the list; and
 - after a successful file save, refresh the current directory metadata (or
   patch it from a richer save response) so the displayed modified time does not
@@ -208,17 +239,19 @@ names. Comparators must apply, in order:
 
 `FileBrowserModal`:
 
-- derive sorted entries from its local `entries` plus the shared `uiStore`
-  preference;
+- pass the same persisted sort preference to its paged-directory controller;
 - retain directories regardless of `fileFilter`;
 - retain the existing dimmed/unselectable behavior for non-matching files; and
 - render the same header and row component as the explorer.
 
-Filtering and git-ignore hiding do not change sort semantics. The explorer
-filters hidden git-ignored entries before sorting; the picker continues to show
-all entries and only changes eligibility/opacity for file filters.
+Filtering and git-ignore hiding do not change sort semantics. The server applies
+the explorer's git-ignore inclusion choice before ordering/snapshot paging; the
+picker continues to request all entries and only changes eligibility/opacity
+for file filters.
 
-## Implementation Phases
+## Sorting Implementation Phases
+
+Begin only after Steps 1-2 in the cross-plan order above are complete.
 
 ### Phase 1 — Metadata contract
 
@@ -229,14 +262,17 @@ all entries and only changes eligibility/opacity for file filters.
 4. Extend server unit tests for files, directories, ordering, virtual roots,
    and missing-stat tolerance where practical.
 
-### Phase 2 — Shared sort preference and helpers
+### Phase 2 — Server-wide sorting and preference
 
 1. Define the sort constants/types and default `{ Name, Ascending }` value.
 2. Add the shared preference and action to `uiStore` and persist it.
-3. Implement the non-mutating comparator, toggle transition helper, and date
-   formatter.
-4. Unit-test all four states, directory grouping, timestamp ties, missing
-   metadata, immutability, and default-direction transitions.
+3. Thread the preference through the paged initial-listing request and make a
+   header change create a fresh snapshot.
+4. Implement the non-mutating server comparator, toggle transition helper, and
+   date formatter.
+5. Unit-test all four states, cross-page ordering, directory grouping,
+   timestamp ties, missing metadata, immutability, and default-direction
+   transitions.
 
 ### Phase 3 — Shared header and row layout
 
@@ -249,9 +285,10 @@ all entries and only changes eligibility/opacity for file filters.
 
 ### Phase 4 — Wire both browser surfaces
 
-1. Derive filtered-and-sorted entries in `WorkspaceExplorerPane`.
-2. Derive sorted entries in `FileBrowserModal` without changing picker
-   selection or navigation behavior.
+1. Send sort changes from `WorkspaceExplorerPane` through the paged-directory
+   controller without changing selection/navigation behavior.
+2. Send sort changes from `FileBrowserModal` through the same controller
+   without changing picker selection/navigation behavior.
 3. Render the shared header in both locations.
 4. Refresh explorer metadata after a successful editor save.
 5. Add focused interaction tests proving each surface reads and updates the
@@ -283,6 +320,7 @@ Add focused tests for the shared sort/list code:
 - Missing timestamps remain last in both directions.
 - Equal timestamps use ascending name order.
 - Sorting does not mutate the input array.
+- Page boundaries preserve the complete snapshot's global order.
 - Inactive Name defaults to ascending; inactive Date modified defaults to
   descending; clicking the active key reverses direction.
 - The active header exposes key/direction accessibly and the row exposes the
@@ -290,15 +328,16 @@ Add focused tests for the shared sort/list code:
 
 ### Component integration tests
 
-Extend `FileBrowserModal.test.tsx` with timestamped fixtures and assert row order
-before and after each header interaction while preserving file-filter and
-selection behavior.
+Extend `FileBrowserModal.test.tsx` with timestamped paged fixtures and assert
+that each header interaction requests a new globally sorted listing while
+preserving file-filter and selection behavior.
 
 Add focused `WorkspaceExplorerPane` coverage (separate from its markdown-preview
 tests) for:
 
 - default ordering;
-- switching to newest-first and reversing it;
+- switching to newest-first and reversing it through new listing requests;
+- correct ordering across multiple loaded ranges;
 - sorting after git-ignored filtering;
 - selected/cut/status-decorated rows surviving reordering; and
 - current-directory reload after a successful save.
@@ -338,8 +377,8 @@ npm run format:check
 - Live filesystem watching. External changes appear after navigation or
   Refresh; saves made in the workspace viewer refresh explicitly.
 - Changing native OS dialogs used by the VS Code panel.
-- Server-side pagination or globally correct sorting beyond `MAX_ENTRIES` in
-  v1.
+- Reimplementing pagination/virtualization inside this plan; those are the
+  explicit prerequisite delivered by `WORKSPACE_DIRECTORY_PAGINATION_PLAN.md`.
 - Changing file-filter or git-ignore semantics.
 
 ## Completion Checklist
@@ -353,8 +392,11 @@ npm run format:check
 - [ ] Every row displays localized date and time, with an accessible full value
       and a safe missing-value fallback.
 - [ ] One persisted `uiStore` preference drives both surfaces.
+- [ ] Header changes create a newly ordered server snapshot rather than sorting
+      an already-issued listing.
 - [ ] Saving from `WorkspaceExplorerPane` refreshes the timestamp and active
       order.
 - [ ] Server, shared utility, store, and both component paths have focused tests.
-- [ ] The 1,000-entry v1 boundary is documented and no unbounded stat traversal
-      is introduced.
+- [ ] The pagination/virtualization prerequisite is complete, ordering is
+      correct across page boundaries, and no unbounded stat traversal is
+      introduced.
