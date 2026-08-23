@@ -212,7 +212,7 @@ export function StatusLineTrackingControls({
         <span>{harnessName}</span>
       </div>
       <SettingToggleRow
-        label="Enable statusline tracking"
+        label={`Enable ${harnessName} statusline tracking`}
         description={getDisableWarning(harnessId)}
         checked={tracking.enabled}
         onChange={handleEnabledChange}
