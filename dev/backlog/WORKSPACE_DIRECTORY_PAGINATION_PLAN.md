@@ -419,12 +419,15 @@ same.
 
 ### Phase 2 — Generalize virtualization
 
-1. Extend `VirtualizedList` or add a shared sparse-page adapter that supports a
-   total count, placeholder rows, and visible-range callbacks.
-2. Preserve the existing parent-owned-ref readiness and focus-retention logic.
-3. Add tests for sparse pages, far scrollbar jumps, placeholders becoming
-   loaded rows, and callbacks not firing duplicate range requests.
-4. Keep `WorkflowList` and `RunPanel` behavior unchanged through the refactor.
+1. [x] Extend `VirtualizedList` with a shared TanStack foundation and add
+       `VirtualizedPagedList` for total counts, O(1) sparse lookup, placeholders,
+       and visible/overscan range callbacks.
+2. [x] Preserve the existing parent-owned-ref readiness and focus-retention
+       logic.
+3. [x] Add tests for sparse pages, far scrollbar jumps, placeholders becoming
+       loaded rows, and callbacks not firing duplicate range requests.
+4. [x] Keep `WorkflowList` and `RunPanel` behavior unchanged through the
+       refactor.
 
 ### Phase 3 — Shared paged-directory hook
 

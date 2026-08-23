@@ -111,6 +111,11 @@ export {
 } from "./useSecretGrantOptions";
 export { VirtualizedDropdownList } from "./VirtualizedDropdownList";
 export { VirtualizedList, type VirtualizedListProps } from "./VirtualizedList";
+export {
+  VirtualizedPagedList,
+  type VirtualizedPagedListProps,
+} from "./VirtualizedPagedList";
+export type { VirtualizedListRange } from "./VirtualizedListFoundation";
 export { ToastViewport } from "./ToastViewport";
 export {
   DateRangeFilterControls,
