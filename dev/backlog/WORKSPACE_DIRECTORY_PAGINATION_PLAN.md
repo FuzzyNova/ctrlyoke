@@ -162,7 +162,6 @@ Subsequent requests identify the immutable snapshot and a page-aligned offset:
 interface WorkspaceTreeRangeRequest {
   listingId: string;
   offset: number;
-  pageSize?: number;
 }
 ```
 
@@ -171,6 +170,12 @@ explicit routes if route parsing is clearer. Do not accept a client-provided
 absolute directory path on range requests; `listingId` resolves only to a
 workspace-scoped snapshot already admitted through `safeResolve()`.
 
+The effective page size is fixed when the initial listing is created. The
+server clamps the requested value once, stores the result in the snapshot, and
+requires every range offset to align to that value. Range requests do not
+renegotiate page size; otherwise the same listing could produce overlapping
+pages and the sparse client map would have no stable page boundaries.
+
 ### Response
 
 Replace/extend `WorkspaceTreeResponse` with a paged response:
@@ -178,6 +183,7 @@ Replace/extend `WorkspaceTreeResponse` with a paged response:
 ```ts
 interface WorkspaceTreePageResponse {
   listingId: string;
+  pageSize: number;
   rootLabel: string;
   path: string;
   parentPath: string | null;
@@ -193,7 +199,10 @@ interface WorkspaceTreePageResponse {
 post-filter count for the requested view, so the explorer can size its virtual
 list and accurately report progress. A page that reaches the end simply has
 `offset + entries.length === totalEntries`; a separate `hasMore` flag would be
-duplicate state.
+duplicate state. `pageSize` is the server-clamped size fixed for this listing;
+returning it is required for clients to align later ranges, including when the
+initial response is an anchored final page whose entry count is smaller than
+the configured page size.
 
 All paths remain normalized workspace-relative viewer paths, including
 folder-name prefixes in multi-root workspaces. The virtual roots list uses the
@@ -247,6 +256,14 @@ Manage snapshots in a bounded LRU/TTL cache owned by
 - optionally evict snapshots for paths affected by save/delete/copy/move
   operations to reclaim memory early.
 
+Treat the metadata-byte limit as a soft aggregate target, not a per-directory
+product cutoff. Evict older snapshots until the newest snapshot is the only
+one left, but retain that newest snapshot even when it alone exceeds the target;
+otherwise one sufficiently large directory would create a listing id that is
+already expired before its second page can be requested. Keep the count and
+byte targets in named server constants so profiling can tune them without
+changing the paging contract.
+
 The current implementation already materializes every `Dirent` before slicing,
 so one active snapshot does not introduce a new order of memory growth. The
 cache bound prevents navigation history and multiple browser tabs from
@@ -263,6 +280,9 @@ Return a distinguishable expired-listing response (HTTP 410 is appropriate)
 when a snapshot is evicted. The client should create a new listing anchored on
 the top visible entry path and restore the viewport. Permit one automatic
 restart per expiration event; repeated failure becomes the inline Retry state.
+The shared hosted API error must retain the HTTP status (rather than exposing
+only a formatted message) so the hook can distinguish 410 from ordinary page
+failures without parsing strings.
 
 Malformed ids, negative/non-aligned offsets, and out-of-range page sizes are
 validated before access. Range responses must never expose absolute paths or
