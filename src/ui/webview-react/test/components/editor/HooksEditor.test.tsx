@@ -1,8 +1,86 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { HooksEditor } from "@components/editor/HooksEditor";
+import { HARNESS_IDS } from "@root/types/DashboardConstants";
+import { COMPATIBILITY_DIAGNOSTIC_CODES } from "@root/types/CompatibilityTypes";
+import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
 
 describe("HooksEditor compatibility diagnostics", () => {
+  it("offers Notification and persists its command as a custom hook", () => {
+    const onChange = vi.fn();
+
+    function ControlledEditor() {
+      const [value, setValue] = useState<UserHookConfig[]>([
+        { event: "stop", command: "" },
+      ]);
+
+      return (
+        <HooksEditor
+          value={value}
+          onChange={(next) => {
+            onChange(next);
+            if (Array.isArray(next)) setValue(next);
+          }}
+        />
+      );
+    }
+
+    render(<ControlledEditor />);
+
+    expect(
+      screen.getByRole("option", { name: "Notification" })
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "notification" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("node ./scripts/my-hook.js"), {
+      target: { value: "node ./notification-hook.js" },
+    });
+
+    expect(onChange).toHaveBeenLastCalledWith([
+      { event: "notification", command: "node ./notification-hook.js" },
+    ]);
+  });
+
+  it.each([
+    [HARNESS_IDS.CODEX_CLI, "Codex"],
+    [HARNESS_IDS.ANTIGRAVITY_CLI, "Antigravity CLI"],
+    [HARNESS_IDS.OPENCODE_CLI, "OpenCode"],
+  ] as const)(
+    "keeps a notification hook editable while showing the %s compatibility warning",
+    (harnessId, harnessName) => {
+      render(
+        <HooksEditor
+          value={[{ event: "notification", command: "node ./hook.js" }]}
+          onChange={() => undefined}
+          diagnostics={[
+            {
+              code: COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED,
+              severity: "warning",
+              harnessId,
+              capability: "notification",
+              state: {
+                fidelity: "unsupported",
+                mechanism: "none",
+                verification: "verified",
+              },
+              message: `The ${harnessName} harness does not support the Notification hook event.`,
+            },
+          ]}
+        />
+      );
+
+      expect(screen.getByDisplayValue("node ./hook.js")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          `The ${harnessName} harness does not support the Notification hook event.`
+        )
+      ).toBeVisible();
+      expect(screen.getByRole("button", { name: "+ Add Hook" })).toBeVisible();
+    }
+  );
+
   it("keeps configured hooks editable while showing persistent diagnostics", () => {
     render(
       <HooksEditor

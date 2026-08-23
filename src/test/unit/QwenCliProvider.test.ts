@@ -77,7 +77,7 @@ suite("QwenCliProvider", () => {
               string,
               string[]
             >
-          )[workspaceRoot].some((key) => key.includes("Notification"))
+          )[workspaceRoot].some((key) => key.includes("ctrlyoke-qwen-hook.js"))
         );
       } finally {
         await provider.cleanupWorkspaceArtifacts(
