@@ -184,6 +184,10 @@ export const WorkspaceExplorerPane: React.FC = () => {
     includeGitIgnored: !hideGitIgnoredFiles,
     sort: workspaceEntrySort,
     sortAnchorPath: selectedFilePath ?? undefined,
+    // A pending route/open request is consumed below. Let that request own
+    // the first listing so the hook cannot issue a duplicate request that is
+    // immediately aborted by the pending-navigation effect.
+    enabled: pendingNavigation === null,
   });
   const parentPath = directory.parentPath;
   const rootLabel = directory.rootLabel;
@@ -298,7 +302,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   // directly to keep the "don't reload if already there" optimisation without
   // making explorerPath a trigger.
   useEffect(() => {
-    if (!selectedFilePath) return;
+    if (!selectedFilePath || pendingNavigation) return;
     const relativePath = toWorkspaceRelative(selectedFilePath, workspacePath);
     const normalizedPath = relativePath.replace(/\\/g, "/");
     const lastSep = Math.max(
@@ -309,13 +313,20 @@ export const WorkspaceExplorerPane: React.FC = () => {
     if (parentDir !== useWorkspaceViewerStore.getState().explorerPath) {
       loadDirectory(parentDir, normalizedPath);
     }
-  }, [loadDirectory, selectedFilePath, workspacePath]);
+  }, [loadDirectory, pendingNavigation, selectedFilePath, workspacePath]);
 
   // Consume pending navigation set externally (e.g. from CodeMirror link clicks)
   useEffect(() => {
     if (!pendingNavigation) return;
     if (pendingNavigation.type === "directory") {
-      loadDirectory(pendingNavigation.dirPath);
+      const normalizedPath = pendingNavigation.dirPath
+        .replace(/\\/g, "/")
+        .replace(/^\.\//, "");
+      // Keep the hook's path prop aligned with the request before enabling
+      // its normal option effect. This lets the one-shot navigate call below
+      // be recognized as intentional rather than restarting the old path.
+      setExplorerPath(normalizedPath);
+      loadDirectory(normalizedPath);
     } else {
       const { filePath, startLine, endLine } = pendingNavigation;
       const relativePath = toWorkspaceRelative(filePath, workspacePath);

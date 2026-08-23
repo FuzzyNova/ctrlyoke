@@ -288,7 +288,17 @@ export function usePagedWorkspaceDirectory(
       controller.abort();
     }
     controllersRef.current.clear();
-  }, []);
+    updateState((current) => {
+      if (!current.initialLoading && current.inFlightOffsets.size === 0) {
+        return current;
+      }
+      return {
+        ...current,
+        initialLoading: false,
+        inFlightOffsets: new Set(),
+      };
+    });
+  }, [updateState]);
 
   const isCurrent = useCallback(
     (

@@ -185,6 +185,32 @@ beforeEach(() => {
 });
 
 describe("WorkspaceExplorerPane pagination", () => {
+  it("does not abort the only listing when consuming an initial directory navigation", async () => {
+    mocks.workspaceTree.mockImplementation(async (request) => {
+      if ("listingId" in request) {
+        return response(
+          request.listingId,
+          request.offset,
+          1,
+          [entry(0)],
+          "other"
+        );
+      }
+      return response("initial-navigation", 0, 1, [entry(0)], request.path);
+    });
+    act(() => useWorkspaceViewerStore.getState().openToDirectory("other"));
+
+    render(<WorkspaceExplorerPane />);
+    await waitFor(() => expect(mocks.workspaceTree).toHaveBeenCalledOnce());
+
+    expect(mocks.workspaceTree.mock.calls[0]?.[0]).toMatchObject({
+      path: "other",
+    });
+    expect(
+      (mocks.workspaceTree.mock.calls[0]?.[1] as AbortSignal).aborted
+    ).toBe(false);
+  });
+
   it("uses every server sort state, preserves selection, and refreshes saves with the active sort", async () => {
     const oldEntry = {
       ...entry(0),

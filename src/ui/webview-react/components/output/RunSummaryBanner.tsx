@@ -203,7 +203,7 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
   return (
     <div
       className={`flex flex-col gap-1 px-3 py-1.5 text-[length:var(--fp-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border flex-shrink-0 ${
-        isPinned ? "sticky top-0 z-10" : ""
+        isPinned ? "sticky top-0 z-header" : ""
       }`}
     >
       <div className="flex items-center justify-between gap-2 min-w-0">

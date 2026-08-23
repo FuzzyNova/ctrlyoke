@@ -234,6 +234,29 @@ describe("usePagedWorkspaceDirectory", () => {
     expect(result.current.path).toBe("other");
   });
 
+  it("clears the initial loading state when an in-flight request is cancelled", async () => {
+    const initial = deferred<WorkspaceTreePageResponse>();
+    const fetchPage = vi
+      .fn<PagedWorkspaceDirectoryFetcher>()
+      .mockReturnValue(initial.promise);
+    const { result, rerender } = renderHook(
+      (props: { enabled: boolean }) =>
+        usePagedWorkspaceDirectory({
+          path: "src",
+          includeGitIgnored: true,
+          enabled: props.enabled,
+          fetchPage,
+        }),
+      { initialProps: { enabled: true } }
+    );
+
+    await waitFor(() => expect(fetchPage).toHaveBeenCalledOnce());
+    rerender({ enabled: false });
+
+    await waitFor(() => expect(result.current.isInitialLoading).toBe(false));
+    expect((fetchPage.mock.calls[0]?.[1] as AbortSignal).aborted).toBe(true);
+  });
+
   it("ignores responses with the wrong path, listing, or options", async () => {
     const fetchPage = vi
       .fn<PagedWorkspaceDirectoryFetcher>()
