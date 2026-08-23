@@ -285,12 +285,11 @@ Begin only after Steps 1-2 in the cross-plan order above are complete.
    - [x] Parse and validate the server's initial-listing sort selection and
          capture it in immutable snapshots; range requests inherit it from
          `listingId`.
-4. [x] Implement the non-mutating server comparator.
-   - The UI toggle transition helper and date formatter remain for the client
-     phases.
+4. [x] Implement the non-mutating server comparator, shared UI toggle transition
+       helper, and localized date formatter.
 5. [x] Unit-test the server's four states, cross-page ordering, directory grouping,
        timestamp ties, missing metadata, immutability, and Name-ascending default
-       behavior.
+       behavior, plus the client default-direction transitions.
 
 ### Phase 3 — Shared header and row layout
 
