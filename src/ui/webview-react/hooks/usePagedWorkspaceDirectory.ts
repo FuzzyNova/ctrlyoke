@@ -593,8 +593,20 @@ export function usePagedWorkspaceDirectory(
             : -1;
       lastVisibleStartRef.current = range.visibleStartIndex;
 
-      const firstOffset = pageOffset(range.overscanStartIndex, pageSize);
-      const lastOffset = pageOffset(range.overscanEndIndex, pageSize);
+      const visibleFirstOffset = pageOffset(range.visibleStartIndex, pageSize);
+      const visibleLastOffset = pageOffset(range.visibleEndIndex, pageSize);
+      const overscanFirstOffset = pageOffset(
+        range.overscanStartIndex,
+        pageSize
+      );
+      const overscanLastOffset = pageOffset(range.overscanEndIndex, pageSize);
+      // A large downward jump should request the target page directly instead
+      // of walking backward through the page that happens to overlap the
+      // virtualizer's leading overscan. Upward scrolling gets the symmetric
+      // preceding-page prefetch, while a stationary range keeps both sides.
+      const firstOffset =
+        direction > 0 ? visibleFirstOffset : overscanFirstOffset;
+      const lastOffset = direction < 0 ? visibleLastOffset : overscanLastOffset;
       for (let offset = firstOffset; offset <= lastOffset; offset += pageSize) {
         requestRange(offset);
       }

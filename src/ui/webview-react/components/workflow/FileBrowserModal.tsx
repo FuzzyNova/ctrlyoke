@@ -1,13 +1,24 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Modal, Button } from "../shared";
 import { useUiStore } from "@store/uiStore";
-import { workspaceTree } from "@utils/hostedApi";
 import { extractExtensionsFromGlobs } from "@root/utils/fileFilterUtils";
-import type { WorkspaceEntry } from "@root/types/HostedWorkspaceViewerTypes";
+import { usePagedWorkspaceDirectory } from "@hooks/usePagedWorkspaceDirectory";
+import { VirtualizedPagedList } from "@components/shared";
+import type { WorkspaceTreeEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import {
   EntryRow,
   renderBreadcrumb,
 } from "../workspace-viewer/fileBrowserShared";
+
+const FILE_BROWSER_VIRTUALIZATION_THRESHOLD = 50;
+const FILE_BROWSER_OVERSCAN = 12;
+const FILE_BROWSER_ROW_ESTIMATE = 36;
 
 /**
  * FileBrowserModal - web-native file/directory picker for the hosted
@@ -25,15 +36,19 @@ export const FileBrowserModal: React.FC = () => {
     (s) => s.setFileBrowserLastDirectory
   );
 
-  const [path, setPath] = useState("");
-  const [parentPath, setParentPath] = useState<string | null>(null);
-  const [rootLabel, setRootLabel] = useState("");
-  const [entries, setEntries] = useState<WorkspaceEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const rememberedDirectoryFallbackRef = useRef(false);
 
   const mode = fileBrowserState?.mode;
+  const initialDirectoryPath =
+    fileBrowserState?.initialPath ?? fileBrowserLastDirectory ?? "";
+
+  const directory = usePagedWorkspaceDirectory({
+    path: initialDirectoryPath,
+    includeGitIgnored: true,
+    enabled: fileBrowserState !== null,
+  });
 
   // Extensions extracted from fileFilter globs; null means "no filter" (either
   // no filter was given, or the globs didn't reduce to plain extensions).
@@ -44,7 +59,7 @@ export const FileBrowserModal: React.FC = () => {
   }, [mode, fileBrowserState]);
 
   const matchesFilter = useCallback(
-    (entry: WorkspaceEntry): boolean => {
+    (entry: WorkspaceTreeEntry): boolean => {
       if (!filterExts) return true;
       const dot = entry.name.lastIndexOf(".");
       if (dot < 0) return false;
@@ -53,49 +68,33 @@ export const FileBrowserModal: React.FC = () => {
     [filterExts]
   );
 
-  const loadDirectory = useCallback(async (dirPath: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await workspaceTree({
-        path: dirPath,
-        includeGitIgnored: true,
-      });
-      const fwd = (p: string) => p.replace(/\\/g, "/");
-      setEntries(result.entries.map((e) => ({ ...e, path: fwd(e.path) })));
-      setPath(fwd(result.path));
-      setParentPath(result.parentPath !== null ? fwd(result.parentPath) : null);
-      setRootLabel(result.rootLabel);
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   // Reset and load whenever a new request opens the modal.
   useEffect(() => {
-    if (!fileBrowserState) return;
+    if (!fileBrowserState) {
+      rememberedDirectoryFallbackRef.current = false;
+      return;
+    }
     setSelectedFile(null);
-    setError(null);
-    const initialPath =
-      fileBrowserState.initialPath ?? fileBrowserLastDirectory ?? "";
-    const shouldFallbackToRoot =
+    rememberedDirectoryFallbackRef.current =
       fileBrowserState.initialPath === undefined &&
       fileBrowserLastDirectory !== null &&
-      initialPath !== "";
-    void (async () => {
-      const loaded = await loadDirectory(initialPath);
-      if (!loaded && shouldFallbackToRoot) {
-        await loadDirectory("");
-      }
-    })();
-    // Intentional: only re-run when a new request object opens the modal,
-    // not on every loadDirectory identity change.
+      initialDirectoryPath !== "";
+    // Intentional: only reset selection when a new request opens the modal,
+    // not when a paged directory response arrives.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileBrowserState, fileBrowserLastDirectory]);
+
+  useEffect(() => {
+    if (
+      !fileBrowserState ||
+      !rememberedDirectoryFallbackRef.current ||
+      !directory.initialError
+    ) {
+      return;
+    }
+    rememberedDirectoryFallbackRef.current = false;
+    directory.navigate("");
+  }, [directory.initialError, directory.navigate, fileBrowserState]);
 
   const handleCancel = useCallback(() => {
     closeFileBrowser();
@@ -105,37 +104,37 @@ export const FileBrowserModal: React.FC = () => {
     if (!fileBrowserState) return;
     if (fileBrowserState.mode === "file") {
       if (!selectedFile) return;
-      setFileBrowserLastDirectory(path);
+      setFileBrowserLastDirectory(directory.path);
       fileBrowserState.onSelect(selectedFile);
     } else {
-      setFileBrowserLastDirectory(path);
-      fileBrowserState.onSelect(path);
+      setFileBrowserLastDirectory(directory.path);
+      fileBrowserState.onSelect(directory.path);
     }
     closeFileBrowser();
   }, [
     fileBrowserState,
     selectedFile,
-    path,
+    directory.path,
     setFileBrowserLastDirectory,
     closeFileBrowser,
   ]);
 
   const handleEntryClick = useCallback(
-    (entry: WorkspaceEntry) => {
+    (entry: WorkspaceTreeEntry) => {
       if (entry.kind === "directory") {
-        void loadDirectory(entry.path);
+        directory.navigate(entry.path);
         return;
       }
       if (mode === "file" && matchesFilter(entry)) {
         setSelectedFile(entry.path);
       }
     },
-    [mode, matchesFilter, loadDirectory]
+    [directory.navigate, mode, matchesFilter]
   );
 
   const handleBack = useCallback(() => {
-    if (parentPath !== null) void loadDirectory(parentPath);
-  }, [parentPath, loadDirectory]);
+    if (directory.parentPath !== null) directory.navigate(directory.parentPath);
+  }, [directory.navigate, directory.parentPath]);
 
   if (!fileBrowserState) return null;
 
@@ -145,7 +144,7 @@ export const FileBrowserModal: React.FC = () => {
     fileBrowserState.title ??
     (isDirectoryMode ? "Select Folder" : "Select File");
   const statusText = isDirectoryMode
-    ? path || "(workspace root)"
+    ? directory.path || "(workspace root)"
     : (selectedFile ?? "No file selected");
 
   return (
@@ -181,9 +180,9 @@ export const FileBrowserModal: React.FC = () => {
         <div className="flex items-center gap-1 px-1 py-1 border-b border-panel-border">
           <button
             onClick={handleBack}
-            disabled={parentPath === null}
+            disabled={directory.parentPath === null}
             className={`flex items-center justify-center w-6 h-6 rounded transition-colors flex-shrink-0 ${
-              parentPath === null
+              directory.parentPath === null
                 ? "opacity-30 cursor-default"
                 : "hover:bg-btn-secondary-hover text-editor-fg"
             }`}
@@ -193,57 +192,119 @@ export const FileBrowserModal: React.FC = () => {
             <i className="codicon codicon-arrow-left text-xs" />
           </button>
           <div className="flex-1 min-w-0 flex flex-wrap items-center px-1">
-            {renderBreadcrumb(path, rootLabel, (p) => void loadDirectory(p))}
+            {renderBreadcrumb(directory.path, directory.rootLabel, (p) =>
+              directory.navigate(p)
+            )}
           </div>
         </div>
 
-        <div className="h-72 overflow-y-auto rounded border border-panel-border">
-          {loading ? (
+        <div
+          ref={scrollContainerRef}
+          data-testid="file-browser-directory-list"
+          className="h-72 overflow-y-auto rounded border border-panel-border"
+          aria-busy={directory.isLoading}
+        >
+          {directory.isInitialLoading ? (
             <div className="flex items-center justify-center py-8 text-editor-fg opacity-50">
               <i className="codicon codicon-loading animate-spin mr-2" />
               <span className="text-sm">Loading…</span>
             </div>
-          ) : error ? (
-            <div className="px-3 py-2 text-sm text-warning-fg">{error}</div>
-          ) : entries.length === 0 ? (
+          ) : directory.initialError ? (
+            <div className="flex items-center justify-center gap-2 px-3 py-8 text-sm text-warning-fg">
+              <span>{directory.initialError.message}</span>
+              <Button variant="secondary" onClick={directory.retryInitial}>
+                Retry
+              </Button>
+            </div>
+          ) : directory.totalCount === 0 ? (
             <div className="flex items-center justify-center py-8 text-editor-fg opacity-40 select-none">
               <span className="text-sm">Empty directory</span>
             </div>
           ) : (
-            <ul className="py-1">
-              {entries.map((entry) => {
-                const isNonMatchingFile =
-                  !isDirectoryMode &&
-                  entry.kind === "file" &&
-                  !matchesFilter(entry);
-                const isUnselectableFile =
-                  isDirectoryMode && entry.kind === "file";
-                return (
-                  <li
-                    key={entry.path}
-                    className={
-                      isNonMatchingFile || isUnselectableFile
-                        ? "opacity-40"
-                        : undefined
-                    }
-                  >
-                    <EntryRow
-                      entry={entry}
-                      isSelected={
-                        !isDirectoryMode && selectedFile === entry.path
-                      }
-                      statusColorClass={undefined}
-                      onClick={() => {
-                        if (isUnselectableFile) return;
-                        handleEntryClick(entry);
-                      }}
-                    />
-                  </li>
-                );
-              })}
-            </ul>
+            <div role="list" className="py-1">
+              <VirtualizedPagedList
+                totalCount={directory.totalCount}
+                listingId={directory.listingId ?? ""}
+                getItem={directory.getEntry}
+                getItemKey={(entry) => entry.path}
+                renderItem={(entry) => {
+                  const isNonMatchingFile =
+                    !isDirectoryMode &&
+                    entry.kind === "file" &&
+                    !matchesFilter(entry);
+                  const isUnselectableFile =
+                    isDirectoryMode && entry.kind === "file";
+                  const isUnselectable =
+                    isNonMatchingFile || isUnselectableFile;
+                  return (
+                    <div
+                      role="listitem"
+                      className={isUnselectable ? "opacity-40" : undefined}
+                    >
+                      <EntryRow
+                        entry={entry}
+                        isSelected={
+                          !isDirectoryMode && selectedFile === entry.path
+                        }
+                        disabled={isUnselectable}
+                        statusColorClass={undefined}
+                        onClick={() => handleEntryClick(entry)}
+                      />
+                    </div>
+                  );
+                }}
+                renderPlaceholder={(index) => {
+                  const failedRange = directory.failedRanges.find(
+                    (range) => index >= range.offset && index < range.endOffset
+                  );
+                  if (failedRange && index === failedRange.offset) {
+                    return (
+                      <div
+                        role="listitem"
+                        className="flex min-h-[44px] items-center justify-between gap-2 px-3 py-1 text-sm text-warning-fg"
+                      >
+                        <span>Unable to load this page.</span>
+                        <Button
+                          variant="secondary"
+                          onClick={() =>
+                            directory.retryPage(failedRange.offset)
+                          }
+                        >
+                          Retry / Load page
+                        </Button>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div
+                      role="listitem"
+                      className="min-h-[44px] animate-pulse px-3 py-2"
+                      aria-label={`Loading entry ${index + 1}`}
+                    >
+                      <span className="block h-4 w-2/3 rounded bg-panel-border opacity-50" />
+                    </div>
+                  );
+                }}
+                scrollContainerRef={scrollContainerRef}
+                estimateItemSize={() => FILE_BROWSER_ROW_ESTIMATE}
+                overscan={FILE_BROWSER_OVERSCAN}
+                threshold={FILE_BROWSER_VIRTUALIZATION_THRESHOLD}
+                onRangeChange={directory.onRangeChange}
+                layoutResetKey={directory.listingId ?? undefined}
+              />
+            </div>
           )}
         </div>
+
+        {!directory.isInitialLoading &&
+          directory.totalCount > 0 &&
+          directory.uniqueLoadedCount < directory.totalCount && (
+            <p className="px-1 text-xs text-description-fg" aria-live="polite">
+              Loaded {directory.uniqueLoadedCount.toLocaleString()} of{" "}
+              {directory.totalCount.toLocaleString()}
+              {directory.pageLoading ? " …" : ""}
+            </p>
+          )}
 
         {isDirectoryMode && (
           <p className="text-xs text-description-fg">

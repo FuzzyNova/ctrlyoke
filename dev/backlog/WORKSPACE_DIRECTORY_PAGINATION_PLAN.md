@@ -442,8 +442,9 @@ same.
 
 1. Migrate `WorkspaceExplorerPane` and verify all navigation/context-menu/save
    flows against paged data.
-2. Migrate `FileBrowserModal` and verify file/directory/filter selection flows.
-3. Add automatic viewport-range loading plus the explicit retry affordance.
+2. [x] Migrate `FileBrowserModal` and verify file/directory/filter selection flows.
+3. [x] Add automatic viewport-range loading plus the explicit retry affordance to
+       `FileBrowserModal`; the explorer migration remains pending.
 4. Confirm both surfaces show directories with more than 1,000 entries through
    the same shared implementation.
 

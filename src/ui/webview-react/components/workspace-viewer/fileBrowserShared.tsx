@@ -31,6 +31,8 @@ export function toWorkspaceRelative(
 export interface EntryRowProps {
   entry: WorkspaceEntry;
   isSelected: boolean;
+  /** Prevents selection while preserving the shared row's native button semantics. */
+  disabled?: boolean;
   /** Defaults to false — only the explorer's cut/paste feature needs this. */
   isCut?: boolean;
   statusColorClass: string | undefined;
@@ -44,6 +46,7 @@ const noopOpenContextMenu = () => {};
 export function EntryRow({
   entry,
   isSelected,
+  disabled = false,
   isCut = false,
   statusColorClass,
   onClick,
@@ -57,6 +60,8 @@ export function EntryRow({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
+      aria-disabled={disabled || undefined}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -67,7 +72,9 @@ export function EntryRow({
       className={`fp-list-row w-full flex items-center gap-1.5 px-3 py-1 min-h-[44px] sm:min-h-0 text-sm text-left transition-colors ${
         isSelected
           ? "fp-list-row-selected bg-list-active-bg text-editor-fg"
-          : "text-editor-fg hover:bg-list-hover-bg"
+          : disabled
+            ? "text-editor-fg"
+            : "text-editor-fg hover:bg-list-hover-bg"
       }`}
       title={entry.path}
     >
