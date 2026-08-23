@@ -44,10 +44,11 @@ same.
 
 The pagination prerequisite is implemented. `HostedWorkspaceViewerService`
 now creates immutable, complete directory snapshots in
-`WorkspaceListingSnapshotCache`, ordered as directory names A-Z followed by
-file names A-Z. `materializeListingPage()` stats only files in the requested
-range, with bounded concurrency, to populate optional `size`; directories and
-virtual multi-root entries are not statted.
+`WorkspaceListingSnapshotCache`, ordered by the requested sort while keeping
+directories before files. Name sorting stats entries only in requested ranges;
+Date modified sorting stats the complete candidate set before freezing order.
+Both paths use bounded concurrency, and the snapshot cache reuses completed or
+in-flight metadata work for each entry.
 
 Both `WorkspaceExplorerPane` and `FileBrowserModal` use
 `usePagedWorkspaceDirectory()` and `VirtualizedPagedList`. They share
@@ -56,11 +57,13 @@ Both `WorkspaceExplorerPane` and `FileBrowserModal` use
 contains path, git-ignore, page-size, and optional anchor fields; range requests
 remain bound to the immutable order captured by `listingId`.
 
-There is still no modification timestamp or sort preference in the shared
-contract, so the effective sort remains Name ascending and neither browser can
-display or select another order. `WorkspaceExplorerPane` already starts a new
-anchored listing after a successful save, so sorting only needs to preserve and
-verify that refresh behavior.
+The shared contract now carries optional modification timestamps and the
+initial request can select any of the four server-side orders; absent sort
+still resolves to Name ascending. The browser surfaces still have no persisted
+sort preference or header controls, so they continue to request the default
+order until the client phases are implemented. `WorkspaceExplorerPane` already
+starts a new anchored listing after a successful save, so sorting only needs to
+preserve and verify that refresh behavior.
 
 ## Product Decisions
 
@@ -264,24 +267,28 @@ Begin only after Steps 1-2 in the cross-plan order above are complete.
 
 ### Phase 1 — Metadata contract
 
-1. Add optional `modifiedAt` to `WorkspaceEntry`.
-2. Enrich returned files, directories, and multi-root virtual entries from
-   filesystem stats without making a stat failure fatal.
-3. Reuse one stat result per entry for file size and modification time.
-4. Extend server unit tests for files, directories, ordering, virtual roots,
-   and missing-stat tolerance where practical.
+1. [x] Add optional `modifiedAt` to `WorkspaceEntry`.
+2. [x] Enrich returned files, directories, and multi-root virtual entries from
+       filesystem stats without making a stat failure fatal.
+3. [x] Reuse one stat result per entry for file size and modification time.
+4. [x] Extend server unit tests for files, directories, ordering, virtual roots,
+       and missing-stat tolerance where practical.
 
 ### Phase 2 — Server-wide sorting and preference
 
-1. Define the sort constants/types and default `{ Name, Ascending }` value.
+1. [x] Define the sort constants/types and default `{ Name, Ascending }` value.
 2. Add the shared preference and action to `uiStore` and persist it.
 3. Thread the preference through the paged initial-listing request and make a
    header change create a fresh snapshot.
-4. Implement the non-mutating server comparator, toggle transition helper, and
-   date formatter.
-5. Unit-test all four states, cross-page ordering, directory grouping,
-   timestamp ties, missing metadata, immutability, and default-direction
-   transitions.
+   - [x] Parse and validate the server's initial-listing sort selection and
+         capture it in immutable snapshots; range requests inherit it from
+         `listingId`.
+4. [x] Implement the non-mutating server comparator.
+   - The UI toggle transition helper and date formatter remain for the client
+     phases.
+5. [x] Unit-test the server's four states, cross-page ordering, directory grouping,
+       timestamp ties, missing metadata, immutability, and Name-ascending default
+       behavior.
 
 ### Phase 3 — Shared header and row layout
 
@@ -393,8 +400,12 @@ npm run format:check
 
 ## Completion Checklist
 
-- [ ] `WorkspaceEntry.modifiedAt` is populated for files, directories, and
+- [x] `WorkspaceEntry.modifiedAt` is populated for files, directories, and
       available virtual roots.
+- [x] Server snapshots support all four sort states with directories kept
+      before files, stable page boundaries, and missing timestamps last.
+- [x] Initial sort query fields are validated, and range requests remain bound
+      to the order captured by their `listingId`.
 - [ ] Name and Date modified headers are shared by both browser surfaces.
 - [ ] All four sort states work with directories kept before files.
 - [ ] The default remains Name ascending and Date modified initially chooses
@@ -407,6 +418,6 @@ npm run format:check
 - [ ] Saving from `WorkspaceExplorerPane` refreshes the timestamp and active
       order.
 - [ ] Server, shared utility, store, and both component paths have focused tests.
-- [ ] The pagination/virtualization prerequisite is complete, ordering is
+- [x] The pagination/virtualization prerequisite is complete, ordering is
       correct across page boundaries, and no unbounded stat traversal is
       introduced.

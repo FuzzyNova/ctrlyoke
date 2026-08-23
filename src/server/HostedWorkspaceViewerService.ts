@@ -34,10 +34,12 @@ import type {
   WorkspaceSearchResult,
   WorkspaceSearchScope,
   WorkspaceSearchContentMatch,
+  WorkspaceTreeEntry,
 } from "../types/HostedWorkspaceViewerTypes";
 import {
   WORKSPACE_TREE_DEFAULT_PAGE_SIZE,
   WORKSPACE_TREE_MAX_PAGE_SIZE,
+  WORKSPACE_ENTRY_SORT_KEYS,
 } from "../types/HostedWorkspaceViewerTypes";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {
@@ -74,8 +76,12 @@ import {
 import { pathsEqual } from "../utils/PathCasing";
 import {
   WorkspaceListingSnapshotCache,
-  WORKSPACE_LISTING_SNAPSHOT_DEFAULT_ORDER,
+  type WorkspaceEntryMetadata,
 } from "./WorkspaceListingSnapshotCache";
+import {
+  normalizeWorkspaceEntrySort,
+  sortWorkspaceEntries,
+} from "./WorkspaceEntrySort";
 import {
   WorkspaceTreeBadRequestError,
   WorkspaceTreeExpiredError,
@@ -827,6 +833,7 @@ export class HostedWorkspaceViewerService {
     request: WorkspaceTreePageRequest,
     pageSize: number
   ) {
+    const sort = normalizeWorkspaceEntrySort(request.sort);
     const resolved = this.safeResolve(request.path);
     if (!resolved) {
       Log.warn(
@@ -840,18 +847,35 @@ export class HostedWorkspaceViewerService {
         path: root.name,
         kind: "directory" as const,
       }));
-      return this.listingSnapshotCache.create({
-        resolvedDirectory: resolved,
-        rootLabel: "workspace",
-        path: "",
-        parentPath: null,
-        isGitRepo: false,
-        isRootsList: true,
-        includeGitIgnored: request.includeGitIgnored,
-        order: WORKSPACE_LISTING_SNAPSHOT_DEFAULT_ORDER,
-        pageSize,
-        entries,
-      });
+      const initialMetadata =
+        sort.key === WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT
+          ? await this.collectEntryMetadata(
+              entries,
+              (entry) => this.findRootForEntry(entry)?.fsPath
+            )
+          : new Map<string, WorkspaceEntryMetadata>();
+      const orderedEntries = sortWorkspaceEntries(
+        entries.map((entry) => ({
+          ...entry,
+          ...initialMetadata.get(entry.path),
+        })),
+        sort
+      );
+      return this.listingSnapshotCache.create(
+        {
+          resolvedDirectory: resolved,
+          rootLabel: "workspace",
+          path: "",
+          parentPath: null,
+          isGitRepo: false,
+          isRootsList: true,
+          includeGitIgnored: request.includeGitIgnored,
+          order: sort,
+          pageSize,
+          entries: orderedEntries,
+        },
+        initialMetadata
+      );
     }
 
     const rootLabel = this.isMultiRoot
@@ -907,24 +931,73 @@ export class HostedWorkspaceViewerService {
           gitIgnored,
         };
       })
-      .filter((entry) => request.includeGitIgnored || !entry.gitIgnored)
-      .sort((a, b) => {
-        if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      });
+      .filter((entry) => request.includeGitIgnored || !entry.gitIgnored);
+    const initialMetadata =
+      sort.key === WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT
+        ? await this.collectEntryMetadata(candidates, (entry) =>
+            path.join(resolved, entry.name)
+          )
+        : new Map<string, WorkspaceEntryMetadata>();
+    const orderedEntries = sortWorkspaceEntries(
+      candidates.map((entry) => ({
+        ...entry,
+        ...initialMetadata.get(entry.path),
+      })),
+      sort
+    );
 
-    return this.listingSnapshotCache.create({
-      resolvedDirectory: resolved,
-      rootLabel,
-      path: relDir,
-      parentPath,
-      isGitRepo,
-      isRootsList: false,
-      includeGitIgnored: request.includeGitIgnored,
-      order: WORKSPACE_LISTING_SNAPSHOT_DEFAULT_ORDER,
-      pageSize,
-      entries: candidates,
-    });
+    return this.listingSnapshotCache.create(
+      {
+        resolvedDirectory: resolved,
+        rootLabel,
+        path: relDir,
+        parentPath,
+        isGitRepo,
+        isRootsList: false,
+        includeGitIgnored: request.includeGitIgnored,
+        order: sort,
+        pageSize,
+        entries: orderedEntries,
+      },
+      initialMetadata
+    );
+  }
+
+  private async collectEntryMetadata(
+    entries: readonly WorkspaceTreeEntry[],
+    resolvePath: (entry: WorkspaceTreeEntry) => string | undefined
+  ): Promise<Map<string, WorkspaceEntryMetadata>> {
+    const metadata = await mapWithBoundedConcurrency(
+      entries,
+      WORKSPACE_TREE_STAT_CONCURRENCY,
+      async (entry) =>
+        [
+          entry.path,
+          await this.readEntryMetadata(resolvePath(entry), entry.kind),
+        ] as const
+    );
+    return new Map(metadata);
+  }
+
+  private async readEntryMetadata(
+    absolutePath: string | undefined,
+    kind: WorkspaceTreeEntry["kind"]
+  ): Promise<WorkspaceEntryMetadata> {
+    if (absolutePath === undefined) return {};
+    try {
+      const stat = await fs.promises.stat(absolutePath);
+      return kind === "file"
+        ? { size: stat.size, modifiedAt: stat.mtimeMs }
+        : { modifiedAt: stat.mtimeMs };
+    } catch {
+      return {};
+    }
+  }
+
+  private findRootForEntry(
+    entry: WorkspaceTreeEntry
+  ): ResolverWorkspaceFolder | undefined {
+    return this.namedRoots.find((root) => root.name === entry.name);
   }
 
   private async getListingPage(
@@ -971,23 +1044,19 @@ export class HostedWorkspaceViewerService {
       offset,
       offset + snapshot.pageSize
     );
-    const fileEntries = pageEntries.filter((entry) => entry.kind === "file");
-    const sizes = await mapWithBoundedConcurrency(
-      fileEntries,
+    const metadata = await mapWithBoundedConcurrency(
+      pageEntries,
       WORKSPACE_TREE_STAT_CONCURRENCY,
-      async (entry) => {
-        try {
-          const stat = await fs.promises.stat(
-            path.join(snapshot.resolvedDirectory, entry.name)
-          );
-          return stat.size;
-        } catch {
-          return undefined;
-        }
-      }
-    );
-    const sizeByPath = new Map(
-      fileEntries.map((entry, index) => [entry.path, sizes[index]])
+      (entry) =>
+        this.listingSnapshotCache.getOrCreateEntryMetadata(
+          snapshot.listingId,
+          entry.path,
+          () =>
+            this.readEntryMetadata(
+              this.resolveEntryMetadataPath(snapshot, entry),
+              entry.kind
+            )
+        )
     );
     return {
       listingId: snapshot.listingId,
@@ -999,11 +1068,19 @@ export class HostedWorkspaceViewerService {
       isRootsList: snapshot.isRootsList,
       totalEntries: snapshot.entries.length,
       offset,
-      entries: pageEntries.map((entry) => {
-        const size = sizeByPath.get(entry.path);
-        return size === undefined ? { ...entry } : { ...entry, size };
-      }),
+      entries: pageEntries.map((entry, index) => ({
+        ...entry,
+        ...metadata[index],
+      })),
     };
+  }
+
+  private resolveEntryMetadataPath(
+    snapshot: Awaited<ReturnType<WorkspaceListingSnapshotCache["create"]>>,
+    entry: WorkspaceTreeEntry
+  ): string | undefined {
+    if (snapshot.isRootsList) return this.findRootForEntry(entry)?.fsPath;
+    return path.join(snapshot.resolvedDirectory, entry.name);
   }
 
   // ── File read ────────────────────────────────────────────────────────────

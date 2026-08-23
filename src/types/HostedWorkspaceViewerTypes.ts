@@ -9,6 +9,8 @@ export interface WorkspaceEntry {
   path: string;
   kind: "file" | "directory";
   size?: number;
+  /** Last filesystem modification time in epoch milliseconds. */
+  modifiedAt?: number;
   /** True if this entry is ignored by .gitignore (or is itself an ignored directory). */
   gitIgnored?: boolean;
 }
@@ -21,12 +23,42 @@ export const WORKSPACE_TREE_DEFAULT_PAGE_SIZE = 250;
 export const WORKSPACE_TREE_MIN_PAGE_SIZE = 1;
 export const WORKSPACE_TREE_MAX_PAGE_SIZE = 500;
 
+/** Canonical sort keys for workspace directory entries. */
+export const WORKSPACE_ENTRY_SORT_KEYS = {
+  NAME: "name",
+  MODIFIED_AT: "modifiedAt",
+} as const;
+
+export type WorkspaceEntrySortKey =
+  (typeof WORKSPACE_ENTRY_SORT_KEYS)[keyof typeof WORKSPACE_ENTRY_SORT_KEYS];
+
+/** Canonical sort directions for workspace directory entries. */
+export const WORKSPACE_ENTRY_SORT_DIRECTIONS = {
+  ASCENDING: "ascending",
+  DESCENDING: "descending",
+} as const;
+
+export type WorkspaceEntrySortDirection =
+  (typeof WORKSPACE_ENTRY_SORT_DIRECTIONS)[keyof typeof WORKSPACE_ENTRY_SORT_DIRECTIONS];
+
+export interface WorkspaceEntrySort {
+  readonly key: WorkspaceEntrySortKey;
+  readonly direction: WorkspaceEntrySortDirection;
+}
+
+/** Stable default used when an initial listing omits its sort selection. */
+export const DEFAULT_WORKSPACE_ENTRY_SORT = Object.freeze({
+  key: WORKSPACE_ENTRY_SORT_KEYS.NAME,
+  direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.ASCENDING,
+}) satisfies WorkspaceEntrySort;
+
 /** Initial request for a workspace directory listing snapshot. */
 export interface WorkspaceTreePageRequest {
   path: string;
   pageSize?: number;
   includeGitIgnored: boolean;
   anchorPath?: string;
+  sort?: WorkspaceEntrySort;
 }
 
 /** Random-access request for a page in an existing immutable listing. */

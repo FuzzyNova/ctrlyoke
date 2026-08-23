@@ -1,6 +1,14 @@
 import type {
+  WorkspaceEntrySort,
+  WorkspaceEntrySortDirection,
+  WorkspaceEntrySortKey,
   WorkspaceTreePageRequest,
   WorkspaceTreeRangeRequest,
+} from "../types/HostedWorkspaceViewerTypes";
+import {
+  DEFAULT_WORKSPACE_ENTRY_SORT,
+  WORKSPACE_ENTRY_SORT_DIRECTIONS,
+  WORKSPACE_ENTRY_SORT_KEYS,
 } from "../types/HostedWorkspaceViewerTypes";
 import { WorkspaceTreeBadRequestError } from "./WorkspaceTreeErrors";
 
@@ -21,7 +29,9 @@ export function parseWorkspaceTreeQuery(
     query.path !== undefined ||
     query.pageSize !== undefined ||
     query.includeGitIgnored !== undefined ||
-    query.anchorPath !== undefined;
+    query.anchorPath !== undefined ||
+    query.sortKey !== undefined ||
+    query.sortDirection !== undefined;
 
   if (hasRangeFields) {
     if (!listingId || !LISTING_ID_PATTERN.test(listingId)) {
@@ -50,13 +60,51 @@ export function parseWorkspaceTreeQuery(
     includeGitIgnoredValue === undefined
       ? false
       : parseBoolean(includeGitIgnoredValue, "includeGitIgnored");
+  const sort = parseSort(query);
 
   return {
     path,
     ...(pageSize === undefined ? {} : { pageSize }),
     includeGitIgnored,
     ...(anchorPath === undefined ? {} : { anchorPath }),
+    sort,
   };
+}
+
+function parseSort(query: Record<string, unknown>): WorkspaceEntrySort {
+  const key = readOptionalString(query, "sortKey");
+  const direction = readOptionalString(query, "sortDirection");
+  if ((key === undefined) !== (direction === undefined)) {
+    throw new WorkspaceTreeBadRequestError(
+      "sortKey and sortDirection must be provided together"
+    );
+  }
+  if (key === undefined || direction === undefined) {
+    return DEFAULT_WORKSPACE_ENTRY_SORT;
+  }
+  if (!isWorkspaceEntrySortKey(key)) {
+    throw new WorkspaceTreeBadRequestError("sortKey is invalid");
+  }
+  if (!isWorkspaceEntrySortDirection(direction)) {
+    throw new WorkspaceTreeBadRequestError("sortDirection is invalid");
+  }
+  return { key, direction };
+}
+
+function isWorkspaceEntrySortKey(
+  value: string
+): value is WorkspaceEntrySortKey {
+  return Object.values(WORKSPACE_ENTRY_SORT_KEYS).includes(
+    value as WorkspaceEntrySortKey
+  );
+}
+
+function isWorkspaceEntrySortDirection(
+  value: string
+): value is WorkspaceEntrySortDirection {
+  return Object.values(WORKSPACE_ENTRY_SORT_DIRECTIONS).includes(
+    value as WorkspaceEntrySortDirection
+  );
 }
 
 function readOptionalString(

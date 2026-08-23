@@ -2,8 +2,10 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import {
   WorkspaceListingSnapshotCache,
+  type WorkspaceEntryMetadata,
   type WorkspaceListingSnapshotInput,
 } from "../../server/WorkspaceListingSnapshotCache";
+import { DEFAULT_WORKSPACE_ENTRY_SORT } from "../../types/HostedWorkspaceViewerTypes";
 
 suite("WorkspaceListingSnapshotCache", () => {
   let now = 0;
@@ -28,7 +30,7 @@ suite("WorkspaceListingSnapshotCache", () => {
     isGitRepo: true,
     isRootsList: false,
     includeGitIgnored: false,
-    order: "name-ascending",
+    order: DEFAULT_WORKSPACE_ENTRY_SORT,
     pageSize: 100,
     entries: [
       { name: "index.ts", path: "src/index.ts", kind: "file", size: 12 },
@@ -126,5 +128,38 @@ suite("WorkspaceListingSnapshotCache", () => {
     assert.strictEqual(cache.totalEstimatedMetadataBytes, 0);
     assert.strictEqual(cache.get("listing-2"), undefined);
     assert.throws(() => cache.create(snapshotInput()), /disposed/);
+  });
+
+  test("shares in-flight metadata work and caches missing metadata", async () => {
+    const cache = createCache();
+    const snapshot = cache.create(snapshotInput());
+    let attempts = 0;
+    const loader = async (): Promise<WorkspaceEntryMetadata> => {
+      attempts++;
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      return {};
+    };
+
+    const [first, second] = await Promise.all([
+      cache.getOrCreateEntryMetadata(
+        snapshot.listingId,
+        "src/index.ts",
+        loader
+      ),
+      cache.getOrCreateEntryMetadata(
+        snapshot.listingId,
+        "src/index.ts",
+        loader
+      ),
+    ]);
+    assert.deepStrictEqual(first, {});
+    assert.deepStrictEqual(second, {});
+    assert.strictEqual(attempts, 1);
+    await cache.getOrCreateEntryMetadata(
+      snapshot.listingId,
+      "src/index.ts",
+      loader
+    );
+    assert.strictEqual(attempts, 1);
   });
 });

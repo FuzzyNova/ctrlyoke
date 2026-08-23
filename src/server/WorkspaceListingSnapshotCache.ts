@@ -1,5 +1,8 @@
 import { randomUUID } from "crypto";
-import type { WorkspaceTreeEntry } from "../types/HostedWorkspaceViewerTypes";
+import type {
+  WorkspaceEntrySort,
+  WorkspaceTreeEntry,
+} from "../types/HostedWorkspaceViewerTypes";
 
 /** Default idle lifetime for an immutable workspace directory listing. */
 export const WORKSPACE_LISTING_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
@@ -11,8 +14,10 @@ export const WORKSPACE_LISTING_SNAPSHOT_MAX_COUNT = 32;
 export const WORKSPACE_LISTING_SNAPSHOT_MAX_ESTIMATED_METADATA_BYTES =
   8 * 1024 * 1024;
 
-/** The initial paging stage's stable ordering identity. */
-export const WORKSPACE_LISTING_SNAPSHOT_DEFAULT_ORDER = "name-ascending";
+export interface WorkspaceEntryMetadata {
+  size?: number;
+  modifiedAt?: number;
+}
 
 export interface WorkspaceListingSnapshotInput {
   /** Canonical path obtained after the server's workspace safety checks. */
@@ -23,8 +28,8 @@ export interface WorkspaceListingSnapshotInput {
   isGitRepo: boolean;
   isRootsList: boolean;
   includeGitIgnored: boolean;
-  /** Kept in the snapshot identity so sorting can extend it later. */
-  order: string;
+  /** Normalized sort selection captured by this immutable listing. */
+  order: WorkspaceEntrySort;
   pageSize: number;
   entries: readonly WorkspaceTreeEntry[];
   /** Optional estimate supplied by the server; otherwise JSON metadata is estimated. */
@@ -48,6 +53,8 @@ export interface WorkspaceListingSnapshotCacheOptions {
 
 interface CachedSnapshot {
   snapshot: WorkspaceListingSnapshot;
+  metadata: Map<string, WorkspaceEntryMetadata>;
+  inFlightMetadata: Map<string, Promise<WorkspaceEntryMetadata>>;
 }
 
 /**
@@ -102,7 +109,10 @@ export class WorkspaceListingSnapshotCache {
   }
 
   /** Add a new immutable snapshot and return its opaque server-generated id. */
-  create(input: WorkspaceListingSnapshotInput): WorkspaceListingSnapshot {
+  create(
+    input: WorkspaceListingSnapshotInput,
+    initialMetadata: ReadonlyMap<string, WorkspaceEntryMetadata> = new Map()
+  ): WorkspaceListingSnapshot {
     this.assertNotDisposed();
     const now = this.now();
     this.removeExpired(now);
@@ -132,12 +142,52 @@ export class WorkspaceListingSnapshotCache {
       lastAccessedAt: now,
       estimatedMetadataBytes,
     });
-    this.snapshots.set(listingId, { snapshot });
+    const metadata = new Map<string, WorkspaceEntryMetadata>();
+    for (const [entryPath, entryMetadata] of initialMetadata) {
+      metadata.set(entryPath, freezeMetadata(entryMetadata));
+    }
+    this.snapshots.set(listingId, {
+      snapshot,
+      metadata,
+      inFlightMetadata: new Map(),
+    });
     this.estimatedMetadataBytes += estimatedMetadataBytes;
 
     this.enforceCountLimit();
     this.enforceByteTarget(listingId);
     return snapshot;
+  }
+
+  /**
+   * Reuse a completed or in-flight metadata lookup for one snapshot entry.
+   * The loader is expected to return an empty object for a failed stat; this
+   * method also converts an unexpected rejection into cached missing metadata.
+   */
+  getOrCreateEntryMetadata(
+    listingId: string,
+    entryPath: string,
+    loader: () => Promise<WorkspaceEntryMetadata>
+  ): Promise<WorkspaceEntryMetadata> {
+    const cached = this.snapshots.get(listingId);
+    if (!cached) {
+      return Promise.reject(new Error("Listing snapshot has expired"));
+    }
+    const existing = cached.metadata.get(entryPath);
+    if (existing !== undefined) return Promise.resolve(existing);
+    const inFlight = cached.inFlightMetadata.get(entryPath);
+    if (inFlight) return inFlight;
+
+    const pending = Promise.resolve()
+      .then(loader)
+      .catch(() => ({}))
+      .then((metadata) => {
+        const frozen = freezeMetadata(metadata);
+        cached.metadata.set(entryPath, frozen);
+        cached.inFlightMetadata.delete(entryPath);
+        return frozen;
+      });
+    cached.inFlightMetadata.set(entryPath, pending);
+    return pending;
   }
 
   /**
@@ -234,4 +284,10 @@ function estimateMetadataBytes(input: WorkspaceListingSnapshotInput): number {
     }),
     "utf8"
   );
+}
+
+function freezeMetadata(
+  metadata: WorkspaceEntryMetadata
+): WorkspaceEntryMetadata {
+  return Object.freeze({ ...metadata });
 }

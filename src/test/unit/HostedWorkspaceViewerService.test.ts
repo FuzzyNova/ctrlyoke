@@ -9,7 +9,11 @@ import {
   CommitMessageGenerator,
   type CommitResult,
 } from "../../git/CommitMessageGenerator";
-import type { WorkspaceSearchContentMatch } from "../../types/HostedWorkspaceViewerTypes";
+import {
+  WORKSPACE_ENTRY_SORT_DIRECTIONS,
+  WORKSPACE_ENTRY_SORT_KEYS,
+  type WorkspaceSearchContentMatch,
+} from "../../types/HostedWorkspaceViewerTypes";
 import {
   WorkspaceTreeBadRequestError,
   WorkspaceTreeExpiredError,
@@ -109,6 +113,174 @@ suite("HostedWorkspaceViewerService", function () {
       const firstDir = kinds.indexOf("directory");
       const firstFile = kinds.indexOf("file");
       assert.ok(firstDir < firstFile, "directories should appear before files");
+    });
+
+    test("returns file and directory modification metadata", async () => {
+      const root = createWorkspace();
+      const directory = path.join(root, "directory");
+      const file = path.join(root, "file.txt");
+      fs.mkdirSync(directory);
+      fs.writeFileSync(file, "content");
+      fs.utimesSync(directory, new Date(1000), new Date(2000));
+      fs.utimesSync(file, new Date(3000), new Date(4000));
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.listDirectory({
+        path: "",
+        pageSize: 2,
+        includeGitIgnored: true,
+      });
+      const byName = new Map(
+        result.entries.map((entry) => [entry.name, entry])
+      );
+
+      assert.strictEqual(byName.get("directory")?.size, undefined);
+      assert.ok(
+        Math.abs((byName.get("directory")?.modifiedAt ?? 0) - 2000) < 100
+      );
+      assert.strictEqual(byName.get("file.txt")?.size, 7);
+      assert.ok(
+        Math.abs((byName.get("file.txt")?.modifiedAt ?? 0) - 4000) < 100
+      );
+    });
+
+    test("keeps all four orders globally stable across page boundaries", async () => {
+      const root = createWorkspace();
+      for (const directory of ["a-directory", "z-directory"]) {
+        fs.mkdirSync(path.join(root, directory));
+      }
+      for (const file of ["a-file.txt", "z-file.txt"]) {
+        fs.writeFileSync(path.join(root, file), "x");
+      }
+      fs.utimesSync(
+        path.join(root, "a-directory"),
+        new Date(1000),
+        new Date(1000)
+      );
+      fs.utimesSync(
+        path.join(root, "z-directory"),
+        new Date(2000),
+        new Date(2000)
+      );
+      fs.utimesSync(
+        path.join(root, "a-file.txt"),
+        new Date(1000),
+        new Date(1000)
+      );
+      fs.utimesSync(
+        path.join(root, "z-file.txt"),
+        new Date(2000),
+        new Date(2000)
+      );
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const expected = new Map([
+        [
+          `${WORKSPACE_ENTRY_SORT_KEYS.NAME}:${WORKSPACE_ENTRY_SORT_DIRECTIONS.ASCENDING}`,
+          ["a-directory", "z-directory", "a-file.txt", "z-file.txt"],
+        ],
+        [
+          `${WORKSPACE_ENTRY_SORT_KEYS.NAME}:${WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING}`,
+          ["z-directory", "a-directory", "z-file.txt", "a-file.txt"],
+        ],
+        [
+          `${WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT}:${WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING}`,
+          ["z-directory", "a-directory", "z-file.txt", "a-file.txt"],
+        ],
+        [
+          `${WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT}:${WORKSPACE_ENTRY_SORT_DIRECTIONS.ASCENDING}`,
+          ["a-directory", "z-directory", "a-file.txt", "z-file.txt"],
+        ],
+      ]);
+      for (const [key, names] of expected) {
+        const [sortKey, direction] = key.split(":") as [
+          (typeof WORKSPACE_ENTRY_SORT_KEYS)[keyof typeof WORKSPACE_ENTRY_SORT_KEYS],
+          (typeof WORKSPACE_ENTRY_SORT_DIRECTIONS)[keyof typeof WORKSPACE_ENTRY_SORT_DIRECTIONS],
+        ];
+        const first = await svc.listDirectory({
+          path: "",
+          pageSize: 1,
+          includeGitIgnored: true,
+          sort: { key: sortKey, direction },
+        });
+        const all = [...first.entries];
+        for (
+          let offset = first.pageSize;
+          offset < first.totalEntries;
+          offset++
+        ) {
+          all.push(
+            ...(await svc.listDirectory({ listingId: first.listingId, offset }))
+              .entries
+          );
+        }
+        assert.deepStrictEqual(
+          all.map((entry) => entry.name),
+          names
+        );
+      }
+    });
+
+    test("returns metadata for virtual roots using their backing paths", async () => {
+      const primary = createWorkspace();
+      const secondary = createWorkspace();
+      fs.utimesSync(primary, new Date(1000), new Date(1000));
+      fs.utimesSync(secondary, new Date(2000), new Date(2000));
+      const svc = new HostedWorkspaceViewerService(primary, [
+        { name: "display-primary", fsPath: primary },
+        { name: "display-secondary", fsPath: secondary },
+      ]);
+
+      const result = await svc.listDirectory({
+        path: "",
+        pageSize: 2,
+        includeGitIgnored: true,
+        sort: {
+          key: WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT,
+          direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.ASCENDING,
+        },
+      });
+
+      assert.deepStrictEqual(
+        result.entries.map((entry) => entry.name),
+        ["display-primary", "display-secondary"]
+      );
+      assert.ok(
+        result.entries.every((entry) => entry.modifiedAt !== undefined)
+      );
+      assert.ok(result.entries.every((entry) => entry.size === undefined));
+    });
+
+    test("caches failed metadata and does not retry it for ranges", async () => {
+      const root = createWorkspace();
+      const file = path.join(root, "file.txt");
+      fs.writeFileSync(file, "content");
+      const originalStat = fs.promises.stat;
+      let attempts = 0;
+      fs.promises.stat = (async (...args: Parameters<typeof originalStat>) => {
+        if (args[0] === file) {
+          attempts++;
+          throw new Error("stat failed");
+        }
+        return originalStat(...args);
+      }) as typeof originalStat;
+      try {
+        const svc = new HostedWorkspaceViewerService(root);
+        const first = await svc.listDirectory({
+          path: "",
+          pageSize: 1,
+          includeGitIgnored: true,
+        });
+        assert.strictEqual(first.entries[0]?.modifiedAt, undefined);
+        const repeated = await svc.listDirectory({
+          listingId: first.listingId,
+          offset: 0,
+        });
+        assert.strictEqual(repeated.entries[0]?.size, undefined);
+        assert.strictEqual(attempts, 1);
+      } finally {
+        fs.promises.stat = originalStat;
+      }
     });
 
     test("returns empty entries for path traversal attempt", async () => {
