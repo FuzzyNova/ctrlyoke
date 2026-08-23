@@ -435,18 +435,18 @@ same.
        ranges, Refresh, and expiration recovery.
 2. [x] Add anchored listings and scroll restoration.
 3. [x] Add progress and retry state suitable for both consumers.
-4. Remove or reshape `workspaceViewerStore.explorerEntries` so there is one
-   source of listing truth.
+4. [x] Remove or reshape `workspaceViewerStore.explorerEntries` so there is one
+       source of listing truth.
 
 ### Phase 4 — Migrate both consumers
 
-1. Migrate `WorkspaceExplorerPane` and verify all navigation/context-menu/save
-   flows against paged data.
+1. [x] Migrate `WorkspaceExplorerPane` and verify all navigation/context-menu/save
+       flows against paged data.
 2. [x] Migrate `FileBrowserModal` and verify file/directory/filter selection flows.
 3. [x] Add automatic viewport-range loading plus the explicit retry affordance to
-       `FileBrowserModal`; the explorer migration remains pending.
-4. Confirm both surfaces show directories with more than 1,000 entries through
-   the same shared implementation.
+       `FileBrowserModal`.
+4. [x] Confirm both surfaces show directories with more than 1,000 entries through
+       the same shared implementation.
 
 ### Handoff to the sorting plan
 
@@ -556,17 +556,17 @@ npm run format:check
 
 ## Completion Checklist
 
-- [ ] No fixed entry-count cutoff remains in directory browsing.
-- [ ] The tree API exposes stable snapshot ranges and an exact total count.
-- [ ] Every page contains metadata only; file contents remain click-to-load.
-- [ ] Large directory rows use the shared TanStack virtualization foundation.
-- [ ] Scrolling or jumping requests only the missing visible/nearby ranges.
-- [ ] Sync Explorer can reveal a selected entry outside the first page.
-- [ ] Both browser surfaces share the paging controller and virtual list.
-- [ ] Loading, progress, retry, refresh, and expired-snapshot states are visible
+- [x] No fixed entry-count cutoff remains in directory browsing.
+- [x] The tree API exposes stable snapshot ranges and an exact total count.
+- [x] Every page contains metadata only; file contents remain click-to-load.
+- [x] Large directory rows use the shared TanStack virtualization foundation.
+- [x] Scrolling or jumping requests only the missing visible/nearby ranges.
+- [x] Sync Explorer can reveal a selected entry outside the first page.
+- [x] Both browser surfaces share the paging controller and virtual list.
+- [x] Loading, progress, retry, refresh, and expired-snapshot states are visible
       and recoverable.
 - [x] The listing contract/snapshot identity is ready for the sorting plan to
       add server-wide ordering without changing the paging model.
-- [ ] Git-ignore and picker-filter semantics are preserved.
-- [ ] Tests cover directories beyond 1,000 entries and prove bounded DOM/network
+- [x] Git-ignore and picker-filter semantics are preserved.
+- [x] Tests cover directories beyond 1,000 entries and prove bounded DOM/network
       work.

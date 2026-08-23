@@ -227,6 +227,7 @@ export function usePagedWorkspaceDirectory(
   };
 
   const currentPathRef = useRef(normalizedOptionPath);
+  const skipOptionStartRef = useRef<DirectoryConfig | null>(null);
   const generationRef = useRef(0);
   const stateRef = useRef<DirectoryState | null>(null);
   const controllersRef = useRef(new Map<number, AbortController>());
@@ -543,6 +544,11 @@ export function usePagedWorkspaceDirectory(
 
   const navigate = useCallback(
     (path: string, options?: WorkspaceDirectoryRefreshOptions): void => {
+      skipOptionStartRef.current = {
+        path: normalizePath(path),
+        includeGitIgnored: configRef.current.includeGitIgnored,
+        pageSize: configRef.current.pageSize,
+      };
       startListing(path, options?.anchorPath);
     },
     [startListing]
@@ -638,8 +644,20 @@ export function usePagedWorkspaceDirectory(
   useEffect(() => {
     if (options.enabled === false) {
       abortRequests();
+      skipOptionStartRef.current = null;
       return;
     }
+    const skipOptionStart = skipOptionStartRef.current;
+    if (
+      skipOptionStart &&
+      skipOptionStart.path === normalizedOptionPath &&
+      skipOptionStart.includeGitIgnored === options.includeGitIgnored &&
+      skipOptionStart.pageSize === options.pageSize
+    ) {
+      skipOptionStartRef.current = null;
+      return;
+    }
+    skipOptionStartRef.current = null;
     startListing(normalizedOptionPath, options.anchorPath);
     return abortRequests;
     // Option changes intentionally begin a new request generation.

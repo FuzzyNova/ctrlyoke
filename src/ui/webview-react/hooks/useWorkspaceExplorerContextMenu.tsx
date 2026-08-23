@@ -27,7 +27,7 @@ export interface UseWorkspaceExplorerContextMenuOptions {
    * workspace root, not a real file or subdirectory.
    */
   isRootsList: boolean;
-  onRefresh: () => void;
+  onRefresh: (affectedPath?: string) => void;
   onOpenFile: (path: string) => void;
 }
 
@@ -78,7 +78,7 @@ export function useWorkspaceExplorerContextMenu({
     async (path: string) => {
       try {
         await workspaceDeleteEntry({ path });
-        onRefresh();
+        onRefresh(path);
       } catch (err) {
         console.error("Delete failed:", err);
       }
@@ -96,7 +96,11 @@ export function useWorkspaceExplorerContextMenu({
       } else {
         await workspaceCopyEntry({ sourcePath: clipboard.path, destDir });
       }
-      onRefresh();
+      onRefresh(
+        clipboard.kind === "file"
+          ? buildPastedFilePath(clipboard.path, destDir)
+          : destDir
+      );
       if (clipboard.kind === "file") {
         onOpenFile(buildPastedFilePath(clipboard.path, destDir));
       }

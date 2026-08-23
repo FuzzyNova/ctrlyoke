@@ -47,11 +47,16 @@ vi.mock("@components/output/MarkdownText", () => ({
 // Pane loads the directory + git status on mount; resolve them to empty.
 vi.mock("@utils/hostedApi", () => ({
   workspaceTree: vi.fn().mockResolvedValue({
+    listingId: "preview-listing",
+    pageSize: 100,
     entries: [],
     path: "",
     parentPath: null,
     rootLabel: "workspace",
     isGitRepo: false,
+    isRootsList: false,
+    totalEntries: 0,
+    offset: 0,
   }),
   workspaceFile: vi.fn().mockResolvedValue({ content: "", path: "" }),
   workspaceSaveFile: vi.fn().mockResolvedValue(undefined),

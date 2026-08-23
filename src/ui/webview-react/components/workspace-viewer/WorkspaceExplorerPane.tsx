@@ -18,17 +18,18 @@ import { useIsMobile } from "@hooks/useMediaQuery";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useWorkspaceEditorContextMenu } from "@hooks/useWorkspaceEditorContextMenu";
 import { useWorkspaceExplorerContextMenu } from "@hooks/useWorkspaceExplorerContextMenu";
+import { usePagedWorkspaceDirectory } from "@hooks/usePagedWorkspaceDirectory";
 import { MESSAGE_TYPES, SETTING_SCOPES } from "@/types/messages";
 import type {
   WorkspaceEntry,
   SourceControlFile,
 } from "@root/types/HostedWorkspaceViewerTypes";
 import {
-  workspaceTree,
   workspaceFile,
   workspaceSaveFile,
   workspaceStatus,
 } from "@utils/hostedApi";
+import { VirtualizedPagedList } from "@components/shared";
 import {
   SCM_IGNORED_COLOR_CLASS,
   SCM_KIND_COLOR_CLASS,
@@ -81,19 +82,7 @@ function getEntryStatusColorClass(
 
 export const WorkspaceExplorerPane: React.FC = () => {
   const explorerPath = useWorkspaceViewerStore((s) => s.explorerPath);
-  const explorerEntries = useWorkspaceViewerStore((s) => s.explorerEntries);
-  const explorerLoading = useWorkspaceViewerStore((s) => s.explorerLoading);
   const setExplorerPath = useWorkspaceViewerStore((s) => s.setExplorerPath);
-  const setExplorerEntries = useWorkspaceViewerStore(
-    (s) => s.setExplorerEntries
-  );
-  const setExplorerLoading = useWorkspaceViewerStore(
-    (s) => s.setExplorerLoading
-  );
-  const explorerIsGitRepo = useWorkspaceViewerStore((s) => s.explorerIsGitRepo);
-  const setExplorerIsGitRepo = useWorkspaceViewerStore(
-    (s) => s.setExplorerIsGitRepo
-  );
   const sourceControlFiles = useWorkspaceViewerStore(
     (s) => s.sourceControlFiles
   );
@@ -182,56 +171,44 @@ export const WorkspaceExplorerPane: React.FC = () => {
     filePath: selectedFilePath,
   });
 
-  // Nav metadata kept in local state — not needed globally
-  const [parentPath, setParentPath] = useState<string | null>(null);
-  const [rootLabel, setRootLabel] = useState<string>("");
-  // True when the current listing is the virtual top level of a multi-root
-  // workspace (one entry per root folder) rather than a real directory —
-  // entry-level file operations (cut/copy/delete/paste) are disabled there
-  // since each entry represents an entire workspace root.
-  const [isRootsList, setIsRootsList] = useState(false);
+  const directoryScrollContainerRef = useRef<HTMLDivElement>(null);
+  const directory = usePagedWorkspaceDirectory({
+    path: explorerPath,
+    includeGitIgnored: !hideGitIgnoredFiles,
+  });
+  const parentPath = directory.parentPath;
+  const rootLabel = directory.rootLabel;
+  const isRootsList = directory.isRootsList;
 
-  const visibleEntries = useMemo(
-    () =>
-      hideGitIgnoredFiles
-        ? explorerEntries.filter((entry) => !entry.gitIgnored)
-        : explorerEntries,
-    [explorerEntries, hideGitIgnoredFiles]
-  );
+  // The hook is the listing source; explorerPath remains in the store only so
+  // navigation URLs can describe the directory currently shown.
+  useEffect(() => {
+    if (directory.path !== useWorkspaceViewerStore.getState().explorerPath) {
+      setExplorerPath(directory.path);
+    }
+  }, [directory.path, setExplorerPath]);
 
   const loadDirectory = useCallback(
-    async (dirPath: string) => {
-      setExplorerLoading(true);
-      try {
-        const result = await workspaceTree({
-          path: dirPath,
-          includeGitIgnored: !hideGitIgnoredFiles,
-        });
-        const fwd = (p: string) => p.replace(/\\/g, "/");
-        setExplorerEntries(
-          result.entries.map((e) => ({ ...e, path: fwd(e.path) }))
-        );
-        setExplorerPath(fwd(result.path));
-        setParentPath(
-          result.parentPath !== null ? fwd(result.parentPath) : null
-        );
-        setRootLabel(result.rootLabel);
-        setExplorerIsGitRepo(result.isGitRepo);
-        setIsRootsList(result.isRootsList ?? false);
-      } catch (err) {
-        setError(String(err));
-      } finally {
-        setExplorerLoading(false);
-      }
+    (dirPath: string, anchorPath?: string) => {
+      directory.navigate(dirPath, anchorPath ? { anchorPath } : undefined);
     },
-    [
-      setExplorerLoading,
-      setExplorerEntries,
-      setExplorerPath,
-      setExplorerIsGitRepo,
-      setError,
-      hideGitIgnoredFiles,
-    ]
+    [directory.navigate]
+  );
+
+  const refreshDirectory = useCallback(
+    (affectedPath?: string) => {
+      const candidate = affectedPath ?? selectedFilePath;
+      const normalizedCandidate = candidate?.replace(/\\/g, "/");
+      const lastSlash = normalizedCandidate?.lastIndexOf("/") ?? -1;
+      const candidateParent =
+        lastSlash > 0 ? normalizedCandidate?.slice(0, lastSlash) : "";
+      const anchorPath =
+        normalizedCandidate && candidateParent === directory.path
+          ? normalizedCandidate
+          : undefined;
+      directory.refresh(anchorPath ? { anchorPath } : undefined);
+    },
+    [directory.path, directory.refresh, selectedFilePath]
   );
 
   // Loads git status for the whole workspace, used to color explorer entries
@@ -246,11 +223,9 @@ export const WorkspaceExplorerPane: React.FC = () => {
 
   // Load root on mount, unless a pending navigation will handle it
   useEffect(() => {
-    if (!useWorkspaceViewerStore.getState().pendingNavigation) {
-      loadDirectory(explorerPath);
-    }
     loadGitStatus();
-    // Intentional: run once on mount; navigation is explicit through loadDirectory calls
+    // The paged-directory hook owns the initial listing; status remains an
+    // aggregate, unpaged workspace request used for row coloring.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -306,15 +281,17 @@ export const WorkspaceExplorerPane: React.FC = () => {
   // making explorerPath a trigger.
   useEffect(() => {
     if (!selectedFilePath) return;
+    const relativePath = toWorkspaceRelative(selectedFilePath, workspacePath);
+    const normalizedPath = relativePath.replace(/\\/g, "/");
     const lastSep = Math.max(
-      selectedFilePath.lastIndexOf("/"),
-      selectedFilePath.lastIndexOf("\\")
+      normalizedPath.lastIndexOf("/"),
+      normalizedPath.lastIndexOf("\\")
     );
-    const parentDir = lastSep > 0 ? selectedFilePath.slice(0, lastSep) : "";
+    const parentDir = lastSep > 0 ? normalizedPath.slice(0, lastSep) : "";
     if (parentDir !== useWorkspaceViewerStore.getState().explorerPath) {
-      loadDirectory(parentDir);
+      loadDirectory(parentDir, normalizedPath);
     }
-  }, [selectedFilePath, loadDirectory]);
+  }, [loadDirectory, selectedFilePath, workspacePath]);
 
   // Consume pending navigation set externally (e.g. from CodeMirror link clicks)
   useEffect(() => {
@@ -323,6 +300,12 @@ export const WorkspaceExplorerPane: React.FC = () => {
       loadDirectory(pendingNavigation.dirPath);
     } else {
       const { filePath, startLine, endLine } = pendingNavigation;
+      const relativePath = toWorkspaceRelative(filePath, workspacePath);
+      const normalizedPath = relativePath.replace(/\\/g, "/");
+      const lastSlash = normalizedPath.lastIndexOf("/");
+      const parentDir = lastSlash > 0 ? normalizedPath.slice(0, lastSlash) : "";
+      setExplorerPath(parentDir);
+      loadDirectory(parentDir, normalizedPath);
       if (startLine !== undefined && endLine !== undefined) {
         setPendingEditorSelection({
           requestId: ++selectionRequestSeqRef.current,
@@ -338,7 +321,14 @@ export const WorkspaceExplorerPane: React.FC = () => {
     // request begins. Clear the request afterwards so navigation recording sees
     // the target file rather than the file that was previously open.
     clearPendingNavigation();
-  }, [pendingNavigation, clearPendingNavigation, loadDirectory, openFile]);
+  }, [
+    pendingNavigation,
+    clearPendingNavigation,
+    loadDirectory,
+    openFile,
+    setExplorerPath,
+    workspacePath,
+  ]);
 
   const handlePendingSelectionApplied = useCallback((requestId: number) => {
     setPendingEditorSelection((current) =>
@@ -352,20 +342,25 @@ export const WorkspaceExplorerPane: React.FC = () => {
     }
   }, [parentPath, loadDirectory]);
 
-  const handleRefresh = useCallback(() => {
-    loadDirectory(explorerPath);
-    loadGitStatus();
-  }, [explorerPath, loadDirectory, loadGitStatus]);
+  const handleRefresh = useCallback(
+    (affectedPath?: string) => {
+      refreshDirectory(affectedPath);
+      loadGitStatus();
+    },
+    [loadGitStatus, refreshDirectory]
+  );
 
   const handleSyncExplorer = useCallback(() => {
     if (!selectedFilePath) return;
+    const relativePath = toWorkspaceRelative(selectedFilePath, workspacePath);
+    const normalizedPath = relativePath.replace(/\\/g, "/");
     const lastSep = Math.max(
-      selectedFilePath.lastIndexOf("/"),
-      selectedFilePath.lastIndexOf("\\")
+      normalizedPath.lastIndexOf("/"),
+      normalizedPath.lastIndexOf("\\")
     );
-    const parentDir = lastSep > 0 ? selectedFilePath.slice(0, lastSep) : "";
-    loadDirectory(parentDir);
-  }, [selectedFilePath, loadDirectory]);
+    const parentDir = lastSep > 0 ? normalizedPath.slice(0, lastSep) : "";
+    loadDirectory(parentDir, normalizedPath);
+  }, [loadDirectory, selectedFilePath, workspacePath]);
 
   const { clipboard, openContextMenu, explorerContextMenuPortal } =
     useWorkspaceExplorerContextMenu({
@@ -385,12 +380,20 @@ export const WorkspaceExplorerPane: React.FC = () => {
     try {
       await workspaceSaveFile({ path: selectedFilePath, content: fileContent });
       markFileSaved(fileContent);
+      refreshDirectory(selectedFilePath);
     } catch (err) {
       setError(String(err));
     } finally {
       setFileSaving(false);
     }
-  }, [selectedFilePath, fileContent, setFileSaving, markFileSaved, setError]);
+  }, [
+    selectedFilePath,
+    fileContent,
+    setFileSaving,
+    markFileSaved,
+    refreshDirectory,
+    setError,
+  ]);
 
   const handleDiscardUnsaved = useCallback(async () => {
     if (!selectedFilePath) return;
@@ -460,7 +463,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
           </div>
         </div>
 
-        {explorerIsGitRepo && (
+        {directory.isGitRepo && (
           <button
             onClick={() =>
               vscode.postMessage({
@@ -493,14 +496,14 @@ export const WorkspaceExplorerPane: React.FC = () => {
         )}
 
         <button
-          onClick={handleRefresh}
+          onClick={() => handleRefresh()}
           className="flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded hover:bg-btn-secondary-hover text-editor-fg transition-colors flex-shrink-0"
           title="Refresh directory"
           aria-label="Refresh directory"
         >
           <i
             className={`codicon codicon-refresh text-xs ${
-              explorerLoading ? "animate-spin" : ""
+              directory.isLoading ? "animate-spin" : ""
             }`}
           />
         </button>
@@ -532,50 +535,123 @@ export const WorkspaceExplorerPane: React.FC = () => {
       </div>
 
       {/* Entry list */}
-      <div className="flex-1 overflow-y-auto">
-        {explorerLoading ? (
+      <div
+        ref={directoryScrollContainerRef}
+        className="flex-1 overflow-y-auto"
+        aria-busy={directory.isLoading}
+      >
+        {directory.initialError && directory.totalCount === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-8 text-sm text-warning-fg">
+            <span>{directory.initialError.message}</span>
+            <button
+              type="button"
+              className="rounded border border-btn-border px-2 py-1 hover:bg-btn-secondary-hover"
+              onClick={directory.retryInitial}
+            >
+              Retry
+            </button>
+          </div>
+        ) : directory.isLoading && directory.totalCount === 0 ? (
           <div className="flex items-center justify-center py-8 text-editor-fg opacity-50">
             <i className="codicon codicon-loading animate-spin mr-2" />
             <span className="text-sm">Loading…</span>
           </div>
-        ) : visibleEntries.length === 0 ? (
+        ) : directory.totalCount === 0 ? (
           <div className="flex items-center justify-center py-8 text-editor-fg opacity-40 select-none">
             <span className="text-sm">Empty directory</span>
           </div>
         ) : (
-          <ul className="py-1">
-            {visibleEntries.map((entry) => {
-              const isSelected =
-                entry.kind === "file" && selectedFilePath === entry.path;
-              const isCut =
-                clipboard?.operation === "cut" && clipboard.path === entry.path;
-              const statusColorClass = getEntryStatusColorClass(
-                entry,
-                sourceControlFiles
-              );
+          <div role="list" className="py-1">
+            <VirtualizedPagedList
+              totalCount={directory.totalCount}
+              listingId={directory.listingId ?? ""}
+              getItem={directory.getEntry}
+              getItemKey={(entry) => entry.path}
+              renderItem={(entry) => {
+                const isSelected =
+                  entry.kind === "file" && selectedFilePath === entry.path;
+                const isCut =
+                  clipboard?.operation === "cut" &&
+                  clipboard.path === entry.path;
+                const statusColorClass = getEntryStatusColorClass(
+                  entry,
+                  sourceControlFiles
+                );
 
-              return (
-                <li key={entry.path}>
-                  <EntryRow
-                    entry={entry}
-                    isSelected={isSelected}
-                    isCut={isCut}
-                    statusColorClass={statusColorClass}
-                    onClick={() => {
-                      if (entry.kind === "directory") {
-                        loadDirectory(entry.path);
-                      } else {
-                        openFile(entry.path);
-                      }
-                    }}
-                    openContextMenu={openContextMenu}
-                  />
-                </li>
-              );
-            })}
-          </ul>
+                return (
+                  <div role="listitem">
+                    <EntryRow
+                      entry={entry}
+                      isSelected={isSelected}
+                      isCut={isCut}
+                      statusColorClass={statusColorClass}
+                      onClick={() => {
+                        if (entry.kind === "directory") {
+                          loadDirectory(entry.path);
+                        } else {
+                          openFile(entry.path);
+                        }
+                      }}
+                      openContextMenu={openContextMenu}
+                    />
+                  </div>
+                );
+              }}
+              renderPlaceholder={(index) => {
+                const failedRange = directory.failedRanges.find(
+                  (range) => index >= range.offset && index < range.endOffset
+                );
+                if (failedRange && index === failedRange.offset) {
+                  return (
+                    <div
+                      role="listitem"
+                      className="flex min-h-[36px] items-center justify-between gap-2 px-3 py-1 text-sm text-warning-fg"
+                    >
+                      <span>Unable to load this page.</span>
+                      <button
+                        type="button"
+                        className="rounded border border-btn-border px-2 py-1 hover:bg-btn-secondary-hover"
+                        onClick={() => directory.retryPage(failedRange.offset)}
+                      >
+                        Retry / Load page
+                      </button>
+                    </div>
+                  );
+                }
+                return (
+                  <div
+                    role="listitem"
+                    className="min-h-[36px] animate-pulse px-3 py-2"
+                    aria-label={`Loading entry ${index + 1}`}
+                  >
+                    <span className="block h-4 w-2/3 rounded bg-panel-border opacity-50" />
+                  </div>
+                );
+              }}
+              scrollContainerRef={directoryScrollContainerRef}
+              estimateItemSize={() => 36}
+              overscan={12}
+              threshold={50}
+              onRangeChange={directory.onRangeChange}
+              layoutResetKey={directory.listingId ?? undefined}
+              scrollToIndex={directory.scrollRestoration?.index ?? null}
+              scrollToIndexRequest={directory.scrollRestoration?.requestId}
+            />
+          </div>
         )}
       </div>
+      {!directory.isInitialLoading &&
+        directory.totalCount > 0 &&
+        directory.uniqueLoadedCount < directory.totalCount && (
+          <p
+            className="flex-shrink-0 px-2 py-1 text-xs text-description-fg"
+            aria-live="polite"
+          >
+            Loaded {directory.uniqueLoadedCount.toLocaleString()} of{" "}
+            {directory.totalCount.toLocaleString()}
+            {directory.pageLoading ? " …" : ""}
+          </p>
+        )}
     </div>
   );
 

@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { vsCodeRawStorage } from "@utils/vsCodeStateStorage";
 import type {
-  WorkspaceEntry,
   SourceControlFile,
   DiffKind,
   WorkspaceCommitLogEntry,
@@ -59,9 +58,6 @@ interface WorkspaceViewerState {
 
   // Explorer
   explorerPath: string;
-  explorerEntries: WorkspaceEntry[];
-  explorerLoading: boolean;
-  explorerIsGitRepo: boolean;
 
   // File editor
   selectedFilePath: string | null;
@@ -157,9 +153,6 @@ interface WorkspaceViewerActions {
 
   // Explorer
   setExplorerPath(path: string): void;
-  setExplorerEntries(entries: WorkspaceEntry[]): void;
-  setExplorerIsGitRepo(isGitRepo: boolean): void;
-  setExplorerLoading(loading: boolean): void;
 
   // File editor
   selectFile(path: string): void;
@@ -251,9 +244,6 @@ const INITIAL_STATE: WorkspaceViewerState = {
   activeTab: "explorer",
 
   explorerPath: "",
-  explorerEntries: [],
-  explorerLoading: false,
-  explorerIsGitRepo: false,
 
   selectedFilePath: null,
   fileContent: "",
@@ -335,7 +325,6 @@ export const useWorkspaceViewerStore = create<
       close() {
         set({
           isOpen: false,
-          explorerLoading: false,
           fileLoading: false,
           fileSaving: false,
           sourceControlLoading: false,
@@ -372,18 +361,6 @@ export const useWorkspaceViewerStore = create<
 
       setExplorerPath(path) {
         set({ explorerPath: path });
-      },
-
-      setExplorerEntries(entries) {
-        set({ explorerEntries: entries });
-      },
-
-      setExplorerIsGitRepo(isGitRepo) {
-        set({ explorerIsGitRepo: isGitRepo });
-      },
-
-      setExplorerLoading(loading) {
-        set({ explorerLoading: loading });
       },
 
       // --- File editor ---
