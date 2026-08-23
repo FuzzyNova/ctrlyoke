@@ -611,6 +611,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             status={data.status}
             maxLines={row.collapsedToolOutputLineCount}
             maxCharacters={row.collapsedToolOutputMaxCharacters}
+            showLabel={row.showParamsLabel}
             expansion={bashExpansion}
             onExpansionChange={(section, expanded) =>
               onBashExpansionChange?.(row.key, section, expanded)
@@ -811,6 +812,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             name={data.name}
             parameters={data.parameters}
             result={data.result}
+            showLabel={row.showParamsLabel}
             nameFindMatches={getFieldMatches("toolLabel")}
             outputFindMatches={
               toolContentIsError ? undefined : toolContentMatches

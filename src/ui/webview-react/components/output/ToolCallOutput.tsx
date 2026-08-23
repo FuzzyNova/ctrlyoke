@@ -26,6 +26,7 @@ import { highlightText, type RowFindDecoration } from "@utils/outputFind";
 import { TOOL_RESULT_LINE, TOOL_ERROR_LINE } from "./outputStyles";
 import { ToolDot } from "./FileOperationOutput";
 import { ToolCallBlock } from "./ToolCallBlock";
+import { ToolCallExpandToggle } from "./ToolCallExpandToggle";
 import type { ToolResult } from "../../types/cliEvents";
 
 // Re-exports so existing consumers (CliOutput, UndoChangesDialog, index.ts)
@@ -133,6 +134,7 @@ interface GenericToolCallOutputProps {
   nameFindMatches?: RowFindDecoration["matches"];
   outputFindMatches?: RowFindDecoration["matches"];
   errorFindMatches?: RowFindDecoration["matches"];
+  showLabel?: boolean;
   expansion?: ToolCallExpansionState;
   renderPlan?: ToolCallRenderPlan;
   onExpansionChange?: (
@@ -149,6 +151,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
   nameFindMatches,
   outputFindMatches,
   errorFindMatches,
+  showLabel = false,
   expansion,
   renderPlan,
   onExpansionChange,
@@ -257,24 +260,19 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
             )}
           </span>
           {resolvedRenderPlan.params.canToggle && (
-            <button
-              type="button"
-              className="text-bash-expand-link text-[length:var(--fp-output-font-size-sm)] cursor-pointer bg-transparent border-0 p-0 font-inherit hover:underline shrink-0"
-              onClick={(event) => {
-                event.preventDefault();
-                updateExpansion(
-                  "params",
-                  !resolvedRenderPlan.params.isExpanded
-                );
-              }}
+            <ToolCallExpandToggle
+              expanded={resolvedRenderPlan.params.isExpanded}
+              onToggle={() =>
+                updateExpansion("params", !resolvedRenderPlan.params.isExpanded)
+              }
+              label="Show parameters"
+              showLabel={showLabel}
               title={
                 resolvedRenderPlan.params.isExpanded
                   ? "Hide parameters"
                   : "Show all parameters"
               }
-            >
-              {resolvedRenderPlan.params.isExpanded ? "▲" : "▼"}
-            </button>
+            />
           )}
         </>
       }

@@ -251,10 +251,11 @@ formatting decisions.
 
 ## Open questions
 
-- Confirm the `items-baseline` → "fill available height" layout approach for the
-  toggle button (see section 1) before implementing — may need a small, scoped
-  change to `TOOL_CALL_LINE` or a height sourced from `toolCallLineHeight()`
-  instead of relying on flex stretch.
+- Resolved in sections 1-2: `TOOL_CALL_LINE` now uses `items-center`, and the
+  shared toggle uses a fixed `1.625em` height matching the relaxed header line
+  height plus horizontal padding. This gives the button a larger hit target
+  without making the row taller; the MCP toggle should reuse the same approach
+  when section 3 is implemented.
 
 ## Acceptance criteria
 

@@ -221,6 +221,8 @@ describe("outputRows", () => {
 
     expect(bashRow.collapsedToolOutputLineCount).toBe(4);
     expect(bashRow.collapsedToolOutputMaxCharacters).toBeLessThan(1200);
+    expect(bashRow.showParamsLabel).toBe(false);
+    expect(toolCallRow.showParamsLabel).toBe(false);
     expect(toolCallRow.toolCall?.renderPlan.output.visibleLineCount).toBe(4);
     expect(toolCallRow.toolCall?.renderPlan.maxResultChars).toBeLessThan(1200);
   });

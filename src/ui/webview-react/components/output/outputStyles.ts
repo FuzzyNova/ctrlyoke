@@ -4,7 +4,7 @@ export const TOOL_CALL_TERMINAL =
 
 /** Tool call header line (bullet + command text) */
 export const TOOL_CALL_LINE =
-  "text-editor-fg text-[length:var(--fp-output-font-size)] flex flex-wrap items-baseline gap-1";
+  "text-editor-fg text-[length:var(--fp-output-font-size)] flex flex-wrap items-center gap-1";
 
 /**
  * Tool result line (⎿ output).

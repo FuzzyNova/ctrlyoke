@@ -11,6 +11,7 @@ import {
 import { highlightText, type RowFindDecoration } from "@utils/outputFind";
 import { TOOL_RESULT_LINE, TOOL_ERROR_LINE } from "./outputStyles";
 import { ToolCallBlock } from "./ToolCallBlock";
+import { ToolCallExpandToggle } from "./ToolCallExpandToggle";
 import type { FileOperationStatus } from "../../types/cliEvents";
 import { OPERATION_STATUS } from "../../types/cliEvents";
 
@@ -32,6 +33,7 @@ interface BashOutputProps {
   maxLines?: number;
   maxCharacters?: number;
   maxCommandCharacters?: number;
+  showLabel?: boolean;
   expansion?: BashOutputExpansionState;
   onExpansionChange?: (
     section: BashOutputExpansionSection,
@@ -81,6 +83,7 @@ export const BashOutput = memo<BashOutputProps>(
     maxLines = DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
     maxCharacters = DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
     maxCommandCharacters = DEFAULT_COLLAPSED_COMMAND_MAX_CHARS,
+    showLabel = false,
     expansion,
     onExpansionChange,
     className = "",
@@ -244,24 +247,19 @@ export const BashOutput = memo<BashOutputProps>(
               {renderStatusBadge()}
             </span>
             {canToggleCommand && (
-              <button
-                type="button"
-                className="text-bash-expand-link text-[length:var(--fp-output-font-size-sm)] cursor-pointer bg-transparent border-0 p-0 font-inherit hover:underline shrink-0"
-                onClick={(event) => {
-                  event.preventDefault();
-                  updateExpansion(
-                    "command",
-                    !resolvedExpansion.commandExpanded
-                  );
-                }}
+              <ToolCallExpandToggle
+                expanded={resolvedExpansion.commandExpanded}
+                onToggle={() =>
+                  updateExpansion("command", !resolvedExpansion.commandExpanded)
+                }
+                label="Show full command"
+                showLabel={showLabel}
                 title={
                   resolvedExpansion.commandExpanded
                     ? "Hide full command"
                     : "Show full command"
                 }
-              >
-                {resolvedExpansion.commandExpanded ? "▲" : "▼"}
-              </button>
+              />
             )}
           </>
         }

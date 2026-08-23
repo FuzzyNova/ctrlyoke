@@ -13,6 +13,7 @@ export {
   GenericToolCallOutput,
 } from "./ToolCallOutput";
 export { BashOutput } from "./BashOutput";
+export { ToolCallExpandToggle } from "./ToolCallExpandToggle";
 export { StatusMessage } from "./StatusMessage";
 export { ScriptVerdict } from "./ScriptVerdict";
 export { TerminalInstance } from "./TerminalInstance";

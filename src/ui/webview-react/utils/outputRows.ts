@@ -197,6 +197,8 @@ export interface StructuredEventRow extends OutputRowBase {
   undoRecord?: UndoRecord;
   diff?: OutputRowDiffMeta;
   toolCall?: OutputRowToolCallMeta;
+  /** Whether dense tool-call header toggles have room for their text label. */
+  showParamsLabel?: boolean;
   bashExpansion?: OutputRowBashExpansionState;
   collapsedToolOutputLineCount?: number;
   /** Width-aware character budget backing the collapsed Bash preview. */
@@ -1718,6 +1720,12 @@ export function buildOutputRows(
   const firstRowIndexByTarget = new Map<string, number>();
   const collapsedToolOutputLineCount =
     input.collapsedToolOutputLineCount ?? DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
+  // OutputSection starts with an unmeasured width of 0. Treat that as unknown,
+  // just like undefined, so the discoverable label is present on first paint.
+  const showParamsLabel =
+    input.outputContentWidth == null ||
+    input.outputContentWidth === 0 ||
+    input.outputContentWidth >= 400;
   const attemptGroups = new Map<string, AttemptGroupAggregate>();
   const attemptGroupByMessageIndex = new Map<number, string>();
 
@@ -2024,6 +2032,7 @@ export function buildOutputRows(
         workspaceSnapshot,
         undoRecord,
         hideDiff: visibleEvent.hideDiff,
+        showParamsLabel,
         bashExpansion:
           visibleEvent.event.type === CLI_EVENT_TYPES.BASH_COMMAND
             ? input.bashExpansionState?.get(rowKey)

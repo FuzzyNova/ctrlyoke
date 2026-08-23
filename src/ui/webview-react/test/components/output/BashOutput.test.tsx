@@ -16,6 +16,7 @@ describe("BashOutput", () => {
     const { container } = render(<BashOutput command={longCommand} />);
 
     expect(screen.getByTitle("Show full command")).toBeInTheDocument();
+    expect(screen.queryByText("Show full command")).not.toBeInTheDocument();
     expect(container.textContent).toContain("...");
     expect(container.textContent).not.toContain("x".repeat(200));
 
@@ -24,6 +25,13 @@ describe("BashOutput", () => {
     expect(screen.getByTitle("Hide full command")).toBeInTheDocument();
     expect(container.textContent).not.toContain(`${"x".repeat(160)}...`);
     expect(container.textContent).toContain(longCommand);
+  });
+
+  it("shows the full-command label when the caller enables it", () => {
+    const longCommand = `node -e "${"x".repeat(220)}"`;
+    render(<BashOutput command={longCommand} showLabel />);
+
+    expect(screen.getByText("Show full command")).toBeInTheDocument();
   });
 
   it("renders output when status is completed", () => {

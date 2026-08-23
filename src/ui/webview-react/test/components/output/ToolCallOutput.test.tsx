@@ -30,6 +30,7 @@ describe("GenericToolCallOutput", () => {
           subject: "output-layout",
           detail: "lift expansion state",
         }}
+        showLabel
         result={{
           success: true,
           output,
@@ -47,6 +48,7 @@ describe("GenericToolCallOutput", () => {
         /write_memory\(subject: output-layout, detail: lift expansion state\)\.\.\./i
       )
     ).toBeInTheDocument();
+    expect(screen.getByText("Show parameters")).toBeInTheDocument();
     expect(collapsedOutput?.textContent).toContain(`line ${lastVisibleLine}`);
     expect(collapsedOutput?.textContent).not.toContain(
       `line ${lastVisibleLine + 1}`
