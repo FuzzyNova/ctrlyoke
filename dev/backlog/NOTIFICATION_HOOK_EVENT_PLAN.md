@@ -245,9 +245,11 @@ registry completeness invariant remains enforced for the new event. Verified
 behavior keeps OpenCode's completion plugin loaded while omitting unsupported
 notification-only user hooks; `tui.toast.show` remains deliberately unmapped.
 
-The plan remains open for the notification payload normalization/factory work,
-React UI coverage, and stimulus-dependent live/manual verification. Those items
-were intentionally not implemented in this session per the task scope.
+The plan remains open for React UI coverage and stimulus-dependent live/manual
+verification. The supported notification artifact normalization and factory
+work are now complete: the factory keeps the stable `ctrlyoke - Notification`
+title, preserves workflow/prompt context, and includes the normalized native
+title/message/type detail without exposing `rawHookData`.
 
 This session also completed the supported stdin-hook script/artifact scope:
 Claude, Copilot, and Qwen now map native `Notification` payloads to opt-in

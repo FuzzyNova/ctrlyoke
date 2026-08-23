@@ -6,14 +6,118 @@ import {
   STEP_STATUS,
 } from "../../types/DashboardConstants";
 import {
+  buildHookNotificationEvent,
   buildPromptCompletionNotification,
   buildTestNotificationEvent,
   buildWorkflowCompletionNotification,
   isWorkflowCompletionTransition,
+  type HookArtifact,
 } from "../../ui/notifications/CompletionNotificationFactory";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 
 suite("CompletionNotificationFactory", () => {
+  const createHookArtifact = (
+    overrides: Partial<HookArtifact> = {}
+  ): HookArtifact => ({
+    runId: "run-1",
+    timestamp: 123,
+    workflowId: "wf-hook",
+    workflowName: "refactor",
+    promptIndex: 1,
+    promptName: "implement",
+    hookEvent: "notification",
+    nativeHookEvent: "Notification",
+    harnessId: "claude-cli",
+    rawHookData: {},
+    ...overrides,
+  });
+
+  const notificationSettings = {
+    ...CTRLYOKE_SETTINGS_DEFAULTS.notifications,
+    events: {
+      ...CTRLYOKE_SETTINGS_DEFAULTS.notifications.events,
+      hookEvents: {
+        ...CTRLYOKE_SETTINGS_DEFAULTS.notifications.events.hookEvents,
+        notification: true,
+      },
+    },
+  };
+
+  test("suppresses disabled hook notifications", () => {
+    const event = buildHookNotificationEvent(
+      createHookArtifact({ notificationMessage: "Answer needed" }),
+      CTRLYOKE_SETTINGS_DEFAULTS.notifications
+    );
+
+    assert.strictEqual(event, null);
+  });
+
+  test("keeps workflow and prompt context with the native message", () => {
+    const event = buildHookNotificationEvent(
+      createHookArtifact({ notificationMessage: "Answer needed" }),
+      notificationSettings
+    );
+
+    assert.ok(event);
+    assert.strictEqual(event?.title, "ctrlyoke - Notification");
+    assert.strictEqual(event?.body, "refactor - implement - Answer needed");
+  });
+
+  test("includes a distinct native title before its message", () => {
+    const event = buildHookNotificationEvent(
+      createHookArtifact({
+        notificationTitle: "Permission required",
+        notificationMessage: "Allow access to the repository?",
+      }),
+      notificationSettings
+    );
+
+    assert.strictEqual(
+      event?.body,
+      "refactor - implement - Permission required - Allow access to the repository?"
+    );
+  });
+
+  test("does not repeat a native title that duplicates its message", () => {
+    const event = buildHookNotificationEvent(
+      createHookArtifact({
+        notificationTitle: "  Answer needed ",
+        notificationMessage: "Answer needed",
+      }),
+      notificationSettings
+    );
+
+    assert.strictEqual(event?.body, "refactor - implement - Answer needed");
+  });
+
+  test("trims empty native values and falls back to the notification type", () => {
+    const event = buildHookNotificationEvent(
+      createHookArtifact({
+        notificationTitle: "  ",
+        notificationMessage: "\t",
+        notificationType: "  permission_prompt  ",
+      }),
+      notificationSettings
+    );
+
+    assert.strictEqual(event?.body, "refactor - implement - permission_prompt");
+  });
+
+  test("falls back to the shared notification label without native details", () => {
+    const event = buildHookNotificationEvent(
+      createHookArtifact({
+        notificationTitle: "",
+        notificationMessage: " ",
+        notificationType: "\n",
+        rawHookData: { message: "secret payload" },
+      }),
+      notificationSettings
+    );
+
+    assert.strictEqual(event?.body, "refactor - implement - Notification");
+    assert.ok(!event?.body.includes("secret payload"));
+  });
+
   test("builds workflow success notifications when workflow events are enabled", () => {
     const event = buildWorkflowCompletionNotification({
       summary: {

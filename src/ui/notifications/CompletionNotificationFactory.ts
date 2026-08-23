@@ -59,6 +59,12 @@ export interface HookArtifact {
   harnessId: string;
   sessionId?: string;
   toolName?: string;
+  /** Normalized native notification title, when the hook event provides one. */
+  notificationTitle?: string;
+  /** Normalized native notification message, when the hook event provides one. */
+  notificationMessage?: string;
+  /** Normalized native notification type, when the hook event provides one. */
+  notificationType?: string;
   rawHookData: Record<string, unknown>;
 }
 
@@ -361,6 +367,17 @@ export function buildHookNotificationEvent(
     bodyParts.push(artifact.toolName);
   }
 
+  if (artifact.hookEvent === "notification") {
+    const notificationMessage = artifact.notificationMessage?.trim();
+    const notificationTitle = artifact.notificationTitle?.trim();
+    const notificationType = artifact.notificationType?.trim();
+
+    if (notificationTitle && notificationTitle !== notificationMessage) {
+      bodyParts.push(notificationTitle);
+    }
+    bodyParts.push(notificationMessage || notificationType || label);
+  }
+
   const id = `${artifact.workflowId}:hook:${artifact.hookEvent}:${artifact.timestamp}`;
 
   return {
@@ -368,7 +385,10 @@ export function buildHookNotificationEvent(
     kind: NOTIFICATION_KINDS.HOOK,
     severity: COMPLETION_NOTIFICATION_SEVERITY.INFO,
     workflowId: artifact.workflowId,
-    title: titleParts.join(" "),
+    title:
+      artifact.hookEvent === "notification"
+        ? "ctrlyoke - Notification"
+        : titleParts.join(" "),
     body: bodyParts.join(" - ") || label,
     tag: `ctrlyoke-hook-${artifact.workflowId}-${artifact.hookEvent}`,
     url,
