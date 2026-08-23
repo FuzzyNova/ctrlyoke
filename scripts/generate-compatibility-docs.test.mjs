@@ -46,8 +46,8 @@ test("compatibility documentation covers the current registry without uniform fe
   ]);
   assert.equal(
     generated.split("\n").filter((line) => line.startsWith("| ")).length,
-    74,
-    "six harnesses × twelve leaves plus the table header and divider"
+    80,
+    "six harnesses × thirteen leaves plus the table header and divider"
   );
   assert.match(generated, /sandbox\/approval modes/);
   assert.match(generated, /Remove the server filter/);
