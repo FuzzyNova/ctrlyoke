@@ -1,7 +1,127 @@
 import React from "react";
 import { useLongPress } from "@hooks/useLongPress";
 import type { FailedWorkspaceDirectoryRange } from "@hooks/usePagedWorkspaceDirectory";
-import type { WorkspaceEntry } from "@root/types/HostedWorkspaceViewerTypes";
+import type {
+  WorkspaceEntry,
+  WorkspaceEntrySort,
+  WorkspaceEntrySortKey,
+} from "@root/types/HostedWorkspaceViewerTypes";
+import {
+  WORKSPACE_ENTRY_SORT_DIRECTIONS,
+  WORKSPACE_ENTRY_SORT_KEYS,
+} from "@root/types/HostedWorkspaceViewerTypes";
+
+/** Shared tracks keep the sort header and every entry row aligned. */
+export const FILE_BROWSER_GRID_TEMPLATE =
+  "1.25rem minmax(0, 1fr) clamp(9rem, 32%, 12rem)";
+
+const modifiedAtCompactFormatter = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+const modifiedAtFullFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "full",
+  timeStyle: "long",
+});
+
+export interface WorkspaceEntryModifiedAtPresentation {
+  compact: string;
+  full: string;
+}
+
+/**
+ * Format a workspace entry timestamp for both its visible cell and its full
+ * tooltip/accessibility value. Filesystem metadata is best-effort, so invalid
+ * and absent timestamps deliberately share the same safe fallback.
+ */
+export function formatWorkspaceEntryModifiedAt(
+  modifiedAt: number | undefined
+): WorkspaceEntryModifiedAtPresentation {
+  if (modifiedAt === undefined || !Number.isFinite(modifiedAt)) {
+    return { compact: "—", full: "—" };
+  }
+
+  const date = new Date(modifiedAt);
+  if (Number.isNaN(date.getTime())) {
+    return { compact: "—", full: "—" };
+  }
+
+  return {
+    compact: modifiedAtCompactFormatter.format(date),
+    full: modifiedAtFullFormatter.format(date),
+  };
+}
+
+const SORT_LABELS: Record<WorkspaceEntrySortKey, string> = {
+  [WORKSPACE_ENTRY_SORT_KEYS.NAME]: "Name",
+  [WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT]: "Date modified",
+};
+
+function sortDirectionLabel(sort: WorkspaceEntrySort): string {
+  return sort.direction === WORKSPACE_ENTRY_SORT_DIRECTIONS.ASCENDING
+    ? "ascending"
+    : "descending";
+}
+
+export interface FileBrowserSortHeaderProps {
+  sort: WorkspaceEntrySort;
+  onSortKeyRequest: (key: WorkspaceEntrySortKey) => void;
+}
+
+/** Shared, stateless sort controls for the workspace file browsers. */
+export function FileBrowserSortHeader({
+  sort,
+  onSortKeyRequest,
+}: FileBrowserSortHeaderProps): React.ReactElement {
+  const renderSortButton = (key: WorkspaceEntrySortKey): React.ReactElement => {
+    const isActive = sort.key === key;
+    const label = SORT_LABELS[key];
+    const direction = sortDirectionLabel(sort);
+    const activationDirection =
+      key === WORKSPACE_ENTRY_SORT_KEYS.NAME ? "ascending" : "descending";
+    const accessibleDirection = isActive
+      ? `currently ${direction}`
+      : `inactive; selecting sorts ${activationDirection}`;
+
+    return (
+      <button
+        key={key}
+        type="button"
+        aria-label={`${label}, ${accessibleDirection}`}
+        aria-pressed={isActive}
+        onClick={() => onSortKeyRequest(key)}
+        className="flex min-w-0 items-center gap-1 truncate rounded px-1 py-1 text-left text-xs font-medium text-description-fg hover:bg-btn-secondary-hover hover:text-editor-fg"
+      >
+        <span className="truncate">{label}</span>
+        {isActive && (
+          <i
+            aria-hidden="true"
+            className={`codicon flex-shrink-0 ${
+              sort.direction === WORKSPACE_ENTRY_SORT_DIRECTIONS.ASCENDING
+                ? "codicon-chevron-up"
+                : "codicon-chevron-down"
+            }`}
+          />
+        )}
+      </button>
+    );
+  };
+
+  return (
+    <div
+      data-testid="file-browser-sort-header"
+      className="grid w-full items-center gap-1.5 border-b border-panel-border px-3 py-1 text-xs"
+      style={{ gridTemplateColumns: FILE_BROWSER_GRID_TEMPLATE }}
+    >
+      <span aria-hidden="true" />
+      {renderSortButton(WORKSPACE_ENTRY_SORT_KEYS.NAME)}
+      {renderSortButton(WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT)}
+    </div>
+  );
+}
 
 /**
  * Strip a workspace root prefix from an absolute path, returning a
@@ -56,6 +176,8 @@ export function EntryRow({
   const longPressHandlers = useLongPress((x, y) =>
     openContextMenu(x, y, entry)
   );
+  const modifiedAt = formatWorkspaceEntryModifiedAt(entry.modifiedAt);
+  const entryLabel = `${entry.name}${entry.kind === "directory" ? "/" : ""}, ${entry.path}, modified ${modifiedAt.full}`;
 
   return (
     <button
@@ -69,26 +191,37 @@ export function EntryRow({
         openContextMenu(e.clientX, e.clientY, entry);
       }}
       {...longPressHandlers}
-      style={isCut ? { opacity: 0.5 } : undefined}
-      className={`fp-list-row w-full flex items-center gap-1.5 px-3 py-1 min-h-[44px] sm:min-h-0 text-sm text-left transition-colors ${
+      className={`fp-list-row grid w-full min-w-0 items-center gap-1.5 px-3 py-1 min-h-[44px] sm:min-h-0 text-sm text-left transition-colors ${
         isSelected
           ? "fp-list-row-selected bg-list-active-bg text-editor-fg"
           : disabled
             ? "text-editor-fg"
             : "text-editor-fg hover:bg-list-hover-bg"
       }`}
-      title={entry.path}
+      style={{
+        ...(isCut ? { opacity: 0.5 } : {}),
+        gridTemplateColumns: FILE_BROWSER_GRID_TEMPLATE,
+      }}
+      title={`${entry.path} — Modified ${modifiedAt.full}`}
+      aria-label={entryLabel}
     >
       <i
-        className={`codicon flex-shrink-0 text-sm ${
+        aria-hidden="true"
+        className={`codicon text-sm ${
           entry.kind === "directory"
             ? "codicon-folder text-[var(--status-warning)]"
             : "codicon-file"
         }`}
       />
-      <span className={`truncate ${statusColorClass ?? ""}`}>
+      <span className={`min-w-0 truncate ${statusColorClass ?? ""}`}>
         {entry.name}
         {entry.kind === "directory" ? "/" : ""}
+      </span>
+      <span
+        className="min-w-0 truncate whitespace-nowrap text-xs text-description-fg"
+        title={modifiedAt.full}
+      >
+        {modifiedAt.compact}
       </span>
     </button>
   );

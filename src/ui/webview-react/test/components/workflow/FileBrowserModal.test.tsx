@@ -25,6 +25,7 @@ import userEvent from "@testing-library/user-event";
 import { FileBrowserModal } from "@components/workflow/FileBrowserModal";
 import { useUiStore, type FileBrowserRequest } from "@store/uiStore";
 import { workspaceFile, workspaceTree } from "@utils/hostedApi";
+import { DEFAULT_WORKSPACE_ENTRY_SORT } from "@root/types/HostedWorkspaceViewerTypes";
 import type {
   WorkspaceTreeEntry,
   WorkspaceTreePageRequest,
@@ -155,9 +156,13 @@ function responseForLargeDirectory(
 async function expectTreeRequest(
   expected: WorkspaceTreePageRequest | WorkspaceTreeRangeRequest
 ): Promise<void> {
+  const expectedWithSort =
+    "listingId" in expected
+      ? expected
+      : { ...expected, sort: DEFAULT_WORKSPACE_ENTRY_SORT };
   await waitFor(() =>
     expect(workspaceTreeMock).toHaveBeenCalledWith(
-      expected,
+      expectedWithSort,
       expect.any(AbortSignal)
     )
   );
@@ -254,8 +259,16 @@ describe("FileBrowserModal — navigation", () => {
 
     await waitFor(() => {
       expect(workspaceTreeMock.mock.calls.map(([request]) => request)).toEqual([
-        { path: "deleted", includeGitIgnored: true },
-        { path: "", includeGitIgnored: true },
+        {
+          path: "deleted",
+          includeGitIgnored: true,
+          sort: DEFAULT_WORKSPACE_ENTRY_SORT,
+        },
+        {
+          path: "",
+          includeGitIgnored: true,
+          sort: DEFAULT_WORKSPACE_ENTRY_SORT,
+        },
       ]);
     });
     expect(await screen.findByText("readme.md")).toBeInTheDocument();

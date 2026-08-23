@@ -292,11 +292,11 @@ Begin only after Steps 1-2 in the cross-plan order above are complete.
 
 ### Phase 3 — Shared header and row layout
 
-1. Add `FileBrowserSortHeader` beside the existing shared browser primitives.
-2. Convert `EntryRow` and the header to one aligned grid-track definition.
-3. Add the compact date/time cell and full date/time/path tooltip or accessible
+1. [x] Add `FileBrowserSortHeader` beside the existing shared browser primitives.
+2. [x] Convert `EntryRow` and the header to one aligned grid-track definition.
+3. [x] Add the compact date/time cell and full date/time/path tooltip or accessible
    label.
-4. Verify selected, cut, disabled/dimmed, git-decorated, touch, and narrow-pane
+4. [x] Verify selected, cut, disabled/dimmed, git-decorated, touch, and narrow-pane
    row states still render correctly.
 
 ### Phase 4 — Wire both browser surfaces
@@ -410,7 +410,7 @@ npm run format:check
 - [ ] All four sort states work with directories kept before files.
 - [ ] The default remains Name ascending and Date modified initially chooses
       newest first.
-- [ ] Every row displays localized date and time, with an accessible full value
+- [x] Every row displays localized date and time, with an accessible full value
       and a safe missing-value fallback.
 - [ ] One persisted `uiStore` preference drives both surfaces.
 - [ ] Header changes create a newly ordered server snapshot rather than sorting
