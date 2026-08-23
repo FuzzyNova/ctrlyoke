@@ -152,6 +152,35 @@ suite("CliEventMapper", () => {
       }
     });
 
+    // ── MCP_TOOL_CALL — standard "mcp__<server>__<tool>" format ─────────────
+
+    test("mcp__ctrlyoke__ctrlyoke_append_queue → MCP_TOOL_CALL (server/tool correctly split)", () => {
+      // Regression: the generic "server__tool" branch above would split on the
+      // *first* "__", wrongly extracting server="mcp",
+      // tool="ctrlyoke__ctrlyoke_append_queue" for this format — used both by
+      // Claude Code's native MCP tool names and by Codex's exec-unwrapped
+      // ctrlyoke MCP calls.
+      const result = CliEventMapper.classifyTool(
+        "mcp__ctrlyoke__ctrlyoke_append_queue"
+      );
+      assert.strictEqual(result.type, CLI_EVENT_TYPES.MCP_TOOL_CALL);
+      if (result.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) {
+        assert.strictEqual(result.server, "ctrlyoke");
+        assert.strictEqual(result.tool, "ctrlyoke_append_queue");
+      }
+    });
+
+    test("mcp__github__search_repositories → MCP_TOOL_CALL (server/tool correctly split)", () => {
+      const result = CliEventMapper.classifyTool(
+        "mcp__github__search_repositories"
+      );
+      assert.strictEqual(result.type, CLI_EVENT_TYPES.MCP_TOOL_CALL);
+      if (result.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) {
+        assert.strictEqual(result.server, "github");
+        assert.strictEqual(result.tool, "search_repositories");
+      }
+    });
+
     // ── MCP_TOOL_CALL — Claude dot format ────────────────────────────────────
 
     test("github.search → MCP_TOOL_CALL (Claude dot format)", () => {

@@ -181,6 +181,28 @@ export class CliEventMapper {
       };
     }
 
+    // Standard "mcp__<server>__<tool>" format (Claude Code's convention, also
+    // used for ctrlyoke's own MCP server and Codex's exec-unwrapped calls).
+    // Must be checked before the generic "__" branch below: splitting
+    // "mcp__ctrlyoke__append_queue" on the *first* "__" would wrongly extract
+    // server="mcp", tool="ctrlyoke__append_queue".
+    if (toolName.startsWith("mcp__")) {
+      const rest = toolName.slice(5);
+      const sepIdx = rest.indexOf("__");
+      if (sepIdx > 0) {
+        return {
+          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+          server: rest.slice(0, sepIdx) || "unknown",
+          tool: rest.slice(sepIdx + 2) || "unknown",
+        };
+      }
+      return {
+        type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+        server: "unknown",
+        tool: rest || toolName,
+      };
+    }
+
     // Codex format: "server__tool" (double underscore)
     if (toolName.includes("__")) {
       const [server, tool] = toolName.split("__", 2);

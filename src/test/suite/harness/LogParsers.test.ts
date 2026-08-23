@@ -3316,6 +3316,83 @@ suite("CodexLogParser", () => {
       assert.strictEqual(data.output, "all tests passed\n");
     });
 
+    test("should unwrap exec MCP tool calls into MCP_TOOL_CALL, not opaque exec(...)", () => {
+      // Codex calls ctrlyoke's own MCP server through the same exec wrapper as
+      // shell commands: `tools.mcp__<server>__<tool>(...)`. Before this fix the
+      // call surfaced as a generic "exec" tool call whose row title truncated to
+      // `exec(input: const result = await tools.mcp__ctr...)`, hiding the real
+      // tool name from both the row label and "find in output".
+      const events = [
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call",
+            name: "exec",
+            call_id: "call_mcp_append_queue",
+            input:
+              "const result = await tools.mcp__ctrlyoke__ctrlyoke_append_queue({\n" +
+              '  position: "end",\n' +
+              '  source: "planning pass",\n' +
+              '  steps: [{ name: "Add tests", prompt: "Write tests." }],\n' +
+              "});\n" +
+              'for (const c of (result?.content ?? [])) if (c.type === "text") text(c.text);\n',
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call_output",
+            call_id: "call_mcp_append_queue",
+            output: [
+              { type: "input_text", text: "Queued 1 step at position end." },
+            ],
+          },
+        },
+      ];
+
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+
+      const execToolCalls = response.events.filter(
+        (e) =>
+          e.type === CLI_EVENT_TYPES.TOOL_CALL &&
+          (e.data as { name?: string }).name === "exec"
+      );
+      assert.strictEqual(
+        execToolCalls.length,
+        0,
+        "MCP calls must be unwrapped, not rendered as a generic tool call"
+      );
+
+      const mcpEvents = response.events.filter(
+        (e) => e.type === CLI_EVENT_TYPES.MCP_TOOL_CALL
+      );
+      assert.ok(
+        mcpEvents.length >= 2,
+        "expected INITIATED + COMPLETED MCP_TOOL_CALL events"
+      );
+      const initiated = mcpEvents[0].data as { server: string; tool: string };
+      assert.strictEqual(initiated.server, "ctrlyoke");
+      assert.strictEqual(initiated.tool, "ctrlyoke_append_queue");
+
+      const completed = mcpEvents.find(
+        (e) => (e.data as { result?: unknown }).result
+      );
+      assert.ok(
+        completed,
+        "expected a completed MCP_TOOL_CALL event with a result"
+      );
+      const completedData = completed!.data as {
+        result?: { success: boolean; output: string };
+      };
+      assert.strictEqual(completedData.result?.success, true);
+      assert.strictEqual(
+        completedData.result?.output,
+        "Queued 1 step at position end."
+      );
+    });
+
     test("should unwrap exec_command's cmd field into BASH_COMMAND (newer gpt-5.x sandbox helper)", () => {
       // Even newer Codex builds call `tools.exec_command({cmd, workdir, ...})`
       // (not `tools.shell_command({command, ...})`) and forward the whole result

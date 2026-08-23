@@ -10,6 +10,7 @@ import {
   AskUserQuestionEntry,
   AskUserQuestionOption,
   TextData,
+  McpToolCallData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -24,10 +25,9 @@ import { BaseToolBuilder } from "../shared/BaseToolBuilder";
  * Event types that need toolCallMap registration (i.e. they have a matching
  * COMPLETED event format that references the same call_id).
  *
- * MCP_TOOL_CALL and WEB_SEARCH are point-in-time — no separate completion
- * event arrives for them. TOOL_CALL (generic fallback) also has no tracked
- * completion. BASH, FILE_*, and request_user_input have matching output
- * events.
+ * WEB_SEARCH is point-in-time — no separate completion event arrives for it.
+ * TOOL_CALL (generic fallback) also has no tracked completion. BASH, FILE_*,
+ * MCP_TOOL_CALL, and request_user_input have matching output events.
  */
 const TYPES_WITH_COMPLETION = new Set<string>([
   CLI_EVENT_TYPES.BASH_COMMAND,
@@ -36,6 +36,7 @@ const TYPES_WITH_COMPLETION = new Set<string>([
   CLI_EVENT_TYPES.FILE_EDIT,
   CLI_EVENT_TYPES.FILE_DELETE,
   CLI_EVENT_TYPES.ASK_USER_QUESTION,
+  CLI_EVENT_TYPES.MCP_TOOL_CALL,
 ]);
 
 /**
@@ -177,13 +178,19 @@ export class CodexToolBuilder {
    * ```js
    * const r = await tools.update_plan({plan: [{step: "...", status: "..."}]});
    * ```
+   * ```js
+   * const result = await tools.mcp__ctrlyoke__ctrlyoke_append_queue({ position: "end", steps: [...] });
+   * ```
    *
    * This unwraps that snippet back into the underlying shell command,
-   * apply_patch payload, plan update, or backgrounded-session poll and
-   * delegates to {@link buildLogToolInitiatedEvents} / {@link buildPlanEvents}
-   * so the rest of the pipeline emits BASH_COMMAND / FILE_EDIT / TEXT events
-   * instead of an opaque `exec(input: ...)` tool-call row. Falls back to a
-   * generic tool call when the snippet cannot be parsed.
+   * apply_patch payload, plan update, backgrounded-session poll, or MCP tool
+   * invocation and delegates to {@link buildLogToolInitiatedEvents} /
+   * {@link buildPlanEvents} so the rest of the pipeline emits BASH_COMMAND /
+   * FILE_EDIT / TEXT / MCP_TOOL_CALL events instead of an opaque
+   * `exec(input: ...)` tool-call row — the opaque form is also what defeats
+   * "find in output", since the row title truncates before the real tool
+   * name is reached. Falls back to a generic tool call when the snippet
+   * cannot be parsed.
    *
    * @param input     - The raw JavaScript snippet from `payload.input`
    * @param callId    - Call ID for correlation with the COMPLETED event
@@ -216,6 +223,15 @@ export class CodexToolBuilder {
       );
     }
 
+    if (parsed.kind === "mcp") {
+      return this.buildLogToolInitiatedEvents(
+        parsed.toolName,
+        this.parseMcpCallArguments(parsed.argsText),
+        callId,
+        timestamp
+      );
+    }
+
     if (parsed.kind === "plan") {
       return this.buildPlanEvents(parsed.items, timestamp);
     }
@@ -242,20 +258,44 @@ export class CodexToolBuilder {
   }
 
   /**
+   * Matches an MCP tool invocation inside a Codex `exec` snippet, e.g.
+   * `tools.mcp__ctrlyoke__ctrlyoke_append_queue(`. Checked before every other
+   * branch in {@link parseExecInput}: an MCP call's JSON-ish argument object
+   * (often a multi-line prompt string) can freely contain words like
+   * "apply_patch" or "command:" that would otherwise false-positive on the
+   * other heuristics below.
+   */
+  private static readonly MCP_TOOL_CALL_PATTERN =
+    /\btools\.(mcp__[A-Za-z0-9_-]+)\s*\(/;
+
+  /**
    * Unwrap a Codex `exec` JavaScript snippet into its underlying operation.
    *
    * @returns A shell command (with optional workdir), an apply_patch payload,
    *          a plan/todo-list update, a backgrounded-session poll/input
-   *          (`write_stdin`), or null when the snippet matches no known helper.
+   *          (`write_stdin`), an MCP tool invocation, or null when the
+   *          snippet matches no known helper.
    */
   static parseExecInput(
     input: string
   ):
     | { kind: "shell"; command: string; workdir?: string }
     | { kind: "patch"; patch: string }
+    | { kind: "mcp"; toolName: string; argsText: string }
     | { kind: "plan"; items: Array<{ step: string; status: string }> }
     | { kind: "continue"; sessionId?: string; chars: string }
     | null {
+    const mcpMatch = this.MCP_TOOL_CALL_PATTERN.exec(input);
+    if (mcpMatch) {
+      const toolName = mcpMatch[1];
+      const argsStart = mcpMatch.index + mcpMatch[0].length;
+      const argsText = this.extractBalancedCallArguments(
+        input,
+        argsStart
+      ).trim();
+      return { kind: "mcp", toolName, argsText };
+    }
+
     if (input.includes("apply_patch") || input.includes("*** Begin Patch")) {
       const patch = this.extractJsStringLiterals(input).find((literal) =>
         literal.includes("*** Begin Patch")
@@ -331,6 +371,67 @@ export class CodexToolBuilder {
         data: { text: `Todo List:\n${todoText}` } as TextData,
       },
     ];
+  }
+
+  /**
+   * Extract the raw argument text of a `tools.<mcpTool>(...)` call, starting
+   * just past its opening `(`. Scans char-by-char tracking combined
+   * paren/brace/bracket depth (skipping over string/template literals via
+   * {@link readJsStringLiteral}) so nested calls, object/array literals, and
+   * multi-line prompt strings inside the arguments don't break on their own
+   * `(`/`{`/`[` characters. Returns the substring up to (excluding) the
+   * matching closing `)`.
+   */
+  private static extractBalancedCallArguments(
+    src: string,
+    start: number
+  ): string {
+    let i = start;
+    let depth = 1; // already past the call's opening '('
+    while (i < src.length && depth > 0) {
+      const ch = src[i];
+      if (ch === '"' || ch === "'" || ch === "`") {
+        const literal = this.readJsStringLiteral(src, i);
+        if (literal) {
+          i = literal.endIdx;
+          continue;
+        }
+      }
+      if (ch === "(" || ch === "{" || ch === "[") {
+        depth += 1;
+      } else if (ch === ")" || ch === "}" || ch === "]") {
+        depth -= 1;
+        if (depth === 0) break;
+      }
+      i += 1;
+    }
+    return src.slice(start, i);
+  }
+
+  /**
+   * Best-effort conversion of an MCP call's argument text into a params
+   * object for display. Codex's `exec` wrapper serializes arguments as a JS
+   * object literal (bare keys, template-literal strings) rather than JSON, so
+   * `JSON.parse` only succeeds for simple/empty argument objects (e.g. `{}`).
+   * Anything else falls back to showing the raw call text verbatim — the
+   * user explicitly doesn't want a bespoke MCP-argument parser/viewer here,
+   * just a discoverable, honest view of what was actually sent.
+   */
+  private static parseMcpCallArguments(
+    argsText: string
+  ): Record<string, unknown> {
+    if (!argsText) {
+      return {};
+    }
+    try {
+      const parsed = JSON.parse(argsText) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Not valid JSON (bare keys, template literals, trailing commas, ...)
+    }
+    return { arguments: argsText };
   }
 
   /**
@@ -665,6 +766,16 @@ export class CodexToolBuilder {
           },
         ];
 
+      case CLI_EVENT_TYPES.MCP_TOOL_CALL:
+        return [
+          this.buildMcpToolCallCompletedEvent(
+            primaryInitiatedData as McpToolCallData | undefined,
+            outputText,
+            success,
+            timestamp
+          ),
+        ];
+
       default:
         return [
           {
@@ -677,6 +788,28 @@ export class CodexToolBuilder {
           },
         ];
     }
+  }
+
+  /**
+   * Build a COMPLETED MCP_TOOL_CALL event, embedding the tool result onto the
+   * same `server`/`tool`/`parameters` carried by the INITIATED event.
+   */
+  private static buildMcpToolCallCompletedEvent(
+    initiatedData: McpToolCallData | undefined,
+    outputText: string,
+    success: boolean,
+    timestamp: number
+  ): CliEvent {
+    return {
+      type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+      timestamp,
+      data: {
+        server: initiatedData?.server ?? "unknown",
+        tool: initiatedData?.tool ?? "unknown",
+        parameters: initiatedData?.parameters,
+        result: { success, output: outputText },
+      } as McpToolCallData,
+    };
   }
 
   /**
@@ -707,6 +840,15 @@ export class CodexToolBuilder {
         callId,
         timestamp,
         initiatedEvent
+      );
+    }
+
+    if (initiatedEvent?.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) {
+      return this.buildMcpToolCallCompletedEvent(
+        initiatedEvent.data as McpToolCallData | undefined,
+        rawOutput,
+        true,
+        timestamp
       );
     }
 
