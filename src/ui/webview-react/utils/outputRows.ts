@@ -9,6 +9,7 @@ import type {
   AskUserQuestionData,
   CliOutput as CliOutputType,
   CliEvent,
+  McpToolCallData,
   OutputStatusMessage,
   ToolCall,
 } from "../types/cliEvents";
@@ -1311,14 +1312,6 @@ function estimateStructuredTextHeight(
         data.error
       );
     }
-    case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
-      const data = row.event.data as { server?: string; tool?: string };
-      return estimateTerminalSummaryHeight(
-        `MCP ${data.server ?? "server"}.${data.tool ?? "tool"}`,
-        outputContentWidth,
-        outputFontSize
-      );
-    }
     case CLI_EVENT_TYPES.WEB_SEARCH: {
       const data = row.event.data as { query?: string; error?: string };
       return estimateTerminalSummaryHeight(
@@ -1391,7 +1384,11 @@ function estimateBaseStructuredEventHeight(
   outputContentWidth: number | undefined,
   outputFontSize: number
 ): number {
-  if (row.event.type === CLI_EVENT_TYPES.TOOL_CALL && row.toolCall) {
+  if (
+    (row.event.type === CLI_EVENT_TYPES.TOOL_CALL ||
+      row.event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL) &&
+    row.toolCall
+  ) {
     return estimateToolCallStructuredEventHeight(
       row,
       outputFontSize,
@@ -1426,7 +1423,11 @@ function estimateToolCallStructuredEventHeight(
   outputFontSize: number,
   outputContentWidth?: number
 ): number {
-  if (row.event.type !== CLI_EVENT_TYPES.TOOL_CALL || !row.toolCall) {
+  if (
+    (row.event.type !== CLI_EVENT_TYPES.TOOL_CALL &&
+      row.event.type !== CLI_EVENT_TYPES.MCP_TOOL_CALL) ||
+    !row.toolCall
+  ) {
     return 64;
   }
 
@@ -1437,7 +1438,7 @@ function estimateToolCallStructuredEventHeight(
     return row.toolCall.renderPlan.totalHeight;
   }
 
-  const data = row.event.data as ToolCall;
+  const data = row.event.data as ToolCall | McpToolCallData;
   return estimateGenericToolCallHeight(
     data.parameters,
     data.result,
@@ -2005,15 +2006,20 @@ export function buildOutputRows(
           ? diffKeyBase
           : null;
       const toolCallExpansion =
-        visibleEvent.event.type === CLI_EVENT_TYPES.TOOL_CALL
+        visibleEvent.event.type === CLI_EVENT_TYPES.TOOL_CALL ||
+        visibleEvent.event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL
           ? (input.toolCallExpansionState.get(rowKey) ??
             DEFAULT_TOOL_CALL_EXPANSION_STATE)
           : undefined;
       const toolCallRenderPlan =
-        visibleEvent.event.type === CLI_EVENT_TYPES.TOOL_CALL
+        visibleEvent.event.type === CLI_EVENT_TYPES.TOOL_CALL ||
+        visibleEvent.event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL
           ? buildToolCallRenderPlan({
-              parameters: (visibleEvent.event.data as ToolCall).parameters,
-              result: (visibleEvent.event.data as ToolCall).result,
+              parameters: (
+                visibleEvent.event.data as ToolCall | McpToolCallData
+              ).parameters,
+              result: (visibleEvent.event.data as ToolCall | McpToolCallData)
+                .result,
               expansion: toolCallExpansion,
               outputFontSize: input.outputFontSize,
               outputContentWidth: toolCallContentWidth,

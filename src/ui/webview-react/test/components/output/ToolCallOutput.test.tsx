@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { GenericToolCallOutput } from "@components/output/ToolCallOutput";
+import {
+  GenericToolCallOutput,
+  McpToolCallOutput,
+} from "@components/output/ToolCallOutput";
 import { buildToolCallRenderPlan } from "@utils/toolCallLayout";
 import { DEFAULT_COLLAPSED_OUTPUT_MAX_LINES } from "@utils/outputTruncation";
 
@@ -241,5 +244,39 @@ describe("GenericToolCallOutput", () => {
     expect(
       screen.queryByText(/exec\(input: .*\.{6}\)$/i)
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("McpToolCallOutput", () => {
+  it("reveals the complete parameter text with one expansion click", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <McpToolCallOutput
+        server="ctrlyoke"
+        tool="append_queue"
+        parameters={{
+          prompt: "queue the next step",
+          properties: { harness: "codex-cli" },
+        }}
+        showLabel
+      />
+    );
+
+    expect(screen.getByText("Show parameters")).toBeInTheDocument();
+    expect(
+      screen.queryByText("prompt: queue the next step")
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByTitle("Show all parameters"));
+
+    expect(screen.getByTitle("Hide parameters")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.textContent ===
+          'prompt: queue the next step\nproperties: {"harness":"codex-cli"}'
+      )
+    ).toBeInTheDocument();
   });
 });

@@ -766,11 +766,18 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           <McpToolCallOutput
             server={data.server}
             tool={data.tool}
+            parameters={data.parameters}
             result={data.result}
+            showLabel={row.showParamsLabel}
             labelContent={highlightText(
               `MCP: ${data.server}.${data.tool}`,
               getFieldMatches("toolLabel")
             )}
+            expansion={row.toolCall?.expansion}
+            renderPlan={row.toolCall?.renderPlan}
+            onExpansionChange={(section, expanded) =>
+              onToolCallExpansionChange?.(row.key, section, expanded)
+            }
           />
         );
       }

@@ -53,7 +53,15 @@ function resultDotStatus(result?: ToolResult): "pending" | "success" | "error" {
 interface McpToolCallOutputProps {
   server: string;
   tool: string;
+  parameters?: Record<string, unknown>;
   result?: ToolResult;
+  showLabel?: boolean;
+  expansion?: ToolCallExpansionState;
+  renderPlan?: ToolCallRenderPlan;
+  onExpansionChange?: (
+    section: ToolCallExpansionSection,
+    expanded: boolean
+  ) => void;
   labelContent?: React.ReactNode;
   className?: string;
 }
@@ -61,20 +69,128 @@ interface McpToolCallOutputProps {
 export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
   server,
   tool,
+  parameters,
   result,
+  showLabel = false,
+  expansion,
+  renderPlan,
+  onExpansionChange,
   labelContent,
   className = "",
-}) => (
-  <ToolCallBlock
-    className={className}
-    dot={<ToolDot status={resultDotStatus(result)} />}
-    header={
-      <span className="min-w-0 [overflow-wrap:anywhere]">
-        {labelContent ?? `MCP: ${server}.${tool}`}
-      </span>
+}) => {
+  const [uncontrolledExpansion, setUncontrolledExpansion] =
+    useState<ToolCallExpansionState>(() => ({
+      ...DEFAULT_TOOL_CALL_EXPANSION_STATE,
+    }));
+  const containerId = useId();
+  const resolvedExpansion = expansion ?? uncontrolledExpansion;
+  const fullParamsText = getGenericToolCallParamsText(parameters);
+  const { output: outputStr, error: errorStr } =
+    getGenericToolCallOutput(result);
+  const resolvedRenderPlan =
+    renderPlan ??
+    buildToolCallRenderPlan({
+      parameters,
+      result,
+      expansion: resolvedExpansion,
+    });
+
+  const updateExpansion = (
+    section: ToolCallExpansionSection,
+    expanded: boolean
+  ) => {
+    if (expansion === undefined) {
+      setUncontrolledExpansion((previous) => {
+        switch (section) {
+          case "params":
+            return { ...previous, paramsExpanded: expanded };
+          case "output":
+            return { ...previous, outputExpanded: expanded };
+          case "error":
+            return { ...previous, errorExpanded: expanded };
+          default:
+            return previous;
+        }
+      });
     }
-  />
-);
+    onExpansionChange?.(section, expanded);
+  };
+
+  const renderExpandableSection = (
+    content: string,
+    type: "output" | "error",
+    sectionPlan: ToolCallSectionRenderPlan
+  ) => {
+    const cssClass = type === "error" ? TOOL_ERROR_LINE : TOOL_RESULT_LINE;
+    const visibleText = getVisibleToolCallText(content, sectionPlan);
+
+    return (
+      <div className={`${cssClass} flex items-start gap-1`}>
+        <span className="shrink-0">⎿</span>
+        <div
+          className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]"
+          id={`${containerId}-${type}`}
+        >
+          {visibleText}
+          {sectionPlan.canToggle && (
+            <button
+              type="button"
+              className="text-bash-expand-link no-underline text-[length:var(--fp-output-font-size-sm)] ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
+              onClick={(event) => {
+                event.preventDefault();
+                updateExpansion(type, !sectionPlan.isExpanded);
+              }}
+            >
+              {sectionPlan.isExpanded
+                ? "[show less]"
+                : formatCollapsedOutputToggleLabel(sectionPlan, false)}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <ToolCallBlock
+      className={className}
+      dot={<ToolDot status={resultDotStatus(result)} />}
+      header={
+        <>
+          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+            {labelContent ?? `MCP: ${server}.${tool}`}
+          </span>
+          {resolvedRenderPlan.params.canToggle && (
+            <ToolCallExpandToggle
+              expanded={resolvedRenderPlan.params.isExpanded}
+              onToggle={() =>
+                updateExpansion("params", !resolvedRenderPlan.params.isExpanded)
+              }
+              label="Show parameters"
+              showLabel={showLabel}
+              title={
+                resolvedRenderPlan.params.isExpanded
+                  ? "Hide parameters"
+                  : "Show all parameters"
+              }
+            />
+          )}
+        </>
+      }
+    >
+      {resolvedRenderPlan.params.visibleLineCount > 0 && fullParamsText && (
+        <div className="text-[length:var(--fp-output-font-size-sm)] text-description-fg whitespace-pre-wrap [overflow-wrap:anywhere]">
+          {fullParamsText}
+        </div>
+      )}
+
+      {outputStr &&
+        renderExpandableSection(outputStr, "output", resolvedRenderPlan.output)}
+      {errorStr &&
+        renderExpandableSection(errorStr, "error", resolvedRenderPlan.error)}
+    </ToolCallBlock>
+  );
+};
 
 // ============================================================================
 // WebSearchOutput

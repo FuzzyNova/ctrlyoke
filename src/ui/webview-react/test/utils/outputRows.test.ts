@@ -227,6 +227,102 @@ describe("outputRows", () => {
     expect(toolCallRow.toolCall?.renderPlan.maxResultChars).toBeLessThan(1200);
   });
 
+  it("uses the shared expansion metadata and height estimate for MCP rows", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const rowKey = "queue:0:run0:attempt0:event:0";
+    const output = Array.from(
+      { length: 12 },
+      (_, index) => `result line ${index + 1}`
+    ).join("\n");
+    const allMessages: OutputMessage[] = [
+      {
+        type: "cli",
+        target,
+        timestamp: 1000,
+        attemptIndex: 0,
+        runIndex: 0,
+        data: {
+          prompt: "Call MCP tool",
+          response: "",
+          elapsed: 0,
+          isStreaming: false,
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+                data: {
+                  server: "ctrlyoke",
+                  tool: "append_queue",
+                  parameters: { prompt: "queue the next step" },
+                  result: { success: true, output },
+                },
+              },
+            ],
+            metadata: {},
+          },
+        },
+      },
+    ];
+    const buildRows = (expansion: {
+      paramsExpanded: boolean;
+      outputExpanded: boolean;
+      errorExpanded: boolean;
+    }) =>
+      buildOutputRows({
+        allMessages,
+        steps,
+        finalStep: null,
+        streamingChunks: {},
+        finalStepStreamingChunks: {},
+        isExecutionActive: false,
+        allowUndoActions: false,
+        isViewingHistory: false,
+        historyOutputs: null,
+        workspaceSnapshots: {},
+        finalStepWorkspaceSnapshots: {},
+        undoRecords: {},
+        diffCollapseState: new Map(),
+        diffExpansionState: new Map(),
+        toolCallExpansionState: new Map([[rowKey, expansion]]),
+        defaultDiffCollapsed: false,
+        outputContentWidth: 760,
+        outputFontSize: 13,
+      }).rows.find(
+        (row) => row.rowKind === "structured-event" && row.key === rowKey
+      );
+
+    const collapsed = buildRows({
+      paramsExpanded: false,
+      outputExpanded: false,
+      errorExpanded: false,
+    });
+    const expanded = buildRows({
+      paramsExpanded: true,
+      outputExpanded: true,
+      errorExpanded: false,
+    });
+
+    if (
+      !collapsed ||
+      collapsed.rowKind !== "structured-event" ||
+      !collapsed.toolCall ||
+      !expanded ||
+      expanded.rowKind !== "structured-event" ||
+      !expanded.toolCall
+    ) {
+      throw new Error("Expected MCP tool-call rows with expansion metadata");
+    }
+
+    expect(collapsed.toolCall.renderPlan.params.visibleLineCount).toBe(0);
+    expect(expanded.toolCall.renderPlan.params.visibleLineCount).toBe(1);
+    expect(estimateOutputRowHeight(expanded, 13, 760)).toBe(
+      expanded.toolCall.renderPlan.totalHeight
+    );
+    expect(estimateOutputRowHeight(expanded, 13, 760)).toBeGreaterThan(
+      estimateOutputRowHeight(collapsed, 13, 760)
+    );
+  });
+
   it("adds a verdict between the response and stats rows", () => {
     const result = buildOutputRows({
       allMessages: [
