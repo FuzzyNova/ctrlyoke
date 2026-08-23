@@ -9,6 +9,7 @@ import {
   AskUserQuestionData,
   AskUserQuestionEntry,
   AskUserQuestionOption,
+  TextData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -164,18 +165,25 @@ export class CodexToolBuilder {
    * `input` is a JavaScript snippet driving sandbox helpers, e.g.:
    *
    * ```js
-   * const r = await tools.shell_command({command:"...", workdir:"..."}); text(r)
+   * const r = await tools.exec_command({cmd:"...", workdir:"..."}); text(r.output)
    * ```
    * ```js
    * const patch = "*** Begin Patch\n...*** End Patch";
    * text(await tools.apply_patch(patch));
    * ```
+   * ```js
+   * const r = await tools.write_stdin({session_id: 56047, chars: ""}); text(...)
+   * ```
+   * ```js
+   * const r = await tools.update_plan({plan: [{step: "...", status: "..."}]});
+   * ```
    *
-   * This unwraps that snippet back into the underlying shell command or
-   * apply_patch payload and delegates to {@link buildLogToolInitiatedEvents} so
-   * the rest of the pipeline emits BASH_COMMAND / FILE_EDIT events instead of an
-   * opaque `exec(input: ...)` tool-call row. Falls back to a generic tool call
-   * when the snippet cannot be parsed.
+   * This unwraps that snippet back into the underlying shell command,
+   * apply_patch payload, plan update, or backgrounded-session poll and
+   * delegates to {@link buildLogToolInitiatedEvents} / {@link buildPlanEvents}
+   * so the rest of the pipeline emits BASH_COMMAND / FILE_EDIT / TEXT events
+   * instead of an opaque `exec(input: ...)` tool-call row. Falls back to a
+   * generic tool call when the snippet cannot be parsed.
    *
    * @param input     - The raw JavaScript snippet from `payload.input`
    * @param callId    - Call ID for correlation with the COMPLETED event
@@ -208,6 +216,23 @@ export class CodexToolBuilder {
       );
     }
 
+    if (parsed.kind === "plan") {
+      return this.buildPlanEvents(parsed.items, timestamp);
+    }
+
+    if (parsed.kind === "continue") {
+      const sessionLabel = parsed.sessionId ?? "?";
+      const command = parsed.chars
+        ? `(sending input to running command, session ${sessionLabel}): ${parsed.chars}`
+        : `(waiting for output from running command, session ${sessionLabel})`;
+      return this.buildLogToolInitiatedEvents(
+        "shell_command",
+        { command },
+        callId,
+        timestamp
+      );
+    }
+
     return this.buildLogToolInitiatedEvents(
       "shell_command",
       { command: parsed.command, workingDir: parsed.workdir },
@@ -219,14 +244,17 @@ export class CodexToolBuilder {
   /**
    * Unwrap a Codex `exec` JavaScript snippet into its underlying operation.
    *
-   * @returns A shell command (with optional workdir), an apply_patch payload, or
-   *          null when the snippet matches no known helper.
+   * @returns A shell command (with optional workdir), an apply_patch payload,
+   *          a plan/todo-list update, a backgrounded-session poll/input
+   *          (`write_stdin`), or null when the snippet matches no known helper.
    */
   static parseExecInput(
     input: string
   ):
     | { kind: "shell"; command: string; workdir?: string }
     | { kind: "patch"; patch: string }
+    | { kind: "plan"; items: Array<{ step: string; status: string }> }
+    | { kind: "continue"; sessionId?: string; chars: string }
     | null {
     if (input.includes("apply_patch") || input.includes("*** Begin Patch")) {
       const patch = this.extractJsStringLiterals(input).find((literal) =>
@@ -237,8 +265,28 @@ export class CodexToolBuilder {
       }
     }
 
-    if (input.includes("shell_command") || /\bcommand\s*:/.test(input)) {
-      const command = this.readJsObjectStringValue(input, "command");
+    if (input.includes("update_plan")) {
+      const items = this.parsePlanItems(input);
+      if (items.length > 0) {
+        return { kind: "plan", items };
+      }
+    }
+
+    if (input.includes("write_stdin")) {
+      const sessionIdMatch = /\bsession_id\s*:\s*(\d+)/.exec(input);
+      const chars = this.readJsObjectStringValue(input, "chars") ?? "";
+      return { kind: "continue", sessionId: sessionIdMatch?.[1], chars };
+    }
+
+    if (
+      input.includes("shell_command") ||
+      input.includes("exec_command") ||
+      /\bcommand\s*:/.test(input) ||
+      /\bcmd\s*:/.test(input)
+    ) {
+      const command =
+        this.readJsObjectStringValue(input, "command") ??
+        this.readJsObjectStringValue(input, "cmd");
       if (command !== undefined) {
         const workdir = this.readJsObjectStringValue(input, "workdir");
         return { kind: "shell", command, workdir };
@@ -246,6 +294,100 @@ export class CodexToolBuilder {
     }
 
     return null;
+  }
+
+  /**
+   * Parse the `plan: [{step, status}, ...]` array out of a Codex
+   * `tools.update_plan({...})` exec snippet. Uses brace/bracket-balanced
+   * scanning (not `JSON.parse`) because Codex serializes these with bare
+   * (unquoted) JS object keys.
+   */
+  private static parsePlanItems(
+    input: string
+  ): Array<{ step: string; status: string }> {
+    return this.extractJsObjectArrayElements(input, "plan")
+      .map((element) => ({
+        step: this.readJsObjectStringValue(element, "step") ?? "",
+        status: this.readJsObjectStringValue(element, "status") ?? "",
+      }))
+      .filter((item) => item.step.length > 0);
+  }
+
+  /** Build the compact "Todo List" text event used to render a plan update. */
+  private static buildPlanEvents(
+    items: Array<{ step: string; status: string }>,
+    timestamp: number
+  ): CliEvent[] {
+    const todoText = items
+      .map(
+        (item, index) =>
+          `${index + 1}. [${item.status === "completed" ? "x" : " "}] ${item.step}`
+      )
+      .join("\n");
+    return [
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp,
+        data: { text: `Todo List:\n${todoText}` } as TextData,
+      },
+    ];
+  }
+
+  /**
+   * Extract each top-level `{ ... }` object substring from a `key: [ ... ]`
+   * array within a JS object literal. Scans char-by-char (skipping over
+   * string literals, so braces/brackets embedded in string content don't
+   * confuse the depth count) rather than using `JSON.parse`, since Codex's
+   * `exec` wrapper snippets use bare (unquoted) object keys.
+   */
+  private static extractJsObjectArrayElements(
+    src: string,
+    key: string
+  ): string[] {
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const keyRegex = new RegExp(
+      `(?:["']${escapedKey}["']|${escapedKey})\\s*:\\s*\\[`
+    );
+    const match = keyRegex.exec(src);
+    if (!match) {
+      return [];
+    }
+
+    let i = match.index + match[0].length; // just past the array's '['
+    let bracketDepth = 1;
+    let braceDepth = 0;
+    let objectStart = -1;
+    const elements: string[] = [];
+
+    while (i < src.length && bracketDepth > 0) {
+      const ch = src[i];
+      if (ch === '"' || ch === "'" || ch === "`") {
+        const literal = this.readJsStringLiteral(src, i);
+        if (literal) {
+          i = literal.endIdx;
+          continue;
+        }
+      }
+      if (ch === "[") {
+        bracketDepth += 1;
+      } else if (ch === "]") {
+        bracketDepth -= 1;
+      } else if (ch === "{") {
+        if (braceDepth === 0) {
+          objectStart = i;
+        }
+        braceDepth += 1;
+      } else if (ch === "}") {
+        braceDepth -= 1;
+        if (braceDepth === 0 && objectStart !== -1) {
+          elements.push(src.slice(objectStart, i + 1));
+          objectStart = -1;
+        }
+      }
+      i += 1;
+    }
+
+    return elements;
   }
 
   /**

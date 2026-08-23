@@ -3316,6 +3316,197 @@ suite("CodexLogParser", () => {
       assert.strictEqual(data.output, "all tests passed\n");
     });
 
+    test("should unwrap exec_command's cmd field into BASH_COMMAND (newer gpt-5.x sandbox helper)", () => {
+      // Even newer Codex builds call `tools.exec_command({cmd, workdir, ...})`
+      // (not `tools.shell_command({command, ...})`) and forward the whole result
+      // object via JSON.stringify(r) instead of r.output — both of which must be
+      // unwrapped so the row shows the real command instead of raw JS/JSON.
+      const events = [
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call",
+            name: "exec",
+            call_id: "call_exec_cmd",
+            input:
+              'const r = await tools.exec_command({cmd: "npm run lint", ' +
+              'workdir: "C:\\\\dev\\\\ctrlyoke", yield_time_ms: 1000, ' +
+              "max_output_tokens: 16000}); text(JSON.stringify(r));",
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call_output",
+            call_id: "call_exec_cmd",
+            output: [
+              {
+                type: "input_text",
+                text: "Script completed\nWall time 1.0 seconds\nOutput:\n",
+              },
+              {
+                type: "input_text",
+                text:
+                  '{"chunk_id":"580097","wall_time_seconds":1.0,"session_id":56047,' +
+                  '"exit_code":0,"original_token_count":13,' +
+                  '"output":"\\n> ctrlyoke@0.1.0 lint\\n> eslint src\\n\\n"}',
+              },
+            ],
+          },
+        },
+      ];
+
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+
+      const execToolCalls = response.events.filter(
+        (e) =>
+          e.type === CLI_EVENT_TYPES.TOOL_CALL &&
+          (e.data as { name?: string }).name === "exec"
+      );
+      assert.strictEqual(
+        execToolCalls.length,
+        0,
+        "exec_command must be unwrapped, not rendered as a generic tool call"
+      );
+
+      const bashEvents = response.events.filter(
+        (e) => e.type === CLI_EVENT_TYPES.BASH_COMMAND
+      );
+      assert.ok(
+        bashEvents.length >= 2,
+        "expected INITIATED + COMPLETED bash events"
+      );
+      assert.strictEqual(
+        (bashEvents[0].data as { command?: string }).command,
+        "npm run lint"
+      );
+      const completed = bashEvents.find(
+        (e) => (e.data as { output?: string }).output
+      );
+      assert.ok(completed, "expected a completed bash event with output");
+      const data = completed!.data as { output: string; exitCode?: number };
+      assert.strictEqual(data.exitCode, 0);
+      // Should show the real stdout, not the JSON.stringify(r) metadata blob.
+      assert.strictEqual(
+        data.output,
+        "\n> ctrlyoke@0.1.0 lint\n> eslint src\n\n"
+      );
+    });
+
+    test("should render exec write_stdin polls as a labeled BASH_COMMAND, not opaque exec(...)", () => {
+      // Long-running commands time out at yield_time_ms and hand back a
+      // session_id; Codex then polls via tools.write_stdin({session_id, chars})
+      // instead of re-issuing exec_command. These must not surface as a raw
+      // `exec(input: const r = await tools.write_stdin(...))` tool-call row.
+      const events = [
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call",
+            name: "exec",
+            call_id: "call_write_stdin",
+            input:
+              'const r = await tools.write_stdin({session_id: 56047, chars: "", ' +
+              "yield_time_ms: 1000, max_output_tokens: 16000}); text(JSON.stringify(r));",
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call_output",
+            call_id: "call_write_stdin",
+            output: [
+              {
+                type: "input_text",
+                text: "Script completed\nWall time 5.0 seconds\nOutput:\n",
+              },
+              {
+                type: "input_text",
+                text:
+                  '{"chunk_id":"108903","wall_time_seconds":5.0,"session_id":56047,' +
+                  '"original_token_count":0,"output":""}',
+              },
+            ],
+          },
+        },
+      ];
+
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+
+      const execToolCalls = response.events.filter(
+        (e) =>
+          e.type === CLI_EVENT_TYPES.TOOL_CALL &&
+          (e.data as { name?: string }).name === "exec"
+      );
+      assert.strictEqual(
+        execToolCalls.length,
+        0,
+        "write_stdin must be unwrapped, not rendered as a generic tool call"
+      );
+
+      const bashEvents = response.events.filter(
+        (e) => e.type === CLI_EVENT_TYPES.BASH_COMMAND
+      );
+      assert.ok(bashEvents.length >= 1, "expected a BASH_COMMAND event");
+      const command = (bashEvents[0].data as { command?: string }).command;
+      assert.ok(
+        command?.includes("56047"),
+        `expected label to reference the session id, got: ${command}`
+      );
+    });
+
+    test("should unwrap exec update_plan into a Todo List TEXT event", () => {
+      // Plan/todo updates also arrive wrapped in the `exec` tool with bare
+      // (unquoted) object keys, so JSON.parse cannot be used directly.
+      const events = [
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call",
+            name: "exec",
+            call_id: "call_update_plan",
+            input:
+              "const r = await tools.update_plan({plan: [\n" +
+              '  {step: "Inspect current implementation", status: "completed"},\n' +
+              '  {step: "Add coverage", status: "in_progress"},\n' +
+              '  {step: "Verify", status: "pending"}\n' +
+              "]}); text(JSON.stringify(r));",
+          },
+        },
+      ];
+
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+
+      const execToolCalls = response.events.filter(
+        (e) =>
+          e.type === CLI_EVENT_TYPES.TOOL_CALL &&
+          (e.data as { name?: string }).name === "exec"
+      );
+      assert.strictEqual(
+        execToolCalls.length,
+        0,
+        "update_plan must be unwrapped, not rendered as a generic tool call"
+      );
+
+      const textEvents = response.events.filter(
+        (e) => e.type === CLI_EVENT_TYPES.TEXT
+      );
+      const planText = textEvents.find((e) =>
+        (e.data as { text?: string }).text?.includes("Todo List:")
+      );
+      assert.ok(planText, "expected a Todo List text event");
+      const text = (planText!.data as { text: string }).text;
+      assert.ok(text.includes("[x] Inspect current implementation"));
+      assert.ok(text.includes("[ ] Add coverage"));
+      assert.ok(text.includes("[ ] Verify"));
+    });
+
     test("should unwrap exec apply_patch into FILE_EDIT (gpt-5.x format)", () => {
       // exec apply_patch: the patch is a JS string literal (escaped \n / \\) and the
       // patch_apply_end event uses a separate `exec-<uuid>` call_id that does NOT

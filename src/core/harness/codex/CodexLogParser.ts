@@ -1395,10 +1395,16 @@ export class CodexLogParser extends BaseLogParser {
 
   /**
    * Normalize a Codex `custom_tool_call_output` payload into display text and an
-   * exit code. Handles both output shapes:
+   * exit code. Handles all observed output shapes:
    * - Legacy: a JSON string with `output` / `metadata.exit_code`.
-   * - Newer (gpt-5.x): an array of `{type, text}` parts whose text carries a
-   *   `Exit code: N` line and an `Output:\n<content>` body.
+   * - gpt-5.x `exec` wrapper, `text(r.output)`: an array of `{type, text}` parts
+   *   whose text carries a `Exit code: N` line and an `Output:\n<content>` body
+   *   that is already the command's raw stdout.
+   * - gpt-5.x `exec` wrapper, `text(JSON.stringify(r))`: the same
+   *   `Output:\n<content>` body, but `<content>` is itself a JSON object
+   *   (`{chunk_id, session_id, exit_code?, output}`) from the sandbox's
+   *   `exec_command`/`write_stdin` helpers — unwrap it one level further so the
+   *   displayed text is the real command output, not the whole metadata blob.
    */
   private parseCustomToolCallOutput(output: unknown): {
     outputText: string;
@@ -1422,6 +1428,20 @@ export class CodexLogParser extends BaseLogParser {
       const outIdx = raw.lastIndexOf("Output:\n");
       if (outIdx >= 0) {
         outputText = raw.slice(outIdx + "Output:\n".length);
+      }
+
+      // The sandbox's exec_command/write_stdin helpers return a result object;
+      // when the model forwards it via JSON.stringify(r) instead of r.output,
+      // that object shows up here as JSON text instead of plain stdout — unwrap
+      // it so the user sees the command's actual output.
+      try {
+        const inner = JSON.parse(outputText) as Record<string, any>;
+        if (typeof inner.output === "string") {
+          outputText = inner.output;
+          exitCode = (inner.exit_code as number | undefined) ?? exitCode;
+        }
+      } catch {
+        // Not a JSON-wrapped result — outputText is already the raw stdout.
       }
     }
 
