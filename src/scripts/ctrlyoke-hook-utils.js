@@ -260,6 +260,7 @@ function isHookEventEnabled(logicalEvent) {
  * @param {string|undefined} sessionId - Session ID if available
  * @param {string|undefined} toolName - Tool name for preToolUse/postToolUse
  * @param {function} debugLog - Logger function
+ * @param {{notificationTitle?: string, notificationMessage?: string, notificationType?: string}} [artifactExtras] - Optional normalized artifact fields
  */
 function maybeWriteHookArtifact(
   logicalEvent,
@@ -268,7 +269,8 @@ function maybeWriteHookArtifact(
   notifyDir,
   sessionId,
   toolName,
-  debugLog
+  debugLog,
+  artifactExtras
 ) {
   if (!isHookEventEnabled(logicalEvent)) {
     return;
@@ -277,14 +279,40 @@ function maybeWriteHookArtifact(
   if (!base) {
     return;
   }
-  const artifact = Object.assign({}, base, {
-    hookEvent: logicalEvent,
-    nativeHookEvent,
-    sessionId: sessionId || undefined,
-    toolName: toolName || undefined,
-    rawHookData: hookInput,
-  });
+  const artifact = Object.assign(
+    {},
+    base,
+    {
+      hookEvent: logicalEvent,
+      nativeHookEvent,
+      sessionId: sessionId || undefined,
+      toolName: toolName || undefined,
+    },
+    artifactExtras || {},
+    {
+      rawHookData: hookInput,
+    }
+  );
   writeHookArtifact(notifyDir, artifact, debugLog);
+}
+
+/**
+ * Normalize native notification payload fields for a hook artifact.
+ *
+ * @param {object} hookInput - Parsed hook input object from stdin
+ * @returns {{notificationTitle?: string, notificationMessage?: string, notificationType?: string}}
+ */
+function normalizeNotificationDetails(hookInput) {
+  return {
+    notificationTitle:
+      typeof hookInput.title === "string" ? hookInput.title : undefined,
+    notificationMessage:
+      typeof hookInput.message === "string" ? hookInput.message : undefined,
+    notificationType:
+      typeof hookInput.notification_type === "string"
+        ? hookInput.notification_type
+        : undefined,
+  };
 }
 
 /**
@@ -333,6 +361,7 @@ const STANDARD_LOGICAL_EVENT_MAP = {
   PostToolUse: "postToolUse",
   UserPromptSubmit: "userPromptSubmit",
   PermissionRequest: "permissionRequest",
+  Notification: "notification",
 };
 
 /**
@@ -514,6 +543,7 @@ module.exports = {
   buildArtifactBase,
   isHookEventEnabled,
   maybeWriteHookArtifact,
+  normalizeNotificationDetails,
   STANDARD_LOGICAL_EVENT_MAP,
   STANDARD_HANDLED_EVENTS,
   logInvocation,

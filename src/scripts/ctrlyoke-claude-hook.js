@@ -10,6 +10,7 @@
  * Supported hook events:
  * - SessionStart: Called when new session starts (provides session ID immediately)
  * - Stop: Called when execution completes (for completion detection)
+ * - Notification: Side-effect-only event forwarded as an opt-in hook artifact
  *
  * Usage (configured by ctrlyoke via --settings):
  *   claude --settings '{"hooks":{"SessionStart":[...], "Stop":[...]}}' ...
@@ -19,7 +20,10 @@
  *   "session_id": "abc123",
  *   "transcript_path": "~/.claude/projects/.../session.jsonl",
  *   "permission_mode": "default",
- *   "hook_event_name": "SessionStart" | "Stop",
+ *   "hook_event_name": "SessionStart" | "Stop" | "Notification",
+ *   "message": "Notification text" (Notification only),
+ *   "title": "Notification title" (Notification only),
+ *   "notification_type": "permission_prompt" (Notification only),
  *   "session_start_hook_active": true,
  *   "stop_hook_active": true
  * }
@@ -42,6 +46,7 @@ const {
   buildErrorNotifyFilePath,
   STANDARD_LOGICAL_EVENT_MAP,
   STANDARD_HANDLED_EVENTS,
+  normalizeNotificationDetails,
 } = require("./ctrlyoke-hook-utils");
 
 const SCRIPT_NAME = "ctrlyoke-claude-hook";
@@ -88,6 +93,10 @@ function main() {
     // NOTE: PermissionRequest is a decision hook — we must NOT produce stdout.
     const logicalEvent = LOGICAL_EVENT_MAP[hookEvent];
     if (logicalEvent && notifyDir) {
+      const artifactExtras =
+        logicalEvent === "notification"
+          ? normalizeNotificationDetails(hookInput)
+          : undefined;
       maybeWriteHookArtifact(
         logicalEvent,
         hookEvent,
@@ -95,7 +104,8 @@ function main() {
         notifyDir,
         sessionId,
         toolName,
-        debugLog
+        debugLog,
+        artifactExtras
       );
     }
 
@@ -112,7 +122,8 @@ function main() {
     if (
       hookEvent === "PreToolUse" ||
       hookEvent === "PostToolUse" ||
-      hookEvent === "UserPromptSubmit"
+      hookEvent === "UserPromptSubmit" ||
+      hookEvent === "Notification"
     ) {
       debugLog(`✅ Hook ${hookEvent} completed`);
       process.exit(0);

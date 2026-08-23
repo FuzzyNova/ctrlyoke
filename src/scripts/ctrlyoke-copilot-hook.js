@@ -19,7 +19,8 @@
  *   "version": 1,
  *   "hooks": {
  *     "sessionStart": [{"type": "command", "bash": "node <script> <dir> sessionStart"}],
- *     "agentStop": [{"type": "command", "bash": "node <script> <dir> agentStop"}]
+ *     "agentStop": [{"type": "command", "bash": "node <script> <dir> agentStop"}],
+ *     "notification": [{"type": "command", "bash": "node <script> <dir> notification"}]
  *   }
  * }
  *
@@ -30,12 +31,16 @@
  *   "cwd": "C:\\dev\\ctrlyoke",
  *   "source": "new",          // sessionStart only
  *   "initialPrompt": "...",   // sessionStart only
- *   "reason": "complete"      // agentStop only
+ *   "reason": "complete",     // agentStop only
+ *   "hook_event_name": "Notification", // notification only
+ *   "message": "Notification text",     // notification only
+ *   "title": "Notification title",      // notification only
+ *   "notification_type": "elicitation_dialog" // notification only
  * }
  *
  * Arguments:
  * - argv[2]: Notification directory
- * - argv[3]: Hook type (sessionStart | agentStop)
+ * - argv[3]: Hook type (sessionStart | agentStop | notification)
  *
  * Debug logging: All hook data logged to <workspace>/.ctrlyoke/logs/ctrlyoke-copilot-hook-debug.log
  */
@@ -50,6 +55,7 @@ const {
   ensureNotifyDir,
   buildNotifyFilePath,
   buildErrorNotifyFilePath,
+  normalizeNotificationDetails,
 } = require("./ctrlyoke-hook-utils");
 
 const SCRIPT_NAME = "ctrlyoke-copilot-hook";
@@ -109,17 +115,27 @@ function main() {
       postToolUse: "postToolUse",
       userPromptSubmitted: "userPromptSubmit",
       permissionRequest: "permissionRequest",
+      notification: "notification",
     };
     const logicalEvent = LOGICAL_EVENT_MAP[hookType];
     if (logicalEvent && notifyDir) {
+      const nativeHookEvent =
+        logicalEvent === "notification"
+          ? hookInput.hook_event_name || hookType
+          : hookType;
+      const artifactExtras =
+        logicalEvent === "notification"
+          ? normalizeNotificationDetails(hookInput)
+          : undefined;
       maybeWriteHookArtifact(
         logicalEvent,
-        hookType,
+        nativeHookEvent,
         hookInput,
         notifyDir,
         sessionId,
         toolName,
-        debugLog
+        debugLog,
+        artifactExtras
       );
     }
 

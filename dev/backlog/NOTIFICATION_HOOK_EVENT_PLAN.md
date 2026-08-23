@@ -249,6 +249,17 @@ The plan remains open for the notification payload normalization/factory work,
 React UI coverage, and stimulus-dependent live/manual verification. Those items
 were intentionally not implemented in this session per the task scope.
 
+This session also completed the supported stdin-hook script/artifact scope:
+Claude, Copilot, and Qwen now map native `Notification` payloads to opt-in
+`notification` artifacts with normalized title/message/type fields and intact
+raw payloads. Notification events are side-effect-only and do not require a
+session ID or write lifecycle files. Copilot intentionally uses its lowercase
+`notification` argv/config key to select the logical event while retaining the
+PascalCase `hook_event_name` from stdin as the native event. The focused
+extension-host test covers enabled/disabled artifacts, lifecycle files, and
+decision-hook stdout for all three scripts. No changes were made to the
+OpenCode plugin.
+
 ## Acceptance Criteria
 
 - `notification` is accepted by workflow schemas and typed as a canonical `HookEvent`.

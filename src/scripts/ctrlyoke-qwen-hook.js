@@ -10,6 +10,7 @@
  * Supported hook events:
  * - SessionStart: Called when new session starts (provides session ID immediately)
  * - Stop: Called when execution completes
+ * - Notification: Side-effect-only event forwarded as an opt-in hook artifact
  *
  * Usage (configured by ctrlyoke via .qwen/settings.json, requires --experimental-hooks):
  *   { "hooks": { "SessionStart": [...], "Stop": [...] } }
@@ -20,7 +21,10 @@
  *   "transcript_path": "~/.qwen/projects/.../session.jsonl",
  *   "cwd": "/workspace",
  *   "permission_mode": "default",
- *   "hook_event_name": "SessionStart" | "Stop",
+ *   "hook_event_name": "SessionStart" | "Stop" | "Notification",
+ *   "message": "Notification text" (Notification only),
+ *   "title": "Notification title" (Notification only),
+ *   "notification_type": "idle_prompt" (Notification only),
  *   "stop_hook_active": true,
  *   "last_assistant_message": "..."
  * }
@@ -43,6 +47,7 @@ const {
   buildNotifyFilePath,
   STANDARD_LOGICAL_EVENT_MAP,
   STANDARD_HANDLED_EVENTS,
+  normalizeNotificationDetails,
 } = require("./ctrlyoke-hook-utils");
 
 const SCRIPT_NAME = "ctrlyoke-qwen-hook";
@@ -86,6 +91,10 @@ function main() {
 
     const logicalEvent = STANDARD_LOGICAL_EVENT_MAP[hookEvent];
     if (logicalEvent && notifyDir) {
+      const artifactExtras =
+        logicalEvent === "notification"
+          ? normalizeNotificationDetails(hookInput)
+          : undefined;
       maybeWriteHookArtifact(
         logicalEvent,
         hookEvent,
@@ -93,7 +102,8 @@ function main() {
         notifyDir,
         sessionId,
         toolName,
-        debugLog
+        debugLog,
+        artifactExtras
       );
     }
 
@@ -107,7 +117,11 @@ function main() {
     }
 
     // Events that don't need notification file I/O
-    if (hookEvent === "PreToolUse" || hookEvent === "PostToolUse") {
+    if (
+      hookEvent === "PreToolUse" ||
+      hookEvent === "PostToolUse" ||
+      hookEvent === "Notification"
+    ) {
       debugLog(`✅ Hook ${hookEvent} completed`);
       process.exit(0);
     }
