@@ -38,6 +38,7 @@ export class AntigravityNotificationMonitor
     postToolUse: AntigravityNotificationMonitor.verifiedHook(),
     userPromptSubmit: AntigravityNotificationMonitor.unsupportedHook(),
     permissionRequest: AntigravityNotificationMonitor.unsupportedHook(),
+    notification: AntigravityNotificationMonitor.unsupportedHook(),
     error: AntigravityNotificationMonitor.unsupportedHook(),
   };
 

@@ -521,6 +521,7 @@ suite("OpenCodeCliProvider", () => {
     const hooks = [
       { event: "stop", command: "node ./stop-hook.js" },
       { event: "permissionRequest", command: "node ./permission-hook.js" },
+      { event: "notification", command: "node ./notification-hook.js" },
     ];
 
     try {
@@ -542,7 +543,7 @@ suite("OpenCodeCliProvider", () => {
           } as any
         );
 
-        const expectedHooks = JSON.stringify(hooks);
+        const expectedHooks = JSON.stringify(hooks.slice(0, 2));
         const env = isInteractive
           ? provider.getInteractiveSpawnEnv()
           : provider.getHeadlessSpawnEnv();
@@ -556,6 +557,47 @@ suite("OpenCodeCliProvider", () => {
       assert.deepStrictEqual(await fs.readdir(workspaceRoot), []);
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
+      await fs.rm(extensionPath, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps the completion plugin when notification is the only unsupported user hook", async () => {
+    const provider = new OpenCodeCliProvider();
+    const extensionPath = await fs.mkdtemp(
+      path.join(os.tmpdir(), "opencode-notification-extension-")
+    );
+    const pluginSourcePath = path.join(
+      extensionPath,
+      "out",
+      "scripts",
+      "ctrlyoke-opencode-plugin.ts"
+    );
+
+    try {
+      await fs.mkdir(path.dirname(pluginSourcePath), { recursive: true });
+      await fs.writeFile(pluginSourcePath, "export default {};\n", "utf8");
+      await provider.buildCliArgs(
+        { prompt: "test" },
+        false,
+        extensionPath,
+        undefined,
+        undefined,
+        {
+          promptIndex: 0,
+          allPrompts: [],
+          resolvedProperties: {
+            hooks: [{ event: "notification", command: "node notify.js" }],
+          },
+        } as any
+      );
+
+      const env = provider.getHeadlessSpawnEnv();
+      assert.strictEqual(env.CTRLYOKE_OPENCODE_HOOKS, undefined);
+      assert.deepStrictEqual(
+        JSON.parse(env.OPENCODE_CONFIG_CONTENT!),
+        { plugin: [path.resolve(pluginSourcePath)] }
+      );
+    } finally {
       await fs.rm(extensionPath, { recursive: true, force: true });
     }
   });

@@ -39,6 +39,7 @@ export class CopilotNotificationMonitor
     postToolUse: "postToolUse",
     userPromptSubmit: "userPromptSubmitted",
     permissionRequest: "permissionRequest",
+    notification: "notification",
   };
 
   static readonly CAPABILITIES: Record<HookEvent, CapabilityDeclaration> =

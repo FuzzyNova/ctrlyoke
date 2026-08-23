@@ -149,4 +149,48 @@ suite("ExecutionPlanBuilder", () => {
       await fsPromises.rm(workspaceRoot, { recursive: true, force: true });
     }
   });
+
+  test("hooks:null suppresses inherited custom hooks and hook notifications", async () => {
+    const provider = new ClaudeCliProvider();
+    let capturedUserHooks: unknown;
+    let capturedEvents: unknown;
+    Object.defineProperty(provider, "planNotificationHookArgs", {
+      value: async (
+        _extensionPath: string,
+        _workspaceRoot: string,
+        _promptIndex: number,
+        _workingFilePath: string | undefined,
+        userHooks: unknown,
+        events: unknown
+      ) => {
+        capturedUserHooks = userHooks;
+        capturedEvents = events;
+        return { cliArgs: [], mutations: [], diagnostics: [] };
+      },
+    });
+    const workspaceRoot = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-execution-plan-hooks-null-")
+    );
+
+    try {
+      const session = createSession("interactive", {
+        ...resolvedProperties,
+        hooks: null,
+      });
+      const plan = await new ExecutionPlanBuilder({
+        provider,
+        getWorkspaceRoot: () => workspaceRoot,
+        getWorkspaceRoots: () => [workspaceRoot],
+        getExtensionPath: () => "extension",
+        getExecutionMode: () => "interactive",
+        getEnabledHookNotificationEvents: () => ["notification"],
+      }).plan(session);
+
+      assert.ok(plan);
+      assert.strictEqual(capturedUserHooks, undefined);
+      assert.deepStrictEqual(capturedEvents, []);
+    } finally {
+      await fsPromises.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
 });

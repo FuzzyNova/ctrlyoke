@@ -32,7 +32,7 @@ export class OpenCodeNotificationMonitor
   extends NotificationMonitorBase
   implements INotificationMonitor
 {
-  static readonly EVENT_MAP: Record<HookEvent, string> = {
+  static readonly EVENT_MAP: Partial<Record<HookEvent, string>> = {
     stop: "session.status.idle",
     sessionStart: "session.created",
     preToolUse: "tool.execute.before",
@@ -49,6 +49,7 @@ export class OpenCodeNotificationMonitor
     postToolUse: OpenCodeNotificationMonitor.verifiedHook(),
     userPromptSubmit: OpenCodeNotificationMonitor.verifiedHook(),
     permissionRequest: OpenCodeNotificationMonitor.partialHook(),
+    notification: OpenCodeNotificationMonitor.unsupportedHook(),
     error: OpenCodeNotificationMonitor.verifiedHook(),
   };
 
@@ -74,6 +75,19 @@ export class OpenCodeNotificationMonitor
         reference: "src/scripts/ctrlyoke-opencode-plugin.ts",
         basis: "cli-version",
         verifiedVersions: [">=1.1.48"],
+      },
+    };
+  }
+
+  private static unsupportedHook(): CapabilityDeclaration {
+    return {
+      fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
+      mechanism: CAPABILITY_MECHANISMS.NONE,
+      verification: {
+        kind: "manual",
+        reference: "src/core/harness/opencode/OpenCodeNotificationMonitor.ts",
+        basis: "cli-version",
+        verifiedVersions: [">=1.18.10"],
       },
     };
   }

@@ -380,6 +380,36 @@ suite("HarnessCapabilityRegistry", () => {
     }
   });
 
+  test("declares the notification support boundary with native evidence", async () => {
+    const snapshot = await new HarnessCapabilityRegistry({
+      enabledDomains: [CAPABILITY_DOMAINS.HOOKS],
+    }).getSnapshot();
+    const supported = [
+      HARNESS_IDS.CLAUDE_CLI,
+      HARNESS_IDS.COPILOT_CLI,
+      HARNESS_IDS.QWEN_CLI,
+    ];
+    const unsupported = [
+      HARNESS_IDS.CODEX_CLI,
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+      HARNESS_IDS.OPENCODE_CLI,
+    ];
+
+    for (const harnessId of supported) {
+      const declaration = snapshot.harnesses[harnessId].descriptor.hooks
+        ?.notification;
+      assert.strictEqual(declaration?.fidelity, "exact");
+      assert.strictEqual(declaration?.mechanism, "workspace-config");
+      assert.ok(declaration?.verification);
+    }
+    for (const harnessId of unsupported) {
+      const declaration = snapshot.harnesses[harnessId].descriptor.hooks
+        ?.notification;
+      assert.strictEqual(declaration?.fidelity, "unsupported");
+      assert.strictEqual(declaration?.mechanism, "none");
+    }
+  });
+
   test("rejects incomplete enabled domains and invalid declarations", () => {
     assert.throws(
       () =>

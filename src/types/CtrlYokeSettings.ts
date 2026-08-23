@@ -517,6 +517,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
         postToolUse: false,
         userPromptSubmit: false,
         permissionRequest: false,
+        notification: false,
         error: false,
       },
     },

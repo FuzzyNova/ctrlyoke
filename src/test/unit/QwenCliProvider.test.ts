@@ -53,7 +53,7 @@ suite("QwenCliProvider", () => {
           0,
           path.join(workspaceRoot, "workflow.yaml"),
           undefined,
-          []
+          ["notification"]
         );
 
         const settings = JSON.parse(
@@ -62,7 +62,7 @@ suite("QwenCliProvider", () => {
             "utf-8"
           )
         ) as { hooks?: Record<string, unknown[]> };
-        assert.ok(settings.hooks?.Stop);
+        assert.ok(settings.hooks?.Notification);
         assert.ok(
           (
             JSON.parse(await fs.readFile(trustedHooksPath, "utf-8")) as Record<
@@ -70,6 +70,14 @@ suite("QwenCliProvider", () => {
               string[]
             >
           )[workspaceRoot]
+        );
+        assert.ok(
+          (
+            JSON.parse(await fs.readFile(trustedHooksPath, "utf-8")) as Record<
+              string,
+              string[]
+            >
+          )[workspaceRoot].some((key) => key.includes("Notification"))
         );
       } finally {
         await provider.cleanupWorkspaceArtifacts(

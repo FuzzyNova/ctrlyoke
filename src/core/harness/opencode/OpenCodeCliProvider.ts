@@ -771,8 +771,17 @@ export class OpenCodeCliProvider implements ICliProvider {
     if (!userHooks || userHooks.length === 0) {
       return undefined;
     }
+    const supportedHooks = userHooks.filter(
+      (hook) => OpenCodeNotificationMonitor.EVENT_MAP[hook.event] !== undefined
+    );
+    if (supportedHooks.length === 0) {
+      return undefined;
+    }
     return JSON.stringify(
-      userHooks.map((hook) => ({ event: hook.event, command: hook.command }))
+      supportedHooks.map((hook) => ({
+        event: hook.event,
+        command: hook.command,
+      }))
     );
   }
 
@@ -838,11 +847,12 @@ export class OpenCodeCliProvider implements ICliProvider {
     await fs.promises.copyFile(sourcePath, pluginPath);
     this.fallbackPluginArtifactPaths.push(pluginPath);
 
-    if (userHooks && userHooks.length > 0) {
+    const serializedUserHooks = this.serializeUserHooks(userHooks);
+    if (serializedUserHooks !== undefined) {
       const sidecarPath = path.join(pluginDir, "ctrlyoke-hooks.json");
       await fs.promises.writeFile(
         sidecarPath,
-        this.serializeUserHooks(userHooks)!,
+        serializedUserHooks,
         "utf8"
       );
       this.fallbackPluginArtifactPaths.push(sidecarPath);

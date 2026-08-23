@@ -64,6 +64,7 @@ export class CodexNotificationMonitor
     postToolUse: CodexNotificationMonitor.verifiedHook(),
     userPromptSubmit: CodexNotificationMonitor.verifiedHook(),
     permissionRequest: CodexNotificationMonitor.verifiedHook(),
+    notification: CodexNotificationMonitor.unsupportedHook(),
     error: CodexNotificationMonitor.unsupportedHook(),
   };
 

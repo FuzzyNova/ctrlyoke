@@ -36,6 +36,7 @@ export class QwenNotificationMonitor
     postToolUse: "PostToolUse",
     userPromptSubmit: "UserPromptSubmit",
     permissionRequest: "PermissionRequest",
+    notification: "Notification",
   };
 
   static readonly CAPABILITIES: Record<HookEvent, CapabilityDeclaration> = {
@@ -45,6 +46,7 @@ export class QwenNotificationMonitor
     postToolUse: QwenNotificationMonitor.verifiedHook(),
     userPromptSubmit: QwenNotificationMonitor.verifiedHook(),
     permissionRequest: QwenNotificationMonitor.verifiedHook(),
+    notification: QwenNotificationMonitor.verifiedHook(),
     error: QwenNotificationMonitor.unsupportedHook(),
   };
 

@@ -236,6 +236,19 @@ npm test
 
 Do not make `notification` a universally required event in the live harness suite: notification hooks are stimulus-dependent and may not fire in a normal successful prompt. Add or run targeted live/manual scenarios that explicitly cause an input or permission prompt for Claude, Copilot, and Qwen. Record unsupported behavior for Codex, Antigravity, and OpenCode as a skip, not a failure.
 
+### Session update (2026-08-22)
+
+This session completed the shared contract, settings default/schema, generated
+workflow schema, all six capability declarations, supported native registration
+maps, unsupported-provider filtering, and focused extension-host coverage. The
+registry completeness invariant remains enforced for the new event. Verified
+behavior keeps OpenCode's completion plugin loaded while omitting unsupported
+notification-only user hooks; `tui.toast.show` remains deliberately unmapped.
+
+The plan remains open for the notification payload normalization/factory work,
+React UI coverage, and stimulus-dependent live/manual verification. Those items
+were intentionally not implemented in this session per the task scope.
+
 ## Acceptance Criteria
 
 - `notification` is accepted by workflow schemas and typed as a canonical `HookEvent`.

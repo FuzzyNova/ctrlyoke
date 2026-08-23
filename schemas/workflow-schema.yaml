@@ -1183,10 +1183,13 @@ definitions:
           - postToolUse
           - userPromptSubmit
           - permissionRequest
+          - notification
           - error
         description: >-
           Logical hook event. Unsupported events for the active harness are silently skipped. 'stop'
           maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex).
+          'notification' maps to Notification (Claude/Qwen), notification (Copilot), and is n/a for
+          Codex/Antigravity/OpenCode.
       command:
         type: string
         description: Command to execute. Resolved relative to workspace root if not absolute.

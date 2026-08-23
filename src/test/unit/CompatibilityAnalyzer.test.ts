@@ -941,4 +941,45 @@ suite("CompatibilityAnalyzer", () => {
     );
     assert.ok(!unused.some((diagnostic) => diagnostic.capability === "error"));
   });
+
+  test("warns that notification hooks are unsupported on Codex, Antigravity, and OpenCode", () => {
+    for (const harnessId of [
+      HARNESS_IDS.CODEX_CLI,
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+      HARNESS_IDS.OPENCODE_CLI,
+    ]) {
+      const workflow = mixedWorkflow({
+        steps: [
+          {
+            prompt: "Target",
+            harness: harnessId,
+            hooks: [{ event: "notification", command: "node notify.js" }],
+          },
+        ],
+      });
+      const target = installed(harnessId, true, "exact", "verified");
+      target.descriptor.hooks!.notification = {
+        ...target.descriptor.hooks!.notification,
+        fidelity: "unsupported",
+        mechanism: "none",
+      };
+      target.effective!.hooks!.notification = {
+        fidelity: "unsupported",
+        mechanism: "none",
+        verification: "verified",
+      };
+      const diagnostics = analyze(
+        workflow,
+        snapshot({ [harnessId]: target })
+      );
+      assert.ok(
+        diagnostics.some(
+          (diagnostic) =>
+            diagnostic.capability === "notification" &&
+            diagnostic.code === COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED
+        ),
+        harnessId
+      );
+    }
+  });
 });

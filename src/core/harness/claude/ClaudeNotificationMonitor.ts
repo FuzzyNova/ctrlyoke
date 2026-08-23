@@ -42,6 +42,7 @@ export class ClaudeNotificationMonitor
     // ctrlyoke notification script — so Claude handles the stdin/stdout
     // contract natively without ctrlyoke interception.
     permissionRequest: "PermissionRequest",
+    notification: "Notification",
   };
 
   static readonly CAPABILITIES: Record<HookEvent, CapabilityDeclaration> =

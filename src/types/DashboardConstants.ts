@@ -1161,6 +1161,7 @@ export const HARNESS_CHART_COLORS: Record<HarnessId, string> = {
  * | "postToolUse"       | PostToolUse      | postToolUse         | PostToolUse      | PostToolUse       | tool.execute.after      |
  * | "userPromptSubmit"  | UserPromptSubmit | userPromptSubmitted | n/a              | UserPromptSubmit  | session.status { busy } |
  * | "permissionRequest" | PermissionRequest| permissionRequest   | n/a              | PermissionRequest | permission.asked        |
+ * | "notification"      | Notification     | notification        | n/a              | n/a               | n/a                     |
  * | "error"            | StopFailure      | errorOccurred     | n/a              | n/a               | session.error           |
  */
 export type HookEvent =
@@ -1170,6 +1171,7 @@ export type HookEvent =
   | "postToolUse"
   | "userPromptSubmit"
   | "permissionRequest"
+  | "notification"
   | "error";
 
 export interface HookEventMetadata {
@@ -1185,6 +1187,7 @@ export const HOOK_EVENT_ORDER: HookEvent[] = [
   "postToolUse",
   "userPromptSubmit",
   "permissionRequest",
+  "notification",
   "error",
 ];
 
@@ -1218,6 +1221,12 @@ export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
     event: "permissionRequest",
     label: "Permission Request",
     description: "Fires when the AI requests permission to perform an action.",
+  },
+  {
+    event: "notification",
+    label: "Notification",
+    description:
+      "Fires when the harness displays a notification, including prompts that may require user input.",
   },
   {
     event: "error",

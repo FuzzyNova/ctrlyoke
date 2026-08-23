@@ -62,6 +62,28 @@ suite("Workflow template schema", () => {
     assert.strictEqual(valid, true, JSON.stringify(validate.errors));
   });
 
+  test("accepts notification hooks and rejects unknown hook events", () => {
+    const valid = validate({
+      steps: [
+        {
+          prompt: "Wait for input",
+          hooks: [{ event: "notification", command: "node notify.js" }],
+        },
+      ],
+    });
+    assert.strictEqual(valid, true, JSON.stringify(validate.errors));
+
+    const invalid = validate({
+      steps: [
+        {
+          prompt: "Wait for input",
+          hooks: [{ event: "notARealHook", command: "node notify.js" }],
+        },
+      ],
+    });
+    assert.strictEqual(invalid, false);
+  });
+
   test("rejects secret grants with invalid names", () => {
     for (const name of ["lowercase", "1START", "HAS-DASH", ""]) {
       const valid = validate({

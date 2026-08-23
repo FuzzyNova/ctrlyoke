@@ -859,6 +859,10 @@
                   "type": "boolean",
                   "description": "Notify when the AI requests permission to perform an action."
                 },
+                "notification": {
+                  "type": "boolean",
+                  "description": "Notify when the harness displays a notification, including prompts that may require user input."
+                },
                 "error": {
                   "type": "boolean",
                   "description": "Notify when the harness reports a session-level error."

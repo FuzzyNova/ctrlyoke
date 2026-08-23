@@ -55,7 +55,7 @@ suite("AntigravityNotificationMonitor", () => {
     );
 
     assert.strictEqual(config.type, "json");
-    const group = (config.config as Record<string, any>).ctrlyoke;
+    const group = (config as { config: Record<string, any> }).config.ctrlyoke;
     assert.ok(Array.isArray(group.PreInvocation));
     assert.strictEqual(group.PostInvocation, null);
     assert.ok(Array.isArray(group.Stop));
@@ -72,7 +72,7 @@ suite("AntigravityNotificationMonitor", () => {
     );
 
     assert.strictEqual(config.type, "json");
-    const group = (config.config as Record<string, any>).ctrlyoke;
+    const group = (config as { config: Record<string, any> }).config.ctrlyoke;
     assert.ok(Array.isArray(group.PreToolUse));
     assert.ok(Array.isArray(group.PostToolUse));
     assert.strictEqual(group.PreInvocation, null);
@@ -108,7 +108,7 @@ suite("AntigravityNotificationMonitor", () => {
     );
 
     assert.strictEqual(config.type, "json");
-    const group = (config.config as Record<string, any>).ctrlyoke;
+    const group = (config as { config: Record<string, any> }).config.ctrlyoke;
     assert.deepStrictEqual(
       group.Stop.map((h: { command: string }) => h.command),
       ["node stop-hook.js"]
@@ -126,5 +126,27 @@ suite("AntigravityNotificationMonitor", () => {
       ["node post-hook.js"]
     );
     assert.strictEqual(group.PostInvocation, null);
+  });
+
+  test("silently skips notification as an unsupported event", () => {
+    const monitor = new AntigravityNotificationMonitor();
+    const config = monitor.buildHookConfig(
+      "script.js",
+      "notify-dir",
+      "workspace",
+      [{ event: "notification", command: "node notify.js" }],
+      ["notification"]
+    );
+    const group = (config as { config: Record<string, any> }).config.ctrlyoke;
+
+    assert.strictEqual(group.PreToolUse, null);
+    assert.strictEqual(group.PostToolUse, null);
+    assert.strictEqual(group.PreInvocation, null);
+    assert.strictEqual(group.PostInvocation, null);
+    assert.strictEqual(group.Stop, null);
+    assert.strictEqual(
+      AntigravityNotificationMonitor.CAPABILITIES.notification.fidelity,
+      "unsupported"
+    );
   });
 });

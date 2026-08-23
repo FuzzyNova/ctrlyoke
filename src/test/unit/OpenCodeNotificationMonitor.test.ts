@@ -34,4 +34,19 @@ suite("OpenCodeNotificationMonitor", () => {
       )
     );
   });
+
+  test("leaves notification unmapped and declares it unsupported", () => {
+    assert.strictEqual(
+      OpenCodeNotificationMonitor.EVENT_MAP.notification,
+      undefined
+    );
+    assert.strictEqual(
+      OpenCodeNotificationMonitor.CAPABILITIES.notification.fidelity,
+      "unsupported"
+    );
+    assert.strictEqual(
+      OpenCodeNotificationMonitor.CAPABILITIES.notification.mechanism,
+      "none"
+    );
+  });
 });
