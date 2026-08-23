@@ -6,6 +6,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  DEFAULT_WORKSPACE_ENTRY_SORT,
+  WORKSPACE_ENTRY_SORT_DIRECTIONS,
+  WORKSPACE_ENTRY_SORT_KEYS,
+} from "@root/types/HostedWorkspaceViewerTypes";
 import type {
   WorkspaceTreeEntry,
   WorkspaceTreePageRequest,
@@ -14,13 +19,16 @@ import type {
 } from "@root/types/HostedWorkspaceViewerTypes";
 import { WorkspaceExplorerPane } from "@components/workspace-viewer/WorkspaceExplorerPane";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
+import { SCM_KIND_COLOR_CLASS } from "@utils/scmStatus";
 
 const mocks = vi.hoisted(() => ({
   workspaceTree: vi.fn(),
   workspaceFile: vi.fn(),
   workspaceSaveFile: vi.fn(),
   workspaceStatus: vi.fn(),
+  clipboard: null as { operation: "cut"; path: string } | null,
   contextOptions: null as {
     onRefresh: (affectedPath?: string) => void;
   } | null,
@@ -56,7 +64,7 @@ vi.mock("@hooks/useWorkspaceExplorerContextMenu", () => ({
   }) => {
     mocks.contextOptions = options;
     return {
-      clipboard: null,
+      clipboard: mocks.clipboard,
       openContextMenu: vi.fn(),
       explorerContextMenuPortal: null,
     };
@@ -163,10 +171,12 @@ beforeEach(() => {
   useWorkspaceViewerStore.getState().reset();
   useSettingsStore.getState().updateGlobalSetting("workspaceRoot", "");
   useSettingsStore.getState().updateGlobalSetting("hideGitIgnoredFiles", false);
+  useUiStore.setState({ workspaceEntrySort: DEFAULT_WORKSPACE_ENTRY_SORT });
   mocks.workspaceTree.mockReset();
   mocks.workspaceFile.mockReset();
   mocks.workspaceSaveFile.mockReset();
   mocks.workspaceStatus.mockReset();
+  mocks.clipboard = null;
   mocks.workspaceFile.mockResolvedValue({ content: "", path: "" });
   mocks.workspaceSaveFile.mockResolvedValue(undefined);
   mocks.workspaceStatus.mockResolvedValue({ files: [] });
@@ -175,6 +185,110 @@ beforeEach(() => {
 });
 
 describe("WorkspaceExplorerPane pagination", () => {
+  it("uses every server sort state, preserves selection, and refreshes saves with the active sort", async () => {
+    const oldEntry = {
+      ...entry(0),
+      name: "old.ts",
+      path: "old.ts",
+      modifiedAt: 1,
+    };
+    const selectedEntry = {
+      ...entry(1),
+      name: "selected.ts",
+      path: "selected.ts",
+      modifiedAt: 3,
+    };
+    const newEntry = {
+      ...entry(2),
+      name: "new.ts",
+      path: "new.ts",
+      modifiedAt: 5,
+    };
+    let listingNumber = 0;
+    mocks.workspaceFile.mockResolvedValue({
+      content: "old",
+      path: "selected.ts",
+    });
+    useWorkspaceViewerStore.getState().selectFile("selected.ts");
+    useWorkspaceViewerStore
+      .getState()
+      .setLoadedFileContent("selected.ts", "old");
+    useWorkspaceViewerStore.getState().setFileContent("new");
+    mocks.clipboard = { operation: "cut", path: "selected.ts" };
+    mocks.workspaceStatus.mockResolvedValue({
+      files: [{ path: "selected.ts", kind: "modified" }],
+    });
+    mocks.workspaceTree.mockImplementation(async (request) => {
+      if ("listingId" in request) {
+        return response(request.listingId, request.offset, 3, [
+          oldEntry,
+          selectedEntry,
+          newEntry,
+        ]);
+      }
+      listingNumber += 1;
+      const descending =
+        request.sort?.key === WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT &&
+        request.sort.direction === WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING;
+      const entries = descending
+        ? [newEntry, selectedEntry, oldEntry]
+        : [oldEntry, selectedEntry, newEntry];
+      return response(`sorted-${listingNumber}`, 0, 3, entries);
+    });
+
+    render(<WorkspaceExplorerPane />);
+    await screen.findByText("selected.ts");
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /Date modified, inactive; selecting sorts descending/,
+      })
+    );
+    await waitFor(() => expect(mocks.workspaceTree).toHaveBeenCalledTimes(2));
+    expect(mocks.workspaceTree.mock.calls[1]?.[0]).toMatchObject({
+      path: "",
+      anchorPath: "selected.ts",
+      includeGitIgnored: true,
+      sort: {
+        key: WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT,
+        direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING,
+      },
+    });
+    const selectedRow = screen.getByText("selected.ts").closest("button");
+    expect(selectedRow).toHaveClass("fp-list-row-selected");
+    expect(selectedRow).toHaveStyle({ opacity: "0.5" });
+    expect(selectedRow?.querySelector("span")).toHaveClass(
+      SCM_KIND_COLOR_CLASS.modified
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /Date modified, currently descending/,
+      })
+    );
+    await waitFor(() => expect(mocks.workspaceTree).toHaveBeenCalledTimes(3));
+    expect(mocks.workspaceTree.mock.calls[2]?.[0]).toMatchObject({
+      sort: {
+        key: WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT,
+        direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.ASCENDING,
+      },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Save file"));
+    });
+    await waitFor(() => expect(mocks.workspaceSaveFile).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.workspaceTree).toHaveBeenCalledTimes(4));
+    expect(mocks.workspaceTree.mock.calls[3]?.[0]).toMatchObject({
+      path: "",
+      anchorPath: "selected.ts",
+      sort: {
+        key: WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT,
+        direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.ASCENDING,
+      },
+    });
+  });
+
   it("reaches entries past the old 1,000-entry cutoff with bounded mounts", async () => {
     render(<WorkspaceExplorerPane />);
     await waitFor(() =>

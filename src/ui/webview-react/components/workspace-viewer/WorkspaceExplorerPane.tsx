@@ -12,6 +12,7 @@ import {
   WORKSPACE_VIEWER_SIDE_PANEL_MAX_SIZE,
   WORKSPACE_VIEWER_SIDE_PANEL_MIN_SIZE,
 } from "@/constants";
+import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useIsMobile } from "@hooks/useMediaQuery";
@@ -44,9 +45,12 @@ import {
 import {
   DirectoryPageFailureNotice,
   EntryRow,
+  FileBrowserSortHeader,
   renderBreadcrumb as renderBreadcrumbShared,
   toWorkspaceRelative,
 } from "./fileBrowserShared";
+import type { WorkspaceEntrySortKey } from "@root/types/HostedWorkspaceViewerTypes";
+import { nextWorkspaceEntrySort } from "@utils/workspaceEntrySort";
 
 /**
  * Resolves the git-status text color class for an explorer entry, mirroring
@@ -138,6 +142,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
       : SETTING_SCOPES.USER
   );
   const vscode = useVsCodeApi();
+  const workspaceEntrySort = useUiStore((s) => s.workspaceEntrySort);
+  const setWorkspaceEntrySort = useUiStore((s) => s.setWorkspaceEntrySort);
 
   const isMobile = useIsMobile();
 
@@ -176,12 +182,21 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const directory = usePagedWorkspaceDirectory({
     path: explorerPath,
     includeGitIgnored: !hideGitIgnoredFiles,
+    sort: workspaceEntrySort,
+    sortAnchorPath: selectedFilePath ?? undefined,
   });
   const parentPath = directory.parentPath;
   const rootLabel = directory.rootLabel;
   const isRootsList = directory.isRootsList;
   const navigateDirectory = directory.navigate;
   const refreshPagedDirectory = directory.refresh;
+
+  const handleSortKeyRequest = useCallback(
+    (key: WorkspaceEntrySortKey) => {
+      setWorkspaceEntrySort(nextWorkspaceEntrySort(workspaceEntrySort, key));
+    },
+    [setWorkspaceEntrySort, workspaceEntrySort]
+  );
 
   // The hook is the listing source; explorerPath remains in the store only so
   // navigation URLs can describe the directory currently shown.
@@ -536,6 +551,11 @@ export const WorkspaceExplorerPane: React.FC = () => {
           <i className="codicon codicon-search text-xs" />
         </button>
       </div>
+
+      <FileBrowserSortHeader
+        sort={workspaceEntrySort}
+        onSortKeyRequest={handleSortKeyRequest}
+      />
 
       {/* Entry list */}
       <div

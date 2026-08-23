@@ -20,7 +20,7 @@ is Name. File size is deliberately deferred.
 ## Dependency and Recommended Cross-Plan Order
 
 This plan depends on
-[`WORKSPACE_DIRECTORY_PAGINATION_PLAN.md`](../implemented/WORKSPACE_DIRECTORY_PAGINATION_PLAN.md)
+[`WORKSPACE_DIRECTORY_PAGINATION_PLAN.md`](./WORKSPACE_DIRECTORY_PAGINATION_PLAN.md)
 and must be staged after its paged-listing foundation. Date modified ordering
 must operate on a complete listing snapshot so page boundaries remain stable as
 later ranges arrive.
@@ -59,11 +59,13 @@ remain bound to the immutable order captured by `listingId`.
 
 The shared contract now carries optional modification timestamps and the
 initial request can select any of the four server-side orders; absent sort
-still resolves to Name ascending. The browser surfaces still have no persisted
-sort preference or header controls, so they continue to request the default
-order until the client phases are implemented. `WorkspaceExplorerPane` already
-starts a new anchored listing after a successful save, so sorting only needs to
-preserve and verify that refresh behavior.
+still resolves to Name ascending. Both browser surfaces read the same
+persisted preference, render the shared header, and restart the current
+directory through the paged controller when that preference changes. The
+controller preserves the current directory and restores the selected or
+visible entry without locally reordering sparse pages. `WorkspaceExplorerPane`
+also starts a new anchored listing after a successful save, using the active
+sort so the refreshed metadata and ordering remain consistent.
 
 ## Product Decisions
 
@@ -295,21 +297,21 @@ Begin only after Steps 1-2 in the cross-plan order above are complete.
 1. [x] Add `FileBrowserSortHeader` beside the existing shared browser primitives.
 2. [x] Convert `EntryRow` and the header to one aligned grid-track definition.
 3. [x] Add the compact date/time cell and full date/time/path tooltip or accessible
-   label.
+       label.
 4. [x] Verify selected, cut, disabled/dimmed, git-decorated, touch, and narrow-pane
-   row states still render correctly.
+       row states still render correctly.
 
 ### Phase 4 — Wire both browser surfaces
 
-1. Send sort changes from `WorkspaceExplorerPane` through the paged-directory
-   controller without changing selection/navigation behavior.
-2. Send sort changes from `FileBrowserModal` through the same controller
-   without changing picker selection/navigation behavior.
-3. Render the shared header in both locations.
-4. Preserve and verify the existing anchored explorer refresh after a
-   successful editor save so it uses the active sort.
-5. Add focused interaction tests proving each surface reads and updates the
-   same persisted preference.
+1. [x] Send sort changes from `WorkspaceExplorerPane` through the paged-directory
+       controller without changing selection/navigation behavior.
+2. [x] Send sort changes from `FileBrowserModal` through the same controller
+       without changing picker selection/navigation behavior.
+3. [x] Render the shared header in both locations.
+4. [x] Preserve and verify the existing anchored explorer refresh after a
+       successful editor save so it uses the active sort.
+5. [x] Add focused interaction tests proving each surface reads and updates the
+       same persisted preference.
 
 ## Test Plan
 
@@ -406,18 +408,18 @@ npm run format:check
       before files, stable page boundaries, and missing timestamps last.
 - [x] Initial sort query fields are validated, and range requests remain bound
       to the order captured by their `listingId`.
-- [ ] Name and Date modified headers are shared by both browser surfaces.
-- [ ] All four sort states work with directories kept before files.
-- [ ] The default remains Name ascending and Date modified initially chooses
+- [x] Name and Date modified headers are shared by both browser surfaces.
+- [x] All four sort states work with directories kept before files.
+- [x] The default remains Name ascending and Date modified initially chooses
       newest first.
 - [x] Every row displays localized date and time, with an accessible full value
       and a safe missing-value fallback.
-- [ ] One persisted `uiStore` preference drives both surfaces.
-- [ ] Header changes create a newly ordered server snapshot rather than sorting
+- [x] One persisted `uiStore` preference drives both surfaces.
+- [x] Header changes create a newly ordered server snapshot rather than sorting
       an already-issued listing.
-- [ ] Saving from `WorkspaceExplorerPane` refreshes the timestamp and active
+- [x] Saving from `WorkspaceExplorerPane` refreshes the timestamp and active
       order.
-- [ ] Server, shared utility, store, and both component paths have focused tests.
+- [x] Server, shared utility, store, and both component paths have focused tests.
 - [x] The pagination/virtualization prerequisite is complete, ordering is
       correct across page boundaries, and no unbounded stat traversal is
       introduced.

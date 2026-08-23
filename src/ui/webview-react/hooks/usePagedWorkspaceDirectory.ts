@@ -20,6 +20,8 @@ export interface PagedWorkspaceDirectoryOptions {
   pageSize?: number;
   /** Server-side ordering for the immutable listing snapshot. */
   sort?: WorkspaceEntrySort;
+  /** Entry to restore only when a sort change restarts the current listing. */
+  sortAnchorPath?: string;
   /** Initial anchor, or an anchor supplied by a consumer before first load. */
   anchorPath?: string;
   enabled?: boolean;
@@ -255,6 +257,8 @@ export function usePagedWorkspaceDirectory(
   const currentPathRef = useRef(normalizedOptionPath);
   const anchorPathRef = useRef(options.anchorPath);
   anchorPathRef.current = options.anchorPath;
+  const sortAnchorPathRef = useRef(options.sortAnchorPath);
+  sortAnchorPathRef.current = options.sortAnchorPath;
   const skipOptionStartRef = useRef<DirectoryConfig | null>(null);
   const generationRef = useRef(0);
   const stateRef = useRef<DirectoryState | null>(null);
@@ -695,7 +699,8 @@ export function usePagedWorkspaceDirectory(
     skipOptionStartRef.current = null;
     const anchorPath =
       sortChanged && currentPathRef.current === normalizedOptionPath
-        ? (anchorPathRef.current ??
+        ? (sortAnchorPathRef.current ??
+          anchorPathRef.current ??
           findAnchor(lastVisibleStartRef.current ?? 0)?.path)
         : anchorPathRef.current;
     startListing(normalizedOptionPath, anchorPath);

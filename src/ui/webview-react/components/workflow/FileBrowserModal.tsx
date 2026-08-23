@@ -14,8 +14,11 @@ import type { WorkspaceTreeEntry } from "@root/types/HostedWorkspaceViewerTypes"
 import {
   DirectoryPageFailureNotice,
   EntryRow,
+  FileBrowserSortHeader,
   renderBreadcrumb,
 } from "../workspace-viewer/fileBrowserShared";
+import type { WorkspaceEntrySortKey } from "@root/types/HostedWorkspaceViewerTypes";
+import { nextWorkspaceEntrySort } from "@utils/workspaceEntrySort";
 
 const FILE_BROWSER_VIRTUALIZATION_THRESHOLD = 50;
 const FILE_BROWSER_OVERSCAN = 12;
@@ -36,6 +39,8 @@ export const FileBrowserModal: React.FC = () => {
   const setFileBrowserLastDirectory = useUiStore(
     (s) => s.setFileBrowserLastDirectory
   );
+  const workspaceEntrySort = useUiStore((s) => s.workspaceEntrySort);
+  const setWorkspaceEntrySort = useUiStore((s) => s.setWorkspaceEntrySort);
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -48,9 +53,18 @@ export const FileBrowserModal: React.FC = () => {
   const directory = usePagedWorkspaceDirectory({
     path: initialDirectoryPath,
     includeGitIgnored: true,
+    sort: workspaceEntrySort,
+    sortAnchorPath: selectedFile ?? undefined,
     enabled: fileBrowserState !== null,
   });
   const navigateDirectory = directory.navigate;
+
+  const handleSortKeyRequest = useCallback(
+    (key: WorkspaceEntrySortKey) => {
+      setWorkspaceEntrySort(nextWorkspaceEntrySort(workspaceEntrySort, key));
+    },
+    [setWorkspaceEntrySort, workspaceEntrySort]
+  );
 
   // Extensions extracted from fileFilter globs; null means "no filter" (either
   // no filter was given, or the globs didn't reduce to plain extensions).
@@ -199,6 +213,11 @@ export const FileBrowserModal: React.FC = () => {
             )}
           </div>
         </div>
+
+        <FileBrowserSortHeader
+          sort={workspaceEntrySort}
+          onSortKeyRequest={handleSortKeyRequest}
+        />
 
         <div
           ref={scrollContainerRef}

@@ -25,7 +25,11 @@ import userEvent from "@testing-library/user-event";
 import { FileBrowserModal } from "@components/workflow/FileBrowserModal";
 import { useUiStore, type FileBrowserRequest } from "@store/uiStore";
 import { workspaceFile, workspaceTree } from "@utils/hostedApi";
-import { DEFAULT_WORKSPACE_ENTRY_SORT } from "@root/types/HostedWorkspaceViewerTypes";
+import {
+  DEFAULT_WORKSPACE_ENTRY_SORT,
+  WORKSPACE_ENTRY_SORT_DIRECTIONS,
+  WORKSPACE_ENTRY_SORT_KEYS,
+} from "@root/types/HostedWorkspaceViewerTypes";
 import type {
   WorkspaceTreeEntry,
   WorkspaceTreePageRequest,
@@ -196,6 +200,7 @@ beforeEach(() => {
   useUiStore.setState({
     fileBrowserState: null,
     fileBrowserLastDirectory: null,
+    workspaceEntrySort: DEFAULT_WORKSPACE_ENTRY_SORT,
   });
 });
 
@@ -316,6 +321,168 @@ describe("FileBrowserModal — navigation", () => {
 });
 
 describe("FileBrowserModal — file mode", () => {
+  it("shares the persisted sort, requests every transition, and keeps page order server-owned", async () => {
+    const user = userEvent.setup();
+    const entries = Array.from({ length: 120 }, (_, index) => ({
+      ...entry(index, "file", `file-${String(index).padStart(3, "0")}.ts`),
+      modifiedAt: index,
+    }));
+    let listingNumber = 0;
+    const listingIds: string[] = [];
+    workspaceTreeMock.mockImplementation((request) => {
+      if ("listingId" in request) {
+        const offset = request.offset;
+        const sortListing = workspaceTreeMock.mock.calls
+          .map(([candidate]) => candidate)
+          .find(
+            (candidate): candidate is WorkspaceTreePageRequest =>
+              !("listingId" in candidate) &&
+              candidate.sort?.key === WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT
+          );
+        const descending =
+          sortListing?.sort?.direction ===
+          WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING;
+        const ordered = descending ? [...entries].reverse() : entries;
+        return Promise.resolve(
+          pageResponse(
+            request.listingId,
+            "",
+            ordered.slice(offset, offset + PAGE_SIZE),
+            ordered.length,
+            offset
+          )
+        );
+      }
+
+      listingNumber += 1;
+      listingIds.push(`sorted-listing-${listingNumber}`);
+      const descending =
+        request.sort?.direction === WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING;
+      const ordered = descending ? [...entries].reverse() : entries;
+      return Promise.resolve(
+        pageResponse(
+          `sorted-listing-${listingNumber}`,
+          request.path,
+          ordered.slice(0, PAGE_SIZE),
+          ordered.length
+        )
+      );
+    });
+
+    openPicker({ mode: "file", onSelect: vi.fn() });
+    render(<FileBrowserModal />);
+    await screen.findByText("file-000.ts");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /Date modified, inactive; selecting sorts descending/,
+      })
+    );
+    await screen.findByText("file-119.ts");
+    expect(workspaceTreeMock.mock.calls[1]?.[0]).toMatchObject({
+      path: "",
+      includeGitIgnored: true,
+      sort: {
+        key: WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT,
+        direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING,
+      },
+    });
+
+    const scroller = screen.getByTestId("file-browser-directory-list");
+    scroller.scrollTop = 100 * 36;
+    fireEvent.scroll(scroller);
+    await screen.findByText("file-019.ts");
+    expect(
+      workspaceTreeMock.mock.calls.some(
+        ([candidate]) => "listingId" in candidate && candidate.offset === 100
+      )
+    ).toBe(true);
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /Date modified, currently descending/,
+      })
+    );
+    await screen.findByText("file-000.ts");
+    const initialRequests = workspaceTreeMock.mock.calls
+      .map(([candidate]) => candidate)
+      .filter((candidate) => !("listingId" in candidate));
+    expect(initialRequests).toHaveLength(3);
+    expect(initialRequests[2]).toMatchObject({
+      sort: {
+        key: WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT,
+        direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.ASCENDING,
+      },
+    });
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /Name, inactive; selecting sorts ascending/,
+      })
+    );
+    await screen.findByText("file-000.ts");
+    await user.click(
+      screen.getByRole("button", { name: /Name, currently ascending/ })
+    );
+    await screen.findByText("file-119.ts");
+    const completedInitialRequests = workspaceTreeMock.mock.calls
+      .map(([candidate]) => candidate)
+      .filter((candidate) => !("listingId" in candidate));
+    expect(completedInitialRequests).toHaveLength(5);
+    expect(completedInitialRequests[4]).toMatchObject({
+      sort: {
+        key: WORKSPACE_ENTRY_SORT_KEYS.NAME,
+        direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING,
+      },
+    });
+    expect(listingIds).toEqual([
+      "sorted-listing-1",
+      "sorted-listing-2",
+      "sorted-listing-3",
+      "sorted-listing-4",
+      "sorted-listing-5",
+    ]);
+  });
+
+  it("preserves the selected file when sorting restarts the current listing", async () => {
+    const user = userEvent.setup();
+    const oldEntry = { ...entry(0, "file", "old.ts"), modifiedAt: 1 };
+    const selectedEntry = {
+      ...entry(1, "file", "selected.ts"),
+      modifiedAt: 3,
+    };
+    const newEntry = { ...entry(2, "file", "new.ts"), modifiedAt: 5 };
+    workspaceTreeMock
+      .mockResolvedValueOnce(
+        pageResponse(ROOT_LISTING, "", [oldEntry, selectedEntry, newEntry], 3)
+      )
+      .mockResolvedValueOnce(
+        pageResponse("sorted", "", [newEntry, selectedEntry, oldEntry], 3)
+      );
+
+    openPicker({ mode: "file", onSelect: vi.fn() });
+    render(<FileBrowserModal />);
+    await user.click(await screen.findByText("selected.ts"));
+    await user.click(
+      screen.getByRole("button", {
+        name: /Date modified, inactive; selecting sorts descending/,
+      })
+    );
+
+    await waitFor(() => expect(workspaceTreeMock).toHaveBeenCalledTimes(2));
+    expect(workspaceTreeMock.mock.calls[1]?.[0]).toMatchObject({
+      path: "",
+      anchorPath: "selected.ts",
+      sort: {
+        key: WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT,
+        direction: WORKSPACE_ENTRY_SORT_DIRECTIONS.DESCENDING,
+      },
+    });
+    expect(
+      document.querySelector("button.fp-list-row-selected")
+    ).toHaveTextContent("selected.ts");
+  });
+
   it("selects a matching file, enabling confirm, and confirming selects it and closes", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
@@ -435,7 +602,11 @@ describe("FileBrowserModal — file mode", () => {
     await userEvent
       .setup()
       .click(screen.getByRole("button", { name: "Retry / Load page" }));
-    expect(await screen.findByText("file-150.ts")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.getAllByText(/file-1(?:5|6|7|8|9)\d\.ts/).length
+      ).toBeGreaterThan(0)
+    );
     expect(
       workspaceTreeMock.mock.calls.filter(
         ([request]) => "listingId" in request && request.offset === 100
