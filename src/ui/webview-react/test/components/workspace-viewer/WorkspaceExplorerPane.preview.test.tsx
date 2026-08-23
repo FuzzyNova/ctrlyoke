@@ -117,6 +117,7 @@ describe("WorkspaceExplorerPane — markdown preview toggle", () => {
     // Editor stays mounted (so undo history survives) but is visually hidden.
     const editorWrapper = screen.getByTestId("file-editor").parentElement;
     expect(editorWrapper).toHaveClass("hidden");
+    expect(editorWrapper).toHaveClass("w-full", "min-w-0");
 
     // Button now offers a way back to the editor.
     expect(screen.getByRole("button", { name: /edit/i })).toBeInTheDocument();

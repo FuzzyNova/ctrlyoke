@@ -580,7 +580,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const fileEditorColumn = (
-    <div className="flex-1 flex flex-col overflow-hidden relative">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden relative">
       {/* File toolbar */}
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-panel-border flex-shrink-0 min-h-9">
         {isMobile && (
@@ -704,7 +704,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
 
       {/* Content area */}
       {selectedFilePath ? (
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {fileLoading ? (
             <div className="flex items-center gap-2 p-4 opacity-50 text-editor-fg">
               <i className="codicon codicon-loading animate-spin" />
@@ -718,11 +718,11 @@ export const WorkspaceExplorerPane: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="flex-1 overflow-hidden relative">
+            <div className="relative flex min-h-0 flex-1 overflow-hidden">
               {/* Editor stays mounted while previewing so undo history and
                   scroll position survive toggling back to edit mode. */}
               <div
-                className={`h-full ${showPreview ? "hidden" : ""}`}
+                className={`h-full min-w-0 w-full flex-1 ${showPreview ? "hidden" : ""}`}
                 role="presentation"
                 onContextMenu={(e) => {
                   e.preventDefault();
@@ -792,10 +792,12 @@ export const WorkspaceExplorerPane: React.FC = () => {
           maxSize={WORKSPACE_VIEWER_SIDE_PANEL_MAX_SIZE}
           groupResizeBehavior="preserve-pixel-size"
         >
-          {directoryListColumn}
+          <div className="h-full overflow-hidden">{directoryListColumn}</div>
         </Panel>
         <Separator className={SEPARATOR_VERTICAL} />
-        <Panel id="workspace-explorer-editor-panel">{fileEditorColumn}</Panel>
+        <Panel id="workspace-explorer-editor-panel">
+          <div className="h-full overflow-hidden">{fileEditorColumn}</div>
+        </Panel>
       </Group>
       {explorerContextMenuPortal}
       {editorContextMenuPortal}

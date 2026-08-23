@@ -262,7 +262,7 @@ export const WorkspaceFileEditor = forwardRef<
 
     if (imageDataUri) {
       return (
-        <div className="h-full w-full overflow-auto flex items-center justify-center bg-editor-bg p-4">
+        <div className="flex h-full min-h-0 w-full items-center justify-center overflow-auto bg-editor-bg p-4">
           <img
             src={imageDataUri}
             alt={filePath}
@@ -273,7 +273,12 @@ export const WorkspaceFileEditor = forwardRef<
       );
     }
 
-    return <div ref={containerRef} className="h-full w-full overflow-hidden" />;
+    return (
+      <div
+        ref={containerRef}
+        className="h-full min-h-0 w-full overflow-hidden"
+      />
+    );
   }
 );
 
