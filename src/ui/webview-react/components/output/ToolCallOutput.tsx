@@ -55,6 +55,7 @@ interface McpToolCallOutputProps {
   tool: string;
   parameters?: Record<string, unknown>;
   result?: ToolResult;
+  paramsFindMatches?: RowFindDecoration["matches"];
   showLabel?: boolean;
   expansion?: ToolCallExpansionState;
   renderPlan?: ToolCallRenderPlan;
@@ -71,6 +72,7 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
   tool,
   parameters,
   result,
+  paramsFindMatches,
   showLabel = false,
   expansion,
   renderPlan,
@@ -180,7 +182,7 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
     >
       {resolvedRenderPlan.params.visibleLineCount > 0 && fullParamsText && (
         <div className="text-[length:var(--fp-output-font-size-sm)] text-description-fg whitespace-pre-wrap [overflow-wrap:anywhere]">
-          {fullParamsText}
+          {highlightText(fullParamsText, paramsFindMatches ?? [])}
         </div>
       )}
 
@@ -248,6 +250,7 @@ interface GenericToolCallOutputProps {
   parameters?: Record<string, unknown>;
   result?: ToolResult;
   nameFindMatches?: RowFindDecoration["matches"];
+  paramsFindMatches?: RowFindDecoration["matches"];
   outputFindMatches?: RowFindDecoration["matches"];
   errorFindMatches?: RowFindDecoration["matches"];
   showLabel?: boolean;
@@ -265,6 +268,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
   parameters,
   result,
   nameFindMatches,
+  paramsFindMatches,
   outputFindMatches,
   errorFindMatches,
   showLabel = false,
@@ -395,7 +399,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
     >
       {resolvedRenderPlan.params.visibleLineCount > 0 && fullParamsText && (
         <div className="text-[length:var(--fp-output-font-size-sm)] text-description-fg whitespace-pre-wrap [overflow-wrap:anywhere]">
-          {fullParamsText}
+          {highlightText(fullParamsText, paramsFindMatches ?? [])}
         </div>
       )}
 

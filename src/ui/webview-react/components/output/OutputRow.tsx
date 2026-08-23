@@ -768,6 +768,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             tool={data.tool}
             parameters={data.parameters}
             result={data.result}
+            paramsFindMatches={getFieldMatches("params")}
             showLabel={row.showParamsLabel}
             labelContent={highlightText(
               `MCP: ${data.server}.${data.tool}`,
@@ -821,6 +822,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             result={data.result}
             showLabel={row.showParamsLabel}
             nameFindMatches={getFieldMatches("toolLabel")}
+            paramsFindMatches={getFieldMatches("params")}
             outputFindMatches={
               toolContentIsError ? undefined : toolContentMatches
             }

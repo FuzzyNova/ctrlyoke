@@ -180,22 +180,31 @@ describe("GenericToolCallOutput", () => {
     expect(screen.queryByText("line 5")).not.toBeInTheDocument();
   });
 
-  it("highlights find matches in the tool name and output", () => {
+  it("highlights find matches in the tool name, parameters, and output", () => {
     const { container } = render(
       <GenericToolCallOutput
         name="write_memory"
+        parameters={{ subject: "alpha parameter" }}
         result={{ success: true, output: "alpha beta" }}
+        expansion={{
+          paramsExpanded: true,
+          outputExpanded: false,
+          errorExpanded: false,
+        }}
         nameFindMatches={[{ start: 0, end: 5, active: true }]}
+        paramsFindMatches={[{ start: 9, end: 14, active: false }]}
         outputFindMatches={[{ start: 0, end: 5, active: false }]}
       />
     );
 
     const marks = container.querySelectorAll("mark");
-    expect(marks).toHaveLength(2);
+    expect(marks).toHaveLength(3);
     expect(marks[0]).toHaveAttribute("data-find-active", "true");
     expect(marks[0].textContent).toBe("write");
     expect(marks[1]).not.toHaveAttribute("data-find-active");
     expect(marks[1].textContent).toBe("alpha");
+    expect(marks[2]).not.toHaveAttribute("data-find-active");
+    expect(marks[2].textContent).toBe("alpha");
   });
 
   it("highlights find matches in the tool error", () => {
@@ -278,5 +287,33 @@ describe("McpToolCallOutput", () => {
           'prompt: queue the next step\nproperties: {"harness":"codex-cli"}'
       )
     ).toBeInTheDocument();
+  });
+
+  it("highlights find matches in expanded parameter text", () => {
+    const { container } = render(
+      <McpToolCallOutput
+        server="ctrlyoke"
+        tool="append_queue"
+        parameters={{ prompt: "mcp-params-only" }}
+        expansion={{
+          paramsExpanded: true,
+          outputExpanded: false,
+          errorExpanded: false,
+        }}
+        renderPlan={buildToolCallRenderPlan({
+          parameters: { prompt: "mcp-params-only" },
+          expansion: {
+            paramsExpanded: true,
+            outputExpanded: false,
+            errorExpanded: false,
+          },
+        })}
+        paramsFindMatches={[{ start: 8, end: 23, active: true }]}
+      />
+    );
+
+    const mark = container.querySelector("mark");
+    expect(mark).toHaveTextContent("mcp-params-only");
+    expect(mark).toHaveAttribute("data-find-active", "true");
   });
 });

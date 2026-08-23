@@ -62,6 +62,7 @@ function makeStructuredBashRow(
 function makeStructuredToolCallRow(
   name: string,
   result: { success: boolean; output?: string; error?: string },
+  parameters: Record<string, unknown> = {},
   key = "tool-1"
 ): OutputRenderRow {
   return {
@@ -72,7 +73,7 @@ function makeStructuredToolCallRow(
       type: CLI_EVENT_TYPES.TOOL_CALL,
       data: {
         name,
-        parameters: {},
+        parameters,
         result,
       },
     },
@@ -245,6 +246,56 @@ describe("outputFind", () => {
         rowKind: "structured-event",
         field: "toolContent",
         start: "read_file".length + 1,
+      });
+    });
+
+    it("finds matches in generic tool call parameter text", () => {
+      const matches = findOutputMatches(
+        [
+          makeStructuredToolCallRow(
+            "read_file",
+            { success: true, output: "done" },
+            { path: "src/params-only.ts" }
+          ),
+        ],
+        "params-only",
+        false
+      );
+
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toMatchObject({
+        field: "params",
+        start: "read_file".length + 1 + "path: src/".length,
+      });
+    });
+
+    it("finds matches in MCP tool call parameter text", () => {
+      const row: OutputRenderRow = {
+        key: "mcp-tool-1",
+        rowKind: "structured-event",
+        target,
+        event: {
+          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+          data: {
+            server: "ctrlyoke",
+            tool: "append_queue",
+            parameters: { prompt: "mcp-params-only" },
+            result: { success: true, output: "done" },
+          },
+        },
+        eventIndex: 0,
+        rawTextOutput: true,
+        attemptIndex: 0,
+        hideDiff: false,
+        estimateSize: 48,
+      };
+
+      const matches = findOutputMatches([row], "mcp-params-only", false);
+
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toMatchObject({
+        field: "params",
+        start: "MCP: ctrlyoke.append_queue".length + 1 + "prompt: ".length,
       });
     });
 

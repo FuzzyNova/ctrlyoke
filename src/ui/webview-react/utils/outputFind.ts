@@ -22,6 +22,7 @@ import type { OutputMessageTarget } from "./outputProjection";
 import type { OutputRenderRow } from "./outputRows";
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
 import { buildAskUserQuestionSearchSegments } from "./askUserQuestionLayout";
+import { getGenericToolCallParamsText } from "./toolCallLayout";
 
 type OutputFindField =
   | "header"
@@ -35,6 +36,7 @@ type OutputFindField =
   | "action"
   | "filePath"
   | "toolLabel"
+  | "params"
   | "toolContent"
   | "diff";
 
@@ -224,6 +226,10 @@ export function getOutputRowSearchSegments(
           const data = event.data as McpToolCallData;
           return createSegments([
             { field: "toolLabel", text: `MCP: ${data.server}.${data.tool}` },
+            {
+              field: "params",
+              text: getGenericToolCallParamsText(data.parameters),
+            },
             { field: "toolContent", text: getToolResultText(data.result) },
           ]);
         }
@@ -238,6 +244,10 @@ export function getOutputRowSearchSegments(
           const data = event.data as ToolCall;
           return createSegments([
             { field: "toolLabel", text: data.name },
+            {
+              field: "params",
+              text: getGenericToolCallParamsText(data.parameters),
+            },
             { field: "toolContent", text: getToolResultText(data.result) },
           ]);
         }
