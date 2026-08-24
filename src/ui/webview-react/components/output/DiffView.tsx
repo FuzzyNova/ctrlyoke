@@ -28,6 +28,7 @@ import {
   applyDiffGapExpansionState,
   type DiffGapExpansionState,
 } from "@utils/outputRenderUtils";
+import { WebviewLog } from "@utils/logger";
 import {
   toRdvHunks,
   toRdvFromContent,
@@ -324,7 +325,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
             );
       const oldLineCount = oldContent.split("\n").length;
       if (gapStart > oldLineCount) {
-        console.warn(
+        WebviewLog.warn(
           `[DiffView] expand skipped: gapStart=${gapStart} exceeds oldContent lines=${oldLineCount}. ` +
             `oldContent may be a snippet rather than the full file.`
         );
@@ -409,7 +410,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
       }
       return tokenize(expandedHunks, { highlight: false, enhancers });
     } catch (error) {
-      console.warn("[DiffView] syntax tokenization failed", error);
+      WebviewLog.warn("[DiffView] syntax tokenization failed", error);
       return null;
     }
   }, [expandedHunks, lang, oldContent, shouldComputeTokens]);

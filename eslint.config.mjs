@@ -59,6 +59,43 @@ export default [
       semi: "warn",
     },
   },
+  // no-console ratchet: application code routes all logging through Log.ts /
+  // WebviewLog.ts (level, redaction, and file output stay centralized there —
+  // see dev/backlog/LOG_CLEANUP_PLAN.md). console.* is only legitimate in
+  // code that has no access to either logger.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      "no-console": "error",
+    },
+  },
+  // Exemptions: standalone processes with no Log/WebviewLog access (the CLI's
+  // console output is intentional user-facing terminal output, not logging),
+  // modules shared with those processes that can't assume either logger is
+  // available, the loggers' own bootstrap/fallback paths, and tests.
+  {
+    files: [
+      "src/cli.ts",
+      "src/cli/**/*.{ts,tsx}",
+      "src/mcp-server.ts",
+      "src/config/**/*.{ts,tsx}",
+      "src/core/orchestration/WorkflowLineageRepository.ts",
+      "src/utils/FileLockUtils.ts",
+      "src/utils/FileReferenceParser.ts",
+      "src/utils/Log.ts",
+      "src/ui/webview-react/utils/logger.ts",
+      "src/ui/webview-react/hooks/useVsCodeApi.ts",
+      "src/ui/webview-react/scripts/bootstrapScript.ts",
+      "src/ui/webview-react/scripts/moduleLoaderScript.ts",
+      "src/test/**/*.{ts,tsx}",
+      "src/ui/webview-react/test/**/*.{ts,tsx}",
+      "**/*.test.{ts,tsx}",
+      "**/*.spec.{ts,tsx}",
+    ],
+    rules: {
+      "no-console": "off",
+    },
+  },
   // Direct status-message calls are restricted to the reporter, transport
   // implementations, and the replay path that forwards already-persisted rows.
   {

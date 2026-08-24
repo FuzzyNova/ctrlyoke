@@ -9,6 +9,7 @@ import {
   workspaceDeleteEntry,
   workspaceMoveEntry,
 } from "@utils/hostedApi";
+import { WebviewLog } from "@utils/logger";
 import type { WorkspaceEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import { PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
 
@@ -80,7 +81,7 @@ export function useWorkspaceExplorerContextMenu({
         await workspaceDeleteEntry({ path });
         onRefresh(path);
       } catch (err) {
-        console.error("Delete failed:", err);
+        WebviewLog.error("Delete failed:", err);
       }
     },
     [onRefresh]
@@ -105,7 +106,7 @@ export function useWorkspaceExplorerContextMenu({
         onOpenFile(buildPastedFilePath(clipboard.path, destDir));
       }
     } catch (err) {
-      console.error("Paste failed:", err);
+      WebviewLog.error("Paste failed:", err);
     }
   }, [clipboard, explorerPath, isRootsList, onOpenFile, onRefresh]);
 

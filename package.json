@@ -649,6 +649,7 @@
     "sync-model-pricing": "node scripts/sync-model-pricing.mjs",
     "manual-test:large-directory": "node scripts/generate-large-directory.mjs",
     "chores": "node scripts/chores.mjs",
+    "generate:log-inventory": "node scripts/generate-log-inventory.mjs",
     "compile:prod": "npm run compile:extension && npm run build:webview",
     "knip": "knip",
     "find-dead-methods": "node scripts/find-dead-methods.mjs"
