@@ -1,6 +1,13 @@
 # Commit Message Generation Visibility
 
 > **Status:** Proposed — not implemented. Written 2026-08-17 against current code.
+> Re-verified against current code on 2026-08-24: all facts in §1 still hold
+> (line numbers drifted slightly, noted inline), and §3.1's design is
+> **simplified below** based on an exact-match existing pattern found in
+> `WorkingFileManager`/`PromptQueue`/`WorkflowInstance` (`loadFromMemory` +
+> `createWorkingFile`) that the original write-up didn't identify. §7's open
+> questions are resolved with concrete, code-verified answers. The plan is
+> ready to implement as revised; no further spikes needed.
 >
 > **Problem in one line:** commit-message generation runs a full harness
 > execution and then throws away everything except a final success/failure
@@ -16,22 +23,23 @@ commit-message run that exited cleanly (`Process exited - execution complete`,
 exit 0, 13148 input / 1707 output tokens) and then failed with `Commit message
 generation produced an empty response`.
 
-Traced through the code:
+Traced through the code (line numbers re-verified 2026-08-24; content
+unchanged, only line numbers drifted slightly since the 2026-08-17 original):
 
-- `CommitMessageGenerator.generateMessage()` (`src/git/CommitMessageGenerator.ts:147-221`)
+- `CommitMessageGenerator.generateMessage()` (`src/git/CommitMessageGenerator.ts:144-371`)
   tries the `ctrlyoke_submit_commit_message` MCP tool first, and only falls
   back to captured response text if the tool was never called
-  (`CommitMessageGenerator.ts:310-333`).
+  (`CommitMessageGenerator.ts:313-337`).
 - The fallback text comes from `capturedResponseText`, set by an
-  `onResponseComplete` listener (`CommitMessageGenerator.ts:276-281`)
+  `onResponseComplete` listener (`CommitMessageGenerator.ts:280-285`)
   attached to a one-shot `WorkflowInstance`.
 - That value is computed by `CliResponseCollector.collectHeadlessResponse()`
-  (`src/core/harness/shared/CliResponseCollector.ts:95-101`):
+  (`src/core/harness/shared/CliResponseCollector.ts:47-`):
   `resultResponse = responseText || failure?.message || ""`. With exit code 0
   and no stderr, there is no `failure`, and `extractTextFromEvents()` returned
   empty — so `""` (a defined, falsy string) is fired through
   `onResponseComplete`, which is exactly what trips
-  `!rawResponse?.trim()` in `CommitMessageGenerator.ts:344-346`.
+  `!rawResponse?.trim()` in `CommitMessageGenerator.ts:347-350`.
 
 So: the harness produced 1707 output tokens but neither called the MCP tool
 nor left extractable final text — almost certainly tool-call/exploration
@@ -40,7 +48,7 @@ opencode model behavior or a gap in its `extractTextFromEvents` handling is
 **unknowable today**, because nothing about the run is kept. `generateMessage()`
 loads the prompt via `instance.loadPromptString(...)`, which explicitly sets
 `filePath: "<inline>"` with no `workflowKey`/`runRef`
-(`src/core/WorkflowInstance.ts:1090-1101`) — by design, so this run is never
+(`src/core/WorkflowInstance.ts:1189-1203`) — by design, so this run is never
 written to `.ctrlyoke/.runs/`. The only trace is the final string held in a
 local variable, gone the moment `generateMessage()` returns.
 
@@ -77,38 +85,108 @@ machinery instead of building a new one.
 ### 3.1 Persist commit-generation runs as real (flagged) lineages
 
 `WorkflowInstance` already constructs a real `OutputHistoryManager` in its
-constructor unconditionally (`WorkflowInstance.ts:469`) — the `undefined`
+constructor unconditionally (`WorkflowInstance.ts:468`) — the `undefined`
 `dashboardSink` argument `CommitMessageGenerator` passes today
-(`CommitMessageGenerator.ts:253-261`) doesn't disable persistence machinery,
+(`CommitMessageGenerator.ts:257-265`) doesn't disable persistence machinery,
 it's a separate concern (UI push notifications). What actually skips
-persistence is `loadPromptString()` never allocating a lineage/run, so the
-queue state's `workflowKey`/`runRef` stay unset and nothing downstream has an
-address to write `manifest.json`/`events.jsonl` to.
+persistence is `loadPromptString()` (`WorkflowInstance.ts:1189-1203`) never
+allocating a lineage/run — it calls `promptQueue.loadPrompts(promptFile)`
+directly with no `workingFilePath`, so the queue state's
+`workflowKey`/`runRef` stay unset and nothing downstream has an address to
+write `manifest.json`/`events.jsonl` to.
 
-Concretely:
+**Revised design — reuse the existing template-loading path instead of hand-rolling lineage/run allocation.**
+The original draft of this section proposed a new method that manually calls
+`WorkflowLineageRepository.createLineage()` + `allocateRun()` +
+`OutputHistoryManager.initializeRunAt()`/`finalizeRun()`. That duplicates
+logic that already exists and already runs automatically. Verified by reading
+the actual call chain:
 
-- Allocate a lineage the same way any other first run does:
-  `WorkflowLineageRepository.createLineage()` +
-  `allocateRun()`/`WorkingFileManager.promoteToNewRun()`, then
-  `OutputHistoryManager.initializeRunAt()`
-  (`src/core/orchestration/OutputHistoryManager.ts:251-290`) to open
-  `manifest.json`/`events.jsonl`, and `finalizeRun()`
-  (`OutputHistoryManager.ts:752-789`) when the instance completes — the same
-  calls a normal execution triggers, just invoked for this one-shot instance.
-  `allocateWorkflowKey(workspaceRoot, nameHint)`
-  (`src/utils/WorkflowPaths.ts:445-476`) already supports minting a lineage
-  with no backing prompt file — `WorkflowLineageDescriptor.originalFile` is
-  already documented as optional "for ephemeral/dashboard-created lineages"
-  (`src/types/CtrlYokeTypes.ts:381-401`) — so this is an existing, supported
-  shape, not a new one.
-- The cleanest integration point is a new `WorkflowInstance` method (e.g.
-  `loadPromptStringAsRun()`) that does what `loadPromptString()` does today
-  but additionally performs the lineage/run allocation above before handing
-  off to the normal `executeLoadedPromptFile()` path — so every downstream
-  persistence call site (which already keys off queue-state
-  `workflowKey`/`runRef`) fires without needing to know this run is special.
-  `CommitMessageGenerator.generateMessage()` switches to this method instead
-  of `loadPromptString()`.
+- `WorkflowInstance.loadFromMemory()` (`WorkflowInstance.ts:1163-1183`) — used
+  today for template-created workflows, which also have no source file on
+  disk — calls `PromptFileLoader.loadFromMemory()` →
+  `loadParsedPromptFile()` (`PromptFileLoader.ts:100-227`), which calls
+  `promptQueue.createWorkingFile(displayName, steps, workspaceFolderPath, undefined)`
+  **before** `promptQueue.loadPrompts(promptFile, workingFilePath)`.
+- `PromptQueue.createWorkingFile()` (`PromptQueue.ts:1344-1372`) calls
+  `WorkingFileManager.createWorkingFile()` (`WorkingFileManager.ts:294-327`),
+  which calls `WorkflowLineageRepository.createLineage()` — itself just a
+  thin wrapper around `WorkflowPaths.allocateWorkflowKey()`
+  (`WorkflowLineageRepository.ts:69-111`) — and sets `state.workflowKey` /
+  `state.workingFilePath` on the queue. Passing `undefined` for
+  `originalFilePath` is already the documented, exercised "ephemeral lineage"
+  shape (`WorkflowLineageDescriptor.originalFile` docstring,
+  `CtrlYokeTypes.ts:402`) — templates already prove this path works with no
+  source file.
+- Critically, `PromptQueue.loadPrompts()` (`PromptQueue.ts:334-374`)
+  **explicitly preserves** `this.state.workflowKey`/`runRef` across the call
+  (lines 350-356), and its own comment says why: *"`createWorkingFile()` sets
+  these just before `loadPrompts()` is called
+  (`PromptFileLoader.loadParsedPromptFile`); without preserving them here, a
+  freshly loaded prompt file's first execution could never satisfy
+  `executeLoadedPromptFile`'s fresh-start guard (`... && workflowKey`)."* This
+  is a preexisting, intentional seam for exactly this "create a lineage, then
+  load prompts into it" sequencing — not something to build.
+- Once `state.workflowKey` is set, `executeLoadedPromptFile()`'s existing
+  fresh-run branch (`WorkflowInstance.ts:1774-1811`) already does the rest
+  unconditionally: `promptQueue.promoteToNewRun()` →
+  `WorkingFileManager.promoteToNewRun()` (allocates the `RunRef`) →
+  `outputHistoryManager.initializeRunAt()` (opens `manifest.json`/
+  `events.jsonl`). `finalizeRun()` is likewise already called from within
+  `executeLoadedPromptFile()`'s own completion paths
+  (`WorkflowInstance.ts:2127`, `4516`) with no help needed from the caller.
+
+So the actual, minimal change is:
+
+- Add `WorkflowInstance.loadPromptStringAsRun(promptText, nameHint, workflowOverrides?)`
+  that does what `loadPromptString()` does today (clear queue, build the
+  single-step `PromptFile`), but — mirroring `loadFromMemory()`'s tail —
+  first calls `promptQueue.createWorkingFile(nameHint, promptFile.steps, workspaceFolderPath, undefined)`
+  and passes the resulting `workingFilePath` into `loadPrompts()`. No manual
+  lineage/run/timeline calls; `executeLoadedPromptFile()` picks it up for
+  free exactly like any other fresh run.
+- `CommitMessageGenerator.generateMessage()` switches to this method instead
+  of `loadPromptString()`, passing a stable `nameHint` (see §3.1.1 for what
+  that hint needs to be and why it can't just be a literal string reused
+  as-is).
+- One thing `loadPromptString()` does that must be preserved:
+  `workflowOverrides` (harness/model/executionMode/etc. from
+  `buildCommitWorkflowOverrides()`) are spread onto the in-memory
+  `PromptFile`, not persisted as working-file properties the way
+  `loadParsedPromptFile()` persists them for real prompt files
+  (`PromptFileLoader.ts:183-217`). That's fine to leave as-is — commit-gen's
+  overrides are deliberately transient per-call config, not something a user
+  would want written into a reusable lineage's working file — but note it
+  explicitly so a future edit doesn't "fix" it into matching template
+  behavior by accident.
+
+#### 3.1.1 Reusing one lineage across calls (needed for open question 2, §7)
+
+`WorkflowPaths.allocateWorkflowKey()` (`WorkflowPaths.ts:445-476`) is **not**
+idempotent on `nameHint` — every call mints a brand-new,
+timestamp-suffixed key and creates a new directory, even with an identical
+hint. So "one lineage per workspace" (the proposal in §7 Q2) is not free: two
+back-to-back commits would otherwise create two lineages. Making reuse work
+needs a small persisted pointer, since `CommitMessageGenerator` is
+reconstructed fresh on every call (a brand-new process for the CLI, no
+in-memory state to carry a resolved key across invocations for the extension
+either). Concretely:
+
+- Store the resolved `workflowKey` at a well-known path, e.g.
+  `<runsRoot>/.commit-message-lineage.json` (a sibling of the per-lineage
+  directories under `.runs/`, not itself a lineage — no collision with
+  `assertValidWorkflowKey`'s key format since it's a different file, not a
+  directory entry `listLineageKeys()` would enumerate).
+- On each `generateMessage()` call: read the pointer; if present, validate it
+  with `WorkflowLineageRepository.tryReadDescriptor()`
+  (`WorkflowLineageRepository.ts:151-160`, already returns `undefined` on a
+  missing/corrupt lineage — an existing, exercised validate-and-fallback
+  primitive) before reusing the key. If absent or invalid, mint a new lineage
+  via the normal `createWorkingFile()` path and (re)write the pointer.
+- This keeps `maxRuns`-based pruning (`OutputHistoryManager.pruneOldRuns`,
+  already invoked from `initializeRunAt`, confirmed at
+  `OutputHistoryManager.ts:284-290`) working unmodified, per the original
+  proposal — it's a normal single lineage accumulating normal runs.
 
 ### 3.2 Keep these runs out of the recent-workflows list
 
@@ -224,9 +302,10 @@ checked to confirm they pass through whatever `generateMessage()` now returns.
 | Phase | Content                                                                                                                   | Ships value alone?                                       |
 | ----- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | 1     | §3.5 — `Log.debug` additions around MCP outcome / response length                                                         | Yes — immediate debugging aid                            |
-| 2     | §3.1 — `loadPromptStringAsRun()`, lineage allocation, `initializeRunAt`/`finalizeRun` wiring for commit-gen               | Partial — data now persists, but nothing surfaces it yet |
+| 2     | §3.1 — `WorkflowInstance.loadPromptStringAsRun()` (mirrors `loadFromMemory()`; no new lineage/run/timeline plumbing) + §3.1.1 pointer-file lineage reuse | Partial — data now persists, but nothing surfaces it yet |
 | 3     | §3.2 — `isSystemGenerated` flag + recent-list filtering                                                                   | Gate for phase 2 shipping without cluttering the UI      |
 | 4     | §3.3 + §3.4 — dedupe `CommitMessageGenerationRecord`, carry the address, "View full output" affordance in `CommitSection` | Yes — completes the loop                                 |
+| —     | §7 Q3 — CLI failure-path `WorkflowPaths.eventsPath()` pointer via an address-carrying error | Independent, cheap; can land alongside phase 2 or later  |
 
 Phase 3 should land no later than phase 2 — persisting commit-gen runs without
 filtering them out of "recent workflows" is a regression (log/history clutter
@@ -234,31 +313,45 @@ proportional to how often the user commits), not a strict improvement.
 
 ---
 
-## 7. Open questions
+## 7. Open questions — resolved 2026-08-24
 
-1. **Search index / usage stats.** Should `isSystemGenerated` lineages be
-   excluded from `refreshSearchIndex()`/`feedUsageStores()` too, or only from
-   the recent-workflows list? Excluding them from search removes the ability
-   to full-text-search past commit-message generations; excluding them from
-   usage stats undercounts real harness spend. Proposed: keep them in search
-   and usage, filter only the recent-workflows list — but confirm neither
-   feed assumes "every lineage has an `originalFile`" somewhere non-obvious.
-2. **Retention.** Commit generation can run far more often than typical
-   workflows (every commit). Does this lineage need its own `maxRuns`-style
-   cap independent of `ConfigurationUtils.getMaxRuns()`, or is one lineage
-   with pruning-as-normal (`OutputHistoryManager.pruneOldRuns`, already called
-   from `initializeRunAt`) sufficient? Proposed: reuse one lineage per
-   workspace (stable `nameHint`, e.g. `"commit-message-generation"") so normal
-per-lineage `maxRuns` pruning applies without new configuration.
-3. **CLI parity.** `commitCommand` (CLI) also calls `generateMessage()`
-   directly per `git.instructions.md`. Does the CLI want a
-   `--show-output`/log-path pointer on failure, given it has no dashboard to
-   send `LOAD_RUN_VIEW` to? Proposed: on CLI failure, print the persisted
-   run's `events.jsonl` path so a user can inspect it manually — cheap, and
-   the file exists once phase 2 lands regardless of caller.
-4. **MCP-unavailable dev builds.** `useMcpCapture` is false when
-   `mcp-server.js` isn't built (`CommitMessageGenerator.ts:203-209`) — does
-   persistence still make sense there, or should phase 2 be conditioned on
-   MCP capture being active? Proposed: persist regardless — the visibility
-   problem applies to the text-extraction fallback path even more than the
-   MCP path, since that's exactly the path that failed in §1's incident.
+1. **Search index / usage stats. RESOLVED — keep them in both.** Read
+   `OutputHistoryManager.feedUsageStores()` (`OutputHistoryManager.ts:1572-1606`)
+   and `refreshSearchIndex()` (`OutputHistoryManager.ts:1628-1635`) in full:
+   both operate purely off `workflowKey`/`runRef`/the run manifest content
+   (`WorkflowPaths.parseRunArtifactPath()`, `timelineRecorder.readManifest()`,
+   `historySearchIndexService.enqueueWorkspaceRefresh()`). Neither reads
+   `WorkflowLineageDescriptor.originalFile` or any other descriptor field —
+   there is no hidden assumption to trip. Implement exactly as originally
+   proposed: filter `isSystemGenerated` lineages out of
+   `listWorkingFilesByRecency()` only (`WorkspaceSessionManager.ts:120-172`);
+   leave search indexing and usage-store feeding untouched.
+2. **Retention. RESOLVED — one reused lineage, but it needs a pointer file.**
+   `allocateWorkflowKey()` always mints a new key per call regardless of
+   `nameHint` (verified, §3.1.1) — "reuse one lineage" is not automatic from
+   passing the same hint string. §3.1.1 above specifies the required
+   mechanism: a small pointer file at `<runsRoot>/.commit-message-lineage.json`
+   holding the resolved `workflowKey`, validated each call via
+   `WorkflowLineageRepository.tryReadDescriptor()` before reuse, with a fresh
+   lineage minted (and the pointer rewritten) whenever it's missing or
+   invalid. Once resolved to a real lineage, normal `maxRuns` pruning applies
+   with zero new configuration, as originally proposed.
+3. **CLI parity. RESOLVED — attach the address to the thrown error.**
+   Verified `commitCommand` in `src/cli.ts:1676-1725`: its `catch` block
+   (1721-1725) only has `err.message` to work with today — `generateMessage()`
+   throws a plain `Error` with no run address attached. `WorkflowPaths.eventsPath(workspaceRoot, workflowKey, runRef)`
+   (`WorkflowPaths.ts:275-283`) already exists and is exactly the helper
+   needed to print a path. Implementation: give `generateMessage()`'s
+   empty-response throw (and any other post-allocation failure) a
+   `workflowKey`/`runRef`-carrying error (a small `CommitMessageGenerationError`
+   subclass, or `Error.cause`), and have `commitCommand`'s catch block check
+   for those fields and print the `eventsPath()` result when present. Cheap,
+   and needs nothing beyond what phase 2 already allocates.
+4. **MCP-unavailable dev builds. RESOLVED — persist regardless, as proposed.**
+   Confirmed `useMcpCapture` (`CommitMessageGenerator.ts:200-206`) only gates
+   whether the MCP tool/temp-file capture path is wired into the prompt and
+   `mcpServerConfig` — it has no interaction with `WorkflowInstance`
+   construction or execution, which is where §3.1's persistence attaches. No
+   conditioning needed; persistence is orthogonal to MCP availability, and (as
+   originally noted) the text-extraction fallback is exactly the path that
+   failed silently in §1's incident, so it needs the visibility most.
