@@ -167,8 +167,17 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       "utf8"
     );
     const restartedManager = new OutputHistoryManager(tempWorkspace);
+    let tokenTotalsChangedCalls = 0;
+    restartedManager.setTokenTotalsChangedHandler(() => {
+      tokenTotalsChangedCalls += 1;
+    });
     const recovered = await restartedManager.hydrateTokenTotals(filePath);
     assert.strictEqual(recovered?.total, 30);
+    assert.strictEqual(
+      tokenTotalsChangedCalls,
+      0,
+      "hydrating totals already present in the manifest must not notify the queue"
+    );
     assert.strictEqual(
       (await restartedManager.hydrateTokenTotals(filePath))?.total,
       30

@@ -1553,15 +1553,19 @@ export class OutputHistoryManager {
     historyFilePath: string,
     tokenTotals: WorkflowTokenTotals
   ): Promise<void> {
+    let tokenTotalsChanged = false;
     await this.timelineRecorder.updateManifest(historyFilePath, (manifest) => {
       if (
         JSON.stringify(manifest.tokenTotals) === JSON.stringify(tokenTotals)
       ) {
         return manifest;
       }
+      tokenTotalsChanged = true;
       return { ...manifest, tokenTotals };
     });
-    await this.tokenTotalsChangedHandler?.(historyFilePath, tokenTotals);
+    if (tokenTotalsChanged) {
+      await this.tokenTotalsChangedHandler?.(historyFilePath, tokenTotals);
+    }
   }
 
   /**
