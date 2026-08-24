@@ -20,7 +20,7 @@ export const ToolCallExpandToggle: React.FC<ToolCallExpandToggleProps> = ({
 }) => (
   <button
     type="button"
-    className="text-bash-expand-link inline-flex h-[1.625em] shrink-0 items-center gap-1 rounded px-1 text-[length:var(--fp-output-font-size)] leading-none cursor-pointer bg-transparent border-0 font-inherit hover:underline"
+    className="self-start inline-flex h-[1.625em] shrink-0 items-center gap-1 whitespace-nowrap rounded border border-btn-border bg-btn-secondary-bg px-1.5 text-[length:var(--fp-output-font-size-sm)] leading-none text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover cursor-pointer font-inherit"
     onClick={(event) => {
       event.preventDefault();
       onToggle();

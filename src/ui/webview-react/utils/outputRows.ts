@@ -61,6 +61,7 @@ import {
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
 import {
   OUTPUT_ROW_HORIZONTAL_PADDING,
+  OUTPUT_SECTION_HEADER_NARROW_THRESHOLD,
   TOOL_CALL_BLOCK_HALF_VERTICAL_CHROME,
   TOOL_CALL_BLOCK_VERTICAL_CHROME,
   estimateFileOperationHeaderLines,
@@ -1726,7 +1727,7 @@ export function buildOutputRows(
   const showParamsLabel =
     input.outputContentWidth == null ||
     input.outputContentWidth === 0 ||
-    input.outputContentWidth >= 400;
+    input.outputContentWidth >= OUTPUT_SECTION_HEADER_NARROW_THRESHOLD;
   const attemptGroups = new Map<string, AttemptGroupAggregate>();
   const attemptGroupByMessageIndex = new Map<number, string>();
 

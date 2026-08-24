@@ -23,6 +23,7 @@ import { useOutputScrollTarget } from "@hooks/useOutputScrollTarget";
 import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { useOutputVirtualization } from "@hooks/useOutputVirtualization";
 import { useOutputFind } from "@hooks/useOutputFind";
+import { OUTPUT_SECTION_HEADER_NARROW_THRESHOLD } from "@utils/outputLineMetrics";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import {
   MESSAGE_TYPES,
@@ -307,7 +308,9 @@ const OutputSectionInner: React.FC = () => {
     (s) => s.globalSettings.atomicContextReferences
   );
 
-  const [headerRef, isHeaderNarrow] = useElementNarrow(650);
+  const [headerRef, isHeaderNarrow] = useElementNarrow(
+    OUTPUT_SECTION_HEADER_NARROW_THRESHOLD
+  );
   const [veryNarrowRef, isHeaderVeryNarrow] = useElementNarrow(400);
   const mergedHeaderRef = useCallback(
     (node: HTMLDivElement | null) => {

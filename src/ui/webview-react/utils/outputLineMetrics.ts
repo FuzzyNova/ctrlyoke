@@ -48,6 +48,13 @@ export const DEFAULT_OUTPUT_CONTENT_WIDTH = 760;
 /** Never estimate against a width narrower than this — it explodes line counts. */
 export const MIN_OUTPUT_CONTENT_WIDTH = 240;
 
+/**
+ * Output-section header breakpoint shared by the header layout and dense
+ * tool-call controls. Keep the control labels visible until the header enters
+ * the same narrow layout tier.
+ */
+export const OUTPUT_SECTION_HEADER_NARROW_THRESHOLD = 650;
+
 /** Usable text width for a row, given the pane width and the row's horizontal chrome. */
 export function resolveOutputContentWidth(
   outputContentWidth: number | undefined,
