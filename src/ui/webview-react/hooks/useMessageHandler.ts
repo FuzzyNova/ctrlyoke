@@ -1381,6 +1381,16 @@ export function createMessageHandlers(
     const workflowStore = useWorkflowStore.getState();
     const events = message.events || [];
 
+    // TEMP DEBUG (copilot-duplicate-events investigation): correlate against
+    // the [dup-debug] RUN_VIEW_LOADED/hydrateLiveRunHistory logs by timestamp
+    // to see whether a snapshot replay lands between two of these calls.
+    // Remove once root-caused.
+    WebviewLog.debug(
+      `[dup-debug] CLI_STREAMING_EVENTS at t=${Date.now()} stepIndex=${message.stepIndex} ` +
+        `runIndex=${message.runIndex ?? 0} attemptIndex=${message.attemptIndex ?? 0} ` +
+        `eventTypes=${events.map((e: { type: string }) => e.type).join(",")}`
+    );
+
     // Append events to streaming buffer (creates buffer if needed)
     // Events are accumulated and displayed in real-time as formatted structured output
     workflowStore.appendStreamingEvents(
@@ -2328,6 +2338,16 @@ export function createMessageHandlers(
         executionRunRef !== undefined &&
         address.runRef === executionRunRef;
       if (isExecutionRun) {
+        // TEMP DEBUG (copilot-duplicate-events investigation): a RUN_VIEW_LOADED
+        // replay for the actively-executing run races live CLI_STREAMING_EVENTS.
+        // Logging every occurrence (with a wall-clock timestamp) lets a repro be
+        // correlated against the CLI_STREAMING_EVENTS timeline captured by the
+        // [dup-debug] logs in workflowStore.ts. Remove once root-caused.
+        WebviewLog.debug(
+          `[dup-debug] RUN_VIEW_LOADED: hydrating live run history at t=${Date.now()} ` +
+            `address=${JSON.stringify(address)} isSameViewReplay=${isSameViewReplay} ` +
+            `historyOrderedEntryCount=${history.orderedEntries.length}`
+        );
         // An executing run is a live view, but its persisted timeline is still
         // the authoritative baseline. Hydrate that complete history before the
         // backend overlays output captured after the snapshot read.
