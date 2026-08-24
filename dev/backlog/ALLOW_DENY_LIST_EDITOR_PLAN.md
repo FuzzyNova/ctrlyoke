@@ -310,6 +310,10 @@ follow-ups since they need zero new plumbing — `ScriptCommandEditor` already
 exists and already does exactly this job elsewhere in this same panel
 (`ScriptConditionEditor`'s Script field):
 
+**Implementation status:** The per-hook command field and worktree Setup field
+are now implemented with `ScriptCommandEditor`, including shell-command
+completions. The remaining items in this follow-up are intentionally deferred.
+
 - **`HooksEditor.tsx`'s per-hook `command` field**
   (`components/editor/HooksEditor.tsx` ~L176–L185, rendered from this
   panel's Hooks tab) — a plain `<input type="text">` with placeholder

@@ -1,14 +1,25 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { HooksEditor } from "@components/editor/HooksEditor";
 import { HARNESS_IDS } from "@root/types/DashboardConstants";
 import { COMPATIBILITY_DIAGNOSTIC_CODES } from "@root/types/CompatibilityTypes";
 import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
 
 describe("HooksEditor compatibility diagnostics", () => {
-  it("offers Notification and persists its command as a custom hook", () => {
+  beforeAll(() => {
+    if (!Range.prototype.getClientRects) {
+      Object.defineProperty(Range.prototype, "getClientRects", {
+        configurable: true,
+        value: () => [],
+      });
+    }
+  });
+
+  it("offers Notification and persists its command as a custom hook", async () => {
     const onChange = vi.fn();
+    const user = userEvent.setup();
 
     function ControlledEditor() {
       const [value, setValue] = useState<UserHookConfig[]>([
@@ -34,8 +45,12 @@ describe("HooksEditor compatibility diagnostics", () => {
     fireEvent.change(screen.getByRole("combobox"), {
       target: { value: "notification" },
     });
-    fireEvent.change(screen.getByPlaceholderText("node ./scripts/my-hook.js"), {
-      target: { value: "node ./notification-hook.js" },
+    const command = screen.getByLabelText("hook-0-command");
+    await user.click(command);
+    fireEvent.paste(command, {
+      clipboardData: {
+        getData: () => "node ./notification-hook.js",
+      },
     });
 
     expect(onChange).toHaveBeenLastCalledWith([
@@ -71,7 +86,9 @@ describe("HooksEditor compatibility diagnostics", () => {
         />
       );
 
-      expect(screen.getByDisplayValue("node ./hook.js")).toBeInTheDocument();
+      expect(screen.getByLabelText("hook-0-command")).toHaveTextContent(
+        "node ./hook.js"
+      );
       expect(
         screen.getByText(
           `The ${harnessName} harness does not support the Notification hook event.`
@@ -104,7 +121,9 @@ describe("HooksEditor compatibility diagnostics", () => {
       />
     );
 
-    expect(screen.getByDisplayValue("node ./hook.js")).toBeInTheDocument();
+    expect(screen.getByLabelText("hook-0-command")).toHaveTextContent(
+      "node ./hook.js"
+    );
     expect(
       screen.getByText(/does not support the Error hook event/)
     ).toBeVisible();

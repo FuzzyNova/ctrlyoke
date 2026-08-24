@@ -49,6 +49,7 @@ import {
   ErrorBehaviorEditor,
   ScriptConditionEditor,
   type ScriptConditionValue,
+  ScriptCommandEditor,
   KeyValueMapEditor,
   BranchNameEditor,
   AnimatedSection,
@@ -1704,19 +1705,16 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     htmlFor="settings-worktree-setup"
                     description="Optional command run after a new worktree is created. Setup is outside step errorBehavior; a failure blocks the worktree and the next Run retries it."
                   >
-                    <input
-                      type="text"
+                    <ScriptCommandEditor
                       id="settings-worktree-setup"
                       aria-label="Worktree setup"
                       value={worktreeSetupInput}
-                      onChange={(event) =>
-                        setWorktreeSetupInput(event.target.value)
-                      }
+                      onChange={setWorktreeSetupInput}
                       onBlur={() =>
                         handleWorktreeFieldChange("setup", worktreeSetupInput)
                       }
                       placeholder="e.g. npm ci"
-                      className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
+                      className="w-full text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                     />
                   </FormField>
                   {worktreeMode === WORKTREE_MODES.MANAGED && (

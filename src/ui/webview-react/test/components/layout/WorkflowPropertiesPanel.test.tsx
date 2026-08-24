@@ -352,7 +352,7 @@ describe("WorkflowPropertiesPanel inherited defaults", () => {
     expect(screen.getByLabelText("ctrlyoke enabled")).toBeChecked();
 
     fireEvent.click(screen.getByTitle("Hooks"));
-    expect(screen.getByDisplayValue("npm run format")).toBeInTheDocument();
+    expect(screen.getByText("npm run format")).toBeInTheDocument();
 
     fireEvent.click(screen.getByTitle("Validation"));
     expect(screen.getByLabelText("Enable Pre-Condition")).toBeChecked();
@@ -496,7 +496,7 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
       "ui-work"
     );
     expect(screen.getByLabelText("Worktree base")).toHaveTextContent("main");
-    expect(screen.getByLabelText("Worktree setup")).toHaveValue("npm ci");
+    expect(screen.getByLabelText("Worktree setup")).toHaveTextContent("npm ci");
     expect(screen.queryByText(/Keep directory/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Merge on done/i)).not.toBeInTheDocument();
     expect(postMessage).toHaveBeenCalledWith(
@@ -527,7 +527,7 @@ describe("WorkflowPropertiesPanel worktree authoring", () => {
     chooseWorktreeMode("Managed");
 
     expect(screen.getByLabelText("Worktree base")).toHaveTextContent("main");
-    expect(screen.getByLabelText("Worktree setup")).toHaveValue("npm ci");
+    expect(screen.getByLabelText("Worktree setup")).toHaveTextContent("npm ci");
     expect(screen.getByLabelText("Keep directory")).toBeChecked();
     expect(screen.getByLabelText("Merge")).toBeChecked();
     expect(screen.queryByLabelText("Worktree branch")).not.toBeInTheDocument();

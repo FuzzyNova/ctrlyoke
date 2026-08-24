@@ -5,6 +5,7 @@ import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
 import { toFieldDiagnostic } from "@utils/compatibilityDiagnostics";
 import { FieldDiagnostic } from "../shared/FieldDiagnostic";
 import { KeyValueMapEditor } from "../shared/KeyValueMapEditor";
+import { ScriptCommandEditor } from "../shared/ScriptCommandEditor";
 
 type HooksValue = UserHookConfig[] | null | undefined;
 
@@ -173,15 +174,13 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
                 </option>
               ))}
             </select>
-            <input
-              type="text"
+            <ScriptCommandEditor
               id={`hook-${index}-command`}
               value={hook.command}
-              onChange={(e) =>
-                handleUpdateHook(index, { command: e.target.value })
-              }
+              onChange={(command) => handleUpdateHook(index, { command })}
               placeholder="node ./scripts/my-hook.js"
-              className="flex-1 bg-input-bg text-input-fg border border-input-border rounded px-2 py-0.5 text-xs font-mono"
+              aria-label={`hook-${index}-command`}
+              className="flex-1 min-w-0 bg-input-bg text-input-fg border border-input-border rounded text-xs font-mono"
             />
             <div className="flex min-w-[180px] flex-col gap-1">
               <label
