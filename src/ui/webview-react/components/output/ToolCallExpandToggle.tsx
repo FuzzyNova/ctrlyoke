@@ -30,9 +30,9 @@ export const ToolCallExpandToggle: React.FC<ToolCallExpandToggleProps> = ({
     aria-expanded={expanded}
   >
     <i
-      className={`codicon codicon-chevron-right text-[length:var(--fp-output-font-size-sm)] transition-transform duration-150 ${
-        expanded ? "rotate-90" : ""
-      }`}
+      className={`codicon ${
+        expanded ? "codicon-fold" : "codicon-unfold"
+      } text-[length:var(--fp-output-font-size-sm)]`}
     />
     {showLabel && label && (
       <span className="text-[length:var(--fp-output-font-size-sm)]">

@@ -51,14 +51,20 @@ describe("GenericToolCallOutput", () => {
         /write_memory\(subject: output-layout, detail: lift expansion state\)\.\.\./i
       )
     ).toBeInTheDocument();
-    expect(screen.getByText("Show parameters")).toBeInTheDocument();
+    const showParametersButton = screen.getByTitle("Show all parameters");
+    expect(showParametersButton).toBeInTheDocument();
+    expect(showParametersButton.querySelector("i")).toHaveClass(
+      "codicon-unfold"
+    );
     expect(collapsedOutput?.textContent).toContain(`line ${lastVisibleLine}`);
     expect(collapsedOutput?.textContent).not.toContain(
       `line ${lastVisibleLine + 1}`
     );
 
-    await user.click(screen.getByTitle("Show all parameters"));
-    expect(screen.getByTitle("Hide parameters")).toBeInTheDocument();
+    await user.click(showParametersButton);
+    const hideParametersButton = screen.getByTitle("Hide parameters");
+    expect(hideParametersButton).toBeInTheDocument();
+    expect(hideParametersButton.querySelector("i")).toHaveClass("codicon-fold");
     expect(
       screen.getAllByText(
         (_, element) =>
