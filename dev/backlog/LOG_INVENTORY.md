@@ -8,16 +8,16 @@ Excludes `src/test/**` and `*.test.tsx?`/`*.spec.tsx?` files (test assertions/mo
 
 ---
 
-## Backend (`Log.*`) — 1073 call sites across 113 file(s)
+## Backend (`Log.*`) — 1067 call sites across 113 file(s)
 
-Totals by level: trace=21, debug=431, info=154, warn=279, error=186, appendLine=2
+Totals by level: trace=22, debug=415, info=163, warn=278, error=187, appendLine=2
 
 Ranked by call count (highest first).
 
 | File | trace | debug | info | warn | error | appendLine | Total |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/core/WorkflowOrchestrator.ts` | 6 | 41 | 16 | 39 | 6 |  | 108 |
-| `src/core/WorkflowInstance.ts` | 1 | 50 | 16 | 24 | 13 |  | 104 |
+| `src/core/WorkflowInstance.ts` | 2 | 34 | 25 | 23 | 14 |  | 98 |
 | `src/server/CtrlYokeHostedServer.ts` |  | 6 |  | 8 | 22 |  | 36 |
 | `src/core/PromptQueue.ts` |  | 7 | 15 | 2 | 2 |  | 26 |
 | `src/ui/WebviewMessageRouter.ts` | 1 | 3 | 6 | 7 | 9 |  | 26 |

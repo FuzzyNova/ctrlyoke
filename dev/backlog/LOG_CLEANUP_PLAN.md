@@ -131,6 +131,15 @@ pause/cancel/resume requests and CLI queue-extension notifications are INFO beca
 user-observable workflow events. A failure to scan the runner-discovery root is WARN because it
 can prevent an otherwise active CLI session from being discovered.
 
+**Group 2 decisions (2026-08-24):** In `WorkflowInstance.ts`, continuation mode selection,
+resume waits, deferred execution after cancellation, prompt-count growth, and per-step harness
+switches are INFO because they explain user-visible run behavior. Session-activity attribution
+buffering remains TRACE because it can repeat within one activity burst. The generic runtime
+transition line remains DEBUG; Gap #1 will add the step-level lifecycle INFO records later.
+Redundant ephemeral "send/add prompt" and pre-delete diagnostics were removed. A missing history
+file for a promoted run is ERROR because it disables timeline and manifest persistence for that
+run rather than merely taking a degraded fallback.
+
 Groups, sized to ~100-150 call sites each and aligned to `.github/instructions/*.instructions.md`
 scopes so each session reads one coherent set of conventions:
 
