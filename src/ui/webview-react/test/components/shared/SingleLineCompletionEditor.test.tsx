@@ -113,6 +113,37 @@ describe("SingleLineCompletionEditor", () => {
     expect(content.textContent).toBe("firstsecondthird");
   });
 
+  it("preserves newlines when multiline mode receives pasted text", () => {
+    const onChange = vi.fn();
+    const { content } = renderEditor({ multiline: true, onChange });
+
+    fireEvent.paste(content, {
+      clipboardData: {
+        getData: () => "first\nsecond\r\nthird",
+      },
+    });
+
+    expect(onChange).toHaveBeenCalledWith("first\nsecond\nthird");
+  });
+
+  it("inserts a newline instead of blurring in multiline mode", async () => {
+    const user = userEvent.setup();
+    const onBlur = vi.fn();
+    const onChange = vi.fn();
+    const { content } = renderEditor({
+      multiline: true,
+      onBlur,
+      onChange,
+    });
+
+    content.focus();
+    await user.keyboard("{Enter}");
+
+    expect(onChange).toHaveBeenCalledWith("\n");
+    expect(onBlur).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(content);
+  });
+
   it("blocks edits and completion requests when disabled", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

@@ -28,13 +28,13 @@ export interface SingleLineCompletionEditorProps {
   disabled?: boolean;
   /**
    * Classes for the wrapper div this editor mounts into (e.g. `border`,
-   * `rounded`, `bg-input-bg`). The editor already fixes its own height
-   * (see `singleLineTheme`) and pads its content horizontally via
-   * `.cm-line` — do not add `py-*`/`px-*` here, or the wrapper will grow
-   * taller/wider than sibling plain `<input>` fields styled with the same
-   * `h-7` box-sizing.
+   * `rounded`, `bg-input-bg`). Single-line mode fixes its own height (see
+   * `singleLineTheme`), while multiline mode lets this wrapper's height
+   * determine the visible editor size. Both modes pad their content
+   * horizontally via `.cm-line` — do not add `py-*`/`px-*` here.
    */
   className?: string;
+  multiline?: boolean;
   /**
    * Overrides the editor font size (any CSS font-size value). Read once at
    * mount; omit to follow the VS Code editor font size.
@@ -101,21 +101,39 @@ const singleLineTheme = EditorView.theme({
   },
 });
 
-function replaceNewlines(text: string): string {
-  return text.replace(/[\r\n]/g, "");
+const multilineTheme = EditorView.theme({
+  ".cm-content": {
+    padding: "4px 0",
+  },
+  ".cm-gutters": {
+    display: "none",
+  },
+  ".cm-activeLine": {
+    backgroundColor: "transparent",
+  },
+});
+
+function replaceNewlines(text: string, multiline: boolean): string {
+  return multiline ? text : text.replace(/[\r\n]/g, "");
 }
 
-function handlePaste(event: ClipboardEvent, view: EditorView): boolean {
+function handlePaste(
+  event: ClipboardEvent,
+  view: EditorView,
+  multiline: boolean
+): boolean {
   const text = event.clipboardData?.getData("text/plain");
   if (text === undefined) return false;
 
   event.preventDefault();
-  view.dispatch(view.state.replaceSelection(replaceNewlines(text)));
+  view.dispatch(
+    view.state.replaceSelection(replaceNewlines(text, multiline))
+  );
   return true;
 }
 
-function syncDocument(view: EditorView, value: string): void {
-  const nextValue = replaceNewlines(value);
+function syncDocument(view: EditorView, value: string, multiline: boolean): void {
+  const nextValue = replaceNewlines(value, multiline);
   const currentValue = view.state.doc.toString();
   if (currentValue === nextValue) return;
 
@@ -156,6 +174,7 @@ export function SingleLineCompletionEditor({
   placeholder: placeholderText,
   disabled = false,
   className,
+  multiline = false,
   fontSize,
   "aria-label": ariaLabel,
   "aria-describedby": ariaDescribedby,
@@ -202,11 +221,11 @@ export function SingleLineCompletionEditor({
     };
 
     const view = new EditorView({
-      doc: replaceNewlines(valueRef.current),
+      doc: replaceNewlines(valueRef.current, multiline),
       parent,
       extensions: [
         minimalSetup,
-        singleLineTransactionFilter,
+        ...(multiline ? [] : [singleLineTransactionFilter]),
         editableCompartmentRef.current.of([
           EditorState.readOnly.of(initialProps.disabled),
           EditorView.editable.of(!initialProps.disabled),
@@ -218,9 +237,11 @@ export function SingleLineCompletionEditor({
           keymap.of([
             {
               key: "Enter",
-              run: (editorView) =>
-                acceptCompletion(editorView) ||
-                (editorView.contentDOM.blur(), true),
+              run: multiline
+                ? acceptCompletion
+                : (editorView) =>
+                    acceptCompletion(editorView) ||
+                    (editorView.contentDOM.blur(), true),
             },
             {
               key: "Tab",
@@ -239,14 +260,15 @@ export function SingleLineCompletionEditor({
         createThemeExtension("input", {
           fontSize: initialProps.fontSize,
         } satisfies ThemeExtensionOptions),
-        singleLineTheme,
+        multiline ? multilineTheme : singleLineTheme,
         tooltips({ parent: document.body, tooltipSpace: keyboardTooltipSpace }),
         EditorView.domEventHandlers({
           blur: () => {
             onBlurRef.current?.();
             return false;
           },
-          paste: handlePaste,
+          paste: (event, editorView) =>
+            handlePaste(event, editorView, multiline),
         }),
         autocompletion({
           override: [
@@ -273,7 +295,7 @@ export function SingleLineCompletionEditor({
       viewRef.current = null;
       view.destroy();
     };
-  }, []);
+  }, [multiline]);
 
   // Remeasure the editor and reposition an already-open completion dropdown
   // when the mobile keyboard changes the visual viewport. requestMeasure alone
@@ -338,8 +360,8 @@ export function SingleLineCompletionEditor({
 
   useEffect(() => {
     const view = viewRef.current;
-    if (view) syncDocument(view, value);
-  }, [value]);
+    if (view) syncDocument(view, value, multiline);
+  }, [multiline, value]);
 
   return <div ref={editorRef} className={className} />;
 }

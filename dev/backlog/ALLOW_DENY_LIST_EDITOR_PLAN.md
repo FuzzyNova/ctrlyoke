@@ -79,11 +79,13 @@ second component: add a `multiline?: boolean` prop (default `false`, so
   `disabled`/`aria-*`, viewport/tooltip repositioning, `syncDocument`'s
   external-value diffing — is identical and shared as-is.
 
-Consider a small rename for clarity once this lands (e.g. the file becoming
-`CompletionEditor.tsx` exporting both `SingleLineCompletionEditor` and
-`MultiLineCompletionEditor` thin wrappers around one internal
-implementation) — a naming decision, not a functional one; fine to decide at
-implementation time rather than pre-committing here.
+The implementation keeps the existing filename and export rather than
+renaming it to `CompletionEditor.tsx`; multiline behavior is a prop on the
+shared component.
+
+**Implemented:** Item 1 is implemented by keeping the existing
+`SingleLineCompletionEditor.tsx` file and export, with a `multiline` prop for
+the flexible-height behavior.
 
 ### 2. New completion source: tool permission patterns
 
@@ -202,9 +204,9 @@ Replace the four textareas with `<PermissionListEditor>`:
 
 ## Decisions Deferred to Implementation
 
-- Whether the multiline variant gets its own file/name
-  (`CompletionEditor.tsx` + two wrappers) or stays a prop on
-  `SingleLineCompletionEditor` — cosmetic, doesn't affect behavior.
+- The multiline variant stays as a `multiline` prop on the existing
+  `SingleLineCompletionEditor.tsx` file and export; no rename to
+  `CompletionEditor.tsx` is planned.
 - Exact curated list of `shell(...)`/`bash(...)` argument snippets beyond the
   handful named above — expand based on what's actually common in existing
   workflow fixtures/templates.
