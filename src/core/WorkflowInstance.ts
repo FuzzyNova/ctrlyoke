@@ -4883,10 +4883,27 @@ export class WorkflowInstance {
     }
 
     const state = this.promptQueue.getState();
-    Log.debug(
-      `[inst:${this.id.slice(0, 8)}] Runtime transition ${transition.command}: ${transition.previous.status} -> ${transition.current.status} ` +
-        `(step ${state.currentIndex}/${state.steps.length})`
-    );
+    const runtimeTransitionDetails =
+      `Runtime transition ${transition.command}: ${transition.previous.status} -> ${transition.current.status} ` +
+      `(step ${state.currentIndex}/${state.steps.length})`;
+    switch (transition.command) {
+      case "startExecution":
+        Log.info(`[inst:${this.id.slice(0, 8)}] Workflow started`);
+        break;
+      case "complete":
+        Log.info(`[inst:${this.id.slice(0, 8)}] Workflow completed`);
+        break;
+      case "fail":
+        Log.info(`[inst:${this.id.slice(0, 8)}] Workflow failed`);
+        break;
+      case "requestStop":
+      case "confirmStopped":
+        Log.info(`[inst:${this.id.slice(0, 8)}] Workflow stopped`);
+        break;
+      default:
+        Log.debug(`[inst:${this.id.slice(0, 8)}] ${runtimeTransitionDetails}`);
+        break;
+    }
 
     const executionState = this.getAuthoritativeExecutionState();
 
@@ -4916,39 +4933,78 @@ export class WorkflowInstance {
   }
 
   private onAttemptTransition(transition: WorkflowAttemptTransition): void {
-    if (!this.dashboardSink) {
-      return;
-    }
-
     const target = transition.current.target;
     if (target.kind !== FINAL_STEP_PHASES.QUEUE) {
       return;
     }
 
+    const state = this.promptQueue.getState();
+    const step = state.steps[target.stepIndex];
+
     switch (transition.command) {
       case WORKFLOW_ATTEMPT_COMMANDS.BEGIN:
+        if (step) {
+          const command = isScriptStep(step) ? step.script : step.prompt;
+          const harness = isScriptStep(step)
+            ? undefined
+            : (step._runtime?.harness ??
+              PropertyResolver.resolve(
+                step,
+                this.promptQueue.getWorkflowFile(),
+                { hostCanProvidePty: this.hostCanProvidePty }
+              ).harness);
+          Log.info(
+            `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1}/${state.steps.length} started ` +
+              `(attempt ${transition.current.attemptIndex + 1}, command="${command}"` +
+              (harness ? `, harness=${harness}` : "") +
+              ")"
+          );
+        } else {
+          Log.info(
+            `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1} started ` +
+              `(attempt ${transition.current.attemptIndex + 1})`
+          );
+        }
         if (transition.current.attemptIndex > 0) {
-          this.dashboardSink.updateStepStatus(target.stepIndex, {
+          this.dashboardSink?.updateStepStatus(target.stepIndex, {
             state: STEP_STATUS.RUNNING,
           });
         }
         break;
       case WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY:
-        this.dashboardSink.updateRetryAttempt(
+        Log.debug(
+          `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1} retry scheduled ` +
+            `(attempt ${transition.current.attemptIndex + 1})`
+        );
+        this.dashboardSink?.updateRetryAttempt(
           target.stepIndex,
           transition.current.retryCount ?? transition.current.attemptIndex,
           transition.current.maxRetries ?? 0
         );
         break;
       case WORKFLOW_ATTEMPT_COMMANDS.CANCEL:
-        this.dashboardSink.updateStepStatus(target.stepIndex, {
+        Log.debug(
+          `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1} cancelled ` +
+            `(attempt ${transition.current.attemptIndex + 1})`
+        );
+        this.dashboardSink?.updateStepStatus(target.stepIndex, {
           state: STEP_STATUS.CANCELLED,
         });
         break;
       case WORKFLOW_ATTEMPT_COMMANDS.COMPLETE:
+        Log.info(
+          `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1} completed ` +
+            `(attempt ${transition.current.attemptIndex + 1})`
+        );
         if (transition.current.attemptIndex > 0) {
-          this.dashboardSink.updateRetryAttempt(target.stepIndex, 0, 0);
+          this.dashboardSink?.updateRetryAttempt(target.stepIndex, 0, 0);
         }
+        break;
+      case WORKFLOW_ATTEMPT_COMMANDS.FAIL:
+        Log.info(
+          `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1} failed ` +
+            `(attempt ${transition.current.attemptIndex + 1}, failureReason="${transition.current.failureReason ?? "unknown"}")`
+        );
         break;
       default:
         break;

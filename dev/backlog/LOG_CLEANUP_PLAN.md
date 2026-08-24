@@ -33,7 +33,7 @@ transition) with an explicit TRACE tier for the high-frequency stuff currently m
 and states the same intent for `WebviewLog.ts` so both logging paths share one scheme instead of
 drifting independently.
 
-## Gap #1 — `WorkflowStateMachine` step-level transitions are never logged
+## Gap #1 — `WorkflowStateMachine` step-level transitions are never logged (done)
 
 `WorkflowStateMachine.ts` owns two separate transition streams:
 
@@ -51,7 +51,7 @@ drifting independently.
   exactly the "new step started, command of the step" play-by-play — and it's currently invisible
   in the log file entirely.
 
-Proposed fix (a future session — not applied in this one):
+Implemented:
 
 - Add `Log.info` in `onAttemptTransition` for `BEGIN` (step index, attempt index) and terminal
   outcomes `COMPLETE`/`FAIL` (with `failureReason` on fail). `BEGIN` needs the step's resolved
@@ -166,9 +166,8 @@ scopes so each session reads one coherent set of conventions:
 
 ### Phase 3 — Fill the gaps
 
-- Gap #1: wire `Log.info` into `WorkflowInstance.ts`'s `onAttemptTransition`/`onRuntimeTransition`
-  handlers for step-level `WorkflowStateMachine` transitions (see Gap #1 above for exact
-  transitions/wording). Run after group 2 lands (same file).
+- Gap #1: **done** — `WorkflowInstance.ts` now logs step attempt lifecycle events and promotes
+  headline run lifecycle transitions to INFO (see above for the exact transitions/wording).
 - Gap #2: bring `WebviewLog.info` into use for the same class of run-lifecycle events on the panel
   side, so a user reading the Debug Console gets one coherent story instead of two disconnected
   DEBUG streams from webview + extension host. Run after group 8 lands (touches
