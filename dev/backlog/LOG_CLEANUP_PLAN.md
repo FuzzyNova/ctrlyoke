@@ -100,38 +100,68 @@ functional fix.
 
 ## Phased approach
 
-### Phase 1 — Trim (no new logs)
+**Orchestration note (2026-08-24):** the original draft ran Phase 1 (trim) and Phase 2
+(reclassify) as two separate full passes over every file. Merged them into one pass per file
+group instead — the trim question ("does this fire more than once per user-meaningful event?")
+and the reclassify question ("would a user watching the Debug Console want to see what survives?")
+are answered by looking at the same call site once, so a second full traversal of the same ~113
+backend files bought nothing but doubled read cost. Phase 4 (confirm the shape changed) is no
+longer a queued session either — it's cheap enough (`npm run generate:log-inventory` + a read of
+the diff) that the orchestrator does it directly during the review pass instead of spending a
+session on it.
 
-Walk `dev/backlog/LOG_INVENTORY.md` file-by-file, biggest first. `WorkflowOrchestrator.ts` (108
-call sites) and `WorkflowInstance.ts` (104) alone are ~20% of all backend call sites — highest
-leverage, start there. For each site: does it fire more than once per user-meaningful event? If
-yes, demote to TRACE or delete if redundant with a nearby line.
+### Phase 1+2 — Trim and reclassify, per file group
 
-### Phase 2 — Reclassify what survives the trim
+For every `Log.*`/`WebviewLog.*` call site in the group: does it fire more than once per
+user-meaningful event (per-render, per-poll, per-byte)? → demote to TRACE, or delete if redundant
+with a nearby line. Otherwise, still at DEBUG: would a user watching the Debug Console while their
+workflow runs want to see this? → promote to INFO; otherwise leave at DEBUG. Spot-check WARN/ERROR
+while in each file: is an expected/recoverable path logged at ERROR (over-alarming), or a real
+failure under-reported at WARN?
 
-Re-walk the trimmed inventory. For everything still at DEBUG: would a user watching the Debug
-Console while their workflow runs want to see this? If yes, promote to INFO; otherwise it stays
-DEBUG. Spot-check the WARN/ERROR split too — 278 warns + 186 errors backend-side is a lot; sample
-the top files (`CtrlYokeHostedServer.ts`: 8 warn/22 error, `WorkflowSerializer.ts`: 6 warn/12
-error) for cases where an expected/recoverable path is logged at ERROR (over-alarming) or a real
-failure is under-reported at WARN. Not a full audit in this phase — just enough sampling to tell
-whether the split is trustworthy.
+`dev/backlog/LOG_INVENTORY.md` only prints its top 40 backend files (`MAX_ROWS` in
+`scripts/generate-log-inventory.mjs`) — the remaining ~73 files/252 call sites are a long tail not
+listed there. Each group below is defined by directory/instruction-file scope, not just the named
+files, so grep the group's own scope (e.g. `Log\.(trace|debug|info|warn|error)\(` under
+`src/core/harness/shared/`) to catch tail files the table doesn't show.
+
+Groups, sized to ~100-150 call sites each and aligned to `.github/instructions/*.instructions.md`
+scopes so each session reads one coherent set of conventions:
+
+1. `src/core/WorkflowOrchestrator.ts` (108) — solo, largest single file.
+2. `src/core/WorkflowInstance.ts` (104) — solo, largest single file; also the file Gap #1 extends.
+3. Core misc + orchestration: `src/core/PromptQueue.ts`, `WorkflowExecutor.ts`,
+   `EndConditionEvaluator.ts`, `WorkingFileManager.ts`, `WorkflowStateMachine.ts`, other
+   `src/core/*.ts`, plus `src/core/orchestration/**` (`OutputHistoryManager.ts`,
+   `PromptFileLoader.ts`, etc.).
+4. Harness plumbing: `src/core/harness/shared/**` (`INotificationMonitor.ts`,
+   `CliExecutionRunner.ts`, `CliInteractiveStartupCoordinator.ts`, `CliTransportCoordinator.ts`,
+   `HeadlessLogTail.ts`, `SettingsJsonMcpTracker.ts`) plus `CliIntegration.ts`,
+   `CliLogMonitor.ts`, `PtyProcessManager.ts`.
+5. Harness CLI providers: everything under `src/core/harness/{copilot,claude,codex,opencode,qwen,antigravity}/**`
+   (providers, log parsers, permission mappers).
+6. Utils + extension + dev: `src/utils/**`, `src/extension.ts`, `src/dev/**`.
+7. UI + server: `src/ui/**` excl. `src/ui/webview-react/**` (`WebviewMessageRouter.ts`,
+   `WorkflowSerializer.ts`, `PromptEditorSupportService.ts`, `WebviewSettingsSync.ts`,
+   `WorkflowStepHandlers.ts`) plus `src/server/**` (`CtrlYokeHostedServer.ts`).
+8. Webview: all of `src/ui/webview-react/**` (hooks, components, store, utils, root files). Also
+   fold in the wording quirk noted above — `useMessageHandler.ts`'s `[WORKFLOW_DISMISSED]` line
+   reads like an error when `loadedWorkflows` is legitimately still empty; reword it while in that
+   file.
 
 ### Phase 3 — Fill the gaps
 
-- Wire `Log.info` into `WorkflowStateMachine` step-level transitions (Gap #1).
-- Bring `WebviewLog.info` into use for the same class of run-lifecycle events on the panel side
-  (Gap #2), so a user reading the Debug Console gets one coherent story instead of two
-  disconnected DEBUG streams from webview + extension host.
-
-### Phase 4 — Confirm the shape changed
-
-`npm run generate:log-inventory` again. DEBUG's total should have shrunk (moved to TRACE and
-INFO), INFO should have grown, and the webview's `info=0` column should no longer read zero.
+- Gap #1: wire `Log.info` into `WorkflowInstance.ts`'s `onAttemptTransition`/`onRuntimeTransition`
+  handlers for step-level `WorkflowStateMachine` transitions (see Gap #1 above for exact
+  transitions/wording). Run after group 2 lands (same file).
+- Gap #2: bring `WebviewLog.info` into use for the same class of run-lifecycle events on the panel
+  side, so a user reading the Debug Console gets one coherent story instead of two disconnected
+  DEBUG streams from webview + extension host. Run after group 8 lands (touches
+  `useMessageHandler.ts` and related webview files).
 
 ## Picking this up
 
-Start from `dev/backlog/LOG_INVENTORY.md`, biggest files first. Both docs are living/backlog —
-update them as decisions get made, same as `dev/backlog/TESTING_GAPS.md` tracks coverage. No
-logging call sites were changed in the session that produced this plan; `scripts/generate-log-inventory.mjs`
-and these two docs are the only new artifacts.
+Both docs are living/backlog — update them as decisions get made, same as
+`dev/backlog/TESTING_GAPS.md` tracks coverage. Re-run `npm run generate:log-inventory` after each
+group lands to keep `LOG_INVENTORY.md` current; the orchestrator confirms the overall shape change
+(DEBUG shrinks, INFO grows, webview `info=0` stops reading zero) once all groups and gaps are in.
