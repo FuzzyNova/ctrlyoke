@@ -1,5 +1,8 @@
 import * as vscode from "vscode";
-import { CommitMessageGenerator } from "../git/CommitMessageGenerator";
+import {
+  CommitMessageGenerator,
+  type CommitMessageWorkflowHost,
+} from "../git/CommitMessageGenerator";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 import { VSCODE_CONTEXT_KEYS } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
@@ -29,8 +32,12 @@ function getGitInputBox(cwd: string): { value: string } | undefined {
 }
 
 export class ScmCommitCommand {
-  private readonly generator = new CommitMessageGenerator();
+  private readonly generator: CommitMessageGenerator;
   private activeAbortController: AbortController | null = null;
+
+  constructor(workflowHost?: CommitMessageWorkflowHost) {
+    this.generator = new CommitMessageGenerator(workflowHost);
+  }
 
   cancel(): void {
     this.activeAbortController?.abort();

@@ -580,6 +580,55 @@ export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
+   * Create a workflow instance for an orchestrated one-shot caller.
+   *
+   * Unlike the normal dashboard workflow path, the caller loads its prompt after
+   * construction so it can allocate the persisted lineage first. Registration
+   * here is what wires the instance's dashboard sink and lifecycle listener into
+   * the normal live-run pipeline.
+   */
+  public createExternalWorkflowInstance(): WorkflowInstance {
+    const currentPanelId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
+    const currentViewed = currentPanelId
+      ? (this.instances.get(currentPanelId) ??
+        this.retiredInstances.get(currentPanelId))
+      : undefined;
+    if (
+      currentViewed &&
+      !isExecutionOwnerState(currentViewed.getQueueState().status)
+    ) {
+      currentViewed.dispose();
+      this.instances.delete(currentPanelId!);
+      this.retiredInstances.delete(currentPanelId!);
+    }
+    const instance = this.buildWorkflowInstance();
+    this.instances.set(instance.id, instance);
+    return instance;
+  }
+
+  /**
+   * Make an externally-created workflow the panel's addressed view after its
+   * prompt has been loaded. Replaying at this point includes the newly-created
+   * draft address, so promotion to the executing run can use the existing
+   * draft-to-run view handoff.
+   */
+  public async activateExternalWorkflowInstance(
+    instance: WorkflowInstance
+  ): Promise<void> {
+    if (this.instances.get(instance.id) !== instance) {
+      throw new Error("External workflow instance is not registered");
+    }
+    this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
+    if (this.storedPanelSend) {
+      await this.replayWorkflowStateTo(
+        instance.id,
+        this.storedPanelSend,
+        this.PANEL_CLIENT_ID
+      );
+    }
+  }
+
+  /**
    * Creates a fresh WorkflowInstance and makes it the active workflow.
    * Phase 2: adds it alongside existing instances without clearing the registry.
    */

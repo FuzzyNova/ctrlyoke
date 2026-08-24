@@ -481,6 +481,36 @@ suite("WorkflowInstance session activity forwarding", () => {
     }
   });
 
+  test("forwards the execution integration response to instance subscribers", () => {
+    const platform = new MockPlatform();
+    const instance = new WorkflowInstance(
+      platform,
+      undefined,
+      new MockIntegrationFactory(platform),
+      () => new MockHarnessIntegration(undefined, false),
+      () => {},
+      () => {},
+      process.cwd()
+    );
+
+    try {
+      let response: string | undefined;
+      const disposable = instance.onResponseComplete((value) => {
+        response = value;
+      });
+      const integration = (instance as any).createIntegrationForMode(
+        HARNESS_IDS.COPILOT_CLI
+      ) as MockHarnessIntegration;
+
+      (integration as any).responseCompleteEmitter.fire("generated message");
+
+      assert.strictEqual(response, "generated message");
+      disposable.dispose();
+    } finally {
+      instance.dispose();
+    }
+  });
+
   test("appends resumed assistant text only to the active queue output cache", async () => {
     const platform = new MockPlatform();
     const instance = new WorkflowInstance(

@@ -1063,7 +1063,12 @@ function registerCommands(context: vscode.ExtensionContext) {
   );
 
   // Generate Commit Message command (SCM panel button)
-  const scmCommitCommand = new ScmCommitCommand();
+  const scmCommitCommand = new ScmCommitCommand({
+    createWorkflowInstance: () =>
+      workflowOrchestrator.createExternalWorkflowInstance(),
+    activateWorkflowInstance: (instance) =>
+      workflowOrchestrator.activateExternalWorkflowInstance(instance),
+  });
   const generateCommitMessageCommand = vscode.commands.registerCommand(
     VSCODE_COMMANDS.GENERATE_COMMIT_MESSAGE,
     () => scmCommitCommand.execute(context)

@@ -105,6 +105,11 @@ export class CommitMessageGenerationError extends Error {
   }
 }
 
+export interface CommitMessageWorkflowHost {
+  createWorkflowInstance(): WorkflowInstance;
+  activateWorkflowInstance(instance: WorkflowInstance): Promise<void>;
+}
+
 export function buildCommitWorkflowOverrides(
   harness: HarnessId,
   model: string | undefined,
@@ -128,6 +133,8 @@ export function buildCommitWorkflowOverrides(
 }
 
 export class CommitMessageGenerator {
+  constructor(private readonly workflowHost?: CommitMessageWorkflowHost) {}
+
   async getDiff(cwd: string): Promise<DiffResult | null> {
     // Primary: staged changes
     const stagedCommand = "git diff --cached";
@@ -332,15 +339,17 @@ export class CommitMessageGenerator {
     const factory = new IntegrationFactory(platform);
     const detectorIntegration = factory.createForExecution(harness);
 
-    const instance = new WorkflowInstance(
-      platform,
-      undefined,
-      factory,
-      () => detectorIntegration,
-      () => {},
-      () => {},
-      cwd
-    );
+    const instance =
+      this.workflowHost?.createWorkflowInstance() ??
+      new WorkflowInstance(
+        platform,
+        undefined,
+        factory,
+        () => detectorIntegration,
+        () => {},
+        () => {},
+        cwd
+      );
 
     // Force headless execution at the workflow tier and suppress VS Code globals
     // that could bleed into this one-shot call. PropertyResolver materializes
@@ -363,6 +372,7 @@ export class CommitMessageGenerator {
           isSystemGenerated: existingWorkflowKey === undefined,
         }
       );
+      await this.workflowHost?.activateWorkflowInstance(instance);
 
       const resolvedWorkflowKey = instance.promptQueue.getState().workflowKey;
       if (resolvedWorkflowKey && existingWorkflowKey === undefined) {
@@ -372,19 +382,19 @@ export class CommitMessageGenerator {
       // Captured directly from the integration rather than read back from a
       // persisted run history file: the response-complete listener is the fallback
       // text source even though this run now persists normal timeline artifacts.
-      responseCompleteDisposable = detectorIntegration.onResponseComplete(
+      responseCompleteDisposable = instance.onResponseComplete(
         (response) => {
           capturedResponseText = response;
         }
       );
-      streamingChunkDisposable = detectorIntegration.onStreamingChunk(
+      streamingChunkDisposable = instance.onStreamingChunk(
         (chunk) => {
           Log.debug(
             `[CommitMessageGenerator] Streaming chunk received during commit generation: length=${chunk.length}`
           );
         }
       );
-      streamingEventsDisposable = detectorIntegration.onStreamingEvents(
+      streamingEventsDisposable = instance.onStreamingEvents(
         (events) => {
           const summaries = events.map((event) => {
             if (

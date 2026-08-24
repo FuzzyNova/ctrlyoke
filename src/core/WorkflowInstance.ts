@@ -370,6 +370,10 @@ export class WorkflowInstance {
   /** Fires plain-text chunks (Copilot) from the active execution integration. */
   public readonly onStreamingChunk = this._streamingChunkEmitter.event;
 
+  private readonly _responseCompleteEmitter = new TypedEmitter<string>();
+  /** Fires the final plain-text response from the active execution integration. */
+  public readonly onResponseComplete = this._responseCompleteEmitter.event;
+
   private readonly _promptCompleteEmitter =
     new TypedEmitter<PromptCompleteData>();
   /**
@@ -3838,6 +3842,9 @@ export class WorkflowInstance {
     );
     integration.onStreamingChunk((chunk) =>
       this._streamingChunkEmitter.fire(chunk)
+    );
+    integration.onResponseComplete((response) =>
+      this._responseCompleteEmitter.fire(response)
     );
     integration.onNotificationEvent((event) =>
       this.dashboardSink?.notifyNotificationEvent?.(event)
