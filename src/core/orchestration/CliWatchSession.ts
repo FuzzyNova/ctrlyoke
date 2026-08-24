@@ -160,7 +160,7 @@ export class CliWatchSession implements vscode.Disposable {
       }
       if (!retried) {
         // JSON parse error: file may be mid-write — retry once after 50ms
-        Log.debug(
+        Log.trace(
           `[CliWatchSession] handleWorkingFileChange: parse error, retrying in 50ms`
         );
         await new Promise((resolve) => setTimeout(resolve, 50));
@@ -233,7 +233,7 @@ export class CliWatchSession implements vscode.Disposable {
       WorkflowLockManager.checkLock(this.workspaceFolderPath, this.workflowKey)
         .then((status) => {
           if (status === LOCK_STATUS.NONE || status === LOCK_STATUS.STALE) {
-            Log.debug(
+            Log.trace(
               `[CliWatchSession] heartbeat poll: lock is ${status} for workflowKey="${this.workflowKey}" — calling onFinished`
             );
             this.onFinished();

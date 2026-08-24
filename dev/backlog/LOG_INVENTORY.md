@@ -8,32 +8,32 @@ Excludes `src/test/**` and `*.test.tsx?`/`*.spec.tsx?` files (test assertions/mo
 
 ---
 
-## Backend (`Log.*`) — 1067 call sites across 113 file(s)
+## Backend (`Log.*`) — 1075 call sites across 113 file(s)
 
-Totals by level: trace=22, debug=415, info=163, warn=278, error=187, appendLine=2
+Totals by level: trace=50, debug=389, info=169, warn=276, error=189, appendLine=2
 
 Ranked by call count (highest first).
 
 | File | trace | debug | info | warn | error | appendLine | Total |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| `src/core/WorkflowInstance.ts` | 2 | 36 | 33 | 23 | 14 |  | 108 |
 | `src/core/WorkflowOrchestrator.ts` | 6 | 41 | 16 | 39 | 6 |  | 108 |
-| `src/core/WorkflowInstance.ts` | 2 | 34 | 25 | 23 | 14 |  | 98 |
 | `src/server/CtrlYokeHostedServer.ts` |  | 6 |  | 8 | 22 |  | 36 |
-| `src/core/PromptQueue.ts` |  | 7 | 15 | 2 | 2 |  | 26 |
 | `src/ui/WebviewMessageRouter.ts` | 1 | 3 | 6 | 7 | 9 |  | 26 |
 | `src/core/harness/shared/interfaces/INotificationMonitor.ts` |  | 18 | 2 | 4 |  |  | 24 |
-| `src/core/WorkflowExecutor.ts` | 2 | 2 | 13 | 4 | 3 |  | 24 |
+| `src/core/PromptQueue.ts` | 2 | 7 | 11 | 2 | 2 |  | 24 |
+| `src/core/WorkflowExecutor.ts` | 3 |  | 14 | 4 | 3 |  | 24 |
 | `src/ui/WorkflowSerializer.ts` |  | 6 |  | 6 | 12 |  | 24 |
 | `src/extension.ts` |  | 10 | 6 | 5 | 2 |  | 23 |
 | `src/core/harness/CliIntegration.ts` |  | 7 | 8 | 3 | 2 | 2 | 22 |
 | `src/core/harness/shared/CliExecutionRunner.ts` |  | 7 | 4 | 7 | 4 |  | 22 |
 | `src/core/harness/shared/CliInteractiveStartupCoordinator.ts` |  | 5 | 10 | 2 | 5 |  | 22 |
 | `src/core/harness/copilot/CopilotCliProvider.ts` |  | 15 | 1 | 3 | 1 |  | 20 |
-| `src/core/orchestration/OutputHistoryManager.ts` |  | 3 |  | 17 |  |  | 20 |
+| `src/core/orchestration/OutputHistoryManager.ts` | 2 | 1 |  | 15 | 2 |  | 20 |
 | `src/utils/ContextExpander.ts` |  | 10 |  | 5 | 5 |  | 20 |
 | `src/core/harness/copilot/CopilotLogParser.ts` |  | 17 |  | 2 |  |  | 19 |
 | `src/utils/ModelRegistry.ts` |  | 12 | 4 | 3 |  |  | 19 |
-| `src/core/orchestration/PromptFileLoader.ts` |  | 10 |  | 2 | 5 |  | 17 |
+| `src/core/orchestration/PromptFileLoader.ts` | 6 | 3 | 1 | 2 | 5 |  | 17 |
 | `src/dev/DevCommands.ts` |  |  | 11 |  | 5 |  | 16 |
 | `src/core/harness/qwen/QwenLogParser.ts` |  | 13 |  | 1 |  |  | 14 |
 | `src/ui/PromptEditorSupportService.ts` | 1 |  |  | 5 | 8 |  | 14 |
@@ -43,7 +43,7 @@ Ranked by call count (highest first).
 | `src/utils/TempFileManager.ts` |  |  | 2 | 4 | 7 |  | 13 |
 | `src/core/harness/claude/ClaudeCliProvider.ts` |  | 8 | 1 | 3 |  |  | 12 |
 | `src/core/harness/claude/ClaudeLogParser.ts` |  | 11 |  | 1 |  |  | 12 |
-| `src/core/EndConditionEvaluator.ts` |  | 1 | 4 |  | 6 |  | 11 |
+| `src/core/EndConditionEvaluator.ts` | 1 |  | 4 |  | 6 |  | 11 |
 | `src/core/harness/codex/CodexLogParser.ts` |  | 9 |  | 1 | 1 |  | 11 |
 | `src/core/harness/opencode/OpenCodeCliProvider.ts` |  | 5 | 1 | 5 |  |  | 11 |
 | `src/core/harness/PtyProcessManager.ts` |  | 10 |  | 1 |  |  | 11 |
@@ -52,7 +52,7 @@ Ranked by call count (highest first).
 | `src/ui/WorkflowStepHandlers.ts` |  |  |  |  | 11 |  | 11 |
 | `src/core/harness/qwen/QwenCliProvider.ts` |  | 8 | 1 | 1 |  |  | 10 |
 | `src/core/harness/shared/SettingsJsonMcpTracker.ts` |  | 6 |  | 4 |  |  | 10 |
-| `src/core/WorkingFileManager.ts` |  | 4 | 4 | 1 | 1 |  | 10 |
+| `src/core/WorkingFileManager.ts` | 4 |  | 4 | 1 | 1 |  | 10 |
 | `src/utils/SessionResolver.ts` |  | 5 |  | 5 |  |  | 10 |
 | `src/utils/WorkflowLockManager.ts` |  | 2 | 2 | 6 |  |  | 10 |
 | `src/core/harness/qwen/QwenToolPermissionMapper.ts` |  | 7 |  | 2 |  |  | 9 |

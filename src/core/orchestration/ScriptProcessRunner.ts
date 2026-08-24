@@ -36,7 +36,7 @@ export class ScriptProcessRunner {
 
   constructor(processManagerRoot: string) {
     this.processManager = new CliProcessManager(processManagerRoot, (msg) =>
-      Log.debug(msg)
+      Log.trace(msg)
     );
   }
 
@@ -69,7 +69,7 @@ export class ScriptProcessRunner {
     for (const key of vsCodeEnvVars) {
       delete cleanEnv[key];
     }
-    Log.debug(
+    Log.trace(
       `Cleaned ${vsCodeEnvVars.length} VS Code env vars for isolated execution`
     );
 

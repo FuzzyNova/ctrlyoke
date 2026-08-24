@@ -140,6 +140,17 @@ Redundant ephemeral "send/add prompt" and pre-delete diagnostics were removed. A
 file for a promoted run is ERROR because it disables timeline and manifest persistence for that
 run rather than merely taking a degraded fallback.
 
+**Group 3 decisions (2026-08-24):** Working-file write analysis, queue reload bookkeeping,
+filesystem watchers, CLI watch heartbeats, output-capture callbacks, and unscoped projection
+events are TRACE because they repeat during a single edit, poll, or replay. Pre-condition
+outcomes and queue extensions are INFO because they explain the run's visible play-by-play.
+Removed the redundant "about to update" and "successfully merged" queue messages while retaining
+one INFO record for the completed append. History initialization and finalization failures are
+ERROR: initialization can leave a run without timeline persistence, and finalization can leave
+its manifest incomplete. Best-effort usage-rollup refresh failures remain non-blocking but move
+to TRACE so they do not add per-attempt DEBUG noise. `WorkflowStateMachine.ts` had no direct
+logging call sites; its transition reporting remains owned by `WorkflowInstance.ts`.
+
 Groups, sized to ~100-150 call sites each and aligned to `.github/instructions/*.instructions.md`
 scopes so each session reads one coherent set of conventions:
 

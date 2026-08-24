@@ -387,7 +387,7 @@ export class PromptFileParser {
       const files = await this.findPromptFilesRecursive(promptsDirPath);
       return files;
     } catch (error) {
-      Log.debug(
+      Log.trace(
         `ctrlyoke: Prompts directory ${promptsDirPath} not found or inaccessible`
       );
       return [];

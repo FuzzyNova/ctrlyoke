@@ -191,7 +191,7 @@ export class OutputCaptureBuffer {
         const maxRetries =
           promptStepTyped?.endCondition?.maxRetries ?? attemptIndex;
         completedEntry.retryState = { currentRetry: attemptIndex, maxRetries };
-        Log.debug(
+        Log.trace(
           `${this.instanceTag} captureOutputInit: set retryState for step ${stepIndex} (attempt ${attemptIndex}/${maxRetries})`
         );
       }
@@ -244,7 +244,7 @@ export class OutputCaptureBuffer {
     } else {
       this.completedStepOutputs.set(stepIndex, { outputs: [output] });
     }
-    Log.debug(
+    Log.trace(
       `${this.instanceTag} captureCompletedOutput: step ${stepIndex} attempt ${attemptIndex}, total outputs=${this.completedStepOutputs.get(stepIndex)!.outputs.length}, retryState=${JSON.stringify(this.completedStepOutputs.get(stepIndex)!.retryState ?? null)}`
     );
     // Step is no longer streaming

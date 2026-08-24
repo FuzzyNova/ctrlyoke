@@ -1163,14 +1163,14 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       );
       const diskSteps = workingFile.steps || [];
 
-      Log.info(
+      Log.trace(
         `mergeStepsFromDisk: Disk has ${diskSteps.length} steps, memory has ${this.state.steps.length} steps`
       );
 
       const newStepsFromDisk = this.mergeDiskSteps(diskSteps);
 
       if (newStepsFromDisk.length === 0) {
-        Log.info("mergeStepsFromDisk: No new steps found");
+        Log.trace("mergeStepsFromDisk: No new steps found");
         return 0;
       }
 
@@ -1184,10 +1184,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
 
       // Emit state change so dashboard updates
       this.emitStateChange();
-
-      Log.info(
-        `mergeStepsFromDisk: Successfully merged. New queue size: ${this.state.steps.length}`
-      );
 
       return newStepsFromDisk.length;
     } catch (error) {
@@ -1248,9 +1244,6 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
       this.emitStateChange();
 
       // Update working file if it exists (direct call since we're already in the operation queue)
-      Log.info(
-        `About to update working file. Path: ${this.state.workingFilePath}, Total steps: ${this.state.steps.length}, Insert position: ${position} (index: ${insertIndex})`
-      );
       await this.workingFileManager.updateWorkingFileDirect();
       Log.info(
         `Working file updated. Appended ${steps.length} steps from: ${source} at position: ${position}`
