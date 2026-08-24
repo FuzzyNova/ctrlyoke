@@ -1553,6 +1553,12 @@ export interface RunViewLoadedMessage {
   /** Descriptor revision paired with this snapshot for optimistic mutations. */
   descriptorRevision: number;
   /**
+   * True for internal lineages the extension creates for itself (e.g. commit
+   * message generation) — mirrors `WorkflowLineageDescriptor.isSystemGenerated`.
+   * Drives read-only lockdown of workflow-mutating controls in the dashboard.
+   */
+  isSystemGenerated: boolean;
+  /**
    * Identifies an intentional definition rollback, such as discarding a
    * pending continuation. Requestless snapshots normally may not replace a
    * newer definition revision; this marker authorizes only the exact

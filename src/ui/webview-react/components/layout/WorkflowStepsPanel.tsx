@@ -16,6 +16,7 @@ import {
   useLongPress,
   useSortableDndSensors,
   useIsViewingDeletedWorkflow,
+  useIsSystemGeneratedWorkflow,
 } from "@hooks/index";
 import { HARNESS_INFO } from "../../types/messages";
 import type { HarnessId } from "../../types/messages";
@@ -337,9 +338,13 @@ const WorkflowStepsPanelInner: React.FC<{
   const isCLIManaged =
     loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
     RUNNER_IDS.CLI;
-  // The lineage on screen was deleted while being viewed — nothing here has
-  // anywhere left to write to.
+  // The lineage on screen was deleted while being viewed, or is an internal
+  // system lineage (e.g. commit message generation) whose properties are
+  // overridden by its owning feature on the next run regardless of what's
+  // edited here — either way, nothing here has anywhere meaningful to write to.
   const isViewingDeletedWorkflow = useIsViewingDeletedWorkflow();
+  const isSystemGeneratedWorkflow = useIsSystemGeneratedWorkflow();
+  const isLineageReadOnly = isViewingDeletedWorkflow || isSystemGeneratedWorkflow;
   const { selectionTarget, selectPrompt, selectFinalStep, deselect } =
     useEditorStore();
   const { workflowProperties, globalSettings } = useSettingsStore();
@@ -670,7 +675,7 @@ const WorkflowStepsPanelInner: React.FC<{
   );
 
   const handleFinalStepSelect = useCallback(() => {
-    if (isCLIManaged || isViewingDeletedWorkflow) return;
+    if (isCLIManaged || isLineageReadOnly) return;
     if (finalStep) {
       selectFinalStep(finalStep);
     } else {
@@ -679,7 +684,7 @@ const WorkflowStepsPanelInner: React.FC<{
     }
   }, [
     isCLIManaged,
-    isViewingDeletedWorkflow,
+    isLineageReadOnly,
     finalStep,
     selectFinalStep,
     setFinalStepFooterExpanded,
@@ -687,13 +692,13 @@ const WorkflowStepsPanelInner: React.FC<{
   ]);
 
   const handleToggleFinalStepEnabled = useCallback(() => {
-    if (isCLIManaged || isViewingDeletedWorkflow || !finalStep) return;
+    if (isCLIManaged || isLineageReadOnly || !finalStep) return;
     const enabling = finalStep.enabled === false;
     sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, {
       finalStep: buildWorkflowStepEnabledState(finalStep, enabling),
       ...(enabling ? { clearProperties: ["enabled"] } : {}),
     });
-  }, [isCLIManaged, isViewingDeletedWorkflow, finalStep]);
+  }, [isCLIManaged, isLineageReadOnly, finalStep]);
 
   const handleSelectedStepCopy = useCallback(() => {
     if (selectionTarget.kind !== FINAL_STEP_PHASES.QUEUE) {
@@ -711,7 +716,7 @@ const WorkflowStepsPanelInner: React.FC<{
   const handleSelectedStepPaste = useCallback(() => {
     if (
       isCLIManaged ||
-      isViewingDeletedWorkflow ||
+      isLineageReadOnly ||
       !canPasteStep ||
       selectionTarget.kind !== FINAL_STEP_PHASES.QUEUE
     ) {
@@ -727,18 +732,18 @@ const WorkflowStepsPanelInner: React.FC<{
         });
       })
       .catch(() => {});
-  }, [canPasteStep, isCLIManaged, isViewingDeletedWorkflow, selectionTarget]);
+  }, [canPasteStep, isCLIManaged, isLineageReadOnly, selectionTarget]);
 
   const finalStepIsReadOnly =
     isCLIManaged ||
-    isViewingDeletedWorkflow ||
+    isLineageReadOnly ||
     (finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP &&
       finalStepStatus === STEP_STATUS.RUNNING);
   // A running final step remains selectable so its prompt can be reviewed and
   // edited locally. The editor footer prevents updating or deleting it until
-  // execution finishes; only CLI-managed / deleted workflows block editor
+  // execution finishes; only CLI-managed / read-only lineages block editor
   // selection outright.
-  const finalStepSelectionIsReadOnly = isCLIManaged || isViewingDeletedWorkflow;
+  const finalStepSelectionIsReadOnly = isCLIManaged || isLineageReadOnly;
 
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({
@@ -940,7 +945,7 @@ const WorkflowStepsPanelInner: React.FC<{
 
       {/* Step list */}
       <div
-        className={`flex-1 overflow-y-auto min-h-0${isViewingDeletedWorkflow ? " pointer-events-none opacity-60 select-none" : ""}`}
+        className={`flex-1 overflow-y-auto min-h-0${isLineageReadOnly ? " pointer-events-none opacity-60 select-none" : ""}`}
         role="listbox"
         tabIndex={0}
         onClick={(e) => {
@@ -986,7 +991,7 @@ const WorkflowStepsPanelInner: React.FC<{
           if (key === "v") {
             if (
               isCLIManaged ||
-              isViewingDeletedWorkflow ||
+              isLineageReadOnly ||
               !canPasteStep ||
               selectionTarget.kind !== FINAL_STEP_PHASES.QUEUE
             ) {

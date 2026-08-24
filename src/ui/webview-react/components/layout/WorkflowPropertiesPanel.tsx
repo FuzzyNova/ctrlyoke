@@ -14,6 +14,7 @@ import { useUiStore } from "../../store/uiStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useIsViewingDeletedWorkflow } from "../../hooks/useIsViewingDeletedWorkflow";
+import { useIsSystemGeneratedWorkflow } from "../../hooks/useIsSystemGeneratedWorkflow";
 import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
 import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnostics";
 import {
@@ -226,6 +227,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
   // The lineage on screen was deleted while being viewed — nothing here has
   // anywhere left to write to.
   const isViewingDeletedWorkflow = useIsViewingDeletedWorkflow();
+  // The lineage on screen is an internal system lineage (e.g. commit message
+  // generation) — every property here is overridden by its owning feature on
+  // the next run regardless of what's edited, so editing is pure UI theater.
+  const isSystemGeneratedWorkflow = useIsSystemGeneratedWorkflow();
   const {
     availableAgents,
     availableSkills,
@@ -1384,7 +1389,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
       {/* Body - Scrollable (pointer-events disabled in CLI watch mode) */}
       <div
-        className={`flex-1 overflow-y-auto${activePage === DRAWER_PAGES.MCP ? " flex flex-col" : ""}${isCLIManaged || isViewingDeletedWorkflow ? " pointer-events-none opacity-60 select-none" : ""}`}
+        className={`flex-1 overflow-y-auto${activePage === DRAWER_PAGES.MCP ? " flex flex-col" : ""}${isCLIManaged || isViewingDeletedWorkflow || isSystemGeneratedWorkflow ? " pointer-events-none opacity-60 select-none" : ""}`}
       >
         <div
           className={`px-4 py-2${activePage === DRAWER_PAGES.MCP ? " flex flex-col flex-1 min-h-0 gap-2" : ` space-y-2${activePage === DRAWER_PAGES.PERMISSIONS ? " min-h-full flex flex-col" : ""}`}`}

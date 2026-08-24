@@ -2,6 +2,7 @@ import React, { useCallback, useState } from "react";
 import { isStandalone, useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useIsViewingDeletedWorkflow } from "@hooks/useIsViewingDeletedWorkflow";
+import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES } from "@/types/messages";
@@ -61,6 +62,11 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
   // duplicating it has nothing left to read from/write to. Creating fresh
   // (New / From Template / Load from File) stays available.
   const isViewingDeletedWorkflow = useIsViewingDeletedWorkflow();
+  // The lineage on screen is an internal system lineage (e.g. commit message
+  // generation) — appending to its queue is pointless since the next real
+  // generation wipes the draft anyway. Duplicating it into an independent,
+  // freely-editable lineage stays available as an escape hatch.
+  const isSystemGeneratedWorkflow = useIsSystemGeneratedWorkflow();
 
   // Handle new workflow (clear current)
   const handleNewWorkflow = useCallback(() => {
@@ -142,7 +148,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
       value: "queue-file",
       icon: <i className="custom-icon icon-queue-from-file" />,
       onClick: handleQueueFile,
-      disabled: !hasQueue || isViewingDeletedWorkflow,
+      disabled: !hasQueue || isViewingDeletedWorkflow || isSystemGeneratedWorkflow,
     },
     {
       label: isViewingRun

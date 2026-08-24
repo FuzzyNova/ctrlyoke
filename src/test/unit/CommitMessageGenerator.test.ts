@@ -43,6 +43,7 @@ suite("CommitMessageGenerator", () => {
 
     assert.strictEqual(overrides.executionMode, EXECUTION_MODES.HEADLESS);
     assert.strictEqual(overrides.resumeSession, false);
+    assert.strictEqual(overrides.worktree, false);
     assert.strictEqual(overrides.harness, HARNESS_IDS.OPENCODE_CLI);
     assert.strictEqual(overrides.model, "test-model");
     assert.deepStrictEqual(overrides.mcpServers, [mcpServer]);
@@ -60,6 +61,7 @@ suite("CommitMessageGenerator", () => {
     );
 
     assert.strictEqual(overrides.executionMode, EXECUTION_MODES.HEADLESS);
+    assert.strictEqual(overrides.worktree, false);
     assert.strictEqual(overrides.mcpServers, null);
   });
 });

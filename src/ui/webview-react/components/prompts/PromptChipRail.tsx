@@ -24,6 +24,7 @@ import {
   useLatestStepOutput,
   usePasteToEndContextMenu,
   useIsViewingDeletedWorkflow,
+  useIsSystemGeneratedWorkflow,
 } from "@hooks/index";
 import { StatusIcon } from "./StatusIcon";
 import {
@@ -262,9 +263,13 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   const isCLIManaged =
     loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
     RUNNER_IDS.CLI;
-  // The lineage on screen was deleted while being viewed — nothing here has
-  // anywhere left to write to.
+  // The lineage on screen was deleted while being viewed, or is an internal
+  // system lineage (e.g. commit message generation) whose properties are
+  // overridden by its owning feature on the next run regardless of what's
+  // edited here — either way, nothing here has anywhere meaningful to write to.
   const isViewingDeletedWorkflow = useIsViewingDeletedWorkflow();
+  const isSystemGeneratedWorkflow = useIsSystemGeneratedWorkflow();
+  const isLineageReadOnly = isViewingDeletedWorkflow || isSystemGeneratedWorkflow;
 
   const isRunning = isWorkflowRunning(executionState);
   const isPaused = executionState === EXECUTION_STATES.PAUSED;
@@ -304,7 +309,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   const hasFinalStep = !!finalStep;
   const finalStepIsReadOnly =
     isCLIManaged ||
-    isViewingDeletedWorkflow ||
+    isLineageReadOnly ||
     (finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP &&
       finalStepStatus === STEP_STATUS.RUNNING);
   const finalStepEffectiveStatus: StepStatus = hasFinalStep
@@ -312,7 +317,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
     : STEP_STATUS.PENDING;
 
   const handleFinalStepClick = useCallback(() => {
-    if (isCLIManaged || isViewingDeletedWorkflow) return;
+    if (isCLIManaged || isLineageReadOnly) return;
     if (finalStep) {
       selectFinalStep(finalStep);
     } else {
@@ -321,7 +326,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
     }
   }, [
     isCLIManaged,
-    isViewingDeletedWorkflow,
+    isLineageReadOnly,
     finalStep,
     selectFinalStep,
     setFinalStepFooterExpanded,
@@ -329,13 +334,13 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   ]);
 
   const handleToggleFinalStepEnabled = useCallback(() => {
-    if (isCLIManaged || isViewingDeletedWorkflow || !finalStep) return;
+    if (isCLIManaged || isLineageReadOnly || !finalStep) return;
     const enabling = finalStep.enabled === false;
     sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, {
       finalStep: buildWorkflowStepEnabledState(finalStep, enabling),
       ...(enabling ? { clearProperties: ["enabled"] } : {}),
     });
-  }, [isCLIManaged, isViewingDeletedWorkflow, finalStep]);
+  }, [isCLIManaged, isLineageReadOnly, finalStep]);
 
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({
@@ -365,7 +370,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
 
       {/* Prompt chips — scrollable, scrollbars hidden */}
       <div
-        className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 scrollbar-hide${isViewingDeletedWorkflow ? " pointer-events-none opacity-60 select-none" : ""}`}
+        className={`flex-1 overflow-y-auto overflow-x-hidden min-h-0 scrollbar-hide${isLineageReadOnly ? " pointer-events-none opacity-60 select-none" : ""}`}
         role="listbox"
         tabIndex={0}
         onClick={(e) => {

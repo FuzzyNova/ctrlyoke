@@ -115,6 +115,10 @@ export function buildCommitWorkflowOverrides(
     model,
     executionMode: EXECUTION_MODES.HEADLESS,
     resumeSession: false,
+    // The diff this prompt reasons about is always computed against the real
+    // workspace root, before this run is even loaded — a worktree here would
+    // run the harness against a different directory than the diff describes.
+    worktree: false,
     mcpServers: mcpServerConfig ? [mcpServerConfig] : null,
     agent: null,
     skills: null,

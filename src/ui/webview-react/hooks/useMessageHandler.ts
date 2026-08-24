@@ -2313,7 +2313,8 @@ export function createMessageHandlers(
         descriptorRevision: message.descriptorRevision,
       },
       pendingRewind ?? runtime?.pendingRewind,
-      message.runDirectory
+      message.runDirectory,
+      message.isSystemGenerated
     );
     ui.clearPendingRunViewLoad();
     // A rewind starts a new, suffix-only editing epoch. Re-baselining here

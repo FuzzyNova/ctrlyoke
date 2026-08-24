@@ -464,6 +464,16 @@ interface UiState {
   /** The displayed lineage's runs, newest first. Stable identities only — run
    * navigation addresses runs by `runRef`, never by position in this array. */
   runSummaries: RunSummary[];
+  /**
+   * Mirrors `WorkflowLineageDescriptor.isSystemGenerated` for the lineage
+   * currently displayed (e.g. commit message generation) — set on every
+   * `RUN_VIEW_LOADED` snapshot, so it always reflects the lineage that
+   * snapshot actually applied. Drives read-only lockdown of workflow-mutating
+   * controls: every property that matters for such a lineage is overridden
+   * by its owning feature on the next run anyway (see `CommitSection.tsx`),
+   * so editing it in the dashboard has no durable effect.
+   */
+  viewedLineageIsSystemGenerated: boolean;
   displayedViewAddress: WorkflowViewAddress | null;
   /** Directory containing the definition and timeline for displayedViewAddress. */
   displayedRunDirectory: string | null;
@@ -886,7 +896,8 @@ interface UiActions {
     executionRunRef?: string,
     revisions?: { definitionRevision: number; descriptorRevision: number },
     pendingRewind?: { fromStepIndex: number; baseDefinitionRevision: number },
-    runDirectory?: string
+    runDirectory?: string,
+    isSystemGenerated?: boolean
   ) => void;
   setDisplayedViewIdentity: (
     address: WorkflowViewAddress,
@@ -1032,6 +1043,7 @@ const initialState: UiState = {
   terminalRailSizePx: 140,
   isViewingHistory: false,
   runSummaries: [],
+  viewedLineageIsSystemGenerated: false,
   displayedViewAddress: null,
   displayedRunDirectory: null,
   appliedViewAddress: null,
@@ -1642,7 +1654,8 @@ export const useUiStore = create<UiState & UiActions>()(
         executionRunRef,
         revisions,
         pendingRewind,
-        runDirectory
+        runDirectory,
+        isSystemGenerated
       ) =>
         set((state) => ({
           displayedViewAddress: address,
@@ -1657,6 +1670,7 @@ export const useUiStore = create<UiState & UiActions>()(
           pendingRewind: pendingRewind ?? null,
           runSummaries: summaries,
           isViewingHistory: address.kind === "run",
+          viewedLineageIsSystemGenerated: isSystemGenerated ?? false,
         })),
 
       // Address + revisions, plus one cross-lineage coherence guard. Ordinary
@@ -1989,6 +2003,7 @@ export const useUiStore = create<UiState & UiActions>()(
           newWorkflowModalOpen: false,
           openCreateTemplateForm: false,
           viewingDeletedWorkflow: null,
+          viewedLineageIsSystemGenerated: false,
           templates: [],
           currentTemplate: null,
           isHistorySearchOpen: false,

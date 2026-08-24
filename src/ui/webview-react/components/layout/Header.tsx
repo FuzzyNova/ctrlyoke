@@ -11,6 +11,7 @@ import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useIsMobile, useMediaQuery } from "@hooks/useMediaQuery";
 import { useLongPress } from "@hooks/useLongPress";
 import { useIsViewingDeletedWorkflow } from "@hooks/useIsViewingDeletedWorkflow";
+import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
 import { WebviewLog } from "@utils/logger";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
@@ -172,6 +173,13 @@ export const Header: React.FC<{
   // except the prompt editor (see EditorSection — its draft is intentionally
   // workflow-agnostic).
   const isViewingDeletedWorkflow = useIsViewingDeletedWorkflow();
+  // The lineage on screen is an internal system lineage (e.g. commit message
+  // generation) — its harness/model/execution settings are overridden by its
+  // owning feature on every real run regardless of what's edited here, and
+  // re-running it from the dashboard would bypass those overrides entirely,
+  // so it gets the same lockdown as a deleted workflow.
+  const isSystemGeneratedWorkflow = useIsSystemGeneratedWorkflow();
+  const isLineageReadOnly = isViewingDeletedWorkflow || isSystemGeneratedWorkflow;
 
   const hasFile = fileName !== null;
   const executionRunSummary = executionRunRef
@@ -253,13 +261,15 @@ export const Header: React.FC<{
     }
   }, [vscode, activeWorkflowId]);
 
-  const dryRunDisabled = !displayedViewAddress || isViewingDeletedWorkflow;
-  const canSave = hasFile && !isViewingDeletedWorkflow;
+  const dryRunDisabled = !displayedViewAddress || isLineageReadOnly;
+  const canSave = hasFile && !isLineageReadOnly;
   const saveTitle = isViewingDeletedWorkflow
     ? "This workflow has been deleted"
-    : hasFile
-      ? "Save workflow to file"
-      : "Load a workflow to save";
+    : isSystemGeneratedWorkflow
+      ? "Managed automatically by commit message generation"
+      : hasFile
+        ? "Save workflow to file"
+        : "Load a workflow to save";
 
   const handleSave = useCallback(() => {
     if (!canSave || !displayedViewAddress) return;
@@ -477,7 +487,7 @@ export const Header: React.FC<{
       <UndoRedoControl
         isRunning={isRunning}
         isPaused={isPaused}
-        disabled={isViewingDeletedWorkflow}
+        disabled={isLineageReadOnly}
         embedded
         showHistoryChevronOnDesktopOnly="lg"
         onAction={handleUndoRedoAction}
@@ -488,12 +498,9 @@ export const Header: React.FC<{
   // Below xs (380px), show only actionable execution slots. If none are
   // actionable, retain the disabled Run slot so the primary affordance never
   // disappears completely. From xs upward all three fixed slots remain visible.
-  const slot1Enabled =
-    slot1.enabled && !isCLIManaged && !isViewingDeletedWorkflow;
-  const slot2Enabled =
-    slot2.enabled && !isCLIManaged && !isViewingDeletedWorkflow;
-  const slot3Enabled =
-    (slot3.enabled || isCLIManaged) && !isViewingDeletedWorkflow;
+  const slot1Enabled = slot1.enabled && !isCLIManaged && !isLineageReadOnly;
+  const slot2Enabled = slot2.enabled && !isCLIManaged && !isLineageReadOnly;
+  const slot3Enabled = (slot3.enabled || isCLIManaged) && !isLineageReadOnly;
   const restartOnlyOnNarrow =
     executionState === EXECUTION_STATES.STOPPED &&
     !isRunning &&
@@ -528,13 +535,15 @@ export const Header: React.FC<{
             openRunDryRunMenu(event.clientX, event.clientY);
           }}
           {...runSlotLongPressHandlers}
-          disabled={!slot1.enabled || isCLIManaged || isViewingDeletedWorkflow}
+          disabled={!slot1.enabled || isCLIManaged || isLineageReadOnly}
           title={
             isCLIManaged
               ? "Workflow is running via ctrlyoke CLI"
               : isViewingDeletedWorkflow
                 ? "This workflow has been deleted"
-                : slot1.title
+                : isSystemGeneratedWorkflow
+                  ? "Managed automatically by commit message generation"
+                  : slot1.title
           }
           aria-label={slot1.label}
         >
@@ -554,13 +563,15 @@ export const Header: React.FC<{
               : `${HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
           onClick={() => handleSlotAction(slot2.action)}
-          disabled={!slot2.enabled || isCLIManaged || isViewingDeletedWorkflow}
+          disabled={!slot2.enabled || isCLIManaged || isLineageReadOnly}
           title={
             isCLIManaged
               ? "Workflow is running via ctrlyoke CLI"
               : isViewingDeletedWorkflow
                 ? "This workflow has been deleted"
-                : slot2.title
+                : isSystemGeneratedWorkflow
+                  ? "Managed automatically by commit message generation"
+                  : slot2.title
           }
           aria-label={slot2.label}
         >
@@ -582,13 +593,15 @@ export const Header: React.FC<{
               ? handleStopCliRun
               : () => handleSlotAction(slot3.action)
           }
-          disabled={(!slot3.enabled && !isCLIManaged) || isViewingDeletedWorkflow}
+          disabled={(!slot3.enabled && !isCLIManaged) || isLineageReadOnly}
           title={
             isCLIManaged
               ? "Stop CLI run"
               : isViewingDeletedWorkflow
                 ? "This workflow has been deleted"
-                : slot3.title
+                : isSystemGeneratedWorkflow
+                  ? "Managed automatically by commit message generation"
+                  : slot3.title
           }
           aria-label={slot3.label}
         >
@@ -669,7 +682,7 @@ export const Header: React.FC<{
             <UndoRedoControl
               isRunning={isRunning}
               isPaused={isPaused}
-              disabled={isViewingDeletedWorkflow}
+              disabled={isLineageReadOnly}
               embedded
               showHistoryChevronOnDesktopOnly="lg"
               onAction={handleUndoRedoAction}

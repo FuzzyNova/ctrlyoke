@@ -269,6 +269,7 @@ interface AddressedRunView {
   runSummaries: RunViewLoadedMessage["runSummaries"];
   workflowProperties: RunViewLoadedMessage["workflowProperties"];
   descriptorRevision: number;
+  isSystemGenerated: boolean;
 }
 
 export class WorkflowOrchestrator {
@@ -2720,6 +2721,7 @@ export class WorkflowOrchestrator {
       runSummaries,
       workflowProperties,
       descriptorRevision: descriptor.revision,
+      isSystemGenerated: descriptor.isSystemGenerated ?? false,
     };
   }
 
@@ -2759,6 +2761,7 @@ export class WorkflowOrchestrator {
       executionRunRef,
       pendingRewind: workingFile._runtime?.pendingRewind,
       descriptorRevision: view.descriptorRevision,
+      isSystemGenerated: view.isSystemGenerated,
       ...(definitionRollback &&
       (workingFile.definitionRevision ?? 1) ===
         definitionRollback.restoredRevision &&
