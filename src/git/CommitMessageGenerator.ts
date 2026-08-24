@@ -25,6 +25,7 @@ import {
   isScriptStep,
   type McpServerConfig,
   type PromptFile,
+  type RunRef,
   type WorkflowKey,
 } from "../types/CtrlYokeTypes";
 
@@ -90,6 +91,18 @@ export interface CommitResult {
   message: string;
   staged: boolean;
   truncated: boolean;
+}
+
+export class CommitMessageGenerationError extends Error {
+  constructor(
+    message: string,
+    public readonly workflowKey?: WorkflowKey,
+    public readonly runRef?: RunRef,
+    options?: ErrorOptions
+  ) {
+    super(message, options);
+    this.name = "CommitMessageGenerationError";
+  }
 }
 
 export function buildCommitWorkflowOverrides(
@@ -323,159 +336,182 @@ export class CommitMessageGenerator {
     // that could bleed into this one-shot call. PropertyResolver materializes
     // settings into resolved step properties, which take precedence over the
     // CliAdapter fallback used by CliIntegration.
-    await instance.loadPromptStringAsRun(
-      fullPrompt,
-      COMMIT_MESSAGE_WORKFLOW_NAME,
-      buildCommitWorkflowOverrides(harness, model, mcpServerConfig),
-      {
-        existingWorkflowKey,
-        isSystemGenerated: existingWorkflowKey === undefined,
-      }
-    );
-
-    const resolvedWorkflowKey = instance.promptQueue.getState().workflowKey;
-    if (resolvedWorkflowKey && existingWorkflowKey === undefined) {
-      await writeCommitMessageLineageKey(stateRoot, resolvedWorkflowKey);
-    }
-
-    // Captured directly from the integration rather than read back from a
-    // persisted run history file: the response-complete listener is the fallback
-    // text source even though this run now persists normal timeline artifacts.
     let capturedResponseText: string | undefined;
     let mcpToolCalled = false;
-    const responseCompleteDisposable = detectorIntegration.onResponseComplete(
-      (response) => {
-        capturedResponseText = response;
-      }
-    );
-    const streamingChunkDisposable = detectorIntegration.onStreamingChunk(
-      (chunk) => {
-        Log.debug(
-          `[CommitMessageGenerator] Streaming chunk received during commit generation: length=${chunk.length}`
-        );
-      }
-    );
-    const streamingEventsDisposable = detectorIntegration.onStreamingEvents(
-      (events) => {
-        const summaries = events.map((event) => {
-          if (
-            event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL &&
-            "tool" in event.data &&
-            typeof event.data.tool === "string"
-          ) {
-            if (event.data.tool === COMMIT_MESSAGE_MCP_TOOL) {
-              mcpToolCalled = true;
-            }
-            return `${event.type}:${event.data.tool}`;
-          }
-          if ("name" in event.data && typeof event.data.name === "string") {
-            return `${event.type}:${event.data.name}`;
-          }
-          return event.type;
-        });
-        Log.debug(
-          `[CommitMessageGenerator] Streaming events during commit generation: count=${events.length}, types=${summaries.join(",")}`
-        );
-      }
-    );
-
+    let responseCompleteDisposable: { dispose(): void } | undefined;
+    let streamingChunkDisposable: { dispose(): void } | undefined;
+    let streamingEventsDisposable: { dispose(): void } | undefined;
     let abortListener: (() => void) | undefined;
-    if (token) {
-      abortListener = () => {
-        void instance.stop();
-      };
-      token.addEventListener("abort", abortListener);
-    }
 
     try {
+      await instance.loadPromptStringAsRun(
+        fullPrompt,
+        COMMIT_MESSAGE_WORKFLOW_NAME,
+        buildCommitWorkflowOverrides(harness, model, mcpServerConfig),
+        {
+          existingWorkflowKey,
+          isSystemGenerated: existingWorkflowKey === undefined,
+        }
+      );
+
+      const resolvedWorkflowKey = instance.promptQueue.getState().workflowKey;
+      if (resolvedWorkflowKey && existingWorkflowKey === undefined) {
+        await writeCommitMessageLineageKey(stateRoot, resolvedWorkflowKey);
+      }
+
+      // Captured directly from the integration rather than read back from a
+      // persisted run history file: the response-complete listener is the fallback
+      // text source even though this run now persists normal timeline artifacts.
+      responseCompleteDisposable = detectorIntegration.onResponseComplete(
+        (response) => {
+          capturedResponseText = response;
+        }
+      );
+      streamingChunkDisposable = detectorIntegration.onStreamingChunk(
+        (chunk) => {
+          Log.debug(
+            `[CommitMessageGenerator] Streaming chunk received during commit generation: length=${chunk.length}`
+          );
+        }
+      );
+      streamingEventsDisposable = detectorIntegration.onStreamingEvents(
+        (events) => {
+          const summaries = events.map((event) => {
+            if (
+              event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL &&
+              "tool" in event.data &&
+              typeof event.data.tool === "string"
+            ) {
+              if (event.data.tool === COMMIT_MESSAGE_MCP_TOOL) {
+                mcpToolCalled = true;
+              }
+              return `${event.type}:${event.data.tool}`;
+            }
+            if ("name" in event.data && typeof event.data.name === "string") {
+              return `${event.type}:${event.data.name}`;
+            }
+            return event.type;
+          });
+          Log.debug(
+            `[CommitMessageGenerator] Streaming events during commit generation: count=${events.length}, types=${summaries.join(",")}`
+          );
+        }
+      );
+
+      if (token) {
+        abortListener = () => {
+          void instance.stop();
+        };
+        token.addEventListener("abort", abortListener);
+      }
+
       await instance.executeLoadedPromptFile(harness);
+
+      if (token?.aborted) {
+        throw new Error("Commit message generation cancelled");
+      }
+
+      const cliCommand =
+        detectorIntegration instanceof CliIntegration
+          ? detectorIntegration.getLastSpawnedCommand()
+          : undefined;
+
+      // Primary path: read the commit message written by ctrlyoke_submit_commit_message.
+      if (useMcpCapture) {
+        let mcpMessage: string | undefined;
+        try {
+          const raw = await fs.readFile(commitOutputPath, "utf8");
+          mcpToolCalled = true;
+          mcpMessage = raw.trim() || undefined;
+        } catch {
+          // Tool was not called — fall through to text extraction below
+        }
+        try {
+          await fs.unlink(commitOutputPath);
+        } catch {
+          // Best-effort cleanup
+        }
+        if (mcpMessage) {
+          Log.debug(
+            `[CommitMessageGenerator] MCP capture resolved: enabled=${useMcpCapture}, toolCalled=${mcpToolCalled}, outcome=message-captured`
+          );
+          return { message: mcpMessage, prompt: fullPrompt, cliCommand };
+        }
+
+        Log.debug(
+          `[CommitMessageGenerator] MCP capture resolved: enabled=${useMcpCapture}, toolCalled=${mcpToolCalled}, outcome=falling-through-to-response-text`
+        );
+
+        Log.warn(
+          `[CommitMessageGenerator] MCP capture was enabled for ${harness} but no commit message was submitted; falling back to response text extraction`
+        );
+      } else {
+        Log.debug(
+          `[CommitMessageGenerator] MCP capture resolved: enabled=${useMcpCapture}, toolCalled=${mcpToolCalled}, outcome=falling-through-to-response-text`
+        );
+      }
+
+      // Fallback: extract from response text (MCP unavailable or tool not called).
+      const firstStep = instance.promptQueue.getState().steps[0];
+      if (!firstStep || isScriptStep(firstStep)) {
+        const state = instance.promptQueue.getState();
+        throw new CommitMessageGenerationError(
+          "Commit message generation failed: no prompt step executed",
+          state.workflowKey,
+          state.runRef
+        );
+      }
+
+      const rawResponse = capturedResponseText;
+      Log.debug(
+        `[CommitMessageGenerator] Raw captured response before empty-response check: ${rawResponse === undefined ? "undefined" : `length=${rawResponse.length}, state=${rawResponse === "" ? "empty-string" : "non-empty"}`}`
+      );
+      if (!rawResponse?.trim()) {
+        const state = instance.promptQueue.getState();
+        throw new CommitMessageGenerationError(
+          "Commit message generation produced an empty response",
+          state.workflowKey,
+          state.runRef
+        );
+      }
+
+      // Strip thinking blocks and file-operation annotations — for a commit message we
+      // only want the pure assistant text, not reasoning traces or tool-call summaries.
+      // These formats are defined by CliResponseTextExtractor.extractTextFromEvents().
+      let responseText = rawResponse
+        .replace(/\n?\[Thinking\][\s\S]*?\[\/Thinking\]/g, "")
+        .replace(/\n\[(Created|Edited|Deleted):[^\]]*\]/g, "")
+        .trim();
+
+      // Strip wrapper code fences (e.g. ```commit\n...\n``` or ```\n...\n```)
+      responseText = responseText
+        .replace(/^```[a-z]*\n?([\s\S]*?)\n?```$/i, "$1")
+        .trim();
+      // Strip single-backtick wrapping
+      responseText = responseText.replace(/^`([\s\S]*)`$/, "$1").trim();
+      // Strip surrounding double or single quotes (only when the entire message is wrapped)
+      responseText = responseText.replace(/^"([\s\S]*)"$/, "$1").trim();
+      responseText = responseText.replace(/^'([\s\S]*)'$/, "$1").trim();
+
+      return { message: responseText, prompt: fullPrompt, cliCommand };
+    } catch (error) {
+      if (error instanceof CommitMessageGenerationError) {
+        throw error;
+      }
+      const state = instance.promptQueue.getState();
+      throw new CommitMessageGenerationError(
+        error instanceof Error ? error.message : String(error),
+        state.workflowKey ?? existingWorkflowKey,
+        state.runRef,
+        { cause: error }
+      );
     } finally {
-      responseCompleteDisposable.dispose();
-      streamingChunkDisposable.dispose();
-      streamingEventsDisposable.dispose();
+      responseCompleteDisposable?.dispose();
+      streamingChunkDisposable?.dispose();
+      streamingEventsDisposable?.dispose();
       if (token && abortListener) {
         token.removeEventListener("abort", abortListener);
       }
     }
-
-    if (token?.aborted) {
-      throw new Error("Commit message generation cancelled");
-    }
-
-    const cliCommand =
-      detectorIntegration instanceof CliIntegration
-        ? detectorIntegration.getLastSpawnedCommand()
-        : undefined;
-
-    // Primary path: read the commit message written by ctrlyoke_submit_commit_message.
-    if (useMcpCapture) {
-      let mcpMessage: string | undefined;
-      try {
-        const raw = await fs.readFile(commitOutputPath, "utf8");
-        mcpToolCalled = true;
-        mcpMessage = raw.trim() || undefined;
-      } catch {
-        // Tool was not called — fall through to text extraction below
-      }
-      try {
-        await fs.unlink(commitOutputPath);
-      } catch {
-        // Best-effort cleanup
-      }
-      if (mcpMessage) {
-        Log.debug(
-          `[CommitMessageGenerator] MCP capture resolved: enabled=${useMcpCapture}, toolCalled=${mcpToolCalled}, outcome=message-captured`
-        );
-        return { message: mcpMessage, prompt: fullPrompt, cliCommand };
-      }
-
-      Log.debug(
-        `[CommitMessageGenerator] MCP capture resolved: enabled=${useMcpCapture}, toolCalled=${mcpToolCalled}, outcome=falling-through-to-response-text`
-      );
-
-      Log.warn(
-        `[CommitMessageGenerator] MCP capture was enabled for ${harness} but no commit message was submitted; falling back to response text extraction`
-      );
-    } else {
-      Log.debug(
-        `[CommitMessageGenerator] MCP capture resolved: enabled=${useMcpCapture}, toolCalled=${mcpToolCalled}, outcome=falling-through-to-response-text`
-      );
-    }
-
-    // Fallback: extract from response text (MCP unavailable or tool not called).
-    const firstStep = instance.promptQueue.getState().steps[0];
-    if (!firstStep || isScriptStep(firstStep)) {
-      throw new Error(
-        "Commit message generation failed: no prompt step executed"
-      );
-    }
-
-    const rawResponse = capturedResponseText;
-    Log.debug(
-      `[CommitMessageGenerator] Raw captured response before empty-response check: ${rawResponse === undefined ? "undefined" : `length=${rawResponse.length}, state=${rawResponse === "" ? "empty-string" : "non-empty"}`}`
-    );
-    if (!rawResponse?.trim()) {
-      throw new Error("Commit message generation produced an empty response");
-    }
-
-    // Strip thinking blocks and file-operation annotations — for a commit message we
-    // only want the pure assistant text, not reasoning traces or tool-call summaries.
-    // These formats are defined by CliResponseTextExtractor.extractTextFromEvents().
-    let responseText = rawResponse
-      .replace(/\n?\[Thinking\][\s\S]*?\[\/Thinking\]/g, "")
-      .replace(/\n\[(Created|Edited|Deleted):[^\]]*\]/g, "")
-      .trim();
-
-    // Strip wrapper code fences (e.g. ```commit\n...\n``` or ```\n...\n```)
-    responseText = responseText
-      .replace(/^```[a-z]*\n?([\s\S]*?)\n?```$/i, "$1")
-      .trim();
-    // Strip single-backtick wrapping
-    responseText = responseText.replace(/^`([\s\S]*)`$/, "$1").trim();
-    // Strip surrounding double or single quotes (only when the entire message is wrapped)
-    responseText = responseText.replace(/^"([\s\S]*)"$/, "$1").trim();
-    responseText = responseText.replace(/^'([\s\S]*)'$/, "$1").trim();
-
-    return { message: responseText, prompt: fullPrompt, cliCommand };
   }
 }

@@ -1690,7 +1690,7 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
     configService.setCliOverlay(overlay);
   }
 
-  const { CommitMessageGenerator } =
+  const { CommitMessageGenerationError, CommitMessageGenerator } =
     await import("./git/CommitMessageGenerator");
   const generator = new CommitMessageGenerator();
 
@@ -1721,6 +1721,17 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error(chalk.red(`Error: ${errMsg}`));
+    if (
+      err instanceof CommitMessageGenerationError &&
+      err.workflowKey &&
+      err.runRef
+    ) {
+      console.error(
+        chalk.dim(
+          `Inspect the persisted run events at: ${WorkflowPaths.eventsPath(workingDir, err.workflowKey, err.runRef)}`
+        )
+      );
+    }
     process.exit(1);
   }
 

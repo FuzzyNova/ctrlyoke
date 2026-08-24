@@ -1,10 +1,33 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { buildCommitWorkflowOverrides } from "../../git/CommitMessageGenerator";
+import {
+  buildCommitWorkflowOverrides,
+  CommitMessageGenerationError,
+} from "../../git/CommitMessageGenerator";
 import { EXECUTION_MODES, HARNESS_IDS } from "../../types/DashboardConstants";
-import type { McpServerConfig } from "../../types/CtrlYokeTypes";
+import type {
+  McpServerConfig,
+  RunRef,
+  WorkflowKey,
+} from "../../types/CtrlYokeTypes";
 
 suite("CommitMessageGenerator", () => {
+  test("carries the persisted run address on generation errors", () => {
+    const workflowKey =
+      "commit-message-generation-20260824-120000" as WorkflowKey;
+    const runRef = "run-20260824-120000" as RunRef;
+    const error = new CommitMessageGenerationError(
+      "generation failed",
+      workflowKey,
+      runRef
+    );
+
+    assert.strictEqual(error.message, "generation failed");
+    assert.strictEqual(error.workflowKey, workflowKey);
+    assert.strictEqual(error.runRef, runRef);
+    assert.strictEqual(error.name, "CommitMessageGenerationError");
+  });
+
   test("forces its one-shot workflow to headless mode", () => {
     const mcpServer: McpServerConfig = {
       id: "ctrlyoke-commit",
