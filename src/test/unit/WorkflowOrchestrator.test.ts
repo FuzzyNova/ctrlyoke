@@ -70,7 +70,10 @@ function createLineageBindingHarness() {
   internal.viewAddressRegistry = new Map();
   internal.viewMessageSinks = new Map();
   internal.lineageBindingClients = new Set<string>();
-  internal.lineageExecutionOwners = new Map<string, string>();
+  internal.lineageExecutionOwners = new Map<
+    string,
+    { instanceId: string; promoted: boolean }
+  >();
 
   const replays: string[] = [];
   const replayOptions: unknown[] = [];
@@ -812,7 +815,10 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       id: "instance-seeded",
       getQueueState: () => ({ workflowKey: boundKey, runRef: seededRun }),
     });
-    internal.lineageExecutionOwners.set(boundKey, "instance-seeded");
+    internal.lineageExecutionOwners.set(boundKey, {
+      instanceId: "instance-seeded",
+      promoted: false,
+    });
     internal.viewerRegistry.set("client-a", "instance-seeded");
     internal.getActiveTerminalWorkflowRefs = () => [
       {
@@ -859,10 +865,10 @@ suite("WorkflowOrchestrator handleClientReady", () => {
 
     await internal.switchClientToPreparedExecution(prepared, "client-a");
 
-    assert.strictEqual(
-      internal.lineageExecutionOwners.get(boundKey),
-      "instance-seeded"
-    );
+    assert.deepStrictEqual(internal.lineageExecutionOwners.get(boundKey), {
+      instanceId: "instance-seeded",
+      promoted: false,
+    });
     assert.strictEqual(
       internal.findInstanceForLineage(boundKey),
       prepared,
@@ -961,9 +967,47 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         status: EXECUTION_STATES.COMPLETED,
       }),
     });
-    internal.lineageExecutionOwners.set(boundKey, "instance-finished");
+    internal.lineageExecutionOwners.set(boundKey, {
+      instanceId: "instance-finished",
+      promoted: true,
+    });
 
     assert.strictEqual(internal.findInstanceForLineage(boundKey), live);
+  });
+
+  // The bug this reproduces: continuing an already-completed run reuses that
+  // run's own retired instance, whose status is still COMPLETED (left over
+  // from the run just finished) right up until the continuation's own RUNNING
+  // transition — which happens *after* this claim is set. A live idle instance
+  // of the same lineage (e.g. one the client had drifted onto while browsing)
+  // must not steal residency back during that window just because the claimed
+  // instance's status happens to read as terminal.
+  test("keeps a not-yet-promoted claim pinned even though its instance's status is still terminal from its own previous run", () => {
+    const { internal, boundKey } = createLineageBindingHarness();
+
+    internal.instances.delete("instance-bound");
+    const liveIdle = {
+      id: "instance-live-idle",
+      getQueueState: () => ({
+        workflowKey: boundKey,
+        status: EXECUTION_STATES.IDLE,
+      }),
+    };
+    internal.instances.set("instance-live-idle", liveIdle);
+    const continuing = {
+      id: "instance-continuing",
+      getQueueState: () => ({
+        workflowKey: boundKey,
+        status: EXECUTION_STATES.COMPLETED,
+      }),
+    };
+    internal.retiredInstances.set("instance-continuing", continuing);
+    internal.lineageExecutionOwners.set(boundKey, {
+      instanceId: "instance-continuing",
+      promoted: false,
+    });
+
+    assert.strictEqual(internal.findInstanceForLineage(boundKey), continuing);
   });
 
   test("materializes an addressed instance only when the lineage has none resident", async () => {

@@ -175,6 +175,25 @@ function isSpentExecutionOwnerState(status: QueueState["status"]): boolean {
   );
 }
 
+/**
+ * A `lineageExecutionOwners` entry. `promoted` is false from the moment a run
+ * action parks its incoming instance until that instance's own state
+ * transitions into an execution-owner state at least once — only then can a
+ * later terminal status mean "this claim's run is over" rather than "this
+ * instance's *previous* run left it terminal, and the one it was just
+ * prepared for has not started yet". Continuing an already-completed run
+ * reuses that same retired instance, so at claim time its status is still
+ * whatever the prior run left it at (typically COMPLETED) — unlike a Re-run's
+ * freshly built instance, which starts IDLE. Without the `promoted` gate,
+ * `isSpentExecutionOwnerState` cannot tell those two apart and discards the
+ * still-valid claim, letting some other resident of the lineage (e.g. a live
+ * idle instance browsing another run) win the tie-break instead.
+ */
+interface LineageExecutionClaim {
+  instanceId: string;
+  promoted: boolean;
+}
+
 interface DefinitionRollbackInvalidation {
   fromRevision: number;
   restoredRevision: number;
@@ -316,7 +335,10 @@ export class WorkflowOrchestrator {
   private readonly lineageBindingClients = new Set<string>();
   /** Lineage → instance most recently prepared to execute it (see
    * {@link getLineageExecutionOwners}); disambiguates retired duplicates. */
-  private readonly lineageExecutionOwners = new Map<WorkflowKey, string>();
+  private readonly lineageExecutionOwners = new Map<
+    WorkflowKey,
+    LineageExecutionClaim
+  >();
 
   /** Retired instances keyed by workflowId — held until no client views them. */
   private retiredInstances = new Map<string, WorkflowInstance>();
@@ -2402,11 +2424,11 @@ export class WorkflowOrchestrator {
    *
    * Defensive for lightweight unit-test instances created without constructors.
    */
-  private getLineageExecutionOwners(): Map<WorkflowKey, string> {
+  private getLineageExecutionOwners(): Map<WorkflowKey, LineageExecutionClaim> {
     const initialized = this.lineageExecutionOwners;
     if (initialized) return initialized;
     const partial = this as unknown as {
-      lineageExecutionOwners?: Map<WorkflowKey, string>;
+      lineageExecutionOwners?: Map<WorkflowKey, LineageExecutionClaim>;
     };
     return (partial.lineageExecutionOwners ??= new Map());
   }
@@ -2468,13 +2490,17 @@ export class WorkflowOrchestrator {
     // Only until the execution it describes finishes: nothing deletes these
     // entries, so a spent one would otherwise outrank a live instance forever.
     // The window this covers is real and unavoidable — a prepared instance has
-    // not transitioned to RUNNING yet, so rule 1 cannot see it.
-    const preparedId = this.getLineageExecutionOwners().get(workflowKey);
-    const prepared = residents.find(
-      (instance) =>
-        instance.id === preparedId &&
-        !isSpentExecutionOwnerState(instance.getQueueState().status)
-    );
+    // not transitioned to RUNNING yet, so rule 1 cannot see it. Before that
+    // transition (`!claim.promoted`) the instance's status can only be
+    // leftover from *its own previous* execution — e.g. a continuation reusing
+    // the run's own retired, COMPLETED instance — so it must not be read as
+    // this claim already being spent.
+    const claim = this.getLineageExecutionOwners().get(workflowKey);
+    const prepared = residents.find((instance) => {
+      if (!claim || instance.id !== claim.instanceId) return false;
+      if (!claim.promoted) return true;
+      return !isSpentExecutionOwnerState(instance.getQueueState().status);
+    });
     if (prepared) {
       return prepared;
     }
@@ -3981,7 +4007,10 @@ export class WorkflowOrchestrator {
     // resolves to the run the client was just switched to.
     const workflowKey = instance.getQueueState().workflowKey;
     if (workflowKey) {
-      this.getLineageExecutionOwners().set(workflowKey, instance.id);
+      this.getLineageExecutionOwners().set(workflowKey, {
+        instanceId: instance.id,
+        promoted: false,
+      });
     }
 
     const send =
@@ -5194,6 +5223,20 @@ export class WorkflowOrchestrator {
           `inRegistry=${inRegistry} registrySize=${this.instances.size} ` +
           `fp=${summary.filePath ? path.basename(summary.filePath) : "?"} step=${workflowDisplayStep(summary)}/${summary.totalSteps}`
       );
+
+      // Mark this instance's lineageExecutionOwners claim (if any) promoted the
+      // first time it actually reaches an execution-owner state. Until this
+      // fires, a terminal status on the claimed instance is leftover from its
+      // *previous* run (e.g. continuing an already-COMPLETED run reuses that
+      // same retired instance) and must not be read as this claim being spent
+      // — see `findInstanceForLineage` and `LineageExecutionClaim`.
+      if (state.workflowKey && isExecutionOwnerState(state.status)) {
+        const owners = this.getLineageExecutionOwners();
+        const claim = owners.get(state.workflowKey);
+        if (claim && claim.instanceId === instance.id && !claim.promoted) {
+          owners.set(state.workflowKey, { ...claim, promoted: true });
+        }
+      }
 
       // Register in the running/paused registry whenever this instance enters
       // RUNNING or PAUSED and is not already tracked.  Using the registry
