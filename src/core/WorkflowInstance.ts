@@ -36,6 +36,7 @@ import {
   DynamicQueueConfig,
   type RunRef,
   type WorkflowKey,
+  type WorkflowLineageCreationOptions,
 } from "../types/CtrlYokeTypes";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import { HEARTBEAT_INTERVAL_MS } from "../utils/LockSafetyPrimitives";
@@ -675,7 +676,6 @@ export class WorkflowInstance {
         }
       );
     }
-
   }
 
   private reportMissingAssetWarning(
@@ -1199,6 +1199,44 @@ export class WorkflowInstance {
     };
     this.currentPromptFile = { filePath: "<inline>", promptFile };
     this.promptQueue.loadPrompts(promptFile);
+    this.propagateWorkflowNameToIntegrations();
+  }
+
+  /**
+   * Load an inline prompt into a persisted, single-step workflow run.
+   * An existing lineage key may be supplied when the caller owns a durable
+   * pointer to the lineage; otherwise the normal creation path mints one.
+   * Workflow overrides are intentionally in-memory only; the working file
+   * stores the prompt step and lineage/runtime metadata.
+   */
+  async loadPromptStringAsRun(
+    promptText: string,
+    nameHint: string,
+    workflowOverrides?: Partial<PromptFile>,
+    lineageOptions?: WorkflowLineageCreationOptions
+  ): Promise<void> {
+    this.promptQueue.clearQueue();
+    this.filePath = "";
+    this.sourceDefinitionPath = undefined;
+    const promptFile: PromptFile = {
+      steps: [{ prompt: promptText }],
+      ...workflowOverrides,
+    };
+
+    const workspaceFolderPath =
+      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    const workingFilePath = workspaceFolderPath
+      ? await this.promptQueue.createWorkingFile(
+          nameHint,
+          promptFile.steps ?? [],
+          workspaceFolderPath,
+          undefined,
+          lineageOptions
+        )
+      : undefined;
+
+    this.currentPromptFile = { filePath: "<inline>", promptFile };
+    this.promptQueue.loadPrompts(promptFile, workingFilePath);
     this.propagateWorkflowNameToIntegrations();
   }
 

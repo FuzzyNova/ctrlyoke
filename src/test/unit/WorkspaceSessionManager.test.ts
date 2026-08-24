@@ -17,7 +17,8 @@ async function writeDraftLineage(
   workflowKey: WorkflowKey,
   workflowName: string,
   startedAt: number,
-  lastModifiedAt: number
+  lastModifiedAt: number,
+  isSystemGenerated = false
 ): Promise<void> {
   await fs.mkdir(WorkflowPaths.draftDir(workspaceRoot, workflowKey), {
     recursive: true,
@@ -26,6 +27,7 @@ async function writeDraftLineage(
     schemaVersion: 1,
     workflowKey,
     workflowName,
+    ...(isSystemGenerated ? { isSystemGenerated: true } : {}),
     isFavorite: false,
     createdAt: startedAt,
     lastModifiedAt,
@@ -128,6 +130,45 @@ suite("WorkspaceSessionManager", () => {
       assert.match(
         session?.detail ?? "",
         /Configured worktree default did not apply: workspace is not a Git repository\./
+      );
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("omits system-generated lineages from recent session discovery", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-workspace-system-session-")
+    );
+
+    try {
+      const userKey = "user-workflow-2026-01-01T00-00-00" as WorkflowKey;
+      const systemKey = "system-workflow-2026-01-02T00-00-00" as WorkflowKey;
+      await writeDraftLineage(
+        workspaceRoot,
+        userKey,
+        "user-workflow",
+        100,
+        100
+      );
+      await writeDraftLineage(
+        workspaceRoot,
+        systemKey,
+        "system-workflow",
+        200,
+        200,
+        true
+      );
+
+      const manager = new WorkspaceSessionManager(
+        new PromptFileParser(),
+        {} as any
+      );
+      const sessions = await manager.discoverSessions(workspaceRoot);
+
+      assert.deepStrictEqual(
+        sessions.map((session) => session.filePath),
+        [WorkflowPaths.draftFilePath(workspaceRoot, userKey)]
       );
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });

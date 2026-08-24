@@ -137,6 +137,9 @@ export class WorkspaceSessionManager {
             workspaceFolderPath,
             workflowKey
           );
+          if (descriptor.isSystemGenerated) {
+            return undefined;
+          }
           const filePath = descriptor.latestRunRef
             ? WorkflowPaths.runFilePath(
                 workspaceFolderPath,

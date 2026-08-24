@@ -6,6 +6,7 @@ import type {
   WorkflowRunAddress,
   WorkflowKey,
   WorkflowLineageDescriptor,
+  WorkflowLineageCreationOptions,
 } from "../../types/CtrlYokeTypes";
 import { isWorkflowRunAddress } from "../../types/CtrlYokeTypes";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
@@ -76,8 +77,37 @@ export class WorkflowLineageRepository {
       sourceRunRef?: RunRef;
       sourceWorkflowName: string;
       variantCreatedAt: number;
-    }
+    },
+    options?: WorkflowLineageCreationOptions
   ): Promise<CreatedLineage> {
+    if (options?.existingWorkflowKey) {
+      const workflowKey = options.existingWorkflowKey;
+      const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
+      if (descriptor.workflowKey !== workflowKey) {
+        throw new Error(
+          `Lineage descriptor key mismatch for workflow "${workflowKey}"`
+        );
+      }
+
+      if (options.isSystemGenerated && !descriptor.isSystemGenerated) {
+        await this.updateDescriptor(workspaceRoot, workflowKey, (current) => ({
+          ...current,
+          isSystemGenerated: true,
+        }));
+      }
+
+      await fs.promises.mkdir(
+        WorkflowPaths.draftDir(workspaceRoot, workflowKey),
+        { recursive: true }
+      );
+
+      return {
+        workflowKey,
+        descriptor: await this.readDescriptor(workspaceRoot, workflowKey),
+        draftFilePath: WorkflowPaths.draftFilePath(workspaceRoot, workflowKey),
+      };
+    }
+
     const workflowKey = await WorkflowPaths.allocateWorkflowKey(
       workspaceRoot,
       nameHint
@@ -89,6 +119,7 @@ export class WorkflowLineageRepository {
       workflowKey,
       workflowName,
       ...(originalFile ? { originalFile } : {}),
+      ...(options?.isSystemGenerated ? { isSystemGenerated: true } : {}),
       ...(provenance ?? {}),
       isFavorite: false,
       createdAt: now,

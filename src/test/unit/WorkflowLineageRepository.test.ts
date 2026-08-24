@@ -77,6 +77,33 @@ suite("WorkflowLineageRepository", () => {
       );
     });
 
+    test("marks system-generated lineages and reuses an existing key", async () => {
+      const ws = await makeWorkspace("ctrlyoke-lineage-system-");
+      const created = await repository.createLineage(
+        ws,
+        "commit-message-generation",
+        "commit-message-generation",
+        undefined,
+        undefined,
+        { isSystemGenerated: true }
+      );
+      assert.strictEqual(created.descriptor.isSystemGenerated, true);
+
+      const reused = await repository.createLineage(
+        ws,
+        "commit-message-generation",
+        "commit-message-generation",
+        undefined,
+        undefined,
+        { existingWorkflowKey: created.workflowKey }
+      );
+      assert.strictEqual(reused.workflowKey, created.workflowKey);
+      assert.strictEqual(
+        reused.draftFilePath,
+        WorkflowPaths.draftFilePath(ws, created.workflowKey)
+      );
+    });
+
     test("readDescriptor rejects for a missing lineage", async () => {
       const ws = await makeWorkspace("ctrlyoke-lineage-missing-");
       await assert.rejects(

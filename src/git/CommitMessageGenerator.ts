@@ -11,7 +11,10 @@ import type { ResolvedCliConfig } from "../platform/CliAdapter";
 import { IntegrationFactory } from "../core/IntegrationFactory";
 import { CliIntegration } from "../core/harness/CliIntegration";
 import { WorkflowInstance } from "../core/WorkflowInstance";
+import { WorkflowLineageRepository } from "../core/orchestration/WorkflowLineageRepository";
 import { Log } from "../utils/Log";
+import * as WorkflowPaths from "../utils/WorkflowPaths";
+import { writeFileAtomic } from "../utils/AtomicFileUtils";
 import {
   CLI_EVENT_TYPES,
   EXECUTION_MODES,
@@ -22,6 +25,7 @@ import {
   isScriptStep,
   type McpServerConfig,
   type PromptFile,
+  type WorkflowKey,
 } from "../types/CtrlYokeTypes";
 
 const execFileAsync = promisify(execFile);
@@ -30,6 +34,49 @@ const execFileAsync = promisify(execFile);
 // against truly pathological diffs (e.g. generated files, minified bundles).
 const MAX_DIFF_BYTES = 750 * 1024;
 const COMMIT_MESSAGE_MCP_TOOL = "ctrlyoke_submit_commit_message";
+const COMMIT_MESSAGE_LINEAGE_POINTER = ".commit-message-lineage.json";
+const COMMIT_MESSAGE_WORKFLOW_NAME = "commit-message-generation";
+
+async function readCommitMessageLineageKey(
+  stateRoot: string
+): Promise<WorkflowKey | undefined> {
+  const pointerPath = path.join(
+    WorkflowPaths.runsRoot(stateRoot),
+    COMMIT_MESSAGE_LINEAGE_POINTER
+  );
+  try {
+    const parsed = JSON.parse(await fs.readFile(pointerPath, "utf8")) as {
+      workflowKey?: unknown;
+    };
+    if (typeof parsed.workflowKey !== "string") {
+      return undefined;
+    }
+
+    WorkflowPaths.assertValidWorkflowKey(parsed.workflowKey);
+    const descriptor = await new WorkflowLineageRepository().tryReadDescriptor(
+      stateRoot,
+      parsed.workflowKey
+    );
+    return descriptor?.workflowKey === parsed.workflowKey &&
+      descriptor.isSystemGenerated
+      ? parsed.workflowKey
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function writeCommitMessageLineageKey(
+  stateRoot: string,
+  workflowKey: WorkflowKey
+): Promise<void> {
+  const runsRoot = WorkflowPaths.runsRoot(stateRoot);
+  await fs.mkdir(runsRoot, { recursive: true });
+  await writeFileAtomic(
+    path.join(runsRoot, COMMIT_MESSAGE_LINEAGE_POINTER),
+    JSON.stringify({ workflowKey }, null, 2)
+  );
+}
 
 export interface DiffResult {
   diff: string;
@@ -256,6 +303,9 @@ export class CommitMessageGenerator {
       );
     }
 
+    const stateRoot = cwd;
+    const existingWorkflowKey = await readCommitMessageLineageKey(stateRoot);
+
     const factory = new IntegrationFactory(platform);
     const detectorIntegration = factory.createForExecution(harness);
 
@@ -273,15 +323,24 @@ export class CommitMessageGenerator {
     // that could bleed into this one-shot call. PropertyResolver materializes
     // settings into resolved step properties, which take precedence over the
     // CliAdapter fallback used by CliIntegration.
-    instance.loadPromptString(
+    await instance.loadPromptStringAsRun(
       fullPrompt,
-      buildCommitWorkflowOverrides(harness, model, mcpServerConfig)
+      COMMIT_MESSAGE_WORKFLOW_NAME,
+      buildCommitWorkflowOverrides(harness, model, mcpServerConfig),
+      {
+        existingWorkflowKey,
+        isSystemGenerated: existingWorkflowKey === undefined,
+      }
     );
 
+    const resolvedWorkflowKey = instance.promptQueue.getState().workflowKey;
+    if (resolvedWorkflowKey && existingWorkflowKey === undefined) {
+      await writeCommitMessageLineageKey(stateRoot, resolvedWorkflowKey);
+    }
+
     // Captured directly from the integration rather than read back from a
-    // persisted run history file: this instance is loaded via loadPromptString
-    // (an ephemeral <inline> prompt), which never creates the workflowKey/runRef
-    // a history file lookup would need.
+    // persisted run history file: the response-complete listener is the fallback
+    // text source even though this run now persists normal timeline artifacts.
     let capturedResponseText: string | undefined;
     let mcpToolCalled = false;
     const responseCompleteDisposable = detectorIntegration.onResponseComplete(

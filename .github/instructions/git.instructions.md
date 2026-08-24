@@ -29,7 +29,7 @@ Do not turn this folder into a second workspace-viewer git service. The hosted w
 
 - Preferred capture path is the `ctrlyoke_submit_commit_message` MCP tool exposed by `src/mcp-server.ts`.
 - The temporary capture file lives under `.ctrlyoke/temp/` in the workspace and should remain best-effort cleanup only.
-- If MCP capture is unavailable or unused, resolve the executed prompt response from that run's `events.jsonl` through `RunOutputResolver`; keep sanitization narrowly focused on removing wrapper noise, not rewriting the message.
+- Commit-generation runs are persisted as system-generated lineages and their timeline is available through normal run storage. If MCP capture is unavailable or unused, the fallback message text still comes from the integration's in-memory `onResponseComplete` listener (`capturedResponseText`), not by re-reading that run's `events.jsonl`; keep sanitization narrowly focused on removing wrapper noise, not rewriting the message.
 
 **Cross-file contracts**
 
