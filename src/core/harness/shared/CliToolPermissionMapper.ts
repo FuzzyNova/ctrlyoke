@@ -1,5 +1,9 @@
 import { Log } from "../../../utils/Log";
 import {
+  inspectToolPatternSyntax,
+  parseToolPattern,
+} from "../../../utils/ToolPatternSyntax";
+import {
   ToolPermissionMode,
   ToolPermissionConfig,
 } from "./interfaces/IToolPermissionMapper";
@@ -69,12 +73,7 @@ export class CliToolPermissionMapper {
    * @returns [toolName, args] or null if pattern doesn't match expected format
    */
   static parsePattern(pattern: string): [string, string] | null {
-    const match = pattern.match(/^([a-zA-Z_][a-zA-Z0-9_-]*)(\(.*\))?$/);
-    if (!match) {
-      return null;
-    }
-
-    return [match[1], match[2] || ""];
+    return parseToolPattern(pattern);
   }
 
   /**
@@ -154,21 +153,21 @@ export class CliToolPermissionMapper {
     const warnings: string[] = [];
 
     for (const pattern of patterns) {
-      const parsed = this.parsePattern(pattern);
-      if (!parsed && !pattern.includes("(")) {
+      const syntax = inspectToolPatternSyntax(pattern);
+      if (syntax.doesNotMatchPattern && !syntax.hasOpeningParenthesis) {
         // If it doesn't parse and doesn't have parentheses, might be invalid
         // But allow MCP server names without parentheses
         continue;
       }
 
       // Check for common mistakes
-      if (pattern.includes("*") && !pattern.includes("(")) {
+      if (syntax.hasWildcardOutsideParentheses) {
         warnings.push(
           `Pattern "${pattern}" contains wildcard (*) but missing argument parentheses. Did you mean "${pattern.replace("*", "(*)")}?`
         );
       }
 
-      if (pattern.includes("(") && !pattern.includes(")")) {
+      if (syntax.hasUnclosedParentheses) {
         warnings.push(`Pattern "${pattern}" has unclosed parentheses`);
       }
     }

@@ -193,8 +193,8 @@ Replace the four textareas with `<PermissionListEditor>`:
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `SingleLineCompletionEditor.tsx`                           | Gains `multiline` support; single-line callers unaffected                                             |
 | `src/completions/PermissionListCompletionHelpers.ts` (new) | Line-scoped completion candidates for tool patterns                                                   |
-| `src/utils/ToolPatternSyntax.ts` (new)                     | Shared, dependency-free pattern regex + syntax checks (extension host + webview)                      |
-| `src/core/harness/shared/CliToolPermissionMapper.ts`       | Source of the canonical tool-name list; adopts `ToolPatternSyntax.ts` instead of its own inline regex |
+| `src/utils/ToolPatternSyntax.ts`                          | Implemented: shared, dependency-free pattern regex + syntax checks (extension host + webview)         |
+| `src/core/harness/shared/CliToolPermissionMapper.ts`       | Implemented: adopts `ToolPatternSyntax.ts` instead of its own inline regex                            |
 | `PromptEditorSupportService.ts`                            | New `handlePermissionCompletionRequest()`, mirroring `handleScriptCompletionRequest`                  |
 | `WebviewMessageRouter.ts`                                  | Registers `PERMISSION_COMPLETIONS_REQUEST`                                                            |
 | `DashboardConstants.ts` / `WebviewMessageTypes.ts`         | New message type + payload contracts                                                                  |
