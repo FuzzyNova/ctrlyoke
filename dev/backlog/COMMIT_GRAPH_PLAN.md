@@ -1,6 +1,7 @@
 # Multi-Lane Commit Graph for the Workspace Source Control Pane
 
-> **Status:** Proposed — not implemented. Written 2026-08-24 against current code.
+> **Status:** In progress — the pure layout algorithm and unit tests are implemented;
+> rendering integration remains. Written 2026-08-24 against current code.
 >
 > **Problem in one line:** `WorkspaceCommitHistoryPane` draws one straight
 > gutter line with a node per commit; it has no concept of branch lanes, so a
@@ -50,7 +51,7 @@ repoId)`, 30 at a time via `loadMoreHistory` in
   classification (`classifyRefNames`, `HostedWorkspaceViewerService.ts:~215`)
   are unaffected by this plan and stay as-is.
 - Graph colors are already themed off VS Code's SCM palette in
-  `tailwind.config.js:245-252` (`scm-graph-local` / `-remote` / `-base` →
+  `src/ui/webview-react/tailwind.config.js:245-252` (`scm-graph-local` / `-remote` / `-base` →
   `var(--vscode-scmGraph-historyItem*Color, <hex fallback>)`), so hosted
   (non-VS Code) rendering already has real fallback colors, not just
   `undefined` CSS vars.
@@ -164,6 +165,11 @@ No schema (`schemas/*.json`) changes — this type isn't part of
 construct or check `WorkspaceCommitLogEntry` objects.
 
 ## 4. Layout algorithm (new module)
+
+Implementation note: `commitGraphLayout.ts` follows the API and lane model below
+without deviation. When converging lanes have the same target commit, the later
+duplicate is removed when that commit is processed so the shared ancestor is
+represented by one node and one continuing lane.
 
 New file: `src/ui/webview-react/utils/commitGraphLayout.ts` — pure, no React,
 independently testable.
