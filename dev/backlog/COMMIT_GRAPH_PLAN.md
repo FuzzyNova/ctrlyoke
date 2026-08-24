@@ -283,9 +283,10 @@ case (a handful of concurrent branches) before the rail's own scroll kicks
 in, and make the cap responsive — smaller on the `isMobile` layout
 (`WorkspaceSourceControlPane.tsx:590-665`, where the pane is full viewport
 width) than on the desktop side-by-side layout
-(`WORKSPACE_VIEWER_SIDE_PANEL_*` sizing, `:667-691`). Pin the exact numbers
-against the branch-heavy fixture in §8 rather than guessing; this is a
-tuning pass, not an open design question anymore.
+(`WORKSPACE_VIEWER_SIDE_PANEL_*` sizing, `:667-691`). The first rendering pass
+uses placeholder values of `14px` per lane, a five-lane desktop cap, and a
+three-lane mobile cap (with `ROW_HEIGHT = 24px`). Tune these values against
+the branch-heavy fixture in §8; they are intentionally not final.
 
 Default `scrollLeft = 0` on the rail requires no extra logic to "do the
 right thing": since commits list newest-first and the layout algorithm seeds

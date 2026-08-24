@@ -563,6 +563,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         <WorkspaceCommitHistoryPane
           onLoadMore={() => void loadMoreHistory()}
           onRefresh={() => void refreshAll()}
+          isMobile={isMobile}
         />
       </div>
     </div>
@@ -612,6 +613,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
             <WorkspaceCommitHistoryPane
               onLoadMore={() => void loadMoreHistory()}
               onRefresh={() => void refreshAll()}
+              isMobile={isMobile}
             />
           </div>
         </div>
