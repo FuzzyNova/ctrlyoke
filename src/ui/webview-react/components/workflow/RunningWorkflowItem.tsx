@@ -237,6 +237,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
             ? `${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)}/${workflow.totalSteps}`
             : undefined
         }
+        worktree={workflow.worktree ?? lineage?.worktree}
         glyph={
           hasActiveTerminal && (
             <i

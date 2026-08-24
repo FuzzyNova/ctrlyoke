@@ -33,6 +33,7 @@ import {
   WorkflowAttemptTransition,
   WorkflowRuntimeTransition,
   WorkflowSummary,
+  type WorktreeRunProjection,
   DynamicQueueConfig,
   type RunRef,
   type WorkflowKey,
@@ -1037,6 +1038,15 @@ export class WorkflowInstance {
       executionTimeMs: this.workflowRuntime.getActiveExecutionTime(),
       executionTimeUpdatedAt,
       harness,
+      worktree: this.activeWorktree
+        ? ({
+            branchName: this.activeWorktree.branchName,
+            worktreePath: this.activeWorktree.worktreePath,
+          } satisfies Pick<
+            WorktreeRunProjection,
+            "branchName" | "worktreePath"
+          >)
+        : undefined,
       tokenTotals: state.tokenTotals,
     };
   }

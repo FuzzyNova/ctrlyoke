@@ -272,6 +272,7 @@ export interface RecentWorkflow {
   harness?: HarnessId;
   runNav?: WorkflowRunNavigationSummary;
   tokenTotals?: WorkflowTokenTotals;
+  worktree?: Pick<WorktreeRunProjection, "branchName" | "worktreePath">;
 }
 
 /** Panel size snapshot for the desktop layout (steps/settings/editor in px; output as %). */

@@ -59,6 +59,7 @@ import type {
   WorkingFile,
   WorkflowRunNavigationSummary,
   WorkflowTokenTotals,
+  WorktreeRunProjection,
   ScriptVerdict,
 } from "./CtrlYokeTypes";
 import type {
@@ -893,6 +894,7 @@ export interface RecentWorkflowsMessage {
     harness?: HarnessId;
     runNav?: WorkflowRunNavigationSummary;
     tokenTotals?: WorkflowTokenTotals;
+    worktree?: Pick<WorktreeRunProjection, "branchName" | "worktreePath">;
   }>;
 }
 

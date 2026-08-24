@@ -76,6 +76,26 @@ describe("WorkflowRowLayout", () => {
     screen.getByRole("button", { name: /Fix login bug/ }).click();
     expect(onClick).toHaveBeenCalledOnce();
   });
+
+  it("renders the worktree icon beside the row glyph with branch and location tooltip", () => {
+    const { container } = renderLayout("stacked", {
+      glyph: <i className="codicon codicon-terminal" />,
+      worktree: {
+        branchName: "feature/auth",
+        worktreePath: "C:/worktrees/feature-auth",
+      },
+    });
+
+    const meta = container.querySelector(".workflow-row-cell-meta")!;
+    const icons = meta.querySelectorAll(".codicon");
+    expect(icons).toHaveLength(2);
+    expect(icons[0]).toHaveClass("codicon-terminal");
+    expect(icons[1]).toHaveClass("codicon-source-control");
+    expect(icons[1]).toHaveAttribute(
+      "title",
+      "Branch: feature/auth\nWorktree: C:/worktrees/feature-auth"
+    );
+  });
 });
 
 describe("isCompactRow", () => {
