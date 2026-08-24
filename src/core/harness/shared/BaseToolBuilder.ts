@@ -15,6 +15,41 @@ import {
 } from "../../../types/DashboardConstants";
 import { CliEventMapper } from "./CliEventMapper";
 
+export interface FileReadRange {
+  lineStart?: number;
+  lineEnd?: number;
+}
+
+export function extractFileReadRange(
+  input: Record<string, unknown>
+): FileReadRange {
+  const rawRange = input.view_range ?? input.viewRange ?? input.lineRange;
+  if (Array.isArray(rawRange) && rawRange.length >= 2) {
+    const [lineStart, lineEnd] = rawRange;
+    if (
+      typeof lineStart === "number" &&
+      Number.isFinite(lineStart) &&
+      typeof lineEnd === "number" &&
+      Number.isFinite(lineEnd)
+    ) {
+      return { lineStart, lineEnd };
+    }
+  }
+
+  const lineStart =
+    input.startLine ?? input.start_line ?? input.lineStart ?? input.line_start;
+  const lineEnd =
+    input.endLine ?? input.end_line ?? input.lineEnd ?? input.line_end;
+  return {
+    ...(typeof lineStart === "number" && Number.isFinite(lineStart)
+      ? { lineStart }
+      : {}),
+    ...(typeof lineEnd === "number" && Number.isFinite(lineEnd)
+      ? { lineEnd }
+      : {}),
+  };
+}
+
 /**
  * Shared INITIATED event builder for all CLI harnesses.
  *
@@ -75,6 +110,8 @@ export class BaseToolBuilder {
             ...ex,
             data: {
               path: path || "unknown",
+              toolCallId: toolId,
+              ...extractFileReadRange(input),
               status: OPERATION_STATUS.INITIATED,
             } as FileReadData,
           },

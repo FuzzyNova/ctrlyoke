@@ -723,6 +723,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           <FileReadOutput
             path={data.path}
             pathContent={highlightText(data.path, getFieldMatches("filePath"))}
+            lineStart={data.lineStart}
+            lineEnd={data.lineEnd}
             atomicContextReferences={atomicContextReferences}
             filePathFindMatches={getFieldMatches("filePath")}
             status={data.status}

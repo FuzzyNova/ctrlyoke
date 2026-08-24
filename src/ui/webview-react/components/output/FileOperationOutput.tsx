@@ -59,6 +59,7 @@ interface FileOperationBlockProps {
   actionLabel: string;
   path: string;
   pathContent?: React.ReactNode;
+  pathSuffix?: React.ReactNode;
   atomicContextReferences?: boolean;
   filePathFindMatches?: RowFindDecoration["matches"];
   trailingAction?: React.ReactNode;
@@ -76,6 +77,7 @@ const FileOperationBlock: React.FC<FileOperationBlockProps> = ({
   actionLabel,
   path,
   pathContent,
+  pathSuffix,
   atomicContextReferences = false,
   filePathFindMatches = [],
   trailingAction,
@@ -117,6 +119,7 @@ const FileOperationBlock: React.FC<FileOperationBlockProps> = ({
               </FilePath>
             )}
           </span>
+          {pathSuffix}
           {trailingAction}
         </>
       }
@@ -356,6 +359,8 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
 interface FileReadOutputProps {
   path: string;
   pathContent?: React.ReactNode;
+  lineStart?: number;
+  lineEnd?: number;
   atomicContextReferences?: boolean;
   filePathFindMatches?: RowFindDecoration["matches"];
   status?: FileOperationStatus;
@@ -366,6 +371,8 @@ interface FileReadOutputProps {
 export const FileReadOutput: React.FC<FileReadOutputProps> = ({
   path,
   pathContent,
+  lineStart,
+  lineEnd,
   atomicContextReferences,
   filePathFindMatches,
   status,
@@ -379,6 +386,12 @@ export const FileReadOutput: React.FC<FileReadOutputProps> = ({
     if (status === OPERATION_STATUS.FAILED) return "Read failed:";
     return "Read";
   };
+  const lineRange =
+    lineStart !== undefined && lineEnd !== undefined
+      ? lineStart === lineEnd
+        ? `line ${lineStart}`
+        : `lines ${lineStart}-${lineEnd}`
+      : undefined;
 
   return (
     <FileOperationBlock
@@ -387,6 +400,13 @@ export const FileReadOutput: React.FC<FileReadOutputProps> = ({
       actionLabel={getActionLabel()}
       path={path}
       pathContent={pathContent}
+      pathSuffix={
+        lineRange ? (
+          <span className="ml-1 shrink-0 text-description-fg">
+            ({lineRange})
+          </span>
+        ) : undefined
+      }
       atomicContextReferences={atomicContextReferences}
       filePathFindMatches={filePathFindMatches}
       error={status === OPERATION_STATUS.FAILED ? error : undefined}

@@ -1786,6 +1786,60 @@ suite("CopilotLogParser", () => {
       );
     });
 
+    test("should preserve Copilot read ranges and tool IDs", () => {
+      const events = [
+        {
+          type: "tool.execution_start",
+          data: {
+            toolCallId: "read-1",
+            toolName: "view",
+            arguments: {
+              path: "src/example.ts",
+              view_range: [12, 24],
+            },
+          },
+          timestamp: "2026-08-13T21:42:10.574Z",
+        },
+        {
+          type: "tool.execution_complete",
+          data: {
+            toolCallId: "read-1",
+            success: true,
+            result: { content: "file contents" },
+          },
+          timestamp: "2026-08-13T21:42:20.965Z",
+        },
+      ];
+
+      const streamingParser = new CopilotLogParser();
+      const initiated = streamingParser.extractStructuredEventsFromEvent(
+        events[0] as unknown as BaseCliEvent
+      );
+      const completed = streamingParser.extractStructuredEventsFromEvent(
+        events[1] as unknown as BaseCliEvent
+      );
+
+      assert.strictEqual(initiated.length, 1);
+      assert.deepStrictEqual(initiated[0].data, {
+        path: "src/example.ts",
+        toolCallId: "read-1",
+        lineStart: 12,
+        lineEnd: 24,
+        status: OPERATION_STATUS.INITIATED,
+      });
+      assert.strictEqual(completed.length, 2);
+      assert.deepStrictEqual(completed[0].data, {
+        path: "src/example.ts",
+        toolCallId: "read-1",
+        lineStart: 12,
+        lineEnd: 24,
+        status: OPERATION_STATUS.COMPLETED,
+        success: true,
+        error: undefined,
+      });
+      assert.strictEqual((completed[1].data as any).toolCallId, "read-1");
+    });
+
     test("should preserve Copilot ask_user questions, choices, and answer", () => {
       const choices = [
         "dog \u2014 loyal companion\n / \\__",
@@ -2463,6 +2517,26 @@ suite("CopilotLogParser", () => {
         "human-steer"
       );
       assert.strictEqual(parser.extractUserSteerText(event), text);
+    });
+
+    test("suppresses an idle prompt echo even when transformed text differs", () => {
+      const event: BaseCliEvent = {
+        type: "user.message",
+        data: {
+          content: "using these file references @request.prompt.md",
+          transformedContent:
+            "<current_datetime>2026-08-24T14:59:05.283-05:00</current_datetime>",
+          delivery: "idle",
+        },
+      };
+
+      assert.strictEqual(
+        parser.classifyUserEvent(event, {
+          dispatchedPromptText:
+            "using these file references @request.prompt.md\n\n<system_reminder>...</system_reminder>",
+        }),
+        "injected-prompt"
+      );
     });
   });
 

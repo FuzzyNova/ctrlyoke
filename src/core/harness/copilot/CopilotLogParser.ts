@@ -777,20 +777,11 @@ export class CopilotLogParser extends BaseLogParser {
       if (normalizedLogged.includes(normalizedDispatched)) {
         return "injected-prompt";
       }
-      // TEMP DEBUG (copilot-duplicate-events / spurious-user-message
-      // investigation): a mismatch here is what makes the dispatched prompt
-      // render as a "User message" bubble instead of being suppressed.
-      // Remove once root-caused.
-      Log.debug(
-        `[dup-debug] classifyUserEvent: dispatched-prompt prefix did not match logged text — ` +
-          `falling through to human-steer. dispatchedPrefix=${JSON.stringify(normalizedDispatched)} ` +
-          `loggedPrefix=${JSON.stringify(normalizedLogged)}`
-      );
-    } else {
-      Log.debug(
-        `[dup-debug] classifyUserEvent: no dispatchedPromptText in context — ` +
-          `falling through to human-steer for text=${JSON.stringify(text.substring(0, 100))}`
-      );
+      // Copilot marks the initial prompt submitted while idle distinctly from
+      // human steering. The logged content can differ after prompt transforms.
+      if (e.data?.delivery === "idle") {
+        return "injected-prompt";
+      }
     }
 
     return "human-steer";

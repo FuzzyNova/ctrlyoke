@@ -502,26 +502,6 @@ function overlayLiveHistoryEntries(
   for (const overlayEntry of overlayEntries) {
     if (overlayEntry.kind === OUTPUT_HISTORY_KINDS.CLI) {
       const matchingIdx = findMatchingCliEntryIndex(entries, overlayEntry);
-      // TEMP DEBUG (copilot-duplicate-events investigation): a no-match here
-      // means this live entry falls through to entries.push() below instead
-      // of overlaying the persisted row — the exact mechanism that would
-      // render a running step's tool calls twice. Remove once root-caused.
-      if (matchingIdx < 0) {
-        const identity = getCliEntryIdentity(overlayEntry);
-        WebviewLog.debug(
-          `[dup-debug] overlayLiveHistoryEntries: NO MATCH for live entry ` +
-            `target=${JSON.stringify(identity.target)} runIndex=${identity.runIndex} ` +
-            `attemptIndex=${identity.attemptIndex} phase=${String(identity.phase)} ` +
-            `— will be pushed as a NEW row (persisted candidates: ` +
-            `${entries
-              .filter((e) => e.kind === OUTPUT_HISTORY_KINDS.CLI)
-              .map((e) => {
-                const i = getCliEntryIdentity(e as OrderedCliHistoryEntry);
-                return `[target=${JSON.stringify(i.target)} runIndex=${i.runIndex} attemptIndex=${i.attemptIndex} phase=${String(i.phase)}]`;
-              })
-              .join(", ")})`
-        );
-      }
       if (matchingIdx >= 0) {
         entries[matchingIdx] = {
           ...overlayEntry,
@@ -611,24 +591,6 @@ function appendStreamingEventsToOutputState(
   let liveOrderedEntries = liveMerge.entries;
   let liveSequence = state.liveSequence;
   if (!liveMerge.matchedEntry) {
-    // TEMP DEBUG (copilot-duplicate-events investigation): this branch pushes
-    // a brand-new live row instead of merging into an existing one. Expected
-    // exactly once per (target, runIndex, attemptIndex, phase) identity — if
-    // it fires again for a step still actively streaming, state.liveOrderedEntries
-    // lost its previously-created entry for this identity (e.g. a
-    // hydrateLiveRunHistory overlay mismatch just replaced it), and this is
-    // the exact call that creates the visible duplicate row. Remove once
-    // root-caused.
-    const existingCliCount = state.liveOrderedEntries.filter(
-      (e) => e.kind === OUTPUT_HISTORY_KINDS.CLI
-    ).length;
-    WebviewLog.debug(
-      `[dup-debug] appendStreamingEventsToOutputState: no live match for ` +
-        `target=${JSON.stringify(target)} runIndex=${runIndex} attemptIndex=${attemptIndex} ` +
-        `phase=${String(identity.phase)} eventsIncoming=${events.length} ` +
-        `(existing CLI rows in liveOrderedEntries=${existingCliCount}, ` +
-        `history match found=${Boolean(historyMerge?.matchedEntry)}) — pushing a new row`
-    );
     const historyEntry = historyMerge?.matchedEntry;
     const cliOutput: CliOutput = historyEntry?.cliOutput ?? {
       prompt: "",
@@ -1095,32 +1057,9 @@ export const useWorkflowStore = create<
         withUndoPause(() =>
           set((state) => {
             const projected = projectLiveHistoryArtifacts(history);
-            // TEMP DEBUG (copilot-duplicate-events investigation): capture
-            // both sides going into the overlay so a repro shows whether the
-            // persisted snapshot and the live in-memory entries already
-            // disagree on identity (runIndex/attemptIndex/phase) before the
-            // merge even runs. Remove once root-caused.
-            const describeCliEntries = (entries: OrderedHistoryEntry[]) =>
-              entries
-                .filter((e) => e.kind === OUTPUT_HISTORY_KINDS.CLI)
-                .map((e) => {
-                  const i = getCliEntryIdentity(e as OrderedCliHistoryEntry);
-                  const eventCount =
-                    (e as OrderedCliHistoryEntry).cliOutput.structured
-                      ?.events?.length ?? 0;
-                  return `[target=${JSON.stringify(i.target)} runIndex=${i.runIndex} attemptIndex=${i.attemptIndex} phase=${String(i.phase)} events=${eventCount}]`;
-                })
-                .join(", ");
-            WebviewLog.debug(
-              `[dup-debug] hydrateLiveRunHistory: persisted=${describeCliEntries(history.orderedEntries)} ` +
-                `live(before)=${describeCliEntries(state.liveOrderedEntries)}`
-            );
             const overlay = overlayLiveHistoryEntries(
               history.orderedEntries,
               state.liveOrderedEntries
-            );
-            WebviewLog.debug(
-              `[dup-debug] hydrateLiveRunHistory: liveOrderedEntries(after)=${describeCliEntries(overlay.entries)}`
             );
             return {
               // The executing run must remain in live mode so buffered and

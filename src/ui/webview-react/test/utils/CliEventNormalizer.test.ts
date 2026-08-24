@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
-import type { CliEvent } from "@/types/cliEvents";
+import type { CliEvent, FileReadData } from "@/types/cliEvents";
 
 describe("CliEventNormalizer", () => {
   it("collapses initiated read, tool result, and completed read into one event", () => {
@@ -44,6 +44,58 @@ describe("CliEventNormalizer", () => {
       status: OPERATION_STATUS.COMPLETED,
       success: true,
     });
+  });
+
+  it("keeps concurrent reads to the same path correlated by tool call ID", () => {
+    const normalized = normalizeCliEvents([
+      {
+        type: CLI_EVENT_TYPES.FILE_READ,
+        data: {
+          path: "src/example.ts",
+          toolCallId: "read-1",
+          lineStart: 1,
+          lineEnd: 10,
+          status: OPERATION_STATUS.INITIATED,
+        },
+      },
+      {
+        type: CLI_EVENT_TYPES.FILE_READ,
+        data: {
+          path: "src/example.ts",
+          toolCallId: "read-2",
+          lineStart: 20,
+          lineEnd: 30,
+          status: OPERATION_STATUS.INITIATED,
+        },
+      },
+      {
+        type: CLI_EVENT_TYPES.FILE_READ,
+        data: {
+          path: "src/example.ts",
+          toolCallId: "read-1",
+          lineStart: 1,
+          lineEnd: 10,
+          status: OPERATION_STATUS.COMPLETED,
+          success: true,
+        },
+      },
+      {
+        type: CLI_EVENT_TYPES.FILE_READ,
+        data: {
+          path: "src/example.ts",
+          toolCallId: "read-2",
+          lineStart: 20,
+          lineEnd: 30,
+          status: OPERATION_STATUS.COMPLETED,
+          success: true,
+        },
+      },
+    ]);
+
+    expect(normalized).toHaveLength(2);
+    expect(
+      normalized.map((event) => (event.data as FileReadData).toolCallId)
+    ).toEqual(["read-1", "read-2"]);
   });
 
   it("preserves initiated edit diff when the completed event lacks it", () => {

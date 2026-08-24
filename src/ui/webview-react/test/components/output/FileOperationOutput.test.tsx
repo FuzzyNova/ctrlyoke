@@ -97,12 +97,21 @@ describe("FileEditOutput", () => {
     const chip = screen.getByRole("button", {
       name: "Open src/ui/webview-react/File.tsx",
     });
+
     expect(chip).toHaveTextContent("src/ui/webview-react/File.tsx");
     expect(chip.querySelector("mark")).toHaveTextContent("ui");
     expect(chip.querySelector("mark")).toHaveAttribute(
       "data-find-active",
       "true"
     );
+  });
+
+  it("shows the requested line range for a file read", () => {
+    render(
+      <FileReadOutput path="src/example.ts" lineStart={12} lineEnd={24} />
+    );
+
+    expect(screen.getByText("(lines 12-24)")).toBeTruthy();
   });
 
   // Multi-root workspaces hand the harness absolute paths, so file events come

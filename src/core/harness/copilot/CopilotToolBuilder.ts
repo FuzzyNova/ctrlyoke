@@ -19,7 +19,10 @@ import {
 import { CliEventMapper } from "../shared/CliEventMapper";
 import { ApplyPatchParser } from "../shared/ApplyPatchParser";
 import { CliParseUtils } from "../shared/CliParseUtils";
-import { BaseToolBuilder } from "../shared/BaseToolBuilder";
+import {
+  BaseToolBuilder,
+  extractFileReadRange,
+} from "../shared/BaseToolBuilder";
 
 type CopilotToolArgs = Record<string, unknown> | string;
 
@@ -463,12 +466,16 @@ export class CopilotToolBuilder {
     }
 
     if (classifiedType === CLI_EVENT_TYPES.FILE_READ) {
+      const fileReadRange =
+        typeof args === "string" ? {} : extractFileReadRange(args);
       return [
         {
           type: CLI_EVENT_TYPES.FILE_READ,
           timestamp: Date.now(),
           data: {
             path: path || "unknown",
+            toolCallId: completionData.toolCallId,
+            ...fileReadRange,
             status: success
               ? OPERATION_STATUS.COMPLETED
               : OPERATION_STATUS.FAILED,

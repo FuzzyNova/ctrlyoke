@@ -324,6 +324,12 @@ export interface FileReadData {
   path: string;
   /** File content (if available) */
   content?: string;
+  /** Copilot tool call ID used to correlate concurrent reads */
+  toolCallId?: string;
+  /** First requested line, when the harness supplied a line range */
+  lineStart?: number;
+  /** Last requested line, when the harness supplied a line range */
+  lineEnd?: number;
   /** Read lifecycle stage */
   status?: FileOperationStatus;
   /** Success status */

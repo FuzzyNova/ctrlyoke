@@ -140,6 +140,13 @@ function getEventKey(event: CliEvent): string | undefined {
         | FileWriteData
         | FileEditData
         | FileDeleteData;
+      if (
+        event.type === CLI_EVENT_TYPES.FILE_READ &&
+        "toolCallId" in data &&
+        data.toolCallId
+      ) {
+        return `${event.type}:call:${data.toolCallId}`;
+      }
       const path = normalizePath(data.path);
       return path ? `${event.type}:${path}` : undefined;
     }
@@ -174,6 +181,9 @@ function getEventKey(event: CliEvent): string | undefined {
 function getToolCallId(event: CliEvent): string | undefined {
   if (event.type === CLI_EVENT_TYPES.TOOL_CALL) {
     return (event.data as ToolCall).id;
+  }
+  if (event.type === CLI_EVENT_TYPES.FILE_READ) {
+    return (event.data as FileReadData).toolCallId;
   }
   return undefined;
 }
@@ -232,6 +242,7 @@ function createPendingEvent(
       kind: "semantic",
       type: event.type,
       key: getEventKey(event),
+      toolCallId: getToolCallId(event),
     };
   }
 
@@ -540,6 +551,9 @@ function mergeInitiatedWithCompleted(
           ...completedData,
           path: completedData.path || initiatedData.path,
           content: completedData.content ?? initiatedData.content,
+          toolCallId: completedData.toolCallId ?? initiatedData.toolCallId,
+          lineStart: completedData.lineStart ?? initiatedData.lineStart,
+          lineEnd: completedData.lineEnd ?? initiatedData.lineEnd,
           error: completedData.error ?? initiatedData.error,
           success: completedData.success ?? initiatedData.success,
         } as FileReadData,
