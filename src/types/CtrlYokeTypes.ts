@@ -1071,6 +1071,8 @@ export interface WorkflowSummary {
   managedBy?: RunnerId;
   /** Resolved harness this workflow runs on (workflow/step override, or the global default). */
   harness?: HarnessId;
+  /** Resolved worktree identity for the currently executing run, when applicable. */
+  worktree?: Pick<WorktreeRunProjection, "branchName" | "worktreePath">;
   /** Run-navigation metadata for this lineage's list row. Not yet populated for running workflows. */
   runNav?: WorkflowRunNavigationSummary;
   tokenTotals?: WorkflowTokenTotals;

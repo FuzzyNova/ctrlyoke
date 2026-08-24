@@ -5921,6 +5921,7 @@ export class WorkflowOrchestrator {
         currentIndex?: number;
         executionState?: string;
         tokenTotals?: WorkflowSummary["tokenTotals"];
+        worktree?: WorkflowSummary["worktree"];
       };
     };
     try {
@@ -5948,6 +5949,7 @@ export class WorkflowOrchestrator {
       startedAt: workingFile.startedAt,
       managedBy: RUNNER_IDS.CLI,
       tokenTotals: workingFile._runtime?.tokenTotals,
+      worktree: workingFile._runtime?.worktree,
     };
 
     const session = new CliWatchSession(

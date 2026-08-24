@@ -121,4 +121,35 @@ describe("RunningWorkflowItem", () => {
       expect.any(HTMLButtonElement)
     );
   });
+
+  it("shows the active worktree branch beside the terminal icon", () => {
+    const { container } = render(
+      <RunningWorkflowItem
+        workflow={{
+          id: "running",
+          workflowName: "Running workflow",
+          filePath: "running.prompt.md",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 1,
+          totalSteps: 2,
+          worktree: {
+            branchName: "feature/auth",
+            worktreePath: "C:/worktrees/feature-auth",
+          },
+        }}
+        isCurrent
+        hasActiveTerminal
+        {...callbacks}
+      />
+    );
+
+    const terminal = screen.getByLabelText("Terminal session is still running");
+    const branch = container.querySelector(".codicon-source-control")!;
+    expect(terminal).toBeInTheDocument();
+    expect(branch).toHaveClass("codicon-source-control");
+    expect(branch).toHaveAttribute(
+      "title",
+      "Branch: feature/auth\nWorktree: C:/worktrees/feature-auth"
+    );
+  });
 });

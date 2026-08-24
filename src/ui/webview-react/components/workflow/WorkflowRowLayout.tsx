@@ -2,6 +2,7 @@ import React from "react";
 import { WORKFLOW_ROW_TRACKS, type WorkflowRowTier } from "../../constants";
 import { runNavIndicatorLabel, isDrillableRunNav } from "@utils/runNavigation";
 import type { WorkflowRunNavigationSummary } from "@root/types/CtrlYokeTypes";
+import type { WorktreeRunProjection } from "@root/types/CtrlYokeTypes";
 
 /**
  * Whether this tier renders the *content* of a row compactly — today the
@@ -35,6 +36,8 @@ interface WorkflowRowLayoutProps {
   count?: React.ReactNode;
   /** Column 4 / trailing meta glyph — 16px status icon (terminal session, live run). */
   glyph?: React.ReactNode;
+  /** Resolved worktree identity, rendered beside the terminal/status glyph. */
+  worktree?: Pick<WorktreeRunProjection, "branchName" | "worktreePath">;
   /** Column 5 / first line, right — execution state badge. */
   badge?: React.ReactNode;
   /** Column 6 / run-total usage; joins stacked metadata. */
@@ -157,6 +160,7 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
   labelClassName = "",
   count,
   glyph,
+  worktree,
   badge,
   usage,
   time,
@@ -171,6 +175,9 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
   if (hasContent(visibleUsage))
     metaParts.push({ key: "usage", node: visibleUsage });
   if (hasContent(time)) metaParts.push({ key: "time", node: time });
+  const worktreeTitle = worktree
+    ? `Branch: ${worktree.branchName}\nWorktree: ${worktree.worktreePath}`
+    : undefined;
 
   return (
     <button
@@ -205,6 +212,15 @@ export const WorkflowRowLayout: React.FC<WorkflowRowLayoutProps> = ({
         {hasContent(glyph) && (
           <span className="flex w-4 flex-shrink-0 items-center justify-center">
             {glyph}
+          </span>
+        )}
+        {worktree && (
+          <span className="flex w-4 flex-shrink-0 items-center justify-center">
+            <i
+              className="codicon codicon-source-control"
+              title={worktreeTitle}
+              aria-label={worktreeTitle}
+            />
           </span>
         )}
       </span>

@@ -1301,6 +1301,12 @@ export class WorkflowSerializer {
               totalSteps: steps.length,
               harness,
               tokenTotals: workingFile._runtime?.tokenTotals,
+              worktree: workingFile._runtime?.worktree
+                ? {
+                    branchName: workingFile._runtime.worktree.branchName,
+                    worktreePath: workingFile._runtime.worktree.worktreePath,
+                  }
+                : undefined,
               runNav,
             };
           } catch (error) {
