@@ -9,6 +9,7 @@ import type {
   WorkingFileRuntime,
   WorkingFileWorktreeRuntimePatch,
   WorkflowTokenTotals,
+  WorkflowLineageCreationOptions,
 } from "../types/CtrlYokeTypes";
 import type { FinalStepRuntimeState } from "../types/CtrlYokeTypes";
 import {
@@ -296,14 +297,17 @@ export class WorkingFileManager {
     steps: WorkflowStep[],
     workspaceFolderPath: string,
     workflowName: string,
-    originalFilePath?: string
+    originalFilePath?: string,
+    options?: WorkflowLineageCreationOptions
   ): Promise<{ workingFilePath: string; workflowKey: WorkflowKey }> {
     const { workflowKey, draftFilePath } =
       await this.lineageRepository.createLineage(
         workspaceFolderPath,
         nameForFile,
         workflowName,
-        originalFilePath
+        originalFilePath,
+        undefined,
+        options
       );
 
     const workingFile: WorkingFile = {

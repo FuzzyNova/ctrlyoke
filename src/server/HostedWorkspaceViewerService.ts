@@ -1623,7 +1623,7 @@ export class HostedWorkspaceViewerService {
       return null;
     }
 
-    const { message, prompt, cliCommand } =
+    const { message, prompt, cliCommand, workflowKey, runRef } =
       await this.commitGenerator.generateMessage(
         diffResult.diff,
         repoRoot,
@@ -1643,6 +1643,8 @@ export class HostedWorkspaceViewerService {
       prompt,
       generatedMessage: message,
       cliCommand,
+      workflowKey,
+      runRef,
     });
 
     return {

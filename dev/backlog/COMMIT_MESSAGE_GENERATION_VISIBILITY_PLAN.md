@@ -1,13 +1,13 @@
 # Commit Message Generation Visibility
 
-> **Status:** Proposed — not implemented. Written 2026-08-17 against current code.
+> **Status:** Implemented — phases 1-4 and §7 Q3 complete. Written 2026-08-17 against current code.
 > Re-verified against current code on 2026-08-24: all facts in §1 still hold
 > (line numbers drifted slightly, noted inline), and §3.1's design is
 > **simplified below** based on an exact-match existing pattern found in
 > `WorkingFileManager`/`PromptQueue`/`WorkflowInstance` (`loadFromMemory` +
 > `createWorkingFile`) that the original write-up didn't identify. §7's open
-> questions are resolved with concrete, code-verified answers. The plan is
-> ready to implement as revised; no further spikes needed.
+> questions are resolved with concrete, code-verified answers. The revised
+> implementation is complete; no further spikes are needed.
 >
 > **Problem in one line:** commit-message generation runs a full harness
 > execution and then throws away everything except a final success/failure
@@ -102,9 +102,9 @@ The original draft of this section proposed a new method that manually calls
 logic that already exists and already runs automatically. Verified by reading
 the actual call chain:
 
-- `WorkflowInstance.loadFromMemory()` (`WorkflowInstance.ts:1163-1183`) — used
-  today for template-created workflows, which also have no source file on
-  disk — calls `PromptFileLoader.loadFromMemory()` →
+- `WorkflowInstance.loadFromTemplate()` (`WorkflowInstance.ts:1163-1183`) —
+  used today for template-created workflows, which also have no source file
+  on disk — calls `PromptFileLoader.loadFromMemory()` →
   `loadParsedPromptFile()` (`PromptFileLoader.ts:100-227`), which calls
   `promptQueue.createWorkingFile(displayName, steps, workspaceFolderPath, undefined)`
   **before** `promptQueue.loadPrompts(promptFile, workingFilePath)`.
@@ -302,14 +302,13 @@ checked to confirm they pass through whatever `generateMessage()` now returns.
 | Phase | Content                                                                                                                   | Ships value alone?                                       |
 | ----- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | 1     | §3.5 — `Log.debug` additions around MCP outcome / response length                                                         | Yes — immediate debugging aid                            |
-| 2     | §3.1 — `WorkflowInstance.loadPromptStringAsRun()` (mirrors `loadFromMemory()`; no new lineage/run/timeline plumbing) + §3.1.1 pointer-file lineage reuse | Partial — data now persists, but nothing surfaces it yet |
-| 3     | §3.2 — `isSystemGenerated` flag + recent-list filtering                                                                   | Gate for phase 2 shipping without cluttering the UI      |
+| 2+3   | §3.1 — `WorkflowInstance.loadPromptStringAsRun()` (mirrors `loadFromMemory()`; no new lineage/run/timeline plumbing) + §3.1.1 pointer-file lineage reuse + §3.2 system-generated flag/recent-list filtering | Partial — data now persists, but nothing surfaces it yet |
 | 4     | §3.3 + §3.4 — dedupe `CommitMessageGenerationRecord`, carry the address, "View full output" affordance in `CommitSection` | Yes — completes the loop                                 |
 | —     | §7 Q3 — CLI failure-path `WorkflowPaths.eventsPath()` pointer via an address-carrying error | Independent, cheap; can land alongside phase 2 or later  |
 
-Phase 3 should land no later than phase 2 — persisting commit-gen runs without
-filtering them out of "recent workflows" is a regression (log/history clutter
-proportional to how often the user commits), not a strict improvement.
+The persistence and filtering work ships together — persisting commit-gen runs
+without filtering them out of "recent workflows" is a regression (log/history
+clutter proportional to how often the user commits), not a strict improvement.
 
 ---
 

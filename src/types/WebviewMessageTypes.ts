@@ -92,6 +92,8 @@ import type {
   HarnessUsageSnapshot,
   WorkspaceStatsSnapshot,
 } from "./UsageTypes";
+import type { CommitMessageGenerationRecord } from "../git/CommitMessageGenerationTracker";
+export type { CommitMessageGenerationRecord } from "../git/CommitMessageGenerationTracker";
 import type {
   AttemptCostEstimate,
   AttemptCostUnavailableReason,
@@ -529,20 +531,6 @@ export interface UxSnapshotSavedMessage {
   type: typeof MESSAGE_TYPES.UX_SNAPSHOT_SAVED;
   path?: string;
   error?: string;
-}
-
-export interface CommitMessageGenerationRecord {
-  source: "scm" | "workspace-viewer";
-  workingDirectory: string;
-  commands: string[];
-  output: string;
-  staged: boolean;
-  truncated: boolean;
-  includesUntrackedFiles: boolean;
-  generatedAt: number;
-  prompt?: string;
-  generatedMessage?: string;
-  cliCommand?: string;
 }
 
 export interface CommitMessageGenerationUpdatedMessage {

@@ -401,6 +401,8 @@ export interface WorkflowLineageDescriptor {
   workflowName: string;
   /** Path to the source prompt file, if any (undefined for ephemeral/dashboard-created lineages). */
   originalFile?: string;
+  /** True for internal lineages that should not appear in the recent-workflows list. */
+  isSystemGenerated?: boolean;
   isFavorite: boolean;
   createdAt: number;
   lastModifiedAt: number;
@@ -430,6 +432,12 @@ export interface WorkflowLineageDescriptor {
       };
   /** Optimistic-concurrency counter for descriptor metadata/allocation changes. */
   revision: number;
+}
+
+/** Options for creating a draft in a new or already-known lineage. */
+export interface WorkflowLineageCreationOptions {
+  existingWorkflowKey?: WorkflowKey;
+  isSystemGenerated?: boolean;
 }
 
 /**

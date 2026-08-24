@@ -17,6 +17,7 @@ import {
   WorkflowTokenTotals,
   type WorkingFileWorktreeRuntimePatch,
   type RunRef,
+  type WorkflowLineageCreationOptions,
 } from "../types/CtrlYokeTypes";
 import {
   FINAL_STEP_PHASES,
@@ -1345,7 +1346,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
     nameForFile: string,
     prompts: WorkflowStep[],
     workspaceFolderPath: string,
-    originalFilePath?: string
+    originalFilePath?: string,
+    options?: WorkflowLineageCreationOptions
   ): Promise<string> {
     // Compute workflow name and store back into state so loadPrompts preserves it
     const computedWorkflowName =
@@ -1358,7 +1360,8 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
         prompts,
         workspaceFolderPath,
         computedWorkflowName,
-        originalFilePath
+        originalFilePath,
+        options
       );
 
     // Update queue state with working file path and lineage identity

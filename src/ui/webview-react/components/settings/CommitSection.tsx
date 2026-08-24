@@ -7,6 +7,9 @@ import type { HarnessId } from "@root/types/DashboardConstants";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { navigateToWorkflowAddress } from "@utils/runNavigation";
+import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import { CustomSelect } from "@components/shared/CustomSelect";
 import { HarnessDropdown } from "@components/shared/HarnessDropdown";
 import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
@@ -62,6 +65,27 @@ export function CommitSection({
     (commit.harness as string) || settings.settings.defaults.harness;
   const discoveredModels = getModelsForHarness(effectiveHarness as HarnessId);
   const currentModel = (commit.model as string) ?? "";
+  const handleViewFullOutput = () => {
+    const record = useSettingsStore.getState().lastCommitMessageGeneration;
+    if (!record?.workflowKey || !record.runRef) return;
+
+    const address: WorkflowViewAddress = {
+      kind: "run",
+      workflowKey: record.workflowKey as WorkflowViewAddress["workflowKey"],
+      runRef: record.runRef as Extract<
+        WorkflowViewAddress,
+        { kind: "run" }
+      >["runRef"],
+    };
+    const ui = useUiStore.getState();
+    const targetWorkflowName = ui.loadedWorkflows.find(
+      (workflow) => workflow.workflowKey === record.workflowKey
+    )?.workflowName;
+    ui.closeGlobalSettings();
+    ui.setOutputCollapsed(false);
+    ui.setActiveOutputTab(record.workflowKey, "output");
+    navigateToWorkflowAddress(getVsCodeApi(), address, targetWorkflowName);
+  };
   const generationStatus = lastCommitMessageGeneration
     ? lastCommitMessageGeneration.staged
       ? "Used staged diff from git."
@@ -213,6 +237,17 @@ export function CommitSection({
 
         {lastCommitMessageGeneration ? (
           <>
+            {lastCommitMessageGeneration.workflowKey &&
+            lastCommitMessageGeneration.runRef ? (
+              <button
+                type="button"
+                className="text-xs text-link-fg hover:text-link-active-fg underline"
+                onClick={handleViewFullOutput}
+              >
+                View full output
+              </button>
+            ) : null}
+
             {lastCommitMessageGeneration.cliCommand ? (
               <div className="space-y-1">
                 <div className="text-xs font-semibold text-description-fg">
