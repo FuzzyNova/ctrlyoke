@@ -107,7 +107,6 @@ export class CommitMessageGenerationError extends Error {
 
 export interface CommitMessageWorkflowHost {
   createWorkflowInstance(): WorkflowInstance;
-  activateWorkflowInstance(instance: WorkflowInstance): Promise<void>;
 }
 
 export function buildCommitWorkflowOverrides(
@@ -372,7 +371,6 @@ export class CommitMessageGenerator {
           isSystemGenerated: existingWorkflowKey === undefined,
         }
       );
-      await this.workflowHost?.activateWorkflowInstance(instance);
 
       const resolvedWorkflowKey = instance.promptQueue.getState().workflowKey;
       if (resolvedWorkflowKey && existingWorkflowKey === undefined) {

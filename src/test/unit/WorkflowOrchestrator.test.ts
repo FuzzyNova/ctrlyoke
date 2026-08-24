@@ -4154,6 +4154,8 @@ suite("WorkflowOrchestrator client view addressing", () => {
     internal.viewerRegistry = new Map();
     internal.viewAddressRegistry = new Map();
     internal.viewMessageSinks = new Map();
+    internal.externallyCreatedInstanceIds = new Set<string>();
+    internal.announcedExternalWorkflowIds = new Set<string>();
     // A real instance broadcasts state through the hub as an IDashboardSink;
     // this test is about view addressing, so every notification is a no-op.
     internal.dashboardBroadcastHub = new Proxy(
@@ -4194,6 +4196,82 @@ suite("WorkflowOrchestrator client view addressing", () => {
       kind: "run",
       runRef,
     });
+  });
+
+  // Guards the commit-message-generation background-run fix: an externally
+  // created instance (createExternalWorkflowInstance) must still be announced
+  // to the dashboard once it starts running — so it shows up in the Running
+  // list — without ever being adopted as the panel's viewed workflow, and
+  // without disturbing whatever the panel was already viewing.
+  test("announces an externally-created instance without adopting it as the panel's view", () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+
+    internal.context = {};
+    internal.currentWorkspaceFolder = { uri: { fsPath: os.tmpdir() } };
+    internal.instances = new Map();
+    internal.retiredInstances = new Map();
+    internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
+    internal.viewerRegistry = new Map([[PANEL_CLIENT_ID, "panel-instance"]]);
+    internal.viewAddressRegistry = new Map();
+    internal.viewMessageSinks = new Map();
+    internal.externallyCreatedInstanceIds = new Set<string>();
+    internal.announcedExternalWorkflowIds = new Set<string>();
+
+    const addedSummaries: unknown[] = [];
+    internal.dashboardBroadcastHub = new Proxy(
+      {},
+      {
+        get: (_target: unknown, prop: string) => {
+          if (prop === "notifyWorkflowAdded") {
+            return (summary: unknown) => addedSummaries.push(summary);
+          }
+          return () => undefined;
+        },
+      }
+    );
+    internal.resolveDetectorIntegration = () => ({});
+    internal.propagateWorkflowNameToIntegrations = () => undefined;
+    internal.updateStatusBar = () => undefined;
+
+    const instance: any = internal.createExternalWorkflowInstance();
+    assert.ok(
+      internal.externallyCreatedInstanceIds.has(instance.id),
+      "the instance must be marked as externally created"
+    );
+    assert.strictEqual(
+      internal.instances.get(instance.id),
+      instance,
+      "the instance must already be registered before its prompt loads"
+    );
+
+    // Simulate the instance reaching RUNNING, as executeLoadedPromptFile()
+    // would after the caller's prompt finishes loading.
+    instance.promptQueue.state.workflowKey = "commit-message-generation";
+    instance.workflowRuntime.startExecution();
+    instance.promptQueue.emitStateChange();
+
+    assert.strictEqual(
+      addedSummaries.length,
+      1,
+      "a background instance must still be announced to the dashboard exactly once"
+    );
+    assert.strictEqual(
+      internal.getViewedWorkflowId(PANEL_CLIENT_ID),
+      "panel-instance",
+      "the panel's viewed workflow must not change for a background instance"
+    );
+
+    // A second RUNNING/PAUSED transition must not re-announce it.
+    instance.workflowRuntime.pause();
+    instance.promptQueue.emitStateChange();
+    assert.strictEqual(
+      addedSummaries.length,
+      1,
+      "the one-shot announce guard must prevent a duplicate notifyWorkflowAdded"
+    );
   });
 
   test("drops the previous lineage's address when a client switches to a blank workflow", () => {

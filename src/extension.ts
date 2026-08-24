@@ -1066,8 +1066,6 @@ function registerCommands(context: vscode.ExtensionContext) {
   const scmCommitCommand = new ScmCommitCommand({
     createWorkflowInstance: () =>
       workflowOrchestrator.createExternalWorkflowInstance(),
-    activateWorkflowInstance: (instance) =>
-      workflowOrchestrator.activateExternalWorkflowInstance(instance),
   });
   const generateCommitMessageCommand = vscode.commands.registerCommand(
     VSCODE_COMMANDS.GENERATE_COMMIT_MESSAGE,

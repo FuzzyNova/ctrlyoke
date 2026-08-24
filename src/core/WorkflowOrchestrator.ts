@@ -344,6 +344,18 @@ export class WorkflowOrchestrator {
   /** Retired instances keyed by workflowId — held until no client views them. */
   private retiredInstances = new Map<string, WorkflowInstance>();
 
+  /**
+   * Instances created via `createExternalWorkflowInstance` (e.g. commit-message
+   * generation) — pre-registered in `instances` before their prompt loads, so
+   * they must never be auto-adopted as a client's viewed workflow and must be
+   * announced to the dashboard (`notifyWorkflowAdded`) despite already being
+   * `inRegistry` by the time they reach RUNNING/PAUSED. See
+   * `announcedExternalWorkflowIds` for the one-shot announce guard.
+   */
+  private readonly externallyCreatedInstanceIds = new Set<string>();
+  /** One-shot guard so an externally-created instance's `notifyWorkflowAdded` fires exactly once. */
+  private readonly announcedExternalWorkflowIds = new Set<string>();
+
   // ─────────────────────────────────────────────────────────────────────────
   // Cross-cutting concerns
   // ─────────────────────────────────────────────────────────────────────────
@@ -580,52 +592,27 @@ export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
-   * Create a workflow instance for an orchestrated one-shot caller.
+   * Create a workflow instance for an orchestrated one-shot background caller
+   * (e.g. commit-message generation) that must run without hijacking any
+   * client's currently displayed workflow.
    *
    * Unlike the normal dashboard workflow path, the caller loads its prompt after
    * construction so it can allocate the persisted lineage first. Registration
    * here is what wires the instance's dashboard sink and lifecycle listener into
-   * the normal live-run pipeline.
+   * the normal live-run pipeline. The instance is deliberately never adopted as
+   * any client's viewed workflow — `externallyCreatedInstanceIds` marks it so
+   * `buildWorkflowInstance`'s state-change listener announces it
+   * (`notifyWorkflowAdded`, for the Running-workflows dropdown) once it starts
+   * executing instead of skipping the announcement as "already registered", and
+   * so it's excluded from the blank-panel auto-adopt behavior meant for normal
+   * runs. Because nothing ever views it, there's also no currently-viewed
+   * idle instance to dispose here the way the normal "make active" path does.
    */
   public createExternalWorkflowInstance(): WorkflowInstance {
-    const currentPanelId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
-    const currentViewed = currentPanelId
-      ? (this.instances.get(currentPanelId) ??
-        this.retiredInstances.get(currentPanelId))
-      : undefined;
-    if (
-      currentViewed &&
-      !isExecutionOwnerState(currentViewed.getQueueState().status)
-    ) {
-      currentViewed.dispose();
-      this.instances.delete(currentPanelId!);
-      this.retiredInstances.delete(currentPanelId!);
-    }
     const instance = this.buildWorkflowInstance();
     this.instances.set(instance.id, instance);
+    this.externallyCreatedInstanceIds.add(instance.id);
     return instance;
-  }
-
-  /**
-   * Make an externally-created workflow the panel's addressed view after its
-   * prompt has been loaded. Replaying at this point includes the newly-created
-   * draft address, so promotion to the executing run can use the existing
-   * draft-to-run view handoff.
-   */
-  public async activateExternalWorkflowInstance(
-    instance: WorkflowInstance
-  ): Promise<void> {
-    if (this.instances.get(instance.id) !== instance) {
-      throw new Error("External workflow instance is not registered");
-    }
-    this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
-    if (this.storedPanelSend) {
-      await this.replayWorkflowStateTo(
-        instance.id,
-        this.storedPanelSend,
-        this.PANEL_CLIENT_ID
-      );
-    }
   }
 
   /**
@@ -778,6 +765,8 @@ export class WorkflowOrchestrator {
     } else {
       // Background workflow completed silently with no active terminals — dispose immediately.
       instance.dispose();
+      this.externallyCreatedInstanceIds.delete(workflowId);
+      this.announcedExternalWorkflowIds.delete(workflowId);
     }
 
     // Remove from the Running Workflows section in the dashboard.
@@ -5324,12 +5313,21 @@ export class WorkflowOrchestrator {
       // request processed before the runtime entered RUNNING would return an
       // IDLE summary that the webview filter drops, incorrectly clearing
       // loadedWorkflows.
+      const isExternallyCreated = this.externallyCreatedInstanceIds.has(
+        instance.id
+      );
+      const needsExternalAnnounce =
+        isExternallyCreated &&
+        !this.announcedExternalWorkflowIds.has(instance.id);
       if (
         (state.status === EXECUTION_STATES.RUNNING ||
           state.status === EXECUTION_STATES.PAUSING ||
           state.status === EXECUTION_STATES.PAUSED) &&
-        !inRegistry
+        (!inRegistry || needsExternalAnnounce)
       ) {
+        if (needsExternalAnnounce) {
+          this.announcedExternalWorkflowIds.add(instance.id);
+        }
         const wasRetired = this.promoteInstanceToLive(instance);
         Log.debug(
           `onDidChangeState: registered inst:${instance.id.slice(0, 8)} in running registry on ${state.status} ` +
@@ -5342,8 +5340,11 @@ export class WorkflowOrchestrator {
         // and this workflow was started outside the normal panel launch path (inRegistry=false),
         // auto-update viewerRegistry so subsequent executeEphemeralPrompt and retireWorkflow
         // calls resolve to this running instance instead of the blank placeholder.
+        // Externally-created background instances (e.g. commit-message generation) are
+        // excluded — they must never hijack a client's displayed workflow, only announce
+        // their existence in the Running-workflows list.
         const panelViewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
-        if (panelViewedId !== instance.id) {
+        if (!isExternallyCreated && panelViewedId !== instance.id) {
           const panelViewed = panelViewedId
             ? (this.instances.get(panelViewedId) ??
               this.retiredInstances.get(panelViewedId))
