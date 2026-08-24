@@ -221,6 +221,47 @@ describe("WorkspaceCommitHistoryPane", () => {
     ).toBe(2);
   });
 
+  it("caps the graph rail responsively while keeping horizontal overflow local", () => {
+    const parentHashes = ["p1", "p2", "p3", "p4", "p5", "p6"];
+    const parents = parentHashes.map((hash) => ({
+      ...commit,
+      hash,
+      shortHash: hash,
+      isHead: false,
+      refs: [],
+      parentHashes: [],
+    }));
+    useWorkspaceViewerStore.setState({
+      commitHistory: [
+        {
+          ...commit,
+          hash: "octopus",
+          shortHash: "octopus",
+          isMerge: true,
+          parentHashes,
+        },
+        ...parents,
+      ],
+    });
+
+    const view = render(
+      <WorkspaceCommitHistoryPane onLoadMore={vi.fn()} onRefresh={vi.fn()} />
+    );
+    const rail = screen.getByTestId("commit-graph-rail");
+    expect(rail.className).toContain("overflow-x-auto");
+    expect(rail.className).toContain("overflow-y-visible");
+    expect(rail.style.width).toBe("84px");
+
+    view.rerender(
+      <WorkspaceCommitHistoryPane
+        onLoadMore={vi.fn()}
+        onRefresh={vi.fn()}
+        isMobile
+      />
+    );
+    expect(screen.getByTestId("commit-graph-rail").style.width).toBe("56px");
+  });
+
   it("dims commits that are ahead of the detached HEAD", () => {
     const head = {
       ...commit,

@@ -27,6 +27,9 @@ type HeadRelation = "ahead" | "at" | "behind";
 type GraphColor = "scm-graph-local" | "scm-graph-remote";
 
 const ROW_HEIGHT = 24;
+// Validated against this repository's three-lane history and a six-lane
+// managed-worktree merge fixture: wide enough to keep elbows distinct without
+// making the mobile rail consume the text column.
 const GRAPH_LANE_WIDTH = 14;
 const DESKTOP_INLINE_LANE_CAP = 5;
 const MOBILE_INLINE_LANE_CAP = 3;

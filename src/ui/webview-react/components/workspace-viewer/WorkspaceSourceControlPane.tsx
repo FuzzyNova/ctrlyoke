@@ -324,10 +324,10 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   // it to its natural height so the sibling consumes the remaining slack.
   const filesRegionClass = filesEmpty
     ? "flex-none"
-    : "flex-1 basis-0 min-h-0 overflow-y-auto";
+    : "flex-1 basis-0 min-h-0 overflow-x-hidden overflow-y-auto";
   const historyRegionClass = historyEmpty
     ? "flex-none"
-    : "flex-1 basis-0 min-h-0 overflow-y-auto";
+    : "flex-1 basis-0 min-h-0 overflow-x-hidden overflow-y-auto";
 
   const openDiscardWarning = useCallback(
     (paths: string[], untrackedCount: number) => {
@@ -592,7 +592,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     return (
       <>
         <div className="flex flex-col h-full overflow-hidden">
-          <div className="flex-1 overflow-y-auto flex flex-col">
+          <div className="flex-1 overflow-x-hidden overflow-y-auto flex flex-col">
             <WorkspaceCommitArea
               incomingCommitCount={incomingCommitCount}
               onRefresh={refreshAll}
