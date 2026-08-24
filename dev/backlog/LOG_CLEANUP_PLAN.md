@@ -125,6 +125,12 @@ listed there. Each group below is defined by directory/instruction-file scope, n
 files, so grep the group's own scope (e.g. `Log\.(trace|debug|info|warn|error)\(` under
 `src/core/harness/shared/`) to catch tail files the table doesn't show.
 
+**Group 1 decisions (2026-08-24):** Copilot integration status and recurring CLI runner-lock
+discovery messages are TRACE because they repeat during polling/heartbeat handling. Per-workflow
+pause/cancel/resume requests and CLI queue-extension notifications are INFO because they are
+user-observable workflow events. A failure to scan the runner-discovery root is WARN because it
+can prevent an otherwise active CLI session from being discovered.
+
 Groups, sized to ~100-150 call sites each and aligned to `.github/instructions/*.instructions.md`
 scopes so each session reads one coherent set of conventions:
 
