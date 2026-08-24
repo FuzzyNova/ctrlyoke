@@ -12,7 +12,11 @@ import { IntegrationFactory } from "../core/IntegrationFactory";
 import { CliIntegration } from "../core/harness/CliIntegration";
 import { WorkflowInstance } from "../core/WorkflowInstance";
 import { Log } from "../utils/Log";
-import { EXECUTION_MODES, PERMISSION_MODES } from "../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  EXECUTION_MODES,
+  PERMISSION_MODES,
+} from "../types/DashboardConstants";
 import type { HarnessId } from "../types/DashboardConstants";
 import {
   isScriptStep,
@@ -25,6 +29,7 @@ const execFileAsync = promisify(execFile);
 // The harness handles actual context-window limits natively — this is just a safeguard
 // against truly pathological diffs (e.g. generated files, minified bundles).
 const MAX_DIFF_BYTES = 750 * 1024;
+const COMMIT_MESSAGE_MCP_TOOL = "ctrlyoke_submit_commit_message";
 
 export interface DiffResult {
   diff: string;
@@ -213,7 +218,7 @@ export class CommitMessageGenerator {
     // The tool description already says "do not output as plain text", but an explicit instruction
     // in the prompt reinforces it and prevents the AI from outputting the message twice.
     const mcpInstruction = useMcpCapture
-      ? "\n\nSubmit the commit message using the `ctrlyoke_submit_commit_message` tool. Do not output it as text."
+      ? `\n\nSubmit the commit message using the \`${COMMIT_MESSAGE_MCP_TOOL}\` tool. Do not output it as text.`
       : "";
     // Fence the diff so its literal content (e.g. an added file's leading
     // `<!DOCTYPE html>`) is never mistaken for a ctrlyoke reference trigger
@@ -278,9 +283,40 @@ export class CommitMessageGenerator {
     // (an ephemeral <inline> prompt), which never creates the workflowKey/runRef
     // a history file lookup would need.
     let capturedResponseText: string | undefined;
+    let mcpToolCalled = false;
     const responseCompleteDisposable = detectorIntegration.onResponseComplete(
       (response) => {
         capturedResponseText = response;
+      }
+    );
+    const streamingChunkDisposable = detectorIntegration.onStreamingChunk(
+      (chunk) => {
+        Log.debug(
+          `[CommitMessageGenerator] Streaming chunk received during commit generation: length=${chunk.length}`
+        );
+      }
+    );
+    const streamingEventsDisposable = detectorIntegration.onStreamingEvents(
+      (events) => {
+        const summaries = events.map((event) => {
+          if (
+            event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL &&
+            "tool" in event.data &&
+            typeof event.data.tool === "string"
+          ) {
+            if (event.data.tool === COMMIT_MESSAGE_MCP_TOOL) {
+              mcpToolCalled = true;
+            }
+            return `${event.type}:${event.data.tool}`;
+          }
+          if ("name" in event.data && typeof event.data.name === "string") {
+            return `${event.type}:${event.data.name}`;
+          }
+          return event.type;
+        });
+        Log.debug(
+          `[CommitMessageGenerator] Streaming events during commit generation: count=${events.length}, types=${summaries.join(",")}`
+        );
       }
     );
 
@@ -296,6 +332,8 @@ export class CommitMessageGenerator {
       await instance.executeLoadedPromptFile(harness);
     } finally {
       responseCompleteDisposable.dispose();
+      streamingChunkDisposable.dispose();
+      streamingEventsDisposable.dispose();
       if (token && abortListener) {
         token.removeEventListener("abort", abortListener);
       }
@@ -315,6 +353,7 @@ export class CommitMessageGenerator {
       let mcpMessage: string | undefined;
       try {
         const raw = await fs.readFile(commitOutputPath, "utf8");
+        mcpToolCalled = true;
         mcpMessage = raw.trim() || undefined;
       } catch {
         // Tool was not called — fall through to text extraction below
@@ -326,13 +365,21 @@ export class CommitMessageGenerator {
       }
       if (mcpMessage) {
         Log.debug(
-          `[CommitMessageGenerator] Captured commit message via MCP tool for ${harness}`
+          `[CommitMessageGenerator] MCP capture resolved: enabled=${useMcpCapture}, toolCalled=${mcpToolCalled}, outcome=message-captured`
         );
         return { message: mcpMessage, prompt: fullPrompt, cliCommand };
       }
 
+      Log.debug(
+        `[CommitMessageGenerator] MCP capture resolved: enabled=${useMcpCapture}, toolCalled=${mcpToolCalled}, outcome=falling-through-to-response-text`
+      );
+
       Log.warn(
         `[CommitMessageGenerator] MCP capture was enabled for ${harness} but no commit message was submitted; falling back to response text extraction`
+      );
+    } else {
+      Log.debug(
+        `[CommitMessageGenerator] MCP capture resolved: enabled=${useMcpCapture}, toolCalled=${mcpToolCalled}, outcome=falling-through-to-response-text`
       );
     }
 
@@ -345,6 +392,9 @@ export class CommitMessageGenerator {
     }
 
     const rawResponse = capturedResponseText;
+    Log.debug(
+      `[CommitMessageGenerator] Raw captured response before empty-response check: ${rawResponse === undefined ? "undefined" : `length=${rawResponse.length}, state=${rawResponse === "" ? "empty-string" : "non-empty"}`}`
+    );
     if (!rawResponse?.trim()) {
       throw new Error("Commit message generation produced an empty response");
     }
