@@ -243,6 +243,38 @@ describe("RunSummaryRow", () => {
     );
   });
 
+  it("shows the run's own worktree branch, distinct from other runs of the same lineage", () => {
+    const { container } = render(
+      <RunSummaryRow
+        row={{
+          kind: "run",
+          summary: {
+            ...summary,
+            worktree: {
+              mode: "managed",
+              branchName: "feature/auth",
+              worktreePath: "C:/worktrees/feature-auth",
+            },
+          } as unknown as RunSummary,
+        }}
+        rowKey="run:wf:run-14"
+        isViewed={false}
+        isPending={false}
+        isLive={false}
+        tier="stacked"
+        canDelete
+        onSelect={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    const branch = container.querySelector(".codicon-source-control")!;
+    expect(branch).toHaveAttribute(
+      "title",
+      "Branch: feature/auth\nWorktree: C:/worktrees/feature-auth"
+    );
+  });
+
   it("uses the same target and opener for right-click and long-press", () => {
     vi.useFakeTimers();
     try {

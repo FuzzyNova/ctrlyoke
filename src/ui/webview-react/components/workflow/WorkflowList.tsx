@@ -222,6 +222,7 @@ const RecentWorkflowRow: React.FC<RecentWorkflowRowProps> = ({
             ? `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`
             : undefined
         }
+        worktree={workflow.worktree}
         glyph={
           showTerminalIcon && (
             <i

@@ -154,6 +154,53 @@ describe("WorkflowList token totals", () => {
   );
 });
 
+describe("WorkflowList recent row worktree", () => {
+  afterEach(() => cleanup());
+
+  it("shows the branch icon for a completed lineage read from disk history", () => {
+    render(
+      <WorkflowList
+        rows={[
+          {
+            kind: "recent",
+            key: "recent:wf",
+            workflow: {
+              address: {
+                workflowKey: "wf" as never,
+                kind: "run",
+                runRef: "run-1" as never,
+              },
+              workflowName: "Worktree workflow",
+              executionState: EXECUTION_STATES.STOPPED,
+              totalSteps: 2,
+              worktree: {
+                branchName: "feature/auth",
+                worktreePath: "C:/worktrees/feature-auth",
+              },
+            },
+          },
+        ]}
+        currentAddress={null}
+        activeWorkflowId={null}
+        runningHasActiveTerminal={() => false}
+        onSelectRecent={() => undefined}
+        onSwitchRunning={() => undefined}
+        onPauseRunning={() => undefined}
+        onCancelPauseRunning={() => undefined}
+        onResumeRunning={() => undefined}
+        onStopRunning={() => undefined}
+        onClearHistory={() => undefined}
+      />
+    );
+
+    const branch = document.querySelector(".codicon-source-control")!;
+    expect(branch).toHaveAttribute(
+      "title",
+      "Branch: feature/auth\nWorktree: C:/worktrees/feature-auth"
+    );
+  });
+});
+
 describe("WorkflowList context targets", () => {
   afterEach(() => cleanup());
 
