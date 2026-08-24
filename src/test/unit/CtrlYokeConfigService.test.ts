@@ -544,4 +544,32 @@ suite("FileConfigBackend", () => {
     const backend = new FileConfigBackend(configPath);
     assert.strictEqual(backend.filePath, configPath);
   });
+
+  test("concurrent set() calls to different paths do not clobber each other", async () => {
+    const configPath = path.join(tmpDir, "settings.json");
+    const backend = new FileConfigBackend(configPath);
+    // Mirrors TerminalControlBarEditor's addShortcut(), which fires two
+    // onUpdate() calls to different paths for one user action without
+    // awaiting the first. Without serialized writes, the second set()'s
+    // read-modify-write can race ahead of the first and silently drop it.
+    await Promise.all([
+      backend.set("terminal.mobileCustomShortcuts", [
+        { id: "abc-123", label: "", sequence: "" },
+      ]),
+      backend.set("terminal.mobileBarLayout", {
+        bar: ["key:esc"],
+        popup: ["abc-123"],
+        hidden: [],
+      }),
+    ]);
+    const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    assert.deepStrictEqual(content.terminal.mobileCustomShortcuts, [
+      { id: "abc-123", label: "", sequence: "" },
+    ]);
+    assert.deepStrictEqual(content.terminal.mobileBarLayout, {
+      bar: ["key:esc"],
+      popup: ["abc-123"],
+      hidden: [],
+    });
+  });
 });
