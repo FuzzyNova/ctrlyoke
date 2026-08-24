@@ -10,6 +10,8 @@ export interface CommitMessageGenerationRecord {
   prompt?: string;
   generatedMessage?: string;
   cliCommand?: string;
+  workflowKey?: string;
+  runRef?: string;
 }
 
 type Listener = (record: CommitMessageGenerationRecord | null) => void;

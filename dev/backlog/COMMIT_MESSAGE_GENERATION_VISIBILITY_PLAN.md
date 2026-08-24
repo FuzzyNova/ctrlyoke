@@ -1,13 +1,13 @@
 # Commit Message Generation Visibility
 
-> **Status:** Proposed — not implemented. Written 2026-08-17 against current code.
+> **Status:** Implemented — phases 1-4 and §7 Q3 complete. Written 2026-08-17 against current code.
 > Re-verified against current code on 2026-08-24: all facts in §1 still hold
 > (line numbers drifted slightly, noted inline), and §3.1's design is
 > **simplified below** based on an exact-match existing pattern found in
 > `WorkingFileManager`/`PromptQueue`/`WorkflowInstance` (`loadFromMemory` +
 > `createWorkingFile`) that the original write-up didn't identify. §7's open
-> questions are resolved with concrete, code-verified answers. The plan is
-> ready to implement as revised; no further spikes needed.
+> questions are resolved with concrete, code-verified answers. The revised
+> implementation is complete; no further spikes are needed.
 >
 > **Problem in one line:** commit-message generation runs a full harness
 > execution and then throws away everything except a final success/failure

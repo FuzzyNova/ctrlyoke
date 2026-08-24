@@ -84,7 +84,7 @@ export class ScmCommitCommand {
               return;
             }
 
-            const { message, prompt, cliCommand } =
+            const { message, prompt, cliCommand, workflowKey, runRef } =
               await this.generator.generateMessage(
                 diffResult.diff,
                 cwd,
@@ -104,6 +104,8 @@ export class ScmCommitCommand {
               prompt,
               generatedMessage: message,
               cliCommand,
+              workflowKey,
+              runRef,
             });
 
             if (diffResult.truncated) {

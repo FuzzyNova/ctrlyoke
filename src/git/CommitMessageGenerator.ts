@@ -211,7 +211,13 @@ export class CommitMessageGenerator {
     cwd: string,
     token?: AbortSignal,
     instructions?: string
-  ): Promise<{ message: string; prompt: string; cliCommand?: string }> {
+  ): Promise<{
+    message: string;
+    prompt: string;
+    cliCommand?: string;
+    workflowKey?: string;
+    runRef?: string;
+  }> {
     const rawHarness =
       ConfigurationUtils.getCommitHarness() ||
       ConfigurationUtils.getIntegrationMode();
@@ -415,6 +421,9 @@ export class CommitMessageGenerator {
         detectorIntegration instanceof CliIntegration
           ? detectorIntegration.getLastSpawnedCommand()
           : undefined;
+      const generationState = instance.promptQueue.getState();
+      const workflowKey = generationState.workflowKey;
+      const runRef = generationState.runRef;
 
       // Primary path: read the commit message written by ctrlyoke_submit_commit_message.
       if (useMcpCapture) {
@@ -435,7 +444,13 @@ export class CommitMessageGenerator {
           Log.debug(
             `[CommitMessageGenerator] MCP capture resolved: enabled=${useMcpCapture}, toolCalled=${mcpToolCalled}, outcome=message-captured`
           );
-          return { message: mcpMessage, prompt: fullPrompt, cliCommand };
+          return {
+            message: mcpMessage,
+            prompt: fullPrompt,
+            cliCommand,
+            workflowKey,
+            runRef,
+          };
         }
 
         Log.debug(
@@ -452,13 +467,12 @@ export class CommitMessageGenerator {
       }
 
       // Fallback: extract from response text (MCP unavailable or tool not called).
-      const firstStep = instance.promptQueue.getState().steps[0];
+      const firstStep = generationState.steps[0];
       if (!firstStep || isScriptStep(firstStep)) {
-        const state = instance.promptQueue.getState();
         throw new CommitMessageGenerationError(
           "Commit message generation failed: no prompt step executed",
-          state.workflowKey,
-          state.runRef
+          workflowKey,
+          runRef
         );
       }
 
@@ -467,11 +481,10 @@ export class CommitMessageGenerator {
         `[CommitMessageGenerator] Raw captured response before empty-response check: ${rawResponse === undefined ? "undefined" : `length=${rawResponse.length}, state=${rawResponse === "" ? "empty-string" : "non-empty"}`}`
       );
       if (!rawResponse?.trim()) {
-        const state = instance.promptQueue.getState();
         throw new CommitMessageGenerationError(
           "Commit message generation produced an empty response",
-          state.workflowKey,
-          state.runRef
+          workflowKey,
+          runRef
         );
       }
 
@@ -493,7 +506,13 @@ export class CommitMessageGenerator {
       responseText = responseText.replace(/^"([\s\S]*)"$/, "$1").trim();
       responseText = responseText.replace(/^'([\s\S]*)'$/, "$1").trim();
 
-      return { message: responseText, prompt: fullPrompt, cliCommand };
+      return {
+        message: responseText,
+        prompt: fullPrompt,
+        cliCommand,
+        workflowKey,
+        runRef,
+      };
     } catch (error) {
       if (error instanceof CommitMessageGenerationError) {
         throw error;
