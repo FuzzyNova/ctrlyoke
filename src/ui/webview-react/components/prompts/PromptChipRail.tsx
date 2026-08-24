@@ -269,7 +269,8 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   // edited here — either way, nothing here has anywhere meaningful to write to.
   const isViewingDeletedWorkflow = useIsViewingDeletedWorkflow();
   const isSystemGeneratedWorkflow = useIsSystemGeneratedWorkflow();
-  const isLineageReadOnly = isViewingDeletedWorkflow || isSystemGeneratedWorkflow;
+  const isLineageReadOnly =
+    isViewingDeletedWorkflow || isSystemGeneratedWorkflow;
 
   const isRunning = isWorkflowRunning(executionState);
   const isPaused = executionState === EXECUTION_STATES.PAUSED;

@@ -399,7 +399,11 @@ suite("Shared statusline wrappers", () => {
       workspace: { current_dir: tempDirectory },
       git: { branch: "small-feature" },
     };
-    const qwenLine = shared.formatBrandedStatusLine("qwen", qwenPayload, context);
+    const qwenLine = shared.formatBrandedStatusLine(
+      "qwen",
+      qwenPayload,
+      context
+    );
     assert.match(qwenLine, /42\.7k\/1\.0M ctx \(4\.3%\)/);
     assert.doesNotMatch(qwenLine, /\(7\.8%\)/);
   });

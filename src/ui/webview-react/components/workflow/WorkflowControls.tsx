@@ -148,7 +148,8 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
       value: "queue-file",
       icon: <i className="custom-icon icon-queue-from-file" />,
       onClick: handleQueueFile,
-      disabled: !hasQueue || isViewingDeletedWorkflow || isSystemGeneratedWorkflow,
+      disabled:
+        !hasQueue || isViewingDeletedWorkflow || isSystemGeneratedWorkflow,
     },
     {
       label: isViewingRun

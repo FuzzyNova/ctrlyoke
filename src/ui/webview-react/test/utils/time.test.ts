@@ -188,8 +188,6 @@ describe("formatRelativeTimeVerbose", () => {
 
   it("accepts an explicit reference time instead of the system clock", () => {
     const now = Date.now();
-    expect(formatRelativeTimeVerbose(now - 120_000, now)).toBe(
-      "2 minutes ago"
-    );
+    expect(formatRelativeTimeVerbose(now - 120_000, now)).toBe("2 minutes ago");
   });
 });

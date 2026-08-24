@@ -26,7 +26,10 @@ import { resolveReferencePath } from "../../platform/WorkspaceRootResolver";
 import { StatusMessageReporter } from "../../core/orchestration/StatusMessageReporter";
 
 function createNoopStatusReporter(): StatusMessageReporter {
-  return new StatusMessageReporter(() => undefined, () => undefined);
+  return new StatusMessageReporter(
+    () => undefined,
+    () => undefined
+  );
 }
 
 suite("PromptFileLoader Tests", () => {

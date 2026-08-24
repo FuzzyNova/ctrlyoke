@@ -344,7 +344,8 @@ const WorkflowStepsPanelInner: React.FC<{
   // edited here — either way, nothing here has anywhere meaningful to write to.
   const isViewingDeletedWorkflow = useIsViewingDeletedWorkflow();
   const isSystemGeneratedWorkflow = useIsSystemGeneratedWorkflow();
-  const isLineageReadOnly = isViewingDeletedWorkflow || isSystemGeneratedWorkflow;
+  const isLineageReadOnly =
+    isViewingDeletedWorkflow || isSystemGeneratedWorkflow;
   const { selectionTarget, selectPrompt, selectFinalStep, deselect } =
     useEditorStore();
   const { workflowProperties, globalSettings } = useSettingsStore();

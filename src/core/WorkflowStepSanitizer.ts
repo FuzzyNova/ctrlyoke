@@ -558,13 +558,15 @@ export function mergeWorkflowStepUpdate(
 
 /** Normalize a dashboard final-step payload before applying the shared merge rule. */
 export function buildFinalStepUpdate(finalStep: WorkflowStep): WorkflowStep {
-  const normalized = (isScriptStep(finalStep)
-    ? stripViewOnlyWorkflowStepFields(finalStep)
-    : {
-        prompt: finalStep.prompt,
-        ...(finalStep.name ? { name: finalStep.name } : {}),
-        ...buildPromptStepProperties(finalStep),
-      }) as WorkflowStep;
+  const normalized = (
+    isScriptStep(finalStep)
+      ? stripViewOnlyWorkflowStepFields(finalStep)
+      : {
+          prompt: finalStep.prompt,
+          ...(finalStep.name ? { name: finalStep.name } : {}),
+          ...buildPromptStepProperties(finalStep),
+        }
+  ) as WorkflowStep;
 
   // Final-step runtime metadata belongs to the disk head, not to an editor
   // payload. Same-kind merges preserve it from the existing step; type changes

@@ -380,41 +380,35 @@ export class CommitMessageGenerator {
       // Captured directly from the integration rather than read back from a
       // persisted run history file: the response-complete listener is the fallback
       // text source even though this run now persists normal timeline artifacts.
-      responseCompleteDisposable = instance.onResponseComplete(
-        (response) => {
-          capturedResponseText = response;
-        }
-      );
-      streamingChunkDisposable = instance.onStreamingChunk(
-        (chunk) => {
-          Log.debug(
-            `[CommitMessageGenerator] Streaming chunk received during commit generation: length=${chunk.length}`
-          );
-        }
-      );
-      streamingEventsDisposable = instance.onStreamingEvents(
-        (events) => {
-          const summaries = events.map((event) => {
-            if (
-              event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL &&
-              "tool" in event.data &&
-              typeof event.data.tool === "string"
-            ) {
-              if (event.data.tool === COMMIT_MESSAGE_MCP_TOOL) {
-                mcpToolCalled = true;
-              }
-              return `${event.type}:${event.data.tool}`;
+      responseCompleteDisposable = instance.onResponseComplete((response) => {
+        capturedResponseText = response;
+      });
+      streamingChunkDisposable = instance.onStreamingChunk((chunk) => {
+        Log.debug(
+          `[CommitMessageGenerator] Streaming chunk received during commit generation: length=${chunk.length}`
+        );
+      });
+      streamingEventsDisposable = instance.onStreamingEvents((events) => {
+        const summaries = events.map((event) => {
+          if (
+            event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL &&
+            "tool" in event.data &&
+            typeof event.data.tool === "string"
+          ) {
+            if (event.data.tool === COMMIT_MESSAGE_MCP_TOOL) {
+              mcpToolCalled = true;
             }
-            if ("name" in event.data && typeof event.data.name === "string") {
-              return `${event.type}:${event.data.name}`;
-            }
-            return event.type;
-          });
-          Log.debug(
-            `[CommitMessageGenerator] Streaming events during commit generation: count=${events.length}, types=${summaries.join(",")}`
-          );
-        }
-      );
+            return `${event.type}:${event.data.tool}`;
+          }
+          if ("name" in event.data && typeof event.data.name === "string") {
+            return `${event.type}:${event.data.name}`;
+          }
+          return event.type;
+        });
+        Log.debug(
+          `[CommitMessageGenerator] Streaming events during commit generation: count=${events.length}, types=${summaries.join(",")}`
+        );
+      });
 
       if (token) {
         abortListener = () => {

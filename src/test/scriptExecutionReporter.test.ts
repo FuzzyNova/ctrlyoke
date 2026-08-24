@@ -70,7 +70,10 @@ function makeReporter(result: EvaluationResult, events: string[]) {
   const reporter = new ScriptExecutionReporter(evaluator);
   const context: ScriptExecutionReporterContext = {
     workspaceFolderPath: process.cwd(),
-    statusReporter: new StatusMessageReporter(() => undefined, () => undefined),
+    statusReporter: new StatusMessageReporter(
+      () => undefined,
+      () => undefined
+    ),
     dashboardProvider: {
       updateCliOutput: (_stepIndex: number, output: unknown) => {
         events.push(
@@ -488,7 +491,10 @@ suite("ScriptExecutionReporter", () => {
     const reporter = new ScriptExecutionReporter(evaluator);
     const context: ScriptExecutionReporterContext = {
       workspaceFolderPath: process.cwd(),
-      statusReporter: new StatusMessageReporter(() => undefined, () => undefined),
+      statusReporter: new StatusMessageReporter(
+        () => undefined,
+        () => undefined
+      ),
       dashboardProvider: {
         updateCliOutput: (_stepIndex: number, output: unknown) => {
           events.push(

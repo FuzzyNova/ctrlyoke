@@ -5,7 +5,7 @@
 > and 6, so read it before implementing any phase. One instance of the bug this plan targets was
 > already fixed as a narrow patch (`WorkflowInstance.executeLoadedPromptFile`'s
 > "Execution failed" row, 2026-08-20) — this document is the follow-up
-> redesign so the *class* of bug can't recur, requested directly after that
+> redesign so the _class_ of bug can't recur, requested directly after that
 > patch landed.
 > **Priority:** P2 — not data loss, but a real, repeatedly-reintroduced UX gap
 > (a user navigating away and back, or starting a new run, loses the exact
@@ -17,7 +17,7 @@
 > call site (the top-level execution-failure catch in `WorkflowInstance`) had
 > forgotten the second half. The question this plan answers: how many other
 > call sites have the same gap, and what structural change makes it
-> impossible for a *new* call site to introduce it again.
+> impossible for a _new_ call site to introduce it again.
 
 ## Problem
 
@@ -26,14 +26,14 @@ to a step or the final-step loop — has two independent effects today, and
 nothing ties them together:
 
 1. **Live push**: `IDashboardSink.updateStatusMessage(stepIndex, message,
-   severity, workflowId?, timestampMs?)`, which the currently-viewing webview
+severity, workflowId?, timestampMs?)`, which the currently-viewing webview
    renders immediately.
 2. **Persistence**: `OutputHistoryManager.appendStatusMessage(historyFilePath,
-   target, statusMessage)`, which writes the row into the run's timeline so
+target, statusMessage)`, which writes the row into the run's timeline so
    it survives a reload — switching workflows and back, restarting the
    extension host, or opening the run from history later.
 
-Every caller that wants a status message to *survive* has to remember to call
+Every caller that wants a status message to _survive_ has to remember to call
 both, with the right target-encoding for each (`updateStatusMessage` takes a
 signed `stepIndex`; `appendStatusMessage` takes an `OutputExecutionTarget`
 object). Nothing in the type system or the call shape suggests the second
@@ -44,14 +44,14 @@ runs fine on its own, silently live-only.
 
 Confirmed by reading each site directly:
 
-| Site | Pairs live push with persistence? |
-| --- | --- |
-| `WorkflowExecutor.trackStatusMessage` (`WorkflowExecutor.ts:1761-1807`) | Yes — the one caller-facing helper that already gets this right, but it's private to `WorkflowExecutor` and only `WorkflowExecutor`'s own step-lifecycle messages go through it. |
-| `ScriptExecutionReporter.emitStatus` (`ScriptExecutionReporter.ts:393-434`) | Yes — a second, independently-written copy of the same "push, then `if (context.historyFilePath && context.outputHistoryManager) …`" shape. |
-| `WorkflowInstance.reportCompatibilityDiagnostics` (`WorkflowInstance.ts:637-694`) | Yes, but via a third shape: two separate dedup `Set`s (`reportedCompatibilityDiagnosticKeys`, `persistedCompatibilityDiagnosticKeys`) because the first call can happen before a history file exists (preflight) and a later call must still persist once one does. |
-| `WorkflowInstance`'s four direct call sites (worktree notice `:1996-2015`, missing-secret preflight warning `:1970-1994`, and — until the 2026-08-20 patch — the top-level execution-failure catch `:2114-2150`) | Hand-written each time, correct three-of-four times *by copying the pattern*, wrong once. |
-| `EndConditionHandler` (`EndConditionHandler.ts:277-281`, `:378-382`) | **No.** Only has `getDashboard(): () => IDashboardSink \| undefined` in its constructor; no path to `outputHistoryManager`/`historyFilePath` at all. |
-| `PromptFileLoader` (`PromptFileLoader.ts:403-412`) | **No.** Same shape as `EndConditionHandler` — `getDashboard()` only. |
+| Site                                                                                                                                                                                                             | Pairs live push with persistence?                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WorkflowExecutor.trackStatusMessage` (`WorkflowExecutor.ts:1761-1807`)                                                                                                                                          | Yes — the one caller-facing helper that already gets this right, but it's private to `WorkflowExecutor` and only `WorkflowExecutor`'s own step-lifecycle messages go through it.                                                                                    |
+| `ScriptExecutionReporter.emitStatus` (`ScriptExecutionReporter.ts:393-434`)                                                                                                                                      | Yes — a second, independently-written copy of the same "push, then `if (context.historyFilePath && context.outputHistoryManager) …`" shape.                                                                                                                         |
+| `WorkflowInstance.reportCompatibilityDiagnostics` (`WorkflowInstance.ts:637-694`)                                                                                                                                | Yes, but via a third shape: two separate dedup `Set`s (`reportedCompatibilityDiagnosticKeys`, `persistedCompatibilityDiagnosticKeys`) because the first call can happen before a history file exists (preflight) and a later call must still persist once one does. |
+| `WorkflowInstance`'s four direct call sites (worktree notice `:1996-2015`, missing-secret preflight warning `:1970-1994`, and — until the 2026-08-20 patch — the top-level execution-failure catch `:2114-2150`) | Hand-written each time, correct three-of-four times _by copying the pattern_, wrong once.                                                                                                                                                                           |
+| `EndConditionHandler` (`EndConditionHandler.ts:277-281`, `:378-382`)                                                                                                                                             | **No.** Only has `getDashboard(): () => IDashboardSink \| undefined` in its constructor; no path to `outputHistoryManager`/`historyFilePath` at all.                                                                                                                |
+| `PromptFileLoader` (`PromptFileLoader.ts:403-412`)                                                                                                                                                               | **No.** Same shape as `EndConditionHandler` — `getDashboard()` only.                                                                                                                                                                                                |
 
 So the count is: one correct shared helper (`trackStatusMessage`, scoped too
 narrowly to cover everything), one independent reimplementation that also
@@ -60,7 +60,7 @@ reimplementation with its own bespoke dedup semantics
 (`reportCompatibilityDiagnostics`), one class with the right access but where
 a copy-pasted call site forgot the second half (the bug this plan follows
 up on), and two classes (`EndConditionHandler`, `PromptFileLoader`) that
-structurally *cannot* persist today because they were only ever given a
+structurally _cannot_ persist today because they were only ever given a
 dashboard handle.
 
 ### Why `EndConditionHandler` and `PromptFileLoader` don't just get an `outputHistoryManager` reference
@@ -72,8 +72,8 @@ every run — it's `undefined` until a run starts, then a fresh value each
 time `executeLoadedPromptFile` promotes or resumes a run
 (`this.activeHistoryFilePath = historyFilePath;` at `WorkflowInstance.ts:4110`
 inside `startWorkflowExecution`). That's exactly why these two classes
-already take `getDashboard: () => IDashboardSink | undefined` — a *getter
-closure* — instead of a plain `IDashboardSink` field: the dashboard sink
+already take `getDashboard: () => IDashboardSink | undefined` — a _getter
+closure_ — instead of a plain `IDashboardSink` field: the dashboard sink
 itself is stable across runs, but if it weren't, the same closure shape would
 still work. A raw `historyFilePath: string` constructor field would go stale
 the moment the second run starts; that's the "threading `getHistoryContext`
@@ -87,12 +87,12 @@ Don't thread a raw, run-scoped value into long-lived constructors. Instead,
 introduce **one small stateful service, constructed once per `WorkflowInstance`
 alongside `dashboardSink`/`outputHistoryManager`, that is the only supported
 way to raise a status message.** Every current call site — including the two
-classes that can't reach history today — gets a reference to *this one
-service* instead of a raw dashboard handle, and the service internally
+classes that can't reach history today — gets a reference to _this one
+service_ instead of a raw dashboard handle, and the service internally
 resolves "is a history file active right now" via a getter closure exactly
 like the `getDashboard` closure they already receive. Callers stop having two
 things to remember and get exactly one method to call; there is no code path
-left that pushes a status message live without at least *attempting* to
+left that pushes a status message live without at least _attempting_ to
 persist it.
 
 ### The shape: `StatusMessageReporter`
@@ -159,7 +159,7 @@ delegate to it too, instead of each keeping its own copy of the same logic).
 - **No dedupe keys (the common case — worktree notice, missing-secret
   warning, execution-failure row, `EndConditionHandler`'s two sites,
   `PromptFileLoader`'s warning, every `trackStatusMessage`/`emitStatus`
-  caller today):** every `report()` call pushes live *and* attempts to
+  caller today):** every `report()` call pushes live _and_ attempts to
   persist. This is `trackStatusMessage`'s and `emitStatus`'s existing
   behavior, now shared instead of duplicated.
 - **Both keys set, identical (`reportCompatibilityDiagnostics`'s case):**
@@ -167,7 +167,7 @@ delegate to it too, instead of each keeping its own copy of the same logic).
   fires once ever per key, persistence fires once ever per key, and because
   they're independent, a diagnostic raised during preflight (before any
   history file exists) still gets a live push immediately and a persisted
-  write the *first later call* where `getActiveHistorySink()` is non-`undefined`
+  write the _first later call_ where `getActiveHistorySink()` is non-`undefined`
   — without a second, redundant live push. This is why the primitive takes
   two independent keys instead of one: collapsing them would either
   re-push live on every subsequent call (noisy) or skip persistence
@@ -185,12 +185,12 @@ delegate to it too, instead of each keeping its own copy of the same logic).
 An earlier shape considered for this document: wrap the real
 `IDashboardSink` in a decorator whose `updateStatusMessage` always also
 persists, and keep every existing call site's code unchanged (just swap what
-object `this.dashboardSink` points to). This is *less* invasive — zero call
+object `this.dashboardSink` points to). This is _less_ invasive — zero call
 sites change — but it breaks `reportCompatibilityDiagnostics`'s two-phase
 behavior: that method's whole reason for two dedup sets is that it
 deliberately calls `updateStatusMessage` **only once, ever, per fact** (to
 avoid spamming the live feed on every re-report), while still needing
-persistence to fire *later*, the first time a history file exists. A
+persistence to fire _later_, the first time a history file exists. A
 decorator only sees the calls that actually reach it — if the live push is
 already deduped away above the decorator, the decorator never runs a second
 time to catch the persist-later case, and that behavior silently regresses.
@@ -208,7 +208,7 @@ places it reached. The fix isn't "thread the raw context more carefully" —
 it's "callers never see the raw context (dashboard sink + history file +
 history manager) at all; they see one always-both-halves operation." That
 also means this plan does not add a new closure parameter next to
-`getDashboard` — it *replaces* `getDashboard` everywhere the only reason a
+`getDashboard` — it _replaces_ `getDashboard` everywhere the only reason a
 caller had it was to call `updateStatusMessage`.
 
 ## Corrections from the code audit (2026-08-20)
@@ -217,7 +217,7 @@ Every line reference in this document was re-checked against the current
 tree before staging. Four things in the original write-up are wrong or
 incomplete; the phase table below has been amended accordingly.
 
-### 1. A status message has *three* effects, not two
+### 1. A status message has _three_ effects, not two
 
 The "Problem" section above describes live push + persistence. There is a
 third, and it is the one most likely to be silently dropped by phase 5:
@@ -227,7 +227,7 @@ third, and it is the one most likely to be silently dropped by phase 5:
    and `onFinalStepStatusMessage(loopIndex, message, severity)`. Both
    `WorkflowExecutor.trackStatusMessage` (`WorkflowExecutor.ts:1797-1799`)
    and `ScriptExecutionReporter.emitStatus`
-   (`ScriptExecutionReporter.ts:418-422`) fire one of these *between* the
+   (`ScriptExecutionReporter.ts:418-422`) fire one of these _between_ the
    live push and the persist. In `WorkflowInstance` they land on
    `_workflowStatusMessageEmitter` (`WorkflowInstance.ts:3597-3603`,
    consumed by `cli.ts:633`) and, for the finalStep variant, on
@@ -252,7 +252,7 @@ third, and it is the one most likely to be silently dropped by phase 5:
 
    `WorkflowInstance` wires it to the same two callbacks it already passes
    into `WorkflowExecutionContext`, dispatching on `target.kind`. This is a
-   deliberate, small behavior *addition* for `WorkflowInstance`'s own four
+   deliberate, small behavior _addition_ for `WorkflowInstance`'s own four
    direct call sites and for `EndConditionHandler`/`PromptFileLoader`, which
    fire no notification today — their messages become visible to the CLI
    consumer and (for finalStep targets) replayable, which is the same gap in
@@ -262,7 +262,7 @@ third, and it is the one most likely to be silently dropped by phase 5:
 
 Phase 4's "replace `getDashboard` with the shared reporter" is wrong for
 this class. `PromptFileLoader` uses its dashboard handle for three
-*non*-status calls — `updateFileSelected` (`:221`), `updateSessionRestored`
+_non_-status calls — `updateFileSelected` (`:221`), `updateSessionRestored`
 (`:302`), and the STEPS_EXTENDED merge push (`:329`) — in addition to the
 one `updateStatusMessage` at `:405`. Keep `getDashboard` and **add** the
 reporter as a new constructor parameter.
@@ -314,14 +314,14 @@ caller-supplied argument in favour of its own tag
 
 ## Staged execution plan
 
-| # | Step | Closes |
-| --- | --- | --- |
-| 1 | **Done.** Add `StatusMessageReporter` + `WorkflowEventTarget`/`StatusMessageReportOptions` types, with full unit coverage (live-only when no history sink, both when active, independent live/persist dedupe keys, `resetDedupeState()`). No production call site changes yet. | New primitive exists and is proven correct in isolation. |
-| 2 | **Done.** `WorkflowInstance` constructs one `StatusMessageReporter`; its four direct call sites (compatibility diagnostics, worktree notice, missing-secret warning, execution-failure row) use it; `resetDedupeState()` replaces the old compatibility sets' clear calls; the two sets and hand-rolled persistence/live fan-out are gone. The execution-failure path preserves its explicit `runToFinalize` destination when it differs from the normal active-history resolver. | The original bug class, inside the file it was found in. |
-| 3 | **Done.** `EndConditionHandler`: replace the `getDashboard` constructor param with the shared reporter; migrate its two call sites (`:277-281` end-condition-failed error, `:378-382` retry-in-progress notice). Update every test construction site (`EndConditionHandler.test.ts`, `WorkflowExecutor.test.ts`, `mixedModeExecution.integration.test.ts`, `interactiveScriptStep.test.ts` — 21 call sites) to pass a reporter (a no-op reporter for tests that don't care, matching today's `() => undefined`). | The two structurally-unpersisted sites found in the prior investigation. |
-| 4 | **Done.** `PromptFileLoader` adds the shared reporter while retaining `getDashboard` for its three non-status calls, migrates the missing-assets warning, preserves headless logging with an unconditional `Log.warn`, and exposes the last missing-directories list. `WorkflowInstance` re-reports that warning after `EXECUTION_STARTED` resolves a history path, using independent live/persist dedupe so the original load-time push fires once and the persisted write lands once. | The genuinely harder case — a warning raised before a run exists at all — instead of leaving it as a documented exception. |
-| 5 | **Done.** `WorkflowExecutor.trackStatusMessage` and `ScriptExecutionReporter.emitStatus` keep their existing signatures but delegate through the instance-owned reporter. The reporter retains the extension-clock timestamp and dispatches queue/final-step notification fan-out before persistence; both execution contexts require that shared instance. | Removes the two remaining independent reimplementations; from here on there is exactly one. |
-| 6 | **Done.** Add an ESLint `no-restricted-syntax` rule forbidding direct `.updateStatusMessage(` calls outside `StatusMessageReporter.ts` and the sink-transport layer itself (`WorkflowTaggedSink.ts`, `DashboardBroadcastHub.ts`, `PostMessageDashboardSink.ts`, `CtrlYokeWebviewProvider.ts`, `CtrlYokeHostedServer.ts` — these *implement* `IDashboardSink.updateStatusMessage`, they don't call it as a status-raising event, and must stay exempt — plus `OutputCaptureBuffer.ts`, which *replays* already-raised messages and must also stay exempt, see correction 4). The rule is configured with a file-scoped exemption list, and the replay path uses the real `IDashboardSink` type. | Makes the fix durable against future call sites, not just the ones known today. |
+| #   | Step                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Closes                                                                                                                     |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Done.** Add `StatusMessageReporter` + `WorkflowEventTarget`/`StatusMessageReportOptions` types, with full unit coverage (live-only when no history sink, both when active, independent live/persist dedupe keys, `resetDedupeState()`). No production call site changes yet.                                                                                                                                                                                                                                                                                                                                                                                                                 | New primitive exists and is proven correct in isolation.                                                                   |
+| 2   | **Done.** `WorkflowInstance` constructs one `StatusMessageReporter`; its four direct call sites (compatibility diagnostics, worktree notice, missing-secret warning, execution-failure row) use it; `resetDedupeState()` replaces the old compatibility sets' clear calls; the two sets and hand-rolled persistence/live fan-out are gone. The execution-failure path preserves its explicit `runToFinalize` destination when it differs from the normal active-history resolver.                                                                                                                                                                                                              | The original bug class, inside the file it was found in.                                                                   |
+| 3   | **Done.** `EndConditionHandler`: replace the `getDashboard` constructor param with the shared reporter; migrate its two call sites (`:277-281` end-condition-failed error, `:378-382` retry-in-progress notice). Update every test construction site (`EndConditionHandler.test.ts`, `WorkflowExecutor.test.ts`, `mixedModeExecution.integration.test.ts`, `interactiveScriptStep.test.ts` — 21 call sites) to pass a reporter (a no-op reporter for tests that don't care, matching today's `() => undefined`).                                                                                                                                                                               | The two structurally-unpersisted sites found in the prior investigation.                                                   |
+| 4   | **Done.** `PromptFileLoader` adds the shared reporter while retaining `getDashboard` for its three non-status calls, migrates the missing-assets warning, preserves headless logging with an unconditional `Log.warn`, and exposes the last missing-directories list. `WorkflowInstance` re-reports that warning after `EXECUTION_STARTED` resolves a history path, using independent live/persist dedupe so the original load-time push fires once and the persisted write lands once.                                                                                                                                                                                                        | The genuinely harder case — a warning raised before a run exists at all — instead of leaving it as a documented exception. |
+| 5   | **Done.** `WorkflowExecutor.trackStatusMessage` and `ScriptExecutionReporter.emitStatus` keep their existing signatures but delegate through the instance-owned reporter. The reporter retains the extension-clock timestamp and dispatches queue/final-step notification fan-out before persistence; both execution contexts require that shared instance.                                                                                                                                                                                                                                                                                                                                    | Removes the two remaining independent reimplementations; from here on there is exactly one.                                |
+| 6   | **Done.** Add an ESLint `no-restricted-syntax` rule forbidding direct `.updateStatusMessage(` calls outside `StatusMessageReporter.ts` and the sink-transport layer itself (`WorkflowTaggedSink.ts`, `DashboardBroadcastHub.ts`, `PostMessageDashboardSink.ts`, `CtrlYokeWebviewProvider.ts`, `CtrlYokeHostedServer.ts` — these _implement_ `IDashboardSink.updateStatusMessage`, they don't call it as a status-raising event, and must stay exempt — plus `OutputCaptureBuffer.ts`, which _replays_ already-raised messages and must also stay exempt, see correction 4). The rule is configured with a file-scoped exemption list, and the replay path uses the real `IDashboardSink` type. | Makes the fix durable against future call sites, not just the ones known today.                                            |
 
 Phases 1–5 were the correctness work; phase 6 is what satisfies
 "impossible to hit going forward" for code written after this lands, and
@@ -384,17 +384,17 @@ the full plan is now complete.
 
 ## Files likely changed
 
-| File | Change |
-| --- | --- |
-| `src/core/orchestration/StatusMessageReporter.ts` | New. The shared primitive. |
-| `src/test/unit/StatusMessageReporter.test.ts` | New. Primitive unit coverage. |
-| `src/core/WorkflowInstance.ts` | Construct the reporter; migrate 4 direct call sites + `reportCompatibilityDiagnostics`; delete the two dedup `Set`s; call `resetDedupeState()`; pass the reporter into `EndConditionHandler`/`PromptFileLoader` construction and into `WorkflowExecutionContext`. |
-| `src/core/EndConditionHandler.ts` | Constructor param swap; migrate 2 call sites. |
-| `src/core/orchestration/PromptFileLoader.ts` | Constructor param **added** (not swapped — `getDashboard` stays for its three non-status uses); migrate 1 call site; add `getLastMissingAssetDirectories()` for the re-report phase. |
-| `src/core/WorkflowExecutor.ts` | `WorkflowExecutionContext` gains `statusReporter`; `trackStatusMessage` delegates instead of duplicating. |
-| `src/core/orchestration/ScriptExecutionReporter.ts` | `ScriptExecutionReporterContext` gains `statusReporter`; `emitStatus` delegates instead of duplicating. |
-| `src/test/unit/PromptFileLoader.test.ts` (7 constructor sites) | Update constructor call sites. |
-| `src/test/unit/WorkflowInstance.test.ts`, `EndConditionHandler.test.ts`, `WorkflowExecutor.test.ts`, `src/test/integration/mixedModeExecution.integration.test.ts`, `src/test/unit/interactiveScriptStep.test.ts` | Update constructor call sites; add persistence assertions where only live-push was checked before. |
-| `.github/instructions/core.instructions.md` | Replace the interim "known, not-yet-fixed instances" bullet (added 2026-08-20) with a description of `StatusMessageReporter` as the single funnel point, once phases 1–5 land. |
-| `eslint.config.mjs` (phase 6 only) | New `no-restricted-syntax` rule, with the transport-layer + `OutputCaptureBuffer` exemption list. |
-| `src/core/OutputCaptureBuffer.ts` (phase 6 only) | Replace the inline structural cast at `:427` with the real `IDashboardSink` type so the replay call is visible to the lint rule and covered by the exemption. |
+| File                                                                                                                                                                                                              | Change                                                                                                                                                                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/core/orchestration/StatusMessageReporter.ts`                                                                                                                                                                 | New. The shared primitive.                                                                                                                                                                                                                                        |
+| `src/test/unit/StatusMessageReporter.test.ts`                                                                                                                                                                     | New. Primitive unit coverage.                                                                                                                                                                                                                                     |
+| `src/core/WorkflowInstance.ts`                                                                                                                                                                                    | Construct the reporter; migrate 4 direct call sites + `reportCompatibilityDiagnostics`; delete the two dedup `Set`s; call `resetDedupeState()`; pass the reporter into `EndConditionHandler`/`PromptFileLoader` construction and into `WorkflowExecutionContext`. |
+| `src/core/EndConditionHandler.ts`                                                                                                                                                                                 | Constructor param swap; migrate 2 call sites.                                                                                                                                                                                                                     |
+| `src/core/orchestration/PromptFileLoader.ts`                                                                                                                                                                      | Constructor param **added** (not swapped — `getDashboard` stays for its three non-status uses); migrate 1 call site; add `getLastMissingAssetDirectories()` for the re-report phase.                                                                              |
+| `src/core/WorkflowExecutor.ts`                                                                                                                                                                                    | `WorkflowExecutionContext` gains `statusReporter`; `trackStatusMessage` delegates instead of duplicating.                                                                                                                                                         |
+| `src/core/orchestration/ScriptExecutionReporter.ts`                                                                                                                                                               | `ScriptExecutionReporterContext` gains `statusReporter`; `emitStatus` delegates instead of duplicating.                                                                                                                                                           |
+| `src/test/unit/PromptFileLoader.test.ts` (7 constructor sites)                                                                                                                                                    | Update constructor call sites.                                                                                                                                                                                                                                    |
+| `src/test/unit/WorkflowInstance.test.ts`, `EndConditionHandler.test.ts`, `WorkflowExecutor.test.ts`, `src/test/integration/mixedModeExecution.integration.test.ts`, `src/test/unit/interactiveScriptStep.test.ts` | Update constructor call sites; add persistence assertions where only live-push was checked before.                                                                                                                                                                |
+| `.github/instructions/core.instructions.md`                                                                                                                                                                       | Replace the interim "known, not-yet-fixed instances" bullet (added 2026-08-20) with a description of `StatusMessageReporter` as the single funnel point, once phases 1–5 land.                                                                                    |
+| `eslint.config.mjs` (phase 6 only)                                                                                                                                                                                | New `no-restricted-syntax` rule, with the transport-layer + `OutputCaptureBuffer` exemption list.                                                                                                                                                                 |
+| `src/core/OutputCaptureBuffer.ts` (phase 6 only)                                                                                                                                                                  | Replace the inline structural cast at `:427` with the real `IDashboardSink` type so the replay call is visible to the lint rule and covered by the exemption.                                                                                                     |

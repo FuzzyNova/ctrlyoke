@@ -968,15 +968,13 @@ suite("CompatibilityAnalyzer", () => {
         mechanism: "none",
         verification: "verified",
       };
-      const diagnostics = analyze(
-        workflow,
-        snapshot({ [harnessId]: target })
-      );
+      const diagnostics = analyze(workflow, snapshot({ [harnessId]: target }));
       assert.ok(
         diagnostics.some(
           (diagnostic) =>
             diagnostic.capability === "notification" &&
-            diagnostic.code === COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED
+            diagnostic.code ===
+              COMPATIBILITY_DIAGNOSTIC_CODES.HOOK_EVENT_UNSUPPORTED
         ),
         harnessId
       );

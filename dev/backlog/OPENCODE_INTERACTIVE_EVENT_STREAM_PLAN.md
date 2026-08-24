@@ -118,7 +118,7 @@ Ctrlyoke can and does run multiple concurrent OpenCode harness instances in the
 same workspace. Each spawned interactive process needs its **own** free port —
 there is no evidence in the opencode source of a "find me any free port and
 tell me which one" mode usable cross-process (passing `--port 0` only helps the
-*in-process* worker pick an ephemeral port; that choice is never surfaced to
+_in-process_ worker pick an ephemeral port; that choice is never surfaced to
 stdout/PTY or any discoverable file, so an external process cannot learn it).
 The practical approach: **ctrlyoke allocates a free TCP port itself** (bind to
 port 0 on 127.0.0.1, read the OS-assigned port, close the probe socket, then

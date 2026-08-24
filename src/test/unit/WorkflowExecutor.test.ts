@@ -95,7 +95,10 @@ function makeExecutor(
   const handler = new EndConditionHandler(
     conditionEvaluator,
     queue,
-    new StatusMessageReporter(() => undefined, () => undefined)
+    new StatusMessageReporter(
+      () => undefined,
+      () => undefined
+    )
   );
   return new WorkflowExecutor(queue, handler, conditionEvaluator, platform);
 }
@@ -425,8 +428,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
         strictContextResolution
           ? {
               execution: {
-                strictContextResolution:
-                  CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
+                strictContextResolution: CONTEXT_RESOLUTION_FAILURE_MODES.FAIL,
               },
             }
           : {}

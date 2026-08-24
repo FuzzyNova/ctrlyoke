@@ -120,11 +120,11 @@ the actual call chain:
   source file.
 - Critically, `PromptQueue.loadPrompts()` (`PromptQueue.ts:334-374`)
   **explicitly preserves** `this.state.workflowKey`/`runRef` across the call
-  (lines 350-356), and its own comment says why: *"`createWorkingFile()` sets
+  (lines 350-356), and its own comment says why: _"`createWorkingFile()` sets
   these just before `loadPrompts()` is called
   (`PromptFileLoader.loadParsedPromptFile`); without preserving them here, a
   freshly loaded prompt file's first execution could never satisfy
-  `executeLoadedPromptFile`'s fresh-start guard (`... && workflowKey`)."* This
+  `executeLoadedPromptFile`'s fresh-start guard (`... && workflowKey`)."_ This
   is a preexisting, intentional seam for exactly this "create a lineage, then
   load prompts into it" sequencing — not something to build.
 - Once `state.workflowKey` is set, `executeLoadedPromptFile()`'s existing
@@ -299,12 +299,12 @@ checked to confirm they pass through whatever `generateMessage()` now returns.
 
 ## 6. Phasing
 
-| Phase | Content                                                                                                                   | Ships value alone?                                       |
-| ----- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| 1     | §3.5 — `Log.debug` additions around MCP outcome / response length                                                         | Yes — immediate debugging aid                            |
+| Phase | Content                                                                                                                                                                                                     | Ships value alone?                                       |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| 1     | §3.5 — `Log.debug` additions around MCP outcome / response length                                                                                                                                           | Yes — immediate debugging aid                            |
 | 2+3   | §3.1 — `WorkflowInstance.loadPromptStringAsRun()` (mirrors `loadFromMemory()`; no new lineage/run/timeline plumbing) + §3.1.1 pointer-file lineage reuse + §3.2 system-generated flag/recent-list filtering | Partial — data now persists, but nothing surfaces it yet |
-| 4     | §3.3 + §3.4 — dedupe `CommitMessageGenerationRecord`, carry the address, "View full output" affordance in `CommitSection` | Yes — completes the loop                                 |
-| —     | §7 Q3 — CLI failure-path `WorkflowPaths.eventsPath()` pointer via an address-carrying error | Independent, cheap; can land alongside phase 2 or later  |
+| 4     | §3.3 + §3.4 — dedupe `CommitMessageGenerationRecord`, carry the address, "View full output" affordance in `CommitSection`                                                                                   | Yes — completes the loop                                 |
+| —     | §7 Q3 — CLI failure-path `WorkflowPaths.eventsPath()` pointer via an address-carrying error                                                                                                                 | Independent, cheap; can land alongside phase 2 or later  |
 
 The persistence and filtering work ships together — persisting commit-gen runs
 without filtering them out of "recent workflows" is a regression (log/history

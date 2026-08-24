@@ -242,10 +242,7 @@ function createReporter(
 ): StatusMessageReporter {
   return new StatusMessageReporter(
     () => dashboard,
-    () =>
-      history
-        ? { filePath: "history.json", manager: history }
-        : undefined
+    () => (history ? { filePath: "history.json", manager: history } : undefined)
   );
 }
 
@@ -705,8 +702,8 @@ suite("EndConditionHandler", () => {
     assert.deepStrictEqual(
       dashboard.statusMessages.map(({ message }) => message),
       [
-      "Re-running Prompt 1 (Pass retry 1/2): Run the task again",
-      "Re-running Prompt 1 (Pass retry 2/2): Run the task again",
+        "Re-running Prompt 1 (Pass retry 1/2): Run the task again",
+        "Re-running Prompt 1 (Pass retry 2/2): Run the task again",
       ]
     );
     assert.deepStrictEqual(

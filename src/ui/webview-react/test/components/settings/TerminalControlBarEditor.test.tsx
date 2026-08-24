@@ -4,9 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { TerminalControlBarEditor } from "@components/settings/TerminalControlBarEditor";
 import { SETTING_SCOPES } from "@/types/messages";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
-import type {
-  FullGlobalSettings,
-} from "@root/types/WebviewMessageTypes";
+import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 import type {
   TerminalMobileBarLayout,
   TerminalShortcut,
@@ -124,11 +122,14 @@ describe("TerminalControlBarEditor", () => {
 
   it("reorders items within the bar with the horizontal keyboard drag sensor", async () => {
     const onUpdate = renderEditor(
-      completeLayout([
-        TERMINAL_BAR_CTRL_ID,
-        TERMINAL_BAR_KEY_IDS.ESC,
-        TERMINAL_BAR_KEY_IDS.TAB,
-      ], [])
+      completeLayout(
+        [
+          TERMINAL_BAR_CTRL_ID,
+          TERMINAL_BAR_KEY_IDS.ESC,
+          TERMINAL_BAR_KEY_IDS.TAB,
+        ],
+        []
+      )
     );
     const handles = screen.getAllByRole("button", {
       name: /Drag to reorder (Ctrl|Esc|Tab)/,
@@ -150,10 +151,7 @@ describe("TerminalControlBarEditor", () => {
     const onUpdate = renderEditor(
       completeLayout(
         [...DEFAULT_TERMINAL_BAR_LAYOUT.bar],
-        [
-          TERMINAL_BAR_SHORTCUT_IDS.CTRL_C,
-          TERMINAL_BAR_SHORTCUT_IDS.CTRL_Z,
-        ]
+        [TERMINAL_BAR_SHORTCUT_IDS.CTRL_C, TERMINAL_BAR_SHORTCUT_IDS.CTRL_Z]
       )
     );
     const handles = screen.getAllByRole("button", {
@@ -186,7 +184,10 @@ describe("TerminalControlBarEditor", () => {
 
     expect(lastLayout(onUpdate)).toEqual(
       expect.objectContaining({
-        bar: [...DEFAULT_TERMINAL_BAR_LAYOUT.bar, TERMINAL_BAR_SHORTCUT_IDS.CTRL_C],
+        bar: [
+          ...DEFAULT_TERMINAL_BAR_LAYOUT.bar,
+          TERMINAL_BAR_SHORTCUT_IDS.CTRL_C,
+        ],
         popup: [],
       })
     );
@@ -258,7 +259,9 @@ describe("TerminalControlBarEditor", () => {
         sequence: "\\x1b[1~",
       };
       const layout = completeLayout(
-        location === "bar" ? [TERMINAL_BAR_CTRL_ID, customId] : [TERMINAL_BAR_CTRL_ID],
+        location === "bar"
+          ? [TERMINAL_BAR_CTRL_ID, customId]
+          : [TERMINAL_BAR_CTRL_ID],
         location === "popup" ? [customId] : [],
         location === "hidden" ? [customId] : []
       );

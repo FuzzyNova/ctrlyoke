@@ -120,9 +120,7 @@ CliTerminalFormatter.renderEvent({
     );
 
     assert.ok(output.includes("⚙ queue:append"));
-    assert.ok(
-      output.includes('{"prompt":"terminal parameter output"}')
-    );
+    assert.ok(output.includes('{"prompt":"terminal parameter output"}'));
     assert.ok(output.includes("⎿  terminal result output"));
   });
 

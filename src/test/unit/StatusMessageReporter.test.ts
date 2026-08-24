@@ -198,9 +198,7 @@ suite("StatusMessageReporter", () => {
       () => ({ filePath: "run/events.jsonl", manager: history })
     );
 
-    assert.doesNotThrow(() =>
-      reporter.report(queueTarget, "failure", "error")
-    );
+    assert.doesNotThrow(() => reporter.report(queueTarget, "failure", "error"));
     await flushPromises();
   });
 

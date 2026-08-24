@@ -12,9 +12,7 @@
     {
       "if": {
         "not": {
-          "required": [
-            "_templateMeta"
-          ]
+          "required": ["_templateMeta"]
         }
       },
       "then": {
@@ -111,9 +109,7 @@
               "$ref": "#/definitions/runtimeMetadata"
             }
           },
-          "required": [
-            "steps"
-          ]
+          "required": ["steps"]
         }
       ]
     }
@@ -165,13 +161,7 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": [
-            "text",
-            "file",
-            "directory",
-            "select",
-            "harness"
-          ],
+          "enum": ["text", "file", "directory", "select", "harness"],
           "description": "Control used to collect this variable in the template dialog."
         },
         "fileFilter": {
@@ -251,9 +241,7 @@
               "description": "Optional setup command run after a new managed worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped."
             }
           },
-          "required": [
-            "mode"
-          ],
+          "required": ["mode"],
           "additionalProperties": false
         },
         {
@@ -279,10 +267,7 @@
               "description": "Optional setup command run after a new named worktree is created. Setup is outside the step-scoped errorBehavior policy: it runs before any step is in flight, so a non-succeeded setup blocks the worktree and the next Run re-runs it; a succeeded outcome is skipped."
             }
           },
-          "required": [
-            "mode",
-            "branch"
-          ],
+          "required": ["mode", "branch"],
           "additionalProperties": false
         }
       ]
@@ -383,19 +368,13 @@
           "$ref": "#/definitions/varsConfig"
         }
       },
-      "required": [
-        "type",
-        "script"
-      ],
+      "required": ["type", "script"],
       "additionalProperties": false
     },
     "workflowRunAddress": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "workflowKey",
-        "runRef"
-      ],
+      "required": ["workflowKey", "runRef"],
       "properties": {
         "workflowKey": {
           "type": "string",
@@ -485,10 +464,7 @@
         },
         "executionMode": {
           "type": "string",
-          "enum": [
-            "interactive",
-            "headless"
-          ],
+          "enum": ["interactive", "headless"],
           "description": "Where this step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Pre/end-condition scripts always run headless. Omitting this field inherits the workflow/global default."
         },
         "agent": {
@@ -553,10 +529,7 @@
           "description": "User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness; unsupported events are silently skipped."
         },
         "sessionId": {
-          "type": [
-            "string",
-            "number"
-          ],
+          "type": ["string", "number"],
           "description": "Session ID for resuming CLI conversations. Can be: a string (exact CLI session ID to resume), a number (prompt reference: 1 = use session from first prompt), or the special value \"finalStep\" (resume the session established by the most recent final step execution — works on any prompt, not just the final step itself; on first pass when no final step session exists yet, a new session starts). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution."
         },
         "skills": {
@@ -719,9 +692,7 @@
         {
           "not": {
             "type": "object",
-            "required": [
-              "worktree"
-            ]
+            "required": ["worktree"]
           }
         }
       ]
@@ -757,9 +728,7 @@
               "description": "Per-prompt runtime execution metadata (optional, added automatically during execution)"
             }
           },
-          "required": [
-            "prompt"
-          ]
+          "required": ["prompt"]
         }
       ]
     },
@@ -781,10 +750,7 @@
         },
         "executionMode": {
           "type": "string",
-          "enum": [
-            "interactive",
-            "headless"
-          ],
+          "enum": ["interactive", "headless"],
           "description": "Where this script step runs. 'interactive' uses a live PTY/TUI; 'headless' runs in the background with output in the Output panel. Omitting this field inherits the global default."
         },
         "script": {
@@ -830,19 +796,13 @@
         },
         "onPass": {
           "type": "string",
-          "enum": [
-            "continue",
-            "stopWorkflow"
-          ],
+          "enum": ["continue", "stopWorkflow"],
           "default": "continue",
           "description": "What to do when the script passes (exit 0 / returns matches). 'continue': advance the queue (default). 'stopWorkflow': halt execution immediately."
         },
         "onFail": {
           "type": "string",
-          "enum": [
-            "continue",
-            "stopWorkflow"
-          ],
+          "enum": ["continue", "stopWorkflow"],
           "default": "stopWorkflow",
           "description": "What to do when the script fails or returns is not matched. 'continue': log a warning and advance the queue. 'stopWorkflow': halt execution (default)."
         },
@@ -851,10 +811,7 @@
           "description": "Per-step runtime execution metadata (optional, added automatically during execution)"
         }
       },
-      "required": [
-        "type",
-        "script"
-      ],
+      "required": ["type", "script"],
       "additionalProperties": false
     },
     "endCondition": {
@@ -886,29 +843,18 @@
         },
         "onPass": {
           "type": "string",
-          "enum": [
-            "continue",
-            "retry",
-            "stopWorkflow"
-          ],
+          "enum": ["continue", "retry", "stopWorkflow"],
           "default": "continue",
           "description": "What to do when the end condition passes. 'continue': advance to the next step (default). 'retry': re-run the step's prompt while the condition keeps passing, up to maxRetries; exhausting the retries advances to the next step. A failure during the loop is handled by onFail. 'stopWorkflow': halt execution immediately."
         },
         "onFail": {
           "type": "string",
-          "enum": [
-            "continue",
-            "retry",
-            "stopWorkflow"
-          ],
+          "enum": ["continue", "retry", "stopWorkflow"],
           "default": "stopWorkflow",
           "description": "What to do when end condition fails. 'retry': re-run the AI prompt (up to maxRetries times). 'continue': advance to the next step even if validation fails. 'stopWorkflow': halt execution (default). When 'retry' is set and maxRetries is unset, defaults to 1 retry."
         }
       },
-      "required": [
-        "script",
-        "returns"
-      ]
+      "required": ["script", "returns"]
     },
     "scriptProperties": {
       "type": "object",
@@ -927,12 +873,7 @@
         },
         "compareSource": {
           "type": "string",
-          "enum": [
-            "auto",
-            "stdout",
-            "stderr",
-            "exitCode"
-          ],
+          "enum": ["auto", "stdout", "stderr", "exitCode"],
           "description": "Which output to compare against `returns`. 'auto' (default): 'true'/'false' use exit code, other values compare stdout. 'stdout': always compare stdout (also requires a clean exit). 'stderr': compare stderr content (exit code ignored). 'exitCode': compare the numeric exit code directly."
         },
         "returns": {
@@ -944,9 +885,7 @@
           "description": "Timeout in milliseconds. Defaults to ctrlyoke.scriptTimeout setting."
         }
       },
-      "required": [
-        "script"
-      ]
+      "required": ["script"]
     },
     "preCondition": {
       "type": "object",
@@ -959,28 +898,18 @@
       "properties": {
         "onPass": {
           "type": "string",
-          "enum": [
-            "continue",
-            "skipPrompt",
-            "stopWorkflow"
-          ],
+          "enum": ["continue", "skipPrompt", "stopWorkflow"],
           "default": "continue",
           "description": "What to do when the pre-condition check passes (script exits 0 / returns matches). 'continue': run the prompt (default). 'skipPrompt': skip this prompt and advance the queue. 'stopWorkflow': halt execution."
         },
         "onFail": {
           "type": "string",
-          "enum": [
-            "continue",
-            "skipPrompt",
-            "stopWorkflow"
-          ],
+          "enum": ["continue", "skipPrompt", "stopWorkflow"],
           "default": "skipPrompt",
           "description": "What to do when the pre-condition check fails. 'continue': run the prompt anyway (pre-condition is advisory). 'skipPrompt': skip this prompt and advance the queue (default). 'stopWorkflow': halt execution."
         }
       },
-      "required": [
-        "script"
-      ]
+      "required": ["script"]
     },
     "errorBehavior": {
       "type": "object",
@@ -988,11 +917,7 @@
       "properties": {
         "onError": {
           "type": "string",
-          "enum": [
-            "stop",
-            "retry",
-            "continue"
-          ],
+          "enum": ["stop", "retry", "continue"],
           "description": "What to do when a step phase cannot run or otherwise encounters an internal error."
         },
         "maxRetries": {
@@ -1006,9 +931,7 @@
           "description": "Delay before retrying, in milliseconds."
         }
       },
-      "required": [
-        "onError"
-      ],
+      "required": ["onError"],
       "additionalProperties": false
     },
     "promptRuntimeMetadata": {
@@ -1021,9 +944,7 @@
         {
           "not": {
             "type": "object",
-            "required": [
-              "worktree"
-            ]
+            "required": ["worktree"]
           }
         },
         {
@@ -1038,12 +959,7 @@
             },
             "terminalStatus": {
               "type": "string",
-              "enum": [
-                "completed",
-                "cancelled",
-                "failed",
-                "skipped"
-              ],
+              "enum": ["completed", "cancelled", "failed", "skipped"],
               "description": "Terminal state of this prompt. Absent or 'completed' means successful completion. Used to restore the correct visual status after a working file reload."
             },
             "retryCount": {
@@ -1066,9 +982,7 @@
               "description": "Human-readable message describing the last harness/session failure."
             }
           },
-          "required": [
-            "startedAt"
-          ]
+          "required": ["startedAt"]
         }
       ]
     },
@@ -1126,10 +1040,7 @@
               "description": "Definition revision the rewind was taken from"
             }
           },
-          "required": [
-            "fromStepIndex",
-            "baseDefinitionRevision"
-          ],
+          "required": ["fromStepIndex", "baseDefinitionRevision"],
           "additionalProperties": false
         },
         "finalStep": {
@@ -1138,10 +1049,7 @@
           "properties": {
             "phase": {
               "type": "string",
-              "enum": [
-                "queue",
-                "finalStep"
-              ],
+              "enum": ["queue", "finalStep"],
               "description": "Current workflow execution phase"
             },
             "loopCount": {
@@ -1178,17 +1086,11 @@
               "description": "Latest end-condition evaluation retained for the final step's automation result projection"
             }
           },
-          "required": [
-            "phase",
-            "loopCount"
-          ],
+          "required": ["phase", "loopCount"],
           "additionalProperties": false
         }
       },
-      "required": [
-        "currentIndex",
-        "executionState"
-      ],
+      "required": ["currentIndex", "executionState"],
       "additionalProperties": false
     },
     "conditionEvaluationSummary": {
@@ -1200,12 +1102,7 @@
         },
         "action": {
           "type": "string",
-          "enum": [
-            "continue",
-            "stopWorkflow",
-            "retry",
-            "skipPrompt"
-          ],
+          "enum": ["continue", "stopWorkflow", "retry", "skipPrompt"],
           "description": "Populated for pre-conditions, where it explains the gate decision."
         },
         "script": {
@@ -1216,11 +1113,7 @@
         },
         "actualSource": {
           "type": "string",
-          "enum": [
-            "stdout",
-            "stderr",
-            "exitCode"
-          ]
+          "enum": ["stdout", "stderr", "exitCode"]
         },
         "stdout": {
           "type": "string"
@@ -1272,10 +1165,7 @@
         },
         "coverage": {
           "type": "string",
-          "enum": [
-            "complete",
-            "partial"
-          ]
+          "enum": ["complete", "partial"]
         },
         "reportedAttemptCount": {
           "type": "number"
@@ -1293,11 +1183,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": [
-              "harness-reported",
-              "price-table",
-              "user-override"
-            ]
+            "enum": ["harness-reported", "price-table", "user-override"]
           }
         }
       }
@@ -1312,10 +1198,7 @@
         },
         "coverage": {
           "type": "string",
-          "enum": [
-            "complete",
-            "partial"
-          ],
+          "enum": ["complete", "partial"],
           "description": "'complete' only when every executed AI attempt reported a usable total"
         },
         "reportedAttemptCount": {
@@ -1338,11 +1221,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": [
-              "harness-reported",
-              "price-table",
-              "user-override"
-            ]
+            "enum": ["harness-reported", "price-table", "user-override"]
           }
         },
         "byHarness": {
@@ -1375,10 +1254,7 @@
     },
     "userHookConfig": {
       "type": "object",
-      "required": [
-        "event",
-        "command"
-      ],
+      "required": ["event", "command"],
       "additionalProperties": false,
       "properties": {
         "event": {
@@ -1462,10 +1338,7 @@
         },
         "transport": {
           "type": "string",
-          "enum": [
-            "streamable-http",
-            "sse"
-          ],
+          "enum": ["streamable-http", "sse"],
           "description": "Transport protocol for remote servers. Defaults to \"streamable-http\"."
         },
         "headers": {
@@ -1483,9 +1356,7 @@
           "description": "Tool names from this server to deny at execution time. Use bare tool names without the mcp__<serverid>__ prefix (e.g. [\"ctrlyoke_append_queue\"]). Translated to mcp__<id>__<tool> deny patterns and merged into the harness permission args. Supported on harnesses that accept tool deny patterns."
         }
       },
-      "required": [
-        "id"
-      ],
+      "required": ["id"],
       "additionalProperties": false
     }
   }

@@ -33,20 +33,20 @@ diagnostic fires after the fact.
 
 Plain `<textarea>`/`LocalTextarea` allow/deny fields, one pair per surface:
 
-| Surface | File | Commit behavior |
-| --- | --- | --- |
-| Workflow-level Permissions tab | `WorkflowPropertiesPanel.tsx` (~L2179–L2269) | every keystroke (`onChange` posts immediately) |
-| Global defaults Permissions page | `components/settings/defaults/DefaultsPermissionsPage.tsx` (~L49–L102) | on blur, via `LocalTextarea`/`useLocalInput` |
+| Surface                          | File                                                                   | Commit behavior                                |
+| -------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------- |
+| Workflow-level Permissions tab   | `WorkflowPropertiesPanel.tsx` (~L2179–L2269)                           | every keystroke (`onChange` posts immediately) |
+| Global defaults Permissions page | `components/settings/defaults/DefaultsPermissionsPage.tsx` (~L49–L102) | on blur, via `LocalTextarea`/`useLocalInput`   |
 
 Both split/join on `\n` and store `string[]` (`toolPermissions.allowedTools` /
 `.deniedTools`). Both already have compatibility diagnostics layered on top
 (`FieldDiagnostic`, `PermissionCapabilitySummary`) — this plan only adds
-*syntax* linting, it doesn't touch that existing per-harness support
+_syntax_ linting, it doesn't touch that existing per-harness support
 reporting.
 
 **Out of scope:** `McpServerForm.tsx`'s per-server `autoApprove`/`deniedTools`
 textareas (~L312–L339 and its sibling) use a different vocabulary — bare tool
-names *defined by that specific MCP server*, not the `shell(...)`/canonical
+names _defined by that specific MCP server_, not the `shell(...)`/canonical
 patterns this plan covers. Offering real completions there needs a live tool
 listing from the configured server, which is a separate feature. Worth a
 follow-up once this lands, not bundled here.
@@ -73,7 +73,7 @@ second component: add a `multiline?: boolean` prop (default `false`, so
   mode, plain `Enter` should fall through to `minimalSetup`'s default
   `insertNewlineAndIndent`; only wire `Enter`/`Tab` to `acceptCompletion`
   when a completion popup is actually open (`acceptCompletion` already
-  no-ops and returns `false` otherwise, so this is just *not* adding the
+  no-ops and returns `false` otherwise, so this is just _not_ adding the
   "else blur" fallback for the multiline case).
 - Everything else — the completion round-trip plumbing, compartments for
   `disabled`/`aria-*`, viewport/tooltip repositioning, `syncDocument`'s
@@ -90,7 +90,7 @@ implementation time rather than pre-committing here.
 Mirror the `ScriptCommandEditor` → `ScriptCommandCompletionHelpers.ts` split:
 
 - **`src/completions/PermissionListCompletionHelpers.ts`** (extension host,
-  Node-side): builds completion candidates for the *current line's* pattern,
+  Node-side): builds completion candidates for the _current line's_ pattern,
   not the whole document (allow/deny lists are one pattern per line, so
   context is line-scoped — mirrors `parseScriptCompletionContext`, but
   simpler: split on `\n`, find the line at `position`, offer candidates
@@ -159,7 +159,7 @@ pattern syntax is just a regex shape. Add via `@codemirror/lint`'s
   - Bare tool name not in the canonical list from `ToolPatternSyntax.ts` and
     not shaped like `word(...)`: leave unflagged — this is the escape hatch
     for MCP server tool names (`github(search)`) and any future tool this
-    list hasn't been taught about yet. Only *shape* is linted, not vocabulary
+    list hasn't been taught about yet. Only _shape_ is linted, not vocabulary
     completeness, so the linter never blocks a valid-but-unrecognized entry.
 
 ### 4. Roll out to call sites
@@ -187,18 +187,18 @@ Replace the four textareas with `<PermissionListEditor>`:
 
 ## Affected Components
 
-| Component | Planned role |
-| --- | --- |
-| `SingleLineCompletionEditor.tsx` | Gains `multiline` support; single-line callers unaffected |
-| `src/completions/PermissionListCompletionHelpers.ts` (new) | Line-scoped completion candidates for tool patterns |
-| `src/utils/ToolPatternSyntax.ts` (new) | Shared, dependency-free pattern regex + syntax checks (extension host + webview) |
-| `src/core/harness/shared/CliToolPermissionMapper.ts` | Source of the canonical tool-name list; adopts `ToolPatternSyntax.ts` instead of its own inline regex |
-| `PromptEditorSupportService.ts` | New `handlePermissionCompletionRequest()`, mirroring `handleScriptCompletionRequest` |
-| `WebviewMessageRouter.ts` | Registers `PERMISSION_COMPLETIONS_REQUEST` |
-| `DashboardConstants.ts` / `WebviewMessageTypes.ts` | New message type + payload contracts |
-| `components/shared/PermissionListEditor.tsx` (new) | Wraps the multiline editor + completion source + linter; owns `string[]` ↔ `\n`-joined conversion |
-| `WorkflowPropertiesPanel.tsx` | Allowed/Denied Tools fields on the workflow Permissions tab |
-| `components/settings/defaults/DefaultsPermissionsPage.tsx` | Allowed/Denied tools fields on the global defaults page |
+| Component                                                  | Planned role                                                                                          |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `SingleLineCompletionEditor.tsx`                           | Gains `multiline` support; single-line callers unaffected                                             |
+| `src/completions/PermissionListCompletionHelpers.ts` (new) | Line-scoped completion candidates for tool patterns                                                   |
+| `src/utils/ToolPatternSyntax.ts` (new)                     | Shared, dependency-free pattern regex + syntax checks (extension host + webview)                      |
+| `src/core/harness/shared/CliToolPermissionMapper.ts`       | Source of the canonical tool-name list; adopts `ToolPatternSyntax.ts` instead of its own inline regex |
+| `PromptEditorSupportService.ts`                            | New `handlePermissionCompletionRequest()`, mirroring `handleScriptCompletionRequest`                  |
+| `WebviewMessageRouter.ts`                                  | Registers `PERMISSION_COMPLETIONS_REQUEST`                                                            |
+| `DashboardConstants.ts` / `WebviewMessageTypes.ts`         | New message type + payload contracts                                                                  |
+| `components/shared/PermissionListEditor.tsx` (new)         | Wraps the multiline editor + completion source + linter; owns `string[]` ↔ `\n`-joined conversion     |
+| `WorkflowPropertiesPanel.tsx`                              | Allowed/Denied Tools fields on the workflow Permissions tab                                           |
+| `components/settings/defaults/DefaultsPermissionsPage.tsx` | Allowed/Denied tools fields on the global defaults page                                               |
 
 ## Decisions Deferred to Implementation
 
@@ -230,7 +230,7 @@ Replace the four textareas with `<PermissionListEditor>`:
 
 Raised while scoping this plan. None of these are required for the allow/deny
 list work above to ship; recommendations below are about whether they're
-worth a *future* plan of their own.
+worth a _future_ plan of their own.
 
 ### 1. `KeyValueMapEditor.tsx` as a CodeMirror editor with lint/completions
 
@@ -254,7 +254,7 @@ primitives this plan already introduces:
   secret-name source (`useSecretRegistryStore`) the select already reads.
 
 What I would **not** carry over from the tool-permission editor: bare-name
-tool completions. There's no closed vocabulary for env/header *keys* — they're
+tool completions. There's no closed vocabulary for env/header _keys_ — they're
 arbitrary, user- and server-defined — so there's nothing meaningful to
 complete on the key side, only lint + secret-reference completions on values.
 Scope this as "lint + secret completions," not "tool-name completions for
@@ -268,11 +268,11 @@ them:
 - `McpServerForm.tsx`'s `autoApprove`/`deniedTools` textareas (~L312–L339 and
   its sibling) — per-server tool names, 100% freehand today with zero
   validation; a typo silently no-ops.
-- Whether the *workflow-level* `toolPermissions.allowedTools`/`deniedTools`
+- Whether the _workflow-level_ `toolPermissions.allowedTools`/`deniedTools`
   list (the one this plan's `PermissionListEditor` covers) is "another spot
   where users can approve or deny MCPs" — **confirmed yes.** Per
   `schemas/workflow-schema.json`'s `deniedTools` description for a
-  per-server entry, MCP tool patterns in the *main* allow/deny list use the
+  per-server entry, MCP tool patterns in the _main_ allow/deny list use the
   `mcp__<serverid>__<tool>` shape (Claude CLI's native format), distinct
   from the per-server `deniedTools` field's bare-name shape. So a workflow
   author can and does write `mcp__github__search` directly into the same

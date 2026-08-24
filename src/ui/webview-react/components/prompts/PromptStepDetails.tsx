@@ -104,7 +104,11 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
               }
             >
               {harnessId && (
-                <HarnessIcon harnessId={harnessId} size={12} className="opacity-90" />
+                <HarnessIcon
+                  harnessId={harnessId}
+                  size={12}
+                  className="opacity-90"
+                />
               )}
               <span className="truncate">
                 {harnessLabel}

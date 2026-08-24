@@ -152,7 +152,9 @@ suite("WebviewSettingsSync", () => {
             enabled: true,
             customCommand: "node user-statusline.js",
             useCtrlyokeStyle: true,
-            format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
+            format: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({
+              ...segment,
+            })),
           });
           const messages: unknown[] = [];
           const sync = makeSync({ [harnessId]: manager }, messages);
@@ -430,7 +432,10 @@ suite("WebviewSettingsSync", () => {
           providerWrites.push({ provider, format: settings.format });
         };
 
-        const sync = new WebviewSettingsSync(() => {}, () => undefined);
+        const sync = new WebviewSettingsSync(
+          () => {},
+          () => undefined
+        );
         await sync.handleSetStatusLineFormatMode({
           type: MESSAGE_TYPES.SET_STATUS_LINE_FORMAT_MODE,
           useDifferentFormatPerHarness: true,
@@ -450,7 +455,9 @@ suite("WebviewSettingsSync", () => {
       );
       assert.deepStrictEqual(providerWrites[0].format, sharedFormat);
       assert.strictEqual(
-        JSON.stringify(providerSettings[STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY].format),
+        JSON.stringify(
+          providerSettings[STATUS_LINE_TRACKING_PROVIDERS.ANTIGRAVITY].format
+        ),
         JSON.stringify(customizedFormat)
       );
     });
@@ -489,7 +496,10 @@ suite("WebviewSettingsSync", () => {
           providerWrites.push(settings.format);
         };
 
-        const sync = new WebviewSettingsSync(() => {}, () => undefined);
+        const sync = new WebviewSettingsSync(
+          () => {},
+          () => undefined
+        );
         await sync.handleSetStatusLineFormatMode({
           type: MESSAGE_TYPES.SET_STATUS_LINE_FORMAT_MODE,
           useDifferentFormatPerHarness: true,
@@ -528,7 +538,10 @@ suite("WebviewSettingsSync", () => {
           writes.push(value);
         };
 
-        const sync = new WebviewSettingsSync(() => {}, () => undefined);
+        const sync = new WebviewSettingsSync(
+          () => {},
+          () => undefined
+        );
         await sync.handleSetStatusLineFormatMode({
           type: MESSAGE_TYPES.SET_STATUS_LINE_FORMAT_MODE,
           useDifferentFormatPerHarness: false,
@@ -549,7 +562,10 @@ suite("WebviewSettingsSync", () => {
           writes++;
         };
 
-        const sync = new WebviewSettingsSync(() => {}, () => undefined);
+        const sync = new WebviewSettingsSync(
+          () => {},
+          () => undefined
+        );
         await sync.handleSetStatusLineFormatMode({
           type: MESSAGE_TYPES.SET_STATUS_LINE_FORMAT_MODE,
           useDifferentFormatPerHarness: "true",

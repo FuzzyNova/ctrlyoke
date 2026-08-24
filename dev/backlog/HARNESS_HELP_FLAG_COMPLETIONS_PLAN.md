@@ -4,7 +4,7 @@
 >
 > Referenced as a follow-up from
 > [`ALLOW_DENY_LIST_EDITOR_PLAN.md`](ALLOW_DENY_LIST_EDITOR_PLAN.md#3-other-free-text-fields-in-workflowpropertiespaneltsx-worth-the-same-treatment),
-> which recommended *against* completions for Additional Args on the
+> which recommended _against_ completions for Additional Args on the
 > assumption it would mean hand-maintaining a per-harness flag list. This
 > plan proposes something different — parsing the actual installed CLI's
 > `--help` output live — which sidesteps that objection. See "Reconsidering
@@ -35,7 +35,7 @@ about a **hand-maintained** list: "flags belong to external CLI tools
 ctrlyoke doesn't control or version-pin... a stale suggestion here is
 actively misleading." That objection doesn't apply to this design — parsing
 `--help` from the exact binary `resolveCliCommand()` would actually launch
-means the completion list *is* the installed version's real flag set, not a
+means the completion list _is_ the installed version's real flag set, not a
 snapshot that can drift. If anything, this is more accurate than a
 human remembering flags from the last time they checked. The remaining
 risk is different in kind: not staleness, but **parse fidelity** — whether
@@ -46,10 +46,10 @@ share a help-output format. That's addressed below, not dismissed.
 
 Two call sites, both plain text inputs, no assistance at all:
 
-| Surface | File | Commit behavior |
-| --- | --- | --- |
-| Workflow-level Additional Args | `WorkflowPropertiesPanel.tsx` (~L1579–L1591) | on blur (local `useState` + `handleAdditionalArgsChange`) |
-| Per-harness default Additional Args | `components/settings/HarnessesSection.tsx` (~L127–L147) | on blur (`LocalTextInput`) |
+| Surface                             | File                                                    | Commit behavior                                           |
+| ----------------------------------- | ------------------------------------------------------- | --------------------------------------------------------- |
+| Workflow-level Additional Args      | `WorkflowPropertiesPanel.tsx` (~L1579–L1591)            | on blur (local `useState` + `handleAdditionalArgsChange`) |
+| Per-harness default Additional Args | `components/settings/HarnessesSection.tsx` (~L127–L147) | on blur (`LocalTextInput`)                                |
 
 Both store a single space-separated flag string
 (`WorkflowProperties.additionalArgs` / `globalSettings.harnessDefaultAdditionalArgs[harnessId]`),
@@ -63,14 +63,14 @@ The six harness binaries and their existing version-check convention
 `getCliVersion("<bin> --version")` call per provider) are the model to
 follow:
 
-| Harness | Binary |
-| --- | --- |
-| `copilot-cli` | `copilot` |
-| `claude-cli` | `claude` |
-| `codex-cli` | `codex` |
-| `opencode-cli` | `opencode` |
-| `qwen-cli` | `qwen` |
-| `antigravity-cli` | `agy` |
+| Harness           | Binary     |
+| ----------------- | ---------- |
+| `copilot-cli`     | `copilot`  |
+| `claude-cli`      | `claude`   |
+| `codex-cli`       | `codex`    |
+| `opencode-cli`    | `opencode` |
+| `qwen-cli`        | `qwen`     |
+| `antigravity-cli` | `agy`      |
 
 ## Proposed Design
 
@@ -185,18 +185,18 @@ source:
 
 ## Affected Components
 
-| Component | Planned role |
-| --- | --- |
-| `CliProviderUtils.ts` | New `runHelpCommand()` + dedicated `RetryableAsyncCache<string>` for help output |
-| `*CliProvider.ts` (all six) | Single-sourced binary name feeding both `--version` and `--help` commands |
-| `src/core/harness/shared/HarnessFlagCompletionProvider.ts` (new) | Generic + per-harness `--help` parsers → `{flag, valueHints?, detail}[]` |
-| `PromptEditorSupportService.ts` | New `handleHarnessFlagCompletionRequest()` |
-| `WebviewMessageRouter.ts` | Registers `HARNESS_FLAG_COMPLETIONS_REQUEST` |
-| `DashboardConstants.ts` / `WebviewMessageTypes.ts` | New message type + payload contracts |
-| `components/shared/AdditionalArgsEditor.tsx` (new) | Wraps `SingleLineCompletionEditor` + the completion source |
-| `WorkflowPropertiesPanel.tsx` | Workflow-level Additional Args field |
-| `components/settings/HarnessesSection.tsx` | Per-harness default Additional Args fields |
-| `src/test/fixtures/harness-help/*.txt` (new) | Captured real `--help` output per harness, backing parser unit tests |
+| Component                                                        | Planned role                                                                     |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `CliProviderUtils.ts`                                            | New `runHelpCommand()` + dedicated `RetryableAsyncCache<string>` for help output |
+| `*CliProvider.ts` (all six)                                      | Single-sourced binary name feeding both `--version` and `--help` commands        |
+| `src/core/harness/shared/HarnessFlagCompletionProvider.ts` (new) | Generic + per-harness `--help` parsers → `{flag, valueHints?, detail}[]`         |
+| `PromptEditorSupportService.ts`                                  | New `handleHarnessFlagCompletionRequest()`                                       |
+| `WebviewMessageRouter.ts`                                        | Registers `HARNESS_FLAG_COMPLETIONS_REQUEST`                                     |
+| `DashboardConstants.ts` / `WebviewMessageTypes.ts`               | New message type + payload contracts                                             |
+| `components/shared/AdditionalArgsEditor.tsx` (new)               | Wraps `SingleLineCompletionEditor` + the completion source                       |
+| `WorkflowPropertiesPanel.tsx`                                    | Workflow-level Additional Args field                                             |
+| `components/settings/HarnessesSection.tsx`                       | Per-harness default Additional Args fields                                       |
+| `src/test/fixtures/harness-help/*.txt` (new)                     | Captured real `--help` output per harness, backing parser unit tests             |
 
 ## Decisions Deferred to Implementation
 

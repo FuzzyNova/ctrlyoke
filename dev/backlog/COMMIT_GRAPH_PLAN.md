@@ -21,7 +21,7 @@
   of it away before it reaches the client:
   - `GitUtils.getRecentCommits()` (`src/utils/GitUtils.ts:112-171`) runs
     `git log --format=%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D -n <limit>
-    [--skip=N] [-- <ref>]` and already parses `%P` into `parentHashes: string[]`
+[--skip=N] [-- <ref>]` and already parses `%P` into `parentHashes: string[]`
     and `%D` into `refNames: string[]` on every `CommitInfo`.
   - `HostedWorkspaceViewerService.getCommitLog()`
     (`src/server/HostedWorkspaceViewerService.ts:1701-1772`) only uses
@@ -29,19 +29,19 @@
     array. The full parent-hash list never reaches the wire.
   - `WorkspaceCommitLogEntry` (`src/types/HostedWorkspaceViewerTypes.ts:275-287`)
     has no `parentHashes` field, so there is currently no way for the client
-    to know *which* commit is a node's parent, only that it has &gt;1.
+    to know _which_ commit is a node's parent, only that it has &gt;1.
 - The log walk is single-ref: no `ref` argument means "walk from HEAD";
   `WorkspaceSourceControlPane.detachedBranchHint()` supplies the previous
   branch name while detached so its newer commits stay visible
   (`WorkspaceSourceControlPane.tsx:41-44`, `getCommitLog`'s `branchHint`
-  param). `git log <ref>` without `--first-parent` already walks *every*
-  reachable ancestor via *every* parent link and returns them in commit-date
+  param). `git log <ref>` without `--first-parent` already walks _every_
+  reachable ancestor via _every_ parent link and returns them in commit-date
   order — i.e. the exact input shape a swimlane algorithm expects. **No
   `--all` / multi-ref walk is needed for the case this plan targets**
   (a branch's merged-in history), only for showing several simultaneously
   checked-out branches side by side, which is explicitly out of scope (§7).
 - Pagination is `skip`/`limit` based (`getCommitLog(skip, limit, branchHint,
-  repoId)`, 30 at a time via `loadMoreHistory` in
+repoId)`, 30 at a time via `loadMoreHistory` in
   `WorkspaceSourceControlPane.tsx:167-189`). The store
   (`workspaceViewerStore.ts:653-671`) keeps one flat, ever-growing
   `commitHistory: WorkspaceCommitLogEntry[]` and appends on "load more" — it
@@ -69,7 +69,7 @@ VS Code ships a **hand-rolled, dependency-free** graph — it is not using
 The model, in our terms:
 
 - Each **swimlane** is `{ id: <parent commit hash the lane is waiting for>,
-  color }`. A row's `inputSwimlanes` is the *previous* row's `outputSwimlanes`
+color }`. A row's `inputSwimlanes` is the _previous_ row's `outputSwimlanes`
   (deep-cloned) — the whole thing is one linear left-to-right fold over the
   commit list, no lookahead required beyond "does this row's commit id match
   a lane I'm already tracking."
@@ -79,18 +79,18 @@ The model, in our terms:
      the node is drawn (`circleIndex`); if not found, it's a new tip and gets
      appended as a new lane at the end.
   3. Build `outputSwimlanes` by walking `inputSwimlanes` left to right: any
-     lane *not* pointing at this commit passes through unchanged; the lane
-     that *does* point at this commit is replaced by one lane per parent
+     lane _not_ pointing at this commit passes through unchanged; the lane
+     that _does_ point at this commit is replaced by one lane per parent
      (first parent reuses the same column/color, additional parents —
      merges — get a **new** column and a color pulled from a small rotating
      palette, `colorRegistry` = 5 colors, via `rot(colorIndex + 1, 5)`).
-  4. Any parent id that a *later* row will need to terminate onto is found via
+  4. Any parent id that a _later_ row will need to terminate onto is found via
      `findLastIndex(outputSwimlanes, parentId)` when that row is processed —
      this is how a branch's line curves back and joins an existing lane
      instead of running forever in its own column.
 - Rendering (`renderSCMHistoryItemGraph`) is one `<svg>` per row, `SWIMLANE_WIDTH
-  = 11px` per lane, `SWIMLANE_HEIGHT = 22px` tall, columns at `x = WIDTH *
-  (laneIndex + 1)`. Per row it draws: straight verticals for lanes passing
+= 11px` per lane, `SWIMLANE_HEIGHT = 22px` tall, columns at `x = WIDTH *
+(laneIndex + 1)`. Per row it draws: straight verticals for lanes passing
   through untouched, quarter-circle-arc "elbows" (`A r r 0 0 1 …`) for a lane
   merging into the node's column or forking away from it, extra elbow pairs
   for each additional merge parent, and the node itself (filled circle, ring
@@ -115,14 +115,14 @@ The model, in our terms:
    library (e.g. `@gitgraph/js`) expects a full commit set up front and
    owns its own DOM/canvas rendering; we'd fight it for both incremental
    loading and Tailwind/codicon styling. `git-graph.js`-style tools that
-   ship as an installed VS Code *extension* are also not a runtime
+   ship as an installed VS Code _extension_ are also not a runtime
    dependency we can import — they're standalone webviews with no exported
    library entry point.
 3. No new npm dependency to vet, license, or keep patched, and the output
    integrates directly with the existing `RefPill`/row-selection/context-menu
    code instead of a second component tree.
 4. Algorithms aren't copyrightable; we're not vendoring VS Code source
-   (MIT-licensed, so we *could*), we're independently implementing the same
+   (MIT-licensed, so we _could_), we're independently implementing the same
    well-known swimlane technique against our own types, row markup, and color
    tokens.
 
@@ -230,6 +230,7 @@ elements) instead of imperative DOM calls to fit the existing React component:
   range is a reasonable starting point, but pin the exact number by testing
   the desktop and mobile branch-heavy fixture from §8 rather than choosing
   blind.
+
 ### 5.1 Bounding lane width: the two-column "rail" layout
 
 Resolved decision. Split each history row into two parallel columns instead
@@ -238,7 +239,7 @@ gutter+subject+refs as siblings):
 
 - **Graph rail** — the stacked per-commit `CommitGraphSvg` rows, wrapped in
   one container with `overflow-x: auto; overflow-y: visible` and a fixed
-  pixel width capped to N inline lanes (see below). This is the *only*
+  pixel width capped to N inline lanes (see below). This is the _only_
   horizontally-scrollable thing in the pane.
 - **Text column** — subject, ref pills, stage/discard/unstage buttons. No
   `overflow-x` of its own; never scrolls horizontally.
@@ -296,7 +297,7 @@ pages.
 
 This is a deliberate simplification vs. VS Code (which also just recomputes
 the full visible `viewModels` array on any change, `toISCMHistoryItemViewModelArray`
-takes the complete `historyItems` list every call — it does *not* do
+takes the complete `historyItems` list every call — it does _not_ do
 incremental per-page folding either, despite the per-row loop internally
 reading only the previous row). Given `commitHistory` here is capped by
 realistic "load more" usage (tens to low hundreds of rows, not the tens of
@@ -309,8 +310,8 @@ profiling — don't pre-optimize it.
 
 - **`--all` / multiple simultaneously-visible branches.** This plan targets
   the case worktree merges actually create today: one branch's ancestry
-  containing merged-in feature history. Showing several *currently checked
-  out* branches side by side (e.g. one lane per active worktree) is a
+  containing merged-in feature history. Showing several _currently checked
+  out_ branches side by side (e.g. one lane per active worktree) is a
   materially different feature — different git walk (`--all` or explicit
   multi-ref), different ref-to-lane assignment, and a real question about
   how it interacts with `detachedBranchHint`'s single-hint model. Worth a
@@ -334,13 +335,13 @@ profiling — don't pre-optimize it.
 ## 8. Testing
 
 - `src/ui/webview-react/test/utils/commitGraphLayout.test.ts` (new): pure
-  unit tests over `computeCommitGraphLayout`, ported from the *shape* of
+  unit tests over `computeCommitGraphLayout`, ported from the _shape_ of
   `src/vs/workbench/contrib/scm/test/browser/scmHistory.test.ts`'s fixtures
   (linear history, a single merge, a criss-cross merge, an octopus merge,
   a branch tip with no children yet loaded) — assert lane indices and
   output-lane continuity directly rather than pixel output.
 - Update `src/ui/webview-react/test/components/workspace-viewer/
-  WorkspaceCommitHistoryPane.test.tsx` for the new SVG row markup and to add
+WorkspaceCommitHistoryPane.test.tsx` for the new SVG row markup and to add
   a fixture with `parentHashes` describing an actual merge, so the test
   suite exercises multi-lane rendering, not just the single-lane case it
   covers today.

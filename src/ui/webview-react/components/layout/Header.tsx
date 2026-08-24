@@ -179,7 +179,8 @@ export const Header: React.FC<{
   // re-running it from the dashboard would bypass those overrides entirely,
   // so it gets the same lockdown as a deleted workflow.
   const isSystemGeneratedWorkflow = useIsSystemGeneratedWorkflow();
-  const isLineageReadOnly = isViewingDeletedWorkflow || isSystemGeneratedWorkflow;
+  const isLineageReadOnly =
+    isViewingDeletedWorkflow || isSystemGeneratedWorkflow;
 
   const hasFile = fileName !== null;
   const executionRunSummary = executionRunRef

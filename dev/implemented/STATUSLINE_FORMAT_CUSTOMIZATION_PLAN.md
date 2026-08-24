@@ -78,6 +78,7 @@ the existing `usage` field's job: Claude's `rate_limits.{five_hour,seven_day}.us
 
 **Present in both under the same key, but NOT actually equivalent — rejected despite matching
 names:**
+
 - `exceeds_200k_tokens` — both payloads carry this exact key, but it's a hardcoded legacy
   Claude-specific 200k threshold. Antigravity's own example shows `context_window_size: 1048576`
   (1M tokens) with the flag still `false` at ~14% usage — comparing against a fixed 200k line is
@@ -95,6 +96,7 @@ names:**
 
 **No equivalent at all, either direction** — stays out of the registry entirely, per your
 instruction to only allow fields available in both (or with real equivalents in both):
+
 - Claude-only: `session_name`, `prompt_id`, `output_style`, `cost.*`, `fast_mode`, `thinking`,
   `vim`, `agent.name`, `pr.*`, `worktree.*`.
 - Antigravity-only: `conversation_id`, `product`, `agent_state`, `vcs.{type,dirty}`, `sandbox`,
@@ -136,11 +138,18 @@ wrapper reuses these conventions without importing across that boundary.
 ## Decisions
 
 1. **Model the format as an ordered array of typed segments, not a template string.**
+
    ```typescript
    type StatusLineSegment =
-     | { type: "field"; field: StatusLineFieldId; label?: string; color?: StatusLineColorId }
+     | {
+         type: "field";
+         field: StatusLineFieldId;
+         label?: string;
+         color?: StatusLineColorId;
+       }
      | { type: "literal"; text: string; color?: StatusLineColorId };
    ```
+
    Rejected alternative: a `printf`-style template string (e.g. `"{model} · {context}"`). An
    array of segments keeps the field vocabulary closed and typed — consistent with this
    project's "no hardcoded strings for flow control" rule (`CLAUDE.md`) — keeps the detached
@@ -151,7 +160,7 @@ wrapper reuses these conventions without importing across that boundary.
    were the two Open Questions below — see Decision 13 (`color`) and Decision 14 (`label`) for
    the full design; both are additive and don't change this shape's two base variants.
 
-   **Ordering is a first-class part of this design, not an afterthought**: the format *is* an
+   **Ordering is a first-class part of this design, not an afterthought**: the format _is_ an
    ordered array, and the format editor gives users Up/Down reorder controls per row (see UI
    Placement) — there's no separate "ordering" feature to add, it falls straight out of modeling
    the format as an array in the first place.
@@ -183,17 +192,17 @@ wrapper reuses these conventions without importing across that boundary.
    the registry (valid everywhere) or it isn't (not in the registry). Each entry gives a display
    label for the UI and, wrapper-side, its extractor:
 
-   | id          | label                        | claude source                              | antigravity source                    |
-   | ----------- | ---------------------------- | ------------------------------------------- | -------------------------------------- |
-   | `brand`     | "ctrlyoke ⚡" mark            | static                                       | static                                 |
-   | `model`     | Model name                   | `payload.model.{id,display_name}`           | `payload.model.{id,display_name}`      |
-   | `context`   | Context usage (colored band) | `payload.context_window`                    | `payload.context_window` (identical shape) |
-   | `usage`     | Rate/quota used % (worst of all windows) | `payload.rate_limits.*` (normalized) | `payload.quota.*` (normalized) |
-   | `usage1`    | First usage window, used % + short label | `payload.rate_limits.five_hour` | `payload.quota[sorted[0]]`     |
-   | `usage2`    | Second usage window, used % + short label | `payload.rate_limits.seven_day` | `payload.quota[sorted[1]]`    |
-   | `version`   | Harness/CLI version          | `payload.version`                           | `payload.version`                      |
-   | `cwd`       | Current directory (basename) | `payload.cwd`                               | `payload.cwd`                          |
-   | `sessionId` | Session id (truncated)       | `payload.session_id`                        | `payload.session_id`                   |
+   | id          | label                                     | claude source                        | antigravity source                         |
+   | ----------- | ----------------------------------------- | ------------------------------------ | ------------------------------------------ |
+   | `brand`     | "ctrlyoke ⚡" mark                        | static                               | static                                     |
+   | `model`     | Model name                                | `payload.model.{id,display_name}`    | `payload.model.{id,display_name}`          |
+   | `context`   | Context usage (colored band)              | `payload.context_window`             | `payload.context_window` (identical shape) |
+   | `usage`     | Rate/quota used % (worst of all windows)  | `payload.rate_limits.*` (normalized) | `payload.quota.*` (normalized)             |
+   | `usage1`    | First usage window, used % + short label  | `payload.rate_limits.five_hour`      | `payload.quota[sorted[0]]`                 |
+   | `usage2`    | Second usage window, used % + short label | `payload.rate_limits.seven_day`      | `payload.quota[sorted[1]]`                 |
+   | `version`   | Harness/CLI version                       | `payload.version`                    | `payload.version`                          |
+   | `cwd`       | Current directory (basename)              | `payload.cwd`                        | `payload.cwd`                              |
+   | `sessionId` | Session id (truncated)                    | `payload.session_id`                 | `payload.session_id`                       |
 
    `usage` reuses today's already-provider-branching `getQuotaPercentage`, keeping today's
    per-provider label ("rate" for Claude, "quota" for Antigravity), **but flips its number to
@@ -210,7 +219,7 @@ wrapper reuses these conventions without importing across that boundary.
    Research section above.
 
    **Direction fix: used %, not remaining %.** Today's `getQuotaPercentage`
-   (`ctrlyoke-statusline-wrapper.js:277-323`) deliberately computes the *remaining* percentage —
+   (`ctrlyoke-statusline-wrapper.js:277-323`) deliberately computes the _remaining_ percentage —
    `100 - used_percentage` for Claude's rate limits, the raw `remaining_fraction` for
    Antigravity's quota — then takes the `Math.min` across windows (worst case = lowest
    remaining). That's the outlier, not the norm, in this exact codebase: the wrapper's own
@@ -228,14 +237,16 @@ wrapper reuses these conventions without importing across that boundary.
    called-out behavior change bundled into this plan alongside the Claude `agentState` fix noted
    above — not a silent one.
 
-3. **Default format reproduces today's line's *composition* exactly, with two intentional
+3. **Default format reproduces today's line's _composition_ exactly, with two intentional
    exceptions already called out above** (Claude drops the dead `agentState` tail; `usage`'s
    number now reads used % instead of remaining %). Because the registry no longer has any
    provider-exclusive field, **both providers now share one identical default array** — a further
    simplification the "shared fields only" constraint buys for free:
+
    ```
    [brand, model, ·, context, ·, usage]
    ```
+
    where `·` is itself a **literal segment**, not a separator concept — this is not a new idea,
    it's exactly how the current array already works (`"·"` is just another array element,
    space-joined like everything else). Modeling it as a literal segment in the new scheme means
@@ -249,7 +260,7 @@ wrapper reuses these conventions without importing across that boundary.
 
 4. **`usage1`/`usage2` ordering rule — deterministic, not runtime-dependent.** The naive
    approach (sort each provider's windows by remaining time, e.g. `reset_in_seconds`) is
-   rejected: for Antigravity's two *weekly* tiers, `reset_in_seconds` just reflects where each
+   rejected: for Antigravity's two _weekly_ tiers, `reset_in_seconds` just reflects where each
    tier happens to sit in its own week-long cycle right now, not a structural property of the
    tier — a user's `usage1` could silently become "gemini quota" one week and "3rd-party quota"
    the next, purely from reset timing, with no config change. Instead:
@@ -297,7 +308,7 @@ wrapper reuses these conventions without importing across that boundary.
 
 6. **Add one global `usageTracking.percentDirection: "used" | "remaining"` setting** (default
    `"used"`, matching Decision 2/5's direction fix) so users coming from Codex or Antigravity's
-   *native* CLI — which show remaining%, unlike Claude/Copilot's native used% — can pick the
+   _native_ CLI — which show remaining%, unlike Claude/Copilot's native used% — can pick the
    convention they already think in, confirmed as the right shape in conversation: a single
    global toggle, not per-provider (a per-provider pair would only additionally help someone
    running multiple harnesses side-by-side who wants each line to mirror its own CLI's
@@ -324,7 +335,7 @@ wrapper reuses these conventions without importing across that boundary.
      `StatusLineTrackingControls.tsx`, and not duplicated per provider), since it now affects
      every harness's `UsageCard`, not just the two statusline-managed ones.
    - **Critical implementation catch — do not invert `getUsageBarColorClass` itself.**
-     `getUsageBarColorClass` (`src/ui/webview-react/utils/usageBarColor.ts:9-14`) is a *shared*
+     `getUsageBarColorClass` (`src/ui/webview-react/utils/usageBarColor.ts:9-14`) is a _shared_
      danger-coloring function, and its other caller has nothing to do with quota: `WorkflowStep.tsx:388-390`
      feeds it a plain used% **context** value (`contextPct`) to color the step's context-fill
      animation, with no remaining-% concept at all. Inverting the function's thresholds/comparison
@@ -375,11 +386,11 @@ wrapper reuses these conventions without importing across that boundary.
    field on an existing one.
 
 10. **No new `MESSAGE_TYPES` needed.** Reuse `UPDATE_GLOBAL_SETTING` with two new
-   `SETTING_PATHS` entries (`PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_FORMAT`,
-   `..._ANTIGRAVITY_FORMAT`), written as one whole-array commit per edit — the same granularity
-   `permissions.allowedExternalFileRoots` already uses today (whole array recommitted on
-   textarea blur, `AdvancedPermissionsSection.tsx:99-113`). No per-segment message plumbing to
-   invent.
+    `SETTING_PATHS` entries (`PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_FORMAT`,
+    `..._ANTIGRAVITY_FORMAT`), written as one whole-array commit per edit — the same granularity
+    `permissions.allowedExternalFileRoots` already uses today (whole array recommitted on
+    textarea blur, `AdvancedPermissionsSection.tsx:99-113`). No per-segment message plumbing to
+    invent.
 
 11. **Preview must reuse the real formatter, not a second hand-rolled one.** The settled
     implementation is **(a1)**: pure statusline display helpers live in an isomorphic TypeScript
@@ -401,7 +412,7 @@ wrapper reuses these conventions without importing across that boundary.
     (2026-08-21): `StatsUsageSection` is already the longest tab in the settings drawer (stat
     tiles, harness-share bar, six per-harness `UsageCard`s), and the format editor alone
     (per-segment field/literal rows, live preview, reset-to-default) roughly doubles the size of
-    the existing `StatusLineTrackingControls` block *per provider* — bolting that onto the bottom
+    the existing `StatusLineTrackingControls` block _per provider_ — bolting that onto the bottom
     of an already-dense tab makes it the longest scroll in the whole drawer by a wide margin.
     Splitting is cheap: `GlobalSettingsDrawer.tsx`'s `ALL_TABS` (lines 31-51) is a flat array and
     its render switch (lines 209 on) is one `{condition && <Section/>}` block per tab — the exact
@@ -442,17 +453,17 @@ wrapper reuses these conventions without importing across that boundary.
     swatch list and the schema a closed enum (consistent with this project's "no hardcoded
     strings for flow control" rule) rather than a color-input widget with unbounded values:
 
-    | id        | ANSI code | notes |
-    | --------- | --------- | ----- |
-    | `default` | *(none)*  | no override — segment renders with its own built-in coloring if it has one (today, only `context`'s band coloring), otherwise plain terminal foreground. This is the implicit value when `color` is omitted. |
-    | `red`     | `31`      | matches the existing `CONTEXT_COLORS.danger` |
-    | `yellow`  | `33`      | matches the existing `CONTEXT_COLORS.warning` |
-    | `green`   | `32`      | new |
-    | `cyan`    | `36`      | matches the existing `CONTEXT_COLORS.neutral` |
-    | `blue`    | `34`      | new |
-    | `magenta` | `35`      | new |
-    | `white`   | `37`      | new |
-    | `gray`    | `90`      | new (bright-black) |
+    | id        | ANSI code | notes                                                                                                                                                                                                        |
+    | --------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+    | `default` | _(none)_  | no override — segment renders with its own built-in coloring if it has one (today, only `context`'s band coloring), otherwise plain terminal foreground. This is the implicit value when `color` is omitted. |
+    | `red`     | `31`      | matches the existing `CONTEXT_COLORS.danger`                                                                                                                                                                 |
+    | `yellow`  | `33`      | matches the existing `CONTEXT_COLORS.warning`                                                                                                                                                                |
+    | `green`   | `32`      | new                                                                                                                                                                                                          |
+    | `cyan`    | `36`      | matches the existing `CONTEXT_COLORS.neutral`                                                                                                                                                                |
+    | `blue`    | `34`      | new                                                                                                                                                                                                          |
+    | `magenta` | `35`      | new                                                                                                                                                                                                          |
+    | `white`   | `37`      | new                                                                                                                                                                                                          |
+    | `gray`    | `90`      | new (bright-black)                                                                                                                                                                                           |
 
     **Precedence over built-in semantic coloring, deliberately.** `context` is currently the only
     field with inherent coloring — a danger band (`getContextBand`/`CONTEXT_COLORS`) signaling how
@@ -482,7 +493,7 @@ wrapper reuses these conventions without importing across that boundary.
     decided yes, 2026-08-21), narrower in scope than it might first sound. A general "stick my own
     text next to a field" need is already solved for free by literal segments adjacent to the
     field — that's literally this plan's own motivating example in the Goal section ("with my own
-    label stuck on the front"). What literal segments *can't* do is change the word a field prints
+    label stuck on the front"). What literal segments _can't_ do is change the word a field prints
     **internally** as part of its own formatter: `usage`'s `"rate "`/`"quota "` prefix, `usage1`/
     `usage2`'s per-window short label (`"5h"`/`"week"`/`"3P Weekly"`, from Decision 5's
     `formatUsageWindowLabel`/`humanizeQuotaKey`), and `context`'s trailing `" ctx"` word. `label`
@@ -500,13 +511,12 @@ wrapper reuses these conventions without importing across that boundary.
     wrapper itself from the local machine/filesystem, so — unlike `usage`, which inherently
     branches on `provider` — they need no per-provider extraction logic and are identical by
     construction on both statusline-tracked harnesses, not merely coincidentally similar.
-
     - **`branch` (git branch of the current workspace) — recommended, designed below.** Field
       Availability Research above already rejected a payload-derived `branch`: Claude's
       `workspace.git_worktree`/`worktree.branch` only populates inside a ctrlyoke-managed
       worktree (rare) while Antigravity's `vcs.branch` is a general current-branch field (common)
       — genuinely different data, not a shared field despite the matching name. That asymmetry is
-      specific to *reading it out of the payload*; it disappears entirely once the wrapper computes
+      specific to _reading it out of the payload_; it disappears entirely once the wrapper computes
       the branch itself from disk, using `payload.cwd` (already confirmed present with matching
       semantics on both providers, per Decision 2's registry) as the repo root. At that point both
       providers get the exact same real git branch, computed the same way — this isn't a
@@ -560,7 +570,7 @@ wrapper reuses these conventions without importing across that boundary.
     `formatBrandedStatusLine(...)` when `useCtrlyokeStyle` is true, or to `forwardedOutput`
     otherwise — and `forwardToCommand` already short-circuits to an empty buffer when
     `customCommand` is empty (`ctrlyoke-statusline-wrapper.js:174-176`), so `useCtrlyokeStyle:
-    false` with no custom command already prints nothing today, in the one state the UI currently
+false` with no custom command already prints nothing today, in the one state the UI currently
     prevents a user from reaching.
 
     **Verification of the unconfigured CLI states.** Claude Code's official statusline
@@ -609,7 +619,7 @@ wrapper reuses these conventions without importing across that boundary.
 - Live preview line above the editor, rendered via Decision 11's shared formatter against the
   latest cached snapshot for that harness from `useHarnessUsageStore` when one exists, falling
   back to a fixture payload otherwise (a brand-new user with no snapshot yet should still see
-  *something* representative, not a blank preview). The preview must also respect the current
+  _something_ representative, not a blank preview). The preview must also respect the current
   `usageTracking.percentDirection` (Decision 6), not just the segment list, so it never shows a
   different direction than what the real statusline will render — since that setting's control now
   lives on a different tab (Decision 12), the preview reads it from shared settings state, not a
@@ -639,7 +649,7 @@ wrapper reuses these conventions without importing across that boundary.
   returns the whole typed object generically.
 - `schemas/settings-schema.json`'s `usageTracking` definition (currently
   `enabled`/`providerRefreshEnabled`/`persistObservedUsage`/`warningPercentUsed`, starting at line 442) gains `percentDirection: "used" | "remaining"` (default `"used"`), normal (non-machine)
-  scope. Note `usageTracking.enabled` specifically *is* listed in
+  scope. Note `usageTracking.enabled` specifically _is_ listed in
   `WORKSPACE_FORBIDDEN_SETTING_ROOTS` (`CtrlYokeConfigService.ts:27-32`) while its siblings are
   not — `percentDirection` follows the siblings and must **not** be added to that list. `CtrlYokeSettings.ts`'s `usageTracking` interface and defaults block gain the matching
   field; a new `SETTING_PATHS.USAGE_TRACKING_PERCENT_DIRECTION` entry alongside the existing
@@ -719,14 +729,14 @@ the other's settings or code paths.
 Both plans edit `StatsUsageSection.tsx`, but in disjoint regions. As shipped, the parity plan's
 "Usage collection" block sits at the top of that file (where it gates the stats rendered below)
 and its "Model pricing overrides" block sits below the usage cards; this plan's only edit to that
-file is *removing* the statusline block (Decision 12) and adding the `percentDirection` control,
+file is _removing_ the statusline block (Decision 12) and adding the `percentDirection` control,
 so the two diffs do not meaningfully conflict.
 
 **One operational watch-item, not a blocker.** This plan introduces a brand-new schema leaf,
 `usageTracking.percentDirection` (Decision 6), sitting in the same `usageTracking` object
 `settingsSchemaUiParity.integration.test.ts` already inventories (the test that backs
 `SETTINGS_UI_PARITY_PLAN.md`'s `PENDING_UI_PARITY` list). If this plan's Phase 3 (schema) and its
-`percentDirection` UI control (Phase 5) ever land in *separate* merges instead of together, that
+`percentDirection` UI control (Phase 5) ever land in _separate_ merges instead of together, that
 test will flag a new gap in the interim — fix, if it happens, is adding
 `usageTracking.percentDirection` to `PENDING_UI_PARITY`, same as any other
 tracked-but-not-yet-controlled setting. Landing schema and control together (as this plan's own
@@ -738,7 +748,7 @@ zero dependencies on anything else in this plan — including Phase 1's spike �
 standalone changes before the rest: **16 → 12 → Phase 1 spike → 3 → 2 → 4 → 5 → 6.**
 
 **Phase 3 moves ahead of Phase 2 (revised in the orchestration pass, 2026-08-21).** The phase list
-below is written 2-before-3 (wrapper first, then types/schema), but the wrapper is a *consumer* of
+below is written 2-before-3 (wrapper first, then types/schema), but the wrapper is a _consumer_ of
 this plan's new contracts — `StatusLineSegment`, the `StatusLineFieldId` registry, the
 `StatusLineColorId` registry, the shared default array, and `percentDirection` — and those
 contracts have to be single-sourced somewhere before two independent implementations start

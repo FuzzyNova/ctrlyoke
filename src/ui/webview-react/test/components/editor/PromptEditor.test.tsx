@@ -572,7 +572,8 @@ describe("PromptEditor — script-step properties", () => {
       .click(container.querySelector(".btn-editor-run") as HTMLButtonElement);
 
     const message = postMessageSpy.mock.calls.find(
-      ([msg]) => (msg as { type?: string }).type === MESSAGE_TYPES.EXECUTE_PROMPT
+      ([msg]) =>
+        (msg as { type?: string }).type === MESSAGE_TYPES.EXECUTE_PROMPT
     )?.[0] as Record<string, unknown> | undefined;
     expect(message).toMatchObject({
       type: MESSAGE_TYPES.EXECUTE_PROMPT,

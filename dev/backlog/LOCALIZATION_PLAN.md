@@ -26,7 +26,7 @@ mechanism, and no single tool covers all three:
    QuickPicks, error messages surfaced via `vscode.window.showErrorMessage`, etc.)
    — runs in Node, has full access to the `vscode` module.
 3. **React dashboard** (`src/ui/webview-react/`) — this bundle is dual-served:
-   as a VS Code **webview** (see `src/ui/CtrlYokeWebviewProvider.ts`) *and* as a
+   as a VS Code **webview** (see `src/ui/CtrlYokeWebviewProvider.ts`) _and_ as a
    plain static bundle served over HTTP/WS by the standalone hosted dashboard
    (`src/server/CtrlYokeHostedServer.ts` → `buildHtml()`, serving the same
    `webviewDist` via `express.static`). **The hosted dashboard has no `vscode`
@@ -55,7 +55,7 @@ extension host:
   bundle at runtime based on `vscode.env.language`.
 - VS Code ships a pseudo-locale (`qps-ploc`) specifically to catch strings that
   were missed during extraction — run the extension with
-  `--locale qps-ploc` and look for any text that *didn't* get pseudo-translated.
+  `--locale qps-ploc` and look for any text that _didn't_ get pseudo-translated.
 
 This part is well-trodden and low-risk. **It does not touch the React webview
 at all** — `vscode.l10n.t()` only exists in the extension host process, not in
@@ -95,11 +95,11 @@ This is genuinely a good amount of engineering effort — there is no
 "automatic extraction" shortcut for JSX. Every user-facing string in the
 ~265 `.tsx` files needs to be pulled into a `t("key")` call by hand (or with
 heavy tool assistance — see Tooling below). This is the part of the C#
-`resx` experience that *doesn't* have a magic equivalent in React: the payoff
+`resx` experience that _doesn't_ have a magic equivalent in React: the payoff
 of `react-i18next` is runtime locale-switching and translator-friendly JSON,
 not less refactoring work up front.
 
-### Browser "Translate this page" — does **not** help the webview, *might* help the hosted dashboard, but shouldn't be relied on
+### Browser "Translate this page" — does **not** help the webview, _might_ help the hosted dashboard, but shouldn't be relied on
 
 This was the most important question to settle, since it changes how much
 custom work is actually required:
@@ -113,14 +113,14 @@ custom work is actually required:
   extension**, and we should verify this empirically (load the panel, check
   DevTools for any translate affordance) before ruling it out entirely, but
   don't plan around it appearing.
-- **Hosted dashboard**: this *is* a real `https://` page loaded in the user's
+- **Hosted dashboard**: this _is_ a real `https://` page loaded in the user's
   own browser tab, so Chrome/Edge's automatic translate UI plausibly could
   appear unprompted for hosted-dashboard users. However, relying on it as a
   strategy has real problems even there:
   - It's fully out of our control — quality, availability by language, and
     whether it triggers at all (some browsers only offer it for whole-page
     language mismatches, not SPA content that mutates after initial load via
-    React's virtual DOM patches, which is *most* of this dashboard's content).
+    React's virtual DOM patches, which is _most_ of this dashboard's content).
   - It does not translate `aria-label`/`title`/`alt` attributes consistently,
     hurting accessibility for non-English users specifically.
   - It provides no path for the VS Code webview surface, which will remain
@@ -163,7 +163,7 @@ shared `UserFeedback` → `notifyUserFeedback()`/`notifyUser()` →
 `UserFeedbackMessage` pipeline (`src/core/UserFeedbackSink.ts`,
 `src/ui/webview-react/utils/notifyUser.ts`), specifically so the same
 operational message reaches the VS Code panel, the VS Code-hosted browser
-dashboard, *and* the eventual standalone server identically. Wrapping those
+dashboard, _and_ the eventual standalone server identically. Wrapping those
 call sites in `vscode.l10n.t()` would reintroduce the exact `vscode`
 dependency the decoupling plan is purging from that file list, and would
 silently stop working the moment those files run in the standalone process.
@@ -231,11 +231,11 @@ authoring the English text twice.
 
 ## Recommended Architecture
 
-| Surface | Mechanism | Key artifact |
-|---|---|---|
-| `package.json` contributions (commands, config, menus) | VS Code `package.nls.json` + `%key%` refs | `package.nls.json`, `package.nls.<locale>.json` |
-| Extension host TS (`src/extension.ts`, `src/core/**`, notifications, errors) | `vscode.l10n.t()` + `@vscode/l10n-dev` extraction | `l10n/bundle.l10n.json`, `l10n/bundle.l10n.<locale>.json` |
-| React dashboard (webview **and** hosted server, same bundle) | `react-i18next` with locale resolved per-surface at HTML-build time | `src/ui/webview-react/locales/<locale>.json` |
+| Surface                                                                      | Mechanism                                                           | Key artifact                                              |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------- |
+| `package.json` contributions (commands, config, menus)                       | VS Code `package.nls.json` + `%key%` refs                           | `package.nls.json`, `package.nls.<locale>.json`           |
+| Extension host TS (`src/extension.ts`, `src/core/**`, notifications, errors) | `vscode.l10n.t()` + `@vscode/l10n-dev` extraction                   | `l10n/bundle.l10n.json`, `l10n/bundle.l10n.<locale>.json` |
+| React dashboard (webview **and** hosted server, same bundle)                 | `react-i18next` with locale resolved per-surface at HTML-build time | `src/ui/webview-react/locales/<locale>.json`              |
 
 Keep these three completely decoupled — different runtime, different tooling,
 different translator handoff. Don't try to force a single shared key
@@ -310,7 +310,7 @@ This is a multi-phase effort, not a single PR:
    most mistakes since these are just string literals in TS).
 3. **Phase 3 — React dashboard infrastructure**: add `react-i18next`,
    `i18n.ts` setup, locale-injection plumbing for both webview and hosted-server
-   HTML paths, the pseudo-locale, and the ESLint guardrail — *before* touching
+   HTML paths, the pseudo-locale, and the ESLint guardrail — _before_ touching
    component code, so new components written during Phase 4 don't add to the
    backlog.
 4. **Phase 4 — React string migration**: the bulk of the work — sweep

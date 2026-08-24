@@ -205,7 +205,8 @@ describe("ScriptConditionEditor", () => {
 
     expect(
       postMessage.mock.calls.filter(
-        ([message]) => message.type === MESSAGE_TYPES.CREATE_END_CONDITION_SCRIPT
+        ([message]) =>
+          message.type === MESSAGE_TYPES.CREATE_END_CONDITION_SCRIPT
       )
     ).toHaveLength(0);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -552,27 +553,27 @@ describe("ScriptConditionEditor", () => {
     it.each(["scriptStep", "preCondition", "endCondition"] as const)(
       "%s renders and round-trips the environment map",
       (variant) => {
-      const onChange = vi.fn();
+        const onChange = vi.fn();
 
-      render(
-        <ScriptConditionEditor
-          variant={variant}
-          value={{ script: "npm test", env: { CI: "true" } }}
-          onChange={onChange}
-          idPrefix={`test-${variant}`}
-        />
-      );
+        render(
+          <ScriptConditionEditor
+            variant={variant}
+            value={{ script: "npm test", env: { CI: "true" } }}
+            onChange={onChange}
+            idPrefix={`test-${variant}`}
+          />
+        );
 
-      const env = screen.getByLabelText(`test-${variant}-env`);
-      expect(env).toHaveValue("CI=true");
-      fireEvent.change(env, { target: { value: "CI=true\nTOKEN=value" } });
-      fireEvent.blur(env);
+        const env = screen.getByLabelText(`test-${variant}-env`);
+        expect(env).toHaveValue("CI=true");
+        fireEvent.change(env, { target: { value: "CI=true\nTOKEN=value" } });
+        fireEvent.blur(env);
 
-      expect(onChange).toHaveBeenCalledWith(
-        expect.objectContaining({
-          env: { CI: "true", TOKEN: "value" },
-        })
-      );
+        expect(onChange).toHaveBeenCalledWith(
+          expect.objectContaining({
+            env: { CI: "true", TOKEN: "value" },
+          })
+        );
       }
     );
   });

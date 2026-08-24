@@ -43,8 +43,10 @@ export class PromptFileLoader {
       diagnostics: CompatibilityDiagnostic[]
     ) => void,
     private readonly userFeedbackSink?: UserFeedbackSink,
-    private readonly statusMessageReporter: StatusMessageReporter =
-      new StatusMessageReporter(() => undefined, () => undefined)
+    private readonly statusMessageReporter: StatusMessageReporter = new StatusMessageReporter(
+      () => undefined,
+      () => undefined
+    )
   ) {}
 
   getLastCompatibilityDiagnostics(): readonly CompatibilityDiagnostic[] {

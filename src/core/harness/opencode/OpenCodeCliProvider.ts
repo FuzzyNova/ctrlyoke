@@ -850,11 +850,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     const serializedUserHooks = this.serializeUserHooks(userHooks);
     if (serializedUserHooks !== undefined) {
       const sidecarPath = path.join(pluginDir, "ctrlyoke-hooks.json");
-      await fs.promises.writeFile(
-        sidecarPath,
-        serializedUserHooks,
-        "utf8"
-      );
+      await fs.promises.writeFile(sidecarPath, serializedUserHooks, "utf8");
       this.fallbackPluginArtifactPaths.push(sidecarPath);
     }
 

@@ -377,10 +377,7 @@ export async function preflightWorkflowSecrets(
         for (const name of unapprovedGrants) {
           missingSecretNames.add(name);
         }
-        throw new MissingSecretError(
-          unapprovedGrants[0],
-          unapprovedGrants
-        );
+        throw new MissingSecretError(unapprovedGrants[0], unapprovedGrants);
       }
       if (grants.length > 0) {
         const missing = await findMissingSecretNames(grants, {

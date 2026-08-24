@@ -202,7 +202,6 @@ stop. That trains rubber-stamping.
    one silent path plus one noisy one.
 
    Implement this as the following concrete plan:
-
    1. **Implemented (2026-08-22) — compute the workflow-wide request once, from the existing authoritative
       per-step resolver.** Add
       `getWorkflowSecretGrants(workflow: PromptFile): string[]` to
@@ -221,9 +220,9 @@ stop. That trains rubber-stamping.
       `SecretGrantTrustDecision = "allow" | "deny"`,
       `getDecision(workspaceIdentity: string, name: string)`,
       `getApprovedGrants(workspaceIdentity: string, candidateNames:
-      readonly string[])`, `getPendingGrants(...)`, and
+readonly string[])`, `getPendingGrants(...)`, and
       `setDecisions(workspaceIdentity: string, names: readonly string[],
-      decision: SecretGrantTrustDecision)`. Canonicalize the workspace identity
+decision: SecretGrantTrustDecision)`. Canonicalize the workspace identity
       with `ExternalRootsTrustStore.canonicalizeRoot`. Persist atomically at
       `~/.ctrlyoke/secret-grants-trust.json`, with the exact key shape
       `${workspaceIdentity}␟${secretName}`. Export a process-wide
@@ -235,7 +234,7 @@ stop. That trains rubber-stamping.
       at the core boundary.** Add an optional constructor callback to
       `src/core/WorkflowInstance.ts`, for example
       `approveSecretGrants?: (workflow: PromptFile, workspaceRoot: string) =>
-      Promise<void>`. Invoke it in `WorkflowInstance.executeLoadedPromptFile`
+Promise<void>`. Invoke it in `WorkflowInstance.executeLoadedPromptFile`
       immediately before the existing `preflightWorkflowSecrets(...)` call.
       The callback resolves pending approvals; `preflightWorkflowSecrets`
       itself must then verify that every name returned by
@@ -255,8 +254,8 @@ stop. That trains rubber-stamping.
 
    4. **Implemented (2026-08-22) — wire the VS Code prompt at execution time, not extension activation.**
       Add `promptBatchApprovalForPendingWorkspaceSecretGrants(workflow:
-      PromptFile, workspaceRoot: string, store: SecretGrantsTrustStore =
-      secretGrantsTrustStore): Promise<void>` to a new
+PromptFile, workspaceRoot: string, store: SecretGrantsTrustStore =
+secretGrantsTrustStore): Promise<void>` to a new
       `src/ui/SecretGrantsTrustPrompt.ts`, mirroring
       `promptBatchApprovalForPendingWorkspaceExternalRoots` in
       `src/ui/ExternalFileTrustPrompt.ts`. Require
@@ -279,19 +278,13 @@ stop. That trains rubber-stamping.
       given a loaded workflow). Use `getWorkflowSecretGrants`, the canonical
       working-directory identity, and `secretGrantsTrustStore.getPendingGrants`.
       List every pending name and exit 2 with
-      `Run \`ctrlyoke trust-secret-grants <file>\` to review and approve them.`
-      Keep the existing external-root gate unchanged. Register a top-level
-      `trust-secret-grants <file>` command in `src/cli.ts`, with `-d, --cwd`
-      and `-y, --yes`, and implement its parse/load, pending-name listing,
-      interactive confirmation, and allow/deny persistence by reusing the
-      `PromptFileParser` and the store. The command is deliberately scoped to
-      one workflow file because grants are per-workflow; an inline `--prompt`
-      with pending names remains fail closed and must be moved to a file before
-      it can be approved durably. Add the command's options/handler types to
-      `src/cli/SecretCommandDefinitions.ts` (`TrustSecretGrantsOptions`) and
-      its testable `trustSecretGrantsCommand(...)` handler in
-      `src/cli/SecretCommands.ts`, using the existing
-      `SecretCommandDependencies`/`SecretCommandIo` contracts.
+      `Run \`ctrlyoke trust-secret-grants <file>\` to review and approve them.`Keep the existing external-root gate unchanged. Register a top-level`trust-secret-grants <file>`command in`src/cli.ts`, with `-d, --cwd`and`-y, --yes`, and implement its parse/load, pending-name listing,
+interactive confirmation, and allow/deny persistence by reusing the
+`PromptFileParser`and the store. The command is deliberately scoped to
+one workflow file because grants are per-workflow; an inline`--prompt`with pending names remains fail closed and must be moved to a file before
+it can be approved durably. Add the command's options/handler types to`src/cli/SecretCommandDefinitions.ts` (`TrustSecretGrantsOptions`) and
+its testable `trustSecretGrantsCommand(...)`handler in`src/cli/SecretCommands.ts`, using the existing
+`SecretCommandDependencies`/`SecretCommandIo` contracts.
 
    6. **Implemented (2026-08-22) — scope the decision by workspace and name, not by workflow file or
       content hash.** Use the exact `${workspaceIdentity}␟${secretName}` key:
@@ -325,6 +318,7 @@ stop. That trains rubber-stamping.
       that seam requires broad live VS Code/orchestrator integration mocking.
       The existing `WorkflowInstance` execution path remains the focused
       callback-order seam.
+
 3. **Honored (2026-08-20), not outstanding work** — this was a constraint on the
    fix, not a task. The invalid-name throw (`isValidSecretName`) and the runtime
    `MissingSecretError` are both still in place: they are real resolution
@@ -375,15 +369,15 @@ item above would have been caught by it.
 
 ## Files likely changed
 
-| File                                                                      | Change                                                                      |
-| ------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `src/utils/VarSubstitutor.ts`                                             | Stop throwing on unresolved placeholders; mask fenced blocks (item 2)       |
-| `src/utils/SecretReferenceParser.ts`                                      | Union process-map secret references into the effective grant (item 3)       |
-| `src/utils/SecretResolver.ts`                                             | `getDeclaredSecretGrants`/`getProcessMaps` wiring; `getWorkflowSecretGrants` and trust-store check in `preflightWorkflowSecrets` (item 3 rec. 2) |
-| `src/types/PreviewRedactor.ts`                                            | **Done.** Narrowed `credential-assignment` so it does not eat `${secret:NAME}` (item 4) |
-| `src/test/unit/WorkflowExecutor.test.ts`                                  | Documents-every-syntax regression test                                     |
-| `src/config/SecretGrantsTrustStore.ts`                                    | New user-local trust store for workflow secret grants (item 3 rec. 2)      |
-| `src/core/WorkflowInstance.ts`, `src/core/WorkflowOrchestrator.ts`        | `approveSecretGrants` callback wired before `preflightWorkflowSecrets` (item 3 rec. 2) |
-| `src/ui/SecretGrantsTrustPrompt.ts`                                       | VS Code batch-approval picker for pending secret grants (item 3 rec. 2)    |
-| `src/cli.ts`, `src/cli/SecretCommands.ts`, `src/cli/SecretCommandDefinitions.ts` | CLI fail-closed gate and `trust-secret-grants` command (item 3 rec. 2) |
-| `src/test/unit/SecretGrantsTrustStore.test.ts`, `SecretGrantsTrustPrompt.test.ts`, `SecretResolver.test.ts`, `SecretCommands.test.ts`, `WorkflowInstance.test.ts` | Coverage for the trust store, prompt, resolver, CLI command, and execution wiring |
+| File                                                                                                                                                              | Change                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/utils/VarSubstitutor.ts`                                                                                                                                     | Stop throwing on unresolved placeholders; mask fenced blocks (item 2)                                                                            |
+| `src/utils/SecretReferenceParser.ts`                                                                                                                              | Union process-map secret references into the effective grant (item 3)                                                                            |
+| `src/utils/SecretResolver.ts`                                                                                                                                     | `getDeclaredSecretGrants`/`getProcessMaps` wiring; `getWorkflowSecretGrants` and trust-store check in `preflightWorkflowSecrets` (item 3 rec. 2) |
+| `src/types/PreviewRedactor.ts`                                                                                                                                    | **Done.** Narrowed `credential-assignment` so it does not eat `${secret:NAME}` (item 4)                                                          |
+| `src/test/unit/WorkflowExecutor.test.ts`                                                                                                                          | Documents-every-syntax regression test                                                                                                           |
+| `src/config/SecretGrantsTrustStore.ts`                                                                                                                            | New user-local trust store for workflow secret grants (item 3 rec. 2)                                                                            |
+| `src/core/WorkflowInstance.ts`, `src/core/WorkflowOrchestrator.ts`                                                                                                | `approveSecretGrants` callback wired before `preflightWorkflowSecrets` (item 3 rec. 2)                                                           |
+| `src/ui/SecretGrantsTrustPrompt.ts`                                                                                                                               | VS Code batch-approval picker for pending secret grants (item 3 rec. 2)                                                                          |
+| `src/cli.ts`, `src/cli/SecretCommands.ts`, `src/cli/SecretCommandDefinitions.ts`                                                                                  | CLI fail-closed gate and `trust-secret-grants` command (item 3 rec. 2)                                                                           |
+| `src/test/unit/SecretGrantsTrustStore.test.ts`, `SecretGrantsTrustPrompt.test.ts`, `SecretResolver.test.ts`, `SecretCommands.test.ts`, `WorkflowInstance.test.ts` | Coverage for the trust store, prompt, resolver, CLI command, and execution wiring                                                                |

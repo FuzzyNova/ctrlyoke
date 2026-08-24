@@ -396,15 +396,15 @@ suite("HarnessCapabilityRegistry", () => {
     ];
 
     for (const harnessId of supported) {
-      const declaration = snapshot.harnesses[harnessId].descriptor.hooks
-        ?.notification;
+      const declaration =
+        snapshot.harnesses[harnessId].descriptor.hooks?.notification;
       assert.strictEqual(declaration?.fidelity, "exact");
       assert.strictEqual(declaration?.mechanism, "workspace-config");
       assert.ok(declaration?.verification);
     }
     for (const harnessId of unsupported) {
-      const declaration = snapshot.harnesses[harnessId].descriptor.hooks
-        ?.notification;
+      const declaration =
+        snapshot.harnesses[harnessId].descriptor.hooks?.notification;
       assert.strictEqual(declaration?.fidelity, "unsupported");
       assert.strictEqual(declaration?.mechanism, "none");
     }

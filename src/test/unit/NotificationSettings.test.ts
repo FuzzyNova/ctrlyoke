@@ -60,22 +60,22 @@ suite("Notification settings defaults", () => {
     const validate = new Ajv({ allErrors: true }).compile(schema);
 
     assert.strictEqual(
-      validate({ notifications: { events: { hookEvents: { notification: true } } } }),
+      validate({
+        notifications: { events: { hookEvents: { notification: true } } },
+      }),
       true,
       JSON.stringify(validate.errors)
     );
     assert.strictEqual(
-      validate({ notifications: { events: { hookEvents: { unknown: true } } } }),
+      validate({
+        notifications: { events: { hookEvents: { unknown: true } } },
+      }),
       false
     );
     const notificationSchema = (
-      (
-        (
-          (schema.properties as Record<string, any>).notifications.properties
-            .events.properties.hookEvents.properties
-        ) as Record<string, any>
-      ).notification
-    );
+      (schema.properties as Record<string, any>).notifications.properties.events
+        .properties.hookEvents.properties as Record<string, any>
+    ).notification;
     assert.strictEqual(notificationSchema.type, "boolean");
     assert.strictEqual("default" in notificationSchema, false);
   });

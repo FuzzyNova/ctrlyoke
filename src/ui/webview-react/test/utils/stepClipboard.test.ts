@@ -85,49 +85,43 @@ describe("stepClipboard", () => {
     });
   });
 
-  it(
-    "disabling a script step sends only its type and enabled state",
-    () => {
-      expect(
-        buildWorkflowStepEnabledUpdate(
-          {
-            type: STEP_TYPES.SCRIPT,
-            script: "npm run deploy",
-            env: { DEPLOY_TOKEN: "${secret:DEPLOY_TOKEN}" },
-            secrets: ["DEPLOY_TOKEN"],
-            errorBehavior: { onError: "retry", maxRetries: 2 },
-            executionMode: "headless",
-            timeout: 30,
-          } as never,
-          false
-        ).properties
-      ).toEqual({
-        type: STEP_TYPES.SCRIPT,
-        enabled: false,
-      });
-    }
-  );
+  it("disabling a script step sends only its type and enabled state", () => {
+    expect(
+      buildWorkflowStepEnabledUpdate(
+        {
+          type: STEP_TYPES.SCRIPT,
+          script: "npm run deploy",
+          env: { DEPLOY_TOKEN: "${secret:DEPLOY_TOKEN}" },
+          secrets: ["DEPLOY_TOKEN"],
+          errorBehavior: { onError: "retry", maxRetries: 2 },
+          executionMode: "headless",
+          timeout: 30,
+        } as never,
+        false
+      ).properties
+    ).toEqual({
+      type: STEP_TYPES.SCRIPT,
+      enabled: false,
+    });
+  });
 
-  it(
-    "the canonical enabled-state payload preserves a script step's secrets",
-    () => {
-      expect(
-        buildWorkflowStepEnabledState(
-          {
-            type: STEP_TYPES.SCRIPT,
-            script: "npm run deploy",
-            secrets: ["DEPLOY_TOKEN"],
-          } as never,
-          false
-        )
-      ).toEqual({
-        type: STEP_TYPES.SCRIPT,
-        script: "npm run deploy",
-        secrets: ["DEPLOY_TOKEN"],
-        enabled: false,
-      });
-    }
-  );
+  it("the canonical enabled-state payload preserves a script step's secrets", () => {
+    expect(
+      buildWorkflowStepEnabledState(
+        {
+          type: STEP_TYPES.SCRIPT,
+          script: "npm run deploy",
+          secrets: ["DEPLOY_TOKEN"],
+        } as never,
+        false
+      )
+    ).toEqual({
+      type: STEP_TYPES.SCRIPT,
+      script: "npm run deploy",
+      secrets: ["DEPLOY_TOKEN"],
+      enabled: false,
+    });
+  });
 
   it("builds a canonical enabled-state payload without runtime fields", () => {
     expect(

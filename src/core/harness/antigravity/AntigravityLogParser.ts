@@ -560,7 +560,11 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
       entry.status === "RUNNING";
     const isAskQuestionResult =
       entry.source === "MODEL" && entry.type === "ASK_QUESTION";
-    if (entry.status !== "DONE" && !isBackgroundLaunch && !isAskQuestionResult) {
+    if (
+      entry.status !== "DONE" &&
+      !isBackgroundLaunch &&
+      !isAskQuestionResult
+    ) {
       return [];
     }
 

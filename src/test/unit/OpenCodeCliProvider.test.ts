@@ -593,10 +593,9 @@ suite("OpenCodeCliProvider", () => {
 
       const env = provider.getHeadlessSpawnEnv();
       assert.strictEqual(env.CTRLYOKE_OPENCODE_HOOKS, undefined);
-      assert.deepStrictEqual(
-        JSON.parse(env.OPENCODE_CONFIG_CONTENT!),
-        { plugin: [path.resolve(pluginSourcePath)] }
-      );
+      assert.deepStrictEqual(JSON.parse(env.OPENCODE_CONFIG_CONTENT!), {
+        plugin: [path.resolve(pluginSourcePath)],
+      });
     } finally {
       await fs.rm(extensionPath, { recursive: true, force: true });
     }

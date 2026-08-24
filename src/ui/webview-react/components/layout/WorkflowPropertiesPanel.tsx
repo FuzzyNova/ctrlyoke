@@ -955,10 +955,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const handleHooksChange = useCallback(
     (newValue: UserHookConfig[] | null | undefined) => {
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty(
-        "hooks",
-        newValue
-      );
+      settingsStore.updateWorkflowProperty("hooks", newValue);
       syncWorkflowPropertiesForUndo();
 
       postWorkflowDefinitionMutation(vscode, {

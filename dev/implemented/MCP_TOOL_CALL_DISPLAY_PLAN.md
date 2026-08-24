@@ -129,7 +129,7 @@ this feature: `OutputSectionHeader.tsx`'s Undo/Redo buttons
 `DEFAULT_THRESHOLD` tier). **Use `400` as the "Show input" label threshold**,
 reusing that established value rather than picking a new one.
 
-That said, don't reuse the *hook call* — `isHeaderVeryNarrow`'s `ResizeObserver`
+That said, don't reuse the _hook call_ — `isHeaderVeryNarrow`'s `ResizeObserver`
 watches one header element; a virtualized list can render hundreds of tool-call
 rows and must not attach one `ResizeObserver` per row. `outputContentWidth` is
 already computed once in `OutputSection.tsx` and threaded through
@@ -155,7 +155,7 @@ toggle).
 **Collapse/expand behavior — resolved, matches `GenericToolCallOutput` exactly,
 no new truncation.** Confirmed against `toolCallLayout.ts`: today, collapsed
 params render nothing at all (`buildHiddenSectionRenderPlan` — zero-height, no
-preview), and expanding reveals the *entire* params text in one step (no nested
+preview), and expanding reveals the _entire_ params text in one step (no nested
 "show more" the way bash/tool-call **output/error** sections have). MCP reuses
 this exact behavior unchanged — collapsed by default (chevron closed, fully
 hidden), one click reveals everything, no second truncation step to click
@@ -212,9 +212,8 @@ already does in that same file, not new formatting logic:
   `extractKeyParameters`) or `formatToolResultForMarkdown` — both of which the
   adjacent `TOOL_CALL` case (~line 279-285) already calls. Change the
   `MCP_TOOL_CALL` case to call the same two helpers:
-  `formatToolCallForMarkdown(\`MCP: ${data.server}.${data.tool}\`, data.parameters)`
-  and, when `data.result` is present, `formatToolResultForMarkdown(data.result)` —
-  identical shape to `TOOL_CALL`, just with the MCP label string.
+  `formatToolCallForMarkdown(\`MCP: ${data.server}.${data.tool}\`, data.parameters)`and, when`data.result`is present,`formatToolResultForMarkdown(data.result)`—
+identical shape to`TOOL_CALL`, just with the MCP label string.
 - **`CliTerminalFormatter.ts`** (~line 419-427): the `MCP_TOOL_CALL` case prints
   only `⚙ server:tool`, never the params preview or result the `TOOL_CALL` case
   (~line 439-460) prints right below it (`JSON.stringify(data.parameters).slice(0,
@@ -235,19 +234,19 @@ formatting decisions.
 
 ## Affected components
 
-| Component | Planned role |
-| --- | --- |
-| `ToolCallOutput.tsx` | Add params rendering + expansion props to `McpToolCallOutput`; swap both toggles to the shared component |
-| `BashOutput.tsx` | Swap command toggle to the shared component |
-| New `ToolCallExpandToggle` (or similar, in `components/output/`) | Shared codicon-chevron + optional label toggle |
-| `toolCallLayout.ts` | No new logic expected — `buildToolCallRenderPlan`/`getGenericToolCallParamsText` already generic; confirm during implementation |
-| `outputRows.ts` | Widen `TOOL_CALL`-only expansion/render-plan attachment and height estimation to include `MCP_TOOL_CALL`; own `outputContentWidth` → `showParamsLabel` derivation |
-| `OutputRow.tsx` | Wire `McpToolCallOutput`'s new props the same way `GenericToolCallOutput`'s are wired today |
-| `outputFind.ts` | Add params segments to `TOOL_CALL`/`MCP_TOOL_CALL` search |
-| `OutputSection.tsx` / `OutputPaneProps` | Only if `showParamsLabel` ends up computed once at this level rather than per-row-build |
-| `markdownExport.ts` | Route `MCP_TOOL_CALL` through the same `formatToolCallForMarkdown`/`formatToolResultForMarkdown` helpers `TOOL_CALL` already uses |
-| `CliTerminalFormatter.ts` | Add the same params-preview + result lines to `MCP_TOOL_CALL` that `TOOL_CALL` already prints |
-| `HistoryCandidateExtractor.ts` | Add a `data.parameters` search candidate to `MCP_TOOL_CALL`, matching `TOOL_CALL` |
+| Component                                                        | Planned role                                                                                                                                                      |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ToolCallOutput.tsx`                                             | Add params rendering + expansion props to `McpToolCallOutput`; swap both toggles to the shared component                                                          |
+| `BashOutput.tsx`                                                 | Swap command toggle to the shared component                                                                                                                       |
+| New `ToolCallExpandToggle` (or similar, in `components/output/`) | Shared codicon-chevron + optional label toggle                                                                                                                    |
+| `toolCallLayout.ts`                                              | No new logic expected — `buildToolCallRenderPlan`/`getGenericToolCallParamsText` already generic; confirm during implementation                                   |
+| `outputRows.ts`                                                  | Widen `TOOL_CALL`-only expansion/render-plan attachment and height estimation to include `MCP_TOOL_CALL`; own `outputContentWidth` → `showParamsLabel` derivation |
+| `OutputRow.tsx`                                                  | Wire `McpToolCallOutput`'s new props the same way `GenericToolCallOutput`'s are wired today                                                                       |
+| `outputFind.ts`                                                  | Add params segments to `TOOL_CALL`/`MCP_TOOL_CALL` search                                                                                                         |
+| `OutputSection.tsx` / `OutputPaneProps`                          | Only if `showParamsLabel` ends up computed once at this level rather than per-row-build                                                                           |
+| `markdownExport.ts`                                              | Route `MCP_TOOL_CALL` through the same `formatToolCallForMarkdown`/`formatToolResultForMarkdown` helpers `TOOL_CALL` already uses                                 |
+| `CliTerminalFormatter.ts`                                        | Add the same params-preview + result lines to `MCP_TOOL_CALL` that `TOOL_CALL` already prints                                                                     |
+| `HistoryCandidateExtractor.ts`                                   | Add a `data.parameters` search candidate to `MCP_TOOL_CALL`, matching `TOOL_CALL`                                                                                 |
 
 ## Open questions
 
@@ -260,17 +259,17 @@ formatting decisions.
 ## Acceptance criteria
 
 - [x] MCP tool call rows show a discoverable input/parameters toggle and render the
-  same raw-text content `GenericToolCallOutput` already shows for generic tool
-  call parameters, collapsed by default and revealing everything in one click
-  (no nested "show more" step).
+      same raw-text content `GenericToolCallOutput` already shows for generic tool
+      call parameters, collapsed by default and revealing everything in one click
+      (no nested "show more" step).
 - [x] Bash command, generic tool call, and MCP tool call expand toggles all use one
-  shared codicon-chevron component instead of three separate `▼`/`▲` buttons, and
-  the "Show input" label appears once the row is at least 400px wide (matching
-  `OutputSectionHeader.tsx`'s existing `isHeaderVeryNarrow` threshold).
+      shared codicon-chevron component instead of three separate `▼`/`▲` buttons, and
+      the "Show input" label appears once the row is at least 400px wide (matching
+      `OutputSectionHeader.tsx`'s existing `isHeaderVeryNarrow` threshold).
 - [x] Expanding/collapsing generic or MCP tool call parameters does not cause
-  virtualized scroll-position jumps.
+      virtualized scroll-position jumps.
 - [x] "Find in output" matches text that exists only inside a tool call's (generic or
-  MCP) parameters.
+      MCP) parameters.
 - [x] Exported markdown, the CLI terminal fallback, and history-search results all
-  include MCP tool call parameters, matching what `TOOL_CALL` already includes in
-  each of those three surfaces.
+      include MCP tool call parameters, matching what `TOOL_CALL` already includes in
+      each of those three surfaces.

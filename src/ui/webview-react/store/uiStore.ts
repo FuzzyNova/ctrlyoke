@@ -548,7 +548,10 @@ interface UiState {
    * directly, so navigating away — by any means, not just the banner's Close
    * action — silently retires it.
    */
-  viewingDeletedWorkflow: { workflowKey: WorkflowKey; workflowName: string } | null;
+  viewingDeletedWorkflow: {
+    workflowKey: WorkflowKey;
+    workflowName: string;
+  } | null;
 
   // Save workflow dialog state
   saveWorkflowDialogOpen: boolean;

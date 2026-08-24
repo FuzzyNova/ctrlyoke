@@ -96,10 +96,7 @@ export function useSecretGrantOptions({
         )
         .map((entry) => entry.name)
     );
-    const selectedValues = uniqueNames([
-      ...declaredSecrets,
-      ...inlineNames,
-    ]);
+    const selectedValues = uniqueNames([...declaredSecrets, ...inlineNames]);
     const unresolvedSecretNames =
       registryLoading && registryEntries.length === 0
         ? []

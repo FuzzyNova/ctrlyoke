@@ -27,7 +27,10 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useSecretRegistryStore } from "@store/secretRegistryStore";
-import { MESSAGE_TYPES, PERMISSION_MODES } from "@root/types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  PERMISSION_MODES,
+} from "@root/types/DashboardConstants";
 
 const postMessage = vi.fn();
 
@@ -51,7 +54,9 @@ function findUpdatePropertyMessage(
         MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY &&
       (msg as { property?: string }).property === property
   );
-  return matches[matches.length - 1]?.[0] as Record<string, unknown> | undefined;
+  return matches[matches.length - 1]?.[0] as
+    | Record<string, unknown>
+    | undefined;
 }
 
 describe("WorkflowPropertiesPanel — workflow-property persist/reload round trip", () => {
@@ -118,10 +123,9 @@ describe("WorkflowPropertiesPanel — workflow-property persist/reload round tri
     act(() =>
       useSettingsStore.getState().setWorkflowProperties({
         ...useSettingsStore.getState().workflowProperties,
-        toolPermissions:
-          message?.value as ReturnType<
-            typeof useSettingsStore.getState
-          >["workflowProperties"]["toolPermissions"],
+        toolPermissions: message?.value as ReturnType<
+          typeof useSettingsStore.getState
+        >["workflowProperties"]["toolPermissions"],
       })
     );
 

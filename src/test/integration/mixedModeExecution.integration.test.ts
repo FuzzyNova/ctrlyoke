@@ -270,7 +270,10 @@ suite("mixed-mode workflow execution", () => {
     const handler = new EndConditionHandler(
       evaluator,
       queue,
-      new StatusMessageReporter(() => undefined, () => undefined)
+      new StatusMessageReporter(
+        () => undefined,
+        () => undefined
+      )
     );
     const executor = new WorkflowExecutor(queue, handler, evaluator, platform);
 

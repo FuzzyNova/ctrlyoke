@@ -180,7 +180,10 @@ function makeExecutor(queue: PromptQueue): WorkflowExecutor {
   const handler = new EndConditionHandler(
     evaluator,
     queue,
-    new StatusMessageReporter(() => undefined, () => undefined)
+    new StatusMessageReporter(
+      () => undefined,
+      () => undefined
+    )
   );
   return new WorkflowExecutor(queue, handler, evaluator, platform);
 }

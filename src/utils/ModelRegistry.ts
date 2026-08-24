@@ -364,7 +364,9 @@ function execWithClosedStdin(
         resolve(stdout);
       } else {
         reject(
-          new Error(`Command failed (exit ${code}): ${stderr.trim() || stdout.trim()}`)
+          new Error(
+            `Command failed (exit ${code}): ${stderr.trim() || stdout.trim()}`
+          )
         );
       }
     });
@@ -485,7 +487,9 @@ export function getAntigravityModelIdsSync(): string[] {
  * 'agy models'. Falls back to the static `ANTIGRAVITY_CLI_MODEL_LABELS` map
  * (via the caller) when the live query hasn't populated this ID.
  */
-export function getAntigravityModelLabelSync(modelId: string): string | undefined {
+export function getAntigravityModelLabelSync(
+  modelId: string
+): string | undefined {
   return cachedAntigravityModelLabels.get(modelId);
 }
 

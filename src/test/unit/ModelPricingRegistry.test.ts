@@ -17,7 +17,12 @@ const fixture: ModelPricingRegistryData = {
     anthropic: {
       "claude-sonnet-4-5": { input: 3, output: 15 },
       "claude-sonnet-4-6": { input: 3, output: 15 },
-      "claude-sonnet-5": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+      "claude-sonnet-5": {
+        input: 2,
+        output: 10,
+        cacheRead: 0.2,
+        cacheWrite: 2.5,
+      },
       "claude-opus-4-6": { input: 5, output: 25 },
       "claude-haiku-4-5": { input: 1, output: 5 },
       "claude-fable-5": { input: 10, output: 50 },
@@ -184,9 +189,18 @@ suite("ModelPricingRegistry", () => {
       HARNESS_IDS.COPILOT_CLI,
       "claude-sonnet-4.6"
     );
-    const claude = getModelPricingFromRegistry(HARNESS_IDS.CLAUDE_CLI, "sonnet");
-    const codex = getModelPricingFromRegistry(HARNESS_IDS.CODEX_CLI, "gpt-5.6-sol");
-    const qwen = getModelPricingFromRegistry(HARNESS_IDS.QWEN_CLI, "qwen3.5-plus");
+    const claude = getModelPricingFromRegistry(
+      HARNESS_IDS.CLAUDE_CLI,
+      "sonnet"
+    );
+    const codex = getModelPricingFromRegistry(
+      HARNESS_IDS.CODEX_CLI,
+      "gpt-5.6-sol"
+    );
+    const qwen = getModelPricingFromRegistry(
+      HARNESS_IDS.QWEN_CLI,
+      "qwen3.5-plus"
+    );
 
     for (const result of [copilot, claude, codex, qwen]) {
       assert.ok(result, "expected a resolvable price from the real snapshot");

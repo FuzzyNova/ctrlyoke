@@ -8,7 +8,6 @@ const USAGE_BAR_WARNING_THRESHOLD = 70;
 
 export function getUsageBarColorClass(percent: number): string {
   if (percent >= USAGE_BAR_ERROR_THRESHOLD) return "bg-error-fg opacity-90";
-  if (percent >= USAGE_BAR_WARNING_THRESHOLD)
-    return "bg-warning-fg opacity-85";
+  if (percent >= USAGE_BAR_WARNING_THRESHOLD) return "bg-warning-fg opacity-85";
   return "bg-info-fg opacity-80";
 }

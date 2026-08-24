@@ -130,9 +130,11 @@ export class AntigravityToolEventBuilder {
 
     if (
       result.type === "CODE_ACTION" ||
-      ["write_to_file", "replace_file_content", "multi_replace_file_content"].includes(
-        normalizedName
-      )
+      [
+        "write_to_file",
+        "replace_file_content",
+        "multi_replace_file_content",
+      ].includes(normalizedName)
     ) {
       return this.buildCodeAction(call, result, timestamp, success, error);
     }

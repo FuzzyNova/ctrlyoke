@@ -1,9 +1,6 @@
 import { create } from "zustand";
 import type { VsCodeApi } from "../types/vscode";
-import type {
-  ErrorBehavior,
-  UserHookConfig,
-} from "@root/types/CtrlYokeTypes";
+import type { ErrorBehavior, UserHookConfig } from "@root/types/CtrlYokeTypes";
 import type { PromptStep } from "./workflowStore";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
 import type {

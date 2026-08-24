@@ -14,15 +14,15 @@ those users — with no equivalent path today.
 
 ### 1.1 The MCP tool surface already has a transport-agnostic core
 
-`CtrlYokeMCPServer` (`src/mcp-server.ts`) cleanly separates tool *definitions* from tool
-*dispatch* from *transport*:
+`CtrlYokeMCPServer` (`src/mcp-server.ts`) cleanly separates tool _definitions_ from tool
+_dispatch_ from _transport_:
 
 - `getToolDefinitions()` (`mcp-server.ts:184-299`) is the single source of truth for all
   7 tools' names, descriptions, and JSON-Schema `inputSchema`s — already consumed by
   `ListToolsRequestSchema`'s handler (`mcp-server.ts:303-308`) and nothing else.
 - `invokeTool(name, args)` (`mcp-server.ts:339-356`) is a **public, already-documented**
-  dispatch method: *"Dispatch one tool without transport error wrapping; useful to
-  embedders and focused tests."* `CallToolRequestSchema`'s handler is a thin wrapper
+  dispatch method: _"Dispatch one tool without transport error wrapping; useful to
+  embedders and focused tests."_ `CallToolRequestSchema`'s handler is a thin wrapper
   around it (`mcp-server.ts:311-335`), and `src/test/unit/McpServer.test.ts` already
   calls it directly dozens of times, bypassing stdio/JSON-RPC entirely.
 - Every tool answers for exactly one workflow run, resolved from
@@ -42,17 +42,17 @@ work completely differently:
   `agentContent` (`HarnessIntegration.ts:548-550`), which `CliPromptPreparer` chunks and
   writes verbatim into a workspace-local temp file
   (`TEMP_FILE_CATEGORIES.AGENT`, `CliPromptPreparer.ts:667-681`), referenced from the
-  prompt as `@agent.md`. One hop: the temp file the harness reads *is* the content.
+  prompt as `@agent.md`. One hop: the temp file the harness reads _is_ the content.
 - **Skills** — `SkillExpander.expandSkills()` (`src/utils/SkillExpander.ts:33-76`) does
   not read the skill body at all. It builds a "progressive disclosure" pointer block per
   skill (`buildSkillBlock`, lines 82-88) containing only `## Skill: name` / `Path:
-  <absolute path>` / `Description: ...`, with a header instructing the harness to *"read
-  its SKILL.md file directly using your built-in file read tool."* This block becomes
-  `skillContent` (`HarnessIntegration.ts:544-546`), which is *also* chunked into a
+<absolute path>` / `Description: ...`, with a header instructing the harness to _"read
+  its SKILL.md file directly using your built-in file read tool."_ This block becomes
+  `skillContent` (`HarnessIntegration.ts:544-546`), which is _also_ chunked into a
   workspace-local temp file (`TEMP_FILE_CATEGORIES.SKILLS`,
   `CliPromptPreparer.ts:699-712`) and referenced as `@skills.md`
   (`CliIntegration.ts:492-497`, the categorized-instruction format). Two hops: the
-  workspace-local file the harness reads only contains a *second* path to go read.
+  workspace-local file the harness reads only contains a _second_ path to go read.
 
 That second hop is fine when the skill lives inside the workspace (or another directory
 the executing harness process can actually reach) — it's real, deliberate token savings
@@ -82,10 +82,10 @@ and make it selectable like a user/workspace one" for agents:
   `copy-templates` esbuild plugin, `esbuild.js:120-146`) and the source/test layout.
 - `discoverBuiltInAgents()` (`AgentDiscovery.ts:173-182`) scans that directory with
   `DISCOVERY_SOURCES.BUILT_IN` — a constant that **already exists**
-  (`DashboardConstants.ts:2115`, doc'd *"Immutable agents included with the ctrlyoke
-  installation"*) and is **already a permitted value for `SkillInfo["source"]`**
+  (`DashboardConstants.ts:2115`, doc'd _"Immutable agents included with the ctrlyoke
+  installation"_) and is **already a permitted value for `SkillInfo["source"]`**
   (`SkillDiscovery.ts:33`: `Exclude<DiscoverySource, typeof
-  DISCOVERY_SOURCES.WORKSPACE_CTRLYOKE>` — `BUILT_IN` is not excluded). Nothing to add
+DISCOVERY_SOURCES.WORKSPACE_CTRLYOKE>` — `BUILT_IN` is not excluded). Nothing to add
   to the type system; skills just never populate this source today.
 - `discoverAgents()` appends built-ins **after** user/workspace agents and filters out
   any built-in name a real file already claims (`AgentDiscovery.ts:153-158`) — built-in
@@ -101,7 +101,7 @@ never hit the "harness can't read this path" problem in the first place. Skills 
 both: a `discoverBuiltInSkills()` mirror of this pattern, **and** the §1.2 fix (built-in
 skills have no path to point at — they must always take the "embed full content" branch).
 
-### 1.4 Commit-message generation already has an MCP-first / text-fallback split, but no "MCP unavailable" *detection*
+### 1.4 Commit-message generation already has an MCP-first / text-fallback split, but no "MCP unavailable" _detection_
 
 `CommitMessageGenerator.generateMessage()` (`src/git/CommitMessageGenerator.ts:144-371`)
 already:
@@ -112,20 +112,20 @@ already:
   (lines 212-217).
 - Falls back to parsing the response text (lines 339-370) when the tool wasn't called.
 
-But `useMcpCapture` (lines 200-206) is decided purely by *"does `out/mcp-server.js` exist
-on disk"* — there is no concept of *"the file exists but the harness's environment is
-policy-blocked from using any MCP config at all."* In that situation today, ctrlyoke
+But `useMcpCapture` (lines 200-206) is decided purely by _"does `out/mcp-server.js` exist
+on disk"_ — there is no concept of _"the file exists but the harness's environment is
+policy-blocked from using any MCP config at all."_ In that situation today, ctrlyoke
 still attaches `mcpServerConfig` to the step, the harness silently ignores/rejects it
 (varies by harness/policy), and generation degrades to the text-extraction fallback with
 no warning that anything different happened. `.github/instructions/git.instructions.md`
 already documents "structured MCP submission is primary, prose parsing is only a
 fallback" as a locked-in contract — this plan needs to preserve that contract while
-giving MCP-disabled environments a *second* structured path (the skill), not just a
+giving MCP-disabled environments a _second_ structured path (the skill), not just a
 worse silent one.
 
-*(Note: `dev/backlog/COMMIT_MESSAGE_GENERATION_VISIBILITY_PLAN.md` addresses a different,
+_(Note: `dev/backlog/COMMIT_MESSAGE_GENERATION_VISIBILITY_PLAN.md` addresses a different,
 orthogonal gap — that these one-shot runs aren't persisted/viewable. That plan and this
-one don't conflict; cross-reference only.)*
+one don't conflict; cross-reference only.)_
 
 ### 1.5 Env-var wiring: `CTRLYOKE_WORKING_FILE`/`CTRLYOKE_WORKSPACE` only reach the MCP subprocess today
 
@@ -133,7 +133,7 @@ one don't conflict; cross-reference only.)*
 `CTRLYOKE_WORKSPACE`/`CTRLYOKE_WORKING_FILE` **only inside the generated MCP server
 entry's own `env` block** (`CliProviderUtils.ts` — see `generateJsonConfig` in
 `src/core/harness/shared/CliProviderUtils.ts:337-341` and the TOML equivalent). The
-harness CLI process's *own* environment is built by
+harness CLI process's _own_ environment is built by
 `CliProviderUtils.buildProcessEnv()` (`CliProviderUtils.ts:457-463`), which only spreads
 `process.env` plus `CTRLYOKE_DIAGNOSTIC_LOGS` — it never sets `CTRLYOKE_WORKING_FILE`.
 
@@ -169,7 +169,7 @@ embed full content instead of a pointer whenever the answer is no.
   (skill lives in the workspace being handed to the harness).
 - This is the general fix (also fixes the real, pre-existing "sandboxed harness +
   user-home skill" bug from §1.2) and, as a side effect, is exactly the mechanism Phase 2
-  needs: a built-in skill's path is *never* inside the execution checkout, so it always
+  needs: a built-in skill's path is _never_ inside the execution checkout, so it always
   takes the "embed full body" branch — except its "body" isn't file content, it's
   generated text (see Phase 2).
 
@@ -191,11 +191,11 @@ Add a second, non-transport entry path to the same binary, reusing `invokeTool` 
 - Before constructing `CtrlYokeMCPServer`, set `process.env.CTRLYOKE_WORKSPACE` /
   `CTRLYOKE_WORKING_FILE` from the parsed flags (both `requireRunAddress()` and the
   constructor read these from `process.env`, not from constructor options for the
-  working-file address) — this is what makes the CLI form usable from *outside* an
+  working-file address) — this is what makes the CLI form usable from _outside_ an
   MCP-launched subprocess (§1.5).
 - Call the same `initializeMcpStorage()` the `start()` path already calls
   (`mcp-server.ts:1115`), then `new CtrlYokeMCPServer({ workspaceRoot
-  }).invokeTool(name, JSON.parse(argsJson))`; print the result's `content[0].text` to
+}).invokeTool(name, JSON.parse(argsJson))`; print the result's `content[0].text` to
   stdout; `process.exit(0)`. On a thrown error, print `error.message` to stderr and
   `process.exit(1)` — mirroring the existing transport handler's error shape
   (`mcp-server.ts:319-333`) closely enough that a harness parsing either output sees a
@@ -205,7 +205,7 @@ Add a second, non-transport entry path to the same binary, reusing `invokeTool` 
 
 ### Phase 2 — built-in skill registry + autogenerated "MCP tools" skill content
 
-Mirror the built-in-agents precedent (§1.3) for skills, but make the *body* generated
+Mirror the built-in-agents precedent (§1.3) for skills, but make the _body_ generated
 from live tool definitions instead of a static file, so it updates automatically when
 `getToolDefinitions()` changes — the user's explicit design goal.
 
@@ -229,8 +229,8 @@ from live tool definitions instead of a static file, so it updates automatically
   file, e.g. `src/utils/McpToolSkillGenerator.ts`) that renders, per tool: name,
   description, a human-readable parameter list from `inputSchema.properties`/`required`,
   and one concrete example `node "<mcp-server.js path>" --tool <name> --args
-  '<example-json>' --workspace "<path>" --working-file "<path>"` line.
-- Wire generation into *expand time*, not build time (build-time codegen would go stale
+'<example-json>' --workspace "<path>" --working-file "<path>"` line.
+- Wire generation into _expand time_, not build time (build-time codegen would go stale
   the moment someone edits `getToolDefinitions()` without also running a codegen step —
   defeating the "for free" goal): when Phase 0's "embed full body" branch fires for a
   **built-in** skill specifically, call `McpToolSkillGenerator.generateToolReference()`
@@ -284,7 +284,7 @@ has to be a user-set toggle (see §4 non-goals).
   — per §1.5, relying on env passthrough into a harness-spawned child process is not
   reliable across harnesses/OSes.
 - Diff, fallback text-extraction, and `CommitMessageGenerationRecord` are all unaffected
-  — this phase only changes *how* the structured capture happens when MCP is
+  — this phase only changes _how_ the structured capture happens when MCP is
   unavailable, not the surrounding contract documented in
   `.github/instructions/git.instructions.md`.
 
@@ -301,7 +301,7 @@ of an active run. Not required for the core capability to work.
 ## 3. Non-goals
 
 - **Not** replacing the native MCP integration as the default path. `mcpAvailability:
-  "auto"` (default) must produce byte-identical behavior to today.
+"auto"` (default) must produce byte-identical behavior to today.
 - **Not** a generic "any MCP server as a skill" system. Scoped specifically to
   ctrlyoke's own `src/mcp-server.ts` surface — the only server ctrlyoke fully controls.
   User-defined `mcpServers` entries in a workflow are unaffected and out of scope.
@@ -338,7 +338,7 @@ of an active run. Not required for the core capability to work.
    Probably safe to embed the body verbatim, frontmatter included — confirm at
    implementation time that no harness chokes on a leading `---` block in an XML-wrapped
    attachment.
-2. **Phase 3's exact resolver insertion point.** This research pass confirmed *where*
+2. **Phase 3's exact resolver insertion point.** This research pass confirmed _where_
    `resolvedProperties.mcpServers` is consumed (`CliProviderUtils.planMcpConfigBlock`)
    but did not trace the property-resolution layer that would need to also touch
    `resolvedProperties.skills` in the same pass. Needs a focused look at whatever
@@ -362,14 +362,14 @@ of an active run. Not required for the core capability to work.
 
 ## 6. Phasing
 
-| Phase | Content                                                                 | Ships value alone? |
-| ----- | ------------------------------------------------------------------------ | ------------------- |
-| 0     | Fix skill expansion to embed full content for unreadable paths           | Yes — fixes a real, pre-existing sandboxed-harness bug independent of everything else here |
-| 1     | `--tool`/`--args` CLI entrypoint on `mcp-server.ts`, reusing `invokeTool` | Partial — testable in isolation, not yet reachable from a real prompt |
-| 2     | Built-in skill registry + autogenerated queue-tools skill content        | Yes — the core "MCP as skill" capability, usable once a user manually attaches the skill |
-| 3     | `mcpAvailability` setting + auto-swap wiring                             | Yes — completes the "just works when MCP is policy-disabled" loop for queue tools |
-| 4     | Commit-message skill parity                                              | Yes — completes the loop for the commit-message button specifically |
-| 5     | Built-in skill export/discoverability in the Agent & Skills Manager      | Nice-to-have; independent of 0-4 |
+| Phase | Content                                                                   | Ships value alone?                                                                         |
+| ----- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 0     | Fix skill expansion to embed full content for unreadable paths            | Yes — fixes a real, pre-existing sandboxed-harness bug independent of everything else here |
+| 1     | `--tool`/`--args` CLI entrypoint on `mcp-server.ts`, reusing `invokeTool` | Partial — testable in isolation, not yet reachable from a real prompt                      |
+| 2     | Built-in skill registry + autogenerated queue-tools skill content         | Yes — the core "MCP as skill" capability, usable once a user manually attaches the skill   |
+| 3     | `mcpAvailability` setting + auto-swap wiring                              | Yes — completes the "just works when MCP is policy-disabled" loop for queue tools          |
+| 4     | Commit-message skill parity                                               | Yes — completes the loop for the commit-message button specifically                        |
+| 5     | Built-in skill export/discoverability in the Agent & Skills Manager       | Nice-to-have; independent of 0-4                                                           |
 
 Phase 0 should land first regardless of the rest of this plan's priority — it is a
 correctness fix on its own. Phases 1-2 can land and be manually useful (a user attaches

@@ -556,7 +556,9 @@ function execWithClosedStdin(command, args, timeoutMs) {
         resolvePromise(stdout);
       } else {
         rejectPromise(
-          new Error(`Command failed (exit ${code}): ${stderr.trim() || stdout.trim()}`)
+          new Error(
+            `Command failed (exit ${code}): ${stderr.trim() || stdout.trim()}`
+          )
         );
       }
     });
@@ -579,7 +581,9 @@ async function discoverAntigravityFromCli() {
     stdout = await execWithClosedStdin("agy", ["models"], 15000);
   } catch (error) {
     console.error("Failed to run 'agy models':", error.message);
-    console.log("\nMake sure Antigravity CLI (agy) is installed and in your PATH.");
+    console.log(
+      "\nMake sure Antigravity CLI (agy) is installed and in your PATH."
+    );
     process.exit(1);
   }
 
@@ -631,7 +635,10 @@ async function discoverAntigravityFromCli() {
  * model IDs relative to what was previously there.
  */
 function updateAntigravityModelsAndLabels(content, modelPairs) {
-  const currentIds = parseStringArrayConstant(content, "ANTIGRAVITY_CLI_MODELS");
+  const currentIds = parseStringArrayConstant(
+    content,
+    "ANTIGRAVITY_CLI_MODELS"
+  );
 
   const modelIds = modelPairs.map(([id]) => id);
   const idEntries = modelIds.map((id) => `  "${id}"`);
@@ -642,9 +649,7 @@ function updateAntigravityModelsAndLabels(content, modelPairs) {
     newIdsBlock
   );
 
-  const labelEntries = modelPairs.map(
-    ([id, label]) => `  "${id}": "${label}"`
-  );
+  const labelEntries = modelPairs.map(([id, label]) => `  "${id}": "${label}"`);
   const newLabelsBlock = `export const ANTIGRAVITY_CLI_MODEL_LABELS: Record<string, string> = {\n${labelEntries.join(",\n")},\n}`;
 
   updatedContent = updatedContent.replace(
@@ -669,7 +674,9 @@ async function main() {
   if (discover) {
     await discoverFromCli();
     await discoverAntigravityFromCli();
-    console.log("\nNext step: Run 'npm run sync-models' to update package.json");
+    console.log(
+      "\nNext step: Run 'npm run sync-models' to update package.json"
+    );
     return;
   }
 

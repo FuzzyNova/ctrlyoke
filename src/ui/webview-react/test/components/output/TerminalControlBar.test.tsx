@@ -55,13 +55,10 @@ describe("TerminalControlBar", () => {
     cleanup();
     useSettingsStore.getState().resetSettings();
     sendMessageMock.mockReset();
-    vi.stubGlobal(
-      "requestAnimationFrame",
-      (callback: FrameRequestCallback) => {
-        callback(0);
-        return 0;
-      }
-    );
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0);
+      return 0;
+    });
   });
 
   afterEach(() => {
@@ -105,14 +102,11 @@ describe("TerminalControlBar", () => {
 
     fireEvent.keyDown(document, { key: "c" });
 
-    expect(sendMessageMock).toHaveBeenCalledWith(
-      MESSAGE_TYPES.TERMINAL_INPUT,
-      {
-        workflowId: "workflow-1",
-        sessionId: "session-1",
-        data: "\x03",
-      }
-    );
+    expect(sendMessageMock).toHaveBeenCalledWith(MESSAGE_TYPES.TERMINAL_INPUT, {
+      workflowId: "workflow-1",
+      sessionId: "session-1",
+      data: "\x03",
+    });
     expect(ctrlButton).toHaveAttribute("aria-pressed", "false");
   });
 
@@ -173,8 +167,8 @@ describe("TerminalControlBar", () => {
     const popupItems = screen
       .getByRole("menu")
       .querySelectorAll('[role="menuitem"]');
-    expect(Array.from(popupItems).map((item) => item.textContent?.trim())).toEqual(
-      ["Custom", "Ctrl+C"]
-    );
+    expect(
+      Array.from(popupItems).map((item) => item.textContent?.trim())
+    ).toEqual(["Custom", "Ctrl+C"]);
   });
 });

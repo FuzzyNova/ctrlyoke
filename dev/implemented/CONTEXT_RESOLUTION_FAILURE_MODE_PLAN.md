@@ -141,7 +141,7 @@ controls — rather than inventing a `SettingSelectRow` for a single use.
 1. `assertNoSecretInterpolationInPrompt` — rejects `${secret:X}` in prompt
    text. ~~This is always an authoring error; keep it an unconditional
    throw.~~ **Reversed during review — see Phase 8.** This was wrong: prompt
-   text frequently *documents* the syntax (this very plan does), and the check
+   text frequently _documents_ the syntax (this very plan does), and the check
    cannot tell an author who expects substitution from a prompt that merely
    quotes the token. It hard-failed several legitimate runs of this workflow.
    It is now a non-blocking advisory diagnostic.
@@ -427,7 +427,7 @@ step failure does today (not a warning row; an actual failure/error state).
       `reportCompatibilityDiagnostics`, so the author still learns the token is
       passed through verbatim. **The advisory is deliberately excluded from
       `isContextResolutionDiagnostic`, so it never blocks a step even in
-      `"fail"` mode** — nothing failed to *resolve* here; prompt bodies simply
+      `"fail"` mode** — nothing failed to _resolve_ here; prompt bodies simply
       are not a resolution boundary. The env-map grant-consistency throw
       (check 2) is unchanged: those maps really do interpolate, so an ungranted
       name there remains a genuine error.
@@ -442,26 +442,26 @@ legitimately exceeded the old limit; this is test infrastructure only.
 
 ## Files Likely Changed
 
-| File                                                                             | Change                                                                                  |
-| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `schemas/settings-schema.json`                                                   | Add `execution.strictContextResolution`                                                 |
-| `src/types/CtrlYokeSettings.ts`                                                  | Add the `execution` interface member + `CTRLYOKE_SETTINGS_DEFAULTS` entry (`"warn"`)    |
-| `src/ui/webview-react/components/settings/ExecutionSection.tsx`                  | Add the settings row (enum `<select>` inside `SettingInputRow`)                         |
-| `src/utils/ConfigurationUtils.ts`                                                | Add `getContextResolutionFailureMode()`                                                 |
-| `src/types/DashboardConstants.ts`                                                | Shared prompt diagnostic codes, resolution predicate, and failure-message formatter     |
-| `src/core/harness/shared/CliPromptPreparer.ts`                                   | Point prompt preparation at the shared diagnostic codes                                 |
-| `src/utils/McpServerNormalizer.ts`                                               | Replace the hardcoded `"prompt.mcp.unknown"` literal with the shared constant           |
+| File                                                                             | Change                                                                                                                                                  |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schemas/settings-schema.json`                                                   | Add `execution.strictContextResolution`                                                                                                                 |
+| `src/types/CtrlYokeSettings.ts`                                                  | Add the `execution` interface member + `CTRLYOKE_SETTINGS_DEFAULTS` entry (`"warn"`)                                                                    |
+| `src/ui/webview-react/components/settings/ExecutionSection.tsx`                  | Add the settings row (enum `<select>` inside `SettingInputRow`)                                                                                         |
+| `src/utils/ConfigurationUtils.ts`                                                | Add `getContextResolutionFailureMode()`                                                                                                                 |
+| `src/types/DashboardConstants.ts`                                                | Shared prompt diagnostic codes, resolution predicate, and failure-message formatter                                                                     |
+| `src/core/harness/shared/CliPromptPreparer.ts`                                   | Point prompt preparation at the shared diagnostic codes                                                                                                 |
+| `src/utils/McpServerNormalizer.ts`                                               | Replace the hardcoded `"prompt.mcp.unknown"` literal with the shared constant                                                                           |
 | `src/utils/SecretResolver.ts`                                                    | Add `failOnMissing` option to `preflightWorkflowSecrets`; replace the prompt-text interpolation throw with `findSecretInterpolationsInPrompt` (Phase 8) |
-| `src/core/WorkflowInstance.ts`                                                   | Pass resolved mode into `preflightWorkflowSecrets`                                      |
-| `src/cli/SecretCommands.ts`                                                      | No change (confirm it still calls with default `failOnMissing: true`)                   |
-| `src/utils/ContextExpander.ts`                                                   | `expandGitChanges` returns `{ attachments, skipped }`; thread into `expandContextSplit` |
-| `src/core/harness/CliIntegration.ts`                                             | Insert per-step "fail" gate before `session.preparePrompt(...)`                         |
-| `src/core/WorkflowExecutor.ts`                                                   | Insert per-step "fail" gate after MCP diagnostics, before integration lookup            |
-| `src/test/unit/SecretResolver.test.ts`                                           | Cover conditional resolvability throw                                                   |
-| `src/test/unit/ContextExpander*.test.ts` (or `src/test/contextExpander.test.ts`) | Cover git-ref → `skippedReferences`                                                     |
-| `src/test/unit/CliIntegration.test.ts`                                           | Cover the new "fail" gate for skill/file/secret diagnostics                             |
-| `src/test/unit/WorkflowExecutor*.test.ts`                                        | Cover the new "fail" gate for MCP diagnostics                                           |
-| `.github/instructions/*.instructions.md`                                         | Document the two-chokepoint gate + "mode ignores severity" decision                     |
+| `src/core/WorkflowInstance.ts`                                                   | Pass resolved mode into `preflightWorkflowSecrets`                                                                                                      |
+| `src/cli/SecretCommands.ts`                                                      | No change (confirm it still calls with default `failOnMissing: true`)                                                                                   |
+| `src/utils/ContextExpander.ts`                                                   | `expandGitChanges` returns `{ attachments, skipped }`; thread into `expandContextSplit`                                                                 |
+| `src/core/harness/CliIntegration.ts`                                             | Insert per-step "fail" gate before `session.preparePrompt(...)`                                                                                         |
+| `src/core/WorkflowExecutor.ts`                                                   | Insert per-step "fail" gate after MCP diagnostics, before integration lookup                                                                            |
+| `src/test/unit/SecretResolver.test.ts`                                           | Cover conditional resolvability throw                                                                                                                   |
+| `src/test/unit/ContextExpander*.test.ts` (or `src/test/contextExpander.test.ts`) | Cover git-ref → `skippedReferences`                                                                                                                     |
+| `src/test/unit/CliIntegration.test.ts`                                           | Cover the new "fail" gate for skill/file/secret diagnostics                                                                                             |
+| `src/test/unit/WorkflowExecutor*.test.ts`                                        | Cover the new "fail" gate for MCP diagnostics                                                                                                           |
+| `.github/instructions/*.instructions.md`                                         | Document the two-chokepoint gate + "mode ignores severity" decision                                                                                     |
 
 ## Testing
 

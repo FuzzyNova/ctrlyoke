@@ -53,9 +53,10 @@ function platformWith(store: SecretStore): PlatformAdapter {
   };
 }
 
-class AllowAllSecretGrantsTrustStore
-  implements Pick<SecretGrantsTrustStore, "getDecision">
-{
+class AllowAllSecretGrantsTrustStore implements Pick<
+  SecretGrantsTrustStore,
+  "getDecision"
+> {
   getDecision(
     _workspaceIdentity: string,
     _secretName: string
@@ -83,8 +84,7 @@ function preflightWorkflowSecrets(
     environment,
     {
       ...options,
-      trustStore:
-        options.trustStore ?? new AllowAllSecretGrantsTrustStore(),
+      trustStore: options.trustStore ?? new AllowAllSecretGrantsTrustStore(),
     }
   );
 }

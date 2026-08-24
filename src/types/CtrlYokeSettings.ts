@@ -395,7 +395,9 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     codexApprovalPolicy: "on-request",
     statusLineTracking: {
       useDifferentFormatPerHarness: false,
-      sharedFormat: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({ ...segment })),
+      sharedFormat: DEFAULT_STATUS_LINE_FORMAT.map((segment) => ({
+        ...segment,
+      })),
       [STATUS_LINE_TRACKING_PROVIDERS.CLAUDE]: {
         enabled: true,
         customCommand: "",

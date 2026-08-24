@@ -193,9 +193,9 @@ export function StatsUsageSection({
               this page.
             </p>
             <p className="text-xs text-description-fg mt-1">
-              Local only — nothing is uploaded or shared with ctrlyoke. Usage
-              is read from your own harness sessions and saved in files on
-              this machine.
+              Local only — nothing is uploaded or shared with ctrlyoke. Usage is
+              read from your own harness sessions and saved in files on this
+              machine.
             </p>
           </div>
           <div className="space-y-3">
@@ -346,8 +346,8 @@ export function StatsUsageSection({
       <p className="text-xs text-description-fg">
         Totals are ctrlyoke-observed only; they do not include harness activity
         outside ctrlyoke. Costs are estimated from token counts at API list
-        prices, or taken directly from a harness's own reported figure when
-        one is available; either way, they are not subscription spend.
+        prices, or taken directly from a harness's own reported figure when one
+        is available; either way, they are not subscription spend.
       </p>
       {settings && (
         <section

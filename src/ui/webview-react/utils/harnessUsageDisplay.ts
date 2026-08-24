@@ -83,8 +83,7 @@ export function getHarnessUsageDisplay(
   );
   const quotaPhrase = windows
     .map((window) => {
-      const resetPassed =
-        window.resetAt !== undefined && now >= window.resetAt;
+      const resetPassed = window.resetAt !== undefined && now >= window.resetAt;
       const finiteTotals = hasFiniteQuotaTotals(window);
       const label = window.isUnlimited
         ? "Unlimited"
