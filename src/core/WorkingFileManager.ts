@@ -1,4 +1,5 @@
 import * as fs from "fs/promises";
+import { isDeepStrictEqual } from "util";
 import type {
   RunRef,
   WorkflowKey,
@@ -65,14 +66,254 @@ async function readWorkingFileFromDisk(
   }
 }
 
+function getRuntimeSnapshot(workingFile: WorkingFile): {
+  workflow?: WorkingFileRuntime;
+  steps: Array<WorkflowStep["_runtime"]>;
+  finalStep?: WorkflowStep["_runtime"];
+} {
+  return {
+    workflow: workingFile._runtime,
+    steps: (workingFile.steps ?? [])
+      .map((step) => step._runtime)
+      .filter((runtime) => runtime !== undefined),
+    finalStep: workingFile.finalStep?._runtime,
+  };
+}
+
+function bumpLastModifiedAt(workingFile: WorkingFile): void {
+  workingFile.lastModifiedAt = Math.max(
+    Date.now(),
+    (workingFile.lastModifiedAt ?? 0) + 1
+  );
+}
+
+type WorkingFileWriteOptions = {
+  skipLock?: boolean;
+  operation?: string;
+  attemptedFields?: readonly string[];
+};
+
+type WorkingFileFieldStatus = "added" | "removed" | "changed" | "no-op";
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function getFieldChangeStatuses(
+  before: Record<string, unknown> | undefined,
+  after: Record<string, unknown> | undefined,
+  excludedFields: ReadonlySet<string> = new Set()
+): Record<string, WorkingFileFieldStatus> {
+  const fields = new Set([
+    ...Object.keys(before ?? {}),
+    ...Object.keys(after ?? {}),
+  ]);
+  const statuses: Record<string, WorkingFileFieldStatus> = {};
+
+  for (const field of fields) {
+    if (excludedFields.has(field)) {
+      continue;
+    }
+    const beforeHasField = before ? Object.hasOwn(before, field) : false;
+    const afterHasField = after ? Object.hasOwn(after, field) : false;
+    if (
+      beforeHasField &&
+      afterHasField &&
+      isDeepStrictEqual(before?.[field], after?.[field])
+    ) {
+      statuses[field] = "no-op";
+    } else if (!beforeHasField && afterHasField) {
+      statuses[field] = "added";
+    } else if (beforeHasField && !afterHasField) {
+      statuses[field] = "removed";
+    } else {
+      statuses[field] = "changed";
+    }
+  }
+
+  return statuses;
+}
+
+function getRuntimeChangeSummary(
+  before: WorkingFile | undefined,
+  after: WorkingFile
+): {
+  workflow: Record<string, WorkingFileFieldStatus>;
+  steps: Record<string, WorkingFileFieldStatus>;
+  finalStep: Record<string, WorkingFileFieldStatus>;
+} {
+  const beforeSteps = before?.steps ?? [];
+  const afterSteps = after.steps ?? [];
+  const stepStatuses: Record<string, WorkingFileFieldStatus> = {};
+  for (
+    let index = 0;
+    index < Math.max(beforeSteps.length, afterSteps.length);
+    index++
+  ) {
+    const statuses = getFieldChangeStatuses(
+      asRecord(beforeSteps[index]?._runtime),
+      asRecord(afterSteps[index]?._runtime)
+    );
+    for (const [field, status] of Object.entries(statuses)) {
+      stepStatuses[`steps[${index}]._runtime.${field}`] = status;
+    }
+  }
+
+  const finalStepStatuses = getFieldChangeStatuses(
+    asRecord(before?.finalStep?._runtime),
+    asRecord(after.finalStep?._runtime)
+  );
+
+  return {
+    workflow: getFieldChangeStatuses(
+      asRecord(before?._runtime),
+      asRecord(after._runtime)
+    ),
+    steps: stepStatuses,
+    finalStep: Object.fromEntries(
+      Object.entries(finalStepStatuses).map(([field, status]) => [
+        `finalStep._runtime.${field}`,
+        status,
+      ])
+    ),
+  };
+}
+
+function getRuntimeValues(workingFile: WorkingFile | undefined): {
+  workflow: WorkingFileRuntime | undefined;
+  steps: Record<number, WorkflowStep["_runtime"]>;
+  finalStep: WorkflowStep["_runtime"];
+} {
+  const steps: Record<number, WorkflowStep["_runtime"]> = {};
+  for (const [index, step] of (workingFile?.steps ?? []).entries()) {
+    if (step._runtime !== undefined) {
+      steps[index] = step._runtime;
+    }
+  }
+  return {
+    workflow: workingFile?._runtime,
+    steps,
+    finalStep: workingFile?.finalStep?._runtime,
+  };
+}
+
+function getDefinitionChangeSummary(
+  before: WorkingFile | undefined,
+  after: WorkingFile
+): {
+  steps: Record<string, WorkingFileFieldStatus>;
+  finalStep: Record<string, WorkingFileFieldStatus>;
+} {
+  const beforeSteps = before?.steps ?? [];
+  const afterSteps = after.steps ?? [];
+  const stepStatuses: Record<string, WorkingFileFieldStatus> = {};
+  for (
+    let index = 0;
+    index < Math.max(beforeSteps.length, afterSteps.length);
+    index++
+  ) {
+    const statuses = getFieldChangeStatuses(
+      asRecord(beforeSteps[index]),
+      asRecord(afterSteps[index]),
+      new Set(["_runtime"])
+    );
+    for (const [field, status] of Object.entries(statuses)) {
+      stepStatuses[`steps[${index}].${field}`] = status;
+    }
+  }
+
+  const finalStepStatuses = getFieldChangeStatuses(
+    asRecord(before?.finalStep),
+    asRecord(after.finalStep),
+    new Set(["_runtime"])
+  );
+
+  return {
+    steps: stepStatuses,
+    finalStep: Object.fromEntries(
+      Object.entries(finalStepStatuses).map(([field, status]) => [
+        `finalStep.${field}`,
+        status,
+      ])
+    ),
+  };
+}
+
+async function readWorkingFileForWriteDiagnostics(
+  workingFilePath: string
+): Promise<WorkingFile | undefined> {
+  try {
+    const content = await fs.readFile(workingFilePath, "utf-8");
+    return stripTimelineDuplicatedWorkingFileOutput(
+      JSON.parse(content) as WorkingFile
+    );
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      Log.debug(
+        `[WorkingFileManager] Unable to read the previous working file for write diagnostics: ${workingFilePath}`
+      );
+    }
+    return undefined;
+  }
+}
+
+async function logWorkingFileWriteDiagnostics(
+  workingFilePath: string,
+  workingFile: WorkingFile,
+  options: WorkingFileWriteOptions
+): Promise<void> {
+  const previousWorkingFile =
+    await readWorkingFileForWriteDiagnostics(workingFilePath);
+  const persistedWorkingFile =
+    stripTimelineDuplicatedWorkingFileOutput(workingFile);
+  const runtime = getRuntimeChangeSummary(
+    previousWorkingFile,
+    persistedWorkingFile
+  );
+  const topLevel = getFieldChangeStatuses(
+    asRecord(previousWorkingFile),
+    asRecord(persistedWorkingFile),
+    new Set(["steps", "finalStep", "_runtime"])
+  );
+  const definition = getDefinitionChangeSummary(
+    previousWorkingFile,
+    persistedWorkingFile
+  );
+
+  Log.debug(
+    `[WorkingFileManager] ${options.operation ?? "atomic-write"} write analysis: ` +
+      JSON.stringify({
+        path: workingFilePath,
+        attemptedFields: options.attemptedFields ?? [],
+        fileChanged: previousWorkingFile
+          ? !isDeepStrictEqual(previousWorkingFile, persistedWorkingFile)
+          : "new-file",
+        topLevel,
+        definition,
+        runtime,
+        runtimeValues: {
+          before: getRuntimeValues(previousWorkingFile),
+          after: getRuntimeValues(persistedWorkingFile),
+        },
+      })
+  );
+}
+
 /** Write a working file atomically (temp + rename), optionally under `withFileLock`. */
 async function writeWorkingFileAtomicTo(
   workingFilePath: string,
   workingFile: WorkingFile,
-  options: { skipLock?: boolean } = {}
+  options: WorkingFileWriteOptions = {}
 ): Promise<void> {
   const writeAction = async () => {
     try {
+      await logWorkingFileWriteDiagnostics(
+        workingFilePath,
+        workingFile,
+        options
+      );
       await writeFileAtomic(
         workingFilePath,
         JSON.stringify(
@@ -274,7 +515,7 @@ export class WorkingFileManager {
   private async writeWorkingFileAtomic(
     workingFilePath: string,
     workingFile: WorkingFile,
-    options: { skipLock?: boolean } = {}
+    options: WorkingFileWriteOptions = {}
   ): Promise<void> {
     return writeWorkingFileAtomicTo(workingFilePath, workingFile, options);
   }
@@ -1496,6 +1737,16 @@ export class WorkingFileManager {
       return; // No working file to update
     }
 
+    const caller = new Error().stack
+      ?.split("\n")
+      .slice(2, 6)
+      .map((line) => line.trim())
+      .join(" <- ");
+    Log.debug(
+      `[WorkingFileManager] updateWorkingFile requested: ` +
+        JSON.stringify({ skipMerge, caller })
+    );
+
     // Serialize operation to prevent race conditions
     const operation = this.operationQueue.then(() =>
       this.updateWorkingFileDirect(skipMerge)
@@ -1524,6 +1775,7 @@ export class WorkingFileManager {
       // Read current working file from disk
       const workingFile = await this.readWorkingFile(workingFilePath);
       this.assertExpectedDefinitionRevision(workingFile);
+      const originalRuntime = getRuntimeSnapshot(workingFile);
 
       // CRITICAL FIX: Merge steps from disk instead of blindly overwriting
       // This preserves MCP-appended steps that may have been added while we were running
@@ -1584,19 +1836,23 @@ export class WorkingFileManager {
           `_runtime: ${stepsWithRuntime}/${workingFile.steps.length} steps`
       );
 
-      // Update workflow name if set in state
+      // Update workflow name if set in state. A name change is a definition
+      // change even when the queue's revision predates the name assignment
+      // (for example, the first prompt naming an ephemeral workflow).
       const workflowName = this.queueAccess.getWorkflowName();
+      const definitionRevision = this.queueAccess.getDefinitionRevision();
+      const definitionChanged =
+        definitionRevision !== (workingFile.definitionRevision ?? 1) ||
+        (workflowName !== undefined &&
+          workflowName !== workingFile.workflowName);
       if (workflowName) {
         workingFile.workflowName = workflowName;
       }
 
-      // Update last modified timestamp
-      workingFile.lastModifiedAt = Date.now();
-
       // Definition revision is bumped by the queue's definition-mutating methods
       // (append/insert/replace/delete/reorder); this just serializes the current
-      // in-memory value. Not bumped here — pure runtime persistence must not advance it.
-      workingFile.definitionRevision = this.queueAccess.getDefinitionRevision();
+      // in-memory value.
+      workingFile.definitionRevision = definitionRevision;
 
       // Update workflow-level runtime state
       // completedPrompts is no longer written; per-prompt _runtime.completedAt is the source of truth
@@ -1615,9 +1871,26 @@ export class WorkingFileManager {
           : {}),
       };
 
+      const runtimeChanged = !isDeepStrictEqual(
+        originalRuntime,
+        getRuntimeSnapshot(workingFile)
+      );
+      if (definitionChanged || runtimeChanged) {
+        bumpLastModifiedAt(workingFile);
+      }
+
       // Write atomically while holding lock
       await this.writeWorkingFileAtomic(workingFilePath, workingFile, {
         skipLock: true,
+        operation: "updateWorkingFileDirect",
+        attemptedFields: [
+          "steps",
+          "finalStep._runtime",
+          "workflowName",
+          "definitionRevision",
+          "_runtime",
+          "lastModifiedAt",
+        ],
       });
     });
   }
@@ -1660,7 +1933,7 @@ export class WorkingFileManager {
         currentIndex: 0,
         executionState: EXECUTION_STATES.IDLE,
       };
-      workingFile._runtime = {
+      const nextRuntime = {
         ...currentRuntime,
         worktree: {
           ...currentRuntime.worktree,
@@ -1668,9 +1941,14 @@ export class WorkingFileManager {
           updatedAt: patch.updatedAt ?? Date.now(),
         } as NonNullable<typeof currentRuntime.worktree>,
       };
-      workingFile.lastModifiedAt = Date.now();
+      if (!isDeepStrictEqual(currentRuntime, nextRuntime)) {
+        bumpLastModifiedAt(workingFile);
+      }
+      workingFile._runtime = nextRuntime;
       await writeWorkingFileAtomicTo(workingFilePath, workingFile, {
         skipLock: true,
+        operation: "updateWorktreeRuntimeAtRun",
+        attemptedFields: ["_runtime.worktree", "lastModifiedAt"],
       });
     });
   }
@@ -1698,7 +1976,7 @@ export class WorkingFileManager {
           currentIndex: this.queueAccess.getCurrentIndex(),
           executionState: this.queueAccess.getStatus(),
         };
-        workingFile._runtime = {
+        const nextRuntime = {
           ...currentRuntime,
           worktree: {
             ...currentRuntime.worktree,
@@ -1706,9 +1984,14 @@ export class WorkingFileManager {
             updatedAt: patch.updatedAt ?? Date.now(),
           } as NonNullable<typeof currentRuntime.worktree>,
         };
-        workingFile.lastModifiedAt = Date.now();
+        if (!isDeepStrictEqual(currentRuntime, nextRuntime)) {
+          bumpLastModifiedAt(workingFile);
+        }
+        workingFile._runtime = nextRuntime;
         await this.writeWorkingFileAtomic(workingFilePath, workingFile, {
           skipLock: true,
+          operation: "updateWorktreeRuntime",
+          attemptedFields: ["_runtime.worktree", "lastModifiedAt"],
         });
       });
     });
@@ -1733,13 +2016,18 @@ export class WorkingFileManager {
           currentIndex: this.queueAccess.getCurrentIndex(),
           executionState: this.queueAccess.getStatus(),
         };
-        workingFile._runtime = {
+        const nextRuntime = {
           ...currentRuntime,
           worktreeNotice: notice,
         };
-        workingFile.lastModifiedAt = Date.now();
+        if (!isDeepStrictEqual(currentRuntime, nextRuntime)) {
+          bumpLastModifiedAt(workingFile);
+        }
+        workingFile._runtime = nextRuntime;
         await this.writeWorkingFileAtomic(workingFilePath, workingFile, {
           skipLock: true,
+          operation: "updateWorktreeNotice",
+          attemptedFields: ["_runtime.worktreeNotice", "lastModifiedAt"],
         });
       });
     });
@@ -1835,6 +2123,14 @@ export class WorkingFileManager {
             (workingFile.definitionRevision ?? 1) + 1;
           await this.writeWorkingFileAtomic(workingFilePath, workingFile, {
             skipLock: true,
+            operation: "updateWorkingFileProperties",
+            attemptedFields: [
+              ...Object.keys(properties),
+              "harness",
+              "model",
+              "lastModifiedAt",
+              "definitionRevision",
+            ],
           });
           this.queueAccess.setDefinitionRevision(
             workingFile.definitionRevision

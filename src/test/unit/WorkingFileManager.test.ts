@@ -407,6 +407,64 @@ suite("WorkingFileManager", () => {
       assert.strictEqual(parsed.definitionRevision, 3);
     });
 
+    test("updateWorkingFileDirect preserves lastModifiedAt for runtime-only writes", async () => {
+      const workingFilePath = tempFile("runtime-timestamp");
+      await writeTempJson(workingFilePath, {
+        ...makeMinimalWorkingFile(),
+        lastModifiedAt: 1_234,
+        definitionRevision: 4,
+      });
+
+      const access = makeMockAccess(workingFilePath);
+      access.setDefinitionRevision(4);
+      await new WorkingFileManager(access).updateWorkingFileDirect();
+
+      const persisted = JSON.parse(
+        await fs.readFile(workingFilePath, "utf-8")
+      ) as WorkingFile;
+      assert.strictEqual(persisted.lastModifiedAt, 1_234);
+      assert.strictEqual(persisted.definitionRevision, 4);
+    });
+
+    test("updateWorkingFileDirect bumps lastModifiedAt for runtime writes", async () => {
+      const workingFilePath = tempFile("runtime-timestamp-change");
+      await writeTempJson(workingFilePath, {
+        ...makeMinimalWorkingFile(),
+        lastModifiedAt: 1,
+        definitionRevision: 4,
+      });
+
+      const access = makeMockAccess(workingFilePath);
+      access.setDefinitionRevision(4);
+      access.getStatus = () => EXECUTION_STATES.STOPPED;
+      await new WorkingFileManager(access).updateWorkingFileDirect();
+
+      const persisted = JSON.parse(
+        await fs.readFile(workingFilePath, "utf-8")
+      ) as WorkingFile;
+      assert.ok((persisted.lastModifiedAt ?? 0) > 1);
+      assert.strictEqual(persisted.definitionRevision, 4);
+    });
+
+    test("updateWorkingFileDirect bumps lastModifiedAt for definition writes", async () => {
+      const workingFilePath = tempFile("definition-timestamp");
+      await writeTempJson(workingFilePath, {
+        ...makeMinimalWorkingFile(),
+        lastModifiedAt: 1,
+        definitionRevision: 4,
+      });
+
+      const access = makeMockAccess(workingFilePath);
+      access.setDefinitionRevision(5);
+      await new WorkingFileManager(access).updateWorkingFileDirect();
+
+      const persisted = JSON.parse(
+        await fs.readFile(workingFilePath, "utf-8")
+      ) as WorkingFile;
+      assert.ok((persisted.lastModifiedAt ?? 0) > 1);
+      assert.strictEqual(persisted.definitionRevision, 5);
+    });
+
     test("updateWorkingFileDirect persists pause-aware execution timing", async () => {
       tmpWorkspace = await makeTmpWorkspace();
       const { workingFilePath } = await new WorkingFileManager(
@@ -447,6 +505,7 @@ suite("WorkingFileManager", () => {
       const worktree = makeWorktreeRuntime();
       await writeTempJson(workingFilePath, {
         ...makeMinimalWorkingFile(),
+        lastModifiedAt: 1_234,
         definitionRevision: 7,
         _runtime: {
           currentIndex: 2,
@@ -471,6 +530,7 @@ suite("WorkingFileManager", () => {
         EXECUTION_STATES.PAUSED
       );
       assert.strictEqual(persisted.definitionRevision, 7);
+      assert.ok((persisted.lastModifiedAt ?? 0) > 1_234);
     });
 
     test("atomically patches worktree runtime without disturbing queue runtime or definition revision", async () => {
@@ -478,6 +538,7 @@ suite("WorkingFileManager", () => {
       const worktree = makeWorktreeRuntime();
       await writeTempJson(workingFilePath, {
         ...makeMinimalWorkingFile(),
+        lastModifiedAt: 1_234,
         definitionRevision: 9,
         _runtime: {
           currentIndex: 4,
@@ -512,6 +573,7 @@ suite("WorkingFileManager", () => {
       });
       assert.strictEqual(persisted.definitionRevision, 9);
       assert.strictEqual(access.getDefinitionRevision(), 9);
+      assert.ok((persisted.lastModifiedAt ?? 0) > 1_234);
     });
 
     test("invalidates the run summary cache when worktree runtime changes", async () => {
