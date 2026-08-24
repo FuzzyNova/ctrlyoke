@@ -237,7 +237,12 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
             ? `${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)}/${workflow.totalSteps}`
             : undefined
         }
-        worktree={workflow.worktree ?? lineage?.worktree}
+        // The live instance's own projection only — never the lineage's
+        // last-persisted snapshot, which can still name a worktree this run
+        // stopped using (e.g. the workflow was reconfigured to "none" and
+        // resumed on main): a running row must show where this run is
+        // actually executing right now, not history.
+        worktree={workflow.worktree}
         glyph={
           hasActiveTerminal && (
             <i
