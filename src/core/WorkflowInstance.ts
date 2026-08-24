@@ -236,6 +236,16 @@ export class WorkflowInstance {
   private endConditionHandler: EndConditionHandler;
   private readonly worktreeManager: WorktreeManager;
   private activeWorktree: WorktreeInfo | undefined;
+  /**
+   * Merge/keep intent captured alongside `activeWorktree` at the moment it
+   * was resolved. `worktreeResolution` gets overwritten by the next resolve
+   * (e.g. resuming after the workflow's worktree config changed), so by the
+   * time a stale `activeWorktree` needs settling, `worktreeResolution.config`
+   * no longer describes it — this does.
+   */
+  private activeWorktreeSettlement:
+    | { merge: boolean; keep: boolean }
+    | undefined;
   /** Used only to look up another lease owner's display name for lease-conflict errors. */
   private readonly lineageRepository = new WorkflowLineageRepository();
 
@@ -4070,6 +4080,7 @@ export class WorkflowInstance {
   ): Promise<void> {
     const config = this.worktreeResolution.config;
     if (!config) {
+      await this.abandonActiveWorktree();
       await this.configureExecutionWorkspace(this.defaultExecutionWorkspace);
       return;
     }
@@ -4137,8 +4148,73 @@ export class WorkflowInstance {
       this.worktreeManager.releaseRuntimeTrust(this.activeWorktree);
     }
     this.activeWorktree = info;
+    this.activeWorktreeSettlement = {
+      merge: config.merge === true,
+      keep: config.keep === true,
+    };
     this.executionLease = info.lease;
     await this.configureExecutionWorkspace(info.executionWorkspace);
+  }
+
+  /**
+   * Settle and release a worktree this run was using before it was resumed
+   * onto no worktree — e.g. paused mid-run, then the workflow's worktree
+   * config was edited to "none" before resuming. The normal
+   * terminal-completion cleanup in `startWorkflowExecution`'s `finally`
+   * never runs for this transition (the run isn't ending), so this is the
+   * only place that settles it; without it, `activeWorktree` would linger
+   * stale for the rest of the run, still reporting a worktree this run no
+   * longer executes in.
+   */
+  private async abandonActiveWorktree(): Promise<void> {
+    const worktree = this.activeWorktree;
+    if (!worktree) return;
+    const settlement = this.activeWorktreeSettlement;
+    this.activeWorktree = undefined;
+    this.activeWorktreeSettlement = undefined;
+
+    // Any PTY retained across the pause for reuse belongs to the worktree
+    // being abandoned and cannot follow execution to the new workspace —
+    // settlement below must not race a still-live process in that directory.
+    for (const [harnessKey, liveIntegration] of this.liveInjectIntegrations) {
+      await this.cleanupRetainedIntegrationArtifacts(
+        harnessKey,
+        liveIntegration
+      );
+      liveIntegration.closeTerminalGracefully();
+      liveIntegration.dispose();
+    }
+    this.liveInjectIntegrations.clear();
+
+    this.worktreeManager.releaseRuntimeTrust(worktree);
+
+    if (worktree.mode === WORKTREE_MODES.MANAGED) {
+      try {
+        await this.worktreeManager.completeManagedRun(worktree, {
+          merge: settlement?.merge === true,
+          keep: settlement?.keep === true,
+          artifactsClean: true,
+        });
+      } catch (error) {
+        Log.error(
+          `[inst:${this.id.slice(0, 8)}] Failed to settle abandoned managed worktree:`,
+          error
+        );
+        await worktree.lease?.release().catch(() => undefined);
+      }
+      this.executionLease = undefined;
+    } else if (this.executionLease) {
+      const lease = this.executionLease;
+      this.executionLease = undefined;
+      await lease
+        .release()
+        .catch((err) =>
+          Log.warn(
+            `[inst:${this.id.slice(0, 8)}] Failed to release abandoned worktree lease:`,
+            err
+          )
+        );
+    }
   }
 
   private async ensureRunnerLock(workingFilePath?: string): Promise<void> {

@@ -168,6 +168,7 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
         label={label}
         labelClassName="font-mono"
         count={stepCount > 0 ? stepLabel : undefined}
+        worktree={summary?.worktree}
         glyph={
           isLive ? (
             <span
