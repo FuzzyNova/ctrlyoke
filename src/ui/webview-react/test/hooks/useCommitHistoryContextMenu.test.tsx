@@ -25,6 +25,7 @@ const commit: WorkspaceCommitLogEntry = {
   pushed: true,
   refs: [],
   isMerge: false,
+  parentHashes: [],
 };
 
 function TestHarness({ onRefresh }: { onRefresh: () => void }) {

@@ -21,6 +21,7 @@ const commit: WorkspaceCommitLogEntry = {
   pushed: true,
   refs: [{ name: "main", type: "localBranch" }],
   isMerge: false,
+  parentHashes: [],
 };
 
 function commitRow(): HTMLElement {

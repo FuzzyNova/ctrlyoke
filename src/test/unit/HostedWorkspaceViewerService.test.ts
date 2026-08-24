@@ -1179,9 +1179,11 @@ suite("HostedWorkspaceViewerService", function () {
 
       runGit(root, "checkout", "-b", "feature");
       commitFile(root, "feature.txt", "feat\n", "feature work");
+      const featureHash = runGit(root, "rev-parse", "HEAD");
 
       runGit(root, "checkout", main);
       commitFile(root, "main.txt", "main\n", "main work");
+      const mainHash = runGit(root, "rev-parse", "HEAD");
       runGit(root, "merge", "--no-ff", "-m", "merge feature", "feature");
 
       const svc = new HostedWorkspaceViewerService(root);
@@ -1190,6 +1192,7 @@ suite("HostedWorkspaceViewerService", function () {
       const merge = result.commits.find((c) => c.subject === "merge feature");
       assert.ok(merge, "merge commit should be present");
       assert.strictEqual(merge?.isMerge, true);
+      assert.deepStrictEqual(merge?.parentHashes, [mainHash, featureHash]);
     });
 
     test("keeps branch-ahead commits visible while detached when given a branch hint", async () => {
