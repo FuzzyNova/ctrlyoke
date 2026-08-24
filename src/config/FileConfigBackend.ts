@@ -6,6 +6,13 @@ import type { PartialCtrlYokeSettings } from "../types/CtrlYokeSettings";
 
 export class FileConfigBackend implements ConfigBackend {
   private cache?: PartialCtrlYokeSettings;
+  // Serializes set() calls so a read-modify-write can't read a stale file out
+  // from under a write that's still in flight. Two settings paths committed
+  // back-to-back (e.g. TerminalControlBarEditor's addShortcut writing
+  // mobileCustomShortcuts then mobileBarLayout) reach here as two overlapping
+  // calls; without this queue, the second call's load() can run before the
+  // first call's save() lands, so the second write clobbers the first.
+  private writeQueue: Promise<void> = Promise.resolve();
 
   constructor(private readonly configPath: string) {}
 
@@ -24,15 +31,21 @@ export class FileConfigBackend implements ConfigBackend {
   }
 
   /** Write a setting using dot-notation path (e.g. "execution.injectMode") */
-  async set(settingPath: string, value: unknown): Promise<void> {
-    const current = this.load();
-    this.setNestedValue(
-      current as Record<string, unknown>,
-      settingPath.split("."),
-      value
-    );
-    await this.save(current);
-    this.cache = undefined;
+  set(settingPath: string, value: unknown): Promise<void> {
+    const write = this.writeQueue.then(async () => {
+      const current = this.load();
+      this.setNestedValue(
+        current as Record<string, unknown>,
+        settingPath.split("."),
+        value
+      );
+      await this.save(current);
+      this.cache = undefined;
+    });
+    // Keep the queue alive even if this write rejects, but let the
+    // rejection still surface to this call's own caller via `write`.
+    this.writeQueue = write.catch(() => {});
+    return write;
   }
 
   private load(): PartialCtrlYokeSettings {
