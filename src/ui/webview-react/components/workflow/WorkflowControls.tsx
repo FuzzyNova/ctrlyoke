@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { isStandalone, useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
+import { useIsViewingDeletedWorkflow } from "@hooks/useIsViewingDeletedWorkflow";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES } from "@/types/messages";
@@ -56,6 +57,10 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
 
   const hasQueue = fileName !== null;
   const isViewingRun = displayedViewAddress?.kind === "run";
+  // The lineage on screen was deleted while being viewed — appending to it or
+  // duplicating it has nothing left to read from/write to. Creating fresh
+  // (New / From Template / Load from File) stays available.
+  const isViewingDeletedWorkflow = useIsViewingDeletedWorkflow();
 
   // Handle new workflow (clear current)
   const handleNewWorkflow = useCallback(() => {
@@ -137,7 +142,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
       value: "queue-file",
       icon: <i className="custom-icon icon-queue-from-file" />,
       onClick: handleQueueFile,
-      disabled: !hasQueue,
+      disabled: !hasQueue || isViewingDeletedWorkflow,
     },
     {
       label: isViewingRun
@@ -146,7 +151,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
       value: "duplicate-workflow",
       icon: <i className="codicon codicon-copy" />,
       onClick: handleDuplicateWorkflow,
-      disabled: !displayedViewAddress,
+      disabled: !displayedViewAddress || isViewingDeletedWorkflow,
     },
   ];
 

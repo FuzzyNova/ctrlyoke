@@ -139,6 +139,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     runSummaries,
     executionRunRef,
     isViewingHistory,
+    setViewingDeletedWorkflow,
   } = useUiStore();
   const { globalSettings, workflowProperties } = useSettingsStore();
   const effectiveWorktree = useMemo(() => {
@@ -1027,10 +1028,26 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     });
   }, [drilledWorkflow, vscode]);
 
+  // A lineage delete may target the workflow currently on screen (deleting
+  // from the recent-workflows dropdown or the header's own context menu while
+  // it's the active view). REMOVE_WORKFLOW_HISTORY hard-deletes the backing
+  // files immediately, so record it here rather than waiting on any reply —
+  // there isn't one to wait for.
+  const markIfViewingDeletedLineage = useCallback(
+    (workflowKey: WorkflowKey) => {
+      if (workflowKey !== displayedViewAddress?.workflowKey) return;
+      setViewingDeletedWorkflow({ workflowKey, workflowName: displayName });
+    },
+    [displayName, displayedViewAddress, setViewingDeletedWorkflow]
+  );
+
   // Clear workflow history
   const handleClearHistory = useCallback(() => {
     if (!globalSettings.confirmDeleteOperations) {
       vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY });
+      if (displayedViewAddress) {
+        markIfViewingDeletedLineage(displayedViewAddress.workflowKey);
+      }
       setRecentWorkflows([]);
       closeDropdown();
       return;
@@ -1038,7 +1055,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     setPendingDelete({ scope: "all" });
   }, [
     closeDropdown,
+    displayedViewAddress,
     globalSettings.confirmDeleteOperations,
+    markIfViewingDeletedLineage,
     setRecentWorkflows,
     vscode,
   ]);
@@ -1052,6 +1071,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
           address,
         });
+        markIfViewingDeletedLineage(address.workflowKey);
         setRecentWorkflows(
           useUiStore
             .getState()
@@ -1064,7 +1084,12 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       // Show confirmation modal
       setPendingDelete({ address, scope: "lineage" });
     },
-    [globalSettings.confirmDeleteOperations, setRecentWorkflows, vscode]
+    [
+      globalSettings.confirmDeleteOperations,
+      markIfViewingDeletedLineage,
+      setRecentWorkflows,
+      vscode,
+    ]
   );
 
   // Confirmed: actually remove the workflow history entry
@@ -1082,6 +1107,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
           address: pendingDelete.address,
         });
+        markIfViewingDeletedLineage(pendingDelete.address.workflowKey);
         setRecentWorkflows(
           useUiStore
             .getState()
@@ -1092,6 +1118,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         break;
       case "all":
         vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY });
+        if (displayedViewAddress) {
+          markIfViewingDeletedLineage(displayedViewAddress.workflowKey);
+        }
         setRecentWorkflows([]);
         closeDropdown();
         break;
@@ -1099,7 +1128,14 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         assertNever(pendingDelete);
     }
     setPendingDelete(null);
-  }, [closeDropdown, pendingDelete, setRecentWorkflows, vscode]);
+  }, [
+    closeDropdown,
+    displayedViewAddress,
+    markIfViewingDeletedLineage,
+    pendingDelete,
+    setRecentWorkflows,
+    vscode,
+  ]);
 
   const handleRemoveWorkflowCancel = useCallback(() => {
     setPendingDelete(null);

@@ -527,6 +527,17 @@ interface UiState {
     fromStepIndex: number;
     baseDefinitionRevision: number;
   } | null;
+  /**
+   * Set when the lineage currently displayed is deleted (from history) while
+   * being viewed in this session — the backing files are gone, but the cached
+   * view stays on screen until the user navigates away. Not persisted: a
+   * reload has no in-memory view to protect. Whether the banner/lockdown is
+   * *currently* active is derived by comparing this against
+   * `displayedViewAddress` (see `useIsViewingDeletedWorkflow`), not read
+   * directly, so navigating away — by any means, not just the banner's Close
+   * action — silently retires it.
+   */
+  viewingDeletedWorkflow: { workflowKey: WorkflowKey; workflowName: string } | null;
 
   // Save workflow dialog state
   saveWorkflowDialogOpen: boolean;
@@ -807,6 +818,9 @@ interface UiActions {
   updateLoadedWorkflow: (workflow: WorkflowSummary) => void;
   setActiveWorkflowId: (id: string | null) => void;
   setActiveWorkflowWorkingFilePath: (path: string | null) => void;
+  setViewingDeletedWorkflow: (
+    value: { workflowKey: WorkflowKey; workflowName: string } | null
+  ) => void;
 
   // Output / editor font size
   setOutputFontSize: (size: number) => void;
@@ -1030,6 +1044,7 @@ const initialState: UiState = {
   displayedDefinitionRevision: null,
   displayedDescriptorRevision: null,
   pendingRewind: null,
+  viewingDeletedWorkflow: null,
   footerOpenPicker: null,
   mobileStepsOpen: false,
   mobileStepsMode: "fullwidth",
@@ -1483,6 +1498,9 @@ export const useUiStore = create<UiState & UiActions>()(
 
       setActiveWorkflowWorkingFilePath: (path) =>
         set({ activeWorkflowWorkingFilePath: path }),
+
+      setViewingDeletedWorkflow: (value) =>
+        set({ viewingDeletedWorkflow: value }),
 
       // ============================================================================
       // OUTPUT FONT SIZE
@@ -1970,6 +1988,7 @@ export const useUiStore = create<UiState & UiActions>()(
           selectedOutputStep: null,
           newWorkflowModalOpen: false,
           openCreateTemplateForm: false,
+          viewingDeletedWorkflow: null,
           templates: [],
           currentTemplate: null,
           isHistorySearchOpen: false,

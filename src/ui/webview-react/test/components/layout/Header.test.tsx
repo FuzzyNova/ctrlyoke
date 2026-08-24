@@ -644,3 +644,85 @@ describe("Header execution controls", () => {
     });
   });
 });
+
+describe("Header deleted-workflow banner", () => {
+  beforeEach(() => {
+    useWorkflowStore.getState().resetWorkflow();
+    useUiStore.getState().resetUi();
+    useExecutionPreviewStore.getState().reset();
+    postMessage.mockReset();
+    Object.defineProperty(window, "vscodeApi", {
+      configurable: true,
+      value: { postMessage, getState: vi.fn(), setState: vi.fn() },
+    });
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "workflow.ctrlyoke.json",
+      workflowName: "Deleted One",
+      steps: [{ prompt: "first" }],
+      executionState: EXECUTION_STATES.IDLE,
+    });
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-a" as never,
+        kind: "draft",
+      },
+      viewingDeletedWorkflow: {
+        workflowKey: "workflow-a" as never,
+        workflowName: "Deleted One",
+      },
+    });
+  });
+
+  afterEach(cleanup);
+
+  it("shows the banner and locks Save/Dry Run/run controls, but Close still works", () => {
+    render(<Header />);
+
+    expect(
+      screen.getByText('"Deleted One" has been deleted')
+    ).toBeInTheDocument();
+    const actionGroup = screen.getByRole("group", {
+      name: "Workflow action controls",
+    });
+    expect(
+      within(actionGroup).getByRole("button", { name: "Save workflow" })
+    ).toBeDisabled();
+    expect(
+      within(actionGroup).getByRole("button", { name: "Dry Run" })
+    ).toBeDisabled();
+    const executionControls = screen.getByRole("group", {
+      name: "Workflow execution controls",
+    });
+    expect(
+      within(executionControls).getByRole("button", { name: "Run" })
+    ).toBeDisabled();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close deleted workflow" })
+    );
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.CLEAR_WORKFLOW,
+    });
+  });
+
+  it("does not show the banner once the view navigates to a different workflow", () => {
+    useUiStore.setState({
+      displayedViewAddress: {
+        workflowKey: "workflow-b" as never,
+        kind: "draft",
+      },
+    });
+
+    render(<Header />);
+
+    expect(
+      screen.queryByText('"Deleted One" has been deleted')
+    ).not.toBeInTheDocument();
+    const actionGroup = screen.getByRole("group", {
+      name: "Workflow action controls",
+    });
+    expect(
+      within(actionGroup).getByRole("button", { name: "Dry Run" })
+    ).toBeEnabled();
+  });
+});

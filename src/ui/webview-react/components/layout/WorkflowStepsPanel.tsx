@@ -15,6 +15,7 @@ import {
   usePasteToEndContextMenu,
   useLongPress,
   useSortableDndSensors,
+  useIsViewingDeletedWorkflow,
 } from "@hooks/index";
 import { HARNESS_INFO } from "../../types/messages";
 import type { HarnessId } from "../../types/messages";
@@ -336,6 +337,9 @@ const WorkflowStepsPanelInner: React.FC<{
   const isCLIManaged =
     loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
     RUNNER_IDS.CLI;
+  // The lineage on screen was deleted while being viewed — nothing here has
+  // anywhere left to write to.
+  const isViewingDeletedWorkflow = useIsViewingDeletedWorkflow();
   const { selectionTarget, selectPrompt, selectFinalStep, deselect } =
     useEditorStore();
   const { workflowProperties, globalSettings } = useSettingsStore();
@@ -666,7 +670,7 @@ const WorkflowStepsPanelInner: React.FC<{
   );
 
   const handleFinalStepSelect = useCallback(() => {
-    if (isCLIManaged) return;
+    if (isCLIManaged || isViewingDeletedWorkflow) return;
     if (finalStep) {
       selectFinalStep(finalStep);
     } else {
@@ -675,6 +679,7 @@ const WorkflowStepsPanelInner: React.FC<{
     }
   }, [
     isCLIManaged,
+    isViewingDeletedWorkflow,
     finalStep,
     selectFinalStep,
     setFinalStepFooterExpanded,
@@ -682,13 +687,13 @@ const WorkflowStepsPanelInner: React.FC<{
   ]);
 
   const handleToggleFinalStepEnabled = useCallback(() => {
-    if (isCLIManaged || !finalStep) return;
+    if (isCLIManaged || isViewingDeletedWorkflow || !finalStep) return;
     const enabling = finalStep.enabled === false;
     sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, {
       finalStep: buildWorkflowStepEnabledState(finalStep, enabling),
       ...(enabling ? { clearProperties: ["enabled"] } : {}),
     });
-  }, [isCLIManaged, finalStep]);
+  }, [isCLIManaged, isViewingDeletedWorkflow, finalStep]);
 
   const handleSelectedStepCopy = useCallback(() => {
     if (selectionTarget.kind !== FINAL_STEP_PHASES.QUEUE) {
@@ -706,6 +711,7 @@ const WorkflowStepsPanelInner: React.FC<{
   const handleSelectedStepPaste = useCallback(() => {
     if (
       isCLIManaged ||
+      isViewingDeletedWorkflow ||
       !canPasteStep ||
       selectionTarget.kind !== FINAL_STEP_PHASES.QUEUE
     ) {
@@ -721,16 +727,18 @@ const WorkflowStepsPanelInner: React.FC<{
         });
       })
       .catch(() => {});
-  }, [canPasteStep, isCLIManaged, selectionTarget]);
+  }, [canPasteStep, isCLIManaged, isViewingDeletedWorkflow, selectionTarget]);
 
   const finalStepIsReadOnly =
     isCLIManaged ||
+    isViewingDeletedWorkflow ||
     (finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP &&
       finalStepStatus === STEP_STATUS.RUNNING);
   // A running final step remains selectable so its prompt can be reviewed and
   // edited locally. The editor footer prevents updating or deleting it until
-  // execution finishes; only CLI-managed workflows block editor selection.
-  const finalStepSelectionIsReadOnly = isCLIManaged;
+  // execution finishes; only CLI-managed / deleted workflows block editor
+  // selection outright.
+  const finalStepSelectionIsReadOnly = isCLIManaged || isViewingDeletedWorkflow;
 
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({
@@ -932,7 +940,7 @@ const WorkflowStepsPanelInner: React.FC<{
 
       {/* Step list */}
       <div
-        className="flex-1 overflow-y-auto min-h-0"
+        className={`flex-1 overflow-y-auto min-h-0${isViewingDeletedWorkflow ? " pointer-events-none opacity-60 select-none" : ""}`}
         role="listbox"
         tabIndex={0}
         onClick={(e) => {
@@ -978,6 +986,7 @@ const WorkflowStepsPanelInner: React.FC<{
           if (key === "v") {
             if (
               isCLIManaged ||
+              isViewingDeletedWorkflow ||
               !canPasteStep ||
               selectionTarget.kind !== FINAL_STEP_PHASES.QUEUE
             ) {

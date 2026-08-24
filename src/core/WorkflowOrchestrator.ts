@@ -4575,6 +4575,9 @@ export class WorkflowOrchestrator {
     if (!workspaceRoot) throw new Error("No workspace folder is open");
 
     const historyManager = new OutputHistoryManager(workspaceRoot);
+    const deletedRunId = (
+      await historyManager.getRunSummaries(address.workflowKey)
+    ).find((summary) => summary.runRef === address.runRef)?.runId;
     await historyManager.deleteRunByRef(address.workflowKey, address.runRef);
     const remaining = await historyManager.getRunSummaries(address.workflowKey);
     const fallback: WorkflowViewAddress = remaining[0]
@@ -4587,6 +4590,11 @@ export class WorkflowOrchestrator {
 
     const targets = [...this.getViewAddressRegistry().entries()].filter(
       ([, candidate]) => candidate?.workflowKey === address.workflowKey
+    );
+    const displacedAViewer = targets.some(
+      ([, currentAddress]) =>
+        currentAddress?.kind === "run" &&
+        currentAddress.runRef === address.runRef
     );
     await Promise.all(
       targets.map(async ([targetClientId, currentAddress]) => {
@@ -4608,6 +4616,21 @@ export class WorkflowOrchestrator {
         );
       })
     );
+
+    // Only a client actually looking at the deleted run got moved off it —
+    // deleting a different run's row from the navigation panel while viewing
+    // something else changes nothing on screen and must stay silent.
+    if (displacedAViewer) {
+      const fallbackLabel =
+        fallback.kind === "run" ? `Run ${remaining[0].runId}` : "the draft";
+      notifyUserFeedback(
+        this.userFeedbackSink,
+        USER_FEEDBACK_SEVERITY.INFO,
+        deletedRunId !== undefined
+          ? `Run ${deletedRunId} was deleted — you're now viewing ${fallbackLabel}.`
+          : `That run was deleted — you're now viewing ${fallbackLabel}.`
+      );
+    }
 
     await this.pushRunSummariesRefreshIfNotAlreadyViewing(
       address.workflowKey,

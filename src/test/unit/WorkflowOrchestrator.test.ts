@@ -1145,11 +1145,25 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         refreshed.push({ clientId, address });
         internal.viewAddressRegistry.set(clientId, address);
       };
+      const feedbackCalls: Array<{ severity: string; message: string }> = [];
+      internal.userFeedbackSink = {
+        notify: (feedback: { severity: string; message: string }) =>
+          feedbackCalls.push(feedback),
+      };
 
       await orchestrator.deleteRunAtAddress(
         { workflowKey, runRef: newer.runRef },
         () => undefined,
         PANEL_CLIENT_ID
+      );
+
+      // Every displaced client shares one lineage-wide fallback, so the
+      // deleted-run toast fires once, not once per client.
+      assert.strictEqual(feedbackCalls.length, 1);
+      assert.strictEqual(feedbackCalls[0].severity, "info");
+      assert.strictEqual(
+        feedbackCalls[0].message,
+        `Run ${newer.runId} was deleted — you're now viewing Run ${older.runId}.`
       );
 
       const fallback = { workflowKey, kind: "run", runRef: older.runRef };
@@ -1257,6 +1271,11 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         readDescriptor: async () => ({ revision: 1, lastModifiedAt: 123 }),
       };
       const pushed: Array<{ type?: string; runSummaries?: unknown[] }> = [];
+      const feedbackCalls: Array<{ severity: string; message: string }> = [];
+      internal.userFeedbackSink = {
+        notify: (feedback: { severity: string; message: string }) =>
+          feedbackCalls.push(feedback),
+      };
 
       await orchestrator.deleteRunAtAddress(
         { workflowKey, runRef: older.runRef },
@@ -1273,6 +1292,10 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       assert.strictEqual(pushed.length, 1);
       assert.strictEqual(pushed[0].type, MESSAGE_TYPES.RUN_SUMMARIES_LOADED);
       assert.strictEqual(pushed[0].runSummaries?.length, 1);
+
+      // Nobody was actually looking at the deleted run, so the toast must
+      // stay silent.
+      assert.strictEqual(feedbackCalls.length, 0);
     } finally {
       await history?.flushPendingIndexRefresh();
       await fs.rm(workspace, { recursive: true, force: true });

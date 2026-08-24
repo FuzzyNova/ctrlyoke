@@ -10,6 +10,7 @@ import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useIsMobile, useMediaQuery } from "@hooks/useMediaQuery";
 import { useLongPress } from "@hooks/useLongPress";
+import { useIsViewingDeletedWorkflow } from "@hooks/useIsViewingDeletedWorkflow";
 import { WebviewLog } from "@utils/logger";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
@@ -147,6 +148,7 @@ export const Header: React.FC<{
     displayedDefinitionRevision,
     displayedDescriptorRevision,
     pendingRewind,
+    viewingDeletedWorkflow,
     newWorkflowModalOpen,
     closeNewWorkflowModal,
     mobileStepsOpen,
@@ -165,6 +167,11 @@ export const Header: React.FC<{
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged = activeWorkflow?.managedBy === RUNNER_IDS.CLI;
+  // The lineage on screen was deleted (from history) while being viewed —
+  // its backing files are gone, so every workflow-mutating control is locked
+  // except the prompt editor (see EditorSection — its draft is intentionally
+  // workflow-agnostic).
+  const isViewingDeletedWorkflow = useIsViewingDeletedWorkflow();
 
   const hasFile = fileName !== null;
   const executionRunSummary = executionRunRef
@@ -246,10 +253,13 @@ export const Header: React.FC<{
     }
   }, [vscode, activeWorkflowId]);
 
-  const canSave = hasFile;
-  const saveTitle = hasFile
-    ? "Save workflow to file"
-    : "Load a workflow to save";
+  const dryRunDisabled = !displayedViewAddress || isViewingDeletedWorkflow;
+  const canSave = hasFile && !isViewingDeletedWorkflow;
+  const saveTitle = isViewingDeletedWorkflow
+    ? "This workflow has been deleted"
+    : hasFile
+      ? "Save workflow to file"
+      : "Load a workflow to save";
 
   const handleSave = useCallback(() => {
     if (!canSave || !displayedViewAddress) return;
@@ -371,6 +381,14 @@ export const Header: React.FC<{
     postViewedRunAction(MESSAGE_TYPES.DISCARD_CONTINUATION);
   }, [postViewedRunAction]);
 
+  // Same action as the WorkflowControls "New" button — drops the cached view
+  // of the deleted lineage and starts a blank workflow. No "undo" here:
+  // REMOVE_WORKFLOW_HISTORY already hard-deleted the backing files by the
+  // time this banner appears.
+  const handleCloseDeletedWorkflow = useCallback(() => {
+    vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });
+  }, [vscode]);
+
   const handleCancelSuffixEditConfirmation = useCallback(() => {
     setSuffixEditConfirmation(null);
   }, [setSuffixEditConfirmation]);
@@ -450,7 +468,7 @@ export const Header: React.FC<{
       <DryRunButton
         btnSize={btnSize}
         onClick={openDryRunWorkflow}
-        disabled={!displayedViewAddress}
+        disabled={dryRunDisabled}
       />
 
       <div className="fp-button-group-divider" />
@@ -459,6 +477,7 @@ export const Header: React.FC<{
       <UndoRedoControl
         isRunning={isRunning}
         isPaused={isPaused}
+        disabled={isViewingDeletedWorkflow}
         embedded
         showHistoryChevronOnDesktopOnly="lg"
         onAction={handleUndoRedoAction}
@@ -469,9 +488,12 @@ export const Header: React.FC<{
   // Below xs (380px), show only actionable execution slots. If none are
   // actionable, retain the disabled Run slot so the primary affordance never
   // disappears completely. From xs upward all three fixed slots remain visible.
-  const slot1Enabled = slot1.enabled && !isCLIManaged;
-  const slot2Enabled = slot2.enabled && !isCLIManaged;
-  const slot3Enabled = slot3.enabled || isCLIManaged;
+  const slot1Enabled =
+    slot1.enabled && !isCLIManaged && !isViewingDeletedWorkflow;
+  const slot2Enabled =
+    slot2.enabled && !isCLIManaged && !isViewingDeletedWorkflow;
+  const slot3Enabled =
+    (slot3.enabled || isCLIManaged) && !isViewingDeletedWorkflow;
   const restartOnlyOnNarrow =
     executionState === EXECUTION_STATES.STOPPED &&
     !isRunning &&
@@ -506,9 +528,13 @@ export const Header: React.FC<{
             openRunDryRunMenu(event.clientX, event.clientY);
           }}
           {...runSlotLongPressHandlers}
-          disabled={!slot1.enabled || isCLIManaged}
+          disabled={!slot1.enabled || isCLIManaged || isViewingDeletedWorkflow}
           title={
-            isCLIManaged ? "Workflow is running via ctrlyoke CLI" : slot1.title
+            isCLIManaged
+              ? "Workflow is running via ctrlyoke CLI"
+              : isViewingDeletedWorkflow
+                ? "This workflow has been deleted"
+                : slot1.title
           }
           aria-label={slot1.label}
         >
@@ -528,9 +554,13 @@ export const Header: React.FC<{
               : `${HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
           onClick={() => handleSlotAction(slot2.action)}
-          disabled={!slot2.enabled || isCLIManaged}
+          disabled={!slot2.enabled || isCLIManaged || isViewingDeletedWorkflow}
           title={
-            isCLIManaged ? "Workflow is running via ctrlyoke CLI" : slot2.title
+            isCLIManaged
+              ? "Workflow is running via ctrlyoke CLI"
+              : isViewingDeletedWorkflow
+                ? "This workflow has been deleted"
+                : slot2.title
           }
           aria-label={slot2.label}
         >
@@ -552,8 +582,14 @@ export const Header: React.FC<{
               ? handleStopCliRun
               : () => handleSlotAction(slot3.action)
           }
-          disabled={!slot3.enabled && !isCLIManaged}
-          title={isCLIManaged ? "Stop CLI run" : slot3.title}
+          disabled={(!slot3.enabled && !isCLIManaged) || isViewingDeletedWorkflow}
+          title={
+            isCLIManaged
+              ? "Stop CLI run"
+              : isViewingDeletedWorkflow
+                ? "This workflow has been deleted"
+                : slot3.title
+          }
           aria-label={slot3.label}
         >
           <i className={`codicon ${slot3.icon} ${btnSize.icon}`} />
@@ -626,13 +662,14 @@ export const Header: React.FC<{
             <DryRunButton
               btnSize={btnSize}
               onClick={openDryRunWorkflow}
-              disabled={!displayedViewAddress}
+              disabled={dryRunDisabled}
             />
             <div className="fp-button-group-divider" />
             {/* Undo / Redo / History */}
             <UndoRedoControl
               isRunning={isRunning}
               isPaused={isPaused}
+              disabled={isViewingDeletedWorkflow}
               embedded
               showHistoryChevronOnDesktopOnly="lg"
               onAction={handleUndoRedoAction}
@@ -854,6 +891,26 @@ export const Header: React.FC<{
             aria-label="Cancel pause"
           >
             Cancel
+          </button>
+        </div>
+      )}
+      {isViewingDeletedWorkflow && viewingDeletedWorkflow && (
+        <div
+          className="flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-error)] text-white border-b border-btn-border"
+          role="status"
+          aria-label={`Workflow "${viewingDeletedWorkflow.workflowName}" has been deleted`}
+        >
+          <i className="codicon codicon-trash" aria-hidden="true" />
+          <span>
+            &quot;{viewingDeletedWorkflow.workflowName}&quot; has been deleted
+          </span>
+          <button
+            className="ml-auto text-xs underline opacity-90 hover:opacity-100"
+            onClick={handleCloseDeletedWorkflow}
+            title="Start a new workflow and drop this cached view"
+            aria-label="Close deleted workflow"
+          >
+            Close
           </button>
         </div>
       )}

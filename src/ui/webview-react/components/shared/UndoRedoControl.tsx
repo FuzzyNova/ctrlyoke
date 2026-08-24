@@ -21,6 +21,10 @@ import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 interface UndoRedoControlProps {
   isRunning: boolean;
   isPaused: boolean;
+  /** Forces undo/redo/history fully disabled regardless of run state — e.g.
+   * while viewing a workflow whose backing file no longer exists, so there is
+   * nowhere for an undo mutation to be written. */
+  disabled?: boolean;
   embedded?: boolean;
   showHistoryChevronOnDesktopOnly?: "sm" | "lg";
   onAction?: (
@@ -287,6 +291,7 @@ function describeChange(
 export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   isRunning,
   isPaused,
+  disabled = false,
   embedded = false,
   showHistoryChevronOnDesktopOnly = "sm",
   onAction,
@@ -320,7 +325,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   const pastStates = useWorkflowTemporalStore((s) => s.pastStates);
   const futureStates = useWorkflowTemporalStore((s) => s.futureStates);
 
-  const editingDisabled = isRunning || isPaused;
+  const editingDisabled = isRunning || isPaused || disabled;
 
   useEffect(() => {
     if (isMobile && isOpen) {

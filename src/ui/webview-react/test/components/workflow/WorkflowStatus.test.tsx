@@ -371,6 +371,52 @@ describe("WorkflowStatus — loaded state", () => {
       type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
       address,
     });
+    // Deleting the lineage currently on screen records it so the deleted-
+    // workflow banner/lockdown (Header, WorkflowPropertiesPanel, etc.) can
+    // pick it up — see useIsViewingDeletedWorkflow.
+    expect(useUiStore.getState().viewingDeletedWorkflow).toEqual({
+      workflowKey: address.workflowKey,
+      // Set by this describe block's own beforeEach (line ~164).
+      workflowName: "My Workflow",
+    });
+  });
+
+  it("does not record a deletion for a lineage other than the one on screen", () => {
+    const viewedAddress = {
+      workflowKey: "wf-viewed" as never,
+      kind: "draft" as const,
+    };
+    const otherAddress = {
+      workflowKey: "wf-other" as never,
+      kind: "draft" as const,
+    };
+    useUiStore.setState({ displayedViewAddress: viewedAddress });
+    useSettingsStore.setState({
+      globalSettings: {
+        ...useSettingsStore.getState().globalSettings,
+        confirmDeleteOperations: false,
+      },
+    });
+    setRecentWorkflows([
+      {
+        address: otherAddress,
+        workflowName: "Some Other Workflow",
+        executionState: EXECUTION_STATES.IDLE,
+      },
+    ]);
+
+    render(<WorkflowStatus />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    fireEvent.contextMenu(document.querySelector(".workflow-menu-item")!);
+    fireEvent.click(screen.getByRole("button", { name: "Delete Workflow" }));
+
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
+      address: otherAddress,
+    });
+    expect(useUiStore.getState().viewingDeletedWorkflow).toBeNull();
   });
 
   it("routes clear history through the confirmation modal when enabled", () => {

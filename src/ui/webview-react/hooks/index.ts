@@ -34,6 +34,7 @@ export {
 export { useLongPress } from "./useLongPress";
 export { useSortableDndSensors } from "./useSortableDndSensors";
 export { useLatestStepOutput } from "./useLatestStepOutput";
+export { useIsViewingDeletedWorkflow } from "./useIsViewingDeletedWorkflow";
 export {
   useHideableOptions,
   type HideablePartition,
