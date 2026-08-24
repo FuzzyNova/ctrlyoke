@@ -55,6 +55,9 @@ function quotaSourceDescription(
   }
 }
 
+const SAFE_ERROR_DESCRIPTION =
+  "A sanitized status code from the most recent usage refresh or observed-usage read. It does not include the provider's raw error details or describe a workflow error.";
+
 export function UsageCard({
   snapshot,
   harnessId,
@@ -184,9 +187,17 @@ export function UsageCard({
           ))}
         </div>
       )}
-      <div className="text-description-fg">
-        Last safe error: {snapshot.quota.errorCode ?? "none"}
-      </div>
+      {snapshot.quota.errorCode && (
+        <div className="text-description-fg">
+          <span
+            className="cursor-help underline decoration-dotted underline-offset-2"
+            title={SAFE_ERROR_DESCRIPTION}
+          >
+            Last safe error
+          </span>
+          : {snapshot.quota.errorCode}
+        </div>
+      )}
     </div>
   );
 }

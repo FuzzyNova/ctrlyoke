@@ -191,4 +191,37 @@ describe("UsageCard percent direction", () => {
     const bar = container.querySelector(".bg-ctx-bar-track > div");
     expect(bar).toHaveStyle({ width: "25%" });
   });
+
+  it("explains the sanitized usage refresh error code", () => {
+    const snapshot = makeSnapshot(HARNESS_IDS.CLAUDE_CLI);
+    snapshot.quota.errorCode = "provider-refresh-failed";
+
+    const { container } = render(
+      <UsageCard
+        harnessId={HARNESS_IDS.CLAUDE_CLI}
+        snapshot={snapshot}
+        hideCost={true}
+      />
+    );
+
+    const label = container.querySelector(
+      '[title="A sanitized status code from the most recent usage refresh or observed-usage read. It does not include the provider\'s raw error details or describe a workflow error."]'
+    );
+    expect(label).toHaveTextContent("Last safe error");
+    expect(container).toHaveTextContent(
+      "Last safe error: provider-refresh-failed"
+    );
+  });
+
+  it("omits the safe error row when no error was recorded", () => {
+    const { container } = render(
+      <UsageCard
+        harnessId={HARNESS_IDS.CLAUDE_CLI}
+        snapshot={makeSnapshot(HARNESS_IDS.CLAUDE_CLI)}
+        hideCost={true}
+      />
+    );
+
+    expect(container).not.toHaveTextContent("Last safe error");
+  });
 });

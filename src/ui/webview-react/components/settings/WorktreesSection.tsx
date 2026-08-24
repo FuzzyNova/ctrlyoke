@@ -25,15 +25,6 @@ interface Props {
   onReset: (path: string) => void;
 }
 
-function formatAge(ageMs: number | undefined): string {
-  if (ageMs === undefined) return "—";
-  const days = Math.floor(ageMs / 86_400_000);
-  if (days > 0) return `${days}d old`;
-  const hours = Math.floor(ageMs / 3_600_000);
-  if (hours > 0) return `${hours}h old`;
-  return `${Math.max(1, Math.floor(ageMs / 60_000))}m old`;
-}
-
 let requestIdCounter = 0;
 function generateRequestId(key: string): string {
   requestIdCounter += 1;
@@ -572,7 +563,6 @@ function WorktreeRow({
       </div>
       <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-description-fg">
         <span>Owner: {owner}</span>
-        <span>Age: {formatAge(entry.ageMs)}</span>
         <span>
           Branch: {entry.branchName ?? "detached"} ({entry.branchState})
         </span>

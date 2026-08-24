@@ -78,6 +78,7 @@ describe("WorktreesSection", () => {
       screen.getByRole("button", { name: "Clean up safe merged branches (1)" })
     ).toBeInTheDocument();
     expect(screen.getByText(/In use — wf\/run/)).toBeInTheDocument();
+    expect(screen.queryByText(/Age:/)).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open owning workspace" })
     ).toBeInTheDocument();
