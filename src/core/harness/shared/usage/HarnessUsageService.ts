@@ -435,6 +435,7 @@ export class HarnessUsageService {
       ) {
         throw new Error(HARNESS_USAGE_ERROR_CODES.MALFORMED_PROVIDER_DATA);
       }
+      let loadedAny = false;
       for (const [harnessId, value] of Object.entries(parsed.snapshots)) {
         if (VALID_HARNESS_IDS.has(harnessId as HarnessId) && isRecord(value)) {
           const quota = value as unknown as HarnessQuotaSnapshot;
@@ -443,8 +444,18 @@ export class HarnessUsageService {
             typeof quota.source === "string"
           ) {
             this.quotaCache.set(harnessId as HarnessId, normalizeQuota(quota));
+            loadedAny = true;
           }
         }
+      }
+      // Construction seeds every harness with a placeholder unavailable quota
+      // synchronously, and this disk read finishes asynchronously afterward —
+      // publish so a client that already requested usage before this resolved
+      // (e.g. the dashboard's first paint in a brand-new workspace) gets the
+      // machine-wide last-known quota promptly, rather than only picking it up
+      // incidentally the next time something else calls refreshOne().
+      if (loadedAny) {
+        this.publish();
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return;

@@ -849,6 +849,13 @@ export const HARNESS_USAGE_FRESHNESS_MS = {
 export const HARNESS_USAGE_STATUS_CODES = {
   AUTH_REQUIRED: "auth-required",
   UNSUPPORTED_AUTH_MODE: "unsupported-auth-mode",
+  /**
+   * Quota is pushed by an active statusline sidecar (Claude, Antigravity),
+   * not pulled by a standalone probe, and no push has landed yet in this
+   * environment. Distinct from a provider that structurally never reports
+   * quota — see HARNESS_QUOTA_SOURCES.UNAVAILABLE usage in those providers.
+   */
+  SIDECAR_PENDING: "sidecar-pending",
 } as const;
 
 /** Delay used to coalesce repeated usage refresh requests. */

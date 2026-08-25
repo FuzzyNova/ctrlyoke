@@ -3,6 +3,7 @@ import {
   HARNESS_QUOTA_SOURCES,
   HARNESS_USAGE_CONFIDENCE,
   HARNESS_USAGE_FRESHNESS_MS,
+  HARNESS_USAGE_STATUS_CODES,
   HARNESS_USAGE_UNITS,
 } from "../../../../../types/DashboardConstants";
 import type {
@@ -103,11 +104,15 @@ export class AntigravityUsageProvider implements IHarnessUsageProvider {
   async refreshUsage(_signal?: AbortSignal): Promise<HarnessQuotaSnapshot> {
     // Antigravity exposes quota through an active statusline invocation, not a
     // safe standalone probe. The sidecar supplies provider-live snapshots.
+    // errorCode (rather than a bare unavailable) tells the dashboard this is a
+    // "no push yet" state, not "this provider doesn't report quota" — and lets
+    // HarnessUsageService.refreshOne preserve a prior live snapshot untouched.
     return {
       harnessId: this.harnessId,
       source: HARNESS_QUOTA_SOURCES.UNAVAILABLE,
       staleAfterMs: 0,
       windows: [],
+      errorCode: HARNESS_USAGE_STATUS_CODES.SIDECAR_PENDING,
     };
   }
 }

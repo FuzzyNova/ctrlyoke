@@ -1,6 +1,7 @@
 import {
   HARNESS_IDS,
   HARNESS_QUOTA_SOURCES,
+  HARNESS_USAGE_STATUS_CODES,
   HARNESS_USAGE_UNITS,
   WORKFLOW_TOKEN_COVERAGE,
 } from "@root/types/DashboardConstants";
@@ -20,10 +21,18 @@ import { getUsageBarColorClass } from "@utils/usageBarColor";
 import { formatFutureTime, formatRelativeTimeVerbose } from "@utils/time";
 import { useSettingsStore } from "@store/settingsStore";
 
-function quotaSourceLabel(
-  source: HarnessUsageSnapshot["quota"]["source"]
-): string {
-  switch (source) {
+function isSidecarPending(quota: HarnessUsageSnapshot["quota"]): boolean {
+  return (
+    quota.source === HARNESS_QUOTA_SOURCES.UNAVAILABLE &&
+    quota.errorCode === HARNESS_USAGE_STATUS_CODES.SIDECAR_PENDING
+  );
+}
+
+function quotaSourceLabel(quota: HarnessUsageSnapshot["quota"]): string {
+  if (isSidecarPending(quota)) {
+    return "no data yet";
+  }
+  switch (quota.source) {
     case HARNESS_QUOTA_SOURCES.PROVIDER_LIVE:
       return "live from provider";
     case HARNESS_QUOTA_SOURCES.PROVIDER_LOG:
@@ -41,9 +50,12 @@ function formatUpdatedSuffix(fetchedAt: number | undefined): string {
 }
 
 function quotaSourceDescription(
-  source: HarnessUsageSnapshot["quota"]["source"]
+  quota: HarnessUsageSnapshot["quota"]
 ): string {
-  switch (source) {
+  if (isSidecarPending(quota)) {
+    return "This provider reports quota live during a session, not through a standalone check. Run a ctrlyoke step with it and its quota will appear here.";
+  }
+  switch (quota.source) {
     case HARNESS_QUOTA_SOURCES.PROVIDER_LIVE:
       return "Fetched directly from the provider's API just now.";
     case HARNESS_QUOTA_SOURCES.PROVIDER_LOG:
@@ -102,9 +114,9 @@ export function UsageCard({
           Quota source:{" "}
           <span
             className="cursor-help underline decoration-dotted underline-offset-2"
-            title={quotaSourceDescription(snapshot.quota.source)}
+            title={quotaSourceDescription(snapshot.quota)}
           >
-            {quotaSourceLabel(snapshot.quota.source)}
+            {quotaSourceLabel(snapshot.quota)}
           </span>
           {formatUpdatedSuffix(snapshot.quota.fetchedAt)}
         </span>
@@ -187,17 +199,19 @@ export function UsageCard({
           ))}
         </div>
       )}
-      {snapshot.quota.errorCode && (
-        <div className="text-description-fg">
-          <span
-            className="cursor-help underline decoration-dotted underline-offset-2"
-            title={SAFE_ERROR_DESCRIPTION}
-          >
-            Last safe error
-          </span>
-          : {snapshot.quota.errorCode}
-        </div>
-      )}
+      {snapshot.quota.errorCode &&
+        snapshot.quota.errorCode !==
+          HARNESS_USAGE_STATUS_CODES.SIDECAR_PENDING && (
+          <div className="text-description-fg">
+            <span
+              className="cursor-help underline decoration-dotted underline-offset-2"
+              title={SAFE_ERROR_DESCRIPTION}
+            >
+              Last safe error
+            </span>
+            : {snapshot.quota.errorCode}
+          </div>
+        )}
     </div>
   );
 }

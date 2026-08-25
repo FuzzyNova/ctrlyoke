@@ -8,6 +8,7 @@ import {
   HARNESS_IDS,
   HARNESS_QUOTA_SOURCES,
   HARNESS_USAGE_CONFIDENCE,
+  HARNESS_USAGE_STATUS_CODES,
   HARNESS_USAGE_UNITS,
   HARNESS_USAGE_WINDOW_KINDS,
 } from "../../types/DashboardConstants";
@@ -91,6 +92,7 @@ suite("AntigravityUsageProvider", () => {
       source: HARNESS_QUOTA_SOURCES.UNAVAILABLE,
       staleAfterMs: 0,
       windows: [],
+      errorCode: HARNESS_USAGE_STATUS_CODES.SIDECAR_PENDING,
     });
   });
 });

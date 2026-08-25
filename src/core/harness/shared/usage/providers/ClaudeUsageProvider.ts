@@ -3,6 +3,7 @@ import {
   HARNESS_QUOTA_SOURCES,
   HARNESS_USAGE_CONFIDENCE,
   HARNESS_USAGE_FRESHNESS_MS,
+  HARNESS_USAGE_STATUS_CODES,
   HARNESS_USAGE_UNITS,
   formatUsageWindowLabel,
   usageWindowKind,
@@ -122,11 +123,15 @@ export class ClaudeUsageProvider
   async refreshUsage(_signal?: AbortSignal): Promise<HarnessQuotaSnapshot> {
     // Claude exposes rate limits through an active statusline invocation, not
     // through a safe standalone probe. The sidecar push path supplies live data.
+    // errorCode (rather than a bare unavailable) tells the dashboard this is a
+    // "no push yet" state, not "this provider doesn't report quota" — and lets
+    // HarnessUsageService.refreshOne preserve a prior live snapshot untouched.
     return {
       harnessId: HARNESS_IDS.CLAUDE_CLI,
       source: HARNESS_QUOTA_SOURCES.UNAVAILABLE,
       staleAfterMs: 0,
       windows: [],
+      errorCode: HARNESS_USAGE_STATUS_CODES.SIDECAR_PENDING,
     };
   }
 }
