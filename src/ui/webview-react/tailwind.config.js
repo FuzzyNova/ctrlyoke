@@ -250,6 +250,13 @@ module.exports = {
           "var(--vscode-scmGraph-historyItemRemoteRefColor, #ad80d7)",
         "scm-graph-base":
           "var(--vscode-scmGraph-historyItemBaseRefColor, #ea5c00)",
+        // Rotating swimlane palette (non-ref-specific lanes) — matches VS
+        // Code's scmGraph.foreground1-5 tokens used by its graph renderer.
+        "scm-graph-fg1": "var(--vscode-scmGraph-foreground1, #ffb000)",
+        "scm-graph-fg2": "var(--vscode-scmGraph-foreground2, #dc267f)",
+        "scm-graph-fg3": "var(--vscode-scmGraph-foreground3, #994f00)",
+        "scm-graph-fg4": "var(--vscode-scmGraph-foreground4, #40b0a6)",
+        "scm-graph-fg5": "var(--vscode-scmGraph-foreground5, #b66dff)",
 
         // ── Context window bar ──
         // Track (empty portion) uses a 15% tint of the foreground so it reads

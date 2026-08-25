@@ -42,11 +42,11 @@ const GRAPH_NODE_COLOR_CLASSES: Record<GraphColor, string> = {
 
 /** Rotation-only lane colors; there is intentionally no ref-to-color map. */
 const GRAPH_LANE_COLOR_CLASSES = [
-  "text-scm-graph-local",
-  "text-scm-graph-remote",
-  "text-scm-graph-base",
-  "text-scm-graph-local",
-  "text-scm-graph-remote",
+  "text-scm-graph-fg1",
+  "text-scm-graph-fg2",
+  "text-scm-graph-fg3",
+  "text-scm-graph-fg4",
+  "text-scm-graph-fg5",
 ] as const;
 
 function laneX(laneIndex: number): number {
@@ -72,24 +72,33 @@ function findLaneIndex(
   );
 }
 
+// Both functions draw a single quarter-circle elbow (tangent to the vertical
+// stub on one end, tangent to the horizontal run on the other) plus a
+// straight segment that absorbs any distance beyond one radius. The straight
+// segment is always placed at the row's vertical midpoint, never at a row's
+// top/bottom edge — putting it at an edge instead (as a previous version of
+// bottomTransitionPath did) creates a visible right-angle notch where one
+// row's graph meets the next. The sweep flags below were verified against
+// VS Code's own scmHistory.ts arc commands (which hardcode sweep per-phase,
+// not per-direction) via the SVG endpoint-to-center formula; top and bottom
+// are mirror images of each other, so they take opposite sweep conventions
+// for the same horizontal direction.
 function topTransitionPath(fromX: number, toX: number): string {
   if (fromX === toX) return `M ${fromX} 0 V ${ROW_HEIGHT / 2}`;
   const direction = toX > fromX ? 1 : -1;
   const radius = Math.min(Math.abs(toX - fromX), ROW_HEIGHT / 2);
   const turnX = fromX + direction * radius;
-  return `M ${fromX} 0 V ${ROW_HEIGHT / 2 - radius} A ${radius} ${radius} 0 0 ${
-    direction > 0 ? 1 : 0
-  } ${turnX} ${ROW_HEIGHT / 2} H ${toX}`;
+  const sweep = direction > 0 ? 0 : 1;
+  return `M ${fromX} 0 V ${ROW_HEIGHT / 2 - radius} A ${radius} ${radius} 0 0 ${sweep} ${turnX} ${ROW_HEIGHT / 2} H ${toX}`;
 }
 
 function bottomTransitionPath(fromX: number, toX: number): string {
   if (fromX === toX) return `M ${fromX} ${ROW_HEIGHT / 2} V ${ROW_HEIGHT}`;
   const direction = toX > fromX ? 1 : -1;
   const radius = Math.min(Math.abs(toX - fromX), ROW_HEIGHT / 2);
-  const turnX = fromX + direction * radius;
-  return `M ${fromX} ${ROW_HEIGHT / 2} A ${radius} ${radius} 0 0 ${
-    direction > 0 ? 1 : 0
-  } ${turnX} ${ROW_HEIGHT / 2 + radius} V ${ROW_HEIGHT} H ${toX}`;
+  const turnX = toX - direction * radius;
+  const sweep = direction > 0 ? 1 : 0;
+  return `M ${fromX} ${ROW_HEIGHT / 2} H ${turnX} A ${radius} ${radius} 0 0 ${sweep} ${toX} ${ROW_HEIGHT}`;
 }
 
 function straightPath(x: number): string {
@@ -210,6 +219,10 @@ const CommitGraphSvg: React.FC<CommitGraphSvgProps> = ({
   });
 
   const nodeClass = GRAPH_NODE_COLOR_CLASSES[color];
+  const branchTooltip =
+    commit.refs.length > 0
+      ? commit.refs.map((ref) => ref.name).join(", ")
+      : undefined;
   const rowClass = `flex flex-shrink-0 items-center justify-center h-6 transition-colors ${
     isSelected
       ? "bg-list-active-bg"
@@ -230,6 +243,7 @@ const CommitGraphSvg: React.FC<CommitGraphSvgProps> = ({
       className={rowClass}
       style={{ width, height: ROW_HEIGHT }}
       data-testid={`commit-graph-svg-${commit.hash}`}
+      title={branchTooltip}
       onClick={handleClick}
       onContextMenu={(e) => onContextMenu(e, commit)}
       {...longPressHandlers}
