@@ -68,6 +68,10 @@ function realizedDiffBody(file: DiffFileCardProps): number {
         file.source.newContent
       ).hunks;
       break;
+    case "image":
+    case "binary":
+    case "deferred":
+      return 0;
   }
 
   if (hunks.length === 0) {

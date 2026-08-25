@@ -47,6 +47,11 @@ const DIFF_FILE_CARD_NOTE_HORIZONTAL_CHROME = 40;
 const DIFF_FILE_LIST_TEXT_LINE_HEIGHT = 16;
 /** Approximate monospace advance used by the note's `[overflow-wrap:anywhere]`. */
 const DIFF_FILE_HEADER_CHAR_WIDTH = 0.6;
+const DIFF_FILE_NON_TEXT_TOGGLE_HEIGHT = 24;
+const DIFF_FILE_IMAGE_PREVIEW_HEIGHT = 256;
+const DIFF_FILE_BINARY_PREVIEW_HEIGHT = 22;
+/** Deferred history cards start collapsed; their unloaded body has no height. */
+const DIFF_FILE_DEFERRED_PREVIEW_HEIGHT = 0;
 const GROUP_KEY_SEPARATOR = "\u001f";
 
 export interface DiffFileRowEstimateOptions {
@@ -285,6 +290,34 @@ function getContentEstimate(
   return plan.diffBlockHeight;
 }
 
+function getImageEstimate(file: DiffFileCardProps, collapsed: boolean): number {
+  if (file.source.kind !== "image") return 0;
+  return (
+    DIFF_FILE_NON_TEXT_TOGGLE_HEIGHT +
+    (collapsed ? 0 : DIFF_FILE_IMAGE_PREVIEW_HEIGHT)
+  );
+}
+
+function getBinaryEstimate(
+  file: DiffFileCardProps,
+  collapsed: boolean
+): number {
+  if (file.source.kind !== "binary") return 0;
+  return (
+    DIFF_FILE_NON_TEXT_TOGGLE_HEIGHT +
+    (collapsed ? 0 : DIFF_FILE_BINARY_PREVIEW_HEIGHT)
+  );
+}
+
+function getDeferredEstimate(
+  file: DiffFileCardProps,
+  _collapsed: boolean
+): number {
+  return file.source.kind === "deferred"
+    ? DIFF_FILE_DEFERRED_PREVIEW_HEIGHT
+    : 0;
+}
+
 function getHunkEstimate(
   file: DiffFileCardProps,
   collapsed: boolean,
@@ -328,7 +361,13 @@ function getDiffBodyEstimate(
       ? getHunkEstimate(file, collapsed, options)
       : file.source.kind === "patch"
         ? getPatchEstimate(file, collapsed, options)
-        : getContentEstimate(file, collapsed, options);
+        : file.source.kind === "content"
+          ? getContentEstimate(file, collapsed, options)
+          : file.source.kind === "image"
+            ? getImageEstimate(file, collapsed)
+            : file.source.kind === "binary"
+              ? getBinaryEstimate(file, collapsed)
+              : getDeferredEstimate(file, collapsed);
   sourceCache.set(cacheKey, estimate);
   return estimate;
 }

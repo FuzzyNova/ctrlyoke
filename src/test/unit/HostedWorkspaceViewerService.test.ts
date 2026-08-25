@@ -18,6 +18,7 @@ import {
   WorkspaceTreeBadRequestError,
   WorkspaceTreeExpiredError,
 } from "../../server/WorkspaceTreeErrors";
+import { DIFF_PAYLOAD_KINDS } from "../../types/DashboardConstants";
 
 suite("HostedWorkspaceViewerService", function () {
   // Most tests here shell out to real git (init/config/commit/clone/push/
@@ -621,6 +622,205 @@ suite("HostedWorkspaceViewerService", function () {
     });
   });
 
+  // ── getFileHistory ────────────────────────────────────────────────────────
+
+  suite("getFileHistory", () => {
+    test("freezes the complete history at the initial HEAD", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "First history commit");
+      commitFile(root, "history.txt", "two\n", "Second history commit");
+      commitFile(root, "history.txt", "three\n", "Third history commit");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const first = await svc.getFileHistory("history.txt", 0, 2);
+      assert.deepStrictEqual(
+        first.entries.map((entry) => entry.subject),
+        ["Third history commit", "Second history commit"]
+      );
+
+      commitFile(root, "history.txt", "four\n", "Commit after opening history");
+      const continuation = await svc.getFileHistory(
+        "history.txt",
+        2,
+        undefined,
+        first.historyId
+      );
+      assert.strictEqual(continuation.totalEntries, 3);
+      assert.deepStrictEqual(
+        continuation.entries.map((entry) => entry.subject),
+        ["First history commit"]
+      );
+
+      const refreshed = await svc.getFileHistory("history.txt", 0, 10);
+      assert.strictEqual(refreshed.totalEntries, 4);
+      assert.notStrictEqual(refreshed.historyId, first.historyId);
+    });
+
+    test("scopes a multi-repo path through its owning repository", async () => {
+      const primary = createWorkspace();
+      const secondary = createWorkspace();
+      for (const root of [primary, secondary]) {
+        runGit(root, "init");
+        configureGitIdentity(root);
+      }
+      commitFile(secondary, "history.txt", "secondary\n", "Secondary history");
+
+      const svc = new HostedWorkspaceViewerService(primary, [
+        { name: "primary", fsPath: primary },
+        { name: "secondary", fsPath: secondary },
+      ]);
+      const result = await svc.getFileHistory("secondary/history.txt", 0, 2);
+
+      assert.strictEqual(result.totalEntries, 1);
+      assert.strictEqual(result.entries[0]?.subject, "Secondary history");
+      assert.strictEqual(result.entries[0]?.path, "secondary/history.txt");
+    });
+
+    test("rejects invalid paths, history ids, and page ranges", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "History commit");
+      const svc = new HostedWorkspaceViewerService(root);
+      const page = await svc.getFileHistory("history.txt", 0, 2);
+
+      await assert.rejects(
+        svc.getFileHistory("../outside.txt"),
+        (error: unknown) =>
+          error instanceof Error && error.message === "Path not allowed"
+      );
+      await assert.rejects(
+        svc.getFileHistory("history.txt", 1, undefined, page.historyId),
+        (error: unknown) => error instanceof WorkspaceTreeBadRequestError
+      );
+      await assert.rejects(
+        svc.getFileHistory(
+          "history.txt",
+          0,
+          undefined,
+          "00000000-0000-4000-8000-000000000099"
+        ),
+        (error: unknown) => error instanceof WorkspaceTreeExpiredError
+      );
+    });
+  });
+
+  // ── getFileHistoryDiff ────────────────────────────────────────────────────
+
+  suite("getFileHistoryDiff", () => {
+    test("returns before and after text for a normal file change", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "before\n", "Initial file");
+      fs.writeFileSync(path.join(root, "history.txt"), "after\n");
+      runGit(root, "add", "history.txt");
+      runGit(root, "commit", "-m", "Update file");
+      const commit = runGit(root, "rev-parse", "HEAD");
+
+      const result = await new HostedWorkspaceViewerService(
+        root
+      ).getFileHistoryDiff("history.txt", commit);
+
+      assert.strictEqual(result.payloadKind, "text");
+      if (result.payloadKind !== "text") return;
+      assert.strictEqual(result.subject, "Update file");
+      assert.strictEqual(result.oldContent, "before\n");
+      assert.strictEqual(result.newContent, "after\n");
+      assert.strictEqual(result.path, "history.txt");
+      assert.strictEqual(result.oldPath, "history.txt");
+    });
+
+    test("uses the parent path on the old side of a rename", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "old-name.txt", "same content\n", "Initial name");
+      runGit(root, "mv", "old-name.txt", "new-name.txt");
+      runGit(root, "commit", "-m", "Rename file");
+      const commit = runGit(root, "rev-parse", "HEAD");
+
+      const result = await new HostedWorkspaceViewerService(
+        root
+      ).getFileHistoryDiff("new-name.txt", commit);
+
+      assert.strictEqual(result.payloadKind, "text");
+      if (result.payloadKind !== "text") return;
+      assert.strictEqual(result.path, "new-name.txt");
+      assert.strictEqual(result.oldPath, "old-name.txt");
+      assert.strictEqual(result.oldContent, "same content\n");
+      assert.strictEqual(result.newContent, "same content\n");
+    });
+
+    test("uses Git's implicit empty tree for a root commit", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "root.txt", "root content\n", "Root commit");
+      const commit = runGit(root, "rev-parse", "HEAD");
+
+      const result = await new HostedWorkspaceViewerService(
+        root
+      ).getFileHistoryDiff("root.txt", commit);
+
+      assert.strictEqual(result.payloadKind, "text");
+      if (result.payloadKind !== "text") return;
+      assert.strictEqual(result.oldContent, "");
+      assert.strictEqual(result.newContent, "root content\n");
+    });
+
+    test("returns real image bytes for an image-file commit", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      const oldBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00]);
+      const newBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff]);
+      fs.writeFileSync(path.join(root, "history.png"), oldBytes);
+      runGit(root, "add", "history.png");
+      runGit(root, "commit", "-m", "Initial image");
+      fs.writeFileSync(path.join(root, "history.png"), newBytes);
+      runGit(root, "add", "history.png");
+      runGit(root, "commit", "-m", "Update image");
+      const commit = runGit(root, "rev-parse", "HEAD");
+
+      const result = await new HostedWorkspaceViewerService(
+        root
+      ).getFileHistoryDiff("history.png", commit);
+
+      assert.strictEqual(result.payloadKind, DIFF_PAYLOAD_KINDS.IMAGE);
+      if (result.payloadKind !== DIFF_PAYLOAD_KINDS.IMAGE) return;
+      assert.strictEqual(
+        result.image.oldImageDataUri,
+        `data:image/png;base64,${oldBytes.toString("base64")}`
+      );
+      assert.strictEqual(
+        result.image.newImageDataUri,
+        `data:image/png;base64,${newBytes.toString("base64")}`
+      );
+    });
+
+    test("returns a binary payload for a non-image binary commit", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      fs.writeFileSync(path.join(root, "history.bin"), Buffer.from([0, 1]));
+      runGit(root, "add", "history.bin");
+      runGit(root, "commit", "-m", "Initial binary");
+      fs.writeFileSync(path.join(root, "history.bin"), Buffer.from([0, 2]));
+      runGit(root, "add", "history.bin");
+      runGit(root, "commit", "-m", "Update binary");
+      const commit = runGit(root, "rev-parse", "HEAD");
+
+      const result = await new HostedWorkspaceViewerService(
+        root
+      ).getFileHistoryDiff("history.bin", commit);
+
+      assert.strictEqual(result.payloadKind, DIFF_PAYLOAD_KINDS.BINARY);
+    });
+  });
+
   // ── readFile ───────────────────────────────────────────────────────────────
 
   suite("readFile", () => {
@@ -1109,6 +1309,82 @@ suite("HostedWorkspaceViewerService", function () {
         unstagedStatus: "?",
         kind: "untracked",
       });
+    });
+  });
+
+  // ── diff payloads ─────────────────────────────────────────────────────────
+
+  suite("diff payloads", () => {
+    test("returns image bytes as data URIs for a working-tree image diff", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      const oldBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00]);
+      const newBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff]);
+      fs.writeFileSync(path.join(root, "image.png"), oldBytes);
+      runGit(root, "add", "image.png");
+      runGit(root, "commit", "-m", "Add image");
+      fs.writeFileSync(path.join(root, "image.png"), newBytes);
+
+      const result = await new HostedWorkspaceViewerService(root).getDiff(
+        "image.png"
+      );
+
+      assert.strictEqual(result.payloadKind, DIFF_PAYLOAD_KINDS.IMAGE);
+      if (result.payloadKind !== DIFF_PAYLOAD_KINDS.IMAGE) return;
+      assert.strictEqual(
+        result.image.oldImageDataUri,
+        `data:image/png;base64,${oldBytes.toString("base64")}`
+      );
+      assert.strictEqual(
+        result.image.newImageDataUri,
+        `data:image/png;base64,${newBytes.toString("base64")}`
+      );
+    });
+
+    test("returns a binary payload instead of decoding binary bytes as text", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      fs.writeFileSync(path.join(root, "data.bin"), Buffer.from([0, 1]));
+      runGit(root, "add", "data.bin");
+      runGit(root, "commit", "-m", "Add binary");
+      fs.writeFileSync(path.join(root, "data.bin"), Buffer.from([0, 2]));
+
+      const result = await new HostedWorkspaceViewerService(root).getDiff(
+        "data.bin"
+      );
+
+      assert.strictEqual(result.payloadKind, DIFF_PAYLOAD_KINDS.BINARY);
+    });
+
+    test("returns image and non-image binary entries for a commit diff", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "baseline.txt", "baseline\n", "Baseline");
+      const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xaa]);
+      fs.writeFileSync(path.join(root, "image.png"), imageBytes);
+      fs.writeFileSync(path.join(root, "data.bin"), Buffer.from([0, 3]));
+      runGit(root, "add", "image.png", "data.bin");
+      runGit(root, "commit", "-m", "Add binary files");
+      const commit = runGit(root, "rev-parse", "HEAD");
+
+      const result = await new HostedWorkspaceViewerService(root).getGitRefDiff(
+        commit
+      );
+      const entries = result.nonTextEntries ?? [];
+      const imageEntry = entries.find((entry) => entry.path === "image.png");
+      const binaryEntry = entries.find((entry) => entry.path === "data.bin");
+
+      assert.ok(imageEntry);
+      assert.strictEqual(imageEntry?.payloadKind, DIFF_PAYLOAD_KINDS.IMAGE);
+      assert.strictEqual(
+        imageEntry?.image?.newImageDataUri,
+        `data:image/png;base64,${imageBytes.toString("base64")}`
+      );
+      assert.ok(binaryEntry);
+      assert.strictEqual(binaryEntry?.payloadKind, DIFF_PAYLOAD_KINDS.BINARY);
     });
   });
 

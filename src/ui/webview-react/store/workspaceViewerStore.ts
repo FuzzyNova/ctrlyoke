@@ -9,7 +9,14 @@ import type {
   WorkspaceRepo,
   WorkspaceSearchResult,
   WorkspaceSearchScope,
+  WorkspaceDiffEntry,
+  WorkspaceImageDiffSides,
+  WorkspaceScmDiffResponse,
 } from "@root/types/HostedWorkspaceViewerTypes";
+import {
+  DIFF_PAYLOAD_KINDS,
+  type DiffPayloadKind,
+} from "@root/types/DashboardConstants";
 import type { ParsedDiffFile } from "@utils/rdvAdapter";
 import { workspaceGitRefDiff, workspaceWorktreeDiff } from "@utils/hostedApi";
 import { parseUnifiedDiffToFiles } from "@utils/rdvAdapter";
@@ -21,6 +28,16 @@ import { parseUnifiedDiffToFiles } from "@utils/rdvAdapter";
 export type PendingNavigation =
   | { type: "file"; filePath: string; startLine?: number; endLine?: number }
   | { type: "directory"; dirPath: string };
+
+export interface PendingFileHistory {
+  path: string;
+  repoId: string | null;
+  generation: number;
+}
+
+function normalizeWorkspacePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/^\.\//, "");
+}
 
 /**
  * Match a viewer path to the repo that owns it, for defaulting the SCM repo
@@ -93,6 +110,8 @@ interface WorkspaceViewerState {
   diffNewContent: string;
   diffLanguage: string | undefined;
   diffKind: DiffKind | null;
+  diffPayloadKind: DiffPayloadKind | null;
+  diffImage: WorkspaceImageDiffSides | null;
   diffLoading: boolean;
 
   // Search
@@ -121,6 +140,7 @@ interface WorkspaceViewerState {
 
   // Multi-file git-ref diff (e.g. from clicking a ~<hash> link in browser mode)
   diffFiles: ParsedDiffFile[] | null;
+  diffNonTextEntries: WorkspaceDiffEntry[];
   diffRefLabel: string | null;
   diffRefLoading: boolean;
   /** Full commit metadata, present only when diffFiles came from a single commit ref. */
@@ -135,6 +155,12 @@ interface WorkspaceViewerState {
   pendingNavigation: PendingNavigation | null;
   // Pending diff selection (set externally, consumed by WorkspaceSourceControlPane)
   pendingDiff: string | null;
+  // File-history projection (set externally, consumed by WorkspaceSourceControlPane)
+  fileHistoryPath: string | null;
+  fileHistoryRepoId: string | null;
+  fileHistoryActive: boolean;
+  pendingFileHistory: PendingFileHistory | null;
+  fileHistoryGeneration: number;
 
   // General
   error: string | null;
@@ -180,12 +206,7 @@ interface WorkspaceViewerActions {
   setSourceControlLoading(loading: boolean): void;
   selectDiff(path: string | null): void;
   clearDiff(): void;
-  setDiffData(
-    oldContent: string,
-    newContent: string,
-    language: string | undefined,
-    kind: DiffKind
-  ): void;
+  setDiffData(response: WorkspaceScmDiffResponse): void;
   setDiffLoading(loading: boolean): void;
   setCommitMessage(msg: string): void;
   setCommitting(v: boolean): void;
@@ -233,6 +254,9 @@ interface WorkspaceViewerActions {
   clearPendingNavigation(): void;
   openToDiff(path: string): void;
   clearPendingDiff(): void;
+  openToFileHistory(path: string): void;
+  clearPendingFileHistory(): void;
+  closeFileHistoryView(): void;
 }
 
 // ============================================================================
@@ -270,6 +294,8 @@ const INITIAL_STATE: WorkspaceViewerState = {
   diffNewContent: "",
   diffLanguage: undefined,
   diffKind: null,
+  diffPayloadKind: null,
+  diffImage: null,
   diffLoading: false,
 
   searchQuery: "",
@@ -294,6 +320,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
   previousBranch: null,
 
   diffFiles: null,
+  diffNonTextEntries: [],
   diffRefLabel: null,
   diffRefLoading: false,
   diffCommitInfo: null,
@@ -301,6 +328,11 @@ const INITIAL_STATE: WorkspaceViewerState = {
 
   pendingNavigation: null,
   pendingDiff: null,
+  fileHistoryPath: null,
+  fileHistoryRepoId: null,
+  fileHistoryActive: false,
+  pendingFileHistory: null,
+  fileHistoryGeneration: 0,
 
   error: null,
 };
@@ -339,6 +371,10 @@ export const useWorkspaceViewerStore = create<
           diffCommitInfo: null,
           diffRef: null,
           pendingDiff: null,
+          pendingFileHistory: null,
+          fileHistoryActive: false,
+          fileHistoryPath: null,
+          fileHistoryRepoId: null,
           commitHistoryLoading: false,
           committing: false,
           generatingCommitMessage: false,
@@ -543,6 +579,8 @@ export const useWorkspaceViewerStore = create<
                 diffNewContent: "",
                 diffLanguage: undefined,
                 diffKind: null,
+                diffPayloadKind: null,
+                diffImage: null,
                 diffLoading: false,
               }
             : {}),
@@ -556,7 +594,14 @@ export const useWorkspaceViewerStore = create<
       selectDiff(path) {
         set({
           selectedDiffPath: path,
+          fileHistoryPath: null,
+          fileHistoryRepoId: null,
+          fileHistoryActive: false,
+          pendingFileHistory: null,
+          diffPayloadKind: null,
+          diffImage: null,
           diffFiles: null,
+          diffNonTextEntries: [],
           diffRefLabel: null,
           diffRefLoading: false,
           diffCommitInfo: null,
@@ -571,22 +616,35 @@ export const useWorkspaceViewerStore = create<
           diffNewContent: "",
           diffLanguage: undefined,
           diffKind: null,
+          diffPayloadKind: null,
+          diffImage: null,
           diffLoading: false,
           diffFiles: null,
+          diffNonTextEntries: [],
           diffRefLabel: null,
           diffRefLoading: false,
           diffCommitInfo: null,
           diffRef: null,
           pendingDiff: null,
+          fileHistoryPath: null,
+          fileHistoryRepoId: null,
+          fileHistoryActive: false,
+          pendingFileHistory: null,
         });
       },
 
-      setDiffData(oldContent, newContent, language, kind) {
+      setDiffData(response) {
+        const isText = response.payloadKind === DIFF_PAYLOAD_KINDS.TEXT;
         set({
-          diffOldContent: oldContent,
-          diffNewContent: newContent,
-          diffLanguage: language,
-          diffKind: kind,
+          diffOldContent: isText ? response.oldContent : "",
+          diffNewContent: isText ? response.newContent : "",
+          diffLanguage: isText ? response.language : undefined,
+          diffKind: response.kind,
+          diffPayloadKind: response.payloadKind,
+          diffImage:
+            response.payloadKind === DIFF_PAYLOAD_KINDS.IMAGE
+              ? response.image
+              : null,
         });
       },
 
@@ -686,18 +744,21 @@ export const useWorkspaceViewerStore = create<
           activeTab: "sourceControl",
           // Clear single-file diff so the pane switches to ref mode
           selectedDiffPath: null,
+          diffNonTextEntries: [],
           diffFiles: null,
           diffRefLabel: null,
           diffRefLoading: true,
           diffCommitInfo: null,
           diffRef: ref,
           pendingDiff: null,
+          pendingFileHistory: null,
+          fileHistoryActive: false,
+          fileHistoryPath: null,
+          fileHistoryRepoId: null,
         });
         try {
-          const { unifiedDiff, commitInfo } = await workspaceGitRefDiff(
-            ref,
-            get().selectedRepoId ?? undefined
-          );
+          const { unifiedDiff, commitInfo, nonTextEntries } =
+            await workspaceGitRefDiff(ref, get().selectedRepoId ?? undefined);
           const diffFiles = parseUnifiedDiffToFiles(unifiedDiff);
           const shortRef = ref.startsWith("~") ? ref.slice(1) : ref;
           const diffRefLabel =
@@ -710,6 +771,7 @@ export const useWorkspaceViewerStore = create<
                   : `Commit ${shortRef.slice(0, 7)}`;
           set({
             diffFiles,
+            diffNonTextEntries: nonTextEntries ?? [],
             diffRefLabel,
             diffRefLoading: false,
             diffCommitInfo: commitInfo ?? null,
@@ -725,20 +787,26 @@ export const useWorkspaceViewerStore = create<
           activeTab: "sourceControl",
           selectedDiffPath: null,
           diffFiles: null,
+          diffNonTextEntries: [],
           diffRefLabel: null,
           diffRefLoading: true,
           diffCommitInfo: null,
           diffRef: null,
           pendingDiff: null,
+          pendingFileHistory: null,
+          fileHistoryActive: false,
+          fileHistoryPath: null,
+          fileHistoryRepoId: null,
         });
         try {
-          const { unifiedDiff } = await workspaceWorktreeDiff(
+          const { unifiedDiff, nonTextEntries } = await workspaceWorktreeDiff(
             sourceCheckoutRoot,
             baseCommit,
             branchName
           );
           set({
             diffFiles: parseUnifiedDiffToFiles(unifiedDiff),
+            diffNonTextEntries: nonTextEntries ?? [],
             diffRefLabel: `Branch ${branchName}`,
             diffRefLoading: false,
           });
@@ -779,6 +847,10 @@ export const useWorkspaceViewerStore = create<
           activeTab: "sourceControl",
           selectedDiffPath: path,
           pendingDiff: path,
+          fileHistoryPath: null,
+          fileHistoryRepoId: null,
+          fileHistoryActive: false,
+          pendingFileHistory: null,
           // Leaving ref mode for a single-file diff.
           diffFiles: null,
           diffRefLabel: null,
@@ -790,6 +862,42 @@ export const useWorkspaceViewerStore = create<
 
       clearPendingDiff() {
         set({ pendingDiff: null });
+      },
+
+      openToFileHistory(path) {
+        const normalizedPath = normalizeWorkspacePath(path);
+        const repoId = get().selectedRepoId;
+        const generation = get().fileHistoryGeneration + 1;
+        set({
+          isOpen: true,
+          activeTab: "sourceControl",
+          selectedDiffPath: null,
+          pendingDiff: null,
+          fileHistoryPath: normalizedPath,
+          fileHistoryRepoId: repoId,
+          fileHistoryActive: true,
+          pendingFileHistory: {
+            path: normalizedPath,
+            repoId,
+            generation,
+          },
+          fileHistoryGeneration: generation,
+          // Leaving ref mode for the file-history projection.
+          diffFiles: null,
+          diffNonTextEntries: [],
+          diffRefLabel: null,
+          diffRefLoading: false,
+          diffCommitInfo: null,
+          diffRef: null,
+        });
+      },
+
+      clearPendingFileHistory() {
+        set({ pendingFileHistory: null });
+      },
+
+      closeFileHistoryView() {
+        set({ fileHistoryActive: false, pendingFileHistory: null });
       },
     }),
     {

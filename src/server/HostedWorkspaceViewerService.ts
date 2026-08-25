@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as readline from "readline";
+import { randomUUID } from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { Log } from "../utils/Log";
@@ -24,6 +25,9 @@ import type {
   DiffKind,
   WorkspaceCommitLogResponse,
   WorkspaceCommitLogEntry,
+  WorkspaceFileHistoryEntry,
+  WorkspaceFileHistoryPageResponse,
+  WorkspaceFileHistoryDiffResponse,
   WorkspaceGitRefDiffResponse,
   WorkspaceScmFile,
   WorkspaceRepo,
@@ -40,6 +44,8 @@ import {
   WORKSPACE_TREE_DEFAULT_PAGE_SIZE,
   WORKSPACE_TREE_MAX_PAGE_SIZE,
   WORKSPACE_ENTRY_SORT_KEYS,
+  WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE,
+  WORKSPACE_FILE_HISTORY_MAX_PAGE_SIZE,
 } from "../types/HostedWorkspaceViewerTypes";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {
@@ -59,17 +65,25 @@ import {
 import { runtimeTrustedRootRegistry } from "../utils/RuntimeTrustedRootRegistry";
 import {
   getRecentCommits,
+  getFileHistoryCommits,
+  resolveCommit,
   getWorkingTreeDiff,
   getStagedDiff,
   getStashDiff,
   getCommitDiff,
   getCommitInfo,
+  getBlobBytes,
+  getChangedFilesWithBinaryStatus,
+  type GitChangedFile,
   getIgnoredEntryNames,
   getGitTrackedFiles,
   getGitIgnoredFiles,
   getDiffBetweenRefs,
 } from "../utils/GitUtils";
 import {
+  DIFF_CHANGE_TYPES,
+  DIFF_PAYLOAD_KINDS,
+  type DiffChangeType,
   isImageRefPath,
   imageExtensionToMimeType,
 } from "../types/DashboardConstants";
@@ -100,6 +114,8 @@ const SEARCH_CONCURRENCY = 8;
 const SEARCH_DEFAULT_LIMIT = 100;
 const SEARCH_MAX_LIMIT = 500;
 const SEARCH_SNIPPET_MAX_LENGTH = 200;
+const FILE_HISTORY_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
+const FILE_HISTORY_SNAPSHOT_MAX_COUNT = 32;
 const SEARCH_FALLBACK_SKIP_DIRECTORIES = new Set([
   ".git",
   "node_modules",
@@ -108,6 +124,22 @@ const SEARCH_FALLBACK_SKIP_DIRECTORIES = new Set([
   "out",
   "coverage",
 ]);
+
+interface NonTextDiffSources {
+  baseRef: string;
+  targetRef?: string;
+  targetIsWorkingTree: boolean;
+}
+
+interface FileHistorySnapshot {
+  historyId: string;
+  requestedPath: string;
+  repoRoot: string;
+  headHash: string;
+  pageSize: number;
+  entries: readonly WorkspaceFileHistoryEntry[];
+  lastAccessedAt: number;
+}
 
 /** Run metadata work with a fixed number of concurrent filesystem operations. */
 async function mapWithBoundedConcurrency<T, R>(
@@ -252,6 +284,7 @@ function classifyRefNames(refNames: string[]): GitRefLabel[] {
 export class HostedWorkspaceViewerService {
   private readonly commitGenerator = new CommitMessageGenerator();
   private readonly listingSnapshotCache = new WorkspaceListingSnapshotCache();
+  private readonly fileHistorySnapshots = new Map<string, FileHistorySnapshot>();
 
   constructor(
     private readonly workspaceRoot: string,
@@ -1496,40 +1529,86 @@ export class HostedWorkspaceViewerService {
     );
     const kind: DiffKind = fileStatus?.kind ?? "modified";
 
-    const oldContent = await this.getHeadContent(gitPath, repoRoot);
-    let newContent = "";
+    const oldBytes = await getBlobBytes(repoRoot, "HEAD", gitPath);
+    let newBytes: Buffer | null = null;
 
     if (kind !== "deleted") {
       try {
-        newContent = await fs.promises.readFile(resolved, "utf8");
+        newBytes = await fs.promises.readFile(resolved);
       } catch {
-        newContent = "";
+        newBytes = null;
       }
     }
 
+    const responsePath = fileStatus?.path ?? normalizedRelPath;
+    if (isImageRefPath(resolved)) {
+      const image = this.buildImageDiffSides(
+        oldBytes,
+        newBytes,
+        resolved,
+        gitPath
+      );
+      if (image) {
+        return {
+          path: responsePath,
+          kind,
+          payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
+          image,
+        } as WorkspaceScmDiffResponse;
+      }
+    }
+
+    if (this.isBinaryBuffer(oldBytes) || this.isBinaryBuffer(newBytes)) {
+      return {
+        path: responsePath,
+        kind,
+        payloadKind: DIFF_PAYLOAD_KINDS.BINARY,
+      } as WorkspaceScmDiffResponse;
+    }
+
     return {
-      path: fileStatus?.path ?? normalizedRelPath,
+      path: responsePath,
       language,
-      oldContent,
-      newContent,
+      oldContent: oldBytes?.toString("utf8") ?? "",
+      newContent: newBytes?.toString("utf8") ?? "",
       kind,
+      payloadKind: DIFF_PAYLOAD_KINDS.TEXT,
     };
   }
 
-  private async getHeadContent(
-    gitRelPath: string,
-    repoRoot: string
-  ): Promise<string> {
-    try {
-      const { stdout } = await execFileAsync(
-        "git",
-        ["-C", repoRoot, "show", `HEAD:${gitRelPath}`],
-        { timeout: GIT_TIMEOUT_MS }
-      );
-      return stdout;
-    } catch {
-      return "";
+  private isBinaryBuffer(buffer: Buffer | null): boolean {
+    if (!buffer) return false;
+    const bytesToCheck = Math.min(buffer.length, BINARY_CHECK_BYTES);
+    for (let index = 0; index < bytesToCheck; index++) {
+      if (buffer[index] === 0) return true;
     }
+    return false;
+  }
+
+  private buildImageDiffSides(
+    oldBytes: Buffer | null,
+    newBytes: Buffer | null,
+    newPath: string,
+    oldPath: string
+  ): { oldImageDataUri?: string; newImageDataUri?: string } | null {
+    const oldExtension = path.extname(oldPath).replace(/^\./, "");
+    const newExtension = path.extname(newPath).replace(/^\./, "");
+    const oldMimeType = imageExtensionToMimeType(oldExtension);
+    const newMimeType = imageExtensionToMimeType(newExtension);
+    if ((oldBytes && !oldMimeType) || (newBytes && !newMimeType)) {
+      return null;
+    }
+
+    return {
+      oldImageDataUri:
+        oldBytes && oldMimeType
+          ? `data:${oldMimeType};base64,${oldBytes.toString("base64")}`
+          : undefined,
+      newImageDataUri:
+        newBytes && newMimeType
+          ? `data:${newMimeType};base64,${newBytes.toString("base64")}`
+          : undefined,
+    };
   }
 
   // ── Git stage / unstage ──────────────────────────────────────────────────
@@ -1698,6 +1777,300 @@ export class HostedWorkspaceViewerService {
 
   // ── Commit log ───────────────────────────────────────────────────────────
 
+  async getFileHistory(
+    requestedPath: string,
+    offset = 0,
+    pageSize?: number,
+    historyId?: string,
+    repoId?: string
+  ): Promise<WorkspaceFileHistoryPageResponse> {
+    if (!Number.isSafeInteger(offset) || offset < 0) {
+      throw new WorkspaceTreeBadRequestError(
+        "offset must be a non-negative integer"
+      );
+    }
+
+    const resolved = this.safeResolve(requestedPath);
+    if (!resolved) throw new Error("Path not allowed");
+    const repoRoot = await this.requireRepoRootForPath(resolved);
+    const viewerPath = normalizeViewerPath(this.relativePath(resolved));
+    void repoId;
+
+    if (historyId !== undefined) {
+      if (!isValidHistoryId(historyId)) {
+        throw new WorkspaceTreeBadRequestError("historyId is invalid");
+      }
+      const snapshot = this.getFileHistorySnapshot(historyId);
+      if (!snapshot) throw new WorkspaceTreeExpiredError();
+      if (
+        !pathsEqual(snapshot.repoRoot, repoRoot) ||
+        snapshot.requestedPath !== viewerPath
+      ) {
+        throw new WorkspaceTreeBadRequestError(
+          "path does not match the history snapshot"
+        );
+      }
+      if (offset % snapshot.pageSize !== 0) {
+        throw new WorkspaceTreeBadRequestError(
+          "offset must be aligned to pageSize"
+        );
+      }
+      if (offset > snapshot.entries.length) {
+        throw new WorkspaceTreeBadRequestError(
+          "offset is outside the history"
+        );
+      }
+      return this.materializeFileHistoryPage(snapshot, offset);
+    }
+
+    const resolvedPageSize = this.resolveFileHistoryPageSize(pageSize);
+    try {
+      const stat = await fs.promises.stat(resolved);
+      if (stat.isDirectory()) {
+        throw new WorkspaceTreeBadRequestError("path must be a file");
+      }
+    } catch (error) {
+      if (error instanceof WorkspaceTreeBadRequestError) throw error;
+      // A deleted file can still have useful history, so an absent current
+      // filesystem entry is allowed; Git remains the source of truth below.
+    }
+
+    const gitPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
+    const headHash = await resolveCommit(repoRoot, "HEAD");
+    const [historyRows, unpushedHashes] = await Promise.all([
+      // Omitting max-count is intentional: the complete result is the frozen
+      // snapshot from which all later pages are served.
+      getFileHistoryCommits(repoRoot, gitPath, undefined, 0, headHash),
+      this.getUnpushedHistoryHashes(repoRoot, headHash),
+    ]);
+    const entries = historyRows
+      .filter((row) => {
+        const oldAbsolute = path.resolve(repoRoot, row.oldPath);
+        const newAbsolute = path.resolve(repoRoot, row.path);
+        return (
+          isPathWithinAnyDirectory(oldAbsolute, this.trustedRoots) &&
+          isPathWithinAnyDirectory(newAbsolute, this.trustedRoots)
+        );
+      })
+      .map((row) => ({
+        hash: row.hash,
+        shortHash: row.shortHash,
+        subject: row.subject,
+        author: row.author,
+        relativeDate: row.relativeDate,
+        isHead: row.hash === headHash,
+        pushed: !unpushedHashes.has(row.hash),
+        refs: classifyRefNames(row.refNames),
+        isMerge: row.parentHashes.length > 1,
+        parentHashes: row.parentHashes,
+        path: normalizeViewerPath(
+          this.relativePath(path.resolve(repoRoot, row.path))
+        ),
+        oldPath: normalizeViewerPath(
+          this.relativePath(path.resolve(repoRoot, row.oldPath))
+        ),
+      } satisfies WorkspaceFileHistoryEntry));
+
+    const snapshot: FileHistorySnapshot = {
+      historyId: this.createFileHistoryId(),
+      requestedPath: viewerPath,
+      repoRoot,
+      headHash,
+      pageSize: resolvedPageSize,
+      entries: Object.freeze(entries),
+      lastAccessedAt: Date.now(),
+    };
+    this.fileHistorySnapshots.set(snapshot.historyId, snapshot);
+    this.trimFileHistorySnapshots();
+
+    if (offset % snapshot.pageSize !== 0) {
+      throw new WorkspaceTreeBadRequestError(
+        "offset must be aligned to pageSize"
+      );
+    }
+    if (offset > snapshot.entries.length) {
+      throw new WorkspaceTreeBadRequestError("offset is outside the history");
+    }
+    return this.materializeFileHistoryPage(snapshot, offset);
+  }
+
+  async getFileHistoryDiff(
+    requestedPath: string,
+    commit: string,
+    repoId?: string
+  ): Promise<WorkspaceFileHistoryDiffResponse> {
+    const resolved = this.safeResolve(requestedPath);
+    if (!resolved) throw new Error("Path not allowed");
+    const repoRoot = await this.requireRepoRootForPath(resolved);
+    void repoId;
+
+    const resolvedCommit = await resolveCommit(repoRoot, commit);
+
+    const requestedGitPath = toGitPath(
+      this.relativeToRepo(resolved, repoRoot)
+    );
+    const changedFiles = await getChangedFilesWithBinaryStatus(repoRoot, [
+      "show",
+      "--format=",
+      "--no-ext-diff",
+      "--end-of-options",
+      resolvedCommit,
+    ]);
+    const changedFile = changedFiles.find(
+      (file) =>
+        file.path === requestedGitPath || file.oldPath === requestedGitPath
+    );
+    if (!changedFile) {
+      throw new WorkspaceTreeBadRequestError(
+        "commit does not touch the requested path"
+      );
+    }
+
+    const commitPath = changedFile.path;
+    const parentPath = changedFile.oldPath ?? commitPath;
+    const commitAbsolutePath = path.resolve(repoRoot, commitPath);
+    const parentAbsolutePath = path.resolve(repoRoot, parentPath);
+    if (
+      !isPathWithinAnyDirectory(commitAbsolutePath, this.trustedRoots) ||
+      !isPathWithinAnyDirectory(parentAbsolutePath, this.trustedRoots)
+    ) {
+      throw new Error("Path not allowed");
+    }
+
+    const [oldBytes, newBytes, commitInfo] = await Promise.all([
+      getBlobBytes(repoRoot, `${resolvedCommit}^`, parentPath),
+      getBlobBytes(repoRoot, resolvedCommit, commitPath),
+      getCommitInfo(repoRoot, resolvedCommit),
+    ]);
+    const changeType = this.diffChangeType(changedFile.status);
+    const responsePath = normalizeViewerPath(
+      this.relativePath(commitAbsolutePath)
+    );
+    const responseOldPath = normalizeViewerPath(
+      this.relativePath(parentAbsolutePath)
+    );
+
+    if (isImageRefPath(commitPath)) {
+      const image = this.buildImageDiffSides(
+        oldBytes,
+        newBytes,
+        commitPath,
+        parentPath
+      );
+      if (image) {
+        return {
+          ...commitInfo,
+          path: responsePath,
+          oldPath: responseOldPath,
+          changeType,
+          payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
+          image,
+        };
+      }
+    }
+
+    if (this.isBinaryBuffer(oldBytes) || this.isBinaryBuffer(newBytes)) {
+      return {
+        ...commitInfo,
+        path: responsePath,
+        oldPath: responseOldPath,
+        changeType,
+        payloadKind: DIFF_PAYLOAD_KINDS.BINARY,
+      };
+    }
+
+    return {
+      ...commitInfo,
+      path: responsePath,
+      oldPath: responseOldPath,
+      changeType,
+      payloadKind: DIFF_PAYLOAD_KINDS.TEXT,
+      language: languageFromPath(commitAbsolutePath),
+      oldContent: oldBytes?.toString("utf8") ?? "",
+      newContent: newBytes?.toString("utf8") ?? "",
+    };
+  }
+
+  private resolveFileHistoryPageSize(requestedPageSize?: number): number {
+    if (requestedPageSize === undefined) {
+      return WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE;
+    }
+    if (!Number.isSafeInteger(requestedPageSize) || requestedPageSize < 1) {
+      throw new WorkspaceTreeBadRequestError(
+        "pageSize must be a positive integer"
+      );
+    }
+    return Math.min(WORKSPACE_FILE_HISTORY_MAX_PAGE_SIZE, requestedPageSize);
+  }
+
+  private createFileHistoryId(): string {
+    let historyId = randomUUID();
+    while (this.fileHistorySnapshots.has(historyId)) {
+      historyId = randomUUID();
+    }
+    return historyId;
+  }
+
+  private getFileHistorySnapshot(
+    historyId: string
+  ): FileHistorySnapshot | undefined {
+    const now = Date.now();
+    for (const [id, snapshot] of this.fileHistorySnapshots) {
+      if (now - snapshot.lastAccessedAt >= FILE_HISTORY_SNAPSHOT_TTL_MS) {
+        this.fileHistorySnapshots.delete(id);
+      }
+    }
+    const snapshot = this.fileHistorySnapshots.get(historyId);
+    if (!snapshot) return undefined;
+    const refreshed = { ...snapshot, lastAccessedAt: now };
+    this.fileHistorySnapshots.delete(historyId);
+    this.fileHistorySnapshots.set(historyId, refreshed);
+    return refreshed;
+  }
+
+  private trimFileHistorySnapshots(): void {
+    while (this.fileHistorySnapshots.size > FILE_HISTORY_SNAPSHOT_MAX_COUNT) {
+      const oldest = this.fileHistorySnapshots.keys().next().value;
+      if (oldest === undefined) return;
+      this.fileHistorySnapshots.delete(oldest);
+    }
+  }
+
+  private materializeFileHistoryPage(
+    snapshot: FileHistorySnapshot,
+    offset: number
+  ): WorkspaceFileHistoryPageResponse {
+    return {
+      historyId: snapshot.historyId,
+      pageSize: snapshot.pageSize,
+      totalEntries: snapshot.entries.length,
+      offset,
+      entries: snapshot.entries.slice(offset, offset + snapshot.pageSize),
+    };
+  }
+
+  private async getUnpushedHistoryHashes(
+    repoRoot: string,
+    headHash: string
+  ): Promise<Set<string>> {
+    try {
+      const { stdout } = await execFileAsync(
+        "git",
+        [
+          "-C",
+          repoRoot,
+          "rev-list",
+          "--no-walk",
+          `@{upstream}..${headHash}`,
+        ],
+        { timeout: GIT_TIMEOUT_MS }
+      );
+      return new Set(stdout.trim().split("\n").filter(Boolean));
+    } catch {
+      return new Set();
+    }
+  }
+
   async getCommitLog(
     skip = 0,
     limit = 30,
@@ -1833,6 +2206,98 @@ export class HostedWorkspaceViewerService {
 
   // ── Git ref diff ──────────────────────────────────────────────────────────
 
+  private diffChangeType(status: string): DiffChangeType {
+    const statusCode = status[0];
+    const changeTypes: Record<string, DiffChangeType> = {
+      A: DIFF_CHANGE_TYPES.CREATED,
+      C: DIFF_CHANGE_TYPES.RENAMED,
+      D: DIFF_CHANGE_TYPES.DELETED,
+      R: DIFF_CHANGE_TYPES.RENAMED,
+    };
+    return changeTypes[statusCode ?? ""] ?? DIFF_CHANGE_TYPES.MODIFIED;
+  }
+
+  private async readWorkingTreeDiffBytes(
+    repoRoot: string,
+    gitPath: string,
+    changeType: DiffChangeType
+  ): Promise<Buffer | null> {
+    if (changeType === DIFF_CHANGE_TYPES.DELETED) return null;
+    try {
+      return await fs.promises.readFile(path.join(repoRoot, gitPath));
+    } catch {
+      return null;
+    }
+  }
+
+  private async buildNonTextDiffEntries(
+    repoRoot: string,
+    changedFiles: readonly GitChangedFile[],
+    sources: NonTextDiffSources
+  ): Promise<WorkspaceGitRefDiffResponse["nonTextEntries"]> {
+    const entries = await Promise.all(
+      changedFiles
+        .filter((file) => file.isBinary)
+        .map(async (file) => {
+          const absolutePath = path.resolve(repoRoot, file.path);
+          if (!isPathWithinAnyDirectory(absolutePath, this.trustedRoots)) {
+            return null;
+          }
+
+          const changeType = this.diffChangeType(file.status);
+          const oldGitPath = file.oldPath ?? file.path;
+          const oldBytes = await getBlobBytes(
+            repoRoot,
+            sources.baseRef,
+            oldGitPath
+          );
+          const newBytes = sources.targetIsWorkingTree
+            ? await this.readWorkingTreeDiffBytes(
+                repoRoot,
+                file.path,
+                changeType
+              )
+            : await getBlobBytes(
+                repoRoot,
+                sources.targetRef ?? "HEAD",
+                file.path
+              );
+          const viewerPath = this.relativePath(absolutePath);
+          const viewerOldPath = file.oldPath
+            ? this.relativePath(path.resolve(repoRoot, file.oldPath))
+            : undefined;
+
+          if (isImageRefPath(file.path)) {
+            const image = this.buildImageDiffSides(
+              oldBytes,
+              newBytes,
+              file.path,
+              oldGitPath
+            );
+            if (image) {
+              return {
+                path: viewerPath,
+                oldPath: viewerOldPath,
+                changeType,
+                payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
+                image,
+              };
+            }
+          }
+
+          return {
+            path: viewerPath,
+            oldPath: viewerOldPath,
+            changeType,
+            payloadKind: DIFF_PAYLOAD_KINDS.BINARY,
+          };
+        })
+    );
+    return entries.filter(
+      (entry): entry is NonNullable<typeof entry> => entry !== null
+    );
+  }
+
   async getGitRefDiff(
     ref: string,
     repoId?: string
@@ -1843,25 +2308,89 @@ export class HostedWorkspaceViewerService {
     const repoRoot = await this.resolveRepoRoot(repoId);
 
     if (ref === DIFF_REF) {
-      return { unifiedDiff: await getWorkingTreeDiff(repoRoot) };
+      const [unifiedDiff, changedFiles] = await Promise.all([
+        getWorkingTreeDiff(repoRoot),
+        getChangedFilesWithBinaryStatus(repoRoot, ["diff"]),
+      ]);
+      return {
+        unifiedDiff,
+        nonTextEntries: await this.buildNonTextDiffEntries(
+          repoRoot,
+          changedFiles,
+          {
+            baseRef: ":",
+            targetIsWorkingTree: true,
+          }
+        ),
+      };
     }
     if (ref === STAGED_REF) {
-      return { unifiedDiff: await getStagedDiff(repoRoot) };
+      const [unifiedDiff, changedFiles] = await Promise.all([
+        getStagedDiff(repoRoot),
+        getChangedFilesWithBinaryStatus(repoRoot, ["diff", "--cached"]),
+      ]);
+      return {
+        unifiedDiff,
+        nonTextEntries: await this.buildNonTextDiffEntries(
+          repoRoot,
+          changedFiles,
+          {
+            baseRef: "HEAD",
+            targetRef: ":",
+            targetIsWorkingTree: false,
+          }
+        ),
+      };
     }
     if (ref.startsWith(STASH_PREFIX)) {
       const index = parseInt(ref.slice(STASH_PREFIX.length), 10);
       if (!Number.isFinite(index)) {
         throw new Error(`Invalid stash ref: ${ref}`);
       }
-      return { unifiedDiff: await getStashDiff(repoRoot, index) };
+      const stashRef = `stash@{${index}}`;
+      const [unifiedDiff, changedFiles] = await Promise.all([
+        getStashDiff(repoRoot, index),
+        getChangedFilesWithBinaryStatus(repoRoot, ["stash", "show", stashRef]),
+      ]);
+      return {
+        unifiedDiff,
+        nonTextEntries: await this.buildNonTextDiffEntries(
+          repoRoot,
+          changedFiles,
+          {
+            baseRef: `${stashRef}^1`,
+            targetRef: stashRef,
+            targetIsWorkingTree: false,
+          }
+        ),
+      };
     }
     // Treat as commit hash
     const hash = ref.startsWith("~") ? ref.slice(1) : ref;
-    const [unifiedDiff, commitInfo] = await Promise.all([
+    const [unifiedDiff, commitInfo, changedFiles] = await Promise.all([
       getCommitDiff(repoRoot, hash),
       getCommitInfo(repoRoot, hash),
+      getChangedFilesWithBinaryStatus(repoRoot, [
+        "show",
+        "--format=",
+        "--no-ext-diff",
+        "--end-of-options",
+        hash,
+      ]),
     ]);
-    return { unifiedDiff, commitInfo };
+    return {
+      unifiedDiff,
+      commitInfo,
+      nonTextEntries: await this.buildNonTextDiffEntries(
+        repoRoot,
+        changedFiles,
+        {
+          baseRef: `${hash}^`,
+          targetRef: hash,
+          targetIsWorkingTree: false,
+        }
+      ),
+    };
   }
 
   /**
@@ -1890,10 +2419,12 @@ export class HostedWorkspaceViewerService {
 
   dispose(): void {
     this.listingSnapshotCache.dispose();
+    this.fileHistorySnapshots.clear();
   }
 
   clear(): void {
     this.listingSnapshotCache.clear();
+    this.fileHistorySnapshots.clear();
   }
 }
 
@@ -1905,4 +2436,8 @@ function isValidListingId(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value
   );
+}
+
+function isValidHistoryId(value: string): boolean {
+  return isValidListingId(value);
 }

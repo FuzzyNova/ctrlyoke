@@ -124,6 +124,9 @@ export const WorkspaceExplorerPane: React.FC = () => {
     (s) => s.setMobileEditorVisible
   );
   const setActiveTab = useWorkspaceViewerStore((s) => s.setActiveTab);
+  const openToFileHistory = useWorkspaceViewerStore(
+    (s) => s.openToFileHistory
+  );
   const setError = useWorkspaceViewerStore((s) => s.setError);
 
   const pendingNavigation = useWorkspaceViewerStore((s) => s.pendingNavigation);
@@ -401,6 +404,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
       isRootsList,
       onRefresh: handleRefresh,
       onOpenFile: openFile,
+      onViewFileHistory: openToFileHistory,
     });
 
   const handleMobileBack = useCallback(() => {

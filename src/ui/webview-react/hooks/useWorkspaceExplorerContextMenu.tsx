@@ -30,6 +30,11 @@ export interface UseWorkspaceExplorerContextMenuOptions {
   isRootsList: boolean;
   onRefresh: (affectedPath?: string) => void;
   onOpenFile: (path: string) => void;
+  onViewFileHistory: (path: string) => void;
+}
+
+function normalizeWorkspacePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/^\.\//, "");
 }
 
 function buildFileRef(path: string): string {
@@ -55,6 +60,7 @@ export function useWorkspaceExplorerContextMenu({
   isRootsList,
   onRefresh,
   onOpenFile,
+  onViewFileHistory,
 }: UseWorkspaceExplorerContextMenuOptions) {
   const [clipboard, setClipboard] = useState<WorkspaceClipboard | null>(null);
   const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
@@ -74,6 +80,14 @@ export function useWorkspaceExplorerContextMenu({
       mode: PROMPT_EDITOR_INSERT_MODES.APPEND,
     });
   }, []);
+
+  const handleViewFileHistory = useCallback(
+    (entry: WorkspaceEntry) => {
+      if (entry.kind !== "file") return;
+      onViewFileHistory(normalizeWorkspacePath(entry.path));
+    },
+    [onViewFileHistory]
+  );
 
   const handleDelete = useCallback(
     async (path: string) => {
@@ -172,6 +186,16 @@ export function useWorkspaceExplorerContextMenu({
               handleAddToCtrlYoke(entry);
             },
           },
+          ...(entry.kind === "file"
+            ? [
+                {
+                  label: "View File History",
+                  icon: "codicon-history",
+                  disabled: false,
+                  onClick: () => handleViewFileHistory(entry),
+                },
+              ]
+            : []),
           { type: "divider" },
           {
             label: "Delete",
@@ -189,7 +213,14 @@ export function useWorkspaceExplorerContextMenu({
         ],
       });
     },
-    [clipboard, handleAddToCtrlYoke, handleDelete, handlePaste, isRootsList]
+    [
+      clipboard,
+      handleAddToCtrlYoke,
+      handleDelete,
+      handlePaste,
+      handleViewFileHistory,
+      isRootsList,
+    ]
   );
 
   const explorerContextMenuPortal = contextMenu ? (

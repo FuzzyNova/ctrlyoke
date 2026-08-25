@@ -25,8 +25,14 @@ import {
 import type { UnifiedDiffHunk } from "../types/cliEvents";
 import {
   DIFF_CHANGE_TYPES,
+  DIFF_PAYLOAD_KINDS,
   type DiffChangeType,
+  type DiffPayloadKind,
 } from "@root/types/DashboardConstants";
+import type {
+  WorkspaceDiffEntry,
+  WorkspaceImageDiffSides,
+} from "@root/types/HostedWorkspaceViewerTypes";
 
 // ── Multi-file unified diff parsing ──────────────────────────────────────────
 
@@ -37,6 +43,9 @@ export interface ParsedDiffFile {
   language?: string;
   hunks: HunkData[];
   diffType: DiffType;
+  /** Present for non-text entries merged from the hosted diff response. */
+  payloadKind?: Exclude<DiffPayloadKind, typeof DIFF_PAYLOAD_KINDS.TEXT>;
+  image?: WorkspaceImageDiffSides;
 }
 
 const DEV_NULL = "/dev/null";
@@ -135,6 +144,38 @@ export function parseUnifiedDiffToFiles(unifiedDiff: string): ParsedDiffFile[] {
       diffType: (file.type as DiffType) ?? "modify",
     };
   });
+}
+
+/**
+ * Attach structured image/binary entries to the parsed textual diff list.
+ * Binary-only stanzas are retained even when react-diff-view has no hunks for
+ * them, while textual entries keep their parsed hunks and metadata.
+ */
+export function mergeNonTextDiffEntries(
+  files: ParsedDiffFile[],
+  entries: readonly WorkspaceDiffEntry[] | undefined
+): ParsedDiffFile[] {
+  if (!entries || entries.length === 0) return files;
+
+  const merged = new Map(files.map((file) => [file.path, file]));
+  for (const entry of entries) {
+    const existing = merged.get(entry.path);
+    merged.set(entry.path, {
+      path: entry.path,
+      oldPath: entry.oldPath ?? existing?.oldPath,
+      changeType: entry.changeType,
+      language: existing?.language,
+      hunks: existing?.hunks ?? [],
+      diffType: existing?.diffType ?? "modify",
+      payloadKind:
+        entry.payloadKind === DIFF_PAYLOAD_KINDS.TEXT
+          ? undefined
+          : entry.payloadKind,
+      image: entry.image,
+    });
+  }
+
+  return [...merged.values()];
 }
 
 export interface RenderedDiffRun {

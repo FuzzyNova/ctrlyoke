@@ -14,8 +14,15 @@ import {
   fromDiffKind,
   OpenFileButton,
 } from "@components/diff";
+import { DiffFileHistoryList } from "@components/diff/DiffFileHistoryList";
 import { downloadTextFile } from "@utils/diff";
 import { workspaceGitRefDiff } from "@utils/hostedApi";
+import { DIFF_PAYLOAD_KINDS } from "@root/types/DashboardConstants";
+import type { DiffFileCardProps } from "@components/diff/DiffFileCard";
+import {
+  mergeNonTextDiffEntries,
+  type ParsedDiffFile,
+} from "@utils/rdvAdapter";
 
 export const WorkspaceDiffPane: React.FC = () => {
   const selectedDiffPath = useWorkspaceViewerStore((s) => s.selectedDiffPath);
@@ -24,10 +31,28 @@ export const WorkspaceDiffPane: React.FC = () => {
   const diffLanguage = useWorkspaceViewerStore((s) => s.diffLanguage);
   const diffLoading = useWorkspaceViewerStore((s) => s.diffLoading);
   const diffFiles = useWorkspaceViewerStore((s) => s.diffFiles);
+  const diffNonTextEntries = useWorkspaceViewerStore(
+    (s) => s.diffNonTextEntries
+  );
   const diffRefLabel = useWorkspaceViewerStore((s) => s.diffRefLabel);
   const diffRefLoading = useWorkspaceViewerStore((s) => s.diffRefLoading);
   const diffCommitInfo = useWorkspaceViewerStore((s) => s.diffCommitInfo);
   const diffKind = useWorkspaceViewerStore((s) => s.diffKind);
+  const diffPayloadKind = useWorkspaceViewerStore((s) => s.diffPayloadKind);
+  const diffImage = useWorkspaceViewerStore((s) => s.diffImage);
+  const fileHistoryPath = useWorkspaceViewerStore((s) => s.fileHistoryPath);
+  const fileHistoryRepoId = useWorkspaceViewerStore(
+    (s) => s.fileHistoryRepoId
+  );
+  const fileHistoryActive = useWorkspaceViewerStore(
+    (s) => s.fileHistoryActive
+  );
+  const closeFileHistoryView = useWorkspaceViewerStore(
+    (s) => s.closeFileHistoryView
+  );
+  const setMobileDiffVisible = useWorkspaceViewerStore(
+    (s) => s.setMobileDiffVisible
+  );
 
   const [downloading, setDownloading] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -37,9 +62,42 @@ export const WorkspaceDiffPane: React.FC = () => {
   const [commitDetailsExpanded, setCommitDetailsExpanded] = useState(false);
 
   const visibleFiles = useMemo(
-    () => (diffFiles ?? []).filter((file) => file.hunks.length > 0),
-    [diffFiles]
+    () => mergeNonTextDiffEntries(diffFiles ?? [], diffNonTextEntries),
+    [diffFiles, diffNonTextEntries]
   );
+
+  const sourceForParsedFile = useCallback(
+    (file: ParsedDiffFile): DiffFileCardProps["source"] => {
+      switch (file.payloadKind) {
+        case DIFF_PAYLOAD_KINDS.IMAGE:
+          return { kind: "image", image: file.image ?? {} };
+        case DIFF_PAYLOAD_KINDS.BINARY:
+          return { kind: "binary" };
+        default:
+          return {
+            kind: "hunks",
+            hunks: file.hunks,
+            diffType: file.diffType,
+          };
+      }
+    },
+    []
+  );
+
+  const sourceForSingleFile = useMemo((): DiffFileCardProps["source"] => {
+    switch (diffPayloadKind) {
+      case DIFF_PAYLOAD_KINDS.IMAGE:
+        return { kind: "image", image: diffImage ?? {} };
+      case DIFF_PAYLOAD_KINDS.BINARY:
+        return { kind: "binary" };
+      default:
+        return {
+          kind: "content",
+          oldContent: diffOldContent,
+          newContent: diffNewContent,
+        };
+    }
+  }, [diffImage, diffNewContent, diffOldContent, diffPayloadKind]);
   const commitGroups = useMemo<DiffFileGroup[]>(
     () => [
       {
@@ -50,16 +108,12 @@ export const WorkspaceDiffPane: React.FC = () => {
           oldPath: file.oldPath,
           changeType: file.changeType,
           language: file.language,
-          source: {
-            kind: "hunks" as const,
-            hunks: file.hunks,
-            diffType: file.diffType,
-          },
+          source: sourceForParsedFile(file),
           headerActions: <OpenFileButton path={file.path} />,
         })),
       },
     ],
-    [visibleFiles]
+    [sourceForParsedFile, visibleFiles]
   );
   const singleFileGroups = useMemo<DiffFileGroup[]>(
     () =>
@@ -73,18 +127,14 @@ export const WorkspaceDiffPane: React.FC = () => {
                   path: selectedDiffPath,
                   changeType: fromDiffKind(diffKind ?? "modified"),
                   language: diffLanguage,
-                  source: {
-                    kind: "content" as const,
-                    oldContent: diffOldContent,
-                    newContent: diffNewContent,
-                  },
+                  source: sourceForSingleFile,
                   headerActions: <OpenFileButton path={selectedDiffPath} />,
                 },
               ],
             },
           ]
         : [],
-    [diffKind, diffLanguage, diffNewContent, diffOldContent, selectedDiffPath]
+    [diffKind, diffLanguage, selectedDiffPath, sourceForSingleFile]
   );
 
   useEffect(() => {
@@ -140,6 +190,42 @@ export const WorkspaceDiffPane: React.FC = () => {
       setDownloading(false);
     }
   }, [diffRefLabel]);
+
+  const handleFileHistoryBack = useCallback(() => {
+    closeFileHistoryView();
+    setMobileDiffVisible(false);
+  }, [closeFileHistoryView, setMobileDiffVisible]);
+
+  if (fileHistoryActive && fileHistoryPath) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-panel-border flex-shrink-0">
+          <button
+            type="button"
+            onClick={handleFileHistoryBack}
+            className="flex items-center gap-1 text-xs text-editor-fg hover:opacity-80 transition-opacity"
+            aria-label="Back to source control files"
+          >
+            <i className="codicon codicon-arrow-left text-sm" />
+            <span>Back</span>
+          </button>
+          <span className="truncate text-xs font-semibold text-editor-fg">
+            File History: {fileHistoryPath}
+          </span>
+        </div>
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 overflow-auto px-3 py-2"
+        >
+          <DiffFileHistoryList
+            path={fileHistoryPath}
+            repo={fileHistoryRepoId ?? undefined}
+            scrollContainerRef={scrollContainerRef}
+          />
+        </div>
+      </div>
+    );
+  }
 
   // ── Multi-file git-ref diff mode ──────────────────────────────────────────
 

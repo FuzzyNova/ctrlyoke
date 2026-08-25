@@ -170,6 +170,100 @@ export async function getRecentCommits(
     });
 }
 
+export interface FileHistoryCommitInfo extends CommitInfo {
+  /** Repository-relative path on the commit side of this change. */
+  path: string;
+  /** Repository-relative path on the parent side of this change. */
+  oldPath: string;
+}
+
+/**
+ * Returns the commits that touched one path, newest first, following renames.
+ *
+ * This deliberately has its own parser rather than extending
+ * getRecentCommits(): --name-status -z interleaves each commit's metadata
+ * with one or two path tokens, which is what lets callers render both sides
+ * of a rename.
+ */
+export async function getFileHistoryCommits(
+  workspaceRoot: string,
+  gitPath: string,
+  limit: number | undefined = 30,
+  skip: number = 0,
+  ref?: string
+): Promise<FileHistoryCommitInfo[]> {
+  const args = [
+    "-C",
+    workspaceRoot,
+    "log",
+    "--follow",
+    "-z",
+    "--name-status",
+    "--format=%x00%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D%x00",
+  ];
+  if (skip > 0) args.push(`--skip=${skip}`);
+  if (limit !== undefined) {
+    args.push("-n", String(limit));
+  }
+  if (ref && ref.trim()) {
+    args.push("--end-of-options", ref.trim());
+  }
+  args.push("--", gitPath);
+
+  const { stdout } = await execFileAsync("git", args);
+  const tokens = stdout.split("\0");
+  const commits: FileHistoryCommitInfo[] = [];
+
+  for (let index = 0; index < tokens.length; index++) {
+    const hash = tokens[index] ?? "";
+    if (!/^[0-9a-f]{40}$/i.test(hash)) continue;
+
+    const shortHash = tokens[index + 1] ?? "";
+    const subject = tokens[index + 2] ?? "";
+    const author = tokens[index + 3] ?? "";
+    const relativeDate = tokens[index + 4] ?? "";
+    const parents = tokens[index + 5] ?? "";
+    const decorate = tokens[index + 6] ?? "";
+    const parentHashes = parents.trim() ? parents.trim().split(/\s+/) : [];
+    const refNames = decorate.trim()
+      ? decorate
+          .trim()
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean)
+      : [];
+
+    let statusIndex = index + 7;
+    while (statusIndex < tokens.length && tokens[statusIndex] === "") {
+      statusIndex++;
+    }
+    const status = (tokens[statusIndex] ?? "").replace(/^\r?\n/, "");
+    const isRename = status.startsWith("R") || status.startsWith("C");
+    const firstPath = tokens[statusIndex + 1];
+    const secondPath = isRename ? tokens[statusIndex + 2] : undefined;
+    const commitPath = secondPath ?? firstPath;
+    if (!commitPath) continue;
+
+    commits.push({
+      hash,
+      shortHash,
+      subject,
+      author,
+      relativeDate,
+      parentHashes,
+      refNames,
+      path: commitPath,
+      oldPath: secondPath ? (firstPath ?? commitPath) : commitPath,
+    });
+
+    // Avoid mistaking a path that happens to look like a hash for the next
+    // commit header; the next real header is the following empty token.
+    index = statusIndex + (isRename ? 2 : 1);
+  }
+
+  return commits;
+}
+
 /**
  * Returns full commit metadata: subject, body, author, and dates.
  * Uses NUL byte (%x00) as field separator, same convention as getRecentCommits.
@@ -229,6 +323,142 @@ export async function getCommitDiff(
     hash,
   ]);
   return stdout;
+}
+
+/**
+ * Read a blob without decoding it as UTF-8. Missing paths are represented by
+ * null so callers can build added/deleted file payloads without treating a
+ * normal absent side as a Git error.
+ */
+export async function getBlobBytes(
+  repoRoot: string,
+  ref: string,
+  gitRelPath: string
+): Promise<Buffer | null> {
+  try {
+    const result = await execFilePromisified(
+      "git",
+      [
+        "-C",
+        repoRoot,
+        "show",
+        ref === ":" ? `:${gitRelPath}` : `${ref}:${gitRelPath}`,
+      ],
+      {
+        timeout: GIT_TIMEOUT_MS,
+        maxBuffer: GIT_MAX_BUFFER,
+        encoding: "buffer",
+      }
+    );
+    return Buffer.isBuffer(result.stdout)
+      ? result.stdout
+      : Buffer.from(result.stdout);
+  } catch {
+    return null;
+  }
+}
+
+export interface GitChangedFile {
+  path: string;
+  oldPath?: string;
+  isBinary: boolean;
+  status: string;
+}
+
+interface ParsedNumstatRecord {
+  path: string;
+  oldPath?: string;
+  isBinary: boolean;
+}
+
+const NUMSTAT_RECORD_PATTERN = /^(\d+|-)\t(\d+|-)\t/;
+
+/**
+ * Return changed paths, Git status, and binary classification from one Git
+ * diff/show invocation. The raw records provide change type and rename paths;
+ * numstat provides the binary marker (`-\t-`).
+ */
+export async function getChangedFilesWithBinaryStatus(
+  repoRoot: string,
+  gitArgs: readonly string[]
+): Promise<GitChangedFile[]> {
+  const outputOptions = ["--raw", "--numstat", "-z", "--find-renames"];
+  const boundaryIndex = gitArgs.indexOf("--end-of-options");
+  const stashRevisionIndex = gitArgs.findIndex((arg) =>
+    arg.startsWith("stash@{")
+  );
+  const insertionIndex =
+    boundaryIndex >= 0
+      ? boundaryIndex
+      : stashRevisionIndex >= 0
+        ? stashRevisionIndex
+        : gitArgs.length;
+  const args =
+    insertionIndex >= 0
+      ? [
+          ...gitArgs.slice(0, insertionIndex),
+          ...outputOptions,
+          ...gitArgs.slice(insertionIndex),
+        ]
+      : [...gitArgs, ...outputOptions];
+  const { stdout } = await execGit(["-C", repoRoot, ...args]);
+  const tokens = stdout.split("\0");
+  const statusByPath = new Map<string, { status: string; oldPath?: string }>();
+  const numstatRecords: ParsedNumstatRecord[] = [];
+
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index] ?? "";
+    if (token.startsWith(":")) {
+      const statusParts = token.trim().split(/\s+/);
+      const status = statusParts[statusParts.length - 1] ?? "M";
+      const oldPath = tokens[index + 1];
+      const isRenameOrCopy = status.startsWith("R") || status.startsWith("C");
+      if (!oldPath) continue;
+      if (isRenameOrCopy) {
+        const newPath = tokens[index + 2];
+        if (!newPath) continue;
+        statusByPath.set(newPath, { status, oldPath });
+        index += 2;
+      } else {
+        statusByPath.set(oldPath, { status });
+        index += 1;
+      }
+      continue;
+    }
+
+    const match = NUMSTAT_RECORD_PATTERN.exec(token);
+    if (!match) continue;
+    const additions = match[1];
+    const deletions = match[2];
+    const inlinePath = token.slice(match[0].length);
+    let pathTokenIndex = index + 1;
+    const firstPath = inlinePath || tokens[pathTokenIndex++];
+    if (!firstPath) continue;
+    const nextToken = tokens[pathTokenIndex] ?? "";
+    const hasRenamePath =
+      nextToken.length > 0 &&
+      !nextToken.startsWith(":") &&
+      !NUMSTAT_RECORD_PATTERN.test(nextToken);
+    const secondPath = hasRenamePath ? nextToken : undefined;
+    numstatRecords.push({
+      path: secondPath ?? firstPath,
+      oldPath: secondPath ? firstPath : undefined,
+      isBinary: additions === "-" && deletions === "-",
+    });
+    index = secondPath ? pathTokenIndex : pathTokenIndex - 1;
+    if (secondPath) index += 1;
+  }
+
+  return numstatRecords.map((record) => {
+    const statusRecord =
+      statusByPath.get(record.path) ??
+      (record.oldPath ? statusByPath.get(record.oldPath) : undefined);
+    return {
+      ...record,
+      status: statusRecord?.status ?? "M",
+      oldPath: statusRecord?.oldPath ?? record.oldPath,
+    };
+  });
 }
 
 /** Return repository-relative files changed between two commits/refs. */

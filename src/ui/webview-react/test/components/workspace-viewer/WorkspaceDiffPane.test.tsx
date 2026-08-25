@@ -14,6 +14,7 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import type { ParsedDiffFile } from "@utils/rdvAdapter";
 import { MESSAGE_TYPES } from "@/types/messages";
+import { DIFF_PAYLOAD_KINDS } from "@root/types/DashboardConstants";
 
 vi.mock("@components/output/DiffView", () => ({
   DiffView: ({ collapsed }: { collapsed: boolean }) => (
@@ -84,6 +85,35 @@ beforeEach(() => {
 });
 
 describe("WorkspaceDiffPane commit diff controls", () => {
+  it("renders commit image and binary entries even without text hunks", () => {
+    useWorkspaceViewerStore.setState({
+      diffFiles: [],
+      diffNonTextEntries: [
+        {
+          path: "assets/deleted.png",
+          changeType: "deleted",
+          payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
+          image: { oldImageDataUri: "data:image/png;base64,old" },
+        },
+        {
+          path: "assets/data.bin",
+          changeType: "modified",
+          payloadKind: DIFF_PAYLOAD_KINDS.BINARY,
+        },
+      ],
+      diffRefLabel: "Commit abc1234",
+      diffRefLoading: false,
+    });
+
+    render(<WorkspaceDiffPane />);
+
+    expect(screen.getByText("deleted.png")).toBeInTheDocument();
+    expect(screen.getByText("No new image")).toBeInTheDocument();
+    expect(
+      screen.getByText("binary diff preview unavailable")
+    ).toBeInTheDocument();
+  });
+
   it("collapses and expands commit diffs with pane-local state", async () => {
     const user = userEvent.setup();
     useUiStore.getState().collapseAllDiffs();
@@ -206,6 +236,25 @@ describe("WorkspaceDiffPane commit diff controls", () => {
 });
 
 describe("WorkspaceDiffPane single-file mode", () => {
+  it("renders an image response instead of garbled text", () => {
+    useWorkspaceViewerStore.setState({
+      selectedDiffPath: "assets/logo.png",
+      diffPayloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
+      diffImage: {
+        oldImageDataUri: "data:image/png;base64,old",
+        newImageDataUri: "data:image/png;base64,new",
+      },
+      diffKind: "modified",
+      diffLoading: false,
+      diffFiles: null,
+    });
+
+    render(<WorkspaceDiffPane />);
+
+    expect(screen.getByAltText("assets/logo.png before")).toBeInTheDocument();
+    expect(screen.queryByTestId("diff-view")).not.toBeInTheDocument();
+  });
+
   it("renders the header and change-type icon derived from diffKind", () => {
     useWorkspaceViewerStore.setState({
       selectedDiffPath: "src/new.ts",

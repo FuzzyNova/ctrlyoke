@@ -3,9 +3,11 @@ import { tokenize } from "react-diff-view";
 import {
   buildDiffRenderPlan,
   getRenderedDiffStats,
+  mergeNonTextDiffEntries,
   parseUnifiedDiffToFiles,
   type RenderedDiffRun,
 } from "@utils/rdvAdapter";
+import { DIFF_PAYLOAD_KINDS } from "@root/types/DashboardConstants";
 import {
   getLanguageFromPath,
   normalizeSyntaxLanguage,
@@ -488,5 +490,47 @@ describe("parseUnifiedDiffToFiles", () => {
 
   it("does not throw on malformed / binary-only input", () => {
     expect(() => parseUnifiedDiffToFiles("not a real diff")).not.toThrow();
+  });
+});
+
+describe("mergeNonTextDiffEntries", () => {
+  it("retains binary/image entries and merges them by path", () => {
+    const files = mergeNonTextDiffEntries(
+      [
+        {
+          path: "src/text.ts",
+          changeType: "modified",
+          hunks: [],
+          diffType: "modify",
+        },
+      ],
+      [
+        {
+          path: "assets/logo.png",
+          changeType: "created",
+          payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
+          image: { newImageDataUri: "data:image/png;base64,new" },
+        },
+        {
+          path: "assets/data.bin",
+          changeType: "modified",
+          payloadKind: DIFF_PAYLOAD_KINDS.BINARY,
+        },
+      ]
+    );
+
+    expect(files.map((file) => file.path)).toEqual([
+      "src/text.ts",
+      "assets/logo.png",
+      "assets/data.bin",
+    ]);
+    expect(files[1]).toMatchObject({
+      payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
+      image: { newImageDataUri: "data:image/png;base64,new" },
+    });
+    expect(files[2]).toMatchObject({
+      payloadKind: DIFF_PAYLOAD_KINDS.BINARY,
+      hunks: [],
+    });
   });
 });

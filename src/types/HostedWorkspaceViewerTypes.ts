@@ -1,3 +1,9 @@
+import {
+  DIFF_PAYLOAD_KINDS,
+  type DiffChangeType,
+  type DiffPayloadKind,
+} from "./DashboardConstants";
+
 /**
  * Types for the hosted workspace viewer feature.
  *
@@ -196,13 +202,47 @@ export type DiffKind =
   | "renamed"
   | "untracked";
 
-export interface WorkspaceScmDiffResponse {
+export interface WorkspaceImageDiffSides {
+  oldImageDataUri?: string;
+  newImageDataUri?: string;
+}
+
+export interface WorkspaceDiffEntry {
   path: string;
-  language?: string;
-  oldContent: string;
-  newContent: string;
+  oldPath?: string;
+  changeType: DiffChangeType;
+  payloadKind: DiffPayloadKind;
+  image?: WorkspaceImageDiffSides;
+}
+
+interface WorkspaceScmDiffBase {
+  path: string;
   kind: DiffKind;
 }
+
+export type WorkspaceDiffPayload =
+  | {
+      payloadKind: typeof DIFF_PAYLOAD_KINDS.TEXT;
+      language?: string;
+      oldContent: string;
+      newContent: string;
+    }
+  | {
+      payloadKind: typeof DIFF_PAYLOAD_KINDS.IMAGE;
+      language?: never;
+      oldContent?: never;
+      newContent?: never;
+      image: WorkspaceImageDiffSides;
+    }
+  | {
+      payloadKind: typeof DIFF_PAYLOAD_KINDS.BINARY;
+      language?: never;
+      oldContent?: never;
+      newContent?: never;
+      image?: never;
+    };
+
+export type WorkspaceScmDiffResponse = WorkspaceScmDiffBase & WorkspaceDiffPayload;
 
 export interface WorkspaceStageRequest {
   path: string;
@@ -296,6 +336,31 @@ export interface WorkspaceCommitLogResponse {
   detached: boolean;
 }
 
+/** Default and supported bounds for the paged file-history API. */
+export const WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE = 30;
+export const WORKSPACE_FILE_HISTORY_MIN_PAGE_SIZE = 1;
+export const WORKSPACE_FILE_HISTORY_MAX_PAGE_SIZE = 500;
+
+/** A commit that touched a path, including both sides of a rename. */
+export interface WorkspaceFileHistoryEntry extends WorkspaceCommitLogEntry {
+  /** Workspace-relative path at the commit side of the change. */
+  path: string;
+  /** Workspace-relative path at the parent side of the change. */
+  oldPath: string;
+}
+
+/** A page from an immutable file-history snapshot. */
+export interface WorkspaceFileHistoryPageResponse {
+  historyId: string;
+  /** Server-clamped size fixed when the history snapshot was created. */
+  pageSize: number;
+  /** Number of commits in the frozen history snapshot. */
+  totalEntries: number;
+  /** Virtual index of the first entry in `entries`. */
+  offset: number;
+  entries: WorkspaceFileHistoryEntry[];
+}
+
 export interface WorkspaceCheckoutCommitRequest {
   hash: string;
   /** Repo id to scope the checkout to; omitted → primary repo. */
@@ -322,8 +387,20 @@ export interface WorkspaceCommitInfo {
   relativeDate: string;
 }
 
+/** Before/after payload for one commit in a path-scoped file history. */
+export type WorkspaceFileHistoryDiffResponse = WorkspaceCommitInfo &
+  WorkspaceDiffPayload & {
+    /** Workspace-relative path at the commit side of the change. */
+    path: string;
+    /** Workspace-relative path at the first-parent side of the change. */
+    oldPath: string;
+    changeType: DiffChangeType;
+  };
+
 export interface WorkspaceGitRefDiffResponse {
   unifiedDiff: string;
   /** Present only when `ref` resolves to a single commit (not diff/staged/stash). */
   commitInfo?: WorkspaceCommitInfo;
+  /** Changed files whose content is not plain text. */
+  nonTextEntries?: WorkspaceDiffEntry[];
 }

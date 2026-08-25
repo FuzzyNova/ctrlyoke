@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { DiffFileCard } from "@components/diff/DiffFileCard";
 import { DiffFileList } from "@components/diff/DiffFileList";
+import { ImageDiffView } from "@components/diff/ImageDiffView";
 
 const { diffViewRenderCount } = vi.hoisted(() => ({
   diffViewRenderCount: { value: 0 },
@@ -82,6 +83,62 @@ function listProps(command: { version: number; collapsed: boolean }) {
 }
 
 describe("DiffFileCard", () => {
+  it("renders before and after image sides with accessible labels", () => {
+    render(
+      <ImageDiffView
+        path="assets/logo.png"
+        sides={{
+          oldImageDataUri: "data:image/png;base64,old",
+          newImageDataUri: "data:image/png;base64,new",
+        }}
+      />
+    );
+
+    expect(screen.getByText("Before")).toBeInTheDocument();
+    expect(screen.getByText("After")).toBeInTheDocument();
+    expect(screen.getByAltText("assets/logo.png before")).toHaveAttribute(
+      "src",
+      "data:image/png;base64,old"
+    );
+    expect(screen.getByAltText("assets/logo.png after")).toHaveAttribute(
+      "src",
+      "data:image/png;base64,new"
+    );
+  });
+
+  it("renders explicit placeholders for deleted and created image sides", () => {
+    const { rerender } = render(
+      <ImageDiffView
+        path="assets/deleted.png"
+        sides={{ oldImageDataUri: "old" }}
+      />
+    );
+
+    expect(screen.getByText("No new image")).toBeInTheDocument();
+    rerender(
+      <ImageDiffView
+        path="assets/created.png"
+        sides={{ newImageDataUri: "new" }}
+      />
+    );
+    expect(screen.getByText("No previous image")).toBeInTheDocument();
+  });
+
+  it("renders a compact binary fallback without DiffView props", () => {
+    render(
+      <DiffFileCard
+        path="assets/data.bin"
+        changeType="modified"
+        source={{ kind: "binary" }}
+      />
+    );
+
+    expect(
+      screen.getByText("binary diff preview unavailable")
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("diff-view")).not.toBeInTheDocument();
+  });
+
   it("shows a real added-file path, no /dev/null, and a created tooltip on the icon", () => {
     render(
       <DiffFileCard

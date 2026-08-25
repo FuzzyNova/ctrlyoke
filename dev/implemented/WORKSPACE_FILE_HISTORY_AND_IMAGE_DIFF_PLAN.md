@@ -1,6 +1,6 @@
 # Workspace File History and Image Diff Plan
 
-**Status:** Ready for implementation (derisked)
+**Status:** Sections 1-4 implemented; sections 5-6 remain open follow-ons
 **Priority:** P2
 
 ## Problem

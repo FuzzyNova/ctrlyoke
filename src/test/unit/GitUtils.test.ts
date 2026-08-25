@@ -23,6 +23,9 @@ import {
   getAheadBehind,
   getBranchUpstream,
   isCommitAncestor,
+  getBlobBytes,
+  getFileHistoryCommits,
+  getChangedFilesWithBinaryStatus,
 } from "../../utils/GitUtils";
 
 suite("GitUtils.gitRefExists", function () {
@@ -143,6 +146,71 @@ suite("GitUtils.gitRefExists", function () {
       exists: false,
       message: "git context not found",
     });
+  });
+
+  test("reads existing blobs as bytes and returns null for missing blobs", async () => {
+    const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff]);
+    await fs.writeFile(path.join(workspaceRoot, "image.png"), imageBytes);
+    runGit(["add", "image.png"]);
+    runGit(["commit", "-m", "Add image"]);
+
+    assert.deepStrictEqual(
+      await getBlobBytes(workspaceRoot, "HEAD", "image.png"),
+      imageBytes
+    );
+    assert.strictEqual(
+      await getBlobBytes(workspaceRoot, "HEAD", "missing.png"),
+      null
+    );
+  });
+
+  test("classifies binary and text changes from one numstat query", async () => {
+    await writeWorkspaceFile("text.txt", "changed\n");
+    await fs.writeFile(
+      path.join(workspaceRoot, "binary.bin"),
+      Buffer.from([0, 1, 2])
+    );
+    runGit(["add", "text.txt", "binary.bin"]);
+
+    const changed = await getChangedFilesWithBinaryStatus(workspaceRoot, [
+      "diff",
+      "--cached",
+    ]);
+
+    assert.deepStrictEqual(
+      changed.map(({ path: filePath, isBinary, status }) => ({
+        path: filePath,
+        isBinary,
+        status,
+      })),
+      [
+        { path: "binary.bin", isBinary: true, status: "A" },
+        { path: "text.txt", isBinary: false, status: "A" },
+      ]
+    );
+  });
+
+  test("returns path history newest first and preserves rename pairs", async () => {
+    runGit(["mv", "tracked.txt", "renamed.txt"]);
+    runGit(["commit", "-am", "Rename tracked file"]);
+    await writeWorkspaceFile("renamed.txt", "latest\n");
+    runGit(["commit", "-am", "Update renamed file"]);
+
+    const history = await getFileHistoryCommits(
+      workspaceRoot,
+      "renamed.txt",
+      undefined
+    );
+
+    assert.deepStrictEqual(
+      history.map((entry) => entry.subject),
+      ["Update renamed file", "Rename tracked file", "Initial commit"]
+    );
+    assert.strictEqual(history[1]?.oldPath, "tracked.txt");
+    assert.strictEqual(history[1]?.path, "renamed.txt");
+    assert.deepStrictEqual(history[2]?.parentHashes, []);
+    assert.strictEqual(history[2]?.oldPath, "tracked.txt");
+    assert.strictEqual(history[2]?.path, "tracked.txt");
   });
 });
 
