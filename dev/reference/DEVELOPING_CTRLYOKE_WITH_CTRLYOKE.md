@@ -3,8 +3,8 @@
 How to use ctrlyoke to build ctrlyoke without the dev loop killing the very
 workflows/tools you're using to build it, and without a debug Extension
 Development Host silently corrupting a real, long-running instance pointed at
-the same repo. See `dev/backlog/MULTI_INSTANCE_WORKSPACE_COORDINATION_PLAN.md`
-for the underlying bug this doc works around and the plan to fix it properly.
+the same repo. See `dev/implemented/MULTI_INSTANCE_WORKSPACE_COORDINATION_PLAN.md`
+for the coordination behavior that now makes this safe.
 
 ## The core problem this doc solves
 
@@ -96,17 +96,21 @@ files at TRACE level that the dev host writes unconditionally — see the
 `<debugging>` section of `.github/copilot-instructions.md` for what's in
 each.
 
-## The workspace-collision hazard, and today's mitigation
+## The workspace-collision hazard, and today's coordination
 
 Running a production instance and a debug Extension Development Host against
-the **same** folder at the same time is not yet fully safe: a live workflow
-running in one can be force-stopped by the other's own startup routine. The
-full mechanism and fix are tracked in
-`dev/backlog/MULTI_INSTANCE_WORKSPACE_COORDINATION_PLAN.md` — this section is
-the practical workaround available today, without waiting on that fix, and it
-directly answers "do I need to migrate off `ctrlyoke-test.code-workspace` to
-a sibling test repo?" — **no, you don't**, as long as you apply this
-mitigation.
+the **same** folder at the same time is now coordinated. Phase 1 fixed the
+startup scan that could force-stop a live workflow owned by a sibling VS Code
+instance; Phase 2 keeps that sibling-owned workflow read-only and watches its
+state. Phase 3 also prevents two hosted servers from bridging the same
+workspace. The full implementation is tracked in
+`dev/implemented/MULTI_INSTANCE_WORKSPACE_COORDINATION_PLAN.md`.
+
+You can keep using `ctrlyoke-test.code-workspace`; moving to a sibling test
+repo is not required for safety. `CTRLYOKE_HOME` remains an optional way to
+separate user-scoped scratch state, quota snapshots, and trust-store state
+when that is useful, but it is no longer required to prevent the old
+run-storage collision from killing a sibling workflow.
 
 ### Why this happens
 
@@ -115,24 +119,23 @@ By default `storage.runHistoryLocation` is `"user"`
 definitions, timelines) lives under
 `<CTRLYOKE_HOME>/projects/<slug>-<hash-of-workspace-path>/.runs/` — a
 location keyed by **workspace path**, not by which process opened it. Two
-processes that open the identical folder — production instance and debug
-host alike — resolve to the identical run-storage directory and therefore
-the identical `runner.json` lock files. On activation, each instance scans
-every lineage's lock and force-normalizes anything it doesn't recognize as
-`active-cli` to `STOPPED` — including a sibling instance's genuinely live,
-actively-heartbeating run (see the backlog plan for the exact code path).
-This isn't specific to the debug host; it would happen with *any* two
-windows on the same folder.
+processes that open the identical folder therefore still see the same run
+history and `runner.json` files. That shared storage is intentional and can
+make two dashboards show the same activity, but the coordination changes
+now preserve a live sibling lock and expose the run as read-only/watch-only
+instead of treating it as stale local state.
 
-### The mitigation: give the debug host its own `CTRLYOKE_HOME`
+### Optional isolation: give the debug host its own `CTRLYOKE_HOME`
 
 `ctrlyokeStateHome()` (`src/utils/ProjectStatePaths.ts:19-20`) reads the
 `CTRLYOKE_HOME` environment variable as an override for the entire state root
 that run storage, secrets, and quota cache live under. Point the debug
 Extension Development Host at a different one than your production install's
-default (`~/.ctrlyoke`), and its run storage — including `runner.json` — lands
-in a completely separate directory tree that the production instance's
-startup scan never even reads, so the collision can't happen.
+default (`~/.ctrlyoke`) if you want separate user-scoped scratch state. This
+keeps each instance's run-history files, secrets, quota cache, and trust-store
+state in separate trees, but it is a convenience choice now rather than a
+safety workaround: shared live workflow ownership is handled by the
+coordination layer.
 
 Add an `env` block to the debug configs in `.vscode/launch.json`, for
 example:
@@ -181,9 +184,10 @@ all, in either scope:
   user-scoped and would already be split by `CTRLYOKE_HOME`, so you may see
   the prompt twice — once per instance — the first time).
 - **If you ever set `storage.runHistoryLocation: "workspace"`**, run storage
-  moves back inside `.ctrlyoke/.runs/`, which `CTRLYOKE_HOME` cannot split —
-  don't use that setting in a workspace you're deliberately double-opening
-  until the backlog plan is implemented.
+  moves back inside `.ctrlyoke/.runs/`, which `CTRLYOKE_HOME` cannot split.
+  The two instances still share that workspace history, and the same live-lock
+  coordination applies; the override simply cannot isolate this particular
+  storage location.
 - **The debug host's harness-quota cache
   (`<CTRLYOKE_HOME>/usage/provider-snapshots.json`,
   `HarnessUsageService.providerSnapshotsPath()`) is a real, practical downside
@@ -201,13 +205,13 @@ all, in either scope:
   though, nothing about quota cache actually needs per-instance isolation for
   *correctness* — `HarnessUsageService.persistProviderSnapshots()` already
   writes it under `withFileLock()` with newest-`fetchedAt`-wins merge
-  (`selectNewestQuota`) specifically so concurrent writers are safe. So once
-  Phase 1 of the backlog plan removes the actual reason `CTRLYOKE_HOME` is
-  needed (the `runner.json` collision), dropping the override entirely is the
-  right move, not just a run-storage nicety — it also reunites the debug
-  host's quota view (and secrets-grant trust store) with your production
-  install's, with no downside. Until then, live with a quota-empty debug host
-  rather than trying to special-case just this one file.
+  (`selectNewestQuota`) specifically so concurrent writers are safe. There is
+  no longer a safety reason to accept that empty cache: Phase 1 and Phase 2
+  handle live run ownership without splitting run storage. The simplest
+  default is therefore to omit `CTRLYOKE_HOME`, so the debug host shares the
+  production install's quota view and trust-store decisions. Keep the
+  override only when deliberately isolated user-scoped state is more important
+  than that shared convenience.
 
 Note in particular that `server.port`/`server.enabled` fall in the "same
 file, same value" bucket above — `CTRLYOKE_HOME` does not give the two
@@ -216,27 +220,23 @@ in practice.
 
 ### Hosted server, and why Playwright automation still works cleanly
 
-With `server.enabled: true`, **both** instances read the identical
-`server.port` (default `3000`) and both auto-start a hosted server on
-activation (`src/extension.ts:1294-1297`). This is a **race**, not a
-deterministic split: whichever process's `enableServer` command runs first —
-in practice almost always your already-running production window, since the
-debug host takes longer to compile and launch — binds the literal configured
-port. The loser hits `EADDRINUSE` and `CtrlYokeHostedServer.listen()`
-silently falls back to an OS-assigned port instead
-(`src/server/CtrlYokeHostedServer.ts:2036-2067`) — not an error, just two
-independent servers on different ports, each bridging only its own process's
-workflow state.
+With `server.enabled: true`, both instances read the identical
+`server.port` (default `3000`) and attempt to auto-start a hosted server on
+activation (`src/extension.ts:1294-1297`). The first instance to bind wins.
+When the other receives `EADDRINUSE`, `CtrlYokeHostedServer.listen()` probes
+the occupied port with the configured token and workspace identity. If it is
+a sibling ctrlyoke server, the second instance does not start another server;
+it reports a warning naming the existing URL and disposes its unstarted
+server object. Only one hosted server ever bridges this workspace.
 
-This is actually fine for the Playwright use case already documented in
-`.github/copilot-instructions.md`'s `<debugging>` section: **only
-`IS_DEV_MODE` builds mirror their live server URL (with token) to
-`.ctrlyoke/dev/server-url.txt`.** Since your production install is a real
-`--production` build, it never touches that file — only the debug host does.
-So reading `.ctrlyoke/dev/server-url.txt` always and unambiguously gets you
-the debug host's server, which is exactly the one you're testing against.
-Attach the Playwright MCP server to your agent session as usual; no extra
-config is needed on top of the `CTRLYOKE_HOME` split above.
+**Only `IS_DEV_MODE` builds mirror a URL (including its token) to
+`.ctrlyoke/dev/server-url.txt`.** If the production daily driver owns the
+port, the debug host writes the sibling's URL to that file before its
+sibling-detected server object is disposed, and that disposal preserves the
+file. If the debug host owns the port, it writes its own URL as usual. Either
+way, a headless agent or Playwright can read a valid workspace URL without a
+human pasting it. Attach the Playwright MCP server to your agent session as
+usual; no port-splitting configuration is needed.
 
 ## Launching and closing the dev host from a CLI agent (no `F5`, no UI restart)
 
@@ -276,10 +276,11 @@ window handle. You cannot safely `taskkill` any single window out of it
 window at all, and the top process is shared with windows you must not
 touch).
 
-**The fix: give the dev host its own `--user-data-dir`.** This is a second,
-independent override from `CTRLYOKE_HOME` above — `CTRLYOKE_HOME` isolates
-ctrlyoke's *own* state, `--user-data-dir` isolates *VS Code's* singleton-
-instance lock — and both are needed together:
+**The fix: give the dev host its own `--user-data-dir`.** This is independent
+of the optional `CTRLYOKE_HOME` override above — `CTRLYOKE_HOME` isolates
+ctrlyoke's *own* user-scoped state, while `--user-data-dir` isolates *VS
+Code's* singleton-instance lock. Only the latter is required for an
+independent, safely closable VS Code process:
 
 ```sh
 CTRLYOKE_HOME="$PWD/.ctrlyoke-dev-home" code \
@@ -331,10 +332,14 @@ extension host's event loop is already unhealthy — the OS-level close/relaunch
 here doesn't depend on the thing being torn down staying responsive.
 
 One caveat: `.ctrlyoke/dev/server-url.txt` lives in the shared workspace
-folder, not under `CTRLYOKE_HOME`, so it isn't per-instance — if two dev hosts
-are ever activated concurrently, whichever finished activating most recently
-wins the file and the other's URL is unrecoverable from it. Keep it to one
-CLI-launched dev host at a time.
+folder, not under `CTRLYOKE_HOME`, so it isn't per-instance. With sibling
+detection, dev instances write the same single-server URL rather than racing
+two independent servers. If a dev instance only discovered a production
+sibling and that production server later stops, the dev instance has no
+running server of its own to clear the file, so the URL can remain stale until
+the next server start rewrites it. Treat the file as a discovery hint while a
+server is expected to be running; active reconciliation of that edge case is
+intentionally out of scope.
 
 ## Summary checklist
 
@@ -343,8 +348,9 @@ CLI-launched dev host at a time.
 - [ ] Set VS Code's per-extension log level for ctrlyoke to **Trace**
       (persists across restarts).
 - [ ] Set `"ctrlyoke.enableDiagnosticLogs": true` in **user**-scope settings.
-- [ ] Add `"env": { "CTRLYOKE_HOME": "<some local, gitignored path>" }` to the
-      `extensionHost` launch configs you use.
+- [ ] Optionally add `"env": { "CTRLYOKE_HOME": "<some local, gitignored path>" }`
+      to the `extensionHost` launch configs when separate user-scoped state is
+      useful; it is not required for workspace safety.
 - [ ] Keep using `ctrlyoke-test.code-workspace` as-is — no need to move to a
       sibling test repo.
 - [ ] Treat the Extension Development Host as disposable: build, smoke-test,

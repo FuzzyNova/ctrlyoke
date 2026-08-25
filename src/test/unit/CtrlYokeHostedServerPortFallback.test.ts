@@ -1,9 +1,14 @@
 import * as assert from "assert";
 import { EventEmitter } from "events";
 import { createServer as createHttpServer, Server as HttpServer } from "http";
+import * as fs from "fs";
 import { suite, test } from "mocha";
+import * as os from "os";
+import * as path from "path";
 import { DashboardBroadcastHub } from "../../ui/DashboardBroadcastHub";
 import { CtrlYokeHostedServer } from "../../server/CtrlYokeHostedServer";
+import * as BuildConfig from "../../utils/BuildConfig";
+import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 
 /**
  * Minimal stand-in for Node's http.Server, driving the same
@@ -93,20 +98,41 @@ function closeHttpServer(server: HttpServer): Promise<void> {
 function createHostedServer(
   port: number,
   token: string,
-  onSiblingServerDetected?: (url: string) => void
+  onSiblingServerDetected?: (url: string) => void,
+  workspaceRoot = process.cwd()
 ): CtrlYokeHostedServer {
   return new CtrlYokeHostedServer(
     new DashboardBroadcastHub(),
     {} as never,
     (() => ({})) as never,
     port,
-    process.cwd(),
+    workspaceRoot,
     [],
     token,
     "127.0.0.1",
     undefined,
     onSiblingServerDetected
   );
+}
+
+function devServerUrlFilePath(workspaceRoot: string): string {
+  return path.join(
+    workspaceRoot,
+    PATH_CONSTANTS.CTRLYOKE_DIR,
+    PATH_CONSTANTS.DEV_DIR,
+    PATH_CONSTANTS.SERVER_URL_FILE
+  );
+}
+
+function setDevMode(value: boolean): () => void {
+  const original = Object.getOwnPropertyDescriptor(BuildConfig, "IS_DEV_MODE");
+  Object.defineProperty(BuildConfig, "IS_DEV_MODE", {
+    configurable: true,
+    value,
+  });
+  return () => {
+    if (original) Object.defineProperty(BuildConfig, "IS_DEV_MODE", original);
+  };
 }
 
 suite("CtrlYokeHostedServer.listen port fallback", () => {
@@ -159,6 +185,72 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
     } finally {
       second?.dispose();
       sibling.dispose();
+    }
+  });
+
+  test("writes the sibling URL in dev mode and preserves it through dispose", async () => {
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "ctrlyoke-hosted-server-")
+    );
+    const token = "sibling-server-token";
+    const sibling = createHostedServer(0, token, undefined, workspaceRoot);
+    let second: CtrlYokeHostedServer | undefined;
+    const restoreDevMode = setDevMode(true);
+    try {
+      const siblingUrl = await sibling.listen();
+      if (!siblingUrl) throw new Error("Sibling server did not start");
+
+      const urlFile = devServerUrlFilePath(workspaceRoot);
+      fs.rmSync(urlFile, { force: true });
+      second = createHostedServer(
+        Number(new URL(siblingUrl).port),
+        token,
+        undefined,
+        workspaceRoot
+      );
+
+      assert.strictEqual(await second.listen(), undefined);
+      assert.strictEqual(fs.readFileSync(urlFile, "utf8"), `${siblingUrl}\n`);
+
+      second.dispose();
+      assert.strictEqual(fs.readFileSync(urlFile, "utf8"), `${siblingUrl}\n`);
+    } finally {
+      second?.dispose();
+      restoreDevMode();
+      sibling.dispose();
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("does not write a dev URL file for a non-dev sibling detection", async () => {
+    const workspaceRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "ctrlyoke-hosted-server-")
+    );
+    const token = "sibling-server-token";
+    const sibling = createHostedServer(0, token, undefined, workspaceRoot);
+    let second: CtrlYokeHostedServer | undefined;
+    const restoreDevMode = setDevMode(false);
+    try {
+      const siblingUrl = await sibling.listen();
+      if (!siblingUrl) throw new Error("Sibling server did not start");
+
+      second = createHostedServer(
+        Number(new URL(siblingUrl).port),
+        token,
+        undefined,
+        workspaceRoot
+      );
+
+      assert.strictEqual(await second.listen(), undefined);
+      assert.strictEqual(
+        fs.existsSync(devServerUrlFilePath(workspaceRoot)),
+        false
+      );
+    } finally {
+      second?.dispose();
+      restoreDevMode();
+      sibling.dispose();
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
     }
   });
 

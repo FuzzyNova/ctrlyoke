@@ -181,6 +181,7 @@ export class CtrlYokeHostedServer
   private availableIps: string[] = [];
   private requestedPort?: number;
   private portFellBack = false;
+  private devServerUrlFileOwned = false;
   private readonly viewerService: HostedWorkspaceViewerService;
 
   constructor(
@@ -2058,6 +2059,7 @@ export class CtrlYokeHostedServer
               .then((existingServer) => {
                 if (existingServer) {
                   const existingServerUrl = this.buildPublicUrl(port);
+                  this.writeDevServerUrlFile(existingServerUrl, false);
                   this.onSiblingServerDetected?.(existingServerUrl);
                   resolve(undefined);
                   return;
@@ -2078,7 +2080,7 @@ export class CtrlYokeHostedServer
             this.bindAddress === "0.0.0.0" ? this.getLanIps() : [];
           const host = this.availableIps[0] ?? "localhost";
           this.publicUrl = `${scheme}://${host}:${this.port}/?token=${this.token}`;
-          this.writeDevServerUrlFile();
+          this.writeDevServerUrlFile(this.publicUrl, true);
           resolve(this.publicUrl);
         };
         this.httpServer.once("error", onError);
@@ -2193,13 +2195,13 @@ export class CtrlYokeHostedServer
   }
 
   /**
-   * Dev-only convenience: mirrors the running server URL (including token) to
-   * `.ctrlyoke/dev/server-url.txt` so external tooling can read it directly
+   * Dev-only convenience: mirrors the active workspace server URL (including
+   * its token) to `.ctrlyoke/dev/server-url.txt` so external tooling can read it directly
    * instead of a human pasting it. Best-effort — a write failure must never
    * block the server from starting.
    */
-  private writeDevServerUrlFile(): void {
-    if (!IS_DEV_MODE || !this.publicUrl) return;
+  private writeDevServerUrlFile(url: string, ownsFile: boolean): void {
+    if (!IS_DEV_MODE) return;
     try {
       const devDir = path.join(
         this.workspaceRoot,
@@ -2209,9 +2211,10 @@ export class CtrlYokeHostedServer
       fs.mkdirSync(devDir, { recursive: true });
       fs.writeFileSync(
         path.join(devDir, PATH_CONSTANTS.SERVER_URL_FILE),
-        `${this.publicUrl}\n`,
+        `${url}\n`,
         "utf8"
       );
+      if (ownsFile) this.devServerUrlFileOwned = true;
     } catch (err) {
       Log.warn(`ctrlyoke: Failed to write dev server-url file: ${err}`);
     }
@@ -2235,7 +2238,7 @@ export class CtrlYokeHostedServer
   }
 
   dispose(): void {
-    this.clearDevServerUrlFile();
+    if (this.devServerUrlFileOwned) this.clearDevServerUrlFile();
     this.viewerService.dispose();
     this.hub.removeClient(this);
     if (this.heartbeatInterval !== undefined) {
