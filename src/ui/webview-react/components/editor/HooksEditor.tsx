@@ -157,59 +157,69 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
       {modeSelector}
       <div className="space-y-2">
         {hooks.map((hook, index) => (
-          <div key={index} className="flex gap-1 items-start">
-            <select
-              id={`hook-${index}-event`}
-              value={hook.event}
-              onChange={(e) =>
-                handleUpdateHook(index, {
-                  event: e.target.value as UserHookConfig["event"],
-                })
-              }
-              className="bg-input-bg text-input-fg border border-input-border rounded px-1 py-0.5 text-xs min-w-[120px]"
-            >
-              {HOOK_EVENT_METADATA.map((m) => (
-                <option key={m.event} value={m.event}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
+          <div key={index} className="grid min-w-0 gap-2">
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2">
+              <select
+                id={`hook-${index}-event`}
+                value={hook.event}
+                onChange={(e) =>
+                  handleUpdateHook(index, {
+                    event: e.target.value as UserHookConfig["event"],
+                  })
+                }
+                className="w-full min-w-0 rounded border border-input-border bg-input-bg px-1 py-0.5 text-xs text-input-fg"
+              >
+                {HOOK_EVENT_METADATA.map((m) => (
+                  <option key={m.event} value={m.event}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              <div className="flex min-w-0 flex-col gap-1">
+                <label
+                  htmlFor={`hook-${index}-timeout-sec`}
+                  className="text-xxs text-description-fg"
+                >
+                  Timeout (seconds)
+                </label>
+                <input
+                  type="number"
+                  id={`hook-${index}-timeout-sec`}
+                  value={hook.timeoutSec ?? ""}
+                  min={0}
+                  onChange={(e) => {
+                    const raw = e.target.value.trim();
+                    const timeoutSec = raw === "" ? undefined : Number(raw);
+                    handleUpdateHook(
+                      index,
+                      raw === ""
+                        ? { timeoutSec: undefined }
+                        : Number.isFinite(timeoutSec)
+                          ? { timeoutSec }
+                          : {}
+                    );
+                  }}
+                  placeholder="Default"
+                  className="w-full min-w-0 rounded border border-input-border bg-input-bg px-2 py-0.5 text-xs text-input-fg"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => handleRemoveHook(index)}
+                className="self-end px-1 text-xs text-description-fg hover:text-error-fg cursor-pointer"
+                title="Remove hook"
+              >
+                ✕
+              </button>
+            </div>
             <ScriptCommandEditor
               id={`hook-${index}-command`}
               value={hook.command}
               onChange={(command) => handleUpdateHook(index, { command })}
               placeholder="node ./scripts/my-hook.js"
               aria-label={`hook-${index}-command`}
-              className="flex-1 min-w-0 bg-input-bg text-input-fg border border-input-border rounded text-xs font-mono"
+              className="w-full min-w-0 rounded border border-input-border bg-input-bg text-xs font-mono text-input-fg"
             />
-            <div className="flex min-w-[180px] flex-col gap-1">
-              <label
-                htmlFor={`hook-${index}-timeout-sec`}
-                className="text-xxs text-description-fg"
-              >
-                Timeout (seconds)
-              </label>
-              <input
-                type="number"
-                id={`hook-${index}-timeout-sec`}
-                value={hook.timeoutSec ?? ""}
-                min={0}
-                onChange={(e) => {
-                  const raw = e.target.value.trim();
-                  const timeoutSec = raw === "" ? undefined : Number(raw);
-                  handleUpdateHook(
-                    index,
-                    raw === ""
-                      ? { timeoutSec: undefined }
-                      : Number.isFinite(timeoutSec)
-                        ? { timeoutSec }
-                        : {}
-                  );
-                }}
-                placeholder="Default"
-                className="bg-input-bg text-input-fg border border-input-border rounded px-2 py-0.5 text-xs"
-              />
-            </div>
             <KeyValueMapEditor
               id={`hook-${index}-env`}
               label="Environment"
@@ -223,14 +233,6 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
               allowSecretReferences
               rows={2}
             />
-            <button
-              type="button"
-              onClick={() => handleRemoveHook(index)}
-              className="text-description-fg hover:text-error-fg text-xs px-1 cursor-pointer"
-              title="Remove hook"
-            >
-              ✕
-            </button>
           </div>
         ))}
       </div>

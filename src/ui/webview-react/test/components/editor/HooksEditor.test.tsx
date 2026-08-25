@@ -173,6 +173,20 @@ describe("HooksEditor compatibility diagnostics", () => {
     ]);
   });
 
+  it("gives the script editor its own full-width row", () => {
+    render(
+      <HooksEditor
+        value={[{ event: "stop", command: "node ./hook.js" }]}
+        onChange={() => undefined}
+      />
+    );
+
+    const editor = screen
+      .getByLabelText("hook-0-command")
+      .closest(".cm-editor");
+    expect(editor?.parentElement).toHaveClass("w-full", "min-w-0");
+  });
+
   it("clears hook environment and timeout overrides", () => {
     const onChange = vi.fn();
     render(

@@ -35,7 +35,7 @@ commit message generation should use CLI ouput and display the raw output of the
 
 fix where ctrlyoke right click menu shortcuts show up in vs code (currently doesn't show up in scm)
 
-Add more context menus to the app, specifically workspace explorer (copy/move files)
+Add more context menus to the app, specifically workspace explorer (copy/move files), we have cut and paste already though
 
 ☑️ Add file link to diff views so it opens the full file
 
@@ -49,14 +49,22 @@ Add animation for output window new messages and fix scroll lock behavior and gl
 
 ☑️ FOUND THE EDITOR SHIFT CAUSE: it happens when you drag to select - so figure out why dragging to select drags the whole editor down and brings the propery drawer up.
 
-research translation and localization
+☑️ research translation and localization
 
 fix tab navigation and keyboard shortcuts
 
-fix commit message generation
+☑️ fix commit message generation
 
-we are leaving statusline configuration in the global claude settings, it should probably be a setting like antigravity has where users can disable if wanted.
+☑️ we are leaving statusline configuration in the global claude settings, it should probably be a setting like antigravity has where users can disable if wanted.
 
-auto complete dropdown for single line codemirror doesn't work on mobile (maybe keyboard hiding it)
+☑️ auto complete dropdown for single line codemirror doesn't work on mobile (maybe keyboard hiding it)
 
 we should add codemirror auto complete editors for allowed tools lists, additional args, and maybe convert the variable field to one.
+
+hooks don't warn when empty
+
+switching away from the commit-message-generation to a new workflow made the workflow's panel disabled
+
+commit-message-generation workflow should overlay why the panels are disabled (ie and overlay of workflow prop panel saying "disabled due to system workflow" or "disabled: workflow deleted"), not allow the send or queue buttons in the editor, and show the actual value in the workflow props panel, even if they are grayed out it, it should still show the right harness/model/etc
+
+mcp sometimes does not get attached, or harness bugs where the don't pick up the mcp. Claude suggested changing our mcp format to http instead of stdio might fix this, but not sure.
