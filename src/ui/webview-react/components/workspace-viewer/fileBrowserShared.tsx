@@ -160,7 +160,11 @@ export function FileBrowserSortHeader({
         aria-label={`${fullLabel}, ${accessibleDirection}`}
         aria-pressed={isActive}
         onClick={() => onSortKeyRequest(key)}
-        className="flex min-w-0 items-center gap-1 truncate rounded px-1 py-1 text-left text-xs font-medium text-description-fg hover:bg-btn-secondary-hover hover:text-editor-fg"
+        className={`flex min-w-0 items-center gap-1 truncate rounded px-1 py-1 text-left text-xs font-medium text-description-fg hover:bg-btn-secondary-hover hover:text-editor-fg ${
+          key === WORKSPACE_ENTRY_SORT_KEYS.NAME
+            ? "col-span-2 pl-[1.625rem]"
+            : "col-start-3 justify-center"
+        }`}
       >
         <span className="truncate">{visibleLabel}</span>
         {isActive && (
@@ -188,7 +192,6 @@ export function FileBrowserSortHeader({
         ...(usableWidth !== null ? { width: usableWidth } : {}),
       }}
     >
-      <span aria-hidden="true" />
       {renderSortButton(WORKSPACE_ENTRY_SORT_KEYS.NAME)}
       {renderSortButton(WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT)}
     </div>
