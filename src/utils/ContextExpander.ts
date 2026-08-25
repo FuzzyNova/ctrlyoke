@@ -212,7 +212,7 @@ export class ContextExpander {
       );
 
       const attachments = await Promise.all(attachmentPromises);
-      Log.debug(
+      Log.trace(
         `[ContextExpander] Built ${attachments.length} attachment(s) in ${Date.now() - t0}ms`
       );
 
@@ -225,7 +225,7 @@ export class ContextExpander {
         (sum, a) => sum + Buffer.byteLength(a, "utf8"),
         0
       );
-      Log.debug(
+      Log.trace(
         `[ContextExpander] Total attachment size: ${(totalBytes / 1024).toFixed(1)} KB across ${validAttachments.length} attachment(s)`
       );
 
@@ -373,7 +373,7 @@ export class ContextExpander {
         }
 
         if (this.attachmentIds.has(attachmentId)) {
-          Log.debug(`[ContextExpander] Skipping duplicate: ${attachmentId}`);
+          Log.trace(`[ContextExpander] Skipping duplicate: ${attachmentId}`);
           continue;
         }
         this.attachmentIds.add(attachmentId);
@@ -388,7 +388,7 @@ export class ContextExpander {
             this.effectiveAbsolute,
             this.sourceDefinitionDir
           ).catch((err) => {
-            Log.error(
+            Log.warn(
               `[ContextExpander] Failed directory attachment ${ref.path}:`,
               err
             );
@@ -409,7 +409,7 @@ export class ContextExpander {
             ref.endLine,
             ref.symbolName
           ).catch((err) => {
-            Log.error(
+            Log.warn(
               `[ContextExpander] Failed excerpt attachment ${ref.path}:`,
               err
             );
@@ -603,7 +603,7 @@ export class ContextExpander {
       absolutePath = resolution.absolutePath;
       await fs.access(absolutePath);
     } catch (err) {
-      Log.debug(
+      Log.trace(
         `[ContextExpander] Skipping unresolvable reference: ${ref.path}.`,
         err
       );
@@ -768,7 +768,7 @@ export class ContextExpander {
       }
 
       if (this.attachmentIds.has(attachmentId)) {
-        Log.debug(
+        Log.trace(
           `[ContextExpander] Skipping duplicate git attachment: ${attachmentId}`
         );
         continue;
@@ -901,7 +901,7 @@ export class ContextExpander {
 
     // Skip if already attached
     if (this.attachmentIds.has(attachmentId)) {
-      Log.debug(`Skipping duplicate attachment: ${attachmentId}`);
+      Log.trace(`Skipping duplicate attachment: ${attachmentId}`);
       return ""; // Return empty string for duplicates
     }
 
@@ -956,7 +956,7 @@ export class ContextExpander {
     const rawContent = await fs.readFile(absolutePath, "utf8");
     const elapsed = Date.now() - t0;
     const sizeKb = (Buffer.byteLength(rawContent, "utf8") / 1024).toFixed(1);
-    Log.debug(
+    Log.trace(
       `[ContextExpander] Read ${filePath} (${sizeKb} KB) in ${elapsed}ms`
     );
 
@@ -986,7 +986,7 @@ ${rawContent}
     const lines = rawContent.split("\n");
     const slicedLines = lines.slice(startLine - 1, endLine);
 
-    Log.debug(
+    Log.trace(
       `[ContextExpander] Sliced ${filePath} lines ${startLine}-${endLine} (${slicedLines.length} lines of ${lines.length})`
     );
 

@@ -71,7 +71,10 @@ async function buildDirectoryTree(
 
     return tree;
   } catch (error) {
-    Log.error(`Failed to read directory ${dirUri.fsPath}:`, error);
+    Log.warn(
+      `Failed to read directory ${dirUri.fsPath}; returning partial tree:`,
+      error
+    );
     return `${prefix}[Error reading directory]\n`;
   }
 }
@@ -121,7 +124,7 @@ export async function buildDirectoryAttachmentXml(
   // have been authored by the person running it — reject traversal outside
   // every trusted root rather than listing an arbitrary directory on disk.
   if (!isPathWithinAnyDirectory(absolutePath, trustedRoots)) {
-    Log.error(
+    Log.warn(
       `Security: Directory reference "${dirPath}" resolves outside the workspace and was blocked`
     );
     return `<attachment id="directory:${normalizedPath}">
@@ -138,7 +141,7 @@ Directory reference is outside the workspace and was blocked: ${normalizedPath}
       throw new Error("Path is not a directory");
     }
   } catch (error) {
-    Log.error(`Directory not found: ${dirPath}`, error);
+    Log.warn(`Directory not found: ${dirPath}`, error);
     return `<attachment id="directory:${normalizedPath}">
 Directory not found: ${normalizedPath}
 </attachment>`;
@@ -182,7 +185,7 @@ export async function getWorkspaceSymbols(
 
     return allSymbols.slice(0, maxResults);
   } catch (error) {
-    Log.error("Failed to get workspace symbols:", error);
+    Log.warn("Failed to get workspace symbols; returning no symbols:", error);
     return [];
   }
 }

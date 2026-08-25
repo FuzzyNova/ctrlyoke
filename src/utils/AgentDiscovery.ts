@@ -157,9 +157,9 @@ export class AgentDiscovery {
         ...builtInAgents.filter((agent) => !discoveredNames.has(agent.name))
       );
 
-      Log.debug(`Discovered ${agents.length} agents`);
+      Log.trace(`Discovered ${agents.length} agents`);
     } catch (error) {
-      Log.error("Error discovering agents:", error);
+      Log.warn("Error discovering agents; returning partial results:", error);
     }
 
     return agents;
@@ -259,13 +259,16 @@ export class AgentDiscovery {
       }
 
       if (agents.length > 0) {
-        Log.debug(
+        Log.trace(
           `Found ${agents.length} agent(s) in ${directoryPath}:`,
           agents.map((a) => a.name).join(", ")
         );
       }
     } catch (error) {
-      Log.error(`Error discovering agents in ${directoryPath}:`, error);
+      Log.warn(
+        `Error discovering agents in ${directoryPath}; skipping:`,
+        error
+      );
     }
 
     return agents;

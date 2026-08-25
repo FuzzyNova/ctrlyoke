@@ -10,7 +10,7 @@ Excludes `src/test/**` and `*.test.tsx?`/`*.spec.tsx?` files (test assertions/mo
 
 ## Backend (`Log.*`) — 1073 call sites across 113 file(s)
 
-Totals by level: trace=105, debug=312, info=181, warn=290, error=183, appendLine=2
+Totals by level: trace=124, debug=299, info=175, warn=302, error=171, appendLine=2
 
 Ranked by call count (highest first).
 
@@ -29,17 +29,17 @@ Ranked by call count (highest first).
 | `src/core/harness/shared/CliExecutionRunner.ts` | 5 | 2 | 4 | 7 | 4 |  | 22 |
 | `src/core/harness/shared/CliInteractiveStartupCoordinator.ts` |  | 5 | 10 | 2 | 5 |  | 22 |
 | `src/core/orchestration/OutputHistoryManager.ts` | 2 | 1 |  | 15 | 2 |  | 20 |
-| `src/utils/ContextExpander.ts` |  | 10 |  | 5 | 5 |  | 20 |
+| `src/utils/ContextExpander.ts` | 8 | 2 |  | 7 | 3 |  | 20 |
 | `src/core/harness/copilot/CopilotCliProvider.ts` | 1 | 10 | 3 | 4 | 1 |  | 19 |
 | `src/core/harness/copilot/CopilotLogParser.ts` | 4 | 13 |  | 2 |  |  | 19 |
 | `src/utils/ModelRegistry.ts` |  | 12 | 4 | 3 |  |  | 19 |
 | `src/core/orchestration/PromptFileLoader.ts` | 6 | 3 | 1 | 2 | 5 |  | 17 |
-| `src/dev/DevCommands.ts` |  |  | 11 |  | 5 |  | 16 |
+| `src/dev/DevCommands.ts` | 4 |  | 7 |  | 5 |  | 16 |
 | `src/core/harness/qwen/QwenLogParser.ts` | 3 | 10 |  | 1 |  |  | 14 |
 | `src/ui/PromptEditorSupportService.ts` | 1 |  |  | 5 | 8 |  | 14 |
 | `src/core/harness/CliLogMonitor.ts` | 3 | 3 | 3 | 4 |  |  | 13 |
 | `src/ui/WebviewSettingsSync.ts` |  | 1 |  | 6 | 6 |  | 13 |
-| `src/utils/TempFileManager.ts` |  |  | 2 | 4 | 7 |  | 13 |
+| `src/utils/TempFileManager.ts` | 2 |  |  | 5 | 6 |  | 13 |
 | `src/core/harness/claude/ClaudeLogParser.ts` | 3 | 8 |  | 1 |  |  | 12 |
 | `src/core/harness/codex/CodexCliProvider.ts` |  | 4 | 3 | 4 | 1 |  | 12 |
 | `src/core/EndConditionEvaluator.ts` | 1 |  | 4 |  | 6 |  | 11 |

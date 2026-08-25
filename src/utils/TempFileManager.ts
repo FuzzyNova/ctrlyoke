@@ -455,7 +455,7 @@ export class TempFileManager {
             if (now - stats.mtimeMs > this.MAX_FILE_AGE_MS) {
               await fs.promises.unlink(filePath);
               cleanedCount++;
-              Log.info(`🗑️ Cleaned up orphaned temp file: ${file}`);
+              Log.trace(`🗑️ Cleaned up orphaned temp file: ${file}`);
             }
           } catch (err) {
             Log.warn(`Failed to process temp file ${file}: ${err}`);
@@ -464,7 +464,7 @@ export class TempFileManager {
       }
     } catch (err) {
       // Log error but don't throw - cleanup is best-effort
-      Log.error(`Temp file cleanup failed: ${err}`);
+      Log.warn(`Temp file cleanup failed: ${err}`);
     }
 
     return cleanedCount;
@@ -492,7 +492,7 @@ export class TempFileManager {
           if (now - stats.mtimeMs > this.MAX_FILE_AGE_MS) {
             await fs.promises.unlink(filePath);
             cleanedCount++;
-            Log.info(
+            Log.trace(
               `🗑️ Cleaned up orphaned notification file: ${path.basename(dirPath)}/${file}`
             );
           }

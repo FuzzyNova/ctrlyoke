@@ -195,6 +195,17 @@ making the process itself unrecoverable. Antigravity transcript callback/tail fa
 for the same degraded-coverage reason. OpenCode export failure remains WARN because a failed export
 silently drops events; only the routine polling exception is TRACE.
 
+**Group 6 decisions (2026-08-24):** Per-chunk dev-build output, per-command dump listings,
+per-directory agent/skill discovery details, duplicate/context-read/slice telemetry, per-file
+orphan cleanup messages, and template-variable matches are TRACE because the dashboard or saved
+artifact already carries the useful result and these lines repeat within one action. Context
+attachment failures, blocked/missing directory references, workspace-symbol lookup failures, and
+partial agent/skill discovery failures are WARN rather than ERROR because each path returns a
+degraded result and the surrounding workflow continues. Temp-file cleanup failure is also WARN
+for the same best-effort reason. User-visible exports, cleanup summaries, server lifecycle, and
+dev-build start/completion remain INFO; model-registry, session-resolution, lock, and extension
+wiring diagnostics remain DEBUG as internal bookkeeping.
+
 ### Phase 3 — Fill the gaps
 
 - Gap #1: **done** — `WorkflowInstance.ts` now logs step attempt lifecycle events and promotes
