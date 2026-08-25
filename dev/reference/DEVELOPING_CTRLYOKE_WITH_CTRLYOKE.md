@@ -184,6 +184,30 @@ all, in either scope:
   moves back inside `.ctrlyoke/.runs/`, which `CTRLYOKE_HOME` cannot split —
   don't use that setting in a workspace you're deliberately double-opening
   until the backlog plan is implemented.
+- **The debug host's harness-quota cache
+  (`<CTRLYOKE_HOME>/usage/provider-snapshots.json`,
+  `HarnessUsageService.providerSnapshotsPath()`) is a real, practical downside
+  of this split, not just a theoretical one.** It starts out empty in
+  `.ctrlyoke-dev-home/` — a Claude/Antigravity harness card will show "no data
+  yet" (see the `UsageCard.tsx` sidecar-pending state) even though your
+  production install's `~/.ctrlyoke/usage/provider-snapshots.json` already has
+  fresh quota for the same account, because the debug host never reads that
+  file. This is a side effect of the *same* generic `CTRLYOKE_HOME` override
+  used for run-storage safety above — it isn't given special-case treatment to
+  read from the real home, because `HarnessUsageService`'s own tests rely on
+  `CTRLYOKE_HOME` to sandbox `provider-snapshots.json` reads/writes into a temp
+  dir (`src/test/unit/HarnessUsageService.test.ts`'s `setup()`), so quota
+  cache can't bypass it without breaking that isolation. Unlike run storage,
+  though, nothing about quota cache actually needs per-instance isolation for
+  *correctness* — `HarnessUsageService.persistProviderSnapshots()` already
+  writes it under `withFileLock()` with newest-`fetchedAt`-wins merge
+  (`selectNewestQuota`) specifically so concurrent writers are safe. So once
+  Phase 1 of the backlog plan removes the actual reason `CTRLYOKE_HOME` is
+  needed (the `runner.json` collision), dropping the override entirely is the
+  right move, not just a run-storage nicety — it also reunites the debug
+  host's quota view (and secrets-grant trust store) with your production
+  install's, with no downside. Until then, live with a quota-empty debug host
+  rather than trying to special-case just this one file.
 
 Note in particular that `server.port`/`server.enabled` fall in the "same
 file, same value" bucket above — `CTRLYOKE_HOME` does not give the two
