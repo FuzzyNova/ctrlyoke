@@ -131,23 +131,28 @@ export class CliProviderUtils {
   private static readonly helpCommandCache = new RetryableAsyncCache<string>();
 
   /**
-   * Execute a CLI version command through the same launcher resolution path used
-   * for runtime prompt execution.
+   * Shared implementation behind {@link runVersionCommand} and
+   * {@link runHelpCommand}: resolve the launcher, spawn with a timeout, cache
+   * the successful result, and optionally retry past transient Windows file
+   * locks. The two callers differ only in which cache and log/error label to
+   * use, so this is the single place that owns process-spawn behavior.
    */
-  static async runVersionCommand(
-    versionCommand: string,
-    options: CliCommandOptions = {}
+  private static async runCachedCliCommand(
+    command: string,
+    cache: RetryableAsyncCache<string>,
+    logLabel: string,
+    options: CliCommandOptions
   ): Promise<string> {
     const execute = async (): Promise<string> => {
-      const [commandName, ...commandArgs] = parseArgString(versionCommand);
+      const [commandName, ...commandArgs] = parseArgString(command);
       if (!commandName) {
-        throw new Error("Version command is empty");
+        throw new Error(`${logLabel} command is empty`);
       }
 
       const resolved = await resolveCliCommand(commandName, commandArgs);
       const timeoutMs = options.timeoutMs ?? CLI_VERSION_CHECK_TIMEOUT_MS;
       Log.debug(
-        `[runVersionCommand] spawning: ${resolved.displayCommand} (kind=${resolved.launcherKind}, timeout=${timeoutMs}ms)`
+        `[${logLabel}] spawning: ${resolved.displayCommand} (kind=${resolved.launcherKind}, timeout=${timeoutMs}ms)`
       );
       const { stdout } = await execFileAsync(resolved.command, resolved.args, {
         encoding: "utf8",
@@ -157,63 +162,7 @@ export class CliProviderUtils {
       return typeof stdout === "string" ? stdout.trim() : String(stdout).trim();
     };
 
-    return CliProviderUtils.versionCommandCache.getOrRun(
-      versionCommand,
-      async () => {
-        if (!options.retryWindowsFileLockErrors) {
-          return execute();
-        }
-
-        const result = await retryWithBackoff(
-          async () => {
-            try {
-              return await execute();
-            } catch (error) {
-              if (String(error).includes(WINDOWS_FILE_LOCK_ERROR)) {
-                return null;
-              }
-              throw error;
-            }
-          },
-          { maxAttempts: 4, delays: [200, 500, 1000] }
-        );
-
-        if (result === undefined) {
-          throw new Error(`Version command failed: ${versionCommand}`);
-        }
-        return result;
-      }
-    );
-  }
-
-  /**
-   * Execute a CLI help command through the same launcher and retry paths used
-   * for version checks.
-   */
-  static async runHelpCommand(
-    helpCommand: string,
-    options: CliCommandOptions = {}
-  ): Promise<string> {
-    const execute = async (): Promise<string> => {
-      const [commandName, ...commandArgs] = parseArgString(helpCommand);
-      if (!commandName) {
-        throw new Error("Help command is empty");
-      }
-
-      const resolved = await resolveCliCommand(commandName, commandArgs);
-      const timeoutMs = options.timeoutMs ?? CLI_VERSION_CHECK_TIMEOUT_MS;
-      Log.debug(
-        `[runHelpCommand] spawning: ${resolved.displayCommand} (kind=${resolved.launcherKind}, timeout=${timeoutMs}ms)`
-      );
-      const { stdout } = await execFileAsync(resolved.command, resolved.args, {
-        encoding: "utf8",
-        timeout: timeoutMs,
-        windowsVerbatimArguments: resolved.requiresShellVerbatimArgs,
-      });
-      return typeof stdout === "string" ? stdout.trim() : String(stdout).trim();
-    };
-
-    return CliProviderUtils.helpCommandCache.getOrRun(helpCommand, async () => {
+    return cache.getOrRun(command, async () => {
       if (!options.retryWindowsFileLockErrors) {
         return execute();
       }
@@ -233,10 +182,42 @@ export class CliProviderUtils {
       );
 
       if (result === undefined) {
-        throw new Error(`Help command failed: ${helpCommand}`);
+        throw new Error(`${logLabel} command failed: ${command}`);
       }
       return result;
     });
+  }
+
+  /**
+   * Execute a CLI version command through the same launcher resolution path used
+   * for runtime prompt execution.
+   */
+  static async runVersionCommand(
+    versionCommand: string,
+    options: CliCommandOptions = {}
+  ): Promise<string> {
+    return CliProviderUtils.runCachedCliCommand(
+      versionCommand,
+      CliProviderUtils.versionCommandCache,
+      "Version",
+      options
+    );
+  }
+
+  /**
+   * Execute a CLI help command through the same launcher and retry paths used
+   * for version checks.
+   */
+  static async runHelpCommand(
+    helpCommand: string,
+    options: CliCommandOptions = {}
+  ): Promise<string> {
+    return CliProviderUtils.runCachedCliCommand(
+      helpCommand,
+      CliProviderUtils.helpCommandCache,
+      "Help",
+      options
+    );
   }
 
   /**
