@@ -198,7 +198,7 @@ Replace the four textareas with `<PermissionListEditor>`:
 | `PromptEditorSupportService.ts`                            | Implemented: new `handlePermissionCompletionRequest()`, mirroring script completions                   |
 | `WebviewMessageRouter.ts`                                  | Implemented: registers `PERMISSION_COMPLETIONS_REQUEST`                                                 |
 | `DashboardConstants.ts` / `WebviewMessageTypes.ts`         | Implemented: new message type + payload contracts                                                       |
-| `components/shared/PermissionListEditor.tsx` (new)         | Wraps the multiline editor + completion source + linter; owns `string[]` ↔ `\n`-joined conversion     |
+| `components/shared/PermissionListEditor.tsx` (new)         | Implemented: wraps the multiline editor + completion source + linter; owns `string[]` ↔ `\n`-joined conversion |
 | `WorkflowPropertiesPanel.tsx`                              | Allowed/Denied Tools fields on the workflow Permissions tab                                           |
 | `components/settings/defaults/DefaultsPermissionsPage.tsx` | Allowed/Denied tools fields on the global defaults page                                               |
 
@@ -210,10 +210,8 @@ Replace the four textareas with `<PermissionListEditor>`:
 - Exact curated list of `shell(...)`/`bash(...)` argument snippets beyond the
   handful named above — expand based on what's actually common in existing
   workflow fixtures/templates.
-- Whether lint diagnostics also get a `lintGutter()` dot marker or stay
-  underline-only (textareas today have no gutter at all; underline-only is
-  the closer visual match, but a gutter dot makes multiple errors in a long
-  list easier to scan).
+- Lint diagnostics stay underline-only; no `lintGutter()` dot marker is used
+  because the textareas they replace have no gutter.
 
 ## Non-Goals
 

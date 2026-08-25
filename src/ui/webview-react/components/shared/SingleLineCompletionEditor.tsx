@@ -6,7 +6,13 @@ import {
   type CompletionContext,
   type CompletionResult,
 } from "@codemirror/autocomplete";
-import { Annotation, Compartment, EditorState, Prec } from "@codemirror/state";
+import {
+  Annotation,
+  Compartment,
+  EditorState,
+  Prec,
+  type Extension,
+} from "@codemirror/state";
 import {
   EditorView,
   keymap,
@@ -35,6 +41,8 @@ export interface SingleLineCompletionEditorProps {
    */
   className?: string;
   multiline?: boolean;
+  /** Additional CodeMirror extensions for specialized editor variants. */
+  extensions?: Extension[];
   /**
    * Overrides the editor font size (any CSS font-size value). Read once at
    * mount; omit to follow the VS Code editor font size.
@@ -126,13 +134,15 @@ function handlePaste(
   if (text === undefined) return false;
 
   event.preventDefault();
-  view.dispatch(
-    view.state.replaceSelection(replaceNewlines(text, multiline))
-  );
+  view.dispatch(view.state.replaceSelection(replaceNewlines(text, multiline)));
   return true;
 }
 
-function syncDocument(view: EditorView, value: string, multiline: boolean): void {
+function syncDocument(
+  view: EditorView,
+  value: string,
+  multiline: boolean
+): void {
   const nextValue = replaceNewlines(value, multiline);
   const currentValue = view.state.doc.toString();
   if (currentValue === nextValue) return;
@@ -175,6 +185,7 @@ export function SingleLineCompletionEditor({
   disabled = false,
   className,
   multiline = false,
+  extensions = [],
   fontSize,
   "aria-label": ariaLabel,
   "aria-describedby": ariaDescribedby,
@@ -194,6 +205,7 @@ export function SingleLineCompletionEditor({
     placeholderText,
     disabled,
     fontSize,
+    extensions,
   });
   const editableCompartmentRef = useRef(new Compartment());
   const contentAttributesCompartmentRef = useRef(new Compartment());
@@ -276,6 +288,7 @@ export function SingleLineCompletionEditor({
               disabledRef.current ? null : completionSourceRef.current(context),
           ],
         }),
+        ...initialProps.extensions,
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return;
           if (
