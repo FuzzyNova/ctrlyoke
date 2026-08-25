@@ -6,6 +6,7 @@ import { toFieldDiagnostic } from "@utils/compatibilityDiagnostics";
 import { FieldDiagnostic } from "../shared/FieldDiagnostic";
 import { KeyValueMapEditor } from "../shared/KeyValueMapEditor";
 import { ScriptCommandEditor } from "../shared/ScriptCommandEditor";
+import { Button } from "../shared/Button";
 
 type HooksValue = UserHookConfig[] | null | undefined;
 
@@ -159,22 +160,30 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
         {hooks.map((hook, index) => (
           <div key={index} className="grid min-w-0 gap-2">
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2">
-              <select
-                id={`hook-${index}-event`}
-                value={hook.event}
-                onChange={(e) =>
-                  handleUpdateHook(index, {
-                    event: e.target.value as UserHookConfig["event"],
-                  })
-                }
-                className="w-full min-w-0 rounded border border-input-border bg-input-bg px-1 py-0.5 text-xs text-input-fg"
-              >
-                {HOOK_EVENT_METADATA.map((m) => (
-                  <option key={m.event} value={m.event}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
+              <div className="flex min-w-0 flex-col gap-1">
+                <label
+                  htmlFor={`hook-${index}-event`}
+                  className="text-xxs text-description-fg"
+                >
+                  Event
+                </label>
+                <select
+                  id={`hook-${index}-event`}
+                  value={hook.event}
+                  onChange={(e) =>
+                    handleUpdateHook(index, {
+                      event: e.target.value as UserHookConfig["event"],
+                    })
+                  }
+                  className="h-7 w-full min-w-0 rounded border border-input-border bg-input-bg px-1 py-0.5 text-xs text-input-fg"
+                >
+                  {HOOK_EVENT_METADATA.map((m) => (
+                    <option key={m.event} value={m.event}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="flex min-w-0 flex-col gap-1">
                 <label
                   htmlFor={`hook-${index}-timeout-sec`}
@@ -200,17 +209,20 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
                     );
                   }}
                   placeholder="Default"
-                  className="w-full min-w-0 rounded border border-input-border bg-input-bg px-2 py-0.5 text-xs text-input-fg"
+                  className="h-7 w-full min-w-0 rounded border border-input-border bg-input-bg px-2 py-0.5 text-xs text-input-fg"
                 />
               </div>
-              <button
+              <Button
                 type="button"
                 onClick={() => handleRemoveHook(index)}
-                className="self-end px-1 text-xs text-description-fg hover:text-error-fg cursor-pointer"
+                variant="danger"
+                size="sm"
+                aria-label="Remove hook"
                 title="Remove hook"
+                className="h-7 shrink-0 px-1.5 self-center"
               >
-                ✕
-              </button>
+                <i className="codicon codicon-trash" aria-hidden="true" />
+              </Button>
             </div>
             <ScriptCommandEditor
               id={`hook-${index}-command`}

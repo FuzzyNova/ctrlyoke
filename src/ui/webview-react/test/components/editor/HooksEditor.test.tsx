@@ -185,6 +185,12 @@ describe("HooksEditor compatibility diagnostics", () => {
       .getByLabelText("hook-0-command")
       .closest(".cm-editor");
     expect(editor?.parentElement).toHaveClass("w-full", "min-w-0");
+    expect(screen.getByLabelText("Event")).toHaveClass("h-7");
+    expect(screen.getByLabelText("Timeout (seconds)")).toHaveClass("h-7");
+
+    const removeButton = screen.getByRole("button", { name: "Remove hook" });
+    expect(removeButton).toHaveClass("bg-indicator-error", "h-7");
+    expect(removeButton.querySelector(".codicon-trash")).toBeInTheDocument();
   });
 
   it("clears hook environment and timeout overrides", () => {
