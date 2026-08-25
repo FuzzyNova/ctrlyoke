@@ -170,6 +170,100 @@ export async function getRecentCommits(
     });
 }
 
+export interface FileHistoryCommitInfo extends CommitInfo {
+  /** Repository-relative path on the commit side of this change. */
+  path: string;
+  /** Repository-relative path on the parent side of this change. */
+  oldPath: string;
+}
+
+/**
+ * Returns the commits that touched one path, newest first, following renames.
+ *
+ * This deliberately has its own parser rather than extending
+ * getRecentCommits(): --name-status -z interleaves each commit's metadata
+ * with one or two path tokens, which is what lets callers render both sides
+ * of a rename.
+ */
+export async function getFileHistoryCommits(
+  workspaceRoot: string,
+  gitPath: string,
+  limit: number | undefined = 30,
+  skip: number = 0,
+  ref?: string
+): Promise<FileHistoryCommitInfo[]> {
+  const args = [
+    "-C",
+    workspaceRoot,
+    "log",
+    "--follow",
+    "-z",
+    "--name-status",
+    "--format=%x00%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D%x00",
+  ];
+  if (skip > 0) args.push(`--skip=${skip}`);
+  if (limit !== undefined) {
+    args.push("-n", String(limit));
+  }
+  if (ref && ref.trim()) {
+    args.push("--end-of-options", ref.trim());
+  }
+  args.push("--", gitPath);
+
+  const { stdout } = await execFileAsync("git", args);
+  const tokens = stdout.split("\0");
+  const commits: FileHistoryCommitInfo[] = [];
+
+  for (let index = 0; index < tokens.length; index++) {
+    const hash = tokens[index] ?? "";
+    if (!/^[0-9a-f]{40}$/i.test(hash)) continue;
+
+    const shortHash = tokens[index + 1] ?? "";
+    const subject = tokens[index + 2] ?? "";
+    const author = tokens[index + 3] ?? "";
+    const relativeDate = tokens[index + 4] ?? "";
+    const parents = tokens[index + 5] ?? "";
+    const decorate = tokens[index + 6] ?? "";
+    const parentHashes = parents.trim() ? parents.trim().split(/\s+/) : [];
+    const refNames = decorate.trim()
+      ? decorate
+          .trim()
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean)
+      : [];
+
+    let statusIndex = index + 7;
+    while (statusIndex < tokens.length && tokens[statusIndex] === "") {
+      statusIndex++;
+    }
+    const status = (tokens[statusIndex] ?? "").replace(/^\r?\n/, "");
+    const isRename = status.startsWith("R") || status.startsWith("C");
+    const firstPath = tokens[statusIndex + 1];
+    const secondPath = isRename ? tokens[statusIndex + 2] : undefined;
+    const commitPath = secondPath ?? firstPath;
+    if (!commitPath) continue;
+
+    commits.push({
+      hash,
+      shortHash,
+      subject,
+      author,
+      relativeDate,
+      parentHashes,
+      refNames,
+      path: commitPath,
+      oldPath: secondPath ? (firstPath ?? commitPath) : commitPath,
+    });
+
+    // Avoid mistaking a path that happens to look like a hash for the next
+    // commit header; the next real header is the following empty token.
+    index = statusIndex + (isRename ? 2 : 1);
+  }
+
+  return commits;
+}
+
 /**
  * Returns full commit metadata: subject, body, author, and dates.
  * Uses NUL byte (%x00) as field separator, same convention as getRecentCommits.

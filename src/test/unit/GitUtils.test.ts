@@ -24,6 +24,7 @@ import {
   getBranchUpstream,
   isCommitAncestor,
   getBlobBytes,
+  getFileHistoryCommits,
   getChangedFilesWithBinaryStatus,
 } from "../../utils/GitUtils";
 
@@ -187,6 +188,29 @@ suite("GitUtils.gitRefExists", function () {
         { path: "text.txt", isBinary: false, status: "A" },
       ]
     );
+  });
+
+  test("returns path history newest first and preserves rename pairs", async () => {
+    runGit(["mv", "tracked.txt", "renamed.txt"]);
+    runGit(["commit", "-am", "Rename tracked file"]);
+    await writeWorkspaceFile("renamed.txt", "latest\n");
+    runGit(["commit", "-am", "Update renamed file"]);
+
+    const history = await getFileHistoryCommits(
+      workspaceRoot,
+      "renamed.txt",
+      undefined
+    );
+
+    assert.deepStrictEqual(
+      history.map((entry) => entry.subject),
+      ["Update renamed file", "Rename tracked file", "Initial commit"]
+    );
+    assert.strictEqual(history[1]?.oldPath, "tracked.txt");
+    assert.strictEqual(history[1]?.path, "renamed.txt");
+    assert.deepStrictEqual(history[2]?.parentHashes, []);
+    assert.strictEqual(history[2]?.oldPath, "tracked.txt");
+    assert.strictEqual(history[2]?.path, "tracked.txt");
   });
 });
 

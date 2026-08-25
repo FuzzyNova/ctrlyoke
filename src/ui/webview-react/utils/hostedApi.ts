@@ -1,3 +1,6 @@
+import {
+  WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE,
+} from "@root/types/HostedWorkspaceViewerTypes";
 import type {
   WorkspaceTreePageRequest,
   WorkspaceTreeRangeRequest,
@@ -17,6 +20,7 @@ import type {
   WorkspaceCopyRequest,
   WorkspaceMoveRequest,
   WorkspaceCommitLogResponse,
+  WorkspaceFileHistoryPageResponse,
   WorkspaceCheckoutCommitRequest,
   WorkspaceCheckoutBranchRequest,
   WorkspaceGitRefDiffResponse,
@@ -277,6 +281,28 @@ export async function workspaceCommitLog(
   const repoParam = repo ? `&repo=${encodeURIComponent(repo)}` : "";
   return hostedFetch<WorkspaceCommitLogResponse>(
     `/api/workspace-viewer/commit-log?skip=${skip}&limit=${limit}${branchParam}${repoParam}`
+  );
+}
+
+export async function workspaceFileHistory(
+  filePath: string,
+  offset = 0,
+  pageSize = WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE,
+  historyId?: string,
+  repo?: string
+): Promise<WorkspaceFileHistoryPageResponse> {
+  const params = new URLSearchParams({
+    path: filePath,
+    offset: String(offset),
+  });
+  if (historyId) {
+    params.set("historyId", historyId);
+  } else {
+    params.set("pageSize", String(pageSize));
+  }
+  if (repo) params.set("repo", repo);
+  return hostedFetch<WorkspaceFileHistoryPageResponse>(
+    `/api/workspace-viewer/file-history?${params.toString()}`
   );
 }
 

@@ -622,6 +622,91 @@ suite("HostedWorkspaceViewerService", function () {
     });
   });
 
+  // ── getFileHistory ────────────────────────────────────────────────────────
+
+  suite("getFileHistory", () => {
+    test("freezes the complete history at the initial HEAD", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "First history commit");
+      commitFile(root, "history.txt", "two\n", "Second history commit");
+      commitFile(root, "history.txt", "three\n", "Third history commit");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const first = await svc.getFileHistory("history.txt", 0, 2);
+      assert.deepStrictEqual(
+        first.entries.map((entry) => entry.subject),
+        ["Third history commit", "Second history commit"]
+      );
+
+      commitFile(root, "history.txt", "four\n", "Commit after opening history");
+      const continuation = await svc.getFileHistory(
+        "history.txt",
+        2,
+        undefined,
+        first.historyId
+      );
+      assert.strictEqual(continuation.totalEntries, 3);
+      assert.deepStrictEqual(
+        continuation.entries.map((entry) => entry.subject),
+        ["First history commit"]
+      );
+
+      const refreshed = await svc.getFileHistory("history.txt", 0, 10);
+      assert.strictEqual(refreshed.totalEntries, 4);
+      assert.notStrictEqual(refreshed.historyId, first.historyId);
+    });
+
+    test("scopes a multi-repo path through its owning repository", async () => {
+      const primary = createWorkspace();
+      const secondary = createWorkspace();
+      for (const root of [primary, secondary]) {
+        runGit(root, "init");
+        configureGitIdentity(root);
+      }
+      commitFile(secondary, "history.txt", "secondary\n", "Secondary history");
+
+      const svc = new HostedWorkspaceViewerService(primary, [
+        { name: "primary", fsPath: primary },
+        { name: "secondary", fsPath: secondary },
+      ]);
+      const result = await svc.getFileHistory("secondary/history.txt", 0, 2);
+
+      assert.strictEqual(result.totalEntries, 1);
+      assert.strictEqual(result.entries[0]?.subject, "Secondary history");
+      assert.strictEqual(result.entries[0]?.path, "secondary/history.txt");
+    });
+
+    test("rejects invalid paths, history ids, and page ranges", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "history.txt", "one\n", "History commit");
+      const svc = new HostedWorkspaceViewerService(root);
+      const page = await svc.getFileHistory("history.txt", 0, 2);
+
+      await assert.rejects(
+        svc.getFileHistory("../outside.txt"),
+        (error: unknown) =>
+          error instanceof Error && error.message === "Path not allowed"
+      );
+      await assert.rejects(
+        svc.getFileHistory("history.txt", 1, undefined, page.historyId),
+        (error: unknown) => error instanceof WorkspaceTreeBadRequestError
+      );
+      await assert.rejects(
+        svc.getFileHistory(
+          "history.txt",
+          0,
+          undefined,
+          "00000000-0000-4000-8000-000000000099"
+        ),
+        (error: unknown) => error instanceof WorkspaceTreeExpiredError
+      );
+    });
+  });
+
   // ── readFile ───────────────────────────────────────────────────────────────
 
   suite("readFile", () => {

@@ -1,5 +1,7 @@
 import * as assert from "assert";
+import { request as httpRequest } from "http";
 import { suite, test } from "mocha";
+import { DashboardBroadcastHub } from "../../ui/DashboardBroadcastHub";
 import { createHostedHarnessStatusUpdate } from "../../server/HostedServerMessageFactory";
 import {
   CtrlYokeHostedServer,
@@ -40,6 +42,54 @@ suite("sanitizeBrowserClientId", () => {
     assert.strictEqual(sanitizeBrowserClientId(null), null);
     assert.strictEqual(sanitizeBrowserClientId(""), null);
     assert.strictEqual(sanitizeBrowserClientId("!@#$%^&*()"), null);
+  });
+});
+
+suite("CtrlYokeHostedServer file history route", () => {
+  test("rejects a missing path before invoking the viewer service", async () => {
+    const token = "route-test-token";
+    const server = new CtrlYokeHostedServer(
+      new DashboardBroadcastHub(),
+      {} as never,
+      (() => ({})) as never,
+      0,
+      process.cwd(),
+      [],
+      token
+    );
+    try {
+      const serverUrl = await server.listen();
+      const url = new URL(serverUrl);
+      const response = await new Promise<{
+        statusCode: number | undefined;
+        body: string;
+      }>((resolve, reject) => {
+        const request = httpRequest(
+          {
+            hostname: "127.0.0.1",
+            port: Number(url.port),
+            path: `/api/workspace-viewer/file-history?token=${encodeURIComponent(token)}`,
+          },
+          (res) => {
+            let body = "";
+            res.setEncoding("utf8");
+            res.on("data", (chunk: string) => {
+              body += chunk;
+            });
+            res.on("end", () => resolve({ statusCode: res.statusCode, body }));
+          }
+        );
+        request.on("error", reject);
+        request.end();
+      });
+
+      assert.strictEqual(response.statusCode, 400);
+      assert.deepStrictEqual(JSON.parse(response.body), {
+        error: "path is required",
+      });
+    } finally {
+      server.dispose();
+    }
   });
 });
 

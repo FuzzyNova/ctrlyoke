@@ -1038,6 +1038,60 @@ export class CtrlYokeHostedServer
       }
     );
 
+    this.app.get(
+      "/api/workspace-viewer/file-history",
+      requireToken,
+      async (req, res) => {
+        const filePath =
+          typeof req.query.path === "string" ? req.query.path : "";
+        if (!filePath) {
+          res.status(400).json({ error: "path is required" });
+          return;
+        }
+        const rawOffset =
+          typeof req.query.offset === "string" ? req.query.offset : "0";
+        const rawPageSize =
+          typeof req.query.pageSize === "string"
+            ? req.query.pageSize
+            : undefined;
+        const offset = Number.parseInt(rawOffset, 10);
+        const pageSize =
+          rawPageSize === undefined
+            ? undefined
+            : Number.parseInt(rawPageSize, 10);
+        const historyId =
+          typeof req.query.historyId === "string" && req.query.historyId
+            ? req.query.historyId
+            : undefined;
+        const repo =
+          typeof req.query.repo === "string" && req.query.repo.trim()
+            ? req.query.repo.trim()
+            : undefined;
+        try {
+          res.json(
+            await this.viewerService.getFileHistory(
+              filePath,
+              offset,
+              pageSize,
+              historyId,
+              repo
+            )
+          );
+        } catch (err) {
+          if (err instanceof WorkspaceTreeHttpError) {
+            res.status(err.statusCode).json({ error: err.message });
+            return;
+          }
+          if (err instanceof Error && err.message === "Path not allowed") {
+            res.status(403).json({ error: err.message });
+            return;
+          }
+          Log.error(`workspace-viewer /file-history error: ${String(err)}`);
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
     this.app.post(
       "/api/workspace-viewer/stage",
       requireToken,

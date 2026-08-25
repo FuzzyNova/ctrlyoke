@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as readline from "readline";
+import { randomUUID } from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { Log } from "../utils/Log";
@@ -24,6 +25,8 @@ import type {
   DiffKind,
   WorkspaceCommitLogResponse,
   WorkspaceCommitLogEntry,
+  WorkspaceFileHistoryEntry,
+  WorkspaceFileHistoryPageResponse,
   WorkspaceGitRefDiffResponse,
   WorkspaceScmFile,
   WorkspaceRepo,
@@ -40,6 +43,8 @@ import {
   WORKSPACE_TREE_DEFAULT_PAGE_SIZE,
   WORKSPACE_TREE_MAX_PAGE_SIZE,
   WORKSPACE_ENTRY_SORT_KEYS,
+  WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE,
+  WORKSPACE_FILE_HISTORY_MAX_PAGE_SIZE,
 } from "../types/HostedWorkspaceViewerTypes";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {
@@ -59,6 +64,8 @@ import {
 import { runtimeTrustedRootRegistry } from "../utils/RuntimeTrustedRootRegistry";
 import {
   getRecentCommits,
+  getFileHistoryCommits,
+  resolveCommit,
   getWorkingTreeDiff,
   getStagedDiff,
   getStashDiff,
@@ -106,6 +113,8 @@ const SEARCH_CONCURRENCY = 8;
 const SEARCH_DEFAULT_LIMIT = 100;
 const SEARCH_MAX_LIMIT = 500;
 const SEARCH_SNIPPET_MAX_LENGTH = 200;
+const FILE_HISTORY_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
+const FILE_HISTORY_SNAPSHOT_MAX_COUNT = 32;
 const SEARCH_FALLBACK_SKIP_DIRECTORIES = new Set([
   ".git",
   "node_modules",
@@ -119,6 +128,16 @@ interface NonTextDiffSources {
   baseRef: string;
   targetRef?: string;
   targetIsWorkingTree: boolean;
+}
+
+interface FileHistorySnapshot {
+  historyId: string;
+  requestedPath: string;
+  repoRoot: string;
+  headHash: string;
+  pageSize: number;
+  entries: readonly WorkspaceFileHistoryEntry[];
+  lastAccessedAt: number;
 }
 
 /** Run metadata work with a fixed number of concurrent filesystem operations. */
@@ -264,6 +283,7 @@ function classifyRefNames(refNames: string[]): GitRefLabel[] {
 export class HostedWorkspaceViewerService {
   private readonly commitGenerator = new CommitMessageGenerator();
   private readonly listingSnapshotCache = new WorkspaceListingSnapshotCache();
+  private readonly fileHistorySnapshots = new Map<string, FileHistorySnapshot>();
 
   constructor(
     private readonly workspaceRoot: string,
@@ -1756,6 +1776,203 @@ export class HostedWorkspaceViewerService {
 
   // ── Commit log ───────────────────────────────────────────────────────────
 
+  async getFileHistory(
+    requestedPath: string,
+    offset = 0,
+    pageSize?: number,
+    historyId?: string,
+    repoId?: string
+  ): Promise<WorkspaceFileHistoryPageResponse> {
+    if (!Number.isSafeInteger(offset) || offset < 0) {
+      throw new WorkspaceTreeBadRequestError(
+        "offset must be a non-negative integer"
+      );
+    }
+
+    const resolved = this.safeResolve(requestedPath);
+    if (!resolved) throw new Error("Path not allowed");
+    const repoRoot = await this.requireRepoRootForPath(resolved);
+    const viewerPath = normalizeViewerPath(this.relativePath(resolved));
+    void repoId;
+
+    if (historyId !== undefined) {
+      if (!isValidHistoryId(historyId)) {
+        throw new WorkspaceTreeBadRequestError("historyId is invalid");
+      }
+      const snapshot = this.getFileHistorySnapshot(historyId);
+      if (!snapshot) throw new WorkspaceTreeExpiredError();
+      if (
+        !pathsEqual(snapshot.repoRoot, repoRoot) ||
+        snapshot.requestedPath !== viewerPath
+      ) {
+        throw new WorkspaceTreeBadRequestError(
+          "path does not match the history snapshot"
+        );
+      }
+      if (offset % snapshot.pageSize !== 0) {
+        throw new WorkspaceTreeBadRequestError(
+          "offset must be aligned to pageSize"
+        );
+      }
+      if (offset > snapshot.entries.length) {
+        throw new WorkspaceTreeBadRequestError(
+          "offset is outside the history"
+        );
+      }
+      return this.materializeFileHistoryPage(snapshot, offset);
+    }
+
+    const resolvedPageSize = this.resolveFileHistoryPageSize(pageSize);
+    try {
+      const stat = await fs.promises.stat(resolved);
+      if (stat.isDirectory()) {
+        throw new WorkspaceTreeBadRequestError("path must be a file");
+      }
+    } catch (error) {
+      if (error instanceof WorkspaceTreeBadRequestError) throw error;
+      // A deleted file can still have useful history, so an absent current
+      // filesystem entry is allowed; Git remains the source of truth below.
+    }
+
+    const gitPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
+    const headHash = await resolveCommit(repoRoot, "HEAD");
+    const [historyRows, unpushedHashes] = await Promise.all([
+      // Omitting max-count is intentional: the complete result is the frozen
+      // snapshot from which all later pages are served.
+      getFileHistoryCommits(repoRoot, gitPath, undefined, 0, headHash),
+      this.getUnpushedHistoryHashes(repoRoot, headHash),
+    ]);
+    const entries = historyRows
+      .filter((row) => {
+        const oldAbsolute = path.resolve(repoRoot, row.oldPath);
+        const newAbsolute = path.resolve(repoRoot, row.path);
+        return (
+          isPathWithinAnyDirectory(oldAbsolute, this.trustedRoots) &&
+          isPathWithinAnyDirectory(newAbsolute, this.trustedRoots)
+        );
+      })
+      .map((row) => ({
+        hash: row.hash,
+        shortHash: row.shortHash,
+        subject: row.subject,
+        author: row.author,
+        relativeDate: row.relativeDate,
+        isHead: row.hash === headHash,
+        pushed: !unpushedHashes.has(row.hash),
+        refs: classifyRefNames(row.refNames),
+        isMerge: row.parentHashes.length > 1,
+        parentHashes: row.parentHashes,
+        path: normalizeViewerPath(
+          this.relativePath(path.resolve(repoRoot, row.path))
+        ),
+        oldPath: normalizeViewerPath(
+          this.relativePath(path.resolve(repoRoot, row.oldPath))
+        ),
+      } satisfies WorkspaceFileHistoryEntry));
+
+    const snapshot: FileHistorySnapshot = {
+      historyId: this.createFileHistoryId(),
+      requestedPath: viewerPath,
+      repoRoot,
+      headHash,
+      pageSize: resolvedPageSize,
+      entries: Object.freeze(entries),
+      lastAccessedAt: Date.now(),
+    };
+    this.fileHistorySnapshots.set(snapshot.historyId, snapshot);
+    this.trimFileHistorySnapshots();
+
+    if (offset % snapshot.pageSize !== 0) {
+      throw new WorkspaceTreeBadRequestError(
+        "offset must be aligned to pageSize"
+      );
+    }
+    if (offset > snapshot.entries.length) {
+      throw new WorkspaceTreeBadRequestError("offset is outside the history");
+    }
+    return this.materializeFileHistoryPage(snapshot, offset);
+  }
+
+  private resolveFileHistoryPageSize(requestedPageSize?: number): number {
+    if (requestedPageSize === undefined) {
+      return WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE;
+    }
+    if (!Number.isSafeInteger(requestedPageSize) || requestedPageSize < 1) {
+      throw new WorkspaceTreeBadRequestError(
+        "pageSize must be a positive integer"
+      );
+    }
+    return Math.min(WORKSPACE_FILE_HISTORY_MAX_PAGE_SIZE, requestedPageSize);
+  }
+
+  private createFileHistoryId(): string {
+    let historyId = randomUUID();
+    while (this.fileHistorySnapshots.has(historyId)) {
+      historyId = randomUUID();
+    }
+    return historyId;
+  }
+
+  private getFileHistorySnapshot(
+    historyId: string
+  ): FileHistorySnapshot | undefined {
+    const now = Date.now();
+    for (const [id, snapshot] of this.fileHistorySnapshots) {
+      if (now - snapshot.lastAccessedAt >= FILE_HISTORY_SNAPSHOT_TTL_MS) {
+        this.fileHistorySnapshots.delete(id);
+      }
+    }
+    const snapshot = this.fileHistorySnapshots.get(historyId);
+    if (!snapshot) return undefined;
+    const refreshed = { ...snapshot, lastAccessedAt: now };
+    this.fileHistorySnapshots.delete(historyId);
+    this.fileHistorySnapshots.set(historyId, refreshed);
+    return refreshed;
+  }
+
+  private trimFileHistorySnapshots(): void {
+    while (this.fileHistorySnapshots.size > FILE_HISTORY_SNAPSHOT_MAX_COUNT) {
+      const oldest = this.fileHistorySnapshots.keys().next().value;
+      if (oldest === undefined) return;
+      this.fileHistorySnapshots.delete(oldest);
+    }
+  }
+
+  private materializeFileHistoryPage(
+    snapshot: FileHistorySnapshot,
+    offset: number
+  ): WorkspaceFileHistoryPageResponse {
+    return {
+      historyId: snapshot.historyId,
+      pageSize: snapshot.pageSize,
+      totalEntries: snapshot.entries.length,
+      offset,
+      entries: snapshot.entries.slice(offset, offset + snapshot.pageSize),
+    };
+  }
+
+  private async getUnpushedHistoryHashes(
+    repoRoot: string,
+    headHash: string
+  ): Promise<Set<string>> {
+    try {
+      const { stdout } = await execFileAsync(
+        "git",
+        [
+          "-C",
+          repoRoot,
+          "rev-list",
+          "--no-walk",
+          `@{upstream}..${headHash}`,
+        ],
+        { timeout: GIT_TIMEOUT_MS }
+      );
+      return new Set(stdout.trim().split("\n").filter(Boolean));
+    } catch {
+      return new Set();
+    }
+  }
+
   async getCommitLog(
     skip = 0,
     limit = 30,
@@ -2104,10 +2321,12 @@ export class HostedWorkspaceViewerService {
 
   dispose(): void {
     this.listingSnapshotCache.dispose();
+    this.fileHistorySnapshots.clear();
   }
 
   clear(): void {
     this.listingSnapshotCache.clear();
+    this.fileHistorySnapshots.clear();
   }
 }
 
@@ -2119,4 +2338,8 @@ function isValidListingId(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value
   );
+}
+
+function isValidHistoryId(value: string): boolean {
+  return isValidListingId(value);
 }
