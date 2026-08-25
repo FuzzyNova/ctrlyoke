@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useState } from "react";
+import React from "react";
 import { useLongPress } from "@hooks/useLongPress";
 import type { FailedWorkspaceDirectoryRange } from "@hooks/usePagedWorkspaceDirectory";
 import type {
@@ -108,59 +108,24 @@ export interface FileBrowserSortHeaderProps {
   onSortKeyRequest: (key: WorkspaceEntrySortKey) => void;
   /** Defaults to false. See `FILE_BROWSER_NARROW_THRESHOLD`. */
   isNarrow?: boolean;
-  /** Keeps the header width aligned with rows inside the directory scroller. */
-  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-/** Shared, stateless sort controls for the workspace file browsers. */
+/**
+ * Shared, stateless sort controls for the workspace file browsers.
+ *
+ * Must be rendered as the first child inside the same scrolling element as
+ * the entry rows (not as a sibling before it), with `sticky top-0`. Rows are
+ * sized against the scroller's content-box width, which shrinks once a
+ * scrollbar appears; a header living outside that scroller has no way to
+ * learn about that shrink and drifts out of alignment with the columns below
+ * it. Sharing the scroll container sidesteps the problem instead of chasing
+ * it with width measurement.
+ */
 export function FileBrowserSortHeader({
   sort,
   onSortKeyRequest,
   isNarrow = false,
-  scrollContainerRef,
 }: FileBrowserSortHeaderProps): React.ReactElement {
-  const [usableWidth, setUsableWidth] = useState<number | null>(null);
-
-  useLayoutEffect(() => {
-    const scrollContainer = scrollContainerRef?.current;
-    if (!scrollContainer) return;
-
-    let observedList: HTMLElement | null = null;
-    const updateUsableWidth = () => {
-      const list = scrollContainer.querySelector<HTMLElement>('[role="list"]');
-      const nextWidth =
-        list?.getBoundingClientRect().width ?? scrollContainer.clientWidth;
-      if (nextWidth > 0) {
-        setUsableWidth((currentWidth) =>
-          currentWidth === nextWidth ? currentWidth : nextWidth
-        );
-      }
-    };
-
-    const resizeObserver = new ResizeObserver(() => {
-      updateUsableWidth();
-    });
-    const observeList = () => {
-      const list = scrollContainer.querySelector<HTMLElement>('[role="list"]');
-      if (list === observedList) return;
-      if (observedList) resizeObserver.unobserve(observedList);
-      observedList = list;
-      if (list) resizeObserver.observe(list);
-      updateUsableWidth();
-    };
-
-    updateUsableWidth();
-    resizeObserver.observe(scrollContainer);
-    const mutationObserver = new MutationObserver(observeList);
-    mutationObserver.observe(scrollContainer, { childList: true });
-    observeList();
-
-    return () => {
-      mutationObserver.disconnect();
-      resizeObserver.disconnect();
-    };
-  }, [scrollContainerRef]);
-
   const renderSortButton = (key: WorkspaceEntrySortKey): React.ReactElement => {
     const isActive = sort.key === key;
     // Visible text shrinks at the narrow tier; the accessible name stays
@@ -205,12 +170,11 @@ export function FileBrowserSortHeader({
   return (
     <div
       data-testid="file-browser-sort-header"
-      className="grid w-full items-center gap-1.5 border-b border-panel-border px-3 py-1 text-xs"
+      className="sticky top-0 z-10 grid w-full items-center gap-1.5 border-b border-panel-border bg-editor-bg px-3 py-1 text-xs"
       style={{
         gridTemplateColumns: isNarrow
           ? FILE_BROWSER_GRID_TEMPLATE_NARROW
           : FILE_BROWSER_GRID_TEMPLATE,
-        ...(usableWidth !== null ? { width: usableWidth } : {}),
       }}
     >
       {renderSortButton(WORKSPACE_ENTRY_SORT_KEYS.NAME)}

@@ -99,26 +99,6 @@ describe("FileBrowserSortHeader", () => {
     expect(header.querySelectorAll(".codicon-chevron-down")).toHaveLength(1);
     expect(header.querySelectorAll(".codicon-chevron-up")).toHaveLength(0);
   });
-
-  it("uses the directory scroller's usable width for aligned columns", () => {
-    const scrollContainer = document.createElement("div");
-    Object.defineProperty(scrollContainer, "clientWidth", {
-      configurable: true,
-      value: 320,
-    });
-
-    render(
-      <FileBrowserSortHeader
-        sort={DEFAULT_WORKSPACE_ENTRY_SORT}
-        onSortKeyRequest={vi.fn()}
-        scrollContainerRef={{ current: scrollContainer }}
-      />
-    );
-
-    expect(screen.getByTestId("file-browser-sort-header")).toHaveStyle({
-      width: "320px",
-    });
-  });
 });
 
 describe("EntryRow", () => {

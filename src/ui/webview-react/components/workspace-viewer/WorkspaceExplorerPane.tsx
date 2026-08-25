@@ -574,19 +574,17 @@ export const WorkspaceExplorerPane: React.FC = () => {
         </button>
       </div>
 
-      <FileBrowserSortHeader
-        sort={workspaceEntrySort}
-        onSortKeyRequest={handleSortKeyRequest}
-        isNarrow={isNarrowColumnLayout}
-        scrollContainerRef={directoryScrollContainerRef}
-      />
-
       {/* Entry list */}
       <div
         ref={directoryScrollContainerRef}
         className="flex-1 overflow-y-auto"
         aria-busy={directory.isLoading}
       >
+        <FileBrowserSortHeader
+          sort={workspaceEntrySort}
+          onSortKeyRequest={handleSortKeyRequest}
+          isNarrow={isNarrowColumnLayout}
+        />
         {directory.initialError && directory.totalCount === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-8 text-sm text-warning-fg">
             <span>{directory.initialError.message}</span>

@@ -218,19 +218,17 @@ export const FileBrowserModal: React.FC = () => {
           </div>
         </div>
 
-        <FileBrowserSortHeader
-          sort={workspaceEntrySort}
-          onSortKeyRequest={handleSortKeyRequest}
-          isNarrow={isNarrowColumnLayout}
-          scrollContainerRef={scrollContainerRef}
-        />
-
         <div
           ref={scrollContainerRef}
           data-testid="file-browser-directory-list"
           className="h-72 overflow-y-auto rounded border border-panel-border"
           aria-busy={directory.isLoading}
         >
+          <FileBrowserSortHeader
+            sort={workspaceEntrySort}
+            onSortKeyRequest={handleSortKeyRequest}
+            isNarrow={isNarrowColumnLayout}
+          />
           {directory.isInitialLoading ? (
             <div className="flex items-center justify-center py-8 text-editor-fg opacity-50">
               <i className="codicon codicon-loading animate-spin mr-2" />
