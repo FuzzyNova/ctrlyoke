@@ -88,6 +88,7 @@ import type { WorkflowOutputHistory } from "./OutputHistoryTypes";
 import type { ScriptCompletionItem } from "../completions/ScriptCommandCompletionHelpers";
 import type { PermissionCompletionItem } from "../completions/PermissionListCompletionHelpers";
 import type { PlainCompletionItem } from "../completions/CompletionHelpers";
+import type { HarnessFlagCompletion } from "../core/harness/shared/HarnessFlagCompletionProvider";
 import type { HarnessCapabilityRegistrySnapshot } from "./CompatibilityTypes";
 import type { WorkflowExecutionPreview } from "./ExecutionPreviewTypes";
 import type {
@@ -1140,6 +1141,23 @@ export interface ScriptCompletionsRequestMessage {
 export interface ScriptCompletionsResponseMessage {
   type: typeof MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE;
   items: ScriptCompletionItem[];
+  from: number;
+  seq: number;
+}
+
+/** Webview -> Extension: request completions for a harness Additional Args field. */
+export interface HarnessFlagCompletionsRequestMessage {
+  type: typeof MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_REQUEST;
+  harnessId: HarnessId;
+  text: string;
+  position: number;
+  seq: number;
+}
+
+/** Extension -> Webview: harness flag completion results. */
+export interface HarnessFlagCompletionsResponseMessage {
+  type: typeof MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_RESPONSE;
+  items: HarnessFlagCompletion[];
   from: number;
   seq: number;
 }
@@ -2395,6 +2413,7 @@ export type IncomingMessage =
       trigger: string;
     }
   | ScriptCompletionsResponseMessage
+  | HarnessFlagCompletionsResponseMessage
   | PermissionCompletionsResponseMessage
   | BranchListResponseMessage
   | {

@@ -352,7 +352,8 @@ One field reconsidered after initial pushback:
   find the flag by eye, type it back in") worth automating, but the parsing
   side is real work — six CLIs, no shared help-text format guaranteed. Spun
   out into its own plan:
-  [`HARNESS_HELP_FLAG_COMPLETIONS_PLAN.md`](../backlog/HARNESS_HELP_FLAG_COMPLETIONS_PLAN.md).
+  [`HARNESS_HELP_FLAG_COMPLETIONS_PLAN.md`](HARNESS_HELP_FLAG_COMPLETIONS_PLAN.md)
+  (implemented).
 
 One field considered and **not** recommended:
 

@@ -99,6 +99,10 @@ const COPILOT_IMAGE_INPUT_CAPABILITY = {
  * ```
  */
 export class CopilotCliProvider implements ICliProvider {
+  private static readonly CLI_COMMAND = "copilot";
+  static readonly CLI_VERSION_COMMAND = `${CopilotCliProvider.CLI_COMMAND} --version`;
+  static readonly CLI_HELP_COMMAND = `${CopilotCliProvider.CLI_COMMAND} --help`;
+
   private static readonly statuslineManager = StatuslineManager.forProvider(
     STATUS_LINE_TRACKING_PROVIDERS.COPILOT
   );
@@ -1131,9 +1135,12 @@ export class CopilotCliProvider implements ICliProvider {
    * @returns True if CLI executable found
    */
   async checkAvailability(): Promise<boolean> {
-    return CliProviderUtils.checkCliAvailability("copilot --version", {
-      retryWindowsFileLockErrors: true,
-    });
+    return CliProviderUtils.checkCliAvailability(
+      CopilotCliProvider.CLI_VERSION_COMMAND,
+      {
+        retryWindowsFileLockErrors: true,
+      }
+    );
   }
 
   /**
@@ -1142,9 +1149,12 @@ export class CopilotCliProvider implements ICliProvider {
    * @returns Version string if available, undefined if error
    */
   async getVersion(): Promise<string | undefined> {
-    return CliProviderUtils.getCliVersion("copilot --version", {
-      retryWindowsFileLockErrors: true,
-    });
+    return CliProviderUtils.getCliVersion(
+      CopilotCliProvider.CLI_VERSION_COMMAND,
+      {
+        retryWindowsFileLockErrors: true,
+      }
+    );
   }
 
   /**

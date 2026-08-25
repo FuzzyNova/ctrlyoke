@@ -99,6 +99,10 @@ const CLAUDE_IMAGE_INPUT_CAPABILITY = {
  * ```
  */
 export class ClaudeCliProvider implements ICliProvider {
+  private static readonly CLI_COMMAND = "claude";
+  static readonly CLI_VERSION_COMMAND = `${ClaudeCliProvider.CLI_COMMAND} --version`;
+  static readonly CLI_HELP_COMMAND = `${ClaudeCliProvider.CLI_COMMAND} --help`;
+
   private static readonly statuslineManager = StatuslineManager.forProvider(
     STATUS_LINE_TRACKING_PROVIDERS.CLAUDE
   );
@@ -975,7 +979,9 @@ export class ClaudeCliProvider implements ICliProvider {
    * @returns True if CLI executable found
    */
   async checkAvailability(): Promise<boolean> {
-    return CliProviderUtils.checkCliAvailability("claude --version");
+    return CliProviderUtils.checkCliAvailability(
+      ClaudeCliProvider.CLI_VERSION_COMMAND
+    );
   }
 
   /**
@@ -984,7 +990,9 @@ export class ClaudeCliProvider implements ICliProvider {
    * @returns Version string if available, undefined if error
    */
   async getVersion(): Promise<string | undefined> {
-    return CliProviderUtils.getCliVersion("claude --version");
+    return CliProviderUtils.getCliVersion(
+      ClaudeCliProvider.CLI_VERSION_COMMAND
+    );
   }
 
   /**

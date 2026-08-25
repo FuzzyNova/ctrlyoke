@@ -26,7 +26,7 @@ import type { CliEvent } from "../../../../types/CliOutputTypes";
 import type { HarnessQuotaSnapshot } from "../../../../types/UsageTypes";
 import type { StatuslineInstallResult } from "../StatuslineManager";
 
-/** Timeout for CLI version-check subprocesses (checkAvailability + getVersion) */
+/** Timeout for CLI version/help-check subprocesses. */
 export const CLI_VERSION_CHECK_TIMEOUT_MS = 30_000;
 
 /** Disposable sidecar that runs for the lifetime of one CLI execution. */

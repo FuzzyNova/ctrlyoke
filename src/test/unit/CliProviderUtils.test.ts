@@ -121,6 +121,26 @@ suite("CliProviderUtils", () => {
     assert.strictEqual(calls, 3);
   });
 
+  test("runs and caches help output while retrying failed help commands", async () => {
+    const [firstResult, coalescedResult] = await Promise.all([
+      CliProviderUtils.runHelpCommand("node --help"),
+      CliProviderUtils.runHelpCommand("node --help"),
+    ]);
+
+    assert.match(firstResult, /Usage: node/u);
+    assert.strictEqual(coalescedResult, firstResult);
+
+    const missingCommand = `ctrlyoke-missing-help-${Date.now()} --help`;
+    await assert.rejects(
+      CliProviderUtils.runHelpCommand(missingCommand),
+      /not found|cannot find|ENOENT|resolve/u
+    );
+    await assert.rejects(
+      CliProviderUtils.runHelpCommand(missingCommand),
+      /not found|cannot find|ENOENT|resolve/u
+    );
+  });
+
   test("keeps provider-specific references in settings MCP env and headers", () => {
     const entries = CliProviderUtils.buildSettingsJsonMcpEntries(
       undefined,

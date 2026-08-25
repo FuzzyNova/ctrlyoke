@@ -7,7 +7,11 @@ import { HARNESS_IDS, HARNESS_INFO } from "@root/types/DashboardConstants";
 import type { HarnessId } from "@root/types/DashboardConstants";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
-import { CustomSelect, HarnessDropdown } from "@components/shared";
+import {
+  AdditionalArgsEditor,
+  CustomSelect,
+  HarnessDropdown,
+} from "@components/shared";
 import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import { LocalTextInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
@@ -130,14 +134,15 @@ export function HarnessesSection({
                 path={`defaults.additionalArgs.${harnessId}`}
                 {...rowProps}
               >
-                <LocalTextInput
+                <AdditionalArgsEditor
                   id={`extra-args-${harnessId}`}
+                  harnessId={harnessId}
                   value={
                     (additionalArgs as Record<string, string | undefined>)[
                       harnessId
                     ] ?? ""
                   }
-                  onCommit={(v) =>
+                  onChange={(v) =>
                     onUpdate(
                       `defaults.additionalArgs.${harnessId}`,
                       v || undefined

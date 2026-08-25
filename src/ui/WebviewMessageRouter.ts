@@ -761,6 +761,19 @@ export class WebviewMessageRouter {
     );
 
     table.set(
+      MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_REQUEST,
+      async (message, ctx) => {
+        await this.promptEditorSupport.handleHarnessFlagCompletionRequest(
+          ctx,
+          message.harnessId,
+          message.text,
+          message.position,
+          message.seq
+        );
+      }
+    );
+
+    table.set(
       MESSAGE_TYPES.PERMISSION_COMPLETIONS_REQUEST,
       async (message, ctx) => {
         await this.promptEditorSupport.handlePermissionCompletionRequest(

@@ -1,6 +1,6 @@
 # Additional Args Completions from Live `--help` Output
 
-> **Status:** Not implemented.
+> **Status:** Implemented (all five steps complete).
 >
 > Referenced as a follow-up from
 > [`ALLOW_DENY_LIST_EDITOR_PLAN.md`](ALLOW_DENY_LIST_EDITOR_PLAN.md#3-other-free-text-fields-in-workflowpropertiespaneltsx-worth-the-same-treatment),
@@ -74,7 +74,7 @@ follow:
 
 ## Proposed Design
 
-### 1. Extension-host: run and cache `--help`
+### 1. Extension-host: run and cache `--help` — implemented
 
 Add a sibling to `CliProviderUtils.runVersionCommand()` — e.g.
 `runHelpCommand(helpCommand: string, options?)` — reusing the exact same
@@ -103,6 +103,19 @@ it (or, better, extract the bare binary name to one constant per provider
 that both the version and help commands build from, closing a small
 existing duplication rather than adding a third copy of `"copilot"` /
 `"claude"` / etc.).
+
+#### Step 1 landed
+
+- `CliProviderUtils.runHelpCommand()` now uses launcher resolution,
+  `execFileAsync`, Windows file-lock retries, and its own retryable cache.
+- Help probes reuse `CLI_VERSION_CHECK_TIMEOUT_MS` (30 seconds). Measured
+  `--help` runs for all six installed CLIs completed in approximately
+  0.1–1.3 seconds, leaving ample headroom without introducing another
+  timeout constant.
+- Each provider now builds public version/help command constants from one
+  private binary-name constant.
+- Captured fixtures: `claude-cli`, `codex-cli`, `copilot-cli`, `opencode-cli`,
+  `qwen-cli`, and `antigravity-cli`.
 
 ### 2. Parsing `--help` into flag completions
 
@@ -144,7 +157,47 @@ per-harness overrides, not a single regex assumed to fit everything:
   field. This mirrors how `checkCliAvailability` already swallows failures
   into a boolean.
 
+#### Step 2 landed
+
+- `HarnessFlagCompletionProvider.ts` has a generic, fail-soft parser for the
+  shared two-column option table. It handles short aliases, multiple long
+  aliases, angle/bracket value placeholders, wrapped descriptions, and
+  flag-only rows.
+- All six captured fixtures parse acceptably with the generic parser, so no
+  per-harness override was added: `copilot-cli`, `claude-cli`, `codex-cli`,
+  `opencode-cli`, `qwen-cli`, and `antigravity-cli` all use the default path.
+  Codex's wider option indentation and wrapped `Possible values` blocks are
+  handled by the same parser rather than a harness-specific rule.
+- Value hints are available wherever the help text exposes an unambiguous
+  enum: Antigravity (`--effort`, `--input-format`, `--mode`,
+  `--output-format`), Claude (`--autocompact`, `--cloud`, `--effort`,
+  `--input-format`, `--output-format`, `--permission-mode`,
+  `--prompt-suggestions`, `--setting-sources`), Codex (`--sandbox`,
+  `--ask-for-approval`), Copilot (`--bash-env`, `--context`,
+  `--reasoning-effort`, `--log-level`, `--mode`, `--mouse`,
+  `--output-format`, `--stream`), OpenCode (`--log-level`), and Qwen
+  (`--output-format`). Other parsed flags intentionally remain flag-name-only.
+- Fixture-backed unit tests cover every captured file, plus empty/malformed
+  input, aliases, wrapped descriptions, and hand-written enum formats.
+
 ### 3. Message plumbing + webview completion source
+
+#### Extension-host half landed
+
+- Added the harness flag completion request/response contracts, router
+  registration, and `PromptEditorSupportService` handler. It resolves each
+  harness through its provider-owned help command constant, parses and filters
+  live help output at the cursor token, and fails soft on CLI or parse errors.
+- The webview completion source and `AdditionalArgsEditor.tsx` are now
+  implemented; call-site rollout remains for the next step.
+
+#### Webview completion source landed
+
+- Added `AdditionalArgsEditor.tsx` with the single-line completion request,
+  host-authoritative flag filtering, harness-aware invalidation, and value-hint
+  completions.
+- Added Vitest coverage for request payloads, rendered responses, harness
+  changes, and value hints.
 
 Same shape as `ScriptCommandEditor`/the allow-deny list plan's completion
 source:
@@ -198,24 +251,18 @@ source:
 | `components/settings/HarnessesSection.tsx`                       | Per-harness default Additional Args fields                                       |
 | `src/test/fixtures/harness-help/*.txt` (new)                     | Captured real `--help` output per harness, backing parser unit tests             |
 
-## Decisions Deferred to Implementation
+## What actually shipped
 
-- Exact generic-parser regex and which harnesses (if any) need a full
-  per-harness override — can't be known without capturing real `--help`
-  output from all six installed CLIs first.
-- Whether value-hint parsing ships in the first version or is a fast-follow
-  once flag-name completion is working end-to-end. Flag names alone already
-  deliver most of the value in the user's own example (`--reasoning-effort`
-  is the hard-to-remember part; `high` is not).
-- Cache lifetime: session-lifetime (matching `versionCommandCache`'s
-  contract) vs. keyed by resolved binary path so a mid-session CLI upgrade
-  is picked up without an extension reload. Lean toward session-lifetime
-  for simplicity unless testing shows this is actually annoying in
-  practice.
-- Whether completions prefetch on harness change (workflow-level field) or
-  stay purely lazy (fetched on first focus/keystroke) — affects perceived
-  latency on first use vs. unnecessary process spawns for harnesses the
-  user never touches Additional Args for.
+- The shared generic parser handles all six captured help fixtures; no
+  harness-specific parser overrides were needed.
+- Value hints ship on a best-effort basis wherever help output exposes an
+  unambiguous enum. Flags without parseable choices remain flag-name-only
+  completions.
+- Help output uses a dedicated session-lifetime retryable cache, matching
+  the version lookup cache and coalescing concurrent requests.
+- Completion requests stay lazy: the selected harness is queried when the
+  Additional Args editor asks for completions, rather than prefetching on a
+  harness switch.
 
 ## Non-Goals
 

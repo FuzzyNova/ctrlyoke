@@ -5,7 +5,9 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { PromptEditorSupportService } from "../../ui/PromptEditorSupportService";
 import { createWebviewClientContext } from "../../ui/WebviewClientContext";
-import { MESSAGE_TYPES } from "../../types/DashboardConstants";
+import { CliProviderUtils } from "../../core/harness/shared/CliProviderUtils";
+import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
+import { HARNESS_IDS, MESSAGE_TYPES } from "../../types/DashboardConstants";
 import { pathsEqual } from "../../utils/PathCasing";
 
 suite("PromptEditorSupportService", () => {
@@ -288,6 +290,142 @@ suite("PromptEditorSupportService", () => {
     assert.deepStrictEqual(response.items, []);
     assert.strictEqual(response.from, 4);
     assert.strictEqual(response.seq, 102);
+  });
+
+  test("emits harness flag completions from the selected CLI help output", async () => {
+    const emitted: unknown[] = [];
+    const originalRunHelpCommand = CliProviderUtils.runHelpCommand;
+    let requestedCommand: string | undefined;
+    CliProviderUtils.runHelpCommand = async (command) => {
+      requestedCommand = command;
+      return [
+        "Options:",
+        "  --reasoning-effort <level>  Select reasoning effort",
+        "  --model <model>  Model to use",
+      ].join("\n");
+    };
+
+    try {
+      const service = new PromptEditorSupportService(
+        () => workspaceRoot,
+        () => undefined,
+        () => undefined
+      );
+      await service.handleHarnessFlagCompletionRequest(
+        createWebviewClientContext("browser:1", (message) => {
+          emitted.push(message);
+        }),
+        HARNESS_IDS.COPILOT_CLI,
+        "--",
+        2,
+        201
+      );
+    } finally {
+      CliProviderUtils.runHelpCommand = originalRunHelpCommand;
+    }
+
+    const response = emitted[0] as {
+      type: string;
+      items: Array<{ flag: string }>;
+      from: number;
+      seq: number;
+    };
+    assert.strictEqual(requestedCommand, CopilotCliProvider.CLI_HELP_COMMAND);
+    assert.strictEqual(
+      response.type,
+      MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_RESPONSE
+    );
+    assert.deepStrictEqual(
+      response.items.map((item) => item.flag),
+      ["--reasoning-effort", "--model"]
+    );
+    assert.strictEqual(response.from, 0);
+    assert.strictEqual(response.seq, 201);
+  });
+
+  test("emits empty harness flag items when the help command fails", async () => {
+    const emitted: unknown[] = [];
+    const originalRunHelpCommand = CliProviderUtils.runHelpCommand;
+    CliProviderUtils.runHelpCommand = async () => {
+      throw new Error("CLI not installed");
+    };
+
+    try {
+      const service = new PromptEditorSupportService(
+        () => workspaceRoot,
+        () => undefined,
+        () => undefined
+      );
+      await service.handleHarnessFlagCompletionRequest(
+        createWebviewClientContext("test-client", (message) => {
+          emitted.push(message);
+        }),
+        HARNESS_IDS.COPILOT_CLI,
+        "--rea",
+        5,
+        202
+      );
+    } finally {
+      CliProviderUtils.runHelpCommand = originalRunHelpCommand;
+    }
+
+    const response = emitted[0] as {
+      type: string;
+      items: unknown[];
+      from: number;
+      seq: number;
+    };
+    assert.strictEqual(
+      response.type,
+      MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_RESPONSE
+    );
+    assert.deepStrictEqual(response.items, []);
+    assert.strictEqual(response.from, 0);
+    assert.strictEqual(response.seq, 202);
+  });
+
+  test("filters harness flags by the token containing the cursor", async () => {
+    const emitted: unknown[] = [];
+    const originalRunHelpCommand = CliProviderUtils.runHelpCommand;
+    CliProviderUtils.runHelpCommand = async () =>
+      [
+        "Options:",
+        "  --model <model>  Model to use",
+        "  --reasoning-effort <level>  Select reasoning effort",
+        "  --safe-mode  Safe mode",
+      ].join("\n");
+
+    const text = "--model value --rea";
+    try {
+      const service = new PromptEditorSupportService(
+        () => workspaceRoot,
+        () => undefined,
+        () => undefined
+      );
+      await service.handleHarnessFlagCompletionRequest(
+        createWebviewClientContext("test-client", (message) => {
+          emitted.push(message);
+        }),
+        HARNESS_IDS.COPILOT_CLI,
+        text,
+        text.length,
+        203
+      );
+    } finally {
+      CliProviderUtils.runHelpCommand = originalRunHelpCommand;
+    }
+
+    const response = emitted[0] as {
+      items: Array<{ flag: string }>;
+      from: number;
+      seq: number;
+    };
+    assert.deepStrictEqual(
+      response.items.map((item) => item.flag),
+      ["--reasoning-effort"]
+    );
+    assert.strictEqual(response.from, 14);
+    assert.strictEqual(response.seq, 203);
   });
 
   test("emits branch completions through the requesting client context", async () => {

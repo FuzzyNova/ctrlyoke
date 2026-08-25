@@ -50,6 +50,7 @@ import {
   ScriptConditionEditor,
   type ScriptConditionValue,
   ScriptCommandEditor,
+  AdditionalArgsEditor,
   KeyValueMapEditor,
   BranchNameEditor,
   AnimatedSection,
@@ -1602,16 +1603,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   }
                 >
-                  <input
-                    type="text"
+                  <AdditionalArgsEditor
                     id="settings-append-args"
                     aria-label="Additional arguments"
+                    harnessId={effectiveHarness}
                     value={additionalArgsInput}
-                    onChange={(e) => setAdditionalArgsInput(e.target.value)}
-                    onBlur={(e) => handleAdditionalArgsChange(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") e.currentTarget.blur();
-                    }}
+                    onChange={setAdditionalArgsInput}
+                    onBlur={() => handleAdditionalArgsChange(additionalArgsInput)}
                     placeholder="e.g. --effort high --max-turns 10"
                     className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
                   />
