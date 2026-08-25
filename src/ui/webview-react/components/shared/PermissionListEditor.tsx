@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { CompletionResult } from "@codemirror/autocomplete";
 import { linter, type Diagnostic } from "@codemirror/lint";
 import { SingleLineCompletionEditor } from "./SingleLineCompletionEditor";
@@ -11,10 +12,24 @@ import { inspectToolPatternSyntax } from "@root/utils/ToolPatternSyntax";
 
 export type PermissionListEditorProps = Omit<
   SingleLineCompletionEditorProps,
-  "completionSource" | "value" | "onChange" | "multiline" | "extensions"
+  | "completionSource"
+  | "value"
+  | "onChange"
+  | "onBlur"
+  | "multiline"
+  | "extensions"
 > & {
   value: string[];
   onChange: (value: string[]) => void;
+  /**
+   * Called on blur with the cleaned (trimmed, blank lines dropped) value.
+   * Takes the value directly rather than requiring callers to re-read their
+   * own `onChange`-derived state, which would still be stale here: the
+   * blur-triggered `onChange(cleaned)` call below only *schedules* a state
+   * update, so a caller reading its own state synchronously afterward would
+   * see the pre-cleanup value.
+   */
+  onBlur?: (value: string[]) => void;
 };
 
 function buildPermissionCompletionResult(
@@ -100,9 +115,12 @@ const permissionListLintExtension = createPermissionListLintExtension();
 export function PermissionListEditor({
   value,
   onChange,
+  onBlur,
   ...props
 }: PermissionListEditorProps) {
   const vscode = getVsCodeApi();
+  const valueRef = useRef(value);
+  valueRef.current = value;
   const completionSource =
     useCompletionRequest<PermissionCompletionsResponseMessage>({
       parseResponse: parsePermissionCompletionResponse,
@@ -118,13 +136,29 @@ export function PermissionListEditor({
       },
     });
 
+  // Echo back the exact split of what's in the document (no trim/filter) so
+  // the value round-trips losslessly through `syncDocument` on every
+  // keystroke. Trimming or dropping blank lines here would make the
+  // `value` prop diverge from the live doc mid-edit — e.g. pressing Enter
+  // to start a new line produces a trailing blank entry that a filter would
+  // strip immediately, and `syncDocument` would then race the user's next
+  // keystroke to delete the newline they just typed, corrupting input.
   const handleChange = (text: string) => {
-    onChange(
-      text
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-    );
+    onChange(text.split("\n"));
+  };
+
+  // Clean up blank/whitespace-only lines once editing settles, matching the
+  // trim+filter contract callers previously implemented themselves.
+  const handleBlur = () => {
+    const current = valueRef.current;
+    const cleaned = current.map((line) => line.trim()).filter(Boolean);
+    const changed =
+      cleaned.length !== current.length ||
+      cleaned.some((line, index) => line !== current[index]);
+    if (changed) {
+      onChange(cleaned);
+    }
+    onBlur?.(changed ? cleaned : current);
   };
 
   return (
@@ -132,6 +166,7 @@ export function PermissionListEditor({
       {...props}
       value={value.join("\n")}
       onChange={handleChange}
+      onBlur={handleBlur}
       multiline
       extensions={[permissionListLintExtension]}
       completionSource={completionSource}

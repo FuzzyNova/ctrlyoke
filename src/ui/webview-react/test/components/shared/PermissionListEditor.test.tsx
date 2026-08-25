@@ -1,6 +1,6 @@
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ComponentProps } from "react";
+import { useState, type ComponentProps } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PermissionListEditor } from "@components/shared/PermissionListEditor";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
@@ -49,13 +49,72 @@ describe("PermissionListEditor", () => {
       onChange,
     });
 
+    // Paste echoes back the exact `\n` split (no trim/filter) so the
+    // controlled `value` round-trips losslessly while editing is still in
+    // progress — see the "does not corrupt input" test below for why.
     fireEvent.paste(content, {
       clipboardData: {
         getData: () => " shell(*)\n github(search) \n\n",
       },
     });
 
+    expect(onChange).toHaveBeenLastCalledWith([
+      " shell(*)",
+      " github(search) ",
+      "",
+      "",
+    ]);
+  });
+
+  it("trims and drops blank lines on blur", () => {
+    const onChange = vi.fn();
+    const { content } = renderEditor({
+      value: [" shell(*)", " github(search) ", "", ""],
+      onChange,
+    });
+
+    fireEvent.blur(content);
+
     expect(onChange).toHaveBeenLastCalledWith(["shell(*)", "github(search)"]);
+  });
+
+  it("does not corrupt input when a blank line is created via Enter and fed back through a controlled value prop", async () => {
+    // Regression test: PermissionListEditor previously trimmed/filtered
+    // blank lines on every keystroke before calling `onChange`. Since
+    // pressing Enter creates a trailing blank line, that transform made the
+    // echoed value permanently diverge from the live document, so
+    // `syncDocument` would immediately delete the newline the user just
+    // typed — merging the next line's text onto the previous line instead
+    // of starting a new one.
+    function ControlledWrapper() {
+      const [value, setValue] = useState<string[]>([]);
+      return (
+        <PermissionListEditor id="controlled" value={value} onChange={setValue} />
+      );
+    }
+
+    const user = userEvent.setup();
+    const { container } = render(<ControlledWrapper />);
+    const content =
+      container.querySelector<HTMLElement>(".cm-content")!;
+
+    await user.click(content);
+    for (const ch of "read") {
+      await user.keyboard(ch);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    await user.keyboard("{Enter}");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    for (const ch of "grep") {
+      await user.keyboard(ch);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const lines = [...content.querySelectorAll(".cm-line")].map(
+      (line) => line.textContent
+    );
+    expect(lines).toEqual(["read", "grep"]);
   });
 
   it("reports invalid pattern syntax with an inline diagnostic", async () => {

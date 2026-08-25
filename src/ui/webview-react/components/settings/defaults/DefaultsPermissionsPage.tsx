@@ -70,8 +70,8 @@ export function DefaultsPermissionsPage({
           aria-label="Allowed tools (one per line)"
           value={allowedTools}
           onChange={setAllowedTools}
-          onBlur={() =>
-            onUpdate("defaults.toolPermissions.allowedTools", allowedTools)
+          onBlur={(finalValue) =>
+            onUpdate("defaults.toolPermissions.allowedTools", finalValue)
           }
           placeholder={"read\nglob\ngrep"}
           fontSize="0.875rem"
@@ -93,8 +93,8 @@ export function DefaultsPermissionsPage({
           aria-label="Denied tools (one per line)"
           value={deniedTools}
           onChange={setDeniedTools}
-          onBlur={() =>
-            onUpdate("defaults.toolPermissions.deniedTools", deniedTools)
+          onBlur={(finalValue) =>
+            onUpdate("defaults.toolPermissions.deniedTools", finalValue)
           }
           placeholder={"shell(rm:*)\nwrite"}
           fontSize="0.875rem"

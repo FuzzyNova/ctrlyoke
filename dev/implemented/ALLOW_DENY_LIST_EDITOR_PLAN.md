@@ -131,6 +131,18 @@ Mirror the `ScriptCommandEditor` → `ScriptCommandCompletionHelpers.ts` split:
   `DefaultsPermissionsPage`) all do their own `.join("\n")` /
   `.split("\n").map(trim).filter(Boolean)`, which this component should own
   once instead of four times (DRY).
+  - **Important:** the `onChange` echo must be a lossless `text.split("\n")`
+    with no trim/filter. Trimming or dropping blank lines on every keystroke
+    breaks the controlled round-trip: pressing Enter produces a trailing
+    blank line that a per-keystroke filter would strip immediately, and
+    `syncDocument` (in `SingleLineCompletionEditor`) would then delete the
+    newline the user just typed before their next character lands —
+    silently merging lines together. Trimming/filtering happens only in a
+    `handleBlur` that fires once editing settles, and its `onBlur` prop
+    takes the cleaned value directly (`(value: string[]) => void`) rather
+    than letting callers re-read their own `onChange`-derived state, since
+    that state is still stale (React hasn't re-rendered) at the moment
+    `onBlur` fires.
 
 ### 3. Syntax linter
 
@@ -340,7 +352,7 @@ One field reconsidered after initial pushback:
   find the flag by eye, type it back in") worth automating, but the parsing
   side is real work — six CLIs, no shared help-text format guaranteed. Spun
   out into its own plan:
-  [`HARNESS_HELP_FLAG_COMPLETIONS_PLAN.md`](HARNESS_HELP_FLAG_COMPLETIONS_PLAN.md).
+  [`HARNESS_HELP_FLAG_COMPLETIONS_PLAN.md`](../backlog/HARNESS_HELP_FLAG_COMPLETIONS_PLAN.md).
 
 One field considered and **not** recommended:
 
