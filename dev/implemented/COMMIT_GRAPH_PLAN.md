@@ -1,6 +1,8 @@
 # Multi-Lane Commit Graph for the Workspace Source Control Pane
 
-> **Status:** Proposed — not implemented. Written 2026-08-24 against current code.
+> **Status:** Implemented — data plumbing, layout, SVG rendering, bounded rail
+> layout, tests, and manual desktop/mobile verification are complete. Written
+> 2026-08-24 against current code.
 >
 > **Problem in one line:** `WorkspaceCommitHistoryPane` draws one straight
 > gutter line with a node per commit; it has no concept of branch lanes, so a
@@ -50,7 +52,7 @@ repoId)`, 30 at a time via `loadMoreHistory` in
   classification (`classifyRefNames`, `HostedWorkspaceViewerService.ts:~215`)
   are unaffected by this plan and stay as-is.
 - Graph colors are already themed off VS Code's SCM palette in
-  `tailwind.config.js:245-252` (`scm-graph-local` / `-remote` / `-base` →
+  `src/ui/webview-react/tailwind.config.js:245-252` (`scm-graph-local` / `-remote` / `-base` →
   `var(--vscode-scmGraph-historyItem*Color, <hex fallback>)`), so hosted
   (non-VS Code) rendering already has real fallback colors, not just
   `undefined` CSS vars.
@@ -165,6 +167,11 @@ construct or check `WorkspaceCommitLogEntry` objects.
 
 ## 4. Layout algorithm (new module)
 
+Implementation note: `commitGraphLayout.ts` follows the API and lane model below
+without deviation. When converging lanes have the same target commit, the later
+duplicate is removed when that commit is processed so the shared ancestor is
+represented by one node and one continuing lane.
+
 New file: `src/ui/webview-react/utils/commitGraphLayout.ts` — pure, no React,
 independently testable.
 
@@ -224,12 +231,9 @@ elements) instead of imperative DOM calls to fit the existing React component:
   in.
 - Row height: keep the existing `py-1` row rhythm (~22-24px), matching VS
   Code's `SWIMLANE_HEIGHT = 22`.
-- Lane width: VS Code uses `11px`; ctrlyoke's mobile list view needs a
-  slightly larger hit/visual target consistent with `min-h-[44px]` touch
-  targets used elsewhere in this file for buttons — a value in the 12-16px
-  range is a reasonable starting point, but pin the exact number by testing
-  the desktop and mobile branch-heavy fixture from §8 rather than choosing
-  blind.
+- Lane width: `GRAPH_LANE_WIDTH = 14px`. This is larger than VS Code's 11px,
+  keeps adjacent elbows visually distinct at the 24px row height, and remains
+  compact enough for the mobile text column.
 
 ### 5.1 Bounding lane width: the two-column "rail" layout
 
@@ -277,9 +281,11 @@ case (a handful of concurrent branches) before the rail's own scroll kicks
 in, and make the cap responsive — smaller on the `isMobile` layout
 (`WorkspaceSourceControlPane.tsx:590-665`, where the pane is full viewport
 width) than on the desktop side-by-side layout
-(`WORKSPACE_VIEWER_SIDE_PANEL_*` sizing, `:667-691`). Pin the exact numbers
-against the branch-heavy fixture in §8 rather than guessing; this is a
-tuning pass, not an open design question anymore.
+(`WORKSPACE_VIEWER_SIDE_PANEL_*` sizing, `:667-691`). The final values are a
+five-lane desktop cap and a three-lane mobile cap with `ROW_HEIGHT = 24px`: the
+desktop panel keeps five common lanes inline while the sixth lane in the
+worktree-heavy fixture proves rail scrolling, and mobile retains more room for
+commit text while exposing three lanes before scrolling.
 
 Default `scrollLeft = 0` on the rail requires no extra logic to "do the
 right thing": since commits list newest-first and the layout algorithm seeds
@@ -351,4 +357,9 @@ WorkspaceCommitHistoryPane.test.tsx` for the new SVG row markup and to add
   (`git log` shows real merges from the branch list in the attached
   screenshot — `bug-fix`, `small-feature`, etc.) and at a worktree-heavy
   fixture repo with several managed-worktree merges, on both desktop and
-  mobile widths.
+  mobile widths. Completed 2026-08-24: the repository history reached three
+  lanes and the five-worktree fixture reached six; desktop kept five lanes
+  inline and scrolled the sixth, while mobile kept three inline and scrolled
+  the remaining lanes. The rail alone handled horizontal movement, the shared
+  ancestor moved both columns vertically, and touch movement remained governed
+  by the native nested overflow behavior.

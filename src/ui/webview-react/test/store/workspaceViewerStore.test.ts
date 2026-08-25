@@ -195,6 +195,7 @@ const sampleCommit = {
   pushed: true,
   refs: [],
   isMerge: false,
+  parentHashes: [],
 };
 
 describe("setCommitHistory", () => {

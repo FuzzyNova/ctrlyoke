@@ -1765,6 +1765,7 @@ export class HostedWorkspaceViewerService {
       isHead: headHash !== null && c.hash === headHash,
       pushed: !unpushedHashes.has(c.hash),
       isMerge: c.parentHashes.length > 1,
+      parentHashes: c.parentHashes,
       refs: classifyRefNames(c.refNames),
     }));
 

@@ -21,6 +21,7 @@ const commit: WorkspaceCommitLogEntry = {
   pushed: true,
   refs: [{ name: "main", type: "localBranch" }],
   isMerge: false,
+  parentHashes: [],
 };
 
 function commitRow(): HTMLElement {
@@ -164,6 +165,103 @@ describe("WorkspaceCommitHistoryPane", () => {
     expect(screen.getByText("origin/main")).toBeInTheDocument();
   });
 
+  it("renders merge history as multiple SVG lanes", () => {
+    const merge = {
+      ...commit,
+      hash: "merge",
+      shortHash: "merge00",
+      subject: "merge feature",
+      isMerge: true,
+      parentHashes: ["main-parent", "feature-parent"],
+    };
+    const mainParent = {
+      ...commit,
+      hash: "main-parent",
+      shortHash: "main000",
+      isHead: false,
+      refs: [],
+      parentHashes: ["base"],
+    };
+    const featureParent = {
+      ...mainParent,
+      hash: "feature-parent",
+      shortHash: "feat000",
+      subject: "feature work",
+      parentHashes: ["base"],
+    };
+    const base = {
+      ...mainParent,
+      hash: "base",
+      shortHash: "base000",
+      subject: "base commit",
+      parentHashes: [],
+    };
+    useWorkspaceViewerStore.setState({
+      commitHistory: [merge, mainParent, featureParent, base],
+    });
+
+    render(
+      <WorkspaceCommitHistoryPane onLoadMore={vi.fn()} onRefresh={vi.fn()} />
+    );
+
+    expect(screen.getAllByTestId(/^commit-graph-svg-/)).toHaveLength(4);
+    expect(
+      screen.getByTestId("commit-graph-svg-merge").querySelectorAll("path")
+        .length
+    ).toBeGreaterThan(1);
+    expect(
+      screen
+        .getByTestId("commit-graph-svg-feature-parent")
+        .querySelector("svg")
+        ?.getAttribute("viewBox")
+    ).toBe("0 0 42 24");
+    expect(
+      screen.getByTestId("commit-graph-svg-merge").querySelectorAll("circle")
+        .length
+    ).toBe(2);
+  });
+
+  it("caps the graph rail responsively while keeping horizontal overflow local", () => {
+    const parentHashes = ["p1", "p2", "p3", "p4", "p5", "p6"];
+    const parents = parentHashes.map((hash) => ({
+      ...commit,
+      hash,
+      shortHash: hash,
+      isHead: false,
+      refs: [],
+      parentHashes: [],
+    }));
+    useWorkspaceViewerStore.setState({
+      commitHistory: [
+        {
+          ...commit,
+          hash: "octopus",
+          shortHash: "octopus",
+          isMerge: true,
+          parentHashes,
+        },
+        ...parents,
+      ],
+    });
+
+    const view = render(
+      <WorkspaceCommitHistoryPane onLoadMore={vi.fn()} onRefresh={vi.fn()} />
+    );
+    const rail = screen.getByTestId("commit-graph-rail");
+    expect(rail.className).toContain("overflow-x-auto");
+    expect(rail.className).toContain("overflow-y-visible");
+    expect(rail.style.width).toBe("84px");
+
+    view.rerender(
+      <WorkspaceCommitHistoryPane
+        onLoadMore={vi.fn()}
+        onRefresh={vi.fn()}
+        isMobile
+      />
+    );
+    expect(screen.getByTestId("commit-graph-rail").style.width).toBe("56px");
+  });
+
   it("dims commits that are ahead of the detached HEAD", () => {
     const head = {
       ...commit,
@@ -186,11 +284,10 @@ describe("WorkspaceCommitHistoryPane", () => {
       <WorkspaceCommitHistoryPane onLoadMore={vi.fn()} onRefresh={vi.fn()} />
     );
 
-    const aheadRow = screen
-      .getByText("feat: newer than head")
-      .closest("button");
-    // The ahead commit's graph gutter is dimmed via opacity-60.
-    expect(aheadRow?.querySelector(".opacity-60")).not.toBeNull();
+    // The ahead commit's SVG rail row is dimmed via opacity-60.
+    expect(screen.getByTestId("commit-graph-svg-ahead").className).toContain(
+      "opacity-60"
+    );
   });
 
   it("renders the checkout-confirm modal elevated above the workspace viewer", () => {

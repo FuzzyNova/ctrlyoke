@@ -284,6 +284,8 @@ export interface WorkspaceCommitLogEntry {
   refs: GitRefLabel[];
   /** True when the commit has more than one parent (a merge commit). */
   isMerge: boolean;
+  /** Parent commit hashes in git's order (first parent first), empty for the repository's root commit. */
+  parentHashes: string[];
 }
 
 export interface WorkspaceCommitLogResponse {

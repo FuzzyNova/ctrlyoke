@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useMemo, useRef } from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import type {
   GitRefLabel,
@@ -7,10 +7,13 @@ import type {
 import { useCommitHistoryContextMenu } from "@hooks/useCommitHistoryContextMenu";
 import { useLongPress } from "@hooks/useLongPress";
 import { workspaceCheckoutBranch } from "@utils/hostedApi";
+import type { CommitGraphLane, CommitGraphRow } from "@utils/commitGraphLayout";
+import { computeCommitGraphLayout } from "@utils/commitGraphLayout";
 
 interface WorkspaceCommitHistoryPaneProps {
   onLoadMore: () => void;
   onRefresh: () => void;
+  isMobile?: boolean;
 }
 
 /** Position of a commit relative to the current HEAD (current location). */
@@ -23,26 +26,270 @@ type HeadRelation = "ahead" | "at" | "behind";
  */
 type GraphColor = "scm-graph-local" | "scm-graph-remote";
 
-/** Tailwind classes for each graph color, keyed so node styling stays DRY. */
-const GRAPH_NODE_CLASSES: Record<
-  GraphColor,
-  { fill: string; border: string; ring: string }
-> = {
-  "scm-graph-local": {
-    fill: "bg-scm-graph-local",
-    border: "border-scm-graph-local",
-    ring: "ring-scm-graph-local/40",
-  },
-  "scm-graph-remote": {
-    fill: "bg-scm-graph-remote",
-    border: "border-scm-graph-remote",
-    ring: "ring-scm-graph-remote/40",
-  },
+const ROW_HEIGHT = 24;
+// Validated against this repository's three-lane history and a six-lane
+// managed-worktree merge fixture: wide enough to keep elbows distinct without
+// making the mobile rail consume the text column.
+const GRAPH_LANE_WIDTH = 14;
+const DESKTOP_INLINE_LANE_CAP = 5;
+const MOBILE_INLINE_LANE_CAP = 3;
+
+/** Tailwind text tokens provide the themed SVG currentColor values. */
+const GRAPH_NODE_COLOR_CLASSES: Record<GraphColor, string> = {
+  "scm-graph-local": "text-scm-graph-local",
+  "scm-graph-remote": "text-scm-graph-remote",
+};
+
+/** Rotation-only lane colors; there is intentionally no ref-to-color map. */
+const GRAPH_LANE_COLOR_CLASSES = [
+  "text-scm-graph-local",
+  "text-scm-graph-remote",
+  "text-scm-graph-base",
+  "text-scm-graph-local",
+  "text-scm-graph-remote",
+] as const;
+
+function laneX(laneIndex: number): number {
+  return (laneIndex + 1) * GRAPH_LANE_WIDTH;
+}
+
+function laneColorClass(lane: CommitGraphLane): string {
+  return GRAPH_LANE_COLOR_CLASSES[
+    lane.colorIndex % GRAPH_LANE_COLOR_CLASSES.length
+  ];
+}
+
+function findLaneIndex(
+  lanes: readonly CommitGraphLane[],
+  target: CommitGraphLane,
+  excluded: ReadonlySet<number>
+): number {
+  return lanes.findIndex(
+    (lane, index) =>
+      !excluded.has(index) &&
+      lane.id === target.id &&
+      lane.colorIndex === target.colorIndex
+  );
+}
+
+function topTransitionPath(fromX: number, toX: number): string {
+  if (fromX === toX) return `M ${fromX} 0 V ${ROW_HEIGHT / 2}`;
+  const direction = toX > fromX ? 1 : -1;
+  const radius = Math.min(Math.abs(toX - fromX), ROW_HEIGHT / 2);
+  const turnX = fromX + direction * radius;
+  return `M ${fromX} 0 V ${ROW_HEIGHT / 2 - radius} A ${radius} ${radius} 0 0 ${
+    direction > 0 ? 1 : 0
+  } ${turnX} ${ROW_HEIGHT / 2} H ${toX}`;
+}
+
+function bottomTransitionPath(fromX: number, toX: number): string {
+  if (fromX === toX) return `M ${fromX} ${ROW_HEIGHT / 2} V ${ROW_HEIGHT}`;
+  const direction = toX > fromX ? 1 : -1;
+  const radius = Math.min(Math.abs(toX - fromX), ROW_HEIGHT / 2);
+  const turnX = fromX + direction * radius;
+  return `M ${fromX} ${ROW_HEIGHT / 2} A ${radius} ${radius} 0 0 ${
+    direction > 0 ? 1 : 0
+  } ${turnX} ${ROW_HEIGHT / 2 + radius} V ${ROW_HEIGHT} H ${toX}`;
+}
+
+function straightPath(x: number): string {
+  return `M ${x} 0 V ${ROW_HEIGHT}`;
+}
+
+function lanePathClass(lane: CommitGraphLane): string {
+  return `${laneColorClass(lane)} opacity-70`;
+}
+
+interface CommitGraphSvgProps {
+  commit: WorkspaceCommitLogEntry;
+  layout: CommitGraphRow;
+  color: GraphColor;
+  relation: HeadRelation;
+  isSelected: boolean;
+  onClick: (commit: WorkspaceCommitLogEntry) => void;
+  onContextMenu: (e: React.MouseEvent, commit: WorkspaceCommitLogEntry) => void;
+  onLongPressContextMenu: (
+    x: number,
+    y: number,
+    commit: WorkspaceCommitLogEntry
+  ) => void;
+}
+
+/** JSX-rendered swimlanes for one commit row. */
+const CommitGraphSvg: React.FC<CommitGraphSvgProps> = ({
+  commit,
+  layout,
+  color,
+  relation,
+  isSelected,
+  onClick,
+  onContextMenu,
+  onLongPressContextMenu,
+}) => {
+  const ignoreNextClickRef = useRef(false);
+  const longPressHandlers = useLongPress((x, y) => {
+    ignoreNextClickRef.current = true;
+    onLongPressContextMenu(x, y, commit);
+  });
+  const ahead = relation === "ahead";
+  const laneCount = Math.max(
+    layout.laneIndex + 1,
+    layout.inputLanes.length,
+    layout.outputLanes.length,
+    1
+  );
+  const width = (laneCount + 1) * GRAPH_LANE_WIDTH;
+  const nodeX = laneX(layout.laneIndex);
+  const nodeY = ROW_HEIGHT / 2;
+  const nodeSource =
+    layout.inputLanes[layout.laneIndex] ??
+    ({ id: commit.hash, colorIndex: 0 } satisfies CommitGraphLane);
+  const nodeOutputIndices = new Set<number>();
+
+  const outputIndicesForParents = commit.parentHashes.map(
+    (parentHash, parentIndex) => {
+      const expectedLane = {
+        id: parentHash,
+        colorIndex:
+          (nodeSource.colorIndex + parentIndex) %
+          GRAPH_LANE_COLOR_CLASSES.length,
+      };
+      const outputIndex = findLaneIndex(
+        layout.outputLanes,
+        expectedLane,
+        nodeOutputIndices
+      );
+      if (outputIndex >= 0) nodeOutputIndices.add(outputIndex);
+      return outputIndex;
+    }
+  );
+
+  const usedOutputIndices = new Set(nodeOutputIndices);
+  const inputPaths = layout.inputLanes.map((lane, inputIndex) => {
+    const inputX = laneX(inputIndex);
+    if (lane.id === commit.hash) {
+      return {
+        key: `incoming-node-${inputIndex}`,
+        d: topTransitionPath(inputX, nodeX),
+        lane,
+      };
+    }
+
+    const outputIndex = findLaneIndex(
+      layout.outputLanes,
+      lane,
+      usedOutputIndices
+    );
+    if (outputIndex >= 0) {
+      usedOutputIndices.add(outputIndex);
+      return {
+        key: `incoming-${inputIndex}-${outputIndex}`,
+        d: topTransitionPath(inputX, laneX(outputIndex)),
+        lane,
+      };
+    }
+
+    return {
+      key: `incoming-terminal-${inputIndex}`,
+      d: `M ${inputX} 0 V ${nodeY}`,
+      lane,
+    };
+  });
+
+  const outputPaths = layout.outputLanes.map((lane, outputIndex) => {
+    const outputX = laneX(outputIndex);
+    const nodeParentIndex = outputIndicesForParents.indexOf(outputIndex);
+    return {
+      key: `outgoing-${outputIndex}`,
+      d:
+        nodeParentIndex >= 0
+          ? bottomTransitionPath(nodeX, outputX)
+          : straightPath(outputX),
+      lane,
+    };
+  });
+
+  const nodeClass = GRAPH_NODE_COLOR_CLASSES[color];
+  const rowClass = `flex flex-shrink-0 items-center justify-center h-6 transition-colors ${
+    isSelected
+      ? "bg-list-active-bg"
+      : `hover:bg-list-hover-bg${commit.isHead ? " bg-list-active-bg/40" : ""}`
+  }${ahead ? " opacity-60" : ""}`;
+
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (ignoreNextClickRef.current) {
+      ignoreNextClickRef.current = false;
+      e.preventDefault();
+      return;
+    }
+    onClick(commit);
+  };
+
+  return (
+    <div
+      className={rowClass}
+      style={{ width, height: ROW_HEIGHT }}
+      data-testid={`commit-graph-svg-${commit.hash}`}
+      onClick={handleClick}
+      onContextMenu={(e) => onContextMenu(e, commit)}
+      {...longPressHandlers}
+      aria-hidden="true"
+    >
+      <svg
+        width={width}
+        height={ROW_HEIGHT}
+        viewBox={`0 0 ${width} ${ROW_HEIGHT}`}
+        aria-hidden="true"
+      >
+        {[...inputPaths, ...outputPaths].map(({ key, d, lane }) => (
+          <path
+            key={key}
+            d={d}
+            className={lanePathClass(lane)}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+        {commit.isMerge && !commit.isHead && (
+          <circle
+            cx={nodeX}
+            cy={nodeY}
+            r="6.5"
+            className="text-scm-graph-base"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.25"
+          />
+        )}
+        {commit.isHead && (
+          <circle
+            cx={nodeX}
+            cy={nodeY}
+            r="7"
+            className={nodeClass}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          />
+        )}
+        <circle
+          cx={nodeX}
+          cy={nodeY}
+          r={commit.isHead ? 5 : 4.5}
+          className={`${nodeClass}${ahead ? " fill-editor-bg" : " fill-current"}`}
+          stroke="currentColor"
+          strokeWidth={ahead ? 1.75 : 0}
+        />
+      </svg>
+    </div>
+  );
 };
 
 export const WorkspaceCommitHistoryPane: React.FC<
   WorkspaceCommitHistoryPaneProps
-> = ({ onLoadMore, onRefresh }) => {
+> = ({ onLoadMore, onRefresh, isMobile = false }) => {
   const commitHistory = useWorkspaceViewerStore((s) => s.commitHistory);
   const commitHistoryLoading = useWorkspaceViewerStore(
     (s) => s.commitHistoryLoading
@@ -126,6 +373,21 @@ export const WorkspaceCommitHistoryPane: React.FC<
   const hasUnpushed = commitHistory.some((c) => !c.pushed);
   const colorFor = (commit: WorkspaceCommitLogEntry): GraphColor =>
     hasUnpushed && commit.pushed ? "scm-graph-remote" : "scm-graph-local";
+  const graphLayout = useMemo(
+    () => computeCommitGraphLayout(commitHistory),
+    [commitHistory]
+  );
+  const graphLaneCount = Math.max(
+    1,
+    ...graphLayout.map((row) =>
+      Math.max(row.laneIndex + 1, row.inputLanes.length, row.outputLanes.length)
+    )
+  );
+  const inlineLaneCap = isMobile
+    ? MOBILE_INLINE_LANE_CAP
+    : DESKTOP_INLINE_LANE_CAP;
+  const graphRailWidth =
+    (Math.min(graphLaneCount, inlineLaneCap) + 1) * GRAPH_LANE_WIDTH;
 
   return (
     <div className="flex flex-col min-h-0 select-none [-webkit-touch-callout:none]">
@@ -185,21 +447,40 @@ export const WorkspaceCommitHistoryPane: React.FC<
           No commits yet
         </p>
       ) : (
-        <div className="flex flex-col">
-          {commitHistory.map((commit, index) => (
-            <CommitRow
-              key={commit.hash}
-              commit={commit}
-              relation={relationFor(index)}
-              color={colorFor(commit)}
-              isFirst={index === 0}
-              isLast={index === commitHistory.length - 1}
-              isSelected={diffRef === `~${commit.hash}`}
-              onClick={handleRowClick}
-              onContextMenu={handleRowContextMenu}
-              onLongPressContextMenu={handleRowLongPressContextMenu}
-            />
-          ))}
+        <div className="flex min-w-0">
+          <div
+            className="flex-shrink-0 overflow-x-auto overflow-y-visible"
+            style={{ width: graphRailWidth }}
+            data-testid="commit-graph-rail"
+          >
+            <div className="min-w-0">
+              {commitHistory.map((commit, index) => (
+                <CommitGraphSvg
+                  key={commit.hash}
+                  commit={commit}
+                  layout={graphLayout[index]}
+                  relation={relationFor(index)}
+                  color={colorFor(commit)}
+                  isSelected={diffRef === `~${commit.hash}`}
+                  onClick={handleRowClick}
+                  onContextMenu={handleRowContextMenu}
+                  onLongPressContextMenu={handleRowLongPressContextMenu}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="flex-1 min-w-0 overflow-hidden">
+            {commitHistory.map((commit) => (
+              <CommitRow
+                key={commit.hash}
+                commit={commit}
+                isSelected={diffRef === `~${commit.hash}`}
+                onClick={handleRowClick}
+                onContextMenu={handleRowContextMenu}
+                onLongPressContextMenu={handleRowLongPressContextMenu}
+              />
+            ))}
+          </div>
         </div>
       )}
 
@@ -221,62 +502,6 @@ export const WorkspaceCommitHistoryPane: React.FC<
 
       {commitHistoryContextMenuPortal}
     </div>
-  );
-};
-
-interface CommitGraphGutterProps {
-  relation: HeadRelation;
-  color: GraphColor;
-  isHead: boolean;
-  isMerge: boolean;
-  isFirst: boolean;
-  isLast: boolean;
-}
-
-/**
- * Single-lane git-graph gutter: a vertical connector line with one node per
- * commit. The HEAD node is highlighted as the current location; "ahead"
- * commits (newer than HEAD) are dimmed/hollow; merge commits get a base-color
- * ring. Node/ring/border color follows `color` (local vs. remote branch).
- * This intentionally does not render parallel branch lanes.
- */
-const CommitGraphGutter: React.FC<CommitGraphGutterProps> = ({
-  relation,
-  color,
-  isHead,
-  isMerge,
-  isFirst,
-  isLast,
-}) => {
-  const ahead = relation === "ahead";
-  const { fill, border, ring } = GRAPH_NODE_CLASSES[color];
-
-  // Node styling by relation; HEAD wins as the highlighted current location.
-  const sizeClass = isHead ? "w-3 h-3" : "w-2.5 h-2.5";
-  const nodeClass = ahead
-    ? `${sizeClass} border-2 ${border} bg-editor-bg`
-    : isHead
-      ? `${sizeClass} ${fill} ring-2 ${ring} ring-offset-0`
-      : `${sizeClass} ${fill}`;
-  const mergeRing = isMerge && !isHead ? " ring-1 ring-scm-graph-base" : "";
-
-  return (
-    <span
-      className={`relative flex-shrink-0 w-5 self-stretch flex items-center justify-center ${
-        ahead ? "opacity-60" : ""
-      }`}
-      aria-hidden="true"
-    >
-      {/* top connector (toward newer commit) */}
-      {!isFirst && (
-        <span className="absolute top-0 left-1/2 -translate-x-1/2 h-1/2 w-px bg-scm-graph-local/30" />
-      )}
-      {/* bottom connector (toward older commit) */}
-      {!isLast && (
-        <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-1/2 w-px bg-scm-graph-local/30" />
-      )}
-      <span className={`relative rounded-full ${nodeClass}${mergeRing}`} />
-    </span>
   );
 };
 
@@ -316,10 +541,6 @@ const RefPill: React.FC<RefPillProps> = ({ label, iconOnly }) => {
 
 interface CommitRowProps {
   commit: WorkspaceCommitLogEntry;
-  relation: HeadRelation;
-  color: GraphColor;
-  isFirst: boolean;
-  isLast: boolean;
   /** This commit is the one currently shown in the diff pane. */
   isSelected: boolean;
   onClick: (commit: WorkspaceCommitLogEntry) => void;
@@ -333,10 +554,6 @@ interface CommitRowProps {
 
 const CommitRow: React.FC<CommitRowProps> = ({
   commit,
-  relation,
-  color,
-  isFirst,
-  isLast,
   isSelected,
   onClick,
   onContextMenu,
@@ -350,7 +567,7 @@ const CommitRow: React.FC<CommitRowProps> = ({
 
   return (
     <button
-      className={`fp-list-row flex items-center gap-2 px-2 py-1 text-left transition-colors w-full min-w-0 ${
+      className={`fp-list-row flex items-center gap-2 px-2 text-left transition-colors w-full min-w-0 h-6 overflow-hidden ${
         isSelected
           ? "fp-list-row-selected bg-list-active-bg"
           : `hover:bg-list-hover-bg${commit.isHead ? " bg-list-active-bg/40" : ""}`
@@ -365,18 +582,11 @@ const CommitRow: React.FC<CommitRowProps> = ({
       }}
       onContextMenu={(e) => onContextMenu(e, commit)}
       {...longPressHandlers}
+      style={{ height: ROW_HEIGHT }}
       title={`${commit.hash}\n${commit.subject}\n${commit.author} · ${commit.relativeDate}${
         commit.pushed ? "" : "\nNot yet pushed"
       }`}
     >
-      <CommitGraphGutter
-        relation={relation}
-        color={color}
-        isHead={commit.isHead}
-        isMerge={commit.isMerge}
-        isFirst={isFirst}
-        isLast={isLast}
-      />
       <span className="min-w-0 flex-1 truncate text-xs text-editor-fg">
         {commit.subject}
       </span>
