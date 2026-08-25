@@ -125,8 +125,11 @@ export function FileBrowserSortHeader({
     const scrollContainer = scrollContainerRef?.current;
     if (!scrollContainer) return;
 
+    let observedList: HTMLElement | null = null;
     const updateUsableWidth = () => {
-      const nextWidth = scrollContainer.clientWidth;
+      const list = scrollContainer.querySelector<HTMLElement>('[role="list"]');
+      const nextWidth =
+        list?.getBoundingClientRect().width ?? scrollContainer.clientWidth;
       if (nextWidth > 0) {
         setUsableWidth((currentWidth) =>
           currentWidth === nextWidth ? currentWidth : nextWidth
@@ -134,10 +137,28 @@ export function FileBrowserSortHeader({
       }
     };
 
+    const resizeObserver = new ResizeObserver(() => {
+      updateUsableWidth();
+    });
+    const observeList = () => {
+      const list = scrollContainer.querySelector<HTMLElement>('[role="list"]');
+      if (list === observedList) return;
+      if (observedList) resizeObserver.unobserve(observedList);
+      observedList = list;
+      if (list) resizeObserver.observe(list);
+      updateUsableWidth();
+    };
+
     updateUsableWidth();
-    const resizeObserver = new ResizeObserver(updateUsableWidth);
     resizeObserver.observe(scrollContainer);
-    return () => resizeObserver.disconnect();
+    const mutationObserver = new MutationObserver(observeList);
+    mutationObserver.observe(scrollContainer, { childList: true });
+    observeList();
+
+    return () => {
+      mutationObserver.disconnect();
+      resizeObserver.disconnect();
+    };
   }, [scrollContainerRef]);
 
   const renderSortButton = (key: WorkspaceEntrySortKey): React.ReactElement => {
