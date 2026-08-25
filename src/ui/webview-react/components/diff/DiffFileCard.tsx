@@ -23,8 +23,7 @@ import { ImageDiffView } from "./ImageDiffView";
 import { workspaceFileHistoryDiff } from "@utils/hostedApi";
 
 export type DeferredDiffState =
-  | (typeof DEFERRED_DIFF_STATES)[keyof typeof DEFERRED_DIFF_STATES]
-  | "not loaded";
+  (typeof DEFERRED_DIFF_STATES)[keyof typeof DEFERRED_DIFF_STATES];
 
 export type DeferredDiffDetailFetcher = (
   path: string,
@@ -205,8 +204,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
     (retry = false): void => {
       if (!deferredState) return;
       const isNotLoaded =
-        deferredState.state === DEFERRED_DIFF_STATES.NOT_LOADED ||
-        deferredState.state === "not loaded";
+        deferredState.state === DEFERRED_DIFF_STATES.NOT_LOADED;
       if (!retry && !isNotLoaded) return;
 
       setDeferredState({
@@ -259,8 +257,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
       if (
         !nextCollapsed &&
         deferredState &&
-        (deferredState.state === DEFERRED_DIFF_STATES.NOT_LOADED ||
-          deferredState.state === "not loaded")
+        deferredState.state === DEFERRED_DIFF_STATES.NOT_LOADED
       ) {
         requestDeferredDetail();
       }

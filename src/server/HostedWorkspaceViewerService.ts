@@ -1905,10 +1905,6 @@ export class HostedWorkspaceViewerService {
     void repoId;
 
     const resolvedCommit = await resolveCommit(repoRoot, commit);
-    // Keep commit-vs-first-parent semantics in the same single-revision Git
-    // command used by the repository diff surface. Root commits naturally use
-    // Git's implicit empty-tree parent here.
-    await getCommitDiff(repoRoot, resolvedCommit);
 
     const requestedGitPath = toGitPath(
       this.relativeToRepo(resolved, repoRoot)
