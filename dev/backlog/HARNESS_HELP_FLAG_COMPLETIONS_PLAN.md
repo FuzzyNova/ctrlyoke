@@ -182,6 +182,15 @@ per-harness overrides, not a single regex assumed to fit everything:
 
 ### 3. Message plumbing + webview completion source
 
+#### Extension-host half landed
+
+- Added the harness flag completion request/response contracts, router
+  registration, and `PromptEditorSupportService` handler. It resolves each
+  harness through its provider-owned help command constant, parses and filters
+  live help output at the cursor token, and fails soft on CLI or parse errors.
+- The webview completion source and `AdditionalArgsEditor.tsx` remain for the
+  next step.
+
 Same shape as `ScriptCommandEditor`/the allow-deny list plan's completion
 source:
 

@@ -187,6 +187,8 @@ export const MESSAGE_TYPES = {
   COMPLETIONS_RESPONSE: "completionsResponse", // Return autocomplete suggestions
   SCRIPT_COMPLETIONS_REQUEST: "scriptCompletionsRequest",
   SCRIPT_COMPLETIONS_RESPONSE: "scriptCompletionsResponse",
+  HARNESS_FLAG_COMPLETIONS_REQUEST: "harnessFlagCompletionsRequest",
+  HARNESS_FLAG_COMPLETIONS_RESPONSE: "harnessFlagCompletionsResponse",
   PERMISSION_COMPLETIONS_REQUEST: "permissionCompletionsRequest",
   PERMISSION_COMPLETIONS_RESPONSE: "permissionCompletionsResponse",
   BRANCH_LIST_REQUEST: "branchListRequest",

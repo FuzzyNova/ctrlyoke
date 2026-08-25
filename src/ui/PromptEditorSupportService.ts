@@ -9,11 +9,24 @@ import {
 } from "../platform/VsCodeWorkspaceRoot";
 import {
   MESSAGE_TYPES,
+  HARNESS_IDS,
+  type HarnessId,
   PANEL_CLIENT_ID,
   MAX_PASTED_IMAGE_BYTES,
   mimeTypeToImageExtension,
   imageExtensionToMimeType,
 } from "../types/DashboardConstants";
+import { CliProviderUtils } from "../core/harness/shared/CliProviderUtils";
+import {
+  getHarnessFlagCompletions,
+  type HarnessFlagCompletion,
+} from "../core/harness/shared/HarnessFlagCompletionProvider";
+import { CopilotCliProvider } from "../core/harness/copilot/CopilotCliProvider";
+import { ClaudeCliProvider } from "../core/harness/claude/ClaudeCliProvider";
+import { CodexCliProvider } from "../core/harness/codex/CodexCliProvider";
+import { OpenCodeCliProvider } from "../core/harness/opencode/OpenCodeCliProvider";
+import { QwenCliProvider } from "../core/harness/qwen/QwenCliProvider";
+import { AntigravityCliProvider } from "../core/harness/antigravity/AntigravityCliProvider";
 import { TempFileManager } from "../utils/TempFileManager";
 import {
   buildFileReferenceValue,
@@ -78,6 +91,115 @@ import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import type { WebviewClientContext } from "./WebviewClientContext";
 import type { SecretRegistryService } from "./SecretRegistryService";
+
+interface CursorArgumentToken {
+  prefix: string;
+  replacementStart: number;
+}
+
+/**
+ * Find the argument prefix at a cursor position using parseArgString's quote
+ * and whitespace rules. Unlike parseArgString, this retains the replacement
+ * offset needed by the editor.
+ */
+function parseCursorArgumentToken(
+  text: string,
+  position: number
+): CursorArgumentToken {
+  const cursor = Math.max(0, Math.min(position, text.length));
+  let tokenStart = -1;
+  let replacementStart = cursor;
+  let current = "";
+  let quote: '"' | "'" | undefined;
+  let sawQuote = false;
+
+  for (let i = 0; i < cursor; i++) {
+    const ch = text[i];
+
+    if (quote === '"') {
+      if (ch === "\\" && text[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else if (ch === '"') {
+        quote = undefined;
+      } else {
+        current += ch;
+      }
+      continue;
+    }
+
+    if (quote === "'") {
+      if (ch === "'") {
+        quote = undefined;
+      } else {
+        current += ch;
+      }
+      continue;
+    }
+
+    if (/\s/.test(ch)) {
+      tokenStart = -1;
+      current = "";
+      replacementStart = cursor;
+      continue;
+    }
+
+    if (tokenStart === -1) {
+      tokenStart = i;
+      replacementStart = i;
+    }
+
+    if (ch === '"') {
+      quote = '"';
+      sawQuote = true;
+      if (i === tokenStart) {
+        replacementStart = i + 1;
+      }
+    } else if (ch === "'") {
+      quote = "'";
+      sawQuote = true;
+      if (i === tokenStart) {
+        replacementStart = i + 1;
+      }
+    } else {
+      current += ch;
+    }
+  }
+
+  const prefix = sawQuote
+    ? current
+    : text.slice(replacementStart, cursor);
+  return { prefix, replacementStart };
+}
+
+function getHarnessHelpCommand(harnessId: HarnessId): string {
+  switch (harnessId) {
+    case HARNESS_IDS.COPILOT_CLI:
+      return CopilotCliProvider.CLI_HELP_COMMAND;
+    case HARNESS_IDS.CLAUDE_CLI:
+      return ClaudeCliProvider.CLI_HELP_COMMAND;
+    case HARNESS_IDS.CODEX_CLI:
+      return CodexCliProvider.CLI_HELP_COMMAND;
+    case HARNESS_IDS.OPENCODE_CLI:
+      return OpenCodeCliProvider.CLI_HELP_COMMAND;
+    case HARNESS_IDS.QWEN_CLI:
+      return QwenCliProvider.CLI_HELP_COMMAND;
+    case HARNESS_IDS.ANTIGRAVITY_CLI:
+      return AntigravityCliProvider.CLI_HELP_COMMAND;
+  }
+}
+
+function filterHarnessFlagCompletions(
+  items: HarnessFlagCompletion[],
+  prefix: string
+): HarnessFlagCompletion[] {
+  const normalizedPrefix = prefix.toLocaleLowerCase();
+  return items.filter(
+    (item) =>
+      item.flag.toLocaleLowerCase().startsWith(normalizedPrefix) ||
+      item.alias?.toLocaleLowerCase().startsWith(normalizedPrefix)
+  );
+}
 
 /**
  * Editor-support message handlers for the dashboard's CodeMirror prompt editor:
@@ -182,6 +304,40 @@ export class PromptEditorSupportService {
         type: MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE,
         items: [],
         from: position,
+        seq,
+      });
+    }
+  }
+
+  async handleHarnessFlagCompletionRequest(
+    ctx: WebviewClientContext,
+    harnessId: HarnessId,
+    text: string,
+    position: number,
+    seq: number
+  ): Promise<void> {
+    const token = parseCursorArgumentToken(text, position);
+    try {
+      const helpText = await CliProviderUtils.runHelpCommand(
+        getHarnessHelpCommand(harnessId),
+        { retryWindowsFileLockErrors: true }
+      );
+      const items = filterHarnessFlagCompletions(
+        getHarnessFlagCompletions(harnessId, helpText),
+        token.prefix
+      );
+      ctx.emit({
+        type: MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_RESPONSE,
+        items,
+        from: token.replacementStart,
+        seq,
+      });
+    } catch (error) {
+      Log.trace("Failed to get harness flag completions:", error);
+      ctx.emit({
+        type: MESSAGE_TYPES.HARNESS_FLAG_COMPLETIONS_RESPONSE,
+        items: [],
+        from: token.replacementStart,
         seq,
       });
     }
