@@ -18,6 +18,7 @@ import {
   WorkspaceTreeBadRequestError,
   WorkspaceTreeExpiredError,
 } from "../../server/WorkspaceTreeErrors";
+import { DIFF_PAYLOAD_KINDS } from "../../types/DashboardConstants";
 
 suite("HostedWorkspaceViewerService", function () {
   // Most tests here shell out to real git (init/config/commit/clone/push/
@@ -1109,6 +1110,82 @@ suite("HostedWorkspaceViewerService", function () {
         unstagedStatus: "?",
         kind: "untracked",
       });
+    });
+  });
+
+  // ── diff payloads ─────────────────────────────────────────────────────────
+
+  suite("diff payloads", () => {
+    test("returns image bytes as data URIs for a working-tree image diff", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      const oldBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00]);
+      const newBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff]);
+      fs.writeFileSync(path.join(root, "image.png"), oldBytes);
+      runGit(root, "add", "image.png");
+      runGit(root, "commit", "-m", "Add image");
+      fs.writeFileSync(path.join(root, "image.png"), newBytes);
+
+      const result = await new HostedWorkspaceViewerService(root).getDiff(
+        "image.png"
+      );
+
+      assert.strictEqual(result.payloadKind, DIFF_PAYLOAD_KINDS.IMAGE);
+      if (result.payloadKind !== DIFF_PAYLOAD_KINDS.IMAGE) return;
+      assert.strictEqual(
+        result.image.oldImageDataUri,
+        `data:image/png;base64,${oldBytes.toString("base64")}`
+      );
+      assert.strictEqual(
+        result.image.newImageDataUri,
+        `data:image/png;base64,${newBytes.toString("base64")}`
+      );
+    });
+
+    test("returns a binary payload instead of decoding binary bytes as text", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      fs.writeFileSync(path.join(root, "data.bin"), Buffer.from([0, 1]));
+      runGit(root, "add", "data.bin");
+      runGit(root, "commit", "-m", "Add binary");
+      fs.writeFileSync(path.join(root, "data.bin"), Buffer.from([0, 2]));
+
+      const result = await new HostedWorkspaceViewerService(root).getDiff(
+        "data.bin"
+      );
+
+      assert.strictEqual(result.payloadKind, DIFF_PAYLOAD_KINDS.BINARY);
+    });
+
+    test("returns image and non-image binary entries for a commit diff", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "baseline.txt", "baseline\n", "Baseline");
+      const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xaa]);
+      fs.writeFileSync(path.join(root, "image.png"), imageBytes);
+      fs.writeFileSync(path.join(root, "data.bin"), Buffer.from([0, 3]));
+      runGit(root, "add", "image.png", "data.bin");
+      runGit(root, "commit", "-m", "Add binary files");
+      const commit = runGit(root, "rev-parse", "HEAD");
+
+      const result = await new HostedWorkspaceViewerService(root).getGitRefDiff(
+        commit
+      );
+      const entries = result.nonTextEntries ?? [];
+      const imageEntry = entries.find((entry) => entry.path === "image.png");
+      const binaryEntry = entries.find((entry) => entry.path === "data.bin");
+
+      assert.ok(imageEntry);
+      assert.strictEqual(imageEntry?.payloadKind, DIFF_PAYLOAD_KINDS.IMAGE);
+      assert.strictEqual(
+        imageEntry?.image?.newImageDataUri,
+        `data:image/png;base64,${imageBytes.toString("base64")}`
+      );
+      assert.ok(binaryEntry);
+      assert.strictEqual(binaryEntry?.payloadKind, DIFF_PAYLOAD_KINDS.BINARY);
     });
   });
 

@@ -231,6 +231,142 @@ export async function getCommitDiff(
   return stdout;
 }
 
+/**
+ * Read a blob without decoding it as UTF-8. Missing paths are represented by
+ * null so callers can build added/deleted file payloads without treating a
+ * normal absent side as a Git error.
+ */
+export async function getBlobBytes(
+  repoRoot: string,
+  ref: string,
+  gitRelPath: string
+): Promise<Buffer | null> {
+  try {
+    const result = await execFilePromisified(
+      "git",
+      [
+        "-C",
+        repoRoot,
+        "show",
+        ref === ":" ? `:${gitRelPath}` : `${ref}:${gitRelPath}`,
+      ],
+      {
+        timeout: GIT_TIMEOUT_MS,
+        maxBuffer: GIT_MAX_BUFFER,
+        encoding: "buffer",
+      }
+    );
+    return Buffer.isBuffer(result.stdout)
+      ? result.stdout
+      : Buffer.from(result.stdout);
+  } catch {
+    return null;
+  }
+}
+
+export interface GitChangedFile {
+  path: string;
+  oldPath?: string;
+  isBinary: boolean;
+  status: string;
+}
+
+interface ParsedNumstatRecord {
+  path: string;
+  oldPath?: string;
+  isBinary: boolean;
+}
+
+const NUMSTAT_RECORD_PATTERN = /^(\d+|-)\t(\d+|-)\t/;
+
+/**
+ * Return changed paths, Git status, and binary classification from one Git
+ * diff/show invocation. The raw records provide change type and rename paths;
+ * numstat provides the binary marker (`-\t-`).
+ */
+export async function getChangedFilesWithBinaryStatus(
+  repoRoot: string,
+  gitArgs: readonly string[]
+): Promise<GitChangedFile[]> {
+  const outputOptions = ["--raw", "--numstat", "-z", "--find-renames"];
+  const boundaryIndex = gitArgs.indexOf("--end-of-options");
+  const stashRevisionIndex = gitArgs.findIndex((arg) =>
+    arg.startsWith("stash@{")
+  );
+  const insertionIndex =
+    boundaryIndex >= 0
+      ? boundaryIndex
+      : stashRevisionIndex >= 0
+        ? stashRevisionIndex
+        : gitArgs.length;
+  const args =
+    insertionIndex >= 0
+      ? [
+          ...gitArgs.slice(0, insertionIndex),
+          ...outputOptions,
+          ...gitArgs.slice(insertionIndex),
+        ]
+      : [...gitArgs, ...outputOptions];
+  const { stdout } = await execGit(["-C", repoRoot, ...args]);
+  const tokens = stdout.split("\0");
+  const statusByPath = new Map<string, { status: string; oldPath?: string }>();
+  const numstatRecords: ParsedNumstatRecord[] = [];
+
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index] ?? "";
+    if (token.startsWith(":")) {
+      const statusParts = token.trim().split(/\s+/);
+      const status = statusParts[statusParts.length - 1] ?? "M";
+      const oldPath = tokens[index + 1];
+      const isRenameOrCopy = status.startsWith("R") || status.startsWith("C");
+      if (!oldPath) continue;
+      if (isRenameOrCopy) {
+        const newPath = tokens[index + 2];
+        if (!newPath) continue;
+        statusByPath.set(newPath, { status, oldPath });
+        index += 2;
+      } else {
+        statusByPath.set(oldPath, { status });
+        index += 1;
+      }
+      continue;
+    }
+
+    const match = NUMSTAT_RECORD_PATTERN.exec(token);
+    if (!match) continue;
+    const additions = match[1];
+    const deletions = match[2];
+    const inlinePath = token.slice(match[0].length);
+    let pathTokenIndex = index + 1;
+    const firstPath = inlinePath || tokens[pathTokenIndex++];
+    if (!firstPath) continue;
+    const nextToken = tokens[pathTokenIndex] ?? "";
+    const hasRenamePath =
+      nextToken.length > 0 &&
+      !nextToken.startsWith(":") &&
+      !NUMSTAT_RECORD_PATTERN.test(nextToken);
+    const secondPath = hasRenamePath ? nextToken : undefined;
+    numstatRecords.push({
+      path: secondPath ?? firstPath,
+      oldPath: secondPath ? firstPath : undefined,
+      isBinary: additions === "-" && deletions === "-",
+    });
+    index = secondPath ? pathTokenIndex : pathTokenIndex - 1;
+    if (secondPath) index += 1;
+  }
+
+  return numstatRecords.map((record) => {
+    const statusRecord =
+      statusByPath.get(record.path) ??
+      (record.oldPath ? statusByPath.get(record.oldPath) : undefined);
+    return {
+      ...record,
+      status: statusRecord?.status ?? "M",
+      oldPath: statusRecord?.oldPath ?? record.oldPath,
+    };
+  });
+}
+
 /** Return repository-relative files changed between two commits/refs. */
 export async function getDiffFilesBetweenRefs(
   workspaceRoot: string,

@@ -1686,6 +1686,18 @@ export type DiffChangeType =
   (typeof DIFF_CHANGE_TYPES)[keyof typeof DIFF_CHANGE_TYPES];
 
 // ============================================================================
+// DIFF PAYLOAD KINDS - Content shape for text/image/binary diff responses
+// ============================================================================
+export const DIFF_PAYLOAD_KINDS = {
+  TEXT: "text",
+  IMAGE: "image",
+  BINARY: "binary",
+} as const;
+
+export type DiffPayloadKind =
+  (typeof DIFF_PAYLOAD_KINDS)[keyof typeof DIFF_PAYLOAD_KINDS];
+
+// ============================================================================
 // STEP TYPES - Discriminant values for WorkflowStep union type
 // ============================================================================
 export const STEP_TYPES = {

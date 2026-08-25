@@ -1,3 +1,9 @@
+import {
+  DIFF_PAYLOAD_KINDS,
+  type DiffChangeType,
+  type DiffPayloadKind,
+} from "./DashboardConstants";
+
 /**
  * Types for the hosted workspace viewer feature.
  *
@@ -196,13 +202,46 @@ export type DiffKind =
   | "renamed"
   | "untracked";
 
-export interface WorkspaceScmDiffResponse {
-  path: string;
-  language?: string;
-  oldContent: string;
-  newContent: string;
-  kind: DiffKind;
+export interface WorkspaceImageDiffSides {
+  oldImageDataUri?: string;
+  newImageDataUri?: string;
 }
+
+export interface WorkspaceDiffEntry {
+  path: string;
+  oldPath?: string;
+  changeType: DiffChangeType;
+  payloadKind: DiffPayloadKind;
+  image?: WorkspaceImageDiffSides;
+}
+
+interface WorkspaceScmDiffBase {
+  path: string;
+  kind: DiffKind;
+  payloadKind: DiffPayloadKind;
+}
+
+export type WorkspaceScmDiffResponse =
+  | (WorkspaceScmDiffBase & {
+      payloadKind: typeof DIFF_PAYLOAD_KINDS.TEXT;
+      language?: string;
+      oldContent: string;
+      newContent: string;
+    })
+  | (WorkspaceScmDiffBase & {
+      payloadKind: typeof DIFF_PAYLOAD_KINDS.IMAGE;
+      language?: never;
+      oldContent: never;
+      newContent: never;
+      image: WorkspaceImageDiffSides;
+    })
+  | (WorkspaceScmDiffBase & {
+      payloadKind: typeof DIFF_PAYLOAD_KINDS.BINARY;
+      language?: never;
+      oldContent: never;
+      newContent: never;
+      image?: never;
+    });
 
 export interface WorkspaceStageRequest {
   path: string;
@@ -326,4 +365,6 @@ export interface WorkspaceGitRefDiffResponse {
   unifiedDiff: string;
   /** Present only when `ref` resolves to a single commit (not diff/staged/stash). */
   commitInfo?: WorkspaceCommitInfo;
+  /** Changed files whose content is not plain text. */
+  nonTextEntries?: WorkspaceDiffEntry[];
 }

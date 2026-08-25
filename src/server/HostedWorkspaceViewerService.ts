@@ -64,12 +64,18 @@ import {
   getStashDiff,
   getCommitDiff,
   getCommitInfo,
+  getBlobBytes,
+  getChangedFilesWithBinaryStatus,
+  type GitChangedFile,
   getIgnoredEntryNames,
   getGitTrackedFiles,
   getGitIgnoredFiles,
   getDiffBetweenRefs,
 } from "../utils/GitUtils";
 import {
+  DIFF_CHANGE_TYPES,
+  DIFF_PAYLOAD_KINDS,
+  type DiffChangeType,
   isImageRefPath,
   imageExtensionToMimeType,
 } from "../types/DashboardConstants";
@@ -108,6 +114,12 @@ const SEARCH_FALLBACK_SKIP_DIRECTORIES = new Set([
   "out",
   "coverage",
 ]);
+
+interface NonTextDiffSources {
+  baseRef: string;
+  targetRef?: string;
+  targetIsWorkingTree: boolean;
+}
 
 /** Run metadata work with a fixed number of concurrent filesystem operations. */
 async function mapWithBoundedConcurrency<T, R>(
@@ -1496,40 +1508,86 @@ export class HostedWorkspaceViewerService {
     );
     const kind: DiffKind = fileStatus?.kind ?? "modified";
 
-    const oldContent = await this.getHeadContent(gitPath, repoRoot);
-    let newContent = "";
+    const oldBytes = await getBlobBytes(repoRoot, "HEAD", gitPath);
+    let newBytes: Buffer | null = null;
 
     if (kind !== "deleted") {
       try {
-        newContent = await fs.promises.readFile(resolved, "utf8");
+        newBytes = await fs.promises.readFile(resolved);
       } catch {
-        newContent = "";
+        newBytes = null;
       }
     }
 
+    const responsePath = fileStatus?.path ?? normalizedRelPath;
+    if (isImageRefPath(resolved)) {
+      const image = this.buildImageDiffSides(
+        oldBytes,
+        newBytes,
+        resolved,
+        gitPath
+      );
+      if (image) {
+        return {
+          path: responsePath,
+          kind,
+          payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
+          image,
+        } as WorkspaceScmDiffResponse;
+      }
+    }
+
+    if (this.isBinaryBuffer(oldBytes) || this.isBinaryBuffer(newBytes)) {
+      return {
+        path: responsePath,
+        kind,
+        payloadKind: DIFF_PAYLOAD_KINDS.BINARY,
+      } as WorkspaceScmDiffResponse;
+    }
+
     return {
-      path: fileStatus?.path ?? normalizedRelPath,
+      path: responsePath,
       language,
-      oldContent,
-      newContent,
+      oldContent: oldBytes?.toString("utf8") ?? "",
+      newContent: newBytes?.toString("utf8") ?? "",
       kind,
+      payloadKind: DIFF_PAYLOAD_KINDS.TEXT,
     };
   }
 
-  private async getHeadContent(
-    gitRelPath: string,
-    repoRoot: string
-  ): Promise<string> {
-    try {
-      const { stdout } = await execFileAsync(
-        "git",
-        ["-C", repoRoot, "show", `HEAD:${gitRelPath}`],
-        { timeout: GIT_TIMEOUT_MS }
-      );
-      return stdout;
-    } catch {
-      return "";
+  private isBinaryBuffer(buffer: Buffer | null): boolean {
+    if (!buffer) return false;
+    const bytesToCheck = Math.min(buffer.length, BINARY_CHECK_BYTES);
+    for (let index = 0; index < bytesToCheck; index++) {
+      if (buffer[index] === 0) return true;
     }
+    return false;
+  }
+
+  private buildImageDiffSides(
+    oldBytes: Buffer | null,
+    newBytes: Buffer | null,
+    newPath: string,
+    oldPath: string
+  ): { oldImageDataUri?: string; newImageDataUri?: string } | null {
+    const oldExtension = path.extname(oldPath).replace(/^\./, "");
+    const newExtension = path.extname(newPath).replace(/^\./, "");
+    const oldMimeType = imageExtensionToMimeType(oldExtension);
+    const newMimeType = imageExtensionToMimeType(newExtension);
+    if ((oldBytes && !oldMimeType) || (newBytes && !newMimeType)) {
+      return null;
+    }
+
+    return {
+      oldImageDataUri:
+        oldBytes && oldMimeType
+          ? `data:${oldMimeType};base64,${oldBytes.toString("base64")}`
+          : undefined,
+      newImageDataUri:
+        newBytes && newMimeType
+          ? `data:${newMimeType};base64,${newBytes.toString("base64")}`
+          : undefined,
+    };
   }
 
   // ── Git stage / unstage ──────────────────────────────────────────────────
@@ -1833,6 +1891,98 @@ export class HostedWorkspaceViewerService {
 
   // ── Git ref diff ──────────────────────────────────────────────────────────
 
+  private diffChangeType(status: string): DiffChangeType {
+    const statusCode = status[0];
+    const changeTypes: Record<string, DiffChangeType> = {
+      A: DIFF_CHANGE_TYPES.CREATED,
+      C: DIFF_CHANGE_TYPES.RENAMED,
+      D: DIFF_CHANGE_TYPES.DELETED,
+      R: DIFF_CHANGE_TYPES.RENAMED,
+    };
+    return changeTypes[statusCode ?? ""] ?? DIFF_CHANGE_TYPES.MODIFIED;
+  }
+
+  private async readWorkingTreeDiffBytes(
+    repoRoot: string,
+    gitPath: string,
+    changeType: DiffChangeType
+  ): Promise<Buffer | null> {
+    if (changeType === DIFF_CHANGE_TYPES.DELETED) return null;
+    try {
+      return await fs.promises.readFile(path.join(repoRoot, gitPath));
+    } catch {
+      return null;
+    }
+  }
+
+  private async buildNonTextDiffEntries(
+    repoRoot: string,
+    changedFiles: readonly GitChangedFile[],
+    sources: NonTextDiffSources
+  ): Promise<WorkspaceGitRefDiffResponse["nonTextEntries"]> {
+    const entries = await Promise.all(
+      changedFiles
+        .filter((file) => file.isBinary)
+        .map(async (file) => {
+          const absolutePath = path.resolve(repoRoot, file.path);
+          if (!isPathWithinAnyDirectory(absolutePath, this.trustedRoots)) {
+            return null;
+          }
+
+          const changeType = this.diffChangeType(file.status);
+          const oldGitPath = file.oldPath ?? file.path;
+          const oldBytes = await getBlobBytes(
+            repoRoot,
+            sources.baseRef,
+            oldGitPath
+          );
+          const newBytes = sources.targetIsWorkingTree
+            ? await this.readWorkingTreeDiffBytes(
+                repoRoot,
+                file.path,
+                changeType
+              )
+            : await getBlobBytes(
+                repoRoot,
+                sources.targetRef ?? "HEAD",
+                file.path
+              );
+          const viewerPath = this.relativePath(absolutePath);
+          const viewerOldPath = file.oldPath
+            ? this.relativePath(path.resolve(repoRoot, file.oldPath))
+            : undefined;
+
+          if (isImageRefPath(file.path)) {
+            const image = this.buildImageDiffSides(
+              oldBytes,
+              newBytes,
+              file.path,
+              oldGitPath
+            );
+            if (image) {
+              return {
+                path: viewerPath,
+                oldPath: viewerOldPath,
+                changeType,
+                payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
+                image,
+              };
+            }
+          }
+
+          return {
+            path: viewerPath,
+            oldPath: viewerOldPath,
+            changeType,
+            payloadKind: DIFF_PAYLOAD_KINDS.BINARY,
+          };
+        })
+    );
+    return entries.filter(
+      (entry): entry is NonNullable<typeof entry> => entry !== null
+    );
+  }
+
   async getGitRefDiff(
     ref: string,
     repoId?: string
@@ -1843,25 +1993,89 @@ export class HostedWorkspaceViewerService {
     const repoRoot = await this.resolveRepoRoot(repoId);
 
     if (ref === DIFF_REF) {
-      return { unifiedDiff: await getWorkingTreeDiff(repoRoot) };
+      const [unifiedDiff, changedFiles] = await Promise.all([
+        getWorkingTreeDiff(repoRoot),
+        getChangedFilesWithBinaryStatus(repoRoot, ["diff"]),
+      ]);
+      return {
+        unifiedDiff,
+        nonTextEntries: await this.buildNonTextDiffEntries(
+          repoRoot,
+          changedFiles,
+          {
+            baseRef: ":",
+            targetIsWorkingTree: true,
+          }
+        ),
+      };
     }
     if (ref === STAGED_REF) {
-      return { unifiedDiff: await getStagedDiff(repoRoot) };
+      const [unifiedDiff, changedFiles] = await Promise.all([
+        getStagedDiff(repoRoot),
+        getChangedFilesWithBinaryStatus(repoRoot, ["diff", "--cached"]),
+      ]);
+      return {
+        unifiedDiff,
+        nonTextEntries: await this.buildNonTextDiffEntries(
+          repoRoot,
+          changedFiles,
+          {
+            baseRef: "HEAD",
+            targetRef: ":",
+            targetIsWorkingTree: false,
+          }
+        ),
+      };
     }
     if (ref.startsWith(STASH_PREFIX)) {
       const index = parseInt(ref.slice(STASH_PREFIX.length), 10);
       if (!Number.isFinite(index)) {
         throw new Error(`Invalid stash ref: ${ref}`);
       }
-      return { unifiedDiff: await getStashDiff(repoRoot, index) };
+      const stashRef = `stash@{${index}}`;
+      const [unifiedDiff, changedFiles] = await Promise.all([
+        getStashDiff(repoRoot, index),
+        getChangedFilesWithBinaryStatus(repoRoot, ["stash", "show", stashRef]),
+      ]);
+      return {
+        unifiedDiff,
+        nonTextEntries: await this.buildNonTextDiffEntries(
+          repoRoot,
+          changedFiles,
+          {
+            baseRef: `${stashRef}^1`,
+            targetRef: stashRef,
+            targetIsWorkingTree: false,
+          }
+        ),
+      };
     }
     // Treat as commit hash
     const hash = ref.startsWith("~") ? ref.slice(1) : ref;
-    const [unifiedDiff, commitInfo] = await Promise.all([
+    const [unifiedDiff, commitInfo, changedFiles] = await Promise.all([
       getCommitDiff(repoRoot, hash),
       getCommitInfo(repoRoot, hash),
+      getChangedFilesWithBinaryStatus(repoRoot, [
+        "show",
+        "--format=",
+        "--no-ext-diff",
+        "--end-of-options",
+        hash,
+      ]),
     ]);
-    return { unifiedDiff, commitInfo };
+    return {
+      unifiedDiff,
+      commitInfo,
+      nonTextEntries: await this.buildNonTextDiffEntries(
+        repoRoot,
+        changedFiles,
+        {
+          baseRef: `${hash}^`,
+          targetRef: hash,
+          targetIsWorkingTree: false,
+        }
+      ),
+    };
   }
 
   /**
