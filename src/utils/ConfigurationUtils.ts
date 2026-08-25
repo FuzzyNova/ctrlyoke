@@ -211,6 +211,17 @@ export const PATH_CONSTANTS = {
 
   /** Workspace MCP server registry file name (inside MCP_DIR) */
   MCP_SERVERS_FILE: "servers.json",
+
+  /** Dev-only tooling directory name (subdirectory of CTRLYOKE_DIR) — gitignored */
+  DEV_DIR: "dev",
+
+  /**
+   * Dev-only file (inside DEV_DIR) holding the currently running hosted
+   * server's URL (including access token). Written by `CtrlYokeHostedServer`
+   * only in dev builds so external tooling (e.g. an agent driving Playwright)
+   * can discover the live URL without it being pasted into chat each session.
+   */
+  SERVER_URL_FILE: "server-url.txt",
 } as const;
 
 /**

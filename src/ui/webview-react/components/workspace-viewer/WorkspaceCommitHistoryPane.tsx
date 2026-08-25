@@ -19,13 +19,6 @@ interface WorkspaceCommitHistoryPaneProps {
 /** Position of a commit relative to the current HEAD (current location). */
 type HeadRelation = "ahead" | "at" | "behind";
 
-/**
- * Branch color for a commit's graph node, mirroring a canonical git graph:
- * commits that exist only locally (unpushed) are "local", and commits shared
- * with (or only on) the remote are "remote".
- */
-type GraphColor = "scm-graph-local" | "scm-graph-remote";
-
 const ROW_HEIGHT = 24;
 // Validated against this repository's three-lane history and a six-lane
 // managed-worktree merge fixture: wide enough to keep elbows distinct without
@@ -34,14 +27,27 @@ const GRAPH_LANE_WIDTH = 14;
 const DESKTOP_INLINE_LANE_CAP = 5;
 const MOBILE_INLINE_LANE_CAP = 3;
 
-/** Tailwind text tokens provide the themed SVG currentColor values. */
-const GRAPH_NODE_COLOR_CLASSES: Record<GraphColor, string> = {
-  "scm-graph-local": "text-scm-graph-local",
-  "scm-graph-remote": "text-scm-graph-remote",
-};
+// `computeCommitGraphLayout` always seeds the very first (newest) commit's
+// lane at colorIndex 0, and a merge's first parent keeps its lane's
+// colorIndex unchanged — so colorIndex 0 is always the lane descending from
+// whatever is currently checked out (the "trunk"). Only that lane gets the
+// local/remote push-status treatment; every other lane is some other branch
+// merged into it and gets a fixed rotating color instead.
+const TRUNK_COLOR_INDEX = 0;
+// Must match `COMMIT_GRAPH_COLOR_COUNT` in commitGraphLayout.ts — the size of
+// the colorIndex rotation the layout algorithm assigns lanes from.
+const LANE_COLOR_INDEX_COUNT = 5;
 
-/** Rotation-only lane colors; there is intentionally no ref-to-color map. */
-const GRAPH_LANE_COLOR_CLASSES = [
+/** Tailwind text tokens for the trunk lane, keyed by push status. */
+const TRUNK_COLOR_CLASSES = {
+  local: "text-scm-graph-local",
+  remote: "text-scm-graph-remote",
+} as const;
+
+/** Rotation colors for lanes other than the trunk (colorIndex >= 1) — one
+ *  fixed color per branch, independent of push status, matching VS Code's
+ *  scmGraph.foreground1-5 fallback when no explicit ref color is assigned. */
+const GRAPH_BRANCH_COLOR_CLASSES = [
   "text-scm-graph-fg1",
   "text-scm-graph-fg2",
   "text-scm-graph-fg3",
@@ -53,9 +59,17 @@ function laneX(laneIndex: number): number {
   return (laneIndex + 1) * GRAPH_LANE_WIDTH;
 }
 
-function laneColorClass(lane: CommitGraphLane): string {
-  return GRAPH_LANE_COLOR_CLASSES[
-    lane.colorIndex % GRAPH_LANE_COLOR_CLASSES.length
+/** Resolves a lane to its rendered color class. The trunk lane's color
+ *  depends on push status (passed in by the caller, since a `CommitGraphLane`
+ *  alone doesn't carry per-commit push state); every other lane always
+ *  resolves to the same fixed rotation color regardless of the caller. */
+function resolveLaneColorClass(
+  lane: CommitGraphLane,
+  trunkColorClass: string
+): string {
+  if (lane.colorIndex === TRUNK_COLOR_INDEX) return trunkColorClass;
+  return GRAPH_BRANCH_COLOR_CLASSES[
+    (lane.colorIndex - 1) % GRAPH_BRANCH_COLOR_CLASSES.length
   ];
 }
 
@@ -105,14 +119,19 @@ function straightPath(x: number): string {
   return `M ${x} 0 V ${ROW_HEIGHT}`;
 }
 
-function lanePathClass(lane: CommitGraphLane): string {
-  return `${laneColorClass(lane)} opacity-70`;
+function lanePathClass(lane: CommitGraphLane, trunkColorClass: string): string {
+  return `${resolveLaneColorClass(lane, trunkColorClass)} opacity-70`;
 }
 
 interface CommitGraphSvgProps {
   commit: WorkspaceCommitLogEntry;
   layout: CommitGraphRow;
-  color: GraphColor;
+  /** Resolved color class for the trunk lane at this commit (push-status
+   *  driven); ignored for any lane other than the trunk. */
+  trunkColorClass: string;
+  /** Nearest branch name for this commit's lane, if known — shown as the
+   *  native hover tooltip on the graph node/lines. */
+  branchTooltip: string | undefined;
   relation: HeadRelation;
   isSelected: boolean;
   onClick: (commit: WorkspaceCommitLogEntry) => void;
@@ -128,7 +147,8 @@ interface CommitGraphSvgProps {
 const CommitGraphSvg: React.FC<CommitGraphSvgProps> = ({
   commit,
   layout,
-  color,
+  trunkColorClass,
+  branchTooltip,
   relation,
   isSelected,
   onClick,
@@ -160,8 +180,7 @@ const CommitGraphSvg: React.FC<CommitGraphSvgProps> = ({
       const expectedLane = {
         id: parentHash,
         colorIndex:
-          (nodeSource.colorIndex + parentIndex) %
-          GRAPH_LANE_COLOR_CLASSES.length,
+          (nodeSource.colorIndex + parentIndex) % LANE_COLOR_INDEX_COUNT,
       };
       const outputIndex = findLaneIndex(
         layout.outputLanes,
@@ -218,11 +237,7 @@ const CommitGraphSvg: React.FC<CommitGraphSvgProps> = ({
     };
   });
 
-  const nodeClass = GRAPH_NODE_COLOR_CLASSES[color];
-  const branchTooltip =
-    commit.refs.length > 0
-      ? commit.refs.map((ref) => ref.name).join(", ")
-      : undefined;
+  const nodeClass = resolveLaneColorClass(nodeSource, trunkColorClass);
   const rowClass = `flex flex-shrink-0 items-center justify-center h-6 transition-colors ${
     isSelected
       ? "bg-list-active-bg"
@@ -259,7 +274,7 @@ const CommitGraphSvg: React.FC<CommitGraphSvgProps> = ({
           <path
             key={key}
             d={d}
-            className={lanePathClass(lane)}
+            className={lanePathClass(lane, trunkColorClass)}
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"
@@ -271,7 +286,7 @@ const CommitGraphSvg: React.FC<CommitGraphSvgProps> = ({
             cx={nodeX}
             cy={nodeY}
             r="6.5"
-            className="text-scm-graph-base"
+            className={nodeClass}
             fill="none"
             stroke="currentColor"
             strokeWidth="1.25"
@@ -383,14 +398,49 @@ export const WorkspaceCommitHistoryPane: React.FC<
 
   // If the branch has any unpushed commits, it's ahead of its remote: those
   // commits are colored "local" and the shared history they diverged from is
-  // colored "remote". Otherwise (in sync) everything is "local".
+  // colored "remote". Otherwise (in sync) everything is "local". This only
+  // applies to the trunk lane (colorIndex 0) — every other lane is some other
+  // branch merged in and gets a fixed rotating color instead (see
+  // `resolveLaneColorClass`).
   const hasUnpushed = commitHistory.some((c) => !c.pushed);
-  const colorFor = (commit: WorkspaceCommitLogEntry): GraphColor =>
-    hasUnpushed && commit.pushed ? "scm-graph-remote" : "scm-graph-local";
   const graphLayout = useMemo(
     () => computeCommitGraphLayout(commitHistory),
     [commitHistory]
   );
+
+  // Per-commit color + tooltip, computed together in one top-to-bottom pass:
+  // the node's color depends on which lane it's actually drawn in (trunk vs.
+  // branch), and the tooltip is the nearest ref name seen so far for that
+  // same lane (a lane persists across many commits between its branch tip
+  // and the next fork/merge, most of which carry no ref of their own).
+  const rowPresentation = useMemo(() => {
+    const lastSeenBranchName = new Map<number, string>();
+    return commitHistory.map((commit, index) => {
+      const layout = graphLayout[index];
+      const trunkColorClass =
+        hasUnpushed && commit.pushed
+          ? TRUNK_COLOR_CLASSES.remote
+          : TRUNK_COLOR_CLASSES.local;
+      const nodeSource =
+        layout.inputLanes[layout.laneIndex] ??
+        ({
+          id: commit.hash,
+          colorIndex: TRUNK_COLOR_INDEX,
+        } satisfies CommitGraphLane);
+      const nodeColorClass = resolveLaneColorClass(nodeSource, trunkColorClass);
+      if (commit.refs.length > 0) {
+        lastSeenBranchName.set(
+          nodeSource.colorIndex,
+          commit.refs.map((ref) => ref.name).join(", ")
+        );
+      }
+      return {
+        trunkColorClass,
+        nodeColorClass,
+        branchTooltip: lastSeenBranchName.get(nodeSource.colorIndex),
+      };
+    });
+  }, [commitHistory, graphLayout, hasUnpushed]);
   const graphLaneCount = Math.max(
     1,
     ...graphLayout.map((row) =>
@@ -474,7 +524,8 @@ export const WorkspaceCommitHistoryPane: React.FC<
                   commit={commit}
                   layout={graphLayout[index]}
                   relation={relationFor(index)}
-                  color={colorFor(commit)}
+                  trunkColorClass={rowPresentation[index].trunkColorClass}
+                  branchTooltip={rowPresentation[index].branchTooltip}
                   isSelected={diffRef === `~${commit.hash}`}
                   onClick={handleRowClick}
                   onContextMenu={handleRowContextMenu}
@@ -484,10 +535,11 @@ export const WorkspaceCommitHistoryPane: React.FC<
             </div>
           </div>
           <div className="flex-1 min-w-0 overflow-hidden">
-            {commitHistory.map((commit) => (
+            {commitHistory.map((commit, index) => (
               <CommitRow
                 key={commit.hash}
                 commit={commit}
+                colorClass={rowPresentation[index].nodeColorClass}
                 isSelected={diffRef === `~${commit.hash}`}
                 onClick={handleRowClick}
                 onContextMenu={handleRowContextMenu}
@@ -519,21 +571,33 @@ export const WorkspaceCommitHistoryPane: React.FC<
   );
 };
 
+// Tailwind's class scanner only sees literal strings in source — building
+// "border-x" from "text-x" at runtime would hide the border class from it
+// and silently drop that CSS. This table keeps both spellings literal.
+const REF_PILL_BORDER_CLASS: Record<string, string> = {
+  "text-scm-graph-local": "border-scm-graph-local",
+  "text-scm-graph-remote": "border-scm-graph-remote",
+  "text-scm-graph-fg1": "border-scm-graph-fg1",
+  "text-scm-graph-fg2": "border-scm-graph-fg2",
+  "text-scm-graph-fg3": "border-scm-graph-fg3",
+  "text-scm-graph-fg4": "border-scm-graph-fg4",
+  "text-scm-graph-fg5": "border-scm-graph-fg5",
+};
+
 interface RefPillProps {
   label: GitRefLabel;
+  /** Resolved graph color class (e.g. "text-scm-graph-fg2") for the branch
+   *  this ref belongs to — matches the node/lane color in the graph rail. */
+  colorClass: string;
   /** Render only the icon, with no branch-name text (used when a remote ref
    *  is on the same commit as its in-sync local branch — the cloud icon
    *  alone conveys "also pushed here"). */
   iconOnly?: boolean;
 }
 
-const RefPill: React.FC<RefPillProps> = ({ label, iconOnly }) => {
-  const colorClass =
-    label.type === "remoteBranch"
-      ? "border-scm-graph-remote text-scm-graph-remote"
-      : label.type === "tag"
-        ? "border-scm-graph-base text-scm-graph-base"
-        : "border-scm-graph-local text-scm-graph-local";
+const RefPill: React.FC<RefPillProps> = ({ label, colorClass, iconOnly }) => {
+  const borderColorClass =
+    REF_PILL_BORDER_CLASS[colorClass] ?? "border-scm-graph-local";
   const icon =
     label.type === "remoteBranch"
       ? "codicon-cloud"
@@ -544,7 +608,7 @@ const RefPill: React.FC<RefPillProps> = ({ label, iconOnly }) => {
           : "codicon-git-branch";
   return (
     <span
-      className={`flex items-center gap-0.5 px-1 py-px rounded border text-xxs leading-none whitespace-nowrap ${colorClass}`}
+      className={`flex items-center gap-0.5 px-1 py-px rounded border text-xxs leading-none whitespace-nowrap ${colorClass} ${borderColorClass}`}
       title={label.name}
     >
       <i className={`codicon ${icon} text-xxs`} />
@@ -555,6 +619,9 @@ const RefPill: React.FC<RefPillProps> = ({ label, iconOnly }) => {
 
 interface CommitRowProps {
   commit: WorkspaceCommitLogEntry;
+  /** Resolved graph color class for this commit's node — its ref pills are
+   *  colored to match, per branch, rather than by ref type. */
+  colorClass: string;
   /** This commit is the one currently shown in the diff pane. */
   isSelected: boolean;
   onClick: (commit: WorkspaceCommitLogEntry) => void;
@@ -568,6 +635,7 @@ interface CommitRowProps {
 
 const CommitRow: React.FC<CommitRowProps> = ({
   commit,
+  colorClass,
   isSelected,
   onClick,
   onContextMenu,
@@ -610,6 +678,7 @@ const CommitRow: React.FC<CommitRowProps> = ({
             <RefPill
               key={`${ref.type}:${ref.name}`}
               label={ref}
+              colorClass={colorClass}
               iconOnly={
                 ref.type === "remoteBranch" &&
                 commit.refs.some((r) => r.type === "localBranch")

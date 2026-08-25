@@ -316,18 +316,16 @@ export const WorkspaceSourceControlPane: React.FC = () => {
 
   const staged = sourceControlFiles.filter((f) => f.stagedStatus !== null);
   const changed = sourceControlFiles.filter((f) => f.unstagedStatus !== null);
-  const filesEmpty =
-    staged.length === 0 && changed.length === 0 && !sourceControlLoading;
-  const historyEmpty = commitHistory.length === 0;
 
-  // 50/50 flex split with empty-fill: when a region has no content, collapse
-  // it to its natural height so the sibling consumes the remaining slack.
-  const filesRegionClass = filesEmpty
-    ? "flex-none"
-    : "flex-1 basis-0 min-h-0 overflow-x-hidden overflow-y-auto";
-  const historyRegionClass = historyEmpty
-    ? "flex-none"
-    : "flex-1 basis-0 min-h-0 overflow-x-hidden overflow-y-auto";
+  // The files region sizes to its own content (a short list stays short)
+  // capped at 45% of the column so a long list still scrolls in its own
+  // region instead of pushing history off-screen. History always claims
+  // whatever's left — a fixed 50/50 split previously left a large empty gap
+  // under a short file list instead of handing that space to the graph.
+  const filesRegionClass =
+    "flex-none max-h-[45%] min-h-0 overflow-x-hidden overflow-y-auto";
+  const historyRegionClass =
+    "flex-1 basis-0 min-h-0 overflow-x-hidden overflow-y-auto";
 
   const openDiscardWarning = useCallback(
     (paths: string[], untrackedCount: number) => {

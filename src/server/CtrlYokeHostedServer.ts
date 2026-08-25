@@ -77,6 +77,8 @@ import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver"
 import { secretRedactionService } from "../utils/SecretRedactionService";
 import { installSecretRedactionMiddleware } from "./SecretRedactionMiddleware";
 import { buildHostedErrorPage } from "./HostedErrorPageTemplate";
+import { IS_DEV_MODE } from "../utils/BuildConfig";
+import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 
 const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
 
@@ -1955,6 +1957,7 @@ export class CtrlYokeHostedServer
             this.bindAddress === "0.0.0.0" ? this.getLanIps() : [];
           const host = this.availableIps[0] ?? "localhost";
           this.publicUrl = `${scheme}://${host}:${this.port}/?token=${this.token}`;
+          this.writeDevServerUrlFile();
           resolve(this.publicUrl);
         };
         this.httpServer.once("error", onError);
@@ -1993,7 +1996,50 @@ export class CtrlYokeHostedServer
     return ips;
   }
 
+  /**
+   * Dev-only convenience: mirrors the running server URL (including token) to
+   * `.ctrlyoke/dev/server-url.txt` so external tooling can read it directly
+   * instead of a human pasting it. Best-effort — a write failure must never
+   * block the server from starting.
+   */
+  private writeDevServerUrlFile(): void {
+    if (!IS_DEV_MODE || !this.publicUrl) return;
+    try {
+      const devDir = path.join(
+        this.workspaceRoot,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
+        PATH_CONSTANTS.DEV_DIR
+      );
+      fs.mkdirSync(devDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(devDir, PATH_CONSTANTS.SERVER_URL_FILE),
+        `${this.publicUrl}\n`,
+        "utf8"
+      );
+    } catch (err) {
+      Log.warn(`ctrlyoke: Failed to write dev server-url file: ${err}`);
+    }
+  }
+
+  private clearDevServerUrlFile(): void {
+    if (!IS_DEV_MODE) return;
+    try {
+      fs.rmSync(
+        path.join(
+          this.workspaceRoot,
+          PATH_CONSTANTS.CTRLYOKE_DIR,
+          PATH_CONSTANTS.DEV_DIR,
+          PATH_CONSTANTS.SERVER_URL_FILE
+        ),
+        { force: true }
+      );
+    } catch (err) {
+      Log.warn(`ctrlyoke: Failed to clear dev server-url file: ${err}`);
+    }
+  }
+
   dispose(): void {
+    this.clearDevServerUrlFile();
     this.viewerService.dispose();
     this.hub.removeClient(this);
     if (this.heartbeatInterval !== undefined) {
