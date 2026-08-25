@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { HunkData } from "react-diff-view";
 import type { DiffFileCardProps } from "@components/diff/DiffFileCard";
+import type { WorkspaceFileHistoryDiffResponse } from "@root/types/HostedWorkspaceViewerTypes";
 import {
   DIFF_FILE_LIST_ROW_GAP,
   estimateDiffFileCardSize,
@@ -146,6 +147,24 @@ describe("diff file estimates", () => {
     expect(imageExpanded).toBeGreaterThan(imageCollapsed);
     expect(binaryExpanded).toBeGreaterThan(binaryCollapsed);
     expect(binaryExpanded).toBeLessThan(imageExpanded);
+  });
+
+  it("estimates deferred history cards from collapsed chrome only", () => {
+    const source: DiffFileCardProps["source"] = {
+      kind: "deferred",
+      commit: "commit-1",
+      state: "not-loaded",
+      get detail(): WorkspaceFileHistoryDiffResponse {
+        throw new Error(
+          "deferred detail must not be inspected by the estimator"
+        );
+      },
+    };
+    const card = file("src/file.ts", source);
+    const estimate = estimateDiffFileCardSize(card, { collapsed: true });
+
+    expect(estimate).toBeGreaterThan(0);
+    expect(estimateDiffFileCardSize(card)).toBe(estimate);
   });
 
   it("does not recompute raw content metrics when card props are rebuilt", () => {

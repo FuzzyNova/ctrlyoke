@@ -50,6 +50,8 @@ const DIFF_FILE_HEADER_CHAR_WIDTH = 0.6;
 const DIFF_FILE_NON_TEXT_TOGGLE_HEIGHT = 24;
 const DIFF_FILE_IMAGE_PREVIEW_HEIGHT = 256;
 const DIFF_FILE_BINARY_PREVIEW_HEIGHT = 22;
+/** Deferred history cards start collapsed; their unloaded body has no height. */
+const DIFF_FILE_DEFERRED_PREVIEW_HEIGHT = 0;
 const GROUP_KEY_SEPARATOR = "\u001f";
 
 export interface DiffFileRowEstimateOptions {
@@ -307,6 +309,15 @@ function getBinaryEstimate(
   );
 }
 
+function getDeferredEstimate(
+  file: DiffFileCardProps,
+  _collapsed: boolean
+): number {
+  return file.source.kind === "deferred"
+    ? DIFF_FILE_DEFERRED_PREVIEW_HEIGHT
+    : 0;
+}
+
 function getHunkEstimate(
   file: DiffFileCardProps,
   collapsed: boolean,
@@ -354,7 +365,9 @@ function getDiffBodyEstimate(
           ? getContentEstimate(file, collapsed, options)
           : file.source.kind === "image"
             ? getImageEstimate(file, collapsed)
-            : getBinaryEstimate(file, collapsed);
+            : file.source.kind === "binary"
+              ? getBinaryEstimate(file, collapsed)
+              : getDeferredEstimate(file, collapsed);
   sourceCache.set(cacheKey, estimate);
   return estimate;
 }

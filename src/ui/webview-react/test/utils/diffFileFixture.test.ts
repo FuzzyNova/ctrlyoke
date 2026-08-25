@@ -70,6 +70,7 @@ function realizedDiffBody(file: DiffFileCardProps): number {
       break;
     case "image":
     case "binary":
+    case "deferred":
       return 0;
   }
 
