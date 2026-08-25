@@ -9,7 +9,14 @@ import type {
   WorkspaceRepo,
   WorkspaceSearchResult,
   WorkspaceSearchScope,
+  WorkspaceDiffEntry,
+  WorkspaceImageDiffSides,
+  WorkspaceScmDiffResponse,
 } from "@root/types/HostedWorkspaceViewerTypes";
+import {
+  DIFF_PAYLOAD_KINDS,
+  type DiffPayloadKind,
+} from "@root/types/DashboardConstants";
 import type { ParsedDiffFile } from "@utils/rdvAdapter";
 import { workspaceGitRefDiff, workspaceWorktreeDiff } from "@utils/hostedApi";
 import { parseUnifiedDiffToFiles } from "@utils/rdvAdapter";
@@ -93,6 +100,8 @@ interface WorkspaceViewerState {
   diffNewContent: string;
   diffLanguage: string | undefined;
   diffKind: DiffKind | null;
+  diffPayloadKind: DiffPayloadKind | null;
+  diffImage: WorkspaceImageDiffSides | null;
   diffLoading: boolean;
 
   // Search
@@ -121,6 +130,7 @@ interface WorkspaceViewerState {
 
   // Multi-file git-ref diff (e.g. from clicking a ~<hash> link in browser mode)
   diffFiles: ParsedDiffFile[] | null;
+  diffNonTextEntries: WorkspaceDiffEntry[];
   diffRefLabel: string | null;
   diffRefLoading: boolean;
   /** Full commit metadata, present only when diffFiles came from a single commit ref. */
@@ -180,12 +190,7 @@ interface WorkspaceViewerActions {
   setSourceControlLoading(loading: boolean): void;
   selectDiff(path: string | null): void;
   clearDiff(): void;
-  setDiffData(
-    oldContent: string,
-    newContent: string,
-    language: string | undefined,
-    kind: DiffKind
-  ): void;
+  setDiffData(response: WorkspaceScmDiffResponse): void;
   setDiffLoading(loading: boolean): void;
   setCommitMessage(msg: string): void;
   setCommitting(v: boolean): void;
@@ -270,6 +275,8 @@ const INITIAL_STATE: WorkspaceViewerState = {
   diffNewContent: "",
   diffLanguage: undefined,
   diffKind: null,
+  diffPayloadKind: null,
+  diffImage: null,
   diffLoading: false,
 
   searchQuery: "",
@@ -294,6 +301,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
   previousBranch: null,
 
   diffFiles: null,
+  diffNonTextEntries: [],
   diffRefLabel: null,
   diffRefLoading: false,
   diffCommitInfo: null,
@@ -543,6 +551,8 @@ export const useWorkspaceViewerStore = create<
                 diffNewContent: "",
                 diffLanguage: undefined,
                 diffKind: null,
+                diffPayloadKind: null,
+                diffImage: null,
                 diffLoading: false,
               }
             : {}),
@@ -556,7 +566,10 @@ export const useWorkspaceViewerStore = create<
       selectDiff(path) {
         set({
           selectedDiffPath: path,
+          diffPayloadKind: null,
+          diffImage: null,
           diffFiles: null,
+          diffNonTextEntries: [],
           diffRefLabel: null,
           diffRefLoading: false,
           diffCommitInfo: null,
@@ -571,8 +584,11 @@ export const useWorkspaceViewerStore = create<
           diffNewContent: "",
           diffLanguage: undefined,
           diffKind: null,
+          diffPayloadKind: null,
+          diffImage: null,
           diffLoading: false,
           diffFiles: null,
+          diffNonTextEntries: [],
           diffRefLabel: null,
           diffRefLoading: false,
           diffCommitInfo: null,
@@ -581,12 +597,18 @@ export const useWorkspaceViewerStore = create<
         });
       },
 
-      setDiffData(oldContent, newContent, language, kind) {
+      setDiffData(response) {
+        const isText = response.payloadKind === DIFF_PAYLOAD_KINDS.TEXT;
         set({
-          diffOldContent: oldContent,
-          diffNewContent: newContent,
-          diffLanguage: language,
-          diffKind: kind,
+          diffOldContent: isText ? response.oldContent : "",
+          diffNewContent: isText ? response.newContent : "",
+          diffLanguage: isText ? response.language : undefined,
+          diffKind: response.kind,
+          diffPayloadKind: response.payloadKind,
+          diffImage:
+            response.payloadKind === DIFF_PAYLOAD_KINDS.IMAGE
+              ? response.image
+              : null,
         });
       },
 
@@ -686,6 +708,7 @@ export const useWorkspaceViewerStore = create<
           activeTab: "sourceControl",
           // Clear single-file diff so the pane switches to ref mode
           selectedDiffPath: null,
+          diffNonTextEntries: [],
           diffFiles: null,
           diffRefLabel: null,
           diffRefLoading: true,
@@ -694,10 +717,8 @@ export const useWorkspaceViewerStore = create<
           pendingDiff: null,
         });
         try {
-          const { unifiedDiff, commitInfo } = await workspaceGitRefDiff(
-            ref,
-            get().selectedRepoId ?? undefined
-          );
+          const { unifiedDiff, commitInfo, nonTextEntries } =
+            await workspaceGitRefDiff(ref, get().selectedRepoId ?? undefined);
           const diffFiles = parseUnifiedDiffToFiles(unifiedDiff);
           const shortRef = ref.startsWith("~") ? ref.slice(1) : ref;
           const diffRefLabel =
@@ -710,6 +731,7 @@ export const useWorkspaceViewerStore = create<
                   : `Commit ${shortRef.slice(0, 7)}`;
           set({
             diffFiles,
+            diffNonTextEntries: nonTextEntries ?? [],
             diffRefLabel,
             diffRefLoading: false,
             diffCommitInfo: commitInfo ?? null,
@@ -725,6 +747,7 @@ export const useWorkspaceViewerStore = create<
           activeTab: "sourceControl",
           selectedDiffPath: null,
           diffFiles: null,
+          diffNonTextEntries: [],
           diffRefLabel: null,
           diffRefLoading: true,
           diffCommitInfo: null,
@@ -732,13 +755,14 @@ export const useWorkspaceViewerStore = create<
           pendingDiff: null,
         });
         try {
-          const { unifiedDiff } = await workspaceWorktreeDiff(
+          const { unifiedDiff, nonTextEntries } = await workspaceWorktreeDiff(
             sourceCheckoutRoot,
             baseCommit,
             branchName
           );
           set({
             diffFiles: parseUnifiedDiffToFiles(unifiedDiff),
+            diffNonTextEntries: nonTextEntries ?? [],
             diffRefLabel: `Branch ${branchName}`,
             diffRefLoading: false,
           });

@@ -14,6 +14,8 @@ import {
   diffFilePathTitle,
 } from "./DiffFilePathLabel";
 import type { DiffChangeType } from "@root/types/DashboardConstants";
+import type { WorkspaceImageDiffSides } from "@root/types/HostedWorkspaceViewerTypes";
+import { ImageDiffView } from "./ImageDiffView";
 
 export interface DiffFileCardProps {
   path: string;
@@ -29,7 +31,9 @@ export interface DiffFileCardProps {
         kind: "patch";
         structuredPatch: UnifiedDiffHunk[];
         oldContent?: string;
-      };
+      }
+    | { kind: "image"; image: WorkspaceImageDiffSides }
+    | { kind: "binary" };
 
   language?: string;
 
@@ -117,6 +121,36 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
             oldContent={source.oldContent}
             {...sharedDiffViewProps}
           />
+        );
+      case "image":
+        return (
+          <ImageDiffView
+            path={path}
+            sides={source.image}
+            collapsed={collapsed}
+            onCollapsedChange={onCollapsedChange}
+          />
+        );
+      case "binary":
+        return (
+          <div className="my-1 border-t border-panel-border px-2.5 py-2 text-xs text-description-fg">
+            <button
+              type="button"
+              className="flex items-center gap-1.5"
+              aria-expanded={!(collapsed ?? false)}
+              onClick={() => onCollapsedChange?.(!(collapsed ?? false))}
+            >
+              <i
+                className={`codicon codicon-chevron-right text-xxs transition-transform ${collapsed ? "" : "rotate-90"}`}
+              />
+              <span>{collapsed ? "Show binary diff" : "Hide binary diff"}</span>
+            </button>
+            {!collapsed && (
+              <p className="mt-1 pl-4 italic">
+                binary diff preview unavailable
+              </p>
+            )}
+          </div>
         );
     }
   })();

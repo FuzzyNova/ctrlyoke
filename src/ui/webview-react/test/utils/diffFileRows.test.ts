@@ -126,6 +126,28 @@ describe("projectDiffFileListRows", () => {
 });
 
 describe("diff file estimates", () => {
+  it("uses bounded O(1) estimates for image and binary sources", () => {
+    const imageSource: DiffFileCardProps["source"] = {
+      kind: "image",
+      get image(): { oldImageDataUri?: string; newImageDataUri?: string } {
+        throw new Error("image bytes must not be inspected by the estimator");
+      },
+    };
+    const image = file("assets/logo.png", imageSource);
+    const binary = file("assets/data.bin", { kind: "binary" });
+
+    const imageExpanded = estimateDiffFileCardSize(image);
+    const imageCollapsed = estimateDiffFileCardSize(image, { collapsed: true });
+    const binaryExpanded = estimateDiffFileCardSize(binary);
+    const binaryCollapsed = estimateDiffFileCardSize(binary, {
+      collapsed: true,
+    });
+
+    expect(imageExpanded).toBeGreaterThan(imageCollapsed);
+    expect(binaryExpanded).toBeGreaterThan(binaryCollapsed);
+    expect(binaryExpanded).toBeLessThan(imageExpanded);
+  });
+
   it("does not recompute raw content metrics when card props are rebuilt", () => {
     let oldReads = 0;
     let newReads = 0;

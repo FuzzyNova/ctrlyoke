@@ -216,12 +216,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       if (isMobile) setMobileDiffVisible(true);
       try {
         const result = await workspaceDiff(filePath);
-        setDiffData(
-          result.oldContent,
-          result.newContent,
-          result.language,
-          result.kind
-        );
+        setDiffData(result);
       } catch (err) {
         setScmError(String(err));
       } finally {
