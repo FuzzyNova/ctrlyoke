@@ -21,12 +21,17 @@ import {
  * below `FILE_BROWSER_NARROW_THRESHOLD` there isn't room for both a readable
  * name and a full date/time; the name wins and the date degrades gracefully
  * rather than the reverse. The full date/time is never lost — it's always in
- * the row's title/aria-label.
+ * the row's title/aria-label. The narrow column's floor (the clamp's first
+ * value) is sized to the sort *header's* worst case — "Date" plus its sort
+ * chevron — not just the row text, which is shorter; at typical sidebar
+ * widths the percentage resolves below that floor, so the floor is what
+ * actually governs the column's width and must not be shrunk without
+ * re-checking that the header still fits.
  */
 export const FILE_BROWSER_GRID_TEMPLATE =
   "1.25rem minmax(0, 1fr) clamp(6.25rem, 22%, 7.5rem)";
 export const FILE_BROWSER_GRID_TEMPLATE_NARROW =
-  "1.25rem minmax(0, 1fr) clamp(2.5rem, 16%, 3.5rem)";
+  "1.25rem minmax(0, 1fr) clamp(3.5rem, 24%, 4.5rem)";
 
 /**
  * Width (px) below which a file browser column layout switches to the
