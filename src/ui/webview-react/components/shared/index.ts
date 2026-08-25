@@ -77,6 +77,10 @@ export {
   type SingleLineCompletionEditorProps,
 } from "./SingleLineCompletionEditor";
 export { ScriptCommandEditor } from "./ScriptCommandEditor";
+export {
+  AdditionalArgsEditor,
+  type AdditionalArgsEditorProps,
+} from "./AdditionalArgsEditor";
 export { BranchNameEditor } from "./BranchNameEditor";
 export { ErrorBehaviorEditor } from "./ErrorBehaviorEditor";
 export {

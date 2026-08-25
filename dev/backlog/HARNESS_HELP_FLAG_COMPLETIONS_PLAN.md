@@ -1,6 +1,6 @@
 # Additional Args Completions from Live `--help` Output
 
-> **Status:** Steps 1–3 implemented; call-site rollout remains.
+> **Status:** Implemented (all five steps complete).
 >
 > Referenced as a follow-up from
 > [`ALLOW_DENY_LIST_EDITOR_PLAN.md`](ALLOW_DENY_LIST_EDITOR_PLAN.md#3-other-free-text-fields-in-workflowpropertiespaneltsx-worth-the-same-treatment),
@@ -251,24 +251,18 @@ source:
 | `components/settings/HarnessesSection.tsx`                       | Per-harness default Additional Args fields                                       |
 | `src/test/fixtures/harness-help/*.txt` (new)                     | Captured real `--help` output per harness, backing parser unit tests             |
 
-## Decisions Deferred to Implementation
+## What actually shipped
 
-- Exact generic-parser regex and which harnesses (if any) need a full
-  per-harness override — can't be known without capturing real `--help`
-  output from all six installed CLIs first.
-- Whether value-hint parsing ships in the first version or is a fast-follow
-  once flag-name completion is working end-to-end. Flag names alone already
-  deliver most of the value in the user's own example (`--reasoning-effort`
-  is the hard-to-remember part; `high` is not).
-- Cache lifetime: session-lifetime (matching `versionCommandCache`'s
-  contract) vs. keyed by resolved binary path so a mid-session CLI upgrade
-  is picked up without an extension reload. Lean toward session-lifetime
-  for simplicity unless testing shows this is actually annoying in
-  practice.
-- Whether completions prefetch on harness change (workflow-level field) or
-  stay purely lazy (fetched on first focus/keystroke) — affects perceived
-  latency on first use vs. unnecessary process spawns for harnesses the
-  user never touches Additional Args for.
+- The shared generic parser handles all six captured help fixtures; no
+  harness-specific parser overrides were needed.
+- Value hints ship on a best-effort basis wherever help output exposes an
+  unambiguous enum. Flags without parseable choices remain flag-name-only
+  completions.
+- Help output uses a dedicated session-lifetime retryable cache, matching
+  the version lookup cache and coalescing concurrent requests.
+- Completion requests stay lazy: the selected harness is queried when the
+  Additional Args editor asks for completions, rather than prefetching on a
+  harness switch.
 
 ## Non-Goals
 
