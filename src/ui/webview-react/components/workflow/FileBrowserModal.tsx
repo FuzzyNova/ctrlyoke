@@ -222,6 +222,7 @@ export const FileBrowserModal: React.FC = () => {
           sort={workspaceEntrySort}
           onSortKeyRequest={handleSortKeyRequest}
           isNarrow={isNarrowColumnLayout}
+          scrollContainerRef={scrollContainerRef}
         />
 
         <div

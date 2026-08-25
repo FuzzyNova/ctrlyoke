@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useLayoutEffect, useState } from "react";
 import { useLongPress } from "@hooks/useLongPress";
 import type { FailedWorkspaceDirectoryRange } from "@hooks/usePagedWorkspaceDirectory";
 import type {
@@ -108,6 +108,8 @@ export interface FileBrowserSortHeaderProps {
   onSortKeyRequest: (key: WorkspaceEntrySortKey) => void;
   /** Defaults to false. See `FILE_BROWSER_NARROW_THRESHOLD`. */
   isNarrow?: boolean;
+  /** Keeps the header width aligned with rows inside the directory scroller. */
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 /** Shared, stateless sort controls for the workspace file browsers. */
@@ -115,7 +117,29 @@ export function FileBrowserSortHeader({
   sort,
   onSortKeyRequest,
   isNarrow = false,
+  scrollContainerRef,
 }: FileBrowserSortHeaderProps): React.ReactElement {
+  const [usableWidth, setUsableWidth] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    const scrollContainer = scrollContainerRef?.current;
+    if (!scrollContainer) return;
+
+    const updateUsableWidth = () => {
+      const nextWidth = scrollContainer.clientWidth;
+      if (nextWidth > 0) {
+        setUsableWidth((currentWidth) =>
+          currentWidth === nextWidth ? currentWidth : nextWidth
+        );
+      }
+    };
+
+    updateUsableWidth();
+    const resizeObserver = new ResizeObserver(updateUsableWidth);
+    resizeObserver.observe(scrollContainer);
+    return () => resizeObserver.disconnect();
+  }, [scrollContainerRef]);
+
   const renderSortButton = (key: WorkspaceEntrySortKey): React.ReactElement => {
     const isActive = sort.key === key;
     // Visible text shrinks at the narrow tier; the accessible name stays
@@ -161,6 +185,7 @@ export function FileBrowserSortHeader({
         gridTemplateColumns: isNarrow
           ? FILE_BROWSER_GRID_TEMPLATE_NARROW
           : FILE_BROWSER_GRID_TEMPLATE,
+        ...(usableWidth !== null ? { width: usableWidth } : {}),
       }}
     >
       <span aria-hidden="true" />

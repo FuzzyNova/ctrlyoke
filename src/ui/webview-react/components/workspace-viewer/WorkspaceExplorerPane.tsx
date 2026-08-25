@@ -574,6 +574,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
         sort={workspaceEntrySort}
         onSortKeyRequest={handleSortKeyRequest}
         isNarrow={isNarrowColumnLayout}
+        scrollContainerRef={directoryScrollContainerRef}
       />
 
       {/* Entry list */}
