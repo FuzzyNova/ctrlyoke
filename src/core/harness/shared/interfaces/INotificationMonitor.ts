@@ -274,9 +274,9 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
               );
               try {
                 fs.unlinkSync(errorFile);
-                Log.debug("🗑️ Cleaned up error notification file");
+                Log.trace("🗑️ Cleaned up error notification file");
               } catch (error) {
-                Log.debug(`Failed to cleanup error file: ${error}`);
+                Log.trace(`Failed to cleanup error file: ${error}`);
               }
               return {
                 completed: false,
@@ -300,9 +300,9 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
               );
               try {
                 fs.unlinkSync(stopFile);
-                Log.debug("🗑️ Cleaned up Stop notification file");
+                Log.trace("🗑️ Cleaned up Stop notification file");
               } catch (error) {
-                Log.debug(`Failed to cleanup Stop file: ${error}`);
+                Log.trace(`Failed to cleanup Stop file: ${error}`);
               }
               return { completed: true, kind: "completion", data };
             }
@@ -323,9 +323,9 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
                 );
                 try {
                   fs.unlinkSync(file);
-                  Log.debug("🗑️ Cleaned up error notification file");
+                  Log.trace("🗑️ Cleaned up error notification file");
                 } catch (error) {
-                  Log.debug(`Failed to cleanup error file: ${error}`);
+                  Log.trace(`Failed to cleanup error file: ${error}`);
                 }
                 return {
                   completed: false,
@@ -352,9 +352,9 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
                 );
                 try {
                   fs.unlinkSync(file);
-                  Log.debug("🗑️ Cleaned up Stop notification file");
+                  Log.trace("🗑️ Cleaned up Stop notification file");
                 } catch (error) {
-                  Log.debug(`Failed to cleanup Stop file: ${error}`);
+                  Log.trace(`Failed to cleanup Stop file: ${error}`);
                 }
                 return { completed: true, kind: "completion", data };
               }
@@ -362,7 +362,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
           }
         }
       } catch (error) {
-        Log.debug(`Stop notification check error: ${error}`);
+        Log.trace(`Stop notification check error: ${error}`);
       }
 
       await this.delay(pollMs);
@@ -413,17 +413,17 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
             this.getStartHookEvents().includes(data?.hookEvent) &&
             data?.sessionId
           ) {
-            Log.debug(
+            Log.trace(
               `[NotificationMonitorBase] Found session-start notification (${data.hookEvent}): ${data.sessionId}`
             );
             // Delete immediately — this file belongs exclusively to this run
             try {
               fs.unlinkSync(file);
-              Log.debug(
+              Log.trace(
                 "🗑️ Cleaned up run-scoped SessionStart notification file"
               );
             } catch (error) {
-              Log.debug(`Failed to cleanup SessionStart file: ${error}`);
+              Log.trace(`Failed to cleanup SessionStart file: ${error}`);
             }
             return { completed: true, data };
           }
@@ -445,7 +445,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
               this.getStartHookEvents().includes(data?.hookEvent) &&
               data?.sessionId
             ) {
-              Log.debug(
+              Log.trace(
                 `[NotificationMonitorBase] Found session-start notification (${data.hookEvent}): ${data.sessionId}`
               );
               // NOTE: Do NOT delete here — cleanupNotificationFiles() removes both
@@ -483,7 +483,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
       const file = path.join(directory, `${sessionId}${suffix}`);
       try {
         fs.unlinkSync(file);
-        Log.debug(`🗑️ Cleaned up notification file: ${path.basename(file)}`);
+        Log.trace(`🗑️ Cleaned up notification file: ${path.basename(file)}`);
       } catch {
         // Ignore — file may not exist (already deleted or never created)
       }

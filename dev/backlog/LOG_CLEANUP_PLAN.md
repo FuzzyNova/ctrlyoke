@@ -151,6 +151,16 @@ its manifest incomplete. Best-effort usage-rollup refresh failures remain non-bl
 to TRACE so they do not add per-attempt DEBUG noise. `WorkflowStateMachine.ts` had no direct
 logging call sites; its transition reporting remains owned by `WorkflowInstance.ts`.
 
+**Group 4 decisions (2026-08-24):** Headless log-tail reads, notification polling/cleanup,
+notification and log-monitor catch-up errors, raw CLI output, stream JSON skips, hook-event
+file failures, and PTY resize telemetry are TRACE because they can fire per poll, output chunk,
+event file, or viewport resize. Session discovery and MCP/settings bookkeeping remain DEBUG:
+they happen at meaningful boundaries but are internal implementation detail rather than the
+workflow transcript. Base parser JSON/callback/read failures are WARN because parsing continues
+with degraded event coverage; Windows launcher resolution failures are WARN because direct
+invocation is a recoverable fallback. Startup, completion, cancellation, process, and harness
+execution failures retain their existing INFO/WARN/ERROR levels.
+
 Groups, sized to ~100-150 call sites each and aligned to `.github/instructions/*.instructions.md`
 scopes so each session reads one coherent set of conventions:
 

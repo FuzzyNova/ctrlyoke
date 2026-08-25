@@ -214,7 +214,7 @@ export class CliExecutionRunner {
       session.promptArgument,
       CliExecutionRunner.INJECT_PROMPT_CHUNK_SIZE
     );
-    Log.debug(
+    Log.trace(
       `[inject] writing focus-in pulses, ${promptChunks.length} prompt chunk(s), then submit pulses to PTY: ${JSON.stringify([focusIn, ...promptChunks, submit, submit])} hex=${Buffer.from(focusIn.repeat(CliExecutionRunner.INJECT_FOCUS_PULSE_COUNT) + session.promptArgument + submit.repeat(CliExecutionRunner.INJECT_SUBMIT_PULSE_COUNT)).toString("hex")}`
     );
 
@@ -550,7 +550,7 @@ export class CliExecutionRunner {
       }
 
       const startTime = new Date();
-      Log.debug(`⏱️ Recording start time: ${startTime.toISOString()}`);
+      Log.trace(`⏱️ Recording start time: ${startTime.toISOString()}`);
 
       if (session.resolvedSessionId && this.deps.provider.notificationMonitor) {
         const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
@@ -566,7 +566,7 @@ export class CliExecutionRunner {
           if (fs.existsSync(staleStopFile)) {
             try {
               fs.unlinkSync(staleStopFile);
-              Log.debug(
+              Log.trace(
                 `🧹 Cleaned up stale stop notification for session ${session.resolvedSessionId.substring(0, 8)}`
               );
             } catch {
@@ -747,11 +747,11 @@ export class CliExecutionRunner {
 
     return async (result) => {
       if (ConfigurationUtils.shouldLogRawCliOutput()) {
-        Log.debug(
+        Log.trace(
           `[${this.deps.provider.config.displayName} FINAL STDOUT${label}]:\n${result.stdout}`
         );
         if (result.stderr) {
-          Log.debug(
+          Log.trace(
             `[${this.deps.provider.config.displayName} FINAL STDERR${label}]:\n${result.stderr}`
           );
         }

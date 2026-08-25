@@ -433,7 +433,7 @@ export abstract class BaseLogParser implements ILogParser {
           entries.push(entry);
         } catch (error) {
           // Log parse errors but continue processing
-          Log.error(
+          Log.warn(
             `[BaseLogParser] Failed to parse JSON line: ${trimmed.substring(0, 100)}...`,
             error
           );
@@ -526,11 +526,11 @@ export abstract class BaseLogParser implements ILogParser {
           try {
             callback(entry);
           } catch (error) {
-            Log.error("[BaseLogParser] Callback error:", error);
+            Log.warn("[BaseLogParser] Callback error:", error);
           }
         }
       } catch (error) {
-        Log.error("[BaseLogParser] Error reading new lines:", error);
+        Log.warn("[BaseLogParser] Error reading new lines:", error);
       }
     });
 

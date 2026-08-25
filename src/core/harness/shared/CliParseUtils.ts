@@ -102,7 +102,7 @@ export class CliParseUtils {
           const json = JSON.parse(objStr);
           objects.push(json);
         } catch (parseError) {
-          Log.debug(
+          Log.trace(
             `Failed to parse stream-json object: ${objStr.substring(0, 100)}`
           );
         }
@@ -142,7 +142,7 @@ export class CliParseUtils {
         const json = JSON.parse(line);
         objects.push(json);
       } catch (parseError) {
-        Log.debug(`Skipping non-JSON line: ${line.substring(0, 100)}`);
+        Log.trace(`Skipping non-JSON line: ${line.substring(0, 100)}`);
       }
     }
 
