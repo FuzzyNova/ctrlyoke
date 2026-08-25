@@ -189,7 +189,7 @@ describe("HooksEditor compatibility diagnostics", () => {
     expect(screen.getByLabelText("Timeout (seconds)")).toHaveClass("h-7");
 
     const removeButton = screen.getByRole("button", { name: "Remove hook" });
-    expect(removeButton).toHaveClass("bg-indicator-error", "h-7");
+    expect(removeButton).toHaveClass("bg-indicator-error", "h-7", "self-end");
     expect(removeButton.querySelector(".codicon-trash")).toBeInTheDocument();
   });
 

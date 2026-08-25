@@ -219,7 +219,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
                 size="sm"
                 aria-label="Remove hook"
                 title="Remove hook"
-                className="h-7 shrink-0 px-1.5 self-center"
+                className="h-7 shrink-0 self-end px-1.5"
               >
                 <i className="codicon codicon-trash" aria-hidden="true" />
               </Button>
