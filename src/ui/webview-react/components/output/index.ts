@@ -1,7 +1,10 @@
 export { OutputFindBar } from "./OutputFindBar";
 export { OutputRow } from "./OutputRow";
 export { AskUserQuestionOutput } from "./AskUserQuestionOutput";
-export { RunSummaryBanner } from "./RunSummaryBanner";
+export {
+  RunSummaryBanner,
+  WorkspaceWorktreeOwnershipBanner,
+} from "./RunSummaryBanner";
 export { MarkdownText } from "./MarkdownText";
 export {
   FileEditOutput,

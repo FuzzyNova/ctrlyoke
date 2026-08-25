@@ -11,6 +11,7 @@ import type {
   WorktreeRunProjection,
   WorkflowViewAddress,
   WorkflowTokenTotals,
+  WorkspaceWorktreeOwnership,
 } from "@root/types/CtrlYokeTypes";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { isStandalone } from "@hooks/useVsCodeApi";
@@ -146,6 +147,18 @@ export interface RunSummaryBannerProps extends RunBannerData {
   showBackToLive: boolean;
   onBackToLive?: () => void;
 }
+
+export const WorkspaceWorktreeOwnershipBanner: React.FC<{
+  ownership: WorkspaceWorktreeOwnership;
+}> = ({ ownership }) => (
+  <div className="flex items-center gap-1 px-3 py-1.5 text-[length:var(--fp-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border">
+    <i className="codicon codicon-source-control" aria-hidden="true" />
+    <span>
+      This is branch <code className="font-mono">{ownership.branchName}</code>,
+      owned by <code className="font-mono">{ownership.sourceCheckoutRoot}</code>
+    </span>
+  </div>
+);
 
 /**
  * Always-visible run identity strip at the top of the output pane — run

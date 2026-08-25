@@ -47,6 +47,7 @@ import {
 import type {
   ErrorBehavior,
   WorkflowSummary,
+  WorkspaceWorktreeOwnership,
   McpServerConfig,
   PreCondition,
   PriorContext,
@@ -1778,6 +1779,18 @@ export interface RunExecutionControlMessage {
   address: Extract<WorkflowViewAddress, { kind: "run" }>;
 }
 
+/** Webview -> Extension: ask a sibling VS Code owner to stop without touching its lock. */
+export interface StopVscodeRunMessage {
+  type: typeof MESSAGE_TYPES.STOP_VSCODE_RUN;
+  workflowId: string;
+}
+
+/** Extension -> Webview: current workspace is a discovered managed worktree. */
+export interface WorkspaceWorktreeOwnershipMessage {
+  type: typeof MESSAGE_TYPES.WORKSPACE_WORKTREE_OWNERSHIP;
+  ownership: WorkspaceWorktreeOwnership;
+}
+
 /**
  * Set start position message (webview -> extension)
  */
@@ -2463,6 +2476,7 @@ export type IncomingMessage =
   | GlobalSettingsLoadedMessage
   | WorktreeManagementStateMessage
   | WorktreeManagementActionResultMessage
+  | WorkspaceWorktreeOwnershipMessage
   | GlobalSettingUpdatedMessage
   | NotificationEventMessage
   | UserFeedbackMessage

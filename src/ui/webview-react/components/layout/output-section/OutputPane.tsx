@@ -1,6 +1,10 @@
 import React, { memo, Profiler } from "react";
 import type { VirtualItem } from "@tanstack/react-virtual";
-import { OutputRow, RunSummaryBanner } from "@components/output";
+import {
+  OutputRow,
+  RunSummaryBanner,
+  WorkspaceWorktreeOwnershipBanner,
+} from "@components/output";
 import {
   DEFAULT_BASH_OUTPUT_EXPANSION_STATE,
   type BashOutputExpansionSection,
@@ -8,6 +12,7 @@ import {
 } from "@components/output/BashOutput";
 import type { OutputRowFileUndoRequest } from "@components/output/OutputRow";
 import type { RunBannerData } from "@components/output/RunSummaryBanner";
+import type { WorkspaceWorktreeOwnership } from "@root/types/CtrlYokeTypes";
 import {
   OutputMinimap,
   type MinimapStep,
@@ -52,6 +57,7 @@ interface OutputPaneProps {
   measureStaticRowElement: React.RefCallback<HTMLDivElement>;
   /** Run identity/status/totals for whichever run is displayed; absent when there's no run to show (e.g. a fresh draft). */
   runBanner?: RunBannerData;
+  workspaceWorktreeOwnership?: WorkspaceWorktreeOwnership;
   isRunBannerPinned: boolean;
   onToggleRunBannerPinned: () => void;
   /** True while browsing history and a different run is executing live. */
@@ -181,6 +187,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
     measureRowElement,
     measureStaticRowElement,
     runBanner,
+    workspaceWorktreeOwnership,
     isRunBannerPinned,
     onToggleRunBannerPinned,
     showBackToLive,
@@ -260,6 +267,11 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
           onContextMenuOpen(e.clientX, e.clientY, e.currentTarget);
         }}
       >
+        {workspaceWorktreeOwnership && (
+          <WorkspaceWorktreeOwnershipBanner
+            ownership={workspaceWorktreeOwnership}
+          />
+        )}
         {runBanner && (
           <RunSummaryBanner
             runId={runBanner.runId}

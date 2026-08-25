@@ -367,6 +367,13 @@ export class WebviewMessageRouter {
               ? message.preferredViewAddress
               : undefined,
         });
+        const worktreeOwnership = orchestrator.getActivationWorktreeOwnership();
+        if (worktreeOwnership) {
+          ctx.emit({
+            type: MESSAGE_TYPES.WORKSPACE_WORKTREE_OWNERSHIP,
+            ownership: worktreeOwnership,
+          });
+        }
         // For browser clients: SESSION_RESTORED (sent during replay) triggers
         // applyWorkflowChange() which no longer clears workflowProperties, but
         // WORKFLOW_PROPERTIES_UPDATE is still needed to replace any stale values
@@ -2019,6 +2026,18 @@ export class WebviewMessageRouter {
       const { workflowId } = message;
       if (workflowId) {
         await this.getOrchestrator()?.stopCliSession(workflowId);
+      }
+    });
+
+    table.set(MESSAGE_TYPES.STOP_VSCODE_RUN, async (message) => {
+      const { workflowId } = message;
+      if (!workflowId) return;
+      const result =
+        await this.getOrchestrator()?.requestVscodeStop(workflowId);
+      if (result === "timed-out") {
+        Log.warn(
+          `[WebviewMessageRouter] sibling VS Code stop request timed out for "${workflowId}"`
+        );
       }
     });
 

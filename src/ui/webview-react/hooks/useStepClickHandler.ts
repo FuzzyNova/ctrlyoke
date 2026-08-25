@@ -9,7 +9,7 @@ import { getActiveOutputNavigationController } from "@utils/outputNavigation";
  * editing and scrolls the output panel to its anchor.
  *
  * Single source of truth shared by WorkflowStepsPanel and PromptChipRail.
- * Callers can add their own guards (e.g. isCLIManaged) before invoking it.
+ * Callers can add their own guards (e.g. isExternallyManaged) before invoking it.
  */
 export function useStepClickHandler() {
   const selectPrompt = useEditorStore((state) => state.selectPrompt);

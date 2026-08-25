@@ -775,6 +775,24 @@ suite("WorktreeManager", function () {
     await managed.lease.release();
   });
 
+  test("activation discovery surfaces ownership when opened inside a managed worktree", async () => {
+    const { parent, repository } = await makeRepository(
+      "activation-current-worktree"
+    );
+    const managed = await ensureManaged(manager(parent), repository);
+
+    const report = await manager(parent).discoverActivationState({
+      sourceCheckoutRoot: managed.worktreePath,
+    });
+
+    assert.deepStrictEqual(report.currentManagedWorktree, {
+      branchName: managed.branchName,
+      worktreePath: managed.worktreePath,
+      sourceCheckoutRoot: repository,
+    });
+    await managed.lease.release();
+  });
+
   test("seeds .ctrlyoke/.gitignore in a newly created managed worktree", async () => {
     const { parent, repository } = await makeRepository("managed-gitignore");
     const info = await ensureManaged(manager(parent), repository);

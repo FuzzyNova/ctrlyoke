@@ -68,7 +68,7 @@ if (status === LOCK_STATUS.ACTIVE_CLI) {
 ```
 
 (`src/utils/WorkflowLockManager.ts:311-327`, comment included verbatim.) The
-comment's assumption — that an `active-vscode` lock seen during *my* startup
+comment's assumption — that an `active-vscode` lock seen during _my_ startup
 must be a leftover from a `vscode` process that can no longer be alive,
 because I "just started" — is only true when there is exactly one ctrlyoke
 VS Code instance per workspace. It is false the moment a second instance
@@ -82,7 +82,7 @@ runner is `cli`. It rewrites `_runtime.executionState` to `"stopped"` on
 disk, marks the interrupted step `"cancelled"`, and deletes Window A's lock
 file out from under it (`WorkflowLockManager.ts:329-386`). Window A's own
 in-memory `WorkflowExecutor` keeps running — its heartbeat writes will now
-recreate a lock with a *new* `ownerToken`, but the run has already been
+recreate a lock with a _new_ `ownerToken`, but the run has already been
 externally marked terminated on disk and in Window A's dashboard readers,
 who's-more-current logic (`orchestration.instructions.md`'s manifest vs.
 working-file divergence note) will show effects.
@@ -112,9 +112,9 @@ see the companion reference doc,
 ### No UI signal exists for "owned by another ctrlyoke instance"
 
 `WorkflowSummary.managedBy?: RunnerId` already exists precisely to flag
-non-local ownership, but its own doc comment gives away the gap: *"Set to
+non-local ownership, but its own doc comment gives away the gap: _"Set to
 `'cli'` when the workflow is being executed by the ctrlyoke CLI. Undefined
-means vscode-managed"* (`src/types/CtrlYokeTypes.ts:1070-1071`). It is
+means vscode-managed"_ (`src/types/CtrlYokeTypes.ts:1070-1071`). It is
 written **only** with `RUNNER_IDS.CLI`
 (`src/core/WorkflowOrchestrator.ts:5951,5971`) or left `undefined`
 (`WorkflowOrchestrator.ts:6326`) — never `RUNNER_IDS.VSCODE`, even though
@@ -133,8 +133,8 @@ a lineage another live process is actively executing.
 
 All of the above traces to one gap: **ctrlyoke has a per-lineage execution
 lock (`runner.json`), but no per-workspace instance registry.** The lock
-answers "is *a* runner executing this lineage," but nothing answers "which
-*instances* currently consider themselves attached to this workspace,"
+answers "is _a_ runner executing this lineage," but nothing answers "which
+_instances_ currently consider themselves attached to this workspace,"
 so a newly-activating instance cannot tell "stale state from my own prior
 crash" apart from "a live sibling is legitimately running this right now."
 
@@ -159,17 +159,18 @@ Fix `normalizeStaleLocks`' `active-vscode` branch so it only normalizes a
 lock that is actually stale (dead PID or heartbeat >30s), never a live one.
 Concretely: reorder the check in `WorkflowLockManager.normalizeStaleLocks`
 (`WorkflowLockManager.ts:311-327`) so the branches are `ACTIVE_CLI` → preserve
-+ CLI watch, **truly live `ACTIVE_VSCODE`** (not stale) → preserve + register
-some equivalent of a watch session instead of a locally-owned
-`WorkflowInstance` (see Phase 2), and only `NONE`/`STALE` → normalize to
-`STOPPED`. This alone removes the "second window kills the first window's
-run" failure mode even with zero other changes — a genuinely dead sibling
-(closed window, crashed extension host) still gets cleaned up exactly as
-today, since `isOwnerStale` already covers that case correctly.
+
+- CLI watch, **truly live `ACTIVE_VSCODE`** (not stale) → preserve + register
+  some equivalent of a watch session instead of a locally-owned
+  `WorkflowInstance` (see Phase 2), and only `NONE`/`STALE` → normalize to
+  `STOPPED`. This alone removes the "second window kills the first window's
+  run" failure mode even with zero other changes — a genuinely dead sibling
+  (closed window, crashed extension host) still gets cleaned up exactly as
+  today, since `isOwnerStale` already covers that case correctly.
 
 ### Phase 2 — Surface "owned by another ctrlyoke instance" in the dashboard
 
-Backend watch registration is implemented. The shared read-only watcher is now
+Phase 2 is implemented. The shared read-only watcher is now
 `ExternalRunWatchSession` (renamed from `CliWatchSession`) and the existing
 session registry handles both external runners:
 
@@ -179,16 +180,19 @@ session registry handles both external runners:
   `active-vscode` locks through the watch path, while CLI behavior remains
   unchanged; summaries use `managedBy: RUNNER_IDS.VSCODE` for sibling VS Code
   owners and `RUNNER_IDS.CLI` for CLI owners.
-- **Deferred to the next step:** Generalize the dashboard UI's `isCLIManaged`
-  handling into an any-external-runner check, with runner-specific labels.
-- **Deferred to the next step:** Add the Stop-signal mechanism for
-  sibling-owned VS Code runs. Do not delete a sibling's lock from this
-  instance; owner-token protection still applies.
+- **Done:** The dashboard treats every externally managed run as read-only,
+  with runner-specific labels and controls. CLI-owned runs keep their existing
+  Stop behavior; sibling VS Code runs use the signal path below.
+- **Done:** A sibling-owned VS Code Stop writes an owner-token-scoped
+  `stop-request-<ownerToken>.json` sentinel under the lineage. The owning
+  instance polls for that sentinel, performs its normal stop transition, and
+  removes the request; the requester reports pickup or a bounded timeout and
+  never deletes the sibling's lock or run file.
 
 ### Phase 3 — Hosted server awareness (lower priority)
 
 Make a second instance's server auto-start detect that the port it fell back
-from is already answering as a *ctrlyoke* server (not just "something is on
+from is already answering as a _ctrlyoke_ server (not just "something is on
 that port") — e.g. probe `GET /api/...` with the configured token before
 assuming EADDRINUSE means "unrelated process." If it is a sibling ctrlyoke
 server, either: skip starting a second server and show a status-bar/settings
@@ -245,7 +249,7 @@ managed/named worktree runs acquire `exclusive-worktree`). Concretely:
   (`VSCODE_COMMANDS.OPEN_WORKTREE_OWNER`, `src/extension.ts:1231-1246`) — the
   same mechanism already built for ordinary same-directory lease conflicts.
 - Symmetrically, once the new window starts its own ordinary run there
-  (`shared-native` lease), the originating instance cannot start a *second*
+  (`shared-native` lease), the originating instance cannot start a _second_
   worktree-targeted run against that same worktree until the new window's
   run ends.
 - Branch-deletion safety is independent of any of this: `WorktreeManager`
@@ -260,17 +264,10 @@ shipped infrastructure. This needs no new locking primitive.
 
 ### What is genuinely missing (visibility only, not correctness)
 
-1. **No indication, in the new window, that the folder is a ctrlyoke-owned
-   worktree.** `Header.tsx`/`WorkflowStatus.tsx` only consult the ownership
-   record and lease state while *driving* a worktree run; a window opened
-   directly on the worktree path never reads its own ownership record
-   (`<git-common-dir>/ctrlyoke/managed-worktrees/<branch-hash>.json`) to tell
-   the user "this is branch `ctrlyoke/ui-refactor/run-…`, owned by
-   `<sourceCheckoutRoot>`." Worth a read-only banner built on discovery code
-   that already exists (`WorktreeManager.discoverRecoverableManagedWorktrees`
-   / `git worktree list`), not a new coordination mechanism — a natural
-   addition to Phase 2's dashboard-visibility work above rather than a new
-   phase.
+1. **Done (Phase 2):** A window opened directly on a ctrlyoke-managed worktree
+   now receives a read-only ownership banner based on the existing worktree
+   discovery and `git worktree list` data. It identifies the branch and owning
+   source checkout without acquiring or changing the worktree lease.
 2. **A narrow creation-time race.** The exclusive lease is acquired at
    lifecycle step 6, one step after `git worktree add` at step 4 (see the
    Managed/ephemeral lifecycle in `WORKTREE_SUPPORT_PLAN.md`). A user who
@@ -280,18 +277,17 @@ shipped infrastructure. This needs no new locking primitive.
    finalization (directory kept) — never silent loss — so this is a
    low-priority polish item, not a correctness gap.
 3. **Worktree-of-a-worktree is unvalidated.** If the second window itself
-   authors a workflow with `worktree: true`/named targeting a *further*
+   authors a workflow with `worktree: true`/named targeting a _further_
    nested worktree, confirm the placement guards ("reject a root contained
    within any discovered worktree") still resolve correctly when
    `sourceCheckoutRoot` is itself a linked worktree rather than the
    repository's main checkout. Likely fine given the guards are already
    phrased in terms of "any discovered worktree," but untested.
 
-**Recommendation:** no new phase. Fold item 1 into Phase 2 as an additional
-bullet — surfacing external ownership is the same theme as generalizing
-`managedBy` — and leave items 2–3 as watch items; they're pre-existing edge
-cases of the worktree feature itself, not new risk introduced by the
-coordination gap this document is otherwise about.
+**Recommendation:** item 1 is complete as part of Phase 2. Leave items 2–3 as
+watch items; they're pre-existing edge cases of the worktree feature itself,
+not new risk introduced by the coordination gap this document is otherwise
+about.
 
 ## Non-Goals
 
@@ -327,7 +323,7 @@ rides along with Phase 2 whenever that work happens.
   Window" case above
 - `src/types/CtrlYokeTypes.ts` (`WorkflowRunnerLock`, `WorkflowSummary.managedBy`)
 - `src/types/DashboardConstants.ts` (`RUNNER_IDS`, `LOCK_STATUS`)
-- `src/ui/webview-react/components/layout/Header.tsx` (`isCLIManaged` and
+- `src/ui/webview-react/components/layout/Header.tsx` (`isExternallyManaged` and
   its watch-mode lockdown — the pattern Phase 2 generalizes)
 - `src/ui/webview-react/components/output/RunSummaryBanner.tsx` — **Open
   Worktree in New Window** action (`src/extension.ts:866-882`) that opens the

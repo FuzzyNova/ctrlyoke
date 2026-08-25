@@ -23,6 +23,7 @@ import type {
   WorkflowKey,
   WorkflowTokenTotals,
   WorktreeRunProjection,
+  WorkspaceWorktreeOwnership,
 } from "@root/types/CtrlYokeTypes";
 import type { CreateWorkflowVariantRequest } from "@root/types/WebviewMessageTypes";
 import type { SaveWorkflowBundlePreview } from "../types/messages";
@@ -617,6 +618,7 @@ interface UiState {
   observedRunningWorkflowIds: Set<string>;
   activeWorkflowId: string | null;
   activeWorkflowWorkingFilePath: string | null;
+  workspaceWorktreeOwnership: WorkspaceWorktreeOwnership | null;
 
   // Loading states
   isLoading: boolean;
@@ -832,6 +834,9 @@ interface UiActions {
   updateLoadedWorkflow: (workflow: WorkflowSummary) => void;
   setActiveWorkflowId: (id: string | null) => void;
   setActiveWorkflowWorkingFilePath: (path: string | null) => void;
+  setWorkspaceWorktreeOwnership: (
+    ownership: WorkspaceWorktreeOwnership | null
+  ) => void;
   setViewingDeletedWorkflow: (
     value: { workflowKey: WorkflowKey; workflowName: string } | null
   ) => void;
@@ -1031,6 +1036,7 @@ const initialState: UiState = {
   observedRunningWorkflowIds: new Set<string>(),
   activeWorkflowId: null,
   activeWorkflowWorkingFilePath: null,
+  workspaceWorktreeOwnership: null,
   isLoading: false,
   loadingMessage: null,
   outputFontSize: 13,
@@ -1514,6 +1520,9 @@ export const useUiStore = create<UiState & UiActions>()(
 
       setActiveWorkflowWorkingFilePath: (path) =>
         set({ activeWorkflowWorkingFilePath: path }),
+
+      setWorkspaceWorktreeOwnership: (ownership) =>
+        set({ workspaceWorktreeOwnership: ownership }),
 
       setViewingDeletedWorkflow: (value) =>
         set({ viewingDeletedWorkflow: value }),
@@ -2024,6 +2033,7 @@ export const useUiStore = create<UiState & UiActions>()(
           pendingFindRequest: null,
           recentWorkflows: [],
           recentWorkflowsDropdownOpen: false,
+          workspaceWorktreeOwnership: null,
           isLoading: false,
           loadingMessage: null,
           outputScrollTargets: {},

@@ -15,6 +15,7 @@ import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflo
 import { sendMessage } from "@hooks/useMessageHandler";
 import { WebviewLog } from "@utils/logger";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
+import { getExternalRunnerLabel } from "@utils/externalRunner";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { WorkflowControls } from "../workflow/WorkflowControls";
 import { WorkflowStatus } from "../workflow/WorkflowStatus";
@@ -167,8 +168,10 @@ export const Header: React.FC<{
     (workflow) => workflow.id === activeWorkflowId
   );
 
-  // Derive whether the active workflow is CLI-managed (read-only watch mode)
-  const isCLIManaged = activeWorkflow?.managedBy === RUNNER_IDS.CLI;
+  // Any non-local runner owns the live files, so the dashboard is read-only.
+  const managedBy = activeWorkflow?.managedBy;
+  const isExternallyManaged = managedBy != null;
+  const externalManagementLabel = getExternalRunnerLabel(managedBy);
   // The lineage on screen was deleted (from history) while being viewed —
   // its backing files are gone, so every workflow-mutating control is locked
   // except the prompt editor (see EditorSection — its draft is intentionally
@@ -254,13 +257,15 @@ export const Header: React.FC<{
     });
   const dryRunScope = useExecutionPreviewStore((state) => state.scope);
 
-  const handleStopCliRun = useCallback(() => {
-    if (activeWorkflowId) {
-      sendMessage(MESSAGE_TYPES.STOP_CLI_RUN, {
-        workflowId: activeWorkflowId,
-      });
-    }
-  }, [activeWorkflowId]);
+  const handleStopExternallyManagedRun = useCallback(() => {
+    if (!activeWorkflowId) return;
+    sendMessage(
+      managedBy === RUNNER_IDS.VSCODE
+        ? MESSAGE_TYPES.STOP_VSCODE_RUN
+        : MESSAGE_TYPES.STOP_CLI_RUN,
+      { workflowId: activeWorkflowId }
+    );
+  }, [activeWorkflowId, managedBy]);
 
   const dryRunDisabled = !displayedViewAddress || isLineageReadOnly;
   const canSave = hasFile && !isLineageReadOnly;
@@ -495,9 +500,12 @@ export const Header: React.FC<{
   // Below xs (380px), show only actionable execution slots. If none are
   // actionable, retain the disabled Run slot so the primary affordance never
   // disappears completely. From xs upward all three fixed slots remain visible.
-  const slot1Enabled = slot1.enabled && !isCLIManaged && !isLineageReadOnly;
-  const slot2Enabled = slot2.enabled && !isCLIManaged && !isLineageReadOnly;
-  const slot3Enabled = (slot3.enabled || isCLIManaged) && !isLineageReadOnly;
+  const slot1Enabled =
+    slot1.enabled && !isExternallyManaged && !isLineageReadOnly;
+  const slot2Enabled =
+    slot2.enabled && !isExternallyManaged && !isLineageReadOnly;
+  const slot3Enabled =
+    (slot3.enabled || isExternallyManaged) && !isLineageReadOnly;
   const restartOnlyOnNarrow =
     executionState === EXECUTION_STATES.STOPPED &&
     !isRunning &&
@@ -532,10 +540,10 @@ export const Header: React.FC<{
             openRunDryRunMenu(event.clientX, event.clientY);
           }}
           {...runSlotLongPressHandlers}
-          disabled={!slot1.enabled || isCLIManaged || isLineageReadOnly}
+          disabled={!slot1.enabled || isExternallyManaged || isLineageReadOnly}
           title={
-            isCLIManaged
-              ? "Workflow is running via ctrlyoke CLI"
+            externalManagementLabel
+              ? `Workflow is running via ${externalManagementLabel}`
               : isViewingDeletedWorkflow
                 ? "This workflow has been deleted"
                 : isSystemGeneratedWorkflow
@@ -560,10 +568,10 @@ export const Header: React.FC<{
               : `${HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
           onClick={() => handleSlotAction(slot2.action)}
-          disabled={!slot2.enabled || isCLIManaged || isLineageReadOnly}
+          disabled={!slot2.enabled || isExternallyManaged || isLineageReadOnly}
           title={
-            isCLIManaged
-              ? "Workflow is running via ctrlyoke CLI"
+            externalManagementLabel
+              ? `Workflow is running via ${externalManagementLabel}`
               : isViewingDeletedWorkflow
                 ? "This workflow has been deleted"
                 : isSystemGeneratedWorkflow
@@ -586,14 +594,18 @@ export const Header: React.FC<{
               : `${HIDDEN_UNTIL_XS} bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed`
           }`}
           onClick={
-            isCLIManaged
-              ? handleStopCliRun
+            isExternallyManaged
+              ? handleStopExternallyManagedRun
               : () => handleSlotAction(slot3.action)
           }
-          disabled={(!slot3.enabled && !isCLIManaged) || isLineageReadOnly}
+          disabled={
+            (!slot3.enabled && !isExternallyManaged) || isLineageReadOnly
+          }
           title={
-            isCLIManaged
-              ? "Stop CLI run"
+            isExternallyManaged
+              ? managedBy === RUNNER_IDS.CLI
+                ? "Stop CLI run"
+                : "Stop run in another ctrlyoke window"
               : isViewingDeletedWorkflow
                 ? "This workflow has been deleted"
                 : isSystemGeneratedWorkflow

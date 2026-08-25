@@ -23,6 +23,7 @@ import type { RunRef, WorkflowKey } from "../types/CtrlYokeTypes";
 export const WORKING_FILE_NAME = "workflow.ctrlyoke.json";
 const DESCRIPTOR_FILE_NAME = "workflow.json";
 const RUNNER_LOCK_FILE_NAME = "runner.json";
+const STOP_REQUEST_FILE_PREFIX = "stop-request-";
 const DRAFT_DIR_NAME = "draft";
 const CREATING_PREFIX = ".creating-";
 
@@ -194,6 +195,21 @@ export function runnerLockPath(
   return path.join(
     lineageDir(workspaceRoot, workflowKey),
     RUNNER_LOCK_FILE_NAME
+  );
+}
+
+/** Resolve the owner-token-scoped stop request sentinel for a live run. */
+export function stopRequestPath(
+  workspaceRoot: string,
+  workflowKey: WorkflowKey,
+  ownerToken: string
+): string {
+  if (!/^[A-Za-z0-9_-]+$/.test(ownerToken)) {
+    throw new WorkflowPathError("Invalid runner owner token");
+  }
+  return path.join(
+    lineageDir(workspaceRoot, workflowKey),
+    `${STOP_REQUEST_FILE_PREFIX}${ownerToken}.json`
   );
 }
 

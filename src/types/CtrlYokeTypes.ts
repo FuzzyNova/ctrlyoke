@@ -1081,6 +1081,13 @@ export interface WorkflowSummary {
   tokenTotals?: WorkflowTokenTotals;
 }
 
+/** Read-only ownership identity discovered when a window opens on a managed worktree. */
+export interface WorkspaceWorktreeOwnership {
+  branchName: string;
+  worktreePath: string;
+  sourceCheckoutRoot: string;
+}
+
 /**
  * Returns the 1-indexed step number for display (logs, UI labels), bounded by
  * the queue size. The internal cursor equals `totalSteps` after completion, so

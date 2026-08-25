@@ -189,6 +189,9 @@ const OutputSectionInner: React.FC = () => {
     (s) => s.historyOutputs?.runMetadata
   );
   const runBannerPinned = useUiStore((s) => s.runBannerPinned);
+  const workspaceWorktreeOwnership = useUiStore(
+    (s) => s.workspaceWorktreeOwnership
+  );
   const toggleRunBannerPinned = useUiStore((s) => s.toggleRunBannerPinned);
   const displayedRunBanner = useMemo<RunBannerData | undefined>(() => {
     if (!displayedRunSummary || displayedAddress?.kind !== "run")
@@ -1470,6 +1473,7 @@ const OutputSectionInner: React.FC = () => {
           measureRowElement={measureRowElement}
           measureStaticRowElement={measureStaticRowElement}
           runBanner={displayedRunBanner}
+          workspaceWorktreeOwnership={workspaceWorktreeOwnership ?? undefined}
           isRunBannerPinned={runBannerPinned}
           onToggleRunBannerPinned={toggleRunBannerPinned}
           showBackToLive={isViewingHistory && isExecutionActive}

@@ -2642,6 +2642,12 @@ export function createMessageHandlers(
     }
   };
 
+  handlers[MESSAGE_TYPES.WORKSPACE_WORKTREE_OWNERSHIP] = (message) => {
+    useUiStore
+      .getState()
+      .setWorkspaceWorktreeOwnership(message.ownership ?? null);
+  };
+
   // --------------------------------------------------------------------------
   // ACTIVE_WORKFLOW_CHANGED - Active workflow selection changed
   // --------------------------------------------------------------------------

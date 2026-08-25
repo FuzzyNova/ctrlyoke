@@ -42,6 +42,10 @@ import {
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import { HEARTBEAT_INTERVAL_MS } from "../utils/LockSafetyPrimitives";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
+import {
+  deleteWorkflowStopRequest,
+  readWorkflowStopRequest,
+} from "../utils/WorkflowStopRequest";
 import { pathsEqual } from "../utils/PathCasing";
 import {
   ACTION_TYPES,
@@ -270,6 +274,9 @@ export class WorkflowInstance {
     null;
   /** Heartbeat interval for the process lock file (cleared in finally + dispose) */
   private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
+  /** Polls the owner-token-scoped stop request sentinel while this instance owns a run. */
+  private stopRequestPollInterval: ReturnType<typeof setInterval> | undefined;
+  private stopRequestPollInFlight = false;
   /** Ownership token for the currently-held runner lock, if any (see WorkflowLockManager). */
   private currentLockOwnerToken: string | undefined;
   /** Shared lease for the execution root used by this run. */
@@ -886,6 +893,7 @@ export class WorkflowInstance {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = undefined;
     }
+    this.stopStopRequestPolling();
     this.promptFileWatcher.dispose();
     this.endConditionEvaluator.dispose();
     // Close any lingering terminals from the last run and release references.
@@ -4226,6 +4234,57 @@ export class WorkflowInstance {
       }
     );
     this.currentLockOwnerToken = ownerToken;
+    this.startStopRequestPolling();
+  }
+
+  private startStopRequestPolling(): void {
+    this.stopStopRequestPolling();
+    this.stopRequestPollInterval = setInterval(() => {
+      void this.pollStopRequest();
+    }, 1_000);
+  }
+
+  private stopStopRequestPolling(): void {
+    if (this.stopRequestPollInterval !== undefined) {
+      clearInterval(this.stopRequestPollInterval);
+      this.stopRequestPollInterval = undefined;
+    }
+  }
+
+  private async pollStopRequest(): Promise<void> {
+    if (this.stopRequestPollInFlight) return;
+    const state = this.promptQueue.getState();
+    const workspaceRoot =
+      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    const ownerToken = this.currentLockOwnerToken;
+    if (!workspaceRoot || !state.workflowKey || !ownerToken) return;
+
+    this.stopRequestPollInFlight = true;
+    try {
+      const request = await readWorkflowStopRequest(
+        workspaceRoot,
+        state.workflowKey,
+        ownerToken
+      );
+      if (!request) return;
+
+      Log.info(
+        `[inst:${this.id.slice(0, 8)}] honoring stop request ${request.requestId}`
+      );
+      await this.stop();
+      await deleteWorkflowStopRequest(
+        workspaceRoot,
+        state.workflowKey,
+        ownerToken
+      );
+    } catch (error) {
+      Log.warn(
+        `[inst:${this.id.slice(0, 8)}] failed to honor stop request:`,
+        error
+      );
+    } finally {
+      this.stopRequestPollInFlight = false;
+    }
   }
 
   private async releaseRunnerLock(): Promise<void> {
@@ -4235,6 +4294,7 @@ export class WorkflowInstance {
     const ownerToken = this.currentLockOwnerToken;
     if (!lockWorkspaceRoot || !state.workflowKey || !ownerToken) return;
     this.currentLockOwnerToken = undefined;
+    this.stopStopRequestPolling();
     await WorkflowLockManager.releaseLock(
       lockWorkspaceRoot,
       state.workflowKey,
@@ -4582,6 +4642,7 @@ export class WorkflowInstance {
       ) {
         clearInterval(this.heartbeatInterval);
         this.heartbeatInterval = undefined;
+        this.stopStopRequestPolling();
       }
       if (
         !preserveWorktreeReservation &&
@@ -4607,6 +4668,7 @@ export class WorkflowInstance {
       ) {
         const ownerToken = this.currentLockOwnerToken;
         this.currentLockOwnerToken = undefined;
+        this.stopStopRequestPolling();
         await WorkflowLockManager.releaseLock(
           lockWorkspaceRoot,
           workflowKey,
@@ -4674,6 +4736,7 @@ export class WorkflowInstance {
     if (this.heartbeatInterval !== undefined) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = undefined;
+      this.stopStopRequestPolling();
     }
 
     const lease = this.executionLease;

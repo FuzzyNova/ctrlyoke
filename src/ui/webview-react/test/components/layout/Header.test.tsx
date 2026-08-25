@@ -11,7 +11,7 @@ import { Header } from "@components/layout/Header";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
-import { EXECUTION_STATES, MESSAGE_TYPES } from "@/types/messages";
+import { EXECUTION_STATES, MESSAGE_TYPES, RUNNER_IDS } from "@/types/messages";
 
 const postMessage = vi.fn();
 const runRef = "run-2026-07-20T10-30-00-000Z" as never;
@@ -641,6 +641,46 @@ describe("Header execution controls", () => {
         kind: "run",
         runRef,
       },
+    });
+  });
+
+  it("locks down sibling-owned runs and sends the sibling stop request", () => {
+    useUiStore.setState({
+      activeWorkflowId: "sibling-instance",
+      executionRunRef: runRef,
+      pendingRewind: null,
+      loadedWorkflows: [
+        {
+          id: "sibling-instance",
+          workflowKey: "workflow-a" as never,
+          runRef,
+          workflowName: "Sibling workflow",
+          filePath: "workflow.ctrlyoke.json",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 1,
+          totalSteps: 2,
+          managedBy: RUNNER_IDS.VSCODE,
+        },
+      ],
+    });
+    useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
+
+    render(<Header />);
+
+    const controls = screen.getByRole("group", {
+      name: "Workflow execution controls",
+    });
+    expect(
+      within(controls).getByRole("button", { name: "Re-run" })
+    ).toBeDisabled();
+    expect(
+      within(controls).getByRole("button", { name: "Stop" })
+    ).toHaveAttribute("title", "Stop run in another ctrlyoke window");
+
+    fireEvent.click(within(controls).getByRole("button", { name: "Stop" }));
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.STOP_VSCODE_RUN,
+      workflowId: "sibling-instance",
     });
   });
 });

@@ -60,7 +60,8 @@ import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 
 interface PromptEditorProps {
   /** When true, the editor is in CLI watch mode — all editing is disabled. */
-  isCLIManaged?: boolean;
+  isExternallyManaged?: boolean;
+  externalReadOnlyLabel?: string;
   /** Supplies the header action without moving its state out of the editor. */
   onPromptFileActionChange?: (action: PromptFileAction | null) => void;
 }
@@ -83,7 +84,8 @@ export interface PromptFileAction {
  * - State persistence to VS Code webview state
  */
 export const PromptEditor: React.FC<PromptEditorProps> = ({
-  isCLIManaged = false,
+  isExternallyManaged = false,
+  externalReadOnlyLabel,
   onPromptFileActionChange,
 }) => {
   const {
@@ -698,7 +700,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     if (
       isScriptMode ||
       isFileRef ||
-      isCLIManaged ||
+      isExternallyManaged ||
       isPromptExecutionLocked ||
       isPromptFileConversionBusy
     ) {
@@ -728,7 +730,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       ...(promptName.trim() ? { suggestedName: promptName.trim() } : {}),
     });
   }, [
-    isCLIManaged,
+    isExternallyManaged,
     isFileRef,
     isPromptExecutionLocked,
     isPromptFileConversionBusy,
@@ -1160,16 +1162,16 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
   // Keyboard shortcut handlers for CodeMirror — mirror the footer button disabled states
   const handleEditorRun = useCallback(() => {
-    if (!isEditMode && !isCLIManaged && promptText.trim().length > 0) {
+    if (!isEditMode && !isExternallyManaged && promptText.trim().length > 0) {
       executePrompt(ACTION_TYPES.RUN);
     }
-  }, [isEditMode, isCLIManaged, promptText, executePrompt]);
+  }, [isEditMode, isExternallyManaged, promptText, executePrompt]);
 
   const handleEditorQueue = useCallback(() => {
-    if (!isEditMode && !isCLIManaged && promptText.trim().length > 0) {
+    if (!isEditMode && !isExternallyManaged && promptText.trim().length > 0) {
       executePrompt(ACTION_TYPES.QUEUE);
     }
-  }, [isEditMode, isCLIManaged, promptText, executePrompt]);
+  }, [isEditMode, isExternallyManaged, promptText, executePrompt]);
 
   // Handle editor text change
   const handleTextChange = useCallback(
@@ -1263,7 +1265,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             }
             affUri={affUri}
             dicUri={dicUri}
-            readOnly={isCLIManaged}
+            readOnly={isExternallyManaged}
             onRun={handleEditorRun}
             onQueue={handleEditorQueue}
             stepCount={stepCount}
@@ -1301,7 +1303,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             }}
             onChange={handleScriptChange}
             scriptLabel="Script command"
-            disabled={isCLIManaged}
+            disabled={isExternallyManaged}
             idPrefix="script-step"
           />
           <div className="mt-4 space-y-4 rounded border border-panel-border p-3">
@@ -1427,7 +1429,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         onCancel={cancelEdit}
         onToggleProperties={togglePropertiesDrawer}
         propertiesOpen={propertiesDrawerOpen}
-        isCLIManaged={isCLIManaged}
+        isExternallyManaged={isExternallyManaged}
+        externalReadOnlyLabel={externalReadOnlyLabel}
         drawerActivePage={drawerActivePage}
         onDrawerTabChange={setDrawerActivePage}
         drawerHarnessId={drawerCurrentHarness}

@@ -15,7 +15,7 @@ function TestHarness({
   direction?: "rewind" | "forward";
 }) {
   const { openContextMenu, contextMenuPortal } = useStepContextMenu({
-    isCLIManaged: false,
+    isExternallyManaged: false,
     canChangeStartPosition: true,
     canPasteStep: true,
     executionState: EXECUTION_STATES.IDLE,

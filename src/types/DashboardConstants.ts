@@ -310,6 +310,8 @@ export const MESSAGE_TYPES = {
   RESUME_RUN: "resumeRun",
   STOP_RUN: "stopRun",
   STOP_CLI_RUN: "stopCliRun", // Kill the CLI process for a CLI-managed workflow: { workflowId }
+  STOP_VSCODE_RUN: "stopVscodeRun", // Request a sibling VS Code owner to stop via its sentinel: { workflowId }
+  WORKSPACE_WORKTREE_OWNERSHIP: "workspaceWorktreeOwnership", // Extension -> Webview: current folder's managed-worktree ownership
 
   // Recent workflow management — Webview → Extension
   REMOVE_WORKFLOW_HISTORY: "removeWorkflowHistory", // Remove single history entry: { filePath }

@@ -1,7 +1,10 @@
 import type { ComponentProps } from "react";
 import { beforeEach, describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { RunSummaryBanner } from "@components/output/RunSummaryBanner";
+import {
+  RunSummaryBanner,
+  WorkspaceWorktreeOwnershipBanner,
+} from "@components/output/RunSummaryBanner";
 import { EXECUTION_STATES, MESSAGE_TYPES } from "@/types/messages";
 import { isManagedWorktreeUndoUnavailable } from "@components/output/RunSummaryBanner";
 import type {
@@ -249,5 +252,29 @@ describe("RunSummaryBanner", () => {
         directoryState: "present",
       })
     ).toBe(false);
+  });
+
+  it("surfaces ownership when the current workspace is a managed worktree", () => {
+    render(
+      <WorkspaceWorktreeOwnershipBanner
+        ownership={{
+          branchName: "ctrlyoke/ui-refactor/run-1",
+          worktreePath: "C:/worktrees/ui-refactor",
+          sourceCheckoutRoot: "C:/repo",
+        }}
+      />
+    );
+
+    expect(
+      screen.getByText(
+        (_, element) =>
+          (element?.tagName === "SPAN" &&
+            element.textContent?.includes(
+              "This is branch ctrlyoke/ui-refactor/run-1, owned by"
+            )) ??
+          false
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByText("C:/repo")).toBeInTheDocument();
   });
 });

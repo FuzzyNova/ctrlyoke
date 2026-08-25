@@ -196,9 +196,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     [activeTerminalWorkflows]
   );
 
-  const isCLIManaged =
-    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
-    RUNNER_IDS.CLI;
+  const activeManagedBy = loadedWorkflows.find(
+    (w) => w.id === activeWorkflowId
+  )?.managedBy;
+  const isExternallyManaged = activeManagedBy != null;
   const workflowHasActiveTerminal = useCallback(
     (workflowId: string | null | undefined) =>
       !!workflowId && activeTerminalWorkflowIds.has(workflowId),
@@ -1600,13 +1601,17 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                 {displayName}
               </span>
 
-              {/* CLI Managed badge */}
-              {isCLIManaged && (
+              {/* External runner badge */}
+              {isExternallyManaged && (
                 <span
                   className="text-xs px-1.5 py-px rounded uppercase font-semibold flex-shrink-0 bg-btn-bg text-btn-fg border border-btn-border"
-                  title="Workflow is being managed by the ctrlyoke CLI"
+                  title={
+                    activeManagedBy === RUNNER_IDS.CLI
+                      ? "Workflow is being managed by the ctrlyoke CLI"
+                      : "Workflow is being managed by another ctrlyoke window"
+                  }
                 >
-                  CLI
+                  {activeManagedBy === RUNNER_IDS.CLI ? "CLI" : "VS Code"}
                 </span>
               )}
 

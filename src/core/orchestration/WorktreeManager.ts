@@ -72,6 +72,7 @@ import type {
   WorkflowKey,
   WorktreeResolution,
   WorkingFileWorktreeRuntimePatch,
+  WorkspaceWorktreeOwnership,
 } from "../../types/CtrlYokeTypes";
 import { VarSubstitutor } from "../../utils/VarSubstitutor";
 import {
@@ -293,6 +294,7 @@ export interface WorktreeActivationDiscovery {
   worktrees: WorktreeDiscoveryEntry[];
   recoverableManagedWorktrees: WorktreeInfo[];
   staleManagedWorktrees: ManagedWorktreeOwnershipRecord[];
+  currentManagedWorktree?: WorkspaceWorktreeOwnership;
 }
 
 export interface CompleteManagedRunOptions {
@@ -1790,10 +1792,27 @@ export class WorktreeManager {
       return !entry || entry.stale;
     });
 
+    const currentEntry = worktrees.find((entry) =>
+      pathsEqual(entry.worktreePath, sourceCheckoutRoot)
+    );
+    const currentOwnership = records.find(
+      (record) =>
+        currentEntry?.managed === true &&
+        pathsEqual(record.worktreePath, sourceCheckoutRoot) &&
+        record.branchName === currentEntry.branchName
+    );
+
     return {
       worktrees,
       recoverableManagedWorktrees,
       staleManagedWorktrees,
+      currentManagedWorktree: currentOwnership
+        ? {
+            branchName: currentOwnership.branchName,
+            worktreePath: currentOwnership.worktreePath,
+            sourceCheckoutRoot: currentOwnership.sourceCheckoutRoot,
+          }
+        : undefined,
     };
   }
 

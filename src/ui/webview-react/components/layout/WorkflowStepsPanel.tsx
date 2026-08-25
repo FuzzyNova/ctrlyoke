@@ -39,10 +39,10 @@ import {
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
-  RUNNER_IDS,
   type StepStatus,
 } from "../../types/messages";
 import { sendMessage } from "../../hooks/useMessageHandler";
+import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -335,9 +335,11 @@ const WorkflowStepsPanelInner: React.FC<{
   const getLatestOutput = useLatestStepOutput();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
-  const isCLIManaged =
-    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
-    RUNNER_IDS.CLI;
+  const activeManagedBy = loadedWorkflows.find(
+    (w) => w.id === activeWorkflowId
+  )?.managedBy;
+  const isExternallyManaged = activeManagedBy != null;
+  const externalReadOnlyLabel = getExternalReadOnlyLabel(activeManagedBy);
   // The lineage on screen was deleted while being viewed, or is an internal
   // system lineage (e.g. commit message generation) whose properties are
   // overridden by its owning feature on the next run regardless of what's
@@ -362,7 +364,8 @@ const WorkflowStepsPanelInner: React.FC<{
     contextMenuPortal,
     setPositionModal,
   } = useStepContextMenu({
-    isCLIManaged,
+    isExternallyManaged,
+    externalReadOnlyLabel,
     canChangeStartPosition,
     canPasteStep,
     executionState,
@@ -374,7 +377,8 @@ const WorkflowStepsPanelInner: React.FC<{
 
   const { openPasteToEndMenu, pasteToEndMenuPortal } = usePasteToEndContextMenu(
     {
-      isCLIManaged,
+      isExternallyManaged,
+      externalReadOnlyLabel,
       canPasteStep,
       executionState,
       totalSteps: steps.length,
@@ -669,14 +673,14 @@ const WorkflowStepsPanelInner: React.FC<{
   // Handle clicking a step to edit it (disabled in CLI watch mode)
   const handleStepClick = useCallback(
     (index: number) => {
-      if (isCLIManaged) return;
+      if (isExternallyManaged) return;
       stepClickHandler(index);
     },
-    [isCLIManaged, stepClickHandler]
+    [isExternallyManaged, stepClickHandler]
   );
 
   const handleFinalStepSelect = useCallback(() => {
-    if (isCLIManaged || isLineageReadOnly) return;
+    if (isExternallyManaged || isLineageReadOnly) return;
     if (finalStep) {
       selectFinalStep(finalStep);
     } else {
@@ -684,7 +688,7 @@ const WorkflowStepsPanelInner: React.FC<{
       selectPrompt({ kind: FINAL_STEP_PHASES.FINAL_STEP }, { prompt: "" });
     }
   }, [
-    isCLIManaged,
+    isExternallyManaged,
     isLineageReadOnly,
     finalStep,
     selectFinalStep,
@@ -693,13 +697,13 @@ const WorkflowStepsPanelInner: React.FC<{
   ]);
 
   const handleToggleFinalStepEnabled = useCallback(() => {
-    if (isCLIManaged || isLineageReadOnly || !finalStep) return;
+    if (isExternallyManaged || isLineageReadOnly || !finalStep) return;
     const enabling = finalStep.enabled === false;
     sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, {
       finalStep: buildWorkflowStepEnabledState(finalStep, enabling),
       ...(enabling ? { clearProperties: ["enabled"] } : {}),
     });
-  }, [isCLIManaged, isLineageReadOnly, finalStep]);
+  }, [isExternallyManaged, isLineageReadOnly, finalStep]);
 
   const handleSelectedStepCopy = useCallback(() => {
     if (selectionTarget.kind !== FINAL_STEP_PHASES.QUEUE) {
@@ -716,7 +720,7 @@ const WorkflowStepsPanelInner: React.FC<{
 
   const handleSelectedStepPaste = useCallback(() => {
     if (
-      isCLIManaged ||
+      isExternallyManaged ||
       isLineageReadOnly ||
       !canPasteStep ||
       selectionTarget.kind !== FINAL_STEP_PHASES.QUEUE
@@ -733,10 +737,10 @@ const WorkflowStepsPanelInner: React.FC<{
         });
       })
       .catch(() => {});
-  }, [canPasteStep, isCLIManaged, isLineageReadOnly, selectionTarget]);
+  }, [canPasteStep, isExternallyManaged, isLineageReadOnly, selectionTarget]);
 
   const finalStepIsReadOnly =
-    isCLIManaged ||
+    isExternallyManaged ||
     isLineageReadOnly ||
     (finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP &&
       finalStepStatus === STEP_STATUS.RUNNING);
@@ -744,7 +748,7 @@ const WorkflowStepsPanelInner: React.FC<{
   // edited locally. The editor footer prevents updating or deleting it until
   // execution finishes; only CLI-managed / read-only lineages block editor
   // selection outright.
-  const finalStepSelectionIsReadOnly = isCLIManaged || isLineageReadOnly;
+  const finalStepSelectionIsReadOnly = isExternallyManaged || isLineageReadOnly;
 
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({
@@ -991,7 +995,7 @@ const WorkflowStepsPanelInner: React.FC<{
 
           if (key === "v") {
             if (
-              isCLIManaged ||
+              isExternallyManaged ||
               isLineageReadOnly ||
               !canPasteStep ||
               selectionTarget.kind !== FINAL_STEP_PHASES.QUEUE

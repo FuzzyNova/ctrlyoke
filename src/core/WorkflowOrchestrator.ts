@@ -36,6 +36,7 @@ import {
   type WorkflowRunAddress,
   type WorkflowViewAddress,
   type WorktreeRunProjection,
+  type WorkspaceWorktreeOwnership,
   projectWorktreeRuntime,
   workflowDisplayStep,
 } from "../types/CtrlYokeTypes";
@@ -84,6 +85,11 @@ import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
 import { ExternalRunWatchSession } from "./orchestration/ExternalRunWatchSession";
+import {
+  deleteWorkflowStopRequest,
+  waitForWorkflowStopRequestPickup,
+  writeWorkflowStopRequest,
+} from "../utils/WorkflowStopRequest";
 import { HarnessUsageService } from "./harness/shared/usage/HarnessUsageService";
 import { WorkspaceStatsService } from "./harness/shared/usage/WorkspaceStatsService";
 import type { WorkspaceStatsSnapshot } from "../types/UsageTypes";
@@ -300,6 +306,7 @@ export class WorkflowOrchestrator {
    * on every tick. A new lock has no entry and is processed immediately.
    */
   private readonly polledRunnerJsonMtimes = new Map<string, number>();
+  private activationWorktreeOwnership?: WorkspaceWorktreeOwnership;
 
   private readonly PANEL_CLIENT_ID = PANEL_CLIENT_ID;
 
@@ -1939,6 +1946,58 @@ export class WorkflowOrchestrator {
         Log.warn(`stopCliSession: process.kill(${lock.pid}) failed:`, err);
       }
     }
+  }
+
+  /** Ask a live sibling VS Code instance to stop through its owner-token sentinel. */
+  async requestVscodeStop(
+    workflowId: string
+  ): Promise<"picked-up" | "timed-out" | "unavailable"> {
+    const entry = this.cliSessions.get(workflowId);
+    if (entry?.summary.managedBy !== RUNNER_IDS.VSCODE) return "unavailable";
+
+    const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
+    const workflowKey = entry.summary.workflowKey;
+    if (!workspaceFolderPath || !workflowKey) return "unavailable";
+    const lock = await WorkflowLockManager.readLock(
+      workspaceFolderPath,
+      workflowKey
+    );
+    if (
+      !lock ||
+      lock.runner !== RUNNER_IDS.VSCODE ||
+      lock.runRef !== entry.summary.runRef
+    ) {
+      return "unavailable";
+    }
+
+    const requestId = `${this.PANEL_CLIENT_ID}-${Date.now()}`;
+    const requestPath = await writeWorkflowStopRequest(
+      workspaceFolderPath,
+      workflowKey,
+      lock.ownerToken,
+      requestId
+    );
+    const pickedUp = await waitForWorkflowStopRequestPickup(
+      requestPath,
+      10_000
+    );
+    if (!pickedUp) {
+      await deleteWorkflowStopRequest(
+        workspaceFolderPath,
+        workflowKey,
+        lock.ownerToken
+      );
+      Log.warn(
+        `[WorkflowOrchestrator] sibling VS Code stop request timed out for "${workflowKey}"`
+      );
+      return "timed-out";
+    }
+    return "picked-up";
+  }
+
+  /** Ownership discovered for the workspace root during activation, if any. */
+  getActivationWorktreeOwnership(): WorkspaceWorktreeOwnership | undefined {
+    return this.activationWorktreeOwnership;
   }
 
   async clearWorkflow(): Promise<void> {
@@ -5754,6 +5813,7 @@ export class WorkflowOrchestrator {
   private async discoverWorktreesOnActivation(): Promise<void> {
     const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
     if (!workspaceFolderPath) return;
+    this.activationWorktreeOwnership = undefined;
 
     try {
       const report = await new WorktreeManager().discoverActivationState({
@@ -5761,6 +5821,7 @@ export class WorkflowOrchestrator {
       });
       const inUse = report.worktrees.filter((entry) => entry.inUse);
       const prunable = report.worktrees.filter((entry) => entry.prunableReason);
+      this.activationWorktreeOwnership = report.currentManagedWorktree;
 
       Log.info(
         `[WorktreeRecovery] activation discovered ${report.worktrees.length} worktree(s), ` +
@@ -6017,6 +6078,8 @@ export class WorkflowOrchestrator {
 
     const summary: WorkflowSummary = {
       id: workflowId,
+      workflowKey,
+      runRef,
       workflowName: workingFile.workflowName ?? workflowId,
       filePath: workingFilePath,
       workingFilePath,

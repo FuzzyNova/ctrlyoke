@@ -29,7 +29,8 @@ import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 import { notifyUser } from "@utils/notifyUser";
 
 interface UseStepContextMenuOptions {
-  isCLIManaged: boolean;
+  isExternallyManaged: boolean;
+  externalReadOnlyLabel?: string;
   canChangeStartPosition: boolean;
   canPasteStep: boolean;
   executionState: ExecutionState;
@@ -74,7 +75,8 @@ function buildAdjacentSwapOrder(
 }
 
 export function useStepContextMenu({
-  isCLIManaged,
+  isExternallyManaged,
+  externalReadOnlyLabel,
   canChangeStartPosition,
   canPasteStep,
   executionState,
@@ -142,8 +144,8 @@ export function useStepContextMenu({
         ? "Copy Script"
         : "Copy Prompt";
       const stepToggleLabel = step.enabled === false ? "Enable" : "Disable";
-      const pasteDisabledTitle = isCLIManaged
-        ? "Read-only — workflow is running via ctrlyoke CLI"
+      const pasteDisabledTitle = isExternallyManaged
+        ? (externalReadOnlyLabel ?? "Read-only — external workflow")
         : executionState === EXECUTION_STATES.CANCELLING
           ? "Cannot paste steps while workflow is cancelling"
           : undefined;
@@ -152,11 +154,11 @@ export function useStepContextMenu({
       // done/completed steps (direction "rewind") can't be reordered.
       const pendingIndex = deleteIndex - currentStep;
       const pendingCount = totalSteps - currentStep;
-      const queueLockedTitle = isCLIManaged
-        ? "Read-only — workflow is running via ctrlyoke CLI"
+      const queueLockedTitle = isExternallyManaged
+        ? (externalReadOnlyLabel ?? "Read-only — external workflow")
         : "Cannot reorder steps while workflow is cancelling";
       const queueLocked =
-        isCLIManaged || executionState === EXECUTION_STATES.CANCELLING;
+        isExternallyManaged || executionState === EXECUTION_STATES.CANCELLING;
       // A running step stays pinned at pending position 0 (mirrors the drag
       // pinning in WorkflowStepsPanel/PromptChipRail): it can't move, and
       // nothing else can move into its slot.
@@ -235,7 +237,7 @@ export function useStepContextMenu({
           {
             label: "Paste Step",
             icon: "codicon-clippy",
-            disabled: isCLIManaged || !canPasteStep,
+            disabled: isExternallyManaged || !canPasteStep,
             disabledTitle: pasteDisabledTitle,
             onClick: () => {
               void readWorkflowStepFromClipboard()
@@ -271,9 +273,9 @@ export function useStepContextMenu({
                 {
                   label: "Discard Continuation",
                   icon: "codicon-discard",
-                  disabled: isCLIManaged,
+                  disabled: isExternallyManaged,
                   disabledTitle:
-                    "Read-only — workflow is running via ctrlyoke CLI",
+                    externalReadOnlyLabel ?? "Read-only — external workflow",
                   onClick: () =>
                     postRunLifecycleMutation(lifecycleMessageTarget, {
                       type: MESSAGE_TYPES.DISCARD_CONTINUATION,
@@ -305,8 +307,9 @@ export function useStepContextMenu({
             label: stepToggleLabel,
             icon:
               step.enabled === false ? "codicon-check" : "codicon-circle-slash",
-            disabled: isCLIManaged,
-            disabledTitle: "Read-only — workflow is running via ctrlyoke CLI",
+            disabled: isExternallyManaged,
+            disabledTitle:
+              externalReadOnlyLabel ?? "Read-only — external workflow",
             onClick: () => {
               const enabled = step.enabled === false;
               const update = buildWorkflowStepEnabledUpdate(step, enabled);
@@ -322,9 +325,9 @@ export function useStepContextMenu({
           {
             label: "Delete",
             icon: "codicon-trash",
-            disabled: isCLIManaged || isExecutionTargetLocked,
-            disabledTitle: isCLIManaged
-              ? "Read-only — workflow is running via ctrlyoke CLI"
+            disabled: isExternallyManaged || isExecutionTargetLocked,
+            disabledTitle: isExternallyManaged
+              ? (externalReadOnlyLabel ?? "Read-only — external workflow")
               : "Cannot delete the currently executing step",
             onClick: () =>
               sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { index: deleteIndex }),
@@ -338,7 +341,8 @@ export function useStepContextMenu({
       currentStep,
       executionState,
       handleSetStartPosition,
-      isCLIManaged,
+      isExternallyManaged,
+      externalReadOnlyLabel,
       moveQueueStep,
       pendingRewind?.fromStepIndex,
       totalSteps,
@@ -393,7 +397,8 @@ export function useStepContextMenu({
 // ─── usePasteToEndContextMenu ─────────────────────────────────────────────────
 
 interface UsePasteToEndContextMenuOptions {
-  isCLIManaged: boolean;
+  isExternallyManaged: boolean;
+  externalReadOnlyLabel?: string;
   canPasteStep: boolean;
   executionState: ExecutionState;
   /** Used to compute afterIndex = totalSteps - 1 (end of queue). */
@@ -407,7 +412,8 @@ interface UsePasteToEndContextMenuOptions {
  * paste into empty workflows and paste-to-end in existing ones.
  */
 export function usePasteToEndContextMenu({
-  isCLIManaged,
+  isExternallyManaged,
+  externalReadOnlyLabel,
   canPasteStep,
   executionState,
   totalSteps,
@@ -420,8 +426,8 @@ export function usePasteToEndContextMenu({
     (x: number, y: number) => {
       const afterIndex = totalSteps - 1;
 
-      const pasteDisabledTitle = isCLIManaged
-        ? "Read-only — workflow is running via ctrlyoke CLI"
+      const pasteDisabledTitle = isExternallyManaged
+        ? (externalReadOnlyLabel ?? "Read-only — external workflow")
         : executionState === EXECUTION_STATES.CANCELLING
           ? "Cannot paste steps while workflow is cancelling"
           : undefined;
@@ -433,7 +439,7 @@ export function usePasteToEndContextMenu({
           {
             label: "Paste Step",
             icon: "codicon-clippy",
-            disabled: isCLIManaged || !canPasteStep,
+            disabled: isExternallyManaged || !canPasteStep,
             disabledTitle: pasteDisabledTitle,
             onClick: () => {
               void readWorkflowStepFromClipboard()
@@ -454,7 +460,13 @@ export function usePasteToEndContextMenu({
         ],
       });
     },
-    [isCLIManaged, canPasteStep, executionState, totalSteps]
+    [
+      isExternallyManaged,
+      externalReadOnlyLabel,
+      canPasteStep,
+      executionState,
+      totalSteps,
+    ]
   );
 
   const pasteToEndMenuPortal = contextMenu ? (

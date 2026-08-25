@@ -12,12 +12,12 @@ import { ExecutionModeQuickPicker } from "../editor/ExecutionModeQuickPicker";
 import { PanelBar, IconToggleButton } from "../shared";
 import {
   FINAL_STEP_PHASES,
-  RUNNER_IDS,
   EDITOR_TARGET_KINDS,
   MESSAGE_TYPES,
 } from "../../types/messages";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
+import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 
 /**
  * EditorSection - Collapsible section containing the prompt editor
@@ -51,9 +51,11 @@ const EditorSectionInner: React.FC = () => {
   const vscode = useVsCodeApi();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
-  const isCLIManaged =
-    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
-    RUNNER_IDS.CLI;
+  const activeManagedBy = loadedWorkflows.find(
+    (w) => w.id === activeWorkflowId
+  )?.managedBy;
+  const isExternallyManaged = activeManagedBy != null;
+  const externalReadOnlyLabel = getExternalReadOnlyLabel(activeManagedBy);
 
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
   const totalPrompts = steps.length;
@@ -85,10 +87,10 @@ const EditorSectionInner: React.FC = () => {
   }, [isEditingName]);
 
   const startNameEditing = useCallback(() => {
-    if (isCLIManaged) return;
+    if (isExternallyManaged) return;
     setNameEditValue(promptName);
     setIsEditingName(true);
-  }, [isCLIManaged, promptName]);
+  }, [isExternallyManaged, promptName]);
 
   const saveNameEdit = useCallback(() => {
     setPromptName(nameEditValue.trim());
@@ -186,7 +188,7 @@ const EditorSectionInner: React.FC = () => {
         >
           <button
             type="button"
-            disabled={isCLIManaged}
+            disabled={isExternallyManaged}
             className={`fp-mode-switch-btn ${!isScriptMode ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
             onClick={() => setStepType(STEP_TYPES.PROMPT)}
             title="Prompt step — sends text to an AI harness"
@@ -202,7 +204,7 @@ const EditorSectionInner: React.FC = () => {
           </div>
           <button
             type="button"
-            disabled={isCLIManaged}
+            disabled={isExternallyManaged}
             className={`fp-mode-switch-btn ${isScriptMode ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
             onClick={() => setStepType(STEP_TYPES.SCRIPT)}
             title="Script step — runs a shell command with no AI interaction"
@@ -217,7 +219,7 @@ const EditorSectionInner: React.FC = () => {
 
         {/* Center: Enable toggle + Mode text (clickable to edit name) + token count */}
         <div className="flex items-center justify-center flex-1 gap-1 min-w-0">
-          {!isCLIManaged && (
+          {!isExternallyManaged && (
             <button
               type="button"
               onClick={() => setStepEnabled(!stepEnabled)}
@@ -240,8 +242,8 @@ const EditorSectionInner: React.FC = () => {
             </button>
           )}
           <span className="editor-mode-indicator text-center text-xs text-description-fg truncate min-w-0">
-            {isCLIManaged ? (
-              "Read-only — CLI run in progress"
+            {isExternallyManaged ? (
+              (externalReadOnlyLabel ?? "Read-only — external run in progress")
             ) : isEditingName ? (
               <input
                 ref={nameInputRef}
@@ -298,7 +300,7 @@ const EditorSectionInner: React.FC = () => {
         </div>
 
         {/* Right: prompt-file action, execution mode override, and Git ignore toggle */}
-        {!isCLIManaged && !isScriptMode && promptFileAction && (
+        {!isExternallyManaged && !isScriptMode && promptFileAction && (
           <button
             type="button"
             onClick={promptFileAction.onClick}
@@ -312,8 +314,8 @@ const EditorSectionInner: React.FC = () => {
             />
           </button>
         )}
-        {!isCLIManaged && <ExecutionModeQuickPicker />}
-        {!isCLIManaged && (
+        {!isExternallyManaged && <ExecutionModeQuickPicker />}
+        {!isExternallyManaged && (
           <IconToggleButton
             active={globalSettings.respectGitignore}
             onToggle={handleRespectGitignoreChange}
@@ -328,7 +330,8 @@ const EditorSectionInner: React.FC = () => {
       {/* Content area */}
       <div className="prompt-editor-wrapper flex flex-1 min-h-0 overflow-hidden relative">
         <PromptEditor
-          isCLIManaged={isCLIManaged}
+          isExternallyManaged={isExternallyManaged}
+          externalReadOnlyLabel={externalReadOnlyLabel}
           onPromptFileActionChange={setPromptFileAction}
         />
       </div>

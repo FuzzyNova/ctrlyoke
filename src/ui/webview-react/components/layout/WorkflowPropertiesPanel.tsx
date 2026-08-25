@@ -20,7 +20,6 @@ import { useCompatibilityDiagnostics } from "../../hooks/useCompatibilityDiagnos
 import {
   MESSAGE_TYPES,
   SESSION_ID_SENTINELS,
-  RUNNER_IDS,
   CONDITION_ACTIONS,
   type PriorContext,
   type HarnessId,
@@ -224,9 +223,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
   } = useUiStore();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
-  const isCLIManaged =
-    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
-    RUNNER_IDS.CLI;
+  const isExternallyManaged =
+    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy != null;
   // The lineage on screen was deleted while being viewed — nothing here has
   // anywhere left to write to.
   const isViewingDeletedWorkflow = useIsViewingDeletedWorkflow();
@@ -1407,7 +1405,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
       {/* Body - Scrollable (pointer-events disabled in CLI watch mode) */}
       <div
-        className={`flex-1 overflow-y-auto${activePage === DRAWER_PAGES.MCP ? " flex flex-col" : ""}${isCLIManaged || isViewingDeletedWorkflow || isSystemGeneratedWorkflow ? " pointer-events-none opacity-60 select-none" : ""}`}
+        className={`flex-1 overflow-y-auto${activePage === DRAWER_PAGES.MCP ? " flex flex-col" : ""}${isExternallyManaged || isViewingDeletedWorkflow || isSystemGeneratedWorkflow ? " pointer-events-none opacity-60 select-none" : ""}`}
       >
         <div
           className={`px-4 py-2${activePage === DRAWER_PAGES.MCP ? " flex flex-col flex-1 min-h-0 gap-2" : ` space-y-2${activePage === DRAWER_PAGES.PERMISSIONS ? " min-h-full flex flex-col" : ""}`}`}
@@ -1609,7 +1607,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     harnessId={effectiveHarness}
                     value={additionalArgsInput}
                     onChange={setAdditionalArgsInput}
-                    onBlur={() => handleAdditionalArgsChange(additionalArgsInput)}
+                    onBlur={() =>
+                      handleAdditionalArgsChange(additionalArgsInput)
+                    }
                     placeholder="e.g. --effort high --max-turns 10"
                     className="w-full text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                   />

@@ -146,6 +146,8 @@ export {
   type OpenWorktreeMessage,
   type ViewWorktreeDiffMessage,
   type MergeWorktreeMessage,
+  type StopVscodeRunMessage,
+  type WorkspaceWorktreeOwnershipMessage,
   type WorktreeMergeResultMessage,
   type IncomingMessage,
   type SearchHistoryMessage,
@@ -211,6 +213,7 @@ export {
 // Re-export WorkflowSummary, PriorContext, McpServerConfig, ToolPermissionsOverride, PreCondition, and helpers from CtrlYokeTypes
 export type {
   WorkflowSummary,
+  WorkspaceWorktreeOwnership,
   PriorContext,
   WorkflowRunAddress,
   McpServerConfig,

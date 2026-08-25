@@ -36,7 +36,8 @@ interface EditorFooterProps {
   onToggleProperties: () => void;
   propertiesOpen: boolean;
   /** When true, all edit actions are disabled (CLI watch mode). */
-  isCLIManaged?: boolean;
+  isExternallyManaged?: boolean;
+  externalReadOnlyLabel?: string;
   /** Active tab page in the properties drawer — drives the inline DrawerTabBar */
   drawerActivePage: DrawerPage;
   onDrawerTabChange: (page: DrawerPage) => void;
@@ -73,7 +74,8 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   onCancel,
   onToggleProperties,
   propertiesOpen,
-  isCLIManaged = false,
+  isExternallyManaged = false,
+  externalReadOnlyLabel,
   drawerActivePage,
   onDrawerTabChange,
   drawerHarnessId,
@@ -129,22 +131,22 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               <HarnessQuickPicker
                 isNarrow={isMediumWidth}
                 showLabel={!isMediumWidth}
-                disabled={isCLIManaged}
+                disabled={isExternallyManaged}
               />
               <ModelQuickPicker
                 isNarrow={isMediumWidth}
                 showLabel={!isMediumWidth}
-                disabled={isCLIManaged}
+                disabled={isExternallyManaged}
               />
               <AgentQuickPicker
                 isNarrow={isMediumWidth}
                 showLabel={!isMediumWidth}
-                disabled={isCLIManaged}
+                disabled={isExternallyManaged}
               />
               <SkillsQuickPicker
                 isNarrow={isMediumWidth}
                 showLabel={!isMediumWidth}
-                disabled={isCLIManaged}
+                disabled={isExternallyManaged}
               />
             </div>
             {!(isEditMode && isSmallWidth) && (
@@ -152,12 +154,12 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                 <PermissionsQuickPicker
                   isNarrow={isMediumWidth}
                   showLabel={!isMediumWidth}
-                  disabled={isCLIManaged}
+                  disabled={isExternallyManaged}
                 />
                 <ContextQuickPicker
                   isNarrow={isMediumWidth}
                   showLabel={!isMediumWidth}
-                  disabled={isCLIManaged}
+                  disabled={isExternallyManaged}
                 />
               </div>
             )}
@@ -194,10 +196,10 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-cancel border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onCancel}
-              disabled={isCLIManaged}
+              disabled={isExternallyManaged}
               title={
-                isCLIManaged
-                  ? "Read-only — workflow is running via ctrlyoke CLI"
+                isExternallyManaged
+                  ? (externalReadOnlyLabel ?? "Read-only — external run")
                   : "Cancel editing and return to new prompt mode"
               }
             >
@@ -208,10 +210,10 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-update border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onUpdate}
-              disabled={isCLIManaged || !hasContent || isPromptBeingSent}
+              disabled={isExternallyManaged || !hasContent || isPromptBeingSent}
               title={
-                isCLIManaged
-                  ? "Read-only — workflow is running via ctrlyoke CLI"
+                isExternallyManaged
+                  ? (externalReadOnlyLabel ?? "Read-only — external run")
                   : isPromptBeingSent
                     ? "Cannot update a prompt that is currently being sent"
                     : isPromptCompleted
@@ -226,10 +228,10 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-delete border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-terminal-ansiRed text-terminal-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onDelete}
-              disabled={isCLIManaged || isPromptActivelyRunning}
+              disabled={isExternallyManaged || isPromptActivelyRunning}
               title={
-                isCLIManaged
-                  ? "Read-only — workflow is running via ctrlyoke CLI"
+                isExternallyManaged
+                  ? (externalReadOnlyLabel ?? "Read-only — external run")
                   : isFinalStepMode
                     ? "Disable final step"
                     : isPromptActivelyRunning
@@ -251,10 +253,10 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-queue border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onQueue}
-              disabled={isCLIManaged || !hasContent}
+              disabled={isExternallyManaged || !hasContent}
               title={
-                isCLIManaged
-                  ? "Read-only — workflow is running via ctrlyoke CLI"
+                isExternallyManaged
+                  ? (externalReadOnlyLabel ?? "Read-only — external run")
                   : queueButtonTooltip
               }
             >
@@ -265,10 +267,10 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-run border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onRun}
-              disabled={isCLIManaged || !hasContent}
+              disabled={isExternallyManaged || !hasContent}
               title={
-                isCLIManaged
-                  ? "Read-only — workflow is running via ctrlyoke CLI"
+                isExternallyManaged
+                  ? (externalReadOnlyLabel ?? "Read-only — external run")
                   : runButtonTooltip
               }
             >

@@ -277,11 +277,11 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         />
       )}
 
-      {/* Action buttons — CLI pill for CLI-managed workflows, pause/stop for VS Code-managed */}
+      {/* Action buttons — external-owner pill, pause/stop for local workflows */}
       <RowActionRail>
-        {workflow.managedBy === RUNNER_IDS.CLI ? (
+        {workflow.managedBy != null ? (
           <span className="rounded border border-btn-border bg-btn-bg px-1.5 py-0.5 text-xxs font-semibold text-btn-fg">
-            CLI
+            {workflow.managedBy === RUNNER_IDS.CLI ? "CLI" : "VS Code"}
           </span>
         ) : (
           (isRunning || isPausing || isPaused) && (

@@ -32,7 +32,6 @@ import {
   MESSAGE_TYPES,
   FINAL_STEP_PHASES,
   STEP_STATUS,
-  RUNNER_IDS,
   type StepStatus,
 } from "../../types/messages";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
@@ -42,6 +41,7 @@ import {
   isWorkflowRunning,
 } from "../../utils/status";
 import { buildWorkflowStepEnabledState } from "@utils/stepClipboard";
+import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 import {
   ExecutingStepHighlight,
   PauseBoundary,
@@ -260,9 +260,11 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   const { selectFinalStep, selectPrompt, deselect } = useEditorStore();
   const { globalSettings } = useSettingsStore();
 
-  const isCLIManaged =
-    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
-    RUNNER_IDS.CLI;
+  const activeManagedBy = loadedWorkflows.find(
+    (w) => w.id === activeWorkflowId
+  )?.managedBy;
+  const isExternallyManaged = activeManagedBy != null;
+  const externalReadOnlyLabel = getExternalReadOnlyLabel(activeManagedBy);
   // The lineage on screen was deleted while being viewed, or is an internal
   // system lineage (e.g. commit message generation) whose properties are
   // overridden by its owning feature on the next run regardless of what's
@@ -286,7 +288,8 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
 
   const { openContextMenu, contextMenuPortal, setPositionModal } =
     useStepContextMenu({
-      isCLIManaged,
+      isExternallyManaged,
+      externalReadOnlyLabel,
       canChangeStartPosition,
       canPasteStep,
       executionState,
@@ -297,7 +300,8 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
 
   const { openPasteToEndMenu, pasteToEndMenuPortal } = usePasteToEndContextMenu(
     {
-      isCLIManaged,
+      isExternallyManaged,
+      externalReadOnlyLabel,
       canPasteStep,
       executionState,
       totalSteps: prompts.length,
@@ -309,7 +313,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   // Final step derived state
   const hasFinalStep = !!finalStep;
   const finalStepIsReadOnly =
-    isCLIManaged ||
+    isExternallyManaged ||
     isLineageReadOnly ||
     (finalStepPhase === FINAL_STEP_PHASES.FINAL_STEP &&
       finalStepStatus === STEP_STATUS.RUNNING);
@@ -318,7 +322,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
     : STEP_STATUS.PENDING;
 
   const handleFinalStepClick = useCallback(() => {
-    if (isCLIManaged || isLineageReadOnly) return;
+    if (isExternallyManaged || isLineageReadOnly) return;
     if (finalStep) {
       selectFinalStep(finalStep);
     } else {
@@ -326,7 +330,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
       selectPrompt({ kind: FINAL_STEP_PHASES.FINAL_STEP }, { prompt: "" });
     }
   }, [
-    isCLIManaged,
+    isExternallyManaged,
     isLineageReadOnly,
     finalStep,
     selectFinalStep,
@@ -335,13 +339,13 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   ]);
 
   const handleToggleFinalStepEnabled = useCallback(() => {
-    if (isCLIManaged || isLineageReadOnly || !finalStep) return;
+    if (isExternallyManaged || isLineageReadOnly || !finalStep) return;
     const enabling = finalStep.enabled === false;
     sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, {
       finalStep: buildWorkflowStepEnabledState(finalStep, enabling),
       ...(enabling ? { clearProperties: ["enabled"] } : {}),
     });
-  }, [isCLIManaged, isLineageReadOnly, finalStep]);
+  }, [isExternallyManaged, isLineageReadOnly, finalStep]);
 
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({
