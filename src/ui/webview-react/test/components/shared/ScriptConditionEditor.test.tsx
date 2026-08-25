@@ -14,6 +14,7 @@ vi.mock("@components/editor/CodeMirrorEditor", () => ({
     id,
     value,
     onChange,
+    onBlur,
     placeholder,
     readOnly,
     mode,
@@ -23,6 +24,7 @@ vi.mock("@components/editor/CodeMirrorEditor", () => ({
     id?: string;
     value: string;
     onChange: (value: string) => void;
+    onBlur?: () => void;
     placeholder?: string;
     readOnly?: boolean;
     mode?: string;
@@ -33,6 +35,7 @@ vi.mock("@components/editor/CodeMirrorEditor", () => ({
       id={id}
       value={value}
       onChange={(event) => onChange(event.currentTarget.value)}
+      onBlur={onBlur}
       placeholder={placeholder}
       disabled={readOnly}
       data-mode={mode}
@@ -341,6 +344,9 @@ describe("ScriptConditionEditor", () => {
       target: { value: "Continue until the condition fails" },
     });
 
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.blur(editor);
+
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({
         passRetryPrompt: "Continue until the condition fails",
@@ -375,6 +381,9 @@ describe("ScriptConditionEditor", () => {
     fireEvent.change(editor, {
       target: { value: "Use $preCondition:stdout and $endCondition:stderr" },
     });
+
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.blur(editor);
 
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({

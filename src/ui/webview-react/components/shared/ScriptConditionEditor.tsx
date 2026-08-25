@@ -167,6 +167,10 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   const [maxRetriesInput, setMaxRetriesInput] = useState(
     String(v.maxRetries ?? 1)
   );
+  const [passRetryPromptInput, setPassRetryPromptInput] = useState(
+    v.passRetryPrompt ?? ""
+  );
+  const [retryPromptInput, setRetryPromptInput] = useState(v.retryPrompt ?? "");
   const [createScriptModalOpen, setCreateScriptModalOpen] = useState(false);
   const [creatingScript, setCreatingScript] = useState(false);
   const pendingCreateScriptRequest = useRef<string | null>(null);
@@ -191,6 +195,14 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   useEffect(() => {
     setMaxRetriesInput(String(v.maxRetries ?? 1));
   }, [v.maxRetries]);
+
+  useEffect(() => {
+    setPassRetryPromptInput(v.passRetryPrompt ?? "");
+  }, [v.passRetryPrompt]);
+
+  useEffect(() => {
+    setRetryPromptInput(v.retryPrompt ?? "");
+  }, [v.retryPrompt]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -577,8 +589,9 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
               </label>
               <CodeMirrorEditor
                 id={`${idPrefix}-pass-retry-prompt`}
-                value={v.passRetryPrompt ?? ""}
-                onChange={(passRetryPrompt) => update({ passRetryPrompt })}
+                value={passRetryPromptInput}
+                onChange={setPassRetryPromptInput}
+                onBlur={() => update({ passRetryPrompt: passRetryPromptInput })}
                 placeholder={
                   "Validation passed, but the condition still holds.\n\nContinue working until it fails."
                 }
@@ -609,8 +622,9 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
               </label>
               <CodeMirrorEditor
                 id={`${idPrefix}-retry-prompt`}
-                value={v.retryPrompt ?? ""}
-                onChange={(retryPrompt) => update({ retryPrompt })}
+                value={retryPromptInput}
+                onChange={setRetryPromptInput}
+                onBlur={() => update({ retryPrompt: retryPromptInput })}
                 placeholder={
                   "Validation failed: expected $endCondition:expected but got $endCondition:actual from $endCondition:compareSource\n\nPlease fix the issues."
                 }

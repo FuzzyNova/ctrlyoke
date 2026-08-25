@@ -1276,6 +1276,40 @@ const WorkflowPropertiesPanelInner: React.FC<{
         ]
       : [];
 
+  // Permissions page derived values
+  const toolPerms = workflowProperties.toolPermissions;
+  const permMode =
+    toolPerms === null
+      ? PERMISSION_MODES.NONE
+      : (toolPerms?.mode ??
+        globalSettings.toolPermissions.mode ??
+        PERMISSION_MODES.ALLOW_ALL);
+  const effectiveErrorBehavior = workflowProperties.errorBehavior ??
+    globalSettings.defaultErrorBehavior ?? { onError: "stop" as const };
+  // Fall back to global settings when workflow doesn't have lists yet
+  const effectiveAllowedTools =
+    toolPerms?.allowedTools ?? globalSettings.toolPermissions.allowedTools;
+  const effectiveDeniedTools =
+    toolPerms?.deniedTools ?? globalSettings.toolPermissions.deniedTools;
+
+  // PermissionListEditor echoes lossless text on every edit so CodeMirror can
+  // keep blank lines/cursor state intact. Keep that draft local and persist the
+  // cleaned list only from its blur callback.
+  const [allowedToolsInput, setAllowedToolsInput] = useState<string[]>(
+    () => effectiveAllowedTools ?? []
+  );
+  const [deniedToolsInput, setDeniedToolsInput] = useState<string[]>(
+    () => effectiveDeniedTools ?? []
+  );
+
+  useEffect(() => {
+    setAllowedToolsInput(effectiveAllowedTools ?? []);
+  }, [effectiveAllowedTools]);
+
+  useEffect(() => {
+    setDeniedToolsInput(effectiveDeniedTools ?? []);
+  }, [effectiveDeniedTools]);
+
   // ============================================================================
   // RENDER
   // ============================================================================
@@ -1308,22 +1342,6 @@ const WorkflowPropertiesPanelInner: React.FC<{
       />
     );
   }
-
-  // Permissions page derived values
-  const toolPerms = workflowProperties.toolPermissions;
-  const permMode =
-    toolPerms === null
-      ? PERMISSION_MODES.NONE
-      : (toolPerms?.mode ??
-        globalSettings.toolPermissions.mode ??
-        PERMISSION_MODES.ALLOW_ALL);
-  const effectiveErrorBehavior = workflowProperties.errorBehavior ??
-    globalSettings.defaultErrorBehavior ?? { onError: "stop" as const };
-  // Fall back to global settings when workflow doesn't have lists yet
-  const effectiveAllowedTools =
-    toolPerms?.allowedTools ?? globalSettings.toolPermissions.allowedTools;
-  const effectiveDeniedTools =
-    toolPerms?.deniedTools ?? globalSettings.toolPermissions.deniedTools;
 
   return (
     <div
@@ -2103,8 +2121,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     onChange={(mode) => {
                       handleToolPermissionsChange({
                         mode: mode as ToolPermissionMode,
-                        allowedTools: effectiveAllowedTools,
-                        deniedTools: effectiveDeniedTools,
+                        allowedTools: allowedToolsInput,
+                        deniedTools: deniedToolsInput,
                       });
                     }}
                     options={PERMISSION_MODE_OPTIONS}
@@ -2184,14 +2202,15 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     <PermissionListEditor
                       id="settings-allowed-tools"
                       aria-label="Allowed Tools"
-                      value={effectiveAllowedTools}
-                      onChange={(allowedTools) => {
+                      value={allowedToolsInput}
+                      onChange={setAllowedToolsInput}
+                      onBlur={(allowedTools) =>
                         handleToolPermissionsChange({
                           ...(toolPerms || {}),
                           allowedTools,
-                          deniedTools: effectiveDeniedTools,
-                        });
-                      }}
+                          deniedTools: deniedToolsInput,
+                        })
+                      }
                       disabled={permMode !== PERMISSION_MODES.CUSTOM}
                       aria-describedby={
                         allowedFieldDiagnostics.length > 0
@@ -2248,14 +2267,15 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     <PermissionListEditor
                       id="settings-denied-tools"
                       aria-label="Denied Tools"
-                      value={effectiveDeniedTools}
-                      onChange={(deniedTools) => {
+                      value={deniedToolsInput}
+                      onChange={setDeniedToolsInput}
+                      onBlur={(deniedTools) =>
                         handleToolPermissionsChange({
                           ...(toolPerms || {}),
-                          allowedTools: effectiveAllowedTools,
+                          allowedTools: allowedToolsInput,
                           deniedTools,
-                        });
-                      }}
+                        })
+                      }
                       disabled={
                         permMode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
                         permMode === PERMISSION_MODES.NONE

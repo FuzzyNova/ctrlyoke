@@ -165,3 +165,45 @@ suite("WorkflowStepHandlers — success-path client echo", () => {
     ]);
   });
 });
+
+suite("WorkflowMutationCoordinator — property revision recovery", () => {
+  test("retries a property mutation with the authoritative revision", async () => {
+    const attempts: number[] = [];
+    const address = { kind: "draft", workflowKey: "workflow-key" } as const;
+    const orchestrator = {
+      prepareWorkflowPropertiesMutation: async (mutation?: {
+        expectedDefinitionRevision?: number;
+      }) => {
+        attempts.push(mutation?.expectedDefinitionRevision ?? -1);
+        if (attempts.length === 1) {
+          throw new Error("Definition revision conflict: expected 1, found 2");
+        }
+      },
+      publishViewIdentityToViewers: async () => ({
+        type: "workflowViewIdentity",
+        address,
+        definitionRevision: 2,
+        descriptorRevision: 4,
+      }),
+    } as unknown as WorkflowOrchestrator;
+    const coordinator = new WorkflowMutationCoordinator(() => orchestrator);
+    const message: {
+      mutation?: unknown;
+    } = {
+      mutation: {
+        address,
+        expectedDefinitionRevision: 1,
+        expectedDescriptorRevision: 3,
+      },
+    };
+
+    await coordinator.prepareWorkflowPropertiesMutation(makeCtx(), message);
+
+    assert.deepStrictEqual(attempts, [1, 2]);
+    assert.deepStrictEqual(message.mutation, {
+      address,
+      expectedDefinitionRevision: 2,
+      expectedDescriptorRevision: 4,
+    });
+  });
+});

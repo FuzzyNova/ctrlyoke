@@ -75,10 +75,45 @@ export class WorkflowMutationCoordinator {
     if (!orchestrator) {
       throw new Error("WorkflowOrchestrator not initialized");
     }
-    await orchestrator.prepareWorkflowPropertiesMutation(
-      this.asWorkflowDefinitionMutation(message),
-      ctx.clientId
-    );
+    try {
+      await orchestrator.prepareWorkflowPropertiesMutation(
+        this.asWorkflowDefinitionMutation(message),
+        ctx.clientId
+      );
+    } catch (error) {
+      // Property writes are field-level last-writer-wins updates. A fast client
+      // can post several messages before the identity response for the first
+      // write reaches the webview, so each queued message may carry the same
+      // revision even though the previous property write already advanced it.
+      // Refresh and retry only this merge-safe mutation class; step topology and
+      // run lifecycle mutations must continue to fail on stale revisions.
+      if (!getErrorMessage(error).includes("revision conflict")) {
+        throw error;
+      }
+
+      const originalMutation = this.asWorkflowDefinitionMutation(message);
+      const identity = await orchestrator.publishViewIdentityToViewers(
+        ctx.clientId
+      );
+      if (
+        !identity ||
+        !originalMutation ||
+        JSON.stringify(identity.address) !==
+          JSON.stringify(originalMutation.address)
+      ) {
+        throw error;
+      }
+
+      message.mutation = {
+        ...originalMutation,
+        expectedDefinitionRevision: identity.definitionRevision,
+        expectedDescriptorRevision: identity.descriptorRevision,
+      };
+      await orchestrator.prepareWorkflowPropertiesMutation(
+        this.asWorkflowDefinitionMutation(message),
+        ctx.clientId
+      );
+    }
   }
 
   asWorkflowDefinitionMutation(message: {

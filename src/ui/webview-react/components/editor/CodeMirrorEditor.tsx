@@ -102,6 +102,7 @@ interface CodeMirrorEditorProps {
   id?: string;
   value: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
   placeholder?: string;
   affUri: string;
   dicUri: string;
@@ -561,6 +562,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     maxHeightClassName,
     onRun,
     onQueue,
+    onBlur,
     pendingInsertRequest,
     onInsertApplied,
   } = props;
@@ -581,6 +583,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const onChangeRef = useRef(onChange);
   const onRunRef = useRef(onRun);
   const onQueueRef = useRef(onQueue);
+  const onBlurRef = useRef(onBlur);
   const readOnlyRef = useRef(readOnly);
   // Tracks last reported signed-overflow to avoid redundant events
   const lastOverflowRef = useRef<number | null>(null);
@@ -661,6 +664,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   useEffect(() => {
     onQueueRef.current = onQueue;
   }, [onQueue]);
+
+  useEffect(() => {
+    onBlurRef.current = onBlur;
+  }, [onBlur]);
 
   // Update read-only state when prop changes (set contentEditable on the CodeMirror content DOM)
   useEffect(() => {
@@ -1334,14 +1341,18 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
             },
           ],
         }),
-        ...(mode === "prompt"
-          ? [
-              EditorView.domEventHandlers({
+        EditorView.domEventHandlers({
+          blur: () => {
+            onBlurRef.current?.();
+            return false;
+          },
+          ...(mode === "prompt"
+            ? {
                 paste: (event, view) =>
                   handleImagePaste(event as ClipboardEvent, view),
-              }),
-            ]
-          : []),
+              }
+            : {}),
+        }),
         createFencedBlockDecorationExtension(),
         // In atomic mode, createAtomicReferenceExtension already covers every
         // range these would mark (same findContextReferenceMatches /

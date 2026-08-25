@@ -113,6 +113,11 @@ describe("WorkflowPropertiesPanel — workflow-property persist/reload round tri
       clipboardData: { getData: () => "shell(rm:*)" },
     });
 
+    expect(findUpdatePropertyMessage("toolPermissions")).toBeUndefined();
+
+    fireEvent.blur(screen.getByLabelText("Allowed Tools"));
+    fireEvent.blur(screen.getByLabelText("Denied Tools"));
+
     const message = findUpdatePropertyMessage("toolPermissions");
     expect(message?.value).toEqual({
       mode: PERMISSION_MODES.CUSTOM,
