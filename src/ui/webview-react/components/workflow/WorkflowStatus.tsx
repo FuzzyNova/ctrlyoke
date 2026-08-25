@@ -11,6 +11,7 @@ import { useUiStore, type RecentWorkflow } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
+import { sendMessage } from "../../hooks/useMessageHandler";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
@@ -1250,8 +1251,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const handlePauseWorkflow = useCallback(
     (workflow: (typeof loadedWorkflows)[number]) => {
       if (!workflow.workflowKey || !workflow.runRef) return;
-      vscode.postMessage({
-        type: MESSAGE_TYPES.PAUSE_RUN,
+      sendMessage(MESSAGE_TYPES.PAUSE_RUN, {
         address: {
           workflowKey: workflow.workflowKey,
           kind: "run",
@@ -1259,14 +1259,13 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         },
       });
     },
-    [vscode]
+    []
   );
 
   const handleCancelPauseWorkflow = useCallback(
     (workflow: (typeof loadedWorkflows)[number]) => {
       if (!workflow.workflowKey || !workflow.runRef) return;
-      vscode.postMessage({
-        type: MESSAGE_TYPES.CANCEL_PAUSE_RUN,
+      sendMessage(MESSAGE_TYPES.CANCEL_PAUSE_RUN, {
         address: {
           workflowKey: workflow.workflowKey,
           kind: "run",
@@ -1274,14 +1273,13 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         },
       });
     },
-    [vscode]
+    []
   );
 
   const handleResumeWorkflow = useCallback(
     (workflow: (typeof loadedWorkflows)[number]) => {
       if (!workflow.workflowKey || !workflow.runRef) return;
-      vscode.postMessage({
-        type: MESSAGE_TYPES.RESUME_RUN,
+      sendMessage(MESSAGE_TYPES.RESUME_RUN, {
         address: {
           workflowKey: workflow.workflowKey,
           kind: "run",
@@ -1289,14 +1287,13 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         },
       });
     },
-    [vscode]
+    []
   );
 
   const handleStopWorkflow = useCallback(
     (workflow: (typeof loadedWorkflows)[number]) => {
       if (!workflow.workflowKey || !workflow.runRef) return;
-      vscode.postMessage({
-        type: MESSAGE_TYPES.STOP_RUN,
+      sendMessage(MESSAGE_TYPES.STOP_RUN, {
         address: {
           workflowKey: workflow.workflowKey,
           kind: "run",
@@ -1304,7 +1301,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         },
       });
     },
-    [vscode]
+    []
   );
 
   // Single flag drives opacity, clip-path, and visible/pointer-events together —

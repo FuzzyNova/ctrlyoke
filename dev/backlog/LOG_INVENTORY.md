@@ -61,15 +61,15 @@ _73 more file(s) not shown — re-run the script and inspect its output, or grep
 
 ---
 
-## Webview dashboard (`WebviewLog.*`) — 106 call sites across 31 file(s)
+## Webview dashboard (`WebviewLog.*`) — 107 call sites across 31 file(s)
 
-Totals by level: trace=13, debug=46, info=13, warn=15, error=19
+Totals by level: trace=13, debug=46, info=14, warn=15, error=19
 
 Ranked by call count (highest first).
 
 | File | trace | debug | info | warn | error | Total |
 | --- | --- | --- | --- | --- | --- | --- |
-| `src/ui/webview-react/hooks/useMessageHandler.ts` |  | 8 | 9 | 1 |  | 18 |
+| `src/ui/webview-react/hooks/useMessageHandler.ts` |  | 8 | 10 | 1 |  | 19 |
 | `src/ui/webview-react/components/output/TerminalInstance.tsx` | 5 | 10 | 1 |  | 1 | 17 |
 | `src/ui/webview-react/terminalRegistry.ts` | 3 | 7 |  | 1 |  | 11 |
 | `src/ui/webview-react/hooks/terminalMessageHandlers.ts` | 1 | 9 |  |  |  | 10 |

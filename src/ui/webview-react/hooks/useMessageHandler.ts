@@ -168,6 +168,28 @@ const RUN_VIEW_INDEPENDENT_MESSAGE_TYPES = new Set<string>([
 // Send Message Helper
 // ============================================================================
 
+function getPanelLifecycleActionLabel(type: string): string | undefined {
+  switch (type) {
+    case MESSAGE_TYPES.RUN:
+    case MESSAGE_TYPES.EXECUTE_DRAFT:
+    case MESSAGE_TYPES.CONTINUE_RUN:
+    case MESSAGE_TYPES.SEED_NEW_RUN:
+    case MESSAGE_TYPES.START_NEW_RUN_INSTEAD:
+      return "run start requested";
+    case MESSAGE_TYPES.RESUME_RUN:
+      return "run resume requested";
+    case MESSAGE_TYPES.PAUSE_RUN:
+      return "run pause requested";
+    case MESSAGE_TYPES.CANCEL_PAUSE_RUN:
+      return "run pause cancellation requested";
+    case MESSAGE_TYPES.STOP_RUN:
+    case MESSAGE_TYPES.STOP_CLI_RUN:
+      return "run stop requested";
+    default:
+      return undefined;
+  }
+}
+
 /**
  * Send a message to the extension
  * Can be used outside of React components via direct import
@@ -177,6 +199,10 @@ export function sendMessage(
   payload?: Record<string, unknown>
 ): void {
   const vscode = getVsCodeApi();
+  const lifecycleActionLabel = getPanelLifecycleActionLabel(type);
+  if (lifecycleActionLabel) {
+    WebviewLog.info(`[panel] ${lifecycleActionLabel}`);
+  }
   const definitionMutationTypes = new Set<string>([
     MESSAGE_TYPES.UPDATE_PROMPT,
     MESSAGE_TYPES.INSERT_WORKFLOW_STEP,

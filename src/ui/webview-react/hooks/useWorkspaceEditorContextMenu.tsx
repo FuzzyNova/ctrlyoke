@@ -6,6 +6,7 @@ import {
 } from "@components/shared/StepContextMenu";
 import { type WorkspaceFileEditorHandle } from "@components/workspace-viewer/WorkspaceFileEditor";
 import { useLongPress } from "@hooks/useLongPress";
+import { sendMessage } from "@hooks/useMessageHandler";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useEditorStore } from "@store/editorStore";
 import { useUiStore } from "@store/uiStore";
@@ -140,7 +141,7 @@ export function useWorkspaceEditorContextMenu({
                 type: MESSAGE_TYPES.LOAD_WORKFLOW,
                 filePath,
               });
-              vscode.postMessage({ type: MESSAGE_TYPES.RUN });
+              sendMessage(MESSAGE_TYPES.RUN);
             },
           },
           {

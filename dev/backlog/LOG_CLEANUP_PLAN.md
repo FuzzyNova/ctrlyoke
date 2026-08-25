@@ -65,14 +65,15 @@ Implemented:
   stopped"); leave `pause`/`confirmPaused`/`cancelPause`/`resume` at `Log.debug` — open question
   whether pause/resume (also dashboard-visible user actions) should be INFO too.
 
-## Gap #2 — the webview never uses `WebviewLog.info`
+## Gap #2 — panel-side lifecycle actions use `WebviewLog.info` (done)
 
-Per `LOG_INVENTORY.md`: 0 of 102 `WebviewLog.*` calls are `.info` (74 debug, 12 warn, 16 error).
-If INFO is meant to be the user-facing play-by-play and the dashboard is the primary user-facing
-surface, the panel side should be using `WebviewLog.info` for the same class of events (a run
-switched into view, a run started/stopped from a UI action) instead of folding everything into
-debug or skipping logging altogether. Otherwise INFO only ever tells half the story — the
-extension-host half — even though most of what a user does happens through the panel.
+The original inventory recorded 0 of 102 `WebviewLog.*` calls as `.info`; subsequent cleanup passes
+have added targeted panel-side INFO breadcrumbs.
+The existing run-navigation path already logs a run switching into view. The shared panel
+`sendMessage()` funnel now adds INFO entries for run start/resume/pause/stop requests, and the
+Header, workflow dropdown, and workspace context-menu controls use that existing funnel. This
+records what the user asked the panel to do without mirroring backend state transitions that the
+extension host already logs.
 
 ## Gap #3 — DEBUG carries TRACE-shaped chatter
 
