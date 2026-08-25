@@ -86,6 +86,7 @@ import type {
 } from "./WorkflowTimelineTypes";
 import type { WorkflowOutputHistory } from "./OutputHistoryTypes";
 import type { ScriptCompletionItem } from "../completions/ScriptCommandCompletionHelpers";
+import type { PermissionCompletionItem } from "../completions/PermissionListCompletionHelpers";
 import type { PlainCompletionItem } from "../completions/CompletionHelpers";
 import type { HarnessCapabilityRegistrySnapshot } from "./CompatibilityTypes";
 import type { WorkflowExecutionPreview } from "./ExecutionPreviewTypes";
@@ -1139,6 +1140,22 @@ export interface ScriptCompletionsRequestMessage {
 export interface ScriptCompletionsResponseMessage {
   type: typeof MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE;
   items: ScriptCompletionItem[];
+  from: number;
+  seq: number;
+}
+
+/** Webview -> Extension: request completions for a tool permission list field. */
+export interface PermissionCompletionsRequestMessage {
+  type: typeof MESSAGE_TYPES.PERMISSION_COMPLETIONS_REQUEST;
+  text: string;
+  position: number;
+  seq: number;
+}
+
+/** Extension -> Webview: tool permission list completion results. */
+export interface PermissionCompletionsResponseMessage {
+  type: typeof MESSAGE_TYPES.PERMISSION_COMPLETIONS_RESPONSE;
+  items: PermissionCompletionItem[];
   from: number;
   seq: number;
 }
@@ -2378,6 +2395,7 @@ export type IncomingMessage =
       trigger: string;
     }
   | ScriptCompletionsResponseMessage
+  | PermissionCompletionsResponseMessage
   | BranchListResponseMessage
   | {
       type: typeof MESSAGE_TYPES.CONTEXT_REFS_VALIDATION;

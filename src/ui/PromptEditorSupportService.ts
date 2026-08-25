@@ -62,6 +62,10 @@ import {
   getScriptCommandCompletions,
   parseScriptCompletionContext,
 } from "../completions/ScriptCommandCompletionHelpers";
+import {
+  getPermissionListCompletions,
+  parsePermissionCompletionContext,
+} from "../completions/PermissionListCompletionHelpers";
 import { getBranchCompletions } from "../completions/BranchCompletionHelpers";
 import { getStashList, gitRefExists } from "../utils/GitUtils";
 import { ContextExpander } from "../utils/ContextExpander";
@@ -176,6 +180,35 @@ export class PromptEditorSupportService {
       Log.error("Failed to get script completions:", error);
       ctx.emit({
         type: MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE,
+        items: [],
+        from: position,
+        seq,
+      });
+    }
+  }
+
+  async handlePermissionCompletionRequest(
+    ctx: WebviewClientContext,
+    text: string,
+    position: number,
+    seq: number
+  ): Promise<void> {
+    try {
+      const items = getPermissionListCompletions(text, position);
+      const from = parsePermissionCompletionContext(
+        text,
+        position
+      ).replacementStart;
+      ctx.emit({
+        type: MESSAGE_TYPES.PERMISSION_COMPLETIONS_RESPONSE,
+        items,
+        from,
+        seq,
+      });
+    } catch (error) {
+      Log.error("Failed to get permission completions:", error);
+      ctx.emit({
+        type: MESSAGE_TYPES.PERMISSION_COMPLETIONS_RESPONSE,
         items: [],
         from: position,
         seq,

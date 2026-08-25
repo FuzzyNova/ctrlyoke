@@ -192,12 +192,12 @@ Replace the four textareas with `<PermissionListEditor>`:
 | Component                                                  | Planned role                                                                                          |
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `SingleLineCompletionEditor.tsx`                           | Gains `multiline` support; single-line callers unaffected                                             |
-| `src/completions/PermissionListCompletionHelpers.ts` (new) | Line-scoped completion candidates for tool patterns                                                   |
+| `src/completions/PermissionListCompletionHelpers.ts` (new) | Implemented: line-scoped completion candidates for tool patterns                                         |
 | `src/utils/ToolPatternSyntax.ts`                          | Implemented: shared, dependency-free pattern regex + syntax checks (extension host + webview)         |
 | `src/core/harness/shared/CliToolPermissionMapper.ts`       | Implemented: adopts `ToolPatternSyntax.ts` instead of its own inline regex                            |
-| `PromptEditorSupportService.ts`                            | New `handlePermissionCompletionRequest()`, mirroring `handleScriptCompletionRequest`                  |
-| `WebviewMessageRouter.ts`                                  | Registers `PERMISSION_COMPLETIONS_REQUEST`                                                            |
-| `DashboardConstants.ts` / `WebviewMessageTypes.ts`         | New message type + payload contracts                                                                  |
+| `PromptEditorSupportService.ts`                            | Implemented: new `handlePermissionCompletionRequest()`, mirroring script completions                   |
+| `WebviewMessageRouter.ts`                                  | Implemented: registers `PERMISSION_COMPLETIONS_REQUEST`                                                 |
+| `DashboardConstants.ts` / `WebviewMessageTypes.ts`         | Implemented: new message type + payload contracts                                                       |
 | `components/shared/PermissionListEditor.tsx` (new)         | Wraps the multiline editor + completion source + linter; owns `string[]` ↔ `\n`-joined conversion     |
 | `WorkflowPropertiesPanel.tsx`                              | Allowed/Denied Tools fields on the workflow Permissions tab                                           |
 | `components/settings/defaults/DefaultsPermissionsPage.tsx` | Allowed/Denied tools fields on the global defaults page                                               |
