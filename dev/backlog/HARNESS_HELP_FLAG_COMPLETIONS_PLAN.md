@@ -1,6 +1,6 @@
 # Additional Args Completions from Live `--help` Output
 
-> **Status:** Steps 1–2 implemented; message plumbing and webview rollout remain.
+> **Status:** Steps 1–3 implemented; call-site rollout remains.
 >
 > Referenced as a follow-up from
 > [`ALLOW_DENY_LIST_EDITOR_PLAN.md`](ALLOW_DENY_LIST_EDITOR_PLAN.md#3-other-free-text-fields-in-workflowpropertiespaneltsx-worth-the-same-treatment),
@@ -188,8 +188,16 @@ per-harness overrides, not a single regex assumed to fit everything:
   registration, and `PromptEditorSupportService` handler. It resolves each
   harness through its provider-owned help command constant, parses and filters
   live help output at the cursor token, and fails soft on CLI or parse errors.
-- The webview completion source and `AdditionalArgsEditor.tsx` remain for the
-  next step.
+- The webview completion source and `AdditionalArgsEditor.tsx` are now
+  implemented; call-site rollout remains for the next step.
+
+#### Webview completion source landed
+
+- Added `AdditionalArgsEditor.tsx` with the single-line completion request,
+  host-authoritative flag filtering, harness-aware invalidation, and value-hint
+  completions.
+- Added Vitest coverage for request payloads, rendered responses, harness
+  changes, and value hints.
 
 Same shape as `ScriptCommandEditor`/the allow-deny list plan's completion
 source:
