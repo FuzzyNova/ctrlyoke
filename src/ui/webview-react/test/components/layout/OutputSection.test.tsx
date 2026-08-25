@@ -311,7 +311,7 @@ vi.mock("@utils/performanceProfiler", () => ({
 }));
 
 vi.mock("@utils/logger", () => ({
-  WebviewLog: { debug: vi.fn() },
+  WebviewLog: { debug: vi.fn(), trace: vi.fn() },
 }));
 
 vi.mock("@utils/outputDom", () => ({

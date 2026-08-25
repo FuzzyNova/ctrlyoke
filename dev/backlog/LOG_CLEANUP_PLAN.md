@@ -221,14 +221,25 @@ push-subscription attempts are TRACE because one notification can produce one li
 the push dispatch summary remains DEBUG. The remaining UI/server DEBUG calls are connection,
 registry, replay, and routing diagnostics rather than the workflow transcript, so they stay DEBUG.
 
+**Group 8 decisions (2026-08-24):** Added the missing TRACE level to the webview logger and
+forwarding router. Completion triggers, performance-profiler events, terminal resize/viewport
+measurements, and terminal-pane refresh telemetry are TRACE because they repeat within a single
+render or resize cycle. Terminal registry creation, attach/detach, controller bookkeeping, and
+terminal message routing remain DEBUG as diagnostic state transitions. Execution start (including
+continuation/fresh-start branches), startup gates, active-workflow add/dismiss/change events,
+run-view navigation, new-workflow shortcuts, and manual terminal-control requests are INFO so
+the webview stream reads like the user's visible session. WebGL fallback is WARN because it
+degrades rendering, while an unexpected terminal mount failure is ERROR because it leaves the
+terminal unavailable. `WORKFLOW_DISMISSED` now says when the live summary has not arrived yet;
+that state is legitimate during startup and should not read like a client/server desync.
+
 ### Phase 3 — Fill the gaps
 
 - Gap #1: **done** — `WorkflowInstance.ts` now logs step attempt lifecycle events and promotes
   headline run lifecycle transitions to INFO (see above for the exact transitions/wording).
-- Gap #2: bring `WebviewLog.info` into use for the same class of run-lifecycle events on the panel
-  side, so a user reading the Debug Console gets one coherent story instead of two disconnected
-  DEBUG streams from webview + extension host. Run after group 8 lands (touches
-  `useMessageHandler.ts` and related webview files).
+- Gap #2: **done** — `WebviewLog.info` now carries the webview-side startup, run-start,
+  workflow-selection, workflow-add/dismiss, run-view navigation, and terminal-control events so
+  the Debug Console has one coherent story alongside extension-host lifecycle INFO records.
 
 ## Picking this up
 

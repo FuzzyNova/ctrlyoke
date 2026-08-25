@@ -8,9 +8,9 @@ Excludes `src/test/**` and `*.test.tsx?`/`*.spec.tsx?` files (test assertions/mo
 
 ---
 
-## Backend (`Log.*`) — 1072 call sites across 113 file(s)
+## Backend (`Log.*`) — 1073 call sites across 113 file(s)
 
-Totals by level: trace=131, debug=296, info=175, warn=308, error=160, appendLine=2
+Totals by level: trace=132, debug=296, info=175, warn=308, error=160, appendLine=2
 
 Ranked by call count (highest first).
 
@@ -19,7 +19,7 @@ Ranked by call count (highest first).
 | `src/core/WorkflowInstance.ts` | 2 | 36 | 33 | 23 | 14 |  | 108 |
 | `src/core/WorkflowOrchestrator.ts` | 6 | 41 | 16 | 39 | 6 |  | 108 |
 | `src/server/CtrlYokeHostedServer.ts` |  | 6 |  | 11 | 19 |  | 36 |
-| `src/ui/WebviewMessageRouter.ts` | 1 | 3 | 6 | 6 | 9 |  | 25 |
+| `src/ui/WebviewMessageRouter.ts` | 2 | 3 | 6 | 6 | 9 |  | 26 |
 | `src/core/harness/shared/interfaces/INotificationMonitor.ts` | 14 | 4 | 2 | 4 |  |  | 24 |
 | `src/core/PromptQueue.ts` | 2 | 7 | 11 | 2 | 2 |  | 24 |
 | `src/core/WorkflowExecutor.ts` | 3 |  | 14 | 4 | 3 |  | 24 |
@@ -63,49 +63,49 @@ _73 more file(s) not shown — re-run the script and inspect its output, or grep
 
 ## Webview dashboard (`WebviewLog.*`) — 106 call sites across 31 file(s)
 
-Totals by level: debug=74, info=0, warn=14, error=18
+Totals by level: trace=13, debug=46, info=13, warn=15, error=19
 
 Ranked by call count (highest first).
 
-| File | debug | info | warn | error | Total |
-| --- | --- | --- | --- | --- | --- |
-| `src/ui/webview-react/hooks/useMessageHandler.ts` | 17 |  | 1 |  | 18 |
-| `src/ui/webview-react/components/output/TerminalInstance.tsx` | 17 |  |  |  | 17 |
-| `src/ui/webview-react/terminalRegistry.ts` | 11 |  |  |  | 11 |
-| `src/ui/webview-react/hooks/terminalMessageHandlers.ts` | 10 |  |  |  | 10 |
-| `src/ui/webview-react/hooks/useDesktopLayout.ts` |  |  |  | 6 | 6 |
-| `src/ui/webview-react/hooks/useUndoRedoKeyHandler.ts` | 4 |  |  |  | 4 |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | 1 |  |  | 2 | 3 |
-| `src/ui/webview-react/components/output/DiffView.tsx` |  |  | 2 |  | 2 |
-| `src/ui/webview-react/components/output/MarkdownText.tsx` |  |  | 2 |  | 2 |
-| `src/ui/webview-react/components/output/TerminalView.tsx` | 2 |  |  |  | 2 |
-| `src/ui/webview-react/components/settings/stats/StatsUsageSection.tsx` |  |  | 1 | 1 | 2 |
-| `src/ui/webview-react/components/workflow/WorkflowStatus.tsx` | 2 |  |  |  | 2 |
-| `src/ui/webview-react/hooks/useDuplicateWorkflowWatchdog.ts` |  |  | 2 |  | 2 |
-| `src/ui/webview-react/hooks/useNewWorkflowKeyHandler.ts` | 2 |  |  |  | 2 |
-| `src/ui/webview-react/hooks/useRunViewLoadWatchdog.ts` |  |  | 2 |  | 2 |
-| `src/ui/webview-react/hooks/useWorkspaceExplorerContextMenu.tsx` |  |  |  | 2 | 2 |
-| `src/ui/webview-react/main.tsx` |  |  |  | 2 | 2 |
-| `src/ui/webview-react/store/workflowStore.ts` | 2 |  |  |  | 2 |
-| `src/ui/webview-react/utils/runNavigation.ts` | 2 |  |  |  | 2 |
-| `src/ui/webview-react/wdyr.ts` | 1 |  | 1 |  | 2 |
-| `src/ui/webview-react/BootstrapApp.tsx` |  |  |  | 1 | 1 |
-| `src/ui/webview-react/components/dev/UxSnapshotButton.tsx` |  |  |  | 1 | 1 |
-| `src/ui/webview-react/components/layout/Header.tsx` | 1 |  |  |  | 1 |
-| `src/ui/webview-react/components/layout/OutputSection.tsx` | 1 |  |  |  | 1 |
-| `src/ui/webview-react/components/layout/StartupOverlay.tsx` |  |  | 1 |  | 1 |
-| `src/ui/webview-react/components/shared/ErrorBoundary.tsx` |  |  |  | 1 | 1 |
-| `src/ui/webview-react/hooks/reconnectWatchdog.ts` |  |  | 1 |  | 1 |
-| `src/ui/webview-react/hooks/useOutputExport.ts` |  |  |  | 1 | 1 |
-| `src/ui/webview-react/utils/panelSnapshot.ts` |  |  | 1 |  | 1 |
-| `src/ui/webview-react/utils/performanceProfiler.ts` | 1 |  |  |  | 1 |
-| `src/ui/webview-react/utils/tokenizer.ts` |  |  |  | 1 | 1 |
+| File | trace | debug | info | warn | error | Total |
+| --- | --- | --- | --- | --- | --- | --- |
+| `src/ui/webview-react/hooks/useMessageHandler.ts` |  | 8 | 9 | 1 |  | 18 |
+| `src/ui/webview-react/components/output/TerminalInstance.tsx` | 5 | 10 | 1 |  | 1 | 17 |
+| `src/ui/webview-react/terminalRegistry.ts` | 3 | 7 |  | 1 |  | 11 |
+| `src/ui/webview-react/hooks/terminalMessageHandlers.ts` | 1 | 9 |  |  |  | 10 |
+| `src/ui/webview-react/hooks/useDesktopLayout.ts` |  |  |  |  | 6 | 6 |
+| `src/ui/webview-react/hooks/useUndoRedoKeyHandler.ts` |  | 4 |  |  |  | 4 |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | 1 |  |  |  | 2 | 3 |
+| `src/ui/webview-react/components/output/DiffView.tsx` |  |  |  | 2 |  | 2 |
+| `src/ui/webview-react/components/output/MarkdownText.tsx` |  |  |  | 2 |  | 2 |
+| `src/ui/webview-react/components/output/TerminalView.tsx` | 1 | 1 |  |  |  | 2 |
+| `src/ui/webview-react/components/settings/stats/StatsUsageSection.tsx` |  |  |  | 1 | 1 | 2 |
+| `src/ui/webview-react/components/workflow/WorkflowStatus.tsx` |  | 2 |  |  |  | 2 |
+| `src/ui/webview-react/hooks/useDuplicateWorkflowWatchdog.ts` |  |  |  | 2 |  | 2 |
+| `src/ui/webview-react/hooks/useNewWorkflowKeyHandler.ts` |  |  | 2 |  |  | 2 |
+| `src/ui/webview-react/hooks/useRunViewLoadWatchdog.ts` |  |  |  | 2 |  | 2 |
+| `src/ui/webview-react/hooks/useWorkspaceExplorerContextMenu.tsx` |  |  |  |  | 2 | 2 |
+| `src/ui/webview-react/main.tsx` |  |  |  |  | 2 | 2 |
+| `src/ui/webview-react/store/workflowStore.ts` |  | 2 |  |  |  | 2 |
+| `src/ui/webview-react/utils/runNavigation.ts` |  | 1 | 1 |  |  | 2 |
+| `src/ui/webview-react/wdyr.ts` |  | 1 |  | 1 |  | 2 |
+| `src/ui/webview-react/BootstrapApp.tsx` |  |  |  |  | 1 | 1 |
+| `src/ui/webview-react/components/dev/UxSnapshotButton.tsx` |  |  |  |  | 1 | 1 |
+| `src/ui/webview-react/components/layout/Header.tsx` |  | 1 |  |  |  | 1 |
+| `src/ui/webview-react/components/layout/OutputSection.tsx` | 1 |  |  |  |  | 1 |
+| `src/ui/webview-react/components/layout/StartupOverlay.tsx` |  |  |  | 1 |  | 1 |
+| `src/ui/webview-react/components/shared/ErrorBoundary.tsx` |  |  |  |  | 1 | 1 |
+| `src/ui/webview-react/hooks/reconnectWatchdog.ts` |  |  |  | 1 |  | 1 |
+| `src/ui/webview-react/hooks/useOutputExport.ts` |  |  |  |  | 1 | 1 |
+| `src/ui/webview-react/utils/panelSnapshot.ts` |  |  |  | 1 |  | 1 |
+| `src/ui/webview-react/utils/performanceProfiler.ts` | 1 |  |  |  |  | 1 |
+| `src/ui/webview-react/utils/tokenizer.ts` |  |  |  |  | 1 | 1 |
 
 ---
 
-## Raw `console.*` usage — 176 call sites across 30 file(s)
+## Raw `console.*` usage — 177 call sites across 30 file(s)
 
-Totals by level: log=114, debug=1, info=1, warn=11, error=49, trace=0
+Totals by level: log=114, debug=2, info=1, warn=11, error=49, trace=0
 
 `npm run lint` already fails on new `console.*` in the ts/tsx source tree (`no-console`
 in `eslint.config.mjs`) outside its explicit exemption list — standalone processes with no
@@ -123,10 +123,10 @@ Ranked by call count (highest first).
 | `src/cli.ts` | 38 |  |  |  | 35 |  | 73 |
 | `src/cli/CliTerminalFormatter.ts` | 48 |  |  |  |  |  | 48 |
 | `src/test/harness/hooks.harness.test.ts` | 9 |  |  |  |  |  | 9 |
+| `src/ui/webview-react/utils/logger.ts` | 1 | 1 | 1 | 1 | 1 |  | 5 |
 | `src/templates/check_condition.js` | 3 |  |  |  | 1 |  | 4 |
 | `src/test/endConditionEvaluator.test.ts` | 3 |  |  |  | 1 |  | 4 |
 | `src/test/suite/harness/LogParsers.test.ts` | 4 |  |  |  |  |  | 4 |
-| `src/ui/webview-react/utils/logger.ts` | 1 |  | 1 | 1 | 1 |  | 4 |
 | `src/scripts/ctrlyoke-hook-utils.js` |  |  |  |  | 3 |  | 3 |
 | `src/ui/webview-react/scripts/bootstrapScript.ts` |  | 1 |  | 1 | 1 |  | 3 |
 | `src/core/orchestration/WorkflowLineageRepository.ts` |  |  |  | 2 |  |  | 2 |

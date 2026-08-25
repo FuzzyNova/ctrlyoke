@@ -369,7 +369,7 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     const sessions = useTerminalStore.getState().sessions[workflowId] ?? [];
     const session = sessions.find((s) => s.id === sessionId);
     const entry = terminalRegistry.get(workflowId, sessionId);
-    WebviewLog.debug(
+    WebviewLog.trace(
       `[TERMINAL_SIZE_CHANGED] wf=${workflowId?.slice(0, 8)} sess=${sessionId?.slice(0, 8)} ` +
         `controller=${cols}x${rows ?? "?"} isController=${session?.isController} ` +
         `viewerBefore=${entry ? `${entry.term.cols}x${entry.term.rows}` : "no-entry"}`

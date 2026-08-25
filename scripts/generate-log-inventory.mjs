@@ -35,11 +35,11 @@ const BACKEND_LEVELS = [
   "error",
   "appendLine",
 ];
-const WEBVIEW_LEVELS = ["debug", "info", "warn", "error"];
+const WEBVIEW_LEVELS = ["trace", "debug", "info", "warn", "error"];
 const CONSOLE_LEVELS = ["log", "debug", "info", "warn", "error", "trace"];
 
 const BACKEND_CALL_RE = /\bLog\.(trace|debug|info|warn|error|appendLine)\(/g;
-const WEBVIEW_CALL_RE = /\bWebviewLog\.(debug|info|warn|error)\(/g;
+const WEBVIEW_CALL_RE = /\bWebviewLog\.(trace|debug|info|warn|error)\(/g;
 const CONSOLE_CALL_RE = /\bconsole\.(log|debug|info|warn|error|trace)\(/g;
 
 const EXCLUDE_RE = /\/test\/|\.test\.tsx?$|\.spec\.tsx?$/;

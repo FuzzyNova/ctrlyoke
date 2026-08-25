@@ -2135,6 +2135,9 @@ export class WebviewMessageRouter {
     const tag = ctx.clientId;
     const prefixed = `[${tag}] ${message}`;
     switch (level) {
+      case LOG_LEVELS.TRACE:
+        Log.trace(prefixed);
+        break;
       case LOG_LEVELS.DEBUG:
         Log.debug(prefixed);
         break;

@@ -273,7 +273,7 @@ function ensureWebglAddonLoaded(entry: RegistryEntry): Promise<void> {
       );
     } catch {
       // WebGL unavailable at startup — xterm uses its built-in renderer.
-      WebviewLog.debug(
+      WebviewLog.warn(
         `[terminalRegistry.ensureWebglAddonLoaded] WebGL unavailable after ${Math.round(
           performance.now() - startedAt
         )}ms — using built-in renderer`
@@ -430,7 +430,7 @@ export const terminalRegistry = {
         const containerSize = `${container.offsetWidth}x${container.offsetHeight}`;
         const containerDisplay = getComputedStyle(container).display;
         const fitResult = fitRegistryEntry(entry, getFitMode(entry));
-        WebviewLog.debug(
+        WebviewLog.trace(
           `[terminalRegistry.attach] rAF resize — container display=${containerDisplay} size=${containerSize} ` +
             `domElConnected=${entry.domEl.isConnected} controllerCols=${entry.controllerCols ?? "none"} ` +
             `proposed=${fitResult.proposedCols ?? "none"}x${fitResult.proposedRows ?? "none"} ` +
@@ -551,7 +551,7 @@ export const terminalRegistry = {
     }
 
     const fitResult = fitRegistryEntry(entry, "controller");
-    WebviewLog.debug(
+    WebviewLog.trace(
       `[terminalRegistry.measureViewportContainer] size=${container.offsetWidth}x${container.offsetHeight} ` +
         `proposed=${fitResult.proposedCols ?? "none"}x${fitResult.proposedRows ?? "none"} ` +
         `actual=${fitResult.cols}x${fitResult.rows}`
@@ -598,7 +598,7 @@ export const terminalRegistry = {
 
     applyViewerLetterbox(entry);
 
-    WebviewLog.debug(
+    WebviewLog.trace(
       `[terminalRegistry.applyControllerSize] wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
         `controller=${cols}x${rows ?? "?"} viewer=${entry.term.cols}x${entry.term.rows}` +
         (rows != null && rows !== entry.term.rows ? " ROW MISMATCH" : "")

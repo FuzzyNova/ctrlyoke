@@ -1988,6 +1988,7 @@ export const LOCK_STATUS = {
 // LOG LEVELS - Webview → Extension log level strings (LOG_MESSAGE payload)
 // ============================================================================
 export const LOG_LEVELS = {
+  TRACE: "trace",
   DEBUG: "debug",
   INFO: "info",
   WARN: "warn",

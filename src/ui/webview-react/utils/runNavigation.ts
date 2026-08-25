@@ -129,7 +129,7 @@ export function navigateToWorkflowAddress(
     useWorkflowStore.getState().clearHistoryOutputs();
     ui.clearHistoryView();
   }
-  WebviewLog.debug(
+  WebviewLog.info(
     `[runNavigation] loading ${addressLabel(address)} from ${addressLabel(previousAddress)} ` +
       `(requestId=${requestId}, view=${isExecutingRunRow ? "live" : "snapshot"})`
   );

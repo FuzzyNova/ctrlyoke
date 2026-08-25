@@ -1285,7 +1285,7 @@ const OutputSectionInner: React.FC = () => {
       !isExecutionActive);
 
   useEffect(() => {
-    WebviewLog.debug(
+    WebviewLog.trace(
       `[OutputSection] terminal pane wf=${terminalWorkflowId.slice(0, 8)} activeTab=${activeOutputTab} ` +
         `outputCollapsed=${outputCollapsed} terminalSessions=${terminalSessions.length} ` +
         `activeSession=${activeTerminalSessionId?.slice(0, 8) ?? "none"} terminalActive=${terminalSessionActive}`

@@ -1198,7 +1198,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
       if (before.from === before.to && !context.explicit) return null;
 
-      WebviewLog.debug(
+      WebviewLog.trace(
         `[CodeMirror] pathCompletions triggered: "${before.text}" from=${before.from}`
       );
 

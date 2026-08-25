@@ -251,7 +251,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
         cols,
         rows,
       });
-      WebviewLog.debug(
+      WebviewLog.trace(
         `[TerminalView] empty-pane viewport hint wf=${workflowId.slice(0, 8)} ` +
           `container=${activeContainer.offsetWidth}x${activeContainer.offsetHeight}px ` +
           `proposed=${fitResult.proposedCols ?? "none"}x${fitResult.proposedRows ?? "none"} ` +
