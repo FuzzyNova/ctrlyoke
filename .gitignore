@@ -23,6 +23,7 @@ package.json.backup
 .ctrlyoke/snapshots/
 .ctrlyoke/attachments/
 .ctrlyoke/dev/
+.ctrlyoke-dev-home/
 .playwright-mcp/
 manual-test/hooks/output/
 

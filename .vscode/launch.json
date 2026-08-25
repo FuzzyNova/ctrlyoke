@@ -11,7 +11,10 @@
         "${workspaceFolder}/ctrlyoke-test.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "npm: compile"
+      "preLaunchTask": "npm: compile",
+      "env": {
+        "CTRLYOKE_HOME": "${workspaceFolder}/.ctrlyoke-dev-home"
+      }
     },
     {
       "name": "Run Extension (React Debug)",
@@ -23,7 +26,10 @@
         "${workspaceFolder}/ctrlyoke-test.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "npm: compile:react-debug"
+      "preLaunchTask": "npm: compile:react-debug",
+      "env": {
+        "CTRLYOKE_HOME": "${workspaceFolder}/.ctrlyoke-dev-home"
+      }
     },
     {
       "name": "Run Extension (Production)",
@@ -35,7 +41,10 @@
         "${workspaceFolder}/ctrlyoke-test.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "npm: compile:prod"
+      "preLaunchTask": "npm: compile:prod",
+      "env": {
+        "CTRLYOKE_HOME": "${workspaceFolder}/.ctrlyoke-dev-home"
+      }
     },
     {
       "name": "Run Extension (Multi Repo)",
@@ -47,7 +56,10 @@
         "${workspaceFolder}/ctrlyoke-fuzzno.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "npm: compile"
+      "preLaunchTask": "npm: compile",
+      "env": {
+        "CTRLYOKE_HOME": "${workspaceFolder}/.ctrlyoke-dev-home"
+      }
     },
     {
       "name": "Run Extension (Debug, Isolated)",
@@ -60,7 +72,10 @@
         "${workspaceFolder}/ctrlyoke-test.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "npm: compile"
+      "preLaunchTask": "npm: compile",
+      "env": {
+        "CTRLYOKE_HOME": "${workspaceFolder}/.ctrlyoke-dev-home"
+      }
     },
     {
       "name": "Extension Tests",
