@@ -199,6 +199,102 @@ behavior but surface it in the Settings server section (which already has UI
 for `portFallback`, see `server.instructions.md`) with sibling-aware wording
 instead of "port was already in use by something."
 
+## Related, Lower-Severity: The "Open Worktree in New Window" Case
+
+The dashboard also lets a user open a ctrlyoke-managed or named worktree
+directly as the root of a brand-new VS Code window — the **Open Worktree in
+New Window** action in `RunSummaryBanner.tsx`
+(`src/ui/webview-react/components/output/RunSummaryBanner.tsx:324-338`),
+which calls `vscode.commands.executeCommand("vscode.openFolder", …, true)`
+(`src/extension.ts:866-882`) on the exact `worktreePath` recorded for that
+run. If ctrlyoke is installed as a normal extension, that new window
+activates its own ctrlyoke instance — a second kind of "two instances, one
+directory" situation, structurally different from the same-folder case
+above.
+
+### Why it is not the same bug
+
+A worktree and its source checkout are two different paths, so the new
+window's project-state hash (`src/utils/ProjectStatePaths.ts`) differs from
+the originating instance's. That means:
+
+- Run storage, `runner.json`, and lineage state are **not shared** — there is
+  no `normalizeStaleLocks` collision, because the two instances never write
+  the same lock file.
+- The new window's run history starts empty; it has no visibility into (and
+  cannot corrupt) the run history of the project that created the worktree.
+
+The open question is narrower: **can the two instances' harness processes
+write to the same files at the same time?**
+
+### That part is already handled
+
+`ExecutionRootLeaseManager` (`src/core/orchestration/
+ExecutionRootLeaseManager.ts`, described in `dev/implemented/
+WORKTREE_SUPPORT_PLAN.md`'s "Concurrency: Shared and Exclusive Execution
+Leases" section) scopes leases by the **worktree's own absolute Git
+directory**, resolved under the shared Git common directory — not by project
+state root. Every ctrlyoke-orchestrated run, ordinary or worktree-targeted,
+acquires a lease in that same scope before doing any harness/script work
+(`WorkflowInstance.ts:4296-4300` acquires `shared-native` for ordinary runs;
+managed/named worktree runs acquire `exclusive-worktree`). Concretely:
+
+- While the originating instance's managed/named run is actively executing
+  (lease held from provisioning through finalization/removal), any workflow
+  the new window tries to run in that same worktree is **blocked
+  immediately** with an actionable conflict error naming the owning
+  workflow/PID/state root, plus the existing **Open Owning Workspace** action
+  (`VSCODE_COMMANDS.OPEN_WORKTREE_OWNER`, `src/extension.ts:1231-1246`) — the
+  same mechanism already built for ordinary same-directory lease conflicts.
+- Symmetrically, once the new window starts its own ordinary run there
+  (`shared-native` lease), the originating instance cannot start a *second*
+  worktree-targeted run against that same worktree until the new window's
+  run ends.
+- Branch-deletion safety is independent of any of this: `WorktreeManager`
+  only deletes a managed branch after verifying its tip still matches the
+  last tip ctrlyoke itself recorded, so edits made from the second window
+  cannot cause the owning instance to silently discard them.
+
+So for the realistic case this button exists for — opening a `keep: true`
+managed worktree, or a named/persistent worktree, after the owning run has
+settled — the two instances are already correctly arbitrated by existing,
+shipped infrastructure. This needs no new locking primitive.
+
+### What is genuinely missing (visibility only, not correctness)
+
+1. **No indication, in the new window, that the folder is a ctrlyoke-owned
+   worktree.** `Header.tsx`/`WorkflowStatus.tsx` only consult the ownership
+   record and lease state while *driving* a worktree run; a window opened
+   directly on the worktree path never reads its own ownership record
+   (`<git-common-dir>/ctrlyoke/managed-worktrees/<branch-hash>.json`) to tell
+   the user "this is branch `ctrlyoke/ui-refactor/run-…`, owned by
+   `<sourceCheckoutRoot>`." Worth a read-only banner built on discovery code
+   that already exists (`WorktreeManager.discoverRecoverableManagedWorktrees`
+   / `git worktree list`), not a new coordination mechanism — a natural
+   addition to Phase 2's dashboard-visibility work above rather than a new
+   phase.
+2. **A narrow creation-time race.** The exclusive lease is acquired at
+   lifecycle step 6, one step after `git worktree add` at step 4 (see the
+   Managed/ephemeral lifecycle in `WORKTREE_SUPPORT_PLAN.md`). A user who
+   opens and edits the directory in that brief gap isn't yet blocked by
+   anything. Worst case the edit is either swept into the owning run's
+   auto-commit or trips the `.ctrlyoke/` runtime-path guard and blocks
+   finalization (directory kept) — never silent loss — so this is a
+   low-priority polish item, not a correctness gap.
+3. **Worktree-of-a-worktree is unvalidated.** If the second window itself
+   authors a workflow with `worktree: true`/named targeting a *further*
+   nested worktree, confirm the placement guards ("reject a root contained
+   within any discovered worktree") still resolve correctly when
+   `sourceCheckoutRoot` is itself a linked worktree rather than the
+   repository's main checkout. Likely fine given the guards are already
+   phrased in terms of "any discovered worktree," but untested.
+
+**Recommendation:** no new phase. Fold item 1 into Phase 2 as an additional
+bullet — surfacing external ownership is the same theme as generalizing
+`managedBy` — and leave items 2–3 as watch items; they're pre-existing edge
+cases of the worktree feature itself, not new risk introduced by the
+coordination gap this document is otherwise about.
+
 ## Non-Goals
 
 - **Do not prevent multiple windows from opening the same folder.** That is
@@ -218,7 +314,9 @@ Ship Phase 1 on its own as a straightforward correctness fix — it has no
 UI/schema surface and removes a real data-loss bug for any user who ever
 opens one project in two windows. Phases 2–3 are UX polish on top and can
 wait for evidence of real user friction (mirroring how CLI-managed watch mode
-was justified) rather than being built speculatively.
+was justified) rather than being built speculatively. The "Open Worktree in
+New Window" case above needs no dedicated phase — its only real gap (item 1)
+rides along with Phase 2 whenever that work happens.
 
 ## Related Files
 
@@ -226,15 +324,25 @@ was justified) rather than being built speculatively.
   `LockSafetyPrimitives.ts`
 - `src/core/WorkflowOrchestrator.ts` (`setupCliWatching`,
   `startCliWatchSession`, `handleRunnerJsonEvent`)
-- `src/core/orchestration/ExecutionRootLeaseManager.ts` (model to follow)
+- `src/core/orchestration/ExecutionRootLeaseManager.ts` — model to follow for
+  Phase 1–2, and already the mechanism arbitrating the "Open Worktree in New
+  Window" case above
 - `src/types/CtrlYokeTypes.ts` (`WorkflowRunnerLock`, `WorkflowSummary.managedBy`)
 - `src/types/DashboardConstants.ts` (`RUNNER_IDS`, `LOCK_STATUS`)
 - `src/ui/webview-react/components/layout/Header.tsx` (`isCLIManaged` and
   its watch-mode lockdown — the pattern Phase 2 generalizes)
+- `src/ui/webview-react/components/output/RunSummaryBanner.tsx` — **Open
+  Worktree in New Window** action (`src/extension.ts:866-882`) that opens the
+  related, lower-severity cross-window scenario above; also
+  `VSCODE_COMMANDS.OPEN_WORKTREE_OWNER` (`src/extension.ts:1231-1246`), the
+  existing "Open Owning Workspace" action that already generalizes to that case
 - `src/server/CtrlYokeHostedServer.ts` (`listen()` EADDRINUSE fallback)
 - `dev/implemented/CLI_WATCH_MODE.md`,
   `dev/implemented/STALE_RUNNING_STATE_AND_COORDINATION.md` (prior art this
   plan extends)
+- `dev/implemented/WORKTREE_SUPPORT_PLAN.md` (worktree lifecycle, ownership
+  records, and the execution-lease model the cross-window section above
+  relies on)
 - `dev/reference/DEVELOPING_CTRLYOKE_WITH_CTRLYOKE.md` (the practical,
   today-available mitigation via `CTRLYOKE_HOME` while this plan is
   unimplemented)
