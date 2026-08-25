@@ -15,9 +15,9 @@ import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { invalidateRunSummaryFor } from "./RunSummaryCache";
 
 /**
- * CliWatchSession
+ * ExternalRunWatchSession
  *
- * Owns three file watchers for a single CLI-managed workflow, all pinned to the exact
+ * Owns three file watchers for a single externally managed workflow, all pinned to the exact
  * `RunRef` named by the lineage's runner lock — never "the newest run" — so a client
  * browsing a different (older) run of the same lineage can never redirect this watcher:
  *   1. Run file watcher     — tracks step progress (currentIndex, executionState)
@@ -27,10 +27,10 @@ import { invalidateRunSummaryFor } from "./RunSummaryCache";
  * Also runs a 10-second heartbeat staleness poll as a fallback for CLI crashes
  * (lock file exists but heartbeat has gone stale).
  *
- * Created by WorkflowOrchestrator when an active-cli lock is detected.
+ * Created by WorkflowOrchestrator when an active CLI or sibling-VSCode lock is detected.
  * Disposed when the lock is deleted or goes stale.
  */
-export class CliWatchSession implements vscode.Disposable {
+export class ExternalRunWatchSession implements vscode.Disposable {
   private disposables: vscode.Disposable[] = [];
   private heartbeatPollInterval: ReturnType<typeof setInterval> | undefined;
   /** stepIndex → last number of outputs sent to the dashboard for that step */
@@ -71,7 +71,7 @@ export class CliWatchSession implements vscode.Disposable {
 
   async start(): Promise<void> {
     Log.debug(
-      `[CliWatchSession] start: workflowKey="${this.workflowKey}" runRef="${this.runRef}"`
+      `[ExternalRunWatchSession] start: workflowKey="${this.workflowKey}" runRef="${this.runRef}"`
     );
 
     this.setupWorkingFileWatcher();
@@ -90,7 +90,7 @@ export class CliWatchSession implements vscode.Disposable {
     }
     this.disposables = [];
     Log.debug(
-      `[CliWatchSession] disposed: workflowKey="${this.workflowKey}" runRef="${this.runRef}"`
+      `[ExternalRunWatchSession] disposed: workflowKey="${this.workflowKey}" runRef="${this.runRef}"`
     );
   }
 
@@ -161,13 +161,13 @@ export class CliWatchSession implements vscode.Disposable {
       if (!retried) {
         // JSON parse error: file may be mid-write — retry once after 50ms
         Log.trace(
-          `[CliWatchSession] handleWorkingFileChange: parse error, retrying in 50ms`
+          `[ExternalRunWatchSession] handleWorkingFileChange: parse error, retrying in 50ms`
         );
         await new Promise((resolve) => setTimeout(resolve, 50));
         await this.handleWorkingFileChange(true);
       } else {
         Log.warn(
-          `[CliWatchSession] handleWorkingFileChange: failed to parse working file after retry:`,
+          `[ExternalRunWatchSession] handleWorkingFileChange: failed to parse working file after retry:`,
           err
         );
       }
@@ -193,7 +193,7 @@ export class CliWatchSession implements vscode.Disposable {
     this.disposables.push(
       watcher.onDidDelete(() => {
         Log.debug(
-          `[CliWatchSession] lock file deleted — CLI finished for workflowKey="${this.workflowKey}"`
+          `[ExternalRunWatchSession] lock file deleted — external run finished for workflowKey="${this.workflowKey}"`
         );
         this.onFinished();
       })
@@ -207,7 +207,7 @@ export class CliWatchSession implements vscode.Disposable {
 
   private setupHistoryWatcher(): void {
     Log.debug(
-      `[CliWatchSession] watching run: ${this.workflowKey}/${this.runRef}`
+      `[ExternalRunWatchSession] watching run: ${this.workflowKey}/${this.runRef}`
     );
     const targetPath = this.manifestPath;
     const pattern = new vscode.RelativePattern(
@@ -234,13 +234,16 @@ export class CliWatchSession implements vscode.Disposable {
         .then((status) => {
           if (status === LOCK_STATUS.NONE || status === LOCK_STATUS.STALE) {
             Log.trace(
-              `[CliWatchSession] heartbeat poll: lock is ${status} for workflowKey="${this.workflowKey}" — calling onFinished`
+              `[ExternalRunWatchSession] heartbeat poll: lock is ${status} for workflowKey="${this.workflowKey}" — calling onFinished`
             );
             this.onFinished();
           }
         })
         .catch((err) => {
-          Log.warn(`[CliWatchSession] heartbeat poll: checkLock failed:`, err);
+          Log.warn(
+            `[ExternalRunWatchSession] heartbeat poll: checkLock failed:`,
+            err
+          );
         });
     }, 10_000);
   }

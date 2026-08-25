@@ -37,7 +37,7 @@ import type { RunSummaryRecord } from "./OutputHistoryManager";
  * 2. **Stamp validation on read** (below), the only mechanism that can see a
  *    write from another process — the CLI binary, the MCP server, the hosted
  *    server, or a hand-edited file.
- * 3. **The CLI-owned run's existing watcher** (`CliWatchSession`), which covers
+ * 3. **The externally-owned run's existing watcher** (`ExternalRunWatchSession`), which covers
  *    the one out-of-process writer that writes in a tight loop.
  *
  * Mechanism 2 cannot stand alone, which is why 1 and 3 exist: Windows sets file

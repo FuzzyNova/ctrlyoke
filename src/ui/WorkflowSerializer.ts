@@ -1267,7 +1267,7 @@ export class WorkflowSerializer {
                 (await manager?.ensureCliWatchSession(filePath)) ?? false;
               if (isCli) {
                 Log.trace(
-                  `[WorkflowSerializer] getRecentWorkflows: "${workflowKey}" has active CLI lock — keeping running state (CliWatchSession registered)`
+                  `[WorkflowSerializer] getRecentWorkflows: "${workflowKey}" has active CLI lock — keeping running state (ExternalRunWatchSession registered)`
                 );
                 // executionState stays "running"; the session is now in cliSessions
                 // so the next GET_WORKFLOWS_LIST will move it to the Running section.

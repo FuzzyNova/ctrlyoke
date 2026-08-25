@@ -10,6 +10,7 @@ import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryMana
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
+import { ExternalRunWatchSession } from "../../core/orchestration/ExternalRunWatchSession";
 import {
   ACTION_TYPES,
   EXECUTION_STATES,
@@ -2666,6 +2667,163 @@ suite("WorkflowOrchestrator loadWorkflowForClient path matching", () => {
       workflowId: "live-1",
     });
     assert.strictEqual(replayedId, "live-1");
+  });
+});
+
+suite("WorkflowOrchestrator external-run watch routing", () => {
+  async function createLiveRun(
+    workspace: string,
+    runner: typeof RUNNER_IDS.CLI | typeof RUNNER_IDS.VSCODE,
+    name: string
+  ): Promise<{
+    workflowKey: import("../../types/CtrlYokeTypes").WorkflowKey;
+    filePath: string;
+  }> {
+    const workflowKey =
+      `${name}-workflow` as import("../../types/CtrlYokeTypes").WorkflowKey;
+    const runRef =
+      "run-2026-08-25T00-00-00-000Z" as import("../../types/CtrlYokeTypes").RunRef;
+    const filePath = WorkflowPaths.runFilePath(workspace, workflowKey, runRef);
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(
+      filePath,
+      JSON.stringify({
+        workflowName: name,
+        steps: [{ prompt: "live" }],
+        _runtime: { currentIndex: 0, executionState: EXECUTION_STATES.RUNNING },
+      }),
+      "utf8"
+    );
+    await fs.writeFile(
+      WorkflowLockManager.getLockPath(workspace, workflowKey),
+      JSON.stringify({
+        workflowKey,
+        runRef,
+        runner,
+        pid: process.pid,
+        ownerToken: `${name}-owner`,
+        instanceId: `${name}-instance`,
+        startedAt: Date.now(),
+        lastHeartbeat: Date.now(),
+      }),
+      "utf8"
+    );
+    return { workflowKey, filePath };
+  }
+
+  function createWatchHarness(workspace: string) {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+    internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+    internal.instances = new Map();
+    internal.retiredInstances = new Map();
+    internal.cliSessions = new Map();
+    internal.viewerRegistry = new Map();
+    internal.dashboardBroadcastHub = {
+      notifyWorkflowAdded: () => undefined,
+      notifyWorkflowSummaryUpdated: () => undefined,
+    };
+    internal.setViewedWorkflowId = () => undefined;
+    internal.replayWorkflowStateTo = async () => undefined;
+    return { orchestrator, internal };
+  }
+
+  test("registers a live sibling-VSCode lock as a read-only watch at startup", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-vscode-watch-startup-")
+    );
+    const originalStart = ExternalRunWatchSession.prototype.start;
+    ExternalRunWatchSession.prototype.start = async () => undefined;
+    try {
+      const run = await createLiveRun(workspace, RUNNER_IDS.VSCODE, "sibling");
+      const { internal } = createWatchHarness(workspace);
+      internal.lineageRepository = {
+        listLineageKeys: async () => [run.workflowKey],
+        pruneStaleStagingDirs: async () => undefined,
+      };
+      internal.setupRunnerJsonCreateWatcher = () => undefined;
+
+      await internal.setupCliWatching();
+
+      const entry = internal.cliSessions.get(run.workflowKey);
+      assert.ok(entry, "startup should register an external watch session");
+      assert.strictEqual(entry.summary.managedBy, RUNNER_IDS.VSCODE);
+      assert.strictEqual(entry.summary.workingFilePath, run.filePath);
+      assert.strictEqual(
+        internal.instances.size,
+        0,
+        "must not adopt a local instance"
+      );
+    } finally {
+      ExternalRunWatchSession.prototype.start = originalStart;
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("routes both live external runners through the watch path for view loads", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-external-view-watch-")
+    );
+    const originalStart = ExternalRunWatchSession.prototype.start;
+    ExternalRunWatchSession.prototype.start = async () => undefined;
+    try {
+      for (const [runner, expectedManagedBy] of [
+        [RUNNER_IDS.CLI, RUNNER_IDS.CLI],
+        [RUNNER_IDS.VSCODE, RUNNER_IDS.VSCODE],
+      ] as const) {
+        const run = await createLiveRun(workspace, runner, `${runner}-view`);
+        const { orchestrator, internal } = createWatchHarness(workspace);
+        let freshLoad = false;
+        internal.loadFreshInstanceAndReplay = async () => {
+          freshLoad = true;
+        };
+
+        await orchestrator.loadWorkflowForClient(
+          run.filePath,
+          () => undefined,
+          `client-${runner}`,
+          { skipReplay: true }
+        );
+
+        assert.strictEqual(freshLoad, false);
+        assert.strictEqual(
+          internal.cliSessions.get(run.workflowKey)?.summary.managedBy,
+          expectedManagedBy
+        );
+      }
+    } finally {
+      ExternalRunWatchSession.prototype.start = originalStart;
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("routes a live active-vscode working-file load to the watch path", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-vscode-working-watch-")
+    );
+    const originalStart = ExternalRunWatchSession.prototype.start;
+    ExternalRunWatchSession.prototype.start = async () => undefined;
+    try {
+      const run = await createLiveRun(workspace, RUNNER_IDS.VSCODE, "working");
+      const { orchestrator, internal } = createWatchHarness(workspace);
+      let freshInstance = false;
+      internal.loadFreshInstance = async () => {
+        freshInstance = true;
+      };
+
+      await orchestrator.loadWorkingFile(run.filePath);
+
+      assert.strictEqual(freshInstance, false);
+      assert.strictEqual(
+        internal.cliSessions.get(run.workflowKey)?.summary.managedBy,
+        RUNNER_IDS.VSCODE
+      );
+    } finally {
+      ExternalRunWatchSession.prototype.start = originalStart;
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
   });
 });
 

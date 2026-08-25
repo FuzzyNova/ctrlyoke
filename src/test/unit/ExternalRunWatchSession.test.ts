@@ -3,11 +3,11 @@ import { suite, test } from "mocha";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import { CliWatchSession } from "../../core/orchestration/CliWatchSession";
+import { ExternalRunWatchSession } from "../../core/orchestration/ExternalRunWatchSession";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 
-suite("CliWatchSession", () => {
+suite("ExternalRunWatchSession", () => {
   test("pins its manifest path to the exact constructed workflowKey/runRef, never 'newest'", () => {
     const workspaceFolderPath = "C:\\dev\\some-workspace";
     const workflowKey = "my-workflow-2026-07-20T10-30-00" as WorkflowKey;
@@ -18,7 +18,7 @@ suite("CliWatchSession", () => {
       runRef
     );
 
-    const session = new CliWatchSession(
+    const session = new ExternalRunWatchSession(
       workingFilePath,
       workflowKey,
       runRef,
@@ -38,7 +38,7 @@ suite("CliWatchSession", () => {
     const workspaceFolderPath = "C:\\dev\\some-workspace";
     const workflowKey = "my-workflow-2026-07-20T10-30-00" as WorkflowKey;
     const runRef = "run-2026-07-20T10-30-00-000Z" as RunRef;
-    const session = new CliWatchSession(
+    const session = new ExternalRunWatchSession(
       WorkflowPaths.runFilePath(workspaceFolderPath, workflowKey, runRef),
       workflowKey,
       runRef,
@@ -84,7 +84,7 @@ suite("CliWatchSession", () => {
       );
 
       let update: Record<string, unknown> | undefined;
-      const session = new CliWatchSession(
+      const session = new ExternalRunWatchSession(
         workingFilePath,
         workflowKey,
         runRef,

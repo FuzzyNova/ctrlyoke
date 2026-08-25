@@ -4,7 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { suite, test } from "mocha";
-import { CliWatchSession } from "../../core/orchestration/CliWatchSession";
+import { ExternalRunWatchSession } from "../../core/orchestration/ExternalRunWatchSession";
 import { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
@@ -50,7 +50,7 @@ suite("external watcher patterns", () => {
         "run",
         "workflow.ctrlyoke.json"
       );
-      const session = new CliWatchSession(
+      const session = new ExternalRunWatchSession(
         workingFilePath,
         workflowKey,
         runRef,

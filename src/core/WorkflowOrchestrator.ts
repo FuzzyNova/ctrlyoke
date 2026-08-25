@@ -54,6 +54,7 @@ import {
   USER_FEEDBACK_SEVERITY,
   type EndConditionScriptType,
   type HarnessId,
+  type RunnerId,
   type QueuePosition,
   type ActionType,
   type StepStatus,
@@ -82,7 +83,7 @@ import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import { WorkflowLineageRepository } from "./orchestration/WorkflowLineageRepository";
-import { CliWatchSession } from "./orchestration/CliWatchSession";
+import { ExternalRunWatchSession } from "./orchestration/ExternalRunWatchSession";
 import { HarnessUsageService } from "./harness/shared/usage/HarnessUsageService";
 import { WorkspaceStatsService } from "./harness/shared/usage/WorkspaceStatsService";
 import type { WorkspaceStatsSnapshot } from "../types/UsageTypes";
@@ -282,10 +283,10 @@ export class WorkflowOrchestrator {
   private readonly instances: Map<string, WorkflowInstance> = new Map();
   private readonly lineageRepository = new WorkflowLineageRepository();
 
-  /** CLI-managed workflows being watched (keyed by workflowId) */
+  /** Externally managed workflows being watched (keyed by workflowId) */
   private readonly cliSessions: Map<
     string,
-    { session: CliWatchSession; summary: WorkflowSummary }
+    { session: ExternalRunWatchSession; summary: WorkflowSummary }
   > = new Map();
 
   /** Watcher for *.runner.json creation (Entry Point 3: CLI starts while VS Code is open) */
@@ -1183,7 +1184,8 @@ export class WorkflowOrchestrator {
   }
 
   /**
-   * Ensure a CliWatchSession exists for the given working file if the lock is active-cli.
+   * Ensure an external-run watch session exists for the given working file if its lock
+   * belongs to a live CLI or sibling VS Code instance.
    *
    * Called by WorkflowSerializer.handleGetRecentWorkflows to bridge the timing gap between
    * CLI lock file creation and the runnerJsonCreateWatcher firing (VS Code file-watcher
@@ -1192,8 +1194,8 @@ export class WorkflowOrchestrator {
    * Also implements Entry Point 2 from the CLI Watch Mode plan: the user opens a recently-run
    * workflow from the dropdown while the CLI is still actively running it.
    *
-   * @returns true if the working file is (or was just registered as) CLI-managed;
-   *          false if no active-cli lock exists or the session could not be started.
+   * @returns true if the working file is (or was just registered as) externally managed;
+   *          false if no live external lock exists or the session could not be started.
    */
   async ensureCliWatchSession(workingFilePath: string): Promise<boolean> {
     const workflowId =
@@ -1220,14 +1222,24 @@ export class WorkflowOrchestrator {
     Log.debug(
       `[WorkflowOrchestrator] ensureCliWatchSession: "${workflowId}" lockStatus=${lockStatus}`
     );
-    if (lockStatus !== LOCK_STATUS.ACTIVE_CLI) {
+    const managedBy =
+      lockStatus === LOCK_STATUS.ACTIVE_CLI
+        ? RUNNER_IDS.CLI
+        : lockStatus === LOCK_STATUS.ACTIVE_VSCODE
+          ? RUNNER_IDS.VSCODE
+          : undefined;
+    if (!managedBy) {
       return false;
     }
 
     Log.info(
-      `[WorkflowOrchestrator] ensureCliWatchSession: registering CLI watch session for "${workflowId}" (lock was active-cli but watcher hadn't fired yet)`
+      `[WorkflowOrchestrator] ensureCliWatchSession: registering external watch session for "${workflowId}" (lock was ${lockStatus} but watcher hadn't fired yet)`
     );
-    await this.startCliWatchSession(workingFilePath, workspaceFolderPath);
+    await this.startCliWatchSession(
+      workingFilePath,
+      workspaceFolderPath,
+      managedBy
+    );
     return true;
   }
 
@@ -1548,8 +1560,8 @@ export class WorkflowOrchestrator {
         await this.workspaceSessionManager.autoLoadRecentSession(
           this.currentWorkspaceFolder.uri.fsPath,
           async (workingFilePath: string) => {
-            // Skip auto-loading if this working file is actively managed by the CLI.
-            // The CliWatchSession was already created in setupCliWatching(), so the
+            // Skip auto-loading if this working file is actively managed externally.
+            // The external watch session was already created in setupCliWatching(), so the
             // workflow is already visible in the Running section — auto-loading it
             // as a VS Code instance would create a conflicting viewedInstance.
             const address =
@@ -1560,9 +1572,12 @@ export class WorkflowOrchestrator {
                   address.workflowKey
                 )
               : LOCK_STATUS.NONE;
-            if (lockStatus === LOCK_STATUS.ACTIVE_CLI) {
+            if (
+              lockStatus === LOCK_STATUS.ACTIVE_CLI ||
+              lockStatus === LOCK_STATUS.ACTIVE_VSCODE
+            ) {
               Log.debug(
-                `triggerAutoLoad: skipping CLI-managed workflow "${path.basename(workingFilePath)}"`
+                `triggerAutoLoad: skipping externally managed workflow "${path.basename(workingFilePath)}"`
               );
               return;
             }
@@ -1887,7 +1902,7 @@ export class WorkflowOrchestrator {
   /**
    * Kill the CLI process for a CLI-managed workflow by sending SIGTERM to its PID.
    * The CLI handles SIGTERM by releasing the lock and exiting cleanly, which triggers
-   * CliWatchSession.onFinished() → workflow transitions to STOPPED automatically.
+   * ExternalRunWatchSession.onFinished() → workflow transitions to STOPPED automatically.
    */
   async stopCliSession(workflowId: string): Promise<void> {
     const entry = this.cliSessions.get(workflowId);
@@ -3233,7 +3248,7 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    // Check for an active CLI lock before creating a VS Code instance (Entry Point 2)
+    // Check for an active external lock before creating a VS Code instance (Entry Point 2)
     const workspaceFolderPathForLock = this.currentWorkspaceFolder?.uri.fsPath;
     const lockStatus =
       workflowId && workspaceFolderPathForLock
@@ -3242,13 +3257,22 @@ export class WorkflowOrchestrator {
             workflowId
           )
         : LOCK_STATUS.NONE;
-    if (lockStatus === LOCK_STATUS.ACTIVE_CLI) {
+    if (
+      lockStatus === LOCK_STATUS.ACTIVE_CLI ||
+      lockStatus === LOCK_STATUS.ACTIVE_VSCODE
+    ) {
       const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
       if (workspaceFolderPath) {
         Log.debug(
-          `loadWorkingFile: "${workflowId}" has active CLI lock — starting CliWatchSession`
+          `loadWorkingFile: "${workflowId}" has ${lockStatus} lock — starting external run watch session`
         );
-        await this.startCliWatchSession(filePath, workspaceFolderPath);
+        await this.startCliWatchSession(
+          filePath,
+          workspaceFolderPath,
+          lockStatus === LOCK_STATUS.ACTIVE_CLI
+            ? RUNNER_IDS.CLI
+            : RUNNER_IDS.VSCODE
+        );
       }
       return;
     }
@@ -5596,8 +5620,11 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    // Normalize stale locks and get active-cli paths
+    // Normalize stale locks and get active CLI paths. Live sibling-VSCode locks are
+    // intentionally absent from normalizeStaleLocks' return shape, so discover those
+    // paths separately while the lineage keys from the same startup scan are available.
     let activeCliPaths: string[];
+    let activeVscodePaths: string[];
     let recoveredPaths: string[];
     try {
       const workflowKeys =
@@ -5607,6 +5634,10 @@ export class WorkflowOrchestrator {
         workflowKeys
       );
       activeCliPaths = normalized.activeCliRunFiles;
+      activeVscodePaths = await this.findActiveVscodeRunFiles(
+        workspaceFolderPath,
+        workflowKeys
+      );
       recoveredPaths = normalized.recoveredRunFiles;
     } catch (err) {
       Log.warn(
@@ -5614,6 +5645,7 @@ export class WorkflowOrchestrator {
         err
       );
       activeCliPaths = [];
+      activeVscodePaths = [];
       recoveredPaths = [];
     }
 
@@ -5670,13 +5702,52 @@ export class WorkflowOrchestrator {
       );
     }
 
-    // Create CliWatchSession for each active-cli workflow (Entry Point 1)
+    // Create an external-run watch session for each active workflow (Entry Point 1).
     for (const workingFilePath of activeCliPaths) {
-      await this.startCliWatchSession(workingFilePath, workspaceFolderPath);
+      await this.startCliWatchSession(
+        workingFilePath,
+        workspaceFolderPath,
+        RUNNER_IDS.CLI
+      );
+    }
+    for (const workingFilePath of activeVscodePaths) {
+      await this.startCliWatchSession(
+        workingFilePath,
+        workspaceFolderPath,
+        RUNNER_IDS.VSCODE
+      );
     }
 
     // Entry Point 3: Watch for new runner.json files created while VS Code is open
     this.setupRunnerJsonCreateWatcher(workspaceFolderPath, runsRootDir);
+  }
+
+  /** Find live sibling-VSCode locks left out of normalizeStaleLocks' return shape. */
+  private async findActiveVscodeRunFiles(
+    workspaceFolderPath: string,
+    workflowKeys: WorkflowKey[]
+  ): Promise<string[]> {
+    const activeVscodePaths: string[] = [];
+    for (const workflowKey of workflowKeys) {
+      const status = await WorkflowLockManager.checkLock(
+        workspaceFolderPath,
+        workflowKey
+      );
+      if (status !== LOCK_STATUS.ACTIVE_VSCODE) {
+        continue;
+      }
+      const lock = await WorkflowLockManager.readLock(
+        workspaceFolderPath,
+        workflowKey
+      );
+      if (!lock || lock.runner !== RUNNER_IDS.VSCODE) {
+        continue;
+      }
+      activeVscodePaths.push(
+        WorkflowPaths.runFilePath(workspaceFolderPath, workflowKey, lock.runRef)
+      );
+    }
+    return activeVscodePaths;
   }
 
   /** Read-only activation report for managed and user-owned Git worktrees. */
@@ -5872,16 +5943,21 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    await this.startCliWatchSession(workingFilePath, workspaceFolderPath);
+    await this.startCliWatchSession(
+      workingFilePath,
+      workspaceFolderPath,
+      RUNNER_IDS.CLI
+    );
   }
 
   /**
-   * Create and start a CliWatchSession for a CLI-managed workflow.
+   * Create and start an external-run watch session for a CLI- or sibling-VSCode-managed workflow.
    * Reads the working file, builds a WorkflowSummary, and registers the session.
    */
   private async startCliWatchSession(
     workingFilePath: string,
-    workspaceFolderPath: string
+    workspaceFolderPath: string,
+    managedBy: RunnerId
   ): Promise<void> {
     const address =
       WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
@@ -5948,12 +6024,12 @@ export class WorkflowOrchestrator {
       currentStep: currentIndex,
       totalSteps,
       startedAt: workingFile.startedAt,
-      managedBy: RUNNER_IDS.CLI,
+      managedBy,
       tokenTotals: workingFile._runtime?.tokenTotals,
       worktree: workingFile._runtime?.worktree,
     };
 
-    const session = new CliWatchSession(
+    const session = new ExternalRunWatchSession(
       workingFilePath,
       workflowKey,
       runRef,
@@ -5968,7 +6044,7 @@ export class WorkflowOrchestrator {
         const updatedSummary: WorkflowSummary = {
           ...entry.summary,
           ...partialSummary,
-          managedBy: RUNNER_IDS.CLI,
+          managedBy,
         };
         entry.summary = updatedSummary;
         this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(updatedSummary);
@@ -6028,7 +6104,7 @@ export class WorkflowOrchestrator {
    */
   private async sendCliWorkflowFullStateToDashboard(
     workflowId: string,
-    cliEntry: { session: CliWatchSession; summary: WorkflowSummary },
+    cliEntry: { session: ExternalRunWatchSession; summary: WorkflowSummary },
     sink?: IDashboardSink
   ): Promise<void> {
     const workingFilePath = cliEntry.summary.workingFilePath;
@@ -6201,7 +6277,7 @@ export class WorkflowOrchestrator {
   }
 
   /**
-   * Handle output change notifications from a CliWatchSession.
+   * Handle output change notifications from an ExternalRunWatchSession.
    * Reads the history file and sends new outputs to the dashboard.
    */
   private handleCliWatchOutput(

@@ -60,7 +60,7 @@ tell those two cases apart.
 
 ```
 if (status === LOCK_STATUS.ACTIVE_CLI) {
-  // preserve RUNNING, register a CliWatchSession
+  // preserve RUNNING, register an ExternalRunWatchSession
 } else {
   // "none", "stale", or "active-vscode" (we just started — can't be us)
   // normalize this run to STOPPED and delete the lock
@@ -169,28 +169,21 @@ today, since `isOwnerStale` already covers that case correctly.
 
 ### Phase 2 — Surface "owned by another ctrlyoke instance" in the dashboard
 
-Generalize the existing `managedBy`/watch-mode machinery
-(`RUNNER_IDS.VSCODE`, already defined) the same way CLI-managed runs are
-handled today:
+Backend watch registration is implemented. The shared read-only watcher is now
+`ExternalRunWatchSession` (renamed from `CliWatchSession`) and the existing
+session registry handles both external runners:
 
-- When Phase 1's live-`active-vscode` branch is hit, register a read-only
-  watch (reuse or adapt `CliWatchSession`'s polling/tailing approach) instead
-  of silently doing nothing or adopting the lineage into a local
-  `WorkflowInstance`.
-- Set `managedBy: RUNNER_IDS.VSCODE` on that summary so `Header.tsx`'s
-  existing `isCLIManaged` check (`Header.tsx:171`, and the `isCLIManaged`
-  branches through the file) generalizes to "managed by any other runner" —
-  likely renaming the derived flag to something like `isExternallyManaged`
-  and keeping a separate label ("Running in another ctrlyoke window" vs.
-  "Running via ctrlyoke CLI") sourced from `managedBy`.
-- Decide what "Stop" should do for a sibling-owned run from this instance:
-  today `handleStopCliRun` posts `STOP_CLI_RUN`
-  (`Header.tsx:257-263`) which presumably signals through shared state the
-  CLI process polls; an equivalent signal channel is needed for a sibling
-  VS Code process (it cannot just delete the lock — see Phase 1's ownerToken
-  protection — so it likely needs its own lightweight cross-process request,
-  e.g. a sentinel file the owning instance's watcher polls for, mirroring how
-  `runner.json` creation is already watched by `setupRunnerJsonCreateWatcher`).
+- **Done:** A live `active-vscode` lock discovered during startup is registered
+  as a read-only watch instead of being adopted into a local `WorkflowInstance`.
+- **Done:** External view loads and working-file loads route live
+  `active-vscode` locks through the watch path, while CLI behavior remains
+  unchanged; summaries use `managedBy: RUNNER_IDS.VSCODE` for sibling VS Code
+  owners and `RUNNER_IDS.CLI` for CLI owners.
+- **Deferred to the next step:** Generalize the dashboard UI's `isCLIManaged`
+  handling into an any-external-runner check, with runner-specific labels.
+- **Deferred to the next step:** Add the Stop-signal mechanism for
+  sibling-owned VS Code runs. Do not delete a sibling's lock from this
+  instance; owner-token protection still applies.
 
 ### Phase 3 — Hosted server awareness (lower priority)
 

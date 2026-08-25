@@ -805,7 +805,7 @@ export class CtrlYokeWebviewProvider
 
   /**
    * Send a live CLI output update to the webview for a CLI-managed workflow.
-   * Called by WorkflowOrchestrator when CliWatchSession.onOutput fires.
+   * Called by WorkflowOrchestrator when ExternalRunWatchSession.onOutput fires.
    */
   public notifyCliWatchOutput(
     workflowId: string,

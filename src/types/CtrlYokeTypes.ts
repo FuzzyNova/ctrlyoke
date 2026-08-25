@@ -1067,7 +1067,10 @@ export interface WorkflowSummary {
   /** Timestamp when executionTimeMs was sampled for a live-running summary. */
   executionTimeUpdatedAt?: number;
   completedAt?: number;
-  /** Set to "cli" when the workflow is being executed by the ctrlyoke CLI. Undefined means vscode-managed. */
+  /**
+   * Identifies a live external owner: "cli" is the ctrlyoke CLI and "vscode" is
+   * a different VS Code instance. Undefined means this VS Code instance owns it.
+   */
   managedBy?: RunnerId;
   /** Resolved harness this workflow runs on (workflow/step override, or the global default). */
   harness?: HarnessId;
