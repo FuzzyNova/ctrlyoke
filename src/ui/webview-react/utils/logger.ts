@@ -44,6 +44,10 @@ function log(
       console.info(message, ...args);
       return;
     }
+    if (level === LOG_LEVELS.TRACE) {
+      console.debug(message, ...args);
+      return;
+    }
     // console.debug is filtered by default in webview DevTools (Verbose level
     // required), so use console.log to keep debug messages visible.
     console.log(message, ...args);
@@ -51,6 +55,8 @@ function log(
 }
 
 export const WebviewLog = {
+  trace: (message: string, ...args: unknown[]) =>
+    log(LOG_LEVELS.TRACE, message, ...args),
   debug: (message: string, ...args: unknown[]) =>
     log(LOG_LEVELS.DEBUG, message, ...args),
   info: (message: string, ...args: unknown[]) =>

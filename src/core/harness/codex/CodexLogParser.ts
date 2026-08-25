@@ -766,7 +766,7 @@ export class CodexLogParser extends BaseLogParser {
               if (stats.mtime >= startTime) {
                 return matchingFile; // Success - file exists and is recent
               } else {
-                Log.debug(
+                Log.trace(
                   `[CodexLogParser] Session log exists but not yet updated (mtime: ${stats.mtime.toISOString()}, startTime: ${startTime.toISOString()}), will retry...`
                 );
                 return null; // Retry - file will be updated soon
@@ -779,7 +779,7 @@ export class CodexLogParser extends BaseLogParser {
             signal,
             onRetry: (attempt, max, delay) => {
               if (attempt > 1) {
-                Log.debug(
+                Log.trace(
                   `[CodexLogParser] Session log not ready (attempt ${attempt}/${max}), retrying in ${delay}ms...`
                 );
               }
@@ -891,7 +891,7 @@ export class CodexLogParser extends BaseLogParser {
                 }
               }
             } catch (error) {
-              Log.debug(
+              Log.trace(
                 `[CodexLogParser] Failed to read candidate log: ${error}`
               );
               continue;
@@ -904,7 +904,7 @@ export class CodexLogParser extends BaseLogParser {
           signal,
           onRetry: (attempt, max, delay) => {
             if (attempt > 1) {
-              Log.debug(
+              Log.trace(
                 `[CodexLogParser] Session log file not found (attempt ${attempt}/${max}), retrying in ${delay}ms...`
               );
             }
@@ -924,7 +924,7 @@ export class CodexLogParser extends BaseLogParser {
       Log.debug("[CodexLogParser] No matching session log found");
       return null;
     } catch (error) {
-      Log.error(`[CodexLogParser] Session discovery failed: ${error}`);
+      Log.warn(`[CodexLogParser] Session discovery failed: ${error}`);
       return null;
     }
   }
@@ -1613,7 +1613,7 @@ export class CodexLogParser extends BaseLogParser {
 
       return searchDir(basePath);
     } catch (error) {
-      Log.debug(`[CodexLogParser] Error searching for session file: ${error}`);
+      Log.trace(`[CodexLogParser] Error searching for session file: ${error}`);
       return null;
     }
   }

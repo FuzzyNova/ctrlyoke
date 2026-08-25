@@ -248,13 +248,13 @@ export class WebPushService {
 
             if (statusCode === 404 || statusCode === 410) {
               removed += 1;
-              Log.info(
+              Log.trace(
                 `[WebPushService] removed expired push subscription ${redactedHash} status=${statusCode}`
               );
               continue;
             }
 
-            Log.warn(
+            Log.trace(
               `[WebPushService] push send failed for ${redactedHash} status=${statusCode ?? "unknown"}`
             );
             survivors.push({

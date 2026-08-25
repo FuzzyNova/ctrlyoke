@@ -61,7 +61,7 @@ export default [
   },
   // no-console ratchet: application code routes all logging through Log.ts /
   // WebviewLog.ts (level, redaction, and file output stay centralized there —
-  // see dev/backlog/LOG_CLEANUP_PLAN.md). console.* is only legitimate in
+  // see dev/implemented/LOG_CLEANUP_PLAN.md). console.* is only legitimate in
   // code that has no access to either logger.
   {
     files: ["src/**/*.{ts,tsx}"],

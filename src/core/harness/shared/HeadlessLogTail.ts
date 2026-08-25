@@ -148,7 +148,7 @@ export class HeadlessLogTail {
       // session ID is known so it can see the terminal usage event too.
       this.options.onStdoutChunkObserved?.(chunk);
     } catch (error) {
-      Log.debug(`[HeadlessLogTail] stdout observer failed: ${String(error)}`);
+      Log.trace(`[HeadlessLogTail] stdout observer failed: ${String(error)}`);
     }
 
     void this.enqueueTick("stdout", chunk);
@@ -197,7 +197,7 @@ export class HeadlessLogTail {
       await this.readTick(source);
     });
     this.pendingWork = work.catch((error) => {
-      Log.debug(`[HeadlessLogTail] ${source} tick failed: ${String(error)}`);
+      Log.trace(`[HeadlessLogTail] ${source} tick failed: ${String(error)}`);
     });
     return this.pendingWork;
   }
@@ -210,7 +210,7 @@ export class HeadlessLogTail {
         Log.debug(`[HeadlessLogTail] Session ID from stdout: ${sessionId}`);
       }
     } catch (error) {
-      Log.debug(
+      Log.trace(
         `[HeadlessLogTail] stdout session-ID extraction failed: ${String(error)}`
       );
     }
@@ -229,7 +229,7 @@ export class HeadlessLogTail {
       );
       this.processEntries(entries, source);
     } catch (error) {
-      Log.debug(`[HeadlessLogTail] Log read failed: ${String(error)}`);
+      Log.trace(`[HeadlessLogTail] Log read failed: ${String(error)}`);
     }
   }
 
@@ -252,7 +252,7 @@ export class HeadlessLogTail {
           );
         }
       } catch (error) {
-        Log.debug(
+        Log.trace(
           `[HeadlessLogTail] Log session-ID discovery failed: ${String(error)}`
         );
       }
@@ -269,7 +269,7 @@ export class HeadlessLogTail {
         Log.debug(`[HeadlessLogTail] Session log discovered: ${this.logPath}`);
       }
     } catch (error) {
-      Log.debug(
+      Log.trace(
         `[HeadlessLogTail] Session-log discovery failed: ${String(error)}`
       );
     }
@@ -285,7 +285,7 @@ export class HeadlessLogTail {
       }
     }
     if (entries.length > 0) {
-      Log.debug(
+      Log.trace(
         `[HeadlessLogTail] Processed ${entries.length} log event(s) from ${source}`
       );
     }
@@ -304,7 +304,7 @@ export class HeadlessLogTail {
         );
         this.processEntries(entries, "post-exit drain");
       } catch (error) {
-        Log.debug(`[HeadlessLogTail] Drain read failed: ${String(error)}`);
+        Log.trace(`[HeadlessLogTail] Drain read failed: ${String(error)}`);
       }
       await new Promise((resolve) =>
         setTimeout(resolve, this.drainPollIntervalMs)

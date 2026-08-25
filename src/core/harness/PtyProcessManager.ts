@@ -599,7 +599,7 @@ export class PtyProcessManager {
       // any harness output emitted before this point was wrapped at the previous
       // width, not `cols`. A large jump from DEFAULT_COLS on the first resize is
       // the tell that the harness painted its startup frame too wide.
-      Log.debug(
+      Log.trace(
         `🖥️ resizeSession ${sessionId.slice(0, 8)} (${session.kind}) ` +
           `${session.lastReportedCols}x${session.lastReportedRows} → ${cols}x${rows} ` +
           `${changed ? "(changed)" : "(no-op)"} +${elapsedMs}ms since spawn`

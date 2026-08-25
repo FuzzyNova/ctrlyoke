@@ -100,7 +100,7 @@ function log(label: string, details?: Record<string, unknown>): void {
     return;
   }
 
-  WebviewLog.debug(`${LOG_PREFIX} ${label}`, normalizeDetails(details));
+  WebviewLog.trace(`${LOG_PREFIX} ${label}`, normalizeDetails(details));
 }
 
 function applyOptions(options: PerformanceProfilerOptions): void {

@@ -192,7 +192,7 @@ export class WebviewSettingsSync {
 
       this.sendAgentsUpdate();
     } catch (error) {
-      Log.error("Failed to discover agents:", error);
+      Log.warn("Failed to discover agents:", error);
     }
   }
 
@@ -207,7 +207,7 @@ export class WebviewSettingsSync {
 
       this.sendSkillsUpdate();
     } catch (error) {
-      Log.error("Failed to discover skills:", error);
+      Log.warn("Failed to discover skills:", error);
     }
   }
 
@@ -495,7 +495,7 @@ export class WebviewSettingsSync {
 
   async handleHarnessChange(harness: string): Promise<void> {
     if (!WebviewSettingsSync.VALID_HARNESSES.includes(harness as any)) {
-      Log.error(`Invalid harness: ${harness}`);
+      Log.warn(`Invalid harness: ${harness}`);
       return;
     }
 

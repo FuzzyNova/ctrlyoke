@@ -363,14 +363,10 @@ export class CodexCliProvider implements ICliProvider {
       resolvedResumeSession,
       sessionId
     );
-    Log.debug(
-      `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, sessionId=${sessionId ?? "none"}, shouldResume=${shouldResume}`
-    );
-
     if (resolvedResumeSession && !sessionId) {
-      Log.debug(`⚠️ Resume requested but no session ID available`);
+      Log.warn("Resume requested but no session ID available");
     } else if (!shouldResume) {
-      Log.debug(`🆕 Starting new session`);
+      Log.info("Starting new session");
     }
 
     // Note: Prompt is NOT included here - it's a positional argument
@@ -406,7 +402,7 @@ export class CodexCliProvider implements ICliProvider {
       sessionId
     );
     if (shouldResume) {
-      Log.debug(`✅ Appending resume subcommand with session: ${sessionId}`);
+      Log.info(`Resuming session: ${sessionId}`);
       return ["resume", sessionId!];
     }
     return [];

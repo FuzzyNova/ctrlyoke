@@ -357,16 +357,13 @@ export class ClaudeCliProvider implements ICliProvider {
       resolvedResumeSession,
       sessionId
     );
-    Log.debug(
-      `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, sessionId=${sessionId ?? "none"}, shouldResume=${shouldResume}`
-    );
     if (shouldResume) {
       args.push("-r", sessionId!);
-      Log.debug(`✅ Added resume flag: -r ${sessionId}`);
+      Log.info(`Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
-      Log.debug(`⚠️ Resume requested but no session ID available`);
+      Log.warn("Resume requested but no session ID available");
     } else {
-      Log.debug(`🆕 Starting new session`);
+      Log.info("Starting new session");
     }
 
     // Extra CLI flags from additionalArgs (injected before tool permission args).

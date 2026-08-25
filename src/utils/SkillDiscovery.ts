@@ -145,9 +145,9 @@ export class SkillDiscovery {
         }
       }
 
-      Log.debug(`Discovered ${skills.length} skills`);
+      Log.trace(`Discovered ${skills.length} skills`);
     } catch (error) {
-      Log.error("Error discovering skills:", error);
+      Log.warn("Error discovering skills; returning partial results:", error);
     }
 
     return skills;
@@ -161,7 +161,7 @@ export class SkillDiscovery {
     try {
       return path.join(os.homedir(), ...parts);
     } catch (error) {
-      Log.error("Error building user directory path:", error);
+      Log.warn("Error building user directory path:", error);
       return null;
     }
   }
@@ -237,13 +237,16 @@ export class SkillDiscovery {
       }
 
       if (skills.length > 0) {
-        Log.debug(
+        Log.trace(
           `Found ${skills.length} skill(s) in ${directoryPath}:`,
           skills.map((s) => s.name).join(", ")
         );
       }
     } catch (error) {
-      Log.error(`Error discovering skills in ${directoryPath}:`, error);
+      Log.warn(
+        `Error discovering skills in ${directoryPath}; skipping:`,
+        error
+      );
     }
 
     return skills;

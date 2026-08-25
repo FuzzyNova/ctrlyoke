@@ -29,6 +29,7 @@ vi.mock("@utils/browserNotifications", () => ({
 
 vi.mock("@utils/logger", () => ({
   WebviewLog: {
+    trace: vi.fn(),
     debug: vi.fn(),
     info: vi.fn(),
     warn: webviewWarnMock,

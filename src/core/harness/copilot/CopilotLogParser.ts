@@ -939,7 +939,7 @@ export class CopilotLogParser extends BaseLogParser {
               }
             } catch (error) {
               // Skip candidates that can't be read
-              Log.debug(
+              Log.trace(
                 `[CopilotLogParser] Error reading candidate ${candidate}:`,
                 error
               );
@@ -953,7 +953,7 @@ export class CopilotLogParser extends BaseLogParser {
           signal,
           onRetry: (attempt, max, delay) => {
             if (attempt > 1) {
-              Log.debug(
+              Log.trace(
                 `[CopilotLogParser] Session log file not found (attempt ${attempt}/${max}), retrying in ${delay}ms...`
               );
             }
@@ -1368,7 +1368,7 @@ export class CopilotLogParser extends BaseLogParser {
       }
       return sessionId;
     } catch (error) {
-      Log.debug(
+      Log.trace(
         `[CopilotLogParser] Error reading session ID from ${logPath}:`,
         error
       );
@@ -1443,7 +1443,7 @@ export class CopilotLogParser extends BaseLogParser {
       );
       return { used, size };
     } catch (error) {
-      Log.debug(
+      Log.trace(
         `[CopilotLogParser] Failed to read process log for context: ${error}`
       );
       return undefined;

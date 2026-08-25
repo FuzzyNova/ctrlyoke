@@ -981,6 +981,6 @@ export class EndConditionEvaluator {
    */
   dispose(): void {
     this.killAllProcesses();
-    Log.debug("EndConditionEvaluator disposed");
+    Log.trace("EndConditionEvaluator disposed");
   }
 }

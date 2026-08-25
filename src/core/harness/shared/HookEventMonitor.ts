@@ -71,7 +71,7 @@ export class HookEventMonitor {
         artifact = JSON.parse(raw) as HookArtifact;
         fs.unlinkSync(filePath);
       } catch (err) {
-        Log.debug(`[HookEventMonitor] failed to read/delete ${file}: ${err}`);
+        Log.trace(`[HookEventMonitor] failed to read/delete ${file}: ${err}`);
         continue;
       }
 
@@ -82,7 +82,7 @@ export class HookEventMonitor {
           this.opts.onEvent(event);
         }
       } catch (err) {
-        Log.debug(
+        Log.trace(
           `[HookEventMonitor] failed to build event for ${file}: ${err}`
         );
       }

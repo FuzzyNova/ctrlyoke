@@ -1801,20 +1801,20 @@ export class WorkflowInstance {
 
       if (!continueFromCurrent && !isAppendContinuation) {
         if (isRestartFromBeginning) {
-          Log.debug(
+          Log.info(
             `ctrlyoke: Queue in ${executionState} state, restarting from beginning`
           );
           await this.promptQueue.restart();
         }
       } else if (isAppendContinuation) {
-        Log.debug(
+        Log.info(
           `ctrlyoke: Append continuation — skipping restart, continuing from step ${prevCompletedCount}`
         );
         if (executionState === EXECUTION_STATES.IDLE) {
           await this.promptQueue.restoreCompletedSteps(prevCompletedCount);
         }
       } else {
-        Log.debug(
+        Log.info(
           `ctrlyoke: Continuing from current position (append mode), preserving history`
         );
       }
@@ -2297,14 +2297,14 @@ export class WorkflowInstance {
     await this.promptQueue.commitRuntimeTransition();
 
     if (this.workflowExecutor.isAwaitingResponse()) {
-      Log.debug(
+      Log.info(
         "▶️ Resuming while Copilot is still responding - will continue when response completes"
       );
       return;
     }
 
     if (this.startPending) {
-      Log.debug("▶️ Waiting for the paused execution cycle to settle");
+      Log.info("▶️ Waiting for the paused execution cycle to settle");
       await this.executionSettledPromise;
       if (this.workflowRuntime.status !== EXECUTION_STATES.RUNNING) {
         return;
@@ -2412,9 +2412,6 @@ export class WorkflowInstance {
     // Single listener handles both confirmedStopped and timeout cancellation
     const responseCompleteDisposable = integration.onResponseComplete(() => {
       if (!confirmedStoppedCalled) {
-        Log.debug(
-          "🔔 Process confirmed exited - setting queue state to STOPPED"
-        );
         confirmStopped().catch((err) => {
           Log.error("Failed to update working file after stop:", err);
         });
@@ -2877,9 +2874,6 @@ export class WorkflowInstance {
   }
 
   async deletePromptFromQueue(index: number): Promise<void> {
-    Log.debug(
-      `🗑️ WorkflowInstance.deletePromptFromQueue: Deleting prompt at index ${index}`
-    );
     await this.promptQueue.deletePrompt(index);
     if (this.dashboardSink) {
       const currentState = this.promptQueue.getState();
@@ -3078,13 +3072,6 @@ export class WorkflowInstance {
 
       if (shouldRun) {
         await this.executeLoadedPromptFile(stepHarness);
-        Log.debug(
-          `Send prompt (run, position=${position}): ${text.substring(0, 50)}...`
-        );
-      } else {
-        Log.debug(
-          `Add prompt (no run, position=${position}): ${text.substring(0, 50)}...`
-        );
       }
     } else {
       // If the workflow was eagerly created before any prompts were added (e.g., a
@@ -3134,19 +3121,12 @@ export class WorkflowInstance {
         );
         if (isCancelling) {
           this.pendingRunAfterCancel = { harness: stepHarness };
-          Log.debug(
+          Log.info(
             `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: cancelling in progress — deferring run until confirmStopped`
           );
         } else if (isIdleNow || isCompleted || isStopped || isError) {
           await this.executeLoadedPromptFile(stepHarness, isStopped || isError);
         }
-        Log.debug(
-          `Send prompt (run, position=${position}): ${text.substring(0, 50)}...`
-        );
-      } else {
-        Log.debug(
-          `Add prompt (no run, position=${position}): ${text.substring(0, 50)}...`
-        );
       }
     }
   }
@@ -3204,7 +3184,7 @@ export class WorkflowInstance {
     }
     const activityTarget = this.lastCompletedActivityTarget;
     if (!activityTarget) {
-      Log.debug(
+      Log.trace(
         `[inst:${this.id.slice(0, 8)}] Session activity resumed before completed step attribution — buffering`
       );
       this.pendingSessionActivityEvents.push(...events);
@@ -3587,7 +3567,7 @@ export class WorkflowInstance {
           resolvedHarness &&
           resolvedHarness !== currentIntegration.getIntegrationMode()
         ) {
-          Log.debug(
+          Log.info(
             `🔀 Prompt ${prompt.name || "unnamed"} switching to harness: ${resolvedHarness}; retaining the previous harness terminal`
           );
           const overrideIntegration =
@@ -4392,7 +4372,7 @@ export class WorkflowInstance {
       if (!historyFilePath) {
         const { workflowKey, runRef } = this.promptQueue.getState();
         if (workflowKey && runRef) {
-          Log.warn(
+          Log.error(
             `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: no history file for promoted run ` +
               `${workflowKey}/${runRef} — timeline and manifest writes will be skipped for this execution`
           );
@@ -4903,10 +4883,27 @@ export class WorkflowInstance {
     }
 
     const state = this.promptQueue.getState();
-    Log.debug(
-      `[inst:${this.id.slice(0, 8)}] Runtime transition ${transition.command}: ${transition.previous.status} -> ${transition.current.status} ` +
-        `(step ${state.currentIndex}/${state.steps.length})`
-    );
+    const runtimeTransitionDetails =
+      `Runtime transition ${transition.command}: ${transition.previous.status} -> ${transition.current.status} ` +
+      `(step ${state.currentIndex}/${state.steps.length})`;
+    switch (transition.command) {
+      case "startExecution":
+        Log.info(`[inst:${this.id.slice(0, 8)}] Workflow started`);
+        break;
+      case "complete":
+        Log.info(`[inst:${this.id.slice(0, 8)}] Workflow completed`);
+        break;
+      case "fail":
+        Log.info(`[inst:${this.id.slice(0, 8)}] Workflow failed`);
+        break;
+      case "requestStop":
+      case "confirmStopped":
+        Log.info(`[inst:${this.id.slice(0, 8)}] Workflow stopped`);
+        break;
+      default:
+        Log.debug(`[inst:${this.id.slice(0, 8)}] ${runtimeTransitionDetails}`);
+        break;
+    }
 
     const executionState = this.getAuthoritativeExecutionState();
 
@@ -4923,7 +4920,7 @@ export class WorkflowInstance {
     ) {
       const { harness } = this.pendingRunAfterCancel;
       this.pendingRunAfterCancel = null;
-      Log.debug(
+      Log.info(
         `[inst:${this.id.slice(0, 8)}] onRuntimeTransition: firing deferred run after cancel completed`
       );
       this.executeLoadedPromptFile(harness, true).catch((err) =>
@@ -4936,39 +4933,78 @@ export class WorkflowInstance {
   }
 
   private onAttemptTransition(transition: WorkflowAttemptTransition): void {
-    if (!this.dashboardSink) {
-      return;
-    }
-
     const target = transition.current.target;
     if (target.kind !== FINAL_STEP_PHASES.QUEUE) {
       return;
     }
 
+    const state = this.promptQueue.getState();
+    const step = state.steps[target.stepIndex];
+
     switch (transition.command) {
       case WORKFLOW_ATTEMPT_COMMANDS.BEGIN:
+        if (step) {
+          const command = isScriptStep(step) ? step.script : step.prompt;
+          const harness = isScriptStep(step)
+            ? undefined
+            : (step._runtime?.harness ??
+              PropertyResolver.resolve(
+                step,
+                this.promptQueue.getWorkflowFile(),
+                { hostCanProvidePty: this.hostCanProvidePty }
+              ).harness);
+          Log.info(
+            `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1}/${state.steps.length} started ` +
+              `(attempt ${transition.current.attemptIndex + 1}, command="${command}"` +
+              (harness ? `, harness=${harness}` : "") +
+              ")"
+          );
+        } else {
+          Log.info(
+            `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1} started ` +
+              `(attempt ${transition.current.attemptIndex + 1})`
+          );
+        }
         if (transition.current.attemptIndex > 0) {
-          this.dashboardSink.updateStepStatus(target.stepIndex, {
+          this.dashboardSink?.updateStepStatus(target.stepIndex, {
             state: STEP_STATUS.RUNNING,
           });
         }
         break;
       case WORKFLOW_ATTEMPT_COMMANDS.SCHEDULE_RETRY:
-        this.dashboardSink.updateRetryAttempt(
+        Log.debug(
+          `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1} retry scheduled ` +
+            `(attempt ${transition.current.attemptIndex + 1})`
+        );
+        this.dashboardSink?.updateRetryAttempt(
           target.stepIndex,
           transition.current.retryCount ?? transition.current.attemptIndex,
           transition.current.maxRetries ?? 0
         );
         break;
       case WORKFLOW_ATTEMPT_COMMANDS.CANCEL:
-        this.dashboardSink.updateStepStatus(target.stepIndex, {
+        Log.debug(
+          `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1} cancelled ` +
+            `(attempt ${transition.current.attemptIndex + 1})`
+        );
+        this.dashboardSink?.updateStepStatus(target.stepIndex, {
           state: STEP_STATUS.CANCELLED,
         });
         break;
       case WORKFLOW_ATTEMPT_COMMANDS.COMPLETE:
+        Log.info(
+          `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1} completed ` +
+            `(attempt ${transition.current.attemptIndex + 1})`
+        );
         if (transition.current.attemptIndex > 0) {
-          this.dashboardSink.updateRetryAttempt(target.stepIndex, 0, 0);
+          this.dashboardSink?.updateRetryAttempt(target.stepIndex, 0, 0);
         }
+        break;
+      case WORKFLOW_ATTEMPT_COMMANDS.FAIL:
+        Log.info(
+          `[inst:${this.id.slice(0, 8)}] Step ${target.stepIndex + 1} failed ` +
+            `(attempt ${transition.current.attemptIndex + 1}, failureReason="${transition.current.failureReason ?? "unknown"}")`
+        );
         break;
       default:
         break;
@@ -5018,7 +5054,7 @@ export class WorkflowInstance {
       const hasNewPrompts = state.steps.length > this.lastKnownStepCount;
 
       if (hasNewPrompts) {
-        Log.debug(
+        Log.info(
           `Detected prompt count increase: ${this.lastKnownStepCount} → ${state.steps.length}. Notifying dashboard.`
         );
         // Include executionState so both updates reach the webview in one message.

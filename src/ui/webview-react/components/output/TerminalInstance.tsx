@@ -112,7 +112,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       const shouldSendResize = options?.forceResize === true || changed;
 
       if (shouldSendResize) {
-        WebviewLog.debug(
+        WebviewLog.trace(
           `[TerminalInstance] controller → TERMINAL_RESIZE (${reason}) wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
             `container=${container.offsetWidth}x${container.offsetHeight}px ` +
             `proposed=${fitResult?.proposedCols ?? "none"}x${fitResult?.proposedRows ?? "none"} ` +
@@ -133,7 +133,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
   );
 
   useEffect(() => {
-    WebviewLog.debug(
+    WebviewLog.trace(
       `[TerminalInstance] visibility wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
         `isVisible=${isVisible} isController=${isController} controllerCols=${controllerCols ?? "none"}`
     );
@@ -514,7 +514,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     // blank is gone.
     void mount().catch((err) => {
       if (cancelled) return;
-      WebviewLog.debug(
+      WebviewLog.error(
         `[TerminalInstance] mount failed wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}: ` +
           `${err instanceof Error ? err.message : String(err)}`
       );
@@ -631,7 +631,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     const entry = terminalRegistry.get(workflowId, sessionId);
     const container = containerRef.current;
     if (!entry || !container) {
-      WebviewLog.debug(
+      WebviewLog.trace(
         `[TerminalInstance] visible refresh skipped wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
           `entryExists=${!!entry} containerConnected=${container?.isConnected ?? false}`
       );
@@ -666,7 +666,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
               forceResize: phase === "raf2",
             })?.fitResult;
         activeEntry.term.refresh(0, Math.max(0, activeEntry.term.rows - 1));
-        WebviewLog.debug(
+        WebviewLog.trace(
           `[TerminalInstance] visible refresh ${phase} wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
             `containerSize=${activeContainer.offsetWidth}x${activeContainer.offsetHeight} ` +
             `containerDisplay=${getComputedStyle(activeContainer).display} ` +
@@ -674,7 +674,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
             `cols=${activeEntry.term.cols} rows=${activeEntry.term.rows}`
         );
       } catch (error) {
-        WebviewLog.debug(
+        WebviewLog.trace(
           `[TerminalInstance] visible refresh ${phase} failed wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
             `${error instanceof Error ? error.message : String(error)}`
         );
@@ -798,7 +798,7 @@ const ViewOnlyBadge: React.FC<{ workflowId: string; sessionId: string }> = ({
   if (session?.status !== TERMINAL_SESSION_STATUS.RUNNING) return null;
 
   const handleTakeControl = () => {
-    WebviewLog.debug(
+    WebviewLog.info(
       `[TerminalInstance] manual take control requested wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}`
     );
     sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, {

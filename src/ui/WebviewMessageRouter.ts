@@ -1379,7 +1379,9 @@ export class WebviewMessageRouter {
           message.baseTemplateId,
           ctx.postMessage
         )
-        .catch((err) => Log.warn(`CREATE_CUSTOM_TEMPLATE failed: ${err}`));
+        .catch(() => {
+          // handleCreateCustomTemplate reports its own failure to the client.
+        });
     });
 
     table.set(MESSAGE_TYPES.BROWSE_TEMPLATE_FILE, (message, ctx) => {
@@ -2145,6 +2147,9 @@ export class WebviewMessageRouter {
     const tag = ctx.clientId;
     const prefixed = `[${tag}] ${message}`;
     switch (level) {
+      case LOG_LEVELS.TRACE:
+        Log.trace(prefixed);
+        break;
       case LOG_LEVELS.DEBUG:
         Log.debug(prefixed);
         break;

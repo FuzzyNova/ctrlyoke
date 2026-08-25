@@ -514,7 +514,7 @@ export class WorkflowOrchestrator {
       context.subscriptions.push(
         integration.onDidChangeStatus((status) => {
           if (integration === defaultIntegration) {
-            Log.debug(`🔄 Copilot status changed to: ${status}`);
+            Log.trace(`🔄 Copilot status changed to: ${status}`);
             this.updateStatusBar();
           }
           if (
@@ -1793,7 +1793,7 @@ export class WorkflowOrchestrator {
       );
       return;
     }
-    Log.debug(`pauseWorkflow: inst:${workflowId.slice(0, 8)}`);
+    Log.info(`pauseWorkflow: inst:${workflowId.slice(0, 8)}`);
     return instance.pause();
   }
 
@@ -1810,7 +1810,7 @@ export class WorkflowOrchestrator {
       );
       return;
     }
-    Log.debug(`cancelPauseWorkflow: inst:${workflowId.slice(0, 8)}`);
+    Log.info(`cancelPauseWorkflow: inst:${workflowId.slice(0, 8)}`);
     return instance.cancelPause();
   }
 
@@ -1863,7 +1863,7 @@ export class WorkflowOrchestrator {
     if (this.retiredInstances.has(instance.id)) {
       this.retiredInstances.delete(instance.id);
     }
-    Log.debug(`resumeWorkflow: inst:${workflowId.slice(0, 8)}`);
+    Log.info(`resumeWorkflow: inst:${workflowId.slice(0, 8)}`);
     return instance.resume();
   }
 
@@ -5814,7 +5814,7 @@ export class WorkflowOrchestrator {
         }
       }
     } catch (err) {
-      Log.debug(
+      Log.warn(
         `[WorkflowOrchestrator] pollRunnerJsonDiscovery: unable to scan "${runsRootDir}":`,
         err
       );
@@ -5831,7 +5831,7 @@ export class WorkflowOrchestrator {
       const content = await fs.promises.readFile(lockFilePath, "utf8");
       lock = JSON.parse(content) as WorkflowRunnerLock;
     } catch (err) {
-      Log.debug(
+      Log.trace(
         `[WorkflowOrchestrator] handleRunnerJsonEvent: skipping "${path.basename(lockFilePath)}" — unreadable/mid-write: ${(err as NodeJS.ErrnoException).code ?? err}`
       );
       return;
@@ -5849,12 +5849,12 @@ export class WorkflowOrchestrator {
       lock.runRef
     );
 
-    Log.debug(
+    Log.trace(
       `[WorkflowOrchestrator] handleRunnerJsonEvent: CLI lock detected for "${workflowId}" pid=${lock.pid} heartbeat=${lock.lastHeartbeat}`
     );
 
     if (this.cliSessions.has(workflowId)) {
-      Log.debug(
+      Log.trace(
         `[WorkflowOrchestrator] handleRunnerJsonEvent: session already exists for "${workflowId}" — skipping`
       );
       return;
@@ -5866,7 +5866,7 @@ export class WorkflowOrchestrator {
       workflowId
     );
     if (status !== LOCK_STATUS.ACTIVE_CLI) {
-      Log.debug(
+      Log.trace(
         `[WorkflowOrchestrator] handleRunnerJsonEvent: lock status is "${status}" for "${workflowId}" — skipping`
       );
       return;
@@ -5984,7 +5984,7 @@ export class WorkflowOrchestrator {
                 definitionRevision?: number;
               };
               if (wf.steps) {
-                Log.debug(
+                Log.info(
                   `[WorkflowOrchestrator] CLI extended queue for "${workflowId}": ${prevTotalSteps} → ${updatedSummary.totalSteps} steps`
                 );
                 provider.notifyCliPromptsExtended(

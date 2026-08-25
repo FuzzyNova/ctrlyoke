@@ -728,7 +728,7 @@ export class RunOutputResolver {
       approvedExternalRoots,
     });
     if (!access.allowed || !access.matchedRoot) {
-      Log.debug(
+      Log.trace(
         `Ignoring unscoped file event in run projection (${manifestPath})`
       );
       return undefined;

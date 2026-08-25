@@ -168,6 +168,28 @@ const RUN_VIEW_INDEPENDENT_MESSAGE_TYPES = new Set<string>([
 // Send Message Helper
 // ============================================================================
 
+function getPanelLifecycleActionLabel(type: string): string | undefined {
+  switch (type) {
+    case MESSAGE_TYPES.RUN:
+    case MESSAGE_TYPES.EXECUTE_DRAFT:
+    case MESSAGE_TYPES.CONTINUE_RUN:
+    case MESSAGE_TYPES.SEED_NEW_RUN:
+    case MESSAGE_TYPES.START_NEW_RUN_INSTEAD:
+      return "run start requested";
+    case MESSAGE_TYPES.RESUME_RUN:
+      return "run resume requested";
+    case MESSAGE_TYPES.PAUSE_RUN:
+      return "run pause requested";
+    case MESSAGE_TYPES.CANCEL_PAUSE_RUN:
+      return "run pause cancellation requested";
+    case MESSAGE_TYPES.STOP_RUN:
+    case MESSAGE_TYPES.STOP_CLI_RUN:
+      return "run stop requested";
+    default:
+      return undefined;
+  }
+}
+
 /**
  * Send a message to the extension
  * Can be used outside of React components via direct import
@@ -177,6 +199,10 @@ export function sendMessage(
   payload?: Record<string, unknown>
 ): void {
   const vscode = getVsCodeApi();
+  const lifecycleActionLabel = getPanelLifecycleActionLabel(type);
+  if (lifecycleActionLabel) {
+    WebviewLog.info(`[panel] ${lifecycleActionLabel}`);
+  }
   const definitionMutationTypes = new Set<string>([
     MESSAGE_TYPES.UPDATE_PROMPT,
     MESSAGE_TYPES.INSERT_WORKFLOW_STEP,
@@ -915,7 +941,7 @@ export function createMessageHandlers(
       useUiStore.setState({ pendingRewind: null });
     }
 
-    WebviewLog.debug(
+    WebviewLog.info(
       `[EXECUTION_STARTED] isContinuation=${isContinuation}, preserveStepCount=${preserveStepCount}, ` +
         `totalSteps=${message.totalSteps}, isViewingHistory=${uiStore.isViewingHistory}, ` +
         `historyOutputs=${workflowStore.historyOutputs ? "exists" : "null"}, ` +
@@ -925,7 +951,7 @@ export function createMessageHandlers(
     if (isContinuation && preserveStepCount > 0) {
       // Append-continuation run: promote history entries into liveOrderedEntries BEFORE
       // clearing history view, so the user still sees previous prompts' output.
-      WebviewLog.debug(
+      WebviewLog.info(
         `[EXECUTION_STARTED] Continuation — promoting ${preserveStepCount} history step(s) to live, then switching to live view`
       );
       workflowStore.promoteHistoryToLive(preserveStepCount);
@@ -959,7 +985,7 @@ export function createMessageHandlers(
       );
     } else {
       // Fresh start: switch to live view and reset everything
-      WebviewLog.debug(
+      WebviewLog.info(
         `[EXECUTION_STARTED] Fresh start — clearing all runtime state`
       );
       workflowStore.clearHistoryOutputs();
@@ -1832,7 +1858,7 @@ export function createMessageHandlers(
     const { fileName } = useWorkflowStore.getState();
     const { activeWorkflowWorkingFilePath, startupReady } =
       useUiStore.getState();
-    WebviewLog.debug(
+    WebviewLog.info(
       `[startup] STARTUP_COMPLETE received — overlay already dismissed: ${startupReady}`
     );
     clearPanelReconnectReloadWatchdog();
@@ -1849,7 +1875,7 @@ export function createMessageHandlers(
   // WORKSPACE_INIT_REQUIRED - ctrlyoke not yet initialized; user must approve
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKSPACE_INIT_REQUIRED] = () => {
-    WebviewLog.debug("[startup] WORKSPACE_INIT_REQUIRED received");
+    WebviewLog.info("[startup] WORKSPACE_INIT_REQUIRED received");
     useUiStore.getState().setWorkspaceInitRequired(true);
   };
 
@@ -1857,7 +1883,7 @@ export function createMessageHandlers(
   // SHOW_LAYOUT_TIP - first-install step 2: panel placement tip
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SHOW_LAYOUT_TIP] = () => {
-    WebviewLog.debug("[startup] SHOW_LAYOUT_TIP received");
+    WebviewLog.info("[startup] SHOW_LAYOUT_TIP received");
     const store = useUiStore.getState();
     store.setWorkspaceInitRequired(false);
     store.setShowLayoutPreference(true);
@@ -2555,7 +2581,7 @@ export function createMessageHandlers(
   handlers[MESSAGE_TYPES.WORKFLOW_ADDED] = (message) => {
     const summary: WorkflowSummary | undefined = message.summary;
     const uiStore = useUiStore.getState();
-    WebviewLog.debug(
+    WebviewLog.info(
       `[WORKFLOW_ADDED] inst:${summary?.id.slice(0, 8)} name="${summary?.workflowName || "(empty)"}" state=${summary?.executionState} ` +
         `fp=${summary?.filePath?.split(/[\\/]/).pop() || "?"} wfp=${summary?.workingFilePath?.split(/[\\/]/).pop() || "?"} ` +
         `— current loadedWorkflows: [${uiStore.loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState})`).join(", ") || "(none)"}]`
@@ -2573,9 +2599,9 @@ export function createMessageHandlers(
     const dismissed = uiStore.loadedWorkflows.find(
       (w) => w.id === message.workflowId
     );
-    WebviewLog.debug(
+    WebviewLog.info(
       `[WORKFLOW_DISMISSED] inst:${message.workflowId?.slice(0, 8)} ` +
-        `(was: name="${dismissed?.workflowName || "(not found)"}" state=${dismissed?.executionState || "?"}) ` +
+        `(loadedWorkflows has no matching summary yet; reported name="${dismissed?.workflowName || "(not available)"}" state=${dismissed?.executionState || "?"}) ` +
         `— loadedWorkflows before: [${uiStore.loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}`).join(", ") || "(none)"}]`
     );
     if (message.workflowId) {
@@ -2620,7 +2646,7 @@ export function createMessageHandlers(
   // ACTIVE_WORKFLOW_CHANGED - Active workflow selection changed
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED] = (message) => {
-    WebviewLog.debug(
+    WebviewLog.info(
       `[ACTIVE_WORKFLOW_CHANGED] workflowId=inst:${message.workflowId?.slice(0, 8)}`
     );
     if (message.workflowId) {

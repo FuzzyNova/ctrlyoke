@@ -294,7 +294,7 @@ export class OutputHistoryManager {
 
       return { filePath, runCount };
     } catch (error) {
-      Log.warn("Failed to initialize history run:", error);
+      Log.error("Failed to initialize history run:", error);
       return { filePath: "", runCount: 0 };
     }
   }
@@ -519,10 +519,10 @@ export class OutputHistoryManager {
     }
     try {
       Promise.resolve(this.harnessUsageRefreshHandler(harnessId)).catch(() => {
-        Log.debug("[OutputHistoryManager] post-attempt usage refresh failed");
+        Log.trace("[OutputHistoryManager] post-attempt usage refresh failed");
       });
     } catch {
-      Log.debug("[OutputHistoryManager] post-attempt usage refresh failed");
+      Log.trace("[OutputHistoryManager] post-attempt usage refresh failed");
     }
   }
 
@@ -814,7 +814,7 @@ export class OutputHistoryManager {
       this.feedUsageStores(historyFilePath);
       this.refreshSearchIndex();
     } catch (error) {
-      Log.warn("Failed to finalize history run:", error);
+      Log.error("Failed to finalize history run:", error);
     }
   }
 

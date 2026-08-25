@@ -35,12 +35,12 @@ export function useNewWorkflowKeyHandler() {
 
       const vscode = getVsCodeApi();
       if (e.shiftKey) {
-        WebviewLog.debug(
+        WebviewLog.info(
           "[NewWorkflow] Ctrl+Shift+N — new workflow from template"
         );
         vscode.postMessage({ type: MESSAGE_TYPES.NEW_WORKFLOW });
       } else {
-        WebviewLog.debug("[NewWorkflow] Ctrl+N — new blank workflow");
+        WebviewLog.info("[NewWorkflow] Ctrl+N — new blank workflow");
         vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });
       }
     };

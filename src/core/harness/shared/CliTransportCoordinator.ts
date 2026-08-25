@@ -428,7 +428,7 @@ export class CliTransportCoordinator implements CliExecutionTransportCoordinator
         onStdout: shouldStream
           ? (chunk) => {
               if (ConfigurationUtils.shouldLogRawCliOutput()) {
-                Log.debug(
+                Log.trace(
                   `[${this.deps.provider.config.displayName} RAW OUTPUT]: ${chunk}`
                 );
               }

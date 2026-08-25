@@ -56,7 +56,7 @@ export class PromptFileWatcher {
       this.onFileDeleted(uri, onFileDeleted);
     });
 
-    Log.debug(`Set up file watcher for ${filePath}`);
+    Log.trace(`Set up file watcher for ${filePath}`);
   }
 
   /**
@@ -79,12 +79,12 @@ export class PromptFileWatcher {
       state.status === EXECUTION_STATES.CANCELLING;
 
     if (shouldReload) {
-      Log.debug(
+      Log.trace(
         `Working file changed during execution, reloading queue: ${uri.fsPath}`
       );
       await onReload(uri.fsPath);
     } else {
-      Log.debug(
+      Log.trace(
         `Working file changed but ignoring reload (state: ${state.status}) to preserve dashboard view`
       );
     }
@@ -100,7 +100,7 @@ export class PromptFileWatcher {
     uri: vscode.Uri,
     onDelete: (filePath: string) => void
   ): void {
-    Log.debug(`Working file deleted: ${uri.fsPath}`);
+    Log.trace(`Working file deleted: ${uri.fsPath}`);
 
     // Cleanup file references
     onDelete(uri.fsPath);

@@ -12,6 +12,7 @@ import { useIsMobile, useMediaQuery } from "@hooks/useMediaQuery";
 import { useLongPress } from "@hooks/useLongPress";
 import { useIsViewingDeletedWorkflow } from "@hooks/useIsViewingDeletedWorkflow";
 import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
+import { sendMessage } from "@hooks/useMessageHandler";
 import { WebviewLog } from "@utils/logger";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
@@ -255,12 +256,11 @@ export const Header: React.FC<{
 
   const handleStopCliRun = useCallback(() => {
     if (activeWorkflowId) {
-      vscode.postMessage({
-        type: MESSAGE_TYPES.STOP_CLI_RUN,
+      sendMessage(MESSAGE_TYPES.STOP_CLI_RUN, {
         workflowId: activeWorkflowId,
       });
     }
-  }, [vscode, activeWorkflowId]);
+  }, [activeWorkflowId]);
 
   const dryRunDisabled = !displayedViewAddress || isLineageReadOnly;
   const canSave = hasFile && !isLineageReadOnly;
@@ -318,8 +318,7 @@ export const Header: React.FC<{
       ) {
         return;
       }
-      vscode.postMessage({
-        type,
+      sendMessage(type, {
         address: displayedViewAddress,
         expectedDefinitionRevision: displayedDefinitionRevision,
         expectedDescriptorRevision: displayedDescriptorRevision,
@@ -329,7 +328,6 @@ export const Header: React.FC<{
       displayedDefinitionRevision,
       displayedDescriptorRevision,
       displayedViewAddress,
-      vscode,
     ]
   );
 
@@ -341,8 +339,7 @@ export const Header: React.FC<{
           displayedDefinitionRevision !== null &&
           displayedDescriptorRevision !== null
         ) {
-          vscode.postMessage({
-            type: MESSAGE_TYPES.EXECUTE_DRAFT,
+          sendMessage(MESSAGE_TYPES.EXECUTE_DRAFT, {
             address: displayedViewAddress,
             expectedDefinitionRevision: displayedDefinitionRevision,
             expectedDescriptorRevision: displayedDescriptorRevision,
@@ -359,8 +356,7 @@ export const Header: React.FC<{
         postViewedRunAction(MESSAGE_TYPES.START_NEW_RUN_INSTEAD);
       } else if (action === "resume") {
         if (executionRunAddress) {
-          vscode.postMessage({
-            type: MESSAGE_TYPES.RESUME_RUN,
+          sendMessage(MESSAGE_TYPES.RESUME_RUN, {
             address: executionRunAddress,
           });
         } else {
@@ -375,7 +371,7 @@ export const Header: React.FC<{
               : action === "stop"
                 ? MESSAGE_TYPES.STOP_RUN
                 : null;
-        if (type) vscode.postMessage({ type, address: executionRunAddress });
+        if (type) sendMessage(type, { address: executionRunAddress });
       }
     },
     [
@@ -384,7 +380,6 @@ export const Header: React.FC<{
       displayedViewAddress,
       executionRunAddress,
       postViewedRunAction,
-      vscode,
     ]
   );
 
@@ -412,18 +407,19 @@ export const Header: React.FC<{
       expectedDefinitionRevision,
       expectedDescriptorRevision,
     } = suffixEditConfirmation;
-    vscode.postMessage({
-      type:
-        action === "startNewRunInstead"
-          ? MESSAGE_TYPES.START_NEW_RUN_INSTEAD
-          : MESSAGE_TYPES.DISCARD_CONTINUATION,
-      address,
-      expectedDefinitionRevision,
-      expectedDescriptorRevision,
-      confirmEditedSuffix: true,
-    });
+    sendMessage(
+      action === "startNewRunInstead"
+        ? MESSAGE_TYPES.START_NEW_RUN_INSTEAD
+        : MESSAGE_TYPES.DISCARD_CONTINUATION,
+      {
+        address,
+        expectedDefinitionRevision,
+        expectedDescriptorRevision,
+        confirmEditedSuffix: true,
+      }
+    );
     setSuffixEditConfirmation(null);
-  }, [suffixEditConfirmation, vscode, setSuffixEditConfirmation]);
+  }, [suffixEditConfirmation, setSuffixEditConfirmation]);
 
   const handleUndoRedoAction = useCallback(
     (

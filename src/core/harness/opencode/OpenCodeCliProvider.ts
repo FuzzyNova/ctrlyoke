@@ -308,17 +308,13 @@ export class OpenCodeCliProvider implements ICliProvider {
       resolvedResumeSession,
       sessionId
     );
-    Log.debug(
-      `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, sessionId=${sessionId ?? "none"}, shouldResume=${shouldResume}`
-    );
-
     if (shouldResume) {
       args.push("-s", sessionId!);
-      Log.debug(`✅ Added resume flag: -s ${sessionId}`);
+      Log.info(`Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
-      Log.debug(`⚠️ Resume requested but no session ID available`);
+      Log.warn("Resume requested but no session ID available");
     } else {
-      Log.debug(`🆕 Starting new session`);
+      Log.info("Starting new session");
     }
 
     const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;

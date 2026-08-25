@@ -80,7 +80,9 @@ function appendBuildLog(stream: "stdout" | "stderr", chunk: string): void {
     return;
   }
   const prefix = stream === "stderr" ? "[dev build stderr]" : "[dev build]";
-  Log.info(`${prefix} ${trimmed}`);
+  // Build output is already streamed to the dashboard; keep the log copy
+  // available for diagnostics without echoing every output chunk at INFO.
+  Log.trace(`${prefix} ${trimmed}`);
 }
 
 function summarizeBuildError(stderr: string, stdout: string): string {
@@ -326,9 +328,9 @@ async function listAndDisplayCommands(
     ? allCommands.filter(filterFn).sort()
     : allCommands.sort();
 
-  Log.info(`=== ${title.toUpperCase()} ===`);
-  Log.info(`Found ${filteredCommands.length} commands:\n`);
-  filteredCommands.forEach((cmd) => Log.info(`  ${cmd}`));
+  Log.trace(`=== ${title.toUpperCase()} ===`);
+  Log.trace(`Found ${filteredCommands.length} commands:`);
+  filteredCommands.forEach((cmd) => Log.trace(`  ${cmd}`));
 
   // Generate markdown content
   const timestamp = new Date().toISOString();

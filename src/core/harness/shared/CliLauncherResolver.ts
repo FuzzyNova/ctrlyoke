@@ -115,7 +115,7 @@ async function resolveWindowsLauncher(
   const metadata = await getWindowsCommandMetadata(commandName, shell);
 
   if (!metadata) {
-    Log.debug(
+    Log.warn(
       `⚠️ Failed to resolve Windows launcher for ${commandName}; using direct invocation`
     );
     return {
@@ -388,7 +388,7 @@ async function getWindowsCommandMetadata(
       | WindowsCommandMetadata[];
     return Array.isArray(parsed) ? parsed[0] : parsed;
   } catch (error) {
-    Log.debug(
+    Log.warn(
       `⚠️ Windows launcher resolution failed for ${commandName}: ${String(error)}`
     );
     return undefined;

@@ -471,7 +471,7 @@ export class CliLogMonitor {
               processEvent(entry, "background-work hold (catch-up)");
             }
           } catch (error) {
-            Log.debug(
+            Log.trace(
               `⚠️ Catch-up read during background-work hold failed: ${error}`
             );
           }
@@ -509,7 +509,7 @@ export class CliLogMonitor {
             processEvent(entry, `${source} (catch-up)`);
           }
         } catch (error) {
-          Log.debug(
+          Log.trace(
             `⚠️ Catch-up read before completion check failed: ${error}`
           );
         }
@@ -677,7 +677,7 @@ export class CliLogMonitor {
                 );
               }
             } catch (error) {
-              Log.debug(`Notification monitoring error: ${error}`);
+              Log.trace(`Notification monitoring error: ${error}`);
             }
           })();
         }

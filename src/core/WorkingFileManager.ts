@@ -251,7 +251,7 @@ async function readWorkingFileForWriteDiagnostics(
     );
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      Log.debug(
+      Log.trace(
         `[WorkingFileManager] Unable to read the previous working file for write diagnostics: ${workingFilePath}`
       );
     }
@@ -282,7 +282,7 @@ async function logWorkingFileWriteDiagnostics(
     persistedWorkingFile
   );
 
-  Log.debug(
+  Log.trace(
     `[WorkingFileManager] ${options.operation ?? "atomic-write"} write analysis: ` +
       JSON.stringify({
         path: workingFilePath,
@@ -1742,7 +1742,7 @@ export class WorkingFileManager {
       .slice(2, 6)
       .map((line) => line.trim())
       .join(" <- ");
-    Log.debug(
+    Log.trace(
       `[WorkingFileManager] updateWorkingFile requested: ` +
         JSON.stringify({ skipMerge, caller })
     );
@@ -1831,7 +1831,7 @@ export class WorkingFileManager {
       const stepsWithRuntime = workingFile.steps.filter(
         (p) => p._runtime
       ).length;
-      Log.debug(
+      Log.trace(
         `updateWorkingFile - Writing ${workingFile.steps.length} steps to ${workingFilePath}, ` +
           `_runtime: ${stepsWithRuntime}/${workingFile.steps.length} steps`
       );

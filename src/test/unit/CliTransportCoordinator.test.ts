@@ -293,17 +293,17 @@ line two`,
   });
 
   test("should log raw streaming chunks when raw CLI logging is enabled", async () => {
-    const debugMessages: string[] = [];
+    const traceMessages: string[] = [];
     const originalShouldLogRawCliOutput =
       ConfigurationUtils.shouldLogRawCliOutput;
-    const originalDebug = Log.debug;
+    const originalTrace = Log.trace;
     (
       ConfigurationUtils as unknown as { shouldLogRawCliOutput: () => boolean }
     ).shouldLogRawCliOutput = () => true;
-    (Log as unknown as { debug(message: string): void }).debug = (
+    (Log as unknown as { trace(message: string): void }).trace = (
       message: string
     ) => {
-      debugMessages.push(message);
+      traceMessages.push(message);
     };
 
     try {
@@ -372,7 +372,7 @@ line two`,
 
       assert.strictEqual(success, true);
       assert.ok(
-        debugMessages.some((message) =>
+        traceMessages.some((message) =>
           message.includes("[Test CLI RAW OUTPUT]: raw-chunk")
         )
       );
@@ -382,8 +382,8 @@ line two`,
           shouldLogRawCliOutput: () => boolean;
         }
       ).shouldLogRawCliOutput = originalShouldLogRawCliOutput;
-      (Log as unknown as { debug(message: string): void }).debug =
-        originalDebug;
+      (Log as unknown as { trace(message: string): void }).trace =
+        originalTrace;
     }
   });
 

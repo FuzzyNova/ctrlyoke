@@ -193,11 +193,11 @@ export class PromptFileLoader {
 
             if (result?.appliedKeys.length) {
               for (const key of result.appliedKeys) {
-                Log.debug(
+                Log.trace(
                   `Copied workflow property '${key}' from loaded file to working file: ${JSON.stringify(updates[key])}`
                 );
               }
-              Log.debug(
+              Log.trace(
                 "Persisted workflow-level properties from loaded file to working file"
               );
             }
@@ -212,7 +212,7 @@ export class PromptFileLoader {
           if (Object.keys(defaults).length > 0) {
             await this.promptQueue.updateWorkingFileProperties(defaults);
             Object.assign(promptFile, defaults);
-            Log.debug(
+            Log.trace(
               `Populated VS Code defaults for new working file: ${Object.keys(defaults).join(", ")}`
             );
           }
@@ -332,7 +332,7 @@ export class PromptFileLoader {
       } else {
         // Scenario 2: Queue extended during execution (MCP/append to same file)
         // Merge new prompts preserving state and send STEPS_EXTENDED
-        Log.debug(
+        Log.trace(
           `Merging prompts from working file (state: ${queueState.status}, mode: ${mode})`
         );
         const newStepsCount = await this.promptQueue.mergeStepsFromDisk();
@@ -341,7 +341,7 @@ export class PromptFileLoader {
         if (newStepsCount > 0 && mergeDashboard) {
           // Get updated state after merge
           const updatedState = this.promptQueue.getState();
-          Log.debug(
+          Log.info(
             `Queue extended by ${newStepsCount} steps (total: ${updatedState.steps.length}). Sending STEPS_EXTENDED to dashboard.`
           );
 
@@ -353,7 +353,7 @@ export class PromptFileLoader {
             updatedState.definitionRevision
           );
         } else if (newStepsCount === 0) {
-          Log.debug("Working file changed but no new steps detected");
+          Log.trace("Working file changed but no new steps detected");
         }
       }
 
@@ -363,7 +363,7 @@ export class PromptFileLoader {
         workingFile.originalFile
       );
 
-      Log.debug(
+      Log.trace(
         `Reloaded ${workingFile.steps?.length ?? 0} prompts from working file`
       );
     } catch (error) {

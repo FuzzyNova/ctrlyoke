@@ -678,7 +678,7 @@ export class WorkflowExecutor {
             ? (resolvedPreCondition.onPass ?? CONDITION_ACTIONS.CONTINUE)
             : (resolvedPreCondition.onFail ?? CONDITION_ACTIONS.SKIP_PROMPT);
 
-          Log.debug(
+          Log.info(
             `Pre-condition ${preResult.passed ? "passed" : "failed"} → action: ${preAction}`
           );
 
@@ -2196,7 +2196,7 @@ export class WorkflowExecutor {
     errorBehavior?: ErrorBehavior,
     secretNames: readonly string[] = []
   ): Promise<PhaseDisposition> {
-    Log.debug(
+    Log.trace(
       `Evaluating end condition for ${this.describeExecutionTarget(target)}...`
     );
 
