@@ -1,6 +1,8 @@
 # Workspace File History and Image Diff Plan
 
-**Status:** Sections 1-4 implemented; sections 5-6 remain open follow-ons
+**Status:** Sections 1-4 implemented; sections 5-6 broken out as
+[`WORKSPACE_COMMIT_HISTORY_VIRTUALIZATION_PLAN.md`](../backlog/WORKSPACE_COMMIT_HISTORY_VIRTUALIZATION_PLAN.md)
+and [`GIT_REF_DIFF_PAGINATION_PLAN.md`](../backlog/GIT_REF_DIFF_PAGINATION_PLAN.md)
 **Priority:** P2
 
 ## Problem
@@ -418,6 +420,9 @@ work proportional to the file’s byte size.
 
 ### 5. Keep repository-wide history as a follow-on
 
+> Broken out into
+> [`WORKSPACE_COMMIT_HISTORY_VIRTUALIZATION_PLAN.md`](../backlog/WORKSPACE_COMMIT_HISTORY_VIRTUALIZATION_PLAN.md).
+
 Do not virtualize `WorkspaceCommitHistoryPane` in the file-history change. Its
 graph rail and text rows must remain vertically synchronized, and lane colors
 can continue across pages/branches. A later phase should:
@@ -432,6 +437,9 @@ can continue across pages/branches. A later phase should:
 Directory history is also explicitly out of scope for this plan.
 
 ### 6. Paginate large commit/ref diffs (follow-on, not this phase)
+
+> Broken out into
+> [`GIT_REF_DIFF_PAGINATION_PLAN.md`](../backlog/GIT_REF_DIFF_PAGINATION_PLAN.md).
 
 `DiffFileList` should not be retrofitted into a paged component, and this
 phase should not try to solve large-commit scalability as a side effect of
