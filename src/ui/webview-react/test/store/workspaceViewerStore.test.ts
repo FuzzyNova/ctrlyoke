@@ -426,3 +426,38 @@ describe("setRepos", () => {
     expect(store().selectedRepoId).toBe("alpha");
   });
 });
+
+describe("openToFileHistory", () => {
+  it("opens Source Control with a normalized, repo-scoped pending request", () => {
+    store().setSelectedRepoId("repo-b");
+    store().openToFileHistory("src\\file.ts");
+
+    expect(store().activeTab).toBe("sourceControl");
+    expect(store().fileHistoryPath).toBe("src/file.ts");
+    expect(store().fileHistoryRepoId).toBe("repo-b");
+    expect(store().pendingFileHistory).toEqual({
+      path: "src/file.ts",
+      repoId: "repo-b",
+      generation: 1,
+    });
+  });
+
+  it("bumps its generation and leaves only the newest request current", () => {
+    store().openToFileHistory("src/first.ts");
+    const staleRequest = store().pendingFileHistory;
+
+    store().openToFileHistory("src/second.ts");
+
+    expect(store().fileHistoryGeneration).toBe(2);
+    expect(store().pendingFileHistory?.path).toBe("src/second.ts");
+    expect(store().pendingFileHistory?.generation).not.toBe(
+      staleRequest?.generation
+    );
+  });
+
+  it("does not change mobile diff visibility", () => {
+    store().setMobileDiffVisible(false);
+    store().openToFileHistory("src/file.ts");
+    expect(store().mobileDiffVisible).toBe(false);
+  });
+});

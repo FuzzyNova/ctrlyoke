@@ -14,6 +14,7 @@ import {
   fromDiffKind,
   OpenFileButton,
 } from "@components/diff";
+import { DiffFileHistoryList } from "@components/diff/DiffFileHistoryList";
 import { downloadTextFile } from "@utils/diff";
 import { workspaceGitRefDiff } from "@utils/hostedApi";
 import { DIFF_PAYLOAD_KINDS } from "@root/types/DashboardConstants";
@@ -39,6 +40,19 @@ export const WorkspaceDiffPane: React.FC = () => {
   const diffKind = useWorkspaceViewerStore((s) => s.diffKind);
   const diffPayloadKind = useWorkspaceViewerStore((s) => s.diffPayloadKind);
   const diffImage = useWorkspaceViewerStore((s) => s.diffImage);
+  const fileHistoryPath = useWorkspaceViewerStore((s) => s.fileHistoryPath);
+  const fileHistoryRepoId = useWorkspaceViewerStore(
+    (s) => s.fileHistoryRepoId
+  );
+  const fileHistoryActive = useWorkspaceViewerStore(
+    (s) => s.fileHistoryActive
+  );
+  const closeFileHistoryView = useWorkspaceViewerStore(
+    (s) => s.closeFileHistoryView
+  );
+  const setMobileDiffVisible = useWorkspaceViewerStore(
+    (s) => s.setMobileDiffVisible
+  );
 
   const [downloading, setDownloading] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -176,6 +190,42 @@ export const WorkspaceDiffPane: React.FC = () => {
       setDownloading(false);
     }
   }, [diffRefLabel]);
+
+  const handleFileHistoryBack = useCallback(() => {
+    closeFileHistoryView();
+    setMobileDiffVisible(false);
+  }, [closeFileHistoryView, setMobileDiffVisible]);
+
+  if (fileHistoryActive && fileHistoryPath) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-panel-border flex-shrink-0">
+          <button
+            type="button"
+            onClick={handleFileHistoryBack}
+            className="flex items-center gap-1 text-xs text-editor-fg hover:opacity-80 transition-opacity"
+            aria-label="Back to source control files"
+          >
+            <i className="codicon codicon-arrow-left text-sm" />
+            <span>Back</span>
+          </button>
+          <span className="truncate text-xs font-semibold text-editor-fg">
+            File History: {fileHistoryPath}
+          </span>
+        </div>
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 overflow-auto px-3 py-2"
+        >
+          <DiffFileHistoryList
+            path={fileHistoryPath}
+            repo={fileHistoryRepoId ?? undefined}
+            scrollContainerRef={scrollContainerRef}
+          />
+        </div>
+      </div>
+    );
+  }
 
   // ── Multi-file git-ref diff mode ──────────────────────────────────────────
 

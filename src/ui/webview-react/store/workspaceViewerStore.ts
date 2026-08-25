@@ -29,6 +29,16 @@ export type PendingNavigation =
   | { type: "file"; filePath: string; startLine?: number; endLine?: number }
   | { type: "directory"; dirPath: string };
 
+export interface PendingFileHistory {
+  path: string;
+  repoId: string | null;
+  generation: number;
+}
+
+function normalizeWorkspacePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/^\.\//, "");
+}
+
 /**
  * Match a viewer path to the repo that owns it, for defaulting the SCM repo
  * selector to follow the open file. Viewer paths are folder-name-prefixed with
@@ -145,6 +155,12 @@ interface WorkspaceViewerState {
   pendingNavigation: PendingNavigation | null;
   // Pending diff selection (set externally, consumed by WorkspaceSourceControlPane)
   pendingDiff: string | null;
+  // File-history projection (set externally, consumed by WorkspaceSourceControlPane)
+  fileHistoryPath: string | null;
+  fileHistoryRepoId: string | null;
+  fileHistoryActive: boolean;
+  pendingFileHistory: PendingFileHistory | null;
+  fileHistoryGeneration: number;
 
   // General
   error: string | null;
@@ -238,6 +254,9 @@ interface WorkspaceViewerActions {
   clearPendingNavigation(): void;
   openToDiff(path: string): void;
   clearPendingDiff(): void;
+  openToFileHistory(path: string): void;
+  clearPendingFileHistory(): void;
+  closeFileHistoryView(): void;
 }
 
 // ============================================================================
@@ -309,6 +328,11 @@ const INITIAL_STATE: WorkspaceViewerState = {
 
   pendingNavigation: null,
   pendingDiff: null,
+  fileHistoryPath: null,
+  fileHistoryRepoId: null,
+  fileHistoryActive: false,
+  pendingFileHistory: null,
+  fileHistoryGeneration: 0,
 
   error: null,
 };
@@ -347,6 +371,10 @@ export const useWorkspaceViewerStore = create<
           diffCommitInfo: null,
           diffRef: null,
           pendingDiff: null,
+          pendingFileHistory: null,
+          fileHistoryActive: false,
+          fileHistoryPath: null,
+          fileHistoryRepoId: null,
           commitHistoryLoading: false,
           committing: false,
           generatingCommitMessage: false,
@@ -566,6 +594,10 @@ export const useWorkspaceViewerStore = create<
       selectDiff(path) {
         set({
           selectedDiffPath: path,
+          fileHistoryPath: null,
+          fileHistoryRepoId: null,
+          fileHistoryActive: false,
+          pendingFileHistory: null,
           diffPayloadKind: null,
           diffImage: null,
           diffFiles: null,
@@ -594,6 +626,10 @@ export const useWorkspaceViewerStore = create<
           diffCommitInfo: null,
           diffRef: null,
           pendingDiff: null,
+          fileHistoryPath: null,
+          fileHistoryRepoId: null,
+          fileHistoryActive: false,
+          pendingFileHistory: null,
         });
       },
 
@@ -715,6 +751,10 @@ export const useWorkspaceViewerStore = create<
           diffCommitInfo: null,
           diffRef: ref,
           pendingDiff: null,
+          pendingFileHistory: null,
+          fileHistoryActive: false,
+          fileHistoryPath: null,
+          fileHistoryRepoId: null,
         });
         try {
           const { unifiedDiff, commitInfo, nonTextEntries } =
@@ -753,6 +793,10 @@ export const useWorkspaceViewerStore = create<
           diffCommitInfo: null,
           diffRef: null,
           pendingDiff: null,
+          pendingFileHistory: null,
+          fileHistoryActive: false,
+          fileHistoryPath: null,
+          fileHistoryRepoId: null,
         });
         try {
           const { unifiedDiff, nonTextEntries } = await workspaceWorktreeDiff(
@@ -803,6 +847,10 @@ export const useWorkspaceViewerStore = create<
           activeTab: "sourceControl",
           selectedDiffPath: path,
           pendingDiff: path,
+          fileHistoryPath: null,
+          fileHistoryRepoId: null,
+          fileHistoryActive: false,
+          pendingFileHistory: null,
           // Leaving ref mode for a single-file diff.
           diffFiles: null,
           diffRefLabel: null,
@@ -814,6 +862,42 @@ export const useWorkspaceViewerStore = create<
 
       clearPendingDiff() {
         set({ pendingDiff: null });
+      },
+
+      openToFileHistory(path) {
+        const normalizedPath = normalizeWorkspacePath(path);
+        const repoId = get().selectedRepoId;
+        const generation = get().fileHistoryGeneration + 1;
+        set({
+          isOpen: true,
+          activeTab: "sourceControl",
+          selectedDiffPath: null,
+          pendingDiff: null,
+          fileHistoryPath: normalizedPath,
+          fileHistoryRepoId: repoId,
+          fileHistoryActive: true,
+          pendingFileHistory: {
+            path: normalizedPath,
+            repoId,
+            generation,
+          },
+          fileHistoryGeneration: generation,
+          // Leaving ref mode for the file-history projection.
+          diffFiles: null,
+          diffNonTextEntries: [],
+          diffRefLabel: null,
+          diffRefLoading: false,
+          diffCommitInfo: null,
+          diffRef: null,
+        });
+      },
+
+      clearPendingFileHistory() {
+        set({ pendingFileHistory: null });
+      },
+
+      closeFileHistoryView() {
+        set({ fileHistoryActive: false, pendingFileHistory: null });
       },
     }),
     {

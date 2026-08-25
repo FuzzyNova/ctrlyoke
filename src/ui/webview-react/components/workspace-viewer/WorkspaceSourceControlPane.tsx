@@ -78,6 +78,18 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   const selectedDiffPath = useWorkspaceViewerStore((s) => s.selectedDiffPath);
   const pendingDiff = useWorkspaceViewerStore((s) => s.pendingDiff);
   const clearPendingDiff = useWorkspaceViewerStore((s) => s.clearPendingDiff);
+  const pendingFileHistory = useWorkspaceViewerStore(
+    (s) => s.pendingFileHistory
+  );
+  const clearPendingFileHistory = useWorkspaceViewerStore(
+    (s) => s.clearPendingFileHistory
+  );
+  const fileHistoryActive = useWorkspaceViewerStore(
+    (s) => s.fileHistoryActive
+  );
+  const closeFileHistoryView = useWorkspaceViewerStore(
+    (s) => s.closeFileHistoryView
+  );
   const sourceControlLoading = useWorkspaceViewerStore(
     (s) => s.sourceControlLoading
   );
@@ -240,6 +252,29 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     clearPendingDiff();
     void selectFileDiff(pendingDiff);
   }, [pendingDiff, clearPendingDiff, selectFileDiff]);
+
+  // Consume history navigation separately from single-file diff navigation.
+  // The store owns the target synchronously; this consumer owns mobile pane
+  // visibility just like the existing pending diff flow does.
+  useEffect(() => {
+    if (!pendingFileHistory) return;
+    clearPendingFileHistory();
+    if (isMobile) setMobileDiffVisible(true);
+  }, [
+    clearPendingFileHistory,
+    isMobile,
+    pendingFileHistory,
+    setMobileDiffVisible,
+  ]);
+
+  const handleDiffBack = useCallback(() => {
+    if (fileHistoryActive) closeFileHistoryView();
+    setMobileDiffVisible(false);
+  }, [
+    closeFileHistoryView,
+    fileHistoryActive,
+    setMobileDiffVisible,
+  ]);
 
   const refreshAfterMutation = useCallback(
     async (affectedPaths: string[]) => {
@@ -567,7 +602,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       <div className="flex flex-col h-full overflow-hidden">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-panel-border flex-shrink-0">
           <button
-            onClick={() => setMobileDiffVisible(false)}
+            onClick={handleDiffBack}
             className="flex items-center gap-1 text-editor-fg hover:opacity-80 transition-opacity"
           >
             <i className="codicon codicon-arrow-left text-sm" />
