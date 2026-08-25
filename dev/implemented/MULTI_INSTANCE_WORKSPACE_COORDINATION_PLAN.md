@@ -1,9 +1,12 @@
 # Multi-Instance Workspace Coordination Plan
 
-> **Status:** Proposed — not started
+> **Status:** Fully implemented (Phases 1–3, including the worktree-ownership
+> banner folded into Phase 2)
 >
-> **Priority:** P1 for Phase 1 (active correctness bug), P3 for Phases 2–3
-> (nice-to-have visibility/UX)
+> Key files: `src/utils/WorkflowLockManager.ts`, `src/core/WorkflowOrchestrator.ts`,
+> `src/core/WorkflowInstance.ts`, `src/core/orchestration/ExternalRunWatchSession.ts`,
+> `src/utils/WorkflowStopRequest.ts`, `src/server/CtrlYokeHostedServer.ts`,
+> `src/ui/webview-react/components/layout/Header.tsx`
 
 ## Problem
 
