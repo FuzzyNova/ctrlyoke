@@ -106,11 +106,11 @@ describe("WorkflowPropertiesPanel — workflow-property persist/reload round tri
     render(<WorkflowPropertiesPanel />);
     fireEvent.click(screen.getByTitle("Permissions"));
 
-    fireEvent.change(screen.getByLabelText("Allowed Tools"), {
-      target: { value: "shell(git:*)\nread" },
+    fireEvent.paste(screen.getByLabelText("Allowed Tools"), {
+      clipboardData: { getData: () => "shell(git:*)\nread" },
     });
-    fireEvent.change(screen.getByLabelText("Denied Tools"), {
-      target: { value: "shell(rm:*)" },
+    fireEvent.paste(screen.getByLabelText("Denied Tools"), {
+      clipboardData: { getData: () => "shell(rm:*)" },
     });
 
     const message = findUpdatePropertyMessage("toolPermissions");
@@ -130,9 +130,11 @@ describe("WorkflowPropertiesPanel — workflow-property persist/reload round tri
     );
 
     fireEvent.click(screen.getByTitle("Permissions"));
-    expect(screen.getByLabelText("Allowed Tools")).toHaveValue(
-      "shell(git:*)\nread"
+    expect(screen.getByLabelText("Allowed Tools")).toHaveTextContent(
+      "shell(git:*)read"
     );
-    expect(screen.getByLabelText("Denied Tools")).toHaveValue("shell(rm:*)");
+    expect(screen.getByLabelText("Denied Tools")).toHaveTextContent(
+      "shell(rm:*)"
+    );
   });
 });

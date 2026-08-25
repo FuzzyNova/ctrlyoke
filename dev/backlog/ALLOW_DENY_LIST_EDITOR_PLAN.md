@@ -1,6 +1,6 @@
 # Allow/Deny Tool List Completion Editor Plan
 
-> **Status:** Not implemented.
+> **Status:** Implemented — the core plan (multiline editor, completions, linter, and all four call sites) plus the Hooks/Worktree Setup follow-up is complete. The KeyValueMapEditor and MCP-tool-completion follow-ups remain not implemented and are out of scope for this pass.
 
 ## Goal
 

@@ -1,10 +1,11 @@
+import { useEffect, useState } from "react";
 import type {
   FullGlobalSettings,
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import { CustomSelect } from "../../shared/CustomSelect";
-import { LocalTextarea } from "../../shared/LocalInputs";
+import { PermissionListEditor } from "../../shared/PermissionListEditor";
 import { SettingInputRow } from "../../shared/SettingInputRow";
 import { PermissionCapabilitySummary } from "../../shared/PermissionCapabilitySummary";
 
@@ -29,7 +30,19 @@ export function DefaultsPermissionsPage({
 }: Props) {
   const sources = settings.sources as Record<string, SettingSource>;
   const toolPermissions = settings.settings.defaults.toolPermissions;
+  const [allowedTools, setAllowedTools] = useState(
+    toolPermissions.allowedTools
+  );
+  const [deniedTools, setDeniedTools] = useState(toolPermissions.deniedTools);
   const rowProps = { sources, onReset, activeScope };
+
+  useEffect(() => {
+    setAllowedTools(toolPermissions.allowedTools);
+  }, [toolPermissions.allowedTools]);
+
+  useEffect(() => {
+    setDeniedTools(toolPermissions.deniedTools);
+  }, [toolPermissions.deniedTools]);
 
   return (
     <div className="space-y-4">
@@ -52,21 +65,17 @@ export function DefaultsPermissionsPage({
         path="defaults.toolPermissions.allowedTools"
         {...rowProps}
       >
-        <LocalTextarea
+        <PermissionListEditor
           id="defaults-allowed-tools"
-          rows={3}
-          value={toolPermissions.allowedTools.join("\n")}
-          onCommit={(v) =>
-            onUpdate(
-              "defaults.toolPermissions.allowedTools",
-              v
-                .split("\n")
-                .map((t) => t.trim())
-                .filter(Boolean)
-            )
+          aria-label="Allowed tools (one per line)"
+          value={allowedTools}
+          onChange={setAllowedTools}
+          onBlur={() =>
+            onUpdate("defaults.toolPermissions.allowedTools", allowedTools)
           }
           placeholder={"read\nglob\ngrep"}
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
+          fontSize="0.875rem"
+          className="w-full min-h-[72px] bg-input-bg border border-input-border rounded text-sm text-foreground focus:outline-none focus:border-focus-border font-mono"
         />
         <PermissionCapabilitySummary
           id="defaults-allowed-tools-diagnostic"
@@ -79,21 +88,17 @@ export function DefaultsPermissionsPage({
         path="defaults.toolPermissions.deniedTools"
         {...rowProps}
       >
-        <LocalTextarea
+        <PermissionListEditor
           id="defaults-denied-tools"
-          rows={3}
-          value={toolPermissions.deniedTools.join("\n")}
-          onCommit={(v) =>
-            onUpdate(
-              "defaults.toolPermissions.deniedTools",
-              v
-                .split("\n")
-                .map((t) => t.trim())
-                .filter(Boolean)
-            )
+          aria-label="Denied tools (one per line)"
+          value={deniedTools}
+          onChange={setDeniedTools}
+          onBlur={() =>
+            onUpdate("defaults.toolPermissions.deniedTools", deniedTools)
           }
           placeholder={"shell(rm:*)\nwrite"}
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
+          fontSize="0.875rem"
+          className="w-full min-h-[72px] bg-input-bg border border-input-border rounded text-sm text-foreground focus:outline-none focus:border-focus-border font-mono"
         />
         <PermissionCapabilitySummary
           id="defaults-denied-tools-diagnostic"

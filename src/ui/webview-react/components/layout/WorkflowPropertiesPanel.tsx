@@ -59,6 +59,7 @@ import {
   useSecretGrantOptions,
 } from "../shared";
 import { HooksEditor } from "../editor/HooksEditor";
+import { PermissionListEditor } from "../shared/PermissionListEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import {
   EXECUTION_MODE_HELP_TEXT,
@@ -2180,14 +2181,14 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       />
                     }
                   >
-                    <textarea
+                    <PermissionListEditor
                       id="settings-allowed-tools"
                       aria-label="Allowed Tools"
-                      value={effectiveAllowedTools.join("\n")}
-                      onChange={(e) => {
+                      value={effectiveAllowedTools}
+                      onChange={(allowedTools) => {
                         handleToolPermissionsChange({
                           ...(toolPerms || {}),
-                          allowedTools: e.target.value.split("\n"),
+                          allowedTools,
                           deniedTools: effectiveDeniedTools,
                         });
                       }}
@@ -2198,7 +2199,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
                           : undefined
                       }
                       placeholder={"read\nglob\ngrep"}
-                      className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(allowedFieldDiagnostics)} rounded focus:outline-none focus:border-focus-border resize-none font-mono${
+                      fontSize="0.75rem"
+                      className={`flex-1 min-h-[60px] w-full text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(allowedFieldDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono${
                         permMode !== PERMISSION_MODES.CUSTOM
                           ? " opacity-50 cursor-not-allowed"
                           : ""
@@ -2243,15 +2245,15 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       />
                     }
                   >
-                    <textarea
+                    <PermissionListEditor
                       id="settings-denied-tools"
                       aria-label="Denied Tools"
-                      value={effectiveDeniedTools.join("\n")}
-                      onChange={(e) => {
+                      value={effectiveDeniedTools}
+                      onChange={(deniedTools) => {
                         handleToolPermissionsChange({
                           ...(toolPerms || {}),
                           allowedTools: effectiveAllowedTools,
-                          deniedTools: e.target.value.split("\n"),
+                          deniedTools,
                         });
                       }}
                       disabled={
@@ -2264,7 +2266,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
                           : undefined
                       }
                       placeholder={"shell(rm:*)\nwrite"}
-                      className={`flex-1 min-h-[60px] w-full px-2 py-1 text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(deniedFieldDiagnostics)} rounded focus:outline-none focus:border-focus-border resize-none font-mono${
+                      fontSize="0.75rem"
+                      className={`flex-1 min-h-[60px] w-full text-xs bg-input-bg text-input-fg border ${fieldValidationBorderClass(deniedFieldDiagnostics)} rounded focus:outline-none focus:border-focus-border font-mono${
                         permMode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL ||
                         permMode === PERMISSION_MODES.NONE
                           ? " opacity-50 cursor-not-allowed"

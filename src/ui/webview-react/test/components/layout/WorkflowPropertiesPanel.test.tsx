@@ -219,14 +219,20 @@ describe("WorkflowPropertiesPanel permissions", () => {
 
     render(<WorkflowPropertiesPanel />);
     fireEvent.click(screen.getByTitle("Permissions"));
-    expect(screen.getByLabelText("Allowed Tools")).toHaveValue("shell(git:*)");
+    expect(screen.getByLabelText("Allowed Tools")).toHaveTextContent(
+      "shell(git:*)"
+    );
 
     useSettingsStore
       .getState()
       .updateGlobalSetting("harness", HARNESS_IDS.ANTIGRAVITY_CLI);
 
-    expect(screen.getByLabelText("Allowed Tools")).toHaveValue("shell(git:*)");
-    expect(screen.getByLabelText("Denied Tools")).toHaveValue("shell(rm:*)");
+    expect(screen.getByLabelText("Allowed Tools")).toHaveTextContent(
+      "shell(git:*)"
+    );
+    expect(screen.getByLabelText("Denied Tools")).toHaveTextContent(
+      "shell(rm:*)"
+    );
   });
 });
 
