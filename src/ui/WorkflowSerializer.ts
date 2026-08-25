@@ -659,7 +659,7 @@ export class WorkflowSerializer {
         Log.warn(`Save As bundle warning: ${warning}`);
       }
 
-      Log.debug(`Saved workflow to: ${absolutePath}`);
+      Log.info(`Saved workflow to: ${absolutePath}`);
 
       // Remember this directory so the next unsaved workflow's Save As
       // defaults here instead of the repo root.
@@ -1266,13 +1266,13 @@ export class WorkflowSerializer {
               const isCli =
                 (await manager?.ensureCliWatchSession(filePath)) ?? false;
               if (isCli) {
-                Log.debug(
+                Log.trace(
                   `[WorkflowSerializer] getRecentWorkflows: "${workflowKey}" has active CLI lock — keeping running state (CliWatchSession registered)`
                 );
                 // executionState stays "running"; the session is now in cliSessions
                 // so the next GET_WORKFLOWS_LIST will move it to the Running section.
               } else {
-                Log.debug(
+                Log.trace(
                   `[WorkflowSerializer] getRecentWorkflows: normalizing "${workflowKey}" running→stopped (not in activeWorkingFilePaths: [${[...activeWorkingFilePaths].map((p) => path.basename(p)).join(", ") || "none"}])`
                 );
                 executionState = EXECUTION_STATES.STOPPED;
@@ -1425,21 +1425,20 @@ export class WorkflowSerializer {
         return;
       }
 
-      await fs
-        .rm(WorkflowPaths.lineageDir(workspaceRoot, address.workflowKey), {
+      try {
+        await fs.rm(WorkflowPaths.lineageDir(workspaceRoot, address.workflowKey), {
           recursive: true,
           force: true,
-        })
-        .catch((err) =>
-          Log.warn(
-            `handleRemoveWorkflowHistory: failed to delete lineage ${address.workflowKey}:`,
-            err
-          )
+        });
+        Log.debug(
+          `handleRemoveWorkflowHistory: removed lineage "${address.workflowKey}"`
         );
-
-      Log.debug(
-        `handleRemoveWorkflowHistory: removed lineage "${address.workflowKey}"`
-      );
+      } catch (error) {
+        Log.warn(
+          `handleRemoveWorkflowHistory: failed to delete lineage ${address.workflowKey}:`,
+          error
+        );
+      }
     } catch (error) {
       Log.error("Failed to remove workflow history entry:", error);
     }

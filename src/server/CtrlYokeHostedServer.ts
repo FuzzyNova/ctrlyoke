@@ -916,7 +916,7 @@ export class CtrlYokeHostedServer
           res.status(204).send();
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          Log.error(`workspace-viewer DELETE /entry error: ${message}`);
+          Log.warn(`workspace-viewer DELETE /entry error: ${message}`);
           res.status(400).json({ error: message });
         }
       }
@@ -946,7 +946,7 @@ export class CtrlYokeHostedServer
           res.status(204).send();
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          Log.error(`workspace-viewer POST /copy error: ${message}`);
+          Log.warn(`workspace-viewer POST /copy error: ${message}`);
           res.status(400).json({ error: message });
         }
       }
@@ -976,7 +976,7 @@ export class CtrlYokeHostedServer
           res.status(204).send();
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          Log.error(`workspace-viewer POST /move error: ${message}`);
+          Log.warn(`workspace-viewer POST /move error: ${message}`);
           res.status(400).json({ error: message });
         }
       }

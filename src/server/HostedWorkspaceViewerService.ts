@@ -893,7 +893,7 @@ export class HostedWorkspaceViewerService {
     try {
       dirents = await fs.promises.readdir(resolved, { withFileTypes: true });
     } catch (error) {
-      Log.error(
+      Log.warn(
         `WorkspaceViewer: listDirectory failed for ${resolved}: ${String(error)}`
       );
       throw new WorkspaceTreeBadRequestError("Directory could not be read");

@@ -144,7 +144,7 @@ export class PromptEditorSupportService {
       const items = await this.getCompletionItems(trigger, prefix);
       this.emitCompletionsResponse(ctx, items, position, seq, false);
     } catch (error) {
-      Log.error("Failed to get completions:", error);
+      Log.trace("Failed to get completions:", error);
       this.emitCompletionsResponse(ctx, [], position, seq, false);
     }
   }
@@ -173,7 +173,7 @@ export class PromptEditorSupportService {
         seq,
       });
     } catch (error) {
-      Log.error("Failed to get script completions:", error);
+      Log.trace("Failed to get script completions:", error);
       ctx.emit({
         type: MESSAGE_TYPES.SCRIPT_COMPLETIONS_RESPONSE,
         items: [],
@@ -199,7 +199,7 @@ export class PromptEditorSupportService {
         seq,
       });
     } catch (error) {
-      Log.error("Failed to get branch completions:", error);
+      Log.trace("Failed to get branch completions:", error);
       ctx.emit({
         type: MESSAGE_TYPES.BRANCH_LIST_RESPONSE,
         items: [],
@@ -1056,7 +1056,7 @@ export class PromptEditorSupportService {
       });
       await vscode.window.showTextDocument(doc, { preview: true });
     } catch (error) {
-      Log.error("handleOpenPriorContext: failed to open document", error);
+      Log.warn("handleOpenPriorContext: failed to open document", error);
     }
   }
 

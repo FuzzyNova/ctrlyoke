@@ -8,9 +8,9 @@ Excludes `src/test/**` and `*.test.tsx?`/`*.spec.tsx?` files (test assertions/mo
 
 ---
 
-## Backend (`Log.*`) — 1073 call sites across 113 file(s)
+## Backend (`Log.*`) — 1072 call sites across 113 file(s)
 
-Totals by level: trace=124, debug=299, info=175, warn=302, error=171, appendLine=2
+Totals by level: trace=131, debug=296, info=175, warn=308, error=160, appendLine=2
 
 Ranked by call count (highest first).
 
@@ -18,12 +18,12 @@ Ranked by call count (highest first).
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `src/core/WorkflowInstance.ts` | 2 | 36 | 33 | 23 | 14 |  | 108 |
 | `src/core/WorkflowOrchestrator.ts` | 6 | 41 | 16 | 39 | 6 |  | 108 |
-| `src/server/CtrlYokeHostedServer.ts` |  | 6 |  | 8 | 22 |  | 36 |
-| `src/ui/WebviewMessageRouter.ts` | 1 | 3 | 6 | 7 | 9 |  | 26 |
+| `src/server/CtrlYokeHostedServer.ts` |  | 6 |  | 11 | 19 |  | 36 |
+| `src/ui/WebviewMessageRouter.ts` | 1 | 3 | 6 | 6 | 9 |  | 25 |
 | `src/core/harness/shared/interfaces/INotificationMonitor.ts` | 14 | 4 | 2 | 4 |  |  | 24 |
 | `src/core/PromptQueue.ts` | 2 | 7 | 11 | 2 | 2 |  | 24 |
 | `src/core/WorkflowExecutor.ts` | 3 |  | 14 | 4 | 3 |  | 24 |
-| `src/ui/WorkflowSerializer.ts` |  | 6 |  | 6 | 12 |  | 24 |
+| `src/ui/WorkflowSerializer.ts` | 2 | 3 | 1 | 6 | 12 |  | 24 |
 | `src/extension.ts` |  | 10 | 6 | 5 | 2 |  | 23 |
 | `src/core/harness/CliIntegration.ts` |  | 7 | 8 | 3 | 2 | 2 | 22 |
 | `src/core/harness/shared/CliExecutionRunner.ts` | 5 | 2 | 4 | 7 | 4 |  | 22 |
@@ -36,9 +36,9 @@ Ranked by call count (highest first).
 | `src/core/orchestration/PromptFileLoader.ts` | 6 | 3 | 1 | 2 | 5 |  | 17 |
 | `src/dev/DevCommands.ts` | 4 |  | 7 |  | 5 |  | 16 |
 | `src/core/harness/qwen/QwenLogParser.ts` | 3 | 10 |  | 1 |  |  | 14 |
-| `src/ui/PromptEditorSupportService.ts` | 1 |  |  | 5 | 8 |  | 14 |
+| `src/ui/PromptEditorSupportService.ts` | 4 |  |  | 6 | 4 |  | 14 |
 | `src/core/harness/CliLogMonitor.ts` | 3 | 3 | 3 | 4 |  |  | 13 |
-| `src/ui/WebviewSettingsSync.ts` |  | 1 |  | 6 | 6 |  | 13 |
+| `src/ui/WebviewSettingsSync.ts` |  | 1 |  | 9 | 3 |  | 13 |
 | `src/utils/TempFileManager.ts` | 2 |  |  | 5 | 6 |  | 13 |
 | `src/core/harness/claude/ClaudeLogParser.ts` | 3 | 8 |  | 1 |  |  | 12 |
 | `src/core/harness/codex/CodexCliProvider.ts` |  | 4 | 3 | 4 | 1 |  | 12 |
