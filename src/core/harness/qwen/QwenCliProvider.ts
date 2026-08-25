@@ -278,16 +278,13 @@ export class QwenCliProvider implements ICliProvider {
       resolvedResumeSession,
       sessionId
     );
-    Log.debug(
-      `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, sessionId=${sessionId ?? "none"}, shouldResume=${shouldResume}`
-    );
     if (shouldResume) {
       args.push("--resume", sessionId!);
-      Log.debug(`✅ Added resume flag: --resume ${sessionId}`);
+      Log.info(`Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
-      Log.debug(`⚠️ Resume requested but no session ID available`);
+      Log.warn("Resume requested but no session ID available");
     } else {
-      Log.debug(`🆕 Starting new session`);
+      Log.info("Starting new session");
     }
 
     // Extra CLI flags from additionalArgs (injected before tool permission args)
@@ -305,7 +302,7 @@ export class QwenCliProvider implements ICliProvider {
     // NOTE: buildHeadlessUserHookArgs returns ["--experimental-hooks"] for Qwen headless.
     // Permission preparation is similarly dispatched by CliIntegration — not here.
 
-    Log.debug(
+    Log.trace(
       `🔧 Qwen CLI arguments: ${JSON.stringify(this.redactMcpConfigArgs(args))}`
     );
 

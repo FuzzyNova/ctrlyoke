@@ -181,7 +181,7 @@ export class OpenCodeLogParser extends BaseLogParser {
           callback(event);
         }
       } catch (error) {
-        Log.debug(`[OpenCodeLogParser] Export poll error: ${error}`);
+        Log.trace(`[OpenCodeLogParser] Export poll error: ${error}`);
       }
     }, EXPORT_POLL_INTERVAL_MS);
 

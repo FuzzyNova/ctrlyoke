@@ -185,6 +185,16 @@ scopes so each session reads one coherent set of conventions:
    reads like an error when `loadedWorkflows` is legitimately still empty; reword it while in that
    file.
 
+**Group 5 decisions (2026-08-24):** Provider session start/resume is INFO in all six harnesses,
+with a missing requested session ID at WARN; redundant session-check diagnostics were removed.
+Raw CLI arguments, statusline usage snapshots, retry/poll telemetry, and per-candidate read
+failures are TRACE. MCP, permission, hook, and session-discovery bookkeeping remains DEBUG because
+it is useful for diagnosis but is not part of the workflow transcript. Codex session-discovery
+failure was aligned with the other providers at WARN because it degrades session recovery without
+making the process itself unrecoverable. Antigravity transcript callback/tail failures are WARN
+for the same degraded-coverage reason. OpenCode export failure remains WARN because a failed export
+silently drops events; only the routine polling exception is TRACE.
+
 ### Phase 3 — Fill the gaps
 
 - Gap #1: **done** — `WorkflowInstance.ts` now logs step attempt lifecycle events and promotes

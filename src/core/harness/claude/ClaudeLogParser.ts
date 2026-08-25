@@ -873,7 +873,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
               } else {
                 // File exists but hasn't been updated yet - might be resuming an old session
                 // The CLI will update it soon, so retry instead of failing
-                Log.debug(
+                Log.trace(
                   `[ClaudeLogParser] Session log exists but not yet updated (mtime: ${stats.mtime.toISOString()}, startTime: ${startTime.toISOString()}), will retry...`
                 );
                 return null; // Retry - file will be updated soon
@@ -885,7 +885,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
             signal,
             onRetry: (attempt, max, delay) => {
               if (attempt > 1) {
-                Log.debug(
+                Log.trace(
                   `[ClaudeLogParser] Session log not ready (attempt ${attempt}/${max}), retrying in ${delay}ms...`
                 );
               }
@@ -951,7 +951,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           }
         } catch (error) {
           // Skip files that can't be read or parsed
-          Log.debug(
+          Log.trace(
             `[ClaudeLogParser] Error reading candidate ${candidatePath}:`,
             error
           );

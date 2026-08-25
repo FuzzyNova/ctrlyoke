@@ -534,11 +534,11 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
         try {
           callback(event);
         } catch (error) {
-          Log.error("[AntigravityLogParser] Transcript callback error:", error);
+          Log.warn("[AntigravityLogParser] Transcript callback error:", error);
         }
       }
     } catch (error) {
-      Log.error("[AntigravityLogParser] Transcript tail read failed:", error);
+      Log.warn("[AntigravityLogParser] Transcript tail read failed:", error);
     }
   }
 

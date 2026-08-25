@@ -519,7 +519,7 @@ export class QwenLogParser extends BaseLogParser {
               if (stats.mtime >= startTime) {
                 return logPath;
               }
-              Log.debug(
+              Log.trace(
                 `[QwenLogParser] Session log exists but not yet updated (mtime: ${stats.mtime.toISOString()}, startTime: ${startTime.toISOString()}), will retry...`
               );
             }
@@ -529,7 +529,7 @@ export class QwenLogParser extends BaseLogParser {
             signal,
             onRetry: (attempt, max, delay) => {
               if (attempt > 1) {
-                Log.debug(
+                Log.trace(
                   `[QwenLogParser] Session log not ready (attempt ${attempt}/${max}), retrying in ${delay}ms...`
                 );
               }
@@ -591,7 +591,7 @@ export class QwenLogParser extends BaseLogParser {
             }
           }
         } catch (error) {
-          Log.debug(
+          Log.trace(
             `[QwenLogParser] Error reading candidate ${candidatePath}:`,
             error
           );

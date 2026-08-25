@@ -8,9 +8,9 @@ Excludes `src/test/**` and `*.test.tsx?`/`*.spec.tsx?` files (test assertions/mo
 
 ---
 
-## Backend (`Log.*`) — 1075 call sites across 113 file(s)
+## Backend (`Log.*`) — 1073 call sites across 113 file(s)
 
-Totals by level: trace=86, debug=351, info=169, warn=281, error=186, appendLine=2
+Totals by level: trace=105, debug=312, info=181, warn=290, error=183, appendLine=2
 
 Ranked by call count (highest first).
 
@@ -28,33 +28,33 @@ Ranked by call count (highest first).
 | `src/core/harness/CliIntegration.ts` |  | 7 | 8 | 3 | 2 | 2 | 22 |
 | `src/core/harness/shared/CliExecutionRunner.ts` | 5 | 2 | 4 | 7 | 4 |  | 22 |
 | `src/core/harness/shared/CliInteractiveStartupCoordinator.ts` |  | 5 | 10 | 2 | 5 |  | 22 |
-| `src/core/harness/copilot/CopilotCliProvider.ts` |  | 15 | 1 | 3 | 1 |  | 20 |
 | `src/core/orchestration/OutputHistoryManager.ts` | 2 | 1 |  | 15 | 2 |  | 20 |
 | `src/utils/ContextExpander.ts` |  | 10 |  | 5 | 5 |  | 20 |
-| `src/core/harness/copilot/CopilotLogParser.ts` |  | 17 |  | 2 |  |  | 19 |
+| `src/core/harness/copilot/CopilotCliProvider.ts` | 1 | 10 | 3 | 4 | 1 |  | 19 |
+| `src/core/harness/copilot/CopilotLogParser.ts` | 4 | 13 |  | 2 |  |  | 19 |
 | `src/utils/ModelRegistry.ts` |  | 12 | 4 | 3 |  |  | 19 |
 | `src/core/orchestration/PromptFileLoader.ts` | 6 | 3 | 1 | 2 | 5 |  | 17 |
 | `src/dev/DevCommands.ts` |  |  | 11 |  | 5 |  | 16 |
-| `src/core/harness/qwen/QwenLogParser.ts` |  | 13 |  | 1 |  |  | 14 |
+| `src/core/harness/qwen/QwenLogParser.ts` | 3 | 10 |  | 1 |  |  | 14 |
 | `src/ui/PromptEditorSupportService.ts` | 1 |  |  | 5 | 8 |  | 14 |
 | `src/core/harness/CliLogMonitor.ts` | 3 | 3 | 3 | 4 |  |  | 13 |
-| `src/core/harness/codex/CodexCliProvider.ts` |  | 8 | 1 | 3 | 1 |  | 13 |
 | `src/ui/WebviewSettingsSync.ts` |  | 1 |  | 6 | 6 |  | 13 |
 | `src/utils/TempFileManager.ts` |  |  | 2 | 4 | 7 |  | 13 |
-| `src/core/harness/claude/ClaudeCliProvider.ts` |  | 8 | 1 | 3 |  |  | 12 |
-| `src/core/harness/claude/ClaudeLogParser.ts` |  | 11 |  | 1 |  |  | 12 |
+| `src/core/harness/claude/ClaudeLogParser.ts` | 3 | 8 |  | 1 |  |  | 12 |
+| `src/core/harness/codex/CodexCliProvider.ts` |  | 4 | 3 | 4 | 1 |  | 12 |
 | `src/core/EndConditionEvaluator.ts` | 1 |  | 4 |  | 6 |  | 11 |
-| `src/core/harness/codex/CodexLogParser.ts` |  | 9 |  | 1 | 1 |  | 11 |
-| `src/core/harness/opencode/OpenCodeCliProvider.ts` |  | 5 | 1 | 5 |  |  | 11 |
+| `src/core/harness/claude/ClaudeCliProvider.ts` |  | 4 | 3 | 4 |  |  | 11 |
+| `src/core/harness/codex/CodexLogParser.ts` | 5 | 4 |  | 2 |  |  | 11 |
 | `src/core/harness/PtyProcessManager.ts` | 1 | 9 |  | 1 |  |  | 11 |
 | `src/core/harness/shared/CliTransportCoordinator.ts` | 1 | 1 | 7 | 1 | 1 |  | 11 |
 | `src/core/harness/shared/HeadlessLogTail.ts` | 8 | 3 |  |  |  |  | 11 |
 | `src/ui/WorkflowStepHandlers.ts` |  |  |  |  | 11 |  | 11 |
-| `src/core/harness/qwen/QwenCliProvider.ts` |  | 8 | 1 | 1 |  |  | 10 |
+| `src/core/harness/opencode/OpenCodeCliProvider.ts` |  | 1 | 3 | 6 |  |  | 10 |
 | `src/core/harness/shared/SettingsJsonMcpTracker.ts` |  | 6 |  | 4 |  |  | 10 |
 | `src/core/WorkingFileManager.ts` | 4 |  | 4 | 1 | 1 |  | 10 |
 | `src/utils/SessionResolver.ts` |  | 5 |  | 5 |  |  | 10 |
 | `src/utils/WorkflowLockManager.ts` |  | 2 | 2 | 6 |  |  | 10 |
+| `src/core/harness/qwen/QwenCliProvider.ts` | 1 | 3 | 3 | 2 |  |  | 9 |
 | `src/core/harness/qwen/QwenToolPermissionMapper.ts` |  | 7 |  | 2 |  |  | 9 |
 
 _73 more file(s) not shown — re-run the script and inspect its output, or grep directly._

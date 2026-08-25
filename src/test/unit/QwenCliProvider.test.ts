@@ -237,13 +237,13 @@ suite("QwenCliProvider", () => {
   });
 
   suite("buildCliArgs", () => {
-    test("keeps inline MCP as two base tokens and redacts its complete value in debug output", async () => {
+    test("keeps inline MCP as two base tokens and redacts its complete value in trace output", async () => {
       const provider = new QwenCliProvider();
       const workspaceRoot = await createTempWorkspace();
-      const debugMessages: string[] = [];
-      const originalDebug = Log.debug;
-      (Log as unknown as { debug(message: string): void }).debug = (message) =>
-        debugMessages.push(message);
+      const traceMessages: string[] = [];
+      const originalTrace = Log.trace;
+      (Log as unknown as { trace(message: string): void }).trace = (message) =>
+        traceMessages.push(message);
 
       const inlineServer: McpServerConfig = {
         id: "private-server",
@@ -280,16 +280,16 @@ suite("QwenCliProvider", () => {
         assert.strictEqual(args[4], "--extra");
         assert.strictEqual(args[5], "value");
         assert.ok(
-          debugMessages.some((message) =>
+          traceMessages.some((message) =>
             message.includes('Qwen CLI arguments: ["--mcp-config","[REDACTED]"')
           )
         );
-        assert.ok(!debugMessages.some((message) => message.includes(args[1])));
+        assert.ok(!traceMessages.some((message) => message.includes(args[1])));
         assert.ok(
-          !debugMessages.some((message) => message.includes("do-not-log-this"))
+          !traceMessages.some((message) => message.includes("do-not-log-this"))
         );
       } finally {
-        (Log as unknown as { debug: typeof Log.debug }).debug = originalDebug;
+        (Log as unknown as { trace: typeof Log.trace }).trace = originalTrace;
         await removeTempWorkspace(workspaceRoot);
       }
     });

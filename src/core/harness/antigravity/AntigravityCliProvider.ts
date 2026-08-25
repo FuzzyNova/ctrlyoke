@@ -256,10 +256,17 @@ export class AntigravityCliProvider implements ICliProvider {
       args.push("--model", model);
     }
 
-    if (
-      CliProviderUtils.shouldResumeSession(resolvedResumeSession, sessionId)
-    ) {
+    const shouldResume = CliProviderUtils.shouldResumeSession(
+      resolvedResumeSession,
+      sessionId
+    );
+    if (shouldResume) {
       args.push("--conversation", sessionId!);
+      Log.info(`Resuming session: ${sessionId}`);
+    } else if (resolvedResumeSession && !sessionId) {
+      Log.warn("Resume requested but no session ID available");
+    } else {
+      Log.info("Starting new session");
     }
 
     if (workspaceRoot) {
@@ -439,7 +446,7 @@ export class AntigravityCliProvider implements ICliProvider {
         existingUsage?.contextWindowSize ?? snapshotUsage.contextWindowSize,
     };
 
-    Log.debug(
+    Log.trace(
       `[AntigravityCliProvider] Context window from statusline: ${usage.contextWindowUsedTokens}/${usage.contextWindowSize} tokens`
     );
     return {

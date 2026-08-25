@@ -365,19 +365,16 @@ export class CopilotCliProvider implements ICliProvider {
       resolvedResumeSession,
       sessionId
     );
-    Log.debug(
-      `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, sessionId=${sessionId ?? "none"}, shouldResume=${shouldResume}`
-    );
     if (shouldResume) {
       args.push("--resume", sessionId!);
-      Log.debug(`✅ Added resume flag: --resume ${sessionId}`);
+      Log.info(`Resuming session: ${sessionId}`);
     } else if (resolvedResumeSession && !sessionId) {
-      Log.debug(`⚠️ Resume requested but no session ID available`);
+      Log.warn("Resume requested but no session ID available");
     } else {
-      Log.debug(`🆕 Starting new session`);
+      Log.info("Starting new session");
     }
 
-    Log.debug(`🔧 CLI arguments: ${JSON.stringify(args)}`);
+    Log.trace(`🔧 CLI arguments: ${JSON.stringify(args)}`);
 
     return {
       cliArgs: args,
