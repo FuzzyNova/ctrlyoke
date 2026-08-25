@@ -632,6 +632,9 @@ export class CopilotCliProvider implements ICliProvider {
     return {
       path: hookPath,
       intendedContent: content,
+      // Copilot discovers each per-prompt hook file independently; this is
+      // not a partial merge into an existing settings file.
+      ownedKeys: [],
       description,
       apply: async () => {
         await this.createHookFile(

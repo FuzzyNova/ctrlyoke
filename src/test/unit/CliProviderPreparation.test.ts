@@ -68,6 +68,7 @@ suite("CLI provider preparation", () => {
       assert.ok(claudeHooks.mutations[0].intendedContent);
       assert.ok(copilotMcp.mutations[0].path);
       assert.ok(copilotHooks.mutations[0].intendedContent);
+      assert.deepStrictEqual(copilotHooks.mutations[0].ownedKeys, []);
     } finally {
       fsModule.writeFile = originalWriteFile;
       fsModule.mkdir = originalMkdir;

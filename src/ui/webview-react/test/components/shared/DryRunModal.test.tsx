@@ -93,7 +93,7 @@ const preview: WorkflowExecutionPreview = {
           scope: "shared",
           ownedKeys: ["permissions"],
           operation: "write",
-          warning: "May replace owned keys.",
+          warning: "Workspace-wide side effect: May replace owned keys.",
         },
       ],
       variables: [],

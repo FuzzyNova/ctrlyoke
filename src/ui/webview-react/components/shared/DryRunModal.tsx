@@ -410,10 +410,7 @@ function TimelineEntryRow({
             className="codicon codicon-warning mt-px flex-shrink-0"
             aria-hidden="true"
           />
-          <span>
-            Workspace-wide side effect
-            {mutation.warning ? `: ${mutation.warning}` : "."}
-          </span>
+          <span>{mutation.warning ?? "Workspace-wide side effect."}</span>
         </div>
       ) : (
         <div className="mt-1 text-description-fg">
