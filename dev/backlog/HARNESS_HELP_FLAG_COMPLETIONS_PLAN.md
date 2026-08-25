@@ -1,6 +1,6 @@
 # Additional Args Completions from Live `--help` Output
 
-> **Status:** Not implemented.
+> **Status:** Step 1 implemented; parsing, message plumbing, and webview rollout remain.
 >
 > Referenced as a follow-up from
 > [`ALLOW_DENY_LIST_EDITOR_PLAN.md`](ALLOW_DENY_LIST_EDITOR_PLAN.md#3-other-free-text-fields-in-workflowpropertiespaneltsx-worth-the-same-treatment),
@@ -74,7 +74,7 @@ follow:
 
 ## Proposed Design
 
-### 1. Extension-host: run and cache `--help`
+### 1. Extension-host: run and cache `--help` — implemented
 
 Add a sibling to `CliProviderUtils.runVersionCommand()` — e.g.
 `runHelpCommand(helpCommand: string, options?)` — reusing the exact same
@@ -103,6 +103,19 @@ it (or, better, extract the bare binary name to one constant per provider
 that both the version and help commands build from, closing a small
 existing duplication rather than adding a third copy of `"copilot"` /
 `"claude"` / etc.).
+
+#### Step 1 landed
+
+- `CliProviderUtils.runHelpCommand()` now uses launcher resolution,
+  `execFileAsync`, Windows file-lock retries, and its own retryable cache.
+- Help probes reuse `CLI_VERSION_CHECK_TIMEOUT_MS` (30 seconds). Measured
+  `--help` runs for all six installed CLIs completed in approximately
+  0.1–1.3 seconds, leaving ample headroom without introducing another
+  timeout constant.
+- Each provider now builds public version/help command constants from one
+  private binary-name constant.
+- Captured fixtures: `claude-cli`, `codex-cli`, `copilot-cli`, `opencode-cli`,
+  `qwen-cli`, and `antigravity-cli`.
 
 ### 2. Parsing `--help` into flag completions
 

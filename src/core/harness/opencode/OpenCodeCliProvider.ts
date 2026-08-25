@@ -93,6 +93,10 @@ const OPENCODE_IMAGE_INPUT_CAPABILITY = {
  * ```
  */
 export class OpenCodeCliProvider implements ICliProvider {
+  private static readonly CLI_COMMAND = "opencode";
+  static readonly CLI_VERSION_COMMAND = `${OpenCodeCliProvider.CLI_COMMAND} --version`;
+  static readonly CLI_HELP_COMMAND = `${OpenCodeCliProvider.CLI_COMMAND} --help`;
+
   readonly config: HarnessConfig = {
     name: "opencode",
     harnessId: HARNESS_IDS.OPENCODE_CLI,
@@ -716,16 +720,21 @@ export class OpenCodeCliProvider implements ICliProvider {
    * Check if OpenCode CLI is available on the system
    */
   async checkAvailability(): Promise<boolean> {
-    return CliProviderUtils.checkCliAvailability("opencode --version");
+    return CliProviderUtils.checkCliAvailability(
+      OpenCodeCliProvider.CLI_VERSION_COMMAND
+    );
   }
 
   /**
    * Get OpenCode CLI version string
    */
   async getVersion(): Promise<string | undefined> {
-    return CliProviderUtils.getCliVersion("opencode --version", {
-      timeoutMs: 5000,
-    });
+    return CliProviderUtils.getCliVersion(
+      OpenCodeCliProvider.CLI_VERSION_COMMAND,
+      {
+        timeoutMs: 5000,
+      }
+    );
   }
 
   // ============================================================

@@ -1,0 +1,41 @@
+Usage: qwen [options] [command]
+
+Qwen Code - Launch an interactive CLI, use -p/-
+-prompt for non-interactive mode
+
+Commands:
+  qwen auth                  Configure authentication (removed)
+  qwen channel <command>     Manage messaging channels (Telegram, Discord, etc.)
+  qwen extensions <command>  Manage Qwen Code extensions.
+  qwen hooks                 Manage Qwen Code hooks (use /hooks in interactive m
+                             ode).
+  qwen mcp                   Manage MCP servers
+  qwen review <command>      Run a review non-interactively (`run`), plus the in
+                             ternal helpers used by the /review skill (PR worktr
+                             ee setup, context fetch, rules loading, presubmit c
+                             hecks, cleanup)
+  qwen serve                 Run Qwen Code as a local HTTP daemon (Stage 1 exper
+                             imental: --http-bridge)
+  qwen sessions <command>    Manage Qwen Code sessions
+  qwen update                Check for Qwen Code updates and install if availabl
+                             e
+
+Options:
+  -m, --model               Model                                       [string]
+      --fallback-model      Fallback model(s) for capacity errors, repeatable or
+                             comma-separated (max 3)                     [array]
+  -p, --prompt              Prompt. Appended to input on stdin (if any).[string]
+  -i, --prompt-interactive  Execute the provided prompt and continue in interact
+                            ive mode                                    [string]
+      --safe-mode           Disable all customizations (context files, hooks, ex
+                            tensions, skills, MCP servers) for troubleshooting.
+                                                                       [boolean]
+  -s, --sandbox             Run in sandbox?                            [boolean]
+  -o, --output-format       The format of the CLI output.
+                               [string] [choices: "text", "json", "stream-json"]
+  -c, --continue            Resume the most recent session for the current proje
+                            ct.                                        [boolean]
+  -r, --resume              Resume a specific session by its ID. Use without an
+                            ID to show session picker.                  [string]
+  -v, --version             Show version number                        [boolean]
+  -h, --help                Show help                                  [boolean]

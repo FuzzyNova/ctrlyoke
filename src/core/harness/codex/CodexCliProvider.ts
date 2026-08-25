@@ -149,6 +149,10 @@ function splitCodexHeaders(headers: Record<string, string> | undefined): {
  * ```
  */
 export class CodexCliProvider implements ICliProvider {
+  private static readonly CLI_COMMAND = "codex";
+  static readonly CLI_VERSION_COMMAND = `${CodexCliProvider.CLI_COMMAND} --version`;
+  static readonly CLI_HELP_COMMAND = `${CodexCliProvider.CLI_COMMAND} --help`;
+
   readonly logParser: CodexLogParser;
 
   constructor(onProviderUsageUpdate?: (quota: HarnessQuotaSnapshot) => void) {
@@ -860,7 +864,9 @@ export class CodexCliProvider implements ICliProvider {
    * @returns True if CLI executable found
    */
   async checkAvailability(): Promise<boolean> {
-    return CliProviderUtils.checkCliAvailability("codex --version");
+    return CliProviderUtils.checkCliAvailability(
+      CodexCliProvider.CLI_VERSION_COMMAND
+    );
   }
 
   /**
@@ -869,12 +875,15 @@ export class CodexCliProvider implements ICliProvider {
    * @returns Version string if available
    */
   async getVersion(): Promise<string | undefined> {
-    return CliProviderUtils.getCliVersion("codex --version", {
-      parseVersion: (stdout) => {
-        // Extract version from output like "codex version 0.1.2"
-        const match = stdout.match(/codex version ([\d.]+)/i);
-        return match ? match[1] : stdout;
-      },
-    });
+    return CliProviderUtils.getCliVersion(
+      CodexCliProvider.CLI_VERSION_COMMAND,
+      {
+        parseVersion: (stdout) => {
+          // Extract version from output like "codex version 0.1.2"
+          const match = stdout.match(/codex version ([\d.]+)/i);
+          return match ? match[1] : stdout;
+        },
+      }
+    );
   }
 }

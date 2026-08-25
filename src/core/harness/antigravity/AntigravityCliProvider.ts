@@ -89,6 +89,10 @@ type AntigravityHookGroup = Record<
 >;
 
 export class AntigravityCliProvider implements ICliProvider {
+  private static readonly CLI_COMMAND = "agy";
+  static readonly CLI_VERSION_COMMAND = `${AntigravityCliProvider.CLI_COMMAND} --version`;
+  static readonly CLI_HELP_COMMAND = `${AntigravityCliProvider.CLI_COMMAND} --help`;
+
   /**
    * Shared singleton tracker for parallel-safe MCP management. Unlike Qwen
    * (which uses `.{tool}/settings.json`), agy auto-discovers MCP from the
@@ -658,12 +662,15 @@ export class AntigravityCliProvider implements ICliProvider {
   }
 
   async getVersion(): Promise<string | undefined> {
-    return CliProviderUtils.getCliVersion("agy --version", {
-      parseVersion: (stdout) => {
-        const match = stdout.match(/(\d+\.\d+\.\d+)/);
-        return match?.[1];
-      },
-    });
+    return CliProviderUtils.getCliVersion(
+      AntigravityCliProvider.CLI_VERSION_COMMAND,
+      {
+        parseVersion: (stdout) => {
+          const match = stdout.match(/(\d+\.\d+\.\d+)/);
+          return match?.[1];
+        },
+      }
+    );
   }
 
   async extractSessionIdFromLogs(

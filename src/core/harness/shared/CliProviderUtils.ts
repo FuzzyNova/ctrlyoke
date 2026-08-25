@@ -27,12 +27,12 @@ const execFileAsync = promisify(execFile);
 
 const WINDOWS_FILE_LOCK_ERROR = "being used by another process";
 
-interface CliVersionCommandOptions {
+interface CliCommandOptions {
   timeoutMs?: number;
   retryWindowsFileLockErrors?: boolean;
 }
 
-interface GetCliVersionOptions extends CliVersionCommandOptions {
+interface GetCliVersionOptions extends CliCommandOptions {
   parseVersion?: (stdout: string) => string | undefined;
 }
 
@@ -124,12 +124,19 @@ export class CliProviderUtils {
     new RetryableAsyncCache<string>();
 
   /**
+   * Keeps help-output lookups independent from version probes. A CLI can
+   * change or become available during the extension-host session without
+   * invalidating the other lookup's result.
+   */
+  private static readonly helpCommandCache = new RetryableAsyncCache<string>();
+
+  /**
    * Execute a CLI version command through the same launcher resolution path used
    * for runtime prompt execution.
    */
   static async runVersionCommand(
     versionCommand: string,
-    options: CliVersionCommandOptions = {}
+    options: CliCommandOptions = {}
   ): Promise<string> {
     const execute = async (): Promise<string> => {
       const [commandName, ...commandArgs] = parseArgString(versionCommand);
@@ -180,11 +187,64 @@ export class CliProviderUtils {
   }
 
   /**
+   * Execute a CLI help command through the same launcher and retry paths used
+   * for version checks.
+   */
+  static async runHelpCommand(
+    helpCommand: string,
+    options: CliCommandOptions = {}
+  ): Promise<string> {
+    const execute = async (): Promise<string> => {
+      const [commandName, ...commandArgs] = parseArgString(helpCommand);
+      if (!commandName) {
+        throw new Error("Help command is empty");
+      }
+
+      const resolved = await resolveCliCommand(commandName, commandArgs);
+      const timeoutMs = options.timeoutMs ?? CLI_VERSION_CHECK_TIMEOUT_MS;
+      Log.debug(
+        `[runHelpCommand] spawning: ${resolved.displayCommand} (kind=${resolved.launcherKind}, timeout=${timeoutMs}ms)`
+      );
+      const { stdout } = await execFileAsync(resolved.command, resolved.args, {
+        encoding: "utf8",
+        timeout: timeoutMs,
+        windowsVerbatimArguments: resolved.requiresShellVerbatimArgs,
+      });
+      return typeof stdout === "string" ? stdout.trim() : String(stdout).trim();
+    };
+
+    return CliProviderUtils.helpCommandCache.getOrRun(helpCommand, async () => {
+      if (!options.retryWindowsFileLockErrors) {
+        return execute();
+      }
+
+      const result = await retryWithBackoff(
+        async () => {
+          try {
+            return await execute();
+          } catch (error) {
+            if (String(error).includes(WINDOWS_FILE_LOCK_ERROR)) {
+              return null;
+            }
+            throw error;
+          }
+        },
+        { maxAttempts: 4, delays: [200, 500, 1000] }
+      );
+
+      if (result === undefined) {
+        throw new Error(`Help command failed: ${helpCommand}`);
+      }
+      return result;
+    });
+  }
+
+  /**
    * Check whether a CLI is available by running its version command.
    */
   static async checkCliAvailability(
     versionCommand: string,
-    options: CliVersionCommandOptions = {}
+    options: CliCommandOptions = {}
   ): Promise<boolean> {
     try {
       await CliProviderUtils.runVersionCommand(versionCommand, options);

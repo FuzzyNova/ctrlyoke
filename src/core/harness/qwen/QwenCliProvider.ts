@@ -93,6 +93,10 @@ const QWEN_IMAGE_INPUT_CAPABILITY = {
  * ```
  */
 export class QwenCliProvider implements ICliProvider {
+  private static readonly CLI_COMMAND = "qwen";
+  static readonly CLI_VERSION_COMMAND = `${QwenCliProvider.CLI_COMMAND} --version`;
+  static readonly CLI_HELP_COMMAND = `${QwenCliProvider.CLI_COMMAND} --help`;
+
   private static readonly statuslineManager = StatuslineManager.forProvider(
     STATUS_LINE_TRACKING_PROVIDERS.QWEN
   );
@@ -887,7 +891,9 @@ export class QwenCliProvider implements ICliProvider {
    * @returns True if CLI executable found
    */
   async checkAvailability(): Promise<boolean> {
-    return CliProviderUtils.checkCliAvailability("qwen --version");
+    return CliProviderUtils.checkCliAvailability(
+      QwenCliProvider.CLI_VERSION_COMMAND
+    );
   }
 
   /**
@@ -896,7 +902,7 @@ export class QwenCliProvider implements ICliProvider {
    * @returns Version string if available
    */
   async getVersion(): Promise<string | undefined> {
-    return CliProviderUtils.getCliVersion("qwen --version");
+    return CliProviderUtils.getCliVersion(QwenCliProvider.CLI_VERSION_COMMAND);
   }
 
   /**
