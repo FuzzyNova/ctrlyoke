@@ -13,6 +13,100 @@ import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import * as path from "path";
 
 suite("WorkflowLockManager stale-run recovery", () => {
+  test("leaves live VS Code-owned runs and locks untouched", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-lock-live-vscode-")
+    );
+    const cases = [
+      EXECUTION_STATES.RUNNING,
+      EXECUTION_STATES.PAUSING,
+      EXECUTION_STATES.CANCELLING,
+    ].map((executionState, index) => ({
+      executionState,
+      workflowKey: `live-vscode-${index}` as WorkflowKey,
+      runRef: `run-2026-01-01T00-00-0${index}-000Z` as RunRef,
+    }));
+
+    try {
+      const expectedRuntimes = new Map<string, Record<string, unknown>>();
+      const expectedLocks = new Map<string, Record<string, unknown>>();
+
+      for (const { executionState, workflowKey, runRef } of cases) {
+        const runFilePath = WorkflowPaths.runFilePath(
+          workspaceRoot,
+          workflowKey,
+          runRef
+        );
+        const runtime = {
+          currentIndex: 0,
+          executionState,
+          sessionId: "session-survives",
+          customRuntimeValue: "preserve-me",
+        };
+        const lock = {
+          workflowKey,
+          runRef,
+          runner: RUNNER_IDS.VSCODE,
+          pid: process.pid,
+          ownerToken: `live-owner-${executionState}`,
+          instanceId: "live-extension-host",
+          startedAt: Date.now(),
+          lastHeartbeat: Date.now(),
+        };
+
+        await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+        await fs.writeFile(
+          runFilePath,
+          JSON.stringify({
+            steps: [{ prompt: "keep this run" }],
+            _runtime: runtime,
+          }),
+          "utf8"
+        );
+        await fs.writeFile(
+          WorkflowLockManager.getLockPath(workspaceRoot, workflowKey),
+          JSON.stringify(lock),
+          "utf8"
+        );
+        expectedRuntimes.set(runFilePath, runtime);
+        expectedLocks.set(workflowKey, lock);
+      }
+
+      const result = await WorkflowLockManager.normalizeStaleLocks(
+        workspaceRoot,
+        cases.map(({ workflowKey }) => workflowKey)
+      );
+
+      assert.deepStrictEqual(result.activeCliRunFiles, []);
+      assert.deepStrictEqual(result.recoveredRunFiles, []);
+      for (const { workflowKey, runRef } of cases) {
+        const runFilePath = WorkflowPaths.runFilePath(
+          workspaceRoot,
+          workflowKey,
+          runRef
+        );
+        const unchangedRun = JSON.parse(await fs.readFile(runFilePath, "utf8")) as {
+          _runtime: Record<string, unknown>;
+        };
+        assert.deepStrictEqual(
+          unchangedRun._runtime,
+          expectedRuntimes.get(runFilePath)
+        );
+        assert.deepStrictEqual(
+          JSON.parse(
+            await fs.readFile(
+              WorkflowLockManager.getLockPath(workspaceRoot, workflowKey),
+              "utf8"
+            )
+          ),
+          expectedLocks.get(workflowKey)
+        );
+      }
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("marks the interrupted step cancelled and removes a stale VS Code lock", async () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-lock-recovery-")
@@ -95,6 +189,63 @@ suite("WorkflowLockManager stale-run recovery", () => {
       await assert.rejects(
         fs.access(WorkflowLockManager.getLockPath(workspaceRoot, workflowKey))
       );
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("preserves a live active-CLI run and lock", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-lock-live-cli-")
+    );
+    const workflowKey = "live-cli-2026-01-01T00-00-00" as WorkflowKey;
+    const runRef = "run-2026-01-01T00-00-00-000Z" as RunRef;
+    const runFilePath = WorkflowPaths.runFilePath(
+      workspaceRoot,
+      workflowKey,
+      runRef
+    );
+    const runtime = {
+      currentIndex: 0,
+      executionState: EXECUTION_STATES.RUNNING,
+      sessionId: "cli-session-survives",
+    };
+    const lock = {
+      workflowKey,
+      runRef,
+      runner: RUNNER_IDS.CLI,
+      pid: process.pid,
+      ownerToken: "live-cli-owner-token",
+      instanceId: "cli-process",
+      startedAt: Date.now(),
+      lastHeartbeat: Date.now(),
+    };
+
+    try {
+      await fs.mkdir(path.dirname(runFilePath), { recursive: true });
+      await fs.writeFile(
+        runFilePath,
+        JSON.stringify({ steps: [{ prompt: "keep this CLI run" }], _runtime: runtime }),
+        "utf8"
+      );
+      const lockPath = WorkflowLockManager.getLockPath(
+        workspaceRoot,
+        workflowKey
+      );
+      await fs.writeFile(lockPath, JSON.stringify(lock), "utf8");
+
+      const result = await WorkflowLockManager.normalizeStaleLocks(
+        workspaceRoot,
+        [workflowKey]
+      );
+
+      assert.deepStrictEqual(result.activeCliRunFiles, [runFilePath]);
+      assert.deepStrictEqual(result.recoveredRunFiles, []);
+      assert.deepStrictEqual(
+        JSON.parse(await fs.readFile(runFilePath, "utf8")),
+        { steps: [{ prompt: "keep this CLI run" }], _runtime: runtime }
+      );
+      assert.deepStrictEqual(JSON.parse(await fs.readFile(lockPath, "utf8")), lock);
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }

@@ -236,13 +236,12 @@ export class WorkflowLockManager {
   /**
    * Normalize stale locks on extension startup.
    *
-   * Scans every lineage directory under run storage. For each lineage whose
-   * locked `RunRef`'s `_runtime.executionState` is active (running/pausing/cancelling):
-   *   - "none" or "stale" lock  → writes "stopped" to that run's `_runtime.executionState`,
-   *     cleans up any stale lock file
-   *   - "active-vscode"         → this shouldn't happen on startup (we just started);
-   *     treat as stale and normalize to "stopped"
-   *   - "active-cli"            → preserves RUNNING; returns this lineage as CLI-managed
+ * Scans every lineage directory under run storage. For each lineage whose
+ * locked `RunRef`'s `_runtime.executionState` is active (running/pausing/cancelling):
+ *   - "none" or "stale" lock  → writes "stopped" to that run's `_runtime.executionState`,
+ *     cleans up any stale lock file
+ *   - "active-vscode"         → preserves the live VS Code-owned run and lock
+ *   - "active-cli"            → preserves RUNNING; returns this lineage as CLI-managed
    *
    * Returns the exact run file paths recovered/still-active, keyed by lineage.
    */
@@ -321,7 +320,14 @@ export class WorkflowLockManager {
         continue;
       }
 
-      // "none", "stale", or "active-vscode" (we just started — can't be us)
+      if (status === LOCK_STATUS.ACTIVE_VSCODE) {
+        Log.info(
+          `[WorkflowLockManager] normalizeStaleLocks: ${workflowKey} is active-vscode — preserving live VS Code run`
+        );
+        continue;
+      }
+
+      // "none" or "stale"
       Log.info(
         `[WorkflowLockManager] normalizeStaleLocks: normalizing ${workflowKey} from ${executionState} → stopped (lock=${status})`
       );

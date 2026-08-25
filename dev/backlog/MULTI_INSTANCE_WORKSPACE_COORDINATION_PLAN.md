@@ -150,6 +150,11 @@ inventing a new coordination primitive.
 
 ### Phase 1 — Stop the data-loss bug (do this regardless of Phases 2–3)
 
+**Implemented:** `normalizeStaleLocks` now leaves live `active-vscode` run and
+lock files untouched; only `none`/`stale` locks are normalized and deleted.
+Its return shape intentionally remains unchanged (no new `active-vscode` array)
+so Phase 2 can choose that shape against real call-site needs.
+
 Fix `normalizeStaleLocks`' `active-vscode` branch so it only normalizes a
 lock that is actually stale (dead PID or heartbeat >30s), never a live one.
 Concretely: reorder the check in `WorkflowLockManager.normalizeStaleLocks`
