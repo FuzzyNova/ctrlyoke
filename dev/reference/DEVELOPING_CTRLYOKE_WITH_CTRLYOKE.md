@@ -238,6 +238,104 @@ the debug host's server, which is exactly the one you're testing against.
 Attach the Playwright MCP server to your agent session as usual; no extra
 config is needed on top of the `CTRLYOKE_HOME` split above.
 
+## Launching and closing the dev host from a CLI agent (no `F5`, no UI restart)
+
+An agent (e.g. Claude Code) working headlessly has no `F5`/Stop button.
+`scripts/dev-host.mjs` wraps the full recipe below — `npm run dev:host:start`,
+`npm run dev:host:stop`, `npm run dev:host:restart` (stop, compile, start).
+It runs on win32/darwin/linux; the process-discovery and graceful-close
+mechanism differ per OS (PowerShell CIM queries + `taskkill` on Windows,
+`ps` parsing + `SIGTERM` elsewhere) — see the closing section below for which
+half of that is empirically confirmed versus the standard cross-platform
+idiom. The rest of this section explains *why* it's built the way it is
+(mostly written against the Windows path, where it was developed and
+verified), for troubleshooting or extending it.
+
+The `.vscode/launch.json` `extensionHost` configs are just `code` CLI
+invocations wrapped in JSON, so they can be reproduced directly:
+
+```sh
+CTRLYOKE_HOME="$PWD/.ctrlyoke-dev-home" code \
+  --extensionDevelopmentPath="$PWD" \
+  --disable-extension=fuzzynova.ctrlyoke \
+  "$PWD/ctrlyoke-test.code-workspace"
+```
+
+`npm run compile` first (matching the config's `preLaunchTask`). Within a few
+seconds `.ctrlyoke/dev/server-url.txt` has the live URL+token to hand to
+Playwright — see the `<debugging>` section of `.github/copilot-instructions.md`.
+
+**The problem**: as launched above, `code` finds your already-running daily
+driver's IPC socket and asks *it* to open the new window — the `code` process
+returns immediately, and the new window is just another renderer inside the
+daily driver's existing `Code.exe` process tree. There is no independent PID
+to manage: every renderer/utility/gpu process for every open window shares one
+top-level `Code.exe`, and that process also owns every window's actual OS
+window handle. You cannot safely `taskkill` any single window out of it
+(confirmed empirically — the renderer PIDs don't own a closable top-level
+window at all, and the top process is shared with windows you must not
+touch).
+
+**The fix: give the dev host its own `--user-data-dir`.** This is a second,
+independent override from `CTRLYOKE_HOME` above — `CTRLYOKE_HOME` isolates
+ctrlyoke's *own* state, `--user-data-dir` isolates *VS Code's* singleton-
+instance lock — and both are needed together:
+
+```sh
+CTRLYOKE_HOME="$PWD/.ctrlyoke-dev-home" code \
+  --user-data-dir="$PWD/.vscode-dev-userdata" \
+  --extensionDevelopmentPath="$PWD" \
+  --disable-extension=fuzzynova.ctrlyoke \
+  "$PWD/ctrlyoke-test.code-workspace"
+```
+
+This breaks the singleton-IPC handshake, so `code` spawns a genuinely
+independent top-level `Code.exe` (parented under the launching shell, not the
+daily driver) with its own crashpad-handler, gpu-process, extension-host
+utility process, and renderer — confirmed by inspecting `Win32_Process`
+command lines after launch. Don't also override `--extensions-dir`; leaving it
+at the default (`~/.vscode/extensions`) keeps your normally-installed
+extensions available in the dev host, since only the singleton lock — not the
+extensions directory — needs separating.
+
+**Closing it**: find the top-level PID (the one *without* a `--type=` flag in
+its command line — that's what distinguishes it from its own gpu/utility/
+renderer children) by matching on the unique `--user-data-dir` value, then
+request a graceful close. On Windows that's `taskkill /PID <pid>` — **do not
+add `/F`**. Without it, this is the same graceful close as clicking the
+window's X — confirmed by the session log showing a normal
+`ctrlyoke: Extension deactivating...` line and `.ctrlyoke/dev/server-url.txt`
+being removed by `CtrlYokeHostedServer.dispose()`, not a crash. It takes up to
+~10 seconds to fully unwind (extension deactivate, hosted server teardown,
+child process exit) — `dev-host.mjs stop` polls for that rather than assuming
+it's instant. The daily driver and any other open windows are untouched
+throughout, since they live under a different top-level process entirely.
+
+On macOS/Linux the analogous request is `SIGTERM` (`process.kill(pid,
+"SIGTERM")`) — the standard cross-platform idiom for "please quit", which
+Electron apps generally hook into their normal quit sequence. **This half is
+not empirically verified in this repo** (developed and tested on Windows only
+so far) — the Windows behavior above was confirmed by reading the actual
+session log; the POSIX path is the documented-idiom default. The first time
+you run `dev-host.mjs stop` on macOS/Linux, check the newest
+`.ctrlyoke/logs/ctrlyoke-*.log` for the same `Extension deactivating...` line
+to confirm it's a clean shutdown rather than an abrupt kill, and update this
+note with what you find. (This whole close/relaunch dance is what
+`scripts/dev-host.mjs`'s `stop`/`start`/`restart` commands automate.)
+
+This is a strictly better restart path for an agent than the dashboard's own
+`Rebuild Extension & Restart` (`DeveloperSection.tsx`'s
+`DEV_BUILD_EXTENSION_AND_RELOAD` / `workbench.action.restartExtensionHost`),
+which restarts the extension host *from inside itself* and can hang if the
+extension host's event loop is already unhealthy — the OS-level close/relaunch
+here doesn't depend on the thing being torn down staying responsive.
+
+One caveat: `.ctrlyoke/dev/server-url.txt` lives in the shared workspace
+folder, not under `CTRLYOKE_HOME`, so it isn't per-instance — if two dev hosts
+are ever activated concurrently, whichever finished activating most recently
+wins the file and the other's URL is unrecoverable from it. Keep it to one
+CLI-launched dev host at a time.
+
 ## Summary checklist
 
 - [ ] Daily driver: `npm run package`, install the `.vsix`, keep it open on

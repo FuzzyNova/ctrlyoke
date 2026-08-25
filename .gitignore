@@ -24,6 +24,7 @@ package.json.backup
 .ctrlyoke/attachments/
 .ctrlyoke/dev/
 .ctrlyoke-dev-home/
+.vscode-dev-userdata/
 .playwright-mcp/
 manual-test/hooks/output/
 
