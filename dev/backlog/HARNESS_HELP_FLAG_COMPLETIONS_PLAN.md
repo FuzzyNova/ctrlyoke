@@ -1,6 +1,6 @@
 # Additional Args Completions from Live `--help` Output
 
-> **Status:** Step 1 implemented; parsing, message plumbing, and webview rollout remain.
+> **Status:** Steps 1–2 implemented; message plumbing and webview rollout remain.
 >
 > Referenced as a follow-up from
 > [`ALLOW_DENY_LIST_EDITOR_PLAN.md`](ALLOW_DENY_LIST_EDITOR_PLAN.md#3-other-free-text-fields-in-workflowpropertiespaneltsx-worth-the-same-treatment),
@@ -156,6 +156,29 @@ per-harness overrides, not a single regex assumed to fit everything:
   completion list, never throw into the completion round trip or block the
   field. This mirrors how `checkCliAvailability` already swallows failures
   into a boolean.
+
+#### Step 2 landed
+
+- `HarnessFlagCompletionProvider.ts` has a generic, fail-soft parser for the
+  shared two-column option table. It handles short aliases, multiple long
+  aliases, angle/bracket value placeholders, wrapped descriptions, and
+  flag-only rows.
+- All six captured fixtures parse acceptably with the generic parser, so no
+  per-harness override was added: `copilot-cli`, `claude-cli`, `codex-cli`,
+  `opencode-cli`, `qwen-cli`, and `antigravity-cli` all use the default path.
+  Codex's wider option indentation and wrapped `Possible values` blocks are
+  handled by the same parser rather than a harness-specific rule.
+- Value hints are available wherever the help text exposes an unambiguous
+  enum: Antigravity (`--effort`, `--input-format`, `--mode`,
+  `--output-format`), Claude (`--autocompact`, `--cloud`, `--effort`,
+  `--input-format`, `--output-format`, `--permission-mode`,
+  `--prompt-suggestions`, `--setting-sources`), Codex (`--sandbox`,
+  `--ask-for-approval`), Copilot (`--bash-env`, `--context`,
+  `--reasoning-effort`, `--log-level`, `--mode`, `--mouse`,
+  `--output-format`, `--stream`), OpenCode (`--log-level`), and Qwen
+  (`--output-format`). Other parsed flags intentionally remain flag-name-only.
+- Fixture-backed unit tests cover every captured file, plus empty/malformed
+  input, aliases, wrapped descriptions, and hand-written enum formats.
 
 ### 3. Message plumbing + webview completion source
 
