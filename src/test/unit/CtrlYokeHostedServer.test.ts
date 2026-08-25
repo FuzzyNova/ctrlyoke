@@ -59,6 +59,7 @@ suite("CtrlYokeHostedServer file history route", () => {
     );
     try {
       const serverUrl = await server.listen();
+      if (!serverUrl) throw new Error("Hosted server did not start");
       const url = new URL(serverUrl);
       const response = await new Promise<{
         statusCode: number | undefined;
@@ -105,6 +106,7 @@ suite("CtrlYokeHostedServer file history route", () => {
     );
     try {
       const serverUrl = await server.listen();
+      if (!serverUrl) throw new Error("Hosted server did not start");
       const url = new URL(serverUrl);
       const response = await new Promise<{
         statusCode: number | undefined;

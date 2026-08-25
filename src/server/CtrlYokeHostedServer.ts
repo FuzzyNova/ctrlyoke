@@ -1,7 +1,14 @@
 import express from "express";
 import { WebSocketServer, WebSocket } from "ws";
-import { createServer as createHttpServer, Server } from "http";
-import { createServer as createHttpsServer } from "https";
+import {
+  createServer as createHttpServer,
+  request as httpRequest,
+  Server,
+} from "http";
+import {
+  createServer as createHttpsServer,
+  request as httpsRequest,
+} from "https";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
@@ -82,6 +89,7 @@ import { IS_DEV_MODE } from "../utils/BuildConfig";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 
 const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
+const SIBLING_SERVER_PROBE_TIMEOUT_MS = 1000;
 
 function redactHostedTransportMessage(message: unknown): unknown {
   return secretRedactionService.redactValue(message);
@@ -184,7 +192,8 @@ export class CtrlYokeHostedServer
     namedWorkspaceRoots: ResolverWorkspaceFolder[],
     private token: string,
     private bindAddress: string = "127.0.0.1",
-    tlsConfig?: { certPath: string; keyPath: string }
+    tlsConfig?: { certPath: string; keyPath: string },
+    private readonly onSiblingServerDetected?: (url: string) => void
   ) {
     this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
     this.webPushService = new WebPushService();
@@ -2033,7 +2042,7 @@ export class CtrlYokeHostedServer
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-  listen(): Promise<string> {
+  listen(): Promise<string | undefined> {
     this.requestedPort = this.port;
     this.portFellBack = false;
     return new Promise((resolve, reject) => {
@@ -2041,8 +2050,21 @@ export class CtrlYokeHostedServer
         const onError = (err: NodeJS.ErrnoException) => {
           this.httpServer.removeListener("listening", onListening);
           if (err.code === "EADDRINUSE") {
-            this.portFellBack = true;
-            setImmediate(() => attemptListen(0));
+            const fallBackToOsPort = () => {
+              this.portFellBack = true;
+              setImmediate(() => attemptListen(0));
+            };
+            void this.probeExistingServer(port)
+              .then((existingServer) => {
+                if (existingServer) {
+                  const existingServerUrl = this.buildPublicUrl(port);
+                  this.onSiblingServerDetected?.(existingServerUrl);
+                  resolve(undefined);
+                  return;
+                }
+                fallBackToOsPort();
+              })
+              .catch(fallBackToOsPort);
           } else {
             reject(err);
           }
@@ -2082,6 +2104,81 @@ export class CtrlYokeHostedServer
       return null;
     }
     return { requestedPort: this.requestedPort, actualPort: this.port };
+  }
+
+  private buildPublicUrl(port: number): string {
+    const scheme = this.isTls ? "https" : "http";
+    const availableIps = this.bindAddress === "0.0.0.0" ? this.getLanIps() : [];
+    const host = availableIps[0] ?? "localhost";
+    return `${scheme}://${host}:${port}/?token=${this.token}`;
+  }
+
+  private probeExistingServer(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const request = (this.isTls ? httpsRequest : httpRequest)(
+        {
+          hostname: this.getProbeHost(),
+          port,
+          path: "/api/workflow-files",
+          method: "GET",
+          headers: { "x-ctrlyoke-token": this.token },
+          timeout: SIBLING_SERVER_PROBE_TIMEOUT_MS,
+          ...(this.isTls ? { rejectUnauthorized: false } : {}),
+        },
+        (response) => {
+          let body = "";
+          response.setEncoding("utf8");
+          response.on("data", (chunk: string) => {
+            body += chunk;
+          });
+          response.on("end", () => {
+            if (response.statusCode !== 200) {
+              resolve(false);
+              return;
+            }
+            try {
+              const payload: unknown = JSON.parse(body);
+              resolve(this.isMatchingWorkflowFilesResponse(payload));
+            } catch {
+              resolve(false);
+            }
+          });
+          response.on("error", () => resolve(false));
+        }
+      );
+      request.on("error", () => resolve(false));
+      request.on("timeout", () => request.destroy());
+      request.end();
+    });
+  }
+
+  private getProbeHost(): string {
+    if (this.bindAddress === "0.0.0.0") return "127.0.0.1";
+    if (this.bindAddress === "::") return "::1";
+    return this.bindAddress;
+  }
+
+  private isMatchingWorkflowFilesResponse(payload: unknown): boolean {
+    if (!payload || typeof payload !== "object") return false;
+    const candidate = payload as {
+      workspaceRoot?: unknown;
+      isGitRepo?: unknown;
+      files?: unknown;
+    };
+    return (
+      typeof candidate.workspaceRoot === "string" &&
+      this.sameWorkspace(candidate.workspaceRoot, this.workspaceRoot) &&
+      typeof candidate.isGitRepo === "boolean" &&
+      Array.isArray(candidate.files)
+    );
+  }
+
+  private sameWorkspace(left: string, right: string): boolean {
+    const normalizedLeft = path.resolve(left);
+    const normalizedRight = path.resolve(right);
+    return process.platform === "win32"
+      ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+      : normalizedLeft === normalizedRight;
   }
 
   private getLanIps(): string[] {

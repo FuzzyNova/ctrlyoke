@@ -1131,7 +1131,13 @@ function registerCommands(context: vscode.ExtensionContext) {
           namedWorkspaceRoots,
           token,
           bindAddress,
-          tlsConfig
+          tlsConfig,
+          (existingServerUrl) =>
+            notifyUserFeedback(
+              workflowOrchestrator.getUserFeedbackSink(),
+              USER_FEEDBACK_SEVERITY.WARNING,
+              `ctrlyoke: A hosted server is already running for this workspace at ${existingServerUrl}. This window did not start a second server.`
+            )
         );
       } catch (err) {
         unprotectServerToken?.();
@@ -1143,7 +1149,15 @@ function registerCommands(context: vscode.ExtensionContext) {
       }
       let url: string;
       try {
-        url = await hostedServer.listen();
+        const serverUrl = await hostedServer.listen();
+        if (!serverUrl) {
+          hostedServer.dispose();
+          hostedServer = undefined;
+          unprotectServerToken?.();
+          unprotectServerToken = undefined;
+          return;
+        }
+        url = serverUrl;
       } catch (err) {
         hostedServer = undefined;
         unprotectServerToken?.();

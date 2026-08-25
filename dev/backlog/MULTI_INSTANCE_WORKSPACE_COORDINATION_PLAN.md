@@ -201,6 +201,13 @@ behavior but surface it in the Settings server section (which already has UI
 for `portFallback`, see `server.instructions.md`) with sibling-aware wording
 instead of "port was already in use by something."
 
+**Implemented:** `listen()` now probes the authenticated `/api/workflow-files`
+endpoint before falling back after `EADDRINUSE`. When it identifies a sibling
+ctrlyoke server for the same workspace, the second server is not started and
+the existing URL is surfaced through the normal user-feedback notification.
+This chooses the skip-and-notice option because it prevents two independent
+servers from bridging the same workspace.
+
 ## Related, Lower-Severity: The "Open Worktree in New Window" Case
 
 The dashboard also lets a user open a ctrlyoke-managed or named worktree

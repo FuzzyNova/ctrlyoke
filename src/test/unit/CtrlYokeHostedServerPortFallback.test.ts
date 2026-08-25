@@ -1,6 +1,8 @@
 import * as assert from "assert";
 import { EventEmitter } from "events";
+import { createServer as createHttpServer, Server as HttpServer } from "http";
 import { suite, test } from "mocha";
+import { DashboardBroadcastHub } from "../../ui/DashboardBroadcastHub";
 import { CtrlYokeHostedServer } from "../../server/CtrlYokeHostedServer";
 
 /**
@@ -44,6 +46,7 @@ interface HostedServerListenInternals {
   bindAddress: string;
   isTls: boolean;
   token: string;
+  workspaceRoot: string;
   availableIps: string[];
   listen(): Promise<string>;
   getPortFallbackInfo(): { requestedPort: number; actualPort: number } | null;
@@ -61,8 +64,49 @@ function createListenHarness(
   server.bindAddress = "127.0.0.1";
   server.isTls = false;
   server.token = "test-token";
+  server.workspaceRoot = process.cwd();
   server.availableIps = [];
   return server;
+}
+
+function listenHttpServer(server: HttpServer): Promise<number> {
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.removeListener("error", reject);
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        reject(new Error("HTTP test server did not receive a TCP address"));
+        return;
+      }
+      resolve(address.port);
+    });
+  });
+}
+
+function closeHttpServer(server: HttpServer): Promise<void> {
+  return new Promise((resolve) => {
+    server.close(() => resolve());
+  });
+}
+
+function createHostedServer(
+  port: number,
+  token: string,
+  onSiblingServerDetected?: (url: string) => void
+): CtrlYokeHostedServer {
+  return new CtrlYokeHostedServer(
+    new DashboardBroadcastHub(),
+    {} as never,
+    (() => ({})) as never,
+    port,
+    process.cwd(),
+    [],
+    token,
+    "127.0.0.1",
+    undefined,
+    onSiblingServerDetected
+  );
 }
 
 suite("CtrlYokeHostedServer.listen port fallback", () => {
@@ -91,5 +135,69 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
     assert.strictEqual(server.port, 4747);
     assert.ok(url.includes(":4747/"));
     assert.strictEqual(server.getPortFallbackInfo(), null);
+  });
+
+  test("skips a configured port occupied by a sibling ctrlyoke server and reports it", async () => {
+    const token = "sibling-server-token";
+    const sibling = createHostedServer(0, token);
+    let second: CtrlYokeHostedServer | undefined;
+    let detectedUrl: string | undefined;
+    try {
+      const siblingUrl = await sibling.listen();
+      if (!siblingUrl) throw new Error("Sibling server did not start");
+
+      const siblingPort = Number(new URL(siblingUrl).port);
+      second = createHostedServer(siblingPort, token, (url) => {
+        detectedUrl = url;
+      });
+
+      const secondUrl = await second.listen();
+
+      assert.strictEqual(secondUrl, undefined);
+      assert.strictEqual(detectedUrl, siblingUrl);
+      assert.strictEqual(second.getPortFallbackInfo(), null);
+    } finally {
+      second?.dispose();
+      sibling.dispose();
+    }
+  });
+
+  test("falls back when the occupied port responds as an unrelated process", async () => {
+    const unrelated = createHttpServer((_request, response) => {
+      response.setHeader("content-type", "application/json");
+      response.end(
+        JSON.stringify({
+          workspaceRoot: process.cwd(),
+          isGitRepo: true,
+          files: "not-an-array",
+        })
+      );
+    });
+    let server: CtrlYokeHostedServer | undefined;
+    let detectedSibling = false;
+    try {
+      const occupiedPort = await listenHttpServer(unrelated);
+      server = createHostedServer(
+        occupiedPort,
+        "unrelated-process-token",
+        () => {
+          detectedSibling = true;
+        }
+      );
+
+      const url = await server.listen();
+
+      if (!url)
+        throw new Error("Unrelated process incorrectly claimed as ctrlyoke");
+      assert.strictEqual(detectedSibling, false);
+      assert.notStrictEqual(Number(new URL(url).port), occupiedPort);
+      assert.deepStrictEqual(server.getPortFallbackInfo(), {
+        requestedPort: occupiedPort,
+        actualPort: Number(new URL(url).port),
+      });
+    } finally {
+      server?.dispose();
+      await closeHttpServer(unrelated);
+    }
   });
 });
