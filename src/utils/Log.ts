@@ -26,7 +26,7 @@ export enum LogLevel {
 const LOG_CLEANUP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export class Log {
-  private static outputChannel: vscode.OutputChannel;
+  private static outputChannel: vscode.LogOutputChannel;
   private static logLevel: LogLevel = LogLevel.INFO;
   private static logFilePath: string | undefined;
   /** True when running as the standalone CLI binary (not VS Code extension). */
@@ -50,7 +50,12 @@ export class Log {
     context: vscode.ExtensionContext,
     workspaceRoot?: string
   ): void {
-    this.outputChannel = vscode.window.createOutputChannel("ctrlyoke");
+    // { log: true } registers this as a LogOutputChannel, which is what makes
+    // "ctrlyoke" appear as its own entry in "Developer: Set Log Level..." —
+    // a plain createOutputChannel() never shows up there.
+    this.outputChannel = vscode.window.createOutputChannel("ctrlyoke", {
+      log: true,
+    });
     context.subscriptions.push(this.outputChannel);
 
     this.workspaceRoot = workspaceRoot;
@@ -60,10 +65,14 @@ export class Log {
       this.logLevel = LogLevel.TRACE;
       this.openLogFile();
     } else {
-      // Production: respect VS Code's log level setting
-      this.logLevel = Log.fromVSCodeLogLevel(vscode.env.logLevel);
+      // Production: respect the effective log level for this channel, which
+      // is the per-extension override (set via "Developer: Set Log Level..."
+      // > ctrlyoke) when present, falling back to the global default —
+      // vscode.env.logLevel only ever reflects the global default and would
+      // ignore a ctrlyoke-specific override.
+      this.logLevel = Log.fromVSCodeLogLevel(this.outputChannel.logLevel);
       context.subscriptions.push(
-        vscode.env.onDidChangeLogLevel((level) => {
+        this.outputChannel.onDidChangeLogLevel((level) => {
           Log.logLevel = Log.fromVSCodeLogLevel(level);
         })
       );
@@ -226,7 +235,7 @@ export class Log {
    * Get the output channel instance.
    * Used by components that need direct access to the output channel.
    */
-  static getOutputChannel(): vscode.OutputChannel {
+  static getOutputChannel(): vscode.LogOutputChannel {
     if (!this.outputChannel) {
       throw new Error(
         "Log.initialize() must be called before accessing output channel"

@@ -55,6 +55,7 @@ import {
   AnimatedSection,
   AutoResumeStatusRow,
   ExitButton,
+  AdditionalArgsEditor,
 } from "../shared";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
 import {
@@ -716,15 +717,15 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     }
                     title={additionalArgsTooltip}
                   >
-                    <input
-                      type="text"
+                    <AdditionalArgsEditor
                       id="prop-additional-args"
+                      harnessId={currentHarness}
                       value={additionalArgsDisplayValue}
-                      onChange={(e) =>
-                        setProperty("additionalArgs", e.target.value)
+                      onChange={(value) =>
+                        setProperty("additionalArgs", value)
                       }
                       placeholder="e.g. --effort high"
-                      className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+                      className="w-full text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                     />
                   </div>
                 )}
@@ -740,15 +741,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   }`}
                   title={additionalArgsTooltip}
                 >
-                  <input
-                    type="text"
+                  <AdditionalArgsEditor
                     id="prop-additional-args-wide"
+                    harnessId={currentHarness}
                     value={additionalArgsDisplayValue}
-                    onChange={(e) =>
-                      setProperty("additionalArgs", e.target.value)
-                    }
+                    onChange={(value) => setProperty("additionalArgs", value)}
                     placeholder="e.g. --effort high"
-                    className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+                    className="w-full text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                   />
                 </div>
               )}

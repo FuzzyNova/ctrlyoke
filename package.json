@@ -619,6 +619,7 @@
     "build:extension": "npm run typecheck:extension && node scripts/strip-dev-commands.mjs && node esbuild.js --production && node scripts/assert-no-copilot-runtime.mjs",
     "build:webview": "npm run generate-custom-icons && npm run typecheck:webview && vite build --config src/ui/webview-react/vite.config.ts --mode production",
     "package": "vsce package && node scripts/strip-dev-commands.mjs --restore",
+    "package:install": "node scripts/package-install.mjs",
     "strip-dev-commands": "node scripts/strip-dev-commands.mjs",
     "restore-package": "node scripts/strip-dev-commands.mjs --restore",
     "pretest": "npm run compile && npm run compile-tests && node esbuild.js",

@@ -1611,7 +1611,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     onChange={setAdditionalArgsInput}
                     onBlur={() => handleAdditionalArgsChange(additionalArgsInput)}
                     placeholder="e.g. --effort high --max-turns 10"
-                    className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
+                    className="w-full text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                   />
                 </FormField>
                 <FormField
