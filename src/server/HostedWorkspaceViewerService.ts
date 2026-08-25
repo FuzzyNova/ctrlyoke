@@ -27,6 +27,7 @@ import type {
   WorkspaceCommitLogEntry,
   WorkspaceFileHistoryEntry,
   WorkspaceFileHistoryPageResponse,
+  WorkspaceFileHistoryDiffResponse,
   WorkspaceGitRefDiffResponse,
   WorkspaceScmFile,
   WorkspaceRepo,
@@ -1891,6 +1892,107 @@ export class HostedWorkspaceViewerService {
       throw new WorkspaceTreeBadRequestError("offset is outside the history");
     }
     return this.materializeFileHistoryPage(snapshot, offset);
+  }
+
+  async getFileHistoryDiff(
+    requestedPath: string,
+    commit: string,
+    repoId?: string
+  ): Promise<WorkspaceFileHistoryDiffResponse> {
+    const resolved = this.safeResolve(requestedPath);
+    if (!resolved) throw new Error("Path not allowed");
+    const repoRoot = await this.requireRepoRootForPath(resolved);
+    void repoId;
+
+    const resolvedCommit = await resolveCommit(repoRoot, commit);
+    // Keep commit-vs-first-parent semantics in the same single-revision Git
+    // command used by the repository diff surface. Root commits naturally use
+    // Git's implicit empty-tree parent here.
+    await getCommitDiff(repoRoot, resolvedCommit);
+
+    const requestedGitPath = toGitPath(
+      this.relativeToRepo(resolved, repoRoot)
+    );
+    const changedFiles = await getChangedFilesWithBinaryStatus(repoRoot, [
+      "show",
+      "--format=",
+      "--no-ext-diff",
+      "--end-of-options",
+      resolvedCommit,
+    ]);
+    const changedFile = changedFiles.find(
+      (file) =>
+        file.path === requestedGitPath || file.oldPath === requestedGitPath
+    );
+    if (!changedFile) {
+      throw new WorkspaceTreeBadRequestError(
+        "commit does not touch the requested path"
+      );
+    }
+
+    const commitPath = changedFile.path;
+    const parentPath = changedFile.oldPath ?? commitPath;
+    const commitAbsolutePath = path.resolve(repoRoot, commitPath);
+    const parentAbsolutePath = path.resolve(repoRoot, parentPath);
+    if (
+      !isPathWithinAnyDirectory(commitAbsolutePath, this.trustedRoots) ||
+      !isPathWithinAnyDirectory(parentAbsolutePath, this.trustedRoots)
+    ) {
+      throw new Error("Path not allowed");
+    }
+
+    const [oldBytes, newBytes, commitInfo] = await Promise.all([
+      getBlobBytes(repoRoot, `${resolvedCommit}^`, parentPath),
+      getBlobBytes(repoRoot, resolvedCommit, commitPath),
+      getCommitInfo(repoRoot, resolvedCommit),
+    ]);
+    const changeType = this.diffChangeType(changedFile.status);
+    const responsePath = normalizeViewerPath(
+      this.relativePath(commitAbsolutePath)
+    );
+    const responseOldPath = normalizeViewerPath(
+      this.relativePath(parentAbsolutePath)
+    );
+
+    if (isImageRefPath(commitPath)) {
+      const image = this.buildImageDiffSides(
+        oldBytes,
+        newBytes,
+        commitPath,
+        parentPath
+      );
+      if (image) {
+        return {
+          ...commitInfo,
+          path: responsePath,
+          oldPath: responseOldPath,
+          changeType,
+          payloadKind: DIFF_PAYLOAD_KINDS.IMAGE,
+          image,
+        };
+      }
+    }
+
+    if (this.isBinaryBuffer(oldBytes) || this.isBinaryBuffer(newBytes)) {
+      return {
+        ...commitInfo,
+        path: responsePath,
+        oldPath: responseOldPath,
+        changeType,
+        payloadKind: DIFF_PAYLOAD_KINDS.BINARY,
+      };
+    }
+
+    return {
+      ...commitInfo,
+      path: responsePath,
+      oldPath: responseOldPath,
+      changeType,
+      payloadKind: DIFF_PAYLOAD_KINDS.TEXT,
+      language: languageFromPath(commitAbsolutePath),
+      oldContent: oldBytes?.toString("utf8") ?? "",
+      newContent: newBytes?.toString("utf8") ?? "",
+    };
   }
 
   private resolveFileHistoryPageSize(requestedPageSize?: number): number {

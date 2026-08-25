@@ -218,30 +218,31 @@ export interface WorkspaceDiffEntry {
 interface WorkspaceScmDiffBase {
   path: string;
   kind: DiffKind;
-  payloadKind: DiffPayloadKind;
 }
 
-export type WorkspaceScmDiffResponse =
-  | (WorkspaceScmDiffBase & {
+export type WorkspaceDiffPayload =
+  | {
       payloadKind: typeof DIFF_PAYLOAD_KINDS.TEXT;
       language?: string;
       oldContent: string;
       newContent: string;
-    })
-  | (WorkspaceScmDiffBase & {
+    }
+  | {
       payloadKind: typeof DIFF_PAYLOAD_KINDS.IMAGE;
       language?: never;
-      oldContent: never;
-      newContent: never;
+      oldContent?: never;
+      newContent?: never;
       image: WorkspaceImageDiffSides;
-    })
-  | (WorkspaceScmDiffBase & {
+    }
+  | {
       payloadKind: typeof DIFF_PAYLOAD_KINDS.BINARY;
       language?: never;
-      oldContent: never;
-      newContent: never;
+      oldContent?: never;
+      newContent?: never;
       image?: never;
-    });
+    };
+
+export type WorkspaceScmDiffResponse = WorkspaceScmDiffBase & WorkspaceDiffPayload;
 
 export interface WorkspaceStageRequest {
   path: string;
@@ -385,6 +386,16 @@ export interface WorkspaceCommitInfo {
   date: string;
   relativeDate: string;
 }
+
+/** Before/after payload for one commit in a path-scoped file history. */
+export type WorkspaceFileHistoryDiffResponse = WorkspaceCommitInfo &
+  WorkspaceDiffPayload & {
+    /** Workspace-relative path at the commit side of the change. */
+    path: string;
+    /** Workspace-relative path at the first-parent side of the change. */
+    oldPath: string;
+    changeType: DiffChangeType;
+  };
 
 export interface WorkspaceGitRefDiffResponse {
   unifiedDiff: string;

@@ -70,6 +70,7 @@ import type {
   WorkspaceCopyRequest,
   WorkspaceMoveRequest,
   WorkspaceGenerateCommitMessageResponse,
+  WorkspaceFileHistoryDiffResponse,
   WorkspaceGitRefDiffResponse,
   WorkspaceSearchScope,
 } from "../types/HostedWorkspaceViewerTypes";
@@ -1087,6 +1088,50 @@ export class CtrlYokeHostedServer
             return;
           }
           Log.error(`workspace-viewer /file-history error: ${String(err)}`);
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
+    this.app.get(
+      "/api/workspace-viewer/file-history-diff",
+      requireToken,
+      async (req, res) => {
+        const filePath =
+          typeof req.query.path === "string" ? req.query.path : "";
+        if (!filePath) {
+          res.status(400).json({ error: "path is required" });
+          return;
+        }
+        const commit =
+          typeof req.query.commit === "string" ? req.query.commit : "";
+        if (!commit) {
+          res.status(400).json({ error: "commit is required" });
+          return;
+        }
+        const repo =
+          typeof req.query.repo === "string" && req.query.repo.trim()
+            ? req.query.repo.trim()
+            : undefined;
+        try {
+          const result = await this.viewerService.getFileHistoryDiff(
+            filePath,
+            commit,
+            repo
+          );
+          res.json(result satisfies WorkspaceFileHistoryDiffResponse);
+        } catch (err) {
+          if (err instanceof WorkspaceTreeHttpError) {
+            res.status(err.statusCode).json({ error: err.message });
+            return;
+          }
+          if (err instanceof Error && err.message === "Path not allowed") {
+            res.status(403).json({ error: err.message });
+            return;
+          }
+          Log.error(
+            `workspace-viewer /file-history-diff error: ${String(err)}`
+          );
           res.status(500).json({ error: "Internal server error" });
         }
       }

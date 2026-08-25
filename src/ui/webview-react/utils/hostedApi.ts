@@ -21,6 +21,7 @@ import type {
   WorkspaceMoveRequest,
   WorkspaceCommitLogResponse,
   WorkspaceFileHistoryPageResponse,
+  WorkspaceFileHistoryDiffResponse,
   WorkspaceCheckoutCommitRequest,
   WorkspaceCheckoutBranchRequest,
   WorkspaceGitRefDiffResponse,
@@ -303,6 +304,21 @@ export async function workspaceFileHistory(
   if (repo) params.set("repo", repo);
   return hostedFetch<WorkspaceFileHistoryPageResponse>(
     `/api/workspace-viewer/file-history?${params.toString()}`
+  );
+}
+
+export async function workspaceFileHistoryDiff(
+  filePath: string,
+  commit: string,
+  repo?: string
+): Promise<WorkspaceFileHistoryDiffResponse> {
+  const params = new URLSearchParams({
+    path: filePath,
+    commit,
+  });
+  if (repo) params.set("repo", repo);
+  return hostedFetch<WorkspaceFileHistoryDiffResponse>(
+    `/api/workspace-viewer/file-history-diff?${params.toString()}`
   );
 }
 

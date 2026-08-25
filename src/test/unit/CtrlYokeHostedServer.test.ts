@@ -91,6 +91,52 @@ suite("CtrlYokeHostedServer file history route", () => {
       server.dispose();
     }
   });
+
+  test("rejects a missing commit before invoking the viewer service", async () => {
+    const token = "route-test-token-commit";
+    const server = new CtrlYokeHostedServer(
+      new DashboardBroadcastHub(),
+      {} as never,
+      (() => ({})) as never,
+      0,
+      process.cwd(),
+      [],
+      token
+    );
+    try {
+      const serverUrl = await server.listen();
+      const url = new URL(serverUrl);
+      const response = await new Promise<{
+        statusCode: number | undefined;
+        body: string;
+      }>((resolve, reject) => {
+        const request = httpRequest(
+          {
+            hostname: "127.0.0.1",
+            port: Number(url.port),
+            path: `/api/workspace-viewer/file-history-diff?path=file.txt&token=${encodeURIComponent(token)}`,
+          },
+          (res) => {
+            let body = "";
+            res.setEncoding("utf8");
+            res.on("data", (chunk: string) => {
+              body += chunk;
+            });
+            res.on("end", () => resolve({ statusCode: res.statusCode, body }));
+          }
+        );
+        request.on("error", reject);
+        request.end();
+      });
+
+      assert.strictEqual(response.statusCode, 400);
+      assert.deepStrictEqual(JSON.parse(response.body), {
+        error: "commit is required",
+      });
+    } finally {
+      server.dispose();
+    }
+  });
 });
 
 suite("HostedServerMessageFactory", () => {
