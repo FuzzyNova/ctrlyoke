@@ -129,17 +129,17 @@ history doesn't:
 ## Implementation status
 
 - [x] Design point 1: `usePagedCommitHistory` owns sparse pages, frozen-list
-  identity, loading/error state, refresh, and overscan range requests.
+      identity, loading/error state, refresh, and overscan range requests.
 - [x] Design point 2: commit-log pages use a server-side frozen snapshot.
 - [x] Design point 3: one virtualized row range drives both the graph rail and
-  commit text rows.
+      commit text rows.
 - [x] Design point 4: graph layout is folded over the loaded contiguous prefix
-  before only the realized rows are rendered. A sparse page beyond a gap stays
-  a placeholder until the gap is filled, preserving lane continuity without
-  assigning layout state to an incomplete sequence.
+      before only the realized rows are rendered. A sparse page beyond a gap stays
+      a placeholder until the gap is filled, preserving lane continuity without
+      assigning layout state to an incomplete sequence.
 - [x] Design point 5: `WorkspaceSourceControlPane` owns the paging controller,
-  passes it to both desktop and mobile panes, and all refresh/mutation flows
-  refresh the controller. There is no manual load-more action.
+      passes it to both desktop and mobile panes, and all refresh/mutation flows
+      refresh the controller. There is no manual load-more action.
 
 The store no longer caches commit rows or paging/loading flags. It retains only
 current-branch and detached-HEAD metadata for the checkout context menu; the
@@ -228,6 +228,10 @@ lookup, so windowing does not change commit resolution.
 - Performance sanity check on a large real-world history (hundreds+ commits,
   several branches) — DOM node count should stay bounded by the realized
   window, not the total commit count.
+
+Manual performance verification remains outstanding: Playwright tooling was
+not attached for this implementation turn, so the dev-host check should be
+run manually against a large repository history.
 
 ## Acceptance criteria
 

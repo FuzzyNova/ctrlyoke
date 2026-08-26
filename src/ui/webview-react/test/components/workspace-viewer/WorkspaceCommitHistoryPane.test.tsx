@@ -8,7 +8,11 @@ import {
 } from "@testing-library/react";
 import { WorkspaceCommitHistoryPane } from "@components/workspace-viewer/WorkspaceCommitHistoryPane";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
-import { workspaceGitRefDiff } from "@utils/hostedApi";
+import {
+  workspaceCheckoutBranch,
+  workspaceCheckoutCommit,
+  workspaceGitRefDiff,
+} from "@utils/hostedApi";
 import type { WorkspaceCommitLogEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import type { PagedCommitHistoryController } from "@hooks/usePagedCommitHistory";
 
@@ -77,13 +81,13 @@ function testController(
 function renderPane(
   commits = [commit],
   overrides: Partial<PagedCommitHistoryController> = {},
-  props: { isMobile?: boolean } = {}
+  props: { isMobile?: boolean; onRefresh?: () => void } = {}
 ) {
   const state = useWorkspaceViewerStore.getState();
   return render(
     <WorkspaceCommitHistoryPane
-      {...props}
-      onRefresh={vi.fn()}
+      isMobile={props.isMobile}
+      onRefresh={props.onRefresh ?? vi.fn()}
       controller={testController(commits, {
         currentBranch: state.currentBranch,
         detached: state.detached,
@@ -168,6 +172,61 @@ describe("WorkspaceCommitHistoryPane", () => {
 
     expect(screen.getByText("detached")).toBeInTheDocument();
     expect(screen.getByText("Detached HEAD")).toBeInTheDocument();
+  });
+
+  it("refreshes the paged controller from the pane refresh button", () => {
+    const controllerRefresh = vi.fn();
+    const paneRefresh = vi.fn();
+    const controller = testController([commit], { refresh: controllerRefresh });
+    render(
+      <WorkspaceCommitHistoryPane
+        onRefresh={paneRefresh}
+        controller={controller}
+      />
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Refresh commit history" })
+    );
+
+    expect(controllerRefresh).toHaveBeenCalledOnce();
+    expect(paneRefresh).toHaveBeenCalledOnce();
+  });
+
+  it("returns from detached HEAD through the windowed history banner", async () => {
+    vi.mocked(workspaceCheckoutBranch).mockResolvedValue({
+      branch: "main",
+    });
+    const controllerRefresh = vi.fn();
+    const paneRefresh = vi.fn();
+    const controller = testController([commit], {
+      currentBranch: null,
+      detached: true,
+      refresh: controllerRefresh,
+    });
+    useWorkspaceViewerStore.setState({
+      currentBranch: null,
+      detached: true,
+      previousBranch: "main",
+    });
+    render(
+      <WorkspaceCommitHistoryPane
+        onRefresh={paneRefresh}
+        controller={controller}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Return to main" }));
+
+    await waitFor(() =>
+      expect(workspaceCheckoutBranch).toHaveBeenCalledWith({
+        branch: "main",
+        repo: undefined,
+      })
+    );
+    expect(useWorkspaceViewerStore.getState().previousBranch).toBeNull();
+    expect(controllerRefresh).toHaveBeenCalledOnce();
+    expect(paneRefresh).toHaveBeenCalledOnce();
   });
 
   it("renders ref pills from commit decorations", () => {
@@ -339,6 +398,71 @@ describe("WorkspaceCommitHistoryPane", () => {
     expect(document.querySelector(".z-viewer-modal")).not.toBeNull();
   });
 
+  it("checks out the selected commit from the windowed context menu", async () => {
+    vi.mocked(workspaceCheckoutCommit).mockResolvedValue({ detached: true });
+    const controllerRefresh = vi.fn();
+    const paneRefresh = vi.fn();
+    const controller = testController([{ ...commit, isHead: false }], {
+      currentBranch: "main",
+      refresh: controllerRefresh,
+    });
+    useWorkspaceViewerStore.setState({
+      currentBranch: "main",
+      detached: false,
+    });
+    render(
+      <WorkspaceCommitHistoryPane
+        onRefresh={paneRefresh}
+        controller={controller}
+      />
+    );
+
+    fireEvent.contextMenu(commitRow());
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Checkout Commit (Detach HEAD)",
+      })
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Checkout" }));
+
+    await waitFor(() =>
+      expect(workspaceCheckoutCommit).toHaveBeenCalledWith({
+        hash: commit.hash,
+        repo: undefined,
+      })
+    );
+    expect(useWorkspaceViewerStore.getState().previousBranch).toBe("main");
+    expect(useWorkspaceViewerStore.getState().detached).toBe(true);
+    expect(controllerRefresh).toHaveBeenCalledOnce();
+    expect(paneRefresh).toHaveBeenCalledOnce();
+  });
+
+  it("keeps sparse placeholder rows indexed in the full virtual sequence", () => {
+    const commits = [commit, { ...commit, hash: "second", subject: "second" }];
+    const controller = testController(commits, {
+      totalCount: 40,
+      pageSize: 3,
+      loadedOffsets: [0, 6],
+      getCommit: (index) => (index < 2 ? commits[index] : undefined),
+    });
+    render(
+      <WorkspaceCommitHistoryPane onRefresh={vi.fn()} controller={controller} />
+    );
+
+    const placeholder = document.querySelector<HTMLElement>(
+      '[data-index="2"][data-virtual-placeholder="true"]'
+    );
+    expect(placeholder).not.toBeNull();
+    expect(placeholder).toHaveAttribute("role", "listitem");
+    expect(placeholder).toHaveAttribute("aria-posinset", "3");
+    expect(placeholder).toHaveAttribute("aria-setsize", "40");
+    expect(
+      screen
+        .getByTestId(`commit-row-${commit.hash}`)
+        .closest('[role="listitem"]')
+    ).toHaveAttribute("aria-posinset", "1");
+  });
+
   it("mounts only realized and overscan rows for a large history", () => {
     const commits = Array.from({ length: 1000 }, (_, index) => ({
       ...commit,
@@ -384,14 +508,30 @@ describe("WorkspaceCommitHistoryPane", () => {
         parentHashes: index === 999 ? [] : [`stable-${index + 1}`],
       }));
       const targetIndex = 5;
+      commits[targetIndex] = {
+        ...commits[targetIndex],
+        isHead: false,
+        isMerge: true,
+        parentHashes: ["stable-6", "stable-7"],
+      };
+      commits[targetIndex + 1] = {
+        ...commits[targetIndex + 1],
+        parentHashes: [],
+      };
+      commits[targetIndex + 2] = {
+        ...commits[targetIndex + 2],
+        parentHashes: [],
+      };
       const targetHash = commits[targetIndex].hash;
       renderPane(commits);
 
       const graphBefore = screen.getByTestId(`commit-graph-svg-${targetHash}`);
       const before = {
         transform: graphBefore.getAttribute("transform"),
-        path: graphBefore.querySelector("path")?.getAttribute("d"),
-        classes: graphBefore.querySelector("path")?.getAttribute("class"),
+        paths: [...graphBefore.querySelectorAll("path")].map((path) => ({
+          d: path.getAttribute("d"),
+          className: path.getAttribute("class"),
+        })),
       };
       const scroller = screen.getByTestId("commit-history-scroll-container");
 
@@ -418,8 +558,10 @@ describe("WorkspaceCommitHistoryPane", () => {
       const graphAfter = screen.getByTestId(`commit-graph-svg-${targetHash}`);
       expect({
         transform: graphAfter.getAttribute("transform"),
-        path: graphAfter.querySelector("path")?.getAttribute("d"),
-        classes: graphAfter.querySelector("path")?.getAttribute("class"),
+        paths: [...graphAfter.querySelectorAll("path")].map((path) => ({
+          d: path.getAttribute("d"),
+          className: path.getAttribute("class"),
+        })),
       }).toEqual(before);
     } finally {
       if (originalOffsetHeight) {

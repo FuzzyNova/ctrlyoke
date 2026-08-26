@@ -398,6 +398,7 @@ const CommitHistoryVirtualizedRows: React.FC<
   return (
     <div
       data-testid="commit-history-virtualized-list"
+      role="list"
       style={{ height: totalHeight, position: "relative", minWidth: 0 }}
     >
       <div
@@ -467,6 +468,9 @@ const CommitHistoryVirtualizedRows: React.FC<
         return (
           <div
             key={virtualRow.key}
+            role="listitem"
+            aria-posinset={virtualRow.index + 1}
+            aria-setsize={controller.totalCount}
             data-index={virtualRow.index}
             data-commit-row={commit?.hash}
             data-virtual-placeholder={

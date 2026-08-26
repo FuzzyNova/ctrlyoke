@@ -188,6 +188,34 @@ describe("usePagedCommitHistory", () => {
     expect(result.current.getCommit(0)?.hash).toBe("hash-9");
   });
 
+  it("does not let an in-flight page from an old frozen listing shift the refreshed view", async () => {
+    const stalePage = deferred<WorkspaceCommitLogResponse>();
+    const fetchPage = vi
+      .fn<PagedCommitHistoryFetcher>()
+      .mockResolvedValueOnce(
+        response(HISTORY_A, 0, [commit(0), commit(1), commit(2)])
+      )
+      .mockReturnValueOnce(stalePage.promise)
+      .mockResolvedValueOnce(response(HISTORY_B, 0, [commit(9)]));
+    const { result } = renderHistory(fetchPage);
+
+    await waitFor(() => expect(result.current.listingId).toBe(HISTORY_A));
+    act(() => result.current.requestRange(3));
+    act(() => result.current.refresh());
+    await waitFor(() => expect(result.current.listingId).toBe(HISTORY_B));
+
+    await act(async () => {
+      stalePage.resolve(
+        response(HISTORY_A, 3, [commit(3), commit(4), commit(5)])
+      );
+      await stalePage.promise;
+    });
+
+    expect(result.current.listingId).toBe(HISTORY_B);
+    expect(result.current.getCommit(0)?.hash).toBe("hash-9");
+    expect(result.current.getCommit(3)).toBeUndefined();
+  });
+
   it("keeps a failed page retryable without clearing loaded pages", async () => {
     const fetchPage = vi
       .fn<PagedCommitHistoryFetcher>()
