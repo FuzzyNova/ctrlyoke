@@ -360,7 +360,7 @@ Nothing in Phase 1 hardcodes "key" assumptions outside `activateWithKey()` / `im
 1. ~~**Remote-access trial:** length/scope.~~ **Resolved:** 14-day full remote, **unlimited devices**. No per-device tracking (it would be easy to game by auto-deactivating, and adds complexity for little gain).
 2. **Price point:** validate $59 one-time against comparable paid VS Code extensions.
 3. **Offline file TTL:** consumer online files (short TTL, auto-refresh) vs. enterprise air-gapped files (long-lived / per-contract). Pick defaults.
-4. **Key delivery:** LS custom fulfillment showing the Keygen key vs. our own transactional email from the Netlify function. Which is simpler with the LS account you have?
+4. ~~**Key delivery.**~~ **Resolved:** LS's product form has no field to inject a third-party value into checkout/receipt, so the Netlify function emails the Keygen key itself via **Resend**, chosen August 25, 2026. LS's own receipt stays a plain payment receipt telling the buyer to expect a separate email. See [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) §5.2/5.3.
 5. **Keygen plan:** hosted Keygen Cloud tier vs. self-hosted edition — confirm current pricing and pick.
 6. ~~**Enterprise SKU.**~~ **Resolved:** self-serve, auto-fulfilled **annual unlimited-seat site license** (~$2k–$5k/yr), same LS→Keygen pipeline. **Flat unlimited** at launch (size tiers deferred). Manual PO/MSA path kept rare by design. See [§1.7.1](#171-enterprise-sku-self-serve-site-license).
 7. ~~**EULA threshold number.**~~ **Resolved:** **$10M revenue / 250 employees** (Docker's line). Confirm with the lawyer at drafting.

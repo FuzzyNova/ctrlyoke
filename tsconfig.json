@@ -23,6 +23,7 @@
     "manual-test",
     "src/ui/webview-react",
     "landing",
-    "docs"
+    "docs",
+    "netlify"
   ]
 }
