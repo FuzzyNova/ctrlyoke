@@ -39,6 +39,7 @@ import {
   PROMPT_FILE_CONVERSION_TIMEOUT_MS,
 } from "../../types/messages";
 import {
+  KEYBOARD_KEYS,
   STEP_TYPES,
   PERMISSION_CAPABILITY_KEYS,
   PROMPT_INPUT_CAPABILITY_KEYS,
@@ -345,7 +346,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   // Close drawer on ESC key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && propertiesDrawerOpen) {
+      if (e.key === KEYBOARD_KEYS.ESCAPE && propertiesDrawerOpen) {
         closePropertiesDrawer();
       }
     };

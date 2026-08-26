@@ -73,7 +73,10 @@ import {
   nextAutoscrollArmed,
   resolveDiffGapExpansionScrollTarget,
 } from "@utils/outputAutoscroll";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  KEYBOARD_KEYS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` returning a new
 // array reference on every useSyncExternalStore snapshot call.
@@ -1370,7 +1373,9 @@ const OutputSectionInner: React.FC = () => {
       role="button"
       aria-label="Expand output"
       tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && handleToggleOutputCollapse()}
+      onKeyDown={(e) =>
+        e.key === KEYBOARD_KEYS.ENTER && handleToggleOutputCollapse()
+      }
     >
       <i className="codicon codicon-chevron-right text-xs" />
       <i className="codicon codicon-output text-sm" />

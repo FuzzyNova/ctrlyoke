@@ -10,7 +10,7 @@ import {
   type FinalStepPhase,
 } from "../../types/messages";
 import type { CliOutput, WorkflowStep } from "../../store/workflowStore";
-import { STEP_TYPES } from "@root/types/DashboardConstants";
+import { KEYBOARD_KEYS, STEP_TYPES } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
@@ -115,7 +115,10 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
             }
           }}
           onKeyDown={(e) => {
-            if ((e.key === "Enter" || e.key === " ") && !isSelectionReadOnly) {
+            if (
+              (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") &&
+              !isSelectionReadOnly
+            ) {
               e.preventDefault();
               onSelect();
             }
@@ -185,7 +188,10 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
           }
         }}
         onKeyDown={(e) => {
-          if ((e.key === "Enter" || e.key === " ") && !isSelectionReadOnly) {
+          if (
+            (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") &&
+            !isSelectionReadOnly
+          ) {
             e.preventDefault();
             onSelect();
           }

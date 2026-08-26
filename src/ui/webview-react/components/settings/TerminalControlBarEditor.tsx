@@ -1,3 +1,4 @@
+import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   FocusEvent,
@@ -173,13 +174,13 @@ function keyEventToCapture(
     return { sequence, humanLabel: label(glyph) };
   }
 
-  if (e.key === "Escape" && !ctrl && !alt && !shift)
+  if (e.key === KEYBOARD_KEYS.ESCAPE && !ctrl && !alt && !shift)
     return { sequence: "\\x1b", humanLabel: "Esc" };
   if (e.key === "Tab" && !ctrl && !alt)
     return shift
       ? { sequence: "\\x1b[Z", humanLabel: "Shift+Tab" }
       : { sequence: "\\t", humanLabel: "Tab" };
-  if (e.key === "Enter" && !ctrl && !alt && !shift)
+  if (e.key === KEYBOARD_KEYS.ENTER && !ctrl && !alt && !shift)
     return { sequence: "\\r", humanLabel: "Enter" };
   if (e.key === "Backspace" && !ctrl && !alt && !shift)
     return { sequence: "\\x7f", humanLabel: "Backspace" };
@@ -325,7 +326,7 @@ function KeyCaptureInput({
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
     if (!capturing) return;
-    if (event.key === "Escape") {
+    if (event.key === KEYBOARD_KEYS.ESCAPE) {
       setCapturing(false);
       return;
     }

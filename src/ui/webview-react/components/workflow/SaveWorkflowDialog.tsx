@@ -10,7 +10,10 @@ import {
 import { validateSafeName } from "@utils/string";
 import { type TemplateScope, TEMPLATE_SCOPE_OPTIONS } from "./templateScope";
 import { TEMPLATE_FORMAT_OPTIONS } from "./templateFormat";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  KEYBOARD_KEYS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 
 /**
  * Split a full save path into its directory (`location`) and basename
@@ -296,7 +299,7 @@ export const SaveWorkflowDialog: React.FC = () => {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && canSave) {
+      if (e.key === KEYBOARD_KEYS.ENTER && canSave) {
         handleSave();
       }
     },

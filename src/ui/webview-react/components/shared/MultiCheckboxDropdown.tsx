@@ -1,3 +1,4 @@
+import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import React, { useEffect, useState, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
@@ -117,7 +118,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
     if (!isOpen) return;
 
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== KEYBOARD_KEYS.ESCAPE) return;
 
       event.stopPropagation();
       setIsOpen(false);

@@ -1,3 +1,4 @@
+import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import React, {
   useCallback,
   useEffect,
@@ -512,7 +513,7 @@ const RailEntry: React.FC<RailEntryProps> = ({
         ${!isRunning ? "opacity-60" : ""}`}
       onClick={onClick}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
           e.preventDefault();
           onClick();
         }
@@ -559,7 +560,7 @@ const ShellRailEntry: React.FC<ShellRailEntryProps> = ({
         ${isEnded ? "opacity-60" : ""}`}
       onClick={onClick}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
           e.preventDefault();
           onClick();
         }

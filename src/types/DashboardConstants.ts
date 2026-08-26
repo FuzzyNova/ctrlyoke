@@ -2072,6 +2072,14 @@ export type OutputRowKind =
   (typeof OUTPUT_ROW_KINDS)[keyof typeof OUTPUT_ROW_KINDS];
 
 // ============================================================================
+// KEYBOARD KEYS - Shared browser keyboard event key values
+// ============================================================================
+export const KEYBOARD_KEYS = {
+  ENTER: "Enter",
+  ESCAPE: "Escape",
+} as const;
+
+// ============================================================================
 // SNAPSHOT STRATEGIES - Workspace snapshot strategy values
 // ============================================================================
 export const SNAPSHOT_STRATEGIES = {

@@ -10,6 +10,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import {
+  KEYBOARD_KEYS,
   HARNESS_IDS,
   HARNESS_INFO,
   type HarnessId,
@@ -162,7 +163,7 @@ export const DuplicateWorkflowDialog: React.FC = () => {
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === "Enter") {
+      if (event.key === KEYBOARD_KEYS.ENTER) {
         event.preventDefault();
         handleSubmit();
       }

@@ -18,6 +18,7 @@ import {
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES, type HistorySearchResult } from "@/types/messages";
 import {
+  KEYBOARD_KEYS,
   HISTORY_EVENT_KINDS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
@@ -295,7 +296,7 @@ export function HistorySearchDrawer() {
     }
 
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === KEYBOARD_KEYS.ESCAPE) {
         event.preventDefault();
         closeHistorySearch();
       }
@@ -307,13 +308,13 @@ export function HistorySearchDrawer() {
 
   const handleInputKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLInputElement>) => {
-      if (event.key === "Escape") {
+      if (event.key === KEYBOARD_KEYS.ESCAPE) {
         event.preventDefault();
         closeHistorySearch();
         return;
       }
 
-      if (event.key === "Enter" && results.length > 0) {
+      if (event.key === KEYBOARD_KEYS.ENTER && results.length > 0) {
         event.preventDefault();
         navigateToResult(results[0]);
       }

@@ -1,3 +1,4 @@
+import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import React from "react";
 import { ExpandCollapseAllDiffsButton } from "@components/shared";
 import { TerminalSessionIcon } from "@components/output/TerminalSessionIcon";
@@ -98,7 +99,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
           aria-label="Collapse output"
           tabIndex={0}
           onKeyDown={(event) => {
-            if (event.key === "Enter") {
+            if (event.key === KEYBOARD_KEYS.ENTER) {
               onToggleCollapse();
             }
           }}

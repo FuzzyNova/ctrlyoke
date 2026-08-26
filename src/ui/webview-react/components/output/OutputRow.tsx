@@ -11,7 +11,10 @@ import {
 } from "@root/utils/TokenFormatting";
 import { useSettingsStore } from "@store/settingsStore";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
-import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
+import {
+  KEYBOARD_KEYS,
+  OUTPUT_ROW_KINDS,
+} from "@root/types/DashboardConstants";
 import {
   AskUserQuestionOutput,
   BashOutput,
@@ -1387,7 +1390,7 @@ const PromptReferenceText: React.FC<{
           title={promptReferenceTooltip(ref)}
           onClick={() => openContextReference(ref, vscode)}
           onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
+            if (event.key === KEYBOARD_KEYS.ENTER || event.key === " ") {
               event.preventDefault();
               openContextReference(ref, vscode);
             }

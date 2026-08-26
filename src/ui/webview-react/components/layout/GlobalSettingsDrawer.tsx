@@ -1,3 +1,4 @@
+import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import { useEffect, useState } from "react";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -95,7 +96,7 @@ export function GlobalSettingsDrawer() {
   useEffect(() => {
     if (!globalSettingsOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeGlobalSettings();
+      if (e.key === KEYBOARD_KEYS.ESCAPE) closeGlobalSettings();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);

@@ -20,6 +20,7 @@ import {
   type ExecutionState,
 } from "../../types/messages";
 import {
+  KEYBOARD_KEYS,
   DEFAULT_WORKFLOW_NAME,
   WORKTREE_MODES,
   WORKTREE_MODE_OPTIONS,
@@ -763,9 +764,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
   // Handle input key events
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
+    if (e.key === KEYBOARD_KEYS.ENTER) {
       saveEdit();
-    } else if (e.key === "Escape") {
+    } else if (e.key === KEYBOARD_KEYS.ESCAPE) {
       cancelEdit();
     }
   };
@@ -982,7 +983,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       return;
     }
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== KEYBOARD_KEYS.ESCAPE) return;
       if (dropdownView === "runs") {
         handleBackToWorkflowList();
         return;

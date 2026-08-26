@@ -3,6 +3,7 @@ import { useHarnessFileStore } from "@store/useHarnessFileStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { sendMessage } from "@hooks/useMessageHandler";
 import {
+  KEYBOARD_KEYS,
   HARNESS_IDS,
   HARNESS_INFO,
   SETTING_SCOPES,
@@ -794,9 +795,9 @@ export function AgentSkillsManagerSection({
           onKeyDown={(event) => {
             if (
               event.target === event.currentTarget &&
-              (event.key === "Enter" ||
+              (event.key === KEYBOARD_KEYS.ENTER ||
                 event.key === " " ||
-                event.key === "Escape")
+                event.key === KEYBOARD_KEYS.ESCAPE)
             ) {
               event.preventDefault();
               setConfirmDelete(null);
@@ -852,9 +853,9 @@ export function AgentSkillsManagerSection({
           onKeyDown={(event) => {
             if (
               event.target === event.currentTarget &&
-              (event.key === "Enter" ||
+              (event.key === KEYBOARD_KEYS.ENTER ||
                 event.key === " " ||
-                event.key === "Escape")
+                event.key === KEYBOARD_KEYS.ESCAPE)
             ) {
               event.preventDefault();
               setConfirmDeleteAll(null);

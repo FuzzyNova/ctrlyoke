@@ -1,3 +1,4 @@
+import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import React from "react";
 
 interface PanelBarProps {
@@ -31,7 +32,7 @@ export const PanelBar: React.FC<PanelBarProps> = ({
         role="button"
         aria-label={`Expand ${title}`}
         tabIndex={0}
-        onKeyDown={(e) => e.key === "Enter" && onClick()}
+        onKeyDown={(e) => e.key === KEYBOARD_KEYS.ENTER && onClick()}
       >
         <i className="codicon codicon-chevron-right text-xs" />
         <i className={`codicon codicon-${icon} text-sm`} />
@@ -47,7 +48,7 @@ export const PanelBar: React.FC<PanelBarProps> = ({
       role="button"
       aria-label={`Expand ${title}`}
       tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && onClick()}
+      onKeyDown={(e) => e.key === KEYBOARD_KEYS.ENTER && onClick()}
     >
       <i className="codicon codicon-chevron-right text-xs" />
       <i className={`codicon codicon-${icon} text-sm`} />

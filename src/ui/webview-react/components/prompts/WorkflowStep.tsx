@@ -1,3 +1,4 @@
+import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import React, { useState } from "react";
 import { useLongPress } from "../../hooks/useLongPress";
 import type { DraggableAttributes } from "@dnd-kit/core";
@@ -267,7 +268,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
           e.preventDefault();
           onClick?.();
         }

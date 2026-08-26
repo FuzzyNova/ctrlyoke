@@ -26,6 +26,7 @@ import {
 import { MESSAGE_TYPES } from "@/types/messages";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import {
+  KEYBOARD_KEYS,
   HARNESS_IDS,
   HARNESS_INFO,
   SETTING_SCOPES,
@@ -1415,7 +1416,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                 value={remoteQuery}
                 onChange={(event) => setRemoteQuery(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") {
+                  if (event.key === KEYBOARD_KEYS.ENTER) {
                     event.preventDefault();
                     handleSearchRegistry();
                   }
@@ -1595,9 +1596,9 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           onKeyDown={(event) => {
             if (
               event.target === event.currentTarget &&
-              (event.key === "Enter" ||
+              (event.key === KEYBOARD_KEYS.ENTER ||
                 event.key === " " ||
-                event.key === "Escape")
+                event.key === KEYBOARD_KEYS.ESCAPE)
             ) {
               event.preventDefault();
               setDeleteLocationState(null);
@@ -1656,9 +1657,9 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           onKeyDown={(event) => {
             if (
               event.target === event.currentTarget &&
-              (event.key === "Enter" ||
+              (event.key === KEYBOARD_KEYS.ENTER ||
                 event.key === " " ||
-                event.key === "Escape")
+                event.key === KEYBOARD_KEYS.ESCAPE)
             ) {
               event.preventDefault();
               setDeleteTargetState(null);

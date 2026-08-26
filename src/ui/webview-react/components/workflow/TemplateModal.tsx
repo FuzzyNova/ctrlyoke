@@ -1,3 +1,4 @@
+import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Modal,
@@ -347,7 +348,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   // Keyboard handling
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") {
+      if (e.key === KEYBOARD_KEYS.ENTER) {
         if (e.ctrlKey) {
           handleSubmit(true); // Create & Run
         } else if (e.target instanceof HTMLInputElement) {
