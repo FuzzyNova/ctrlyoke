@@ -309,10 +309,16 @@ export function usePagedCommitHistory(
       void fetcherRef
         .current(request, controller.signal)
         .then((response) => {
-          if (
-            !isCurrent(generation, context) ||
-            !responseIsUsable(response, 0, context)
-          ) {
+          // Don't gate the initial fetch on `context.detached` matching the
+          // response: `detached` is a caller-supplied guess (the store's
+          // last-known state, `false` by default) for this *first* request,
+          // not a confirmed fact yet — the response is what tells us the
+          // truth. Requiring them to match would permanently discard a
+          // correct response whenever the guess was wrong (e.g. the
+          // workspace opens already in detached HEAD), with nothing left to
+          // ever correct it. `isCurrent` already guards against a late
+          // response from a superseded context.
+          if (!isCurrent(generation, context) || !responseIsUsable(response, 0)) {
             return;
           }
           updateState((current) => ({

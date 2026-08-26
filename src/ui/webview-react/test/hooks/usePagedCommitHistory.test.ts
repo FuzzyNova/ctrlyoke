@@ -188,6 +188,32 @@ describe("usePagedCommitHistory", () => {
     expect(result.current.getCommit(0)?.hash).toBe("hash-9");
   });
 
+  it("populates the initial listing even when the caller's detached guess was wrong", async () => {
+    // The caller's `detached` option is the store's last-known state (`false`
+    // by default) — a guess for the very first request, not a confirmed
+    // fact. The workspace can already be in detached HEAD before the pane
+    // ever mounts (e.g. reopening on a repo left detached from a prior
+    // session), in which case the server's response legitimately disagrees
+    // with that guess. The response must still populate the listing —
+    // nothing else will ever correct a wrong initial guess otherwise.
+    const fetchPage = vi
+      .fn<PagedCommitHistoryFetcher>()
+      .mockResolvedValue(response(HISTORY_A, 0, [commit(0)], true, 1));
+    const { result } = renderHook(() =>
+      usePagedCommitHistory({
+        repo: "repo-a",
+        detached: false,
+        pageSize: 3,
+        fetchPage,
+      })
+    );
+
+    await waitFor(() => expect(result.current.listingId).toBe(HISTORY_A));
+    expect(result.current.detached).toBe(true);
+    expect(result.current.currentBranch).toBeNull();
+    expect(result.current.getCommit(0)?.hash).toBe("hash-0");
+  });
+
   it("does not let an in-flight page from an old frozen listing shift the refreshed view", async () => {
     const stalePage = deferred<WorkspaceCommitLogResponse>();
     const fetchPage = vi
