@@ -2085,6 +2085,18 @@ export const KEYBOARD_KEYS = {
 export const INHERIT_DEFAULT_OPTION = "default" as const;
 
 // ============================================================================
+// ATOMIC REFERENCE KINDS - @-mention file/directory/symbol references
+// ============================================================================
+export const ATOMIC_REFERENCE_KINDS = {
+  FILE: "file",
+  DIRECTORY: "directory",
+  SYMBOL: "symbol",
+} as const;
+
+export type AtomicReferenceKind =
+  (typeof ATOMIC_REFERENCE_KINDS)[keyof typeof ATOMIC_REFERENCE_KINDS];
+
+// ============================================================================
 // SNAPSHOT STRATEGIES - Workspace snapshot strategy values
 // ============================================================================
 export const SNAPSHOT_STRATEGIES = {

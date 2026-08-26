@@ -2,6 +2,7 @@ import { MESSAGE_TYPES } from "@/types/messages";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useUiStore } from "@store/uiStore";
+import { ATOMIC_REFERENCE_KINDS } from "@root/types/DashboardConstants";
 
 /**
  * Shape of a context reference to act on, independent of where it came from
@@ -101,23 +102,30 @@ export function openContextReference(
 
   if (isStandalone) {
     const store = useWorkspaceViewerStore.getState();
-    if (type === "directory") {
+    if (type === ATOMIC_REFERENCE_KINDS.DIRECTORY) {
       store.openToDirectory(path);
       return true;
     }
-    if (type === "file" || type === "lineRange" || type === "symbol") {
+    if (
+      type === ATOMIC_REFERENCE_KINDS.FILE ||
+      type === "lineRange" ||
+      type === ATOMIC_REFERENCE_KINDS.SYMBOL
+    ) {
       store.openToFile(path, lineStart, lineEnd);
       return true;
     }
     return false;
   }
 
-  if (type === "file" || type === "directory") {
+  if (
+    type === ATOMIC_REFERENCE_KINDS.FILE ||
+    type === ATOMIC_REFERENCE_KINDS.DIRECTORY
+  ) {
     vscode.postMessage({ type: MESSAGE_TYPES.OPEN_FILE, path });
     return true;
   }
 
-  if (type === "lineRange" || type === "symbol") {
+  if (type === "lineRange" || type === ATOMIC_REFERENCE_KINDS.SYMBOL) {
     vscode.postMessage({
       type: MESSAGE_TYPES.OPEN_FILE,
       path,

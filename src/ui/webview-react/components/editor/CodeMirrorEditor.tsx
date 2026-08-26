@@ -51,6 +51,7 @@ import { Prec, RangeSetBuilder, StateEffect } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { openContextReference } from "@utils/contextReferenceActions";
 import {
+  ATOMIC_REFERENCE_KINDS,
   USER_FEEDBACK_SEVERITY,
   CTRLYOKE_SLASH_TOKEN_KINDS,
   SCRIPT_OUTPUT_SOURCES,
@@ -239,7 +240,12 @@ function parseSingleSymbolReference(
   | { path: string; symbolName: string; lineStart?: string; lineEnd?: string }
   | undefined {
   const [match] = findContextReferenceMatches(text);
-  if (!match || match.type !== "symbol" || !match.path || !match.symbolName) {
+  if (
+    !match ||
+    match.type !== ATOMIC_REFERENCE_KINDS.SYMBOL ||
+    !match.path ||
+    !match.symbolName
+  ) {
     return undefined;
   }
   return {
@@ -2036,7 +2042,7 @@ export function createContextReferenceLintExtension(
         let changed = false;
         for (const reference of allReferences) {
           if (
-            reference.type !== "symbol" ||
+            reference.type !== ATOMIC_REFERENCE_KINDS.SYMBOL ||
             !reference.path ||
             !reference.symbolName
           ) {
@@ -2474,7 +2480,10 @@ function createFileRefDecorationExtension(allowWorkspaceFolderPrefix: boolean) {
           end,
           Decoration.mark({
             class: "cm-link cm-prompt-file-ref",
-            attributes: { "data-type": "file", "data-path": trimmed },
+            attributes: {
+              "data-type": ATOMIC_REFERENCE_KINDS.FILE,
+              "data-path": trimmed,
+            },
           })
         );
         return builder.finish();

@@ -12,6 +12,7 @@ import {
 import { useSettingsStore } from "@store/settingsStore";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import {
+  ATOMIC_REFERENCE_KINDS,
   KEYBOARD_KEYS,
   OUTPUT_ROW_KINDS,
 } from "@root/types/DashboardConstants";
@@ -1281,11 +1282,11 @@ function promptReferenceTooltip(ref: ContextReferenceMatch): string {
   switch (ref.type) {
     case "git":
       return `Open git ${ref.gitRef ?? ""}`;
-    case "directory":
+    case ATOMIC_REFERENCE_KINDS.DIRECTORY:
       return `Reveal ${ref.path ?? ""}`;
     case "lineRange":
       return `Open ${ref.path ?? ""}:${ref.lineStart}-${ref.lineEnd}`;
-    case "symbol":
+    case ATOMIC_REFERENCE_KINDS.SYMBOL:
       return `Go to ${ref.symbolName ?? ""} in ${ref.path ?? ""}:${ref.lineStart}-${ref.lineEnd}`;
     case "priorContext":
       return `Open ${ref.ref ?? "context"}`;

@@ -8,6 +8,7 @@ import {
   getVsCodeNamedWorkspaceRoots,
 } from "../platform/VsCodeWorkspaceRoot";
 import {
+  ATOMIC_REFERENCE_KINDS,
   MESSAGE_TYPES,
   HARNESS_IDS,
   type HarnessId,
@@ -15,6 +16,7 @@ import {
   MAX_PASTED_IMAGE_BYTES,
   mimeTypeToImageExtension,
   imageExtensionToMimeType,
+  type AtomicReferenceKind,
 } from "../types/DashboardConstants";
 import { CliProviderUtils } from "../core/harness/shared/CliProviderUtils";
 import {
@@ -798,7 +800,7 @@ export class PromptEditorSupportService {
     ctx: WebviewClientContext,
     references: Array<{
       id: string;
-      type: "file" | "directory" | "lineRange" | "symbol" | "git" | "secret";
+      type: AtomicReferenceKind | "lineRange" | "git" | "secret";
       path?: string;
       gitRef?: string;
       lineStart?: string;
@@ -841,7 +843,7 @@ export class PromptEditorSupportService {
 
   private async validateContextReference(
     reference: {
-      type: "file" | "directory" | "lineRange" | "symbol" | "git" | "secret";
+      type: AtomicReferenceKind | "lineRange" | "git" | "secret";
       path?: string;
       gitRef?: string;
       lineStart?: string;
@@ -891,13 +893,13 @@ export class PromptEditorSupportService {
       // found" otherwise. file/lineRange/symbol all point at a file, so they
       // keep "file not found".
       const message =
-        reference.type === "directory"
+        reference.type === ATOMIC_REFERENCE_KINDS.DIRECTORY
           ? "directory not found"
           : "file not found";
       return this.notFoundWithSuggestions(reference, message);
     }
 
-    if (reference.type === "directory") {
+    if (reference.type === ATOMIC_REFERENCE_KINDS.DIRECTORY) {
       return pathValidation.isDirectory
         ? { exists: true }
         : this.notFoundWithSuggestions(reference, "directory not found");
@@ -907,11 +909,15 @@ export class PromptEditorSupportService {
       return this.notFoundWithSuggestions(reference, "file not found");
     }
 
-    if (reference.type === "lineRange" || reference.type === "symbol") {
+    if (
+      reference.type === "lineRange" ||
+      reference.type === ATOMIC_REFERENCE_KINDS.SYMBOL
+    ) {
       const startLine = Number.parseInt(reference.lineStart ?? "", 10);
       const endLine = Number.parseInt(reference.lineEnd ?? "", 10);
       const missingSymbolName =
-        reference.type === "symbol" && !reference.symbolName;
+        reference.type === ATOMIC_REFERENCE_KINDS.SYMBOL &&
+        !reference.symbolName;
       if (
         missingSymbolName ||
         !Number.isInteger(startLine) ||
@@ -922,7 +928,7 @@ export class PromptEditorSupportService {
         return {
           exists: false,
           message:
-            reference.type === "symbol"
+            reference.type === ATOMIC_REFERENCE_KINDS.SYMBOL
               ? "symbol not found"
               : "selection not found",
         };
@@ -936,12 +942,15 @@ export class PromptEditorSupportService {
           return {
             exists: false,
             message:
-              reference.type === "symbol"
+              reference.type === ATOMIC_REFERENCE_KINDS.SYMBOL
                 ? "symbol not found"
                 : "selection not found",
           };
         }
-        if (reference.type === "symbol" && reference.symbolName) {
+        if (
+          reference.type === ATOMIC_REFERENCE_KINDS.SYMBOL &&
+          reference.symbolName
+        ) {
           // Best-effort: the reference text itself carries no kind, only a
           // live completion item does. A miss here (renamed/moved symbol,
           // no provider) just leaves the icon at its generic fallback.
@@ -960,7 +969,7 @@ export class PromptEditorSupportService {
         return {
           exists: false,
           message:
-            reference.type === "symbol"
+            reference.type === ATOMIC_REFERENCE_KINDS.SYMBOL
               ? "symbol not found"
               : "selection not found",
         };
@@ -983,7 +992,8 @@ export class PromptEditorSupportService {
   ): Promise<{ exists: false; message: string; suggestions?: string[] }> {
     if (
       reference.path &&
-      (reference.type === "file" || reference.type === "directory")
+      (reference.type === ATOMIC_REFERENCE_KINDS.FILE ||
+        reference.type === ATOMIC_REFERENCE_KINDS.DIRECTORY)
     ) {
       const suggestions = await getPathSuggestions(
         reference.path,
