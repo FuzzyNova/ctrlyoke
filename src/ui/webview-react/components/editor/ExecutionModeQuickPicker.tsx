@@ -7,6 +7,7 @@ import { useClickOutside } from "@hooks/useClickOutside";
 import { constrainPopupToViewport } from "@utils/dropdownUtils";
 import { CustomSelect, DropdownPortal } from "../shared";
 import {
+  INHERIT_DEFAULT_OPTION,
   FOOTER_PICKERS,
   EXECUTION_MODES,
   EXECUTION_MODE_OPTIONS,
@@ -117,16 +118,16 @@ export const ExecutionModeQuickPicker: React.FC<
             </h3>
           </div>
           <CustomSelect
-            value={properties.executionMode ?? "default"}
+            value={properties.executionMode ?? INHERIT_DEFAULT_OPTION}
             onChange={(v) => {
               setProperty(
                 "executionMode",
-                v === "default" ? undefined : (v as ExecutionMode)
+                v === INHERIT_DEFAULT_OPTION ? undefined : (v as ExecutionMode)
               );
               setFooterOpenPicker(null);
             }}
             options={[
-              { value: "default", label: defaultLabel },
+              { value: INHERIT_DEFAULT_OPTION, label: defaultLabel },
               ...EXECUTION_MODE_OPTIONS,
             ]}
             dropdownMaxHeight="200px"

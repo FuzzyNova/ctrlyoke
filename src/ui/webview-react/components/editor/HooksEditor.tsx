@@ -1,5 +1,8 @@
 import React, { useCallback, useMemo } from "react";
-import { HOOK_EVENT_METADATA } from "@root/types/DashboardConstants";
+import {
+  INHERIT_DEFAULT_OPTION,
+  HOOK_EVENT_METADATA,
+} from "@root/types/DashboardConstants";
 import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
 import { toFieldDiagnostic } from "@utils/compatibilityDiagnostics";
@@ -21,10 +24,10 @@ interface HooksEditorProps {
   diagnostics?: readonly CompatibilityDiagnostic[];
 }
 
-type EditorMode = "default" | "none" | "custom";
+type EditorMode = typeof INHERIT_DEFAULT_OPTION | "none" | "custom";
 
 function getMode(value: HooksValue): EditorMode {
-  if (value === undefined) return "default";
+  if (value === undefined) return INHERIT_DEFAULT_OPTION;
   if (value === null || (Array.isArray(value) && value.length === 0))
     return "none";
   return "custom";
@@ -49,7 +52,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
 
   const handleModeChange = useCallback(
     (newMode: EditorMode) => {
-      if (newMode === "default") onChange(undefined);
+      if (newMode === INHERIT_DEFAULT_OPTION) onChange(undefined);
       else if (newMode === "none") onChange(null);
       else onChange([{ event: "stop", command: "" }]);
     },
@@ -88,7 +91,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
   // Mode selector (only at prompt level, not global settings)
   const modeSelector = showDefault ? (
     <div className="flex gap-1 mb-2">
-      {(["default", "none", "custom"] as const).map((m) => (
+      {([INHERIT_DEFAULT_OPTION, "none", "custom"] as const).map((m) => (
         <button
           key={m}
           type="button"
@@ -99,7 +102,11 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
               : "bg-transparent text-description-fg hover:text-fg"
           }`}
         >
-          {m === "default" ? "Inherit" : m === "none" ? "None" : "Custom"}
+          {m === INHERIT_DEFAULT_OPTION
+            ? "Inherit"
+            : m === "none"
+              ? "None"
+              : "Custom"}
         </button>
       ))}
     </div>
@@ -116,7 +123,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
   );
 
   // Default mode — show inherited preview
-  if (mode === "default" && showDefault) {
+  if (mode === INHERIT_DEFAULT_OPTION && showDefault) {
     return (
       <div>
         {modeSelector}

@@ -8,7 +8,10 @@ import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import { HarnessDropdown, HarnessIcon, HARNESS_DISPLAY_NAMES } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
 import { useHarnessUsageStore } from "@store/harnessUsageStore";
-import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import {
+  INHERIT_DEFAULT_OPTION,
+  MESSAGE_TYPES,
+} from "@root/types/DashboardConstants";
 import { sendMessage } from "@hooks/useMessageHandler";
 import {
   formatHarnessUsageTooltip,
@@ -50,7 +53,7 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
     : (HARNESS_DISPLAY_NAMES[resolvedHarness] ?? resolvedHarness);
 
   const handleHarnessChange = (newHarness: string) => {
-    if (newHarness === "default") {
+    if (newHarness === INHERIT_DEFAULT_OPTION) {
       setProperty("harness", undefined);
       setProperty("model", undefined);
       setProperty("additionalArgs", undefined);
@@ -112,7 +115,7 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
       disabled={disabled}
     >
       <HarnessDropdown
-        value={properties.harness ?? "default"}
+        value={properties.harness ?? INHERIT_DEFAULT_OPTION}
         onChange={handleHarnessChange}
         showDefault={true}
         defaultLabel={defaultHarnessLabel}

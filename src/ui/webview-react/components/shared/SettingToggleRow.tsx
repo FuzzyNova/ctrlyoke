@@ -1,3 +1,4 @@
+import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
 import type {
   SettingSource,
   SettingWriteScope,
@@ -30,7 +31,9 @@ export function SettingToggleRow({
 }: Props) {
   const source = path && sources ? sources[path] : undefined;
   const canReset =
-    source !== undefined && source !== "default" && source === activeScope;
+    source !== undefined &&
+    source !== INHERIT_DEFAULT_OPTION &&
+    source === activeScope;
 
   return (
     <label
@@ -46,7 +49,7 @@ export function SettingToggleRow({
       <span className="flex flex-col flex-1 min-w-0">
         <span className="flex items-center gap-1.5 flex-wrap">
           <span className="text-sm text-foreground">{label}</span>
-          {source && source !== "default" && (
+          {source && source !== INHERIT_DEFAULT_OPTION && (
             <SettingSourceBadge source={source} />
           )}
         </span>

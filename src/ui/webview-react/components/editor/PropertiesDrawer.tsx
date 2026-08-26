@@ -17,6 +17,7 @@ import {
   type PriorContext,
 } from "../../types/messages";
 import {
+  INHERIT_DEFAULT_OPTION,
   EXECUTION_MODE_HELP_TEXT,
   EXECUTION_MODE_OPTIONS,
   PERMISSION_MODES,
@@ -269,7 +270,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   // Additional Args display mode
   const additionalArgsMode =
     properties.additionalArgs === undefined
-      ? "default"
+      ? INHERIT_DEFAULT_OPTION
       : properties.additionalArgs === null
         ? "none"
         : "custom";
@@ -278,12 +279,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     ? typeof properties.additionalArgs === "string"
       ? properties.additionalArgs
       : ""
-    : additionalArgsMode === "default"
+    : additionalArgsMode === INHERIT_DEFAULT_OPTION
       ? (resolvedAdditionalArgs ?? "")
       : "";
   const additionalArgsTooltip = isAdditionalArgsActive
     ? undefined
-    : additionalArgsMode === "default"
+    : additionalArgsMode === INHERIT_DEFAULT_OPTION
       ? "Inheriting from workflow settings. Select Custom to override."
       : "Set to None — no additional args will be passed";
 
@@ -391,7 +392,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
 
   // Handle harness change - also set model and additionalArgs to global defaults for the new harness
   const handleHarnessChange = (newHarness: string) => {
-    if (newHarness === "default") {
+    if (newHarness === INHERIT_DEFAULT_OPTION) {
       setProperty("harness", undefined);
       setProperty("model", undefined);
       setProperty("additionalArgs", undefined);
@@ -541,7 +542,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <HarnessDropdown
                   id="prop-harness"
-                  value={properties.harness ?? "default"}
+                  value={properties.harness ?? INHERIT_DEFAULT_OPTION}
                   onChange={handleHarnessChange}
                   showDefault={true}
                   defaultLabel={defaultHarnessLabel}
@@ -572,12 +573,15 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <CustomSelect
                   id="prop-model"
-                  value={properties.model ?? "default"}
+                  value={properties.model ?? INHERIT_DEFAULT_OPTION}
                   onChange={(v) =>
-                    setProperty("model", v === "default" ? undefined : v)
+                    setProperty(
+                      "model",
+                      v === INHERIT_DEFAULT_OPTION ? undefined : v
+                    )
                   }
                   options={[
-                    { value: "default", label: defaultModelLabel },
+                    { value: INHERIT_DEFAULT_OPTION, label: defaultModelLabel },
                     ...(models.length === 0
                       ? [
                           {
@@ -597,7 +601,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   onUnhideOption={(v) =>
                     unhideDropdownOption(modelNamespace, v)
                   }
-                  nonHideableValues={["default", ""]}
+                  nonHideableValues={[INHERIT_DEFAULT_OPTION, ""]}
                   warning={modelWarn ?? undefined}
                 />
               </div>
@@ -617,13 +621,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   id="prop-agent"
                   value={
                     properties.agent === undefined
-                      ? "default"
+                      ? INHERIT_DEFAULT_OPTION
                       : properties.agent === null
                         ? "none"
                         : properties.agent
                   }
                   onChange={(v) => {
-                    if (v === "default") {
+                    if (v === INHERIT_DEFAULT_OPTION) {
                       setProperty("agent", undefined);
                     } else if (v === "none") {
                       setProperty("agent", null);
@@ -632,7 +636,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     }
                   }}
                   options={[
-                    { value: "default", label: defaultAgentLabel },
+                    { value: INHERIT_DEFAULT_OPTION, label: defaultAgentLabel },
                     { value: "none", label: "None" },
                     ...availableAgents.map((agent) =>
                       toAgentSelectOption(agent, agent.name)
@@ -648,7 +652,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   onUnhideOption={(v) =>
                     unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
                   }
-                  nonHideableValues={["default"]}
+                  nonHideableValues={[INHERIT_DEFAULT_OPTION]}
                   warning={agentWarn ?? undefined}
                 />
               </div>
@@ -688,7 +692,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   id="prop-additional-args-mode"
                   value={additionalArgsMode}
                   onChange={(v) => {
-                    if (v === "default") {
+                    if (v === INHERIT_DEFAULT_OPTION) {
                       setProperty("additionalArgs", undefined);
                     } else if (v === "none") {
                       setProperty("additionalArgs", null);
@@ -702,7 +706,10 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     }
                   }}
                   options={[
-                    { value: "default", label: defaultAdditionalArgsLabel },
+                    {
+                      value: INHERIT_DEFAULT_OPTION,
+                      label: defaultAdditionalArgsLabel,
+                    },
                     { value: "none", label: "None" },
                     { value: "custom", label: "Custom" },
                   ]}
@@ -763,15 +770,20 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 </label>
                 <CustomSelect
                   id="prop-execution-mode"
-                  value={properties.executionMode ?? "default"}
+                  value={properties.executionMode ?? INHERIT_DEFAULT_OPTION}
                   onChange={(v) =>
                     setProperty(
                       "executionMode",
-                      v === "default" ? undefined : (v as ExecutionMode)
+                      v === INHERIT_DEFAULT_OPTION
+                        ? undefined
+                        : (v as ExecutionMode)
                     )
                   }
                   options={[
-                    { value: "default", label: defaultExecutionModeLabel },
+                    {
+                      value: INHERIT_DEFAULT_OPTION,
+                      label: defaultExecutionModeLabel,
+                    },
                     ...EXECUTION_MODE_OPTIONS,
                   ]}
                 />
@@ -797,7 +809,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   id="prop-resume-session"
                   value={
                     properties.resumeSession === undefined
-                      ? "default"
+                      ? INHERIT_DEFAULT_OPTION
                       : properties.sessionId ===
                             SESSION_ID_SENTINELS.FINAL_STEP &&
                           properties.resumeSession
@@ -1053,14 +1065,14 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   id="prop-permission-mode"
                   value={
                     properties.toolPermissions === undefined
-                      ? "default"
+                      ? INHERIT_DEFAULT_OPTION
                       : properties.toolPermissions === null
                         ? PERMISSION_MODES.NONE
                         : (properties.toolPermissions.mode ??
                           PERMISSION_MODES.ALLOW_ALL)
                   }
                   onChange={(v) => {
-                    if (v === "default") {
+                    if (v === INHERIT_DEFAULT_OPTION) {
                       setProperty("toolPermissions", undefined);
                     } else {
                       const current =
@@ -1074,7 +1086,10 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     }
                   }}
                   options={[
-                    { value: "default", label: defaultPermissionsLabel },
+                    {
+                      value: INHERIT_DEFAULT_OPTION,
+                      label: defaultPermissionsLabel,
+                    },
                     ...PERMISSION_MODE_OPTIONS,
                   ]}
                   warning={modeDiagnostics[0]?.message}

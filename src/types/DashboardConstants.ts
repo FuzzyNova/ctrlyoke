@@ -2080,6 +2080,11 @@ export const KEYBOARD_KEYS = {
 } as const;
 
 // ============================================================================
+// INHERIT DEFAULT OPTION - UI sentinel for inherited settings
+// ============================================================================
+export const INHERIT_DEFAULT_OPTION = "default" as const;
+
+// ============================================================================
 // SNAPSHOT STRATEGIES - Workspace snapshot strategy values
 // ============================================================================
 export const SNAPSHOT_STRATEGIES = {

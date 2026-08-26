@@ -1,3 +1,4 @@
+import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
 import React from "react";
 import { useEditorStore } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
@@ -83,13 +84,13 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
       <CustomSelect
         value={
           properties.agent === undefined
-            ? "default"
+            ? INHERIT_DEFAULT_OPTION
             : properties.agent === null
               ? "none"
               : properties.agent
         }
         onChange={(v) => {
-          if (v === "default") {
+          if (v === INHERIT_DEFAULT_OPTION) {
             setProperty("agent", undefined);
           } else if (v === "none") {
             setProperty("agent", null);
@@ -99,7 +100,7 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
           setFooterOpenPicker(null);
         }}
         options={[
-          { value: "default", label: defaultAgentLabel },
+          { value: INHERIT_DEFAULT_OPTION, label: defaultAgentLabel },
           { value: "none", label: "None" },
           ...availableAgents.map((agent) =>
             toAgentSelectOption(agent, agent.name)
@@ -111,7 +112,7 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
         onUnhideOption={(v) =>
           unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
         }
-        nonHideableValues={["default"]}
+        nonHideableValues={[INHERIT_DEFAULT_OPTION]}
         dropdownMaxHeight="300px"
         inline={true}
       />

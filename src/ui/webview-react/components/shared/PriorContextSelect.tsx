@@ -1,3 +1,4 @@
+import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
 import React, { useState, useEffect, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
@@ -18,7 +19,7 @@ interface PriorContextSelectProps {
 }
 
 export type KeywordMode =
-  | "default"
+  | typeof INHERIT_DEFAULT_OPTION
   | "none"
   | "previous"
   | "all"
@@ -45,7 +46,7 @@ function isRunAddress(
 }
 
 function getMode(value: PriorContext | undefined): KeywordMode {
-  if (value === undefined) return "default";
+  if (value === undefined) return INHERIT_DEFAULT_OPTION;
   if (Array.isArray(value)) return "custom";
   if (isRunAddress(value)) return "run";
   return value as KeywordMode;
@@ -155,7 +156,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
     setWantsCustom(false);
     setCustomText("");
     setCustomError(false);
-    onChange(k === "default" ? undefined : k);
+    onChange(k === INHERIT_DEFAULT_OPTION ? undefined : k);
     setIsOpen(false);
   };
 
@@ -194,7 +195,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   let buttonLabel: string;
   if (showCustomInput) {
     buttonLabel = "Custom";
-  } else if (mode === "default" && defaultLabel) {
+  } else if (mode === INHERIT_DEFAULT_OPTION && defaultLabel) {
     buttonLabel = defaultLabel;
   } else {
     buttonLabel = PRIOR_CONTEXT_KEYWORD_LABELS[mode];
@@ -202,7 +203,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
 
   const keywords: KeywordMode[] = showDefault
     ? [
-        "default",
+        INHERIT_DEFAULT_OPTION,
         "none",
         "previous",
         "all",
@@ -243,7 +244,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
             {keywords.map((k) => {
               const isSelected = displayMode === k;
               const label =
-                k === "default" && defaultLabel
+                k === INHERIT_DEFAULT_OPTION && defaultLabel
                   ? defaultLabel
                   : PRIOR_CONTEXT_KEYWORD_LABELS[k];
               return (

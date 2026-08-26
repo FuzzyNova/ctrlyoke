@@ -2,7 +2,10 @@ import React from "react";
 import { useEditorStore } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
-import { PERMISSION_MODES } from "@root/types/DashboardConstants";
+import {
+  INHERIT_DEFAULT_OPTION,
+  PERMISSION_MODES,
+} from "@root/types/DashboardConstants";
 import { FOOTER_PICKERS } from "@root/types/DashboardConstants";
 import type {
   ToolPermissionsOverride,
@@ -82,13 +85,13 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
       <CustomSelect
         value={
           properties.toolPermissions === undefined
-            ? "default"
+            ? INHERIT_DEFAULT_OPTION
             : properties.toolPermissions === null
               ? PERMISSION_MODES.NONE
               : (properties.toolPermissions.mode ?? PERMISSION_MODES.ALLOW_ALL)
         }
         onChange={(v) => {
-          if (v === "default") {
+          if (v === INHERIT_DEFAULT_OPTION) {
             setProperty("toolPermissions", undefined);
           } else {
             const current =
@@ -103,7 +106,7 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
           setFooterOpenPicker(null);
         }}
         options={[
-          { value: "default", label: defaultLabel },
+          { value: INHERIT_DEFAULT_OPTION, label: defaultLabel },
           ...PERMISSION_MODE_OPTIONS,
         ]}
         dropdownMaxHeight="300px"
