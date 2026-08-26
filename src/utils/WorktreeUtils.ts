@@ -15,6 +15,7 @@ import { withFileLock } from "./FileLockUtils";
 import { discoverRepos } from "./WorkspaceRepoDiscovery";
 import { isPathWithinDirectory } from "./PathSecurity";
 import { ConfigurationUtils } from "./ConfigurationUtils";
+import { WORKTREE_MODES } from "../types/DashboardConstants";
 
 export interface WorkspaceEligibility {
   eligible: boolean;
@@ -54,8 +55,8 @@ export function slugifyWorktreeName(value: string): string {
 }
 
 export type WorktreeNameIdentity =
-  | { kind: "managed"; workflowKey: string; runRef: string }
-  | { kind: "named"; branchRef: string };
+  | { kind: typeof WORKTREE_MODES.MANAGED; workflowKey: string; runRef: string }
+  | { kind: typeof WORKTREE_MODES.NAMED; branchRef: string };
 
 /**
  * Generate the only physical-name format used by worktree support. The hash
@@ -68,7 +69,7 @@ export function createWorktreeDirectoryName(
   identity: WorktreeNameIdentity
 ): string {
   const logicalIdentity =
-    identity.kind === "managed"
+    identity.kind === WORKTREE_MODES.MANAGED
       ? `${identity.workflowKey}/${identity.runRef}`
       : identity.branchRef;
   const hash = crypto
@@ -267,8 +268,15 @@ export interface WorktreePlacementPreview {
  */
 export async function previewWorktreePlacement(
   options:
-    | { sourceCheckoutRoot: string; mode: "managed" }
-    | { sourceCheckoutRoot: string; mode: "named"; branch: string }
+    | {
+        sourceCheckoutRoot: string;
+        mode: typeof WORKTREE_MODES.MANAGED;
+      }
+    | {
+        sourceCheckoutRoot: string;
+        mode: typeof WORKTREE_MODES.NAMED;
+        branch: string;
+      }
 ): Promise<WorktreePlacementPreview> {
   const repositoryRoot = await repoToplevel(options.sourceCheckoutRoot);
   if (!repositoryRoot) {
@@ -279,7 +287,7 @@ export async function previewWorktreePlacement(
     };
   }
 
-  if (options.mode === "named") {
+  if (options.mode === WORKTREE_MODES.NAMED) {
     const entries = await listWorktrees(repositoryRoot).catch(
       () => [] as GitWorktreeEntry[]
     );
@@ -291,7 +299,7 @@ export async function previewWorktreePlacement(
     }
   }
 
-  if (options.mode === "managed") {
+  if (options.mode === WORKTREE_MODES.MANAGED) {
     return {
       isExact: false,
       notice:

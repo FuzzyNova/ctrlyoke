@@ -17,6 +17,7 @@ import {
   EXECUTION_STATES,
   HARNESS_IDS,
   QUEUE_POSITION,
+  WORKTREE_EDIT_KINDS,
   type HarnessId,
   type QueuePosition,
 } from "../types/DashboardConstants";
@@ -971,7 +972,7 @@ export class WorkingFileManager {
             descriptor: {
               ...descriptor,
               pendingEdit: {
-                kind: "rewind",
+                kind: WORKTREE_EDIT_KINDS.REWIND,
                 runRef,
                 fromStepIndex,
                 baseDefinitionRevision: sourceRevision,
@@ -1556,7 +1557,10 @@ export class WorkingFileManager {
         expectedDescriptorRevision,
         async (descriptor) => {
           const pending = descriptor.pendingEdit;
-          if (pending?.kind !== "rewind" || pending.runRef !== runRef) {
+          if (
+            pending?.kind !== WORKTREE_EDIT_KINDS.REWIND ||
+            pending.runRef !== runRef
+          ) {
             throw new Error(
               "This run does not have a pending continuation to discard"
             );
@@ -1671,7 +1675,10 @@ export class WorkingFileManager {
       expectedDescriptorRevision,
       async (descriptor) => {
         const pending = descriptor.pendingEdit;
-        if (pending?.kind !== "rewind" || pending.runRef !== runRef) {
+        if (
+          pending?.kind !== WORKTREE_EDIT_KINDS.REWIND ||
+          pending.runRef !== runRef
+        ) {
           throw new Error(
             "This run does not have a pending continuation to commit"
           );

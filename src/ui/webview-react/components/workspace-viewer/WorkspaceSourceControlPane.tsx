@@ -22,6 +22,7 @@ import {
 } from "@utils/hostedApi";
 import type { SourceControlFile } from "@root/types/HostedWorkspaceViewerTypes";
 import { SCM_KIND_COLOR_CLASS } from "@utils/scmStatus";
+import { SCM_FILE_KINDS } from "@root/types/DashboardConstants";
 import { Button } from "../shared/Button";
 import { Modal } from "../shared/Modal";
 import { WorkspaceCommitArea } from "./WorkspaceCommitArea";
@@ -50,13 +51,13 @@ function getStatusBadge(file: SourceControlFile): {
 } {
   const colorClass = SCM_KIND_COLOR_CLASS[file.kind];
   switch (file.kind) {
-    case "added":
+    case SCM_FILE_KINDS.ADDED:
       return { label: "A", colorClass };
-    case "deleted":
+    case SCM_FILE_KINDS.DELETED:
       return { label: "D", colorClass };
-    case "renamed":
+    case SCM_FILE_KINDS.RENAMED:
       return { label: "R", colorClass };
-    case "untracked":
+    case SCM_FILE_KINDS.UNTRACKED:
       return { label: "U", colorClass };
     default:
       return { label: "M", colorClass };
@@ -362,7 +363,8 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   const requestDiscard = useCallback(
     (paths: string[]) => {
       const untrackedCount = sourceControlFiles.filter(
-        (file) => paths.includes(file.path) && file.kind === "untracked"
+        (file) =>
+          paths.includes(file.path) && file.kind === SCM_FILE_KINDS.UNTRACKED
       ).length;
 
       if (untrackedCount > 0 && confirmDeleteOperations) {

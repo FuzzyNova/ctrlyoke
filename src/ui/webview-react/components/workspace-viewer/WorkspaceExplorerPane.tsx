@@ -53,7 +53,10 @@ import {
 } from "./fileBrowserShared";
 import type { WorkspaceEntrySortKey } from "@root/types/HostedWorkspaceViewerTypes";
 import { nextWorkspaceEntrySort } from "@utils/workspaceEntrySort";
-import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
+import {
+  SCM_FILE_KINDS,
+  WORKSPACE_ENTRY_KINDS,
+} from "@root/types/DashboardConstants";
 
 /**
  * Resolves the git-status text color class for an explorer entry, mirroring
@@ -69,7 +72,7 @@ function getEntryStatusColorClass(
   if (entry.gitIgnored) return SCM_IGNORED_COLOR_CLASS;
 
   const ownStatus = sourceControlFiles.find((f) => f.path === entry.path);
-  if (ownStatus && ownStatus.kind !== "deleted") {
+  if (ownStatus && ownStatus.kind !== SCM_FILE_KINDS.DELETED) {
     return SCM_KIND_COLOR_CLASS[ownStatus.kind];
   }
 
@@ -78,7 +81,8 @@ function getEntryStatusColorClass(
   const prefix = `${entry.path}/`;
   let aggregateKind: SourceControlFile["kind"] | undefined;
   for (const file of sourceControlFiles) {
-    if (file.kind === "deleted" || !file.path.startsWith(prefix)) continue;
+    if (file.kind === SCM_FILE_KINDS.DELETED || !file.path.startsWith(prefix))
+      continue;
     if (aggregateKind === undefined) {
       aggregateKind = file.kind;
     } else if (aggregateKind !== file.kind) {

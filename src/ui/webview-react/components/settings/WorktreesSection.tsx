@@ -8,6 +8,7 @@ import type {
 import {
   MESSAGE_TYPES,
   SETTING_SCOPES,
+  WORKTREE_MODES,
   WORKTREE_MANAGEMENT_ACTIONS,
 } from "@root/types/DashboardConstants";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
@@ -437,7 +438,7 @@ function WorktreeRow({
   const rowKey = (suffix: string) => `${entry.worktreePath}::${suffix}`;
   const owner = entry.inUse
     ? `In use — ${entry.leaseOwners.map((item) => `${item.lease.workflowKey}/${item.lease.runRef}`).join(", ")}`
-    : entry.ownership === "managed"
+    : entry.ownership === WORKTREE_MODES.MANAGED
       ? "ctrlyoke-owned"
       : "user-owned";
   const retry = () => {
@@ -630,7 +631,7 @@ function WorktreeRow({
             onClick={() => cleanupBranch(false)}
           />
         )}
-        {entry.ownership === "managed" &&
+        {entry.ownership === WORKTREE_MODES.MANAGED &&
           entry.branchName &&
           entry.branchState === "present" &&
           !entry.branchCleanupEligible &&
@@ -644,7 +645,7 @@ function WorktreeRow({
               onClick={deleteBranchWithConfirm}
             />
           )}
-        {entry.ownership === "managed" &&
+        {entry.ownership === WORKTREE_MODES.MANAGED &&
           entry.directoryState !== "removed" && (
             <ActionButton
               label="Remove"
@@ -655,7 +656,7 @@ function WorktreeRow({
               onClick={remove}
             />
           )}
-        {entry.ownership === "managed" &&
+        {entry.ownership === WORKTREE_MODES.MANAGED &&
           entry.directoryState !== "removed" && (
             <ActionButton
               label="Force remove"

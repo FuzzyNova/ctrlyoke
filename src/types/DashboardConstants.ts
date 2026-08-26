@@ -660,6 +660,52 @@ export const OPERATION_STATUS = {
 } as const;
 
 // ============================================================================
+// SCRIPT VERDICT OUTCOMES - Results of script/pre-condition/end-condition evaluation
+// ============================================================================
+export const SCRIPT_VERDICT_OUTCOMES = {
+  PASSED: "passed",
+  FAILED: "failed",
+  ERRORED: "errored",
+} as const;
+
+export type ScriptVerdictOutcome =
+  (typeof SCRIPT_VERDICT_OUTCOMES)[keyof typeof SCRIPT_VERDICT_OUTCOMES];
+
+// ============================================================================
+// PROMPT FILE RESOLUTION STATUSES - Prompt reference lookup results
+// ============================================================================
+export const PROMPT_FILE_RESOLUTION_STATUSES = {
+  MISSING: "missing",
+  UNREADABLE: "unreadable",
+  EMPTY: "empty",
+  RESOLVED: "resolved",
+} as const;
+
+export type PromptFileResolutionStatus =
+  (typeof PROMPT_FILE_RESOLUTION_STATUSES)[keyof typeof PROMPT_FILE_RESOLUTION_STATUSES];
+
+// ============================================================================
+// PROJECT STATE STATUSES - Persisted project and runner inspection results
+// ============================================================================
+export const PROJECT_STATE_PATH_STATUSES = {
+  PRESENT: "present",
+  MISSING: "missing",
+  UNKNOWN: "unknown",
+} as const;
+
+export type ProjectStatePathStatus =
+  (typeof PROJECT_STATE_PATH_STATUSES)[keyof typeof PROJECT_STATE_PATH_STATUSES];
+
+export const PROJECT_RUNNER_STATUSES = {
+  NONE: "none",
+  LIVE: "live",
+  UNKNOWN: "unknown",
+} as const;
+
+export type ProjectRunnerStatus =
+  (typeof PROJECT_RUNNER_STATUSES)[keyof typeof PROJECT_RUNNER_STATUSES];
+
+// ============================================================================
 // CLIENT IDS - Well-known client identifiers for the dashboard viewer registry
 // ============================================================================
 /** The VS Code sidebar/panel client. Always registered at startup. */
@@ -1263,6 +1309,77 @@ export const WORKTREE_MODES = {
 export type WorktreeMode = (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES];
 
 // ============================================================================
+// WORKTREE EDIT KINDS - Lineage preparation and start-position edit kinds
+// ============================================================================
+export const WORKTREE_EDIT_KINDS = {
+  DRAFT: "draft",
+  REWIND: "rewind",
+} as const;
+
+export type WorktreeEditKind =
+  (typeof WORKTREE_EDIT_KINDS)[keyof typeof WORKTREE_EDIT_KINDS];
+
+export const WORKTREE_POSITION_DIRECTIONS = {
+  REWIND: WORKTREE_EDIT_KINDS.REWIND,
+  FORWARD: "forward",
+} as const;
+
+export type WorktreePositionDirection =
+  (typeof WORKTREE_POSITION_DIRECTIONS)[keyof typeof WORKTREE_POSITION_DIRECTIONS];
+
+// ============================================================================
+// WORKTREE RUNTIME STATES - Persisted managed/named checkout lifecycle values
+// ============================================================================
+export const WORKTREE_DIRECTORY_STATES = {
+  PRESENT: "present",
+  REMOVED: "removed",
+  MISSING: "missing",
+  REMOVE_FAILED: "remove-failed",
+} as const;
+
+export type WorktreeDirectoryState =
+  (typeof WORKTREE_DIRECTORY_STATES)[keyof typeof WORKTREE_DIRECTORY_STATES];
+
+export const WORKTREE_BRANCH_STATES = {
+  PRESENT: "present",
+  DELETED: "deleted",
+  MISSING: "missing",
+} as const;
+
+export type WorktreeBranchState =
+  (typeof WORKTREE_BRANCH_STATES)[keyof typeof WORKTREE_BRANCH_STATES];
+
+export const WORKTREE_SETUP_OUTCOMES = {
+  PENDING: "pending",
+  RUNNING: "running",
+  SUCCEEDED: "succeeded",
+  FAILED: "failed",
+} as const;
+
+export type WorktreeSetupOutcome =
+  (typeof WORKTREE_SETUP_OUTCOMES)[keyof typeof WORKTREE_SETUP_OUTCOMES];
+
+export const WORKTREE_LANDING_OUTCOMES = {
+  LANDED: "landed",
+  NO_CHANGES: "no-changes",
+  BLOCKED: "blocked",
+} as const;
+
+export type WorktreeLandingOutcome =
+  (typeof WORKTREE_LANDING_OUTCOMES)[keyof typeof WORKTREE_LANDING_OUTCOMES];
+
+export const WORKTREE_MERGE_OUTCOMES = {
+  FAST_FORWARD: "fast-forward",
+  MERGE_COMMIT: "merge-commit",
+  CONFLICT: "conflict",
+  BLOCKED: "blocked",
+  ABORT_FAILED: "abort-failed",
+} as const;
+
+export type WorktreeMergeOutcome =
+  (typeof WORKTREE_MERGE_OUTCOMES)[keyof typeof WORKTREE_MERGE_OUTCOMES];
+
+// ============================================================================
 // WORKFLOW VIEW ADDRESS KIND - Discriminant for WorkflowViewAddress
 // ============================================================================
 export const WORKFLOW_VIEW_ADDRESS_KIND = {
@@ -1690,6 +1807,19 @@ export const GIT_CHANGE_KINDS = {
   STAGED: "staged",
   STASH: "stash",
 } as const;
+
+// ============================================================================
+// SCM FILE KINDS - Git source-control file status values
+// ============================================================================
+export const SCM_FILE_KINDS = {
+  MODIFIED: "modified",
+  ADDED: "added",
+  DELETED: "deleted",
+  RENAMED: "renamed",
+  UNTRACKED: "untracked",
+} as const;
+
+export type ScmFileKind = (typeof SCM_FILE_KINDS)[keyof typeof SCM_FILE_KINDS];
 
 // ============================================================================
 // DIFF CHANGE TYPES - Normalized file change vocabulary for diff surfaces

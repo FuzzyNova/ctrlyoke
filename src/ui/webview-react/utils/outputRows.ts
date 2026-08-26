@@ -16,6 +16,7 @@ import type {
 import type { ScriptVerdict } from "@root/types/CtrlYokeTypes";
 import {
   OUTPUT_ROW_KINDS,
+  OPERATION_STATUS,
   WORKFLOW_TOKEN_COVERAGE,
   type OutputRowKind,
   type WorkflowTokenCoverage,
@@ -1098,8 +1099,8 @@ function estimateBashOutputHeight(
 
   const isCompleted =
     data.status === undefined ||
-    data.status === "completed" ||
-    data.status === "failed";
+    data.status === OPERATION_STATUS.COMPLETED ||
+    data.status === OPERATION_STATUS.FAILED;
   if (!isCompleted) {
     return totalHeight + TOOL_CALL_BLOCK_HALF_VERTICAL_CHROME;
   }

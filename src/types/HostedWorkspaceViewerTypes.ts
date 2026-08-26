@@ -3,6 +3,7 @@ import {
   WORKSPACE_ENTRY_KINDS,
   type DiffChangeType,
   type DiffPayloadKind,
+  type ScmFileKind,
   type WorkspaceFileTreeEntryKind,
 } from "./DashboardConstants";
 
@@ -185,7 +186,7 @@ export interface SourceControlFile {
   path: string;
   stagedStatus: string | null;
   unstagedStatus: string | null;
-  kind: "modified" | "added" | "deleted" | "renamed" | "untracked";
+  kind: ScmFileKind;
 }
 
 /** Alias kept for API naming consistency — same shape as SourceControlFile. */
@@ -197,12 +198,7 @@ export interface WorkspaceScmStatusResponse {
   outgoingCommitCount: number;
 }
 
-export type DiffKind =
-  | "modified"
-  | "added"
-  | "deleted"
-  | "renamed"
-  | "untracked";
+export type DiffKind = ScmFileKind;
 
 export interface WorkspaceImageDiffSides {
   oldImageDataUri?: string;

@@ -831,7 +831,7 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(askEvents.length, 2);
 
       const declined = askEvents[1].data as AskUserQuestionData;
-      assert.strictEqual(declined.status, "failed");
+      assert.strictEqual(declined.status, OPERATION_STATUS.FAILED);
       assert.strictEqual(declined.declined?.reason, "clarify");
       // The decline carries no structured questions of its own — the shared
       // normalizer backfills them from the INITIATED event at render time.
@@ -876,7 +876,7 @@ suite("ClaudeLogParser", () => {
       const declined = response.events.find(
         (e) =>
           e.type === CLI_EVENT_TYPES.ASK_USER_QUESTION &&
-          (e.data as AskUserQuestionData).status === "failed"
+          (e.data as AskUserQuestionData).status === OPERATION_STATUS.FAILED
       )?.data as AskUserQuestionData | undefined;
 
       assert.ok(declined);

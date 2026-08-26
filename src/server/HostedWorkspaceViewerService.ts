@@ -47,7 +47,10 @@ import {
   WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE,
   WORKSPACE_FILE_HISTORY_MAX_PAGE_SIZE,
 } from "../types/HostedWorkspaceViewerTypes";
-import { WORKSPACE_ENTRY_KINDS } from "../types/DashboardConstants";
+import {
+  SCM_FILE_KINDS,
+  WORKSPACE_ENTRY_KINDS,
+} from "../types/DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {
   toViewerPath,
@@ -1490,15 +1493,15 @@ export class HostedWorkspaceViewerService {
 
       let kind: DiffKind;
       if (isUntracked) {
-        kind = "untracked";
+        kind = SCM_FILE_KINDS.UNTRACKED;
       } else if (x === "A") {
-        kind = "added";
+        kind = SCM_FILE_KINDS.ADDED;
       } else if (x === "D" || y === "D") {
-        kind = "deleted";
+        kind = SCM_FILE_KINDS.DELETED;
       } else if (x === "R") {
-        kind = "renamed";
+        kind = SCM_FILE_KINDS.RENAMED;
       } else {
-        kind = "modified";
+        kind = SCM_FILE_KINDS.MODIFIED;
       }
 
       files.push({
@@ -1536,7 +1539,7 @@ export class HostedWorkspaceViewerService {
     const oldBytes = await getBlobBytes(repoRoot, "HEAD", gitPath);
     let newBytes: Buffer | null = null;
 
-    if (kind !== "deleted") {
+    if (kind !== SCM_FILE_KINDS.DELETED) {
       try {
         newBytes = await fs.promises.readFile(resolved);
       } catch {
@@ -1651,7 +1654,7 @@ export class HostedWorkspaceViewerService {
       (file) => normalizeScmPath(file.path) === normalizedRelPath
     );
 
-    if (fileStatus?.kind === "untracked") {
+    if (fileStatus?.kind === SCM_FILE_KINDS.UNTRACKED) {
       await fs.promises.rm(resolved, { recursive: true, force: true });
       return;
     }

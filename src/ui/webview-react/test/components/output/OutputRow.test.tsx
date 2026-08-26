@@ -14,6 +14,7 @@ import {
   ATTEMPT_COST_CONFIDENCE,
   ATTEMPT_COST_SOURCES,
   OUTPUT_ROW_KINDS,
+  SCRIPT_VERDICT_OUTCOMES,
 } from "@root/types/DashboardConstants";
 import { useSettingsStore } from "@store/settingsStore";
 
@@ -242,9 +243,9 @@ describe("OutputRow collapsed attempt groups", () => {
 
 describe("OutputRow auto-expand on hidden active match", () => {
   it.each([
-    ["passed", "✔ Passed"],
-    ["failed", "✖ Failed"],
-    ["errored", "⚠ Errored"],
+    [SCRIPT_VERDICT_OUTCOMES.PASSED, "✔ Passed"],
+    [SCRIPT_VERDICT_OUTCOMES.FAILED, "✖ Failed"],
+    [SCRIPT_VERDICT_OUTCOMES.ERRORED, "⚠ Errored"],
   ] as const)("renders the %s verdict outcome", (outcome, label) => {
     const row: OutputRenderRow = {
       key: `verdict-${outcome}`,
@@ -255,11 +256,16 @@ describe("OutputRow auto-expand on hidden active match", () => {
       verdict: {
         compareSource: "auto",
         expected: "ok",
-        actual: outcome === "errored" ? "spawn npm ENOENT" : "ok",
+        actual:
+          outcome === SCRIPT_VERDICT_OUTCOMES.ERRORED
+            ? "spawn npm ENOENT"
+            : "ok",
         actualSource: "stdout",
         outcome,
-        matchRule: outcome === "passed" ? "exact" : "none",
-        action: outcome === "failed" ? "retry" : "continue",
+        matchRule:
+          outcome === SCRIPT_VERDICT_OUTCOMES.PASSED ? "exact" : "none",
+        action:
+          outcome === SCRIPT_VERDICT_OUTCOMES.FAILED ? "retry" : "continue",
         durationMs: 1200,
       },
     };
@@ -283,7 +289,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
         actual: "1",
         actualSource: "exitCode",
         exitCode: 1,
-        outcome: "failed",
+        outcome: SCRIPT_VERDICT_OUTCOMES.FAILED,
         matchRule: "none",
         action: "stopWorkflow",
         durationMs: 130_600,
@@ -322,7 +328,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
         expected: "PASS",
         actual,
         actualSource: "stdout",
-        outcome: "failed",
+        outcome: SCRIPT_VERDICT_OUTCOMES.FAILED,
         matchRule: "substring",
         action: "stopWorkflow",
         durationMs: 100,

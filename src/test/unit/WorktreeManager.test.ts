@@ -14,7 +14,10 @@ import { ExecutionRootLeaseManager } from "../../core/orchestration/ExecutionRoo
 import { summarizeStatusError } from "../../core/orchestration/ScriptExecutionReporter";
 import type { ScriptProcessResult } from "../../core/orchestration/ScriptProcessRunner";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
-import { WORKTREE_MANAGEMENT_ACTIONS } from "../../types/DashboardConstants";
+import {
+  WORKTREE_MANAGEMENT_ACTIONS,
+  WORKTREE_SETUP_OUTCOMES,
+} from "../../types/DashboardConstants";
 
 class RecordingWorktreeSetupRunner implements WorktreeSetupRunner {
   readonly calls: Array<Parameters<WorktreeSetupRunner["run"]>[0]> = [];
@@ -931,7 +934,8 @@ suite("WorktreeManager", function () {
     assert.ok(
       runtimePatches.some(
         (patch) =>
-          patch.lifecycleState === "blocked" && patch.setupOutcome === "failed"
+          patch.lifecycleState === "blocked" &&
+          patch.setupOutcome === WORKTREE_SETUP_OUTCOMES.FAILED
       )
     );
   });

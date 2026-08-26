@@ -10,6 +10,7 @@ import {
   LOCK_STATUS,
   QUEUE_POSITION,
   resolveQueueInsertIndex,
+  WORKTREE_EDIT_KINDS,
   type QueuePosition,
 } from "../../types/DashboardConstants";
 import { withFileLock } from "../../utils/FileLockUtils";
@@ -70,7 +71,7 @@ export class RunContinuationService {
       }
     }
     const pendingRewindOnThisRun =
-      descriptor.pendingEdit?.kind === "rewind" &&
+      descriptor.pendingEdit?.kind === WORKTREE_EDIT_KINDS.REWIND &&
       descriptor.pendingEdit.runRef === runRef;
     if (
       descriptor.pendingEdit &&
