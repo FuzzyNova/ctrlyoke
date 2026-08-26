@@ -1,5 +1,14 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { HistorySearchDrawer } from "@components/search/HistorySearchDrawer";
 import { useWorkflowStore } from "@store/workflowStore";
 import {
@@ -21,6 +30,47 @@ import {
 
 const postMessage = vi.mocked(window.vscodeApi!.postMessage);
 
+const originalOffsetHeight = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "offsetHeight"
+);
+const originalOffsetWidth = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "offsetWidth"
+);
+
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.classList.contains("overflow-y-auto") ? 100 : 20;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+    configurable: true,
+    get: () => 400,
+  });
+});
+
+function restoreLayoutProperties(): void {
+  if (originalOffsetHeight) {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "offsetHeight",
+      originalOffsetHeight
+    );
+  }
+  if (originalOffsetWidth) {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "offsetWidth",
+      originalOffsetWidth
+    );
+  }
+}
+
+afterAll(restoreLayoutProperties);
+
 const result = {
   workflowKey: "workflow-1" as never,
   runRef: "run-1" as never,
@@ -34,6 +84,14 @@ const result = {
   matchSnippet: "needle found here",
   matchContext: "Prompt 1",
 };
+
+function results(count: number) {
+  return Array.from({ length: count }, (_unused, index) => ({
+    ...result,
+    runRef: `run-${index}` as never,
+    runId: index,
+  }));
+}
 
 function renderSearch(
   filters: HistorySearchFilterState = DEFAULT_HISTORY_SEARCH_FILTERS
@@ -119,20 +177,30 @@ describe("HistorySearchDrawer filters", () => {
   });
 
   it("includes active filters when loading another page", () => {
-    renderSearch({
+    const view = renderSearch({
       ...DEFAULT_HISTORY_SEARCH_FILTERS,
       pathContains: "src/ui",
     });
     act(() => {
-      useUiStore.getState().setHistorySearchResults([result], false, {
-        totalCount: 51,
+      useUiStore.getState().setHistorySearchResults(results(40), false, {
+        totalCount: 100,
         nextCursor: "next-cursor",
         hasMore: true,
       });
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    const scroller =
+      view.container.querySelector<HTMLElement>(".overflow-y-auto");
+    expect(scroller).not.toBeNull();
+    if (!scroller) return;
 
+    act(() => {
+      scroller.scrollTop = 5000;
+      fireEvent.scroll(scroller);
+      fireEvent.scroll(scroller);
+    });
+
+    expect(postMessage).toHaveBeenCalledTimes(1);
     expect(postMessage).toHaveBeenLastCalledWith({
       type: MESSAGE_TYPES.SEARCH_HISTORY,
       query: "needle",
@@ -142,6 +210,57 @@ describe("HistorySearchDrawer filters", () => {
         pathContains: "src/ui",
       },
     });
+  });
+
+  it("does not render a Load more button when more results are available", () => {
+    renderSearch();
+    act(() => {
+      useUiStore.getState().setHistorySearchResults(results(40), false, {
+        totalCount: 100,
+        nextCursor: "next-cursor",
+        hasMore: true,
+      });
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Load more" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders placeholders for trailing results that are not loaded yet", () => {
+    renderSearch();
+    act(() => {
+      useUiStore.getState().setHistorySearchResults([result], false, {
+        totalCount: 100,
+        hasMore: false,
+      });
+    });
+
+    expect(
+      document.querySelector('[data-history-search-placeholder="true"]')
+    ).toBeInTheDocument();
+  });
+
+  it("keeps loaded results when reopening after navigating to a result", () => {
+    renderSearch();
+    act(() => {
+      useUiStore.getState().setHistorySearchResults([result], false, {
+        totalCount: 1,
+        hasMore: false,
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Search Workflow/ }));
+    postMessage.mockClear();
+
+    act(() => {
+      useUiStore.getState().openHistorySearch();
+    });
+
+    expect(screen.getByText("needle found here")).toBeInTheDocument();
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: MESSAGE_TYPES.SEARCH_HISTORY })
+    );
   });
 
   it("re-issues immediately when the harness filter changes", () => {

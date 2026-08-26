@@ -1,6 +1,6 @@
 # History Search Drawer Virtualization & Position Retention Plan
 
-**Status:** Phase 0 implemented, Phase 1 proposed
+**Status:** Implemented
 **Priority:** P3
 
 Sibling to
@@ -124,6 +124,22 @@ If a future need for arbitrary-offset access to search results emerges
 (e.g. "jump to result #500"), that would require extending
 `HistorySearchIndexService.search` with an explicit offset parameter — track
 that separately if it becomes a real need; today's UI never asks for it.
+
+## Implementation status
+
+- [x] Phase 0: unchanged searches preserve the mounted drawer's results and
+      scroll position across close/reopen.
+- [x] Phase 1 design: `HistorySearchDrawer` uses `VirtualizedPagedList` over
+      the flat sequential result array with a stable search listing identity,
+      placeholders, and the existing result-card rendering.
+- [x] Phase 1 design: the server-reported total count drives trailing
+      placeholder rows, while overscan range changes trigger the existing
+      guarded sequential `loadMore` callback.
+- [x] Phase 1 testing: filter-aware pagination, deduplicated overscan loading,
+      button removal, placeholder rendering, and reopen-after-navigation
+      regressions are covered in `HistorySearchDrawer.test.tsx`.
+- [x] Phase 1 acceptance: result rows are virtualized, manual loading is
+      removed, and existing search/filter/navigation behavior is retained.
 
 ### Sequencing
 

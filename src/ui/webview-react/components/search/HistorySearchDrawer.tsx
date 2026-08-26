@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from "react";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -34,10 +35,13 @@ import {
   DateRangeFilterControls,
   ExitButton,
   MultiCheckboxDropdown,
+  VirtualizedPagedList,
+  type VirtualizedListRange,
 } from "@components/shared";
 import { formatMultiFilterLabel } from "@utils/filterLabels";
 
 const RESULT_LIMIT = 50;
+const HISTORY_RESULT_ESTIMATE = 108;
 
 /**
  * Shared centered column for the search bar, result summary, and result list so
@@ -402,6 +406,96 @@ export function HistorySearchDrawer() {
     workflowKey,
   ]);
 
+  const listingId = useMemo(
+    () =>
+      `history-search:${trimmedQuery}:${JSON.stringify(
+        toHistorySearchFilters(historySearchFilters, workflowKey)
+      )}`,
+    [historySearchFilters, trimmedQuery, workflowKey]
+  );
+  const resultsScrollContainerRef = useRef<HTMLDivElement>(null);
+  const getItem = useCallback(
+    (index: number): HistorySearchResult | undefined => results[index],
+    [results]
+  );
+  const getItemKey = useCallback(
+    (result: HistorySearchResult, index: number): string =>
+      `${result.workflowKey}:${result.runRef}:${result.target.kind}:${result.eventKind}:${result.matchField}:${index}`,
+    []
+  );
+  const renderItem = useCallback(
+    (result: HistorySearchResult): ReactNode => {
+      const relativeTime =
+        formatRelativeTimeVerbose(result.startedAt) ?? "Unknown time";
+      const startedAtTitle = new Date(result.startedAt).toLocaleString();
+
+      return (
+        <button
+          type="button"
+          onClick={() => navigateToResult(result)}
+          className="w-full rounded-md border border-transparent px-3 py-3 text-left transition-colors hover:border-focus-border hover:bg-list-hover-bg focus:border-focus-border focus:bg-list-hover-bg focus:outline-none"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-foreground">
+                {result.workflowName}
+              </div>
+              <div
+                className="mt-0.5 text-xs text-description-fg"
+                title={startedAtTitle}
+              >
+                Run #{result.runId} &middot; {relativeTime}
+              </div>
+            </div>
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${EVENT_KIND_BADGES[result.eventKind]}`}
+            >
+              {EVENT_KIND_LABELS[result.eventKind]}
+            </span>
+            <span className="shrink-0 pt-0.5 text-[11px] text-description-fg">
+              · {result.matchField}
+            </span>
+          </div>
+
+          <div className="mt-2 text-xs font-medium text-description-fg">
+            {result.matchContext}
+          </div>
+          <div className="mt-1 text-sm text-foreground/90">
+            {truncateSnippet(result.matchSnippet)}
+          </div>
+        </button>
+      );
+    },
+    [navigateToResult]
+  );
+  const renderPlaceholder = useCallback(
+    (index: number): ReactNode => (
+      <div
+        className="h-[108px] rounded-md border border-panel-border bg-editor-bg/40 px-3 py-3"
+        data-history-search-placeholder="true"
+        data-placeholder-index={index}
+        aria-hidden="true"
+      >
+        <div className="h-3 w-2/5 animate-pulse rounded bg-description-fg/20" />
+        <div className="mt-3 h-3 w-4/5 animate-pulse rounded bg-description-fg/15" />
+        <div className="mt-2 h-3 w-3/5 animate-pulse rounded bg-description-fg/15" />
+      </div>
+    ),
+    []
+  );
+  const estimateItemSize = useCallback(
+    (_index: number): number => HISTORY_RESULT_ESTIMATE,
+    []
+  );
+  const handleRangeChange = useCallback(
+    (range: VirtualizedListRange): void => {
+      if (range.overscanEndIndex >= results.length - 1) {
+        loadMore();
+      }
+    },
+    [loadMore, results.length]
+  );
+
   const summaryLabel = useMemo(() => {
     if (trimmedQuery.length < 2 || loading || totalCount === 0) {
       return "";
@@ -631,7 +725,10 @@ export function HistorySearchDrawer() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
+      <div
+        ref={resultsScrollContainerRef}
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-2"
+      >
         {trimmedQuery.length === 1 && !loading && (
           <div className="px-3 py-6 text-center text-sm text-description-fg">
             Type at least 2 characters
@@ -651,67 +748,19 @@ export function HistorySearchDrawer() {
           </div>
         )}
 
-        {results.length > 0 && (
+        {totalCount > 0 && (
           <div className={`flex flex-col gap-1 ${CONTENT_COLUMN_CLASS}`}>
-            {results.map((result, index) => {
-              const relativeTime =
-                formatRelativeTimeVerbose(result.startedAt) ?? "Unknown time";
-              const startedAtTitle = new Date(
-                result.startedAt
-              ).toLocaleString();
-
-              return (
-                <button
-                  key={`${result.workflowKey}:${result.runRef}:${result.target.kind}:${result.eventKind}:${result.matchField}:${index}`}
-                  type="button"
-                  onClick={() => navigateToResult(result)}
-                  className="w-full rounded-md border border-transparent px-3 py-3 text-left transition-colors hover:border-focus-border hover:bg-list-hover-bg focus:border-focus-border focus:bg-list-hover-bg focus:outline-none"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-foreground">
-                        {result.workflowName}
-                      </div>
-                      <div
-                        className="mt-0.5 text-xs text-description-fg"
-                        title={startedAtTitle}
-                      >
-                        Run #{result.runId} &middot; {relativeTime}
-                      </div>
-                    </div>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${EVENT_KIND_BADGES[result.eventKind]}`}
-                    >
-                      {EVENT_KIND_LABELS[result.eventKind]}
-                    </span>
-                    <span className="shrink-0 pt-0.5 text-[11px] text-description-fg">
-                      · {result.matchField}
-                    </span>
-                  </div>
-
-                  <div className="mt-2 text-xs font-medium text-description-fg">
-                    {result.matchContext}
-                  </div>
-                  <div className="mt-1 text-sm text-foreground/90">
-                    {truncateSnippet(result.matchSnippet)}
-                  </div>
-                </button>
-              );
-            })}
-
-            {hasMore && (
-              <button
-                type="button"
-                onClick={loadMore}
-                disabled={loadingMore}
-                className="mt-2 flex h-8 items-center justify-center gap-2 self-center rounded border border-btn-border bg-btn-secondary-bg px-4 text-xs font-medium text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-60"
-              >
-                {loadingMore && (
-                  <i className="codicon codicon-loading animate-spin" />
-                )}
-                <span>{loadingMore ? "Loading..." : "Load more"}</span>
-              </button>
-            )}
+            <VirtualizedPagedList
+              totalCount={totalCount}
+              listingId={listingId}
+              getItem={getItem}
+              getItemKey={getItemKey}
+              renderItem={renderItem}
+              renderPlaceholder={renderPlaceholder}
+              scrollContainerRef={resultsScrollContainerRef}
+              estimateItemSize={estimateItemSize}
+              onRangeChange={handleRangeChange}
+            />
           </div>
         )}
       </div>
