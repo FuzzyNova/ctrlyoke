@@ -1133,6 +1133,21 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           }
         }
       }
+
+      // Structured tool_use_result metadata (accurate structuredPatch line
+      // numbers, full file context, etc.) — mirrors extractResponse() below.
+      // Without this, live streaming only ever emits the plain TOOL_RESULT
+      // above, so DiffView falls back to diffing the Edit tool's bare
+      // old_string/new_string snippets against each other, which always
+      // starts hunks at line 1 until the run finishes and the log is
+      // reparsed in full via extractResponse().
+      if (e.toolUseResult && typeof e.toolUseResult === "object") {
+        ClaudeToolBuilder.processToolUseResultMetadata(
+          e.toolUseResult as Record<string, any>,
+          timestamp,
+          events
+        );
+      }
     }
 
     if (e.type === "progress" && e.data?.type === "bash_progress") {
