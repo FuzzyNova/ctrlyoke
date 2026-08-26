@@ -27,11 +27,19 @@ describe("BashOutput", () => {
     expect(container.textContent).toContain(longCommand);
   });
 
-  it("shows the full-command label when the caller enables it", () => {
+  it("shows the full-command label when the caller enables it", async () => {
+    const user = userEvent.setup();
     const longCommand = `node -e "${"x".repeat(220)}"`;
     render(<BashOutput command={longCommand} showLabel />);
 
-    expect(screen.getByText("Show full command")).toBeInTheDocument();
+    expect(screen.getByText("Show full command")).toHaveClass(
+      "uppercase",
+      "text-[length:var(--fp-output-font-size-xs)]"
+    );
+
+    await user.click(screen.getByTitle("Show full command"));
+
+    expect(screen.getByText("Hide full command")).toBeInTheDocument();
   });
 
   it("renders output when status is completed", () => {

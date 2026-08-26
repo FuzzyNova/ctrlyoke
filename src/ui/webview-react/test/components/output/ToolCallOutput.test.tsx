@@ -278,7 +278,10 @@ describe("McpToolCallOutput", () => {
       />
     );
 
-    expect(screen.getByText("Show parameters")).toBeInTheDocument();
+    expect(screen.getByText("Show parameters")).toHaveClass(
+      "uppercase",
+      "text-[length:var(--fp-output-font-size-xs)]"
+    );
     expect(
       screen.queryByText("prompt: queue the next step")
     ).not.toBeInTheDocument();
@@ -286,6 +289,7 @@ describe("McpToolCallOutput", () => {
     await user.click(screen.getByTitle("Show all parameters"));
 
     expect(screen.getByTitle("Hide parameters")).toBeInTheDocument();
+    expect(screen.getByText("Hide parameters")).toBeInTheDocument();
     expect(
       screen.getByText(
         (_, element) =>
