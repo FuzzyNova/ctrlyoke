@@ -25,6 +25,7 @@ package.json.backup
 .ctrlyoke/dev/
 .ctrlyoke-dev-home/
 .vscode-dev-userdata/
+.vscode-dev-tempdir/
 .playwright-mcp/
 manual-test/hooks/output/
 

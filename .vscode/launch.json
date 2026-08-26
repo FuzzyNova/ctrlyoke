@@ -26,10 +26,7 @@
         "${workspaceFolder}/ctrlyoke-test.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "npm: compile:react-debug",
-      "env": {
-        "CTRLYOKE_HOME": "${workspaceFolder}/.ctrlyoke-dev-home"
-      }
+      "preLaunchTask": "npm: compile:react-debug"
     },
     {
       "name": "Run Extension (Production)",
@@ -41,10 +38,7 @@
         "${workspaceFolder}/ctrlyoke-test.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "npm: compile:prod",
-      "env": {
-        "CTRLYOKE_HOME": "${workspaceFolder}/.ctrlyoke-dev-home"
-      }
+      "preLaunchTask": "npm: compile:prod"
     },
     {
       "name": "Run Extension (Multi Repo)",
@@ -56,25 +50,30 @@
         "${workspaceFolder}/ctrlyoke-fuzzno.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "npm: compile",
-      "env": {
-        "CTRLYOKE_HOME": "${workspaceFolder}/.ctrlyoke-dev-home"
-      }
+      "preLaunchTask": "npm: compile"
     },
     {
+      // Always launches into a freshly-wiped, unconfigured folder (no
+      // .ctrlyoke/, no committed workflow files) with its own --user-data-dir,
+      // so the walkthrough's "seen" globalState flag is unset too. Use this to
+      // exercise WorkspaceInitializer's first-run flow and the onboarding
+      // tour (dev/implemented/ONBOARDING_TOUR_PLAN.md) repeatably. The reset
+      // happens every launch via the "compile (onboarding tempdir)" task —
+      // see .vscode/tasks.json.
       "name": "Run Extension (Debug, Isolated)",
       "type": "extensionHost",
       "request": "launch",
       "args": [
         "--disable-extensions",
+        "--user-data-dir=${workspaceFolder}/.vscode-dev-tempdir/userdata",
         "--extensionDevelopmentPath=${workspaceFolder}",
         "--disable-extension=fuzzynova.ctrlyoke",
-        "${workspaceFolder}/ctrlyoke-test.code-workspace"
+        "${workspaceFolder}/.vscode-dev-tempdir/workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "npm: compile",
+      "preLaunchTask": "compile (onboarding tempdir)",
       "env": {
-        "CTRLYOKE_HOME": "${workspaceFolder}/.ctrlyoke-dev-home"
+        "CTRLYOKE_HOME": "${workspaceFolder}/.vscode-dev-tempdir/ctrlyoke-home"
       }
     },
     {
