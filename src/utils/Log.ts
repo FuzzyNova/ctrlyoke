@@ -25,6 +25,20 @@ export enum LogLevel {
 /** Max age for log files before cleanup removes them (7 days). */
 const LOG_CLEANUP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * Display label for each {@link LogLevel}, used for the on-disk/CLI log
+ * prefix. `writeLog()` itself dispatches on the `LogLevel` enum value, not
+ * the label — this is only looked up when a message is actually rendered.
+ */
+const LOG_LEVEL_LABELS: Record<LogLevel, string> = {
+  [LogLevel.TRACE]: "TRACE",
+  [LogLevel.DEBUG]: "DEBUG",
+  [LogLevel.INFO]: "INFO",
+  [LogLevel.WARN]: "WARN",
+  [LogLevel.ERROR]: "ERROR",
+  [LogLevel.OFF]: "OFF",
+};
+
 export class Log {
   private static outputChannel: vscode.LogOutputChannel;
   private static logLevel: LogLevel = LogLevel.INFO;
@@ -246,25 +260,25 @@ export class Log {
 
   static trace(message: string, ...args: any[]): void {
     if (this.logLevel <= LogLevel.TRACE) {
-      this.writeLog("TRACE", message, ...args);
+      this.writeLog(LogLevel.TRACE, message, ...args);
     }
   }
 
   static debug(message: string, ...args: any[]): void {
     if (this.logLevel <= LogLevel.DEBUG) {
-      this.writeLog("DEBUG", message, ...args);
+      this.writeLog(LogLevel.DEBUG, message, ...args);
     }
   }
 
   static info(message: string, ...args: any[]): void {
     if (this.logLevel <= LogLevel.INFO) {
-      this.writeLog("INFO", message, ...args);
+      this.writeLog(LogLevel.INFO, message, ...args);
     }
   }
 
   static warn(message: string, ...args: any[]): void {
     if (this.logLevel <= LogLevel.WARN) {
-      this.writeLog("WARN", message, ...args);
+      this.writeLog(LogLevel.WARN, message, ...args);
     }
   }
 
@@ -272,15 +286,15 @@ export class Log {
     if (this.logLevel <= LogLevel.ERROR) {
       if (error) {
         this.writeLog(
-          "ERROR",
+          LogLevel.ERROR,
           `${message}: ${getErrorMessage(error)}`,
           ...args
         );
         if (error instanceof Error && error.stack) {
-          this.writeLog("ERROR", `Stack trace: ${error.stack}`);
+          this.writeLog(LogLevel.ERROR, `Stack trace: ${error.stack}`);
         }
       } else {
-        this.writeLog("ERROR", message, ...args);
+        this.writeLog(LogLevel.ERROR, message, ...args);
       }
     }
   }
@@ -304,7 +318,7 @@ export class Log {
   }
 
   private static writeLog(
-    level: string,
+    level: LogLevel,
     message: string,
     ...args: any[]
   ): void {
@@ -312,7 +326,9 @@ export class Log {
     const formattedMessage = secretRedactionService.redactText(
       args.length > 0 ? `${message} ${JSON.stringify(args)}` : message
     );
-    const logEntry = `[${timestamp}] ${level}: ${formattedMessage}`;
+    // Manual timestamp/level prefix — only needed where VS Code's
+    // LogOutputChannel isn't doing that decoration itself (file/CLI output).
+    const logEntry = `[${timestamp}] ${LOG_LEVEL_LABELS[level]}: ${formattedMessage}`;
 
     if (this.cliMode) {
       // CLI binary: write only to the log file — never pollute stdout/stderr.
@@ -326,9 +342,29 @@ export class Log {
       return;
     }
 
-    // VS Code extension mode: write to output channel and console.
+    // VS Code extension mode: dispatch to the LogOutputChannel's own
+    // level-specific method rather than appendLine(). appendLine() always
+    // renders as "[info]" with VS Code's own timestamp, which — stacked on
+    // top of our manual prefix — is what produced the double
+    // timestamp/level lines in the Output panel.
     if (this.outputChannel) {
-      this.outputChannel.appendLine(logEntry);
+      switch (level) {
+        case LogLevel.TRACE:
+          this.outputChannel.trace(formattedMessage);
+          break;
+        case LogLevel.DEBUG:
+          this.outputChannel.debug(formattedMessage);
+          break;
+        case LogLevel.WARN:
+          this.outputChannel.warn(formattedMessage);
+          break;
+        case LogLevel.ERROR:
+          this.outputChannel.error(formattedMessage);
+          break;
+        default:
+          this.outputChannel.info(formattedMessage);
+          break;
+      }
     }
 
     if (IS_DEV_MODE) {
