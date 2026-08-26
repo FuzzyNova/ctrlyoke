@@ -2404,6 +2404,16 @@ export const KEYBOARD_KEYS = {
 export const INHERIT_DEFAULT_OPTION = "default" as const;
 
 // ============================================================================
+// NONE OPTION - UI sentinel for explicitly disabled inherited settings
+// ============================================================================
+export const NONE_OPTION = "none" as const;
+
+// ============================================================================
+// SCRIPT MATCH RULE NONE - Script verdict sentinel when no rule matched
+// ============================================================================
+export const SCRIPT_MATCH_RULE_NONE = "none" as const;
+
+// ============================================================================
 // ATOMIC REFERENCE KINDS - @-mention file/directory/symbol references
 // ============================================================================
 export const ATOMIC_REFERENCE_KINDS = {

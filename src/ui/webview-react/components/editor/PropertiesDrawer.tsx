@@ -18,6 +18,7 @@ import {
 } from "../../types/messages";
 import {
   INHERIT_DEFAULT_OPTION,
+  NONE_OPTION,
   EXECUTION_MODE_HELP_TEXT,
   EXECUTION_MODE_OPTIONS,
   PERMISSION_MODES,
@@ -273,7 +274,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     properties.additionalArgs === undefined
       ? INHERIT_DEFAULT_OPTION
       : properties.additionalArgs === null
-        ? "none"
+        ? NONE_OPTION
         : PROPERTY_EDITOR_MODES.CUSTOM;
   const isAdditionalArgsActive =
     additionalArgsMode === PROPERTY_EDITOR_MODES.CUSTOM;
@@ -413,14 +414,14 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     properties.endCondition === undefined
       ? "inherit"
       : properties.endCondition === null
-        ? "none"
+        ? NONE_OPTION
         : PROPERTY_EDITOR_MODES.CUSTOM;
 
   const preConditionMode =
     properties.preCondition === undefined
       ? "inherit"
       : properties.preCondition === null
-        ? "none"
+        ? NONE_OPTION
         : PROPERTY_EDITOR_MODES.CUSTOM;
 
   const errorBehaviorMode =
@@ -478,7 +479,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
 
   const buildConditionOptions = (inheritLabel: string) => [
     { value: "inherit", label: inheritLabel },
-    { value: "none", label: "None" },
+    { value: NONE_OPTION, label: "None" },
     { value: PROPERTY_EDITOR_MODES.CUSTOM, label: "Custom" },
   ];
 
@@ -627,13 +628,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     properties.agent === undefined
                       ? INHERIT_DEFAULT_OPTION
                       : properties.agent === null
-                        ? "none"
+                        ? NONE_OPTION
                         : properties.agent
                   }
                   onChange={(v) => {
                     if (v === INHERIT_DEFAULT_OPTION) {
                       setProperty("agent", undefined);
-                    } else if (v === "none") {
+                    } else if (v === NONE_OPTION) {
                       setProperty("agent", null);
                     } else {
                       setProperty("agent", v);
@@ -641,7 +642,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   }}
                   options={[
                     { value: INHERIT_DEFAULT_OPTION, label: defaultAgentLabel },
-                    { value: "none", label: "None" },
+                    { value: NONE_OPTION, label: "None" },
                     ...availableAgents.map((agent) =>
                       toAgentSelectOption(agent, agent.name)
                     ),
@@ -698,7 +699,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   onChange={(v) => {
                     if (v === INHERIT_DEFAULT_OPTION) {
                       setProperty("additionalArgs", undefined);
-                    } else if (v === "none") {
+                    } else if (v === NONE_OPTION) {
                       setProperty("additionalArgs", null);
                     } else {
                       setProperty(
@@ -714,7 +715,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       value: INHERIT_DEFAULT_OPTION,
                       label: defaultAdditionalArgsLabel,
                     },
-                    { value: "none", label: "None" },
+                    { value: NONE_OPTION, label: "None" },
                     { value: PROPERTY_EDITOR_MODES.CUSTOM, label: "Custom" },
                   ]}
                 />
@@ -914,7 +915,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 onChange={(v) => {
                   if (v === "inherit") {
                     setProperty("preCondition", undefined);
-                  } else if (v === "none") {
+                  } else if (v === NONE_OPTION) {
                     setProperty("preCondition", null);
                   } else {
                     setProperty("preCondition", {
@@ -966,7 +967,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 onChange={(v) => {
                   if (v === "inherit") {
                     clearEndCondition();
-                  } else if (v === "none") {
+                  } else if (v === NONE_OPTION) {
                     setEndCondition(null);
                   } else {
                     setEndCondition({ ...END_CONDITION_DEFAULTS });

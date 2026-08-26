@@ -1,4 +1,7 @@
-import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
+import {
+  INHERIT_DEFAULT_OPTION,
+  NONE_OPTION,
+} from "@root/types/DashboardConstants";
 import React from "react";
 import { useEditorStore } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
@@ -86,13 +89,13 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
           properties.agent === undefined
             ? INHERIT_DEFAULT_OPTION
             : properties.agent === null
-              ? "none"
+              ? NONE_OPTION
               : properties.agent
         }
         onChange={(v) => {
           if (v === INHERIT_DEFAULT_OPTION) {
             setProperty("agent", undefined);
-          } else if (v === "none") {
+          } else if (v === NONE_OPTION) {
             setProperty("agent", null);
           } else {
             setProperty("agent", v);
@@ -101,7 +104,7 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
         }}
         options={[
           { value: INHERIT_DEFAULT_OPTION, label: defaultAgentLabel },
-          { value: "none", label: "None" },
+          { value: NONE_OPTION, label: "None" },
           ...availableAgents.map((agent) =>
             toAgentSelectOption(agent, agent.name)
           ),

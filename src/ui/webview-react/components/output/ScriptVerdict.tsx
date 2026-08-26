@@ -1,6 +1,9 @@
 import { memo, useEffect } from "react";
 import type { ScriptVerdict as ScriptVerdictData } from "@root/types/CtrlYokeTypes";
-import { SCRIPT_VERDICT_OUTCOMES } from "@root/types/DashboardConstants";
+import {
+  SCRIPT_MATCH_RULE_NONE,
+  SCRIPT_VERDICT_OUTCOMES,
+} from "@root/types/DashboardConstants";
 import {
   DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
   DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
@@ -38,7 +41,7 @@ function getMatchedByLabel(verdict: ScriptVerdictData): string {
       return "numeric ≥";
     case "exitCode":
       return "exit code";
-    case "none":
+    case SCRIPT_MATCH_RULE_NONE:
       return "no match";
     default:
       return verdict.matchRule;

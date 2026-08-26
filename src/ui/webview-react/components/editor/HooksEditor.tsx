@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from "react";
 import {
   INHERIT_DEFAULT_OPTION,
   HOOK_EVENT_METADATA,
+  NONE_OPTION,
 } from "@root/types/DashboardConstants";
 import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
@@ -24,12 +25,12 @@ interface HooksEditorProps {
   diagnostics?: readonly CompatibilityDiagnostic[];
 }
 
-type EditorMode = typeof INHERIT_DEFAULT_OPTION | "none" | "custom";
+type EditorMode = typeof INHERIT_DEFAULT_OPTION | typeof NONE_OPTION | "custom";
 
 function getMode(value: HooksValue): EditorMode {
   if (value === undefined) return INHERIT_DEFAULT_OPTION;
   if (value === null || (Array.isArray(value) && value.length === 0))
-    return "none";
+    return NONE_OPTION;
   return "custom";
 }
 
@@ -53,7 +54,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
   const handleModeChange = useCallback(
     (newMode: EditorMode) => {
       if (newMode === INHERIT_DEFAULT_OPTION) onChange(undefined);
-      else if (newMode === "none") onChange(null);
+      else if (newMode === NONE_OPTION) onChange(null);
       else onChange([{ event: "stop", command: "" }]);
     },
     [onChange]
@@ -91,7 +92,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
   // Mode selector (only at prompt level, not global settings)
   const modeSelector = showDefault ? (
     <div className="flex gap-1 mb-2">
-      {([INHERIT_DEFAULT_OPTION, "none", "custom"] as const).map((m) => (
+      {([INHERIT_DEFAULT_OPTION, NONE_OPTION, "custom"] as const).map((m) => (
         <button
           key={m}
           type="button"
@@ -104,7 +105,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
         >
           {m === INHERIT_DEFAULT_OPTION
             ? "Inherit"
-            : m === "none"
+            : m === NONE_OPTION
               ? "None"
               : "Custom"}
         </button>
@@ -147,7 +148,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
   }
 
   // None mode (only block when mode selector is visible so user can switch back)
-  if (mode === "none" && showDefault) {
+  if (mode === NONE_OPTION && showDefault) {
     return (
       <div>
         {modeSelector}
