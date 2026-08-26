@@ -204,12 +204,26 @@ behavior but surface it in the Settings server section (which already has UI
 for `portFallback`, see `server.instructions.md`) with sibling-aware wording
 instead of "port was already in use by something."
 
-**Implemented:** `listen()` now probes the authenticated `/api/workflow-files`
+**Implemented:** `listen()` probes the authenticated `/api/workflow-files`
 endpoint before falling back after `EADDRINUSE`. When it identifies a sibling
-ctrlyoke server for the same workspace, the second server is not started and
-the existing URL is surfaced through the normal user-feedback notification.
-This chooses the skip-and-notice option because it prevents two independent
-servers from bridging the same workspace.
+ctrlyoke server for the same workspace, it surfaces the existing URL through
+the normal user-feedback notification and **still falls back to an
+OS-assigned port and starts its own server**, rather than skipping — this
+chooses the bind-fallback-and-notice option instead of skip-and-notice.
+Two hosted servers bridging the same workspace turned out not to need
+preventing: each server bridges its own process's already-correct
+`WorkflowOrchestrator`/`WorkflowLockManager` state (the same per-process
+lock-file arbitration that already makes two VS Code windows on one
+workspace safe, per Phases 1–2), and the dashboard's externally-managed
+read-only banner (`Header.tsx`'s `isExternallyManaged`, keyed off the shared
+`WorkflowSummary.managedBy` field) renders identically whether the client
+reached it through a webview or through either sibling's browser dashboard.
+Skipping the second server actively broke the project's own documented dev
+loop (see `dev/reference/DEVELOPING_CTRLYOKE_WITH_CTRLYOKE.md`): a debug
+Extension Development Host that found the daily-driver's server already
+listening would never bind its own, so `.ctrlyoke/dev/server-url.txt` — and
+therefore Playwright — pointed at the production instance's dashboard
+instead of the code under test.
 
 ## Related, Lower-Severity: The "Open Worktree in New Window" Case
 

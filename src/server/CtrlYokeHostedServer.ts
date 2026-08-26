@@ -2058,11 +2058,7 @@ export class CtrlYokeHostedServer
             void this.probeExistingServer(port)
               .then((existingServer) => {
                 if (existingServer) {
-                  const existingServerUrl = this.buildPublicUrl(port);
-                  this.writeDevServerUrlFile(existingServerUrl, false);
-                  this.onSiblingServerDetected?.(existingServerUrl);
-                  resolve(undefined);
-                  return;
+                  this.onSiblingServerDetected?.(this.buildPublicUrl(port));
                 }
                 fallBackToOsPort();
               })
@@ -2080,7 +2076,7 @@ export class CtrlYokeHostedServer
             this.bindAddress === "0.0.0.0" ? this.getLanIps() : [];
           const host = this.availableIps[0] ?? "localhost";
           this.publicUrl = `${scheme}://${host}:${this.port}/?token=${this.token}`;
-          this.writeDevServerUrlFile(this.publicUrl, true);
+          this.writeDevServerUrlFile(this.publicUrl);
           resolve(this.publicUrl);
         };
         this.httpServer.once("error", onError);
@@ -2200,7 +2196,7 @@ export class CtrlYokeHostedServer
    * instead of a human pasting it. Best-effort — a write failure must never
    * block the server from starting.
    */
-  private writeDevServerUrlFile(url: string, ownsFile: boolean): void {
+  private writeDevServerUrlFile(url: string): void {
     if (!IS_DEV_MODE) return;
     try {
       const devDir = path.join(
@@ -2214,7 +2210,7 @@ export class CtrlYokeHostedServer
         `${url}\n`,
         "utf8"
       );
-      if (ownsFile) this.devServerUrlFileOwned = true;
+      this.devServerUrlFileOwned = true;
     } catch (err) {
       Log.warn(`ctrlyoke: Failed to write dev server-url file: ${err}`);
     }

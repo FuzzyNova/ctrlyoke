@@ -163,7 +163,7 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
     assert.strictEqual(server.getPortFallbackInfo(), null);
   });
 
-  test("skips a configured port occupied by a sibling ctrlyoke server and reports it", async () => {
+  test("falls back to an OS-assigned port when occupied by a sibling ctrlyoke server, and reports it", async () => {
     const token = "sibling-server-token";
     const sibling = createHostedServer(0, token);
     let second: CtrlYokeHostedServer | undefined;
@@ -179,16 +179,21 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
 
       const secondUrl = await second.listen();
 
-      assert.strictEqual(secondUrl, undefined);
+      if (!secondUrl)
+        throw new Error("Second instance did not start its own server");
       assert.strictEqual(detectedUrl, siblingUrl);
-      assert.strictEqual(second.getPortFallbackInfo(), null);
+      assert.notStrictEqual(Number(new URL(secondUrl).port), siblingPort);
+      assert.deepStrictEqual(second.getPortFallbackInfo(), {
+        requestedPort: siblingPort,
+        actualPort: Number(new URL(secondUrl).port),
+      });
     } finally {
       second?.dispose();
       sibling.dispose();
     }
   });
 
-  test("writes the sibling URL in dev mode and preserves it through dispose", async () => {
+  test("writes its own URL to the dev file when a sibling is detected in dev mode", async () => {
     const workspaceRoot = fs.mkdtempSync(
       path.join(os.tmpdir(), "ctrlyoke-hosted-server-")
     );
@@ -209,11 +214,14 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
         workspaceRoot
       );
 
-      assert.strictEqual(await second.listen(), undefined);
-      assert.strictEqual(fs.readFileSync(urlFile, "utf8"), `${siblingUrl}\n`);
+      const secondUrl = await second.listen();
+      if (!secondUrl)
+        throw new Error("Second instance did not start its own server");
+      assert.notStrictEqual(secondUrl, siblingUrl);
+      assert.strictEqual(fs.readFileSync(urlFile, "utf8"), `${secondUrl}\n`);
 
       second.dispose();
-      assert.strictEqual(fs.readFileSync(urlFile, "utf8"), `${siblingUrl}\n`);
+      assert.strictEqual(fs.existsSync(urlFile), false);
     } finally {
       second?.dispose();
       restoreDevMode();
@@ -222,7 +230,7 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
     }
   });
 
-  test("does not write a dev URL file for a non-dev sibling detection", async () => {
+  test("does not write a dev URL file outside dev mode, even after a sibling detection", async () => {
     const workspaceRoot = fs.mkdtempSync(
       path.join(os.tmpdir(), "ctrlyoke-hosted-server-")
     );
@@ -241,7 +249,9 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
         workspaceRoot
       );
 
-      assert.strictEqual(await second.listen(), undefined);
+      const secondUrl = await second.listen();
+      if (!secondUrl)
+        throw new Error("Second instance did not start its own server");
       assert.strictEqual(
         fs.existsSync(devServerUrlFilePath(workspaceRoot)),
         false

@@ -225,17 +225,24 @@ With `server.enabled: true`, both instances read the identical
 activation (`src/extension.ts:1294-1297`). The first instance to bind wins.
 When the other receives `EADDRINUSE`, `CtrlYokeHostedServer.listen()` probes
 the occupied port with the configured token and workspace identity. If it is
-a sibling ctrlyoke server, the second instance does not start another server;
-it reports a warning naming the existing URL and disposes its unstarted
-server object. Only one hosted server ever bridges this workspace.
+a sibling ctrlyoke server, the second instance surfaces a warning naming the
+existing URL — and then **still falls back to an OS-assigned port and starts
+its own server**, exactly as it would for an unrelated process squatting on
+the port. Both hosted servers stay up, each bridging its own process's
+`WorkflowOrchestrator` to whichever browser clients connect to it; this is
+safe for the same reason two VS Code windows on one workspace are safe (see
+`dev/implemented/MULTI_INSTANCE_WORKSPACE_COORDINATION_PLAN.md`'s Phase
+1–2) — each process independently arbitrates the shared lock files, and the
+dashboard's externally-managed read-only banner renders the same way in
+either instance's browser dashboard as it would in a VS Code webview.
 
 **Only `IS_DEV_MODE` builds mirror a URL (including its token) to
-`.ctrlyoke/dev/server-url.txt`.** If the production daily driver owns the
-port, the debug host writes the sibling's URL to that file before its
-sibling-detected server object is disposed, and that disposal preserves the
-file. If the debug host owns the port, it writes its own URL as usual. Either
-way, a headless agent or Playwright can read a valid workspace URL without a
-human pasting it. Attach the Playwright MCP server to your agent session as
+`.ctrlyoke/dev/server-url.txt`.** Whichever instance actually bound a
+listening server — production or debug host — writes *its own* URL there.
+In the normal daily-driver + `F5` debug-host flow this means the debug
+host's fallback port ends up in the file, so a headless agent or Playwright
+reading it lands on the debug build under test, not on the production
+daily driver. Attach the Playwright MCP server to your agent session as
 usual; no port-splitting configuration is needed.
 
 ## Launching and closing the dev host from a CLI agent (no `F5`, no UI restart)
@@ -332,14 +339,19 @@ extension host's event loop is already unhealthy — the OS-level close/relaunch
 here doesn't depend on the thing being torn down staying responsive.
 
 One caveat: `.ctrlyoke/dev/server-url.txt` lives in the shared workspace
-folder, not under `CTRLYOKE_HOME`, so it isn't per-instance. With sibling
-detection, dev instances write the same single-server URL rather than racing
-two independent servers. If a dev instance only discovered a production
-sibling and that production server later stops, the dev instance has no
-running server of its own to clear the file, so the URL can remain stale until
-the next server start rewrites it. Treat the file as a discovery hint while a
-server is expected to be running; active reconciliation of that edge case is
-intentionally out of scope.
+folder, not under `CTRLYOKE_HOME`, so it isn't per-instance — and now that a
+sibling detection no longer stops an instance from binding its own server,
+both the production daily driver and the debug host may be writing to that
+same file. Whichever one (re)starts most recently overwrites it with its own
+URL, which is exactly what you want after a `dev-host.mjs restart` — the
+freshly-restarted debug build's URL wins. The flip side: each instance's
+`dispose()` clears the file unconditionally when it stops, even if a sibling
+server is still running, so a `dev-host.mjs stop` (with no immediate restart)
+removes the file even though the production daily driver's server is still up
+and reachable on its own port. Treat the file as a discovery hint for
+whichever server most recently started, not a durable pointer to "any server
+that's currently running"; reconciling that gap is intentionally out of
+scope.
 
 ## Summary checklist
 

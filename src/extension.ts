@@ -1136,7 +1136,7 @@ function registerCommands(context: vscode.ExtensionContext) {
             notifyUserFeedback(
               workflowOrchestrator.getUserFeedbackSink(),
               USER_FEEDBACK_SEVERITY.WARNING,
-              `ctrlyoke: A hosted server is already running for this workspace at ${existingServerUrl}. This window did not start a second server.`
+              `ctrlyoke: A sibling ctrlyoke server is already running for this workspace at ${existingServerUrl}. This window is starting its own server on a different port.`
             )
         );
       } catch (err) {
