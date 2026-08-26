@@ -273,20 +273,12 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
         }
       }}
     >
-      {/* Layout: drag handle | icon column | content column */}
+      {/* Layout: icon column | content column | (context bar) | (drag handle) */}
       <div className="flex items-start gap-2">
-        {dragHandleProps && (
-          <span
-            className="flex-shrink-0 cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-0.5"
-            style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
-            {...dragHandleProps.listeners}
-            {...dragHandleProps.attributes}
-            aria-label="Drag to reorder"
-          >
-            <i className="codicon codicon-grabber text-xs" />
-          </span>
-        )}
-        {/* Icon column: status icon at top, set-start-position button at bottom */}
+        {/* Icon column: status icon at top, set-start-position button at bottom.
+            Always the same shape regardless of draggability — the drag handle
+            lives at the trailing edge of the row instead, so this column never
+            shifts and stays aligned across done/pending/locked rows. */}
         <span className="flex-shrink-0 flex flex-col items-center self-stretch">
           <span className="mt-0.5">
             <StatusIcon status={status} disabled={isDisabled} />
@@ -408,6 +400,17 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
               )}
             </span>
           </div>
+        )}
+        {dragHandleProps && (
+          <span
+            className="flex-shrink-0 self-stretch w-4 flex items-center justify-center cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+            style={DRAG_HANDLE_TOUCH_ACTION_STYLE}
+            {...dragHandleProps.listeners}
+            {...dragHandleProps.attributes}
+            aria-label="Drag to reorder"
+          >
+            <i className="codicon codicon-grabber text-xs" />
+          </span>
         )}
       </div>
     </div>
