@@ -1093,13 +1093,13 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                 ) : (
                   <>
                     <div className="px-3 py-2">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <input
                           type="checkbox"
                           checked={selectedIds.has(server.id)}
                           onChange={() => handleToggleSelected(server.id)}
                           aria-label={`Select ${server.displayName}`}
-                          className="mt-0.5 h-4 w-4 shrink-0 accent-focus-border cursor-pointer"
+                          className="h-4 w-4 shrink-0 accent-focus-border cursor-pointer"
                         />
 
                         <button
@@ -1123,57 +1123,84 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                           />
                         </button>
 
-                        <div className="flex min-w-0 items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedId(
+                              expandedId === server.id ? null : server.id
+                            )
+                          }
+                          className="flex min-w-28 flex-1 items-center gap-1.5 text-left"
+                        >
+                          <span className="truncate text-xs font-medium text-foreground">
+                            {server.displayName}
+                          </span>
+                          {server.displayName !== server.id && (
+                            <span className="shrink-0 rounded bg-list-hover-bg px-1 py-0.5 font-mono text-xxs text-description-fg">
+                              {server.id}
+                            </span>
+                          )}
+                        </button>
+
+                        <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-1">
                           <button
                             type="button"
-                            onClick={() =>
-                              setExpandedId(
-                                expandedId === server.id ? null : server.id
-                              )
-                            }
-                            className="flex min-w-0 items-center gap-1.5 text-left"
+                            onClick={() => handleStartEdit(server)}
+                            className="flex h-6 items-center justify-center rounded border border-panel-border px-1.5 text-xxs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
+                            title={`Edit ${server.id} in ${activeScope}`}
+                            aria-label={`Edit ${server.id}`}
                           >
-                            <span className="truncate text-xs font-medium text-foreground">
-                              {server.displayName}
-                            </span>
-                            {server.displayName !== server.id && (
-                              <span className="shrink-0 rounded bg-list-hover-bg px-1 py-0.5 font-mono text-xxs text-description-fg">
-                                {server.id}
-                              </span>
-                            )}
+                            <i className="codicon codicon-edit text-xxs" />
                           </button>
 
-                          <div className="flex shrink-0 items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleStartEdit(server)}
-                              className="flex items-center gap-1 rounded border border-panel-border px-1.5 py-0.5 text-xxs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
-                              title={`Edit ${server.id} in ${activeScope}`}
-                            >
-                              <i className="codicon codicon-edit text-xxs" />
-                              <span className="hidden sm:inline">Edit</span>
-                            </button>
+                          <FlyoutActionDropdown
+                            label="Save"
+                            icon="save"
+                            iconOnly
+                            groups={exportGroups}
+                            onSelect={(encoded) => {
+                              const { id, scope } = decodeTarget(encoded);
+                              exportToHarness([server.config], id, scope);
+                            }}
+                          />
 
-                            <button
-                              type="button"
-                              onClick={() => handleDefaultToggle(server)}
-                              className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-xxs transition-colors ${
-                                defaultsEnabled
-                                  ? "border-btn-bg bg-btn-bg text-btn-fg hover:bg-btn-hover"
-                                  : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
-                              }`}
-                              title={
-                                defaultsEnabled
-                                  ? `Remove from default MCP servers (${activeScope})`
-                                  : `Add to default MCP servers (${activeScope})`
-                              }
-                            >
-                              <i className="codicon codicon-globe text-xxs" />
-                              <span>
-                                {defaultsEnabled ? "Default" : "Set default"}
-                              </span>
-                            </button>
-                          </div>
+                          <ActionDropdown
+                            label="Delete"
+                            icon="trash"
+                            iconOnly
+                            items={deleteItems}
+                            onSelect={(value) =>
+                              setDeleteLocationState({
+                                serverId: server.id,
+                                displayName: server.displayName,
+                                location: decodeLocationValue(value),
+                              })
+                            }
+                            className="text-error-fg"
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => handleDefaultToggle(server)}
+                            className={`flex h-6 items-center justify-center gap-1 rounded border px-1.5 text-xxs transition-colors ${
+                              defaultsEnabled
+                                ? "border-btn-bg bg-btn-bg text-btn-fg hover:bg-btn-hover"
+                                : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
+                            }`}
+                            title={
+                              defaultsEnabled
+                                ? `Remove from default MCP servers (${activeScope})`
+                                : `Add to default MCP servers (${activeScope})`
+                            }
+                            aria-label={
+                              defaultsEnabled
+                                ? `Remove from default MCP servers (${activeScope})`
+                                : `Add to default MCP servers (${activeScope})`
+                            }
+                          >
+                            <i className="codicon codicon-globe text-xxs" />
+                            {defaultsEnabled && <span>Default</span>}
+                          </button>
                         </div>
                       </div>
 
@@ -1190,43 +1217,15 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                         {getServerSummary(server.config)}
                       </div>
 
-                      <div className="mt-1 flex flex-col gap-1.5">
-                        <div className="flex flex-wrap items-center gap-1">
-                          {allLocations.map((location) => (
-                            <ScopeBadge
-                              key={`${server.id}:${location.kind}:${location.targetId}:${location.scope}:${location.path}`}
-                              label={`${getExportTargetLabel(
-                                location.targetId
-                              )}${location.scope === SETTING_SCOPES.USER ? " ·user" : ""}`}
-                            />
-                          ))}
-                        </div>
-
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          <FlyoutActionDropdown
-                            label="Save"
-                            icon="save"
-                            groups={exportGroups}
-                            onSelect={(encoded) => {
-                              const { id, scope } = decodeTarget(encoded);
-                              exportToHarness([server.config], id, scope);
-                            }}
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        {allLocations.map((location) => (
+                          <ScopeBadge
+                            key={`${server.id}:${location.kind}:${location.targetId}:${location.scope}:${location.path}`}
+                            label={`${getExportTargetLabel(
+                              location.targetId
+                            )}${location.scope === SETTING_SCOPES.USER ? " ·user" : ""}`}
                           />
-
-                          <ActionDropdown
-                            label="Delete…"
-                            icon="trash"
-                            items={deleteItems}
-                            onSelect={(value) =>
-                              setDeleteLocationState({
-                                serverId: server.id,
-                                displayName: server.displayName,
-                                location: decodeLocationValue(value),
-                              })
-                            }
-                            className="shrink-0 text-error-fg"
-                          />
-                        </div>
+                        ))}
                       </div>
                     </div>
 

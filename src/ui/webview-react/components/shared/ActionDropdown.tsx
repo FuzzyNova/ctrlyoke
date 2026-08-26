@@ -21,6 +21,10 @@ export interface ActionDropdownProps {
   items: ActionDropdownItem[];
   onSelect: (value: string) => void;
   className?: string;
+  /** Render as a compact icon-only trigger (icon + chevron, no label text) */
+  iconOnly?: boolean;
+  /** Tooltip/aria-label shown when iconOnly hides the visible label */
+  title?: string;
 }
 
 export function ActionDropdownItemContent({
@@ -55,6 +59,8 @@ export function ActionDropdown({
   items,
   onSelect,
   className = "",
+  iconOnly = false,
+  title,
 }: ActionDropdownProps) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -89,11 +95,19 @@ export function ActionDropdown({
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((p) => !p)}
-        className="flex w-full items-center justify-between gap-1 px-2 py-0.5 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
+        title={iconOnly ? (title ?? label) : undefined}
+        aria-label={iconOnly ? label : undefined}
+        className={
+          iconOnly
+            ? `flex h-6 items-center justify-center gap-0.5 rounded border border-panel-border px-1.5 text-xxs transition-colors hover:border-focus-border ${
+                className || "text-description-fg hover:text-foreground"
+              }`
+            : "flex w-full items-center justify-between gap-1 px-2 py-0.5 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
+        }
       >
         <span className="flex min-w-0 items-center gap-1 truncate">
           {icon && <i className={`codicon codicon-${icon} text-xxs`} />}
-          <span className="truncate">{label}</span>
+          {!iconOnly && <span className="truncate">{label}</span>}
         </span>
         <i
           className={`codicon codicon-chevron-${open ? "up" : "down"} text-[10px]`}

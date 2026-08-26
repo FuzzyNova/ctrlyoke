@@ -310,77 +310,36 @@ function FileRow({
 
   return (
     <div className="py-2 px-3 border-b border-panel-border last:border-0">
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 flex-wrap">
         <input
           type="checkbox"
           checked={selected}
           onChange={() => onToggleSelected(file.name)}
           aria-label={`Select ${file.displayName}`}
-          className="mt-0.5 h-4 w-4 shrink-0 accent-focus-border cursor-pointer"
+          className="h-4 w-4 shrink-0 accent-focus-border cursor-pointer"
         />
 
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-sm font-medium text-foreground">
-            {file.displayName}
-          </span>
+        <span className="min-w-28 flex-1 truncate text-sm font-medium text-foreground">
+          {file.displayName}
+        </span>
 
+        <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-1">
           {!isStandalone && file.locations.length > 0 && (
             <button
               type="button"
               onClick={() => onEdit(file)}
-              className="flex shrink-0 items-center gap-1 rounded border border-panel-border px-1.5 py-0.5 text-xxs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
+              className="flex h-6 items-center justify-center rounded border border-panel-border px-1.5 text-xxs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
               title={`Open ${file.type === HARNESS_FILE_TYPES.SKILL ? "SKILL.md" : file.displayName} in VS Code`}
+              aria-label={`Edit ${file.displayName}`}
             >
               <i className="codicon codicon-edit text-xxs" />
-              <span className="hidden sm:inline">Edit</span>
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => onToggleDefault(file)}
-            className={`flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-xxs transition-colors ${
-              isDefault
-                ? "border-btn-bg bg-btn-bg text-btn-fg hover:bg-btn-hover"
-                : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
-            }`}
-            title={toggleTitle}
-          >
-            <i className="codicon codicon-globe text-xxs" />
-            <span>{isDefault ? "Default" : "Set default"}</span>
-          </button>
-        </div>
-      </div>
-
-      {file.description && (
-        <p
-          className="mt-1 truncate text-xs text-description-fg"
-          title={file.description}
-        >
-          {file.description}
-        </p>
-      )}
-
-      <div className="mt-1 flex flex-col gap-1.5">
-        <div className="flex items-center gap-1 flex-wrap">
-          {file.locations.map((loc) => (
-            <HarnessBadge
-              key={`${loc.harnessId}-${loc.scope}-${loc.path}`}
-              id={loc.harnessId}
-              scope={loc.scope}
-            />
-          ))}
-          {file.builtInSourcePath && (
-            <span className="inline-flex items-center px-1 py-0.5 rounded text-xxs font-medium leading-none bg-badge-bg text-badge-fg">
-              Built-in
-            </span>
-          )}
-        </div>
-
-        <div className="flex shrink-0 items-center gap-1.5">
           <FlyoutActionDropdown
             label="Save"
             icon="save"
+            iconOnly
             groups={buildSaveFlyoutGroups(
               presentKeys,
               availableIds,
@@ -396,6 +355,7 @@ function FileRow({
             <ActionDropdown
               label="Delete"
               icon="trash"
+              iconOnly
               items={deleteItems}
               onSelect={(encoded) => {
                 const { id, scope } = decodeTarget(encoded);
@@ -404,7 +364,46 @@ function FileRow({
               className="text-error-fg"
             />
           )}
+
+          <button
+            type="button"
+            onClick={() => onToggleDefault(file)}
+            className={`flex h-6 items-center justify-center gap-1 rounded border px-1.5 text-xxs transition-colors ${
+              isDefault
+                ? "border-btn-bg bg-btn-bg text-btn-fg hover:bg-btn-hover"
+                : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
+            }`}
+            title={toggleTitle}
+            aria-label={toggleTitle}
+          >
+            <i className="codicon codicon-globe text-xxs" />
+            {isDefault && <span>Default</span>}
+          </button>
         </div>
+      </div>
+
+      {file.description && (
+        <p
+          className="mt-1 truncate text-xs text-description-fg"
+          title={file.description}
+        >
+          {file.description}
+        </p>
+      )}
+
+      <div className="mt-1 flex items-center gap-1 flex-wrap">
+        {file.locations.map((loc) => (
+          <HarnessBadge
+            key={`${loc.harnessId}-${loc.scope}-${loc.path}`}
+            id={loc.harnessId}
+            scope={loc.scope}
+          />
+        ))}
+        {file.builtInSourcePath && (
+          <span className="inline-flex items-center px-1 py-0.5 rounded text-xxs font-medium leading-none bg-badge-bg text-badge-fg">
+            Built-in
+          </span>
+        )}
       </div>
     </div>
   );
