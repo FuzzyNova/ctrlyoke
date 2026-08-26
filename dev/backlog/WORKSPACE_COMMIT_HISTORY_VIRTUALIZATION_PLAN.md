@@ -1,6 +1,6 @@
 # Workspace Commit History Virtualization Plan
 
-**Status:** Proposed
+**Status:** Implemented
 **Priority:** P3
 
 Follow-on from
@@ -125,6 +125,29 @@ history doesn't:
    (`detachedBranchHint()` in `WorkspaceSourceControlPane.tsx`), checkout
    actions (`workspaceCheckoutBranch`), and the existing commit-history
    context menu (`useCommitHistoryContextMenu`).
+
+## Implementation status
+
+- [x] Design point 1: `usePagedCommitHistory` owns sparse pages, frozen-list
+  identity, loading/error state, refresh, and overscan range requests.
+- [x] Design point 2: commit-log pages use a server-side frozen snapshot.
+- [x] Design point 3: one virtualized row range drives both the graph rail and
+  commit text rows.
+- [x] Design point 4: graph layout is folded over the loaded contiguous prefix
+  before only the realized rows are rendered. A sparse page beyond a gap stays
+  a placeholder until the gap is filled, preserving lane continuity without
+  assigning layout state to an incomplete sequence.
+- [x] Design point 5: `WorkspaceSourceControlPane` owns the paging controller,
+  passes it to both desktop and mobile panes, and all refresh/mutation flows
+  refresh the controller. There is no manual load-more action.
+
+The store no longer caches commit rows or paging/loading flags. It retains only
+current-branch and detached-HEAD metadata for the checkout context menu; the
+history hook is the source of truth for rows and loading state. The diff
+download path uses `diffCommitInfo.hash`, so it remains correct when the
+selected commit is outside the realized history window. `useCommitHistoryContextMenu`
+was verified to receive and act on the commit object itself, with no row-index
+lookup, so windowing does not change commit resolution.
 
 ## Non-goals
 

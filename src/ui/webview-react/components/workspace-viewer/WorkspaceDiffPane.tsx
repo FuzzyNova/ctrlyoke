@@ -35,8 +35,9 @@ export const WorkspaceDiffPane: React.FC = () => {
     (s) => s.diffNonTextEntries
   );
   const diffRefLabel = useWorkspaceViewerStore((s) => s.diffRefLabel);
-  const diffRefLoading = useWorkspaceViewerStore((s) => s.diffRefLoading);
   const diffCommitInfo = useWorkspaceViewerStore((s) => s.diffCommitInfo);
+  const selectedRepoId = useWorkspaceViewerStore((s) => s.selectedRepoId);
+  const diffRefLoading = useWorkspaceViewerStore((s) => s.diffRefLoading);
   const diffKind = useWorkspaceViewerStore((s) => s.diffKind);
   const diffPayloadKind = useWorkspaceViewerStore((s) => s.diffPayloadKind);
   const diffImage = useWorkspaceViewerStore((s) => s.diffImage);
@@ -154,7 +155,6 @@ export const WorkspaceDiffPane: React.FC = () => {
     setDownloading(true);
     try {
       // Re-fetch the raw unified diff text for the download
-      const store = useWorkspaceViewerStore.getState();
       // Reconstruct the ref from the label to avoid storing it separately
       // We already have the unified diff from the current diffFiles parse, but
       // we need the raw text. Re-fetch from the same endpoint.
@@ -165,18 +165,16 @@ export const WorkspaceDiffPane: React.FC = () => {
       else if (refLabel.startsWith("Stash #"))
         ref = `~stash:${refLabel.slice("Stash #".length)}`;
       else {
-        // "Commit abc1234" — we only have the short hash label
-        // find the full hash from the commit history if available
+        // "Commit abc1234" — the ref-diff response carries the full hash, so
+        // downloads remain correct even when that commit is outside the
+        // virtualized history window.
         const shortHash = refLabel.replace("Commit ", "");
-        const fullHash =
-          store.commitHistory.find(
-            (c) => c.shortHash === shortHash || c.hash.startsWith(shortHash)
-          )?.hash ?? shortHash;
+        const fullHash = diffCommitInfo?.hash ?? shortHash;
         ref = `~${fullHash}`;
       }
       const { unifiedDiff } = await workspaceGitRefDiff(
         ref,
-        store.selectedRepoId ?? undefined
+        selectedRepoId ?? undefined
       );
       const safeName = refLabel.replace(/[^a-z0-9_]/gi, "-").toLowerCase();
       downloadTextFile(`ctrlyoke-${safeName}.diff`, unifiedDiff);
@@ -185,7 +183,7 @@ export const WorkspaceDiffPane: React.FC = () => {
     } finally {
       setDownloading(false);
     }
-  }, [diffRefLabel]);
+  }, [diffCommitInfo, diffRefLabel, selectedRepoId]);
 
   const handleFileHistoryBack = useCallback(() => {
     closeFileHistoryView();

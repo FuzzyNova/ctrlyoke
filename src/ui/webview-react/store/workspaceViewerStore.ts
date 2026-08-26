@@ -4,7 +4,6 @@ import { vsCodeRawStorage } from "@utils/vsCodeStateStorage";
 import type {
   SourceControlFile,
   DiffKind,
-  WorkspaceCommitLogEntry,
   WorkspaceCommitInfo,
   WorkspaceRepo,
   WorkspaceSearchResult,
@@ -131,9 +130,6 @@ interface WorkspaceViewerState {
   scmError: string | null;
 
   // Commit history
-  commitHistory: WorkspaceCommitLogEntry[];
-  commitHistoryLoading: boolean;
-  commitHistoryHasMore: boolean;
   currentBranch: string | null;
   detached: boolean;
   previousBranch: string | null;
@@ -224,18 +220,8 @@ interface WorkspaceViewerActions {
   setSearchLoading(loading: boolean): void;
   setSearchTruncated(truncated: boolean): void;
 
-  // Commit history
-  setCommitHistory(
-    commits: WorkspaceCommitLogEntry[],
-    hasMore: boolean,
-    currentBranch: string | null,
-    detached: boolean
-  ): void;
-  appendCommitHistory(
-    commits: WorkspaceCommitLogEntry[],
-    hasMore: boolean
-  ): void;
-  setCommitHistoryLoading(v: boolean): void;
+  // Commit history metadata used by the context menu and detached banner.
+  setCurrentBranch(branch: string | null): void;
   setPreviousBranch(branch: string | null): void;
   setDetached(detached: boolean): void;
 
@@ -312,9 +298,6 @@ const INITIAL_STATE: WorkspaceViewerState = {
   pulling: false,
   scmError: null,
 
-  commitHistory: [],
-  commitHistoryLoading: false,
-  commitHistoryHasMore: false,
   currentBranch: null,
   detached: false,
   previousBranch: null,
@@ -375,7 +358,6 @@ export const useWorkspaceViewerStore = create<
           fileHistoryActive: false,
           fileHistoryPath: null,
           fileHistoryRepoId: null,
-          commitHistoryLoading: false,
           committing: false,
           generatingCommitMessage: false,
           pushing: false,
@@ -706,26 +688,10 @@ export const useWorkspaceViewerStore = create<
         set({ searchTruncated: truncated });
       },
 
-      // --- Commit history ---
+      // --- Commit history metadata ---
 
-      setCommitHistory(commits, hasMore, currentBranch, detached) {
-        set({
-          commitHistory: commits,
-          commitHistoryHasMore: hasMore,
-          currentBranch,
-          detached,
-        });
-      },
-
-      appendCommitHistory(commits, hasMore) {
-        set((state) => ({
-          commitHistory: [...state.commitHistory, ...commits],
-          commitHistoryHasMore: hasMore,
-        }));
-      },
-
-      setCommitHistoryLoading(v) {
-        set({ commitHistoryLoading: v });
+      setCurrentBranch(branch) {
+        set({ currentBranch: branch });
       },
 
       setPreviousBranch(branch) {

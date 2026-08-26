@@ -28,8 +28,6 @@ export interface WorkspaceCommitHistoryPaneProps {
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
   /** Primarily useful to host the pane in a focused test or alternate view. */
   controller?: PagedCommitHistoryController;
-  /** Retained until WorkspaceSourceControlPane adopts the paging controller. */
-  onLoadMore?: () => void;
 }
 
 type HeadRelation = "ahead" | "at" | "behind";

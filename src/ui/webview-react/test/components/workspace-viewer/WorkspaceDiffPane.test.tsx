@@ -7,12 +7,13 @@ import {
   it,
   vi,
 } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkspaceDiffPane } from "@components/workspace-viewer/WorkspaceDiffPane";
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import type { ParsedDiffFile } from "@utils/rdvAdapter";
+import { workspaceGitRefDiff } from "@utils/hostedApi";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { DIFF_PAYLOAD_KINDS } from "@root/types/DashboardConstants";
 
@@ -85,6 +86,36 @@ beforeEach(() => {
 });
 
 describe("WorkspaceDiffPane commit diff controls", () => {
+  it("downloads a commit diff using its full response hash", async () => {
+    const user = userEvent.setup();
+    vi.mocked(workspaceGitRefDiff).mockResolvedValue({ unifiedDiff: "diff" });
+    useWorkspaceViewerStore.setState({
+      diffFiles: [diffFile],
+      diffRefLabel: "Commit abc1234",
+      diffCommitInfo: {
+        hash: "abc1234567890abcdef",
+        shortHash: "abc1234",
+        subject: "fix: commit view",
+        body: "",
+        author: "Dev",
+        authorEmail: "dev@example.com",
+        date: "today",
+        relativeDate: "today",
+      },
+      diffRefLoading: false,
+    });
+
+    render(<WorkspaceDiffPane />);
+    await user.click(screen.getByRole("button", { name: "Download" }));
+
+    await waitFor(() =>
+      expect(workspaceGitRefDiff).toHaveBeenCalledWith(
+        "~abc1234567890abcdef",
+        undefined
+      )
+    );
+  });
+
   it("renders commit image and binary entries even without text hunks", () => {
     useWorkspaceViewerStore.setState({
       diffFiles: [],

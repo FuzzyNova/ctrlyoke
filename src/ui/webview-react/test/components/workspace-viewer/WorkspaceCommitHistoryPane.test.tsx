@@ -75,7 +75,7 @@ function testController(
 }
 
 function renderPane(
-  commits = useWorkspaceViewerStore.getState().commitHistory,
+  commits = [commit],
   overrides: Partial<PagedCommitHistoryController> = {},
   props: { isMobile?: boolean } = {}
 ) {
@@ -97,11 +97,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(workspaceGitRefDiff).mockResolvedValue({ unifiedDiff: "" });
   useWorkspaceViewerStore.getState().reset();
-  useWorkspaceViewerStore.setState({
-    commitHistory: [commit],
-    commitHistoryLoading: false,
-    commitHistoryHasMore: false,
-  });
 });
 
 afterEach(() => {
@@ -176,18 +171,15 @@ describe("WorkspaceCommitHistoryPane", () => {
   });
 
   it("renders ref pills from commit decorations", () => {
-    useWorkspaceViewerStore.setState({
-      commitHistory: [
-        {
-          ...commit,
-          refs: [
-            { name: "main", type: "localBranch" },
-            { name: "origin/main", type: "remoteBranch" },
-          ],
-        },
-      ],
-    });
-    renderPane();
+    renderPane([
+      {
+        ...commit,
+        refs: [
+          { name: "main", type: "localBranch" },
+          { name: "origin/main", type: "remoteBranch" },
+        ],
+      },
+    ]);
 
     // "main" appears both in the header branch chip and as a ref pill.
     expect(screen.getAllByText("main").length).toBeGreaterThanOrEqual(1);
@@ -198,15 +190,12 @@ describe("WorkspaceCommitHistoryPane", () => {
   });
 
   it("shows the full remote branch name when not sharing a row with a local branch ref", () => {
-    useWorkspaceViewerStore.setState({
-      commitHistory: [
-        {
-          ...commit,
-          refs: [{ name: "origin/main", type: "remoteBranch" }],
-        },
-      ],
-    });
-    renderPane();
+    renderPane([
+      {
+        ...commit,
+        refs: [{ name: "origin/main", type: "remoteBranch" }],
+      },
+    ]);
 
     expect(screen.getByText("origin/main")).toBeInTheDocument();
   });
@@ -242,11 +231,7 @@ describe("WorkspaceCommitHistoryPane", () => {
       subject: "base commit",
       parentHashes: [],
     };
-    useWorkspaceViewerStore.setState({
-      commitHistory: [merge, mainParent, featureParent, base],
-    });
-
-    renderPane();
+    renderPane([merge, mainParent, featureParent, base]);
 
     expect(screen.getAllByTestId(/^commit-graph-svg-/)).toHaveLength(4);
     expect(
@@ -272,20 +257,16 @@ describe("WorkspaceCommitHistoryPane", () => {
       refs: [],
       parentHashes: [],
     }));
-    useWorkspaceViewerStore.setState({
-      commitHistory: [
-        {
-          ...commit,
-          hash: "octopus",
-          shortHash: "octopus",
-          isMerge: true,
-          parentHashes,
-        },
-        ...parents,
-      ],
-    });
-
-    const view = renderPane();
+    const view = renderPane([
+      {
+        ...commit,
+        hash: "octopus",
+        shortHash: "octopus",
+        isMerge: true,
+        parentHashes,
+      },
+      ...parents,
+    ]);
     const rail = screen.getByTestId("commit-graph-rail");
     expect(rail.className).toContain("overflow-x-auto");
     expect(rail.className).toContain("overflow-y-visible");
@@ -295,7 +276,16 @@ describe("WorkspaceCommitHistoryPane", () => {
       <WorkspaceCommitHistoryPane
         onRefresh={vi.fn()}
         controller={testController(
-          useWorkspaceViewerStore.getState().commitHistory,
+          [
+            {
+              ...commit,
+              hash: "octopus",
+              shortHash: "octopus",
+              isMerge: true,
+              parentHashes,
+            },
+            ...parents,
+          ],
           {
             currentBranch: useWorkspaceViewerStore.getState().currentBranch,
             detached: useWorkspaceViewerStore.getState().detached,
@@ -321,11 +311,8 @@ describe("WorkspaceCommitHistoryPane", () => {
       subject: "feat: newer than head",
       isHead: false,
     };
-    useWorkspaceViewerStore.setState({
-      commitHistory: [ahead, head],
-      detached: true,
-    });
-    renderPane();
+    useWorkspaceViewerStore.setState({ detached: true });
+    renderPane([ahead, head]);
 
     // The ahead commit's SVG rail row is dimmed via opacity-60.
     expect(
@@ -336,10 +323,7 @@ describe("WorkspaceCommitHistoryPane", () => {
   it("renders the checkout-confirm modal elevated above the workspace viewer", () => {
     vi.useFakeTimers();
     // A non-HEAD commit so the "Checkout Commit" item is enabled.
-    useWorkspaceViewerStore.setState({
-      commitHistory: [{ ...commit, isHead: false }],
-    });
-    renderPane();
+    renderPane([{ ...commit, isHead: false }]);
 
     fireEvent.touchStart(commitRow(), {
       touches: [{ clientX: 24, clientY: 36 }],

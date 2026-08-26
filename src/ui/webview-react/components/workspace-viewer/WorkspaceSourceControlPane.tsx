@@ -8,11 +8,11 @@ import {
   WORKSPACE_VIEWER_SIDE_PANEL_MIN_SIZE,
 } from "@/constants";
 import { useIsMobile } from "@hooks/useMediaQuery";
+import { usePagedCommitHistory } from "@hooks/usePagedCommitHistory";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import {
-  workspaceCommitLog,
   workspaceDiff,
   workspaceDiscard,
   workspaceRepos,
@@ -105,19 +105,12 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     (s) => s.setMobileDiffVisible
   );
   const setScmError = useWorkspaceViewerStore((s) => s.setScmError);
+  const setCurrentBranch = useWorkspaceViewerStore((s) => s.setCurrentBranch);
+  const setDetached = useWorkspaceViewerStore((s) => s.setDetached);
+  const detached = useWorkspaceViewerStore((s) => s.detached);
+  const previousBranch = useWorkspaceViewerStore((s) => s.previousBranch);
   const confirmDeleteOperations = useSettingsStore(
     (s) => s.globalSettings.confirmDeleteOperations
-  );
-  const setCommitHistory = useWorkspaceViewerStore((s) => s.setCommitHistory);
-  const appendCommitHistory = useWorkspaceViewerStore(
-    (s) => s.appendCommitHistory
-  );
-  const setCommitHistoryLoading = useWorkspaceViewerStore(
-    (s) => s.setCommitHistoryLoading
-  );
-  const commitHistory = useWorkspaceViewerStore((s) => s.commitHistory);
-  const commitHistoryHasMore = useWorkspaceViewerStore(
-    (s) => s.commitHistoryHasMore
   );
   const selectedRepoId = useWorkspaceViewerStore((s) => s.selectedRepoId);
   const setRepos = useWorkspaceViewerStore((s) => s.setRepos);
@@ -150,57 +143,34 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     setSourceControlLoading,
   ]);
 
-  const loadHistory = useCallback(async () => {
-    setCommitHistoryLoading(true);
-    try {
-      // While detached, keep the branch we came from visible so the commits
-      // "ahead" of the checked-out point still render in the graph.
-      const result = await workspaceCommitLog(
-        0,
-        30,
-        detachedBranchHint(),
-        selectedRepoId ?? undefined
-      );
-      setCommitHistory(
-        result.commits,
-        result.hasMore,
-        result.currentBranch,
-        result.detached
-      );
-    } catch {
-      // silently ignore — history panel will show empty state
-    } finally {
-      setCommitHistoryLoading(false);
-    }
-  }, [selectedRepoId, setCommitHistory, setCommitHistoryLoading]);
+  const commitHistoryController = usePagedCommitHistory({
+    repo: selectedRepoId ?? undefined,
+    // While detached, keep the branch we came from visible so the commits
+    // "ahead" of the checked-out point still render in the graph.
+    branchHint:
+      detached && previousBranch ? detachedBranchHint() : undefined,
+    detached,
+  });
+  const refreshCommitHistory = commitHistoryController.refresh;
 
-  const loadMoreHistory = useCallback(async () => {
-    if (!commitHistoryHasMore) return;
-    setCommitHistoryLoading(true);
-    try {
-      const result = await workspaceCommitLog(
-        commitHistory.length,
-        30,
-        detachedBranchHint(),
-        selectedRepoId ?? undefined
-      );
-      appendCommitHistory(result.commits, result.hasMore);
-    } catch {
-      // silently ignore
-    } finally {
-      setCommitHistoryLoading(false);
-    }
+  // Keep the small amount of branch metadata used by the checkout context
+  // menu synchronized with the hook's authoritative response.
+  useEffect(() => {
+    if (!commitHistoryController.listingId) return;
+    setCurrentBranch(commitHistoryController.currentBranch);
+    setDetached(commitHistoryController.detached);
   }, [
-    appendCommitHistory,
-    commitHistory.length,
-    commitHistoryHasMore,
-    selectedRepoId,
-    setCommitHistoryLoading,
+    commitHistoryController.currentBranch,
+    commitHistoryController.detached,
+    commitHistoryController.listingId,
+    setCurrentBranch,
+    setDetached,
   ]);
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([loadStatus(), loadHistory()]);
-  }, [loadHistory, loadStatus]);
+    refreshCommitHistory();
+    await loadStatus();
+  }, [loadStatus, refreshCommitHistory]);
 
   // Discover repos once on mount; the selector appears only for multi-repo
   // workspaces and defaults selection to the repo containing the open file.
@@ -212,12 +182,13 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       });
   }, [setRepos]);
 
-  // Load status + history whenever the selected repo changes (loadStatus /
-  // loadHistory close over selectedRepoId, so their identity changes with it).
+  // Load status + history whenever the selected repo changes. The hook also
+  // keys its frozen listing to this repo/context, so refresh starts a fresh
+  // snapshot rather than appending to the previous repository's pages.
   useEffect(() => {
     void loadStatus();
-    void loadHistory();
-  }, [loadStatus, loadHistory]);
+    refreshCommitHistory();
+  }, [loadStatus, refreshCommitHistory, selectedRepoId]);
 
   const selectFileDiff = useCallback(
     async (filePath: string) => {
@@ -273,7 +244,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   const refreshAfterMutation = useCallback(
     async (affectedPaths: string[]) => {
       const files = await loadStatus();
-      void loadHistory();
+      refreshCommitHistory();
       if (!selectedDiffPath || !affectedPaths.includes(selectedDiffPath)) {
         return;
       }
@@ -292,8 +263,8 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     },
     [
       isMobile,
-      loadHistory,
       loadStatus,
+      refreshCommitHistory,
       selectFileDiff,
       selectedDiffPath,
       setMobileDiffVisible,
@@ -305,11 +276,12 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       try {
         await workspaceStage({ path: filePath });
         await loadStatus();
+        refreshCommitHistory();
       } catch (err) {
         setScmError(String(err));
       }
     },
-    [loadStatus, setScmError]
+    [loadStatus, refreshCommitHistory, setScmError]
   );
 
   const handleUnstage = useCallback(
@@ -317,11 +289,12 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       try {
         await workspaceUnstage({ path: filePath });
         await loadStatus();
+        refreshCommitHistory();
       } catch (err) {
         setScmError(String(err));
       }
     },
-    [loadStatus, setScmError]
+    [loadStatus, refreshCommitHistory, setScmError]
   );
 
   const performDiscard = useCallback(
@@ -386,10 +359,11 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         await workspaceStage({ path: file.path });
       }
       await loadStatus();
+      refreshCommitHistory();
     } catch (err) {
       setScmError(String(err));
     }
-  }, [changed, loadStatus, setScmError]);
+  }, [changed, loadStatus, refreshCommitHistory, setScmError]);
 
   const handleDiscardAll = useCallback(() => {
     requestDiscard(changed.map((file) => file.path));
@@ -401,10 +375,11 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         await workspaceUnstage({ path: file.path });
       }
       await loadStatus();
+      refreshCommitHistory();
     } catch (err) {
       setScmError(String(err));
     }
-  }, [loadStatus, setScmError, staged]);
+  }, [loadStatus, refreshCommitHistory, setScmError, staged]);
 
   const handleDiscardCheckboxChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -583,8 +558,8 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       {/* Commit history region — independently scrollable */}
       <div className={historyRegionClass}>
         <WorkspaceCommitHistoryPane
-          onLoadMore={() => void loadMoreHistory()}
-          onRefresh={() => void refreshAll()}
+          controller={commitHistoryController}
+          onRefresh={() => void loadStatus()}
           isMobile={isMobile}
         />
       </div>
@@ -633,8 +608,8 @@ export const WorkspaceSourceControlPane: React.FC = () => {
 
             <div className="border-t border-panel-border" />
             <WorkspaceCommitHistoryPane
-              onLoadMore={() => void loadMoreHistory()}
-              onRefresh={() => void refreshAll()}
+              controller={commitHistoryController}
+              onRefresh={() => void loadStatus()}
               isMobile={isMobile}
             />
           </div>
