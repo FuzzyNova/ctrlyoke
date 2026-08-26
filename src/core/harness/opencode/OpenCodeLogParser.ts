@@ -22,6 +22,10 @@ import {
   mapOpenCodeToolPartToCliEvent,
   accumulateOpenCodeStepTokens,
 } from "./OpenCodeEventMapper";
+import {
+  OPENCODE_EVENT_TYPES,
+  OPENCODE_MESSAGE_ROLES,
+} from "./OpenCodeProtocolConstants";
 import { Log } from "../../../utils/Log";
 import { resolveCliCommand } from "../shared/CliLauncherResolver";
 import { PollingFsWatcher } from "../shared/FsWatcherHandles";
@@ -249,7 +253,7 @@ export class OpenCodeLogParser extends BaseLogParser {
     event: BaseCliEvent,
     ctx: { dispatchedPromptText?: string }
   ): UserEventClassification {
-    if (event.type !== "user_text") {
+    if (event.type !== OPENCODE_EVENT_TYPES.USER_TEXT) {
       return "other";
     }
     const text = (
@@ -275,7 +279,7 @@ export class OpenCodeLogParser extends BaseLogParser {
   }
 
   override extractUserSteerText(event: BaseCliEvent): string | undefined {
-    if (event.type !== "user_text") {
+    if (event.type !== OPENCODE_EVENT_TYPES.USER_TEXT) {
       return undefined;
     }
     const text = (
@@ -285,7 +289,7 @@ export class OpenCodeLogParser extends BaseLogParser {
   }
 
   extractContentFromEvent(event: BaseCliEvent): string | undefined {
-    if (event.type !== "text") {
+    if (event.type !== OPENCODE_EVENT_TYPES.TEXT) {
       return undefined;
     }
     return (event as Record<string, any>).part?.text as string | undefined;
@@ -308,7 +312,7 @@ export class OpenCodeLogParser extends BaseLogParser {
     const timestamp = e.timestamp as number | undefined;
 
     switch (event.type) {
-      case "text": {
+      case OPENCODE_EVENT_TYPES.TEXT: {
         const text = e.part?.text as string | undefined;
         if (text) {
           cliEvents.push({
@@ -330,7 +334,7 @@ export class OpenCodeLogParser extends BaseLogParser {
         }
         break;
       }
-      case "tool_use": {
+      case OPENCODE_EVENT_TYPES.TOOL_USE: {
         const part = e.part as Record<string, any> | undefined;
         if (part) {
           const toolEvent = mapOpenCodeToolPartToCliEvent(timestamp, part);
@@ -424,7 +428,7 @@ export class OpenCodeLogParser extends BaseLogParser {
       }
 
       switch (event.type) {
-        case "text": {
+        case OPENCODE_EVENT_TYPES.TEXT: {
           const text = e.part?.text as string | undefined;
           if (text) {
             cliEvents.push({
@@ -446,7 +450,7 @@ export class OpenCodeLogParser extends BaseLogParser {
           }
           break;
         }
-        case "tool_use": {
+        case OPENCODE_EVENT_TYPES.TOOL_USE: {
           const part = e.part as Record<string, any> | undefined;
           if (part) {
             const toolEvent = mapOpenCodeToolPartToCliEvent(
@@ -596,16 +600,19 @@ export class OpenCodeLogParser extends BaseLogParser {
       // genuine follow-up typed into the live TUI) — see classifyUserEvent.
       // Unlike assistant parts, user text is already final the moment it
       // appears in the export, so isPartCompleted's streaming check doesn't apply.
-      if (message.info.role === "user") {
+      if (message.info.role === OPENCODE_MESSAGE_ROLES.USER) {
         for (const part of message.parts) {
-          if (this.seenPartIds.has(part.id) || part.type !== "text") {
+          if (
+            this.seenPartIds.has(part.id) ||
+            part.type !== OPENCODE_EVENT_TYPES.TEXT
+          ) {
             continue;
           }
           this.seenPartIds.add(part.id);
           const text = (part as any).text as string | undefined;
           if (text && text.trim()) {
             newEvents.push({
-              type: "user_text",
+              type: OPENCODE_EVENT_TYPES.USER_TEXT,
               sessionID: part.sessionID,
               timestamp: (part as any).time?.start ?? messageTimestamp,
               text: text.trim(),
@@ -616,7 +623,7 @@ export class OpenCodeLogParser extends BaseLogParser {
       }
 
       // Only assistant messages contain displayable AI-output events
-      if (message.info.role !== "assistant") {
+      if (message.info.role !== OPENCODE_MESSAGE_ROLES.ASSISTANT) {
         continue;
       }
 
@@ -654,7 +661,7 @@ export class OpenCodeLogParser extends BaseLogParser {
       case "tool":
         // Tool parts transition through "pending" → "completed"; only emit when done.
         return p.state?.status === "completed";
-      case "text":
+      case OPENCODE_EVENT_TYPES.TEXT:
       case "reasoning":
         // Text/reasoning parts are finalized when time.end is set.
         return p.time?.end !== undefined;
@@ -713,9 +720,9 @@ export class OpenCodeLogParser extends BaseLogParser {
           },
         };
 
-      case "text":
+      case OPENCODE_EVENT_TYPES.TEXT:
         return {
-          type: "text",
+          type: OPENCODE_EVENT_TYPES.TEXT,
           sessionID,
           timestamp: (part as any).time?.start ?? messageTimestamp,
           part: { text: (part as any).text },
@@ -731,7 +738,7 @@ export class OpenCodeLogParser extends BaseLogParser {
 
       case "tool":
         return {
-          type: "tool_use",
+          type: OPENCODE_EVENT_TYPES.TOOL_USE,
           sessionID,
           timestamp: (part as any).state?.time?.start ?? messageTimestamp,
           part: {

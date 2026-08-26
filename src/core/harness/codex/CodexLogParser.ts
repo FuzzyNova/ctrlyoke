@@ -30,6 +30,11 @@ import {
 import type { HarnessQuotaSnapshot } from "../../../types/UsageTypes";
 import { getCodexContextWindowSize } from "../../../utils/ModelConstants";
 import { normalizeCodexRolloutQuota } from "./CodexUsageNormalization";
+import {
+  CODEX_CONTENT_BLOCK_TYPES,
+  CODEX_EVENT_TYPES,
+  CODEX_MESSAGE_ROLES,
+} from "./CodexProtocolConstants";
 
 // ============================================================================
 // Codex Log Event Payload Types
@@ -298,8 +303,8 @@ export class CodexLogParser extends BaseLogParser {
 
       // response_item with role="assistant" - Assistant content
       if (
-        event.type === "response_item" &&
-        event.payload?.role === "assistant"
+        event.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
+        event.payload?.role === CODEX_MESSAGE_ROLES.ASSISTANT
       ) {
         const content = event.payload.content;
         if (Array.isArray(content)) {
@@ -320,7 +325,7 @@ export class CodexLogParser extends BaseLogParser {
             }
 
             // Tool calls - map to semantic event types based on tool name
-            if (item.type === "tool_use") {
+            if (item.type === CODEX_CONTENT_BLOCK_TYPES.TOOL_USE) {
               const toolName = item.name?.toLowerCase() || "";
               const params = (item.input || {}) as Record<string, unknown>;
               const callId = item.id as string | undefined;
@@ -364,7 +369,7 @@ export class CodexLogParser extends BaseLogParser {
 
       // response_item:todo_list - Codex's structured plan item
       if (
-        event.type === "response_item" &&
+        event.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
         event.payload?.type === "todo_list"
       ) {
         outputEvents.push(
@@ -374,7 +379,7 @@ export class CodexLogParser extends BaseLogParser {
 
       // response_item:reasoning - AI reasoning process (may be encrypted)
       if (
-        event.type === "response_item" &&
+        event.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
         event.payload?.type === "reasoning"
       ) {
         const reasoningText =
@@ -394,7 +399,7 @@ export class CodexLogParser extends BaseLogParser {
 
       // response_item:function_call - Function call request
       if (
-        event.type === "response_item" &&
+        event.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
         event.payload?.type === "function_call"
       ) {
         let params: Record<string, unknown> =
@@ -436,7 +441,7 @@ export class CodexLogParser extends BaseLogParser {
 
       // response_item:function_call_output - Function result (COMPLETED event)
       if (
-        event.type === "response_item" &&
+        event.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
         event.payload?.type === "function_call_output"
       ) {
         const callId = event.payload.call_id as string | undefined;
@@ -458,7 +463,7 @@ export class CodexLogParser extends BaseLogParser {
 
       // response_item:custom_tool_call - Custom tool call request
       if (
-        event.type === "response_item" &&
+        event.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
         event.payload?.type === "custom_tool_call"
       ) {
         const toolName = event.payload.name?.toLowerCase() || "";
@@ -488,7 +493,7 @@ export class CodexLogParser extends BaseLogParser {
 
       // response_item:custom_tool_call_output - Custom tool result (COMPLETED event)
       if (
-        event.type === "response_item" &&
+        event.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
         event.payload?.type === "custom_tool_call_output"
       ) {
         const callId = event.payload.call_id as string | undefined;
@@ -843,7 +848,7 @@ export class CodexLogParser extends BaseLogParser {
                 // Check turn_context for user message (if present)
                 if (event.type === "turn_context" && event.payload?.messages) {
                   const userMsg = event.payload.messages.find(
-                    (m: any) => m.role === "user"
+                    (m: any) => m.role === CODEX_MESSAGE_ROLES.USER
                   );
                   if (userMsg?.content) {
                     userMessage = Array.isArray(userMsg.content)
@@ -854,8 +859,8 @@ export class CodexLogParser extends BaseLogParser {
 
                 // Check response_item for user echo
                 if (
-                  event.type === "response_item" &&
-                  event.payload?.role === "user"
+                  event.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
+                  event.payload?.role === CODEX_MESSAGE_ROLES.USER
                 ) {
                   const content = event.payload.content;
                   if (Array.isArray(content)) {
@@ -983,7 +988,7 @@ export class CodexLogParser extends BaseLogParser {
     const e = event as CodexProviderEvent;
 
     // Direct content field
-    if (e.type === "text" && e.content) {
+    if (e.type === CODEX_EVENT_TYPES.TEXT && e.content) {
       return e.content as string;
     }
 
@@ -997,8 +1002,8 @@ export class CodexLogParser extends BaseLogParser {
 
     // response_item with assistant role and content array
     if (
-      e.type === "response_item" &&
-      e.payload?.role === "assistant" &&
+      e.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
+      e.payload?.role === CODEX_MESSAGE_ROLES.ASSISTANT &&
       e.payload?.content
     ) {
       const textParts = e.payload.content
@@ -1012,7 +1017,7 @@ export class CodexLogParser extends BaseLogParser {
 
     // response_item with content array (no role check - alternate format variant)
     if (
-      e.type === "response_item" &&
+      e.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
       e.payload?.content &&
       Array.isArray(e.payload.content)
     ) {
@@ -1069,7 +1074,10 @@ export class CodexLogParser extends BaseLogParser {
     // Skipped here; text is captured below when response_item arrives.
 
     // response_item with role="assistant" content array
-    if (e.type === "response_item" && e.payload?.role === "assistant") {
+    if (
+      e.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
+      e.payload?.role === CODEX_MESSAGE_ROLES.ASSISTANT
+    ) {
       const content = e.payload.content;
       if (Array.isArray(content)) {
         for (const item of content) {
@@ -1084,7 +1092,7 @@ export class CodexLogParser extends BaseLogParser {
             });
           }
 
-          if (item.type === "tool_use") {
+          if (item.type === CODEX_CONTENT_BLOCK_TYPES.TOOL_USE) {
             const toolName = item.name?.toLowerCase() || "";
             const params = (item.input || {}) as Record<string, unknown>;
             const callId = item.id as string | undefined;
@@ -1123,13 +1131,19 @@ export class CodexLogParser extends BaseLogParser {
     }
 
     // response_item:todo_list - Codex's structured plan item
-    if (e.type === "response_item" && e.payload?.type === "todo_list") {
+    if (
+      e.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
+      e.payload?.type === "todo_list"
+    ) {
       results.push(...this.buildTodoListEvents(e.payload.items, timestamp));
       return results;
     }
 
     // response_item:reasoning → THINKING
-    if (e.type === "response_item" && e.payload?.type === "reasoning") {
+    if (
+      e.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
+      e.payload?.type === "reasoning"
+    ) {
       const reasoningText =
         e.payload.content ||
         (e.payload.encrypted_content ? "[Encrypted reasoning]" : null);
@@ -1144,7 +1158,10 @@ export class CodexLogParser extends BaseLogParser {
     }
 
     // response_item:function_call → INITIATED
-    if (e.type === "response_item" && e.payload?.type === "function_call") {
+    if (
+      e.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
+      e.payload?.type === "function_call"
+    ) {
       let params: Record<string, unknown> =
         e.payload.arguments || e.payload.input || {};
       if (typeof params === "string") {
@@ -1181,7 +1198,7 @@ export class CodexLogParser extends BaseLogParser {
 
     // response_item:function_call_output → TOOL_RESULT COMPLETED
     if (
-      e.type === "response_item" &&
+      e.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
       e.payload?.type === "function_call_output"
     ) {
       const callId = e.payload.call_id as string | undefined;
@@ -1205,7 +1222,10 @@ export class CodexLogParser extends BaseLogParser {
     }
 
     // response_item:custom_tool_call → INITIATED
-    if (e.type === "response_item" && e.payload?.type === "custom_tool_call") {
+    if (
+      e.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
+      e.payload?.type === "custom_tool_call"
+    ) {
       const toolName = e.payload.name?.toLowerCase() || "";
       const input = e.payload.input;
       const callId = e.payload.call_id as string | undefined;
@@ -1234,7 +1254,7 @@ export class CodexLogParser extends BaseLogParser {
 
     // response_item:custom_tool_call_output → TOOL_RESULT COMPLETED
     if (
-      e.type === "response_item" &&
+      e.type === CODEX_EVENT_TYPES.RESPONSE_ITEM &&
       e.payload?.type === "custom_tool_call_output"
     ) {
       const callId = e.payload.call_id as string | undefined;

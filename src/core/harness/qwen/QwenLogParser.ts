@@ -29,6 +29,7 @@ import {
 } from "../../../types/DashboardConstants";
 import { getQwenContextWindowSize } from "../../../utils/ModelConstants";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
+import { QWEN_EVENT_TYPES } from "./QwenProtocolConstants";
 
 /**
  * Qwen Code CLI Log Parser
@@ -212,7 +213,7 @@ export class QwenLogParser extends BaseLogParser {
         : Date.now();
 
       // ASSISTANT — process parts array (text, thinking, functionCall)
-      if (event.type === "assistant" && event.message?.parts) {
+      if (event.type === QWEN_EVENT_TYPES.ASSISTANT && event.message?.parts) {
         for (const part of event.message.parts) {
           // THINKING — text part with thought: true
           if (part.text && part.thought === true) {
@@ -394,7 +395,7 @@ export class QwenLogParser extends BaseLogParser {
     // Qwen has no stop_reason or result event. An assistant event is the final
     // response when it contains no functionCall parts — if it did have tool calls,
     // Qwen would have continued with tool_result events and another API round.
-    if (event.type !== "assistant") {
+    if (event.type !== QWEN_EVENT_TYPES.ASSISTANT) {
       return false;
     }
 
@@ -407,7 +408,10 @@ export class QwenLogParser extends BaseLogParser {
     modelId: string
   ): { used: number; size: number } | null {
     const e = event as QwenProviderEvent;
-    if (e.type === "assistant" && e.usageMetadata?.promptTokenCount != null) {
+    if (
+      e.type === QWEN_EVENT_TYPES.ASSISTANT &&
+      e.usageMetadata?.promptTokenCount != null
+    ) {
       const used = e.usageMetadata.promptTokenCount;
       const size = getQwenContextWindowSize(e.model ?? modelId);
       return used > 0 && size ? { used, size } : null;
@@ -426,7 +430,7 @@ export class QwenLogParser extends BaseLogParser {
     ctx: { dispatchedPromptText?: string }
   ): UserEventClassification {
     const e = event as QwenProviderEvent;
-    if (e.type !== "user") {
+    if (e.type !== QWEN_EVENT_TYPES.USER) {
       return "other";
     }
 
@@ -452,7 +456,7 @@ export class QwenLogParser extends BaseLogParser {
 
   override extractUserSteerText(event: BaseCliEvent): string | undefined {
     const e = event as QwenProviderEvent;
-    if (e.type !== "user") {
+    if (e.type !== QWEN_EVENT_TYPES.USER) {
       return undefined;
     }
     const text = this.extractUserMessageText(e);
@@ -574,7 +578,7 @@ export class QwenLogParser extends BaseLogParser {
 
           // Qwen user events have message.parts[].text (Gemini-style)
           for (const event of events as QwenProviderEvent[]) {
-            if (event.type === "user" && event.message?.parts) {
+            if (event.type === QWEN_EVENT_TYPES.USER && event.message?.parts) {
               for (const part of event.message.parts) {
                 if (part.text) {
                   const logPromptPrefix = this.normalizePromptForMatching(
@@ -645,7 +649,7 @@ export class QwenLogParser extends BaseLogParser {
       ? new Date(e.timestamp).getTime()
       : Date.now();
 
-    if (e.type === "assistant" && e.message?.parts) {
+    if (e.type === QWEN_EVENT_TYPES.ASSISTANT && e.message?.parts) {
       for (const part of e.message.parts) {
         if (part.text && part.thought === true) {
           cliEvents.push({
@@ -967,7 +971,7 @@ export class QwenLogParser extends BaseLogParser {
     const e = event as QwenProviderEvent;
 
     // Qwen assistant: extract non-thinking text parts from message.parts
-    if (e.type === "assistant" && e.message?.parts) {
+    if (e.type === QWEN_EVENT_TYPES.ASSISTANT && e.message?.parts) {
       const textContent = e.message.parts
         .filter((p) => p.text !== undefined && p.thought !== true)
         .map((p) => p.text as string)
