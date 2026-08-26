@@ -14,7 +14,7 @@ import { useUndoRedoKeyHandler } from "@hooks/useUndoRedoKeyHandler";
 import { useNewWorkflowKeyHandler } from "@hooks/useNewWorkflowKeyHandler";
 import { useRunViewLoadWatchdog } from "@hooks/useRunViewLoadWatchdog";
 import { useDuplicateWorkflowWatchdog } from "@hooks/useDuplicateWorkflowWatchdog";
-import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
+import { useVsCodeApi, isStandalone, panelPageLoadId } from "@hooks/useVsCodeApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useDesktopLayout } from "@hooks/useDesktopLayout";
 import { useMobileLayout } from "@hooks/useMobileLayout";
@@ -592,6 +592,7 @@ function App() {
     vscode.postMessage({
       type: MESSAGE_TYPES.READY,
       preferredViewAddress: getReadyPreferredViewAddress(),
+      pageLoadId: panelPageLoadId,
     });
     // In standalone (browser) mode the server is the authoritative source of theme
     // vars. Sending THEME_VARS_CAPTURED from the browser strips --fp-color-theme-kind

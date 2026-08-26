@@ -339,7 +339,9 @@ export class WebviewMessageRouter {
       if (ctx.clientId === PANEL_CLIENT_ID) {
         // Cancel RECONNECT retries before any awaited startup work so a valid
         // panel READY immediately stops further nudges from the extension.
-        const shouldHandleReady = this.callbacks.onPanelReady?.();
+        const shouldHandleReady = this.callbacks.onPanelReady?.(
+          typeof message.pageLoadId === "string" ? message.pageLoadId : undefined
+        );
         if (shouldHandleReady === false) {
           Log.debug(
             "[WebviewMessageRouter] Ignoring duplicate panel READY for the current webview"
@@ -2258,10 +2260,13 @@ export interface WebviewRouterCallbacks {
    * Called synchronously when the VS Code panel sends READY.
    * Used by CtrlYokeWebviewProvider to cancel pending RECONNECT retries
    * so no stale retries fire after the handshake is already complete. Returns
-   * false when this webview has already begun its READY handshake, allowing the
-   * router to discard duplicate READY messages queued during panel bootstrap.
+   * false when this webview has already begun its READY handshake *for the same
+   * page load* (BootstrapApp's early READY vs. App.tsx's later one), allowing the
+   * router to discard that in-page duplicate. `pageLoadId` distinguishes it from
+   * a READY sent by a fresh page after `window.location.reload()`, which must
+   * always be handled or the reloaded panel never receives CLIENT_ID_ASSIGNED.
    */
-  onPanelReady?: () => boolean;
+  onPanelReady?: (pageLoadId: string | undefined) => boolean;
 }
 
 export interface WebviewRouteOptions {

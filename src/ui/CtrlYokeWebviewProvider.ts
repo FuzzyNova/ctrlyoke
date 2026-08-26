@@ -95,6 +95,14 @@ export class CtrlYokeWebviewProvider
   private runningServerAvailableIps: string[] = [];
   private runningServerPortFallback?: ServerPortFallbackInfo;
   private panelReady = false;
+  // The pageLoadId of the panel page whose READY was last accepted. Compared
+  // (not just latched as a boolean) so that a READY from a *different* page
+  // load — e.g. after the webview's own window.location.reload() — is never
+  // mistaken for an in-page duplicate of BootstrapApp's/App.tsx's two READY
+  // sends. VS Code retains the same WebviewView instance across such a
+  // reload, so panelReady alone would otherwise stay stuck true forever and
+  // silently drop CLIENT_ID_ASSIGNED for every reload after the first.
+  private readyPageLoadId: string | undefined;
   private readonly pendingPromptEditorInsertQueue: PromptEditorInsertRequest[] =
     [];
 
@@ -187,7 +195,7 @@ export class CtrlYokeWebviewProvider
         getServerUrl: () => this.runningServerUrl,
         getAvailableIps: () => this.runningServerAvailableIps,
         getPortFallback: () => this.runningServerPortFallback,
-        onPanelReady: () => this.handlePanelReady(),
+        onPanelReady: (pageLoadId) => this.handlePanelReady(pageLoadId),
       },
       this.secretRegistry
     );
@@ -252,6 +260,7 @@ export class CtrlYokeWebviewProvider
   ): void | Thenable<void> {
     this.view = webviewView;
     this.panelReady = false;
+    this.readyPageLoadId = undefined;
 
     webviewView.webview.options = {
       enableScripts: true,
@@ -278,6 +287,7 @@ export class CtrlYokeWebviewProvider
     webviewView.onDidDispose(() => {
       if (this.view === webviewView) {
         this.panelReady = false;
+        this.readyPageLoadId = undefined;
         this.view = undefined;
       }
       this.cancelReconnectRetry();
@@ -1105,12 +1115,22 @@ export class CtrlYokeWebviewProvider
     this.reconnectRetrySession++;
   }
 
-  private handlePanelReady(): boolean {
+  private handlePanelReady(pageLoadId: string | undefined): boolean {
     this.cancelReconnectRetry();
-    if (this.panelReady) {
+    // A READY carrying the same pageLoadId as the one already accepted is the
+    // in-page duplicate (BootstrapApp's early READY vs. App.tsx's later one) —
+    // ignore it. A different id (or no id at all) means a new page load, even
+    // if this WebviewView was retained across a client-side reload, so it must
+    // always be handled or the reloaded panel never gets CLIENT_ID_ASSIGNED.
+    if (
+      this.panelReady &&
+      pageLoadId !== undefined &&
+      pageLoadId === this.readyPageLoadId
+    ) {
       return false;
     }
     this.panelReady = true;
+    this.readyPageLoadId = pageLoadId;
     this.flushPendingPromptEditorInserts();
     return true;
   }

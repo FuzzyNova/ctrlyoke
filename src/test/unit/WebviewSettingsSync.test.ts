@@ -1505,6 +1505,59 @@ suite("WebviewSettingsSync", () => {
         "duplicate READY must not restart initial state and workflow replay"
       );
     });
+
+    test("treats READY with a different pageLoadId as a fresh page, not a duplicate", async () => {
+      // Mirrors CtrlYokeWebviewProvider.handlePanelReady(): dedupe only within
+      // the same page load (BootstrapApp's early READY vs. App.tsx's later
+      // one), never across a window.location.reload() of the retained
+      // WebviewView, which starts a new page load with a new pageLoadId.
+      let panelReady = false;
+      let readyPageLoadId: string | undefined;
+      let initialStateSendCount = 0;
+
+      const mockSettingsSync = {
+        sendInitialState: async () => {
+          initialStateSendCount++;
+        },
+      } as any;
+
+      const router = new WebviewMessageRouter(
+        () => {},
+        mockSettingsSync,
+        {} as any,
+        () => undefined,
+        {} as any,
+        {
+          handleClearWorkflow: async () => {},
+          updateWorkflowName: () => {},
+          onPanelReady: (pageLoadId?: string) => {
+            if (
+              panelReady &&
+              pageLoadId !== undefined &&
+              pageLoadId === readyPageLoadId
+            ) {
+              return false;
+            }
+            panelReady = true;
+            readyPageLoadId = pageLoadId;
+            return true;
+          },
+        }
+      );
+
+      // BootstrapApp + App.tsx both sending READY for the same page load.
+      await router.route({ type: MESSAGE_TYPES.READY, pageLoadId: "page-1" });
+      await router.route({ type: MESSAGE_TYPES.READY, pageLoadId: "page-1" });
+      // The webview reloads (e.g. a watchdog firing): a new page load sends
+      // its own READY with a different pageLoadId.
+      await router.route({ type: MESSAGE_TYPES.READY, pageLoadId: "page-2" });
+
+      assert.strictEqual(
+        initialStateSendCount,
+        2,
+        "a READY from a reloaded page must still complete the handshake, even though the retained WebviewView already handled an earlier page's READY"
+      );
+    });
   });
 
   suite("WebviewMessageRouter — CREATE_WORKFLOW handler", () => {

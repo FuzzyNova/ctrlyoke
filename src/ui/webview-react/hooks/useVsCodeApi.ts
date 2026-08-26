@@ -24,6 +24,19 @@ declare global {
 export const isStandalone =
   typeof window !== "undefined" && !!window.__ctrlyokeStandalone;
 
+/**
+ * Identifies the current page load (module evaluation), stable for the lifetime
+ * of this JS context and distinct after any `window.location.reload()`. Every
+ * READY the panel sends during one page load carries this same value so the
+ * extension can tell "duplicate READY within this page" (BootstrapApp → App.tsx,
+ * safe to ignore) apart from "READY from a fresh page after a reload" (must be
+ * handled, or the panel never receives CLIENT_ID_ASSIGNED again).
+ */
+export const panelPageLoadId: string =
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
 let vscodeApi: VsCodeApi | undefined;
 
 function flushBootstrapLogs(): void {

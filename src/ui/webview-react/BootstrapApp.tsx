@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { MESSAGE_TYPES } from "@/types/messages";
-import { isStandalone, useVsCodeApi } from "@hooks/useVsCodeApi";
+import { isStandalone, panelPageLoadId, useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useUiStore } from "@store/uiStore";
 import { WebviewLog } from "@utils/logger";
 import { markFreshPageReadySent } from "@hooks/reconnectWatchdog";
@@ -50,6 +50,7 @@ export default function BootstrapApp() {
       vscode.postMessage({
         type: MESSAGE_TYPES.READY,
         preferredViewAddress: initialPreferredViewAddress,
+        pageLoadId: panelPageLoadId,
       });
       // Mark that this fresh page load has already sent READY so the RECONNECT
       // handler won't schedule a premature reload watchdog while the extension

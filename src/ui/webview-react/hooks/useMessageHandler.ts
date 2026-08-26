@@ -10,7 +10,7 @@
  * - Sets up message listener with proper cleanup
  */
 import { useEffect, useCallback, useMemo } from "react";
-import { getVsCodeApi, isStandalone } from "./useVsCodeApi";
+import { getVsCodeApi, isStandalone, panelPageLoadId } from "./useVsCodeApi";
 import {
   useWorkflowStore,
   isStepContentEqual,
@@ -698,6 +698,7 @@ export function createMessageHandlers(
     getVsCodeApi().postMessage({
       type: MESSAGE_TYPES.READY,
       preferredViewAddress: getReadyPreferredViewAddress(),
+      pageLoadId: panelPageLoadId,
     });
     // schedulePanelReconnectReloadWatchdog() is a no-op when this is a fresh
     // page load that already sent READY via BootstrapApp (freshPageReadySent=true).
