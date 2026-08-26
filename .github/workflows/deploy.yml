@@ -2,7 +2,11 @@ name: Deploy Site to Netlify
 
 # Production deploy of ctrlyoke.dev (landing + docs). Path-filtered so routine
 # extension commits don't redeploy the site. Requires NETLIFY_AUTH_TOKEN and
-# NETLIFY_SITE_ID repo secrets (the ctrlyoke.dev Netlify site).
+# NETLIFY_SITE_ID repo secrets (the ctrlyoke.dev Netlify site). The Netlify
+# site is not Git-linked (would require a paid plan), so this workflow is the
+# only way anything reaches Netlify — use workflow_dispatch (Actions tab ->
+# Run workflow) to redeploy when only env vars changed, or when a change
+# lands outside the path filter (e.g. netlify/functions/**).
 on:
   push:
     branches: [main]
@@ -16,6 +20,7 @@ on:
       - ".github/workflows/deploy.yml"
       - ".github/workflows/deploy-preview.yml"
       - ".github/workflows/_netlify-deploy.yml"
+  workflow_dispatch: {}
 
 jobs:
   deploy:
