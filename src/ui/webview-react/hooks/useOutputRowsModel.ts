@@ -21,6 +21,7 @@ import {
   type BashOutputExpansionState,
 } from "@components/output/BashOutput";
 import type { WorkflowStep } from "@store/workflowStore";
+import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 import type {
   OrderedHistoryEntry,
   StepOutput,
@@ -220,7 +221,9 @@ export function useOutputRowsModel({
   const hasDiffRows = useMemo(
     () =>
       rows.some(
-        (row) => row.rowKind === "structured-event" && row.diff !== undefined
+        (row) =>
+          row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
+          row.diff !== undefined
       ),
     [rows]
   );
@@ -230,7 +233,8 @@ export function useOutputRowsModel({
       hasDiffRows &&
       rows.some(
         (row) =>
-          row.rowKind === "structured-event" && row.diff?.isCollapsed === true
+          row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
+          row.diff?.isCollapsed === true
       ),
     [hasDiffRows, rows]
   );
@@ -240,30 +244,36 @@ export function useOutputRowsModel({
   useEffect(() => {
     const diffKeys = new Set(
       rows.flatMap((row) =>
-        row.rowKind === "structured-event" && row.diff ? [row.diff.key] : []
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT && row.diff
+          ? [row.diff.key]
+          : []
       )
     );
     const toolCallRowKeys = new Set(
       rows.flatMap((row) =>
-        row.rowKind === "structured-event" && row.toolCall ? [row.key] : []
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT && row.toolCall
+          ? [row.key]
+          : []
       )
     );
     const bashRowKeys = new Set(
       rows.flatMap((row) =>
-        row.rowKind === "structured-event" &&
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
         row.event.type === CLI_EVENT_TYPES.BASH_COMMAND
           ? [row.key]
           : []
       )
     );
     const scriptVerdictRowKeys = new Set(
-      rows.flatMap((row) => (row.rowKind === "script-verdict" ? [row.key] : []))
+      rows.flatMap((row) =>
+        row.rowKind === OUTPUT_ROW_KINDS.SCRIPT_VERDICT ? [row.key] : []
+      )
     );
     // Keyed by the toggle, not the row: which slice carries the toggle moves
     // between the collapsed and expanded layouts.
     const scriptOutputToggleKeys = new Set(
       rows.flatMap((row) =>
-        row.rowKind === "script-output" && row.tailToggle
+        row.rowKind === OUTPUT_ROW_KINDS.SCRIPT_OUTPUT && row.tailToggle
           ? [row.tailToggle.key]
           : []
       )

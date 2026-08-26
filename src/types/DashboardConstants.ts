@@ -2049,6 +2049,29 @@ export const OUTPUT_HISTORY_KINDS = {
 } as const;
 
 // ============================================================================
+// OUTPUT ROW KINDS - Discriminants for rendered output rows
+// ============================================================================
+export const OUTPUT_ROW_KINDS = {
+  ATTEMPT_GROUP_SUMMARY: "attempt-group-summary",
+  STEP_ANCHOR: "step-anchor",
+  FINAL_STEP_LABEL: "final-step-label",
+  STATUS: "status",
+  CLI_HEADER: "cli-header",
+  PROMPT: "prompt",
+  CLI_COMMAND: "cli-command",
+  SCRIPT_COMMAND: "script-command",
+  ERROR: "error",
+  STRUCTURED_EVENT: "structured-event",
+  PLAIN_RESPONSE: "plain-response",
+  SCRIPT_OUTPUT: "script-output",
+  SCRIPT_VERDICT: "script-verdict",
+  STATS: "stats",
+} as const;
+
+export type OutputRowKind =
+  (typeof OUTPUT_ROW_KINDS)[keyof typeof OUTPUT_ROW_KINDS];
+
+// ============================================================================
 // SNAPSHOT STRATEGIES - Workspace snapshot strategy values
 // ============================================================================
 export const SNAPSHOT_STRATEGIES = {

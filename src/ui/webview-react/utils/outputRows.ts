@@ -15,7 +15,9 @@ import type {
 } from "../types/cliEvents";
 import type { ScriptVerdict } from "@root/types/CtrlYokeTypes";
 import {
+  OUTPUT_ROW_KINDS,
   WORKFLOW_TOKEN_COVERAGE,
+  type OutputRowKind,
   type WorkflowTokenCoverage,
 } from "@root/types/DashboardConstants";
 import type {
@@ -113,16 +115,18 @@ export interface OutputRowBashExpansionState {
   errorExpanded: boolean;
 }
 
-interface OutputRowBase {
+interface OutputRowBase<TRowKind extends OutputRowKind = OutputRowKind> {
   key: string;
+  rowKind: TRowKind;
   target?: OutputMessageTarget;
   estimateSize: number;
   groupStart?: boolean;
   groupEnd?: boolean;
 }
 
-export interface AttemptGroupSummaryRow extends OutputRowBase {
-  rowKind: "attempt-group-summary";
+export interface AttemptGroupSummaryRow extends OutputRowBase<
+  typeof OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY
+> {
   target: OutputMessageTarget;
   groupKey: string;
   attemptCount: number;
@@ -130,25 +134,29 @@ export interface AttemptGroupSummaryRow extends OutputRowBase {
   coverage: WorkflowTokenCoverage;
 }
 
-export interface StepAnchorRow extends OutputRowBase {
-  rowKind: "step-anchor";
+export interface StepAnchorRow extends OutputRowBase<
+  typeof OUTPUT_ROW_KINDS.STEP_ANCHOR
+> {
   target: OutputMessageTarget;
 }
 
-export interface FinalStepLabelRow extends OutputRowBase {
-  rowKind: "final-step-label";
+export interface FinalStepLabelRow extends OutputRowBase<
+  typeof OUTPUT_ROW_KINDS.FINAL_STEP_LABEL
+> {
   target: OutputMessageTarget;
   label: string;
 }
 
-export interface StatusRow extends OutputRowBase {
-  rowKind: "status";
+export interface StatusRow extends OutputRowBase<
+  typeof OUTPUT_ROW_KINDS.STATUS
+> {
   target: OutputMessageTarget;
   status: OutputStatusMessage;
 }
 
-export interface CliHeaderRow extends OutputRowBase {
-  rowKind: "cli-header";
+export interface CliHeaderRow extends OutputRowBase<
+  typeof OUTPUT_ROW_KINDS.CLI_HEADER
+> {
   target: OutputMessageTarget;
   output: CliOutputType;
   stepIndex: number;
@@ -160,36 +168,39 @@ export interface CliHeaderRow extends OutputRowBase {
   promptUndo?: OutputRowPromptUndoMeta;
 }
 
-export interface PromptRow extends OutputRowBase {
-  rowKind: "prompt";
+export interface PromptRow extends OutputRowBase<
+  typeof OUTPUT_ROW_KINDS.PROMPT
+> {
   target: OutputMessageTarget;
   text: string;
 }
 
-interface CommandRowBase extends OutputRowBase {
+interface CommandRowBase<
+  TRowKind extends OutputRowKind,
+> extends OutputRowBase<TRowKind> {
   target: OutputMessageTarget;
   workingDirectory?: string;
   command: string;
   wasInjected?: boolean;
 }
 
-export interface CliCommandRow extends CommandRowBase {
-  rowKind: "cli-command";
-}
+export interface CliCommandRow extends CommandRowBase<
+  typeof OUTPUT_ROW_KINDS.CLI_COMMAND
+> {}
 
-export interface ScriptCommandRow extends CommandRowBase {
-  rowKind: "script-command";
-}
+export interface ScriptCommandRow extends CommandRowBase<
+  typeof OUTPUT_ROW_KINDS.SCRIPT_COMMAND
+> {}
 
-export interface ErrorRow extends OutputRowBase {
-  rowKind: "error";
+export interface ErrorRow extends OutputRowBase<typeof OUTPUT_ROW_KINDS.ERROR> {
   target: OutputMessageTarget;
   timestamp?: string;
   errorMessage: string;
 }
 
-export interface StructuredEventRow extends OutputRowBase {
-  rowKind: "structured-event";
+export interface StructuredEventRow extends OutputRowBase<
+  typeof OUTPUT_ROW_KINDS.STRUCTURED_EVENT
+> {
   target: OutputMessageTarget;
   event: CliEvent;
   eventIndex: number;
@@ -208,8 +219,9 @@ export interface StructuredEventRow extends OutputRowBase {
   hideDiff: boolean;
 }
 
-export interface PlainResponseRow extends OutputRowBase {
-  rowKind: "plain-response";
+export interface PlainResponseRow extends OutputRowBase<
+  typeof OUTPUT_ROW_KINDS.PLAIN_RESPONSE
+> {
   target: OutputMessageTarget;
   text: string;
   rawTextOutput: boolean;
@@ -227,8 +239,9 @@ export interface PlainResponseRow extends OutputRowBase {
  * the process had already exited. Slicing it into bounded rows makes each
  * append touch one row's DOM and lets virtualization do its job.
  */
-export interface ScriptOutputRow extends OutputRowBase {
-  rowKind: "script-output";
+export interface ScriptOutputRow extends OutputRowBase<
+  typeof OUTPUT_ROW_KINDS.SCRIPT_OUTPUT
+> {
   target: OutputMessageTarget;
   text: string;
   /** Position within the emitted slices; only the ends carry block padding. */
@@ -246,15 +259,15 @@ export interface ScriptOutputRow extends OutputRowBase {
   };
 }
 
-export interface StatsRow extends OutputRowBase {
-  rowKind: "stats";
+export interface StatsRow extends OutputRowBase<typeof OUTPUT_ROW_KINDS.STATS> {
   target: OutputMessageTarget;
   output: CliOutputType;
   outputText?: string;
 }
 
-export interface ScriptVerdictRow extends OutputRowBase {
-  rowKind: "script-verdict";
+export interface ScriptVerdictRow extends OutputRowBase<
+  typeof OUTPUT_ROW_KINDS.SCRIPT_VERDICT
+> {
   target: OutputMessageTarget;
   verdict: ScriptVerdict;
   expanded: boolean;
@@ -1518,11 +1531,11 @@ function estimateOutputRowContentHeight(
   outputContentWidth?: number
 ): number {
   switch (row.rowKind) {
-    case "step-anchor":
+    case OUTPUT_ROW_KINDS.STEP_ANCHOR:
       return 1;
-    case "final-step-label":
+    case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
       return 24;
-    case "status":
+    case OUTPUT_ROW_KINDS.STATUS:
       return estimateTextBlockHeight(
         row.status.message,
         outputContentWidth,
@@ -1533,9 +1546,9 @@ function estimateOutputRowContentHeight(
           verticalChrome: STATUS_ROW_VERTICAL_CHROME,
         }
       );
-    case "cli-header":
+    case OUTPUT_ROW_KINDS.CLI_HEADER:
       return estimateCliHeaderHeight(row, outputContentWidth, outputFontSize);
-    case "prompt":
+    case OUTPUT_ROW_KINDS.PROMPT:
       // OUTPUT_BLOCK_BASE: font-mono sm font, body line-height:1.4, py-sm+my-sm=24px chrome.
       // chrome:32 matches actual horizontal padding (px-md outer + px-sm inner + border-l-3).
       return estimateTextBlockHeight(
@@ -1550,8 +1563,8 @@ function estimateOutputRowContentHeight(
           wrapAtWords: true,
         }
       );
-    case "cli-command":
-    case "script-command":
+    case OUTPUT_ROW_KINDS.CLI_COMMAND:
+    case OUTPUT_ROW_KINDS.SCRIPT_COMMAND:
       // OUTPUT_BLOCK_BASE: font-mono sm font, body line-height:1.4, py-sm+my-sm=24px chrome.
       // chrome:32 matches actual horizontal padding (px-md outer + px-sm inner + border-l-3).
       return estimateCliCommandRowHeight(
@@ -1559,7 +1572,7 @@ function estimateOutputRowContentHeight(
         outputContentWidth,
         outputFontSize
       );
-    case "error":
+    case OUTPUT_ROW_KINDS.ERROR:
       return estimateTextBlockHeight(
         `${row.timestamp ? `[${row.timestamp}] ` : ""}Error: ${row.errorMessage}`,
         outputContentWidth,
@@ -1570,7 +1583,7 @@ function estimateOutputRowContentHeight(
           verticalChrome: 22,
         }
       );
-    case "plain-response":
+    case OUTPUT_ROW_KINDS.PLAIN_RESPONSE:
       return row.rawTextOutput
         ? estimateTextBlockHeight(row.text, outputContentWidth, outputFontSize)
         : estimateMarkdownBlockHeight(
@@ -1578,13 +1591,13 @@ function estimateOutputRowContentHeight(
             outputContentWidth,
             outputFontSize
           );
-    case "script-output":
+    case OUTPUT_ROW_KINDS.SCRIPT_OUTPUT:
       return estimateScriptOutputHeight(
         row,
         outputContentWidth,
         outputFontSize
       );
-    case "script-verdict":
+    case OUTPUT_ROW_KINDS.SCRIPT_VERDICT:
       return row.expanded
         ? 220
         : estimateCollapsedScriptVerdictHeight(
@@ -1592,11 +1605,11 @@ function estimateOutputRowContentHeight(
             outputContentWidth,
             outputFontSize
           );
-    case "attempt-group-summary":
+    case OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY:
       return 36;
-    case "stats":
+    case OUTPUT_ROW_KINDS.STATS:
       return estimateStatsRowHeight(row, outputContentWidth, outputFontSize);
-    case "structured-event":
+    case OUTPUT_ROW_KINDS.STRUCTURED_EVENT:
       return row.diff
         ? estimateDiffStructuredEventHeight(
             row,
@@ -1698,7 +1711,7 @@ function pushScriptOutputRows({
     const isLastSegment = index === segments.length - 1;
     rows.push({
       key: tailWindow ? `${baseKey}:tail` : `${baseKey}:segment${index}`,
-      rowKind: "script-output",
+      rowKind: OUTPUT_ROW_KINDS.SCRIPT_OUTPUT,
       target,
       text: segment,
       isFirstSegment: index === 0,
@@ -1773,14 +1786,14 @@ export function buildOutputRows(
       firstRowIndexByTarget.set(targetKey, rows.length);
       rows.push({
         key: `${targetKey}:anchor`,
-        rowKind: "step-anchor",
+        rowKind: OUTPUT_ROW_KINDS.STEP_ANCHOR,
         target,
         estimateSize: 1,
       });
       if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         rows.push({
           key: `${targetKey}:final-step-label`,
-          rowKind: "final-step-label",
+          rowKind: OUTPUT_ROW_KINDS.FINAL_STEP_LABEL,
           target,
           label: `Final Step Loop ${target.index + 1}`,
           estimateSize: 24,
@@ -1791,7 +1804,7 @@ export function buildOutputRows(
     if (message.type === "status") {
       rows.push({
         key: `${targetKey}:status:${messageIndex}`,
-        rowKind: "status",
+        rowKind: OUTPUT_ROW_KINDS.STATUS,
         target,
         status: message.data as OutputStatusMessage,
         estimateSize: 36,
@@ -1828,7 +1841,7 @@ export function buildOutputRows(
 
       rows.push({
         key: `${attemptGroup.key}:summary`,
-        rowKind: "attempt-group-summary",
+        rowKind: OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY,
         target: attemptGroup.target,
         groupKey: attemptGroup.key,
         attemptCount: attemptGroup.attempts.size,
@@ -1876,7 +1889,7 @@ export function buildOutputRows(
 
     rows.push({
       key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:header`,
-      rowKind: "cli-header",
+      rowKind: OUTPUT_ROW_KINDS.CLI_HEADER,
       target,
       output,
       stepIndex: target.index,
@@ -1904,7 +1917,7 @@ export function buildOutputRows(
     if (output.prompt && !scriptish) {
       rows.push({
         key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:prompt`,
-        rowKind: "prompt",
+        rowKind: OUTPUT_ROW_KINDS.PROMPT,
         target,
         text: output.prompt,
         estimateSize: 36,
@@ -1914,7 +1927,9 @@ export function buildOutputRows(
     if (output.cliCommand) {
       rows.push({
         key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:command`,
-        rowKind: scriptish ? "script-command" : "cli-command",
+        rowKind: scriptish
+          ? OUTPUT_ROW_KINDS.SCRIPT_COMMAND
+          : OUTPUT_ROW_KINDS.CLI_COMMAND,
         target,
         workingDirectory: output.workingDirectory,
         command: output.cliCommand,
@@ -1926,7 +1941,7 @@ export function buildOutputRows(
     if (output.errorMessage) {
       rows.push({
         key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:error`,
-        rowKind: "error",
+        rowKind: OUTPUT_ROW_KINDS.ERROR,
         target,
         timestamp: output.timestampMs
           ? new Date(output.timestampMs).toLocaleTimeString("en-US", {
@@ -1968,7 +1983,7 @@ export function buildOutputRows(
     if (hasStructuredEvents && output.isStreaming && streamingChunk) {
       rows.push({
         key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:streaming-text`,
-        rowKind: "plain-response",
+        rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
         target,
         text: streamingChunk,
         rawTextOutput,
@@ -2030,7 +2045,7 @@ export function buildOutputRows(
 
       rows.push({
         key: rowKey,
-        rowKind: "structured-event",
+        rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
         target,
         event: visibleEvent.event,
         eventIndex: visibleEvent.originalIndex,
@@ -2087,7 +2102,7 @@ export function buildOutputRows(
         } else {
           rows.push({
             key: `${attemptKey}:streaming-response`,
-            rowKind: "plain-response",
+            rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
             target,
             text: streamingChunk,
             rawTextOutput,
@@ -2108,7 +2123,7 @@ export function buildOutputRows(
         } else {
           rows.push({
             key: `${attemptKey}:response`,
-            rowKind: "plain-response",
+            rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
             target,
             text: output.response,
             rawTextOutput,
@@ -2123,7 +2138,7 @@ export function buildOutputRows(
       const verdictKey = `${targetKey}:run${runIndex}:attempt${attemptIndex}:verdict`;
       rows.push({
         key: verdictKey,
-        rowKind: "script-verdict",
+        rowKind: OUTPUT_ROW_KINDS.SCRIPT_VERDICT,
         target,
         verdict: output.scriptVerdict,
         expanded: input.scriptVerdictExpansionState?.get(verdictKey) ?? false,
@@ -2144,7 +2159,7 @@ export function buildOutputRows(
     if (hasStatsRow) {
       rows.push({
         key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:stats`,
-        rowKind: "stats",
+        rowKind: OUTPUT_ROW_KINDS.STATS,
         target,
         output,
         outputText,

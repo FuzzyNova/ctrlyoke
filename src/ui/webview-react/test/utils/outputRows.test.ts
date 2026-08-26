@@ -20,6 +20,7 @@ import {
   SCRIPT_OUTPUT_SOURCES,
   getStreamingChunkKey,
 } from "@/types/messages";
+import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 
 describe("outputRows", () => {
   const steps = [{ name: "Analyze code" } as WorkflowStep];
@@ -67,19 +68,23 @@ describe("outputRows", () => {
     expect(
       scriptRows
         .filter(
-          (row) => row.rowKind === "prompt" || row.rowKind.includes("command")
+          (row) =>
+            row.rowKind === OUTPUT_ROW_KINDS.PROMPT ||
+            row.rowKind.includes("command")
         )
         .map((row) => row.rowKind)
-    ).toEqual(["script-command"]);
+    ).toEqual([OUTPUT_ROW_KINDS.SCRIPT_COMMAND]);
 
     const harnessRows = buildRows().rows;
     expect(
       harnessRows
         .filter(
-          (row) => row.rowKind === "prompt" || row.rowKind.includes("command")
+          (row) =>
+            row.rowKind === OUTPUT_ROW_KINDS.PROMPT ||
+            row.rowKind.includes("command")
         )
         .map((row) => row.rowKind)
-    ).toEqual(["prompt", "cli-command"]);
+    ).toEqual([OUTPUT_ROW_KINDS.PROMPT, OUTPUT_ROW_KINDS.CLI_COMMAND]);
   });
 
   it("collapses retry attempts into an explicitly labelled aggregate", () => {
@@ -123,7 +128,7 @@ describe("outputRows", () => {
       collapsedAttemptGroupKeys: new Set(["queue:0:run0"]),
     });
     const summary = collapsed.rows.find(
-      (row) => row.rowKind === "attempt-group-summary"
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY
     );
     expect(summary).toMatchObject({
       attemptCount: 2,
@@ -132,9 +137,9 @@ describe("outputRows", () => {
     });
 
     const expanded = buildOutputRows(common);
-    expect(expanded.rows.filter((row) => row.rowKind === "stats")).toHaveLength(
-      2
-    );
+    expect(
+      expanded.rows.filter((row) => row.rowKind === OUTPUT_ROW_KINDS.STATS)
+    ).toHaveLength(2);
   });
 
   it("threads the collapsed tool output line count into Bash and generic tool rows", () => {
@@ -201,20 +206,20 @@ describe("outputRows", () => {
 
     const bashRow = result.rows.find(
       (row) =>
-        row.rowKind === "structured-event" &&
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
         row.event.type === CLI_EVENT_TYPES.BASH_COMMAND
     );
     const toolCallRow = result.rows.find(
       (row) =>
-        row.rowKind === "structured-event" &&
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
         row.event.type === CLI_EVENT_TYPES.TOOL_CALL
     );
 
     if (
       !bashRow ||
-      bashRow.rowKind !== "structured-event" ||
+      bashRow.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
       !toolCallRow ||
-      toolCallRow.rowKind !== "structured-event"
+      toolCallRow.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT
     ) {
       throw new Error("Expected Bash and generic tool output rows");
     }
@@ -288,7 +293,9 @@ describe("outputRows", () => {
         outputContentWidth: 760,
         outputFontSize: 13,
       }).rows.find(
-        (row) => row.rowKind === "structured-event" && row.key === rowKey
+        (row) =>
+          row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
+          row.key === rowKey
       );
 
     const collapsed = buildRows({
@@ -304,10 +311,10 @@ describe("outputRows", () => {
 
     if (
       !collapsed ||
-      collapsed.rowKind !== "structured-event" ||
+      collapsed.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
       !collapsed.toolCall ||
       !expanded ||
-      expanded.rowKind !== "structured-event" ||
+      expanded.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
       !expanded.toolCall
     ) {
       throw new Error("Expected MCP tool-call rows with expansion metadata");
@@ -371,19 +378,19 @@ describe("outputRows", () => {
     });
 
     expect(result.rows.map((row) => row.rowKind)).toEqual([
-      "step-anchor",
-      "cli-header",
-      "script-command",
-      "script-output",
-      "script-verdict",
-      "stats",
+      OUTPUT_ROW_KINDS.STEP_ANCHOR,
+      OUTPUT_ROW_KINDS.CLI_HEADER,
+      OUTPUT_ROW_KINDS.SCRIPT_COMMAND,
+      OUTPUT_ROW_KINDS.SCRIPT_OUTPUT,
+      OUTPUT_ROW_KINDS.SCRIPT_VERDICT,
+      OUTPUT_ROW_KINDS.STATS,
     ]);
     const verdictRow = result.rows.find(
-      (row) => row.rowKind === "script-verdict"
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.SCRIPT_VERDICT
     );
     expect(verdictRow?.estimateSize).toBeGreaterThan(0);
     expect(verdictRow).toMatchObject({ expanded: false });
-    if (!verdictRow || verdictRow.rowKind !== "script-verdict") {
+    if (!verdictRow || verdictRow.rowKind !== OUTPUT_ROW_KINDS.SCRIPT_VERDICT) {
       throw new Error("Expected a script verdict row");
     }
     expect(estimateOutputRowHeight(verdictRow, 13, 240)).toBeGreaterThan(
@@ -447,7 +454,7 @@ describe("outputRows", () => {
 
     expect(
       result.rows
-        .filter((row) => row.rowKind === "script-output")
+        .filter((row) => row.rowKind === OUTPUT_ROW_KINDS.SCRIPT_OUTPUT)
         .map((row) => row.text)
     ).toEqual(["pre output", "end output"]);
   });
@@ -491,12 +498,12 @@ describe("outputRows", () => {
     });
 
     expect(result.rows.map((row) => row.rowKind)).toEqual([
-      "step-anchor",
-      "cli-header",
-      "prompt",
-      "cli-command",
-      "plain-response",
-      "stats",
+      OUTPUT_ROW_KINDS.STEP_ANCHOR,
+      OUTPUT_ROW_KINDS.CLI_HEADER,
+      OUTPUT_ROW_KINDS.PROMPT,
+      OUTPUT_ROW_KINDS.CLI_COMMAND,
+      OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
+      OUTPUT_ROW_KINDS.STATS,
     ]);
     expect(result.firstRowIndexByTarget.get("queue:0")).toBe(0);
     expect(result.lastCliIndexPerStep.get("queue:0")).toBe(0);
@@ -539,9 +546,9 @@ describe("outputRows", () => {
     });
 
     expect(
-      result.rows.find((row) => row.rowKind === "cli-command")
+      result.rows.find((row) => row.rowKind === OUTPUT_ROW_KINDS.CLI_COMMAND)
     ).toMatchObject({
-      rowKind: "cli-command",
+      rowKind: OUTPUT_ROW_KINDS.CLI_COMMAND,
       command: "Actual injected prompt text",
       wasInjected: true,
     });
@@ -626,15 +633,15 @@ describe("outputRows", () => {
     });
 
     const firstDiffRow = first.rows.find(
-      (row) => row.rowKind === "structured-event" && row.diff
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT && row.diff
     );
     const secondDiffRow = second.rows.find(
-      (row) => row.rowKind === "structured-event" && row.diff
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT && row.diff
     );
 
     expect(firstDiffRow?.key).toBe(secondDiffRow?.key);
-    expect(firstDiffRow?.rowKind).toBe("structured-event");
-    expect(secondDiffRow?.rowKind).toBe("structured-event");
+    expect(firstDiffRow?.rowKind).toBe(OUTPUT_ROW_KINDS.STRUCTURED_EVENT);
+    expect(secondDiffRow?.rowKind).toBe(OUTPUT_ROW_KINDS.STRUCTURED_EVENT);
   });
 
   it("uses split-view diff runs when projecting desktop minimap metadata", () => {
@@ -696,10 +703,10 @@ describe("outputRows", () => {
     });
 
     const diffRow = result.rows.find(
-      (row) => row.rowKind === "structured-event" && row.diff
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT && row.diff
     );
 
-    if (!diffRow || diffRow.rowKind !== "structured-event") {
+    if (!diffRow || diffRow.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT) {
       throw new Error("Expected a structured diff row");
     }
 
@@ -785,7 +792,7 @@ describe("outputRows", () => {
     });
 
     const diffRows = result.rows.filter(
-      (row) => row.rowKind === "structured-event" && row.diff
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT && row.diff
     );
 
     expect(diffRows).toHaveLength(1);
@@ -1004,36 +1011,51 @@ describe("outputRows", () => {
     });
 
     const diffRow = result.rows.find(
-      (row) => row.rowKind === "structured-event" && row.diff?.key === diffKey
+      (row) =>
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
+        row.diff?.key === diffKey
     );
     const toolRow = result.rows.find(
-      (row) => row.rowKind === "structured-event" && row.key === toolRowKey
+      (row) =>
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
+        row.key === toolRowKey
     );
     const baseToolRow = baseResult.rows.find(
-      (row) => row.rowKind === "structured-event" && row.key === toolRowKey
+      (row) =>
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
+        row.key === toolRowKey
     );
     const baseDiffRow = baseResult.rows.find(
-      (row) => row.rowKind === "structured-event" && row.diff?.key === diffKey
+      (row) =>
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
+        row.diff?.key === diffKey
     );
 
-    if (!diffRow || diffRow.rowKind !== "structured-event" || !diffRow.diff) {
+    if (
+      !diffRow ||
+      diffRow.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
+      !diffRow.diff
+    ) {
       throw new Error("Expected diff row");
     }
     if (
       !toolRow ||
-      toolRow.rowKind !== "structured-event" ||
+      toolRow.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
       !toolRow.toolCall
     ) {
       throw new Error("Expected tool-call row");
     }
     if (
       !baseToolRow ||
-      baseToolRow.rowKind !== "structured-event" ||
+      baseToolRow.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
       !baseToolRow.toolCall
     ) {
       throw new Error("Expected base tool-call row");
     }
-    if (!baseDiffRow || baseDiffRow.rowKind !== "structured-event") {
+    if (
+      !baseDiffRow ||
+      baseDiffRow.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT
+    ) {
       throw new Error("Expected base diff row");
     }
 
@@ -1142,10 +1164,10 @@ describe("outputRows", () => {
     });
 
     const narrowResponse = narrow.rows.find(
-      (row) => row.rowKind === "plain-response"
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.PLAIN_RESPONSE
     );
     const wideResponse = wide.rows.find(
-      (row) => row.rowKind === "plain-response"
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.PLAIN_RESPONSE
     );
 
     if (!narrowResponse || !wideResponse) {
@@ -1171,7 +1193,7 @@ describe("outputRows", () => {
 
     const tableRow = {
       key: "table",
-      rowKind: "plain-response",
+      rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
       target,
       text: tableText,
       rawTextOutput: false,
@@ -1208,7 +1230,7 @@ describe("outputRows", () => {
 
     const row = {
       key: "small-table",
-      rowKind: "plain-response",
+      rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
       target,
       text: smallTable,
       rawTextOutput: false,
@@ -1278,11 +1300,11 @@ describe("outputRows", () => {
 
     const bashRow = result.rows.find(
       (row) =>
-        row.rowKind === "structured-event" &&
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
         row.event.type === CLI_EVENT_TYPES.BASH_COMMAND
     );
 
-    if (!bashRow || bashRow.rowKind !== "structured-event") {
+    if (!bashRow || bashRow.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT) {
       throw new Error("Expected bash structured-event row");
     }
 
@@ -1425,12 +1447,12 @@ describe("outputRows", () => {
 
     const cleanRow = buildWithOutput(cleanLine).rows.find(
       (row) =>
-        row.rowKind === "structured-event" &&
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
         row.event.type === CLI_EVENT_TYPES.BASH_COMMAND
     );
     const noisyRow = buildWithOutput(noisyLine).rows.find(
       (row) =>
-        row.rowKind === "structured-event" &&
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
         row.event.type === CLI_EVENT_TYPES.BASH_COMMAND
     );
 
@@ -1512,20 +1534,20 @@ describe("outputRows", () => {
 
     const narrowRow = narrow.rows.find(
       (row) =>
-        row.rowKind === "structured-event" &&
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
         row.event.type === CLI_EVENT_TYPES.FILE_READ
     );
     const wideRow = wide.rows.find(
       (row) =>
-        row.rowKind === "structured-event" &&
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
         row.event.type === CLI_EVENT_TYPES.FILE_READ
     );
 
     if (
       !narrowRow ||
-      narrowRow.rowKind !== "structured-event" ||
+      narrowRow.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
       !wideRow ||
-      wideRow.rowKind !== "structured-event"
+      wideRow.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT
     ) {
       throw new Error("Expected file-read structured-event rows");
     }
@@ -1615,17 +1637,17 @@ describe("outputRows", () => {
     });
 
     const narrowDiff = narrow.rows.find(
-      (row) => row.rowKind === "structured-event" && row.diff
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT && row.diff
     );
     const wideDiff = wide.rows.find(
-      (row) => row.rowKind === "structured-event" && row.diff
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT && row.diff
     );
 
     if (
       !narrowDiff ||
-      narrowDiff.rowKind !== "structured-event" ||
+      narrowDiff.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
       !wideDiff ||
-      wideDiff.rowKind !== "structured-event"
+      wideDiff.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT
     ) {
       throw new Error("Expected diff structured-event rows");
     }
@@ -1697,8 +1719,14 @@ describe("outputRows", () => {
         outputContentWidth: 480,
       }).rows;
 
-      const row = rows.find((entry) => entry.rowKind === "structured-event");
-      if (!row || row.rowKind !== "structured-event" || !row.diff) {
+      const row = rows.find(
+        (entry) => entry.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT
+      );
+      if (
+        !row ||
+        row.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
+        !row.diff
+      ) {
         throw new Error("Expected a collapsed diff structured-event row");
       }
       return row;
@@ -1756,8 +1784,10 @@ describe("outputRows", () => {
       outputContentWidth: 760,
     });
 
-    const header = rows.find((row) => row.rowKind === "cli-header");
-    const stats = rows.find((row) => row.rowKind === "stats");
+    const header = rows.find(
+      (row) => row.rowKind === OUTPUT_ROW_KINDS.CLI_HEADER
+    );
+    const stats = rows.find((row) => row.rowKind === OUTPUT_ROW_KINDS.STATS);
     if (!header || !stats) {
       throw new Error("Expected cli-header and stats rows");
     }
@@ -1789,7 +1819,7 @@ describe("outputRows", () => {
     const prompt = (text: string) =>
       ({
         key: `prompt-${text.length}`,
-        rowKind: "prompt",
+        rowKind: OUTPUT_ROW_KINDS.PROMPT,
         target,
         text,
         estimateSize: 0,
@@ -1797,7 +1827,7 @@ describe("outputRows", () => {
     const command = (text: string) =>
       ({
         key: `command-${text.length}`,
-        rowKind: "cli-command",
+        rowKind: OUTPUT_ROW_KINDS.CLI_COMMAND,
         target,
         command: text,
         wasInjected: true,
@@ -1820,7 +1850,7 @@ describe("outputRows", () => {
     const makeRow = (text: string) =>
       ({
         key: "streaming-response",
-        rowKind: "plain-response",
+        rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
         target,
         text,
         rawTextOutput: true,
@@ -1872,7 +1902,7 @@ describe("outputRows", () => {
     const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
     const makeRow = (text: string) => ({
       key: "memo-probe",
-      rowKind: "plain-response" as const,
+      rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
       target,
       text,
       rawTextOutput: true,
@@ -1942,9 +1972,15 @@ describe("outputRows", () => {
         outputContentWidth: 760,
       });
 
-      const responseRow = rows.find((row) => row.rowKind === "plain-response");
+      const responseRow = rows.find(
+        (row) => row.rowKind === OUTPUT_ROW_KINDS.PLAIN_RESPONSE
+      );
       expect(responseRow).toBeDefined();
-      if (!responseRow || responseRow.rowKind !== "plain-response") return;
+      if (
+        !responseRow ||
+        responseRow.rowKind !== OUTPUT_ROW_KINDS.PLAIN_RESPONSE
+      )
+        return;
 
       // Same probe: a published row that still had to compute would pick the
       // emptied text up and come back shorter than its own `estimateSize`.
@@ -2017,7 +2053,9 @@ describe("outputRows", () => {
       });
 
     const scriptRows = (result: ReturnType<typeof buildOutputRows>) =>
-      result.rows.filter((row) => row.rowKind === "script-output");
+      result.rows.filter(
+        (row) => row.rowKind === OUTPUT_ROW_KINDS.SCRIPT_OUTPUT
+      );
 
     it("sanitizes streamed and completed script output before row rendering", () => {
       const raw = "\u001b[36mcyan\u001b[39m\r\nnext\u0007";
@@ -2176,7 +2214,9 @@ describe("outputRows", () => {
 
       expect(scriptRows(result)).toHaveLength(0);
       expect(
-        result.rows.filter((row) => row.rowKind === "plain-response")
+        result.rows.filter(
+          (row) => row.rowKind === OUTPUT_ROW_KINDS.PLAIN_RESPONSE
+        )
       ).toHaveLength(1);
     });
   });
