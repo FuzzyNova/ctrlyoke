@@ -1,6 +1,6 @@
 # History Search Drawer Virtualization & Position Retention Plan
 
-**Status:** Proposed
+**Status:** Phase 0 implemented, Phase 1 proposed
 **Priority:** P3
 
 Sibling to
@@ -78,6 +78,14 @@ for free once it stayed mounted.
 This alone resolves complaint (1) without touching virtualization, and is
 low-risk enough to ship independently of Phase 1.
 
+**Implemented** in commit `e468dacc` ("fix(webview): preserve component state
+across close/reopen and fix z-index layering"). The debounced-search effect
+in `HistorySearchDrawer.tsx` is now keyed off `query`/`trimmedQuery` only
+(see the comment immediately above it explaining why `isOpen` was
+deliberately dropped from its dependency array), and the focus/select-on-open
+effect remains keyed off `isOpen` alone, running on every reopen as intended.
+Only Phase 1 remains open.
+
 ### Phase 1 — virtualize + overscan-driven infinite scroll
 
 Once Phase 0 is in, replace the eager `results.map()` render and the manual
@@ -154,9 +162,12 @@ gets thrown away on every reopen).
   defaults are reasonable for a sequential-only backing list (no independent
   per-page retry needed here, unlike file/commit history's sparse page map).
 - `src/ui/webview-react/test/components/search/HistorySearchDrawer.test.tsx`
-  — currently 0% covered per `dev/backlog/TESTING_GAPS.md:85`; both phases
-  should land with real coverage, not just avoid regressing an already-empty
-  suite.
+  — real coverage already landed alongside the Phase 0 fix (filters,
+  debouncing, cursor/reset behavior); `dev/backlog/TESTING_GAPS.md:85`'s "0%
+  covered" line predates that commit and is stale. Phase 1 must update the
+  existing "Load more" button-click tests to drive loading via simulated
+  range-change/scroll instead (the button goes away) and add virtualization-
+  specific coverage, not treat this as a from-scratch suite.
 
 ## Testing plan
 
