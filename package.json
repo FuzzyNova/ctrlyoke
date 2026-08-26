@@ -656,7 +656,8 @@
     "generate:log-inventory": "node scripts/generate-log-inventory.mjs",
     "compile:prod": "npm run compile:extension && npm run build:webview",
     "knip": "knip",
-    "find-dead-methods": "node scripts/find-dead-methods.mjs"
+    "find-dead-methods": "node scripts/find-dead-methods.mjs",
+    "find-hardcoded-strings": "node scripts/find-hardcoded-strings.mjs"
   },
   "devDependencies": {
     "@lezer/highlight": "^1.2.3",
