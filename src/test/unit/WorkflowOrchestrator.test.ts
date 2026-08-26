@@ -2860,13 +2860,29 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
     internal.retiredInstances = new Map();
     internal.cliSessions = new Map();
     internal.viewerRegistry = new Map();
+    internal.externallyCreatedInstanceIds = new Set();
+    internal.announcedExternalWorkflowIds = new Set();
     internal.dashboardBroadcastHub = {
       notifyWorkflowAdded: () => undefined,
       notifyWorkflowSummaryUpdated: () => undefined,
+      notifyWorkflowDismissed: () => undefined,
     };
     internal.setViewedWorkflowId = () => undefined;
     internal.replayWorkflowStateTo = async () => undefined;
+    internal.context = { workspaceState: { update: async () => undefined } };
     return { orchestrator, internal };
+  }
+
+  function createFakeInstance(workingFilePath: string, executionState: string) {
+    return {
+      getSummary: () => ({
+        workingFilePath,
+        executionState,
+        workflowName: "local",
+      }),
+      getQueueState: () => ({ status: executionState }),
+      dispose: () => undefined,
+    };
   }
 
   test("registers a live sibling-VSCode lock as a read-only watch at startup", async () => {
@@ -2958,6 +2974,86 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
       assert.strictEqual(
         internal.cliSessions.get(run.workflowKey)?.summary.managedBy,
         RUNNER_IDS.VSCODE
+      );
+    } finally {
+      ExternalRunWatchSession.prototype.start = originalStart;
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("does not retire a locally in-flight WorkflowInstance for its own active-vscode lock", async () => {
+    // Regression: a lock reported as active-vscode may be this very process's own
+    // lock for a workflow it is already executing. startCliWatchSession must not
+    // retire a genuinely RUNNING/PAUSING/CANCELLING local instance in favor of a
+    // read-only watch of itself.
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-self-lock-no-retire-")
+    );
+    const originalStart = ExternalRunWatchSession.prototype.start;
+    ExternalRunWatchSession.prototype.start = async () => undefined;
+    try {
+      const run = await createLiveRun(workspace, RUNNER_IDS.VSCODE, "self");
+      const { internal } = createWatchHarness(workspace);
+      const instanceId = "self-inst";
+      internal.instances.set(
+        instanceId,
+        createFakeInstance(run.filePath, EXECUTION_STATES.RUNNING)
+      );
+
+      await internal.startCliWatchSession(
+        run.filePath,
+        workspace,
+        RUNNER_IDS.VSCODE
+      );
+
+      assert.strictEqual(
+        internal.instances.has(instanceId),
+        true,
+        "the in-flight local instance must survive"
+      );
+      assert.strictEqual(
+        internal.cliSessions.size,
+        0,
+        "no external watch session should be registered over a live local instance"
+      );
+    } finally {
+      ExternalRunWatchSession.prototype.start = originalStart;
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("retires a locally PAUSED WorkflowInstance when the CLI takes over the same run", async () => {
+    // The retire loop exists for exactly this case: VS Code auto-loaded the workflow
+    // in PAUSED state and a live runner is now driving it — that PAUSED instance has
+    // no in-flight step, so it's safe (and correct) to yield to the watch session.
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-paused-retire-")
+    );
+    const originalStart = ExternalRunWatchSession.prototype.start;
+    ExternalRunWatchSession.prototype.start = async () => undefined;
+    try {
+      const run = await createLiveRun(workspace, RUNNER_IDS.CLI, "takeover");
+      const { internal } = createWatchHarness(workspace);
+      const instanceId = "paused-inst";
+      internal.instances.set(
+        instanceId,
+        createFakeInstance(run.filePath, EXECUTION_STATES.PAUSED)
+      );
+
+      await internal.startCliWatchSession(
+        run.filePath,
+        workspace,
+        RUNNER_IDS.CLI
+      );
+
+      assert.strictEqual(
+        internal.instances.has(instanceId),
+        false,
+        "the paused local instance should be retired in favor of the CLI watch session"
+      );
+      assert.strictEqual(
+        internal.cliSessions.get(run.workflowKey)?.summary.managedBy,
+        RUNNER_IDS.CLI
       );
     } finally {
       ExternalRunWatchSession.prototype.start = originalStart;

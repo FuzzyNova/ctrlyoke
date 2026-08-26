@@ -6069,19 +6069,34 @@ export class WorkflowOrchestrator {
     // This prevents a conflict where VS Code auto-loaded the workflow in PAUSED state
     // and the CLI is now taking over execution. Without this, the PAUSED instance
     // stays in the Running Workflows section alongside the CLI watch session.
+    //
+    // A lock reported as "active-vscode"/"active-cli" only means *some* live runner
+    // holds it — it may be this very process's own in-flight execution, since checkLock
+    // never compares the lock's identity against the caller's own. So this loop must
+    // never retire a local instance that is itself genuinely mid-step (RUNNING/PAUSING/
+    // CANCELLING): doing so kills a live execution in favor of a redundant read-only
+    // watch of itself. Only a truly idle-but-tracking instance (PAUSED — the CLI-takeover
+    // case this loop exists for) should yield.
     for (const [instanceId, instance] of [...this.instances.entries()]) {
-      if (
-        sameWorkingFilePath(
-          instance.getSummary().workingFilePath,
-          workingFilePath
-        )
-      ) {
-        Log.info(
-          `[WorkflowOrchestrator] startCliWatchSession: retiring conflicting WorkflowInstance inst:${instanceId.slice(0, 8)} for "${workflowId}"`
-        );
-        this.retireWorkflow(instanceId);
-        break;
+      const localSummary = instance.getSummary();
+      if (!sameWorkingFilePath(localSummary.workingFilePath, workingFilePath)) {
+        continue;
       }
+      const hasInFlightStep =
+        localSummary.executionState === EXECUTION_STATES.RUNNING ||
+        localSummary.executionState === EXECUTION_STATES.PAUSING ||
+        localSummary.executionState === EXECUTION_STATES.CANCELLING;
+      if (hasInFlightStep) {
+        Log.info(
+          `[WorkflowOrchestrator] startCliWatchSession: "${workflowId}" is already owned by this process's in-flight WorkflowInstance inst:${instanceId.slice(0, 8)} (executionState=${localSummary.executionState}) — skipping external watch session instead of retiring it`
+        );
+        return;
+      }
+      Log.info(
+        `[WorkflowOrchestrator] startCliWatchSession: retiring conflicting WorkflowInstance inst:${instanceId.slice(0, 8)} for "${workflowId}"`
+      );
+      this.retireWorkflow(instanceId);
+      break;
     }
 
     // Read working file to build initial summary
