@@ -12,6 +12,14 @@ import {
 import { useSettingsStore } from "@store/settingsStore";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import {
+  ATOMIC_REFERENCE_KINDS,
+  BASH_OUTPUT_EXPANSION_SECTIONS,
+  HISTORY_MATCH_FIELDS,
+  KEYBOARD_KEYS,
+  OUTPUT_ROW_KINDS,
+  TOOL_CALL_EXPANSION_SECTIONS,
+} from "@root/types/DashboardConstants";
+import {
   AskUserQuestionOutput,
   BashOutput,
   FileDeleteOutput,
@@ -494,19 +502,19 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS
         )
       ) {
-        pendingBashExpand = "output";
+        pendingBashExpand = BASH_OUTPUT_EXPANSION_SECTIONS.OUTPUT;
       } else if (
-        activeFindMatch?.field === "error" &&
+        activeFindMatch?.field === HISTORY_MATCH_FIELDS.ERROR &&
         isActiveMatchHidden(
           data.error ?? "",
-          getFieldMatches("error"),
+          getFieldMatches(HISTORY_MATCH_FIELDS.ERROR),
           expansion.errorExpanded,
           collapsedToolOutputLineCount,
           row.collapsedToolOutputMaxCharacters ??
             DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS
         )
       ) {
-        pendingBashExpand = "error";
+        pendingBashExpand = BASH_OUTPUT_EXPANSION_SECTIONS.ERROR;
       }
     }
 
@@ -531,7 +539,9 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             GENERIC_TOOL_CALL_MAX_RESULT_CHARS
         )
       ) {
-        pendingToolCallExpand = toolContentIsError ? "error" : "output";
+        pendingToolCallExpand = toolContentIsError
+          ? TOOL_CALL_EXPANSION_SECTIONS.ERROR
+          : TOOL_CALL_EXPANSION_SECTIONS.OUTPUT;
       }
     }
 
@@ -606,7 +616,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             error={data.error}
             commandFindMatches={getFieldMatches("command")}
             outputFindMatches={getFieldMatches("response")}
-            errorFindMatches={getFieldMatches("error")}
+            errorFindMatches={getFieldMatches(HISTORY_MATCH_FIELDS.ERROR)}
             exitCode={data.exitCode}
             status={data.status}
             maxLines={row.collapsedToolOutputLineCount}
@@ -801,7 +811,10 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             }
             errorContent={
               data.error
-                ? highlightText(data.error, getFieldMatches("error"))
+                ? highlightText(
+                    data.error,
+                    getFieldMatches(HISTORY_MATCH_FIELDS.ERROR)
+                  )
                 : undefined
             }
           />
@@ -1064,7 +1077,7 @@ const CliHeaderRowView: React.FC<{
 };
 
 const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
-  const isStatsRow = row.rowKind === "stats";
+  const isStatsRow = row.rowKind === OUTPUT_ROW_KINDS.STATS;
   const output = isStatsRow ? row.output : undefined;
   const outputText = isStatsRow ? row.outputText : undefined;
   const structuredMetadata = output?.structured?.metadata;
@@ -1277,11 +1290,11 @@ function promptReferenceTooltip(ref: ContextReferenceMatch): string {
   switch (ref.type) {
     case "git":
       return `Open git ${ref.gitRef ?? ""}`;
-    case "directory":
+    case ATOMIC_REFERENCE_KINDS.DIRECTORY:
       return `Reveal ${ref.path ?? ""}`;
     case "lineRange":
       return `Open ${ref.path ?? ""}:${ref.lineStart}-${ref.lineEnd}`;
-    case "symbol":
+    case ATOMIC_REFERENCE_KINDS.SYMBOL:
       return `Go to ${ref.symbolName ?? ""} in ${ref.path ?? ""}:${ref.lineStart}-${ref.lineEnd}`;
     case "priorContext":
       return `Open ${ref.ref ?? "context"}`;
@@ -1386,7 +1399,7 @@ const PromptReferenceText: React.FC<{
           title={promptReferenceTooltip(ref)}
           onClick={() => openContextReference(ref, vscode)}
           onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
+            if (event.key === KEYBOARD_KEYS.ENTER || event.key === " ") {
               event.preventDefault();
               openContextReference(ref, vscode);
             }
@@ -1478,17 +1491,17 @@ function OutputRowComponent({
   const isActiveRow = activeFindMatch?.rowKey === row.key;
   let content: React.ReactNode;
   switch (row.rowKind) {
-    case "step-anchor":
+    case OUTPUT_ROW_KINDS.STEP_ANCHOR:
       content = <div className="h-px" aria-hidden="true" />;
       break;
-    case "final-step-label":
+    case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
       content = (
         <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
           {row.label}
         </div>
       );
       break;
-    case "status":
+    case OUTPUT_ROW_KINDS.STATUS:
       content = (
         <StatusMessage
           message={highlightText(row.status.message, getFieldMatches("status"))}
@@ -1498,7 +1511,7 @@ function OutputRowComponent({
         />
       );
       break;
-    case "cli-header":
+    case OUTPUT_ROW_KINDS.CLI_HEADER:
       content = (
         <CliHeaderRowView
           row={row}
@@ -1517,7 +1530,7 @@ function OutputRowComponent({
         />
       );
       break;
-    case "prompt":
+    case OUTPUT_ROW_KINDS.PROMPT:
       content = (
         <PromptReferenceText
           text={row.text}
@@ -1526,10 +1539,10 @@ function OutputRowComponent({
         />
       );
       break;
-    case "cli-command":
-    case "script-command": {
+    case OUTPUT_ROW_KINDS.CLI_COMMAND:
+    case OUTPUT_ROW_KINDS.SCRIPT_COMMAND: {
       const borderClass =
-        row.rowKind === "script-command"
+        row.rowKind === OUTPUT_ROW_KINDS.SCRIPT_COMMAND
           ? "border-l-output-script-border"
           : "border-l-output-command-border";
       content = (
@@ -1549,7 +1562,7 @@ function OutputRowComponent({
       );
       break;
     }
-    case "error": {
+    case OUTPUT_ROW_KINDS.ERROR: {
       const isWarning = isUserStoppedMessage(row.errorMessage);
       const borderClass = isWarning
         ? "border-l-severity-warning text-warning-fg"
@@ -1560,12 +1573,16 @@ function OutputRowComponent({
           {row.timestamp && (
             <span className="opacity-70">[{row.timestamp}] </span>
           )}
-          {label}: {highlightText(row.errorMessage, getFieldMatches("error"))}
+          {label}:{" "}
+          {highlightText(
+            row.errorMessage,
+            getFieldMatches(HISTORY_MATCH_FIELDS.ERROR)
+          )}
         </div>
       );
       break;
     }
-    case "plain-response": {
+    case OUTPUT_ROW_KINDS.PLAIN_RESPONSE: {
       const responseMatches = getFieldMatches("response");
       content = (
         <TextOutput
@@ -1588,7 +1605,7 @@ function OutputRowComponent({
       );
       break;
     }
-    case "script-output": {
+    case OUTPUT_ROW_KINDS.SCRIPT_OUTPUT: {
       const tailToggle = row.tailToggle;
       content = (
         <ScriptOutputSegment
@@ -1608,7 +1625,7 @@ function OutputRowComponent({
       );
       break;
     }
-    case "structured-event":
+    case OUTPUT_ROW_KINDS.STRUCTURED_EVENT:
       content = (
         <StructuredEventContent
           row={row}
@@ -1635,7 +1652,7 @@ function OutputRowComponent({
         );
       }
       break;
-    case "script-verdict":
+    case OUTPUT_ROW_KINDS.SCRIPT_VERDICT:
       content = (
         <ScriptVerdict
           verdict={row.verdict}
@@ -1649,10 +1666,10 @@ function OutputRowComponent({
         />
       );
       break;
-    case "stats":
+    case OUTPUT_ROW_KINDS.STATS:
       content = <StatsRowView row={row} />;
       break;
-    case "attempt-group-summary": {
+    case OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY: {
       const totalLabel = formatTokenTotal(row.total, row.coverage);
       content = (
         <button
@@ -1673,17 +1690,17 @@ function OutputRowComponent({
   }
 
   const isCliGroupRow =
-    row.rowKind === "cli-header" ||
-    row.rowKind === "prompt" ||
-    row.rowKind === "cli-command" ||
-    row.rowKind === "script-command" ||
-    row.rowKind === "error" ||
-    row.rowKind === "plain-response" ||
-    row.rowKind === "script-output" ||
-    row.rowKind === "structured-event" ||
-    row.rowKind === "script-verdict" ||
-    row.rowKind === "stats" ||
-    row.rowKind === "attempt-group-summary";
+    row.rowKind === OUTPUT_ROW_KINDS.CLI_HEADER ||
+    row.rowKind === OUTPUT_ROW_KINDS.PROMPT ||
+    row.rowKind === OUTPUT_ROW_KINDS.CLI_COMMAND ||
+    row.rowKind === OUTPUT_ROW_KINDS.SCRIPT_COMMAND ||
+    row.rowKind === OUTPUT_ROW_KINDS.ERROR ||
+    row.rowKind === OUTPUT_ROW_KINDS.PLAIN_RESPONSE ||
+    row.rowKind === OUTPUT_ROW_KINDS.SCRIPT_OUTPUT ||
+    row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
+    row.rowKind === OUTPUT_ROW_KINDS.SCRIPT_VERDICT ||
+    row.rowKind === OUTPUT_ROW_KINDS.STATS ||
+    row.rowKind === OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY;
 
   if (!isCliGroupRow) {
     if (!isActiveRow) {

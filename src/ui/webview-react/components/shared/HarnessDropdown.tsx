@@ -10,7 +10,10 @@ import {
   type HarnessId,
   type HarnessStatusString,
 } from "../../types/messages";
-import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import {
+  INHERIT_DEFAULT_OPTION,
+  USER_FEEDBACK_SEVERITY,
+} from "@root/types/DashboardConstants";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { notifyUser } from "@utils/notifyUser";
@@ -268,7 +271,9 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     dropdownMaxHeight
   );
   const triggerUsageSnapshot = useHarnessUsageStore((s) =>
-    value !== "default" ? s.snapshotsByHarness[value as HarnessId] : undefined
+    value !== INHERIT_DEFAULT_OPTION
+      ? s.snapshotsByHarness[value as HarnessId]
+      : undefined
   );
   const triggerUsageDisplay = getHarnessUsageDisplay(triggerUsageSnapshot);
 
@@ -361,14 +366,14 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
       {showDefault && (
         <div
           className={`flex items-center ${
-            value === "default"
+            value === INHERIT_DEFAULT_OPTION
               ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
               : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer fp-dropdown-row"
           }`}
         >
           <button
             type="button"
-            onClick={() => handleSelect("default")}
+            onClick={() => handleSelect(INHERIT_DEFAULT_OPTION)}
             className="flex-1 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit"
           >
             {defaultLabel ?? "Default"}
@@ -400,12 +405,12 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
 
   // ── Trigger + dropdown mode ───────────────────────────────────────────────
   const triggerLabel =
-    value === "default"
+    value === INHERIT_DEFAULT_OPTION
       ? (defaultLabel ?? "Default")
       : (HARNESS_DISPLAY_NAMES[value as HarnessId] ?? value);
 
   const triggerStatus =
-    showStatus && value !== "default" && harnessStatus
+    showStatus && value !== INHERIT_DEFAULT_OPTION && harnessStatus
       ? harnessStatus[value as HarnessId]
       : undefined;
 

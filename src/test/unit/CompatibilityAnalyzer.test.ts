@@ -9,6 +9,7 @@ import {
   CAPABILITY_DOMAINS,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
+  HOOK_EVENT_NAMES,
   HOOK_EVENT_ORDER,
   PROMPT_INPUT_CAPABILITY_KEYS,
   type HookEvent,
@@ -887,7 +888,7 @@ suite("CompatibilityAnalyzer", () => {
         {
           prompt: "Target",
           harness: HARNESS_IDS.CODEX_CLI,
-          hooks: [{ event: "error", command: "node ./hook.js" }],
+          hooks: [{ event: HOOK_EVENT_NAMES.ERROR, command: "node ./hook.js" }],
         },
       ],
     });
@@ -909,7 +910,9 @@ suite("CompatibilityAnalyzer", () => {
 
     assert.deepStrictEqual(
       diagnostics
-        .filter((diagnostic) => diagnostic.capability === "error")
+        .filter(
+          (diagnostic) => diagnostic.capability === HOOK_EVENT_NAMES.ERROR
+        )
         .map(({ code, sourceTier, propertyPointer, consumer }) => ({
           code,
           sourceTier,
@@ -927,7 +930,7 @@ suite("CompatibilityAnalyzer", () => {
     );
     assert.ok(
       diagnostics
-        .find((diagnostic) => diagnostic.capability === "error")
+        .find((diagnostic) => diagnostic.capability === HOOK_EVENT_NAMES.ERROR)
         ?.message.toLowerCase()
         .includes("error")
     );
@@ -939,7 +942,11 @@ suite("CompatibilityAnalyzer", () => {
       }),
       snapshot({ [HARNESS_IDS.CODEX_CLI]: codex })
     );
-    assert.ok(!unused.some((diagnostic) => diagnostic.capability === "error"));
+    assert.ok(
+      !unused.some(
+        (diagnostic) => diagnostic.capability === HOOK_EVENT_NAMES.ERROR
+      )
+    );
   });
 
   test("warns that notification hooks are unsupported on Codex, Antigravity, and OpenCode", () => {

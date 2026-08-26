@@ -1,3 +1,8 @@
+import {
+  KEYBOARD_KEYS,
+  WORKTREE_POSITION_DIRECTIONS,
+  type WorktreePositionDirection,
+} from "@root/types/DashboardConstants";
 import React, { useState } from "react";
 import { useLongPress } from "../../hooks/useLongPress";
 import type { DraggableAttributes } from "@dnd-kit/core";
@@ -69,7 +74,7 @@ interface WorkflowStepProps {
   /** Callback when set start position is clicked */
   onSetStartPosition?: () => void;
   /** Direction of position change (rewind = go backward, forward = skip ahead) */
-  startPositionDirection?: "rewind" | "forward";
+  startPositionDirection?: WorktreePositionDirection;
   /**
    * Visual 1-based position for tooltips (e.g. "Set step 3 as start position").
    * Separate from `index` because after drag-reorder the visual slot differs
@@ -267,7 +272,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
           e.preventDefault();
           onClick?.();
         }
@@ -294,7 +299,7 @@ const WorkflowStepItemInner: React.FC<WorkflowStepProps> = ({
               aria-label={`Set step ${displayNumber ?? index + 1} as start position`}
             >
               <i
-                className={`codicon ${startPositionDirection === "rewind" ? "codicon-debug-reverse-continue" : "codicon-debug-step-over"} text-xs`}
+                className={`codicon ${startPositionDirection === WORKTREE_POSITION_DIRECTIONS.REWIND ? "codicon-debug-reverse-continue" : "codicon-debug-step-over"} text-xs`}
               />
             </button>
           )}

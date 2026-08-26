@@ -1,3 +1,4 @@
+import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
 import React, { useRef, useState } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
@@ -114,8 +115,10 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
     !selectedSkills.includes(skillName) &&
     !nonHideableValues.includes(skillName);
 
-  const handleKeywordSelect = (keyword: "default" | "none") => {
-    onChange(keyword === "default" ? undefined : null);
+  const handleKeywordSelect = (
+    keyword: typeof INHERIT_DEFAULT_OPTION | "none"
+  ) => {
+    onChange(keyword === INHERIT_DEFAULT_OPTION ? undefined : null);
     setIsOpen(false);
     setShowHidden(false);
   };
@@ -137,11 +140,15 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
 
   const listContent = (
     <div className="overflow-y-auto min-h-0 flex-1">
-      {(["default", "none"] as const).map((keyword) => {
+      {([INHERIT_DEFAULT_OPTION, "none"] as const).map((keyword) => {
         const isSelected =
-          keyword === "default" ? value === undefined : value === null;
+          keyword === INHERIT_DEFAULT_OPTION
+            ? value === undefined
+            : value === null;
         const label =
-          keyword === "default" ? (defaultLabel ?? "Default") : "None";
+          keyword === INHERIT_DEFAULT_OPTION
+            ? (defaultLabel ?? "Default")
+            : "None";
         return (
           <button
             key={keyword}

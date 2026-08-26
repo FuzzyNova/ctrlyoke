@@ -19,6 +19,11 @@ const QWEN_PERMISSION_VERIFICATION = {
   verifiedVersions: [">=0.20.1"],
 } as const;
 
+const QWEN_PERMISSION_TOOL_NAMES = {
+  DELETE: "delete",
+  SEARCH: "search",
+} as const;
+
 const QWEN_PERMISSION_CAPABILITIES: PermissionCapabilityDescriptor = {
   mode: {
     fidelity: "exact",
@@ -225,7 +230,7 @@ export class QwenToolPermissionMapper
       ) {
         qwenTools.add("Edit");
       } else if (
-        normalizedToolName === "delete" ||
+        normalizedToolName === QWEN_PERMISSION_TOOL_NAMES.DELETE ||
         normalizedToolName === "remove"
       ) {
         // Qwen has no dedicated file-delete tool (confirmed against its full
@@ -242,7 +247,7 @@ export class QwenToolPermissionMapper
         onLossyPattern?.();
       } else if (
         normalizedToolName === "web_search" ||
-        normalizedToolName === "search" ||
+        normalizedToolName === QWEN_PERMISSION_TOOL_NAMES.SEARCH ||
         normalizedToolName === "web_fetch"
       ) {
         qwenTools.add("WebFetch");

@@ -23,7 +23,11 @@ import {
   writeClipboardText,
 } from "@utils/stepClipboard";
 import { postRunLifecycleMutation } from "../utils/workflowMutation";
-import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import {
+  USER_FEEDBACK_SEVERITY,
+  WORKTREE_POSITION_DIRECTIONS,
+  type WorktreePositionDirection,
+} from "@root/types/DashboardConstants";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 import { notifyUser } from "@utils/notifyUser";
@@ -48,7 +52,7 @@ interface OpenContextMenuParams {
   deleteIndex: number;
   isCurrentStep: boolean;
   isExecutionTargetLocked: boolean;
-  direction: "rewind" | "forward";
+  direction: WorktreePositionDirection;
   /** Response/output text to copy; undefined disables the Copy output item */
   outputText?: string;
 }
@@ -259,7 +263,7 @@ export function useStepContextMenu({
           {
             label: "Set Start Position",
             icon:
-              direction === "rewind"
+              direction === WORKTREE_POSITION_DIRECTIONS.REWIND
                 ? "codicon-debug-reverse-continue"
                 : "codicon-debug-step-over",
             disabled: !canChangeStartPosition || isCurrentStep,

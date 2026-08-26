@@ -2,7 +2,10 @@ import * as path from "path";
 import * as vscode from "vscode";
 import Mocha from "mocha";
 import { glob } from "glob";
-import { RUN_HISTORY_LOCATIONS } from "../../types/DashboardConstants";
+import {
+  EXTENSION_IDENTIFIERS,
+  RUN_HISTORY_LOCATIONS,
+} from "../../types/DashboardConstants";
 import {
   initializeRunHistoryLocation,
   isRunHistoryLocationInitialized,
@@ -11,8 +14,8 @@ import {
 async function activateExtensionForTests(): Promise<void> {
   const extension = vscode.extensions.all.find(
     (candidate) =>
-      candidate.id === "fuzzynova.ctrlyoke" ||
-      candidate.packageJSON.name === "ctrlyoke"
+      candidate.id === EXTENSION_IDENTIFIERS.ID ||
+      candidate.packageJSON.name === EXTENSION_IDENTIFIERS.PACKAGE_NAME
   );
   if (!extension) {
     throw new Error("ctrlyoke extension must be loaded for extension tests");

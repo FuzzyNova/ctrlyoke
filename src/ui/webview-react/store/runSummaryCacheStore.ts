@@ -1,4 +1,8 @@
 import { create } from "zustand";
+import {
+  RUN_SUMMARY_CACHE_STATUSES,
+  type RunSummaryCacheStatus,
+} from "@root/types/DashboardConstants";
 import { MESSAGE_TYPES } from "../types/messages";
 import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
 import type { WorkflowKey, RunRef } from "@root/types/CtrlYokeTypes";
@@ -7,7 +11,7 @@ import { sendMessage } from "../hooks/useMessageHandler";
 let requestSequence = 0;
 
 interface RunSummaryCacheEntry {
-  status: "loading" | "loaded" | "error";
+  status: RunSummaryCacheStatus;
   requestId: string;
   runSummaries: RunSummary[];
   descriptorRevision: number;
@@ -53,10 +57,13 @@ export const useRunSummaryCacheStore = create<RunSummaryCacheState>(
     ensureRunSummaries: (workflowKey, knownLastModifiedAt) => {
       const existing = get().entries[workflowKey];
       const isFreshEnough =
-        existing?.status === "loaded" &&
+        existing?.status === RUN_SUMMARY_CACHE_STATUSES.LOADED &&
         (knownLastModifiedAt === undefined ||
           existing.lastModifiedAt >= knownLastModifiedAt);
-      if (existing?.status === "loading" || isFreshEnough) {
+      if (
+        existing?.status === RUN_SUMMARY_CACHE_STATUSES.LOADING ||
+        isFreshEnough
+      ) {
         return;
       }
 
@@ -66,7 +73,7 @@ export const useRunSummaryCacheStore = create<RunSummaryCacheState>(
         entries: {
           ...state.entries,
           [workflowKey]: {
-            status: "loading",
+            status: RUN_SUMMARY_CACHE_STATUSES.LOADING,
             requestId,
             runSummaries: existing?.runSummaries ?? [],
             descriptorRevision: existing?.descriptorRevision ?? 0,
@@ -91,7 +98,7 @@ export const useRunSummaryCacheStore = create<RunSummaryCacheState>(
         // correlate against and must still be accepted, or a drilled panel's
         // summaries would never reflect a delete it didn't itself request.
         if (
-          existing?.status === "loading" &&
+          existing?.status === RUN_SUMMARY_CACHE_STATUSES.LOADING &&
           existing.requestId !== message.requestId
         ) {
           return state;
@@ -100,7 +107,7 @@ export const useRunSummaryCacheStore = create<RunSummaryCacheState>(
           entries: {
             ...state.entries,
             [message.workflowKey]: {
-              status: "loaded",
+              status: RUN_SUMMARY_CACHE_STATUSES.LOADED,
               requestId: message.requestId,
               runSummaries: message.runSummaries,
               descriptorRevision: message.descriptorRevision,
@@ -116,7 +123,7 @@ export const useRunSummaryCacheStore = create<RunSummaryCacheState>(
         const workflowKey = Object.keys(state.entries).find(
           (key) =>
             state.entries[key].requestId === requestId &&
-            state.entries[key].status === "loading"
+            state.entries[key].status === RUN_SUMMARY_CACHE_STATUSES.LOADING
         );
         if (!workflowKey) return state;
         return {
@@ -124,7 +131,7 @@ export const useRunSummaryCacheStore = create<RunSummaryCacheState>(
             ...state.entries,
             [workflowKey]: {
               ...state.entries[workflowKey],
-              status: "error",
+              status: RUN_SUMMARY_CACHE_STATUSES.ERROR,
               error,
             },
           },

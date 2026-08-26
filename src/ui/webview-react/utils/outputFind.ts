@@ -23,6 +23,7 @@ import type { OutputRenderRow } from "./outputRows";
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
 import { buildAskUserQuestionSearchSegments } from "./askUserQuestionLayout";
 import { getGenericToolCallParamsText } from "./toolCallLayout";
+import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 
 type OutputFindField =
   | "header"
@@ -145,12 +146,12 @@ export function getOutputRowSearchSegments(
   row: OutputRenderRow
 ): OutputRowSearchSegment[] {
   switch (row.rowKind) {
-    case "stats":
-    case "step-anchor":
-    case "final-step-label":
-    case "attempt-group-summary":
+    case OUTPUT_ROW_KINDS.STATS:
+    case OUTPUT_ROW_KINDS.STEP_ANCHOR:
+    case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
+    case OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY:
       return [];
-    case "script-verdict":
+    case OUTPUT_ROW_KINDS.SCRIPT_VERDICT:
       return createSegments([
         {
           field: "expected",
@@ -162,15 +163,15 @@ export function getOutputRowSearchSegments(
           text: row.verdict.actionDetail ?? row.verdict.action,
         },
       ]);
-    case "cli-header":
+    case OUTPUT_ROW_KINDS.CLI_HEADER:
       return createSegments([
         { field: "header", text: row.stepLabel },
         { field: "header", text: row.stepName },
       ]);
-    case "prompt":
+    case OUTPUT_ROW_KINDS.PROMPT:
       return createSegments([{ field: "prompt", text: row.text }]);
-    case "cli-command":
-    case "script-command":
+    case OUTPUT_ROW_KINDS.CLI_COMMAND:
+    case OUTPUT_ROW_KINDS.SCRIPT_COMMAND:
       return createSegments([
         {
           field: "command",
@@ -181,14 +182,14 @@ export function getOutputRowSearchSegments(
           ),
         },
       ]);
-    case "error":
+    case OUTPUT_ROW_KINDS.ERROR:
       return createSegments([{ field: "error", text: row.errorMessage }]);
-    case "plain-response":
-    case "script-output":
+    case OUTPUT_ROW_KINDS.PLAIN_RESPONSE:
+    case OUTPUT_ROW_KINDS.SCRIPT_OUTPUT:
       return createSegments([{ field: "response", text: row.text }]);
-    case "status":
+    case OUTPUT_ROW_KINDS.STATUS:
       return createSegments([{ field: "status", text: row.status.message }]);
-    case "structured-event": {
+    case OUTPUT_ROW_KINDS.STRUCTURED_EVENT: {
       const event = row.event;
       switch (event.type) {
         case CLI_EVENT_TYPES.TEXT:

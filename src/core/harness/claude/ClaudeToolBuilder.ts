@@ -15,6 +15,7 @@ import {
 } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
+import { CLAUDE_CONTENT_BLOCK_TYPES } from "./ClaudeProtocolConstants";
 
 /**
  * Builds CliEvents from Claude CLI tool call payloads.
@@ -128,7 +129,8 @@ export class ClaudeToolBuilder {
       return content
         .filter(
           (b: Record<string, unknown>) =>
-            b.type === "text" && typeof b.text === "string"
+            b.type === CLAUDE_CONTENT_BLOCK_TYPES.TEXT &&
+            typeof b.text === "string"
         )
         .map((b: Record<string, unknown>) => b.text)
         .join("\n");
@@ -416,7 +418,10 @@ export class ClaudeToolBuilder {
     }
 
     // File read result (Read tool)
-    if (toolUseResult.type === "text" && toolUseResult.file) {
+    if (
+      toolUseResult.type === CLAUDE_CONTENT_BLOCK_TYPES.TEXT &&
+      toolUseResult.file
+    ) {
       events.push({
         type: CLI_EVENT_TYPES.FILE_READ,
         timestamp,

@@ -1,3 +1,4 @@
+import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
 import { useState } from "react";
 import type {
   FullGlobalSettings,
@@ -34,12 +35,16 @@ function ObjectSettingHeader({
 }) {
   const source = sources[path];
   const canReset =
-    source !== undefined && source !== "default" && source === activeScope;
+    source !== undefined &&
+    source !== INHERIT_DEFAULT_OPTION &&
+    source === activeScope;
 
   return (
     <div className="flex items-center gap-1.5">
       <span>{label}</span>
-      {source && source !== "default" && <SettingSourceBadge source={source} />}
+      {source && source !== INHERIT_DEFAULT_OPTION && (
+        <SettingSourceBadge source={source} />
+      )}
       <button
         type="button"
         aria-label={`Reset ${label}`}

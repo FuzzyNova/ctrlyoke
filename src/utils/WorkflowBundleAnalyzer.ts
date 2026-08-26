@@ -17,7 +17,10 @@ import {
   isPathWithinAnyDirectory,
   isPathWithinDirectory,
 } from "./PathSecurity";
-import { BUNDLE_MANIFEST_FILE_NAME } from "../types/DashboardConstants";
+import {
+  BUNDLE_MANIFEST_FILE_NAME,
+  PROMPT_FILE_RESOLUTION_STATUSES,
+} from "../types/DashboardConstants";
 
 export { BUNDLE_MANIFEST_FILE_NAME } from "../types/DashboardConstants";
 export const BUNDLE_MANIFEST_VERSION = 1;
@@ -299,7 +302,8 @@ async function analyzeLonePromptFile(
     options.sourceDefinitionPath
   );
   const candidate =
-    resolution.status === "resolved" || resolution.status === "empty"
+    resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED ||
+    resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.EMPTY
       ? resolution.path
       : resolution.candidates.find((value) =>
           isGeneratedStorePath(value, trustedRoots)
@@ -333,7 +337,10 @@ async function analyzeLonePromptFile(
     return false;
   }
 
-  if (resolution.status === "missing" || resolution.status === "unreadable") {
+  if (
+    resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.MISSING ||
+    resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE
+  ) {
     if (candidate && isGeneratedStorePath(candidate, trustedRoots)) {
       addBlocker(
         plan,

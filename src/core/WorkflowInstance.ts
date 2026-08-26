@@ -2141,7 +2141,10 @@ export class WorkflowInstance {
       // history startup fails. That path never enters startWorkflowExecution's
       // finally block, so settle it here or setup/early-run edits would be
       // stranded outside the managed landing barrier.
-      if (!this.startPending && this.activeWorktree?.mode === "managed") {
+      if (
+        !this.startPending &&
+        this.activeWorktree?.mode === WORKTREE_MODES.MANAGED
+      ) {
         const worktree = this.activeWorktree;
         this.worktreeManager.releaseRuntimeTrust(worktree);
         await this.worktreeManager
@@ -4117,7 +4120,7 @@ export class WorkflowInstance {
         ),
     } as const;
     const info =
-      config.mode === "managed"
+      config.mode === WORKTREE_MODES.MANAGED
         ? await this.worktreeManager.ensureManagedWorktree({
             ...sharedOptions,
             workflowName:
@@ -4475,7 +4478,8 @@ export class WorkflowInstance {
       const terminalWorktreeRun =
         !preserveWorktreeReservation && Boolean(this.activeWorktree);
       const managedTerminalRun =
-        terminalWorktreeRun && this.activeWorktree?.mode === "managed";
+        terminalWorktreeRun &&
+        this.activeWorktree?.mode === WORKTREE_MODES.MANAGED;
       let strictArtifactCleanupSucceeded = true;
       let strictArtifactCleanupMessage: string | undefined;
 

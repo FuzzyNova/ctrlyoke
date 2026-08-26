@@ -15,7 +15,7 @@ import {
   EDITOR_TARGET_KINDS,
   MESSAGE_TYPES,
 } from "../../types/messages";
-import { STEP_TYPES } from "@root/types/DashboardConstants";
+import { KEYBOARD_KEYS, STEP_TYPES } from "@root/types/DashboardConstants";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 
@@ -119,8 +119,8 @@ const EditorSectionInner: React.FC = () => {
   );
 
   const handleNameKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") saveNameEdit();
-    else if (e.key === "Escape") cancelNameEdit();
+    if (e.key === KEYBOARD_KEYS.ENTER) saveNameEdit();
+    else if (e.key === KEYBOARD_KEYS.ESCAPE) cancelNameEdit();
   };
 
   const isScriptMode = stepType === STEP_TYPES.SCRIPT;
@@ -170,7 +170,7 @@ const EditorSectionInner: React.FC = () => {
           role="button"
           aria-label="Collapse editor"
           tabIndex={0}
-          onKeyDown={(e) => e.key === "Enter" && handleToggle()}
+          onKeyDown={(e) => e.key === KEYBOARD_KEYS.ENTER && handleToggle()}
         >
           <i className="codicon codicon-chevron-right text-xs rotate-90 transition-transform duration-150" />
           <i className="codicon codicon-edit text-sm" />
@@ -264,7 +264,7 @@ const EditorSectionInner: React.FC = () => {
                 tabIndex={0}
                 onClick={startNameEditing}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
+                  if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
                     e.preventDefault();
                     startNameEditing();
                   }

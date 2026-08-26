@@ -5,6 +5,8 @@ import {
   FINAL_STEP_PHASES,
   MESSAGE_TYPES,
   PANEL_CLIENT_ID,
+  WORKTREE_DIRECTORY_STATES,
+  WORKTREE_MODES,
 } from "../types/DashboardConstants";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { PostMessageFn } from "./WebviewSettingsSync";
@@ -266,8 +268,9 @@ export class UndoRedoCoordinator {
     // restore keeps working there (Settled Decision 9 disables undo on directory
     // *removal*). Keying this on `lifecycleState === "settled"` would silently
     // take undo away from the users who asked to keep the directory.
-    const directoryGone = recorded.directoryState !== "present";
-    if (recorded.mode === "managed" && directoryGone) {
+    const directoryGone =
+      recorded.directoryState !== WORKTREE_DIRECTORY_STATES.PRESENT;
+    if (recorded.mode === WORKTREE_MODES.MANAGED && directoryGone) {
       throw new Error(
         "the managed worktree landed as a branch; filesystem undo is unavailable once its directory is removed (Git can show the recorded diff but cannot apply this undo)"
       );

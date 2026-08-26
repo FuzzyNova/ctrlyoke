@@ -21,7 +21,12 @@ import {
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES, UNDO_FILE_ACTIONS } from "@/types/messages";
 import type { UndoFileCandidate, UndoFileInstruction } from "@/types/messages";
-import { MAX_CONTENT_SIZE } from "@root/types/DashboardConstants";
+import {
+  FILE_OPERATION_KINDS,
+  MAX_CONTENT_SIZE,
+  UNDO_REDO_DIRECTIONS,
+  type FileOperationKind,
+} from "@root/types/DashboardConstants";
 import type { CliOutput } from "@/types/cliEvents";
 import type {
   WorkspaceSnapshot,
@@ -115,18 +120,22 @@ function makeModifiedSnap(
 ): SnapshotFileChange {
   return {
     path,
-    changeType: "modified",
+    changeType: FILE_OPERATION_KINDS.MODIFIED,
     structuredPatch: patch,
     beforeContent,
   };
 }
 
 function makeCreatedSnap(path: string): SnapshotFileChange {
-  return { path, changeType: "created" };
+  return { path, changeType: FILE_OPERATION_KINDS.CREATED };
 }
 
 function makeDeletedSnap(path: string, content: string): SnapshotFileChange {
-  return { path, changeType: "deleted", contentToRestore: content };
+  return {
+    path,
+    changeType: FILE_OPERATION_KINDS.DELETED,
+    contentToRestore: content,
+  };
 }
 
 const TARGET = { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 };
@@ -227,7 +236,7 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
     expect(candidates).toHaveLength(1);
     const c = candidates[0];
     expect(c.tier).toBe("tier1");
-    expect(c.changeType).toBe("modified");
+    expect(c.changeType).toBe(FILE_OPERATION_KINDS.MODIFIED);
     expect(c.instruction?.action).toBe(UNDO_FILE_ACTIONS.REVERSE_PATCH);
   });
 
@@ -238,7 +247,7 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
 
     expect(candidates).toHaveLength(1);
     const c = candidates[0];
-    expect(c.changeType).toBe("created");
+    expect(c.changeType).toBe(FILE_OPERATION_KINDS.CREATED);
     expect(c.instruction?.action).toBe(UNDO_FILE_ACTIONS.DELETE);
   });
 
@@ -252,11 +261,11 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
     expect(candidates[0]).toMatchObject({
       oldContent: "",
       newContent: "created content",
-      changeType: "created",
+      changeType: FILE_OPERATION_KINDS.CREATED,
     });
 
     const model = buildPromptUndoDialogModel({
-      mode: "undo",
+      mode: UNDO_REDO_DIRECTIONS.UNDO,
       input: buildUndoDialogInputForPrompt(
         TARGET,
         [output],
@@ -290,7 +299,7 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
     const snapshot = makeSnapshot([
       {
         path: "src/existing.ts",
-        changeType: "modified",
+        changeType: FILE_OPERATION_KINDS.MODIFIED,
         beforeContent: "before",
         structuredPatch: snapshotPatch,
       },
@@ -298,7 +307,7 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
 
     const candidate = buildUndoCandidatesForOutputs([output], snapshot)[0];
 
-    expect(candidate.changeType).toBe("modified");
+    expect(candidate.changeType).toBe(FILE_OPERATION_KINDS.MODIFIED);
     expect(candidate.oldContent).toBe("before");
     expect(candidate.newContent).toBeUndefined();
     expect(candidate.structuredPatch).toEqual(snapshotPatch);
@@ -328,7 +337,7 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
 
     expect(candidates).toHaveLength(1);
     const c = candidates[0];
-    expect(c.changeType).toBe("deleted");
+    expect(c.changeType).toBe(FILE_OPERATION_KINDS.DELETED);
     expect(c.instruction?.action).toBe(UNDO_FILE_ACTIONS.RESTORE_CONTENT);
   });
 
@@ -336,7 +345,7 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
     const output = makeCliOutput([makeFileDeleteEvent("src/gone.ts")]);
     // Snapshot has no contentToRestore
     const snapshot = makeSnapshot([
-      { path: "src/gone.ts", changeType: "deleted" },
+      { path: "src/gone.ts", changeType: FILE_OPERATION_KINDS.DELETED },
     ]);
     const candidates = buildUndoCandidatesForOutputs([output], snapshot);
 
@@ -373,7 +382,7 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
 
     expect(candidates).toHaveLength(1);
     expect(candidates[0].tier).toBe("tier1");
-    expect(candidates[0].changeType).toBe("created");
+    expect(candidates[0].changeType).toBe(FILE_OPERATION_KINDS.CREATED);
     expect(candidates[0].instruction?.action).toBe(UNDO_FILE_ACTIONS.DELETE);
   });
 
@@ -417,7 +426,7 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
     const snapshot = makeSnapshot([makeCreatedSnap("src/new.ts")]);
     const candidates = buildUndoCandidatesForOutputs([output], snapshot);
 
-    expect(candidates[0].changeType).toBe("created");
+    expect(candidates[0].changeType).toBe(FILE_OPERATION_KINDS.CREATED);
     expect(candidates[0].oldContent).toBe("");
     expect(candidates[0].newContent).toBe("final content");
   });
@@ -495,7 +504,9 @@ describe("buildUndoCandidatesForOutputs — Tier 2", () => {
   it("snapshot-only modified file without structuredPatch → null instruction", () => {
     const candidates = buildUndoCandidatesForOutputs(
       [],
-      makeSnapshot([{ path: "src/x.ts", changeType: "modified" }])
+      makeSnapshot([
+        { path: "src/x.ts", changeType: FILE_OPERATION_KINDS.MODIFIED },
+      ])
     );
     expect(candidates[0].tier).toBe("tier2");
     expect(candidates[0].instruction).toBeNull();
@@ -549,13 +560,13 @@ describe("getPromptUndoSummary", () => {
         tier: "tier1" as const,
         instruction: { path: "a.ts", action: UNDO_FILE_ACTIONS.DELETE },
         path: "a.ts",
-        changeType: "created" as const,
+        changeType: FILE_OPERATION_KINDS.CREATED,
       },
       {
         tier: "tier1" as const,
         instruction: null,
         path: "b.ts",
-        changeType: "modified" as const,
+        changeType: FILE_OPERATION_KINDS.MODIFIED,
       },
     ];
     const s = getPromptUndoSummary(candidates);
@@ -569,7 +580,7 @@ describe("getPromptUndoSummary", () => {
         tier: "tier2" as const,
         instruction: null,
         path: "b.ts",
-        changeType: "modified" as const,
+        changeType: FILE_OPERATION_KINDS.MODIFIED,
       },
     ];
     expect(getPromptUndoSummary(candidates).hasTier2).toBe(true);
@@ -829,7 +840,7 @@ function makeForwardPatch(
 
 function makeWorkflowCandidate(
   path: string,
-  changeType: "created" | "modified" | "deleted",
+  changeType: FileOperationKind,
   instruction: UndoFileInstruction,
   options: Partial<UndoFileCandidate> = {}
 ): UndoFileCandidate {
@@ -859,7 +870,7 @@ describe("aggregateWorkflowUndoFiles", () => {
         0,
         makeWorkflowCandidate(
           "C:\\repo\\src\\new.ts",
-          "created",
+          FILE_OPERATION_KINDS.CREATED,
           {
             path: "src/new.ts",
             action: UNDO_FILE_ACTIONS.DELETE,
@@ -871,7 +882,7 @@ describe("aggregateWorkflowUndoFiles", () => {
         1,
         makeWorkflowCandidate(
           "src/new.ts",
-          "modified",
+          FILE_OPERATION_KINDS.MODIFIED,
           {
             path: "src/new.ts",
             action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
@@ -888,7 +899,7 @@ describe("aggregateWorkflowUndoFiles", () => {
     expect(files).toHaveLength(1);
     expect(files[0]).toMatchObject({
       path: "C:\\repo\\src\\new.ts",
-      changeType: "created",
+      changeType: FILE_OPERATION_KINDS.CREATED,
       oldContent: "",
       newContent: edited,
     });
@@ -909,7 +920,7 @@ describe("aggregateWorkflowUndoFiles", () => {
         0,
         makeWorkflowCandidate(
           "src/file.ts",
-          "modified",
+          FILE_OPERATION_KINDS.MODIFIED,
           {
             path: "src/file.ts",
             action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
@@ -922,7 +933,7 @@ describe("aggregateWorkflowUndoFiles", () => {
         1,
         makeWorkflowCandidate(
           "src/file.ts",
-          "modified",
+          FILE_OPERATION_KINDS.MODIFIED,
           {
             path: "src/file.ts",
             action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
@@ -934,7 +945,7 @@ describe("aggregateWorkflowUndoFiles", () => {
     ]);
 
     expect(files[0]).toMatchObject({
-      changeType: "modified",
+      changeType: FILE_OPERATION_KINDS.MODIFIED,
       oldContent: base,
       newContent: afterSecond,
       isPartialDiff: false,
@@ -947,7 +958,7 @@ describe("aggregateWorkflowUndoFiles", () => {
         0,
         makeWorkflowCandidate(
           "src/new.ts",
-          "created",
+          FILE_OPERATION_KINDS.CREATED,
           {
             path: "src/new.ts",
             action: UNDO_FILE_ACTIONS.DELETE,
@@ -957,7 +968,7 @@ describe("aggregateWorkflowUndoFiles", () => {
       ),
       makeWorkflowEntry(
         1,
-        makeWorkflowCandidate("src/new.ts", "deleted", {
+        makeWorkflowCandidate("src/new.ts", FILE_OPERATION_KINDS.DELETED, {
           path: "src/new.ts",
           action: UNDO_FILE_ACTIONS.RESTORE_CONTENT,
           contentToRestore: "created\n",
@@ -976,7 +987,7 @@ describe("aggregateWorkflowUndoFiles", () => {
         0,
         makeWorkflowCandidate(
           "src/file.ts",
-          "modified",
+          FILE_OPERATION_KINDS.MODIFIED,
           {
             path: "src/file.ts",
             action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
@@ -989,7 +1000,7 @@ describe("aggregateWorkflowUndoFiles", () => {
         1,
         makeWorkflowCandidate(
           "src/file.ts",
-          "modified",
+          FILE_OPERATION_KINDS.MODIFIED,
           {
             path: "src/file.ts",
             action: UNDO_FILE_ACTIONS.REVERSE_PATCH,

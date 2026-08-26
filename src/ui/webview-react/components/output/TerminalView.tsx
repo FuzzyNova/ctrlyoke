@@ -1,3 +1,4 @@
+import { KEYBOARD_KEYS, OUTPUT_TABS } from "@root/types/DashboardConstants";
 import React, {
   useCallback,
   useEffect,
@@ -288,7 +289,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
       removeSession(workflowId, session.id);
       const remaining = useTerminalStore.getState().sessions[workflowId] ?? [];
       if (remaining.length === 0) {
-        setActiveOutputTab(workflowId, "output");
+        setActiveOutputTab(workflowId, OUTPUT_TABS.OUTPUT);
       }
     },
     [workflowId, removeSession, setActiveOutputTab]
@@ -334,7 +335,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
     // If this was the last session, switch back to output tab immediately
     const remaining = useTerminalStore.getState().sessions[workflowId] ?? [];
     if (remaining.length === 0) {
-      setActiveOutputTab(workflowId, "output");
+      setActiveOutputTab(workflowId, OUTPUT_TABS.OUTPUT);
     }
   }
 
@@ -512,7 +513,7 @@ const RailEntry: React.FC<RailEntryProps> = ({
         ${!isRunning ? "opacity-60" : ""}`}
       onClick={onClick}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
           e.preventDefault();
           onClick();
         }
@@ -559,7 +560,7 @@ const ShellRailEntry: React.FC<ShellRailEntryProps> = ({
         ${isEnded ? "opacity-60" : ""}`}
       onClick={onClick}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
           e.preventDefault();
           onClick();
         }

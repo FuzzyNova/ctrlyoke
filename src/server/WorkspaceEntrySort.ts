@@ -10,6 +10,7 @@ import {
   WORKSPACE_ENTRY_SORT_KEYS,
 } from "../types/HostedWorkspaceViewerTypes";
 import { WorkspaceTreeBadRequestError } from "./WorkspaceTreeErrors";
+import { WORKSPACE_ENTRY_KINDS } from "../types/DashboardConstants";
 
 /** Normalize an optional or runtime-originating sort selection. */
 export function normalizeWorkspaceEntrySort(
@@ -29,7 +30,7 @@ export function compareWorkspaceEntries(
   sort: WorkspaceEntrySort
 ): number {
   if (left.kind !== right.kind) {
-    return left.kind === "directory" ? -1 : 1;
+    return left.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY ? -1 : 1;
   }
 
   if (sort.key === WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT) {

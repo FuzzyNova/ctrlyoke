@@ -6,6 +6,7 @@ import {
   type AtomicReferencePresentation,
 } from "@utils/atomicReferences";
 import type { RowFindDecoration } from "@utils/outputFind";
+import { ATOMIC_REFERENCE_KINDS } from "@root/types/DashboardConstants";
 
 export interface AtomicReferenceChipProps {
   descriptor: AtomicReferenceDescriptor;
@@ -21,11 +22,11 @@ function atomicReferenceAriaLabel(
   const { attrs, title } = descriptor;
   const type = attrs["data-type"];
   switch (type) {
-    case "directory":
+    case ATOMIC_REFERENCE_KINDS.DIRECTORY:
       return `Reveal ${attrs["data-path"] ?? title}`;
     case "lineRange":
       return `Open ${attrs["data-path"] ?? title}:${attrs["data-line-start"] ?? ""}-${attrs["data-line-end"] ?? ""}`;
-    case "symbol":
+    case ATOMIC_REFERENCE_KINDS.SYMBOL:
       return `Go to ${attrs["data-symbol-name"] ?? "symbol"} in ${attrs["data-path"] ?? title}:${attrs["data-line-start"] ?? ""}-${attrs["data-line-end"] ?? ""}`;
     case "git":
       return `Open git ${attrs["data-git-ref"] ?? title}`;
@@ -37,7 +38,7 @@ function atomicReferenceAriaLabel(
       return `Open ctrlyoke MCP server ${attrs["data-mcp-server-name"] ?? title} in MCP Manager`;
     case "secret":
       return `Open ctrlyoke Secrets settings for ${attrs["data-secret-name"] ?? title}`;
-    case "file":
+    case ATOMIC_REFERENCE_KINDS.FILE:
     default:
       return `Open ${attrs["data-path"] ?? title}`;
   }

@@ -43,6 +43,12 @@ export const STATUS_LINE_TRACKING_PROVIDERS = {
 export type StatusLineTrackingProvider =
   (typeof STATUS_LINE_TRACKING_PROVIDERS)[keyof typeof STATUS_LINE_TRACKING_PROVIDERS];
 
+/** String representations used when booleans cross a text-based boundary. */
+export const BOOLEAN_STRING_VALUES = {
+  TRUE: "true",
+  FALSE: "false",
+} as const;
+
 // ============================================================================
 // MESSAGE TYPES - Communication between extension and webview
 // ============================================================================
@@ -560,6 +566,17 @@ export type CompletionNotificationSeverity =
   (typeof COMPLETION_NOTIFICATION_SEVERITY)[keyof typeof COMPLETION_NOTIFICATION_SEVERITY];
 
 // ============================================================================
+// NOTIFICATION OUTCOME KINDS - Notification monitor result classifications
+// ============================================================================
+export const NOTIFICATION_OUTCOME_KINDS = {
+  COMPLETION: "completion",
+  ERROR: "error",
+} as const;
+
+export type NotificationOutcomeKind =
+  (typeof NOTIFICATION_OUTCOME_KINDS)[keyof typeof NOTIFICATION_OUTCOME_KINDS];
+
+// ============================================================================
 // USER FEEDBACK SEVERITY - Visual level for transient dashboard feedback
 // ============================================================================
 export const USER_FEEDBACK_SEVERITY = {
@@ -658,6 +675,52 @@ export const OPERATION_STATUS = {
   COMPLETED: "completed",
   FAILED: "failed",
 } as const;
+
+// ============================================================================
+// SCRIPT VERDICT OUTCOMES - Results of script/pre-condition/end-condition evaluation
+// ============================================================================
+export const SCRIPT_VERDICT_OUTCOMES = {
+  PASSED: "passed",
+  FAILED: "failed",
+  ERRORED: "errored",
+} as const;
+
+export type ScriptVerdictOutcome =
+  (typeof SCRIPT_VERDICT_OUTCOMES)[keyof typeof SCRIPT_VERDICT_OUTCOMES];
+
+// ============================================================================
+// PROMPT FILE RESOLUTION STATUSES - Prompt reference lookup results
+// ============================================================================
+export const PROMPT_FILE_RESOLUTION_STATUSES = {
+  MISSING: "missing",
+  UNREADABLE: "unreadable",
+  EMPTY: "empty",
+  RESOLVED: "resolved",
+} as const;
+
+export type PromptFileResolutionStatus =
+  (typeof PROMPT_FILE_RESOLUTION_STATUSES)[keyof typeof PROMPT_FILE_RESOLUTION_STATUSES];
+
+// ============================================================================
+// PROJECT STATE STATUSES - Persisted project and runner inspection results
+// ============================================================================
+export const PROJECT_STATE_PATH_STATUSES = {
+  PRESENT: "present",
+  MISSING: "missing",
+  UNKNOWN: "unknown",
+} as const;
+
+export type ProjectStatePathStatus =
+  (typeof PROJECT_STATE_PATH_STATUSES)[keyof typeof PROJECT_STATE_PATH_STATUSES];
+
+export const PROJECT_RUNNER_STATUSES = {
+  NONE: "none",
+  LIVE: "live",
+  UNKNOWN: "unknown",
+} as const;
+
+export type ProjectRunnerStatus =
+  (typeof PROJECT_RUNNER_STATUSES)[keyof typeof PROJECT_RUNNER_STATUSES];
 
 // ============================================================================
 // CLIENT IDS - Well-known client identifiers for the dashboard viewer registry
@@ -1008,6 +1071,16 @@ export const MCP_CAPABILITY_KEYS = {
   PER_SERVER_TOOL_FILTERING: "perServerToolFiltering",
 } as const;
 
+// ============================================================================
+// MCP TRANSPORTS - Remote MCP protocol values
+// ============================================================================
+export const MCP_TRANSPORTS = {
+  STREAMABLE_HTTP: "streamable-http",
+  SSE: "sse",
+} as const;
+
+export type McpTransport = (typeof MCP_TRANSPORTS)[keyof typeof MCP_TRANSPORTS];
+
 export const COMPATIBILITY_DIAGNOSTIC_SEVERITIES = {
   INFO: "info",
   WARNING: "warning",
@@ -1163,6 +1236,17 @@ export const HARNESS_CHART_COLORS: Record<HarnessId, string> = {
 // HOOK EVENT - Logical hook event names and metadata
 // ============================================================================
 
+export const HOOK_EVENT_NAMES = {
+  STOP: "stop",
+  SESSION_START: "sessionStart",
+  PRE_TOOL_USE: "preToolUse",
+  POST_TOOL_USE: "postToolUse",
+  USER_PROMPT_SUBMIT: "userPromptSubmit",
+  PERMISSION_REQUEST: "permissionRequest",
+  NOTIFICATION: "notification",
+  ERROR: "error",
+} as const;
+
 /**
  * Logical hook event names — mapped to CLI-specific event names at inject time.
  *
@@ -1178,14 +1262,7 @@ export const HARNESS_CHART_COLORS: Record<HarnessId, string> = {
  * | "error"            | StopFailure      | errorOccurred     | n/a              | n/a               | session.error           |
  */
 export type HookEvent =
-  | "stop"
-  | "sessionStart"
-  | "preToolUse"
-  | "postToolUse"
-  | "userPromptSubmit"
-  | "permissionRequest"
-  | "notification"
-  | "error";
+  (typeof HOOK_EVENT_NAMES)[keyof typeof HOOK_EVENT_NAMES];
 
 export interface HookEventMetadata {
   event: HookEvent;
@@ -1194,14 +1271,14 @@ export interface HookEventMetadata {
 }
 
 export const HOOK_EVENT_ORDER: HookEvent[] = [
-  "stop",
-  "sessionStart",
-  "preToolUse",
-  "postToolUse",
-  "userPromptSubmit",
-  "permissionRequest",
-  "notification",
-  "error",
+  HOOK_EVENT_NAMES.STOP,
+  HOOK_EVENT_NAMES.SESSION_START,
+  HOOK_EVENT_NAMES.PRE_TOOL_USE,
+  HOOK_EVENT_NAMES.POST_TOOL_USE,
+  HOOK_EVENT_NAMES.USER_PROMPT_SUBMIT,
+  HOOK_EVENT_NAMES.PERMISSION_REQUEST,
+  HOOK_EVENT_NAMES.NOTIFICATION,
+  HOOK_EVENT_NAMES.ERROR,
 ];
 
 export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
@@ -1231,7 +1308,7 @@ export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
     description: "Fires when a user prompt is submitted to the AI.",
   },
   {
-    event: "permissionRequest",
+    event: HOOK_EVENT_NAMES.PERMISSION_REQUEST,
     label: "Permission Request",
     description: "Fires when the AI requests permission to perform an action.",
   },
@@ -1262,6 +1339,85 @@ export const WORKTREE_MODES = {
 
 export type WorktreeMode = (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES];
 
+export const WORKTREE_LIFECYCLE_OWNERS = {
+  CTRLYOKE: "ctrlyoke",
+  USER: "user",
+} as const;
+
+export type WorktreeLifecycleOwner =
+  (typeof WORKTREE_LIFECYCLE_OWNERS)[keyof typeof WORKTREE_LIFECYCLE_OWNERS];
+
+// ============================================================================
+// WORKTREE EDIT KINDS - Lineage preparation and start-position edit kinds
+// ============================================================================
+export const WORKTREE_EDIT_KINDS = {
+  DRAFT: "draft",
+  REWIND: "rewind",
+} as const;
+
+export type WorktreeEditKind =
+  (typeof WORKTREE_EDIT_KINDS)[keyof typeof WORKTREE_EDIT_KINDS];
+
+export const WORKTREE_POSITION_DIRECTIONS = {
+  REWIND: WORKTREE_EDIT_KINDS.REWIND,
+  FORWARD: "forward",
+} as const;
+
+export type WorktreePositionDirection =
+  (typeof WORKTREE_POSITION_DIRECTIONS)[keyof typeof WORKTREE_POSITION_DIRECTIONS];
+
+// ============================================================================
+// WORKTREE RUNTIME STATES - Persisted managed/named checkout lifecycle values
+// ============================================================================
+export const WORKTREE_DIRECTORY_STATES = {
+  PRESENT: "present",
+  REMOVED: "removed",
+  MISSING: "missing",
+  REMOVE_FAILED: "remove-failed",
+} as const;
+
+export type WorktreeDirectoryState =
+  (typeof WORKTREE_DIRECTORY_STATES)[keyof typeof WORKTREE_DIRECTORY_STATES];
+
+export const WORKTREE_BRANCH_STATES = {
+  PRESENT: "present",
+  DELETED: "deleted",
+  MISSING: "missing",
+} as const;
+
+export type WorktreeBranchState =
+  (typeof WORKTREE_BRANCH_STATES)[keyof typeof WORKTREE_BRANCH_STATES];
+
+export const WORKTREE_SETUP_OUTCOMES = {
+  PENDING: "pending",
+  RUNNING: "running",
+  SUCCEEDED: "succeeded",
+  FAILED: "failed",
+} as const;
+
+export type WorktreeSetupOutcome =
+  (typeof WORKTREE_SETUP_OUTCOMES)[keyof typeof WORKTREE_SETUP_OUTCOMES];
+
+export const WORKTREE_LANDING_OUTCOMES = {
+  LANDED: "landed",
+  NO_CHANGES: "no-changes",
+  BLOCKED: "blocked",
+} as const;
+
+export type WorktreeLandingOutcome =
+  (typeof WORKTREE_LANDING_OUTCOMES)[keyof typeof WORKTREE_LANDING_OUTCOMES];
+
+export const WORKTREE_MERGE_OUTCOMES = {
+  FAST_FORWARD: "fast-forward",
+  MERGE_COMMIT: "merge-commit",
+  CONFLICT: "conflict",
+  BLOCKED: "blocked",
+  ABORT_FAILED: "abort-failed",
+} as const;
+
+export type WorktreeMergeOutcome =
+  (typeof WORKTREE_MERGE_OUTCOMES)[keyof typeof WORKTREE_MERGE_OUTCOMES];
+
 // ============================================================================
 // WORKFLOW VIEW ADDRESS KIND - Discriminant for WorkflowViewAddress
 // ============================================================================
@@ -1269,6 +1425,18 @@ export const WORKFLOW_VIEW_ADDRESS_KIND = {
   DRAFT: "draft",
   RUN: "run",
 } as const;
+
+// ============================================================================
+// WORKFLOW DELETE SCOPES - History/context-menu deletion targets
+// ============================================================================
+export const WORKFLOW_DELETE_SCOPES = {
+  LINEAGE: "lineage",
+  RUN: "run",
+  ALL: "all",
+} as const;
+
+export type WorkflowDeleteScope =
+  (typeof WORKFLOW_DELETE_SCOPES)[keyof typeof WORKFLOW_DELETE_SCOPES];
 
 export const WORKTREE_MANAGEMENT_ACTIONS = {
   REMOVE: "remove",
@@ -1673,6 +1841,45 @@ export const PRIOR_CONTEXT_KEYWORDS = {
   FINAL_STEP_PREVIOUS: "finalStepPrevious",
 } as const;
 
+export const PRIOR_CONTEXT_REFERENCE_KINDS = {
+  PREVIOUS: PRIOR_CONTEXT_KEYWORDS.PREVIOUS,
+  ALL: PRIOR_CONTEXT_KEYWORDS.ALL,
+  FINAL_STEP: "finalStep",
+  ALL_FINAL_STEP: "allFinalStep",
+  STEP: "step",
+} as const;
+
+export type PriorContextReferenceKind =
+  (typeof PRIOR_CONTEXT_REFERENCE_KINDS)[keyof typeof PRIOR_CONTEXT_REFERENCE_KINDS];
+
+export const PRIOR_CONTEXT_SELECTION_MODES = {
+  RUN: "run",
+  CUSTOM: "custom",
+} as const;
+
+export type PriorContextSelectionMode =
+  (typeof PRIOR_CONTEXT_SELECTION_MODES)[keyof typeof PRIOR_CONTEXT_SELECTION_MODES];
+
+export const PROPERTY_EDITOR_MODES = {
+  INHERIT: "inherit",
+  NONE: "none",
+  CUSTOM: "custom",
+} as const;
+
+export type PropertyEditorMode =
+  (typeof PROPERTY_EDITOR_MODES)[keyof typeof PROPERTY_EDITOR_MODES];
+
+// ============================================================================
+// CODEMIRROR EDITOR MODES - Context modes for the prompt editor
+// ============================================================================
+export const CODE_MIRROR_EDITOR_MODES = {
+  PROMPT: "prompt",
+  END_CONDITION: "endCondition",
+} as const;
+
+export type CodeMirrorEditorMode =
+  (typeof CODE_MIRROR_EDITOR_MODES)[keyof typeof CODE_MIRROR_EDITOR_MODES];
+
 // ============================================================================
 // PRIOR CONTEXT ITEM TYPES - Discriminant for PriorContextItem.type
 // ============================================================================
@@ -1692,6 +1899,19 @@ export const GIT_CHANGE_KINDS = {
 } as const;
 
 // ============================================================================
+// SCM FILE KINDS - Git source-control file status values
+// ============================================================================
+export const SCM_FILE_KINDS = {
+  MODIFIED: "modified",
+  ADDED: "added",
+  DELETED: "deleted",
+  RENAMED: "renamed",
+  UNTRACKED: "untracked",
+} as const;
+
+export type ScmFileKind = (typeof SCM_FILE_KINDS)[keyof typeof SCM_FILE_KINDS];
+
+// ============================================================================
 // DIFF CHANGE TYPES - Normalized file change vocabulary for diff surfaces
 // ============================================================================
 export const DIFF_CHANGE_TYPES = {
@@ -1703,6 +1923,30 @@ export const DIFF_CHANGE_TYPES = {
 
 export type DiffChangeType =
   (typeof DIFF_CHANGE_TYPES)[keyof typeof DIFF_CHANGE_TYPES];
+
+// ============================================================================
+// FILE OPERATION KINDS - File-operation and prompt undo change discriminants
+// ============================================================================
+export const FILE_OPERATION_KINDS = {
+  CREATED: DIFF_CHANGE_TYPES.CREATED,
+  MODIFIED: DIFF_CHANGE_TYPES.MODIFIED,
+  DELETED: DIFF_CHANGE_TYPES.DELETED,
+} as const;
+
+export type FileOperationKind =
+  (typeof FILE_OPERATION_KINDS)[keyof typeof FILE_OPERATION_KINDS];
+
+// ============================================================================
+// APPLY PATCH FILE EDIT KINDS - Codex patch parser file-operation values
+// ============================================================================
+export const APPLY_PATCH_FILE_EDIT_KINDS = {
+  ADD: "add",
+  UPDATE: "update",
+  DELETE: "delete",
+} as const;
+
+export type ApplyPatchFileEditKind =
+  (typeof APPLY_PATCH_FILE_EDIT_KINDS)[keyof typeof APPLY_PATCH_FILE_EDIT_KINDS];
 
 // ============================================================================
 // DIFF PAYLOAD KINDS - Content shape for text/image/binary diff responses
@@ -2048,6 +2292,202 @@ export const OUTPUT_HISTORY_KINDS = {
   RUNTIME: "runtime",
 } as const;
 
+/** Message types produced by the live/history output projection. */
+export const OUTPUT_MESSAGE_TYPES = {
+  STATUS: "status",
+  CLI: "cli",
+} as const;
+
+export type OutputMessageType =
+  (typeof OUTPUT_MESSAGE_TYPES)[keyof typeof OUTPUT_MESSAGE_TYPES];
+
+// ============================================================================
+// RUN OUTPUT RESOLVER EVENT KINDS - Events emitted while reducing a run timeline
+// ============================================================================
+export const RUN_OUTPUT_RESOLVER_EVENT_KINDS = {
+  ATTEMPT_STARTED: "attemptStarted",
+  STREAMING_CHUNK: "streamingChunk",
+  STREAMING_EVENTS: "streamingEvents",
+  OUTPUT: "output",
+  SCRIPT_EXECUTION: "scriptExecution",
+  RETRY_SCHEDULED: "retryScheduled",
+  FOLLOW_UP_RESPONSE_APPENDED: "followUpResponseAppended",
+  ATTEMPT_TERMINATED: "attemptTerminated",
+  RUNTIME_TRANSITION: "runtimeTransition",
+  RUN_TERMINATED: "runTerminated",
+} as const;
+
+export type RunOutputResolverEventKind =
+  (typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS)[keyof typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS];
+
+// ============================================================================
+// OUTPUT TABS - Output section tab values stored per workflow
+// ============================================================================
+export const OUTPUT_TABS = {
+  OUTPUT: "output",
+  TERMINAL: "terminal",
+} as const;
+
+export type OutputTab = (typeof OUTPUT_TABS)[keyof typeof OUTPUT_TABS];
+
+// ============================================================================
+// OUTPUT ROW KINDS - Discriminants for rendered output rows
+// ============================================================================
+export const OUTPUT_ROW_KINDS = {
+  ATTEMPT_GROUP_SUMMARY: "attempt-group-summary",
+  STEP_ANCHOR: "step-anchor",
+  FINAL_STEP_LABEL: "final-step-label",
+  STATUS: "status",
+  CLI_HEADER: "cli-header",
+  PROMPT: "prompt",
+  CLI_COMMAND: "cli-command",
+  SCRIPT_COMMAND: "script-command",
+  ERROR: "error",
+  STRUCTURED_EVENT: "structured-event",
+  PLAIN_RESPONSE: "plain-response",
+  SCRIPT_OUTPUT: "script-output",
+  SCRIPT_VERDICT: "script-verdict",
+  STATS: "stats",
+} as const;
+
+export type OutputRowKind =
+  (typeof OUTPUT_ROW_KINDS)[keyof typeof OUTPUT_ROW_KINDS];
+
+// ============================================================================
+// TOOL RESULT STATUSES - Display status for generic tool-call results
+// ============================================================================
+export const TOOL_RESULT_STATUSES = {
+  PENDING: "pending",
+  SUCCESS: "success",
+  ERROR: "error",
+} as const;
+
+export type ToolResultStatus =
+  (typeof TOOL_RESULT_STATUSES)[keyof typeof TOOL_RESULT_STATUSES];
+
+// ============================================================================
+// TOOL-CALL EXPANSION SECTIONS - Expandable generic tool-call content
+// ============================================================================
+export const TOOL_CALL_EXPANSION_SECTIONS = {
+  PARAMS: "params",
+  OUTPUT: "output",
+  ERROR: "error",
+} as const;
+
+export type ToolCallExpansionSection =
+  (typeof TOOL_CALL_EXPANSION_SECTIONS)[keyof typeof TOOL_CALL_EXPANSION_SECTIONS];
+
+// ============================================================================
+// BASH OUTPUT EXPANSION SECTIONS - Expandable shell command content
+// ============================================================================
+export const BASH_OUTPUT_EXPANSION_SECTIONS = {
+  COMMAND: "command",
+  OUTPUT: "output",
+  ERROR: "error",
+} as const;
+
+export type BashOutputExpansionSection =
+  (typeof BASH_OUTPUT_EXPANSION_SECTIONS)[keyof typeof BASH_OUTPUT_EXPANSION_SECTIONS];
+
+// ============================================================================
+// RUN SUMMARY CACHE STATUSES - Async status for cached run summaries
+// ============================================================================
+export const RUN_SUMMARY_CACHE_STATUSES = {
+  LOADING: "loading",
+  LOADED: "loaded",
+  ERROR: "error",
+} as const;
+
+export type RunSummaryCacheStatus =
+  (typeof RUN_SUMMARY_CACHE_STATUSES)[keyof typeof RUN_SUMMARY_CACHE_STATUSES];
+
+// ============================================================================
+// KEYBOARD KEYS - Shared browser keyboard event key values
+// ============================================================================
+export const KEYBOARD_KEYS = {
+  ENTER: "Enter",
+  ESCAPE: "Escape",
+} as const;
+
+// ============================================================================
+// INHERIT DEFAULT OPTION - UI sentinel for inherited settings
+// ============================================================================
+export const INHERIT_DEFAULT_OPTION = "default" as const;
+
+// ============================================================================
+// NONE OPTION - UI sentinel for explicitly disabled inherited settings
+// ============================================================================
+export const NONE_OPTION = "none" as const;
+
+// ============================================================================
+// SCRIPT MATCH RULE NONE - Script verdict sentinel when no rule matched
+// ============================================================================
+export const SCRIPT_MATCH_RULE_NONE = "none" as const;
+
+// ============================================================================
+// ATOMIC REFERENCE KINDS - @-mention file/directory/symbol references
+// ============================================================================
+export const ATOMIC_REFERENCE_KINDS = {
+  FILE: "file",
+  DIRECTORY: "directory",
+  SYMBOL: "symbol",
+} as const;
+
+export type AtomicReferenceKind =
+  (typeof ATOMIC_REFERENCE_KINDS)[keyof typeof ATOMIC_REFERENCE_KINDS];
+
+// ============================================================================
+// WORKSPACE ENTRY KINDS - workspace/file-tree and related result kinds
+// ============================================================================
+export const WORKSPACE_ENTRY_KINDS = {
+  FILE: "file",
+  DIRECTORY: "directory",
+  CONTENT: "content",
+} as const;
+
+export type WorkspaceEntryKind =
+  (typeof WORKSPACE_ENTRY_KINDS)[keyof typeof WORKSPACE_ENTRY_KINDS];
+
+export type WorkspaceFileTreeEntryKind = Exclude<
+  WorkspaceEntryKind,
+  typeof WORKSPACE_ENTRY_KINDS.CONTENT
+>;
+
+// ============================================================================
+// TEMPLATE VARIABLE TYPES - Input control types for template variables
+// ============================================================================
+export const TEMPLATE_VARIABLE_TYPES = {
+  TEXT: "text",
+  FILE: WORKSPACE_ENTRY_KINDS.FILE,
+  DIRECTORY: WORKSPACE_ENTRY_KINDS.DIRECTORY,
+  SELECT: "select",
+  HARNESS: "harness",
+} as const;
+
+export type TemplateVariableType =
+  (typeof TEMPLATE_VARIABLE_TYPES)[keyof typeof TEMPLATE_VARIABLE_TYPES];
+
+// ============================================================================
+// WORKSPACE VIEWER - Shared hosted viewer tab and search scope values
+// ============================================================================
+export const WORKSPACE_VIEWER_TABS = {
+  EXPLORER: "explorer",
+  SOURCE_CONTROL: "sourceControl",
+  SEARCH: "search",
+} as const;
+
+export type WorkspaceViewerTab =
+  (typeof WORKSPACE_VIEWER_TABS)[keyof typeof WORKSPACE_VIEWER_TABS];
+
+export const WORKSPACE_SEARCH_SCOPES = {
+  FILES: "files",
+  CONTENT: "content",
+  BOTH: "both",
+} as const;
+
+export type WorkspaceSearchScope =
+  (typeof WORKSPACE_SEARCH_SCOPES)[keyof typeof WORKSPACE_SEARCH_SCOPES];
+
 // ============================================================================
 // SNAPSHOT STRATEGIES - Workspace snapshot strategy values
 // ============================================================================
@@ -2072,6 +2512,17 @@ export const UNDO_FILE_ACTIONS = {
   RESTORE_CONTENT: "restore-content",
   REVERSE_PATCH: "reverse-patch",
 } as const;
+
+// ============================================================================
+// UNDO/REDO DIRECTIONS - Direction discriminants for history actions
+// ============================================================================
+export const UNDO_REDO_DIRECTIONS = {
+  UNDO: "undo",
+  REDO: "redo",
+} as const;
+
+export type UndoRedoDirection =
+  (typeof UNDO_REDO_DIRECTIONS)[keyof typeof UNDO_REDO_DIRECTIONS];
 
 // ============================================================================
 // TEMP FILE CATEGORIES - Category discriminants for categorized prompt temp files
@@ -2189,6 +2640,21 @@ export const SPECIAL_TARGET_IDS = {
   CTRLYOKE: "ctrlyoke",
   VSCODE: "vscode",
   AGENTS: "agents",
+} as const;
+
+// ============================================================================
+// MCP SERVER IDS - Built-in server identifiers used in workflow properties
+// ============================================================================
+export const MCP_SERVER_IDS = {
+  CTRLYOKE: "ctrlyoke",
+} as const;
+
+// ============================================================================
+// EXTENSION IDENTIFIERS - Development and packaged extension identity values
+// ============================================================================
+export const EXTENSION_IDENTIFIERS = {
+  ID: "fuzzynova.ctrlyoke",
+  PACKAGE_NAME: "ctrlyoke",
 } as const;
 
 // Explicit ctrlyoke prompt references. Plain slash commands remain harness-native.

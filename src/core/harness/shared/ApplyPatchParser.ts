@@ -1,9 +1,13 @@
 import { UnifiedDiffHunk } from "../../../types/CliOutputTypes";
+import {
+  APPLY_PATCH_FILE_EDIT_KINDS,
+  type ApplyPatchFileEditKind,
+} from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 
 export interface ApplyPatchFileEdit {
   path: string;
-  kind: "add" | "update" | "delete";
+  kind: ApplyPatchFileEditKind;
   structuredPatch?: UnifiedDiffHunk[];
 }
 
@@ -168,10 +172,10 @@ export class ApplyPatchParser {
         if (fileMatch) {
           flushFile();
           const kind = line.startsWith("*** Add File:")
-            ? "add"
+            ? APPLY_PATCH_FILE_EDIT_KINDS.ADD
             : line.startsWith("*** Delete File:")
-              ? "delete"
-              : "update";
+              ? APPLY_PATCH_FILE_EDIT_KINDS.DELETE
+              : APPLY_PATCH_FILE_EDIT_KINDS.UPDATE;
           currentFile = {
             path: fileMatch[1].trim(),
             kind,

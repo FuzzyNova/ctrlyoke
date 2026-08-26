@@ -51,9 +51,14 @@ import { Prec, RangeSetBuilder, StateEffect } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { openContextReference } from "@utils/contextReferenceActions";
 import {
+  ATOMIC_REFERENCE_KINDS,
+  BOOLEAN_STRING_VALUES,
+  CODE_MIRROR_EDITOR_MODES,
   USER_FEEDBACK_SEVERITY,
   CTRLYOKE_SLASH_TOKEN_KINDS,
+  PRIOR_CONTEXT_REFERENCE_KINDS,
   SCRIPT_OUTPUT_SOURCES,
+  type CodeMirrorEditorMode,
 } from "@root/types/DashboardConstants";
 import {
   MESSAGE_TYPES,
@@ -95,7 +100,7 @@ interface TypoChecker {
   suggest: (word: string) => string[];
 }
 
-export type CodeMirrorEditorMode = "prompt" | "endCondition";
+export type { CodeMirrorEditorMode } from "@root/types/DashboardConstants";
 type CodeMirrorEditorSurface = "editor" | "input";
 
 interface CodeMirrorEditorProps {
@@ -239,7 +244,12 @@ function parseSingleSymbolReference(
   | { path: string; symbolName: string; lineStart?: string; lineEnd?: string }
   | undefined {
   const [match] = findContextReferenceMatches(text);
-  if (!match || match.type !== "symbol" || !match.path || !match.symbolName) {
+  if (
+    !match ||
+    match.type !== ATOMIC_REFERENCE_KINDS.SYMBOL ||
+    !match.path ||
+    !match.symbolName
+  ) {
     return undefined;
   }
   return {
@@ -555,7 +565,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     affUri,
     dicUri,
     readOnly = false,
-    mode = "prompt",
+    mode = CODE_MIRROR_EDITOR_MODES.PROMPT,
     surface = "editor",
     className,
     minHeightClassName,
@@ -673,7 +683,9 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   useEffect(() => {
     readOnlyRef.current = readOnly;
     if (viewRef.current) {
-      viewRef.current.contentDOM.contentEditable = readOnly ? "false" : "true";
+      viewRef.current.contentDOM.contentEditable = readOnly
+        ? BOOLEAN_STRING_VALUES.FALSE
+        : BOOLEAN_STRING_VALUES.TRUE;
     }
   }, [readOnly]);
 
@@ -707,7 +719,11 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   }, [mode]);
 
   useEffect(() => {
-    if (!pendingInsertRequest || !viewRef.current || mode !== "prompt") {
+    if (
+      !pendingInsertRequest ||
+      !viewRef.current ||
+      mode !== CODE_MIRROR_EDITOR_MODES.PROMPT
+    ) {
       return;
     }
 
@@ -1346,7 +1362,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
             onBlurRef.current?.();
             return false;
           },
-          ...(mode === "prompt"
+          ...(mode === CODE_MIRROR_EDITOR_MODES.PROMPT
             ? {
                 paste: (event, view) =>
                   handleImagePaste(event as ClipboardEvent, view),
@@ -1408,7 +1424,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           // dispatching call stack — an updateListener runs after the fact and
           // cannot identify who moved the caret.
           if (
-            mode === "prompt" &&
+            mode === CODE_MIRROR_EDITOR_MODES.PROMPT &&
             (update.docChanged || update.geometryChanged)
           ) {
             const cause = update.docChanged ? "doc" : "geometry";
@@ -1449,7 +1465,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
     // Check overflow immediately after mount so loading an existing prompt
     // with lots of content triggers auto-expand (treat as a doc event).
-    if (mode === "prompt") {
+    if (mode === CODE_MIRROR_EDITOR_MODES.PROMPT) {
       view.requestMeasure({
         read(v: EditorView) {
           return v.contentHeight - v.scrollDOM.clientHeight;
@@ -1626,7 +1642,7 @@ class AtomicReferenceWidget extends WidgetType {
       // Also flag it for the click handler so it refuses to open a target the
       // validation pass already resolved as nonexistent (see
       // openContextReferenceLink).
-      chip.setAttribute("data-invalid", "true");
+      chip.setAttribute("data-invalid", BOOLEAN_STRING_VALUES.TRUE);
     } else {
       chip.title = this.chip.title;
     }
@@ -2036,7 +2052,7 @@ export function createContextReferenceLintExtension(
         let changed = false;
         for (const reference of allReferences) {
           if (
-            reference.type !== "symbol" ||
+            reference.type !== ATOMIC_REFERENCE_KINDS.SYMBOL ||
             !reference.path ||
             !reference.symbolName
           ) {
@@ -2350,7 +2366,7 @@ function createLinkDecorationExtension(
                 view.state.doc.sliceString(linkMatch.from, linkMatch.to)
               ) === false
             ) {
-              attrs["data-invalid"] = "true";
+              attrs["data-invalid"] = BOOLEAN_STRING_VALUES.TRUE;
             }
 
             builder.add(
@@ -2474,7 +2490,10 @@ function createFileRefDecorationExtension(allowWorkspaceFolderPrefix: boolean) {
           end,
           Decoration.mark({
             class: "cm-link cm-prompt-file-ref",
-            attributes: { "data-type": "file", "data-path": trimmed },
+            attributes: {
+              "data-type": ATOMIC_REFERENCE_KINDS.FILE,
+              "data-path": trimmed,
+            },
           })
         );
         return builder.finish();
@@ -2522,13 +2541,15 @@ function createPriorContextDecorationExtension(
           for (const ref of refs) {
             if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
             const dataRef =
-              ref.kind === "step" ? `step:${ref.indices!.join(",")}` : ref.kind;
+              ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP
+                ? `${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:${ref.indices!.join(",")}`
+                : ref.kind;
             const attributes: Record<string, string> = {
               "data-type": "priorContext",
               "data-ref": dataRef,
             };
             if (referenceValidity?.get(ref.token) === false) {
-              attributes["data-invalid"] = "true";
+              attributes["data-invalid"] = BOOLEAN_STRING_VALUES.TRUE;
             }
             builder.add(
               ref.from,
@@ -2607,16 +2628,25 @@ export function createPriorContextLintExtension(
           if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
 
           let message: string | undefined;
-          if (ref.kind === "previous" || ref.kind === "all") {
+          if (
+            ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS ||
+            ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.ALL
+          ) {
             if (stepCount <= 0) {
               message =
                 "Prior context not found — no prior steps exist at this position";
             }
-          } else if (ref.kind === "finalStep" || ref.kind === "allFinalStep") {
+          } else if (
+            ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP ||
+            ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP
+          ) {
             if (!hasFinalStep) {
               message = "Prior context not found — no final step is configured";
             }
-          } else if (ref.kind === "step" && ref.indices) {
+          } else if (
+            ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP &&
+            ref.indices
+          ) {
             const outOfRange = ref.indices.filter(
               (i) => i < 1 || i > stepCount
             );
@@ -2670,7 +2700,7 @@ export function createConditionOutputLintExtension(
   return linter(
     (view): Diagnostic[] => {
       const hasPreCondition = hasPreConditionRef.current ?? false;
-      const mode = modeRef.current ?? "prompt";
+      const mode = modeRef.current ?? CODE_MIRROR_EDITOR_MODES.PROMPT;
       const diagnostics: Diagnostic[] = [];
       const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
 
@@ -2693,7 +2723,7 @@ export function createConditionOutputLintExtension(
             });
           } else if (
             ref.phase === SCRIPT_OUTPUT_SOURCES.END_CONDITION &&
-            mode !== "endCondition"
+            mode !== CODE_MIRROR_EDITOR_MODES.END_CONDITION
           ) {
             diagnostics.push({
               from: ref.from,
@@ -2755,7 +2785,7 @@ function openContextReferenceLink(
   // there — and surface why, since the click is otherwise a dead no-op. Returns
   // true so the caller still consumes the event (preventDefault) rather than
   // falling through to editor cursor placement.
-  if (target.getAttribute("data-invalid") === "true") {
+  if (target.getAttribute("data-invalid") === BOOLEAN_STRING_VALUES.TRUE) {
     notifyUser(
       "Can't open — this reference doesn't resolve to an existing file",
       USER_FEEDBACK_SEVERITY.WARNING

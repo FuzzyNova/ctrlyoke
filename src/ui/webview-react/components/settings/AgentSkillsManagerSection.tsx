@@ -3,6 +3,7 @@ import { useHarnessFileStore } from "@store/useHarnessFileStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { sendMessage } from "@hooks/useMessageHandler";
 import {
+  KEYBOARD_KEYS,
   HARNESS_IDS,
   HARNESS_INFO,
   SETTING_SCOPES,
@@ -236,7 +237,7 @@ function HarnessBadge({
   id: AnyTargetId;
   scope: SettingWriteScope;
 }) {
-  const isFp = id === "ctrlyoke";
+  const isFp = id === SPECIAL_TARGET_IDS.CTRLYOKE;
   return (
     <span
       className={`inline-flex items-center px-1 py-0.5 rounded text-xxs font-medium leading-none
@@ -794,9 +795,9 @@ export function AgentSkillsManagerSection({
           onKeyDown={(event) => {
             if (
               event.target === event.currentTarget &&
-              (event.key === "Enter" ||
+              (event.key === KEYBOARD_KEYS.ENTER ||
                 event.key === " " ||
-                event.key === "Escape")
+                event.key === KEYBOARD_KEYS.ESCAPE)
             ) {
               event.preventDefault();
               setConfirmDelete(null);
@@ -852,9 +853,9 @@ export function AgentSkillsManagerSection({
           onKeyDown={(event) => {
             if (
               event.target === event.currentTarget &&
-              (event.key === "Enter" ||
+              (event.key === KEYBOARD_KEYS.ENTER ||
                 event.key === " " ||
-                event.key === "Escape")
+                event.key === KEYBOARD_KEYS.ESCAPE)
             ) {
               event.preventDefault();
               setConfirmDeleteAll(null);

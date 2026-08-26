@@ -1,3 +1,4 @@
+import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -65,7 +66,7 @@ export function StepContextMenu({
   useEffect(() => {
     const close = () => onClose();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === KEYBOARD_KEYS.ESCAPE) onClose();
     };
     document.addEventListener("pointerdown", close);
     document.addEventListener("keydown", onKey);

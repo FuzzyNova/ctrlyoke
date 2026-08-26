@@ -14,7 +14,11 @@ import {
 } from "@hooks/useUndoRedoKeyHandler";
 import { MESSAGE_TYPES } from "../../types/messages";
 import { STEP_STATUS } from "../../types/messages";
-import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
+import {
+  DEFAULT_WORKFLOW_NAME,
+  UNDO_REDO_DIRECTIONS,
+  type UndoRedoDirection,
+} from "@root/types/DashboardConstants";
 import { HEADER_BUTTON_SIZES } from "@/constants";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
 
@@ -38,7 +42,7 @@ interface UndoRedoControlProps {
       historyEntryCount: number;
       isOpen?: boolean;
       stepCount?: number;
-      direction?: "undo" | "redo";
+      direction?: UndoRedoDirection;
     }
   ) => void;
 }
@@ -441,7 +445,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   }, [canRedo, editingDisabled, normalizeAfterHistoryAction, syncToVsCode]);
 
   const handleJumpTo = useCallback(
-    (stepCount: number, direction: "undo" | "redo") => {
+    (stepCount: number, direction: UndoRedoDirection) => {
       if (editingDisabled) return;
       const previousState = {
         steps: useWorkflowStore.getState().steps,
@@ -450,7 +454,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
       rememberUndoRedoRuntime(previousState.steps);
       const temporal = useWorkflowStore.temporal.getState();
       for (let i = 0; i < stepCount; i++) {
-        if (direction === "redo") {
+        if (direction === UNDO_REDO_DIRECTIONS.REDO) {
           temporal.redo();
         } else {
           temporal.undo();
@@ -488,7 +492,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
       return {
         label: describeChange(prevState, state),
         stepCount: typedFuture.length - i,
-        direction: "redo" as const,
+        direction: UNDO_REDO_DIRECTIONS.REDO,
       };
     });
 
@@ -497,7 +501,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
       return {
         label: describeChange(state, nextState),
         stepCount: di + 1,
-        direction: "undo" as const,
+        direction: UNDO_REDO_DIRECTIONS.UNDO,
       };
     });
 
@@ -533,7 +537,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
       overrides: Partial<{
         isOpen: boolean;
         stepCount: number;
-        direction: "undo" | "redo";
+        direction: UndoRedoDirection;
       }> = {}
     ) => ({
       canUndo,
@@ -666,20 +670,24 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
                   handleJumpTo(stepCount, direction);
                 }}
                 className={`fp-dropdown-row w-full text-left px-3 py-1.5 text-sm hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer flex items-center gap-2 ${
-                  direction === "redo"
+                  direction === UNDO_REDO_DIRECTIONS.REDO
                     ? "text-dropdown-fg opacity-80"
                     : "text-dropdown-fg"
                 }`}
               >
                 <i
                   className={`codicon ${
-                    direction === "redo" ? "codicon-redo" : "codicon-discard"
+                    direction === UNDO_REDO_DIRECTIONS.REDO
+                      ? "codicon-redo"
+                      : "codicon-discard"
                   } text-description-fg text-xs flex-shrink-0`}
                 />
                 <span className="flex-1 truncate">{label}</span>
                 {stepCount === 1 && (
                   <kbd className="text-xs text-description-fg bg-keybinding-bg px-1.5 py-0.5 rounded font-mono flex-shrink-0">
-                    {direction === "redo" ? "Ctrl+Y" : "Ctrl+Z"}
+                    {direction === UNDO_REDO_DIRECTIONS.REDO
+                      ? "Ctrl+Y"
+                      : "Ctrl+Z"}
                   </kbd>
                 )}
               </button>

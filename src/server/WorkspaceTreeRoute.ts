@@ -10,6 +10,7 @@ import {
   WORKSPACE_ENTRY_SORT_DIRECTIONS,
   WORKSPACE_ENTRY_SORT_KEYS,
 } from "../types/HostedWorkspaceViewerTypes";
+import { BOOLEAN_STRING_VALUES } from "../types/DashboardConstants";
 import { WorkspaceTreeBadRequestError } from "./WorkspaceTreeErrors";
 
 export type WorkspaceTreeRequest =
@@ -146,7 +147,7 @@ function readPositiveInteger(value: string, key: string): number {
 }
 
 function parseBoolean(value: string, key: string): boolean {
-  if (value === "true") return true;
-  if (value === "false") return false;
+  if (value === BOOLEAN_STRING_VALUES.TRUE) return true;
+  if (value === BOOLEAN_STRING_VALUES.FALSE) return false;
   throw new WorkspaceTreeBadRequestError(`${key} must be true or false`);
 }

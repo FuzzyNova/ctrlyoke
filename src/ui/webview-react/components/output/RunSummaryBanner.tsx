@@ -1,6 +1,13 @@
 import React, { useCallback, useState } from "react";
 import { ExecutionStateBadge } from "@components/shared/ExecutionStateBadge";
-import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  WORKTREE_BRANCH_STATES,
+  WORKTREE_DIRECTORY_STATES,
+  WORKTREE_LANDING_OUTCOMES,
+  WORKTREE_MERGE_OUTCOMES,
+  WORKTREE_MODES,
+} from "@root/types/DashboardConstants";
 import {
   WorkflowTokenUsage,
   hasWorkflowTokenUsage,
@@ -74,36 +81,36 @@ function formatWorktreeOutcome(
   worktree: WorktreeRunProjection
 ): WorktreeOutcome | undefined {
   switch (worktree.mergeOutcome) {
-    case "fast-forward":
+    case WORKTREE_MERGE_OUTCOMES.FAST_FORWARD:
       return { severity: "success", text: "Merged (fast-forward)" };
-    case "merge-commit":
+    case WORKTREE_MERGE_OUTCOMES.MERGE_COMMIT:
       return { severity: "success", text: "Merged (merge commit)" };
-    case "conflict":
+    case WORKTREE_MERGE_OUTCOMES.CONFLICT:
       return { severity: "warning", text: "Merge conflict — branch preserved" };
-    case "blocked":
-    case "abort-failed":
+    case WORKTREE_MERGE_OUTCOMES.BLOCKED:
+    case WORKTREE_MERGE_OUTCOMES.ABORT_FAILED:
       return {
         severity: "error",
         text: "Auto merge blocked — source branch changed or checkout is dirty",
       };
   }
-  if (worktree.directoryState === "remove-failed") {
+  if (worktree.directoryState === WORKTREE_DIRECTORY_STATES.REMOVE_FAILED) {
     return {
       severity: "warning",
       text: "Worktree removal failed — branch safe, directory kept",
     };
   }
   switch (worktree.landingOutcome) {
-    case "landed":
+    case WORKTREE_LANDING_OUTCOMES.LANDED:
       return {
         severity: "success",
         text: `Branch ready — ${worktree.changedFileCount ?? 0} file${
           worktree.changedFileCount === 1 ? "" : "s"
         }`,
       };
-    case "no-changes":
+    case WORKTREE_LANDING_OUTCOMES.NO_CHANGES:
       return { severity: "success", text: "No changes" };
-    case "blocked":
+    case WORKTREE_LANDING_OUTCOMES.BLOCKED:
       return {
         severity: "warning",
         text: `Commit blocked — worktree kept at ${formatRelativeWorktreePath(
@@ -123,16 +130,19 @@ function formatWorktreeOutcome(
 export function isManagedWorktreeUndoUnavailable(
   worktree: WorktreeRunProjection | undefined
 ): boolean {
-  return worktree?.mode === "managed" && worktree.directoryState !== "present";
+  return (
+    worktree?.mode === WORKTREE_MODES.MANAGED &&
+    worktree.directoryState !== WORKTREE_DIRECTORY_STATES.PRESENT
+  );
 }
 
 function formatDirectoryState(worktree: WorktreeRunProjection): string {
   switch (worktree.directoryState) {
-    case "removed":
+    case WORKTREE_DIRECTORY_STATES.REMOVED:
       return " (removed)";
-    case "missing":
+    case WORKTREE_DIRECTORY_STATES.MISSING:
       return " (missing)";
-    case "remove-failed":
+    case WORKTREE_DIRECTORY_STATES.REMOVE_FAILED:
       return " (removal failed)";
     default:
       return "";
@@ -201,15 +211,15 @@ export const RunSummaryBanner: React.FC<RunSummaryBannerProps> = ({
     !isStandalone &&
     worktree?.baseCommit &&
     branchName &&
-    worktree.directoryState === "present"
+    worktree.directoryState === WORKTREE_DIRECTORY_STATES.PRESENT
   );
   const hasMergeButton = Boolean(
     address &&
     worktree?.baseCommit &&
     branchName &&
-    worktree.mode === "managed" &&
-    worktree.branchState === "present" &&
-    worktree.landingOutcome === "landed"
+    worktree.mode === WORKTREE_MODES.MANAGED &&
+    worktree.branchState === WORKTREE_BRANCH_STATES.PRESENT &&
+    worktree.landingOutcome === WORKTREE_LANDING_OUTCOMES.LANDED
   );
   const hasWorktreeButtons = hasDiffButton || hasOpenButton || hasMergeButton;
 

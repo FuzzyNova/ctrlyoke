@@ -16,7 +16,9 @@ import type { FinalStepRuntimeState } from "../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
   HARNESS_IDS,
+  PROMPT_PROPERTIES,
   QUEUE_POSITION,
+  WORKTREE_EDIT_KINDS,
   type HarnessId,
   type QueuePosition,
 } from "../types/DashboardConstants";
@@ -43,7 +45,8 @@ import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { TimelineRecorder } from "./orchestration/TimelineRecorder";
 
 function normalizeWorkflowPropertyValue(key: string, value: unknown): unknown {
-  return key === "agent" && (typeof value === "string" || value === null)
+  return key === PROMPT_PROPERTIES.AGENT &&
+    (typeof value === "string" || value === null)
     ? normalizeAgentSelection(value)
     : value;
 }
@@ -971,7 +974,7 @@ export class WorkingFileManager {
             descriptor: {
               ...descriptor,
               pendingEdit: {
-                kind: "rewind",
+                kind: WORKTREE_EDIT_KINDS.REWIND,
                 runRef,
                 fromStepIndex,
                 baseDefinitionRevision: sourceRevision,
@@ -1556,7 +1559,10 @@ export class WorkingFileManager {
         expectedDescriptorRevision,
         async (descriptor) => {
           const pending = descriptor.pendingEdit;
-          if (pending?.kind !== "rewind" || pending.runRef !== runRef) {
+          if (
+            pending?.kind !== WORKTREE_EDIT_KINDS.REWIND ||
+            pending.runRef !== runRef
+          ) {
             throw new Error(
               "This run does not have a pending continuation to discard"
             );
@@ -1671,7 +1677,10 @@ export class WorkingFileManager {
       expectedDescriptorRevision,
       async (descriptor) => {
         const pending = descriptor.pendingEdit;
-        if (pending?.kind !== "rewind" || pending.runRef !== runRef) {
+        if (
+          pending?.kind !== WORKTREE_EDIT_KINDS.REWIND ||
+          pending.runRef !== runRef
+        ) {
           throw new Error(
             "This run does not have a pending continuation to commit"
           );

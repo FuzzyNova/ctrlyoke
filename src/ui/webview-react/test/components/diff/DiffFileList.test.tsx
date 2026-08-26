@@ -8,6 +8,7 @@ import {
   it,
   vi,
 } from "vitest";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 import {
   act,
   fireEvent,
@@ -109,7 +110,7 @@ function makeFile(key: string) {
     path: `src/${key}.ts`,
     changeType: "modified" as const,
     source: {
-      kind: "content" as const,
+      kind: WORKSPACE_ENTRY_KINDS.CONTENT,
       oldContent: "before",
       newContent: "after",
     },

@@ -16,6 +16,7 @@ import {
 } from "@utils/promptUndo";
 import type { CliOutput as CliOutputType } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES, STEP_TYPES } from "@/types/messages";
+import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 import type {
   OpenMinimapRedoDialogInput,
   OpenMinimapUndoDialogInput,
@@ -170,7 +171,7 @@ export function useOutputMinimapModel({
             rowLayout.rowStartsByIndex[firstRowIndex] / totalSize;
           const diffBlocks: MinimapDiffBlock[] = rows.flatMap((row) => {
             if (
-              row.rowKind !== "structured-event" ||
+              row.rowKind !== OUTPUT_ROW_KINDS.STRUCTURED_EVENT ||
               row.target?.kind !== msgTarget.kind ||
               row.target?.index !== msgTarget.index ||
               !row.diff

@@ -1,3 +1,4 @@
+import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import React, { memo, useState, useCallback, useEffect, useRef } from "react";
 import { type FinalStepPhase } from "../../types/messages";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
@@ -598,10 +599,10 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
               setPinnedKey((prev) => (prev === step.key ? null : step.key));
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
+              if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
                 e.preventDefault();
                 setPinnedKey((prev) => (prev === step.key ? null : step.key));
-              } else if (e.key === "Escape") {
+              } else if (e.key === KEYBOARD_KEYS.ESCAPE) {
                 setHoveredKey(null);
                 setPinnedKey(null);
               }

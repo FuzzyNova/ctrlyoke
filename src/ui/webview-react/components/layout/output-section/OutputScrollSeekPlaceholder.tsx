@@ -1,5 +1,6 @@
 import React from "react";
 import type { OutputRenderRow } from "@utils/outputRows";
+import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 import { CLI_EVENT_TYPES } from "@/types/messages";
 
 const OUTPUT_SCROLL_SEEK_TEXT_PLACEHOLDER_MIN_CHARS = 1200;
@@ -19,7 +20,7 @@ export function getWheelDeltaPixels(
 
 function getScrollSeekRowLabel(row: OutputRenderRow): string {
   switch (row.rowKind) {
-    case "structured-event":
+    case OUTPUT_ROW_KINDS.STRUCTURED_EVENT:
       if (row.diff) {
         return row.diff.renderPlan.viewType === "split"
           ? "Diff"
@@ -29,31 +30,31 @@ function getScrollSeekRowLabel(row: OutputRenderRow): string {
         return "Tool call";
       }
       return row.event.type;
-    case "cli-header":
+    case OUTPUT_ROW_KINDS.CLI_HEADER:
       return row.stepLabel;
-    case "cli-command":
+    case OUTPUT_ROW_KINDS.CLI_COMMAND:
       return "Command";
-    case "script-command":
+    case OUTPUT_ROW_KINDS.SCRIPT_COMMAND:
       return "Script command";
-    case "plain-response":
+    case OUTPUT_ROW_KINDS.PLAIN_RESPONSE:
       return "Response";
-    case "script-output":
+    case OUTPUT_ROW_KINDS.SCRIPT_OUTPUT:
       return "Script output";
-    case "prompt":
+    case OUTPUT_ROW_KINDS.PROMPT:
       return "Prompt";
-    case "status":
+    case OUTPUT_ROW_KINDS.STATUS:
       return "Status";
-    case "stats":
+    case OUTPUT_ROW_KINDS.STATS:
       return "Stats";
-    case "script-verdict":
+    case OUTPUT_ROW_KINDS.SCRIPT_VERDICT:
       return "Script verdict";
-    case "attempt-group-summary":
+    case OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY:
       return "Attempts";
-    case "error":
+    case OUTPUT_ROW_KINDS.ERROR:
       return "Error";
-    case "step-anchor":
+    case OUTPUT_ROW_KINDS.STEP_ANCHOR:
       return "Step";
-    case "final-step-label":
+    case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
       return row.label;
   }
 }
@@ -62,10 +63,10 @@ export function shouldRenderScrollSeekPlaceholder(
   row: OutputRenderRow
 ): boolean {
   switch (row.rowKind) {
-    case "plain-response":
-    case "script-output":
+    case OUTPUT_ROW_KINDS.PLAIN_RESPONSE:
+    case OUTPUT_ROW_KINDS.SCRIPT_OUTPUT:
       return row.text.length >= OUTPUT_SCROLL_SEEK_TEXT_PLACEHOLDER_MIN_CHARS;
-    case "structured-event":
+    case OUTPUT_ROW_KINDS.STRUCTURED_EVENT:
       if (row.diff || row.toolCall) {
         return true;
       }

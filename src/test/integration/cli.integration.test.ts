@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { EXTENSION_IDENTIFIERS } from "../../types/DashboardConstants";
 
 /**
  * Integration Tests for CopilotCommandLineIntegration
@@ -16,7 +17,8 @@ suite("CLI Integration Tests", () => {
     const allExtensions = vscode.extensions.all;
     const extension = allExtensions.find(
       (ext) =>
-        ext.id === "fuzzynova.ctrlyoke" || ext.packageJSON.name === "ctrlyoke"
+        ext.id === EXTENSION_IDENTIFIERS.ID ||
+        ext.packageJSON.name === EXTENSION_IDENTIFIERS.PACKAGE_NAME
     );
 
     assert.ok(extension, "ctrlyoke extension must be loaded");
@@ -30,7 +32,8 @@ suite("CLI Integration Tests", () => {
     const allExtensions = vscode.extensions.all;
     const extension = allExtensions.find(
       (ext) =>
-        ext.id === "fuzzynova.ctrlyoke" || ext.packageJSON.name === "ctrlyoke"
+        ext.id === EXTENSION_IDENTIFIERS.ID ||
+        ext.packageJSON.name === EXTENSION_IDENTIFIERS.PACKAGE_NAME
     );
     assert.ok(extension, "Extension should be loaded");
     assert.strictEqual(extension.isActive, true, "Extension should be active");
@@ -79,7 +82,8 @@ suite("CLI Integration Tests", () => {
     const allExtensions = vscode.extensions.all;
     const extension = allExtensions.find(
       (ext) =>
-        ext.id === "fuzzynova.ctrlyoke" || ext.packageJSON.name === "ctrlyoke"
+        ext.id === EXTENSION_IDENTIFIERS.ID ||
+        ext.packageJSON.name === EXTENSION_IDENTIFIERS.PACKAGE_NAME
     );
     assert.ok(extension, "Extension should be loaded");
     assert.strictEqual(extension.isActive, true, "Extension should be active");

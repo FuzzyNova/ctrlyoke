@@ -1,3 +1,4 @@
+import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { HEADER_BUTTON_SIZES } from "@/constants";
@@ -103,7 +104,11 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (!isOpen) {
-        if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+        if (
+          e.key === "ArrowDown" ||
+          e.key === KEYBOARD_KEYS.ENTER ||
+          e.key === " "
+        ) {
           e.preventDefault();
           openedWithKeyboardRef.current = true;
           setIsOpen(true);
@@ -139,7 +144,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
           }
           break;
 
-        case "Enter":
+        case KEYBOARD_KEYS.ENTER:
         case " ":
           e.preventDefault();
           if (focusedIndex >= 0 && !options[focusedIndex]?.disabled) {
@@ -150,7 +155,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
           }
           break;
 
-        case "Escape":
+        case KEYBOARD_KEYS.ESCAPE:
           e.preventDefault();
           setIsOpen(false);
           setFocusedIndex(-1);

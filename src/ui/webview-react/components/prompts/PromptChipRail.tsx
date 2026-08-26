@@ -34,7 +34,7 @@ import {
   STEP_STATUS,
   type StepStatus,
 } from "../../types/messages";
-import { STEP_TYPES } from "@root/types/DashboardConstants";
+import { KEYBOARD_KEYS, STEP_TYPES } from "@root/types/DashboardConstants";
 import {
   getStepAccentClass,
   isExecutionBusy,
@@ -101,7 +101,7 @@ function ChipContent({
       tabIndex={0}
       onClick={onChipClick}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
           e.preventDefault();
           onChipClick();
         }
@@ -191,7 +191,7 @@ function FinalStepChip({
       tabIndex={0}
       onClick={onChipClick}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") {
           e.preventDefault();
           onChipClick();
         }
@@ -366,7 +366,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
         aria-label="Expand prompts"
         title="Expand prompts"
         onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") onExpand();
+          if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ") onExpand();
         }}
       >
         <i className="codicon codicon-chevron-right text-xs text-description-fg" />
@@ -393,7 +393,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
         }}
         {...bgLongPressHandlers}
         onKeyDown={(e) => {
-          if (e.key === "Escape") {
+          if (e.key === KEYBOARD_KEYS.ESCAPE) {
             deselect();
           }
         }}

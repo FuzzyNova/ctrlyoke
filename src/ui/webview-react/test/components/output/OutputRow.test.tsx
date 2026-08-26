@@ -13,6 +13,8 @@ import {
 import {
   ATTEMPT_COST_CONFIDENCE,
   ATTEMPT_COST_SOURCES,
+  OUTPUT_ROW_KINDS,
+  SCRIPT_VERDICT_OUTCOMES,
 } from "@root/types/DashboardConstants";
 import { useSettingsStore } from "@store/settingsStore";
 
@@ -31,7 +33,7 @@ function buildBashRow(
     key: "row-bash",
     target: TARGET,
     estimateSize: 0,
-    rowKind: "structured-event",
+    rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
     event: {
       type: CLI_EVENT_TYPES.BASH_COMMAND,
       data: {
@@ -57,7 +59,7 @@ function buildToolCallRow(
     key: "row-tool",
     target: TARGET,
     estimateSize: 0,
-    rowKind: "structured-event",
+    rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
     event: {
       type: CLI_EVENT_TYPES.TOOL_CALL,
       data: { name, parameters: {}, result },
@@ -96,7 +98,7 @@ function buildStatsRow(tokens: TokenStats): OutputRenderRow {
     key: "row-stats",
     target: TARGET,
     estimateSize: 24,
-    rowKind: "stats",
+    rowKind: OUTPUT_ROW_KINDS.STATS,
     output: {
       prompt: "prompt",
       response: "response",
@@ -197,7 +199,7 @@ describe("OutputRow script commands", () => {
       key: "row-script-command",
       target: TARGET,
       estimateSize: 0,
-      rowKind: "script-command",
+      rowKind: OUTPUT_ROW_KINDS.SCRIPT_COMMAND,
       command: "npm test",
       workingDirectory: "/workspace",
     };
@@ -222,7 +224,7 @@ describe("OutputRow collapsed attempt groups", () => {
           key: "attempt-group-summary",
           target: TARGET,
           estimateSize: 36,
-          rowKind: "attempt-group-summary",
+          rowKind: OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY,
           groupKey: "queue:0:run0",
           attemptCount: 3,
           total: 410_000,
@@ -241,24 +243,29 @@ describe("OutputRow collapsed attempt groups", () => {
 
 describe("OutputRow auto-expand on hidden active match", () => {
   it.each([
-    ["passed", "✔ Passed"],
-    ["failed", "✖ Failed"],
-    ["errored", "⚠ Errored"],
+    [SCRIPT_VERDICT_OUTCOMES.PASSED, "✔ Passed"],
+    [SCRIPT_VERDICT_OUTCOMES.FAILED, "✖ Failed"],
+    [SCRIPT_VERDICT_OUTCOMES.ERRORED, "⚠ Errored"],
   ] as const)("renders the %s verdict outcome", (outcome, label) => {
     const row: OutputRenderRow = {
       key: `verdict-${outcome}`,
       target: TARGET,
       estimateSize: 36,
-      rowKind: "script-verdict",
+      rowKind: OUTPUT_ROW_KINDS.SCRIPT_VERDICT,
       expanded: false,
       verdict: {
         compareSource: "auto",
         expected: "ok",
-        actual: outcome === "errored" ? "spawn npm ENOENT" : "ok",
+        actual:
+          outcome === SCRIPT_VERDICT_OUTCOMES.ERRORED
+            ? "spawn npm ENOENT"
+            : "ok",
         actualSource: "stdout",
         outcome,
-        matchRule: outcome === "passed" ? "exact" : "none",
-        action: outcome === "failed" ? "retry" : "continue",
+        matchRule:
+          outcome === SCRIPT_VERDICT_OUTCOMES.PASSED ? "exact" : "none",
+        action:
+          outcome === SCRIPT_VERDICT_OUTCOMES.FAILED ? "retry" : "continue",
         durationMs: 1200,
       },
     };
@@ -274,7 +281,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
       key: "verdict-exit-code",
       target: TARGET,
       estimateSize: 36,
-      rowKind: "script-verdict",
+      rowKind: OUTPUT_ROW_KINDS.SCRIPT_VERDICT,
       expanded: false,
       verdict: {
         compareSource: "auto",
@@ -282,7 +289,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
         actual: "1",
         actualSource: "exitCode",
         exitCode: 1,
-        outcome: "failed",
+        outcome: SCRIPT_VERDICT_OUTCOMES.FAILED,
         matchRule: "none",
         action: "stopWorkflow",
         durationMs: 130_600,
@@ -314,14 +321,14 @@ describe("OutputRow auto-expand on hidden active match", () => {
       key: "verdict-truncated",
       target: TARGET,
       estimateSize: 36,
-      rowKind: "script-verdict",
+      rowKind: OUTPUT_ROW_KINDS.SCRIPT_VERDICT,
       expanded: false,
       verdict: {
         compareSource: "stdout",
         expected: "PASS",
         actual,
         actualSource: "stdout",
-        outcome: "failed",
+        outcome: SCRIPT_VERDICT_OUTCOMES.FAILED,
         matchRule: "substring",
         action: "stopWorkflow",
         durationMs: 100,
@@ -350,7 +357,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
       key: `header-${source}-${attemptIndex}`,
       target: TARGET,
       estimateSize: 44,
-      rowKind: "cli-header",
+      rowKind: OUTPUT_ROW_KINDS.CLI_HEADER,
       output: {
         prompt: "",
         response: "",
@@ -647,7 +654,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
       key: "row-prompt",
       target: TARGET,
       estimateSize: 0,
-      rowKind: "prompt",
+      rowKind: OUTPUT_ROW_KINDS.PROMPT,
       text: "Review @src/app.ts and #sym:src/utils.ts:runWorkflow:42-58 now",
     };
 
@@ -672,7 +679,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
       key: "row-prompt-chips",
       target: TARGET,
       estimateSize: 0,
-      rowKind: "prompt",
+      rowKind: OUTPUT_ROW_KINDS.PROMPT,
       text,
     };
 
@@ -698,7 +705,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
       key: "row-prompt-slash-tokens",
       target: TARGET,
       estimateSize: 0,
-      rowKind: "prompt",
+      rowKind: OUTPUT_ROW_KINDS.PROMPT,
       text: "using /skill:commit, commit just the changes with /mcp:playwright",
     };
 
@@ -735,7 +742,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
       key: "row-prompt-slash-tokens-plain",
       target: TARGET,
       estimateSize: 0,
-      rowKind: "prompt",
+      rowKind: OUTPUT_ROW_KINDS.PROMPT,
       text: "/skill:commit /mcp:playwright",
     };
 
@@ -767,7 +774,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
       key: "row-prompt-kind-chip",
       target: TARGET,
       estimateSize: 0,
-      rowKind: "prompt",
+      rowKind: OUTPUT_ROW_KINDS.PROMPT,
       text: "Review #sym.class:src/app.ts:Widget:2-8",
     };
 
@@ -784,7 +791,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
       key: "row-prompt-links",
       target: TARGET,
       estimateSize: 0,
-      rowKind: "prompt",
+      rowKind: OUTPUT_ROW_KINDS.PROMPT,
       text: "Open @src/app.ts and $previous",
     };
 
@@ -801,7 +808,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
       key: "row-context",
       target: TARGET,
       estimateSize: 0,
-      rowKind: "prompt",
+      rowKind: OUTPUT_ROW_KINDS.PROMPT,
       text: "Use $previous",
     };
 
@@ -823,7 +830,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
       key: "row-prompt-find",
       target: TARGET,
       estimateSize: 0,
-      rowKind: "prompt",
+      rowKind: OUTPUT_ROW_KINDS.PROMPT,
       text,
     };
     const start = text.indexOf("webview-react");
@@ -859,7 +866,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
       key: "row-prompt-fenced",
       target: TARGET,
       estimateSize: 0,
-      rowKind: "prompt",
+      rowKind: OUTPUT_ROW_KINDS.PROMPT,
       text: "Use @src/app.ts here\n```\n@src/ignored.ts\n```",
     };
 
@@ -879,7 +886,7 @@ describe("OutputRow auto-expand on hidden active match", () => {
       key: "row-error",
       target: TARGET,
       estimateSize: 0,
-      rowKind: "error",
+      rowKind: OUTPUT_ROW_KINDS.ERROR,
       errorMessage: "Stopped by user",
       timestamp: "12:03:21",
     };
@@ -896,12 +903,17 @@ describe("OutputRow auto-expand on hidden active match", () => {
 
   describe("script output rows", () => {
     const buildScriptOutputRow = (
-      overrides: Partial<Extract<OutputRenderRow, { rowKind: "script-output" }>>
+      overrides: Partial<
+        Extract<
+          OutputRenderRow,
+          { rowKind: typeof OUTPUT_ROW_KINDS.SCRIPT_OUTPUT }
+        >
+      >
     ): OutputRenderRow => ({
       key: "row-script-output",
       target: TARGET,
       estimateSize: 0,
-      rowKind: "script-output",
+      rowKind: OUTPUT_ROW_KINDS.SCRIPT_OUTPUT,
       text: "line 1\nline 2",
       isFirstSegment: true,
       isLastSegment: true,

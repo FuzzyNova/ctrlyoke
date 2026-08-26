@@ -1,3 +1,4 @@
+import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
 import React from "react";
 import { useEditorStore } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
@@ -72,13 +73,13 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
       disabled={disabled}
     >
       <CustomSelect
-        value={properties.model ?? "default"}
+        value={properties.model ?? INHERIT_DEFAULT_OPTION}
         onChange={(v) => {
-          setProperty("model", v === "default" ? undefined : v);
+          setProperty("model", v === INHERIT_DEFAULT_OPTION ? undefined : v);
           setFooterOpenPicker(null);
         }}
         options={[
-          { value: "default", label: defaultModelLabel },
+          { value: INHERIT_DEFAULT_OPTION, label: defaultModelLabel },
           ...(models.length === 0
             ? [{ value: "", label: "Loading models...", disabled: true }]
             : models.map((m) => ({ value: m.value, label: m.label }))),
@@ -87,7 +88,7 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
         hiddenValues={hiddenDropdownOptions[modelNamespace] ?? []}
         onHideOption={(v) => hideDropdownOption(modelNamespace, v)}
         onUnhideOption={(v) => unhideDropdownOption(modelNamespace, v)}
-        nonHideableValues={["default", ""]}
+        nonHideableValues={[INHERIT_DEFAULT_OPTION, ""]}
         dropdownMaxHeight="300px"
         inline={true}
       />

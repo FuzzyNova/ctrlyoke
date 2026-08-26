@@ -8,7 +8,10 @@ import type {
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import type { WorkflowExecutionPreview } from "@root/types/ExecutionPreviewTypes";
 import { sendMessage } from "../hooks/useMessageHandler";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  PREVIEW_SCOPES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 
 export type ExecutionPreviewStatus = "checking" | "ready";
 
@@ -53,8 +56,9 @@ function sameScope(
 ): boolean {
   return (
     left.kind === right.kind &&
-    (left.kind !== "step" ||
-      (right.kind === "step" && left.stepIndex === right.stepIndex))
+    (left.kind !== PREVIEW_SCOPES.STEP ||
+      (right.kind === PREVIEW_SCOPES.STEP &&
+        left.stepIndex === right.stepIndex))
   );
 }
 

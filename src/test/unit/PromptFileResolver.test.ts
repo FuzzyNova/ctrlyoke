@@ -9,6 +9,7 @@ import {
   type PromptFileResolution,
 } from "../../core/PromptFileResolver";
 import type { ResolverWorkspaceFolder } from "../../platform/WorkspaceRootResolver";
+import { PROMPT_FILE_RESOLUTION_STATUSES } from "../../types/DashboardConstants";
 
 suite("PromptFileResolver", () => {
   let workspaceRoot: string;
@@ -49,7 +50,7 @@ suite("PromptFileResolver", () => {
       filePath
     );
 
-    assert.strictEqual(result.status, "resolved");
+    assert.strictEqual(result.status, PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED);
     assert.strictEqual(result.path, filePath);
     assert.strictEqual(result.content, "  absolute content  ");
   });
@@ -64,7 +65,7 @@ suite("PromptFileResolver", () => {
       sourceFile
     );
 
-    assert.strictEqual(result.status, "resolved");
+    assert.strictEqual(result.status, PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED);
     assert.strictEqual(result.path, promptFile);
   });
 
@@ -80,7 +81,7 @@ suite("PromptFileResolver", () => {
       path.join(sourceDirectory, "missing.json")
     );
 
-    assert.strictEqual(result.status, "resolved");
+    assert.strictEqual(result.status, PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED);
     assert.strictEqual(result.path, promptFile);
   });
 
@@ -98,7 +99,7 @@ suite("PromptFileResolver", () => {
       path.join(sourceDirectory, "missing.json")
     );
 
-    assert.strictEqual(result.status, "resolved");
+    assert.strictEqual(result.status, PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED);
     assert.strictEqual(result.path, promptFile);
   });
 
@@ -112,7 +113,7 @@ suite("PromptFileResolver", () => {
       namedRoots,
     }).resolve("secondary/prompts/named.prompt.md");
 
-    assert.strictEqual(result.status, "resolved");
+    assert.strictEqual(result.status, PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED);
     assert.strictEqual(result.path, promptFile);
   });
 
@@ -127,10 +128,13 @@ suite("PromptFileResolver", () => {
     const empty = await resolver.resolve("./empty.prompt.md");
     const content = await resolver.resolve("./content.prompt.md");
 
-    assert.strictEqual(missing.status, "missing");
-    assert.strictEqual(empty.status, "empty");
+    assert.strictEqual(missing.status, PROMPT_FILE_RESOLUTION_STATUSES.MISSING);
+    assert.strictEqual(empty.status, PROMPT_FILE_RESOLUTION_STATUSES.EMPTY);
     assert.strictEqual(empty.content, " \n\t ");
-    assert.strictEqual(content.status, "resolved");
+    assert.strictEqual(
+      content.status,
+      PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED
+    );
     assert.strictEqual(content.content, "content");
   });
 
@@ -175,8 +179,8 @@ suite("PromptFileResolver", () => {
     const syncResolution = resolver.resolvePathSync("./same.prompt.md");
 
     if (
-      asyncResolution.status === "missing" ||
-      syncResolution.status === "missing"
+      asyncResolution.status === PROMPT_FILE_RESOLUTION_STATUSES.MISSING ||
+      syncResolution.status === PROMPT_FILE_RESOLUTION_STATUSES.MISSING
     ) {
       throw new Error("Expected the shared path to resolve");
     }
@@ -335,7 +339,7 @@ suite("PromptFileResolver", () => {
       workspaceRoot,
     }).resolve("./directory.prompt.md");
 
-    assert.strictEqual(result.status, "resolved");
+    assert.strictEqual(result.status, PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED);
     assert.strictEqual(result.path, fallback);
   });
 
@@ -352,8 +356,14 @@ suite("PromptFileResolver", () => {
       const relative = await resolver.resolve("../../outside.md", sourceFile);
       const absolute = await resolver.resolve(outsideFile, sourceFile);
 
-      assert.strictEqual(relative.status, "missing");
-      assert.strictEqual(absolute.status, "missing");
+      assert.strictEqual(
+        relative.status,
+        PROMPT_FILE_RESOLUTION_STATUSES.MISSING
+      );
+      assert.strictEqual(
+        absolute.status,
+        PROMPT_FILE_RESOLUTION_STATUSES.MISSING
+      );
     } finally {
       await fs.rm(outsideFile, { force: true });
     }
@@ -376,7 +386,10 @@ suite("PromptFileResolver", () => {
       });
       const resolution = await resolver.resolve(statePrompt);
 
-      assert.strictEqual(resolution.status, "resolved");
+      assert.strictEqual(
+        resolution.status,
+        PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED
+      );
       assert.strictEqual(resolution.path, statePrompt);
     } finally {
       await fs.rm(ownStateRoot, { recursive: true, force: true });
@@ -398,7 +411,10 @@ suite("PromptFileResolver", () => {
         path.join(outsideDirectory, "workflow.yaml")
       );
 
-      assert.strictEqual(resolution.status, "missing");
+      assert.strictEqual(
+        resolution.status,
+        PROMPT_FILE_RESOLUTION_STATUSES.MISSING
+      );
       assert.ok(
         resolution.candidates.every(
           (candidate) => !candidate.startsWith(outsideDirectory)
@@ -423,7 +439,10 @@ suite("PromptFileResolver", () => {
       path.join(path.dirname(workspaceRoot), "outside", "workflow.yaml")
     );
 
-    assert.strictEqual(resolution.status, "missing");
+    assert.strictEqual(
+      resolution.status,
+      PROMPT_FILE_RESOLUTION_STATUSES.MISSING
+    );
     assert.deepStrictEqual(resolution.candidates, []);
   });
 

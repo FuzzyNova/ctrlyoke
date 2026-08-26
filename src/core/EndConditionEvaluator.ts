@@ -10,6 +10,7 @@ import {
   type ScriptMatchRule,
 } from "../types/CtrlYokeTypes";
 import {
+  BOOLEAN_STRING_VALUES,
   COMPARE_SOURCES,
   END_CONDITION_SCRIPT_TYPES,
   type EndConditionScriptType,
@@ -675,7 +676,7 @@ export class EndConditionEvaluator {
     switch (compareSource) {
       case COMPARE_SOURCES.EXIT_CODE: {
         // Directly compare exit code — boolean keywords or exact integer string
-        if (expectedLower === "true") {
+        if (expectedLower === BOOLEAN_STRING_VALUES.TRUE) {
           return {
             passed: result.exitCode === 0,
             matchRule: result.exitCode === 0 ? "exitCode" : "none",
@@ -683,7 +684,7 @@ export class EndConditionEvaluator {
             actualSource,
           };
         }
-        if (expectedLower === "false") {
+        if (expectedLower === BOOLEAN_STRING_VALUES.FALSE) {
           const passed = result.exitCode !== undefined && result.exitCode !== 0;
           return {
             passed,
@@ -732,7 +733,8 @@ export class EndConditionEvaluator {
           actualSource
         );
         const isBooleanReturn =
-          expectedLower === "true" || expectedLower === "false";
+          expectedLower === BOOLEAN_STRING_VALUES.TRUE ||
+          expectedLower === BOOLEAN_STRING_VALUES.FALSE;
         return {
           ...comparison,
           passed: isBooleanReturn
@@ -756,7 +758,8 @@ export class EndConditionEvaluator {
     if (returns === undefined) return "exitCode";
 
     const expectedLower = returns.trim().toLowerCase();
-    return expectedLower === "true" || expectedLower === "false"
+    return expectedLower === BOOLEAN_STRING_VALUES.TRUE ||
+      expectedLower === BOOLEAN_STRING_VALUES.FALSE
       ? "exitCode"
       : "stdout";
   }
@@ -796,19 +799,19 @@ export class EndConditionEvaluator {
     // This prevents a script that explicitly prints "false" from being treated as passing
     // just because it exited cleanly (exit code 0).
     const isExplicitTrue =
-      actual === "true" ||
+      actual === BOOLEAN_STRING_VALUES.TRUE ||
       actual === "1" ||
       actual === "yes" ||
       actual === "pass" ||
       actual === "passed";
     const isExplicitFalse =
-      actual === "false" ||
+      actual === BOOLEAN_STRING_VALUES.FALSE ||
       actual === "0" ||
       actual === "no" ||
       actual === "fail" ||
       actual === "failed";
 
-    if (expected === "true") {
+    if (expected === BOOLEAN_STRING_VALUES.TRUE) {
       if (isExplicitFalse) return matched(false, "boolean"); // Explicit "false" stdout overrides exit code
       if (isExplicitTrue) return matched(true, "boolean"); // Explicit "true" stdout (already caught by exact match above, kept for clarity)
       // No explicit boolean output — fall back to exit code
@@ -818,7 +821,7 @@ export class EndConditionEvaluator {
       return matched(false, "boolean");
     }
 
-    if (expected === "false") {
+    if (expected === BOOLEAN_STRING_VALUES.FALSE) {
       if (isExplicitTrue) return matched(false, "boolean"); // Explicit "true" stdout overrides exit code
       if (isExplicitFalse) return matched(true, "boolean"); // Explicit "false" stdout
       // No explicit boolean output — fall back to exit code

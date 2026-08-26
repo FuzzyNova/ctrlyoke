@@ -1241,7 +1241,7 @@ export class ExecutionPreviewService {
 
   private toPropertySource(source: string | undefined): PreviewPropertySource {
     switch (source) {
-      case "prompt":
+      case PREVIEW_PROPERTY_SOURCES.PROMPT:
         return PREVIEW_PROPERTY_SOURCES.PROMPT;
       case "workflow":
         return PREVIEW_PROPERTY_SOURCES.WORKFLOW;

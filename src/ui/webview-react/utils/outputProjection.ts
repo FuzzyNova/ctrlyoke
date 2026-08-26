@@ -11,6 +11,8 @@ import {
 } from "../types/messages";
 import {
   EXECUTION_PHASES,
+  OUTPUT_MESSAGE_TYPES,
+  type OutputMessageType,
   type ExecutionPhase,
 } from "@root/types/DashboardConstants";
 import { formatTime } from "./outputUtils";
@@ -21,7 +23,7 @@ export interface OutputMessageTarget {
 }
 
 export interface OutputMessage {
-  type: "status" | "cli";
+  type: OutputMessageType;
   target: OutputMessageTarget;
   timestamp: number;
   sequence?: number;
@@ -87,10 +89,10 @@ export function mapOrderedHistoryEntriesToMessages(
 
   for (const entry of orderedEntries) {
     switch (entry.kind) {
-      case "status": {
+      case OUTPUT_HISTORY_KINDS.STATUS: {
         const timestampMs = entry.statusMessage.timestamp ?? entry.timestampMs;
         messages.push({
-          type: "status",
+          type: OUTPUT_MESSAGE_TYPES.STATUS,
           target: toOutputMessageTarget(entry.target),
           timestamp: timestampMs,
           sequence: entry.sequence,
@@ -103,13 +105,13 @@ export function mapOrderedHistoryEntriesToMessages(
         });
         break;
       }
-      case "cli": {
+      case OUTPUT_HISTORY_KINDS.CLI: {
         const target = toOutputMessageTarget(entry.target);
         const entryIdentity = getCliEntryIdentity(entry);
         const identity = cliEntryIdentityKey(entryIdentity);
         const existingIndex = cliMessageIndexByIdentity.get(identity);
         const message: OutputMessage = {
-          type: "cli",
+          type: OUTPUT_MESSAGE_TYPES.CLI,
           target,
           timestamp: entry.timestampMs,
           sequence: entry.sequence,

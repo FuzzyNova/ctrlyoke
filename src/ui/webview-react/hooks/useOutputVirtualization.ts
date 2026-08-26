@@ -28,6 +28,7 @@ import {
 import { OUTPUT_USER_SCROLL_INPUT_GRACE_MS } from "@utils/outputScrollConstants";
 import { shouldSyncMeasurementCorrection } from "@utils/outputAutoscroll";
 import type { OutputScrollTarget } from "@store/uiStore";
+import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 import {
   estimateOutputRowHeight,
   type OutputRenderRow,
@@ -125,21 +126,21 @@ function getZeroHeightStructuredEventReason(
 
 function getRowHeightBucket(row: OutputRenderRow): string {
   switch (row.rowKind) {
-    case "step-anchor":
-    case "final-step-label":
-    case "status":
-    case "cli-header":
-    case "prompt":
-    case "cli-command":
-    case "script-command":
-    case "error":
-    case "plain-response":
-    case "script-output":
-    case "script-verdict":
-    case "attempt-group-summary":
-    case "stats":
+    case OUTPUT_ROW_KINDS.STEP_ANCHOR:
+    case OUTPUT_ROW_KINDS.FINAL_STEP_LABEL:
+    case OUTPUT_ROW_KINDS.STATUS:
+    case OUTPUT_ROW_KINDS.CLI_HEADER:
+    case OUTPUT_ROW_KINDS.PROMPT:
+    case OUTPUT_ROW_KINDS.CLI_COMMAND:
+    case OUTPUT_ROW_KINDS.SCRIPT_COMMAND:
+    case OUTPUT_ROW_KINDS.ERROR:
+    case OUTPUT_ROW_KINDS.PLAIN_RESPONSE:
+    case OUTPUT_ROW_KINDS.SCRIPT_OUTPUT:
+    case OUTPUT_ROW_KINDS.SCRIPT_VERDICT:
+    case OUTPUT_ROW_KINDS.ATTEMPT_GROUP_SUMMARY:
+    case OUTPUT_ROW_KINDS.STATS:
       return row.rowKind;
-    case "structured-event":
+    case OUTPUT_ROW_KINDS.STRUCTURED_EVENT:
       if (row.diff) {
         return `structured-event:diff:${row.diff.renderPlan.viewType}:${row.diff.isCollapsed ? "collapsed" : "expanded"}`;
       }
@@ -279,7 +280,7 @@ export function useOutputVirtualization({
       if (!row) return measuredHeight;
 
       const zeroHeightReason =
-        row.rowKind === "structured-event"
+        row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT
           ? getZeroHeightStructuredEventReason(row)
           : null;
       if (
@@ -352,7 +353,7 @@ export function useOutputVirtualization({
         if (absDelta > 40 && pctDelta > 0.1) {
           const extras: Record<string, unknown> = {};
           if (
-            row.rowKind === "structured-event" &&
+            row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
             row.event.type === CLI_EVENT_TYPES.TEXT
           ) {
             const text = (row.event.data as { text?: string }).text ?? "";
@@ -362,7 +363,7 @@ export function useOutputVirtualization({
             extras.hasList = /^\s*[-*+]\s/m.test(text);
             extras.textPreview = text.slice(0, 100).replace(/\n/g, "↵");
           } else if (
-            row.rowKind === "structured-event" &&
+            row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
             (row.event.type === CLI_EVENT_TYPES.TOOL_CALL ||
               row.event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL)
           ) {
@@ -378,7 +379,7 @@ export function useOutputVirtualization({
             extras.resultLength =
               tc.result != null ? JSON.stringify(tc.result).length : 0;
           } else if (
-            row.rowKind === "structured-event" &&
+            row.rowKind === OUTPUT_ROW_KINDS.STRUCTURED_EVENT &&
             row.event.type === CLI_EVENT_TYPES.BASH_COMMAND
           ) {
             const bc = row.event.data as {
@@ -389,8 +390,8 @@ export function useOutputVirtualization({
             extras.outputLength = (bc.output ?? "").length;
             extras.errorLength = (bc.error ?? "").length;
           } else if (
-            row.rowKind === "cli-command" ||
-            row.rowKind === "script-command"
+            row.rowKind === OUTPUT_ROW_KINDS.CLI_COMMAND ||
+            row.rowKind === OUTPUT_ROW_KINDS.SCRIPT_COMMAND
           ) {
             const fullText = `${row.workingDirectory || "workspace"}> ${row.command}`;
             extras.commandLength = fullText.length;

@@ -7,6 +7,7 @@ import {
 } from "@components/workspace-viewer/WorkspaceFileEditor";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useUiStore } from "@store/uiStore";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 
 describe("WorkspaceFileEditor link navigation", () => {
   beforeAll(() => {
@@ -76,8 +77,8 @@ describe("WorkspaceFileEditor link navigation", () => {
 
     const nav = useWorkspaceViewerStore.getState().pendingNavigation;
     expect(nav).not.toBeNull();
-    expect(nav?.type).toBe("file");
-    if (nav?.type === "file") {
+    expect(nav?.type).toBe(WORKSPACE_ENTRY_KINDS.FILE);
+    if (nav?.type === WORKSPACE_ENTRY_KINDS.FILE) {
       expect(nav.filePath).toBe("src/app.ts");
       expect(nav.startLine).toBe(10);
       expect(nav.endLine).toBe(20);
@@ -110,8 +111,8 @@ describe("WorkspaceFileEditor link navigation", () => {
 
     const nav = useWorkspaceViewerStore.getState().pendingNavigation;
     expect(nav).not.toBeNull();
-    expect(nav?.type).toBe("file");
-    if (nav?.type === "file") {
+    expect(nav?.type).toBe(WORKSPACE_ENTRY_KINDS.FILE);
+    if (nav?.type === WORKSPACE_ENTRY_KINDS.FILE) {
       expect(nav.filePath).toBe("src/utils.ts");
       expect(nav.startLine).toBe(42);
       expect(nav.endLine).toBe(58);
@@ -143,8 +144,8 @@ describe("WorkspaceFileEditor link navigation", () => {
     fireEvent.touchEnd(link);
 
     const nav = useWorkspaceViewerStore.getState().pendingNavigation;
-    expect(nav?.type).toBe("file");
-    if (nav?.type === "file") {
+    expect(nav?.type).toBe(WORKSPACE_ENTRY_KINDS.FILE);
+    if (nav?.type === WORKSPACE_ENTRY_KINDS.FILE) {
       expect(nav.filePath).toBe("src/my utils.ts");
       expect(nav.startLine).toBe(42);
       expect(nav.endLine).toBe(58);

@@ -25,6 +25,7 @@ import { MESSAGE_TYPES } from "@/types/messages";
 import {
   EXECUTION_STATES,
   HARNESS_IDS,
+  HISTORY_EVENT_KINDS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 
@@ -169,7 +170,9 @@ describe("HistorySearchDrawer filters", () => {
       query: "needle",
       limit: 50,
       filters: {
-        eventKinds: ALL_HISTORY_EVENT_KINDS.filter((kind) => kind !== "prompt"),
+        eventKinds: ALL_HISTORY_EVENT_KINDS.filter(
+          (kind) => kind !== HISTORY_EVENT_KINDS.PROMPT
+        ),
       },
     });
     expect(useUiStore.getState().historySearchNextCursor).toBeUndefined();

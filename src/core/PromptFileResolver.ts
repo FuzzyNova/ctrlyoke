@@ -10,6 +10,7 @@ import {
 import { evaluateFileAccess } from "../utils/FileAccessPolicy";
 import { looksLikeFilePath } from "../utils/promptPathUtils";
 import { resolveSourceRuntimeArtifacts } from "../utils/SourceRuntimeArtifactResolver";
+import { PROMPT_FILE_RESOLUTION_STATUSES } from "../types/DashboardConstants";
 
 export interface PromptFileResolverOptions {
   workspaceRoot?: string;
@@ -27,40 +28,40 @@ export interface PromptFileResolverOptions {
 
 export type PromptFilePathResolution =
   | {
-      status: "missing";
+      status: typeof PROMPT_FILE_RESOLUTION_STATUSES.MISSING;
       candidates: readonly string[];
     }
   | {
-      status: "unreadable";
+      status: typeof PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE;
       path: string;
       candidates: readonly string[];
       error: unknown;
     }
   | {
-      status: "resolved";
+      status: typeof PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED;
       path: string;
       candidates: readonly string[];
     };
 
 export type PromptFileResolution =
   | {
-      status: "missing";
+      status: typeof PROMPT_FILE_RESOLUTION_STATUSES.MISSING;
       candidates: readonly string[];
     }
   | {
-      status: "unreadable";
+      status: typeof PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE;
       path: string;
       candidates: readonly string[];
       error: unknown;
     }
   | {
-      status: "empty";
+      status: typeof PROMPT_FILE_RESOLUTION_STATUSES.EMPTY;
       path: string;
       candidates: readonly string[];
       content: string;
     }
   | {
-      status: "resolved";
+      status: typeof PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED;
       path: string;
       candidates: readonly string[];
       content: string;
@@ -71,7 +72,11 @@ export class PromptFileReferenceError extends Error {
     message: string,
     readonly resolution: Extract<
       PromptFileResolution,
-      { status: "missing" | "unreadable" }
+      {
+        status:
+          | typeof PROMPT_FILE_RESOLUTION_STATUSES.MISSING
+          | typeof PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE;
+      }
     >
   ) {
     super(message);
@@ -131,18 +136,26 @@ export class PromptFileResolver {
         candidates
       )
     );
-    if (readable.status !== "resolved") {
+    if (readable.status !== PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED) {
       return readable;
     }
 
     try {
       const content = await fsp.readFile(readable.path, "utf8");
       return content.trim().length === 0
-        ? { ...readable, status: "empty", content }
-        : { ...readable, status: "resolved", content };
+        ? {
+            ...readable,
+            status: PROMPT_FILE_RESOLUTION_STATUSES.EMPTY,
+            content,
+          }
+        : {
+            ...readable,
+            status: PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED,
+            content,
+          };
     } catch (error) {
       return {
-        status: "unreadable",
+        status: PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE,
         path: readable.path,
         candidates,
         error,
@@ -167,12 +180,15 @@ export class PromptFileResolver {
 
     const reference = promptValue.trim();
     const resolution = await this.resolve(reference, sourceDefinitionPath);
-    if (resolution.status === "resolved" || resolution.status === "empty") {
+    if (
+      resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED ||
+      resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.EMPTY
+    ) {
       return resolution.content;
     }
 
     const detail =
-      resolution.status === "missing"
+      resolution.status === PROMPT_FILE_RESOLUTION_STATUSES.MISSING
         ? (getLegacyRunHistoryReferenceGuidance(reference) ??
           "could not be found")
         : `could not be read: ${getErrorMessage(resolution.error)}`;
@@ -249,7 +265,12 @@ export class PromptFileResolver {
         if (isMissingPathError(error)) {
           continue;
         }
-        return { status: "unreadable", path: candidate, candidates, error };
+        return {
+          status: PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE,
+          path: candidate,
+          candidates,
+          error,
+        };
       }
 
       if (!stats.isFile()) {
@@ -258,13 +279,22 @@ export class PromptFileResolver {
 
       try {
         fs.accessSync(candidate, fs.constants.R_OK);
-        return { status: "resolved", path: candidate, candidates };
+        return {
+          status: PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED,
+          path: candidate,
+          candidates,
+        };
       } catch (error) {
-        return { status: "unreadable", path: candidate, candidates, error };
+        return {
+          status: PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE,
+          path: candidate,
+          candidates,
+          error,
+        };
       }
     }
 
-    return { status: "missing", candidates };
+    return { status: PROMPT_FILE_RESOLUTION_STATUSES.MISSING, candidates };
   }
 
   private getCandidates(
@@ -356,7 +386,12 @@ export class PromptFileResolver {
         if (isMissingPathError(error)) {
           continue;
         }
-        return { status: "unreadable", path: candidate, candidates, error };
+        return {
+          status: PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE,
+          path: candidate,
+          candidates,
+          error,
+        };
       }
 
       if (!stats.isFile()) {
@@ -365,13 +400,22 @@ export class PromptFileResolver {
 
       try {
         await fsp.access(candidate, fs.constants.R_OK);
-        return { status: "resolved", path: candidate, candidates };
+        return {
+          status: PROMPT_FILE_RESOLUTION_STATUSES.RESOLVED,
+          path: candidate,
+          candidates,
+        };
       } catch (error) {
-        return { status: "unreadable", path: candidate, candidates, error };
+        return {
+          status: PROMPT_FILE_RESOLUTION_STATUSES.UNREADABLE,
+          path: candidate,
+          candidates,
+          error,
+        };
       }
     }
 
-    return { status: "missing", candidates };
+    return { status: PROMPT_FILE_RESOLUTION_STATUSES.MISSING, candidates };
   }
 
   private getSourceRuntimeCandidate(trimmedPath: string): string | undefined {

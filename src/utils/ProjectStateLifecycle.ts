@@ -13,12 +13,18 @@ import {
 import { projectStateRoot } from "./ProjectStatePaths";
 import { pathsEqual } from "./PathCasing";
 import { isOwnerStale } from "./LockSafetyPrimitives";
-import { RUN_HISTORY_LOCATIONS } from "../types/DashboardConstants";
+import {
+  PROJECT_RUNNER_STATUSES,
+  PROJECT_STATE_PATH_STATUSES,
+  RUN_HISTORY_LOCATIONS,
+} from "../types/DashboardConstants";
 import type { WorkflowRunnerLock } from "../types/CtrlYokeTypes";
 import * as WorkflowPaths from "./WorkflowPaths";
 
-export type ProjectStatePathStatus = "present" | "missing" | "unknown";
-export type ProjectRunnerStatus = "none" | "live" | "unknown";
+export type ProjectStatePathStatus =
+  (typeof PROJECT_STATE_PATH_STATUSES)[keyof typeof PROJECT_STATE_PATH_STATUSES];
+export type ProjectRunnerStatus =
+  (typeof PROJECT_RUNNER_STATUSES)[keyof typeof PROJECT_RUNNER_STATUSES];
 
 export interface UserProjectInspection {
   projectRoot: string;
@@ -71,8 +77,8 @@ export async function pruneUserProjects(
     if (!dryRun) {
       for (const inspection of inspections) {
         if (
-          inspection.statePathStatus !== "missing" ||
-          inspection.runnerStatus !== "none"
+          inspection.statePathStatus !== PROJECT_STATE_PATH_STATUSES.MISSING ||
+          inspection.runnerStatus !== PROJECT_RUNNER_STATUSES.NONE
         ) {
           continue;
         }
@@ -83,15 +89,16 @@ export async function pruneUserProjects(
         const metadata = await readProjectStateMetadata(inspection.projectRoot);
         if (
           !metadata ||
-          (await classifyStatePath(metadata.statePath)) !== "missing"
+          (await classifyStatePath(metadata.statePath)) !==
+            PROJECT_STATE_PATH_STATUSES.MISSING
         ) {
           continue;
         }
         const runner = await inspectRunner(inspection.projectRoot);
-        if (runner.status === "live") {
+        if (runner.status === PROJECT_RUNNER_STATUSES.LIVE) {
           continue;
         }
-        if (runner.status === "unknown") {
+        if (runner.status === PROJECT_RUNNER_STATUSES.UNKNOWN) {
           continue;
         }
 
@@ -301,21 +308,22 @@ async function inspectUserProjectsUnderLock(
     if (!metadata) {
       inspections.push({
         projectRoot,
-        statePathStatus: "unknown",
-        runnerStatus: "unknown",
+        statePathStatus: PROJECT_STATE_PATH_STATUSES.UNKNOWN,
+        runnerStatus: PROJECT_RUNNER_STATUSES.UNKNOWN,
         ...(reason ? { reason } : {}),
       });
       continue;
     }
 
-    let statePathStatus: ProjectStatePathStatus = "unknown";
+    let statePathStatus: ProjectStatePathStatus =
+      PROJECT_STATE_PATH_STATUSES.UNKNOWN;
     try {
       statePathStatus = await classifyStatePath(metadata.statePath);
     } catch (error) {
       reason = error instanceof Error ? error.message : String(error);
     }
 
-    let runnerStatus: ProjectRunnerStatus = "unknown";
+    let runnerStatus: ProjectRunnerStatus = PROJECT_RUNNER_STATUSES.UNKNOWN;
     try {
       runnerStatus = (await inspectRunner(projectRoot)).status;
     } catch (error) {
@@ -358,7 +366,7 @@ async function classifyStatePath(
 ): Promise<ProjectStatePathStatus> {
   try {
     await fs.stat(path.resolve(statePath));
-    return "present";
+    return PROJECT_STATE_PATH_STATUSES.PRESENT;
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT") {
@@ -367,24 +375,26 @@ async function classifyStatePath(
         resolvedStatePath.startsWith("\\\\") ||
         resolvedStatePath.startsWith("//")
       ) {
-        return "unknown";
+        return PROJECT_STATE_PATH_STATUSES.UNKNOWN;
       }
       let parent = path.dirname(resolvedStatePath);
       while (parent !== path.dirname(parent)) {
         try {
           const parentStats = await fs.stat(parent);
-          return parentStats.isDirectory() ? "missing" : "unknown";
+          return parentStats.isDirectory()
+            ? PROJECT_STATE_PATH_STATUSES.MISSING
+            : PROJECT_STATE_PATH_STATUSES.UNKNOWN;
         } catch (parentError) {
           const parentCode = (parentError as NodeJS.ErrnoException).code;
           if (parentCode !== "ENOENT") {
-            return "unknown";
+            return PROJECT_STATE_PATH_STATUSES.UNKNOWN;
           }
           parent = path.dirname(parent);
         }
       }
-      return "unknown";
+      return PROJECT_STATE_PATH_STATUSES.UNKNOWN;
     }
-    return "unknown";
+    return PROJECT_STATE_PATH_STATUSES.UNKNOWN;
   }
 }
 
@@ -394,7 +404,7 @@ async function inspectRunner(
   const runsRoot = WorkflowPaths.runsRootForProjectState(projectRoot);
   const runsStats = await lstatIfExists(runsRoot);
   if (!runsStats) {
-    return { status: "none" };
+    return { status: PROJECT_RUNNER_STATUSES.NONE };
   }
   if (runsStats.isSymbolicLink()) {
     throw new ProjectStateLifecycleError(
@@ -402,7 +412,7 @@ async function inspectRunner(
     );
   }
   if (!runsStats.isDirectory()) {
-    return { status: "unknown" };
+    return { status: PROJECT_RUNNER_STATUSES.UNKNOWN };
   }
 
   const lineages = await fs.readdir(runsRoot, { withFileTypes: true });
@@ -445,11 +455,11 @@ async function inspectRunner(
       );
     }
     if (!isOwnerStale(lock.pid, lock.lastHeartbeat)) {
-      return { status: "live", path: runnerPath };
+      return { status: PROJECT_RUNNER_STATUSES.LIVE, path: runnerPath };
     }
   }
 
-  return { status: "none" };
+  return { status: PROJECT_RUNNER_STATUSES.NONE };
 }
 
 async function refuseLiveOrUnknownRunner(
@@ -457,12 +467,12 @@ async function refuseLiveOrUnknownRunner(
   label: string
 ): Promise<void> {
   const runner = await inspectRunner(projectRoot);
-  if (runner.status === "live") {
+  if (runner.status === PROJECT_RUNNER_STATUSES.LIVE) {
     throw new ProjectStateLifecycleError(
       `Refusing to relink ${label} project with a live runner: ${runner.path}`
     );
   }
-  if (runner.status === "unknown") {
+  if (runner.status === PROJECT_RUNNER_STATUSES.UNKNOWN) {
     throw new ProjectStateLifecycleError(
       `Refusing to relink ${label} project because runner state is unknown: ${projectRoot}`
     );

@@ -13,6 +13,7 @@ import type {
   RegistryMcpEntry,
 } from "../types/WebviewMessageTypes";
 import { Log } from "./Log";
+import { MCP_TRANSPORTS, type McpTransport } from "../types/DashboardConstants";
 import { stripJsonComments } from "./JsoncUtils";
 import {
   getClaudeUserConfigPath,
@@ -102,7 +103,7 @@ function buildLocalEntry(
     args?: string[];
     env?: Record<string, string>;
     url?: string;
-    transport?: "streamable-http" | "sse";
+    transport?: McpTransport;
     headers?: Record<string, string>;
   }
 ): LocalMcpServerEntry | null {
@@ -137,16 +138,16 @@ function normalizeVscodeServerMap(
     }
 
     const entryType = value.type;
-    const isRemote = entryType === "http" || entryType === "sse";
+    const isRemote = entryType === "http" || entryType === MCP_TRANSPORTS.SSE;
     const entry = buildLocalEntry(id, source, filePath, {
       command: typeof value.command === "string" ? value.command : undefined,
       args: isStringArray(value.args) ? value.args : undefined,
       env: toStringRecord(value.env),
       url: typeof value.url === "string" ? value.url : undefined,
       transport: isRemote
-        ? entryType === "sse"
-          ? "sse"
-          : "streamable-http"
+        ? entryType === MCP_TRANSPORTS.SSE
+          ? MCP_TRANSPORTS.SSE
+          : MCP_TRANSPORTS.STREAMABLE_HTTP
         : undefined,
       headers: toStringRecord(value.headers),
     });
@@ -167,10 +168,10 @@ function normalizeClaudeServerMap(
 
     const entryType = value.type;
     const transport =
-      entryType === "sse"
-        ? "sse"
+      entryType === MCP_TRANSPORTS.SSE
+        ? MCP_TRANSPORTS.SSE
         : typeof value.url === "string"
-          ? "streamable-http"
+          ? MCP_TRANSPORTS.STREAMABLE_HTTP
           : undefined;
 
     const entry = buildLocalEntry(id, source, filePath, {
@@ -199,10 +200,10 @@ function normalizeCopilotServerMap(
     const entryType = value.type;
     const isLocal = entryType === "local" || entryType === "stdio";
     const transport =
-      entryType === "sse"
-        ? "sse"
+      entryType === MCP_TRANSPORTS.SSE
+        ? MCP_TRANSPORTS.SSE
         : entryType === "http"
-          ? "streamable-http"
+          ? MCP_TRANSPORTS.STREAMABLE_HTTP
           : undefined;
 
     const entry = buildLocalEntry(id, source, filePath, {
@@ -243,9 +244,9 @@ function normalizeQwenServerMap(
             : undefined,
       transport:
         typeof value.httpUrl === "string"
-          ? "streamable-http"
+          ? MCP_TRANSPORTS.STREAMABLE_HTTP
           : typeof value.url === "string"
-            ? "sse"
+            ? MCP_TRANSPORTS.SSE
             : undefined,
       headers: toStringRecord(value.headers),
     });
@@ -276,7 +277,7 @@ function normalizeAntigravityServerMap(
       args: isStringArray(value.args) ? value.args : undefined,
       env: toStringRecord(value.env),
       url: remoteUrl,
-      transport: remoteUrl ? "streamable-http" : undefined,
+      transport: remoteUrl ? MCP_TRANSPORTS.STREAMABLE_HTTP : undefined,
       headers: toStringRecord(value.headers),
     });
 
@@ -308,7 +309,7 @@ function normalizeOpenCodeServerMap(
       url: typeof value.url === "string" ? value.url : undefined,
       transport:
         entryType === "remote" && typeof value.url === "string"
-          ? "streamable-http"
+          ? MCP_TRANSPORTS.STREAMABLE_HTTP
           : undefined,
       headers: toStringRecord(value.headers),
     });
@@ -482,7 +483,7 @@ function normalizeCodexToml(
     args?: string[];
     env?: Record<string, string>;
     url?: string;
-    transport?: "streamable-http" | "sse";
+    transport?: McpTransport;
     headers?: Record<string, string>;
   } | null = null;
 
@@ -543,10 +544,13 @@ function normalizeCodexToml(
       (value.startsWith(`"`) || value.startsWith(`'`))
     ) {
       const transport = unquoteTomlString(value);
-      if (transport === "sse") {
-        currentConfig.transport = "sse";
-      } else if (transport === "streamable-http" || transport === "http") {
-        currentConfig.transport = "streamable-http";
+      if (transport === MCP_TRANSPORTS.SSE) {
+        currentConfig.transport = MCP_TRANSPORTS.SSE;
+      } else if (
+        transport === MCP_TRANSPORTS.STREAMABLE_HTTP ||
+        transport === "http"
+      ) {
+        currentConfig.transport = MCP_TRANSPORTS.STREAMABLE_HTTP;
       }
       continue;
     }
@@ -876,7 +880,9 @@ async function fetchMcpRegistry(
     if (firstRemote?.url) {
       entry.remoteUrl = firstRemote.url;
       entry.remoteTransport =
-        firstRemote.type === "sse" ? "sse" : "streamable-http";
+        firstRemote.type === MCP_TRANSPORTS.SSE
+          ? MCP_TRANSPORTS.SSE
+          : MCP_TRANSPORTS.STREAMABLE_HTTP;
       const headerDefs = (firstRemote.headers ?? []).filter((h) => h.name);
       if (headerDefs.length > 0) {
         entry.remoteHeaders = headerDefs.map((h) => ({

@@ -23,6 +23,7 @@ import {
   FINAL_STEP_PHASES,
   HARNESS_IDS,
   LOCK_STATUS,
+  WORKTREE_EDIT_KINDS,
   type HarnessId,
   type ExecutionState,
   type ExecutionPhase,
@@ -1263,7 +1264,7 @@ export class OutputHistoryManager {
           "utf8"
         )
       ) as import("../../types/CtrlYokeTypes").WorkflowLineageDescriptor;
-      if (descriptor.pendingEdit?.kind === "rewind") {
+      if (descriptor.pendingEdit?.kind === WORKTREE_EDIT_KINDS.REWIND) {
         protectedRunRefs.add(descriptor.pendingEdit.runRef);
       }
     } catch {

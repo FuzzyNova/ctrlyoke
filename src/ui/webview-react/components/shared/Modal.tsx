@@ -1,3 +1,4 @@
+import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import React, { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { ExitButton } from "./ExitButton";
@@ -52,7 +53,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) {
+      if (e.key === KEYBOARD_KEYS.ESCAPE && isOpen) {
         onClose();
       }
     };

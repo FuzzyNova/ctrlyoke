@@ -59,6 +59,11 @@ const EMPTY_HUNKS: HunkData[] = [];
 const DEFER_DIFF_TOKENIZATION_LINE_THRESHOLD = 240;
 const DEFER_DIFF_TOKENIZATION_TIMEOUT_MS = 900;
 
+const DIFF_EXPANSION_MODES = {
+  CHUNK: "chunk",
+  ALL: "all",
+} as const;
+
 type IdleCallbackDeadline = {
   didTimeout: boolean;
   timeRemaining: () => number;
@@ -308,7 +313,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
       gapIndex: number,
       prevHunk: HunkData | null,
       nextHunk: HunkData,
-      mode: "chunk" | "all"
+      mode: (typeof DIFF_EXPANSION_MODES)[keyof typeof DIFF_EXPANSION_MODES]
     ) => {
       if (oldContent === undefined) return;
       const gapStart =
@@ -317,7 +322,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
       const currentExpandedToLine =
         activeExpandedGaps.get(gapIndex) ?? gapStart;
       const nextExpandedToLine =
-        mode === "all"
+        mode === DIFF_EXPANSION_MODES.ALL
           ? gapEnd
           : Math.min(
               currentExpandedToLine + HIDDEN_CONTEXT_CHUNK_LINES,
@@ -572,7 +577,12 @@ export const DiffView: React.FC<DiffViewProps> = ({
                             <button
                               type="button"
                               onClick={() =>
-                                handleExpand(i, prevHunk, hunk, "all")
+                                handleExpand(
+                                  i,
+                                  prevHunk,
+                                  hunk,
+                                  DIFF_EXPANSION_MODES.ALL
+                                )
                               }
                               className="cursor-pointer border-none bg-transparent p-0 font-mono text-description-fg hover:text-foreground"
                               title="Expand all hidden lines"

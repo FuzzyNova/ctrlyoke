@@ -20,7 +20,12 @@ import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { CODEX_CLI_MODELS, MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
-import { HARNESS_IDS } from "../../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  HOOK_EVENT_NAMES,
+  MCP_SERVER_IDS,
+  MCP_TRANSPORTS,
+} from "../../../types/DashboardConstants";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
   HookEvent,
@@ -606,8 +611,8 @@ export class CodexCliProvider implements ICliProvider {
     const section: Record<string, unknown[]> = {};
     for (const uh of userHooks ?? []) {
       if (
-        uh.event === "permissionRequest" &&
-        wrappedCtrlYokeEvents.includes("permissionRequest")
+        uh.event === HOOK_EVENT_NAMES.PERMISSION_REQUEST &&
+        wrappedCtrlYokeEvents.includes(HOOK_EVENT_NAMES.PERMISSION_REQUEST)
       ) {
         continue;
       }
@@ -763,7 +768,7 @@ export class CodexCliProvider implements ICliProvider {
         configArgs.push(
           "-c",
           CliMcpConfigGenerator.generateInlineTomlConfig(
-            "ctrlyoke",
+            MCP_SERVER_IDS.CTRLYOKE,
             mcpServerPath,
             workspaceRoot,
             workingFilePath,
@@ -779,7 +784,7 @@ export class CodexCliProvider implements ICliProvider {
       }
 
       for (const server of userServers ?? []) {
-        if (server.url && server.transport === "sse") {
+        if (server.url && server.transport === MCP_TRANSPORTS.SSE) {
           Log.warn(
             `⚠️ Codex CLI does not support SSE MCP server "${server.id}". Skipping.`
           );

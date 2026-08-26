@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 import type { HunkData } from "react-diff-view";
 import type { DiffFileCardProps } from "@components/diff/DiffFileCard";
 import {
@@ -56,7 +57,7 @@ function realizedDiffBody(file: DiffFileCardProps): number {
     case "patch":
       hunks = toRdvHunks(file.source.structuredPatch);
       break;
-    case "content":
+    case WORKSPACE_ENTRY_KINDS.CONTENT:
       if (
         file.source.oldContent === undefined ||
         file.source.newContent === undefined
@@ -75,7 +76,7 @@ function realizedDiffBody(file: DiffFileCardProps): number {
   }
 
   if (hunks.length === 0) {
-    return file.source.kind === "content"
+    return file.source.kind === WORKSPACE_ENTRY_KINDS.CONTENT
       ? buildDiffRenderPlan([], {
           ...CALIBRATION_OPTIONS,
           collapsed: true,
@@ -121,14 +122,16 @@ describe("diff file fixture", () => {
       const files = flattenDiffFileFixture(createDiffFileFixture(fileCount));
       expect(files).toHaveLength(fileCount);
       expect(files.some((file) => file.source.kind === "patch")).toBe(true);
-      expect(files.some((file) => file.source.kind === "content")).toBe(true);
+      expect(
+        files.some((file) => file.source.kind === WORKSPACE_ENTRY_KINDS.CONTENT)
+      ).toBe(true);
       expect(files.some((file) => file.oldPath !== undefined)).toBe(true);
       expect(files.some((file) => file.path.length > 80)).toBe(true);
       expect(files.some((file) => file.note !== undefined)).toBe(true);
       expect(
         files.some(
           (file) =>
-            file.source.kind === "content" &&
+            file.source.kind === WORKSPACE_ENTRY_KINDS.CONTENT &&
             file.source.oldContent === file.source.newContent
         )
       ).toBe(true);

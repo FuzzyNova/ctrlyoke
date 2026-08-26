@@ -1,5 +1,6 @@
 import type { ProfilerOnRenderCallback } from "react";
 import { WebviewLog } from "@utils/logger";
+import { BOOLEAN_STRING_VALUES } from "@root/types/DashboardConstants";
 
 type PerformanceProfilerOptions = {
   slowThresholdMs?: number;
@@ -54,7 +55,9 @@ function readEnabledFlag(): boolean {
   }
 
   try {
-    return window.localStorage.getItem(STORAGE_KEY) === "true";
+    return (
+      window.localStorage.getItem(STORAGE_KEY) === BOOLEAN_STRING_VALUES.TRUE
+    );
   } catch {
     return false;
   }

@@ -1,7 +1,8 @@
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
+import type { OutputTab } from "@root/types/DashboardConstants";
 
-type ExecutionOutputTab = "output" | "terminal";
+type ExecutionOutputTab = OutputTab;
 
 export function autoFocusOutputOnExecution(
   workflowId: string,

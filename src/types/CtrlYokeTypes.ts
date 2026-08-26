@@ -15,6 +15,7 @@ import {
   type HarnessId,
   type ExecutionMode,
   type HookEvent,
+  type McpTransport,
   type FailureKind,
   type AttemptCostConfidence,
   type AttemptCostNoteCode,
@@ -22,12 +23,21 @@ import {
   type AttemptCostUnavailableReason,
   type WorkflowTokenCoverage,
   WORKTREE_MODES,
+  WORKTREE_LIFECYCLE_OWNERS,
+  WORKTREE_BRANCH_STATES,
+  WORKTREE_DIRECTORY_STATES,
+  WORKTREE_EDIT_KINDS,
+  WORKTREE_LANDING_OUTCOMES,
+  WORKTREE_MERGE_OUTCOMES,
+  WORKTREE_SETUP_OUTCOMES,
+  SCRIPT_VERDICT_OUTCOMES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "./DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 export type {
   HarnessId,
   HookEvent,
+  McpTransport,
   FailureKind,
   AttemptCostConfidence,
   AttemptCostNoteCode,
@@ -83,7 +93,7 @@ export interface McpServerConfig {
   /** Remote endpoint URL (streamable-http or SSE servers). Required when `command` is not set. */
   url?: string;
   /** Transport protocol for remote servers. Defaults to "streamable-http". */
-  transport?: "streamable-http" | "sse";
+  transport?: McpTransport;
   /** HTTP headers to send with every request (remote servers only, e.g. Authorization) */
   headers?: Record<string, string>;
   /**
@@ -428,9 +438,9 @@ export interface WorkflowLineageDescriptor {
    * draft/rewind editing is introduced in phase 3.
    */
   pendingEdit?:
-    | { kind: "draft" }
+    | { kind: typeof WORKTREE_EDIT_KINDS.DRAFT }
     | {
-        kind: "rewind";
+        kind: typeof WORKTREE_EDIT_KINDS.REWIND;
         runRef: RunRef;
         fromStepIndex: number;
         baseDefinitionRevision: number;
@@ -454,7 +464,7 @@ export interface WorkflowLineageCreationOptions {
  */
 export interface WorkingFileWorktreeRuntime {
   schemaVersion: 1;
-  mode: "managed" | "named";
+  mode: typeof WORKTREE_MODES.MANAGED | typeof WORKTREE_MODES.NAMED;
   origin: "created" | "discovered" | "recovered";
   branchName: string;
   worktreePath: string;
@@ -473,7 +483,7 @@ export interface WorkingFileWorktreeRuntime {
   /** Whether source checkout changes existed when the managed worktree was created. */
   sourceCheckoutDirty?: boolean;
   targetBranch?: string;
-  lifecycleOwner: "ctrlyoke" | "user";
+  lifecycleOwner: (typeof WORKTREE_LIFECYCLE_OWNERS)[keyof typeof WORKTREE_LIFECYCLE_OWNERS];
   lifecycleState:
     | "provisioning"
     | "ready"
@@ -481,16 +491,11 @@ export interface WorkingFileWorktreeRuntime {
     | "settled"
     | "blocked"
     | "orphaned";
-  setupOutcome?: "pending" | "running" | "succeeded" | "failed";
-  landingOutcome?: "landed" | "no-changes" | "blocked";
-  mergeOutcome?:
-    | "fast-forward"
-    | "merge-commit"
-    | "conflict"
-    | "blocked"
-    | "abort-failed";
-  directoryState: "present" | "removed" | "missing" | "remove-failed";
-  branchState: "present" | "deleted" | "missing";
+  setupOutcome?: (typeof WORKTREE_SETUP_OUTCOMES)[keyof typeof WORKTREE_SETUP_OUTCOMES];
+  landingOutcome?: (typeof WORKTREE_LANDING_OUTCOMES)[keyof typeof WORKTREE_LANDING_OUTCOMES];
+  mergeOutcome?: (typeof WORKTREE_MERGE_OUTCOMES)[keyof typeof WORKTREE_MERGE_OUTCOMES];
+  directoryState: (typeof WORKTREE_DIRECTORY_STATES)[keyof typeof WORKTREE_DIRECTORY_STATES];
+  branchState: (typeof WORKTREE_BRANCH_STATES)[keyof typeof WORKTREE_BRANCH_STATES];
   finalBranchTip?: string;
   conflictFiles?: string[];
   message?: string;
@@ -560,15 +565,10 @@ export type WorkingFileWorktreeRuntimePatch =
 
 /** Terminal result of a managed worktree settlement. */
 export interface WorktreeCompletionResult {
-  landingOutcome: "landed" | "no-changes" | "blocked";
-  mergeOutcome?:
-    | "fast-forward"
-    | "merge-commit"
-    | "conflict"
-    | "blocked"
-    | "abort-failed";
+  landingOutcome: (typeof WORKTREE_LANDING_OUTCOMES)[keyof typeof WORKTREE_LANDING_OUTCOMES];
+  mergeOutcome?: (typeof WORKTREE_MERGE_OUTCOMES)[keyof typeof WORKTREE_MERGE_OUTCOMES];
   directoryOutcome: "removed" | "kept" | "remove-failed";
-  branchState: "present" | "deleted" | "missing";
+  branchState: (typeof WORKTREE_BRANCH_STATES)[keyof typeof WORKTREE_BRANCH_STATES];
   branchName: string;
   targetBranch?: string;
   conflictFiles?: string[];
@@ -792,7 +792,7 @@ export interface ScriptVerdict {
   actual: string;
   actualSource: "stdout" | "stderr" | "exitCode";
   exitCode?: number;
-  outcome: "passed" | "failed" | "errored";
+  outcome: (typeof SCRIPT_VERDICT_OUTCOMES)[keyof typeof SCRIPT_VERDICT_OUTCOMES];
   matchRule: ScriptMatchRule;
   action: ConditionAction;
   actionDetail?: string;

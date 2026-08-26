@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { WORKSPACE_ENTRY_KINDS } from "../../types/DashboardConstants";
 import { suite, test } from "mocha";
 import {
   WORKSPACE_ENTRY_SORT_DIRECTIONS,
@@ -12,21 +13,35 @@ import {
 
 suite("WorkspaceEntrySort", () => {
   const entries: WorkspaceEntry[] = [
-    { name: "z-file", path: "z-file", kind: "file", modifiedAt: 20 },
+    {
+      name: "z-file",
+      path: "z-file",
+      kind: WORKSPACE_ENTRY_KINDS.FILE,
+      modifiedAt: 20,
+    },
     {
       name: "a-directory",
       path: "a-directory",
-      kind: "directory",
+      kind: WORKSPACE_ENTRY_KINDS.DIRECTORY,
       modifiedAt: 10,
     },
-    { name: "m-file", path: "m-file", kind: "file", modifiedAt: 10 },
+    {
+      name: "m-file",
+      path: "m-file",
+      kind: WORKSPACE_ENTRY_KINDS.FILE,
+      modifiedAt: 10,
+    },
     {
       name: "z-directory",
       path: "z-directory",
-      kind: "directory",
+      kind: WORKSPACE_ENTRY_KINDS.DIRECTORY,
       modifiedAt: 20,
     },
-    { name: "missing-file", path: "missing-file", kind: "file" },
+    {
+      name: "missing-file",
+      path: "missing-file",
+      kind: WORKSPACE_ENTRY_KINDS.FILE,
+    },
   ];
 
   test("supports both name directions while preserving directory grouping", () => {
@@ -67,13 +82,13 @@ suite("WorkspaceEntrySort", () => {
     const sameTimestampA: WorkspaceEntry = {
       name: "a-file",
       path: "a-file",
-      kind: "file",
+      kind: WORKSPACE_ENTRY_KINDS.FILE,
       modifiedAt: 10,
     };
     const sameTimestampZ: WorkspaceEntry = {
       name: "z-file",
       path: "z-file",
-      kind: "file",
+      kind: WORKSPACE_ENTRY_KINDS.FILE,
       modifiedAt: 10,
     };
     assert.strictEqual(

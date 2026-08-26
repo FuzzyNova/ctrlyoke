@@ -1,4 +1,7 @@
-import { SESSION_ID_SENTINELS } from "@root/types/DashboardConstants";
+import {
+  INHERIT_DEFAULT_OPTION,
+  SESSION_ID_SENTINELS,
+} from "@root/types/DashboardConstants";
 
 /**
  * Namespace keys for the dropdown hide feature.
@@ -42,7 +45,7 @@ export function getResumeSessionOptions(defaultLabel?: string) {
     { value: SESSION_ID_SENTINELS.FINAL_STEP, label: "Final Step Session" },
   ] as const;
   return defaultLabel
-    ? [{ value: "default", label: defaultLabel }, ...base]
+    ? [{ value: INHERIT_DEFAULT_OPTION, label: defaultLabel }, ...base]
     : base;
 }
 
@@ -87,7 +90,7 @@ export function resumeSessionSelection(
     };
   }
   return {
-    resumeSession: selection === "default" ? undefined : false,
+    resumeSession: selection === INHERIT_DEFAULT_OPTION ? undefined : false,
     sessionId: "",
   };
 }

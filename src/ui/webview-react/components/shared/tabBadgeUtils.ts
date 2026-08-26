@@ -1,4 +1,7 @@
-import { PERMISSION_MODES } from "@root/types/DashboardConstants";
+import {
+  PERMISSION_MODES,
+  PRIOR_CONTEXT_KEYWORDS,
+} from "@root/types/DashboardConstants";
 import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
 
 /** Tab icon override shape used by DrawerTabBar */
@@ -155,7 +158,8 @@ export function getContextTabOverride(
   const sessionActive = resumeSession === true;
   const contextActive = Array.isArray(priorContext)
     ? priorContext.length > 0
-    : typeof priorContext === "string" && priorContext !== "none";
+    : typeof priorContext === "string" &&
+      priorContext !== PRIOR_CONTEXT_KEYWORDS.NONE;
   if (sessionActive || contextActive) {
     return FOCUS_TAB_OVERRIDE;
   }

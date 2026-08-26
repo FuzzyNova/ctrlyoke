@@ -15,6 +15,8 @@ import { CreateScriptModal } from "./CreateScriptModal";
 import { getDictionaryUris } from "@utils/dictionaryUris";
 import { useSettingsStore } from "@store/settingsStore";
 import {
+  INHERIT_DEFAULT_OPTION,
+  KEYBOARD_KEYS,
   EXECUTION_MODE_HELP_TEXT,
   EXECUTION_MODE_OPTIONS,
   MESSAGE_TYPES,
@@ -403,7 +405,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             onChange={(e) => setReturnsInput(e.target.value)}
             onBlur={(e) => update({ returns: e.target.value })}
             onKeyDown={(e) => {
-              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === KEYBOARD_KEYS.ENTER) e.currentTarget.blur();
             }}
             placeholder="true"
             disabled={disabled}
@@ -537,15 +539,20 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             </label>
             <CustomSelect
               id={`${idPrefix}-execution-mode`}
-              value={v.executionMode ?? "default"}
+              value={v.executionMode ?? INHERIT_DEFAULT_OPTION}
               onChange={(val) =>
                 update({
                   executionMode:
-                    val === "default" ? undefined : (val as ExecutionMode),
+                    val === INHERIT_DEFAULT_OPTION
+                      ? undefined
+                      : (val as ExecutionMode),
                 })
               }
               options={[
-                { value: "default", label: defaultExecutionModeLabel },
+                {
+                  value: INHERIT_DEFAULT_OPTION,
+                  label: defaultExecutionModeLabel,
+                },
                 ...EXECUTION_MODE_OPTIONS,
               ]}
               disabled={disabled}

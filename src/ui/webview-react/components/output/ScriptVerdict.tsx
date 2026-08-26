@@ -1,6 +1,10 @@
 import { memo, useEffect } from "react";
 import type { ScriptVerdict as ScriptVerdictData } from "@root/types/CtrlYokeTypes";
 import {
+  SCRIPT_MATCH_RULE_NONE,
+  SCRIPT_VERDICT_OUTCOMES,
+} from "@root/types/DashboardConstants";
+import {
   DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
   DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
   buildCollapsedOutputPreview,
@@ -37,7 +41,7 @@ function getMatchedByLabel(verdict: ScriptVerdictData): string {
       return "numeric ≥";
     case "exitCode":
       return "exit code";
-    case "none":
+    case SCRIPT_MATCH_RULE_NONE:
       return "no match";
     default:
       return verdict.matchRule;
@@ -50,19 +54,19 @@ function getOutcomePresentation(outcome: ScriptVerdictData["outcome"]): {
   className: string;
 } {
   switch (outcome) {
-    case "passed":
+    case SCRIPT_VERDICT_OUTCOMES.PASSED:
       return {
         icon: "✔",
         label: "Passed",
         className: "text-indicator-success",
       };
-    case "failed":
+    case SCRIPT_VERDICT_OUTCOMES.FAILED:
       return {
         icon: "✖",
         label: "Failed",
         className: "text-indicator-error",
       };
-    case "errored":
+    case SCRIPT_VERDICT_OUTCOMES.ERRORED:
       return {
         icon: "⚠",
         label: "Errored",
@@ -154,7 +158,8 @@ export const ScriptVerdict = memo<ScriptVerdictProps>(
                 </>
               )}
           </span>
-          {verdict.outcome === "errored" && verdict.error ? (
+          {verdict.outcome === SCRIPT_VERDICT_OUTCOMES.ERRORED &&
+          verdict.error ? (
             <>
               {" "}
               <span className="text-error-fg">· {verdict.error}</span>

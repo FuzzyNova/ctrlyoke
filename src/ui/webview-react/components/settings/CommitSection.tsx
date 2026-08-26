@@ -15,7 +15,11 @@ import { HarnessDropdown } from "@components/shared/HarnessDropdown";
 import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import { LocalTextInput, LocalTextarea } from "@components/shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  INHERIT_DEFAULT_OPTION,
+  OUTPUT_TABS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -84,7 +88,7 @@ export function CommitSection({
     )?.workflowName;
     ui.closeGlobalSettings();
     ui.setOutputCollapsed(false);
-    ui.setActiveOutputTab(record.workflowKey, "output");
+    ui.setActiveOutputTab(record.workflowKey, OUTPUT_TABS.OUTPUT);
     navigateToWorkflowAddress(getVsCodeApi(), address, targetWorkflowName);
   };
   const generationStatus = lastCommitMessageGeneration
@@ -123,9 +127,12 @@ export function CommitSection({
       >
         <HarnessDropdown
           id="commit-harness"
-          value={(commit.harness as string) || "default"}
+          value={(commit.harness as string) || INHERIT_DEFAULT_OPTION}
           onChange={(value) =>
-            onUpdate("commit.harness", value === "default" ? "" : value)
+            onUpdate(
+              "commit.harness",
+              value === INHERIT_DEFAULT_OPTION ? "" : value
+            )
           }
           showDefault={true}
           defaultLabel="Inherit active harness"

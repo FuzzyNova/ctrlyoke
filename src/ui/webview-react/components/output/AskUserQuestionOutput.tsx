@@ -20,6 +20,11 @@ import { buildAskUserQuestionSearchSegments } from "@utils/askUserQuestionLayout
 import { ToolCallBlock } from "./ToolCallBlock";
 import { ToolDot } from "./FileOperationOutput";
 import { TOOL_RESULT_LINE } from "./outputStyles";
+import {
+  HISTORY_MATCH_FIELDS,
+  TOOL_RESULT_STATUSES,
+  type ToolResultStatus,
+} from "@root/types/DashboardConstants";
 
 interface AskUserQuestionOutputProps {
   data: AskUserQuestionData;
@@ -31,12 +36,12 @@ function pluralize(count: number, noun: string): string {
 }
 
 function summarize(data: AskUserQuestionData): {
-  dotStatus: "pending" | "success" | "error";
+  dotStatus: ToolResultStatus;
   headerLabel: string;
 } {
   if (data.declined) {
     return {
-      dotStatus: "error",
+      dotStatus: TOOL_RESULT_STATUSES.ERROR,
       headerLabel:
         data.declined.reason === "clarify"
           ? "Asked to clarify"
@@ -45,12 +50,12 @@ function summarize(data: AskUserQuestionData): {
   }
   if (data.status === OPERATION_STATUS.COMPLETED) {
     return {
-      dotStatus: "success",
+      dotStatus: TOOL_RESULT_STATUSES.SUCCESS,
       headerLabel: `Answered ${pluralize(data.questions.length, "question")}`,
     };
   }
   return {
-    dotStatus: "pending",
+    dotStatus: TOOL_RESULT_STATUSES.PENDING,
     headerLabel: `Asked ${pluralize(data.questions.length, "question")}`,
   };
 }
@@ -88,7 +93,9 @@ export const AskUserQuestionOutput: React.FC<AskUserQuestionOutputProps> = ({
     );
   };
 
-  const declinedSegment = segments.find((segment) => segment.field === "error");
+  const declinedSegment = segments.find(
+    (segment) => segment.field === HISTORY_MATCH_FIELDS.ERROR
+  );
 
   return (
     <ToolCallBlock

@@ -40,6 +40,7 @@ import type {
   WorkspaceSearchContentMatch,
   WorkspaceTreeEntry,
 } from "../types/HostedWorkspaceViewerTypes";
+import { WORKSPACE_SEARCH_SCOPES } from "../types/DashboardConstants";
 import {
   WORKSPACE_TREE_DEFAULT_PAGE_SIZE,
   WORKSPACE_TREE_MAX_PAGE_SIZE,
@@ -47,6 +48,10 @@ import {
   WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE,
   WORKSPACE_FILE_HISTORY_MAX_PAGE_SIZE,
 } from "../types/HostedWorkspaceViewerTypes";
+import {
+  SCM_FILE_KINDS,
+  WORKSPACE_ENTRY_KINDS,
+} from "../types/DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {
   toViewerPath,
@@ -518,11 +523,11 @@ export class HostedWorkspaceViewerService {
     }
 
     const scope: WorkspaceSearchScope =
-      request.scope === "files" ||
-      request.scope === "content" ||
-      request.scope === "both"
+      request.scope === WORKSPACE_SEARCH_SCOPES.FILES ||
+      request.scope === WORKSPACE_SEARCH_SCOPES.CONTENT ||
+      request.scope === WORKSPACE_SEARCH_SCOPES.BOTH
         ? request.scope
-        : "both";
+        : WORKSPACE_SEARCH_SCOPES.BOTH;
     const requestedLimit = Number.isFinite(request.limit)
       ? Math.floor(request.limit ?? SEARCH_DEFAULT_LIMIT)
       : SEARCH_DEFAULT_LIMIT;
@@ -561,14 +566,14 @@ export class HostedWorkspaceViewerService {
       }
       scannedFiles++;
 
-      if (scope !== "content") {
+      if (scope !== WORKSPACE_SEARCH_SCOPES.CONTENT) {
         const name = path.basename(candidate.absolutePath);
         if (
           filenameResults.length < filenameLimit &&
           name.toLowerCase().includes(queryLower)
         ) {
           filenameResults.push({
-            kind: "file",
+            kind: WORKSPACE_ENTRY_KINDS.FILE,
             path: candidate.viewerPath,
             name,
           });
@@ -577,14 +582,18 @@ export class HostedWorkspaceViewerService {
       }
 
       if (
-        (scope === "content" || scope === "both") &&
+        (scope === WORKSPACE_SEARCH_SCOPES.CONTENT ||
+          scope === WORKSPACE_SEARCH_SCOPES.BOTH) &&
         !surfacedFilenamePaths.has(candidate.absolutePath)
       ) {
         contentCandidates.push(candidate);
       }
     }
 
-    if (scope === "files" || filenameResults.length >= limit) {
+    if (
+      scope === WORKSPACE_SEARCH_SCOPES.FILES ||
+      filenameResults.length >= limit
+    ) {
       return { results: filenameResults.slice(0, limit), truncated };
     }
 
@@ -803,7 +812,7 @@ export class HostedWorkspaceViewerService {
         if (line.toLowerCase().includes(queryLower)) {
           const trimmed = line.trim();
           matches.push({
-            kind: "content",
+            kind: WORKSPACE_ENTRY_KINDS.CONTENT,
             path: candidate.viewerPath,
             line: lineNumber,
             matchSnippet:
@@ -895,7 +904,7 @@ export class HostedWorkspaceViewerService {
       const entries = this.namedRoots.map((root) => ({
         name: root.name,
         path: root.name,
-        kind: "directory" as const,
+        kind: WORKSPACE_ENTRY_KINDS.DIRECTORY,
       }));
       const initialMetadata =
         sort.key === WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT
@@ -976,8 +985,8 @@ export class HostedWorkspaceViewerService {
           name: dirent.name,
           path: this.relativePath(path.join(resolved, dirent.name)),
           kind: dirent.isDirectory()
-            ? ("directory" as const)
-            : ("file" as const),
+            ? WORKSPACE_ENTRY_KINDS.DIRECTORY
+            : WORKSPACE_ENTRY_KINDS.FILE,
           gitIgnored,
         };
       })
@@ -1036,7 +1045,7 @@ export class HostedWorkspaceViewerService {
     if (absolutePath === undefined) return {};
     try {
       const stat = await fs.promises.stat(absolutePath);
-      return kind === "file"
+      return kind === WORKSPACE_ENTRY_KINDS.FILE
         ? { size: stat.size, modifiedAt: stat.mtimeMs }
         : { modifiedAt: stat.mtimeMs };
     } catch {
@@ -1503,15 +1512,15 @@ export class HostedWorkspaceViewerService {
 
       let kind: DiffKind;
       if (isUntracked) {
-        kind = "untracked";
+        kind = SCM_FILE_KINDS.UNTRACKED;
       } else if (x === "A") {
-        kind = "added";
+        kind = SCM_FILE_KINDS.ADDED;
       } else if (x === "D" || y === "D") {
-        kind = "deleted";
+        kind = SCM_FILE_KINDS.DELETED;
       } else if (x === "R") {
-        kind = "renamed";
+        kind = SCM_FILE_KINDS.RENAMED;
       } else {
-        kind = "modified";
+        kind = SCM_FILE_KINDS.MODIFIED;
       }
 
       files.push({
@@ -1549,7 +1558,7 @@ export class HostedWorkspaceViewerService {
     const oldBytes = await getBlobBytes(repoRoot, "HEAD", gitPath);
     let newBytes: Buffer | null = null;
 
-    if (kind !== "deleted") {
+    if (kind !== SCM_FILE_KINDS.DELETED) {
       try {
         newBytes = await fs.promises.readFile(resolved);
       } catch {
@@ -1664,7 +1673,7 @@ export class HostedWorkspaceViewerService {
       (file) => normalizeScmPath(file.path) === normalizedRelPath
     );
 
-    if (fileStatus?.kind === "untracked") {
+    if (fileStatus?.kind === SCM_FILE_KINDS.UNTRACKED) {
       await fs.promises.rm(resolved, { recursive: true, force: true });
       return;
     }

@@ -4,7 +4,11 @@ import type {
   CliResult,
   UniversalCliOutput,
 } from "../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES, FAILURE_KINDS } from "../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  FAILURE_KINDS,
+  NOTIFICATION_OUTCOME_KINDS,
+} from "../../types/DashboardConstants";
 import type { FailureKind } from "../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
@@ -643,7 +647,10 @@ export class CliLogMonitor {
                 }
 
                 void handleCompletion("Stop hook");
-              } else if (result.kind === "error" && !completed) {
+              } else if (
+                result.kind === NOTIFICATION_OUTCOME_KINDS.ERROR &&
+                !completed
+              ) {
                 if (
                   this.deps.notificationMonitor!.cleanupNotificationFiles &&
                   sessionId

@@ -1,3 +1,7 @@
+import {
+  INHERIT_DEFAULT_OPTION,
+  PRIOR_CONTEXT_SELECTION_MODES,
+} from "@root/types/DashboardConstants";
 import React, { useState, useEffect, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
@@ -18,14 +22,14 @@ interface PriorContextSelectProps {
 }
 
 export type KeywordMode =
-  | "default"
+  | typeof INHERIT_DEFAULT_OPTION
   | "none"
   | "previous"
   | "all"
   | "finalStepPrevious"
   | "finalStepAll"
-  | "run"
-  | "custom";
+  | typeof PRIOR_CONTEXT_SELECTION_MODES.RUN
+  | typeof PRIOR_CONTEXT_SELECTION_MODES.CUSTOM;
 
 export const PRIOR_CONTEXT_KEYWORD_LABELS: Record<KeywordMode, string> = {
   default: "Default (inherit from workflow)",
@@ -35,7 +39,7 @@ export const PRIOR_CONTEXT_KEYWORD_LABELS: Record<KeywordMode, string> = {
   finalStepPrevious: "Previous final step output",
   finalStepAll: "All final step outputs",
   run: "Completed run output",
-  custom: "Custom",
+  [PRIOR_CONTEXT_SELECTION_MODES.CUSTOM]: "Custom",
 };
 
 function isRunAddress(
@@ -45,9 +49,9 @@ function isRunAddress(
 }
 
 function getMode(value: PriorContext | undefined): KeywordMode {
-  if (value === undefined) return "default";
-  if (Array.isArray(value)) return "custom";
-  if (isRunAddress(value)) return "run";
+  if (value === undefined) return INHERIT_DEFAULT_OPTION;
+  if (Array.isArray(value)) return PRIOR_CONTEXT_SELECTION_MODES.CUSTOM;
+  if (isRunAddress(value)) return PRIOR_CONTEXT_SELECTION_MODES.RUN;
   return value as KeywordMode;
 }
 
@@ -104,7 +108,9 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   const mode = getMode(value);
 
   // Custom input state
-  const [wantsCustom, setWantsCustom] = useState(() => mode === "custom");
+  const [wantsCustom, setWantsCustom] = useState(
+    () => mode === PRIOR_CONTEXT_SELECTION_MODES.CUSTOM
+  );
   const [customText, setCustomText] = useState(() =>
     Array.isArray(value) ? formatAsRangeNotation(value) : ""
   );
@@ -118,7 +124,8 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   // Track onChange calls originating from our text input so we don't sync back
   const textChangePendingRef = useRef(false);
 
-  const showCustomInput = wantsCustom || mode === "custom";
+  const showCustomInput =
+    wantsCustom || mode === PRIOR_CONTEXT_SELECTION_MODES.CUSTOM;
 
   // Sync from external value changes (e.g. undo, workflow load)
   useEffect(() => {
@@ -142,12 +149,12 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   }, [value]);
 
   const selectKeyword = (k: KeywordMode) => {
-    if (k === "custom") {
+    if (k === PRIOR_CONTEXT_SELECTION_MODES.CUSTOM) {
       setWantsCustom(true);
       setIsOpen(false);
       return;
     }
-    if (k === "run") {
+    if (k === PRIOR_CONTEXT_SELECTION_MODES.RUN) {
       setWantsCustom(false);
       setIsOpen(false);
       return;
@@ -155,7 +162,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
     setWantsCustom(false);
     setCustomText("");
     setCustomError(false);
-    onChange(k === "default" ? undefined : k);
+    onChange(k === INHERIT_DEFAULT_OPTION ? undefined : k);
     setIsOpen(false);
   };
 
@@ -190,11 +197,13 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   };
 
   // Build button label
-  const displayMode = showCustomInput ? "custom" : mode;
+  const displayMode = showCustomInput
+    ? PRIOR_CONTEXT_SELECTION_MODES.CUSTOM
+    : mode;
   let buttonLabel: string;
   if (showCustomInput) {
     buttonLabel = "Custom";
-  } else if (mode === "default" && defaultLabel) {
+  } else if (mode === INHERIT_DEFAULT_OPTION && defaultLabel) {
     buttonLabel = defaultLabel;
   } else {
     buttonLabel = PRIOR_CONTEXT_KEYWORD_LABELS[mode];
@@ -202,14 +211,14 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
 
   const keywords: KeywordMode[] = showDefault
     ? [
-        "default",
+        INHERIT_DEFAULT_OPTION,
         "none",
         "previous",
         "all",
         "finalStepPrevious",
         "finalStepAll",
-        "run",
-        "custom",
+        PRIOR_CONTEXT_SELECTION_MODES.RUN,
+        PRIOR_CONTEXT_SELECTION_MODES.CUSTOM,
       ]
     : [
         "none",
@@ -217,8 +226,8 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
         "all",
         "finalStepPrevious",
         "finalStepAll",
-        "run",
-        "custom",
+        PRIOR_CONTEXT_SELECTION_MODES.RUN,
+        PRIOR_CONTEXT_SELECTION_MODES.CUSTOM,
       ];
 
   return (
@@ -243,7 +252,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
             {keywords.map((k) => {
               const isSelected = displayMode === k;
               const label =
-                k === "default" && defaultLabel
+                k === INHERIT_DEFAULT_OPTION && defaultLabel
                   ? defaultLabel
                   : PRIOR_CONTEXT_KEYWORD_LABELS[k];
               return (
@@ -270,7 +279,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
         </DropdownPortal>
       </div>
 
-      {mode === "run" && (
+      {mode === PRIOR_CONTEXT_SELECTION_MODES.RUN && (
         <div className="mt-1 grid grid-cols-1 gap-1">
           <input
             value={workflowKey}

@@ -13,6 +13,7 @@ import {
   McpToolCallData,
 } from "../../../types/CliOutputTypes";
 import {
+  APPLY_PATCH_FILE_EDIT_KINDS,
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
 } from "../../../types/DashboardConstants";
@@ -104,16 +105,18 @@ export class CodexToolBuilder {
         );
         return fileEdits.map((fileEdit) => ({
           type:
-            fileEdit.kind === "add"
+            fileEdit.kind === APPLY_PATCH_FILE_EDIT_KINDS.ADD
               ? CLI_EVENT_TYPES.FILE_WRITE
-              : fileEdit.kind === "delete"
+              : fileEdit.kind === APPLY_PATCH_FILE_EDIT_KINDS.DELETE
                 ? CLI_EVENT_TYPES.FILE_DELETE
                 : CLI_EVENT_TYPES.FILE_EDIT,
           timestamp,
           data: {
             path: fileEdit.path,
             structuredPatch: fileEdit.structuredPatch,
-            ...(fileEdit.kind === "add" && { content: "" }),
+            ...(fileEdit.kind === APPLY_PATCH_FILE_EDIT_KINDS.ADD && {
+              content: "",
+            }),
             status: OPERATION_STATUS.INITIATED,
           } as FileEditData | FileWriteData | FileDeleteData,
         }));

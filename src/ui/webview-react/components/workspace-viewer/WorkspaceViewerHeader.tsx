@@ -3,10 +3,14 @@ import { useIsMobile } from "@hooks/useMediaQuery";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { NavHistoryControls } from "../shared/NavHistoryControls";
 import { ExitButton } from "../shared/ExitButton";
+import {
+  WORKSPACE_VIEWER_TABS,
+  type WorkspaceViewerTab,
+} from "@root/types/DashboardConstants";
 
 interface WorkspaceViewerHeaderProps {
-  activeTab: "explorer" | "sourceControl" | "search";
-  onTabChange: (tab: "explorer" | "sourceControl" | "search") => void;
+  activeTab: WorkspaceViewerTab;
+  onTabChange: (tab: WorkspaceViewerTab) => void;
   onClose: () => void;
   workspacePath?: string;
 }
@@ -54,11 +58,11 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
     : null;
   const workspaceName = workspaceRootName ?? "ctrlyoke Workspace";
   const explorerFileVisible =
-    activeTab === "explorer" &&
+    activeTab === WORKSPACE_VIEWER_TABS.EXPLORER &&
     selectedFilePath !== null &&
     (!isMobile || mobileEditorVisible);
   const diffFileVisible =
-    activeTab === "sourceControl" &&
+    activeTab === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL &&
     selectedDiffPath !== null &&
     (!isMobile || mobileDiffVisible);
   const titleFilePath = explorerFileVisible
@@ -76,9 +80,9 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
       {/* Tab buttons — fixed left, never shrink */}
       <div className="flex items-center flex-shrink-0" role="tablist">
         <button
-          className={`fp-tab fp-tab-hc ${activeTab === "explorer" ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
-          onClick={() => onTabChange("explorer")}
-          aria-selected={activeTab === "explorer"}
+          className={`fp-tab fp-tab-hc ${activeTab === WORKSPACE_VIEWER_TABS.EXPLORER ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
+          onClick={() => onTabChange(WORKSPACE_VIEWER_TABS.EXPLORER)}
+          aria-selected={activeTab === WORKSPACE_VIEWER_TABS.EXPLORER}
           role="tab"
           title="Explorer"
         >
@@ -86,9 +90,9 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
           <span className="hidden sm:inline">Explorer</span>
         </button>
         <button
-          className={`fp-tab fp-tab-hc ${activeTab === "sourceControl" ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
-          onClick={() => onTabChange("sourceControl")}
-          aria-selected={activeTab === "sourceControl"}
+          className={`fp-tab fp-tab-hc ${activeTab === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
+          onClick={() => onTabChange(WORKSPACE_VIEWER_TABS.SOURCE_CONTROL)}
+          aria-selected={activeTab === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL}
           role="tab"
           title="Source Control"
         >
@@ -96,9 +100,9 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
           <span className="hidden sm:inline">Source Control</span>
         </button>
         <button
-          className={`fp-tab fp-tab-hc ${activeTab === "search" ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
-          onClick={() => onTabChange("search")}
-          aria-selected={activeTab === "search"}
+          className={`fp-tab fp-tab-hc ${activeTab === WORKSPACE_VIEWER_TABS.SEARCH ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
+          onClick={() => onTabChange(WORKSPACE_VIEWER_TABS.SEARCH)}
+          aria-selected={activeTab === WORKSPACE_VIEWER_TABS.SEARCH}
           role="tab"
           title="Search"
         >

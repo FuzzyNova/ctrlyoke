@@ -1,10 +1,13 @@
+import {
+  KEYBOARD_KEYS,
+  OUTPUT_TABS,
+  type OutputTab,
+} from "@root/types/DashboardConstants";
 import React from "react";
 import { ExpandCollapseAllDiffsButton } from "@components/shared";
 import { TerminalSessionIcon } from "@components/output/TerminalSessionIcon";
 import type { WorkflowStepEntry } from "@components/output/UndoChangesDialog";
 import type { TerminalSession } from "@store/terminalStore";
-
-type OutputTab = "output" | "terminal";
 
 export interface OutputSectionHeaderProps {
   activeOutputTab: OutputTab;
@@ -98,7 +101,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
           aria-label="Collapse output"
           tabIndex={0}
           onKeyDown={(event) => {
-            if (event.key === "Enter") {
+            if (event.key === KEYBOARD_KEYS.ENTER) {
               onToggleCollapse();
             }
           }}
@@ -109,7 +112,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
         {showTerminalTab ? (
           <div className="flex items-center ml-1">
             <button
-              className={`fp-tab fp-tab-hc ${activeOutputTab === "output" ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
+              className={`fp-tab fp-tab-hc ${activeOutputTab === OUTPUT_TABS.OUTPUT ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
               onClick={onSelectOutputTab}
             >
               <i
@@ -118,7 +121,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               {!isHeaderNarrow && <span>Output</span>}
             </button>
             <button
-              className={`fp-tab fp-tab-hc ${activeOutputTab === "terminal" ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
+              className={`fp-tab fp-tab-hc ${activeOutputTab === OUTPUT_TABS.TERMINAL ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
               onClick={onSelectTerminalTab}
               aria-label={
                 terminalExecutionRunLabel
@@ -152,7 +155,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
           </span>
         )}
 
-        {activeOutputTab === "output" ? (
+        {activeOutputTab === OUTPUT_TABS.OUTPUT ? (
           <div className="flex items-center ml-2">
             <button
               className="icon-btn py-0 px-0.5"
@@ -178,7 +181,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               <i className="codicon codicon-sm codicon-add" />
             </button>
           </div>
-        ) : activeOutputTab === "terminal" ? (
+        ) : activeOutputTab === OUTPUT_TABS.TERMINAL ? (
           <div className="flex items-center ml-2">
             <button
               className="icon-btn py-0 px-0.5"
@@ -210,7 +213,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
       <div
         className={`ml-auto flex items-center ${isHeaderNarrow ? "gap-1" : "gap-2"}`}
       >
-        {activeOutputTab === "terminal" && (
+        {activeOutputTab === OUTPUT_TABS.TERMINAL && (
           <>
             {isTerminalCompact && activeTerminalSession && (
               <div className="flex items-center gap-1.5 min-w-0 mr-1">
@@ -246,7 +249,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
           </>
         )}
 
-        {activeOutputTab === "output" && (
+        {activeOutputTab === OUTPUT_TABS.OUTPUT && (
           <>
             {workflowUndoEntries.length > 0 && (
               <button

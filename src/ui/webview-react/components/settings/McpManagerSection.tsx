@@ -26,9 +26,11 @@ import {
 import { MESSAGE_TYPES } from "@/types/messages";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import {
+  KEYBOARD_KEYS,
   HARNESS_IDS,
   HARNESS_INFO,
   SETTING_SCOPES,
+  MCP_TRANSPORTS,
   SPECIAL_TARGET_IDS,
   type AnyTargetId,
   type HarnessId,
@@ -163,7 +165,7 @@ function localEntryToServer(entry: LocalMcpServerEntry): McpServerConfig {
   }
   if (entry.url) {
     server.url = entry.url;
-    server.transport = entry.transport ?? "streamable-http";
+    server.transport = entry.transport ?? MCP_TRANSPORTS.STREAMABLE_HTTP;
   }
   if (entry.headers && Object.keys(entry.headers).length > 0) {
     server.headers = entry.headers;
@@ -195,7 +197,7 @@ function registryEntryToServer(entry: RegistryMcpEntry): McpServerConfig {
       id,
       ...(description ? { description } : {}),
       url: entry.remoteUrl,
-      transport: entry.remoteTransport ?? "streamable-http",
+      transport: entry.remoteTransport ?? MCP_TRANSPORTS.STREAMABLE_HTTP,
     };
     const requiredHeaders = entry.remoteHeaders?.filter(
       (header) => header.isRequired
@@ -503,7 +505,7 @@ function ServerDetails({
     {
       label: "transport",
       value:
-        config.transport && config.transport !== "streamable-http"
+        config.transport && config.transport !== MCP_TRANSPORTS.STREAMABLE_HTTP
           ? config.transport
           : null,
     },
@@ -1371,8 +1373,8 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                             </div>
                             <div className="truncate font-mono text-xxs text-description-fg">
                               {entry.url
-                                ? entry.transport === "sse"
-                                  ? `sse: ${entry.url}`
+                                ? entry.transport === MCP_TRANSPORTS.SSE
+                                  ? `${MCP_TRANSPORTS.SSE}: ${entry.url}`
                                   : entry.url
                                 : `${entry.command ?? ""}${
                                     entry.args?.length
@@ -1415,7 +1417,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                 value={remoteQuery}
                 onChange={(event) => setRemoteQuery(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") {
+                  if (event.key === KEYBOARD_KEYS.ENTER) {
                     event.preventDefault();
                     handleSearchRegistry();
                   }
@@ -1497,7 +1499,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                             {entry.installCommand
                               ? entry.installCommand
                               : entry.remoteUrl
-                                ? `${entry.remoteTransport ?? "streamable-http"}: ${entry.remoteUrl}`
+                                ? `${entry.remoteTransport ?? MCP_TRANSPORTS.STREAMABLE_HTTP}: ${entry.remoteUrl}`
                                 : (entry.packageName ?? entry.id)}
                           </div>
                           {entry.description && (
@@ -1595,9 +1597,9 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           onKeyDown={(event) => {
             if (
               event.target === event.currentTarget &&
-              (event.key === "Enter" ||
+              (event.key === KEYBOARD_KEYS.ENTER ||
                 event.key === " " ||
-                event.key === "Escape")
+                event.key === KEYBOARD_KEYS.ESCAPE)
             ) {
               event.preventDefault();
               setDeleteLocationState(null);
@@ -1656,9 +1658,9 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           onKeyDown={(event) => {
             if (
               event.target === event.currentTarget &&
-              (event.key === "Enter" ||
+              (event.key === KEYBOARD_KEYS.ENTER ||
                 event.key === " " ||
-                event.key === "Escape")
+                event.key === KEYBOARD_KEYS.ESCAPE)
             ) {
               event.preventDefault();
               setDeleteTargetState(null);

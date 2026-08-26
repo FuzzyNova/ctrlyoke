@@ -270,7 +270,7 @@ function canRetryErrorBehavior(
   attemptIndex: number
 ): boolean {
   return (
-    errorBehavior.onError === "retry" &&
+    errorBehavior.onError === CONDITION_ACTIONS.RETRY &&
     (errorBehavior.maxRetries === -1 ||
       attemptIndex < (errorBehavior.maxRetries ?? 0))
   );
@@ -666,7 +666,7 @@ export class WorkflowExecutor {
             preErrorBehavior,
             attemptIndex
           );
-          if (preDisposition.outcome === "retry") {
+          if (preDisposition.outcome === CONDITION_ACTIONS.RETRY) {
             attemptIndex = preDisposition.nextAttemptIndex ?? attemptIndex + 1;
             continue;
           }
@@ -895,7 +895,7 @@ export class WorkflowExecutor {
           resolvedProperties
         );
 
-        if (failureDisposition.outcome === "retry") {
+        if (failureDisposition.outcome === CONDITION_ACTIONS.RETRY) {
           attemptIndex++;
           continue;
         }
@@ -951,7 +951,7 @@ export class WorkflowExecutor {
           resolvedProperties.secrets
         );
 
-        if (endDisposition.outcome === "retry") {
+        if (endDisposition.outcome === CONDITION_ACTIONS.RETRY) {
           attemptIndex = endDisposition.nextAttemptIndex ?? attemptIndex + 1;
           continue;
         }
@@ -1297,7 +1297,7 @@ export class WorkflowExecutor {
           attemptIndex,
           false
         );
-        if (errorDisposition.outcome === "retry") {
+        if (errorDisposition.outcome === CONDITION_ACTIONS.RETRY) {
           attemptIndex = errorDisposition.nextAttemptIndex ?? attemptIndex + 1;
           continue;
         }
@@ -1973,7 +1973,7 @@ export class WorkflowExecutor {
     errorBehavior?: ErrorBehavior
   ): ConditionAction {
     switch (errorBehavior?.onError) {
-      case "retry":
+      case CONDITION_ACTIONS.RETRY:
         return CONDITION_ACTIONS.RETRY;
       case "continue":
         return CONDITION_ACTIONS.CONTINUE;

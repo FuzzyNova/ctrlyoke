@@ -15,6 +15,7 @@ import {
   HARNESS_IDS,
   MAX_CONTENT_SIZE,
   MAX_PREVIEW_BODY_BYTES,
+  PRIOR_CONTEXT_KEYWORDS,
   PREVIEW_PROMPT_CATEGORIES,
   PREVIEW_TRUNCATION_REASONS,
   PROMPT_DIAGNOSTIC_CODES,
@@ -300,7 +301,8 @@ export class CliPromptPreparer {
       outgoingSections.userPromptText
     ).map((match) => match.ref);
     const hasPriorContext =
-      (resolvedPriorContext !== undefined && resolvedPriorContext !== "none") ||
+      (resolvedPriorContext !== undefined &&
+        resolvedPriorContext !== PRIOR_CONTEXT_KEYWORDS.NONE) ||
       inlineRefs.length > 0;
     const hasExtras =
       !!sections.agentContent ||
@@ -366,7 +368,8 @@ export class CliPromptPreparer {
       ? workflowContext?.resolvePriorContextItems
         ? await workflowContext.resolvePriorContextItems(
             [
-              ...(resolvedPriorContext && resolvedPriorContext !== "none"
+              ...(resolvedPriorContext &&
+              resolvedPriorContext !== PRIOR_CONTEXT_KEYWORDS.NONE
                 ? [resolvedPriorContext]
                 : []),
               ...inlineRefs.map(refToPriorContext),

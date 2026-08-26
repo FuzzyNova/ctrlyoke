@@ -1,3 +1,8 @@
+import {
+  INHERIT_DEFAULT_OPTION,
+  MCP_SERVER_IDS,
+  MCP_TRANSPORTS,
+} from "@root/types/DashboardConstants";
 import React, { useEffect, useMemo, useState } from "react";
 import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import type { ManagedMcpServer } from "@root/types/WebviewMessageTypes";
@@ -59,19 +64,25 @@ function isMatchingServerEntry(entry: McpServerEntry, id: string): boolean {
 }
 
 function hasCtrlYoke(arr: McpServerEntry[]): boolean {
-  return arr.some((entry) => isMatchingServerEntry(entry, "ctrlyoke"));
+  return arr.some((entry) =>
+    isMatchingServerEntry(entry, MCP_SERVER_IDS.CTRLYOKE)
+  );
 }
 
 /** Return the ctrlyoke entry as an McpServerConfig object, or undefined if not present. */
 function getCtrlYokeConfig(arr: McpServerEntry[]): McpServerConfig | undefined {
   return arr.find(
     (entry): entry is McpServerConfig =>
-      typeof entry === "object" && entry !== null && entry.id === "ctrlyoke"
+      typeof entry === "object" &&
+      entry !== null &&
+      entry.id === MCP_SERVER_IDS.CTRLYOKE
   );
 }
 
 function getNonCtrlYokeEntries(arr: McpServerEntry[]): McpServerEntry[] {
-  return arr.filter((entry) => !isMatchingServerEntry(entry, "ctrlyoke"));
+  return arr.filter(
+    (entry) => !isMatchingServerEntry(entry, MCP_SERVER_IDS.CTRLYOKE)
+  );
 }
 
 function buildArray(
@@ -175,7 +186,8 @@ function ServerDetails({ server }: { server: ListedServer }) {
     {
       label: "transport",
       value:
-        server.config.transport && server.config.transport !== "streamable-http"
+        server.config.transport &&
+        server.config.transport !== MCP_TRANSPORTS.STREAMABLE_HTTP
           ? server.config.transport
           : null,
     },
@@ -599,8 +611,8 @@ export const McpServersEditor: React.FC<{
     }
   }, [isLoadingManagedServers, managedServers, requestServers]);
 
-  const mode: "default" | "custom" =
-    showDefault && value === undefined ? "default" : "custom";
+  const mode: typeof INHERIT_DEFAULT_OPTION | "custom" =
+    showDefault && value === undefined ? INHERIT_DEFAULT_OPTION : "custom";
 
   const currentArray = useMemo(
     () => (Array.isArray(value) ? value : []),
@@ -631,14 +643,17 @@ export const McpServersEditor: React.FC<{
   );
 
   useEffect(() => {
-    const activeRows = mode === "default" ? inheritedRows : currentRows;
+    const activeRows =
+      mode === INHERIT_DEFAULT_OPTION ? inheritedRows : currentRows;
     if (expandedId && !activeRows.some((row) => row.id === expandedId)) {
       setExpandedId(null);
     }
   }, [currentRows, expandedId, inheritedRows, mode]);
 
-  const handleModeChange = (newMode: "default" | "custom") => {
-    if (newMode === "default") {
+  const handleModeChange = (
+    newMode: typeof INHERIT_DEFAULT_OPTION | "custom"
+  ) => {
+    if (newMode === INHERIT_DEFAULT_OPTION) {
       onChange(undefined);
       return;
     }
@@ -710,7 +725,7 @@ export const McpServersEditor: React.FC<{
       />
       {showDefault && (
         <div className="flex gap-1">
-          {(["default", "custom"] as const).map((option) => (
+          {([INHERIT_DEFAULT_OPTION, "custom"] as const).map((option) => (
             <button
               key={option}
               type="button"
@@ -721,13 +736,13 @@ export const McpServersEditor: React.FC<{
                   : "border-panel-border bg-transparent text-description-fg hover:border-focus-border hover:text-foreground"
               }`}
             >
-              {option === "default" ? defaultLabel : "Custom"}
+              {option === INHERIT_DEFAULT_OPTION ? defaultLabel : "Custom"}
             </button>
           ))}
         </div>
       )}
 
-      {mode === "default" ? (
+      {mode === INHERIT_DEFAULT_OPTION ? (
         <div className="opacity-80">
           <McpServersPanel
             value={inheritedValue}

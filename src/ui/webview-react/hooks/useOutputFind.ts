@@ -1,3 +1,4 @@
+import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import {
   useCallback,
   useEffect,
@@ -188,13 +189,13 @@ export function useOutputFind(
 
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent) => {
-      if (event.key === "Enter") {
+      if (event.key === KEYBOARD_KEYS.ENTER) {
         event.preventDefault();
         navigate(event.shiftKey ? -1 : 1);
         return;
       }
 
-      if (event.key === "Escape") {
+      if (event.key === KEYBOARD_KEYS.ESCAPE) {
         event.preventDefault();
         close();
         return;

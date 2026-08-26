@@ -9,6 +9,7 @@ import type { OutputMessage } from "@utils/outputProjection";
 import type { WorkflowStep } from "@store/workflowStore";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import { FINAL_STEP_PHASES, MESSAGE_TYPES } from "@/types/messages";
+import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { WebviewLog } from "@/utils/logger";
 
 interface UseOutputExportInput {
@@ -56,7 +57,7 @@ export function useOutputExport({
   const totalCliSteps = useMemo(() => {
     const seen = new Set<string>();
     for (const msg of allMessages) {
-      if (msg.type === "cli") {
+      if (msg.type === OUTPUT_MESSAGE_TYPES.CLI) {
         seen.add(`${msg.target.kind}:${msg.target.index}`);
       }
     }
@@ -74,7 +75,7 @@ export function useOutputExport({
         attemptIndex: msg.attemptIndex,
         runIndex: msg.runIndex,
         stepName:
-          msg.type === "cli"
+          msg.type === OUTPUT_MESSAGE_TYPES.CLI
             ? msg.target.kind === FINAL_STEP_PHASES.FINAL_STEP
               ? finalStep?.name?.trim() || undefined
               : steps[msg.target.index]?.name?.trim() || undefined

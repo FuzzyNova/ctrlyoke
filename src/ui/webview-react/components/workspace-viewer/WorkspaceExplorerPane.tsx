@@ -53,6 +53,10 @@ import {
 } from "./fileBrowserShared";
 import type { WorkspaceEntrySortKey } from "@root/types/HostedWorkspaceViewerTypes";
 import { nextWorkspaceEntrySort } from "@utils/workspaceEntrySort";
+import {
+  SCM_FILE_KINDS,
+  WORKSPACE_ENTRY_KINDS,
+} from "@root/types/DashboardConstants";
 
 /**
  * Resolves the git-status text color class for an explorer entry, mirroring
@@ -68,16 +72,17 @@ function getEntryStatusColorClass(
   if (entry.gitIgnored) return SCM_IGNORED_COLOR_CLASS;
 
   const ownStatus = sourceControlFiles.find((f) => f.path === entry.path);
-  if (ownStatus && ownStatus.kind !== "deleted") {
+  if (ownStatus && ownStatus.kind !== SCM_FILE_KINDS.DELETED) {
     return SCM_KIND_COLOR_CLASS[ownStatus.kind];
   }
 
-  if (entry.kind !== "directory") return undefined;
+  if (entry.kind !== WORKSPACE_ENTRY_KINDS.DIRECTORY) return undefined;
 
   const prefix = `${entry.path}/`;
   let aggregateKind: SourceControlFile["kind"] | undefined;
   for (const file of sourceControlFiles) {
-    if (file.kind === "deleted" || !file.path.startsWith(prefix)) continue;
+    if (file.kind === SCM_FILE_KINDS.DELETED || !file.path.startsWith(prefix))
+      continue;
     if (aggregateKind === undefined) {
       aggregateKind = file.kind;
     } else if (aggregateKind !== file.kind) {
@@ -323,7 +328,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   // Consume pending navigation set externally (e.g. from CodeMirror link clicks)
   useEffect(() => {
     if (!pendingNavigation) return;
-    if (pendingNavigation.type === "directory") {
+    if (pendingNavigation.type === WORKSPACE_ENTRY_KINDS.DIRECTORY) {
       const normalizedPath = pendingNavigation.dirPath
         .replace(/\\/g, "/")
         .replace(/^\.\//, "");
@@ -612,7 +617,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
               getItemKey={(entry) => entry.path}
               renderItem={(entry) => {
                 const isSelected =
-                  entry.kind === "file" && selectedFilePath === entry.path;
+                  entry.kind === WORKSPACE_ENTRY_KINDS.FILE &&
+                  selectedFilePath === entry.path;
                 const isCut =
                   clipboard?.operation === "cut" &&
                   clipboard.path === entry.path;
@@ -629,7 +635,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                       isCut={isCut}
                       statusColorClass={statusColorClass}
                       onClick={() => {
-                        if (entry.kind === "directory") {
+                        if (entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY) {
                           loadDirectory(entry.path);
                         } else {
                           openFile(entry.path);

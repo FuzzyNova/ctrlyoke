@@ -28,6 +28,11 @@ import {
 } from "../../../types/DashboardConstants";
 import { ClaudeToolBuilder } from "./ClaudeToolBuilder";
 import { BackgroundFollowUpState } from "../shared/BackgroundFollowUpState";
+import {
+  CLAUDE_CONTENT_BLOCK_TYPES,
+  CLAUDE_EVENT_TYPES,
+  CLAUDE_STOP_REASONS,
+} from "./ClaudeProtocolConstants";
 
 /**
  * Claude CLI Log Parser
@@ -277,11 +282,17 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         : Date.now();
 
       // Process assistant messages (Claude responses)
-      if (event.type === "assistant" && event.message?.content) {
+      if (
+        event.type === CLAUDE_EVENT_TYPES.ASSISTANT &&
+        event.message?.content
+      ) {
         // Process content blocks in order they appear
         for (const contentBlock of event.message.content) {
           // TEXT - Extract text content
-          if (contentBlock.type === "text" && contentBlock.text) {
+          if (
+            contentBlock.type === CLAUDE_CONTENT_BLOCK_TYPES.TEXT &&
+            contentBlock.text
+          ) {
             outputEvents.push({
               type: CLI_EVENT_TYPES.TEXT,
               timestamp,
@@ -304,7 +315,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           }
 
           // TOOL_USE - Map Claude tools to semantic event types
-          if (contentBlock.type === "tool_use") {
+          if (contentBlock.type === CLAUDE_CONTENT_BLOCK_TYPES.TOOL_USE) {
             if (contentBlock.id && contentBlock.name) {
               pendingToolNames.set(contentBlock.id, contentBlock.name);
             }
@@ -338,7 +349,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       }
 
       // Process user events for TOOL_RESULT blocks and structured metadata
-      if (event.type === "user" && Array.isArray(event.message?.content)) {
+      if (
+        event.type === CLAUDE_EVENT_TYPES.USER &&
+        Array.isArray(event.message?.content)
+      ) {
         ClaudeToolBuilder.processToolResultBlocks(
           event.message.content,
           timestamp,
@@ -490,7 +504,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    */
   isComplete(event: BaseCliEvent): boolean {
     // Must be an assistant event with a stop_reason
-    if (event.type !== "assistant") {
+    if (event.type !== CLAUDE_EVENT_TYPES.ASSISTANT) {
       return false;
     }
 
@@ -503,7 +517,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
     // "tool_use" is NOT a final completion - Claude paused to execute tools
     // and will continue after receiving tool_result
-    if (stopReason === "tool_use") {
+    if (stopReason === CLAUDE_STOP_REASONS.TOOL_USE) {
       return false;
     }
 
@@ -518,7 +532,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     event: BaseCliEvent,
     modelId: string
   ): { used: number; size: number } | null {
-    if (event.type === "assistant") {
+    if (event.type === CLAUDE_EVENT_TYPES.ASSISTANT) {
       const assistantEvent = event as ClaudeProviderEvent;
       const usage = assistantEvent.message?.usage;
       if (!usage) return null;
@@ -546,7 +560,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     ctx: { dispatchedPromptText?: string }
   ): UserEventClassification {
     const e = event as ClaudeProviderEvent;
-    if (e.type !== "user") {
+    if (e.type !== CLAUDE_EVENT_TYPES.USER) {
       return "other";
     }
 
@@ -585,7 +599,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    */
   override extractUserSteerText(event: BaseCliEvent): string | undefined {
     const e = event as ClaudeProviderEvent;
-    if (e.type !== "user") {
+    if (e.type !== CLAUDE_EVENT_TYPES.USER) {
       return undefined;
     }
     const text = this.extractUserMessageText(e);
@@ -619,7 +633,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     }
     return (content as Array<Record<string, any>>)
       .filter(
-        (block) => block.type === "text" && typeof block.text === "string"
+        (block) =>
+          block.type === CLAUDE_CONTENT_BLOCK_TYPES.TEXT &&
+          typeof block.text === "string"
       )
       .map((block) => block.text as string)
       .join("")
@@ -635,7 +651,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * delivered and starts the resumed turn.
    */
   private extractTaskNotificationText(e: ClaudeProviderEvent): string {
-    if (e.type === "user") {
+    if (e.type === CLAUDE_EVENT_TYPES.USER) {
       return this.extractUserMessageText(e);
     }
     if (e.type === "attachment" && typeof e.attachment?.prompt === "string") {
@@ -646,7 +662,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
   /** Update pending launch state from correlated tool results. */
   private trackAsyncLaunchResult(e: ClaudeProviderEvent): void {
-    if (e.type !== "user" || !Array.isArray(e.message?.content)) {
+    if (
+      e.type !== CLAUDE_EVENT_TYPES.USER ||
+      !Array.isArray(e.message?.content)
+    ) {
       return;
     }
 
@@ -723,10 +742,13 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   override trackBackgroundWorkState(event: BaseCliEvent): void {
     const e = event as ClaudeProviderEvent;
 
-    if (e.type === "assistant") {
+    if (e.type === CLAUDE_EVENT_TYPES.ASSISTANT) {
       if (Array.isArray(e.message?.content)) {
         for (const block of e.message.content as Array<Record<string, any>>) {
-          if (block.type !== "tool_use" || typeof block.id !== "string") {
+          if (
+            block.type !== CLAUDE_CONTENT_BLOCK_TYPES.TOOL_USE ||
+            typeof block.id !== "string"
+          ) {
             continue;
           }
 
@@ -761,7 +783,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         this.backgroundFollowUpState.isResumedTurnPending() &&
         stopReason !== null &&
         stopReason !== undefined &&
-        stopReason !== "tool_use"
+        stopReason !== CLAUDE_STOP_REASONS.TOOL_USE
       ) {
         this.backgroundFollowUpState.resumedTurnClosed();
       }
@@ -934,7 +956,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
           // Look for user event with matching prompt text
           for (const event of events as ClaudeProviderEvent[]) {
-            if (event.type === "user") {
+            if (event.type === CLAUDE_EVENT_TYPES.USER) {
               const text = this.extractUserMessageText(event);
               if (text) {
                 const logPromptPrefix = this.normalizePromptForMatching(
@@ -1022,9 +1044,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   extractContentFromEvent(event: BaseCliEvent): string | undefined {
     // Claude assistant: Extract text from content array
     const e = event as ClaudeProviderEvent;
-    if (e.type === "assistant" && e.message?.content) {
+    if (e.type === CLAUDE_EVENT_TYPES.ASSISTANT && e.message?.content) {
       const textContent = e.message.content
-        .filter((c: any) => c.type === "text")
+        .filter((c: any) => c.type === CLAUDE_CONTENT_BLOCK_TYPES.TEXT)
         .map((c: any) => c.text)
         .join("");
       return textContent || undefined;
@@ -1056,9 +1078,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       ? new Date(e.timestamp as number).getTime()
       : Date.now();
 
-    if (e.type === "assistant" && e.message?.content) {
+    if (e.type === CLAUDE_EVENT_TYPES.ASSISTANT && e.message?.content) {
       for (const block of e.message.content) {
-        if (block.type === "text" && block.text) {
+        if (block.type === CLAUDE_CONTENT_BLOCK_TYPES.TEXT && block.text) {
           events.push({
             type: CLI_EVENT_TYPES.TEXT,
             timestamp,
@@ -1077,7 +1099,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           });
         }
 
-        if (block.type === "tool_use") {
+        if (block.type === CLAUDE_CONTENT_BLOCK_TYPES.TOOL_USE) {
           const callerType = block.caller?.type as string | undefined;
           events.push(
             ...ClaudeToolBuilder.buildInitiatedEvents(
@@ -1095,7 +1117,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       }
     }
 
-    if (e.type === "user" && Array.isArray(e.message?.content)) {
+    if (
+      e.type === CLAUDE_EVENT_TYPES.USER &&
+      Array.isArray(e.message?.content)
+    ) {
       for (const block of e.message.content) {
         if (block.type === "tool_result") {
           const toolName = block.tool_use_id

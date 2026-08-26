@@ -13,9 +13,13 @@ import {
   type CtrlYokeSlashToken,
 } from "../../../utils/CtrlYokeSlashTokens";
 import {
+  ATOMIC_REFERENCE_KINDS,
   CTRLYOKE_SLASH_TOKEN_KINDS,
+  PRIOR_CONTEXT_REFERENCE_KINDS,
   RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
+  type AtomicReferenceKind,
+  type PriorContextReferenceKind,
   type RetryPromptPlaceholder,
 } from "../../../types/DashboardConstants";
 import { parseSecretReferences } from "../../../utils/SecretReferenceParser";
@@ -145,10 +149,8 @@ function isRangeCovered(
 }
 
 export type ContextReferenceType =
-  | "file"
-  | "directory"
+  | AtomicReferenceKind
   | "lineRange"
-  | "symbol"
   | "git"
   | "priorContext"
   | "secret"
@@ -199,7 +201,9 @@ export function createFileReferenceChip(path: string): AtomicReferenceChip {
     label: `${referenceBasename(path)}${directory ? "/" : ""}`,
     title: path,
     attrs: {
-      "data-type": directory ? "directory" : "file",
+      "data-type": directory
+        ? ATOMIC_REFERENCE_KINDS.DIRECTORY
+        : ATOMIC_REFERENCE_KINDS.FILE,
       "data-path": path,
     },
   };
@@ -214,8 +218,8 @@ export function createAtomicReferencePresentation(
   const type = descriptor.attrs["data-type"];
   const compactStart = (() => {
     switch (type) {
-      case "directory":
-      case "file":
+      case ATOMIC_REFERENCE_KINDS.DIRECTORY:
+      case ATOMIC_REFERENCE_KINDS.FILE:
         return Math.max(
           0,
           sourceText.lastIndexOf(
@@ -229,7 +233,7 @@ export function createAtomicReferencePresentation(
             `${referenceBasename(descriptor.attrs["data-path"] ?? "")}:${descriptor.attrs["data-line-start"] ?? ""}-${descriptor.attrs["data-line-end"] ?? ""}`
           )
         );
-      case "symbol":
+      case ATOMIC_REFERENCE_KINDS.SYMBOL:
         return Math.max(
           0,
           sourceText.lastIndexOf(descriptor.attrs["data-symbol-name"] ?? label)
@@ -377,7 +381,7 @@ export interface InlinePriorContextRef {
   from: number;
   to: number;
   token: string;
-  kind: "previous" | "all" | "finalStep" | "allFinalStep" | "step";
+  kind: PriorContextReferenceKind;
   indices?: number[];
 }
 
@@ -455,7 +459,10 @@ export function findConditionOutputRefs(
 }
 
 export const PRIOR_CONTEXT_CHIP_LABELS: Record<
-  Exclude<InlinePriorContextRef["kind"], "step">,
+  Exclude<
+    InlinePriorContextRef["kind"],
+    typeof PRIOR_CONTEXT_REFERENCE_KINDS.STEP
+  >,
   string
 > = {
   previous: "previous",
@@ -473,7 +480,7 @@ function describeContextReferenceChip(
   const attrs: Record<string, string> = { "data-type": ref.type };
 
   switch (ref.type) {
-    case "directory":
+    case ATOMIC_REFERENCE_KINDS.DIRECTORY:
       attrs["data-path"] = ref.path ?? "";
       return {
         icon: "folder",
@@ -491,7 +498,7 @@ function describeContextReferenceChip(
         title,
         attrs,
       };
-    case "symbol":
+    case ATOMIC_REFERENCE_KINDS.SYMBOL:
       attrs["data-path"] = ref.path ?? "";
       if (ref.symbolName) attrs["data-symbol-name"] = ref.symbolName;
       if (ref.lineStart) attrs["data-line-start"] = ref.lineStart;
@@ -528,7 +535,7 @@ function describeContextReferenceChip(
         title,
         attrs,
       };
-    case "file":
+    case ATOMIC_REFERENCE_KINDS.FILE:
     default:
       attrs["data-path"] = ref.path ?? "";
       return {
@@ -546,9 +553,11 @@ export function describePriorContextChip(
 ): Omit<AtomicReferenceChip, "from" | "to"> {
   const title = docText.slice(ref.from, ref.to);
   const dataRef =
-    ref.kind === "step" ? `step:${ref.indices?.join(",") ?? ""}` : ref.kind;
+    ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP
+      ? `${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:${ref.indices?.join(",") ?? ""}`
+      : ref.kind;
   const label =
-    ref.kind === "step"
+    ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP
       ? `step ${ref.indices?.join(",") ?? ""}`
       : PRIOR_CONTEXT_CHIP_LABELS[ref.kind];
   return {
@@ -688,7 +697,7 @@ export function findContextReferenceMatches(
   let match: RegExpExecArray | null;
   const collectPathMatches = (
     pattern: RegExp,
-    type: "file" | "directory",
+    type: AtomicReferenceKind,
     target: ContextReferenceMatch[]
   ) => {
     const regex = new RegExp(pattern.source, "g");
@@ -701,10 +710,26 @@ export function findContextReferenceMatches(
       });
     }
   };
-  collectPathMatches(patterns.fullFileQuoted, "file", fileMatches);
-  collectPathMatches(patterns.fullFile, "file", fileMatches);
-  collectPathMatches(patterns.directoryQuoted, "directory", directoryMatches);
-  collectPathMatches(patterns.directory, "directory", directoryMatches);
+  collectPathMatches(
+    patterns.fullFileQuoted,
+    ATOMIC_REFERENCE_KINDS.FILE,
+    fileMatches
+  );
+  collectPathMatches(
+    patterns.fullFile,
+    ATOMIC_REFERENCE_KINDS.FILE,
+    fileMatches
+  );
+  collectPathMatches(
+    patterns.directoryQuoted,
+    ATOMIC_REFERENCE_KINDS.DIRECTORY,
+    directoryMatches
+  );
+  collectPathMatches(
+    patterns.directory,
+    ATOMIC_REFERENCE_KINDS.DIRECTORY,
+    directoryMatches
+  );
   const collectLineRangeMatches = (pattern: RegExp) => {
     const regex = new RegExp(pattern.source, "g");
     while ((match = regex.exec(text)) !== null) {
@@ -725,7 +750,7 @@ export function findContextReferenceMatches(
       symbolMatches.push({
         from: offset + match.index,
         to: offset + match.index + match[0].length,
-        type: "symbol",
+        type: ATOMIC_REFERENCE_KINDS.SYMBOL,
         ...(match[1] ? { symbolKind: match[1] } : {}),
         path: match[2] ?? match[3],
         symbolName: match[4] ?? match[5],
@@ -832,17 +857,45 @@ export function findInlinePriorContextRefs(
     const token = match[0];
     const from = offset + match.index;
     const to = from + token.length;
-    if (body === "previous")
-      results.push({ from, to, token, kind: "previous" });
-    else if (body === "all") results.push({ from, to, token, kind: "all" });
-    else if (body === "finalStep")
-      results.push({ from, to, token, kind: "finalStep" });
-    else if (body === "allFinalStep")
-      results.push({ from, to, token, kind: "allFinalStep" });
-    else if (body.startsWith("step:")) {
-      const indices = parsePriorContextStepRange(body.slice("step:".length));
+    if (body === PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS)
+      results.push({
+        from,
+        to,
+        token,
+        kind: PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS,
+      });
+    else if (body === PRIOR_CONTEXT_REFERENCE_KINDS.ALL)
+      results.push({
+        from,
+        to,
+        token,
+        kind: PRIOR_CONTEXT_REFERENCE_KINDS.ALL,
+      });
+    else if (body === PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP)
+      results.push({
+        from,
+        to,
+        token,
+        kind: PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP,
+      });
+    else if (body === PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP)
+      results.push({
+        from,
+        to,
+        token,
+        kind: PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP,
+      });
+    else if (body.startsWith(`${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:`)) {
+      const stepPrefix = `${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:`;
+      const indices = parsePriorContextStepRange(body.slice(stepPrefix.length));
       if (indices !== null)
-        results.push({ from, to, token, kind: "step", indices });
+        results.push({
+          from,
+          to,
+          token,
+          kind: PRIOR_CONTEXT_REFERENCE_KINDS.STEP,
+          indices,
+        });
     }
   }
   return results;

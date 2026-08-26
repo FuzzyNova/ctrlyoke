@@ -62,6 +62,7 @@ import { HooksEditor } from "../editor/HooksEditor";
 import { PermissionListEditor } from "../shared/PermissionListEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import {
+  KEYBOARD_KEYS,
   EXECUTION_MODE_HELP_TEXT,
   EXECUTION_MODE_OPTIONS,
   WORKTREE_KEEP_HELP_TEXT,
@@ -70,6 +71,7 @@ import {
   WORKTREE_MODES,
   PERMISSION_MODES,
   PERMISSION_CAPABILITY_KEYS,
+  PROMPT_PROPERTIES,
 } from "../../../../types/DashboardConstants";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
@@ -520,7 +522,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
           globalSettings.harnessDefaultAdditionalArgs[effectiveHarness] ?? "";
         return (workflowValue || "") !== (harnessDefault || "");
       }
-      if (property === "agent") {
+      if (property === PROMPT_PROPERTIES.AGENT) {
         // Persisted workflow agent uses null for "None" (see normalizeAgentSelection
         // in WorkflowStepSanitizer), while the global default uses "" — treat both
         // as equivalent so the button hides when the workflow matches the default.
@@ -1355,7 +1357,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
         aria-label={isMobileMode ? undefined : "Collapse workflow properties"}
         tabIndex={isMobileMode ? undefined : 0}
         onKeyDown={
-          isMobileMode ? undefined : (e) => e.key === "Enter" && handleToggle()
+          isMobileMode
+            ? undefined
+            : (e) => e.key === KEYBOARD_KEYS.ENTER && handleToggle()
         }
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 text-description-fg hover:text-foreground transition-colors">
@@ -1855,7 +1859,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       onChange={(e) => setSessionIdInput(e.target.value)}
                       onBlur={(e) => handleSessionIdChange(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") e.currentTarget.blur();
+                        if (e.key === KEYBOARD_KEYS.ENTER)
+                          e.currentTarget.blur();
                       }}
                       placeholder="Session ID, prompt number, or blank for auto-resume"
                       className="w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border h-7"

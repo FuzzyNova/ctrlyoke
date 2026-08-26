@@ -8,6 +8,7 @@ import {
   CLI_EVENT_TYPES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
+  HISTORY_MATCH_FIELDS,
   SCRIPT_OUTPUT_SOURCES,
 } from "../../types/DashboardConstants";
 import type { WorkingFile } from "../../types/CtrlYokeTypes";
@@ -333,7 +334,11 @@ suite("HistorySearchService", () => {
       stdoutResults.map((result) => result.eventKind).sort(),
       ["endCondition", "preCondition", "script"]
     );
-    assert.ok(stdoutResults.every((result) => result.matchField === "output"));
+    assert.ok(
+      stdoutResults.every(
+        (result) => result.matchField === HISTORY_MATCH_FIELDS.OUTPUT
+      )
+    );
     assert.ok(stdoutResults.every((result) => result.eventKind !== "response"));
 
     const commandResults = (

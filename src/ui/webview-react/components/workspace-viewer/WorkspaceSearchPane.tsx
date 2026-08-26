@@ -14,6 +14,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { workspaceRepos, workspaceSearch } from "@utils/hostedApi";
 import { truncateSnippet } from "@utils/string";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 
 const INITIAL_RESULT_LIMIT = 50;
 
@@ -36,7 +37,7 @@ function groupContentMatches(
 ): ContentMatchGroup[] {
   const groups = new Map<string, WorkspaceSearchContentMatch[]>();
   for (const result of results) {
-    if (result.kind !== "content") continue;
+    if (result.kind !== WORKSPACE_ENTRY_KINDS.CONTENT) continue;
     const matches = groups.get(result.path);
     if (matches) {
       matches.push(result);
@@ -188,7 +189,10 @@ export const WorkspaceSearchPane: React.FC = () => {
     [searchResults]
   );
   const filenameMatches = useMemo(
-    () => searchResults.filter((result) => result.kind === "file"),
+    () =>
+      searchResults.filter(
+        (result) => result.kind === WORKSPACE_ENTRY_KINDS.FILE
+      ),
     [searchResults]
   );
 

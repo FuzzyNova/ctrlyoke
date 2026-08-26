@@ -9,6 +9,7 @@ import {
   FINAL_STEP_PHASES,
   PRIOR_CONTEXT_ITEM_TYPES,
   PRIOR_CONTEXT_KEYWORDS,
+  RUN_OUTPUT_RESOLVER_EVENT_KINDS,
 } from "../../types/DashboardConstants";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import type {
@@ -125,52 +126,55 @@ export interface RunOutputProjectionOptions {
  */
 export type RunOutputResolverEvent =
   | {
-      kind: "attemptStarted";
+      kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_STARTED;
       attempt: ResolvedRunAttempt;
       attemptKind: TimelineAttemptKind;
       startReason: TimelineAttemptStartReason;
       prompt: string;
     }
   | {
-      kind: "streamingChunk";
+      kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_CHUNK;
       attempt: ResolvedRunAttempt;
       chunk: string;
     }
   | {
-      kind: "streamingEvents";
+      kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_EVENTS;
       attempt: ResolvedRunAttempt;
       events: CliEvent[];
     }
   | {
-      kind: "output";
+      kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.OUTPUT;
       attempt: ResolvedRunAttemptOutput;
     }
   | {
-      kind: "scriptExecution";
+      kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.SCRIPT_EXECUTION;
       attempt: ResolvedRunAttempt;
       scriptOutput: ScriptRuntimeOutput;
     }
   | {
-      kind: "retryScheduled";
+      kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.RETRY_SCHEDULED;
       attempt: ResolvedRunAttempt;
       previousAttemptIndex: number;
       retryPrompt: string;
     }
   | {
-      kind: "followUpResponseAppended";
+      kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.FOLLOW_UP_RESPONSE_APPENDED;
       attempt: ResolvedRunAttempt;
       responseTextLength: number;
       eventCount: number;
     }
   | {
-      kind: "attemptTerminated";
+      kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_TERMINATED;
       attempt: ResolvedRunAttempt;
       terminalState: TimelineAttemptTerminalState;
       reason?: string;
     }
-  | { kind: "runtimeTransition"; transition: WorkflowRuntimeTransitionPayload }
   | {
-      kind: "runTerminated";
+      kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION;
+      transition: WorkflowRuntimeTransitionPayload;
+    }
+  | {
+      kind: typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED;
       executionState: ExecutionState;
       stepCount: number;
     };
@@ -214,7 +218,7 @@ export class RunOutputResolver {
       switch (event.eventType) {
         case TIMELINE_EVENT_TYPES.WORKFLOW_RUNTIME_TRANSITION_RECORDED:
           yield {
-            kind: "runtimeTransition",
+            kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION,
             transition: event.payload.transition,
           };
           break;
@@ -228,7 +232,7 @@ export class RunOutputResolver {
             event.phase
           );
           yield {
-            kind: "attemptStarted",
+            kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_STARTED,
             attempt,
             attemptKind: event.payload.kind,
             startReason: event.payload.startReason,
@@ -246,7 +250,7 @@ export class RunOutputResolver {
             event.phase
           );
           yield {
-            kind: "output",
+            kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.OUTPUT,
             attempt: {
               ...attempt,
               output: event.payload.cliOutput,
@@ -260,7 +264,7 @@ export class RunOutputResolver {
         }
         case TIMELINE_EVENT_TYPES.CLI_OUTPUT_CHUNK_APPENDED:
           yield {
-            kind: "streamingChunk",
+            kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_CHUNK,
             attempt: this.createAttemptReference(
               event.target,
               event.runIndex ?? 0,
@@ -274,7 +278,7 @@ export class RunOutputResolver {
           break;
         case TIMELINE_EVENT_TYPES.CLI_OUTPUT_EVENTS_APPENDED:
           yield {
-            kind: "streamingEvents",
+            kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_EVENTS,
             attempt: this.createAttemptReference(
               event.target,
               event.runIndex ?? 0,
@@ -288,7 +292,7 @@ export class RunOutputResolver {
           break;
         case TIMELINE_EVENT_TYPES.SCRIPT_EXECUTION_RECORDED:
           yield {
-            kind: "scriptExecution",
+            kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.SCRIPT_EXECUTION,
             attempt: this.createAttemptReference(
               event.target,
               event.runIndex,
@@ -302,7 +306,7 @@ export class RunOutputResolver {
           break;
         case TIMELINE_EVENT_TYPES.RETRY_SCHEDULED:
           yield {
-            kind: "retryScheduled",
+            kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.RETRY_SCHEDULED,
             attempt: this.createAttemptReference(
               event.target,
               event.runIndex,
@@ -317,7 +321,7 @@ export class RunOutputResolver {
           break;
         case TIMELINE_EVENT_TYPES.FOLLOW_UP_RESPONSE_APPENDED:
           yield {
-            kind: "followUpResponseAppended",
+            kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.FOLLOW_UP_RESPONSE_APPENDED,
             attempt: this.createAttemptReference(
               event.target,
               event.runIndex,
@@ -332,7 +336,7 @@ export class RunOutputResolver {
           break;
         case TIMELINE_EVENT_TYPES.ATTEMPT_TERMINATED:
           yield {
-            kind: "attemptTerminated",
+            kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_TERMINATED,
             attempt: this.createAttemptReference(
               event.target,
               event.runIndex,
@@ -346,7 +350,7 @@ export class RunOutputResolver {
           break;
         case TIMELINE_EVENT_TYPES.RUN_TERMINATED:
           yield {
-            kind: "runTerminated",
+            kind: RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED,
             executionState: event.payload.executionState,
             stepCount: event.payload.stepCount,
           };
@@ -366,8 +370,8 @@ export class RunOutputResolver {
 
     for await (const event of this.stream(manifestPath)) {
       if (
-        event.kind === "runTerminated" ||
-        event.kind === "runtimeTransition" ||
+        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED ||
+        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION ||
         !sameAttempt(event.attempt, target, runIndex, attemptIndex)
       ) {
         continue;
@@ -376,17 +380,17 @@ export class RunOutputResolver {
       value ??= { ...event.attempt };
       value.definition = event.attempt.definition ?? value.definition;
       switch (event.kind) {
-        case "attemptStarted":
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_STARTED:
           value.prompt = event.prompt;
           value.kind = event.attemptKind;
           value.startReason = event.startReason;
           break;
-        case "output":
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.OUTPUT:
           value.output = event.attempt.output;
           value.responseText = event.attempt.responseText;
           value.kind = event.attempt.kind;
           break;
-        case "streamingChunk":
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_CHUNK:
           if (value.output?.isStreaming) {
             value.output = {
               ...value.output,
@@ -395,7 +399,7 @@ export class RunOutputResolver {
             value.responseText = value.output.response;
           }
           break;
-        case "streamingEvents":
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_EVENTS:
           if (value.output?.isStreaming) {
             value.output = {
               ...value.output,
@@ -410,10 +414,10 @@ export class RunOutputResolver {
             };
           }
           break;
-        case "scriptExecution":
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.SCRIPT_EXECUTION:
           value.scriptOutput = event.scriptOutput;
           break;
-        case "attemptTerminated":
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_TERMINATED:
           value.terminalState = event.terminalState;
           value.terminalReason = event.reason;
           break;
@@ -437,8 +441,8 @@ export class RunOutputResolver {
 
     for await (const event of this.stream(manifestPath)) {
       if (
-        event.kind === "runTerminated" ||
-        event.kind === "runtimeTransition" ||
+        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED ||
+        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION ||
         !requested.has(getTargetKey(event.attempt.target))
       ) {
         continue;
@@ -462,20 +466,20 @@ export class RunOutputResolver {
       }
       value.definition = event.attempt.definition ?? value.definition;
       switch (event.kind) {
-        case "attemptStarted":
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_STARTED:
           value.prompt = event.prompt;
           value.kind = event.attemptKind;
           value.startReason = event.startReason;
           break;
-        case "output":
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.OUTPUT:
           value.output = event.attempt.output;
           value.responseText = event.attempt.responseText;
           value.kind = event.attempt.kind;
           break;
-        case "scriptExecution":
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.SCRIPT_EXECUTION:
           value.scriptOutput = event.scriptOutput;
           break;
-        case "attemptTerminated":
+        case RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_TERMINATED:
           value.terminalState = event.terminalState;
           value.terminalReason = event.reason;
           break;
@@ -517,8 +521,8 @@ export class RunOutputResolver {
     try {
       for await (const event of this.stream(manifestPath)) {
         if (
-          event.kind === "runTerminated" ||
-          event.kind === "runtimeTransition"
+          event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED ||
+          event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION
         ) {
           continue;
         }
@@ -530,7 +534,7 @@ export class RunOutputResolver {
           continue;
         }
 
-        if (event.kind === "attemptStarted") {
+        if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_STARTED) {
           if (event.attemptKind === TIMELINE_ATTEMPT_KINDS.CONDITION) {
             continue;
           }
@@ -561,7 +565,7 @@ export class RunOutputResolver {
           continue;
         }
 
-        if (event.kind === "attemptTerminated") {
+        if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.ATTEMPT_TERMINATED) {
           queueAccumulator?.recordAttemptTermination(
             event.attempt,
             event.terminalState,
@@ -586,7 +590,7 @@ export class RunOutputResolver {
           continue;
         }
 
-        if (event.kind === "scriptExecution") {
+        if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.SCRIPT_EXECUTION) {
           queueAccumulator?.recordScriptOutput(
             event.attempt,
             event.scriptOutput
@@ -608,9 +612,12 @@ export class RunOutputResolver {
           continue;
         }
 
-        if (event.kind === "streamingEvents" || event.kind === "output") {
+        if (
+          event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_EVENTS ||
+          event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.OUTPUT
+        ) {
           const events =
-            event.kind === "streamingEvents"
+            event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_EVENTS
               ? event.events
               : (event.attempt.output.structured?.events ?? []);
           const normalizedEvents = normalizeCliEvents(events);
@@ -853,8 +860,8 @@ export class RunOutputResolver {
     const queueIndices = new Set<number>();
     for await (const event of this.stream(manifestPath)) {
       if (
-        event.kind !== "runTerminated" &&
-        event.kind !== "runtimeTransition" &&
+        event.kind !== RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED &&
+        event.kind !== RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION &&
         event.attempt.target.kind === FINAL_STEP_PHASES.QUEUE
       ) {
         queueIndices.add(event.attempt.target.stepIndex);
@@ -892,7 +899,10 @@ export class RunOutputResolver {
   ): Promise<OutputExecutionTarget[]> {
     const targets = new Map<string, OutputExecutionTarget>();
     for await (const event of this.stream(manifestPath)) {
-      if (event.kind === "runTerminated" || event.kind === "runtimeTransition")
+      if (
+        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUN_TERMINATED ||
+        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.RUNTIME_TRANSITION
+      )
         continue;
       if (event.attempt.target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         targets.set(getTargetKey(event.attempt.target), event.attempt.target);

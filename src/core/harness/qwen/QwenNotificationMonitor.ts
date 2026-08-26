@@ -9,6 +9,7 @@ import type { CapabilityDeclaration } from "../../../types/CompatibilityTypes";
 import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
+  HOOK_EVENT_NAMES,
 } from "../../../types/DashboardConstants";
 
 /**
@@ -35,7 +36,7 @@ export class QwenNotificationMonitor
     preToolUse: "PreToolUse",
     postToolUse: "PostToolUse",
     userPromptSubmit: "UserPromptSubmit",
-    permissionRequest: "PermissionRequest",
+    [HOOK_EVENT_NAMES.PERMISSION_REQUEST]: "PermissionRequest",
     notification: "Notification",
   };
 
@@ -45,7 +46,8 @@ export class QwenNotificationMonitor
     preToolUse: QwenNotificationMonitor.verifiedHook(),
     postToolUse: QwenNotificationMonitor.verifiedHook(),
     userPromptSubmit: QwenNotificationMonitor.verifiedHook(),
-    permissionRequest: QwenNotificationMonitor.verifiedHook(),
+    [HOOK_EVENT_NAMES.PERMISSION_REQUEST]:
+      QwenNotificationMonitor.verifiedHook(),
     notification: QwenNotificationMonitor.verifiedHook(),
     error: QwenNotificationMonitor.unsupportedHook(),
   };
@@ -123,7 +125,7 @@ export class QwenNotificationMonitor
         continue;
       }
       const eventCommand =
-        event === "permissionRequest" && encodedDecisionHook
+        event === HOOK_EVENT_NAMES.PERMISSION_REQUEST && encodedDecisionHook
           ? `${command} ${encodedDecisionHook}`
           : command;
       hooks[nativeEvent] = [

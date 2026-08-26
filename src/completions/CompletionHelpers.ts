@@ -29,6 +29,8 @@ import { clearSlashTokenCompletionCache } from "./SlashTokenCompletionHelpers";
 import {
   RETRY_PROMPT_PLACEHOLDERS,
   SCRIPT_OUTPUT_SOURCES,
+  WORKSPACE_ENTRY_KINDS,
+  type WorkspaceFileTreeEntryKind,
 } from "../types/DashboardConstants";
 
 export {
@@ -725,7 +727,7 @@ function sharedPathPrefixLength(a: string[], b: string[]): number {
  */
 export async function getPathSuggestions(
   typedPath: string,
-  kind: "file" | "directory",
+  kind: WorkspaceFileTreeEntryKind,
   maxResults = 3
 ): Promise<string[]> {
   const normalizedTyped = normalizeReferencePath(typedPath)
@@ -742,7 +744,7 @@ export async function getPathSuggestions(
 
   // Candidates: files for @file; unique ancestor directories for @directory.
   let candidatePaths: string[];
-  if (kind === "directory") {
+  if (kind === WORKSPACE_ENTRY_KINDS.DIRECTORY) {
     const directories = new Set<string>();
     for (const fileUri of files) {
       collectWorkspaceDirectories(
@@ -812,7 +814,7 @@ export async function getPathSuggestions(
   return ranked
     .slice(0, maxResults)
     .map((entry) =>
-      kind === "directory"
+      kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
         ? buildDirectoryReference(entry.relativePath)
         : buildFileReference(entry.relativePath)
     );

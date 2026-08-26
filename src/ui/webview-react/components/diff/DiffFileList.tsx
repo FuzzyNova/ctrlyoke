@@ -16,6 +16,7 @@ import {
 } from "@utils/diffFileRows";
 import { DEFAULT_OUTPUT_CONTENT_WIDTH } from "@utils/outputLineMetrics";
 import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 
 export interface DiffFileListCommand {
   /** Changes whenever Expand all or Collapse all should reset local state. */
@@ -120,8 +121,12 @@ export const DiffFileList = React.forwardRef<
     }
   );
   const fileRows = rows.filter(
-    (row): row is Extract<DiffFileListRow, { kind: "file" }> =>
-      row.kind === "file"
+    (
+      row
+    ): row is Extract<
+      DiffFileListRow,
+      { kind: typeof WORKSPACE_ENTRY_KINDS.FILE }
+    > => row.kind === WORKSPACE_ENTRY_KINDS.FILE
   );
   const fileRowKeySignature = fileRows.map((row) => row.key).join("\u0000");
   const activeFileRowKeys = useMemo(
@@ -275,7 +280,9 @@ export const DiffFileList = React.forwardRef<
       key={row.key}
       className={diffFileListRowGapClass(row)}
       data-scroll-key={row.key}
-      {...(row.kind === "file" ? { "data-diff-file-key": row.key } : {})}
+      {...(row.kind === WORKSPACE_ENTRY_KINDS.FILE
+        ? { "data-diff-file-key": row.key }
+        : {})}
     >
       {row.kind === "selection-summary" && row.content}
       {row.kind === "group-heading" && (
@@ -290,7 +297,7 @@ export const DiffFileList = React.forwardRef<
           )}
         </div>
       )}
-      {row.kind === "file" && (
+      {row.kind === WORKSPACE_ENTRY_KINDS.FILE && (
         <DiffFileCard
           {...diffFileCardPropsWithoutKey(row.file)}
           ariaSetSize={fileRows.length}

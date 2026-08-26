@@ -5,13 +5,14 @@ import { CLI_EVENT_TYPES } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES } from "@/types/messages";
 import { findOutputMatches, highlightText } from "@utils/outputFind";
 import type { OutputRenderRow } from "@utils/outputRows";
+import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 
 const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
 
 function makePromptRow(text: string, key = "prompt-1"): OutputRenderRow {
   return {
     key,
-    rowKind: "prompt",
+    rowKind: OUTPUT_ROW_KINDS.PROMPT,
     target,
     text,
     estimateSize: 24,
@@ -24,7 +25,7 @@ function makePlainResponseRow(
 ): OutputRenderRow {
   return {
     key,
-    rowKind: "plain-response",
+    rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
     target,
     text,
     rawTextOutput: true,
@@ -41,7 +42,7 @@ function makeStructuredBashRow(
 ): OutputRenderRow {
   return {
     key,
-    rowKind: "structured-event",
+    rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
     target,
     event: {
       type: CLI_EVENT_TYPES.BASH_COMMAND,
@@ -67,7 +68,7 @@ function makeStructuredToolCallRow(
 ): OutputRenderRow {
   return {
     key,
-    rowKind: "structured-event",
+    rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
     target,
     event: {
       type: CLI_EVENT_TYPES.TOOL_CALL,
@@ -88,7 +89,7 @@ function makeStructuredToolCallRow(
 function makeStatsRow(key = "stats-1"): OutputRenderRow {
   return {
     key,
-    rowKind: "stats",
+    rowKind: OUTPUT_ROW_KINDS.STATS,
     target,
     output: {
       prompt: "hidden",
@@ -104,7 +105,7 @@ function makeStatsRow(key = "stats-1"): OutputRenderRow {
 function makeVerdictRow(): OutputRenderRow {
   return {
     key: "verdict-1",
-    rowKind: "script-verdict",
+    rowKind: OUTPUT_ROW_KINDS.SCRIPT_VERDICT,
     target,
     estimateSize: 36,
     expanded: false,
@@ -139,7 +140,7 @@ describe("outputFind", () => {
       expect(matches).toHaveLength(1);
       expect(matches[0]).toMatchObject({
         rowKey: "prompt-1",
-        rowKind: "prompt",
+        rowKind: OUTPUT_ROW_KINDS.PROMPT,
         field: "prompt",
       });
     });
@@ -195,7 +196,7 @@ describe("outputFind", () => {
 
       expect(matches).toHaveLength(1);
       expect(matches[0]).toMatchObject({
-        rowKind: "structured-event",
+        rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
         field: "command",
       });
     });
@@ -243,7 +244,7 @@ describe("outputFind", () => {
 
       expect(matches).toHaveLength(1);
       expect(matches[0]).toMatchObject({
-        rowKind: "structured-event",
+        rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
         field: "toolContent",
         start: "read_file".length + 1,
       });
@@ -272,7 +273,7 @@ describe("outputFind", () => {
     it("finds matches in MCP tool call parameter text", () => {
       const row: OutputRenderRow = {
         key: "mcp-tool-1",
-        rowKind: "structured-event",
+        rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
         target,
         event: {
           type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
@@ -303,7 +304,7 @@ describe("outputFind", () => {
       const rows: OutputRenderRow[] = [
         {
           key: "anchor",
-          rowKind: "step-anchor",
+          rowKind: OUTPUT_ROW_KINDS.STEP_ANCHOR,
           target,
           estimateSize: 1,
         },

@@ -2,6 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as yaml from "js-yaml";
 import {
+  PROMPT_PROPERTIES,
   SECRET_REGISTRY_STATES,
   SETTING_SCOPES,
   type SettingWriteScope,
@@ -110,7 +111,7 @@ function collectWorkflowNames(
       }
     }
 
-    if (key === "prompt" && typeof child === "string") {
+    if (key === PROMPT_PROPERTIES.PROMPT && typeof child === "string") {
       for (const reference of parseSecretReferences(child)) {
         names.add(reference.name);
       }

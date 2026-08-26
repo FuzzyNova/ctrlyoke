@@ -30,6 +30,11 @@ import {
   ILogParser,
 } from "../../../core/harness/shared/interfaces/ILogParser";
 import { CliParseUtils } from "../../../core/harness/shared/CliParseUtils";
+import { OPENCODE_EVENT_TYPES } from "../../../core/harness/opencode/OpenCodeProtocolConstants";
+import {
+  QWEN_CONTENT_PART_TYPES,
+  QWEN_EVENT_TYPES,
+} from "../../../core/harness/qwen/QwenProtocolConstants";
 
 /**
  * Comprehensive unit tests for CLI log parser implementations
@@ -826,7 +831,7 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(askEvents.length, 2);
 
       const declined = askEvents[1].data as AskUserQuestionData;
-      assert.strictEqual(declined.status, "failed");
+      assert.strictEqual(declined.status, OPERATION_STATUS.FAILED);
       assert.strictEqual(declined.declined?.reason, "clarify");
       // The decline carries no structured questions of its own — the shared
       // normalizer backfills them from the INITIATED event at render time.
@@ -871,7 +876,7 @@ suite("ClaudeLogParser", () => {
       const declined = response.events.find(
         (e) =>
           e.type === CLI_EVENT_TYPES.ASK_USER_QUESTION &&
-          (e.data as AskUserQuestionData).status === "failed"
+          (e.data as AskUserQuestionData).status === OPERATION_STATUS.FAILED
       )?.data as AskUserQuestionData | undefined;
 
       assert.ok(declined);
@@ -4931,7 +4936,9 @@ suite("OpenCodeLogParser", () => {
 
       const result = parser.extractResponse(events);
       const thinkingEvents = result.events.filter((e) => e.type === "thinking");
-      const textEvents = result.events.filter((e) => e.type === "text");
+      const textEvents = result.events.filter(
+        (e) => e.type === OPENCODE_EVENT_TYPES.TEXT
+      );
 
       assert.strictEqual(thinkingEvents.length, 1);
       assert.strictEqual(
@@ -4972,7 +4979,7 @@ suite("QwenLogParser", () => {
         .map((line) => JSON.parse(line) as BaseCliEvent);
       const output = provider.logParser.extractResponse(sessionLog);
       const stdoutAssistantParts = stdout
-        .filter((event) => event.type === "assistant")
+        .filter((event) => event.type === QWEN_EVENT_TYPES.ASSISTANT)
         .flatMap((event) => event.message?.content ?? []);
       const stdoutSemantics = {
         sessionId: stdout.find((event) => event.session_id)?.session_id,
@@ -4980,13 +4987,14 @@ suite("QwenLogParser", () => {
           (part) => part.type === "thinking"
         ).length,
         text: stdoutAssistantParts
-          .filter((part) => part.type === "text")
+          .filter((part) => part.type === QWEN_CONTENT_PART_TYPES.TEXT)
           .map((part) => part.text),
         toolCallNames: stdoutAssistantParts
-          .filter((part) => part.type === "tool_use")
+          .filter((part) => part.type === QWEN_CONTENT_PART_TYPES.TOOL_USE)
           .map((part) => part.name),
         toolResultCount: stdout.filter(
-          (event) => event.type === "user" && event.message?.content
+          (event) =>
+            event.type === QWEN_EVENT_TYPES.USER && event.message?.content
         ).length,
         usage: stdout.find((event) => event.type === "result")?.usage,
       };

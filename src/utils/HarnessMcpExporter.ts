@@ -12,6 +12,7 @@ import type {
 } from "../types/DashboardConstants";
 import {
   HARNESS_IDS,
+  MCP_TRANSPORTS,
   SETTING_SCOPES,
   SPECIAL_TARGET_IDS,
 } from "../types/DashboardConstants";
@@ -98,7 +99,8 @@ async function writeTextFileAtomic(
 function toVsCodeEntry(server: McpServerConfig): JsonObject | null {
   if (server.url) {
     return {
-      type: server.transport === "sse" ? "sse" : "http",
+      type:
+        server.transport === MCP_TRANSPORTS.SSE ? MCP_TRANSPORTS.SSE : "http",
       url: server.url,
       ...(server.headers ? { headers: server.headers } : {}),
     };
@@ -125,7 +127,8 @@ function toVsCodeEntry(server: McpServerConfig): JsonObject | null {
 function toClaudeEntry(server: McpServerConfig): JsonObject | null {
   if (server.url) {
     return {
-      type: server.transport === "sse" ? "sse" : "http",
+      type:
+        server.transport === MCP_TRANSPORTS.SSE ? MCP_TRANSPORTS.SSE : "http",
       url: server.url,
       ...(server.headers ? { headers: server.headers } : {}),
     };
@@ -151,7 +154,8 @@ function toClaudeEntry(server: McpServerConfig): JsonObject | null {
 function toCopilotEntry(server: McpServerConfig): JsonObject | null {
   if (server.url) {
     return {
-      type: server.transport === "sse" ? "sse" : "http",
+      type:
+        server.transport === MCP_TRANSPORTS.SSE ? MCP_TRANSPORTS.SSE : "http",
       url: server.url,
       ...(server.headers ? { headers: server.headers } : {}),
       tools: ["*"],
@@ -180,7 +184,7 @@ function toCopilotEntry(server: McpServerConfig): JsonObject | null {
 function toQwenEntry(server: McpServerConfig): JsonObject | null {
   if (server.url) {
     return {
-      ...(server.transport === "sse"
+      ...(server.transport === MCP_TRANSPORTS.SSE
         ? { url: server.url }
         : { httpUrl: server.url }),
       ...(server.headers ? { headers: server.headers } : {}),
@@ -301,8 +305,8 @@ function toCodexBlock(server: McpServerConfig): string | null {
   if (server.url) {
     lines.push(`url = ${escapeTomlString(server.url)}`);
   }
-  if (server.transport === "sse") {
-    lines.push(`transport = "sse"`);
+  if (server.transport === MCP_TRANSPORTS.SSE) {
+    lines.push(`transport = "${MCP_TRANSPORTS.SSE}"`);
   }
   if (server.headers && Object.keys(server.headers).length > 0) {
     lines.push(`headers = ${toTomlInlineTable(server.headers)}`);

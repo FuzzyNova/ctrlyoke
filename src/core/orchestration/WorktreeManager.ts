@@ -43,6 +43,12 @@ import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import {
   LOCK_STATUS,
   WORKTREE_MANAGEMENT_ACTIONS,
+  WORKTREE_BRANCH_STATES,
+  WORKTREE_DIRECTORY_STATES,
+  WORKTREE_LANDING_OUTCOMES,
+  WORKTREE_LIFECYCLE_OWNERS,
+  WORKTREE_MODES,
+  WORKTREE_SETUP_OUTCOMES,
   type WorktreeManagementAction,
 } from "../../types/DashboardConstants";
 import { isPathWithinDirectory } from "../../utils/PathSecurity";
@@ -80,10 +86,13 @@ import {
   type RuntimeTrustedRootHandle,
 } from "../../utils/RuntimeTrustedRootRegistry";
 
-export type WorktreeMode = "managed" | "named";
+export type WorktreeMode =
+  | typeof WORKTREE_MODES.MANAGED
+  | typeof WORKTREE_MODES.NAMED;
 export type WorktreeManagerMode = WorktreeMode;
 export type WorktreeOrigin = "created" | "discovered" | "recovered";
-export type WorktreeLifecycleOwner = "ctrlyoke" | "user";
+export type WorktreeLifecycleOwner =
+  (typeof WORKTREE_LIFECYCLE_OWNERS)[keyof typeof WORKTREE_LIFECYCLE_OWNERS];
 export type ManagedWorktreeRecoveryOutcome =
   | "landed"
   | "no-changes"
@@ -93,10 +102,10 @@ export const MANAGED_WORKTREE_RECORD_SCHEMA_VERSION = 1 as const;
 export const NAMED_WORKTREE_SETUP_RECORD_SCHEMA_VERSION = 1 as const;
 
 export type NamedWorktreeSetupOutcome =
-  | "pending"
-  | "running"
-  | "succeeded"
-  | "failed";
+  | typeof WORKTREE_SETUP_OUTCOMES.PENDING
+  | typeof WORKTREE_SETUP_OUTCOMES.RUNNING
+  | typeof WORKTREE_SETUP_OUTCOMES.SUCCEEDED
+  | typeof WORKTREE_SETUP_OUTCOMES.FAILED;
 
 export interface ManagedWorktreeOwnershipRecord {
   schemaVersion: typeof MANAGED_WORKTREE_RECORD_SCHEMA_VERSION;
@@ -117,12 +126,14 @@ export interface ManagedWorktreeOwnershipRecord {
     | "blocked"
     | "orphaned"
     | "settled";
-  directoryState: "present" | "removed" | "missing" | "remove-failed";
-  branchState: "present" | "deleted" | "missing";
+  directoryState: (typeof WORKTREE_DIRECTORY_STATES)[keyof typeof WORKTREE_DIRECTORY_STATES];
+  branchState: (typeof WORKTREE_BRANCH_STATES)[keyof typeof WORKTREE_BRANCH_STATES];
   recoveryOutcome?: ManagedWorktreeRecoveryOutcome;
   finalBranchTip?: string;
   /** A failed managed setup is eligible for deferred cleanup on re-run. */
-  setupOutcome?: "succeeded" | "failed";
+  setupOutcome?:
+    | typeof WORKTREE_SETUP_OUTCOMES.SUCCEEDED
+    | typeof WORKTREE_SETUP_OUTCOMES.FAILED;
 }
 
 export interface NamedWorktreeSetupRecord {
@@ -691,7 +702,10 @@ export class WorktreeManager {
     };
 
     try {
-      if (info.mode !== "managed" || info.lifecycleOwner !== "ctrlyoke") {
+      if (
+        info.mode !== WORKTREE_MODES.MANAGED ||
+        info.lifecycleOwner !== WORKTREE_LIFECYCLE_OWNERS.CTRLYOKE
+      ) {
         return blocked("Only ctrlyoke-owned managed worktrees can be settled.");
       }
       if (options.artifactsClean === false) {
@@ -1323,7 +1337,10 @@ export class WorktreeManager {
       updatedAt: this.now(),
     });
 
-    if (landingOutcome === "no-changes" && branchState === "deleted") {
+    if (
+      landingOutcome === WORKTREE_LANDING_OUTCOMES.NO_CHANGES &&
+      branchState === WORKTREE_BRANCH_STATES.DELETED
+    ) {
       // The record is no longer needed only after both independent resources
       // are durably recorded as gone. A crash before this unlink leaves the
       // record as a safe reconciliation tombstone.
@@ -1904,7 +1921,7 @@ export class WorktreeManager {
       (record) =>
         !managedEntries.some(
           (entry) =>
-            entry.ownership === "managed" &&
+            entry.ownership === WORKTREE_MODES.MANAGED &&
             entry.branchName === record.branchName &&
             pathsEqual(entry.worktreePath, record.worktreePath)
         )
@@ -2152,7 +2169,7 @@ export class WorktreeManager {
         );
         await this.writeRecord(
           this.recordPath(commonDirectory, record.branchName),
-          { ...record, branchState: "deleted" }
+          { ...record, branchState: WORKTREE_BRANCH_STATES.DELETED }
         );
       }
     });
@@ -2489,7 +2506,7 @@ export class WorktreeManager {
     const info: ActiveWorktreeInfo = {
       mode: "named",
       origin,
-      lifecycleOwner: "user",
+      lifecycleOwner: WORKTREE_LIFECYCLE_OWNERS.USER,
       branchName,
       worktreePath: executionCheckoutRoot,
       sourceCheckoutRoot,
@@ -2632,8 +2649,8 @@ export class WorktreeManager {
           typeof parsed.runRef !== "string" ||
           typeof parsed.createdAt !== "number" ||
           (parsed.setupOutcome !== undefined &&
-            parsed.setupOutcome !== "succeeded" &&
-            parsed.setupOutcome !== "failed") ||
+            parsed.setupOutcome !== WORKTREE_SETUP_OUTCOMES.SUCCEEDED &&
+            parsed.setupOutcome !== WORKTREE_SETUP_OUTCOMES.FAILED) ||
           !parsed.lifecycleState ||
           !parsed.directoryState ||
           !parsed.branchState
@@ -2654,10 +2671,10 @@ export class WorktreeManager {
         if (
           parsed.schemaVersion !== NAMED_WORKTREE_SETUP_RECORD_SCHEMA_VERSION ||
           typeof parsed.worktreePath !== "string" ||
-          (parsed.setupOutcome !== "pending" &&
-            parsed.setupOutcome !== "running" &&
-            parsed.setupOutcome !== "succeeded" &&
-            parsed.setupOutcome !== "failed") ||
+          (parsed.setupOutcome !== WORKTREE_SETUP_OUTCOMES.PENDING &&
+            parsed.setupOutcome !== WORKTREE_SETUP_OUTCOMES.RUNNING &&
+            parsed.setupOutcome !== WORKTREE_SETUP_OUTCOMES.SUCCEEDED &&
+            parsed.setupOutcome !== WORKTREE_SETUP_OUTCOMES.FAILED) ||
           typeof parsed.updatedAt !== "number"
         ) {
           return undefined;
@@ -2795,7 +2812,7 @@ export class WorktreeManager {
       (record) =>
         pathsEqual(record.sourceCheckoutRoot, repositoryRoot) &&
         record.lifecycleState === "blocked" &&
-        record.setupOutcome === "failed"
+        record.setupOutcome === WORKTREE_SETUP_OUTCOMES.FAILED
     );
     if (candidates.length === 0) return;
 
@@ -2872,7 +2889,10 @@ export class WorktreeManager {
       };
       await this.writeRecord(recordPath, reconciledRecord);
 
-      if (branchState === "deleted" || branchState === "missing") {
+      if (
+        branchState === WORKTREE_BRANCH_STATES.DELETED ||
+        branchState === WORKTREE_BRANCH_STATES.MISSING
+      ) {
         // Keep the record as a tombstone until both independently-owned
         // resources have been observed gone. A crash before this unlink is
         // therefore safe to reconcile again.
@@ -2899,9 +2919,9 @@ export class WorktreeManager {
       resolvedOptions
     );
     return {
-      mode: "managed",
+      mode: WORKTREE_MODES.MANAGED,
       origin,
-      lifecycleOwner: "ctrlyoke",
+      lifecycleOwner: WORKTREE_LIFECYCLE_OWNERS.CTRLYOKE,
       branchName: record.branchName,
       worktreePath: record.worktreePath,
       sourceCheckoutRoot: record.sourceCheckoutRoot,
@@ -3016,7 +3036,10 @@ export class WorktreeManager {
       directoryState: "present",
       branchState: "present",
     };
-    if (setupOutcome === "succeeded" || setupOutcome === "failed") {
+    if (
+      setupOutcome === WORKTREE_SETUP_OUTCOMES.SUCCEEDED ||
+      setupOutcome === WORKTREE_SETUP_OUTCOMES.FAILED
+    ) {
       readyRecord.setupOutcome = setupOutcome;
     } else {
       delete readyRecord.setupOutcome;
@@ -3024,9 +3047,9 @@ export class WorktreeManager {
     await this.writeRecord(args.recordPath, readyRecord);
     const dirty = await hasUncommittedChanges(args.record.worktreePath);
     const info: ActiveWorktreeInfo = {
-      mode: "managed",
+      mode: WORKTREE_MODES.MANAGED,
       origin: args.origin,
-      lifecycleOwner: "ctrlyoke",
+      lifecycleOwner: WORKTREE_LIFECYCLE_OWNERS.CTRLYOKE,
       branchName: args.record.branchName,
       worktreePath: args.record.worktreePath,
       sourceCheckoutRoot: args.record.sourceCheckoutRoot,
@@ -3052,7 +3075,7 @@ export class WorktreeManager {
     };
     await this.persistRuntime({
       schemaVersion: 1,
-      mode: "managed",
+      mode: WORKTREE_MODES.MANAGED,
       origin: args.origin,
       branchName: args.record.branchName,
       worktreePath: args.record.worktreePath,
@@ -3067,7 +3090,7 @@ export class WorktreeManager {
       ...(args.record.targetBranch
         ? { targetBranch: args.record.targetBranch }
         : {}),
-      lifecycleOwner: "ctrlyoke",
+      lifecycleOwner: WORKTREE_LIFECYCLE_OWNERS.CTRLYOKE,
       lifecycleState: "ready",
       directoryState: "present",
       branchState: "present",
@@ -3298,7 +3321,7 @@ export class WorktreeManager {
         ),
       })),
       baseCommit: "",
-      lifecycleOwner: "user",
+      lifecycleOwner: WORKTREE_LIFECYCLE_OWNERS.USER,
       lifecycleState: "provisioning",
       directoryState: "missing",
       branchState: "missing",

@@ -3,6 +3,7 @@ import * as os from "os";
 import * as path from "path";
 import { suite, setup, teardown, test } from "mocha";
 import * as vscode from "vscode";
+import { WORKSPACE_ENTRY_KINDS } from "../../types/DashboardConstants";
 import {
   clearFilesCache,
   getFileCompletions,
@@ -338,7 +339,7 @@ suite("CompletionHelpers", () => {
 
       const suggestions = await getPathSuggestions(
         "src/ui/webview-react/components/editor/CodeMirrorEditor.tsxfoo",
-        "file"
+        WORKSPACE_ENTRY_KINDS.FILE
       );
 
       assert.strictEqual(
@@ -355,7 +356,7 @@ suite("CompletionHelpers", () => {
 
       const suggestions = await getPathSuggestions(
         "src/ui/webview-react/components/editor/CodeMirrorEdi",
-        "file"
+        WORKSPACE_ENTRY_KINDS.FILE
       );
 
       // CodeMirrorEditor.tsx is a prefix match (tier 0); CodeMirrorTheme.ts is
@@ -368,7 +369,10 @@ suite("CompletionHelpers", () => {
     test("ranks a same-directory near-match above an exact-basename match elsewhere", async () => {
       mockWorkspaceFiles(["src/a/Button.tsx", "src/z/Button.ts"]);
 
-      const suggestions = await getPathSuggestions("src/a/Button.ts", "file");
+      const suggestions = await getPathSuggestions(
+        "src/a/Button.ts",
+        WORKSPACE_ENTRY_KINDS.FILE
+      );
 
       // Same dir + prefix (tier 0) beats exact basename in another dir (tier 2).
       assert.strictEqual(suggestions[0], "@src/a/Button.tsx");
@@ -382,7 +386,7 @@ suite("CompletionHelpers", () => {
 
       const suggestions = await getPathSuggestions(
         "src/old/path/CodeMirrorEditor.tsx",
-        "file"
+        WORKSPACE_ENTRY_KINDS.FILE
       );
 
       assert.deepStrictEqual(suggestions, [
@@ -397,7 +401,7 @@ suite("CompletionHelpers", () => {
 
       const suggestions = await getPathSuggestions(
         "src/ui/webview-react/components/edito/",
-        "directory"
+        WORKSPACE_ENTRY_KINDS.DIRECTORY
       );
 
       assert.ok(
@@ -408,7 +412,10 @@ suite("CompletionHelpers", () => {
     test("returns no suggestions when nothing resembles the typed basename", async () => {
       mockWorkspaceFiles(["src/a/Alpha.ts", "src/b/Beta.ts"]);
 
-      const suggestions = await getPathSuggestions("src/c/Zzzzz.md", "file");
+      const suggestions = await getPathSuggestions(
+        "src/c/Zzzzz.md",
+        WORKSPACE_ENTRY_KINDS.FILE
+      );
 
       assert.deepStrictEqual(suggestions, []);
     });
@@ -421,7 +428,11 @@ suite("CompletionHelpers", () => {
         "src/a/Report4.ts",
       ]);
 
-      const suggestions = await getPathSuggestions("src/a/Report", "file", 3);
+      const suggestions = await getPathSuggestions(
+        "src/a/Report",
+        WORKSPACE_ENTRY_KINDS.FILE,
+        3
+      );
 
       assert.strictEqual(suggestions.length, 3);
     });

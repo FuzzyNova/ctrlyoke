@@ -6,6 +6,7 @@ import {
   screen,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 import type { WorkspaceSearchResponse } from "@root/types/HostedWorkspaceViewerTypes";
 import { WorkspaceSearchPane } from "@components/workspace-viewer/WorkspaceSearchPane";
 import { useSettingsStore } from "@store/settingsStore";
@@ -227,13 +228,27 @@ describe("WorkspaceSearchPane", () => {
 
   it("shows a truncated notice and loads more with a higher limit", async () => {
     setSearchResults({
-      results: [{ kind: "file", path: "src/app.ts", name: "app.ts" }],
+      results: [
+        {
+          kind: WORKSPACE_ENTRY_KINDS.FILE,
+          path: "src/app.ts",
+          name: "app.ts",
+        },
+      ],
       truncated: true,
     });
     workspaceSearchMock.mockResolvedValueOnce({
       results: [
-        { kind: "file", path: "src/app.ts", name: "app.ts" },
-        { kind: "file", path: "src/main.ts", name: "main.ts" },
+        {
+          kind: WORKSPACE_ENTRY_KINDS.FILE,
+          path: "src/app.ts",
+          name: "app.ts",
+        },
+        {
+          kind: WORKSPACE_ENTRY_KINDS.FILE,
+          path: "src/main.ts",
+          name: "main.ts",
+        },
       ],
       truncated: false,
     });
@@ -266,7 +281,7 @@ describe("WorkspaceSearchPane", () => {
     // inside its budget, so `truncated: false` must still offer Load more.
     setSearchResults({
       results: Array.from({ length: 50 }, (_, i) => ({
-        kind: "file" as const,
+        kind: WORKSPACE_ENTRY_KINDS.FILE,
         path: `src/file-${i}.ts`,
         name: `file-${i}.ts`,
       })),
@@ -294,9 +309,13 @@ describe("WorkspaceSearchPane", () => {
     useWorkspaceViewerStore.setState({ openToFile });
     setSearchResults({
       results: [
-        { kind: "file", path: "src/app.ts", name: "app.ts" },
         {
-          kind: "content",
+          kind: WORKSPACE_ENTRY_KINDS.FILE,
+          path: "src/app.ts",
+          name: "app.ts",
+        },
+        {
+          kind: WORKSPACE_ENTRY_KINDS.CONTENT,
           path: "src/lib.ts",
           line: 12,
           matchSnippet: "a very long matching line",
@@ -328,7 +347,9 @@ describe("WorkspaceSearchPane", () => {
         })
       )
       .mockResolvedValueOnce({
-        results: [{ kind: "file", path: "new.ts", name: "new.ts" }],
+        results: [
+          { kind: WORKSPACE_ENTRY_KINDS.FILE, path: "new.ts", name: "new.ts" },
+        ],
         truncated: false,
       });
 
@@ -341,7 +362,9 @@ describe("WorkspaceSearchPane", () => {
     expect(screen.getByRole("button", { name: /new\.ts/ })).toBeInTheDocument();
 
     resolveFirst({
-      results: [{ kind: "file", path: "old.ts", name: "old.ts" }],
+      results: [
+        { kind: WORKSPACE_ENTRY_KINDS.FILE, path: "old.ts", name: "old.ts" },
+      ],
       truncated: false,
     });
     await act(async () => {

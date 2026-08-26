@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
-import { STEP_TYPES } from "@root/types/DashboardConstants";
+import {
+  KEYBOARD_KEYS,
+  MCP_SERVER_IDS,
+  STEP_TYPES,
+} from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
@@ -514,7 +518,7 @@ const WorkflowStepsPanelInner: React.FC<{
         } else if (Array.isArray(step.mcpServers)) {
           const count = step.mcpServers.length;
           const hasCtrlYoke = step.mcpServers.some(
-            (s) => typeof s === "string" && s === "ctrlyoke"
+            (s) => typeof s === "string" && s === MCP_SERVER_IDS.CTRLYOKE
           );
           const serverIds = step.mcpServers.map((s) =>
             typeof s === "string" ? s : ((s as { id?: string }).id ?? "custom")
@@ -907,7 +911,9 @@ const WorkflowStepsPanelInner: React.FC<{
         aria-label={isMobileMode ? undefined : "Collapse steps"}
         tabIndex={isMobileMode ? undefined : 0}
         onKeyDown={
-          isMobileMode ? undefined : (e) => e.key === "Enter" && handleToggle()
+          isMobileMode
+            ? undefined
+            : (e) => e.key === KEYBOARD_KEYS.ENTER && handleToggle()
         }
       >
         {/* Left: collapse chevron (desktop) OR collapse-to-sidebar arrow (mobile fullwidth) */}
@@ -968,7 +974,7 @@ const WorkflowStepsPanelInner: React.FC<{
         }}
         {...bgLongPressHandlers}
         onKeyDown={(e) => {
-          if (e.key === "Escape") {
+          if (e.key === KEYBOARD_KEYS.ESCAPE) {
             deselect();
             return;
           }

@@ -20,10 +20,13 @@ import {
   type ExecutionState,
 } from "../../types/messages";
 import {
+  KEYBOARD_KEYS,
   DEFAULT_WORKFLOW_NAME,
   WORKTREE_MODES,
   WORKTREE_MODE_OPTIONS,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  WORKFLOW_DELETE_SCOPES,
+  RUN_SUMMARY_CACHE_STATUSES,
 } from "@root/types/DashboardConstants";
 import { WorkflowList, type UnifiedWorkflowRow } from "./WorkflowList";
 import { RunPanel } from "./RunPanel";
@@ -90,7 +93,7 @@ type PendingDelete =
       scope: WorkflowContextMenuTarget["scope"];
     }
   | {
-      scope: "all";
+      scope: typeof WORKFLOW_DELETE_SCOPES.ALL;
     };
 
 function assertNever(value: never): never {
@@ -763,9 +766,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
   // Handle input key events
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
+    if (e.key === KEYBOARD_KEYS.ENTER) {
       saveEdit();
-    } else if (e.key === "Escape") {
+    } else if (e.key === KEYBOARD_KEYS.ESCAPE) {
       cancelEdit();
     }
   };
@@ -982,7 +985,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       return;
     }
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== KEYBOARD_KEYS.ESCAPE) return;
       if (dropdownView === "runs") {
         handleBackToWorkflowList();
         return;
@@ -1012,7 +1015,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         runRef,
       };
       if (requestConfirmation && globalSettings.confirmDeleteOperations) {
-        setPendingDelete({ address, scope: "run" });
+        setPendingDelete({ address, scope: WORKFLOW_DELETE_SCOPES.RUN });
         return;
       }
       vscode.postMessage({
@@ -1055,7 +1058,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       closeDropdown();
       return;
     }
-    setPendingDelete({ scope: "all" });
+    setPendingDelete({ scope: WORKFLOW_DELETE_SCOPES.ALL });
   }, [
     closeDropdown,
     displayedViewAddress,
@@ -1085,7 +1088,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         return;
       }
       // Show confirmation modal
-      setPendingDelete({ address, scope: "lineage" });
+      setPendingDelete({ address, scope: WORKFLOW_DELETE_SCOPES.LINEAGE });
     },
     [
       globalSettings.confirmDeleteOperations,
@@ -1099,13 +1102,13 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const handleRemoveWorkflowConfirm = useCallback(() => {
     if (!pendingDelete) return;
     switch (pendingDelete.scope) {
-      case "run":
+      case WORKFLOW_DELETE_SCOPES.RUN:
         vscode.postMessage({
           type: MESSAGE_TYPES.DELETE_RUN_HISTORY,
           address: pendingDelete.address,
         });
         break;
-      case "lineage":
+      case WORKFLOW_DELETE_SCOPES.LINEAGE:
         vscode.postMessage({
           type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
           address: pendingDelete.address,
@@ -1119,7 +1122,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             )
         );
         break;
-      case "all":
+      case WORKFLOW_DELETE_SCOPES.ALL:
         vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY });
         if (displayedViewAddress) {
           markIfViewingDeletedLineage(displayedViewAddress.workflowKey);
@@ -1169,7 +1172,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
   const handleWorkflowContextMenuDelete = useCallback(
     (target: WorkflowContextMenuTarget) => {
-      if (target.scope === "lineage") {
+      if (target.scope === WORKFLOW_DELETE_SCOPES.LINEAGE) {
         handleRemoveWorkflow(target.address);
         return;
       }
@@ -1216,7 +1219,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         {
           address: displayedViewAddress,
           workflowName: displayName,
-          scope: "lineage",
+          scope: WORKFLOW_DELETE_SCOPES.LINEAGE,
           isFavorite: displayedLineage?.isFavorite,
           runDirectory: displayedRunDirectory ?? undefined,
           isExecuting: isWorkflowActive(executionState),
@@ -1446,7 +1449,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     ? [
         ...(runPanelHasDraft ? [{ kind: "draft" as const }] : []),
         ...runPanelSummaries.map((summary) => ({
-          kind: "run" as const,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           summary,
         })),
       ]
@@ -1454,11 +1457,12 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const runPanelIsLoading = drilledWorkflow
     ? isDrilledLineageDisplayed
       ? false
-      : !cachedRunSummaries || cachedRunSummaries.status === "loading"
+      : !cachedRunSummaries ||
+        cachedRunSummaries.status === RUN_SUMMARY_CACHE_STATUSES.LOADING
     : false;
   const runPanelLoadError = isDrilledLineageDisplayed
     ? undefined
-    : cachedRunSummaries?.status === "error"
+    : cachedRunSummaries?.status === RUN_SUMMARY_CACHE_STATUSES.ERROR
       ? (cachedRunSummaries.error ?? "Failed to load runs")
       : undefined;
   const runPanelExecutionRunRef = isDrilledLineageDisplayed
@@ -1837,23 +1841,23 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         onCancel={handleRemoveWorkflowCancel}
         onConfirm={handleRemoveWorkflowConfirm}
         title={
-          pendingDelete?.scope === "all"
+          pendingDelete?.scope === WORKFLOW_DELETE_SCOPES.ALL
             ? "Delete All Workflow History"
-            : pendingDelete?.scope === "run"
+            : pendingDelete?.scope === WORKFLOW_DELETE_SCOPES.RUN
               ? "Delete Run History"
               : "Delete Workflow History"
         }
         message={
-          pendingDelete?.scope === "all"
+          pendingDelete?.scope === WORKFLOW_DELETE_SCOPES.ALL
             ? "Delete all workflows and their run history?"
-            : pendingDelete?.scope === "run"
+            : pendingDelete?.scope === WORKFLOW_DELETE_SCOPES.RUN
               ? `Delete run "${pendingDelete.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN ? pendingDelete.address.runRef : ""}"?`
               : `Remove "${pendingDelete?.address.workflowKey ?? ""}" from history?`
         }
         detail={
-          pendingDelete?.scope === "all"
+          pendingDelete?.scope === WORKFLOW_DELETE_SCOPES.ALL
             ? "This will permanently delete all workflow queue files and run history. This action cannot be undone."
-            : pendingDelete?.scope === "run"
+            : pendingDelete?.scope === WORKFLOW_DELETE_SCOPES.RUN
               ? "This will permanently delete this run's history. This action cannot be undone."
               : "This will permanently delete the workflow's queue files and all run history. This action cannot be undone."
         }

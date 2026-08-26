@@ -5,8 +5,13 @@ import type {
   HarnessId,
   AnyTargetId,
   SettingWriteScope,
+  HarnessFileType,
 } from "../types/DashboardConstants";
-import { SETTING_SCOPES } from "../types/DashboardConstants";
+import {
+  HARNESS_FILE_TYPES,
+  SETTING_SCOPES,
+  SPECIAL_TARGET_IDS,
+} from "../types/DashboardConstants";
 import {
   getHarnessAgentDirs,
   getHarnessUserAgentDirs,
@@ -41,7 +46,7 @@ export interface ManagedFileLocation {
 export interface ManagedFile {
   name: string;
   displayName: string;
-  type: "agent" | "skill";
+  type: HarnessFileType;
   locations: ManagedFileLocation[];
   /** Immutable bundled source available for export when no editable copy exists. */
   builtInSourcePath?: string;
@@ -110,7 +115,7 @@ async function collectAgentLocations(
       byName.set(name, {
         name,
         displayName: formatDisplayName(name),
-        type: "agent",
+        type: HARNESS_FILE_TYPES.AGENT,
         locations: [],
         ...(description ? { description } : {}),
       });
@@ -133,7 +138,9 @@ async function collectAgentLocations(
     }
     if (!(await isAccessibleDirectory(dir))) return;
     const ext =
-      targetId === "ctrlyoke" || targetId === "agents" || targetId === "vscode"
+      targetId === SPECIAL_TARGET_IDS.CTRLYOKE ||
+      targetId === SPECIAL_TARGET_IDS.AGENTS ||
+      targetId === SPECIAL_TARGET_IDS.VSCODE
         ? ".agent.md"
         : (HARNESS_AGENT_EXTENSION[targetId as HarnessId] ?? ".agent.md");
     const files = await fs.promises.readdir(dir).catch(() => [] as string[]);
@@ -143,7 +150,11 @@ async function collectAgentLocations(
       const isPlainMd = f.endsWith(".md") && !isAgentMd;
       if (
         !f.endsWith(ext) &&
-        !(isPlainMd && (targetId === "agents" || targetId === "vscode"))
+        !(
+          isPlainMd &&
+          (targetId === SPECIAL_TARGET_IDS.AGENTS ||
+            targetId === SPECIAL_TARGET_IDS.VSCODE)
+        )
       )
         continue;
       const name = isAgentMd
@@ -165,7 +176,7 @@ async function collectAgentLocations(
   // ctrlyoke workspace dir (first so it takes priority)
   await scanAgentDir(
     getCtrlYokeAgentDir(workspaceRoot),
-    "ctrlyoke",
+    SPECIAL_TARGET_IDS.CTRLYOKE,
     SETTING_SCOPES.WORKSPACE,
     scannedWorkspace
   );
@@ -173,7 +184,7 @@ async function collectAgentLocations(
   // ctrlyoke user dir (~/.ctrlyoke/agents)
   await scanAgentDir(
     getCtrlYokeUserAgentDir(),
-    "ctrlyoke",
+    SPECIAL_TARGET_IDS.CTRLYOKE,
     SETTING_SCOPES.USER,
     scannedUser
   );
@@ -182,20 +193,25 @@ async function collectAgentLocations(
   // labels them "agents" rather than any specific harness that also points here (e.g. Codex)
   await scanAgentDir(
     getAgentsWorkspaceAgentDir(workspaceRoot),
-    "agents",
+    SPECIAL_TARGET_IDS.AGENTS,
     SETTING_SCOPES.WORKSPACE,
     scannedWorkspace
   );
   await scanAgentDir(
     getAgentsUserAgentDir(),
-    "agents",
+    SPECIAL_TARGET_IDS.AGENTS,
     SETTING_SCOPES.USER,
     scannedUser
   );
 
   // VS Code user prompts dirs (user-only)
   for (const dir of getVSCodeUserAgentDirs()) {
-    await scanAgentDir(dir, "vscode", SETTING_SCOPES.USER, scannedUser);
+    await scanAgentDir(
+      dir,
+      SPECIAL_TARGET_IDS.VSCODE,
+      SETTING_SCOPES.USER,
+      scannedUser
+    );
   }
 
   // Harness workspace dirs (dedup — skips any dir already claimed above)
@@ -237,7 +253,7 @@ async function collectSkillLocations(
       byName.set(name, {
         name,
         displayName: formatDisplayName(name),
-        type: "skill",
+        type: HARNESS_FILE_TYPES.SKILL,
         locations: [],
         ...(description ? { description } : {}),
       });
@@ -284,7 +300,7 @@ async function collectSkillLocations(
   // ctrlyoke workspace dir (first for priority)
   await scanSkillDir(
     getCtrlYokeSkillDir(workspaceRoot),
-    "ctrlyoke",
+    SPECIAL_TARGET_IDS.CTRLYOKE,
     SETTING_SCOPES.WORKSPACE,
     scannedWorkspace
   );
@@ -292,7 +308,7 @@ async function collectSkillLocations(
   // ctrlyoke user dir (~/.ctrlyoke/skills)
   await scanSkillDir(
     getCtrlYokeUserSkillDir(),
-    "ctrlyoke",
+    SPECIAL_TARGET_IDS.CTRLYOKE,
     SETTING_SCOPES.USER,
     scannedUser
   );
@@ -300,13 +316,13 @@ async function collectSkillLocations(
   // Generic "Agents" skill dirs — before harness dirs so dedup assigns correct label
   await scanSkillDir(
     getAgentsWorkspaceSkillDir(workspaceRoot),
-    "agents",
+    SPECIAL_TARGET_IDS.AGENTS,
     SETTING_SCOPES.WORKSPACE,
     scannedWorkspace
   );
   await scanSkillDir(
     getAgentsUserSkillDir(),
-    "agents",
+    SPECIAL_TARGET_IDS.AGENTS,
     SETTING_SCOPES.USER,
     scannedUser
   );
@@ -340,12 +356,12 @@ async function collectSkillLocations(
 export class HarnessFileManager {
   static resolveTargetDirectories(
     workspaceRoot: string,
-    type: "agent" | "skill"
+    type: HarnessFileType
   ): ManagedTargetDirectory[] {
     const targets: AnyTargetId[] = [
-      "ctrlyoke",
-      "agents",
-      "vscode",
+      SPECIAL_TARGET_IDS.CTRLYOKE,
+      SPECIAL_TARGET_IDS.AGENTS,
+      SPECIAL_TARGET_IDS.VSCODE,
       ...getAllHarnessIds(),
     ];
     const directories: ManagedTargetDirectory[] = [];
@@ -380,10 +396,10 @@ export class HarnessFileManager {
    */
   static async resolveAllLocations(
     workspaceRoot: string,
-    type: "agent" | "skill"
+    type: HarnessFileType
   ): Promise<ManagedFile[]> {
     try {
-      if (type === "skill") {
+      if (type === HARNESS_FILE_TYPES.SKILL) {
         return collectSkillLocations(workspaceRoot);
       }
 
@@ -401,7 +417,7 @@ export class HarnessFileManager {
         files.push({
           name: agent.name,
           displayName: agent.displayName,
-          type: "agent",
+          type: HARNESS_FILE_TYPES.AGENT,
           locations: [],
           builtInSourcePath: agent.path,
           ...(agent.description ? { description: agent.description } : {}),
@@ -423,7 +439,7 @@ export class HarnessFileManager {
     sourcePath: string,
     targetHarnessId: AnyTargetId,
     workspaceRoot: string,
-    type: "agent" | "skill",
+    type: HarnessFileType,
     overwrite = false,
     scope: SettingWriteScope = SETTING_SCOPES.WORKSPACE
   ): Promise<void> {
@@ -435,7 +451,7 @@ export class HarnessFileManager {
     );
     await ensureDir(targetDir);
 
-    if (type === "agent") {
+    if (type === HARNESS_FILE_TYPES.AGENT) {
       const isHarnessId = targetHarnessId in HARNESS_AGENT_EXTENSION;
       const destExt = isHarnessId
         ? HARNESS_AGENT_EXTENSION[targetHarnessId as HarnessId]
@@ -470,13 +486,13 @@ export class HarnessFileManager {
   static async importToCtrlYoke(
     sourcePath: string,
     workspaceRoot: string,
-    type: "agent" | "skill",
+    type: HarnessFileType,
     overwrite = false,
     scope: SettingWriteScope = SETTING_SCOPES.WORKSPACE
   ): Promise<void> {
     return HarnessFileManager.exportToHarness(
       sourcePath,
-      "ctrlyoke",
+      SPECIAL_TARGET_IDS.CTRLYOKE,
       workspaceRoot,
       type,
       overwrite,
@@ -492,7 +508,7 @@ export class HarnessFileManager {
     name: string,
     harnessId: AnyTargetId,
     workspaceRoot: string,
-    type: "agent" | "skill",
+    type: HarnessFileType,
     scope: SettingWriteScope = SETTING_SCOPES.WORKSPACE
   ): Promise<void> {
     const targetDir = HarnessFileManager.getTargetDir(
@@ -502,7 +518,7 @@ export class HarnessFileManager {
       scope
     );
 
-    if (type === "agent") {
+    if (type === HARNESS_FILE_TYPES.AGENT) {
       const isHarnessId = harnessId in HARNESS_AGENT_EXTENSION;
       const ext = isHarnessId
         ? HARNESS_AGENT_EXTENSION[harnessId as HarnessId]
@@ -524,11 +540,11 @@ export class HarnessFileManager {
   static async deleteAllFromHarness(
     harnessId: AnyTargetId,
     workspaceRoot: string,
-    type: "agent" | "skill",
+    type: HarnessFileType,
     scope: SettingWriteScope = SETTING_SCOPES.WORKSPACE
   ): Promise<void> {
     const files =
-      type === "agent"
+      type === HARNESS_FILE_TYPES.AGENT
         ? await collectAgentLocations(workspaceRoot)
         : await collectSkillLocations(workspaceRoot);
 
@@ -555,32 +571,32 @@ export class HarnessFileManager {
   static getTargetDir(
     harnessId: AnyTargetId,
     workspaceRoot: string,
-    type: "agent" | "skill",
+    type: HarnessFileType,
     scope: SettingWriteScope = SETTING_SCOPES.WORKSPACE
   ): string {
-    if (harnessId === "ctrlyoke") {
+    if (harnessId === SPECIAL_TARGET_IDS.CTRLYOKE) {
       if (scope === SETTING_SCOPES.USER) {
-        return type === "agent"
+        return type === HARNESS_FILE_TYPES.AGENT
           ? getCtrlYokeUserAgentDir()
           : getCtrlYokeUserSkillDir();
       }
-      return type === "agent"
+      return type === HARNESS_FILE_TYPES.AGENT
         ? getCtrlYokeAgentDir(workspaceRoot)
         : getCtrlYokeSkillDir(workspaceRoot);
     }
 
-    if (harnessId === "agents") {
+    if (harnessId === SPECIAL_TARGET_IDS.AGENTS) {
       if (scope === SETTING_SCOPES.USER) {
-        return type === "agent"
+        return type === HARNESS_FILE_TYPES.AGENT
           ? getAgentsUserAgentDir()
           : getAgentsUserSkillDir();
       }
-      return type === "agent"
+      return type === HARNESS_FILE_TYPES.AGENT
         ? getAgentsWorkspaceAgentDir(workspaceRoot)
         : getAgentsWorkspaceSkillDir(workspaceRoot);
     }
 
-    if (harnessId === "vscode") {
+    if (harnessId === SPECIAL_TARGET_IDS.VSCODE) {
       // VS Code prompts dir is user-only; no workspace equivalent
       const dirs = getVSCodeUserAgentDirs();
       if (dirs.length === 0) {
@@ -591,10 +607,10 @@ export class HarnessFileManager {
 
     const dirs =
       scope === SETTING_SCOPES.USER
-        ? type === "agent"
+        ? type === HARNESS_FILE_TYPES.AGENT
           ? getHarnessUserAgentDirs(harnessId as HarnessId)
           : getHarnessUserSkillDirs(harnessId as HarnessId)
-        : type === "agent"
+        : type === HARNESS_FILE_TYPES.AGENT
           ? getHarnessAgentDirs(harnessId as HarnessId, workspaceRoot)
           : getHarnessSkillDirs(harnessId as HarnessId, workspaceRoot);
 

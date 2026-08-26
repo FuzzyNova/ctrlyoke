@@ -34,6 +34,12 @@ import type {
   WorkspaceImageDiffSides,
 } from "@root/types/HostedWorkspaceViewerTypes";
 
+const RDV_CHANGE_TYPES = {
+  INSERT: "insert",
+  DELETE: "delete",
+  NORMAL: "normal",
+} as const;
+
 // ── Multi-file unified diff parsing ──────────────────────────────────────────
 
 export interface ParsedDiffFile {
@@ -308,14 +314,14 @@ function estimateRenderedVisualRows(
 
     for (let index = 0; index < hunk.changes.length; index++) {
       const current = hunk.changes[index];
-      if (current.type === "normal") {
+      if (current.type === RDV_CHANGE_TYPES.NORMAL) {
         visualRows += getWrappedVisualLineCount(current.content, charsPerLine);
         continue;
       }
 
-      if (current.type === "delete") {
+      if (current.type === RDV_CHANGE_TYPES.DELETE) {
         const next = hunk.changes[index + 1];
-        if (next?.type === "insert") {
+        if (next?.type === RDV_CHANGE_TYPES.INSERT) {
           visualRows += Math.max(
             getWrappedVisualLineCount(current.content, charsPerLine),
             getWrappedVisualLineCount(next.content, charsPerLine)
@@ -380,7 +386,7 @@ export function toRdvHunks(hunks: UnifiedDiffHunk[]): HunkData[] {
 
       if (prefix === "+") {
         changes.push({
-          type: "insert",
+          type: RDV_CHANGE_TYPES.INSERT,
           isInsert: true,
           lineNumber: newLineNumber,
           content,
@@ -388,7 +394,7 @@ export function toRdvHunks(hunks: UnifiedDiffHunk[]): HunkData[] {
         newLineNumber++;
       } else if (prefix === "-") {
         changes.push({
-          type: "delete",
+          type: RDV_CHANGE_TYPES.DELETE,
           isDelete: true,
           lineNumber: oldLineNumber,
           content,
@@ -396,7 +402,7 @@ export function toRdvHunks(hunks: UnifiedDiffHunk[]): HunkData[] {
         oldLineNumber++;
       } else if (prefix === " ") {
         changes.push({
-          type: "normal",
+          type: RDV_CHANGE_TYPES.NORMAL,
           isNormal: true,
           oldLineNumber,
           newLineNumber,
@@ -477,9 +483,9 @@ export function getRenderedDiffStats(
   for (const hunk of hunks) {
     if (viewType === "unified") {
       for (const change of hunk.changes) {
-        if (change.type === "insert") {
+        if (change.type === RDV_CHANGE_TYPES.INSERT) {
           pushRow(1, 0);
-        } else if (change.type === "delete") {
+        } else if (change.type === RDV_CHANGE_TYPES.DELETE) {
           pushRow(0, 1);
         } else {
           pushRow(0, 0);
@@ -491,14 +497,14 @@ export function getRenderedDiffStats(
     for (let i = 0; i < hunk.changes.length; i++) {
       const current = hunk.changes[i];
 
-      if (current.type === "normal") {
+      if (current.type === RDV_CHANGE_TYPES.NORMAL) {
         pushRow(0, 0);
         continue;
       }
 
-      if (current.type === "delete") {
+      if (current.type === RDV_CHANGE_TYPES.DELETE) {
         const next = hunk.changes[i + 1];
-        if (next?.type === "insert") {
+        if (next?.type === RDV_CHANGE_TYPES.INSERT) {
           pushRow(1, 1);
           i++;
           continue;

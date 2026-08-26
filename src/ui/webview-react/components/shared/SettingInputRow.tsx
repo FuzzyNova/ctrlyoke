@@ -1,3 +1,4 @@
+import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
 import type { ReactNode } from "react";
 import type {
   SettingSource,
@@ -28,7 +29,9 @@ export function SettingInputRow({
 }: Props) {
   const source = path && sources ? sources[path] : undefined;
   const canReset =
-    source !== undefined && source !== "default" && source === activeScope;
+    source !== undefined &&
+    source !== INHERIT_DEFAULT_OPTION &&
+    source === activeScope;
 
   return (
     <div className="group">
@@ -36,7 +39,7 @@ export function SettingInputRow({
         <label htmlFor={id} className="text-xs text-description-fg">
           {label}
         </label>
-        {source && source !== "default" && (
+        {source && source !== INHERIT_DEFAULT_OPTION && (
           <SettingSourceBadge source={source} />
         )}
         {onReset && path && (

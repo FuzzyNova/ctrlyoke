@@ -43,6 +43,8 @@ import {
   type ExecutionMode,
   type StepStatus,
   type StatusMessageSeverity,
+  BOOLEAN_STRING_VALUES,
+  WORKSPACE_SEARCH_SCOPES,
 } from "../types/DashboardConstants";
 import {
   ICON_BG_COLOR_DEFAULT,
@@ -838,10 +840,13 @@ export class CtrlYokeHostedServer
         const rawScope =
           typeof req.query.scope === "string" ? req.query.scope : "";
         const scope: WorkspaceSearchScope =
-          rawScope === "files" || rawScope === "content" || rawScope === "both"
+          rawScope === WORKSPACE_SEARCH_SCOPES.FILES ||
+          rawScope === WORKSPACE_SEARCH_SCOPES.CONTENT ||
+          rawScope === WORKSPACE_SEARCH_SCOPES.BOTH
             ? rawScope
-            : "both";
-        const includeGitIgnored = req.query.includeGitIgnored === "true";
+            : WORKSPACE_SEARCH_SCOPES.BOTH;
+        const includeGitIgnored =
+          req.query.includeGitIgnored === BOOLEAN_STRING_VALUES.TRUE;
         const repo =
           typeof req.query.repo === "string" && req.query.repo.trim()
             ? req.query.repo.trim()

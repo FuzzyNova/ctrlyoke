@@ -16,6 +16,7 @@ import {
   writeFileAtomic,
 } from "../../utils/AtomicFileUtils";
 import { getErrorMessage } from "../../utils/ErrorUtils";
+import { WORKTREE_EDIT_KINDS } from "../../types/DashboardConstants";
 
 const DESCRIPTOR_SCHEMA_VERSION = 1;
 /** How long a `.creating-*` staging dir can go without a new write before `pruneStaleStagingDirs` removes it. */
@@ -387,7 +388,7 @@ export class WorkflowLineageRepository {
     return withFileLock(descriptorPath, async () => {
       const descriptor = await this.readDescriptor(workspaceRoot, workflowKey);
       const protectedByPendingRewind =
-        descriptor.pendingEdit?.kind === "rewind" &&
+        descriptor.pendingEdit?.kind === WORKTREE_EDIT_KINDS.REWIND &&
         descriptor.pendingEdit.runRef === runRef;
       if (protectedByPendingRewind || protectedRunRefs.has(runRef)) {
         throw new Error("Cannot delete a protected run");

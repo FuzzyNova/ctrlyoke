@@ -31,6 +31,7 @@ import {
   SESSION_KINDS,
   SETTING_SCOPES,
 } from "../../types/messages";
+import { OUTPUT_TABS } from "@root/types/DashboardConstants";
 import { type MinimapStep } from "../output/OutputMinimap";
 import { OutputFindBar } from "../output";
 import {
@@ -73,7 +74,10 @@ import {
   nextAutoscrollArmed,
   resolveDiffGapExpansionScrollTarget,
 } from "@utils/outputAutoscroll";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  KEYBOARD_KEYS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` returning a new
 // array reference on every useSyncExternalStore snapshot call.
@@ -281,7 +285,7 @@ const OutputSectionInner: React.FC = () => {
   );
   const setOutputScrollTarget = useUiStore((s) => s.setOutputScrollTarget);
   const activeOutputTab = useUiStore(
-    (s) => s.activeOutputTabs[terminalWorkflowId] ?? "output"
+    (s) => s.activeOutputTabs[terminalWorkflowId] ?? OUTPUT_TABS.OUTPUT
   );
   const setActiveOutputTab = useUiStore((s) => s.setActiveOutputTab);
   const terminalActiveWorkflows = useUiStore((s) => s.terminalActiveWorkflows);
@@ -299,7 +303,7 @@ const OutputSectionInner: React.FC = () => {
   // OR when the session rail is collapsed (user narrowed it). In both cases the full
   // title isn't visible in the rail, so we surface it in the header instead.
   const isTerminalCompact =
-    activeOutputTab === "terminal" &&
+    activeOutputTab === OUTPUT_TABS.TERMINAL &&
     terminalSessions.length > 0 &&
     (terminalSessions.length === 1 || terminalRailCollapsed);
   const activeTerminalSession =
@@ -1025,8 +1029,8 @@ const OutputSectionInner: React.FC = () => {
   }, [pendingFindRequest, setPendingFindRequest]);
 
   const handleOpenFind = useCallback(() => {
-    if (activeOutputTab !== "output") {
-      setActiveOutputTab(terminalWorkflowId, "output");
+    if (activeOutputTab !== OUTPUT_TABS.OUTPUT) {
+      setActiveOutputTab(terminalWorkflowId, OUTPUT_TABS.OUTPUT);
     }
     openFind();
   }, [activeOutputTab, openFind, setActiveOutputTab, terminalWorkflowId]);
@@ -1128,7 +1132,7 @@ const OutputSectionInner: React.FC = () => {
 
   useEffect(() => {
     if (
-      activeOutputTab !== "output" ||
+      activeOutputTab !== OUTPUT_TABS.OUTPUT ||
       executionState !== EXECUTION_STATES.RUNNING ||
       (!isViewingHistory && !historyOutputs)
     ) {
@@ -1264,7 +1268,7 @@ const OutputSectionInner: React.FC = () => {
   }, [outputCollapsed, toggleOutputCollapse]);
 
   const handleSelectOutputTab = useCallback(() => {
-    setActiveOutputTab(terminalWorkflowId, "output");
+    setActiveOutputTab(terminalWorkflowId, OUTPUT_TABS.OUTPUT);
   }, [setActiveOutputTab, terminalWorkflowId]);
 
   const handleSpawnTerminal = useCallback(() => {
@@ -1276,7 +1280,7 @@ const OutputSectionInner: React.FC = () => {
   }, [terminalWorkflowId, workspaceRoot]);
 
   const handleSelectTerminalTab = useCallback(() => {
-    setActiveOutputTab(terminalWorkflowId, "terminal");
+    setActiveOutputTab(terminalWorkflowId, OUTPUT_TABS.TERMINAL);
     if (terminalSessions.length === 0) {
       handleSpawnTerminal();
     }
@@ -1333,7 +1337,7 @@ const OutputSectionInner: React.FC = () => {
     const remaining =
       useTerminalStore.getState().sessions[terminalWorkflowId] ?? [];
     if (remaining.length === 0) {
-      setActiveOutputTab(terminalWorkflowId, "output");
+      setActiveOutputTab(terminalWorkflowId, OUTPUT_TABS.OUTPUT);
     }
   }, [activeTerminalSession, setActiveOutputTab, terminalWorkflowId]);
 
@@ -1370,7 +1374,9 @@ const OutputSectionInner: React.FC = () => {
       role="button"
       aria-label="Expand output"
       tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && handleToggleOutputCollapse()}
+      onKeyDown={(e) =>
+        e.key === KEYBOARD_KEYS.ENTER && handleToggleOutputCollapse()
+      }
     >
       <i className="codicon codicon-chevron-right text-xs" />
       <i className="codicon codicon-output text-sm" />
@@ -1441,9 +1447,11 @@ const OutputSectionInner: React.FC = () => {
           which would break xterm's column fit and force a manual resize on tab switch. */}
       <div className="relative flex-row min-h-0 flex-1 flex">
         <div
-          aria-hidden={activeOutputTab !== "terminal" || outputCollapsed}
+          aria-hidden={
+            activeOutputTab !== OUTPUT_TABS.TERMINAL || outputCollapsed
+          }
           className={`absolute inset-0 flex flex-row min-h-0 ${
-            !outputCollapsed && activeOutputTab === "terminal"
+            !outputCollapsed && activeOutputTab === OUTPUT_TABS.TERMINAL
               ? ""
               : "invisible pointer-events-none"
           }`}

@@ -1,6 +1,7 @@
 import type { DiffFileCardProps } from "@components/diff/DiffFileCard";
 import type { DiffFileGroup } from "@components/diff/DiffFileList";
 import type { UnifiedDiffHunk } from "@root/types/CliOutputTypes";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 
 /** The sizes used by the deterministic virtualization acceptance tests. */
 export const DIFF_FILE_FIXTURE_SIZES = [60, 120, 240] as const;
@@ -89,7 +90,7 @@ function fixtureFile(index: number): DiffFileCardProps & { key: string } {
       break;
     case 1:
       source = {
-        kind: "content",
+        kind: WORKSPACE_ENTRY_KINDS.CONTENT,
         oldContent: lines(320, `raw-old-${marker}`),
         newContent: lines(320, `raw-new-${marker}`),
       };
@@ -103,7 +104,7 @@ function fixtureFile(index: number): DiffFileCardProps & { key: string } {
       break;
     case 3:
       source = {
-        kind: "content",
+        kind: WORKSPACE_ENTRY_KINDS.CONTENT,
         oldContent: `rename-old-${marker}\nexport const value = "before";\n`,
         newContent: `rename-new-${marker}\nexport const value = "after";\n`,
       };
@@ -111,7 +112,7 @@ function fixtureFile(index: number): DiffFileCardProps & { key: string } {
       break;
     case 4:
       source = {
-        kind: "content",
+        kind: WORKSPACE_ENTRY_KINDS.CONTENT,
         oldContent: `${marker}\nconst value = 1;\n`,
         newContent: `${marker}\nconst value = 1;\n`,
       };

@@ -10,6 +10,10 @@ import type {
   HistoryPruneOptions,
   HistoryRelinkOptions,
 } from "./HistoryCommandDefinitions";
+import {
+  PROJECT_RUNNER_STATUSES,
+  PROJECT_STATE_PATH_STATUSES,
+} from "../types/DashboardConstants";
 
 export interface HistoryCommandIo {
   writeOut(message: string): void;
@@ -25,7 +29,8 @@ export async function pruneHistoryCommand(
   const plan = await inspectUserProjects();
   const orphaned = plan.filter(
     (project) =>
-      project.statePathStatus === "missing" && project.runnerStatus === "none"
+      project.statePathStatus === PROJECT_STATE_PATH_STATUSES.MISSING &&
+      project.runnerStatus === PROJECT_RUNNER_STATUSES.NONE
   );
 
   renderPrunePlan(plan, io);
@@ -52,8 +57,8 @@ export async function pruneHistoryCommand(
   }
   for (const project of result.inspections) {
     if (
-      project.statePathStatus === "missing" &&
-      project.runnerStatus !== "none"
+      project.statePathStatus === PROJECT_STATE_PATH_STATUSES.MISSING &&
+      project.runnerStatus !== PROJECT_RUNNER_STATUSES.NONE
     ) {
       io.writeErr(
         `Refused ${project.projectRoot}: runner state is ${project.runnerStatus}.`
@@ -109,8 +114,8 @@ function renderPrunePlan(
 
   for (const project of inspections) {
     const state = project.metadata?.statePath ?? "unknown statePath";
-    if (project.statePathStatus === "missing") {
-      if (project.runnerStatus === "none") {
+    if (project.statePathStatus === PROJECT_STATE_PATH_STATUSES.MISSING) {
+      if (project.runnerStatus === PROJECT_RUNNER_STATUSES.NONE) {
         io.writeOut(`ORPHAN ${project.projectRoot} (statePath: ${state})`);
       } else {
         io.writeErr(
@@ -119,7 +124,7 @@ function renderPrunePlan(
       }
       continue;
     }
-    if (project.statePathStatus === "unknown") {
+    if (project.statePathStatus === PROJECT_STATE_PATH_STATUSES.UNKNOWN) {
       io.writeErr(
         `UNKNOWN ${project.projectRoot} (statePath could not be verified${project.reason ? `: ${project.reason}` : ""})`
       );

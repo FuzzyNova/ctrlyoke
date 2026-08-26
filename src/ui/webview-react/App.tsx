@@ -1,3 +1,4 @@
+import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import {
   type CSSProperties,
   useCallback,
@@ -947,7 +948,7 @@ function App() {
                   aria-label="Close settings"
                   onClick={handleSettingsRequestClose}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ")
+                    if (e.key === KEYBOARD_KEYS.ENTER || e.key === " ")
                       handleSettingsRequestClose();
                   }}
                 />

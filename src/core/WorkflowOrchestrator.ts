@@ -53,6 +53,8 @@ import {
   STEP_TYPES,
   TERMINAL_SESSION_STATUS,
   USER_FEEDBACK_SEVERITY,
+  WORKTREE_EDIT_KINDS,
+  WORKTREE_MODES,
   type EndConditionScriptType,
   type HarnessId,
   type RunnerId,
@@ -3424,7 +3426,7 @@ export class WorkflowOrchestrator {
       await fs.promises.readFile(workingFilePath, "utf8")
     ) as WorkingFile;
     const runtime = workingFile._runtime?.worktree;
-    if (!runtime || runtime.mode !== "managed") {
+    if (!runtime || runtime.mode !== WORKTREE_MODES.MANAGED) {
       throw new Error("Merge is available only for managed worktree runs.");
     }
     if (runtime.branchState !== "present") {
@@ -3639,7 +3641,7 @@ export class WorkflowOrchestrator {
       clientId,
       { invalidateViews: false }
     );
-    if (rewind.kind !== "rewind") {
+    if (rewind.kind !== WORKTREE_EDIT_KINDS.REWIND) {
       throw new Error("Completed-step edit did not create a pending rewind");
     }
 
@@ -3888,7 +3890,7 @@ export class WorkflowOrchestrator {
         descriptorRevision: number;
       }
     | {
-        kind: "rewind";
+        kind: typeof WORKTREE_EDIT_KINDS.REWIND;
         definitionRevision: number;
         descriptorRevision: number;
       }
@@ -4019,7 +4021,7 @@ export class WorkflowOrchestrator {
     if (options.invalidateViews !== false) {
       await this.invalidateRunViews(address.workflowKey, address.runRef);
     }
-    return { kind: "rewind", ...result };
+    return { kind: WORKTREE_EDIT_KINDS.REWIND, ...result };
   }
 
   /** Seed a fresh RunRef from an addressed run and execute that new run. */
@@ -4444,7 +4446,7 @@ export class WorkflowOrchestrator {
     // it is precisely how the user commits that rewind. Only a draft, or a
     // rewind belonging to a different run, blocks this continuation.
     const pendingRewindOnThisRun =
-      descriptor.pendingEdit?.kind === "rewind" &&
+      descriptor.pendingEdit?.kind === WORKTREE_EDIT_KINDS.REWIND &&
       descriptor.pendingEdit.runRef === address.runRef;
     if (descriptor.pendingEdit && !pendingRewindOnThisRun) {
       throw new Error("This workflow has a draft or pending continuation");

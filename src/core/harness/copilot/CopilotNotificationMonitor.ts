@@ -9,6 +9,7 @@ import type { CapabilityDeclaration } from "../../../types/CompatibilityTypes";
 import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_MECHANISMS,
+  HOOK_EVENT_NAMES,
 } from "../../../types/DashboardConstants";
 import { lowercaseDriveLetter } from "../../../utils/PathCasing";
 
@@ -38,7 +39,7 @@ export class CopilotNotificationMonitor
     preToolUse: "preToolUse",
     postToolUse: "postToolUse",
     userPromptSubmit: "userPromptSubmitted",
-    permissionRequest: "permissionRequest",
+    [HOOK_EVENT_NAMES.PERMISSION_REQUEST]: HOOK_EVENT_NAMES.PERMISSION_REQUEST,
     notification: "notification",
   };
 
@@ -116,7 +117,7 @@ export class CopilotNotificationMonitor
     const eventMap = CopilotNotificationMonitor.EVENT_MAP;
     const selectedEvents = ctrlyokeEvents ?? ["sessionStart", "stop", "error"];
     const permissionRequestHook = userHooks?.find(
-      (hook) => hook.event === "permissionRequest"
+      (hook) => hook.event === HOOK_EVENT_NAMES.PERMISSION_REQUEST
     );
     const encodedDecisionHook = permissionRequestHook
       ? Buffer.from(permissionRequestHook.command, "utf8").toString("base64")
@@ -130,11 +131,11 @@ export class CopilotNotificationMonitor
         continue;
       }
       const bashCommand =
-        event === "permissionRequest" && encodedDecisionHook
+        event === HOOK_EVENT_NAMES.PERMISSION_REQUEST && encodedDecisionHook
           ? `node "${bashScriptPath}" "${bashNotifyDir}" "${nativeEvent}" "${encodedDecisionHook}"`
           : `node "${bashScriptPath}" "${bashNotifyDir}" "${nativeEvent}"`;
       const powershellCommand =
-        event === "permissionRequest" && encodedDecisionHook
+        event === HOOK_EVENT_NAMES.PERMISSION_REQUEST && encodedDecisionHook
           ? `node "${psScriptPath}" "${psNotifyDir}" "${nativeEvent}" "${encodedDecisionHook}"`
           : `node "${psScriptPath}" "${psNotifyDir}" "${nativeEvent}"`;
       hooks[nativeEvent] = [
@@ -151,8 +152,8 @@ export class CopilotNotificationMonitor
     if (userHooks) {
       for (const uh of userHooks) {
         if (
-          uh.event === "permissionRequest" &&
-          selectedEvents.includes("permissionRequest")
+          uh.event === HOOK_EVENT_NAMES.PERMISSION_REQUEST &&
+          selectedEvents.includes(HOOK_EVENT_NAMES.PERMISSION_REQUEST)
         ) {
           continue;
         }

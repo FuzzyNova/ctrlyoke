@@ -2,11 +2,12 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { useOutputVirtualization } from "@hooks/useOutputVirtualization";
 import type { OutputRenderRow } from "@utils/outputRows";
+import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
 
 function makeRows(count: number): OutputRenderRow[] {
   return Array.from({ length: count }, (_value, index) => ({
     key: `row-${index}`,
-    rowKind: "plain-response" as const,
+    rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
     target: { kind: "queue" as const, index: 0 },
     text: `response ${index}`,
     rawTextOutput: true,
@@ -157,7 +158,7 @@ describe("useOutputVirtualization live row measurement", () => {
 
     const initialRow = {
       key: "row-0",
-      rowKind: "plain-response",
+      rowKind: OUTPUT_ROW_KINDS.PLAIN_RESPONSE,
       target: { kind: "queue", index: 0 },
       text: "initial response",
       rawTextOutput: true,
