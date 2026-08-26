@@ -20,6 +20,7 @@ import {
   OUTPUT_HISTORY_KINDS,
   STEP_STATUS,
   HARNESS_IDS,
+  STATUS_MESSAGE_SEVERITY,
   WORKTREE_MODES,
   type HarnessId,
 } from "../../types/DashboardConstants";
@@ -1803,7 +1804,9 @@ suite("WorkflowInstance append-and-continue", () => {
       "the published run must not be left reading RUNNING forever"
     );
     assert.strictEqual(
-      statusMessages.filter((entry) => entry.severity === "error").length,
+      statusMessages.filter(
+        (entry) => entry.severity === STATUS_MESSAGE_SEVERITY.ERROR
+      ).length,
       1,
       "the failure must reach the dashboard, not only the VS Code notification"
     );
@@ -1819,10 +1822,15 @@ suite("WorkflowInstance append-and-continue", () => {
       persistedStatusMessages[0].filePath,
       `${workflowKey}/${runRef}/manifest.json`
     );
-    assert.strictEqual(persistedStatusMessages[0].severity, "error");
+    assert.strictEqual(
+      persistedStatusMessages[0].severity,
+      STATUS_MESSAGE_SEVERITY.ERROR
+    );
     assert.strictEqual(
       persistedStatusMessages[0].message,
-      statusMessages.find((entry) => entry.severity === "error")?.message
+      statusMessages.find(
+        (entry) => entry.severity === STATUS_MESSAGE_SEVERITY.ERROR
+      )?.message
     );
   });
 

@@ -10,6 +10,7 @@ import {
   toolCallLineHeight,
   toolResultLineHeight,
 } from "./outputLineMetrics";
+import type { ToolCallExpansionSection as SharedToolCallExpansionSection } from "@root/types/DashboardConstants";
 
 export interface ToolCallExpansionState {
   paramsExpanded: boolean;
@@ -17,7 +18,7 @@ export interface ToolCallExpansionState {
   errorExpanded: boolean;
 }
 
-export type ToolCallExpansionSection = "params" | "output" | "error";
+export type ToolCallExpansionSection = SharedToolCallExpansionSection;
 
 export const DEFAULT_TOOL_CALL_EXPANSION_STATE: Readonly<ToolCallExpansionState> =
   Object.freeze({

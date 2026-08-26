@@ -28,6 +28,11 @@ import { ToolDot } from "./FileOperationOutput";
 import { ToolCallBlock } from "./ToolCallBlock";
 import { ToolCallExpandToggle } from "./ToolCallExpandToggle";
 import type { ToolResult } from "../../types/cliEvents";
+import {
+  TOOL_CALL_EXPANSION_SECTIONS,
+  TOOL_RESULT_STATUSES,
+  type ToolResultStatus,
+} from "@root/types/DashboardConstants";
 
 // Re-exports so existing consumers (CliOutput, UndoChangesDialog, index.ts)
 // can continue to import from this file without changes.
@@ -41,9 +46,11 @@ export { DiffView } from "./DiffView";
 
 // ── Status helper ─────────────────────────────────────────────────────────────
 
-function resultDotStatus(result?: ToolResult): "pending" | "success" | "error" {
-  if (!result) return "pending";
-  return result.success ? "success" : "error";
+function resultDotStatus(result?: ToolResult): ToolResultStatus {
+  if (!result) return TOOL_RESULT_STATUSES.PENDING;
+  return result.success
+    ? TOOL_RESULT_STATUSES.SUCCESS
+    : TOOL_RESULT_STATUSES.ERROR;
 }
 
 // ============================================================================
@@ -104,11 +111,11 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
     if (expansion === undefined) {
       setUncontrolledExpansion((previous) => {
         switch (section) {
-          case "params":
+          case TOOL_CALL_EXPANSION_SECTIONS.PARAMS:
             return { ...previous, paramsExpanded: expanded };
-          case "output":
+          case TOOL_CALL_EXPANSION_SECTIONS.OUTPUT:
             return { ...previous, outputExpanded: expanded };
-          case "error":
+          case TOOL_CALL_EXPANSION_SECTIONS.ERROR:
             return { ...previous, errorExpanded: expanded };
           default:
             return previous;
@@ -120,10 +127,16 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
 
   const renderExpandableSection = (
     content: string,
-    type: "output" | "error",
+    type: Exclude<
+      ToolCallExpansionSection,
+      typeof TOOL_CALL_EXPANSION_SECTIONS.PARAMS
+    >,
     sectionPlan: ToolCallSectionRenderPlan
   ) => {
-    const cssClass = type === "error" ? TOOL_ERROR_LINE : TOOL_RESULT_LINE;
+    const cssClass =
+      type === TOOL_CALL_EXPANSION_SECTIONS.ERROR
+        ? TOOL_ERROR_LINE
+        : TOOL_RESULT_LINE;
     const visibleText = getVisibleToolCallText(content, sectionPlan);
 
     return (
@@ -166,7 +179,10 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
             <ToolCallExpandToggle
               expanded={resolvedRenderPlan.params.isExpanded}
               onToggle={() =>
-                updateExpansion("params", !resolvedRenderPlan.params.isExpanded)
+                updateExpansion(
+                  TOOL_CALL_EXPANSION_SECTIONS.PARAMS,
+                  !resolvedRenderPlan.params.isExpanded
+                )
               }
               label="Show parameters"
               showLabel={showLabel}
@@ -187,9 +203,17 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
       )}
 
       {outputStr &&
-        renderExpandableSection(outputStr, "output", resolvedRenderPlan.output)}
+        renderExpandableSection(
+          outputStr,
+          TOOL_CALL_EXPANSION_SECTIONS.OUTPUT,
+          resolvedRenderPlan.output
+        )}
       {errorStr &&
-        renderExpandableSection(errorStr, "error", resolvedRenderPlan.error)}
+        renderExpandableSection(
+          errorStr,
+          TOOL_CALL_EXPANSION_SECTIONS.ERROR,
+          resolvedRenderPlan.error
+        )}
     </ToolCallBlock>
   );
 };
@@ -220,7 +244,11 @@ export const WebSearchOutput: React.FC<WebSearchOutputProps> = ({
     dot={
       <ToolDot
         status={
-          success === undefined ? "pending" : success ? "success" : "error"
+          success === undefined
+            ? TOOL_RESULT_STATUSES.PENDING
+            : success
+              ? TOOL_RESULT_STATUSES.SUCCESS
+              : TOOL_RESULT_STATUSES.ERROR
         }
       />
     }
@@ -309,11 +337,11 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
     if (expansion === undefined) {
       setUncontrolledExpansion((previous) => {
         switch (section) {
-          case "params":
+          case TOOL_CALL_EXPANSION_SECTIONS.PARAMS:
             return { ...previous, paramsExpanded: expanded };
-          case "output":
+          case TOOL_CALL_EXPANSION_SECTIONS.OUTPUT:
             return { ...previous, outputExpanded: expanded };
-          case "error":
+          case TOOL_CALL_EXPANSION_SECTIONS.ERROR:
             return { ...previous, errorExpanded: expanded };
           default:
             return previous;
@@ -325,11 +353,17 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
 
   const renderExpandableSection = (
     content: string,
-    type: "output" | "error",
+    type: Exclude<
+      ToolCallExpansionSection,
+      typeof TOOL_CALL_EXPANSION_SECTIONS.PARAMS
+    >,
     sectionPlan: ToolCallSectionRenderPlan,
     findMatches?: RowFindDecoration["matches"]
   ) => {
-    const cssClass = type === "error" ? TOOL_ERROR_LINE : TOOL_RESULT_LINE;
+    const cssClass =
+      type === TOOL_CALL_EXPANSION_SECTIONS.ERROR
+        ? TOOL_ERROR_LINE
+        : TOOL_RESULT_LINE;
     const visibleText = getVisibleToolCallText(content, sectionPlan);
 
     // Highlight only the visible (possibly truncated) slice — find match
@@ -383,7 +417,10 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
             <ToolCallExpandToggle
               expanded={resolvedRenderPlan.params.isExpanded}
               onToggle={() =>
-                updateExpansion("params", !resolvedRenderPlan.params.isExpanded)
+                updateExpansion(
+                  TOOL_CALL_EXPANSION_SECTIONS.PARAMS,
+                  !resolvedRenderPlan.params.isExpanded
+                )
               }
               label="Show parameters"
               showLabel={showLabel}
@@ -406,14 +443,14 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
       {outputStr &&
         renderExpandableSection(
           outputStr,
-          "output",
+          TOOL_CALL_EXPANSION_SECTIONS.OUTPUT,
           resolvedRenderPlan.output,
           outputFindMatches
         )}
       {errorStr &&
         renderExpandableSection(
           errorStr,
-          "error",
+          TOOL_CALL_EXPANSION_SECTIONS.ERROR,
           resolvedRenderPlan.error,
           errorFindMatches
         )}

@@ -1,4 +1,5 @@
 import type { CompatibilityDiagnostic } from "@root/types/CompatibilityTypes";
+import { COMPATIBILITY_DIAGNOSTIC_SEVERITIES } from "@root/types/DashboardConstants";
 
 export type FieldDiagnostic = Pick<
   CompatibilityDiagnostic,
@@ -9,7 +10,12 @@ export type FieldDiagnostic = Pick<
 export function fieldValidationBorderClass(
   diagnostics: readonly FieldDiagnostic[]
 ): string {
-  if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
+  if (
+    diagnostics.some(
+      (diagnostic) =>
+        diagnostic.severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR
+    )
+  ) {
     return "border-input-error-border";
   }
   if (diagnostics.some((diagnostic) => diagnostic.severity === "warning")) {

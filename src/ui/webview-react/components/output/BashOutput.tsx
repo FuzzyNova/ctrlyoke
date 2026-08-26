@@ -14,6 +14,11 @@ import { ToolCallBlock } from "./ToolCallBlock";
 import { ToolCallExpandToggle } from "./ToolCallExpandToggle";
 import type { FileOperationStatus } from "../../types/cliEvents";
 import { OPERATION_STATUS } from "../../types/cliEvents";
+import {
+  BASH_OUTPUT_EXPANSION_SECTIONS,
+  TOOL_RESULT_STATUSES,
+  type BashOutputExpansionSection as SharedBashOutputExpansionSection,
+} from "@root/types/DashboardConstants";
 
 const STATUS_BADGE_STYLES: Record<string, string> = {
   success: "text-indicator-success",
@@ -42,7 +47,7 @@ interface BashOutputProps {
   className?: string;
 }
 
-export type BashOutputExpansionSection = "command" | "output" | "error";
+export type BashOutputExpansionSection = SharedBashOutputExpansionSection;
 
 export interface BashOutputExpansionState {
   commandExpanded: boolean;
@@ -105,7 +110,7 @@ export const BashOutput = memo<BashOutputProps>(
           ...previous,
           [section === "command"
             ? "commandExpanded"
-            : section === "output"
+            : section === BASH_OUTPUT_EXPANSION_SECTIONS.OUTPUT
               ? "outputExpanded"
               : "errorExpanded"]: expanded,
         }));
@@ -144,7 +149,10 @@ export const BashOutput = memo<BashOutputProps>(
     // DOM nodes even when hidden.
     const renderExpandableContent = (
       content: string,
-      type: "output" | "error",
+      type: Exclude<
+        BashOutputExpansionSection,
+        typeof BASH_OUTPUT_EXPANSION_SECTIONS.COMMAND
+      >,
       isExpanded: boolean,
       findMatches?: RowFindDecoration["matches"]
     ) => {
@@ -157,7 +165,10 @@ export const BashOutput = memo<BashOutputProps>(
       });
       const canToggle = isExpanded || preview.isTruncated;
 
-      const cssClass = type === "error" ? TOOL_ERROR_LINE : TOOL_RESULT_LINE;
+      const cssClass =
+        type === BASH_OUTPUT_EXPANSION_SECTIONS.ERROR
+          ? TOOL_ERROR_LINE
+          : TOOL_RESULT_LINE;
 
       // Highlight only the visible (possibly truncated) slice — find match
       // offsets are computed against the full text, but highlightText's
@@ -201,7 +212,9 @@ export const BashOutput = memo<BashOutputProps>(
       }
       if (isCompleted && exitCode !== undefined) {
         const success = exitCode === 0;
-        const variant = success ? "success" : "error";
+        const variant = success
+          ? TOOL_RESULT_STATUSES.SUCCESS
+          : TOOL_RESULT_STATUSES.ERROR;
         return (
           <span
             className={`inline ml-2 text-[length:var(--fp-output-font-size-sm)] font-normal ${STATUS_BADGE_STYLES[variant]}`}
@@ -269,13 +282,13 @@ export const BashOutput = memo<BashOutputProps>(
           <>
             {renderExpandableContent(
               renderedOutput,
-              "output",
+              BASH_OUTPUT_EXPANSION_SECTIONS.OUTPUT,
               resolvedExpansion.outputExpanded,
               outputFindMatches
             )}
             {renderExpandableContent(
               renderedError,
-              "error",
+              BASH_OUTPUT_EXPANSION_SECTIONS.ERROR,
               resolvedExpansion.errorExpanded,
               errorFindMatches
             )}

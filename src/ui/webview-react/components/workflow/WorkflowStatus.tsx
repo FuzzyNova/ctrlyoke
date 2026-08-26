@@ -26,6 +26,7 @@ import {
   WORKTREE_MODE_OPTIONS,
   WORKFLOW_VIEW_ADDRESS_KIND,
   WORKFLOW_DELETE_SCOPES,
+  RUN_SUMMARY_CACHE_STATUSES,
 } from "@root/types/DashboardConstants";
 import { WorkflowList, type UnifiedWorkflowRow } from "./WorkflowList";
 import { RunPanel } from "./RunPanel";
@@ -1456,11 +1457,12 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const runPanelIsLoading = drilledWorkflow
     ? isDrilledLineageDisplayed
       ? false
-      : !cachedRunSummaries || cachedRunSummaries.status === "loading"
+      : !cachedRunSummaries ||
+        cachedRunSummaries.status === RUN_SUMMARY_CACHE_STATUSES.LOADING
     : false;
   const runPanelLoadError = isDrilledLineageDisplayed
     ? undefined
-    : cachedRunSummaries?.status === "error"
+    : cachedRunSummaries?.status === RUN_SUMMARY_CACHE_STATUSES.ERROR
       ? (cachedRunSummaries.error ?? "Failed to load runs")
       : undefined;
   const runPanelExecutionRunRef = isDrilledLineageDisplayed

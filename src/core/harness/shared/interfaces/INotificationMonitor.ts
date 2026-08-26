@@ -1,7 +1,11 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Log } from "../../../../utils/Log";
-import { HOOK_EVENT_NAMES } from "../../../../types/DashboardConstants";
+import {
+  HOOK_EVENT_NAMES,
+  NOTIFICATION_OUTCOME_KINDS,
+  type NotificationOutcomeKind,
+} from "../../../../types/DashboardConstants";
 import type {
   HookEvent,
   UserHookConfig,
@@ -29,7 +33,7 @@ export interface NotificationResult {
   completed: boolean;
 
   /** Structured notification outcome when a file was detected */
-  kind?: "completion" | "error";
+  kind?: NotificationOutcomeKind;
 
   /** Error message if monitoring failed */
   error?: string;
@@ -269,7 +273,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
           if (await this.isFileNewerThan(errorFile, startTime)) {
             const data = await this.readNotificationFile(errorFile);
 
-            if (data?.status === "error") {
+            if (data?.status === NOTIFICATION_OUTCOME_KINDS.ERROR) {
               Log.warn(
                 `⚠️ Harness error detected via notification hook (session: ${sessionId})`
               );
@@ -281,7 +285,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
               }
               return {
                 completed: false,
-                kind: "error",
+                kind: NOTIFICATION_OUTCOME_KINDS.ERROR,
                 error: "Harness reported an error",
                 data,
               };
@@ -318,7 +322,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
             if (await this.isFileNewerThan(file, startTime)) {
               const data = await this.readNotificationFile(file);
 
-              if (data?.status === "error") {
+              if (data?.status === NOTIFICATION_OUTCOME_KINDS.ERROR) {
                 Log.warn(
                   `⚠️ Harness error detected via notification hook (file: ${file})`
                 );
@@ -330,7 +334,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
                 }
                 return {
                   completed: false,
-                  kind: "error",
+                  kind: NOTIFICATION_OUTCOME_KINDS.ERROR,
                   error: "Harness reported an error",
                   data,
                 };

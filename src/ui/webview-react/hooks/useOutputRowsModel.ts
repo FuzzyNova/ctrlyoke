@@ -21,7 +21,11 @@ import {
   type BashOutputExpansionState,
 } from "@components/output/BashOutput";
 import type { WorkflowStep } from "@store/workflowStore";
-import { OUTPUT_ROW_KINDS } from "@root/types/DashboardConstants";
+import {
+  BASH_OUTPUT_EXPANSION_SECTIONS,
+  OUTPUT_ROW_KINDS,
+  TOOL_CALL_EXPANSION_SECTIONS,
+} from "@root/types/DashboardConstants";
 import type {
   OrderedHistoryEntry,
   StepOutput,
@@ -444,11 +448,17 @@ export function useOutputRowsModel({
         const nextState: ToolCallExpansionState = {
           ...currentState,
           paramsExpanded:
-            section === "params" ? expanded : currentState.paramsExpanded,
+            section === TOOL_CALL_EXPANSION_SECTIONS.PARAMS
+              ? expanded
+              : currentState.paramsExpanded,
           outputExpanded:
-            section === "output" ? expanded : currentState.outputExpanded,
+            section === TOOL_CALL_EXPANSION_SECTIONS.OUTPUT
+              ? expanded
+              : currentState.outputExpanded,
           errorExpanded:
-            section === "error" ? expanded : currentState.errorExpanded,
+            section === TOOL_CALL_EXPANSION_SECTIONS.ERROR
+              ? expanded
+              : currentState.errorExpanded,
         };
 
         const isDefaultState =
@@ -489,11 +499,17 @@ export function useOutputRowsModel({
         const nextState: BashOutputExpansionState = {
           ...currentState,
           commandExpanded:
-            section === "command" ? expanded : currentState.commandExpanded,
+            section === BASH_OUTPUT_EXPANSION_SECTIONS.COMMAND
+              ? expanded
+              : currentState.commandExpanded,
           outputExpanded:
-            section === "output" ? expanded : currentState.outputExpanded,
+            section === BASH_OUTPUT_EXPANSION_SECTIONS.OUTPUT
+              ? expanded
+              : currentState.outputExpanded,
           errorExpanded:
-            section === "error" ? expanded : currentState.errorExpanded,
+            section === BASH_OUTPUT_EXPANSION_SECTIONS.ERROR
+              ? expanded
+              : currentState.errorExpanded,
         };
 
         const isDefaultState =

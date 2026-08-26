@@ -4,6 +4,7 @@ import type {
   SkillOption,
 } from "@store/settingsStore";
 import type { HarnessId } from "../types/messages";
+import { COMPATIBILITY_DIAGNOSTIC_SEVERITIES } from "@root/types/DashboardConstants";
 
 function isKnownName(
   value: string,
@@ -75,7 +76,7 @@ export function dropdownBorderClass(
   validation: string | boolean | null | undefined,
   severity: ValidationSeverity = "warning"
 ): string {
-  if (severity === "error") {
+  if (severity === COMPATIBILITY_DIAGNOSTIC_SEVERITIES.ERROR) {
     return validation ? "border-input-error-border" : "border-input-border";
   }
 

@@ -25,7 +25,9 @@ import {
   CLI_EVENT_TYPES,
   HARNESS_IDS,
   OPERATION_STATUS,
+  TOOL_RESULT_STATUSES,
   TOKEN_TOTAL_CONFIDENCE,
+  type ToolResultStatus,
 } from "../../../types/DashboardConstants";
 import { getQwenContextWindowSize } from "../../../utils/ModelConstants";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
@@ -143,7 +145,7 @@ interface QwenProviderEvent extends BaseCliEvent {
   systemPayload?: Record<string, any>;
   toolCallResult?: {
     callId: string;
-    status: "success" | "error";
+    status: Exclude<ToolResultStatus, typeof TOOL_RESULT_STATUSES.PENDING>;
     resultDisplay?: string | Record<string, unknown>;
   };
 }
@@ -776,7 +778,9 @@ export class QwenLogParser extends BaseLogParser {
     askQuestionMap.delete(callId);
     const response = functionResponse.response;
     const resultText = this.getQwenToolResultText(response, event);
-    const success = !response.error && event.toolCallResult?.status !== "error";
+    const success =
+      !response.error &&
+      event.toolCallResult?.status !== TOOL_RESULT_STATUSES.ERROR;
 
     if (!success) {
       return {

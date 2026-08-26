@@ -21,7 +21,9 @@ import {
 import type { RowFindDecoration } from "@utils/outputFind";
 import { hasRenderableDiff } from "@utils/diffUtils";
 import {
+  TOOL_RESULT_STATUSES,
   UNDO_REDO_DIRECTIONS,
+  type ToolResultStatus,
   type UndoRedoDirection,
 } from "@root/types/DashboardConstants";
 
@@ -29,12 +31,12 @@ import {
 // Shared primitives
 // ============================================================================
 
-type DotStatus = "pending" | "success" | "error";
+type DotStatus = ToolResultStatus;
 
 const DOT_COLORS: Record<DotStatus, string> = {
-  pending: "text-editor-fg",
-  success: "text-indicator-success",
-  error: "text-indicator-error",
+  [TOOL_RESULT_STATUSES.PENDING]: "text-editor-fg",
+  [TOOL_RESULT_STATUSES.SUCCESS]: "text-indicator-success",
+  [TOOL_RESULT_STATUSES.ERROR]: "text-indicator-error",
 };
 
 /** Coloured ● bullet that reflects the operation status */
@@ -135,15 +137,16 @@ const FileOperationBlock: React.FC<FileOperationBlockProps> = ({
 };
 
 function fileOpDotStatus(status?: FileOperationStatus): DotStatus {
-  if (status === OPERATION_STATUS.COMPLETED) return "success";
-  if (status === OPERATION_STATUS.FAILED) return "error";
-  return "pending"; // INITIATED or undefined
+  if (status === OPERATION_STATUS.COMPLETED)
+    return TOOL_RESULT_STATUSES.SUCCESS;
+  if (status === OPERATION_STATUS.FAILED) return TOOL_RESULT_STATUSES.ERROR;
+  return TOOL_RESULT_STATUSES.PENDING; // INITIATED or undefined
 }
 
 function boolDotStatus(success?: boolean): DotStatus {
-  if (success === true) return "success";
-  if (success === false) return "error";
-  return "pending";
+  if (success === true) return TOOL_RESULT_STATUSES.SUCCESS;
+  if (success === false) return TOOL_RESULT_STATUSES.ERROR;
+  return TOOL_RESULT_STATUSES.PENDING;
 }
 
 // ============================================================================

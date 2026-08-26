@@ -13,8 +13,11 @@ import { useSettingsStore } from "@store/settingsStore";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import {
   ATOMIC_REFERENCE_KINDS,
+  BASH_OUTPUT_EXPANSION_SECTIONS,
+  HISTORY_MATCH_FIELDS,
   KEYBOARD_KEYS,
   OUTPUT_ROW_KINDS,
+  TOOL_CALL_EXPANSION_SECTIONS,
 } from "@root/types/DashboardConstants";
 import {
   AskUserQuestionOutput,
@@ -499,19 +502,19 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS
         )
       ) {
-        pendingBashExpand = "output";
+        pendingBashExpand = BASH_OUTPUT_EXPANSION_SECTIONS.OUTPUT;
       } else if (
-        activeFindMatch?.field === "error" &&
+        activeFindMatch?.field === HISTORY_MATCH_FIELDS.ERROR &&
         isActiveMatchHidden(
           data.error ?? "",
-          getFieldMatches("error"),
+          getFieldMatches(HISTORY_MATCH_FIELDS.ERROR),
           expansion.errorExpanded,
           collapsedToolOutputLineCount,
           row.collapsedToolOutputMaxCharacters ??
             DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS
         )
       ) {
-        pendingBashExpand = "error";
+        pendingBashExpand = BASH_OUTPUT_EXPANSION_SECTIONS.ERROR;
       }
     }
 
@@ -536,7 +539,9 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             GENERIC_TOOL_CALL_MAX_RESULT_CHARS
         )
       ) {
-        pendingToolCallExpand = toolContentIsError ? "error" : "output";
+        pendingToolCallExpand = toolContentIsError
+          ? TOOL_CALL_EXPANSION_SECTIONS.ERROR
+          : TOOL_CALL_EXPANSION_SECTIONS.OUTPUT;
       }
     }
 
@@ -611,7 +616,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             error={data.error}
             commandFindMatches={getFieldMatches("command")}
             outputFindMatches={getFieldMatches("response")}
-            errorFindMatches={getFieldMatches("error")}
+            errorFindMatches={getFieldMatches(HISTORY_MATCH_FIELDS.ERROR)}
             exitCode={data.exitCode}
             status={data.status}
             maxLines={row.collapsedToolOutputLineCount}
@@ -806,7 +811,10 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             }
             errorContent={
               data.error
-                ? highlightText(data.error, getFieldMatches("error"))
+                ? highlightText(
+                    data.error,
+                    getFieldMatches(HISTORY_MATCH_FIELDS.ERROR)
+                  )
                 : undefined
             }
           />
@@ -1565,7 +1573,11 @@ function OutputRowComponent({
           {row.timestamp && (
             <span className="opacity-70">[{row.timestamp}] </span>
           )}
-          {label}: {highlightText(row.errorMessage, getFieldMatches("error"))}
+          {label}:{" "}
+          {highlightText(
+            row.errorMessage,
+            getFieldMatches(HISTORY_MATCH_FIELDS.ERROR)
+          )}
         </div>
       );
       break;

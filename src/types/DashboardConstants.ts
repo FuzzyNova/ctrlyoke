@@ -566,6 +566,17 @@ export type CompletionNotificationSeverity =
   (typeof COMPLETION_NOTIFICATION_SEVERITY)[keyof typeof COMPLETION_NOTIFICATION_SEVERITY];
 
 // ============================================================================
+// NOTIFICATION OUTCOME KINDS - Notification monitor result classifications
+// ============================================================================
+export const NOTIFICATION_OUTCOME_KINDS = {
+  COMPLETION: "completion",
+  ERROR: "error",
+} as const;
+
+export type NotificationOutcomeKind =
+  (typeof NOTIFICATION_OUTCOME_KINDS)[keyof typeof NOTIFICATION_OUTCOME_KINDS];
+
+// ============================================================================
 // USER FEEDBACK SEVERITY - Visual level for transient dashboard feedback
 // ============================================================================
 export const USER_FEEDBACK_SEVERITY = {
@@ -2301,6 +2312,54 @@ export const OUTPUT_ROW_KINDS = {
 
 export type OutputRowKind =
   (typeof OUTPUT_ROW_KINDS)[keyof typeof OUTPUT_ROW_KINDS];
+
+// ============================================================================
+// TOOL RESULT STATUSES - Display status for generic tool-call results
+// ============================================================================
+export const TOOL_RESULT_STATUSES = {
+  PENDING: "pending",
+  SUCCESS: "success",
+  ERROR: "error",
+} as const;
+
+export type ToolResultStatus =
+  (typeof TOOL_RESULT_STATUSES)[keyof typeof TOOL_RESULT_STATUSES];
+
+// ============================================================================
+// TOOL-CALL EXPANSION SECTIONS - Expandable generic tool-call content
+// ============================================================================
+export const TOOL_CALL_EXPANSION_SECTIONS = {
+  PARAMS: "params",
+  OUTPUT: "output",
+  ERROR: "error",
+} as const;
+
+export type ToolCallExpansionSection =
+  (typeof TOOL_CALL_EXPANSION_SECTIONS)[keyof typeof TOOL_CALL_EXPANSION_SECTIONS];
+
+// ============================================================================
+// BASH OUTPUT EXPANSION SECTIONS - Expandable shell command content
+// ============================================================================
+export const BASH_OUTPUT_EXPANSION_SECTIONS = {
+  COMMAND: "command",
+  OUTPUT: "output",
+  ERROR: "error",
+} as const;
+
+export type BashOutputExpansionSection =
+  (typeof BASH_OUTPUT_EXPANSION_SECTIONS)[keyof typeof BASH_OUTPUT_EXPANSION_SECTIONS];
+
+// ============================================================================
+// RUN SUMMARY CACHE STATUSES - Async status for cached run summaries
+// ============================================================================
+export const RUN_SUMMARY_CACHE_STATUSES = {
+  LOADING: "loading",
+  LOADED: "loaded",
+  ERROR: "error",
+} as const;
+
+export type RunSummaryCacheStatus =
+  (typeof RUN_SUMMARY_CACHE_STATUSES)[keyof typeof RUN_SUMMARY_CACHE_STATUSES];
 
 // ============================================================================
 // KEYBOARD KEYS - Shared browser keyboard event key values
