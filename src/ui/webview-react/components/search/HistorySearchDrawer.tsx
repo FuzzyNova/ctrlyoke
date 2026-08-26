@@ -224,11 +224,13 @@ export function HistorySearchDrawer() {
     inputRef.current?.select();
   }, [isOpen]);
 
+  // Deliberately keyed off the query alone, not `isOpen`: the drawer stays
+  // mounted while closed (App.tsx renders it unconditionally, hidden via
+  // CSS), so reopening with an unchanged query must not re-clear and
+  // re-fetch results — that wiped the list and reset scroll position on
+  // every reopen even though nothing had changed. Query can only change
+  // while the drawer is interactable (open), so no `isOpen` guard is needed.
   useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
     if (trimmedQuery.length < 2) {
       setHistorySearchResults([], false, {
         totalCount: 0,
@@ -244,7 +246,7 @@ export function HistorySearchDrawer() {
     }, 400);
 
     return () => window.clearTimeout(timeoutId);
-  }, [isOpen, issueSearch, query, setHistorySearchResults, trimmedQuery]);
+  }, [issueSearch, query, setHistorySearchResults, trimmedQuery]);
 
   const navigateToResult = useCallback(
     (result: HistorySearchResult) => {
@@ -259,6 +261,11 @@ export function HistorySearchDrawer() {
         target: result.target,
       });
       const ui = useUiStore.getState();
+      // Search results always live in the output pane, not the terminal —
+      // switch to it (and make sure the output section isn't collapsed) so
+      // the result is actually visible after navigating.
+      ui.setOutputCollapsed(false);
+      ui.setActiveOutputTab(result.workflowKey, "output");
       const address = {
         workflowKey: result.workflowKey,
         kind: "run" as const,

@@ -16,7 +16,11 @@ export const WorkspaceViewerModal: React.FC = () => {
   const setActiveTab = useWorkspaceViewerStore((s) => s.setActiveTab);
   const workspacePath = useSettingsStore((s) => s.globalSettings.workspaceRoot);
 
-  const [rendering, setRendering] = useState(isOpen);
+  // Once opened, the modal stays mounted (hidden via CSS) rather than
+  // unmounting on close. This keeps WorkspaceExplorerPane / WorkspaceFileEditor
+  // alive across close/reopen so scroll position, markdown-preview toggle, and
+  // CodeMirror undo history survive for free instead of resetting each time.
+  const [everOpened, setEverOpened] = useState(isOpen);
   const [closing, setClosing] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -33,22 +37,20 @@ export const WorkspaceViewerModal: React.FC = () => {
         timerRef.current = null;
       }
       setClosing(false);
-      setRendering(true);
-    } else {
+      setEverOpened(true);
+    } else if (everOpened) {
       setClosing(true);
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
-        setRendering(false);
         setClosing(false);
         timerRef.current = null;
       }, EXIT_DURATION_MS);
     }
-  }, [isOpen]);
+  }, [isOpen, everOpened]);
 
   const handleAnimationEnd = useCallback(() => {
     if (closing) {
       if (timerRef.current) clearTimeout(timerRef.current);
-      setRendering(false);
       setClosing(false);
     }
   }, [closing]);
@@ -57,11 +59,14 @@ export const WorkspaceViewerModal: React.FC = () => {
     close();
   }, [close]);
 
-  if (!rendering) return null;
+  if (!everOpened) return null;
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-workspace-viewer flex flex-col bg-sidebar-bg ${closing ? "animate-modal-exit" : "animate-modal-enter"}`}
+      className={`fixed inset-0 z-workspace-viewer flex flex-col bg-sidebar-bg ${
+        closing ? "animate-modal-exit" : isOpen ? "animate-modal-enter" : "hidden"
+      }`}
+      aria-hidden={!isOpen}
       onAnimationEnd={handleAnimationEnd}
     >
       <WorkspaceViewerHeader

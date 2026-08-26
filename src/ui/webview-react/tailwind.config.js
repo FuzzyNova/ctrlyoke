@@ -435,6 +435,11 @@ module.exports = {
         raised: "10",
         header: "20",
         overlay: "30",
+        // Floating widgets confined to the main content area (e.g. the
+        // output find bar) — above header-level content, but below
+        // full-page drawers (History Search, Settings) so those correctly
+        // cover it instead of it floating on top of them.
+        "content-floating": "35",
         drawer: "40",
         floating: "50",
         panel: "100",
