@@ -22,6 +22,10 @@ import {
 } from "./interfaces/PreparedMutation";
 import type { McpSecretConfigOptions } from "./CliMcpConfigGenerator";
 import { transformMcpSecretMap } from "./CliMcpConfigGenerator";
+import {
+  MCP_SERVER_IDS,
+  MCP_TRANSPORTS,
+} from "../../../types/DashboardConstants";
 
 const execFileAsync = promisify(execFile);
 
@@ -437,16 +441,16 @@ export class CliProviderUtils {
       (server): server is McpServerConfig =>
         typeof server === "object" &&
         server !== null &&
-        server.id === "ctrlyoke"
+        server.id === MCP_SERVER_IDS.CTRLYOKE
     );
     const hasCtrlYokeServer =
-      (mcpServers != null && mcpServers.includes("ctrlyoke")) ||
+      (mcpServers != null && mcpServers.includes(MCP_SERVER_IDS.CTRLYOKE)) ||
       !!ctrlyokeServerObj;
     const userServers = (mcpServers ?? []).filter(
       (server): server is McpServerConfig =>
         typeof server === "object" &&
         server !== null &&
-        server.id !== "ctrlyoke"
+        server.id !== MCP_SERVER_IDS.CTRLYOKE
     );
 
     if (!hasCtrlYokeServer && userServers.length === 0) {
@@ -566,7 +570,7 @@ export class CliProviderUtils {
         // ctrlyoke is the orchestrator — auto-approve its tools
         ctrlyokeEntry.trust = true;
       }
-      mcpServers["ctrlyoke"] = ctrlyokeEntry;
+      mcpServers[MCP_SERVER_IDS.CTRLYOKE] = ctrlyokeEntry;
     }
 
     // User-defined MCP servers
@@ -576,7 +580,7 @@ export class CliProviderUtils {
         if (server.url) {
           entry[remoteUrlKey] = server.url;
           if (includeRemoteType) {
-            entry.type = server.transport ?? "streamable-http";
+            entry.type = server.transport ?? MCP_TRANSPORTS.STREAMABLE_HTTP;
           }
           if (server.headers) {
             entry.headers = transformMcpSecretMap(

@@ -1,4 +1,8 @@
-import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
+import {
+  INHERIT_DEFAULT_OPTION,
+  MCP_SERVER_IDS,
+  MCP_TRANSPORTS,
+} from "@root/types/DashboardConstants";
 import React, { useEffect, useMemo, useState } from "react";
 import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import type { ManagedMcpServer } from "@root/types/WebviewMessageTypes";
@@ -60,19 +64,25 @@ function isMatchingServerEntry(entry: McpServerEntry, id: string): boolean {
 }
 
 function hasCtrlYoke(arr: McpServerEntry[]): boolean {
-  return arr.some((entry) => isMatchingServerEntry(entry, "ctrlyoke"));
+  return arr.some((entry) =>
+    isMatchingServerEntry(entry, MCP_SERVER_IDS.CTRLYOKE)
+  );
 }
 
 /** Return the ctrlyoke entry as an McpServerConfig object, or undefined if not present. */
 function getCtrlYokeConfig(arr: McpServerEntry[]): McpServerConfig | undefined {
   return arr.find(
     (entry): entry is McpServerConfig =>
-      typeof entry === "object" && entry !== null && entry.id === "ctrlyoke"
+      typeof entry === "object" &&
+      entry !== null &&
+      entry.id === MCP_SERVER_IDS.CTRLYOKE
   );
 }
 
 function getNonCtrlYokeEntries(arr: McpServerEntry[]): McpServerEntry[] {
-  return arr.filter((entry) => !isMatchingServerEntry(entry, "ctrlyoke"));
+  return arr.filter(
+    (entry) => !isMatchingServerEntry(entry, MCP_SERVER_IDS.CTRLYOKE)
+  );
 }
 
 function buildArray(
@@ -176,7 +186,8 @@ function ServerDetails({ server }: { server: ListedServer }) {
     {
       label: "transport",
       value:
-        server.config.transport && server.config.transport !== "streamable-http"
+        server.config.transport &&
+        server.config.transport !== MCP_TRANSPORTS.STREAMABLE_HTTP
           ? server.config.transport
           : null,
     },

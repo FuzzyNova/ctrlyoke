@@ -16,6 +16,7 @@ import type { FinalStepRuntimeState } from "../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
   HARNESS_IDS,
+  PROMPT_PROPERTIES,
   QUEUE_POSITION,
   WORKTREE_EDIT_KINDS,
   type HarnessId,
@@ -44,7 +45,8 @@ import { RunContinuationService } from "./orchestration/RunContinuationService";
 import { TimelineRecorder } from "./orchestration/TimelineRecorder";
 
 function normalizeWorkflowPropertyValue(key: string, value: unknown): unknown {
-  return key === "agent" && (typeof value === "string" || value === null)
+  return key === PROMPT_PROPERTIES.AGENT &&
+    (typeof value === "string" || value === null)
     ? normalizeAgentSelection(value)
     : value;
 }

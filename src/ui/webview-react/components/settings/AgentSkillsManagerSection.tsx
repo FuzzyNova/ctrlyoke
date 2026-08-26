@@ -237,7 +237,7 @@ function HarnessBadge({
   id: AnyTargetId;
   scope: SettingWriteScope;
 }) {
-  const isFp = id === "ctrlyoke";
+  const isFp = id === SPECIAL_TARGET_IDS.CTRLYOKE;
   return (
     <span
       className={`inline-flex items-center px-1 py-0.5 rounded text-xxs font-medium leading-none

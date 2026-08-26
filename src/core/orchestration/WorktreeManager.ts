@@ -46,6 +46,7 @@ import {
   WORKTREE_BRANCH_STATES,
   WORKTREE_DIRECTORY_STATES,
   WORKTREE_LANDING_OUTCOMES,
+  WORKTREE_LIFECYCLE_OWNERS,
   WORKTREE_MODES,
   WORKTREE_SETUP_OUTCOMES,
   type WorktreeManagementAction,
@@ -85,10 +86,13 @@ import {
   type RuntimeTrustedRootHandle,
 } from "../../utils/RuntimeTrustedRootRegistry";
 
-export type WorktreeMode = "managed" | "named";
+export type WorktreeMode =
+  | typeof WORKTREE_MODES.MANAGED
+  | typeof WORKTREE_MODES.NAMED;
 export type WorktreeManagerMode = WorktreeMode;
 export type WorktreeOrigin = "created" | "discovered" | "recovered";
-export type WorktreeLifecycleOwner = "ctrlyoke" | "user";
+export type WorktreeLifecycleOwner =
+  (typeof WORKTREE_LIFECYCLE_OWNERS)[keyof typeof WORKTREE_LIFECYCLE_OWNERS];
 export type ManagedWorktreeRecoveryOutcome =
   | "landed"
   | "no-changes"
@@ -700,7 +704,7 @@ export class WorktreeManager {
     try {
       if (
         info.mode !== WORKTREE_MODES.MANAGED ||
-        info.lifecycleOwner !== "ctrlyoke"
+        info.lifecycleOwner !== WORKTREE_LIFECYCLE_OWNERS.CTRLYOKE
       ) {
         return blocked("Only ctrlyoke-owned managed worktrees can be settled.");
       }
@@ -2505,7 +2509,7 @@ export class WorktreeManager {
     const info: ActiveWorktreeInfo = {
       mode: "named",
       origin,
-      lifecycleOwner: "user",
+      lifecycleOwner: WORKTREE_LIFECYCLE_OWNERS.USER,
       branchName,
       worktreePath: executionCheckoutRoot,
       sourceCheckoutRoot,
@@ -2920,7 +2924,7 @@ export class WorktreeManager {
     return {
       mode: WORKTREE_MODES.MANAGED,
       origin,
-      lifecycleOwner: "ctrlyoke",
+      lifecycleOwner: WORKTREE_LIFECYCLE_OWNERS.CTRLYOKE,
       branchName: record.branchName,
       worktreePath: record.worktreePath,
       sourceCheckoutRoot: record.sourceCheckoutRoot,
@@ -3048,7 +3052,7 @@ export class WorktreeManager {
     const info: ActiveWorktreeInfo = {
       mode: WORKTREE_MODES.MANAGED,
       origin: args.origin,
-      lifecycleOwner: "ctrlyoke",
+      lifecycleOwner: WORKTREE_LIFECYCLE_OWNERS.CTRLYOKE,
       branchName: args.record.branchName,
       worktreePath: args.record.worktreePath,
       sourceCheckoutRoot: args.record.sourceCheckoutRoot,
@@ -3089,7 +3093,7 @@ export class WorktreeManager {
       ...(args.record.targetBranch
         ? { targetBranch: args.record.targetBranch }
         : {}),
-      lifecycleOwner: "ctrlyoke",
+      lifecycleOwner: WORKTREE_LIFECYCLE_OWNERS.CTRLYOKE,
       lifecycleState: "ready",
       directoryState: "present",
       branchState: "present",
@@ -3320,7 +3324,7 @@ export class WorktreeManager {
         ),
       })),
       baseCommit: "",
-      lifecycleOwner: "user",
+      lifecycleOwner: WORKTREE_LIFECYCLE_OWNERS.USER,
       lifecycleState: "provisioning",
       directoryState: "missing",
       branchState: "missing",

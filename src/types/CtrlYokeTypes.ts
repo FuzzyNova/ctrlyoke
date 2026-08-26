@@ -15,6 +15,7 @@ import {
   type HarnessId,
   type ExecutionMode,
   type HookEvent,
+  type McpTransport,
   type FailureKind,
   type AttemptCostConfidence,
   type AttemptCostNoteCode,
@@ -22,6 +23,7 @@ import {
   type AttemptCostUnavailableReason,
   type WorkflowTokenCoverage,
   WORKTREE_MODES,
+  WORKTREE_LIFECYCLE_OWNERS,
   WORKTREE_BRANCH_STATES,
   WORKTREE_DIRECTORY_STATES,
   WORKTREE_EDIT_KINDS,
@@ -35,6 +37,7 @@ import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver"
 export type {
   HarnessId,
   HookEvent,
+  McpTransport,
   FailureKind,
   AttemptCostConfidence,
   AttemptCostNoteCode,
@@ -90,7 +93,7 @@ export interface McpServerConfig {
   /** Remote endpoint URL (streamable-http or SSE servers). Required when `command` is not set. */
   url?: string;
   /** Transport protocol for remote servers. Defaults to "streamable-http". */
-  transport?: "streamable-http" | "sse";
+  transport?: McpTransport;
   /** HTTP headers to send with every request (remote servers only, e.g. Authorization) */
   headers?: Record<string, string>;
   /**
@@ -480,7 +483,7 @@ export interface WorkingFileWorktreeRuntime {
   /** Whether source checkout changes existed when the managed worktree was created. */
   sourceCheckoutDirty?: boolean;
   targetBranch?: string;
-  lifecycleOwner: "ctrlyoke" | "user";
+  lifecycleOwner: (typeof WORKTREE_LIFECYCLE_OWNERS)[keyof typeof WORKTREE_LIFECYCLE_OWNERS];
   lifecycleState:
     | "provisioning"
     | "ready"

@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  DATE_RANGE_PRESETS,
   getDatePresetRange,
   type DateRangeFilter,
   type DateRangePreset,
@@ -19,7 +20,7 @@ export const DateRangeFilterControls: React.FC<
       return;
     }
 
-    if (preset === "custom") {
+    if (preset === DATE_RANGE_PRESETS.CUSTOM) {
       onChange({
         ...value,
         preset,
@@ -37,7 +38,9 @@ export const DateRangeFilterControls: React.FC<
     onChange({
       ...value,
       preset:
-        nextValue || value[bound === "from" ? "to" : "from"] ? "custom" : "all",
+        nextValue || value[bound === "from" ? "to" : "from"]
+          ? DATE_RANGE_PRESETS.CUSTOM
+          : "all",
       [bound]: nextValue,
     });
   };
@@ -56,10 +59,10 @@ export const DateRangeFilterControls: React.FC<
         <option value="last7">Last 7 days</option>
         <option value="last30">Last 30 days</option>
         <option value="lastMonth">Last month</option>
-        <option value="custom">Custom range</option>
+        <option value={DATE_RANGE_PRESETS.CUSTOM}>Custom range</option>
       </select>
 
-      {value.preset === "custom" && (
+      {value.preset === DATE_RANGE_PRESETS.CUSTOM && (
         <>
           <input
             type="date"

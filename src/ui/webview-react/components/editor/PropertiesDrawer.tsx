@@ -22,6 +22,7 @@ import {
   EXECUTION_MODE_OPTIONS,
   PERMISSION_MODES,
   PERMISSION_CAPABILITY_KEYS,
+  PROPERTY_EDITOR_MODES,
   STEP_TYPES,
   type ExecutionMode,
 } from "../../../../types/DashboardConstants";
@@ -273,8 +274,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       ? INHERIT_DEFAULT_OPTION
       : properties.additionalArgs === null
         ? "none"
-        : "custom";
-  const isAdditionalArgsActive = additionalArgsMode === "custom";
+        : PROPERTY_EDITOR_MODES.CUSTOM;
+  const isAdditionalArgsActive =
+    additionalArgsMode === PROPERTY_EDITOR_MODES.CUSTOM;
   const additionalArgsDisplayValue = isAdditionalArgsActive
     ? typeof properties.additionalArgs === "string"
       ? properties.additionalArgs
@@ -412,17 +414,19 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       ? "inherit"
       : properties.endCondition === null
         ? "none"
-        : "custom";
+        : PROPERTY_EDITOR_MODES.CUSTOM;
 
   const preConditionMode =
     properties.preCondition === undefined
       ? "inherit"
       : properties.preCondition === null
         ? "none"
-        : "custom";
+        : PROPERTY_EDITOR_MODES.CUSTOM;
 
   const errorBehaviorMode =
-    properties.errorBehavior === undefined ? "inherit" : "custom";
+    properties.errorBehavior === undefined
+      ? "inherit"
+      : PROPERTY_EDITOR_MODES.CUSTOM;
 
   const resolvedEndConditionForInherit =
     workflowProperties.endCondition !== undefined
@@ -475,12 +479,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const buildConditionOptions = (inheritLabel: string) => [
     { value: "inherit", label: inheritLabel },
     { value: "none", label: "None" },
-    { value: "custom", label: "Custom" },
+    { value: PROPERTY_EDITOR_MODES.CUSTOM, label: "Custom" },
   ];
 
   const errorBehaviorOptions = [
     { value: "inherit", label: errorBehaviorInheritLabel },
-    { value: "custom", label: "Custom" },
+    { value: PROPERTY_EDITOR_MODES.CUSTOM, label: "Custom" },
   ];
 
   return (
@@ -711,7 +715,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       label: defaultAdditionalArgsLabel,
                     },
                     { value: "none", label: "None" },
-                    { value: "custom", label: "Custom" },
+                    { value: PROPERTY_EDITOR_MODES.CUSTOM, label: "Custom" },
                   ]}
                 />
                 {/* Narrow mode: input always below the dropdown */}
@@ -921,7 +925,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 }}
                 options={buildConditionOptions(preConditionInheritLabel)}
               />
-              <AnimatedSection visible={preConditionMode === "custom"}>
+              <AnimatedSection
+                visible={preConditionMode === PROPERTY_EDITOR_MODES.CUSTOM}
+              >
                 <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
                   <ScriptConditionEditor
                     variant="preCondition"
@@ -968,7 +974,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 }}
                 options={buildConditionOptions(endConditionInheritLabel)}
               />
-              <AnimatedSection visible={endConditionMode === "custom"}>
+              <AnimatedSection
+                visible={endConditionMode === PROPERTY_EDITOR_MODES.CUSTOM}
+              >
                 <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
                   <ScriptConditionEditor
                     variant="endCondition"
@@ -1015,7 +1023,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 }}
                 options={errorBehaviorOptions}
               />
-              <AnimatedSection visible={errorBehaviorMode === "custom"}>
+              <AnimatedSection
+                visible={errorBehaviorMode === PROPERTY_EDITOR_MODES.CUSTOM}
+              >
                 <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
                   <ErrorBehaviorEditor
                     value={properties.errorBehavior}

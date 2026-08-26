@@ -11,6 +11,7 @@ import {
   PERMISSION_MODES,
   HARNESS_IDS,
   EXECUTION_MODES,
+  PROMPT_PROPERTIES,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
 
@@ -186,7 +187,7 @@ suite("PropertyResolver Tests", () => {
                   }
             );
           } else if (
-            fixture.property === "agent" ||
+            fixture.property === PROMPT_PROPERTIES.AGENT ||
             fixture.property === "skills" ||
             fixture.property === "additionalArgs" ||
             fixture.property === "priorContext"

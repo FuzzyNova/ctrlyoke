@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Log } from "../../../../utils/Log";
+import { HOOK_EVENT_NAMES } from "../../../../types/DashboardConstants";
 import type {
   HookEvent,
   UserHookConfig,
@@ -499,7 +500,9 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
   protected encodePermissionRequestHook(
     userHooks: UserHookConfig[] | undefined
   ): string | undefined {
-    const hook = userHooks?.find((h) => h.event === "permissionRequest");
+    const hook = userHooks?.find(
+      (h) => h.event === HOOK_EVENT_NAMES.PERMISSION_REQUEST
+    );
     return hook
       ? Buffer.from(hook.command, "utf8").toString("base64")
       : undefined;
@@ -536,7 +539,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
       const nativeEvent = eventMap[event as HookEvent];
       if (!nativeEvent) continue;
       const eventCommand =
-        event === "permissionRequest" && encodedDecisionHook
+        event === HOOK_EVENT_NAMES.PERMISSION_REQUEST && encodedDecisionHook
           ? `${command} "${encodedDecisionHook}"`
           : command;
       hooks[nativeEvent] = [buildHookGroup(nativeEvent, eventCommand)];
@@ -545,8 +548,8 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
     if (userHooks) {
       for (const uh of userHooks) {
         if (
-          uh.event === "permissionRequest" &&
-          selectedEvents.includes("permissionRequest")
+          uh.event === HOOK_EVENT_NAMES.PERMISSION_REQUEST &&
+          selectedEvents.includes(HOOK_EVENT_NAMES.PERMISSION_REQUEST)
         ) {
           continue;
         }

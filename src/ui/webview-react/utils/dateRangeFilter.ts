@@ -9,7 +9,11 @@ export type DateRangePreset =
   | "last7"
   | "last30"
   | "lastMonth"
-  | "custom";
+  | typeof DATE_RANGE_PRESETS.CUSTOM;
+
+export const DATE_RANGE_PRESETS = {
+  CUSTOM: "custom",
+} as const;
 
 export interface DateRangeFilter {
   preset: DateRangePreset;

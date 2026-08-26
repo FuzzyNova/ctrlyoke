@@ -43,6 +43,7 @@ import {
   STEP_TYPES,
   PERMISSION_CAPABILITY_KEYS,
   PROMPT_INPUT_CAPABILITY_KEYS,
+  PROPERTY_EDITOR_MODES,
   USER_FEEDBACK_SEVERITY,
 } from "@root/types/DashboardConstants";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
@@ -233,10 +234,12 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       ? (workflowProperties.secrets ?? [])
       : (globalSettings.secrets ?? []);
   const scriptErrorBehaviorMode =
-    properties.errorBehavior === undefined ? "inherit" : "custom";
+    properties.errorBehavior === undefined
+      ? "inherit"
+      : PROPERTY_EDITOR_MODES.CUSTOM;
   const scriptErrorBehaviorOptions = [
     { value: "inherit", label: "Inherit" },
-    { value: "custom", label: "Custom" },
+    { value: PROPERTY_EDITOR_MODES.CUSTOM, label: "Custom" },
   ];
   const isFileRef = looksLikeFilePath(promptText.trim(), {
     allowWorkspaceFolderPrefix: globalSettings.isMultiRoot,
@@ -1339,7 +1342,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
                   options={scriptErrorBehaviorOptions}
                 />
               </div>
-              {scriptErrorBehaviorMode === "custom" && (
+              {scriptErrorBehaviorMode === PROPERTY_EDITOR_MODES.CUSTOM && (
                 <ErrorBehaviorEditor
                   value={properties.errorBehavior}
                   onChange={(updated) => setProperty("errorBehavior", updated)}

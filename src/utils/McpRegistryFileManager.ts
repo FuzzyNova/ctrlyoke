@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { SettingWriteScope } from "../types/DashboardConstants";
 import {
+  MCP_TRANSPORTS,
   SETTING_SCOPES,
   SPECIAL_TARGET_IDS,
 } from "../types/DashboardConstants";
@@ -46,8 +47,8 @@ function isMcpServerConfig(value: unknown): value is McpServerConfig {
   const hasUrl = typeof server.url === "string";
   const hasValidTransport =
     server.transport === undefined ||
-    server.transport === "streamable-http" ||
-    server.transport === "sse";
+    server.transport === MCP_TRANSPORTS.STREAMABLE_HTTP ||
+    server.transport === MCP_TRANSPORTS.SSE;
 
   return (
     typeof server.id === "string" &&

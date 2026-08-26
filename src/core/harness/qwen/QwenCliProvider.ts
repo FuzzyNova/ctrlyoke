@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import {
   HARNESS_IDS,
+  HOOK_EVENT_NAMES,
   STATUS_LINE_TRACKING_PROVIDERS,
 } from "../../../types/DashboardConstants";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
@@ -664,8 +665,8 @@ export class QwenCliProvider implements ICliProvider {
     const section: Record<string, unknown[]> = {};
     for (const uh of userHooks ?? []) {
       if (
-        uh.event === "permissionRequest" &&
-        wrappedCtrlYokeEvents.includes("permissionRequest")
+        uh.event === HOOK_EVENT_NAMES.PERMISSION_REQUEST &&
+        wrappedCtrlYokeEvents.includes(HOOK_EVENT_NAMES.PERMISSION_REQUEST)
       ) {
         continue;
       }

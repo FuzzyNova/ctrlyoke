@@ -1,4 +1,7 @@
-import { INHERIT_DEFAULT_OPTION } from "@root/types/DashboardConstants";
+import {
+  INHERIT_DEFAULT_OPTION,
+  PRIOR_CONTEXT_SELECTION_MODES,
+} from "@root/types/DashboardConstants";
 import React, { useState, useEffect, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
@@ -26,7 +29,7 @@ export type KeywordMode =
   | "finalStepPrevious"
   | "finalStepAll"
   | "run"
-  | "custom";
+  | typeof PRIOR_CONTEXT_SELECTION_MODES.CUSTOM;
 
 export const PRIOR_CONTEXT_KEYWORD_LABELS: Record<KeywordMode, string> = {
   default: "Default (inherit from workflow)",
@@ -36,7 +39,7 @@ export const PRIOR_CONTEXT_KEYWORD_LABELS: Record<KeywordMode, string> = {
   finalStepPrevious: "Previous final step output",
   finalStepAll: "All final step outputs",
   run: "Completed run output",
-  custom: "Custom",
+  [PRIOR_CONTEXT_SELECTION_MODES.CUSTOM]: "Custom",
 };
 
 function isRunAddress(
@@ -47,7 +50,7 @@ function isRunAddress(
 
 function getMode(value: PriorContext | undefined): KeywordMode {
   if (value === undefined) return INHERIT_DEFAULT_OPTION;
-  if (Array.isArray(value)) return "custom";
+  if (Array.isArray(value)) return PRIOR_CONTEXT_SELECTION_MODES.CUSTOM;
   if (isRunAddress(value)) return "run";
   return value as KeywordMode;
 }
@@ -105,7 +108,9 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   const mode = getMode(value);
 
   // Custom input state
-  const [wantsCustom, setWantsCustom] = useState(() => mode === "custom");
+  const [wantsCustom, setWantsCustom] = useState(
+    () => mode === PRIOR_CONTEXT_SELECTION_MODES.CUSTOM
+  );
   const [customText, setCustomText] = useState(() =>
     Array.isArray(value) ? formatAsRangeNotation(value) : ""
   );
@@ -119,7 +124,8 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   // Track onChange calls originating from our text input so we don't sync back
   const textChangePendingRef = useRef(false);
 
-  const showCustomInput = wantsCustom || mode === "custom";
+  const showCustomInput =
+    wantsCustom || mode === PRIOR_CONTEXT_SELECTION_MODES.CUSTOM;
 
   // Sync from external value changes (e.g. undo, workflow load)
   useEffect(() => {
@@ -143,7 +149,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   }, [value]);
 
   const selectKeyword = (k: KeywordMode) => {
-    if (k === "custom") {
+    if (k === PRIOR_CONTEXT_SELECTION_MODES.CUSTOM) {
       setWantsCustom(true);
       setIsOpen(false);
       return;
@@ -191,7 +197,9 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   };
 
   // Build button label
-  const displayMode = showCustomInput ? "custom" : mode;
+  const displayMode = showCustomInput
+    ? PRIOR_CONTEXT_SELECTION_MODES.CUSTOM
+    : mode;
   let buttonLabel: string;
   if (showCustomInput) {
     buttonLabel = "Custom";
@@ -210,7 +218,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
         "finalStepPrevious",
         "finalStepAll",
         "run",
-        "custom",
+        PRIOR_CONTEXT_SELECTION_MODES.CUSTOM,
       ]
     : [
         "none",
@@ -219,7 +227,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
         "finalStepPrevious",
         "finalStepAll",
         "run",
-        "custom",
+        PRIOR_CONTEXT_SELECTION_MODES.CUSTOM,
       ];
 
   return (

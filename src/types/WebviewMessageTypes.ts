@@ -35,6 +35,7 @@ import {
   type UserFeedbackSeverity,
   type EndConditionScriptType,
   type HookEvent,
+  type McpTransport,
   type NotificationKind,
   type SettingScope,
   type SettingWriteScope,
@@ -2051,7 +2052,7 @@ export interface LocalMcpServerEntry {
   args?: string[];
   env?: Record<string, string>;
   url?: string;
-  transport?: "streamable-http" | "sse";
+  transport?: McpTransport;
   headers?: Record<string, string>;
   /** Absolute path to the config file where this entry was discovered */
   path: string;
@@ -2095,7 +2096,7 @@ export interface RegistryMcpEntry {
   /** Endpoint URL for remote servers (when no stdio package is available) */
   remoteUrl?: string;
   /** Transport protocol for remote servers */
-  remoteTransport?: "streamable-http" | "sse";
+  remoteTransport?: McpTransport;
   /** Required HTTP headers for remote servers (e.g. Authorization) */
   remoteHeaders?: Array<{
     name: string;

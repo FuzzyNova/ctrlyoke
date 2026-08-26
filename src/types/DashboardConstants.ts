@@ -1054,6 +1054,16 @@ export const MCP_CAPABILITY_KEYS = {
   PER_SERVER_TOOL_FILTERING: "perServerToolFiltering",
 } as const;
 
+// ============================================================================
+// MCP TRANSPORTS - Remote MCP protocol values
+// ============================================================================
+export const MCP_TRANSPORTS = {
+  STREAMABLE_HTTP: "streamable-http",
+  SSE: "sse",
+} as const;
+
+export type McpTransport = (typeof MCP_TRANSPORTS)[keyof typeof MCP_TRANSPORTS];
+
 export const COMPATIBILITY_DIAGNOSTIC_SEVERITIES = {
   INFO: "info",
   WARNING: "warning",
@@ -1209,6 +1219,17 @@ export const HARNESS_CHART_COLORS: Record<HarnessId, string> = {
 // HOOK EVENT - Logical hook event names and metadata
 // ============================================================================
 
+export const HOOK_EVENT_NAMES = {
+  STOP: "stop",
+  SESSION_START: "sessionStart",
+  PRE_TOOL_USE: "preToolUse",
+  POST_TOOL_USE: "postToolUse",
+  USER_PROMPT_SUBMIT: "userPromptSubmit",
+  PERMISSION_REQUEST: "permissionRequest",
+  NOTIFICATION: "notification",
+  ERROR: "error",
+} as const;
+
 /**
  * Logical hook event names — mapped to CLI-specific event names at inject time.
  *
@@ -1224,14 +1245,7 @@ export const HARNESS_CHART_COLORS: Record<HarnessId, string> = {
  * | "error"            | StopFailure      | errorOccurred     | n/a              | n/a               | session.error           |
  */
 export type HookEvent =
-  | "stop"
-  | "sessionStart"
-  | "preToolUse"
-  | "postToolUse"
-  | "userPromptSubmit"
-  | "permissionRequest"
-  | "notification"
-  | "error";
+  (typeof HOOK_EVENT_NAMES)[keyof typeof HOOK_EVENT_NAMES];
 
 export interface HookEventMetadata {
   event: HookEvent;
@@ -1240,14 +1254,14 @@ export interface HookEventMetadata {
 }
 
 export const HOOK_EVENT_ORDER: HookEvent[] = [
-  "stop",
-  "sessionStart",
-  "preToolUse",
-  "postToolUse",
-  "userPromptSubmit",
-  "permissionRequest",
-  "notification",
-  "error",
+  HOOK_EVENT_NAMES.STOP,
+  HOOK_EVENT_NAMES.SESSION_START,
+  HOOK_EVENT_NAMES.PRE_TOOL_USE,
+  HOOK_EVENT_NAMES.POST_TOOL_USE,
+  HOOK_EVENT_NAMES.USER_PROMPT_SUBMIT,
+  HOOK_EVENT_NAMES.PERMISSION_REQUEST,
+  HOOK_EVENT_NAMES.NOTIFICATION,
+  HOOK_EVENT_NAMES.ERROR,
 ];
 
 export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
@@ -1277,7 +1291,7 @@ export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
     description: "Fires when a user prompt is submitted to the AI.",
   },
   {
-    event: "permissionRequest",
+    event: HOOK_EVENT_NAMES.PERMISSION_REQUEST,
     label: "Permission Request",
     description: "Fires when the AI requests permission to perform an action.",
   },
@@ -1307,6 +1321,14 @@ export const WORKTREE_MODES = {
 } as const;
 
 export type WorktreeMode = (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES];
+
+export const WORKTREE_LIFECYCLE_OWNERS = {
+  CTRLYOKE: "ctrlyoke",
+  USER: "user",
+} as const;
+
+export type WorktreeLifecycleOwner =
+  (typeof WORKTREE_LIFECYCLE_OWNERS)[keyof typeof WORKTREE_LIFECYCLE_OWNERS];
 
 // ============================================================================
 // WORKTREE EDIT KINDS - Lineage preparation and start-position edit kinds
@@ -1789,6 +1811,22 @@ export const PRIOR_CONTEXT_KEYWORDS = {
   /** Most recent output from the finalStep loop. */
   FINAL_STEP_PREVIOUS: "finalStepPrevious",
 } as const;
+
+export const PRIOR_CONTEXT_SELECTION_MODES = {
+  CUSTOM: "custom",
+} as const;
+
+export type PriorContextSelectionMode =
+  (typeof PRIOR_CONTEXT_SELECTION_MODES)[keyof typeof PRIOR_CONTEXT_SELECTION_MODES];
+
+export const PROPERTY_EDITOR_MODES = {
+  INHERIT: "inherit",
+  NONE: "none",
+  CUSTOM: "custom",
+} as const;
+
+export type PropertyEditorMode =
+  (typeof PROPERTY_EDITOR_MODES)[keyof typeof PROPERTY_EDITOR_MODES];
 
 // ============================================================================
 // PRIOR CONTEXT ITEM TYPES - Discriminant for PriorContextItem.type
@@ -2407,6 +2445,21 @@ export const SPECIAL_TARGET_IDS = {
   CTRLYOKE: "ctrlyoke",
   VSCODE: "vscode",
   AGENTS: "agents",
+} as const;
+
+// ============================================================================
+// MCP SERVER IDS - Built-in server identifiers used in workflow properties
+// ============================================================================
+export const MCP_SERVER_IDS = {
+  CTRLYOKE: "ctrlyoke",
+} as const;
+
+// ============================================================================
+// EXTENSION IDENTIFIERS - Development and packaged extension identity values
+// ============================================================================
+export const EXTENSION_IDENTIFIERS = {
+  ID: "fuzzynova.ctrlyoke",
+  PACKAGE_NAME: "ctrlyoke",
 } as const;
 
 // Explicit ctrlyoke prompt references. Plain slash commands remain harness-native.

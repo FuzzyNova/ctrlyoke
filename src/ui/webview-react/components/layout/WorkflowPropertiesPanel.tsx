@@ -71,6 +71,7 @@ import {
   WORKTREE_MODES,
   PERMISSION_MODES,
   PERMISSION_CAPABILITY_KEYS,
+  PROMPT_PROPERTIES,
 } from "../../../../types/DashboardConstants";
 import { getAutoResumePreview } from "../../utils/autoResumePreview";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
@@ -521,7 +522,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
           globalSettings.harnessDefaultAdditionalArgs[effectiveHarness] ?? "";
         return (workflowValue || "") !== (harnessDefault || "");
       }
-      if (property === "agent") {
+      if (property === PROMPT_PROPERTIES.AGENT) {
         // Persisted workflow agent uses null for "None" (see normalizeAgentSelection
         // in WorkflowStepSanitizer), while the global default uses "" — treat both
         // as equivalent so the button hides when the workflow matches the default.
