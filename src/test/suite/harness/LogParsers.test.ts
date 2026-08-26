@@ -929,6 +929,84 @@ suite("ClaudeLogParser", () => {
     });
   });
 
+  suite("extractStructuredEventsFromEvent", () => {
+    test("should correct FILE_EDIT line numbers from toolUseResult.structuredPatch during live streaming", () => {
+      // Regression test: the INITIATED FILE_EDIT built from the tool_use block
+      // only has the bare old_string/new_string snippet (no line numbers), so
+      // DiffView diffs the snippet against itself and every hunk starts at
+      // line 1. The paired `user` tool_result event carries the CLI's
+      // toolUseResult.structuredPatch with the real file offset — streaming
+      // must surface a COMPLETED FILE_EDIT event carrying it, the same way
+      // extractResponse() does for the final history, or the live diff never
+      // corrects itself mid-run.
+      const initiatedEvents = parser.extractStructuredEventsFromEvent({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_edit_golden",
+              name: "Edit",
+              input: {
+                file_path: "golden.txt",
+                old_string: "before",
+                new_string: "after",
+              },
+            },
+          ],
+        },
+        timestamp: "2026-07-26T12:00:01.000Z",
+      } as unknown as BaseCliEvent);
+
+      assert.strictEqual(initiatedEvents.length, 1);
+      assert.strictEqual(initiatedEvents[0].type, CLI_EVENT_TYPES.FILE_EDIT);
+      assert.strictEqual(
+        (initiatedEvents[0].data as any).structuredPatch,
+        undefined
+      );
+
+      const completedEvents = parser.extractStructuredEventsFromEvent({
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_edit_golden",
+              content: "Updated golden.txt",
+            },
+          ],
+        },
+        toolUseResult: {
+          type: "edit",
+          filePath: "golden.txt",
+          oldString: "before",
+          newString: "after",
+          structuredPatch: [
+            {
+              oldStart: 482,
+              oldLines: 1,
+              newStart: 482,
+              newLines: 1,
+              lines: ["-before", "+after"],
+            },
+          ],
+        },
+        timestamp: "2026-07-26T12:00:02.000Z",
+      } as unknown as BaseCliEvent);
+
+      const fileEditEvents = completedEvents.filter(
+        (event) => event.type === CLI_EVENT_TYPES.FILE_EDIT
+      );
+      assert.strictEqual(fileEditEvents.length, 1);
+      const hunks = (fileEditEvents[0].data as any).structuredPatch as
+        | Array<{ oldStart: number; newStart: number }>
+        | undefined;
+      assert.ok(hunks && hunks.length > 0, "expected structuredPatch hunks");
+      assert.strictEqual(hunks[0].oldStart, 482);
+      assert.strictEqual(hunks[0].newStart, 482);
+    });
+  });
+
   suite("isComplete", () => {
     test("should detect completion via stop_reason", () => {
       const completeEvents = [
