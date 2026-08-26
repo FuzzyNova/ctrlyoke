@@ -10,6 +10,7 @@ import {
   TERMINAL_SESSION_STATUS,
   SESSION_KINDS,
 } from "../types/messages";
+import { OUTPUT_TABS } from "@root/types/DashboardConstants";
 import { WebviewLog } from "@utils/logger";
 import { useTerminalStore } from "../store/terminalStore";
 import { useUiStore } from "../store/uiStore";
@@ -427,7 +428,9 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
         (s) => s.kind === SESSION_KINDS.SHELL
       );
       if (!hasShellSessions) {
-        useUiStore.getState().setActiveOutputTab(workflowId, "output");
+        useUiStore
+          .getState()
+          .setActiveOutputTab(workflowId, OUTPUT_TABS.OUTPUT);
       }
     }
   };

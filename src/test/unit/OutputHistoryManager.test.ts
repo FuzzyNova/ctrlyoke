@@ -736,7 +736,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       ["status", "cli", "status", "cli"]
     );
     assert.strictEqual(loaded.orderedEntries[1]?.kind, "cli");
-    if (loaded.orderedEntries[1]?.kind !== "cli") {
+    if (loaded.orderedEntries[1]?.kind !== OUTPUT_HISTORY_KINDS.CLI) {
       assert.fail("expected second ordered entry to be cli output");
     }
     assert.strictEqual(loaded.orderedEntries[1].cliOutput.response, "final");

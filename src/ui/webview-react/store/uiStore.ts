@@ -8,6 +8,7 @@ import type {
   WorkflowFileFormat,
 } from "../types/messages";
 import { EXECUTION_STATES, type FooterPicker } from "../types/messages";
+import type { OutputTab } from "@root/types/DashboardConstants";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type {
   HistorySearchIndexState,
@@ -636,7 +637,7 @@ interface UiState {
   runBannerPinned: boolean;
 
   // Terminal tab state (per workflow, defaults to 'output')
-  activeOutputTabs: Record<string, "output" | "terminal">;
+  activeOutputTabs: Record<string, OutputTab>;
   // Workflows with at least one running terminal session
   terminalActiveWorkflows: Set<string>;
 
@@ -890,7 +891,7 @@ interface UiActions {
   ) => void;
 
   // Terminal tab switching
-  setActiveOutputTab: (workflowId: string, tab: "output" | "terminal") => void;
+  setActiveOutputTab: (workflowId: string, tab: OutputTab) => void;
   setTerminalSessionActive: (workflowId: string, active: boolean) => void;
 
   // Terminal session rail layout
@@ -1625,7 +1626,7 @@ export const useUiStore = create<UiState & UiActions>()(
       // TERMINAL TAB STATE
       // ============================================================================
 
-      setActiveOutputTab: (workflowId: string, tab: "output" | "terminal") =>
+      setActiveOutputTab: (workflowId: string, tab: OutputTab) =>
         set((state) => ({
           activeOutputTabs: { ...state.activeOutputTabs, [workflowId]: tab },
         })),

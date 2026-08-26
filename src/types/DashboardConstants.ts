@@ -2291,6 +2291,35 @@ export type OutputMessageType =
   (typeof OUTPUT_MESSAGE_TYPES)[keyof typeof OUTPUT_MESSAGE_TYPES];
 
 // ============================================================================
+// RUN OUTPUT RESOLVER EVENT KINDS - Events emitted while reducing a run timeline
+// ============================================================================
+export const RUN_OUTPUT_RESOLVER_EVENT_KINDS = {
+  ATTEMPT_STARTED: "attemptStarted",
+  STREAMING_CHUNK: "streamingChunk",
+  STREAMING_EVENTS: "streamingEvents",
+  OUTPUT: "output",
+  SCRIPT_EXECUTION: "scriptExecution",
+  RETRY_SCHEDULED: "retryScheduled",
+  FOLLOW_UP_RESPONSE_APPENDED: "followUpResponseAppended",
+  ATTEMPT_TERMINATED: "attemptTerminated",
+  RUNTIME_TRANSITION: "runtimeTransition",
+  RUN_TERMINATED: "runTerminated",
+} as const;
+
+export type RunOutputResolverEventKind =
+  (typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS)[keyof typeof RUN_OUTPUT_RESOLVER_EVENT_KINDS];
+
+// ============================================================================
+// OUTPUT TABS - Output section tab values stored per workflow
+// ============================================================================
+export const OUTPUT_TABS = {
+  OUTPUT: "output",
+  TERMINAL: "terminal",
+} as const;
+
+export type OutputTab = (typeof OUTPUT_TABS)[keyof typeof OUTPUT_TABS];
+
+// ============================================================================
 // OUTPUT ROW KINDS - Discriminants for rendered output rows
 // ============================================================================
 export const OUTPUT_ROW_KINDS = {

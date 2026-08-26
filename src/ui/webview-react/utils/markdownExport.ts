@@ -383,7 +383,7 @@ export function generateMarkdownExport(
   const stepSequence = new Map<string, number>();
   let seq = 0;
   for (const item of sortedOutputs) {
-    if (item.type === "cli") {
+    if (item.type === OUTPUT_MESSAGE_TYPES.CLI) {
       const key = `${item.target.kind}:${item.target.index}`;
       if (!stepSequence.has(key)) {
         seq++;

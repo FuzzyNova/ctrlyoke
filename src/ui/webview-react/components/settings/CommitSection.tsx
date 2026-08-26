@@ -17,6 +17,7 @@ import { LocalTextInput, LocalTextarea } from "@components/shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import {
   INHERIT_DEFAULT_OPTION,
+  OUTPUT_TABS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 
@@ -87,7 +88,7 @@ export function CommitSection({
     )?.workflowName;
     ui.closeGlobalSettings();
     ui.setOutputCollapsed(false);
-    ui.setActiveOutputTab(record.workflowKey, "output");
+    ui.setActiveOutputTab(record.workflowKey, OUTPUT_TABS.OUTPUT);
     navigateToWorkflowAddress(getVsCodeApi(), address, targetWorkflowName);
   };
   const generationStatus = lastCommitMessageGeneration

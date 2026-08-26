@@ -8,6 +8,7 @@ import { extractCliOutputText } from "@utils/outputUtils";
 import type { OutputMessage } from "@utils/outputProjection";
 import type { CliOutput as CliOutputType } from "../types/cliEvents";
 import { FINAL_STEP_PHASES } from "../types/messages";
+import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
 
 function buildCopyAllText(
   allMessages: OutputMessage[],
@@ -27,7 +28,7 @@ function buildCopyAllText(
     if (lastCliIdx === undefined) continue;
 
     const msg = allMessages[lastCliIdx];
-    if (msg?.type !== "cli") continue;
+    if (msg?.type !== OUTPUT_MESSAGE_TYPES.CLI) continue;
 
     const output = msg.data as CliOutputType;
     const isFinalStep = target.kind === FINAL_STEP_PHASES.FINAL_STEP;
@@ -93,14 +94,16 @@ export function useOutputContextMenu({
         const lastCliIdx = lastCliIndexPerStep.get(hoveredStepKey);
         if (lastCliIdx !== undefined) {
           const msg = allMessages[lastCliIdx];
-          if (msg?.type === "cli") {
+          if (msg?.type === OUTPUT_MESSAGE_TYPES.CLI) {
             hoveredOutputText = extractCliOutputText(msg.data as CliOutputType);
           }
         }
       }
 
       const copyAllText = buildCopyAllText(allMessages, lastCliIndexPerStep);
-      const hasAnyOutput = allMessages.some((m) => m.type === "cli");
+      const hasAnyOutput = allMessages.some(
+        (m) => m.type === OUTPUT_MESSAGE_TYPES.CLI
+      );
 
       setContextMenu({
         x,

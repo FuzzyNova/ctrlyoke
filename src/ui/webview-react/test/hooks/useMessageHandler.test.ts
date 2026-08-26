@@ -8,7 +8,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
-import { COMPLETION_NOTIFICATION_SEVERITY } from "@root/types/DashboardConstants";
+import {
+  COMPLETION_NOTIFICATION_SEVERITY,
+  OUTPUT_TABS,
+} from "@root/types/DashboardConstants";
 
 const { handleCompletionNotificationEventMock } = vi.hoisted(() => ({
   handleCompletionNotificationEventMock: vi.fn(),
@@ -2863,7 +2866,9 @@ describe("EXECUTION_STARTED", () => {
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useUiStore.getState().setOutputCollapsed(true);
-    useUiStore.getState().setActiveOutputTab("workflow-1", "terminal");
+    useUiStore
+      .getState()
+      .setActiveOutputTab("workflow-1", OUTPUT_TABS.TERMINAL);
     useSettingsStore
       .getState()
       .updateGlobalSetting("autoFocusOutputOnExecution", true);
@@ -2886,7 +2891,9 @@ describe("EXECUTION_STARTED", () => {
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useUiStore.getState().setOutputCollapsed(true);
-    useUiStore.getState().setActiveOutputTab("workflow-1", "terminal");
+    useUiStore
+      .getState()
+      .setActiveOutputTab("workflow-1", OUTPUT_TABS.TERMINAL);
     useSettingsStore
       .getState()
       .updateGlobalSetting("autoFocusOutputOnExecution", false);
@@ -2986,7 +2993,7 @@ describe("EXECUTION_STARTED", () => {
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useUiStore.getState().setOutputCollapsed(true);
-    useUiStore.getState().setActiveOutputTab("workflow-1", "output");
+    useUiStore.getState().setActiveOutputTab("workflow-1", OUTPUT_TABS.OUTPUT);
     useSettingsStore
       .getState()
       .updateGlobalSetting("autoFocusOutputOnExecution", true);
@@ -3116,7 +3123,7 @@ describe("TERMINAL_STARTED", () => {
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useUiStore.getState().setOutputCollapsed(true);
-    useUiStore.getState().setActiveOutputTab("workflow-1", "output");
+    useUiStore.getState().setActiveOutputTab("workflow-1", OUTPUT_TABS.OUTPUT);
     useSettingsStore
       .getState()
       .updateGlobalSetting("autoFocusOutputOnExecution", true);
@@ -3143,7 +3150,7 @@ describe("TERMINAL_STARTED", () => {
 
     useUiStore.getState().setActiveWorkflowId("workflow-1");
     useUiStore.getState().setOutputCollapsed(true);
-    useUiStore.getState().setActiveOutputTab("workflow-1", "output");
+    useUiStore.getState().setActiveOutputTab("workflow-1", OUTPUT_TABS.OUTPUT);
     useSettingsStore
       .getState()
       .updateGlobalSetting("autoFocusOutputOnExecution", false);

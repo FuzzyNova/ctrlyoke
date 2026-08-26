@@ -1,4 +1,5 @@
 import React, { memo, Profiler } from "react";
+import { OUTPUT_TABS, type OutputTab } from "@root/types/DashboardConstants";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import {
   OutputRow,
@@ -30,7 +31,7 @@ import {
 } from "./OutputScrollSeekPlaceholder";
 
 interface OutputPaneProps {
-  activeOutputTab: "output" | "terminal";
+  activeOutputTab: OutputTab;
   bashExpansionState: ReadonlyMap<string, BashOutputExpansionState>;
   contentHeight: number;
   hasOutput: boolean;
@@ -239,11 +240,11 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
 
   return (
     <div
-      aria-hidden={activeOutputTab !== "output" || isOutputCollapsed}
+      aria-hidden={activeOutputTab !== OUTPUT_TABS.OUTPUT || isOutputCollapsed}
       className={`absolute inset-0 flex flex-row min-h-0 ${
         isOutputCollapsed
           ? "hidden"
-          : activeOutputTab === "output"
+          : activeOutputTab === OUTPUT_TABS.OUTPUT
             ? ""
             : "invisible pointer-events-none"
       }`}

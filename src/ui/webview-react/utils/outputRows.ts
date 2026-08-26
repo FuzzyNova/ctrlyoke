@@ -334,7 +334,7 @@ interface AttemptGroupAggregate {
 }
 
 function getAttemptGroupKey(message: OutputMessage): string | undefined {
-  if (message.type !== "cli") return undefined;
+  if (message.type !== OUTPUT_MESSAGE_TYPES.CLI) return undefined;
   const output = message.data as CliOutputType;
   const runIndex = message.runIndex ?? output.runIndex ?? 0;
   return `${getTargetKey(message.target)}:run${runIndex}`;
@@ -347,7 +347,7 @@ export function getCollapsibleAttemptGroupKeys(
   const groups = new Map<string, Set<string>>();
   for (const message of messages) {
     const groupKey = getAttemptGroupKey(message);
-    if (!groupKey || message.type !== "cli") continue;
+    if (!groupKey || message.type !== OUTPUT_MESSAGE_TYPES.CLI) continue;
     const attemptKey = `${groupKey}:attempt${message.attemptIndex ?? 0}`;
     const attempts = groups.get(groupKey) ?? new Set<string>();
     attempts.add(attemptKey);
@@ -1748,7 +1748,7 @@ export function buildOutputRows(
 
   for (const [messageIndex, message] of input.allMessages.entries()) {
     const groupKey = getAttemptGroupKey(message);
-    if (!groupKey || message.type !== "cli") continue;
+    if (!groupKey || message.type !== OUTPUT_MESSAGE_TYPES.CLI) continue;
     const output = message.data as CliOutputType;
     const runIndex = message.runIndex ?? output.runIndex ?? 0;
     const attemptKey = `${runIndex}:${message.attemptIndex ?? 0}`;
@@ -1772,7 +1772,7 @@ export function buildOutputRows(
       uniqueTargets.set(targetKey, message.target);
     }
 
-    if (message.type === "cli") {
+    if (message.type === OUTPUT_MESSAGE_TYPES.CLI) {
       const stepOutputs = stepOutputsMap.get(targetKey) ?? [];
       stepOutputs.push(message.data as CliOutputType);
       stepOutputsMap.set(targetKey, stepOutputs);

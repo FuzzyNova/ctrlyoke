@@ -105,7 +105,7 @@ export function mapOrderedHistoryEntriesToMessages(
         });
         break;
       }
-      case "cli": {
+      case OUTPUT_HISTORY_KINDS.CLI: {
         const target = toOutputMessageTarget(entry.target);
         const entryIdentity = getCliEntryIdentity(entry);
         const identity = cliEntryIdentityKey(entryIdentity);

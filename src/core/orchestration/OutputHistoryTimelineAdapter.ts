@@ -3,6 +3,7 @@ import {
   FINAL_STEP_PHASES,
   getExecutionPhaseKeySuffix,
   OUTPUT_HISTORY_KINDS,
+  RUN_OUTPUT_RESOLVER_EVENT_KINDS,
   type ExecutionPhase,
 } from "../../types/DashboardConstants";
 import type {
@@ -57,7 +58,7 @@ export class OutputHistoryTimelineAdapter {
       import("../../types/WebviewMessageTypes").CliOutput
     >();
     for await (const event of this.outputResolver.stream(manifestPath)) {
-      if (event.kind === "output") {
+      if (event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.OUTPUT) {
         outputs.set(
           getCliEntryKey(
             event.attempt.target,
@@ -67,7 +68,9 @@ export class OutputHistoryTimelineAdapter {
           ),
           event.attempt.output
         );
-      } else if (event.kind === "streamingChunk") {
+      } else if (
+        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_CHUNK
+      ) {
         const key = getCliEntryKey(
           event.attempt.target,
           event.attempt.runIndex,
@@ -81,7 +84,9 @@ export class OutputHistoryTimelineAdapter {
             response: output.response + event.chunk,
           });
         }
-      } else if (event.kind === "streamingEvents") {
+      } else if (
+        event.kind === RUN_OUTPUT_RESOLVER_EVENT_KINDS.STREAMING_EVENTS
+      ) {
         const key = getCliEntryKey(
           event.attempt.target,
           event.attempt.runIndex,

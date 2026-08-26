@@ -760,7 +760,7 @@ export const useWorkflowStore = create<
       appendLiveEntry: (entry) =>
         withUndoPause(() =>
           set((state) => {
-            if (entry.kind === "cli") {
+            if (entry.kind === OUTPUT_HISTORY_KINDS.CLI) {
               const cliEntry = entry as OrderedCliHistoryEntry;
               const matchingIdx = findMatchingCliEntryIndex(
                 state.liveOrderedEntries,
@@ -1380,7 +1380,7 @@ export const useWorkflowStore = create<
         return entries
           .filter(
             (e): e is OrderedCliHistoryEntry =>
-              e.kind === "cli" &&
+              e.kind === OUTPUT_HISTORY_KINDS.CLI &&
               "target" in e &&
               (e as OrderedCliHistoryEntry).target.kind ===
                 FINAL_STEP_PHASES.QUEUE &&
@@ -1399,7 +1399,7 @@ export const useWorkflowStore = create<
         const cliEntries = entries
           .filter(
             (e): e is OrderedCliHistoryEntry =>
-              e.kind === "cli" &&
+              e.kind === OUTPUT_HISTORY_KINDS.CLI &&
               "target" in e &&
               (e as OrderedCliHistoryEntry).target.kind ===
                 FINAL_STEP_PHASES.QUEUE &&
