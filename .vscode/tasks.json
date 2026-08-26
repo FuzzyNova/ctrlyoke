@@ -36,14 +36,13 @@
       // Wipes .vscode-dev-tempdir/ (workspace folder + --user-data-dir) so the
       // "onboarding" launch config always starts from an unconfigured folder
       // and an unseen walkthrough globalState flag, not leftover state from
-      // the last test run.
+      // the last test run. A script file (not inline `node -e`) because
+      // VS Code's shell-task quoting mangles single quotes inside inline
+      // `-e` code on PowerShell.
       "label": "reset-onboarding-tempdir",
       "type": "shell",
       "command": "node",
-      "args": [
-        "-e",
-        "const fs=require('fs');const p='${workspaceFolder}/.vscode-dev-tempdir';fs.rmSync(p,{recursive:true,force:true});fs.mkdirSync(p+'/workspace',{recursive:true});"
-      ],
+      "args": ["scripts/reset-dev-tempdir.mjs"],
       "presentation": {
         "panel": "dedicated",
         "reveal": "silent"
