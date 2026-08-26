@@ -20,6 +20,10 @@ import {
 } from "@utils/atomicReferences";
 import type { RowFindDecoration } from "@utils/outputFind";
 import { hasRenderableDiff } from "@utils/diffUtils";
+import {
+  UNDO_REDO_DIRECTIONS,
+  type UndoRedoDirection,
+} from "@root/types/DashboardConstants";
 
 // ============================================================================
 // Shared primitives
@@ -163,7 +167,7 @@ interface FileEditOutputProps {
   }>;
   error?: string;
   onUndoFile?: () => void;
-  fileUndoMode?: "undo" | "redo";
+  fileUndoMode?: UndoRedoDirection;
   /** When true, suppresses the diff display (used when a COMPLETED event for the same file follows) */
   hideDiff?: boolean;
   collapsed?: boolean;
@@ -199,7 +203,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
     structuredPatch,
     error,
     onUndoFile,
-    fileUndoMode = "undo",
+    fileUndoMode = UNDO_REDO_DIRECTIONS.UNDO,
     hideDiff = false,
     collapsed,
     onCollapsedChange,
@@ -230,18 +234,20 @@ export const FileEditOutput = memo<FileEditOutputProps>(
       status !== OPERATION_STATUS.FAILED ? (
         <button
           type="button"
-          className={`icon-btn inline-flex items-center gap-1 py-0.5 px-1.5 text-[length:var(--fp-output-font-size-xs)] ${fileUndoMode === "redo" ? "text-terminal-ansiGreen hover:opacity-80" : "text-link-fg hover:text-link-active-fg"}`}
+          className={`icon-btn inline-flex items-center gap-1 py-0.5 px-1.5 text-[length:var(--fp-output-font-size-xs)] ${fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "text-terminal-ansiGreen hover:opacity-80" : "text-link-fg hover:text-link-active-fg"}`}
           title={
-            fileUndoMode === "redo"
+            fileUndoMode === UNDO_REDO_DIRECTIONS.REDO
               ? `Redo changes to ${path}`
               : `Undo changes to ${path}`
           }
           onClick={onUndoFile}
         >
           <i
-            className={`codicon ${fileUndoMode === "redo" ? "codicon-redo" : "codicon-discard"} text-xxs`}
+            className={`codicon ${fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "codicon-redo" : "codicon-discard"} text-xxs`}
           />
-          <span>{fileUndoMode === "redo" ? "Redo" : "Undo"}</span>
+          <span>
+            {fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "Redo" : "Undo"}
+          </span>
         </button>
       ) : null;
 
@@ -297,7 +303,7 @@ interface FileWriteOutputProps {
   content?: string;
   error?: string;
   onUndoFile?: () => void;
-  fileUndoMode?: "undo" | "redo";
+  fileUndoMode?: UndoRedoDirection;
   className?: string;
 }
 
@@ -310,7 +316,7 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
   content,
   error,
   onUndoFile,
-  fileUndoMode = "undo",
+  fileUndoMode = UNDO_REDO_DIRECTIONS.UNDO,
   className = "",
 }) => {
   const dotStatus = fileOpDotStatus(status);
@@ -338,13 +344,13 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
             type="button"
             className="icon-btn py-0 px-1 ml-1 text-[length:var(--fp-output-font-size-xs)]"
             title={
-              fileUndoMode === "redo"
+              fileUndoMode === UNDO_REDO_DIRECTIONS.REDO
                 ? `Redo changes to ${path}`
                 : `Undo changes to ${path}`
             }
             onClick={onUndoFile}
           >
-            {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
+            {fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "↻ Redo" : "↩ Undo"}
           </button>
         ) : null
       }
@@ -426,7 +432,7 @@ interface FileDeleteOutputProps {
   success?: boolean;
   error?: string;
   onUndoFile?: () => void;
-  fileUndoMode?: "undo" | "redo";
+  fileUndoMode?: UndoRedoDirection;
   className?: string;
 }
 
@@ -438,7 +444,7 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
   success,
   error,
   onUndoFile,
-  fileUndoMode = "undo",
+  fileUndoMode = UNDO_REDO_DIRECTIONS.UNDO,
   className = "",
 }) => {
   const dotStatus = boolDotStatus(success);
@@ -459,13 +465,13 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
             type="button"
             className="icon-btn py-0 px-1 ml-1 text-[length:var(--fp-output-font-size-xs)]"
             title={
-              fileUndoMode === "redo"
+              fileUndoMode === UNDO_REDO_DIRECTIONS.REDO
                 ? `Redo deletion of ${path}`
                 : `Undo deletion of ${path}`
             }
             onClick={onUndoFile}
           >
-            {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
+            {fileUndoMode === UNDO_REDO_DIRECTIONS.REDO ? "↻ Redo" : "↩ Undo"}
           </button>
         ) : null
       }

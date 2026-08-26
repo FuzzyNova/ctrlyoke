@@ -29,8 +29,11 @@ import type {
 import * as Diff from "diff";
 import { fromPromptChangeType, type DiffFileCardProps } from "@components/diff";
 import {
+  FILE_OPERATION_KINDS,
   MAX_CONTENT_SIZE,
+  UNDO_REDO_DIRECTIONS,
   type DiffChangeType,
+  type UndoRedoDirection,
 } from "@root/types/DashboardConstants";
 import { getLanguageFromPath } from "@utils/syntaxHighlighting";
 import { hasRenderableDiff } from "@utils/diffUtils";
@@ -156,11 +159,11 @@ export function sameFilePath(a: string, b: string): boolean {
 function eventTypeToChangeType(eventType: string): PromptChangeType | null {
   switch (eventType) {
     case CLI_EVENT_TYPES.FILE_EDIT:
-      return "modified";
+      return FILE_OPERATION_KINDS.MODIFIED;
     case CLI_EVENT_TYPES.FILE_WRITE:
-      return "created";
+      return FILE_OPERATION_KINDS.CREATED;
     case CLI_EVENT_TYPES.FILE_DELETE:
-      return "deleted";
+      return FILE_OPERATION_KINDS.DELETED;
     default:
       return null;
   }
@@ -269,11 +272,13 @@ export function buildUndoCandidatesForOutputs(
       // Preserve "created" once set — a FILE_WRITE followed by FILE_EDITs still
       // means the file was created during this prompt.
       const resolvedChangeType =
-        existing?.changeType === "created" ? "created" : changeType;
+        existing?.changeType === FILE_OPERATION_KINDS.CREATED
+          ? FILE_OPERATION_KINDS.CREATED
+          : changeType;
 
       if (
         event.type === CLI_EVENT_TYPES.FILE_WRITE &&
-        resolvedChangeType === "created"
+        resolvedChangeType === FILE_OPERATION_KINDS.CREATED
       ) {
         oldContent = "";
       }
@@ -357,7 +362,7 @@ function resolveSnapshotUndoInstruction(
   snap: SnapshotFileChange
 ): UndoFileInstruction | null {
   switch (snap.changeType) {
-    case "modified": {
+    case FILE_OPERATION_KINDS.MODIFIED: {
       if (snap.structuredPatch && snap.structuredPatch.length > 0)
         return {
           path: snap.path,
@@ -367,7 +372,7 @@ function resolveSnapshotUndoInstruction(
         };
       return null;
     }
-    case "deleted": {
+    case FILE_OPERATION_KINDS.DELETED: {
       if (snap.contentToRestore != null)
         return {
           path: snap.path,
@@ -376,7 +381,7 @@ function resolveSnapshotUndoInstruction(
         };
       return null;
     }
-    case "created":
+    case FILE_OPERATION_KINDS.CREATED:
       return { path: snap.path, action: UNDO_FILE_ACTIONS.DELETE };
     default:
       return null;
@@ -430,15 +435,15 @@ function redoInstructionToDiffChangeType(
   instruction: UndoFileInstruction
 ): DiffChangeType {
   if (instruction.action === UNDO_FILE_ACTIONS.DELETE) {
-    return "deleted";
+    return FILE_OPERATION_KINDS.DELETED;
   }
   if (
     instruction.action === UNDO_FILE_ACTIONS.RESTORE_CONTENT &&
     !instruction.structuredPatch
   ) {
-    return "created";
+    return FILE_OPERATION_KINDS.CREATED;
   }
-  return "modified";
+  return FILE_OPERATION_KINDS.MODIFIED;
 }
 
 function normalizeFilePath(path: string): string {
@@ -497,11 +502,21 @@ function getNetChangeType(
   first: DiffChangeType,
   last: DiffChangeType
 ): DiffChangeType | null {
-  if (first === "created" && last === "deleted") return null;
-  if (first === "created") return "created";
-  if (last === "deleted") return "deleted";
-  if (first === "deleted" && last === "created") return "modified";
-  return "modified";
+  if (
+    first === FILE_OPERATION_KINDS.CREATED &&
+    last === FILE_OPERATION_KINDS.DELETED
+  )
+    return null;
+  if (first === FILE_OPERATION_KINDS.CREATED)
+    return FILE_OPERATION_KINDS.CREATED;
+  if (last === FILE_OPERATION_KINDS.DELETED)
+    return FILE_OPERATION_KINDS.DELETED;
+  if (
+    first === FILE_OPERATION_KINDS.DELETED &&
+    last === FILE_OPERATION_KINDS.CREATED
+  )
+    return FILE_OPERATION_KINDS.MODIFIED;
+  return FILE_OPERATION_KINDS.MODIFIED;
 }
 
 function composeAggregateDiff(
@@ -513,14 +528,16 @@ function composeAggregateDiff(
 > {
   const first = parts[0];
   const last = parts[parts.length - 1];
-  const base = first.oldContent ?? (changeType === "created" ? "" : undefined);
+  const base =
+    first.oldContent ??
+    (changeType === FILE_OPERATION_KINDS.CREATED ? "" : undefined);
 
   if (base !== undefined) {
     let composed = base;
     let composedSuccessfully = true;
 
     for (const part of parts) {
-      if (part.changeType === "deleted") {
+      if (part.changeType === FILE_OPERATION_KINDS.DELETED) {
         composed = "";
         continue;
       }
@@ -574,8 +591,8 @@ function buildUndoAggregationPart(
 
   if (instruction.action === UNDO_FILE_ACTIONS.RESTORE_CONTENT) {
     oldContent ??= instruction.contentToRestore;
-    if (candidate.changeType === "deleted") newContent = "";
-  } else if (candidate.changeType === "created") {
+    if (candidate.changeType === FILE_OPERATION_KINDS.DELETED) newContent = "";
+  } else if (candidate.changeType === FILE_OPERATION_KINDS.CREATED) {
     oldContent ??= "";
   }
 
@@ -739,7 +756,7 @@ function buildCandidateRow(
 
 /** Build the render-ready data for all four undo/redo dialog modes. */
 export function buildPromptUndoDialogModel(options: {
-  mode: "undo" | "redo";
+  mode: UndoRedoDirection;
   input?: UndoDialogInput;
   redoInstructions?: UndoFileInstruction[];
   workflowEntries?: WorkflowStepEntry[];
@@ -749,7 +766,7 @@ export function buildPromptUndoDialogModel(options: {
 
   if (isWorkflowMode) {
     const aggregationEntries = (workflowEntries ?? []).map((entry) =>
-      mode === "redo"
+      mode === UNDO_REDO_DIRECTIONS.REDO
         ? {
             target: entry.target,
             label: entry.label,
@@ -778,19 +795,19 @@ export function buildPromptUndoDialogModel(options: {
   }
 
   const redoRows =
-    mode === "redo"
+    mode === UNDO_REDO_DIRECTIONS.REDO
       ? (redoInstructions ?? []).map((instruction) =>
           buildRedoDialogRow(instruction, instruction.path)
         )
       : [];
   const tier1Rows =
-    mode === "undo"
+    mode === UNDO_REDO_DIRECTIONS.UNDO
       ? (input?.eventAttributedFiles ?? []).map((candidate) =>
           buildCandidateRow(candidate)
         )
       : [];
   const tier2Rows =
-    mode === "undo"
+    mode === UNDO_REDO_DIRECTIONS.UNDO
       ? (input?.snapshotOnlyFiles ?? []).map((snapshotFile) =>
           buildCandidateRow({
             path: snapshotFile.path,
@@ -806,8 +823,8 @@ export function buildPromptUndoDialogModel(options: {
   const allUndoRows = [...tier1Rows, ...tier2Rows];
 
   const groups: PromptUndoDialogGroup[] =
-    mode === "redo"
-      ? [{ key: "redo", files: redoRows }]
+    mode === UNDO_REDO_DIRECTIONS.REDO
+      ? [{ key: UNDO_REDO_DIRECTIONS.REDO, files: redoRows }]
       : [
           {
             key: "reported",

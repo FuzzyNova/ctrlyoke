@@ -1705,6 +1705,18 @@ export type DiffChangeType =
   (typeof DIFF_CHANGE_TYPES)[keyof typeof DIFF_CHANGE_TYPES];
 
 // ============================================================================
+// FILE OPERATION KINDS - File-operation and prompt undo change discriminants
+// ============================================================================
+export const FILE_OPERATION_KINDS = {
+  CREATED: DIFF_CHANGE_TYPES.CREATED,
+  MODIFIED: DIFF_CHANGE_TYPES.MODIFIED,
+  DELETED: DIFF_CHANGE_TYPES.DELETED,
+} as const;
+
+export type FileOperationKind =
+  (typeof FILE_OPERATION_KINDS)[keyof typeof FILE_OPERATION_KINDS];
+
+// ============================================================================
 // DIFF PAYLOAD KINDS - Content shape for text/image/binary diff responses
 // ============================================================================
 export const DIFF_PAYLOAD_KINDS = {
@@ -2137,6 +2149,17 @@ export const UNDO_FILE_ACTIONS = {
   RESTORE_CONTENT: "restore-content",
   REVERSE_PATCH: "reverse-patch",
 } as const;
+
+// ============================================================================
+// UNDO/REDO DIRECTIONS - Direction discriminants for history actions
+// ============================================================================
+export const UNDO_REDO_DIRECTIONS = {
+  UNDO: "undo",
+  REDO: "redo",
+} as const;
+
+export type UndoRedoDirection =
+  (typeof UNDO_REDO_DIRECTIONS)[keyof typeof UNDO_REDO_DIRECTIONS];
 
 // ============================================================================
 // TEMP FILE CATEGORIES - Category discriminants for categorized prompt temp files

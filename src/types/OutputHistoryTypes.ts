@@ -3,6 +3,7 @@ import {
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
   type ExecutionPhase,
+  type FileOperationKind,
   type SnapshotBaseSource,
 } from "./DashboardConstants";
 import type {
@@ -141,7 +142,7 @@ export type UndoDialogScope =
       path: string;
     };
 
-export type PromptChangeType = "created" | "modified" | "deleted";
+export type PromptChangeType = FileOperationKind;
 
 export interface WorkspaceSnapshotGitInfo {
   /**

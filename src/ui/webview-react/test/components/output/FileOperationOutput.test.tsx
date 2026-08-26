@@ -28,6 +28,7 @@ import {
 } from "@components/output/FileOperationOutput";
 import { GenericToolCallOutput } from "@components/output/ToolCallOutput";
 import { OPERATION_STATUS } from "@/types/cliEvents";
+import { UNDO_REDO_DIRECTIONS } from "@root/types/DashboardConstants";
 
 describe("FileEditOutput", () => {
   beforeEach(() => {
@@ -57,7 +58,7 @@ describe("FileEditOutput", () => {
         oldContent={"const a = 1;\n"}
         newContent={"const a = 2;\n"}
         onUndoFile={vi.fn()}
-        fileUndoMode="redo"
+        fileUndoMode={UNDO_REDO_DIRECTIONS.REDO}
       />
     );
 
