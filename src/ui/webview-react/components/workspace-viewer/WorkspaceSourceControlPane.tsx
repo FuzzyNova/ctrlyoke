@@ -321,8 +321,13 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   // under a short file list instead of handing that space to the graph.
   const filesRegionClass =
     "flex-none max-h-[45%] min-h-0 overflow-x-hidden overflow-y-auto";
-  const historyRegionClass =
-    "flex-1 basis-0 min-h-0 overflow-x-hidden overflow-y-auto";
+  // No overflow here: WorkspaceCommitHistoryPane owns its own scroll
+  // container internally (needed so its virtualizer has a fixed element to
+  // measure). Adding overflow-y-auto on this wrapper too would nest a second
+  // scroll region around it, which starves the virtualizer of a reliable
+  // viewport height and caps it at its unmeasured-fallback row count instead
+  // of loading enough pages to fill the real viewport.
+  const historyRegionClass = "flex-1 basis-0 min-h-0";
 
   const openDiscardWarning = useCallback(
     (paths: string[], untrackedCount: number) => {
