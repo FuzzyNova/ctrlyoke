@@ -78,20 +78,20 @@
 
 ## 6. Lemon Squeezy — create fresh under ctrlyoke
 
-> Never existed under FlightPath — create directly under the ctrlyoke identity (no migration).
+> **Superseded — see [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) Phase 5 for exact current state and remaining steps.** Summary as of August 25, 2026: store renamed `Fuzzy Nova` → `ctrlyoke` (name, URL slug, contact email → `support@ctrlyoke.dev`), product `ctrlyoke Pro` created as a draft ($59 one-time). Still open: LS identity verification (pending LS review), payout tax info, the Netlify webhook function + LS webhook wiring, and publishing the product.
 
-- [ ] Create the Lemon Squeezy store/product for **ctrlyoke Pro**; store owner/admin under `@fuzzno.com`, public support under `support@ctrlyoke.dev`.
-- [ ] Configure support, receipt, and seller-facing metadata to read **ctrlyoke**.
-- [ ] Create the Netlify webhook secret (server-only env var) for order fulfillment.
-- [ ] After the product exists, set `CHECKOUT_URL` in `landing/src/config.ts` (currently `"#"`).
+- [x] Create the Lemon Squeezy store/product for **ctrlyoke Pro**; store owner/admin under `@fuzzno.com`, public support under `support@ctrlyoke.dev`.
+- [x] Configure support, receipt, and seller-facing metadata to read **ctrlyoke**.
+- [ ] Create the Netlify webhook secret (server-only env var) for order fulfillment. — tracked in `RELEASE_CHECKLIST.md` Phase 5.3.
+- [ ] After the product exists, set `CHECKOUT_URL` in `landing/src/config.ts` (currently `"#"`). — tracked in `RELEASE_CHECKLIST.md` Phase 9.
 
 ## 7. Keygen — create fresh under ctrlyoke
 
-> Never existed under FlightPath — create directly under the ctrlyoke identity (no migration).
+> **Superseded — see [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) Phase 4 for exact current state and remaining steps.** Summary as of August 25, 2026: Keygen account, `ctrlyoke` product, and Pro policy already existed (predating this cutover doc) — the policy was just renamed live from a stale `FlightPath Pro` to `ctrlyoke Pro`. Config (perpetual, Ed25519, 10-machine floating) already matched the plan exactly. Still open: confirming admin-token custody and a Dev-tier-vs-paid billing decision.
 
-- [ ] Create the Keygen account under the ctrlyoke domain identity (owner under `@fuzzno.com`, license support under `@ctrlyoke.dev`).
-- [ ] Create the Keygen Pro policy (perpetual Pro, Ed25519 signed license files, machine limit per `PRO_LICENSE_PLAN.md`).
-- [ ] Record the Keygen account **public key** for extension-side verification; create the admin token as a server-only env var.
+- [x] Create the Keygen account under the ctrlyoke domain identity (owner under `@fuzzno.com`, license support under `@ctrlyoke.dev`).
+- [x] Create the Keygen Pro policy (perpetual Pro, Ed25519 signed license files, machine limit per `PRO_LICENSE_PLAN.md`).
+- [x] Record the Keygen account **public key** for extension-side verification; admin token already exists as a server-only credential (custody confirmation still open — see `RELEASE_CHECKLIST.md` Phase 4.2).
 
 ## 8. Code follow-ups gated on the above
 
