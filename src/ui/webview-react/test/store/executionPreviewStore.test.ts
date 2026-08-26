@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 import type { ExecutionPreviewResultMessage } from "@root/types/WebviewMessageTypes";
 import type { WorkflowKey } from "@root/types/CtrlYokeTypes";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
@@ -8,7 +11,10 @@ const { sendMessage } = vi.hoisted(() => ({ sendMessage: vi.fn() }));
 vi.mock("@hooks/useMessageHandler", () => ({ sendMessage }));
 
 const workflowKey = "workflow-a" as WorkflowKey;
-const address = { workflowKey, kind: "draft" } as const;
+const address = {
+  workflowKey,
+  kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+} as const;
 const preview = {
   workflow: {
     name: "Workflow A",

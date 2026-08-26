@@ -4,7 +4,10 @@ import * as path from "path";
 import * as vm from "vm";
 import { suite, test } from "mocha";
 import { renderHostedStandaloneShimScript } from "../../server/HostedStandaloneShimScript";
-import { MESSAGE_TYPES } from "../../types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "../../types/DashboardConstants";
 
 type TimerCallback = () => void;
 type WebSocketEventListener = Parameters<WebSocket["addEventListener"]>[1];
@@ -306,7 +309,7 @@ suite("standalone-shim connection liveness", () => {
     assert.strictEqual(readyMessages.length, 2);
     assert.deepStrictEqual(readyMessages[1].preferredViewAddress, {
       workflowKey: "workflow-1",
-      kind: "run",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
       runRef: "run-2026-07-21",
     });
   });

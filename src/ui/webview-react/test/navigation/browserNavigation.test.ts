@@ -3,6 +3,7 @@ import { setupBrowserNavigation } from "@/navigation/browserNavigation";
 import { useBrowserHistoryStore } from "@/navigation/browserHistoryStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useUiStore } from "@store/uiStore";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 let cleanup: (() => void) | null = null;
 
@@ -78,7 +79,10 @@ describe("setupBrowserNavigation", () => {
     useUiStore
       .getState()
       .setDisplayedRunView(
-        { workflowKey: "recent" as never, kind: "draft" },
+        {
+          workflowKey: "recent" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
         [],
         undefined
       );
@@ -96,7 +100,7 @@ describe("setupBrowserNavigation", () => {
     useUiStore
       .getState()
       .setDisplayedRunView(
-        { workflowKey: "old" as never, kind: "draft" },
+        { workflowKey: "old" as never, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
         [],
         undefined
       );
@@ -114,7 +118,10 @@ describe("setupBrowserNavigation", () => {
     useUiStore
       .getState()
       .setDisplayedRunView(
-        { workflowKey: "recent" as never, kind: "draft" },
+        {
+          workflowKey: "recent" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
         [],
         undefined
       );
@@ -125,7 +132,7 @@ describe("setupBrowserNavigation", () => {
     useUiStore.getState().setDisplayedRunView(
       {
         workflowKey: "other" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2026-07-20T10-30-00-000Z" as never,
       },
       [],
@@ -165,7 +172,7 @@ describe("setupBrowserNavigation", () => {
     cleanup = setupBrowserNavigation();
     expect(useUiStore.getState().displayedViewAddress).toEqual({
       workflowKey: "demo",
-      kind: "run",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
       runRef: "run-2026-07-20T10-30-00-000Z",
     });
   });

@@ -19,6 +19,7 @@ import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
 import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 /** One row of the run panel's flat draft+run list. */
 export type RunPanelRow =
@@ -83,8 +84,9 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
 }) => {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  const isDraft = row.kind === "draft";
-  const summary = row.kind === "run" ? row.summary : null;
+  const isDraft = row.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT;
+  const summary =
+    row.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN ? row.summary : null;
   const executionState = summary?.executionState;
   const timeAgo = summary
     ? formatRelativeTimeVerbose(summary.completedAt ?? summary.startedAt)
@@ -127,7 +129,9 @@ export const RunSummaryRow: React.FC<RunSummaryRowProps> = ({
         scope: "run",
         isFavorite,
         runDirectory:
-          row.kind === "run" ? summary?.runDirectory : draftDirectory,
+          row.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
+            ? summary?.runDirectory
+            : draftDirectory,
         isExecuting: isLive,
       },
       opener

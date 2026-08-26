@@ -137,253 +137,253 @@ wrapper reuses these conventions without importing across that boundary.
 
 ## Decisions
 
-1. **Model the format as an ordered array of typed segments, not a template string.**
+1.  **Model the format as an ordered array of typed segments, not a template string.**
 
-   ```typescript
-   type StatusLineSegment =
-     | {
-         type: "field";
-         field: StatusLineFieldId;
-         label?: string;
-         color?: StatusLineColorId;
-       }
-     | { type: "literal"; text: string; color?: StatusLineColorId };
-   ```
+    ```typescript
+    type StatusLineSegment =
+      | {
+          type: "field";
+          field: StatusLineFieldId;
+          label?: string;
+          color?: StatusLineColorId;
+        }
+      | { type: "literal"; text: string; color?: StatusLineColorId };
+    ```
 
-   Rejected alternative: a `printf`-style template string (e.g. `"{model} · {context}"`). An
-   array of segments keeps the field vocabulary closed and typed — consistent with this
-   project's "no hardcoded strings for flow control" rule (`CLAUDE.md`) — keeps the detached
-   wrapper's parser trivial (iterate + `switch`, nothing to tokenize or fail to parse), and lets
-   the settings UI render an editable list (toggle/reorder/insert) instead of a free-text box a
-   user can typo into a broken statusline with no feedback loop. `label` and `color` are
-   both optional per-segment overrides, resolved (in design discussion, 2026-08-21) from what
-   were the two Open Questions below — see Decision 13 (`color`) and Decision 14 (`label`) for
-   the full design; both are additive and don't change this shape's two base variants.
+    Rejected alternative: a `printf`-style template string (e.g. `"{model} · {context}"`). An
+    array of segments keeps the field vocabulary closed and typed — consistent with this
+    project's "no hardcoded strings for flow control" rule (`CLAUDE.md`) — keeps the detached
+    wrapper's parser trivial (iterate + `switch`, nothing to tokenize or fail to parse), and lets
+    the settings UI render an editable list (toggle/reorder/insert) instead of a free-text box a
+    user can typo into a broken statusline with no feedback loop. `label` and `color` are
+    both optional per-segment overrides, resolved (in design discussion, 2026-08-21) from what
+    were the two Open Questions below — see Decision 13 (`color`) and Decision 14 (`label`) for
+    the full design; both are additive and don't change this shape's two base variants.
 
-   **Ordering is a first-class part of this design, not an afterthought**: the format _is_ an
-   ordered array, and the format editor gives users Up/Down reorder controls per row (see UI
-   Placement) — there's no separate "ordering" feature to add, it falls straight out of modeling
-   the format as an array in the first place.
+    **Ordering is a first-class part of this design, not an afterthought**: the format _is_ an
+    ordered array, and the format editor gives users Up/Down reorder controls per row (see UI
+    Placement) — there's no separate "ordering" feature to add, it falls straight out of modeling
+    the format as an array in the first place.
 
-   **No raw string/template mode, and no conditionals, in the format editor itself — confirmed,
-   2026-08-21.** Two related but separate questions came up in design discussion, both settled the
-   same way: a `literal` segment is inert static text (plus, per Decision 13, an optional color) —
-   it cannot reference field values or branch on anything, so "edit the string myself" and "add a
-   conditional" are not the same request even though they sound similar. A raw editable
-   template string (e.g. typing `"{model} · {context if context > 50}"` directly) would need its
-   own parser and its own tiny expression language to support real conditionals — exactly the
-   parse-failure and hardcoded-string-for-flow-control risk this decision's array-of-typed-segments
-   design was chosen to avoid in the first place, so it isn't being added as an alternate input
-   mode alongside the structured editor. Genuine conditional logic ("show X only if Y ≥ Z", or any
-   formatting the fixed field/literal vocabulary can't express) has an existing, already-shipped
-   escape hatch that isn't being duplicated here: `customCommand`
-   (`STATUSLINE_USER_CONTROLS_PLAN.md`) already lets a user hand ctrlyoke an arbitrary script that
-   receives the same stdin payload and can implement any logic they want in real code, not a
-   template string — and, per Decision 16, `useCtrlyokeStyle` is now always reachable in the UI to
-   switch between that script's output and ctrlyoke's structured line. So the two supported paths
-   stay: (a) the structured segment editor — typed fields, literals, reordering, color, labels —
-   for the common case this plan targets, and (b) `customCommand` for anything that needs real
-   conditional logic. Nothing here forecloses adding a raw-string mode later if a concrete need
-   shows up, but it isn't part of this plan.
+    **No raw string/template mode, and no conditionals, in the format editor itself — confirmed,
+    2026-08-21.** Two related but separate questions came up in design discussion, both settled the
+    same way: a `literal` segment is inert static text (plus, per Decision 13, an optional color) —
+    it cannot reference field values or branch on anything, so "edit the string myself" and "add a
+    conditional" are not the same request even though they sound similar. A raw editable
+    template string (e.g. typing `"{model} · {context if context > 50}"` directly) would need its
+    own parser and its own tiny expression language to support real conditionals — exactly the
+    parse-failure and hardcoded-string-for-flow-control risk this decision's array-of-typed-segments
+    design was chosen to avoid in the first place, so it isn't being added as an alternate input
+    mode alongside the structured editor. Genuine conditional logic ("show X only if Y ≥ Z", or any
+    formatting the fixed field/literal vocabulary can't express) has an existing, already-shipped
+    escape hatch that isn't being duplicated here: `customCommand`
+    (`STATUSLINE_USER_CONTROLS_PLAN.md`) already lets a user hand ctrlyoke an arbitrary script that
+    receives the same stdin payload and can implement any logic they want in real code, not a
+    template string — and, per Decision 16, `useCtrlyokeStyle` is now always reachable in the UI to
+    switch between that script's output and ctrlyoke's structured line. So the two supported paths
+    stay: (a) the structured segment editor — typed fields, literals, reordering, color, labels —
+    for the common case this plan targets, and (b) `customCommand` for anything that needs real
+    conditional logic. Nothing here forecloses adding a raw-string mode later if a concrete need
+    shows up, but it isn't part of this plan.
 
-2. **Single-source the field vocabulary in a `StatusLineFieldId` registry**, keyed by id. Because
-   every field id is now required to mean the same thing on both providers (per the research
-   above), the registry needs no per-provider availability column at all — a field is either in
-   the registry (valid everywhere) or it isn't (not in the registry). Each entry gives a display
-   label for the UI and, wrapper-side, its extractor:
+2.  **Single-source the field vocabulary in a `StatusLineFieldId` registry**, keyed by id. Because
+    every field id is now required to mean the same thing on both providers (per the research
+    above), the registry needs no per-provider availability column at all — a field is either in
+    the registry (valid everywhere) or it isn't (not in the registry). Each entry gives a display
+    label for the UI and, wrapper-side, its extractor:
 
-   | id          | label                                     | claude source                        | antigravity source                         |
-   | ----------- | ----------------------------------------- | ------------------------------------ | ------------------------------------------ |
-   | `brand`     | "ctrlyoke ⚡" mark                        | static                               | static                                     |
-   | `model`     | Model name                                | `payload.model.{id,display_name}`    | `payload.model.{id,display_name}`          |
-   | `context`   | Context usage (colored band)              | `payload.context_window`             | `payload.context_window` (identical shape) |
-   | `usage`     | Rate/quota used % (worst of all windows)  | `payload.rate_limits.*` (normalized) | `payload.quota.*` (normalized)             |
-   | `usage1`    | First usage window, used % + short label  | `payload.rate_limits.five_hour`      | `payload.quota[sorted[0]]`                 |
-   | `usage2`    | Second usage window, used % + short label | `payload.rate_limits.seven_day`      | `payload.quota[sorted[1]]`                 |
-   | `version`   | Harness/CLI version                       | `payload.version`                    | `payload.version`                          |
-   | `cwd`       | Current directory (basename)              | `payload.cwd`                        | `payload.cwd`                              |
-   | `sessionId` | Session id (truncated)                    | `payload.session_id`                 | `payload.session_id`                       |
+    | id          | label                                     | claude source                        | antigravity source                         |
+    | ----------- | ----------------------------------------- | ------------------------------------ | ------------------------------------------ |
+    | `brand`     | "ctrlyoke ⚡" mark                        | static                               | static                                     |
+    | `model`     | Model name                                | `payload.model.{id,display_name}`    | `payload.model.{id,display_name}`          |
+    | `context`   | Context usage (colored band)              | `payload.context_window`             | `payload.context_window` (identical shape) |
+    | `usage`     | Rate/quota used % (worst of all windows)  | `payload.rate_limits.*` (normalized) | `payload.quota.*` (normalized)             |
+    | `usage1`    | First usage window, used % + short label  | `payload.rate_limits.five_hour`      | `payload.quota[sorted[0]]`                 |
+    | `usage2`    | Second usage window, used % + short label | `payload.rate_limits.seven_day`      | `payload.quota[sorted[1]]`                 |
+    | `version`   | Harness/CLI version                       | `payload.version`                    | `payload.version`                          |
+    | `cwd`       | Current directory (basename)              | `payload.cwd`                        | `payload.cwd`                              |
+    | `sessionId` | Session id (truncated)                    | `payload.session_id`                 | `payload.session_id`                       |
 
-   `usage` reuses today's already-provider-branching `getQuotaPercentage`, keeping today's
-   per-provider label ("rate" for Claude, "quota" for Antigravity), **but flips its number to
-   used %, not remaining %** — see the direction fix below. `usage1`/`usage2` are net-new,
-   generic, positional fields exposing each window individually instead of collapsing to the
-   worst case — see Decision 4 for the ordering rule and Decision 5 for rendering. `version`,
-   `cwd`, and `sessionId` are also net-new and, unlike the previous draft's `cost`/`agentState`,
-   need no confirmation spike — both example payloads carry these keys verbatim with matching
-   semantics. `cwd` renders as `path.basename(payload.cwd)` (showing the raw absolute path would
-   dominate the line); `sessionId` renders truncated (first 8 chars) since a full UUID is not
-   glanceable — and, being low-signal for most users, is available to add but **not included in
-   either provider's default array** (Decision 3). `agentState` and `cost` from the previous
-   draft are dropped entirely, not demoted to provider-specific — see the Field Availability
-   Research section above.
+    `usage` reuses today's already-provider-branching `getQuotaPercentage`, keeping today's
+    per-provider label ("rate" for Claude, "quota" for Antigravity), **but flips its number to
+    used %, not remaining %** — see the direction fix below. `usage1`/`usage2` are net-new,
+    generic, positional fields exposing each window individually instead of collapsing to the
+    worst case — see Decision 4 for the ordering rule and Decision 5 for rendering. `version`,
+    `cwd`, and `sessionId` are also net-new and, unlike the previous draft's `cost`/`agentState`,
+    need no confirmation spike — both example payloads carry these keys verbatim with matching
+    semantics. `cwd` renders as `path.basename(payload.cwd)` (showing the raw absolute path would
+    dominate the line); `sessionId` renders truncated (first 8 chars) since a full UUID is not
+    glanceable — and, being low-signal for most users, is available to add but **not included in
+    either provider's default array** (Decision 3). `agentState` and `cost` from the previous
+    draft are dropped entirely, not demoted to provider-specific — see the Field Availability
+    Research section above.
 
-   **Direction fix: used %, not remaining %.** Today's `getQuotaPercentage`
-   (`ctrlyoke-statusline-wrapper.js:277-323`) deliberately computes the _remaining_ percentage —
-   `100 - used_percentage` for Claude's rate limits, the raw `remaining_fraction` for
-   Antigravity's quota — then takes the `Math.min` across windows (worst case = lowest
-   remaining). That's the outlier, not the norm, in this exact codebase: the wrapper's own
-   `context` field computes `used/size` (used %, via `calculateContextPercentage`), and
-   `UsageCard.tsx`'s `window.percentUsed` is used %-oriented on both providers too (Claude:
-   `usedPercentage` straight from the payload, `ClaudeUsageProvider.ts:82-85`; Antigravity:
-   `(1 - remainingFraction) * 100`, `AntigravityUsageProvider.ts:98-107`). There's no comment or
-   plan doc anywhere justifying `usage`'s remaining-% choice — it reads as an unexamined default
-   from whenever the branded line was first written, not a deliberate one, and it's the one place
-   in the product where the same underlying quota data reads in the opposite direction depending
-   on which UI surface shows it. Per this project's pre-release "no backward compatibility
-   constraints, prioritize... bold improvements" stance (`CLAUDE.md`), flip `usage` (and, by
-   construction, `usage1`/`usage2`) to used %, worst case = `Math.max` of used-% across windows
-   (the direction flips; "worst case" as a concept doesn't change). This is a second deliberate,
-   called-out behavior change bundled into this plan alongside the Claude `agentState` fix noted
-   above — not a silent one.
+    **Direction fix: used %, not remaining %.** Today's `getQuotaPercentage`
+    (`ctrlyoke-statusline-wrapper.js:277-323`) deliberately computes the _remaining_ percentage —
+    `100 - used_percentage` for Claude's rate limits, the raw `remaining_fraction` for
+    Antigravity's quota — then takes the `Math.min` across windows (worst case = lowest
+    remaining). That's the outlier, not the norm, in this exact codebase: the wrapper's own
+    `context` field computes `used/size` (used %, via `calculateContextPercentage`), and
+    `UsageCard.tsx`'s `window.percentUsed` is used %-oriented on both providers too (Claude:
+    `usedPercentage` straight from the payload, `ClaudeUsageProvider.ts:82-85`; Antigravity:
+    `(1 - remainingFraction) * 100`, `AntigravityUsageProvider.ts:98-107`). There's no comment or
+    plan doc anywhere justifying `usage`'s remaining-% choice — it reads as an unexamined default
+    from whenever the branded line was first written, not a deliberate one, and it's the one place
+    in the product where the same underlying quota data reads in the opposite direction depending
+    on which UI surface shows it. Per this project's pre-release "no backward compatibility
+    constraints, prioritize... bold improvements" stance (`CLAUDE.md`), flip `usage` (and, by
+    construction, `usage1`/`usage2`) to used %, worst case = `Math.max` of used-% across windows
+    (the direction flips; "worst case" as a concept doesn't change). This is a second deliberate,
+    called-out behavior change bundled into this plan alongside the Claude `agentState` fix noted
+    above — not a silent one.
 
-3. **Default format reproduces today's line's _composition_ exactly, with two intentional
-   exceptions already called out above** (Claude drops the dead `agentState` tail; `usage`'s
-   number now reads used % instead of remaining %). Because the registry no longer has any
-   provider-exclusive field, **both providers now share one identical default array** — a further
-   simplification the "shared fields only" constraint buys for free:
+3.  **Default format reproduces today's line's _composition_ exactly, with two intentional
+    exceptions already called out above** (Claude drops the dead `agentState` tail; `usage`'s
+    number now reads used % instead of remaining %). Because the registry no longer has any
+    provider-exclusive field, **both providers now share one identical default array** — a further
+    simplification the "shared fields only" constraint buys for free:
 
-   ```
-   [brand, model, ·, context, ·, usage]
-   ```
+    ```
+    [brand, model, ·, context, ·, usage]
+    ```
 
-   where `·` is itself a **literal segment**, not a separator concept — this is not a new idea,
-   it's exactly how the current array already works (`"·"` is just another array element,
-   space-joined like everything else). Modeling it as a literal segment in the new scheme means
-   the default array can be expressed with zero new formatting concepts beyond what
-   `formatBrandedStatusLine` already does today. The new `usage1`/`usage2` fields (Decisions 4-5)
-   deliberately stay **out** of this default — adding them would both change the line's look and
-   lengthen it, breaking the "no visible change on upgrade" promise. A user who wants the split
-   view opens the format editor and swaps `usage` for `usage1`/`usage2` (or adds both alongside
-   it) — no new UI mechanism needed beyond the per-segment include/exclude editor already planned
-   under UI Placement.
+    where `·` is itself a **literal segment**, not a separator concept — this is not a new idea,
+    it's exactly how the current array already works (`"·"` is just another array element,
+    space-joined like everything else). Modeling it as a literal segment in the new scheme means
+    the default array can be expressed with zero new formatting concepts beyond what
+    `formatBrandedStatusLine` already does today. The new `usage1`/`usage2` fields (Decisions 4-5)
+    deliberately stay **out** of this default — adding them would both change the line's look and
+    lengthen it, breaking the "no visible change on upgrade" promise. A user who wants the split
+    view opens the format editor and swaps `usage` for `usage1`/`usage2` (or adds both alongside
+    it) — no new UI mechanism needed beyond the per-segment include/exclude editor already planned
+    under UI Placement.
 
-4. **`usage1`/`usage2` ordering rule — deterministic, not runtime-dependent.** The naive
-   approach (sort each provider's windows by remaining time, e.g. `reset_in_seconds`) is
-   rejected: for Antigravity's two _weekly_ tiers, `reset_in_seconds` just reflects where each
-   tier happens to sit in its own week-long cycle right now, not a structural property of the
-   tier — a user's `usage1` could silently become "gemini quota" one week and "3rd-party quota"
-   the next, purely from reset timing, with no config change. Instead:
-   - **Claude**: fixed order, matching the already-shipped `CLAUDE_RATE_LIMIT_WINDOWS` array
-     exactly — `five_hour` is always `usage1`, `seven_day` is always `usage2`, when present.
-     Since this list is a small curated enum (not open-ended), hardcoding the order in the
-     wrapper is safe and mirrors what `ClaudeUsageProvider.ts` already does.
-   - **Antigravity**: keys are open-ended plan tiers with no fixed enum, so ordering must be
-     computed from the payload itself, deterministically. Sort by window **kind** first
-     (rolling < daily < weekly < monthly < unknown — reusing `quotaWindowKind`'s existing
-     classification, and mirroring the same cadence-ascending principle Claude's fixed order
-     already encodes: shorter-cadence window first), then alphabetically by raw key as a
-     tiebreak for same-kind windows. Applied to the real captured payload (both tiers are
-     `weekly`, tying on kind), this lands `3p-weekly` as `usage1` and `gemini-weekly` as
-     `usage2` — deterministic and stable across sessions, even though the specific choice of
-     "alphabetical" for the tiebreak is arbitrary (there's no stronger natural ordering between
-     two same-cadence tiers).
-   - Build the wrapper's extractor as "sort into an array, then `usageN` = `sorted[N-1]`" rather
-     than two hardcoded slots, so a future third window (neither provider currently reports one)
-     falls out of the same logic as `usage3` with no rework — not needed now, just don't paint
-     the implementation into a two-slots-only corner.
-   - **Absence, not placeholder, when a slot has no data.** Unlike collapsed `usage` (which
-     falls back to a visible `"—"` when no window resolves, since it's a single always-expected
-     slot), a missing `usage1`/`usage2` — Claude's `seven_day` genuinely absent, or an
-     Antigravity plan with only one quota tier — renders as an **empty string and is dropped
-     from the line entirely**, not a stray em-dash. Two windows silently collapsing to one is a
-     normal, common state (not an error condition) for both providers, and a dangling `"— "`
-     would read as a rendering glitch rather than a designed outcome.
+4.  **`usage1`/`usage2` ordering rule — deterministic, not runtime-dependent.** The naive
+    approach (sort each provider's windows by remaining time, e.g. `reset_in_seconds`) is
+    rejected: for Antigravity's two _weekly_ tiers, `reset_in_seconds` just reflects where each
+    tier happens to sit in its own week-long cycle right now, not a structural property of the
+    tier — a user's `usage1` could silently become "gemini quota" one week and "3rd-party quota"
+    the next, purely from reset timing, with no config change. Instead:
+    - **Claude**: fixed order, matching the already-shipped `CLAUDE_RATE_LIMIT_WINDOWS` array
+      exactly — `five_hour` is always `usage1`, `seven_day` is always `usage2`, when present.
+      Since this list is a small curated enum (not open-ended), hardcoding the order in the
+      wrapper is safe and mirrors what `ClaudeUsageProvider.ts` already does.
+    - **Antigravity**: keys are open-ended plan tiers with no fixed enum, so ordering must be
+      computed from the payload itself, deterministically. Sort by window **kind** first
+      (rolling < daily < weekly < monthly < unknown — reusing `quotaWindowKind`'s existing
+      classification, and mirroring the same cadence-ascending principle Claude's fixed order
+      already encodes: shorter-cadence window first), then alphabetically by raw key as a
+      tiebreak for same-kind windows. Applied to the real captured payload (both tiers are
+      `weekly`, tying on kind), this lands `3p-weekly` as `usage1` and `gemini-weekly` as
+      `usage2` — deterministic and stable across sessions, even though the specific choice of
+      "alphabetical" for the tiebreak is arbitrary (there's no stronger natural ordering between
+      two same-cadence tiers).
+    - Build the wrapper's extractor as "sort into an array, then `usageN` = `sorted[N-1]`" rather
+      than two hardcoded slots, so a future third window (neither provider currently reports one)
+      falls out of the same logic as `usage3` with no rework — not needed now, just don't paint
+      the implementation into a two-slots-only corner.
+    - **Absence, not placeholder, when a slot has no data.** Unlike collapsed `usage` (which
+      falls back to a visible `"—"` when no window resolves, since it's a single always-expected
+      slot), a missing `usage1`/`usage2` — Claude's `seven_day` genuinely absent, or an
+      Antigravity plan with only one quota tier — renders as an **empty string and is dropped
+      from the line entirely**, not a stray em-dash. Two windows silently collapsing to one is a
+      normal, common state (not an error condition) for both providers, and a dangling `"— "`
+      would read as a rendering glitch rather than a designed outcome.
 
-5. **`usage1`/`usage2` render with their per-window label, not the generic "rate"/"quota" word**
-   — `"{shortLabel} {usedPercent}%"`, e.g. `"5h 24%"` / `"week 41%"` for Claude (from the example
-   `used_percentage` values of 23.5 / 41.2), `"3P Weekly 1%"` / `"Gemini Weekly 6%"` for
-   Antigravity (from example `remaining_fraction` values of 0.991 / 0.9378, converted to used %).
-   Without a label, two bare percentages sitting next to each other in the line are ambiguous —
-   which one is which becomes guesswork. Reuse the exact label functions the extension host
-   already ships for the same data, rather than inventing a third naming convention:
-   `formatUsageWindowLabel(windowMinutes)` (`DashboardConstants.ts:806-822`, → `"5h"` / `"week"`)
-   for Claude, `humanizeQuotaKey(id)` (`AntigravityUsageProvider.ts:43-55`, → `"3P Weekly"` /
-   `"Gemini Weekly"`) for Antigravity — this also keeps the statusline's window naming consistent
-   with what `UsageCard.tsx` already shows for the same two windows, instead of drifting from it.
-   The used-percentage direction matches both the "Direction fix" in Decision 2 and
-   `UsageCard.tsx`'s `window.percentUsed` for consistency across all three surfaces (`context`,
-   `usage`/`usage1`/`usage2`, and the Settings usage card) — not the wrapper's old, unexplained
-   remaining-% convention. This is the wired-in default; Decision 6 makes it user-overridable.
+5.  **`usage1`/`usage2` render with their per-window label, not the generic "rate"/"quota" word**
+    — `"{shortLabel} {usedPercent}%"`, e.g. `"5h 24%"` / `"week 41%"` for Claude (from the example
+    `used_percentage` values of 23.5 / 41.2), `"3P Weekly 1%"` / `"Gemini Weekly 6%"` for
+    Antigravity (from example `remaining_fraction` values of 0.991 / 0.9378, converted to used %).
+    Without a label, two bare percentages sitting next to each other in the line are ambiguous —
+    which one is which becomes guesswork. Reuse the exact label functions the extension host
+    already ships for the same data, rather than inventing a third naming convention:
+    `formatUsageWindowLabel(windowMinutes)` (`DashboardConstants.ts:806-822`, → `"5h"` / `"week"`)
+    for Claude, `humanizeQuotaKey(id)` (`AntigravityUsageProvider.ts:43-55`, → `"3P Weekly"` /
+    `"Gemini Weekly"`) for Antigravity — this also keeps the statusline's window naming consistent
+    with what `UsageCard.tsx` already shows for the same two windows, instead of drifting from it.
+    The used-percentage direction matches both the "Direction fix" in Decision 2 and
+    `UsageCard.tsx`'s `window.percentUsed` for consistency across all three surfaces (`context`,
+    `usage`/`usage1`/`usage2`, and the Settings usage card) — not the wrapper's old, unexplained
+    remaining-% convention. This is the wired-in default; Decision 6 makes it user-overridable.
 
-6. **Add one global `usageTracking.percentDirection: "used" | "remaining"` setting** (default
-   `"used"`, matching Decision 2/5's direction fix) so users coming from Codex or Antigravity's
-   _native_ CLI — which show remaining%, unlike Claude/Copilot's native used% — can pick the
-   convention they already think in, confirmed as the right shape in conversation: a single
-   global toggle, not per-provider (a per-provider pair would only additionally help someone
-   running multiple harnesses side-by-side who wants each line to mirror its own CLI's
-   convention — a narrower need than "let me pick the convention I personally think in").
-   - **Scope, deliberately not machine-only.** Unlike `customCommand`/`enabled`/
-     `useCtrlyokeStyle`/`format` (machine-scoped per `STATUSLINE_USER_CONTROLS_PLAN.md`'s
-     reasoning — a single physical global settings file, and `customCommand` specifically is an
-     executable shell command), this is a pure display preference with no filesystem or security
-     angle. No reason to forbid workspace-level override; leave it at normal default scope.
-   - **Placement**: `usageTracking.percentDirection`, not nested under
-     `permissions.statusLineTracking.*` — it is not provider-specific and (see below) also
-     governs `UsageCard.tsx`, not just the two statusline-tracked harnesses. Sits alongside the
-     existing `usageTracking.{enabled,providerRefreshEnabled,persistObservedUsage}`
-     siblings (`schemas/settings-schema.json:442-465`).
-   - **Scope of effect — genuinely global, not statusline-only.** It must govern both (a) the
-     statusline wrapper's `usage`/`usage1`/`usage2` rendering and (b) `UsageCard.tsx`'s displayed
-     quota numbers, for every harness, not only Claude/Antigravity — leaving UsageCard fixed at
-     used% while the statusline could be toggled to remaining% would recreate the exact
-     same-data-different-direction inconsistency across UI surfaces that Decision 2's direction
-     fix just closed. **`context` is explicitly out of scope for this toggle** — harnesses have
-     no native "remaining context" convention to match (they always express it as used/size), so
-     `context` stays used% always, unaffected by `percentDirection`.
-   - **UI placement**: a single control in `StatsUsageSection.tsx` (not inside
-     `StatusLineTrackingControls.tsx`, and not duplicated per provider), since it now affects
-     every harness's `UsageCard`, not just the two statusline-managed ones.
-   - **Critical implementation catch — do not invert `getUsageBarColorClass` itself.**
-     `getUsageBarColorClass` (`src/ui/webview-react/utils/usageBarColor.ts:9-14`) is a _shared_
-     danger-coloring function, and its other caller has nothing to do with quota: `WorkflowStep.tsx:388-390`
-     feeds it a plain used% **context** value (`contextPct`) to color the step's context-fill
-     animation, with no remaining-% concept at all. Inverting the function's thresholds/comparison
-     for "remaining mode" would silently flip that unrelated bar's danger coloring backwards
-     (a nearly-exhausted context window would render green instead of red) the moment a user
-     enables `percentDirection: "remaining"` — a correctness bug hiding behind an unrelated
-     preference toggle. The function's semantics must stay fixed ("higher input = more danger");
-     only the **displayed number/label** should follow `percentDirection`, never the color
-     computation. Concretely: every call site continues passing `getUsageBarColorClass` the
-     canonical **used%** value (`window.percentUsed`, which — per Decision 2 — is already used%
-     regardless of the display toggle) for coloring, while a small
-     `formatUsagePercentForDisplay(usedPercent, direction)` helper (`remaining` mode returns
-     `100 - usedPercent`) governs only the **text** shown next to/above the bar. This decouples
-     "what color implies danger" (fixed, used%-based, shared safely across quota bars and the
-     context bar) from "what number is shown" (toggle-controlled, quota-only).
-   - This one-line transform (`100 - usedPercent`) is cheap enough that literal, tracked
-     duplication between the detached wrapper (CommonJS) and the TS settings UI is acceptable on
-     its own if Decision 11's shared-module extraction doesn't land first — but if that
-     extraction does happen, `formatUsagePercentForDisplay` belongs in the same isomorphic module
-     for the same DRY reasons already argued there.
+6.  **Add one global `usageTracking.percentDirection: "used" | "remaining"` setting** (default
+    `"used"`, matching Decision 2/5's direction fix) so users coming from Codex or Antigravity's
+    _native_ CLI — which show remaining%, unlike Claude/Copilot's native used% — can pick the
+    convention they already think in, confirmed as the right shape in conversation: a single
+    global toggle, not per-provider (a per-provider pair would only additionally help someone
+    running multiple harnesses side-by-side who wants each line to mirror its own CLI's
+    convention — a narrower need than "let me pick the convention I personally think in").
+    - **Scope, deliberately not machine-only.** Unlike `customCommand`/`enabled`/
+      `useCtrlyokeStyle`/`format` (machine-scoped per `STATUSLINE_USER_CONTROLS_PLAN.md`'s
+      reasoning — a single physical global settings file, and `customCommand` specifically is an
+      executable shell command), this is a pure display preference with no filesystem or security
+      angle. No reason to forbid workspace-level override; leave it at normal default scope.
+    - **Placement**: `usageTracking.percentDirection`, not nested under
+      `permissions.statusLineTracking.*` — it is not provider-specific and (see below) also
+      governs `UsageCard.tsx`, not just the two statusline-tracked harnesses. Sits alongside the
+      existing `usageTracking.{enabled,providerRefreshEnabled,persistObservedUsage}`
+      siblings (`schemas/settings-schema.json:442-465`).
+    - **Scope of effect — genuinely global, not statusline-only.** It must govern both (a) the
+      statusline wrapper's `usage`/`usage1`/`usage2` rendering and (b) `UsageCard.tsx`'s displayed
+      quota numbers, for every harness, not only Claude/Antigravity — leaving UsageCard fixed at
+      used% while the statusline could be toggled to remaining% would recreate the exact
+      same-data-different-direction inconsistency across UI surfaces that Decision 2's direction
+      fix just closed. **`context` is explicitly out of scope for this toggle** — harnesses have
+      no native "remaining context" convention to match (they always express it as used/size), so
+      `context` stays used% always, unaffected by `percentDirection`.
+    - **UI placement**: a single control in `StatsUsageSection.tsx` (not inside
+      `StatusLineTrackingControls.tsx`, and not duplicated per provider), since it now affects
+      every harness's `UsageCard`, not just the two statusline-managed ones.
+    - **Critical implementation catch — do not invert `getUsageBarColorClass` itself.**
+      `getUsageBarColorClass` (`src/ui/webview-react/utils/usageBarColor.ts:9-14`) is a _shared_
+      danger-coloring function, and its other caller has nothing to do with quota: `WorkflowStep.tsx:388-390`
+      feeds it a plain used% **context** value (`contextPct`) to color the step's context-fill
+      animation, with no remaining-% concept at all. Inverting the function's thresholds/comparison
+      for "remaining mode" would silently flip that unrelated bar's danger coloring backwards
+      (a nearly-exhausted context window would render green instead of red) the moment a user
+      enables `percentDirection: "remaining"` — a correctness bug hiding behind an unrelated
+      preference toggle. The function's semantics must stay fixed ("higher input = more danger");
+      only the **displayed number/label** should follow `percentDirection`, never the color
+      computation. Concretely: every call site continues passing `getUsageBarColorClass` the
+      canonical **used%** value (`window.percentUsed`, which — per Decision 2 — is already used%
+      regardless of the display toggle) for coloring, while a small
+      `formatUsagePercentForDisplay(usedPercent, direction)` helper (`remaining` mode returns
+      `100 - usedPercent`) governs only the **text** shown next to/above the bar. This decouples
+      "what color implies danger" (fixed, used%-based, shared safely across quota bars and the
+      context bar) from "what number is shown" (toggle-controlled, quota-only).
+    - This one-line transform (`100 - usedPercent`) is cheap enough that literal, tracked
+      duplication between the detached wrapper (CommonJS) and the TS settings UI is acceptable on
+      its own if Decision 11's shared-module extraction doesn't land first — but if that
+      extraction does happen, `formatUsagePercentForDisplay` belongs in the same isomorphic module
+      for the same DRY reasons already argued there.
 
-7. **Generalize `formatBrandedStatusLine(provider, payload)` to
-   `formatBrandedStatusLine(provider, payload, format)`.** When `format` is missing, not an
-   array, or empty, fall back to the shared default array from Decision 3 — matching the existing
-   tolerant posture of `resolveStatusLineSettings` (malformed settings.json → defaults, never a
-   thrown error, since this runs as a detached process with no error surface a user will ever
-   see). Per-segment tolerance: a `field` segment naming an id not present in the registry is
-   **skipped silently**, not an error — the line renders shorter, never broken. Since every
-   registry field is now valid for both providers, this case is narrower than the previous
-   draft's (no more "valid for the other provider" scenario to handle) — it now only covers a
-   future ctrlyoke version removing a field id that an older saved format still references.
+7.  **Generalize `formatBrandedStatusLine(provider, payload)` to
+    `formatBrandedStatusLine(provider, payload, format)`.** When `format` is missing, not an
+    array, or empty, fall back to the shared default array from Decision 3 — matching the existing
+    tolerant posture of `resolveStatusLineSettings` (malformed settings.json → defaults, never a
+    thrown error, since this runs as a detached process with no error surface a user will ever
+    see). Per-segment tolerance: a `field` segment naming an id not present in the registry is
+    **skipped silently**, not an error — the line renders shorter, never broken. Since every
+    registry field is now valid for both providers, this case is narrower than the previous
+    draft's (no more "valid for the other provider" scenario to handle) — it now only covers a
+    future ctrlyoke version removing a field id that an older saved format still references.
 
-8. **Literal segment handling**: reuse the existing `safeStatusLabel` treatment (strip `\r\n`,
-   since this is a single-line terminal output whose one hard invariant is "no
-   newlines") and add a UI-side length cap (recommend 64 chars) purely for statusline
-   usability — not a security boundary. Literal text is user-authored local machine settings,
-   the same trust level as `customCommand`, which is already an arbitrary shell command; no
-   additional sanitization beyond the newline strip is warranted. Raw ANSI escape codes typed
-   directly into the text still work as a manual fallback, but most users get there through the
-   structured `color` picker instead — see Decision 13.
+8.  **Literal segment handling**: reuse the existing `safeStatusLabel` treatment (strip `\r\n`,
+    since this is a single-line terminal output whose one hard invariant is "no
+    newlines") and add a UI-side length cap (recommend 64 chars) purely for statusline
+    usability — not a security boundary. Literal text is user-authored local machine settings,
+    the same trust level as `customCommand`, which is already an arbitrary shell command; no
+    additional sanitization beyond the newline strip is warranted. Raw ANSI escape codes typed
+    directly into the text still work as a manual fallback, but most users get there through the
+    structured `color` picker instead — see Decision 13.
 
-9. **Settings shape**: add `format: StatusLineSegment[]` to `StatusLineTrackingSettings`
-   (`src/types/CtrlYokeSettings.ts:50-55`), nested per-provider exactly like the three existing
-   fields — `permissions.statusLineTracking.{claude,antigravity}.format`. **Machine-scoped**,
-   same as the other three leaves in that object; `STATUSLINE_USER_CONTROLS_PLAN.md`'s "Scope:
-   User/Machine Only, Not Workspace" reasoning (single physical global settings file, no
-   per-workspace variant exists) applies unchanged here — this isn't a new resource, just a new
-   field on an existing one.
+9.  **Settings shape**: add `format: StatusLineSegment[]` to `StatusLineTrackingSettings`
+    (`src/types/CtrlYokeSettings.ts:50-55`), nested per-provider exactly like the three existing
+    fields — `permissions.statusLineTracking.{claude,antigravity}.format`. **Machine-scoped**,
+    same as the other three leaves in that object; `STATUSLINE_USER_CONTROLS_PLAN.md`'s "Scope:
+    User/Machine Only, Not Workspace" reasoning (single physical global settings file, no
+    per-workspace variant exists) applies unchanged here — this isn't a new resource, just a new
+    field on an existing one.
 
 10. **No new `MESSAGE_TYPES` needed.** Reuse `UPDATE_GLOBAL_SETTING` with two new
     `SETTING_PATHS` entries (`PERMISSIONS_STATUS_LINE_TRACKING_CLAUDE_FORMAT`,
@@ -561,38 +561,39 @@ wrapper reuses these conventions without importing across that boundary.
     UI, not merely hidden behind extra clicks — the setting can only be changed by hand-editing
     `settings.json`.
 
-    **The mechanics already support this; only the UI needs to change.** Confirmed by reading both
-    entry scripts (`ctrlyoke-claude-statusline.js`/`ctrlyoke-antigravity-statusline.js`):
-    `writeSnapshotAtomic` (the actual data-collection step) runs unconditionally whenever
-    `settings.enabled` is true, entirely independent of `useCtrlyokeStyle` and `customCommand` —
-    so "still get the benefits of having our statusline collect data" is already true today, with
-    zero code changes needed for that half of the ask. Separately, stdout resolves to
-    `formatBrandedStatusLine(...)` when `useCtrlyokeStyle` is true, or to `forwardedOutput`
-    otherwise — and `forwardToCommand` already short-circuits to an empty buffer when
-    `customCommand` is empty (`ctrlyoke-statusline-wrapper.js:174-176`), so `useCtrlyokeStyle:
-false` with no custom command already prints nothing today, in the one state the UI currently
+        **The mechanics already support this; only the UI needs to change.** Confirmed by reading both
+        entry scripts (`ctrlyoke-claude-statusline.js`/`ctrlyoke-antigravity-statusline.js`):
+        `writeSnapshotAtomic` (the actual data-collection step) runs unconditionally whenever
+        `settings.enabled` is true, entirely independent of `useCtrlyokeStyle` and `customCommand` —
+        so "still get the benefits of having our statusline collect data" is already true today, with
+        zero code changes needed for that half of the ask. Separately, stdout resolves to
+        `formatBrandedStatusLine(...)` when `useCtrlyokeStyle` is true, or to `forwardedOutput`
+        otherwise — and `forwardToCommand` already short-circuits to an empty buffer when
+        `customCommand` is empty (`ctrlyoke-statusline-wrapper.js:174-176`), so `useCtrlyokeStyle:
+
+    false` with no custom command already prints nothing today, in the one state the UI currently
     prevents a user from reaching.
 
-    **Verification of the unconfigured CLI states.** Claude Code's official statusline
-    documentation says deleting `statusLine` disables the custom statusline; it does not show a
-    built-in default statusline in that state. Antigravity's official documentation explicitly says
-    deleting its custom statusline configuration restores the built-in default statusline. ctrlyoke
-    does not delete either CLI's `statusLine` block when this toggle is turned off: its wrapper owns
-    the command slot and emits empty stdout when no `customCommand` is set. Therefore the reachable
-    no-command off-state is a blank statusline for both providers, not Antigravity's built-in
-    default. The UI copy promises a blank line rather than a harness default, while usage tracking
-    continues independently.
+        **Verification of the unconfigured CLI states.** Claude Code's official statusline
+        documentation says deleting `statusLine` disables the custom statusline; it does not show a
+        built-in default statusline in that state. Antigravity's official documentation explicitly says
+        deleting its custom statusline configuration restores the built-in default statusline. ctrlyoke
+        does not delete either CLI's `statusLine` block when this toggle is turned off: its wrapper owns
+        the command slot and emits empty stdout when no `customCommand` is set. Therefore the reachable
+        no-command off-state is a blank statusline for both providers, not Antigravity's built-in
+        default. The UI copy promises a blank line rather than a harness default, while usage tracking
+        continues independently.
 
-    **Implemented:** remove the `tracking.customCommand.length > 0 &&` gate around the
-    `SettingToggleRow` in `StatusLineTrackingControls.tsx` so it always renders. Update its
-    description text, which currently reads "Show ctrlyoke's branded statusline instead of
-    custom-command output" — accurate only when a custom command exists. Reword to cover both
-    reachable off-states and make the data-collection guarantee explicit, e.g.: "Show ctrlyoke's
-    branded statusline. Turn off to show your custom command's output instead — or, with no
-    custom command set, leave the statusline blank. Usage tracking keeps collecting data either
-    way." No settings-shape or wrapper-script change was needed; this is a standalone UI fix that
-    doesn't depend on the tab split (Decision 12) or the format editor and can ship independently
-    of the rest of the plan.
+        **Implemented:** remove the `tracking.customCommand.length > 0 &&` gate around the
+        `SettingToggleRow` in `StatusLineTrackingControls.tsx` so it always renders. Update its
+        description text, which currently reads "Show ctrlyoke's branded statusline instead of
+        custom-command output" — accurate only when a custom command exists. Reword to cover both
+        reachable off-states and make the data-collection guarantee explicit, e.g.: "Show ctrlyoke's
+        branded statusline. Turn off to show your custom command's output instead — or, with no
+        custom command set, leave the statusline blank. Usage tracking keeps collecting data either
+        way." No settings-shape or wrapper-script change was needed; this is a standalone UI fix that
+        doesn't depend on the tab split (Decision 12) or the format editor and can ship independently
+        of the rest of the plan.
 
 ## UI Placement
 

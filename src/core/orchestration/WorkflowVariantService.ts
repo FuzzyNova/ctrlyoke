@@ -16,6 +16,7 @@ import {
   WorkflowLineageRepository,
   type CreatedLineage,
 } from "./WorkflowLineageRepository";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "../../types/DashboardConstants";
 
 export interface WorkflowVariantRequest {
   source: WorkflowViewAddress;
@@ -92,7 +93,7 @@ export class WorkflowVariantService {
         sourceDescriptor.originalFile,
         {
           sourceWorkflowKey: request.source.workflowKey,
-          ...(request.source.kind === "run"
+          ...(request.source.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
             ? { sourceRunRef: request.source.runRef }
             : {}),
           sourceWorkflowName: sourceDescriptor.workflowName,
@@ -123,11 +124,14 @@ export class WorkflowVariantService {
       );
     }
 
-    return { workflowKey: created.workflowKey, kind: "draft" };
+    return {
+      workflowKey: created.workflowKey,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+    };
   }
 
   private resolveSourceFilePath(source: WorkflowViewAddress): string {
-    return source.kind === "run"
+    return source.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
       ? WorkflowPaths.runFilePath(
           this.workspaceRoot,
           source.workflowKey,

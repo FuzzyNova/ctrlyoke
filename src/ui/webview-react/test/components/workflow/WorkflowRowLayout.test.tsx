@@ -12,6 +12,7 @@ import {
 } from "@components/workflow/WorkflowRowLayout";
 import { WORKFLOW_ROW_TRACKS, type WorkflowRowTier } from "@/constants";
 import type { WorkflowRunNavigationSummary } from "@root/types/CtrlYokeTypes";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 function renderLayout(
   tier: WorkflowRowTier,
@@ -110,7 +111,11 @@ describe("RunIndicatorCell", () => {
     runCount: 3,
     hasDraft: false,
     primaryRunId: 7,
-    primaryAddress: { workflowKey: "wf", kind: "run", runRef: "run-7" },
+    primaryAddress: {
+      workflowKey: "wf",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+      runRef: "run-7",
+    },
   } as unknown as WorkflowRunNavigationSummary;
   const singleRun = {
     ...drillable,

@@ -115,8 +115,12 @@ describe("WorkspaceDiffPane file-history flow", () => {
     useWorkspaceViewerStore.getState().openToFileHistory("assets\\logo.png");
     render(<WorkspaceDiffPane />);
 
-    expect(screen.getByText("File History: assets/logo.png")).toBeInTheDocument();
-    expect(screen.getByText(/Update logo · commit-i · Author · today/)).toBeInTheDocument();
+    expect(
+      screen.getByText("File History: assets/logo.png")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Update logo · commit-i · Author · today/)
+    ).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: "Expand history diff" })
     );

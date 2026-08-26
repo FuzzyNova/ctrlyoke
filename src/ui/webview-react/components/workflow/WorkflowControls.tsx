@@ -13,6 +13,7 @@ import {
 } from "@components/shared/SplitButton";
 import { WorkflowFilePickerModal } from "@components/workflow/WorkflowFilePickerModal";
 import { postWorkflowDefinitionMutation } from "../../utils/workflowMutation";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 interface WorkflowControlsProps {
   /** Additional className for styling */
@@ -57,7 +58,8 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
   );
 
   const hasQueue = fileName !== null;
-  const isViewingRun = displayedViewAddress?.kind === "run";
+  const isViewingRun =
+    displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN;
   // The lineage on screen was deleted while being viewed — appending to it or
   // duplicating it has nothing left to read from/write to. Creating fresh
   // (New / From Template / Load from File) stays available.

@@ -60,6 +60,7 @@ import {
   HARNESS_IDS,
   SECRET_REGISTRY_STATES,
   STEP_TYPES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 
 // The vscode mock is set up in test/setup.ts (window.vscodeApi).
@@ -97,7 +98,7 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "wf-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-1" as never,
       },
       displayedDefinitionRevision: 4,
@@ -117,7 +118,11 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
       text: "append to the viewed run",
       action: ACTION_TYPES.RUN,
       mutation: {
-        address: { workflowKey: "wf-1", kind: "run", runRef: "run-1" },
+        address: {
+          workflowKey: "wf-1",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-1",
+        },
         expectedDefinitionRevision: 4,
         expectedDescriptorRevision: 9,
       },
@@ -134,7 +139,7 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "wf-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-1" as never,
       },
       displayedDefinitionRevision: 4,
@@ -155,7 +160,11 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
     expect(message).toMatchObject({
       type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
       mutation: {
-        address: { workflowKey: "wf-1", kind: "run", runRef: "run-1" },
+        address: {
+          workflowKey: "wf-1",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-1",
+        },
         expectedDefinitionRevision: 4,
         expectedDescriptorRevision: 9,
       },
@@ -182,7 +191,7 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "wf-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-1" as never,
       },
       displayedDefinitionRevision: 2,
@@ -205,7 +214,11 @@ describe("PromptEditor — EXECUTE_PROMPT run addressing", () => {
       text: "edited suffix",
       rewindCompletedStep: true,
       mutation: {
-        address: { workflowKey: "wf-1", kind: "run", runRef: "run-1" },
+        address: {
+          workflowKey: "wf-1",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-1",
+        },
         expectedDefinitionRevision: 2,
         expectedDescriptorRevision: 7,
       },

@@ -20,6 +20,7 @@ import {
   VSCODE_COMMANDS,
   WORKTREE_MANAGEMENT_ACTIONS,
   type WorktreeManagementAction,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
@@ -361,8 +362,10 @@ export class WebviewMessageRouter {
           preferredViewAddress:
             message.preferredViewAddress &&
             typeof message.preferredViewAddress.workflowKey === "string" &&
-            (message.preferredViewAddress.kind === "draft" ||
-              (message.preferredViewAddress.kind === "run" &&
+            (message.preferredViewAddress.kind ===
+              WORKFLOW_VIEW_ADDRESS_KIND.DRAFT ||
+              (message.preferredViewAddress.kind ===
+                WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
                 typeof message.preferredViewAddress.runRef === "string"))
               ? message.preferredViewAddress
               : undefined,
@@ -546,7 +549,8 @@ export class WebviewMessageRouter {
       if (message.filePath) {
         const mutation =
           this.mutationCoordinator.asWorkflowDefinitionMutation(message);
-        const isRunAddressed = mutation?.address.kind === "run";
+        const isRunAddressed =
+          mutation?.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN;
         try {
           await this.getOrchestrator()?.appendFromFileForClient(
             mutation,
@@ -1239,7 +1243,11 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.DELETE_RUN_HISTORY, async (message, ctx) => {
       // Phase 2 requires stable refs. Index deletion is intentionally not
       // accepted here; old clients must refresh to the run-address contract.
-      if (!message.address || message.address.kind !== "run") return;
+      if (
+        !message.address ||
+        message.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN
+      )
+        return;
       await this.serializer.handleDeleteRunByAddress(
         message.address,
         ctx.postMessage,

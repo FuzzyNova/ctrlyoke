@@ -12,7 +12,7 @@ Developing directly inside the Extension Development Host (`F5`) means every
 code change requires: stop all running workflows → close the Extension Host
 window → rebuild → relaunch. Long-running workflows and Playwright-driven
 steps can't survive that, because Playwright's own driving process is running
-*inside* the very extension host that's about to be killed.
+_inside_ the very extension host that's about to be killed.
 
 The fix is to split the two roles:
 
@@ -20,7 +20,7 @@ The fix is to split the two roles:
   long-lived workflows against the ctrlyoke repo, survives forever, is what
   Playwright automation targets.
 - **The Extension Development Host** — used only to build and smoke-test the
-  *next* change. It's expected to restart constantly; nothing important
+  _next_ change. It's expected to restart constantly; nothing important
   should be running inside it.
 
 ## Fact check: none of the `launch.json` configs give you a real production build
@@ -42,7 +42,7 @@ literally named **"Run Extension (Production)"** only swaps in a production
 (`vsce package && node scripts/strip-dev-commands.mjs --restore`,
 `package.json:621`), which drives `build:extension` → `esbuild.js
 --production` (`package.json:619`). That produces a real `.vsix`; install it
-normally (Extensions view → `...` → *Install from VSIX...*, or
+normally (Extensions view → `...` → _Install from VSIX..._, or
 `code --install-extension path/to/ctrlyoke-x.y.z.vsix`) into your everyday VS
 Code. That installed copy — not any `F5` config — is your daily driver.
 
@@ -50,7 +50,7 @@ Code. That installed copy — not any `F5` config — is your daily driver.
 
 1. Keep a production-installed ctrlyoke in your normal VS Code window, open
    on the `ctrlyoke` repo itself. Run your actual dev-loop workflows there
-   (including any that use Playwright to validate a *previous* change) — this
+   (including any that use Playwright to validate a _previous_ change) — this
    window never needs to restart just because you're editing code.
 2. When you're ready to test a change, `F5` into an Extension Development
    Host as before. Use it to smoke-test the change interactively or run a
@@ -146,7 +146,7 @@ example:
   "type": "extensionHost",
   "request": "launch",
   "env": {
-    "CTRLYOKE_HOME": "${workspaceFolder}/.ctrlyoke-dev-home"
+    "CTRLYOKE_HOME": "${workspaceFolder}/.ctrlyoke-dev-home",
   },
   // ...unchanged...
 }
@@ -196,14 +196,14 @@ all, in either scope:
   yet" (see the `UsageCard.tsx` sidecar-pending state) even though your
   production install's `~/.ctrlyoke/usage/provider-snapshots.json` already has
   fresh quota for the same account, because the debug host never reads that
-  file. This is a side effect of the *same* generic `CTRLYOKE_HOME` override
+  file. This is a side effect of the _same_ generic `CTRLYOKE_HOME` override
   used for run-storage safety above — it isn't given special-case treatment to
   read from the real home, because `HarnessUsageService`'s own tests rely on
   `CTRLYOKE_HOME` to sandbox `provider-snapshots.json` reads/writes into a temp
   dir (`src/test/unit/HarnessUsageService.test.ts`'s `setup()`), so quota
   cache can't bypass it without breaking that isolation. Unlike run storage,
   though, nothing about quota cache actually needs per-instance isolation for
-  *correctness* — `HarnessUsageService.persistProviderSnapshots()` already
+  _correctness_ — `HarnessUsageService.persistProviderSnapshots()` already
   writes it under `withFileLock()` with newest-`fetchedAt`-wins merge
   (`selectNewestQuota`) specifically so concurrent writers are safe. There is
   no longer a safety reason to accept that empty cache: Phase 1 and Phase 2
@@ -238,7 +238,7 @@ either instance's browser dashboard as it would in a VS Code webview.
 
 **Only `IS_DEV_MODE` builds mirror a URL (including its token) to
 `.ctrlyoke/dev/server-url.txt`.** Whichever instance actually bound a
-listening server — production or debug host — writes *its own* URL there.
+listening server — production or debug host — writes _its own_ URL there.
 In the normal daily-driver + `F5` debug-host flow this means the debug
 host's fallback port ends up in the file, so a headless agent or Playwright
 reading it lands on the debug build under test, not on the production
@@ -254,7 +254,7 @@ It runs on win32/darwin/linux; the process-discovery and graceful-close
 mechanism differ per OS (PowerShell CIM queries + `taskkill` on Windows,
 `ps` parsing + `SIGTERM` elsewhere) — see the closing section below for which
 half of that is empirically confirmed versus the standard cross-platform
-idiom. The rest of this section explains *why* it's built the way it is
+idiom. The rest of this section explains _why_ it's built the way it is
 (mostly written against the Windows path, where it was developed and
 verified), for troubleshooting or extending it.
 
@@ -273,7 +273,7 @@ seconds `.ctrlyoke/dev/server-url.txt` has the live URL+token to hand to
 Playwright — see the `<debugging>` section of `.github/copilot-instructions.md`.
 
 **The problem**: as launched above, `code` finds your already-running daily
-driver's IPC socket and asks *it* to open the new window — the `code` process
+driver's IPC socket and asks _it_ to open the new window — the `code` process
 returns immediately, and the new window is just another renderer inside the
 daily driver's existing `Code.exe` process tree. There is no independent PID
 to manage: every renderer/utility/gpu process for every open window shares one
@@ -285,8 +285,8 @@ touch).
 
 **The fix: give the dev host its own `--user-data-dir`.** This is independent
 of the optional `CTRLYOKE_HOME` override above — `CTRLYOKE_HOME` isolates
-ctrlyoke's *own* user-scoped state, while `--user-data-dir` isolates *VS
-Code's* singleton-instance lock. Only the latter is required for an
+ctrlyoke's _own_ user-scoped state, while `--user-data-dir` isolates _VS
+Code's_ singleton-instance lock. Only the latter is required for an
 independent, safely closable VS Code process:
 
 ```sh
@@ -306,7 +306,7 @@ at the default (`~/.vscode/extensions`) keeps your normally-installed
 extensions available in the dev host, since only the singleton lock — not the
 extensions directory — needs separating.
 
-**Closing it**: find the top-level PID (the one *without* a `--type=` flag in
+**Closing it**: find the top-level PID (the one _without_ a `--type=` flag in
 its command line — that's what distinguishes it from its own gpu/utility/
 renderer children) by matching on the unique `--user-data-dir` value, then
 request a graceful close. On Windows that's `taskkill /PID <pid>` — **do not
@@ -334,7 +334,7 @@ note with what you find. (This whole close/relaunch dance is what
 This is a strictly better restart path for an agent than the dashboard's own
 `Rebuild Extension & Restart` (`DeveloperSection.tsx`'s
 `DEV_BUILD_EXTENSION_AND_RELOAD` / `workbench.action.restartExtensionHost`),
-which restarts the extension host *from inside itself* and can hang if the
+which restarts the extension host _from inside itself_ and can hang if the
 extension host's event loop is already unhealthy — the OS-level close/relaunch
 here doesn't depend on the thing being torn down staying responsive.
 

@@ -84,9 +84,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   const clearPendingFileHistory = useWorkspaceViewerStore(
     (s) => s.clearPendingFileHistory
   );
-  const fileHistoryActive = useWorkspaceViewerStore(
-    (s) => s.fileHistoryActive
-  );
+  const fileHistoryActive = useWorkspaceViewerStore((s) => s.fileHistoryActive);
   const closeFileHistoryView = useWorkspaceViewerStore(
     (s) => s.closeFileHistoryView
   );
@@ -270,11 +268,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   const handleDiffBack = useCallback(() => {
     if (fileHistoryActive) closeFileHistoryView();
     setMobileDiffVisible(false);
-  }, [
-    closeFileHistoryView,
-    fileHistoryActive,
-    setMobileDiffVisible,
-  ]);
+  }, [closeFileHistoryView, fileHistoryActive, setMobileDiffVisible]);
 
   const refreshAfterMutation = useCallback(
     async (affectedPaths: string[]) => {

@@ -61,7 +61,10 @@ import {
   FINAL_STEP_PHASES,
 } from "@/types/messages";
 import type { PromptStep } from "@/types/messages";
-import { STEP_TYPES } from "@root/types/DashboardConstants";
+import {
+  STEP_TYPES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
 
 // ---------------------------------------------------------------------------
@@ -225,7 +228,7 @@ describe("FILE_SELECTED", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "old-workflow" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "old-run" as never,
       },
       displayedRunDirectory: "/runs/old-workflow/old-run",
@@ -249,7 +252,7 @@ describe("FILE_SELECTED", () => {
     useUiStore.getState().setDisplayedRunView(
       {
         workflowKey: previousWorkflowKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: previousRunRef,
       },
       [
@@ -293,7 +296,7 @@ describe("FILE_SELECTED", () => {
       dispatch(MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY, {
         address: {
           workflowKey: "new-workflow" as never,
-          kind: "draft",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
         },
         definitionRevision: 1,
         descriptorRevision: 1,
@@ -303,7 +306,7 @@ describe("FILE_SELECTED", () => {
     const ui = useUiStore.getState();
     expect(ui.displayedViewAddress).toEqual({
       workflowKey: "new-workflow",
-      kind: "draft",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
     });
     expect(ui.runSummaries).toEqual([]);
     expect(ui.executionRunRef).toBeNull();
@@ -342,7 +345,7 @@ describe("FILE_SELECTED", () => {
     useUiStore.getState().setPendingHistorySearchNavigation({
       address: {
         workflowKey: "wf-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2026-07-20T10-30-00-000Z" as never,
       },
       findQuery: "needle",
@@ -1160,7 +1163,7 @@ describe("OUTPUT_HISTORY_LOADED", () => {
       useUiStore.getState().setPendingHistorySearchNavigation({
         address: {
           workflowKey: "wf-1" as never,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "run-2026-07-20T10-30-00-000Z" as never,
         },
         findQuery: "needle",
@@ -1172,7 +1175,7 @@ describe("OUTPUT_HISTORY_LOADED", () => {
       dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
         address: {
           workflowKey: "wf-1" as never,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "run-2026-07-20T10-30-00-000Z" as never,
         },
         workingFile: { workflowName: "History", steps: [] },
@@ -1693,7 +1696,7 @@ describe("run view revision snapshots", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "previous-workflow" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2026-07-20T10-30-00-000Z" as never,
       },
     });
@@ -1703,7 +1706,10 @@ describe("run view revision snapshots", () => {
         workflowId: "new-instance",
       });
       dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
-        address: { workflowKey: "new-workflow" as never, kind: "draft" },
+        address: {
+          workflowKey: "new-workflow" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
         workingFile: {
           workflowName: "New workflow",
           definitionRevision: 1,
@@ -1718,7 +1724,7 @@ describe("run view revision snapshots", () => {
 
     expect(useUiStore.getState().displayedViewAddress).toEqual({
       workflowKey: "new-workflow",
-      kind: "draft",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
     });
     expect(useWorkflowStore.getState().workflowName).toBe("New workflow");
   });
@@ -1728,7 +1734,10 @@ describe("run view revision snapshots", () => {
 
     act(() => {
       dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
-        address: { workflowKey: "wf-1" as never, kind: "draft" },
+        address: {
+          workflowKey: "wf-1" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
         workingFile: {
           workflowName: "Draft",
           definitionRevision: 7,
@@ -1920,14 +1929,20 @@ describe("run view revision snapshots", () => {
   it("re-arms the next edit with the revisions a write just produced", () => {
     renderHook(() => useMessageHandler());
     useUiStore.setState({
-      displayedViewAddress: { workflowKey: "wf-1" as never, kind: "draft" },
+      displayedViewAddress: {
+        workflowKey: "wf-1" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
       displayedDefinitionRevision: 3,
       displayedDescriptorRevision: 4,
     });
 
     act(() => {
       dispatch(MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY, {
-        address: { workflowKey: "wf-1" as never, kind: "draft" },
+        address: {
+          workflowKey: "wf-1" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
         definitionRevision: 4,
         descriptorRevision: 5,
       });
@@ -2026,13 +2041,16 @@ describe("run view revision snapshots", () => {
       requestId = useUiStore
         .getState()
         .requestRunViewLoad(
-          { workflowKey: "wf-unreachable" as never, kind: "draft" },
+          {
+            workflowKey: "wf-unreachable" as never,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          },
           []
         );
     });
     expect(useUiStore.getState().displayedViewAddress).toEqual({
       workflowKey: "wf-unreachable",
-      kind: "draft",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
     });
 
     act(() => {
@@ -2068,7 +2086,7 @@ describe("run view revision snapshots", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "previous-workflow" as never,
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       },
       displayedDefinitionRevision: 5,
       displayedDescriptorRevision: 6,
@@ -2280,7 +2298,7 @@ describe("active workflow summaries", () => {
       activeWorkflowId: null,
       displayedViewAddress: {
         workflowKey: "workflow-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2026-07-20T12-00-00-000Z" as never,
       },
       executionRunRef: null,
@@ -2301,7 +2319,7 @@ describe("active workflow summaries", () => {
       activeWorkflowId: null,
       displayedViewAddress: {
         workflowKey: "workflow-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2026-07-20T12-00-00-000Z" as never,
       },
       executionRunRef: "run-2026-07-20T13-00-00-000Z",
@@ -2324,7 +2342,7 @@ describe("active workflow summaries", () => {
       activeWorkflowId: "instance-1",
       displayedViewAddress: {
         workflowKey: "workflow-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: historicalRunRef,
       },
       executionRunRef: executingRunRef,
@@ -2344,7 +2362,7 @@ describe("active workflow summaries", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: executingRunRef,
       },
     });
@@ -2652,7 +2670,7 @@ describe("STEPS_EXTENDED", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-key" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-ref" as never,
       },
       displayedDefinitionRevision: 2,
@@ -2804,7 +2822,7 @@ describe("EXECUTION_STARTED", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "wf-key" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef,
       },
       executionRunRef: null,
@@ -3068,7 +3086,7 @@ describe("TERMINAL_STARTED", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "commit" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2026-06-08T21-27-08-408Z" as never,
       },
       executionRunRef: "run-2026-07-24T04-29-37-398Z" as never,

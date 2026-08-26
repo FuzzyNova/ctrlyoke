@@ -152,7 +152,10 @@ function collectFromFile(filePath, occurrences) {
   }
 
   function visit(node) {
-    if (ts.isBinaryExpression(node) && EQUALITY_OPERATORS.has(node.operatorToken.kind)) {
+    if (
+      ts.isBinaryExpression(node) &&
+      EQUALITY_OPERATORS.has(node.operatorToken.kind)
+    ) {
       const isTypeofCheck =
         ts.isTypeOfExpression(node.left) || ts.isTypeOfExpression(node.right);
       if (!isTypeofCheck) {
@@ -163,7 +166,10 @@ function collectFromFile(filePath, occurrences) {
           record(node.right.text, node.right, "==/!=");
         }
       }
-    } else if (ts.isCaseClause(node) && ts.isStringLiteralLike(node.expression)) {
+    } else if (
+      ts.isCaseClause(node) &&
+      ts.isStringLiteralLike(node.expression)
+    ) {
       record(node.expression.text, node.expression, "switch/case");
     }
     ts.forEachChild(node, visit);

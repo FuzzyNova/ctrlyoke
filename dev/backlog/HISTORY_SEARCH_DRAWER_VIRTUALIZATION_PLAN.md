@@ -19,7 +19,7 @@ Two distinct complaints prompted this plan:
 
 1. **"Back to results" loses your place.** After clicking a result
    (`navigateToResult`, `HistorySearchDrawer.tsx:249-280`), the only way back
-   is to reopen the drawer via the search button. Reopening does *not*
+   is to reopen the drawer via the search button. Reopening does _not_
    actually resume where you left off — it silently re-runs the search from
    scratch and drops any list scroll position.
 2. **Results are not virtualized.** `results.map(...)`

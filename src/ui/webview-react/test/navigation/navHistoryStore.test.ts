@@ -5,6 +5,7 @@ import {
   canGoForward,
 } from "@/navigation/navHistoryStore";
 import type { Route } from "@/navigation/route";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 beforeEach(() => {
   useNavHistoryStore.getState().reset();
@@ -14,7 +15,12 @@ function store() {
   return useNavHistoryStore.getState();
 }
 
-const A: Route = { workflow: { workflowKey: "a" as never, kind: "draft" } };
+const A: Route = {
+  workflow: {
+    workflowKey: "a" as never,
+    kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+  },
+};
 const B: Route = { viewer: "explorer", file: "src/a.ts" };
 const C: Route = { viewer: "sourceControl", ref: "abc123" };
 
@@ -46,7 +52,12 @@ describe("record", () => {
 
   it("is a no-op when recording the current route again", () => {
     store().record(A);
-    store().record({ workflow: { workflowKey: "a" as never, kind: "draft" } });
+    store().record({
+      workflow: {
+        workflowKey: "a" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
+    });
     expect(store().past).toEqual([]);
     expect(store().current).toEqual(A);
   });

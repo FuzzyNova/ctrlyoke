@@ -10,6 +10,7 @@ import {
 import { validateSafeName } from "@utils/string";
 import { type TemplateScope, TEMPLATE_SCOPE_OPTIONS } from "./templateScope";
 import { TEMPLATE_FORMAT_OPTIONS } from "./templateFormat";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 /**
  * Split a full save path into its directory (`location`) and basename
@@ -221,9 +222,9 @@ export const SaveWorkflowDialog: React.FC = () => {
     savePathCheck.address.workflowKey ===
       saveWorkflowDialogData.address.workflowKey &&
     savePathCheck.address.kind === saveWorkflowDialogData.address.kind &&
-    (saveWorkflowDialogData.address.kind === "draft" ||
-      (saveWorkflowDialogData.address.kind === "run" &&
-        savePathCheck.address.kind === "run" &&
+    (saveWorkflowDialogData.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT ||
+      (saveWorkflowDialogData.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+        savePathCheck.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
         savePathCheck.address.runRef === saveWorkflowDialogData.address.runRef))
       ? savePathCheck
       : null;

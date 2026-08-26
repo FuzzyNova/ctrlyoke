@@ -1,6 +1,9 @@
 import { useUiStore } from "../store/uiStore";
 import type { WorkflowDefinitionMutation } from "@root/types/WebviewMessageTypes";
-import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import {
+  USER_FEEDBACK_SEVERITY,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 import { notifyUser } from "@utils/notifyUser";
 
 interface MessageTarget {
@@ -43,7 +46,7 @@ export function postRunLifecycleMutation(
   const state = useUiStore.getState();
   const address = state.displayedViewAddress;
   if (
-    address?.kind !== "run" ||
+    address?.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
     state.displayedDefinitionRevision === null ||
     state.displayedDescriptorRevision === null
   ) {

@@ -29,6 +29,7 @@ import {
 import {
   DEFAULT_WORKFLOW_NAME,
   WORKTREE_MODES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 
 // The copy assertion covers the standalone queue branch of notifyUser().
@@ -78,7 +79,10 @@ function setRecentWorkflows(
         ...workflow,
         address:
           workflow.address ??
-          ({ workflowKey: `test-${index}` as never, kind: "draft" } as const),
+          ({
+            workflowKey: `test-${index}` as never,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          } as const),
       }))
     );
   });
@@ -92,7 +96,7 @@ function seedRunPanel(
   useUiStore.setState({
     displayedViewAddress: {
       workflowKey: key,
-      kind: "run",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
       runRef: "run-2" as never,
     },
     executionRunRef: options.executionRunRef ?? null,
@@ -129,13 +133,17 @@ function seedRunPanel(
   });
   setRecentWorkflows([
     {
-      address: { workflowKey: key, kind: "run", runRef: "run-2" as never },
+      address: {
+        workflowKey: key,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: "run-2" as never,
+      },
       workflowName: "Menu Workflow",
       executionState: EXECUTION_STATES.COMPLETED,
       runNav: {
         primaryAddress: {
           workflowKey: key,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "run-2" as never,
         },
         runCount: 2,
@@ -215,7 +223,7 @@ describe("WorkflowStatus — loaded state", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "wf-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2" as never,
       },
       displayedRunDirectory: "/runs/wf-1/run-2",
@@ -224,7 +232,7 @@ describe("WorkflowStatus — loaded state", () => {
       {
         address: {
           workflowKey: "wf-1" as never,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "run-5" as never,
         },
         runDirectory: "/runs/wf-1/run-5",
@@ -574,7 +582,7 @@ describe("WorkflowStatus — loaded state", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "wf-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-1" as never,
       },
       displayedDefinitionRevision: 2,
@@ -589,7 +597,11 @@ describe("WorkflowStatus — loaded state", () => {
       type: MESSAGE_TYPES.UPDATE_WORKFLOW_NAME,
       workflowName: "Renamed Run",
       mutation: {
-        address: { workflowKey: "wf-1", kind: "run", runRef: "run-1" },
+        address: {
+          workflowKey: "wf-1",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-1",
+        },
         expectedDefinitionRevision: 2,
         expectedDescriptorRevision: 5,
       },
@@ -713,13 +725,17 @@ describe("WorkflowStatus — loaded state", () => {
       activeWorkflowId: "workflow-continued",
       activeWorkflowWorkingFilePath: "/workspace/continued.ctrlyoke.json",
       loadedWorkflows: [],
-      displayedViewAddress: { workflowKey, kind: "run", runRef },
+      displayedViewAddress: {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef,
+      },
     });
 
     render(<WorkflowStatus />);
     setRecentWorkflows([
       {
-        address: { workflowKey, kind: "run", runRef },
+        address: { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef },
         workflowName: "Continued Workflow",
         executionState: EXECUTION_STATES.COMPLETED,
         isFavorite: false,
@@ -763,7 +779,11 @@ describe("WorkflowStatus — loaded state", () => {
       render(<WorkflowStatus />);
       setRecentWorkflows([
         {
-          address: { workflowKey, kind: "run", runRef: "run-2" as never },
+          address: {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: "run-2" as never,
+          },
           workflowName: "Paused Workflow",
           executionState: EXECUTION_STATES.PAUSED,
           isFavorite: false,
@@ -873,7 +893,11 @@ describe("WorkflowStatus — loaded state", () => {
       {
         workflowName: "Running Multi",
         executionState: EXECUTION_STATES.RUNNING,
-        address: { workflowKey, kind: "run", runRef: "r8" as never },
+        address: {
+          workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "r8" as never,
+        },
         runNav,
       },
     ]);
@@ -951,7 +975,10 @@ describe("WorkflowStatus — loaded state", () => {
   it("closes the dropdown without reloading when selecting the current workflow", async () => {
     const user = userEvent.setup();
     useUiStore.setState({
-      displayedViewAddress: { workflowKey: "test-0" as never, kind: "draft" },
+      displayedViewAddress: {
+        workflowKey: "test-0" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
     });
     setRecentWorkflows([
       {
@@ -976,7 +1003,10 @@ describe("WorkflowStatus — loaded state", () => {
 
     expect(postMessageSpy).not.toHaveBeenCalledWith({
       type: MESSAGE_TYPES.LOAD_RUN_VIEW,
-      address: { workflowKey: "test-0", kind: "draft" },
+      address: {
+        workflowKey: "test-0",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
     });
     expect(document.querySelector(".workflow-dropdown-menu")).toHaveClass(
       "pointer-events-none"
@@ -991,7 +1021,10 @@ describe("WorkflowStatus — loaded state", () => {
       runRef: "run-2026-07-20T12-00-00-000Z" as never,
     };
     useUiStore.setState({
-      displayedViewAddress: { workflowKey: "test-0" as never, kind: "draft" },
+      displayedViewAddress: {
+        workflowKey: "test-0" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
       runSummaries: [],
     });
     useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
@@ -1032,7 +1065,10 @@ describe("WorkflowStatus — loaded state", () => {
     useUiStore.setState({
       activeWorkflowId: "workflow-1",
       activeWorkflowWorkingFilePath: workingFilePath,
-      displayedViewAddress: { workflowKey: "test-0" as never, kind: "draft" },
+      displayedViewAddress: {
+        workflowKey: "test-0" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
       loadedWorkflows: [
         {
           id: "workflow-1",
@@ -1055,7 +1091,10 @@ describe("WorkflowStatus — loaded state", () => {
       useUiStore.getState().setLoadedWorkflows([]);
       useUiStore.getState().setRecentWorkflows([
         {
-          address: { workflowKey: "test-0" as never, kind: "draft" },
+          address: {
+            workflowKey: "test-0" as never,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          },
           workflowName: "My Workflow",
           executionState: EXECUTION_STATES.COMPLETED,
         },
@@ -1151,7 +1190,10 @@ describe("WorkflowStatus — loaded state", () => {
 
     expect(postMessageSpy).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.TOGGLE_WORKFLOW_FAVORITE,
-      address: { workflowKey: "test-0", kind: "draft" },
+      address: {
+        workflowKey: "test-0",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
     });
     expect(
       screen.getByRole("button", { name: "Remove from favorites" })
@@ -1259,7 +1301,7 @@ describe("WorkflowStatus — loaded state", () => {
         // there is no loaded instance left to correlate through.
         address: {
           workflowKey: "test-0" as never,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "run-2026-01-01T00-00-00-000Z" as never,
         },
         executionState: EXECUTION_STATES.COMPLETED,
@@ -1474,13 +1516,13 @@ describe("WorkflowStatus — run navigation panel", () => {
         executionState: EXECUTION_STATES.COMPLETED,
         address: {
           workflowKey,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "run-2" as never,
         },
         runNav: {
           primaryAddress: {
             workflowKey,
-            kind: "run",
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
             runRef: "run-2" as never,
           },
           primaryRunId: 2,
@@ -1521,7 +1563,7 @@ describe("WorkflowStatus — run navigation panel", () => {
         runNav: {
           primaryAddress: {
             workflowKey: "test-0" as never,
-            kind: "run",
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
             runRef: "run-1" as never,
           },
           primaryRunId: 1,
@@ -1549,11 +1591,15 @@ describe("WorkflowStatus — run navigation panel", () => {
         workflowName: "Multi-run Workflow",
         filePath: "/path/multi.yaml",
         executionState: EXECUTION_STATES.COMPLETED,
-        address: { workflowKey, kind: "run", runRef: "run-2" as never },
+        address: {
+          workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-2" as never,
+        },
         runNav: {
           primaryAddress: {
             workflowKey,
-            kind: "run",
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
             runRef: "run-2" as never,
           },
           primaryRunId: 2,
@@ -1595,11 +1641,15 @@ describe("WorkflowStatus — run navigation panel", () => {
         workflowName: "Multi-run Workflow",
         filePath: "/path/multi.yaml",
         executionState: EXECUTION_STATES.COMPLETED,
-        address: { workflowKey, kind: "run", runRef: "run-2" as never },
+        address: {
+          workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-2" as never,
+        },
         runNav: {
           primaryAddress: {
             workflowKey,
-            kind: "run",
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
             runRef: "run-2" as never,
           },
           primaryRunId: 2,
@@ -1649,11 +1699,15 @@ describe("WorkflowStatus — run navigation panel", () => {
         workflowName: "Multi-run Workflow",
         filePath: "/path/multi.yaml",
         executionState: EXECUTION_STATES.COMPLETED,
-        address: { workflowKey, kind: "run", runRef: "run-2" as never },
+        address: {
+          workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-2" as never,
+        },
         runNav: {
           primaryAddress: {
             workflowKey,
-            kind: "run",
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
             runRef: "run-2" as never,
           },
           primaryRunId: 2,
@@ -1687,7 +1741,7 @@ describe("WorkflowStatus — run navigation panel", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-1" as never,
       },
       runSummaries: [
@@ -1717,7 +1771,7 @@ describe("WorkflowStatus — run navigation panel", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2" as never,
       },
       runSummaries: [
@@ -1784,7 +1838,7 @@ describe("WorkflowStatus — run navigation panel", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2" as never,
       },
       runSummaries: [
@@ -1830,7 +1884,11 @@ describe("WorkflowStatus — run navigation panel", () => {
     expect(postMessageSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         type: MESSAGE_TYPES.LOAD_RUN_VIEW,
-        address: { workflowKey, kind: "run", runRef: "run-1" },
+        address: {
+          workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-1",
+        },
       })
     );
   });
@@ -1862,7 +1920,7 @@ describe("WorkflowStatus — run navigation panel", () => {
       type: MESSAGE_TYPES.DELETE_RUN_HISTORY,
       address: {
         workflowKey: "wf-menu-delete",
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-1",
       },
     });
@@ -1900,7 +1958,7 @@ describe("WorkflowStatus — run navigation panel", () => {
       type: MESSAGE_TYPES.DELETE_RUN_HISTORY,
       address: {
         workflowKey: "wf-menu-confirm",
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-1",
       },
     });
@@ -1940,7 +1998,7 @@ describe("WorkflowStatus — run navigation panel", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2" as never,
       },
       isViewingHistory: true,
@@ -2009,7 +2067,7 @@ describe("WorkflowStatus — run navigation panel", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-1" as never,
       },
       runSummaries: [
@@ -2070,7 +2128,7 @@ describe("WorkflowStatus — run navigation panel", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-1" as never,
       },
       runSummaries: [

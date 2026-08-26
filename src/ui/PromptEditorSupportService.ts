@@ -166,9 +166,7 @@ function parseCursorArgumentToken(
     }
   }
 
-  const prefix = sawQuote
-    ? current
-    : text.slice(replacementStart, cursor);
+  const prefix = sawQuote ? current : text.slice(replacementStart, cursor);
   return { prefix, replacementStart };
 }
 

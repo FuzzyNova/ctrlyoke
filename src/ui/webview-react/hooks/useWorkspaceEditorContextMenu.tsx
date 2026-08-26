@@ -13,6 +13,7 @@ import { useUiStore } from "@store/uiStore";
 import { writeClipboardText } from "@utils/stepClipboard";
 import { MESSAGE_TYPES, PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
 import { postWorkflowDefinitionMutation } from "../utils/workflowMutation";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 const PROMPT_FILE_RE = /\.(ctrlyoke\.(yaml|yml|json)|prompt\.md)$/i;
 
@@ -156,7 +157,7 @@ export function useWorkspaceEditorContextMenu({
           },
           {
             label:
-              displayedViewAddress?.kind === "run"
+              displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
                 ? "Append and Continue Workflow"
                 : "Queue Workflow",
             icon: "codicon-list-ordered",

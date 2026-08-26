@@ -9,6 +9,7 @@ import {
   type StepStatus,
   type ExecutionState,
 } from "../types/messages";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 /**
  * Codicon class names for status icons
@@ -296,7 +297,10 @@ export interface WorkflowExecutionControlsState {
 
 export interface WorkflowExecutionControlsInput {
   viewedExecutionState: ExecutionState;
-  viewedKind: "draft" | "run" | null;
+  viewedKind:
+    | typeof WORKFLOW_VIEW_ADDRESS_KIND.DRAFT
+    | typeof WORKFLOW_VIEW_ADDRESS_KIND.RUN
+    | null;
   hasFile: boolean;
   hasSteps: boolean;
   pendingRewind: boolean;
@@ -363,7 +367,7 @@ export function getWorkflowExecutionControls({
 
   if (executionActive) {
     const slot1 =
-      viewedKind === "draft"
+      viewedKind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT
         ? disabled(
             "Run",
             "codicon-debug-start",
@@ -426,7 +430,10 @@ export function getWorkflowExecutionControls({
     };
   }
 
-  if (viewedKind === null || (viewedKind === "draft" && !hasFile)) {
+  if (
+    viewedKind === null ||
+    (viewedKind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT && !hasFile)
+  ) {
     return {
       slot1: disabled("Run", "codicon-debug-start", "Load a workflow to run"),
       slot2: disabled("Pause", "codicon-debug-pause", "Nothing is executing"),
@@ -438,7 +445,7 @@ export function getWorkflowExecutionControls({
     };
   }
 
-  if (viewedKind === "draft" && !hasSteps) {
+  if (viewedKind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT && !hasSteps) {
     return {
       slot1: disabled("Run", "codicon-debug-start", "Add steps to run"),
       slot2: disabled("Pause", "codicon-debug-pause", "Nothing is executing"),
@@ -451,7 +458,7 @@ export function getWorkflowExecutionControls({
   }
 
   const slot1 =
-    viewedKind === "draft"
+    viewedKind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT
       ? {
           action: "run-draft" as const,
           label: "Run",
@@ -489,7 +496,7 @@ export function getWorkflowExecutionControls({
   // slot 2 is dedicated to Continue instead (see below).
   const resumable =
     !pendingRewind &&
-    viewedKind === "run" &&
+    viewedKind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
     (viewedExecutionState === EXECUTION_STATES.PAUSED ||
       viewedExecutionState === EXECUTION_STATES.STOPPED ||
       viewedExecutionState === EXECUTION_STATES.ERROR);

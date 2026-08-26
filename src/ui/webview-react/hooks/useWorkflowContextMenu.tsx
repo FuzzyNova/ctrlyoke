@@ -4,7 +4,10 @@ import {
   type StepContextMenuState,
 } from "@components/shared/StepContextMenu";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
-import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import {
+  USER_FEEDBACK_SEVERITY,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 import { writeClipboardText } from "@utils/stepClipboard";
 import { notifyUser } from "@utils/notifyUser";
 
@@ -60,7 +63,8 @@ export function useWorkflowContextMenu({
       const deleteLabel =
         target.scope === "lineage" ? "Delete Workflow" : "Delete Run";
       const isDraftRun =
-        target.scope === "run" && target.address.kind === "draft";
+        target.scope === "run" &&
+        target.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT;
       const deleteDisabledTitle = target.isExecuting
         ? `Cannot delete ${target.scope === "lineage" ? "a workflow" : "a run"} while it is executing`
         : isDraftRun

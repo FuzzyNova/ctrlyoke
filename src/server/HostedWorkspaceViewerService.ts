@@ -284,7 +284,10 @@ function classifyRefNames(refNames: string[]): GitRefLabel[] {
 export class HostedWorkspaceViewerService {
   private readonly commitGenerator = new CommitMessageGenerator();
   private readonly listingSnapshotCache = new WorkspaceListingSnapshotCache();
-  private readonly fileHistorySnapshots = new Map<string, FileHistorySnapshot>();
+  private readonly fileHistorySnapshots = new Map<
+    string,
+    FileHistorySnapshot
+  >();
 
   constructor(
     private readonly workspaceRoot: string,
@@ -1816,9 +1819,7 @@ export class HostedWorkspaceViewerService {
         );
       }
       if (offset > snapshot.entries.length) {
-        throw new WorkspaceTreeBadRequestError(
-          "offset is outside the history"
-        );
+        throw new WorkspaceTreeBadRequestError("offset is outside the history");
       }
       return this.materializeFileHistoryPage(snapshot, offset);
     }
@@ -1852,24 +1853,27 @@ export class HostedWorkspaceViewerService {
           isPathWithinAnyDirectory(newAbsolute, this.trustedRoots)
         );
       })
-      .map((row) => ({
-        hash: row.hash,
-        shortHash: row.shortHash,
-        subject: row.subject,
-        author: row.author,
-        relativeDate: row.relativeDate,
-        isHead: row.hash === headHash,
-        pushed: !unpushedHashes.has(row.hash),
-        refs: classifyRefNames(row.refNames),
-        isMerge: row.parentHashes.length > 1,
-        parentHashes: row.parentHashes,
-        path: normalizeViewerPath(
-          this.relativePath(path.resolve(repoRoot, row.path))
-        ),
-        oldPath: normalizeViewerPath(
-          this.relativePath(path.resolve(repoRoot, row.oldPath))
-        ),
-      } satisfies WorkspaceFileHistoryEntry));
+      .map(
+        (row) =>
+          ({
+            hash: row.hash,
+            shortHash: row.shortHash,
+            subject: row.subject,
+            author: row.author,
+            relativeDate: row.relativeDate,
+            isHead: row.hash === headHash,
+            pushed: !unpushedHashes.has(row.hash),
+            refs: classifyRefNames(row.refNames),
+            isMerge: row.parentHashes.length > 1,
+            parentHashes: row.parentHashes,
+            path: normalizeViewerPath(
+              this.relativePath(path.resolve(repoRoot, row.path))
+            ),
+            oldPath: normalizeViewerPath(
+              this.relativePath(path.resolve(repoRoot, row.oldPath))
+            ),
+          }) satisfies WorkspaceFileHistoryEntry
+      );
 
     const snapshot: FileHistorySnapshot = {
       historyId: this.createFileHistoryId(),
@@ -1906,9 +1910,7 @@ export class HostedWorkspaceViewerService {
 
     const resolvedCommit = await resolveCommit(repoRoot, commit);
 
-    const requestedGitPath = toGitPath(
-      this.relativeToRepo(resolved, repoRoot)
-    );
+    const requestedGitPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
     const changedFiles = await getChangedFilesWithBinaryStatus(repoRoot, [
       "show",
       "--format=",
@@ -2056,13 +2058,7 @@ export class HostedWorkspaceViewerService {
     try {
       const { stdout } = await execFileAsync(
         "git",
-        [
-          "-C",
-          repoRoot,
-          "rev-list",
-          "--no-walk",
-          `@{upstream}..${headHash}`,
-        ],
+        ["-C", repoRoot, "rev-list", "--no-walk", `@{upstream}..${headHash}`],
         { timeout: GIT_TIMEOUT_MS }
       );
       return new Set(stdout.trim().split("\n").filter(Boolean));

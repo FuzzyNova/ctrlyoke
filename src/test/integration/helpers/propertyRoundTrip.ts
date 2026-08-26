@@ -3,7 +3,10 @@ import { WorkflowOrchestrator } from "../../../core/WorkflowOrchestrator";
 import { WorkingFileManager } from "../../../core/WorkingFileManager";
 import { WorkflowLineageRepository } from "../../../core/orchestration/WorkflowLineageRepository";
 import * as WorkflowPaths from "../../../utils/WorkflowPaths";
-import { EXECUTION_STATES } from "../../../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "../../../types/DashboardConstants";
 import { WebviewSettingsSync } from "../../../ui/WebviewSettingsSync";
 import type {
   WorkflowKey,
@@ -175,7 +178,11 @@ export function createRoundTripHarness(
   internal.viewAddressRegistry = new Map([
     [
       TEST_CLIENT_ID,
-      { workflowKey: run.workflowKey, kind: "run", runRef: run.runRef },
+      {
+        workflowKey: run.workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: run.runRef,
+      },
     ],
   ]);
   internal.viewMessageSinks = new Map();
@@ -217,7 +224,7 @@ export function createRoundTripHarness(
       return {
         address: {
           workflowKey: run.workflowKey,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: run.runRef,
         },
         expectedDefinitionRevision: definition.definitionRevision ?? 1,

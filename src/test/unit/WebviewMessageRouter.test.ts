@@ -18,6 +18,7 @@ import {
   END_CONDITION_SCRIPT_TYPES,
   USER_FEEDBACK_SEVERITY,
   VSCODE_COMMANDS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
 import { WorkflowVariantService } from "../../core/orchestration/WorkflowVariantService";
 import { VsCodeUserFeedbackSink } from "../../platform/VsCodeUserFeedbackSink";
@@ -491,7 +492,10 @@ suite("WebviewMessageRouter — workflow variant delivery", () => {
     let createCount = 0;
     WorkflowVariantService.prototype.createWorkflowVariant = async () => {
       createCount += 1;
-      return { workflowKey: "created-workflow" as never, kind: "draft" };
+      return {
+        workflowKey: "created-workflow" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      };
     };
     const browserMessages: unknown[] = [];
     const otherClientMessages: unknown[] = [];
@@ -528,7 +532,7 @@ suite("WebviewMessageRouter — workflow variant delivery", () => {
     let createCount = 0;
     WorkflowVariantService.prototype.createWorkflowVariant = async () => ({
       workflowKey: `created-${++createCount}` as never,
-      kind: "draft",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
     });
     const messages: unknown[] = [];
     const router = buildRouter(undefined);
@@ -602,7 +606,10 @@ suite(
 
       await router.route({
         type: MESSAGE_TYPES.LOAD_RUN_VIEW,
-        address: { workflowKey: "workflow-a", kind: "draft" },
+        address: {
+          workflowKey: "workflow-a",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
         requestId: "run-view-42",
       });
 
@@ -641,7 +648,7 @@ suite(
         type: MESSAGE_TYPES.LOAD_RUN_VIEW,
         address: {
           workflowKey: "workflow-a",
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "run-2026-01-01T00-00-00-000Z",
         },
         requestId: "run-view-43",
@@ -665,7 +672,10 @@ suite("WebviewMessageRouter — execution preview transport", () => {
       () =>
         ({
           buildExecutionPreviewForClient: async () => ({
-            address: { workflowKey: "workflow-a", kind: "draft" },
+            address: {
+              workflowKey: "workflow-a",
+              kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+            },
             displayedDefinitionRevision: 7,
             preview: {
               workflow: {

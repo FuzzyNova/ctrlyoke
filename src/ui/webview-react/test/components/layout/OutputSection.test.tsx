@@ -6,6 +6,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useTerminalStore } from "@store/terminalStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 const applyScrollTargetSpy = vi.fn();
 const closeFindSpy = vi.fn();
@@ -434,7 +435,7 @@ describe("OutputSection", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-historical" as never,
       },
       executionRunRef: "run-live",
@@ -477,7 +478,7 @@ describe("OutputSection", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-live" as never,
       },
       executionRunRef: "run-live",
@@ -529,7 +530,7 @@ describe("OutputSection", () => {
       ],
       displayedViewAddress: {
         workflowKey: "workflow-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-live" as never,
       },
       executionRunRef: "run-live" as never,
@@ -574,7 +575,7 @@ describe("OutputSection", () => {
       loadedWorkflows: [],
       displayedViewAddress: {
         workflowKey: "workflow-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-completed" as never,
       },
       executionRunRef: "run-completed" as never,
@@ -630,7 +631,7 @@ describe("OutputSection", () => {
       ],
       displayedViewAddress: {
         workflowKey: "workflow-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-historical" as never,
       },
       executionRunRef: "run-live",

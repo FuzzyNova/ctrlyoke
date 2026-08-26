@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { useUiStore } from "@store/uiStore";
 import { EXECUTION_STATES } from "@/types/messages";
 import type { ExecutionState, WorkflowSummary } from "@/types/messages";
-import { USER_FEEDBACK_SEVERITY } from "@root/types/DashboardConstants";
+import {
+  USER_FEEDBACK_SEVERITY,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 import {
   DEFAULT_WORKSPACE_ENTRY_SORT,
   WORKSPACE_ENTRY_SORT_DIRECTIONS,
@@ -205,7 +208,7 @@ describe("history search state", () => {
     store().setPendingHistorySearchNavigation({
       address: {
         workflowKey: "wf-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2026-07-20T10-30-00-000Z" as never,
       },
       findQuery: "needle",
@@ -219,7 +222,7 @@ describe("history search state", () => {
     expect(store().pendingHistorySearchNavigation).toEqual({
       address: {
         workflowKey: "wf-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2026-07-20T10-30-00-000Z" as never,
       },
       findQuery: "needle",
@@ -256,7 +259,10 @@ describe("save workflow dialog", () => {
   it("opens with data and closes", () => {
     store().openSaveWorkflowDialog({
       requestId: "save-1",
-      address: { workflowKey: "workflow-1" as any, kind: "draft" },
+      address: {
+        workflowKey: "workflow-1" as any,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
       title: "Save draft",
       defaultPath: "/workspace/wf.ctrlyoke.yaml",
       defaultFormat: "yaml",
@@ -272,7 +278,10 @@ describe("save workflow dialog", () => {
   it("ignores stale save-path responses after the destination changes or dialog closes", () => {
     store().openSaveWorkflowDialog({
       requestId: "save-1",
-      address: { workflowKey: "workflow-1" as any, kind: "draft" },
+      address: {
+        workflowKey: "workflow-1" as any,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
       title: "Save draft",
       defaultPath: "/workspace/wf.ctrlyoke.yaml",
       defaultFormat: "yaml",
@@ -280,17 +289,26 @@ describe("save workflow dialog", () => {
     store().beginSavePathCheck(
       "save-1:path:1",
       "/workspace/first.ctrlyoke.yaml",
-      { workflowKey: "workflow-1" as any, kind: "draft" }
+      {
+        workflowKey: "workflow-1" as any,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      }
     );
     store().beginSavePathCheck(
       "save-1:path:2",
       "/workspace/second.ctrlyoke.yaml",
-      { workflowKey: "workflow-1" as any, kind: "draft" }
+      {
+        workflowKey: "workflow-1" as any,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      }
     );
     store().resolveSavePathCheck({
       requestId: "save-1:path:1",
       path: "/workspace/first.ctrlyoke.yaml",
-      address: { workflowKey: "workflow-1" as any, kind: "draft" },
+      address: {
+        workflowKey: "workflow-1" as any,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
       exists: true,
       bundlePreview: {
         copyCount: 99,
@@ -307,7 +325,10 @@ describe("save workflow dialog", () => {
     store().resolveSavePathCheck({
       requestId: "save-1:path:2",
       path: "/workspace/second.ctrlyoke.yaml",
-      address: { workflowKey: "workflow-1" as any, kind: "draft" },
+      address: {
+        workflowKey: "workflow-1" as any,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
       exists: true,
       bundlePreview: {
         copyCount: 2,
@@ -326,7 +347,10 @@ describe("save workflow dialog", () => {
     store().resolveSavePathCheck({
       requestId: "save-1:path:2",
       path: "/workspace/second.ctrlyoke.yaml",
-      address: { workflowKey: "workflow-1" as any, kind: "draft" },
+      address: {
+        workflowKey: "workflow-1" as any,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
       exists: true,
       bundlePreview: {
         copyCount: 2,
@@ -494,7 +518,11 @@ describe("setDisplayedRunView", () => {
       hasMixedModels: false,
     };
     store().setDisplayedRunView(
-      { workflowKey: "wf-1" as never, kind: "run", runRef: run.runRef },
+      {
+        workflowKey: "wf-1" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: run.runRef,
+      },
       [run],
       undefined,
       { definitionRevision: 3, descriptorRevision: 8 },
@@ -506,7 +534,7 @@ describe("setDisplayedRunView", () => {
     });
 
     store().setDisplayedRunView(
-      { workflowKey: "wf-1" as never, kind: "draft" },
+      { workflowKey: "wf-1" as never, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
       [run],
       undefined,
       { definitionRevision: 1, descriptorRevision: 9 }
@@ -540,7 +568,7 @@ describe("descriptor revision monotonicity", () => {
   it("adopts the incoming descriptor revision verbatim on an address switch", () => {
     store().setDisplayedViewIdentity(runAddress, 2, 6);
     store().setDisplayedViewIdentity(
-      { workflowKey: "wf-2" as never, kind: "draft" },
+      { workflowKey: "wf-2" as never, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
       1,
       2
     );
@@ -564,7 +592,7 @@ describe("descriptor revision monotonicity", () => {
     store().adoptDescriptorRevision(runAddress, 4);
     expect(store().displayedDescriptorRevision).toBe(6);
     store().adoptDescriptorRevision(
-      { workflowKey: "other" as never, kind: "draft" },
+      { workflowKey: "other" as never, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
       9
     );
     expect(store().displayedDescriptorRevision).toBe(6);
@@ -587,7 +615,11 @@ describe("requestRunViewLoad", () => {
 
   it("carries summaries and the executing run across runs of the same lineage", () => {
     store().setDisplayedRunView(
-      { workflowKey: "wf-1" as never, kind: "run", runRef: summary.runRef },
+      {
+        workflowKey: "wf-1" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: summary.runRef,
+      },
       [summary],
       summary.runRef
     );
@@ -595,7 +627,7 @@ describe("requestRunViewLoad", () => {
     store().requestRunViewLoad(
       {
         workflowKey: "wf-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2026-07-19T10-30-00-000Z" as never,
       },
       [summary],
@@ -608,7 +640,11 @@ describe("requestRunViewLoad", () => {
 
   it("drops the previous lineage's summaries and executing run on a workflow switch", () => {
     store().setDisplayedRunView(
-      { workflowKey: "wf-1" as never, kind: "run", runRef: summary.runRef },
+      {
+        workflowKey: "wf-1" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: summary.runRef,
+      },
       [summary],
       summary.runRef
     );
@@ -616,7 +652,7 @@ describe("requestRunViewLoad", () => {
     store().requestRunViewLoad(
       {
         workflowKey: "wf-2" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2026-07-21T10-30-00-000Z" as never,
       },
       [summary],
@@ -631,7 +667,11 @@ describe("requestRunViewLoad", () => {
 
   it("records a pending switch for cross-lineage requests only", () => {
     store().setDisplayedRunView(
-      { workflowKey: "wf-1" as never, kind: "run", runRef: summary.runRef },
+      {
+        workflowKey: "wf-1" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: summary.runRef,
+      },
       [summary],
       summary.runRef
     );
@@ -657,7 +697,7 @@ describe("requestRunViewLoad", () => {
     store().requestRunViewLoad(
       {
         workflowKey: "wf-2" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2026-07-21T10-30-00-000Z" as never,
       },
       []
@@ -667,7 +707,7 @@ describe("requestRunViewLoad", () => {
 
   it("clearPendingRunViewLoad clears the pending switch with the request", () => {
     store().requestRunViewLoad(
-      { workflowKey: "wf-9" as never, kind: "draft" },
+      { workflowKey: "wf-9" as never, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
       [],
       undefined,
       "Somewhere else"
@@ -685,7 +725,7 @@ describe("requestRunViewLoad", () => {
     // rejected/lost after this point would be indistinguishable from one that
     // genuinely arrived and applied.
     store().requestRunViewLoad(
-      { workflowKey: "wf-9" as never, kind: "draft" },
+      { workflowKey: "wf-9" as never, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
       []
     );
     expect(store().appliedViewAddress).toBeNull();
@@ -719,14 +759,20 @@ describe("setRecentWorkflows", () => {
   it("replaces recent workflows list", () => {
     store().setRecentWorkflows([
       {
-        address: { workflowKey: "wf1" as never, kind: "draft" },
+        address: {
+          workflowKey: "wf1" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
         workflowName: "wf1",
         executionState: "idle",
         lastModifiedAt: 1000,
         isFavorite: true,
       },
       {
-        address: { workflowKey: "wf2" as never, kind: "draft" },
+        address: {
+          workflowKey: "wf2" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
         workflowName: "wf2",
         executionState: "completed",
         lastModifiedAt: 900,
@@ -786,7 +832,10 @@ describe("resetUi", () => {
   it("clears modal and transient state back to defaults", () => {
     store().openSaveWorkflowDialog({
       requestId: "save-1",
-      address: { workflowKey: "workflow-1" as any, kind: "draft" },
+      address: {
+        workflowKey: "workflow-1" as any,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
       title: "Save draft",
       defaultPath: "/wf.yaml",
       defaultFormat: "yaml",

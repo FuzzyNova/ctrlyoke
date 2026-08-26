@@ -23,6 +23,7 @@ import {
   USER_FEEDBACK_SEVERITY,
   isStatusLineTrackingHarnessId,
   type StatusLineTrackingHarnessId,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
@@ -567,7 +568,7 @@ export class WebviewSettingsSync {
     // lineage for a client whose bound instance happens to be blank — while the
     // property itself still lands on the addressed run.
     let createdWorkingFile = false;
-    if (mutation?.address.kind !== "run") {
+    if (mutation?.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       if (!orchestrator.getQueueState(clientId)?.workingFilePath) {
         await orchestrator.ensureEphemeralWorkingFile(
           { initialProperties: properties },

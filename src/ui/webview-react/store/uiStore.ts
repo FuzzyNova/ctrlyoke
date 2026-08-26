@@ -40,6 +40,7 @@ import {
   USER_FEEDBACK_SEVERITY,
   type UserFeedbackSeverity,
   HISTORY_EVENT_KINDS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import {
   ALL_WORKFLOW_HARNESSES,
@@ -1682,7 +1683,7 @@ export const useUiStore = create<UiState & UiActions>()(
           ),
           pendingRewind: pendingRewind ?? null,
           runSummaries: summaries,
-          isViewingHistory: address.kind === "run",
+          isViewingHistory: address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           viewedLineageIsSystemGenerated: isSystemGenerated ?? false,
         })),
 
@@ -1774,7 +1775,10 @@ export const useUiStore = create<UiState & UiActions>()(
       // instead of lagging for the run's entire duration.
       markExecutionRunStarted: () =>
         set((state) => {
-          if (state.displayedViewAddress?.kind !== "run") return state;
+          if (
+            state.displayedViewAddress?.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN
+          )
+            return state;
           const runRef = state.displayedViewAddress.runRef;
           if (state.executionRunRef === runRef) return state;
           return {

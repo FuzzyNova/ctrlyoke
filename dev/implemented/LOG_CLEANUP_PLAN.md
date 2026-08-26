@@ -208,13 +208,13 @@ dev-build start/completion remain INFO; model-registry, session-resolution, lock
 wiring diagnostics remain DEBUG as internal bookkeeping.
 
 **Group 7 decisions (2026-08-24):** Prompt/script/branch completion failures are TRACE because
- they can happen on every editor keystroke while the editor safely falls back to an empty result;
- prior-context opening, agent/skill discovery, and invalid harness requests are WARN because they
- are recoverable degraded paths. Save As success is INFO because it is a user-visible artifact
- completion; recent-workflow CLI-lock/normalization diagnostics are TRACE because the workflow list
- can request them repeatedly. The custom-template router catch was removed because the serializer
- already reports that failure to the client. History-removal cleanup now logs its DEBUG success only
- after deletion really succeeds.
+they can happen on every editor keystroke while the editor safely falls back to an empty result;
+prior-context opening, agent/skill discovery, and invalid harness requests are WARN because they
+are recoverable degraded paths. Save As success is INFO because it is a user-visible artifact
+completion; recent-workflow CLI-lock/normalization diagnostics are TRACE because the workflow list
+can request them repeatedly. The custom-template router catch was removed because the serializer
+already reports that failure to the client. History-removal cleanup now logs its DEBUG success only
+after deletion really succeeds.
 
 Hosted workspace-viewer path/read failures that produce a client-facing 400 are WARN, while the
 server's outer unexpected `/tree` failure and other 500 responses remain ERROR. Expired or failed

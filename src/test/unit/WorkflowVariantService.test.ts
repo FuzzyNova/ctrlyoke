@@ -7,6 +7,7 @@ import {
   EXECUTION_STATES,
   HARNESS_IDS,
   type HarnessId,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
 import type {
   RunRef,
@@ -115,7 +116,10 @@ suite("WorkflowVariantService", () => {
     const address = await new WorkflowVariantService(
       workspace
     ).createWorkflowVariant({
-      source: { workflowKey: sourceKey, kind: "draft" },
+      source: {
+        workflowKey: sourceKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
       workflowName: "Source Copy",
       overrides: {
         harness: HARNESS_IDS.CODEX_CLI,
@@ -184,7 +188,11 @@ suite("WorkflowVariantService", () => {
     const address = await new WorkflowVariantService(
       workspace
     ).createWorkflowVariant({
-      source: { workflowKey: sourceKey, kind: "run", runRef: firstRun },
+      source: {
+        workflowKey: sourceKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: firstRun,
+      },
       workflowName: "From First Run",
     });
     const copied = await WorkingFileManager.readWorkingFileFromDisk(
@@ -220,7 +228,10 @@ suite("WorkflowVariantService", () => {
     const address = await new WorkflowVariantService(
       workspace
     ).createWorkflowVariant({
-      source: { workflowKey: sourceKey, kind: "draft" },
+      source: {
+        workflowKey: sourceKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
       workflowName: "Pinned Copy",
       overrides: { harness: HARNESS_IDS.CODEX_CLI },
     });
@@ -261,7 +272,10 @@ suite("WorkflowVariantService", () => {
         repository,
         failingWriter
       ).createWorkflowVariant({
-        source: { workflowKey: sourceKey, kind: "draft" },
+        source: {
+          workflowKey: sourceKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
         workflowName: "Never Written",
       }),
       /disk full/
@@ -280,11 +294,17 @@ suite("WorkflowVariantService", () => {
     );
     const service = new WorkflowVariantService(workspace);
     const first = await service.createWorkflowVariant({
-      source: { workflowKey: sourceKey, kind: "draft" },
+      source: {
+        workflowKey: sourceKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
       workflowName: "Same Name",
     });
     const second = await service.createWorkflowVariant({
-      source: { workflowKey: sourceKey, kind: "draft" },
+      source: {
+        workflowKey: sourceKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
       workflowName: "Same Name",
     });
 

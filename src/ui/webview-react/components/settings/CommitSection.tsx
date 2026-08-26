@@ -15,6 +15,7 @@ import { HarnessDropdown } from "@components/shared/HarnessDropdown";
 import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import { LocalTextInput, LocalTextarea } from "@components/shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -70,7 +71,7 @@ export function CommitSection({
     if (!record?.workflowKey || !record.runRef) return;
 
     const address: WorkflowViewAddress = {
-      kind: "run",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
       workflowKey: record.workflowKey as WorkflowViewAddress["workflowKey"],
       runRef: record.runRef as Extract<
         WorkflowViewAddress,

@@ -6,6 +6,7 @@ import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES, SETTING_SCOPES } from "@/types/messages";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 function createSettings(): FullGlobalSettings {
   return {
@@ -129,7 +130,7 @@ describe("CommitSection", () => {
     expect(window.vscodeApi?.postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.LOAD_RUN_VIEW,
       address: {
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         workflowKey: "commit-message-generation-20260824-120000",
         runRef: "run-20260824-120000",
       },

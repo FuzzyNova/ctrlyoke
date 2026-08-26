@@ -11,6 +11,7 @@ import { TemplateModal } from "@components/workflow/TemplateModal";
 import { SaveWorkflowDialog } from "@components/workflow/SaveWorkflowDialog";
 import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES, WORKFLOW_FILE_FORMATS } from "@/types/messages";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 const postMessage = vi.fn();
 
@@ -118,7 +119,7 @@ describe("template saving", () => {
       requestId: "save-1",
       address: {
         workflowKey: "workflow-a" as never,
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       },
       title: "Save workflow",
       defaultPath: "workflow.ctrlyoke.yaml",
@@ -143,7 +144,7 @@ describe("template saving", () => {
       requestId: "save-1",
       address: {
         workflowKey: "workflow-a",
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       },
       name: "snapshot",
       scope: "workspace",

@@ -37,16 +37,12 @@ describe("useWorkspaceExplorerContextMenu file history", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(
-      screen.getByRole("button", { name: "View File History" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "View File History" }));
     expect(onViewFileHistory).toHaveBeenCalledWith("src/file.ts");
 
     cleanup();
     render(
-      <TestHarness
-        entry={{ name: "src", path: "src", kind: "directory" }}
-      />
+      <TestHarness entry={{ name: "src", path: "src", kind: "directory" }} />
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
     expect(

@@ -13,7 +13,11 @@ import {
   ALL_WORKFLOW_STATES,
 } from "@utils/dateRangeFilter";
 import { MESSAGE_TYPES } from "@/types/messages";
-import { EXECUTION_STATES, HARNESS_IDS } from "@root/types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  HARNESS_IDS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 
 const postMessage = vi.mocked(window.vscodeApi!.postMessage);
 
@@ -225,7 +229,7 @@ describe("HistorySearchDrawer filters", () => {
       useUiStore.setState({
         displayedViewAddress: {
           workflowKey: "workflow-1" as never,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "run-1" as never,
         },
       });

@@ -18,6 +18,7 @@ import {
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
   RUNNER_IDS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
 
 function createOrchestratorHarness() {
@@ -545,8 +546,22 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     const viewedRun = "run-2026-07-20T09-30-00-000Z" as never;
 
     internal.viewAddressRegistry = new Map([
-      ["client-a", { workflowKey, kind: "run", runRef: executingRun }],
-      ["client-b", { workflowKey, kind: "run", runRef: viewedRun }],
+      [
+        "client-a",
+        {
+          workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: executingRun,
+        },
+      ],
+      [
+        "client-b",
+        {
+          workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: viewedRun,
+        },
+      ],
     ]);
     internal.instances = new Map([
       [
@@ -565,12 +580,12 @@ suite("WorkflowOrchestrator handleClientReady", () => {
 
     assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
       workflowKey,
-      kind: "run",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
       runRef: executingRun,
     });
     assert.deepStrictEqual(orchestrator.getViewAddress("client-b"), {
       workflowKey,
-      kind: "run",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
       runRef: viewedRun,
     });
     assert.strictEqual(internal.findExecutionRunRef(workflowKey), executingRun);
@@ -621,7 +636,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     internal.viewerRegistry.set("client-a", "instance-1");
     internal.viewAddressRegistry.set("client-a", {
       workflowKey,
-      kind: "draft",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
     });
 
     const loaded: unknown[] = [];
@@ -637,7 +652,10 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     });
 
     assert.deepStrictEqual(loaded, [
-      { address: { workflowKey, kind: "run", runRef }, clients: ["client-a"] },
+      {
+        address: { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef },
+        clients: ["client-a"],
+      },
     ]);
   });
 
@@ -651,7 +669,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     });
 
     await internal.bindClientToAddressedLineage(
-      { workflowKey: other, kind: "draft" },
+      { workflowKey: other, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
       () => undefined,
       "client-a"
     );
@@ -674,7 +692,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     await internal.bindClientToAddressedLineage(
       {
         workflowKey: "bound" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2026-07-19T10-30-00-000Z" as never,
       },
       () => undefined,
@@ -698,7 +716,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     });
 
     await internal.bindClientToAddressedLineage(
-      { workflowKey: other, kind: "draft" },
+      { workflowKey: other, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
       () => undefined,
       "client-a"
     );
@@ -741,7 +759,11 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     ];
 
     await internal.bindClientToAddressedLineage(
-      { workflowKey: other, kind: "run", runRef: historicalRun },
+      {
+        workflowKey: other,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: historicalRun,
+      },
       () => undefined,
       "client-a"
     );
@@ -786,7 +808,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     await internal.bindClientToAddressedLineage(
       {
         workflowKey: boundKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: historicalRun,
       },
       () => undefined,
@@ -830,7 +852,11 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     ];
 
     await internal.bindClientToAddressedLineage(
-      { workflowKey: boundKey, kind: "run", runRef: seededRun },
+      {
+        workflowKey: boundKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: seededRun,
+      },
       () => undefined,
       "client-a"
     );
@@ -910,7 +936,11 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     // The nested bind that `replayWorkflowStateTo` performs via its own
     // `loadRunViewForClient` — the step that used to revert the binding.
     await internal.bindClientToAddressedLineage(
-      { workflowKey: boundKey, kind: "run", runRef: startedRun },
+      {
+        workflowKey: boundKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: startedRun,
+      },
       () => undefined,
       "client-a"
     );
@@ -1018,7 +1048,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     const runRef = "run-2026-07-21T10-30-00-000Z" as never;
 
     await internal.bindClientToAddressedLineage(
-      { workflowKey: other, kind: "run", runRef },
+      { workflowKey: other, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef },
       () => undefined,
       "client-a"
     );
@@ -1129,9 +1159,30 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       internal.instances = new Map();
       internal.cliSessions = new Map();
       internal.viewAddressRegistry = new Map([
-        [PANEL_CLIENT_ID, { workflowKey, kind: "run", runRef: newer.runRef }],
-        ["browser:delete", { workflowKey, kind: "run", runRef: newer.runRef }],
-        ["browser:older", { workflowKey, kind: "run", runRef: older.runRef }],
+        [
+          PANEL_CLIENT_ID,
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: newer.runRef,
+          },
+        ],
+        [
+          "browser:delete",
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: newer.runRef,
+          },
+        ],
+        [
+          "browser:older",
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: older.runRef,
+          },
+        ],
       ]);
       const refreshed: Array<{ clientId: string; address: unknown }> = [];
       internal.viewMessageSinks = new Map([
@@ -1167,7 +1218,11 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         `Run ${newer.runId} was deleted — you're now viewing Run ${older.runId}.`
       );
 
-      const fallback = { workflowKey, kind: "run", runRef: older.runRef };
+      const fallback = {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: older.runRef,
+      };
       assert.deepStrictEqual(
         orchestrator.getViewAddress(PANEL_CLIENT_ID),
         fallback
@@ -1264,7 +1319,10 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       internal.viewAddressRegistry = new Map([
         [
           PANEL_CLIENT_ID,
-          { workflowKey: "other-lineage" as never, kind: "draft" },
+          {
+            workflowKey: "other-lineage" as never,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          },
         ],
       ]);
       internal.viewMessageSinks = new Map();
@@ -1382,7 +1440,14 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       ]);
       internal.cliSessions = new Map();
       internal.viewAddressRegistry = new Map([
-        [PANEL_CLIENT_ID, { workflowKey, kind: "run", runRef: first.runRef }],
+        [
+          PANEL_CLIENT_ID,
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: first.runRef,
+          },
+        ],
       ]);
       const refreshed: Array<{ clientId: string; address: unknown }> = [];
       internal.viewMessageSinks = new Map();
@@ -1408,7 +1473,11 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       assert.deepStrictEqual(refreshed, [
         {
           clientId: PANEL_CLIENT_ID,
-          address: { workflowKey, kind: "run", runRef: second.runRef },
+          address: {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: second.runRef,
+          },
         },
       ]);
     } finally {
@@ -1531,7 +1600,11 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         workflowId,
         "the client must be bound before addressed loading awaits"
       );
-      assert.deepStrictEqual(address, { workflowKey, kind: "run", runRef });
+      assert.deepStrictEqual(address, {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef,
+      });
       operations.push("run-view");
     };
 
@@ -1603,7 +1676,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       };
 
       await orchestrator.loadRunViewForClient(
-        { workflowKey, kind: "draft" },
+        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
         (message) => {
           const typed = message as { type?: string };
           sent.push(typed);
@@ -1746,7 +1819,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       };
 
       await orchestrator.loadRunViewForClient(
-        { workflowKey, kind: "run", runRef },
+        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef },
         (message) => {
           operations.push((message as { type?: string }).type ?? "unknown");
         },
@@ -1843,7 +1916,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       };
 
       await internal.publishRunViewToClients(
-        { workflowKey, kind: "run", runRef },
+        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef },
         [
           { clientId: "panel", send: collect("panel") },
           { clientId: "browser:1", send: collect("browser:1") },
@@ -1870,7 +1943,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       for (const clientId of ["panel", "browser:1"]) {
         assert.deepStrictEqual(
           orchestrator.getViewAddress(clientId),
-          { workflowKey, kind: "run", runRef },
+          { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef },
           "delivery still owns the per-client address and sink registration"
         );
         assert.ok(internal.viewMessageSinks.has(clientId));
@@ -1940,7 +2013,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       };
 
       await orchestrator.loadRunViewForClient(
-        { workflowKey, kind: "run", runRef },
+        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef },
         (message) => sent.push(message as Record<string, unknown>),
         "browser:switch",
         "run-view-request-executing"
@@ -2034,7 +2107,11 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     const workflowId = "workflow-live";
     const workflowKey = "live-lineage" as never;
     const runRef = "run-2026-07-21T12-00-00-000Z" as never;
-    const address = { workflowKey, kind: "run", runRef };
+    const address = {
+      workflowKey,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+      runRef,
+    };
     const operations: string[] = [];
     const sent: unknown[] = [];
 
@@ -2153,8 +2230,22 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         ["client-b", "execution-instance"],
       ]);
       internal.viewAddressRegistry = new Map([
-        ["client-a", { workflowKey, kind: "run", runRef: promoted.runRef }],
-        ["client-b", { workflowKey, kind: "run", runRef: promoted.runRef }],
+        [
+          "client-a",
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: promoted.runRef,
+          },
+        ],
+        [
+          "client-b",
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: promoted.runRef,
+          },
+        ],
       ]);
       internal.viewMessageSinks = new Map();
       let primedRevision: number | undefined;
@@ -2179,7 +2270,11 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
 
       await orchestrator.prepareDefinitionMutation(
         {
-          address: { workflowKey, kind: "run", runRef: promoted.runRef },
+          address: {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: promoted.runRef,
+          },
           expectedDefinitionRevision: 1,
           expectedDescriptorRevision: descriptor.revision,
         },
@@ -2189,12 +2284,12 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
       assert.strictEqual(primedRevision, 1);
       assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
         workflowKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: promoted.runRef,
       });
       assert.deepStrictEqual(orchestrator.getViewAddress("client-b"), {
         workflowKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: promoted.runRef,
       });
       assert.strictEqual(
@@ -2250,7 +2345,14 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
       internal.lineageRepository = repository;
       internal.viewerRegistry = new Map([["client-a", "execution-instance"]]);
       internal.viewAddressRegistry = new Map([
-        ["client-a", { workflowKey, kind: "run", runRef: promoted.runRef }],
+        [
+          "client-a",
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: promoted.runRef,
+          },
+        ],
       ]);
       internal.instances = new Map([
         [
@@ -2278,7 +2380,11 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
 
       await orchestrator.prepareWorkflowPropertiesMutation(
         {
-          address: { workflowKey, kind: "run", runRef: promoted.runRef },
+          address: {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: promoted.runRef,
+          },
           expectedDefinitionRevision: 1,
           expectedDescriptorRevision: descriptor.revision,
         },
@@ -2288,7 +2394,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
       assert.strictEqual(expectedRevision, 1);
       assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
         workflowKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: promoted.runRef,
       });
     } finally {
@@ -2369,7 +2475,14 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
       internal.lineageRepository = repository;
       internal.viewerRegistry = new Map([["client-a", retained.id]]);
       internal.viewAddressRegistry = new Map([
-        ["client-a", { workflowKey, kind: "run", runRef: promoted.runRef }],
+        [
+          "client-a",
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: promoted.runRef,
+          },
+        ],
       ]);
       internal.instances = new Map();
       internal.retiredInstances = new Map([[retained.id, retained]]);
@@ -2377,7 +2490,11 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
 
       await orchestrator.prepareWorkflowPropertiesMutation(
         {
-          address: { workflowKey, kind: "run", runRef: promoted.runRef },
+          address: {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: promoted.runRef,
+          },
           expectedDefinitionRevision: 1,
           expectedDescriptorRevision: descriptor.revision,
         },
@@ -2447,13 +2564,24 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
       internal.retiredInstances = new Map();
       internal.cliSessions = new Map();
       internal.viewAddressRegistry = new Map([
-        ["client-a", { workflowKey, kind: "run", runRef: promoted.runRef }],
+        [
+          "client-a",
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: promoted.runRef,
+          },
+        ],
       ]);
       internal.viewMessageSinks = new Map([["client-a", () => undefined]]);
 
       await orchestrator.deletePromptFromQueue(
         {
-          address: { workflowKey, kind: "run", runRef: promoted.runRef },
+          address: {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: promoted.runRef,
+          },
           expectedDefinitionRevision: 1,
           expectedDescriptorRevision: descriptor.revision,
         },
@@ -2499,7 +2627,14 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
       internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
       internal.viewerRegistry = new Map([["client-a", "unrelated-instance"]]);
       internal.viewAddressRegistry = new Map([
-        ["client-a", { workflowKey: wf1, kind: "run", runRef: run1 }],
+        [
+          "client-a",
+          {
+            workflowKey: wf1,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: run1,
+          },
+        ],
       ]);
       internal.viewMessageSinks = new Map();
 
@@ -2525,7 +2660,11 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
 
       await orchestrator.deletePromptFromQueue(
         {
-          address: { workflowKey: wf1, kind: "run", runRef: run1 },
+          address: {
+            workflowKey: wf1,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: run1,
+          },
           expectedDefinitionRevision: 1,
           expectedDescriptorRevision: 1,
         },
@@ -2871,7 +3010,14 @@ suite("WorkflowOrchestrator addressed start position", () => {
       internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
       internal.instances = new Map();
       internal.viewAddressRegistry = new Map([
-        [PANEL_CLIENT_ID, { workflowKey, kind: "run", runRef: source.runRef }],
+        [
+          PANEL_CLIENT_ID,
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: source.runRef,
+          },
+        ],
       ]);
       internal.viewMessageSinks = new Map([[PANEL_CLIENT_ID, () => undefined]]);
       internal.lineageRepository = lineageRepository;
@@ -2913,13 +3059,21 @@ suite("WorkflowOrchestrator addressed start position", () => {
 
       assert.deepStrictEqual(loaded, [
         {
-          address: { workflowKey, kind: "run", runRef: result.runRef },
+          address: {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: result.runRef,
+          },
           clientId: PANEL_CLIENT_ID,
         },
       ]);
       assert.deepStrictEqual(
         internal.viewAddressRegistry.get(PANEL_CLIENT_ID),
-        { workflowKey, kind: "run", runRef: result.runRef }
+        {
+          workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: result.runRef,
+        }
       );
       // Clients left on the source run hold the same superseded revision.
       assert.deepStrictEqual(invalidated, [[workflowKey, source.runRef]]);
@@ -2983,11 +3137,19 @@ suite("WorkflowOrchestrator addressed start position", () => {
       internal.viewAddressRegistry = new Map([
         [
           PANEL_CLIENT_ID,
-          { workflowKey, kind: "run", runRef: historical.runRef },
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: historical.runRef,
+          },
         ],
         [
           "browser:rewind",
-          { workflowKey, kind: "run", runRef: historical.runRef },
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: historical.runRef,
+          },
         ],
       ]);
       internal.viewMessageSinks = new Map([
@@ -3094,7 +3256,11 @@ suite("WorkflowOrchestrator addressed start position", () => {
       internal.viewAddressRegistry = new Map([
         [
           PANEL_CLIENT_ID,
-          { workflowKey, kind: "run", runRef: promoted.runRef },
+          {
+            workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+            runRef: promoted.runRef,
+          },
         ],
       ]);
       internal.viewMessageSinks = new Map();
@@ -3104,7 +3270,7 @@ suite("WorkflowOrchestrator addressed start position", () => {
         {
           address: {
             workflowKey,
-            kind: "run",
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
             runRef: promoted.runRef,
           },
           expectedDefinitionRevision: 1,
@@ -3220,7 +3386,10 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     internal.cliSessions = new Map();
     internal.viewerRegistry = new Map();
     internal.viewAddressRegistry = new Map([
-      [PANEL_CLIENT_ID, { workflowKey, kind: "run", runRef }],
+      [
+        PANEL_CLIENT_ID,
+        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef },
+      ],
     ]);
     internal.viewMessageSinks = new Map();
     internal.lineageRepository = new WorkflowLineageRepository();
@@ -3321,7 +3490,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         {
           address: {
             workflowKey: historical.workflowKey,
-            kind: "run",
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
             runRef: historical.runRef,
           },
           expectedDefinitionRevision: 1,
@@ -3395,7 +3564,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         {
           address: {
             workflowKey: historical.workflowKey,
-            kind: "run",
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
             runRef: historical.runRef,
           },
           expectedDefinitionRevision: 1,
@@ -3460,7 +3629,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         {
           address: {
             workflowKey: run.workflowKey,
-            kind: "run",
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
             runRef: run.runRef,
           },
           expectedDefinitionRevision: 1,
@@ -3593,7 +3762,10 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       internal.retiredInstances = new Map();
       internal.cliSessions = new Map();
       internal.viewAddressRegistry = new Map([
-        [PANEL_CLIENT_ID, { workflowKey, kind: "draft" }],
+        [
+          PANEL_CLIENT_ID,
+          { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+        ],
       ]);
       internal.viewMessageSinks = new Map();
       internal.lineageRepository = new WorkflowLineageRepository();
@@ -3622,7 +3794,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       internal.getInstanceForClient = () => fakeInstance;
 
       await orchestrator.executeDraftAtAddress(
-        { workflowKey, kind: "draft" },
+        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
         1,
         descriptor.revision,
         PANEL_CLIENT_ID
@@ -3630,7 +3802,11 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
 
       assert.deepStrictEqual(
         internal.viewAddressRegistry.get(PANEL_CLIENT_ID),
-        { workflowKey, kind: "run", runRef: promotedRunRef }
+        {
+          workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: promotedRunRef,
+        }
       );
 
       releaseExecution();
@@ -3833,7 +4009,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         {
           address: {
             workflowKey: run.workflowKey,
-            kind: "run",
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
             runRef: run.runRef,
           },
           expectedDefinitionRevision: 1,
@@ -3932,7 +4108,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
         {
           address: {
             workflowKey: run.workflowKey,
-            kind: "run",
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
             runRef: run.runRef,
           },
           expectedDefinitionRevision: 1,
@@ -4145,8 +4321,14 @@ suite("WorkflowOrchestrator client view addressing", () => {
       ["client-b", "other-instance"],
     ]);
     internal.viewAddressRegistry = new Map([
-      ["client-a", { workflowKey: previousKey, kind: "draft" }],
-      ["client-b", { workflowKey: previousKey, kind: "draft" }],
+      [
+        "client-a",
+        { workflowKey: previousKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+      ],
+      [
+        "client-b",
+        { workflowKey: previousKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+      ],
     ]);
 
     internal.adoptInstanceLineageAddress(
@@ -4158,11 +4340,11 @@ suite("WorkflowOrchestrator client view addressing", () => {
 
     assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
       workflowKey: newKey,
-      kind: "draft",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
     });
     assert.deepStrictEqual(orchestrator.getViewAddress("client-b"), {
       workflowKey: previousKey,
-      kind: "draft",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
     });
   });
 
@@ -4183,7 +4365,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
 
     internal.viewerRegistry = new Map([["client-a", "instance"]]);
     internal.viewAddressRegistry = new Map([
-      ["client-a", { workflowKey, kind: "draft" }],
+      ["client-a", { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT }],
     ]);
 
     internal.adoptInstanceLineageAddress(
@@ -4193,7 +4375,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
 
     assert.deepStrictEqual(
       orchestrator.getViewAddress("client-a"),
-      { workflowKey, kind: "draft" },
+      { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
       "the draft address must survive adoption so syncExecutingRunViews can recognise this client"
     );
   });
@@ -4209,7 +4391,10 @@ suite("WorkflowOrchestrator client view addressing", () => {
 
     internal.viewerRegistry = new Map([["reader", "instance"]]);
     internal.viewAddressRegistry = new Map([
-      ["reader", { workflowKey, kind: "run", runRef: olderRun }],
+      [
+        "reader",
+        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef: olderRun },
+      ],
     ]);
 
     internal.adoptInstanceLineageAddress(
@@ -4219,7 +4404,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
 
     assert.deepStrictEqual(
       orchestrator.getViewAddress("reader"),
-      { workflowKey, kind: "run", runRef: olderRun },
+      { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef: olderRun },
       "only the run's initiator follows a promotion; a history reader keeps its view"
     );
   });
@@ -4241,7 +4426,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
 
     internal.viewerRegistry = new Map([["client-a", "instance"]]);
     internal.viewAddressRegistry = new Map([
-      ["client-a", { workflowKey, kind: "draft" }],
+      ["client-a", { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT }],
     ]);
     internal.viewMessageSinks = new Map([["client-a", () => undefined]]);
     const loaded: unknown[] = [];
@@ -4254,10 +4439,12 @@ suite("WorkflowOrchestrator client view addressing", () => {
     // RUNNING is emitted many times per run; only the first may publish.
     internal.syncExecutingRunViews(instance);
 
-    assert.deepStrictEqual(loaded, [{ workflowKey, kind: "run", runRef }]);
+    assert.deepStrictEqual(loaded, [
+      { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef },
+    ]);
     assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
       workflowKey,
-      kind: "run",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
       runRef,
     });
   });
@@ -4272,7 +4459,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
 
     internal.viewerRegistry = new Map([["client-a", "instance"]]);
     internal.viewAddressRegistry = new Map([
-      ["client-a", { workflowKey, kind: "draft" }],
+      ["client-a", { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT }],
     ]);
     internal.viewMessageSinks = new Map();
     internal.publishRunViewToClients = async () => {
@@ -4286,7 +4473,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
 
     assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
       workflowKey,
-      kind: "run",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
       runRef,
     });
   });
@@ -4328,7 +4515,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
     internal.viewerRegistry.set("client-a", instance.id);
     internal.viewAddressRegistry.set("client-a", {
       workflowKey,
-      kind: "draft",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
     });
     internal.viewMessageSinks.set("client-a", () => undefined);
     const loaded: unknown[] = [];
@@ -4346,12 +4533,12 @@ suite("WorkflowOrchestrator client view addressing", () => {
 
     assert.deepStrictEqual(
       loaded,
-      [{ workflowKey, kind: "run", runRef }],
+      [{ workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef }],
       "the failed start's run must be published to the stranded draft holder"
     );
     assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
       workflowKey,
-      kind: "run",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
       runRef,
     });
   });
@@ -4440,7 +4627,13 @@ suite("WorkflowOrchestrator client view addressing", () => {
 
     internal.viewerRegistry = new Map([["client-a", "old-instance"]]);
     internal.viewAddressRegistry = new Map([
-      ["client-a", { workflowKey: "old-lineage" as never, kind: "draft" }],
+      [
+        "client-a",
+        {
+          workflowKey: "old-lineage" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
+      ],
     ]);
     internal.instances = new Map([
       ["blank-instance", { getQueueState: () => ({}) }],
@@ -4494,14 +4687,14 @@ suite("WorkflowOrchestrator client view addressing", () => {
       internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
       internal.lineageRepository = repository;
       internal.viewAddressRegistry = new Map([
-        ["client-a", { workflowKey, kind: "draft" }],
+        ["client-a", { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT }],
       ]);
 
       const identity = await orchestrator.getViewIdentity("client-a");
 
       assert.deepStrictEqual(identity, {
         type: MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY,
-        address: { workflowKey, kind: "draft" },
+        address: { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
         runDirectory: WorkflowPaths.draftDir(workspace, workflowKey),
         definitionRevision: 7,
         descriptorRevision: descriptor.revision,
@@ -4518,16 +4711,32 @@ suite("WorkflowOrchestrator client view addressing", () => {
     const internal = orchestrator as any;
     const identity = {
       type: MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY,
-      address: { workflowKey: "wf-1", kind: "draft" },
+      address: { workflowKey: "wf-1", kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
       definitionRevision: 4,
       descriptorRevision: 2,
     };
     internal.getViewIdentity = async () => identity;
     internal.viewAddressRegistry = new Map([
-      ["writer", { workflowKey: "wf-1", kind: "draft" }],
-      ["same-address", { workflowKey: "wf-1", kind: "draft" }],
-      ["other-workflow", { workflowKey: "wf-2", kind: "draft" }],
-      ["other-run", { workflowKey: "wf-1", kind: "run", runRef: "run-1" }],
+      [
+        "writer",
+        { workflowKey: "wf-1", kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+      ],
+      [
+        "same-address",
+        { workflowKey: "wf-1", kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+      ],
+      [
+        "other-workflow",
+        { workflowKey: "wf-2", kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
+      ],
+      [
+        "other-run",
+        {
+          workflowKey: "wf-1",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: "run-1",
+        },
+      ],
     ]);
     const received: Record<string, unknown[]> = {
       writer: [],

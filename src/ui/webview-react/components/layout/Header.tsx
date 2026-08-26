@@ -37,6 +37,7 @@ import {
   type WorkflowExecutionControlAction,
 } from "@utils/status";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 let saveRequestSequence = 0;
 
@@ -214,14 +215,14 @@ export const Header: React.FC<{
     if (activeWorkflow?.workflowKey && activeWorkflow.runRef) {
       return {
         workflowKey: activeWorkflow.workflowKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: activeWorkflow.runRef,
       };
     }
     if (!executionRunRef || !displayedViewAddress) return null;
     return {
       workflowKey: displayedViewAddress.workflowKey,
-      kind: "run",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
       runRef: executionRunRef as Extract<
         WorkflowViewAddress,
         { kind: "run" }
@@ -250,7 +251,7 @@ export const Header: React.FC<{
       // can legitimately sit here having executed nothing at all. Offer Run for
       // it rather than Re-run, which would fork yet another empty run.
       viewedRunUnstarted:
-        displayedViewAddress?.kind === "run" &&
+        displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
         executionState === EXECUTION_STATES.IDLE &&
         currentStep === 0 &&
         !hasStepProgress,
@@ -317,7 +318,7 @@ export const Header: React.FC<{
   const postViewedRunAction = useCallback(
     (type: string) => {
       if (
-        displayedViewAddress?.kind !== "run" ||
+        displayedViewAddress?.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
         displayedDefinitionRevision === null ||
         displayedDescriptorRevision === null
       ) {
@@ -340,7 +341,7 @@ export const Header: React.FC<{
     (action: WorkflowExecutionControlAction) => {
       if (action === "run-draft") {
         if (
-          displayedViewAddress?.kind === "draft" &&
+          displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT &&
           displayedDefinitionRevision !== null &&
           displayedDescriptorRevision !== null
         ) {
@@ -936,33 +937,34 @@ export const Header: React.FC<{
           </button>
         </div>
       )}
-      {pendingRewind && displayedViewAddress?.kind === "run" && (
-        <div
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-xs bg-status-warning text-btn-fg border-b border-btn-border"
-          role="status"
-          aria-label={`Continuing run from step ${pendingRewind.fromStepIndex + 1}`}
-        >
-          <i className="codicon codicon-debug-continue" aria-hidden="true" />
-          <span>
-            Continuing run from step {pendingRewind.fromStepIndex + 1}
-          </span>
-          <span
-            className="inline-flex items-center gap-1 opacity-90 cursor-help"
-            title="Continuing crosses an undo-stack boundary — you won't be able to undo once you continue. All output history is preserved, but the working file's captured state for any re-run prompts will be overwritten."
+      {pendingRewind &&
+        displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN && (
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-xs bg-status-warning text-btn-fg border-b border-btn-border"
+            role="status"
+            aria-label={`Continuing run from step ${pendingRewind.fromStepIndex + 1}`}
           >
-            <i className="codicon codicon-info" aria-hidden="true" />
-            Can&apos;t be undone after continuing
-          </span>
-          <div className="ml-auto flex items-center gap-3">
-            <button
-              className="text-xs underline opacity-90 hover:opacity-100 focus-visible:outline focus-visible:outline-1"
-              onClick={handleDiscardContinuation}
+            <i className="codicon codicon-debug-continue" aria-hidden="true" />
+            <span>
+              Continuing run from step {pendingRewind.fromStepIndex + 1}
+            </span>
+            <span
+              className="inline-flex items-center gap-1 opacity-90 cursor-help"
+              title="Continuing crosses an undo-stack boundary — you won't be able to undo once you continue. All output history is preserved, but the working file's captured state for any re-run prompts will be overwritten."
             >
-              Discard Continuation
-            </button>
+              <i className="codicon codicon-info" aria-hidden="true" />
+              Can&apos;t be undone after continuing
+            </span>
+            <div className="ml-auto flex items-center gap-3">
+              <button
+                className="text-xs underline opacity-90 hover:opacity-100 focus-visible:outline focus-visible:outline-1"
+                onClick={handleDiscardContinuation}
+              >
+                Discard Continuation
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
     </>
   );
 };

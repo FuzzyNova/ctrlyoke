@@ -8,7 +8,10 @@ import { suite, test } from "mocha";
 import { WorkflowSerializer } from "../../ui/WorkflowSerializer";
 import { configService } from "../../config/CtrlYokeConfigService";
 import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
-import { MESSAGE_TYPES } from "../../types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "../../types/DashboardConstants";
 import type {
   WorkflowViewAddress,
   WorkflowKey,
@@ -322,7 +325,7 @@ suite("WorkflowSerializer", () => {
       const messages: any[] = [];
       const address = {
         workflowKey: "serializer-test-1",
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       } as WorkflowViewAddress;
 
       try {
@@ -400,7 +403,7 @@ suite("WorkflowSerializer", () => {
       const messages: any[] = [];
       const address = {
         workflowKey: "serializer-schema-test-1",
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       } as WorkflowViewAddress;
       const schemaFields = schemaBackedFieldNames();
       const promptStep = buildSchemaBackedStep(
@@ -543,7 +546,7 @@ suite("WorkflowSerializer", () => {
       );
       const address = {
         workflowKey: "serializer-bundle-roundtrip-1",
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       } as WorkflowViewAddress;
 
       try {
@@ -731,7 +734,7 @@ suite("WorkflowSerializer", () => {
       );
       const address = {
         workflowKey: "serializer-template-bundle-1",
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       } as WorkflowViewAddress;
       const messages: any[] = [];
       let saved = false;
@@ -860,7 +863,7 @@ suite("WorkflowSerializer", () => {
       const messages: any[] = [];
       const address = {
         workflowKey: "save-path-test-1",
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       } as WorkflowViewAddress;
 
       try {
@@ -935,11 +938,11 @@ suite("WorkflowSerializer", () => {
       const messages: any[] = [];
       const current = {
         workflowKey: "workflow-current-1",
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       } as WorkflowViewAddress;
       const stale = {
         workflowKey: "workflow-stale-1",
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       } as WorkflowViewAddress;
       const serializer = new WorkflowSerializer(
         (message) => messages.push(message),
@@ -975,7 +978,7 @@ suite("WorkflowSerializer", () => {
       const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
       const address = {
         workflowKey: "save-blocker-test-1",
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       } as WorkflowViewAddress;
       const outputPath = path.join(
         workspaceRoot,
@@ -1094,7 +1097,7 @@ suite("WorkflowSerializer", () => {
         );
         const address = {
           workflowKey: lineage.workflowKey,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: run.runRef,
         } as WorkflowViewAddress;
         const startedAt = Date.UTC(2026, 6, 20);
@@ -1236,7 +1239,7 @@ suite("WorkflowSerializer", () => {
         assert.deepStrictEqual(message.workflows[0].runNav, {
           primaryAddress: {
             workflowKey: lineage.workflowKey,
-            kind: "run",
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
             runRef,
           },
           primaryRunId: runId,
@@ -1286,7 +1289,7 @@ suite("WorkflowSerializer", () => {
         assert.deepStrictEqual(message.workflows[0].runNav, {
           primaryAddress: {
             workflowKey: lineage.workflowKey,
-            kind: "run",
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
             runRef: latestRunRef,
           },
           primaryRunId: latestRunId,
@@ -1322,7 +1325,10 @@ suite("WorkflowSerializer", () => {
           WorkflowPaths.draftDir(workspaceRoot, lineage.workflowKey)
         );
         assert.deepStrictEqual(message.workflows[0].runNav, {
-          primaryAddress: { workflowKey: lineage.workflowKey, kind: "draft" },
+          primaryAddress: {
+            workflowKey: lineage.workflowKey,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          },
           primaryRunId: undefined,
           runCount: 0,
           hasDraft: true,
@@ -1355,7 +1361,7 @@ suite("WorkflowSerializer", () => {
             lineage.workflowKey,
             (descriptor) => ({
               ...descriptor,
-              pendingEdit: { kind: "draft" },
+              pendingEdit: { kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
             })
           );
           await writeDraftWorkingFile(
@@ -1384,7 +1390,7 @@ suite("WorkflowSerializer", () => {
           assert.deepStrictEqual(message.workflows[0].runNav, {
             primaryAddress: {
               workflowKey: lineage.workflowKey,
-              kind: "run",
+              kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
               runRef,
             },
             primaryRunId: runId,

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { useUiStore } from "@store/uiStore";
 import type { RunRef, WorkflowKey } from "@root/types/CtrlYokeTypes";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 const RUN_ADDRESS = {
   workflowKey: "workflow-1" as WorkflowKey,
@@ -68,7 +69,7 @@ describe("useOutputUndoActions", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: RUN_ADDRESS.workflowKey,
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       },
     });
     const { result } = renderUndoActions();

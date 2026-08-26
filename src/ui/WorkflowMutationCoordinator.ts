@@ -1,5 +1,8 @@
 import { getErrorMessage } from "../utils/ErrorUtils";
-import { MESSAGE_TYPES } from "../types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { WorkflowDefinitionMutation } from "../types/WebviewMessageTypes";
@@ -135,7 +138,8 @@ export class WorkflowMutationCoordinator {
     }
   ): Promise<void> {
     if (
-      this.asWorkflowDefinitionMutation(message ?? {})?.address.kind !== "run"
+      this.asWorkflowDefinitionMutation(message ?? {})?.address.kind !==
+      WORKFLOW_VIEW_ADDRESS_KIND.RUN
     ) {
       const orchestrator = this.getOrchestrator();
       const address = orchestrator?.getViewAddress(ctx.clientId);

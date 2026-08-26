@@ -9,6 +9,7 @@ import {
 } from "@utils/runNavigation";
 import { MESSAGE_TYPES } from "@/types/messages";
 import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 const WORKFLOW_KEY = "wf-1" as never;
 
@@ -37,7 +38,7 @@ describe("isDrillableRunNav", () => {
       isDrillableRunNav({
         primaryAddress: {
           workflowKey: WORKFLOW_KEY,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "r1" as never,
         },
         primaryRunId: 1,
@@ -50,7 +51,10 @@ describe("isDrillableRunNav", () => {
   it("is false for a draft-only lineage", () => {
     expect(
       isDrillableRunNav({
-        primaryAddress: { workflowKey: WORKFLOW_KEY, kind: "draft" },
+        primaryAddress: {
+          workflowKey: WORKFLOW_KEY,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
         runCount: 0,
         hasDraft: true,
       })
@@ -62,7 +66,7 @@ describe("isDrillableRunNav", () => {
       isDrillableRunNav({
         primaryAddress: {
           workflowKey: WORKFLOW_KEY,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "r2" as never,
         },
         primaryRunId: 2,
@@ -75,7 +79,10 @@ describe("isDrillableRunNav", () => {
   it("is true for one run plus a draft", () => {
     expect(
       isDrillableRunNav({
-        primaryAddress: { workflowKey: WORKFLOW_KEY, kind: "draft" },
+        primaryAddress: {
+          workflowKey: WORKFLOW_KEY,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
         runCount: 1,
         hasDraft: true,
       })
@@ -191,7 +198,7 @@ describe("navigateToWorkflowAddress", () => {
       displayedViewAddress: address,
       appliedViewAddress: {
         workflowKey: "wf-other" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-old" as never,
       },
     });
@@ -234,7 +241,7 @@ describe("navigateToWorkflowAddress", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: WORKFLOW_KEY,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-1" as never,
       },
     });
@@ -264,7 +271,7 @@ describe("navigateToWorkflowAddress", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: WORKFLOW_KEY,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-old" as never,
       },
       executionRunRef: "run-executing" as never,

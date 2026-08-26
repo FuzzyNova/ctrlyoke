@@ -4,8 +4,14 @@ import { NavHistoryControls } from "@components/shared/NavHistoryControls";
 import { useNavHistoryStore } from "@/navigation/navHistoryStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import type { Route } from "@/navigation/route";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
-const A: Route = { workflow: { workflowKey: "a" as never, kind: "draft" } };
+const A: Route = {
+  workflow: {
+    workflowKey: "a" as never,
+    kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+  },
+};
 const B: Route = { viewer: "explorer", file: "src/a.ts" };
 
 beforeEach(() => {

@@ -22,6 +22,7 @@ import {
   type AttemptCostUnavailableReason,
   type WorkflowTokenCoverage,
   WORKTREE_MODES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "./DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 export type {
@@ -369,8 +370,12 @@ export type RunRef = string & { readonly __runRef: unique symbol };
 
 /** A client's addressed view into a lineage: either the mutable draft or one promoted run. */
 export type WorkflowViewAddress =
-  | { workflowKey: WorkflowKey; kind: "draft" }
-  | { workflowKey: WorkflowKey; kind: "run"; runRef: RunRef };
+  | { workflowKey: WorkflowKey; kind: typeof WORKFLOW_VIEW_ADDRESS_KIND.DRAFT }
+  | {
+      workflowKey: WorkflowKey;
+      kind: typeof WORKFLOW_VIEW_ADDRESS_KIND.RUN;
+      runRef: RunRef;
+    };
 
 /** Addresses exactly one promoted run within a lineage. */
 export interface WorkflowRunAddress {

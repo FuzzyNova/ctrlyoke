@@ -7,6 +7,7 @@ import {
   PREVIEW_PROMPT_CATEGORIES,
   PREVIEW_TRUNCATION_REASON_COPY,
   PREVIEW_TRUNCATION_REASONS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { DryRunModal } from "@components/shared/DryRunModal";
@@ -173,7 +174,10 @@ function openPreview(
     status: "ready",
     scope,
     displayedDefinitionRevision: 1,
-    displayedAddress: { workflowKey: "workflow-a" as never, kind: "draft" },
+    displayedAddress: {
+      workflowKey: "workflow-a" as never,
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+    },
     isStale: false,
   });
 }
@@ -836,7 +840,7 @@ describe("DryRunModal", () => {
     const user = userEvent.setup();
     const address = {
       workflowKey: "workflow-a" as never,
-      kind: "draft",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
     } as const;
     openPreview({ kind: "workflow" });
     render(<DryRunModal scope={{ kind: "workflow" }} />);

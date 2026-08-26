@@ -14,10 +14,11 @@ import type {
   WorkflowViewAddress,
 } from "@root/types/CtrlYokeTypes";
 import type { WorkflowContextMenuTarget } from "@hooks/useWorkflowContextMenu";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 /** Builds the stable list key for a run-panel row — draft or run:{workflowKey}:{runRef}. */
 function runPanelRowKey(workflowKey: WorkflowKey, row: RunPanelRow): string {
-  return row.kind === "draft"
+  return row.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT
     ? `draft:${workflowKey}`
     : `run:${workflowKey}:${row.summary.runRef}`;
 }
@@ -26,9 +27,13 @@ function addressForRow(
   workflowKey: WorkflowKey,
   row: RunPanelRow
 ): WorkflowViewAddress {
-  return row.kind === "draft"
-    ? { workflowKey, kind: "draft" }
-    : { workflowKey, kind: "run", runRef: row.summary.runRef };
+  return row.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT
+    ? { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT }
+    : {
+        workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: row.summary.runRef,
+      };
 }
 
 interface RunPanelProps {
@@ -105,7 +110,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
 
   const isDisplayedLineage = displayedAddress?.workflowKey === workflowKey;
   const isLiveRow = (row: RunPanelRow) =>
-    row.kind === "run" &&
+    row.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
     executionRunRef != null &&
     row.summary.runRef === executionRunRef;
   // The live run counts as "viewed" once back-to-live clears isViewingHistory,
@@ -177,7 +182,9 @@ export const RunPanel: React.FC<RunPanelProps> = ({
 
   const canGoNewer = viewedIndex > 0;
   const canGoOlder = viewedIndex !== -1 && viewedIndex < rows.length - 1;
-  const hasRuns = rows.some((row) => row.kind === "run");
+  const hasRuns = rows.some(
+    (row) => row.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
+  );
 
   return (
     <div className="run-panel flex h-full flex-col">
@@ -264,7 +271,9 @@ export const RunPanel: React.FC<RunPanelProps> = ({
                   isPending={pendingRowKey === rowKey}
                   isLive={isLive}
                   tier={tier}
-                  canDelete={row.kind === "run" && !isLive}
+                  canDelete={
+                    row.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN && !isLive
+                  }
                   contextMenuAddress={addressForRow(workflowKey, row)}
                   workflowName={workflowName}
                   isFavorite={isFavorite}
@@ -272,7 +281,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
                   onOpenContextMenu={onOpenContextMenu}
                   onSelect={() => handleSelect(row)}
                   onDelete={
-                    row.kind === "run"
+                    row.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
                       ? () => onDeleteRun(row.summary.runRef)
                       : undefined
                   }

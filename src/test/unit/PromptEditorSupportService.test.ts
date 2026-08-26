@@ -7,7 +7,11 @@ import { PromptEditorSupportService } from "../../ui/PromptEditorSupportService"
 import { createWebviewClientContext } from "../../ui/WebviewClientContext";
 import { CliProviderUtils } from "../../core/harness/shared/CliProviderUtils";
 import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
-import { HARNESS_IDS, MESSAGE_TYPES } from "../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  MESSAGE_TYPES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "../../types/DashboardConstants";
 import { pathsEqual } from "../../utils/PathCasing";
 
 suite("PromptEditorSupportService", () => {
@@ -61,7 +65,7 @@ suite("PromptEditorSupportService", () => {
       }),
       "./.ctrlyoke/prompts/empty.prompt.md",
       42,
-      { workflowKey: "test", kind: "draft" }
+      { workflowKey: "test", kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT }
     );
 
     const validation = emitted[0] as {

@@ -40,6 +40,6 @@ run("code", ["--install-extension", vsixPath, "--force"]);
 
 console.log(
   `\nInstalled ${vsixName}. VS Code won't pick up the new code until the ` +
-    "extension host reloads — run \"Developer: Reload Window\" or restart " +
+    'extension host reloads — run "Developer: Reload Window" or restart ' +
     "VS Code yourself once nothing is actively running in that window."
 );

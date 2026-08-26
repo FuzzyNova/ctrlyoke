@@ -11,6 +11,7 @@ import {
   type WorkflowContextMenuTarget,
 } from "@hooks/useWorkflowContextMenu";
 import { useUiStore } from "@store/uiStore";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 // These assertions cover the standalone queue branch of notifyUser().
 vi.hoisted(() => {
@@ -124,7 +125,10 @@ describe("useWorkflowContextMenu", () => {
         menuTarget={{
           ...target,
           scope: "run",
-          address: { workflowKey: "workflow-1" as never, kind: "draft" },
+          address: {
+            workflowKey: "workflow-1" as never,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          },
           runDirectory: "/runs/workflow-1/draft",
         }}
       />

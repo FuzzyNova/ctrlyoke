@@ -2,6 +2,7 @@ import { act, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { WorkflowSwitchOverlay } from "@components/layout/WorkflowSwitchOverlay";
 import { useUiStore } from "@store/uiStore";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 describe("WorkflowSwitchOverlay", () => {
   beforeEach(() => {
@@ -32,7 +33,10 @@ describe("WorkflowSwitchOverlay", () => {
       useUiStore
         .getState()
         .requestRunViewLoad(
-          { workflowKey: "wf-target" as never, kind: "draft" },
+          {
+            workflowKey: "wf-target" as never,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          },
           [],
           undefined,
           "Target workflow"
@@ -50,7 +54,10 @@ describe("WorkflowSwitchOverlay", () => {
 
   it("renders nothing for a same-lineage load, which refines panels in place", () => {
     useUiStore.setState({
-      displayedViewAddress: { workflowKey: "wf-a" as never, kind: "draft" },
+      displayedViewAddress: {
+        workflowKey: "wf-a" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
     });
     const { container } = render(<WorkflowSwitchOverlay />);
 
@@ -58,7 +65,7 @@ describe("WorkflowSwitchOverlay", () => {
       useUiStore.getState().requestRunViewLoad(
         {
           workflowKey: "wf-a" as never,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "run-2026-01-01T00-00-00-000Z" as never,
         },
         []
@@ -79,7 +86,10 @@ describe("WorkflowSwitchOverlay", () => {
       useUiStore
         .getState()
         .requestRunViewLoad(
-          { workflowKey: "wf-lost" as never, kind: "draft" },
+          {
+            workflowKey: "wf-lost" as never,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          },
           [],
           undefined,
           "Target workflow"

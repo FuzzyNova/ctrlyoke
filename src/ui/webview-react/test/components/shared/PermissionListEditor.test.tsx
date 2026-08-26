@@ -89,14 +89,17 @@ describe("PermissionListEditor", () => {
     function ControlledWrapper() {
       const [value, setValue] = useState<string[]>([]);
       return (
-        <PermissionListEditor id="controlled" value={value} onChange={setValue} />
+        <PermissionListEditor
+          id="controlled"
+          value={value}
+          onChange={setValue}
+        />
       );
     }
 
     const user = userEvent.setup();
     const { container } = render(<ControlledWrapper />);
-    const content =
-      container.querySelector<HTMLElement>(".cm-content")!;
+    const content = container.querySelector<HTMLElement>(".cm-content")!;
 
     await user.click(content);
     for (const ch of "read") {

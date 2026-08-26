@@ -8,6 +8,7 @@
  * one implementation here prevents those copies from drifting apart.
  */
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 export function areWorkflowAddressesEqual(
   left: WorkflowViewAddress | null | undefined,
@@ -18,8 +19,8 @@ export function areWorkflowAddressesEqual(
     !!right &&
     left.workflowKey === right.workflowKey &&
     left.kind === right.kind &&
-    (left.kind !== "run" ||
-      right.kind !== "run" ||
+    (left.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
+      right.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
       left.runRef === right.runRef)
   );
 }

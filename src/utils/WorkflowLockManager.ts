@@ -236,12 +236,12 @@ export class WorkflowLockManager {
   /**
    * Normalize stale locks on extension startup.
    *
- * Scans every lineage directory under run storage. For each lineage whose
- * locked `RunRef`'s `_runtime.executionState` is active (running/pausing/cancelling):
- *   - "none" or "stale" lock  → writes "stopped" to that run's `_runtime.executionState`,
- *     cleans up any stale lock file
- *   - "active-vscode"         → preserves the live VS Code-owned run and lock
- *   - "active-cli"            → preserves RUNNING; returns this lineage as CLI-managed
+   * Scans every lineage directory under run storage. For each lineage whose
+   * locked `RunRef`'s `_runtime.executionState` is active (running/pausing/cancelling):
+   *   - "none" or "stale" lock  → writes "stopped" to that run's `_runtime.executionState`,
+   *     cleans up any stale lock file
+   *   - "active-vscode"         → preserves the live VS Code-owned run and lock
+   *   - "active-cli"            → preserves RUNNING; returns this lineage as CLI-managed
    *
    * Returns the exact run file paths recovered/still-active, keyed by lineage.
    */

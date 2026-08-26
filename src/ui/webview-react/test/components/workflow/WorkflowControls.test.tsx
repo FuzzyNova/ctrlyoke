@@ -14,6 +14,7 @@ import { WorkflowControls } from "@components/workflow/WorkflowControls";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES } from "@/types/messages";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 // The vscode mock is set up in test/setup.ts (window.vscodeApi).
 // We just need a reference to the postMessage spy.
@@ -120,7 +121,7 @@ describe("WorkflowControls — dropdown options", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "wf-1" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-1" as never,
       },
       displayedDefinitionRevision: 2,
@@ -141,7 +142,7 @@ describe("WorkflowControls — dropdown options", () => {
       mutation: {
         address: {
           workflowKey: "wf-1",
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "run-1",
         },
         expectedDefinitionRevision: 2,
@@ -155,7 +156,7 @@ describe("WorkflowControls — dropdown options", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "wf-1" as never,
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       },
     });
     render(<WorkflowControls />);

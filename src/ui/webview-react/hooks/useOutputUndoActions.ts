@@ -26,6 +26,7 @@ import type {
 import { FINAL_STEP_PHASES } from "@/types/messages";
 import type { WorkflowRunAddress } from "@root/types/CtrlYokeTypes";
 import { useUiStore } from "@store/uiStore";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 type OutputHistoryView = {
   orderedEntries: OrderedHistoryEntry[];
@@ -80,7 +81,7 @@ export function useOutputUndoActions({
   );
   const runAddress = useMemo<WorkflowRunAddress | null>(
     () =>
-      displayedViewAddress?.kind === "run"
+      displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
         ? {
             workflowKey: displayedViewAddress.workflowKey,
             runRef: displayedViewAddress.runRef,

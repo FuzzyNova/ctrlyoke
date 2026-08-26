@@ -16,7 +16,7 @@ The landing page (`landing/src/pages/index.astro`) sells the product entirely on
 and one hand-authored YAML code block. Nobody sees the dashboard until they install it. Meanwhile
 `docs/` walks through settings and panels in text only. The main interface is not expected to change
 materially before release — see `RELEASE_CHECKLIST.md` Phase 8's own framing: capture screenshots
-"after Phase 6 UI (license status surface, upsell prompts) is final," which is the *only* part of the
+"after Phase 6 UI (license status surface, upsell prompts) is final," which is the _only_ part of the
 UI still in flux. Everything else is capture-ready today.
 
 ## Non-goals (this pass)
@@ -25,7 +25,7 @@ UI still in flux. Everything else is capture-ready today.
   (Phase 6 of the release checklist) isn't built yet. Skip these entirely; they get their own pass once
   that ships. The Pro marketing section on the landing page keeps its current text-only treatment for
   now.
-- **Actually rewriting `landing/src/pages/index.astro` or `docs/**` content** — this doc is the shot
+- **Actually rewriting `landing/src/pages/index.astro` or `docs/**` content\*\* — this doc is the shot
   list and slotting plan only. Executing the swap is separate follow-up work once assets exist.
 - **Video/animated hero** — GIFs only, no produced video.
 
@@ -64,7 +64,7 @@ above.
 
 **Bigger is safe, smaller isn't — for stills.** Once landing images exist they should be built with
 `max-width:100%; height:auto` in their container (same free behavior docs already gets), so a still
-captured *larger* than its slot just scales down cleanly — capturing at 2x DPI and shipping that PNG
+captured _larger_ than its slot just scales down cleanly — capturing at 2x DPI and shipping that PNG
 is correct, not wasteful. The failure mode is the opposite: a still captured smaller than its slot
 has to scale up and goes soft. Treat the px floors below as floors, not ceilings, for PNG categories
 (A, B, C, F) — shoot at 2x whenever it's free to do so.
@@ -79,14 +79,14 @@ gets an ugly crop once dropped in. Raw single-panel stills (A) and the code-snip
 need a forced ratio — their shape is dictated by the sidebar's natural portrait shape or the
 snippet's line count, and the surrounding container just sizes to whatever they are.
 
-| Category | Applies to | Ratio target | Px floor | Notes |
-| --- | --- | --- | --- | --- |
-| A. Raw panel screenshot | #4, #5, #11, #12 | none — natural portrait, crop to content | 880–960px wide | 2x of the real 420–480 webview width |
-| B. Flattened composite | #1, #2 | ~3:2 to 16:10 landscape | 1152px wide (2304px+ at 2x) | targets the `max-w-6xl` features-grid slot |
-| C. Desktop/mobile side-by-side | #3, pairs with #7 | ~3:2 landscape | 896px wide (1800px+ at 2x) | targets `max-w-4xl` Pro callout |
-| D. Hero GIF | #6 | ~4:3 to 16:10 landscape | 896–1152px wide, captured near 1x–1.5x | record from the hosted/browser dashboard, not the narrow sidebar — a stretched 480px capture won't fill the hero |
-| E. In-body docs GIF | #9 | none forced | ~688–900px wide, captured near 1x | keep under the existing 2MB budget |
-| F. Styled code snippet | #8 | none — content-driven height | 896px wide | matches the existing hero `<pre>` block treatment |
+| Category                       | Applies to        | Ratio target                             | Px floor                               | Notes                                                                                                            |
+| ------------------------------ | ----------------- | ---------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| A. Raw panel screenshot        | #4, #5, #11, #12  | none — natural portrait, crop to content | 880–960px wide                         | 2x of the real 420–480 webview width                                                                             |
+| B. Flattened composite         | #1, #2            | ~3:2 to 16:10 landscape                  | 1152px wide (2304px+ at 2x)            | targets the `max-w-6xl` features-grid slot                                                                       |
+| C. Desktop/mobile side-by-side | #3, pairs with #7 | ~3:2 landscape                           | 896px wide (1800px+ at 2x)             | targets `max-w-4xl` Pro callout                                                                                  |
+| D. Hero GIF                    | #6                | ~4:3 to 16:10 landscape                  | 896–1152px wide, captured near 1x–1.5x | record from the hosted/browser dashboard, not the narrow sidebar — a stretched 480px capture won't fill the hero |
+| E. In-body docs GIF            | #9                | none forced                              | ~688–900px wide, captured near 1x      | keep under the existing 2MB budget                                                                               |
+| F. Styled code snippet         | #8                | none — content-driven height             | 896px wide                             | matches the existing hero `<pre>` block treatment                                                                |
 
 One practical gotcha for A/B/C: on a non-retina Windows display at 100%/125% scaling, an ordinary
 screenshot captures logical pixels 1:1 — soft once placed at native size in a 2x-built container.
@@ -112,7 +112,7 @@ Each item: what to capture, what prep it needs, where it's used.
 
 ### 2. Composite: one dashboard, multiple VS Code themes
 
-- **What:** Same compositing technique as #1, but each layer is the *same* dashboard state under a
+- **What:** Same compositing technique as #1, but each layer is the _same_ dashboard state under a
   different VS Code theme (e.g. Dark+, Light+, Dracula, One Dark Pro, Solarized). Demonstrates
   `createThemeExtension` / CSS variable theming actually tracks the host theme.
 - **Prep:** capture the same dashboard view (same workflow, same panel) under ~4–5 themes.
@@ -181,7 +181,7 @@ Each item: what to capture, what prep it needs, where it's used.
   `description`, `select`/`file` types — pulled from real examples in `docs/workflows/templates.md`
   (the Full Feature example at lines 24–45, or the `select`/`directory` example at lines 61–71).
 - **Prep:** none beyond picking/trimming the example; this is a styled code block, not a screenshot of
-  the running app (template variable *editing* isn't a polished dashboard experience yet — see #9).
+  the running app (template variable _editing_ isn't a polished dashboard experience yet — see #9).
 - **Use:** new landing "Templates" section; `docs/workflows/templates.md` itself currently has no
   visual treatment of its own code blocks beyond plain markdown.
 - **Dimensions:** category F — see "Target dimensions" above.
@@ -232,28 +232,28 @@ Each item: what to capture, what prep it needs, where it's used.
 
 ## Slotting summary
 
-| Landing section (existing or new) | Asset(s) |
-| --- | --- |
-| Hero | #6 (workflow-run GIF) replacing/joining the static YAML block |
-| "Harness grid" / new "looks like your editor" section | #2 |
-| Features grid — `⚡` One interface, six harnesses | #1 |
-| Features grid — `📎` Point at the context you mean | #9 |
-| Features grid — `⬛` One reversible view of every result | #11 |
-| New: Statistics/telemetry section | #4, #5 |
-| New: Built-in editor section | #10 |
-| New: Templates section | #8 |
-| New: Mobile section | #3, #7 |
-| Pro callout (`Code from anywhere`) | #3, #7 (non-Pro-UI parts only — see Non-goals) |
+| Landing section (existing or new)                        | Asset(s)                                                      |
+| -------------------------------------------------------- | ------------------------------------------------------------- |
+| Hero                                                     | #6 (workflow-run GIF) replacing/joining the static YAML block |
+| "Harness grid" / new "looks like your editor" section    | #2                                                            |
+| Features grid — `⚡` One interface, six harnesses        | #1                                                            |
+| Features grid — `📎` Point at the context you mean       | #9                                                            |
+| Features grid — `⬛` One reversible view of every result | #11                                                           |
+| New: Statistics/telemetry section                        | #4, #5                                                        |
+| New: Built-in editor section                             | #10                                                           |
+| New: Templates section                                   | #8                                                            |
+| New: Mobile section                                      | #3, #7                                                        |
+| Pro callout (`Code from anywhere`)                       | #3, #7 (non-Pro-UI parts only — see Non-goals)                |
 
-| Docs page (existing or new) | Asset(s) |
-| --- | --- |
-| `docs/workflows/context-files.md` | #9 |
-| `docs/workflows/templates.md` | #8 |
-| `docs/workflows/index.md` / `your-first-workflow.md` | #6, #11 |
-| `docs/reference/settings.md` | #4, #5 |
-| `docs/pro/index.md` | #3, #7 |
-| `docs/guide/concepts.md` or new editor page | #10 |
-| New/expanded workflow-properties + permissions + MCP + hooks docs | #12 |
+| Docs page (existing or new)                                       | Asset(s) |
+| ----------------------------------------------------------------- | -------- |
+| `docs/workflows/context-files.md`                                 | #9       |
+| `docs/workflows/templates.md`                                     | #8       |
+| `docs/workflows/index.md` / `your-first-workflow.md`              | #6, #11  |
+| `docs/reference/settings.md`                                      | #4, #5   |
+| `docs/pro/index.md`                                               | #3, #7   |
+| `docs/guide/concepts.md` or new editor page                       | #10      |
+| New/expanded workflow-properties + permissions + MCP + hooks docs | #12      |
 
 ## Execution order (suggested)
 

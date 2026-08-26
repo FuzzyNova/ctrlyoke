@@ -64,7 +64,7 @@ history doesn't:
    over the commits it has seen; feeding it a windowed subset instead of the
    full fetched history risks lane reassignment/color drift as the window
    slides. This needs either (a) running layout over the full fetched
-   (not just realized) commit set and only virtualizing the row *rendering*,
+   (not just realized) commit set and only virtualizing the row _rendering_,
    or (b) extending `computeCommitGraphLayout` to accept and preserve
    in-flight lane state across windowed calls. Prefer (a) unless memory
    profiling on a large history shows the full-layout array itself is the

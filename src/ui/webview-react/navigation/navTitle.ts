@@ -3,6 +3,7 @@
  * entries get meaningful, shareable labels (VS Code-style).
  */
 import type { Route } from "./route";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 const APP_NAME = "ctrlyoke";
 
@@ -33,7 +34,7 @@ function locationLabel(route: Route): string | undefined {
     return "Search";
   }
   if (route.workflow) {
-    return route.workflow.kind === "run"
+    return route.workflow.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
       ? `Run ${route.workflow.runRef}`
       : "Draft";
   }

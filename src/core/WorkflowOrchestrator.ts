@@ -61,6 +61,7 @@ import {
   type StepStatus,
   type FinalStepPhase,
   type WorktreeManagementAction,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
@@ -243,7 +244,10 @@ function sameViewAddress(
 ): boolean {
   if (!a || !b) return false;
   if (a.workflowKey !== b.workflowKey || a.kind !== b.kind) return false;
-  return a.kind !== "run" || (b.kind === "run" && a.runRef === b.runRef);
+  return (
+    a.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
+    (b.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN && a.runRef === b.runRef)
+  );
 }
 
 function lineageAddressOf(
@@ -251,8 +255,15 @@ function lineageAddressOf(
 ): WorkflowViewAddress | null {
   if (!state?.workflowKey) return null;
   return state.runRef
-    ? { workflowKey: state.workflowKey, kind: "run", runRef: state.runRef }
-    : { workflowKey: state.workflowKey, kind: "draft" };
+    ? {
+        workflowKey: state.workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef: state.runRef,
+      }
+    : {
+        workflowKey: state.workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      };
 }
 
 interface WorkflowReplayOptions {
@@ -890,10 +901,13 @@ export class WorkflowOrchestrator {
           queueState.runRef
             ? {
                 workflowKey: queueState.workflowKey,
-                kind: "run",
+                kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
                 runRef: queueState.runRef,
               }
-            : { workflowKey: queueState.workflowKey, kind: "draft" },
+            : {
+                workflowKey: queueState.workflowKey,
+                kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+              },
           send,
           clientId
         );
@@ -1737,7 +1751,7 @@ export class WorkflowOrchestrator {
     clientId: string,
     position?: QueuePosition
   ): Promise<void> {
-    if (!mutation || mutation.address.kind !== "run") {
+    if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       return this.getInstanceForClient(clientId).appendFromFile(
         filePath,
         position
@@ -2280,7 +2294,7 @@ export class WorkflowOrchestrator {
     const previewSourcePath = sourcePath ?? state?.workingFilePath;
     const outputHistoryManager = this.getOutputHistoryManager();
     const historyFilePath =
-      address.kind === "run"
+      address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
         ? outputHistoryManager.getHistoryFilePath(
             address.workflowKey,
             address.runRef
@@ -2421,7 +2435,7 @@ export class WorkflowOrchestrator {
     workspaceRoot: string,
     address: WorkflowViewAddress
   ): string {
-    return address.kind === "draft"
+    return address.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT
       ? WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey)
       : WorkflowPaths.runFilePath(
           workspaceRoot,
@@ -2434,7 +2448,7 @@ export class WorkflowOrchestrator {
     workspaceRoot: string,
     address: WorkflowViewAddress
   ): string {
-    return address.kind === "draft"
+    return address.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT
       ? WorkflowPaths.draftDir(workspaceRoot, address.workflowKey)
       : WorkflowPaths.runDir(
           workspaceRoot,
@@ -2797,7 +2811,7 @@ export class WorkflowOrchestrator {
     logContext: string
   ): Promise<AddressedRunView> {
     const startTime = Date.now();
-    const addressLabel = `${address.workflowKey}/${address.kind === "run" ? address.runRef : "draft"}`;
+    const addressLabel = `${address.workflowKey}/${address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN ? address.runRef : "draft"}`;
     const logPrefix = `[readAddressedRunView] ${logContext} address=${addressLabel}`;
 
     const filePath = this.resolveAddressFilePath(workspaceRoot, address);
@@ -2807,7 +2821,7 @@ export class WorkflowOrchestrator {
 
     const historyManager = new OutputHistoryManager(workspaceRoot);
     const [history, runSummaries, descriptor] = await Promise.all([
-      address.kind === "run"
+      address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
         ? historyManager.loadHistory(
             historyManager.getHistoryFilePath(
               address.workflowKey,
@@ -2895,8 +2909,9 @@ export class WorkflowOrchestrator {
     // every lineage switch, so folding the check into the `??` fallback below
     // left it unreachable in exactly the case that matters.
     const isLiveAddress =
-      address.kind === "draft" ||
-      (address.kind === "run" && address.runRef === executionRunRef);
+      address.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT ||
+      (address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+        address.runRef === executionRunRef);
     const runtimeWorkflowId =
       boundWorkflowId ??
       (isLiveAddress ? this.getViewedWorkflowId(clientId) : null);
@@ -2937,7 +2952,7 @@ export class WorkflowOrchestrator {
     // SESSION_RESTORED, RUN_VIEW_LOADED, or OUTPUT_HISTORY_LOADED.
     send(snapshot);
     Log.debug(
-      `[deliverRunView] client=${clientId.slice(0, 12)} address=${address.workflowKey}/${address.kind === "run" ? address.runRef : "draft"} snapshot sent`
+      `[deliverRunView] client=${clientId.slice(0, 12)} address=${address.workflowKey}/${address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN ? address.runRef : "draft"} snapshot sent`
     );
 
     // Overlay only in-memory output that may have arrived after the timeline
@@ -3012,7 +3027,10 @@ export class WorkflowOrchestrator {
     // path. Once a client is viewing a persisted draft/run, revision context is
     // mandatory so a stale UI cannot silently alter a promoted definition.
     if (!mutation) {
-      if (viewed?.kind === "run" || viewed?.kind === "draft") {
+      if (
+        viewed?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
+        viewed?.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT
+      ) {
         throw new Error(
           "Definition mutation is missing its addressed revision context"
         );
@@ -3023,8 +3041,8 @@ export class WorkflowOrchestrator {
       !viewed ||
       viewed.workflowKey !== mutation.address.workflowKey ||
       viewed.kind !== mutation.address.kind ||
-      (viewed.kind === "run" &&
-        mutation.address.kind === "run" &&
+      (viewed.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+        mutation.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
         viewed.runRef !== mutation.address.runRef)
     ) {
       throw new Error(
@@ -3038,7 +3056,7 @@ export class WorkflowOrchestrator {
       throw new Error("No workspace folder is open");
     }
 
-    if (mutation.address.kind === "run") {
+    if (mutation.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       // Editing a run whose resident instance owns the lineage lock is done in
       // place against its live queue. This includes active execution and a
       // completed named-worktree run retaining an injectable PTY. Both must
@@ -3242,7 +3260,7 @@ export class WorkflowOrchestrator {
   ): Promise<
     { definitionRevision: number; descriptorRevision: number } | undefined
   > {
-    if (!mutation || mutation.address.kind !== "run") {
+    if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       await this.getInstanceForClient(clientId).updateWorkflowName(
         workflowName
       );
@@ -3507,7 +3525,7 @@ export class WorkflowOrchestrator {
     } = {},
     clientId: string
   ): Promise<{ workingFile: WorkingFile; appliedKeys: string[] } | null> {
-    if (!mutation || mutation.address.kind !== "run") {
+    if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       return this.getInstanceForClient(clientId).updateWorkingFileProperties(
         properties,
         options
@@ -3555,7 +3573,7 @@ export class WorkflowOrchestrator {
     clearProperties?: string[],
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    if (!mutation || mutation.address.kind !== "run") {
+    if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       return this.getInstanceForClient(clientId).updatePromptInQueue(
         index,
         text,
@@ -3604,7 +3622,10 @@ export class WorkflowOrchestrator {
     clearProperties?: string[],
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    if (mutation.address.kind !== "run" || index <= 0) {
+    if (
+      mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
+      index <= 0
+    ) {
       throw new Error(
         "A same-run completed-step continuation requires a nonzero run step"
       );
@@ -3666,7 +3687,7 @@ export class WorkflowOrchestrator {
     step: WorkflowStep,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    if (!mutation || mutation.address.kind !== "run") {
+    if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       return this.getInstanceForClient(clientId).insertWorkflowStepAfterIndex(
         afterIndex,
         step
@@ -3695,7 +3716,7 @@ export class WorkflowOrchestrator {
     clearProperties?: string[],
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    if (!mutation || mutation.address.kind !== "run") {
+    if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       return this.getInstanceForClient(clientId).updateFinalStepInQueue(
         finalStep,
         clearProperties
@@ -3732,7 +3753,7 @@ export class WorkflowOrchestrator {
     index: number,
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    if (!mutation || mutation.address.kind !== "run") {
+    if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       return this.getInstanceForClient(clientId).deletePromptFromQueue(index);
     }
     const runAddress = mutation.address;
@@ -3756,7 +3777,7 @@ export class WorkflowOrchestrator {
     newPendingOrder: number[],
     clientId: string = this.PANEL_CLIENT_ID
   ): Promise<void> {
-    if (!mutation || mutation.address.kind !== "run") {
+    if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       return this.getInstanceForClient(clientId).reorderPendingPrompts(
         newPendingOrder
       );
@@ -3798,7 +3819,7 @@ export class WorkflowOrchestrator {
   ): Promise<
     { definitionRevision: number; descriptorRevision: number } | undefined
   > {
-    if (!mutation || mutation.address.kind !== "run") {
+    if (!mutation || mutation.address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       await this.getInstanceForClient(clientId).syncStepsForUndoRedo(
         steps,
         finalStep
@@ -3916,7 +3937,7 @@ export class WorkflowOrchestrator {
       );
       const seededAddress: Extract<WorkflowViewAddress, { kind: "run" }> = {
         workflowKey: address.workflowKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: seeded.runRef,
       };
       if (options.invalidateViews !== false) {
@@ -4157,7 +4178,7 @@ export class WorkflowOrchestrator {
     const viewed = this.getViewAddress(clientId);
     if (
       !viewed ||
-      viewed.kind !== "draft" ||
+      viewed.kind !== WORKFLOW_VIEW_ADDRESS_KIND.DRAFT ||
       viewed.workflowKey !== address.workflowKey
     ) {
       throw new Error("Run no longer targets this client's viewed draft");
@@ -4207,7 +4228,7 @@ export class WorkflowOrchestrator {
           await this.switchClientToRunAddress(
             {
               workflowKey: state.workflowKey,
-              kind: "run",
+              kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
               runRef: state.runRef,
             },
             clientId
@@ -4263,7 +4284,7 @@ export class WorkflowOrchestrator {
     if (!address) {
       return "(none)";
     }
-    return address.kind === "run"
+    return address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
       ? `${address.workflowKey}/${address.runRef}`
       : `${address.workflowKey}/draft`;
   }
@@ -4276,7 +4297,7 @@ export class WorkflowOrchestrator {
     const viewed = this.getViewAddress(clientId);
     if (
       !viewed ||
-      viewed.kind !== "run" ||
+      viewed.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
       viewed.workflowKey !== address.workflowKey ||
       viewed.runRef !== address.runRef
     ) {
@@ -4595,7 +4616,7 @@ export class WorkflowOrchestrator {
   ): Promise<void> {
     const targets = [...this.getViewAddressRegistry().entries()].filter(
       ([, address]) =>
-        address?.kind === "run" &&
+        address?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
         address.workflowKey === workflowKey &&
         address.runRef === runRef
     );
@@ -4606,7 +4627,7 @@ export class WorkflowOrchestrator {
     try {
       const filePath = this.resolveAddressFilePath(workspaceRoot, {
         workflowKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef,
       });
       workingFile = JSON.parse(
@@ -4648,7 +4669,7 @@ export class WorkflowOrchestrator {
     }> = [];
     for (const [clientId, address] of this.getViewAddressRegistry()) {
       if (
-        address?.kind !== "run" ||
+        address?.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
         address.workflowKey !== workflowKey ||
         address.runRef !== runRef
       ) {
@@ -4660,7 +4681,7 @@ export class WorkflowOrchestrator {
     }
     try {
       await this.publishRunViewToClients(
-        { workflowKey, kind: "run", runRef },
+        { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, runRef },
         targets,
         definitionRollback
       );
@@ -4707,23 +4728,26 @@ export class WorkflowOrchestrator {
     const fallback: WorkflowViewAddress = remaining[0]
       ? {
           workflowKey: address.workflowKey,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: remaining[0].runRef,
         }
-      : { workflowKey: address.workflowKey, kind: "draft" };
+      : {
+          workflowKey: address.workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        };
 
     const targets = [...this.getViewAddressRegistry().entries()].filter(
       ([, candidate]) => candidate?.workflowKey === address.workflowKey
     );
     const displacedAViewer = targets.some(
       ([, currentAddress]) =>
-        currentAddress?.kind === "run" &&
+        currentAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
         currentAddress.runRef === address.runRef
     );
     await Promise.all(
       targets.map(async ([targetClientId, currentAddress]) => {
         const targetAddress =
-          currentAddress?.kind === "run" &&
+          currentAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
           currentAddress.runRef === address.runRef
             ? fallback
             : currentAddress;
@@ -4746,7 +4770,9 @@ export class WorkflowOrchestrator {
     // something else changes nothing on screen and must stay silent.
     if (displacedAViewer) {
       const fallbackLabel =
-        fallback.kind === "run" ? `Run ${remaining[0].runId}` : "the draft";
+        fallback.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
+          ? `Run ${remaining[0].runId}`
+          : "the draft";
       notifyUserFeedback(
         this.userFeedbackSink,
         USER_FEEDBACK_SEVERITY.INFO,
@@ -4795,8 +4821,12 @@ export class WorkflowOrchestrator {
 
     const remaining = await historyManager.getRunSummaries(workflowKey);
     const fallback: WorkflowViewAddress = remaining[0]
-      ? { workflowKey, kind: "run", runRef: remaining[0].runRef }
-      : { workflowKey, kind: "draft" };
+      ? {
+          workflowKey,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef: remaining[0].runRef,
+        }
+      : { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT };
 
     const targets = [...this.getViewAddressRegistry().entries()].filter(
       ([, candidate]) => candidate?.workflowKey === workflowKey
@@ -4804,7 +4834,7 @@ export class WorkflowOrchestrator {
     await Promise.all(
       targets.map(async ([targetClientId, currentAddress]) => {
         const targetAddress =
-          currentAddress?.kind === "run" &&
+          currentAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
           currentAddress.runRef !== executionRunRef
             ? fallback
             : currentAddress;
@@ -4875,7 +4905,11 @@ export class WorkflowOrchestrator {
     // instance owns the addressed run itself (the everyday single-run case,
     // including dynamic append to the executing run), the instance path below
     // already targets the right file.
-    if (!forceNewWorkflow && mutation && mutation.address.kind === "run") {
+    if (
+      !forceNewWorkflow &&
+      mutation &&
+      mutation.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
+    ) {
       const runAddress = mutation.address;
       const queueState = instance.getQueueState();
       const instanceOwnsAddressedRun =
@@ -5526,7 +5560,7 @@ export class WorkflowOrchestrator {
         continue;
       }
       if (
-        address?.kind === "run" &&
+        address?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
         this.getViewAddress(clientId)?.workflowKey === address.workflowKey
       ) {
         continue;
@@ -5557,7 +5591,7 @@ export class WorkflowOrchestrator {
     }
     const address: Extract<WorkflowViewAddress, { kind: "run" }> = {
       workflowKey: state.workflowKey,
-      kind: "run",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
       runRef: state.runRef,
     };
 
@@ -5571,7 +5605,7 @@ export class WorkflowOrchestrator {
       }
       const viewedAddress = this.getViewAddress(clientId);
       if (
-        viewedAddress?.kind !== "draft" ||
+        viewedAddress?.kind !== WORKFLOW_VIEW_ADDRESS_KIND.DRAFT ||
         viewedAddress.workflowKey !== state.workflowKey
       ) {
         continue;

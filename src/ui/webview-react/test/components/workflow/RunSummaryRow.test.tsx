@@ -11,7 +11,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { RunSummaryRow } from "@components/workflow/RunSummaryRow";
 import type { WorkflowRowTier } from "@/constants";
 import { EXECUTION_STATES, HARNESS_IDS } from "@/types/messages";
-import { ATTEMPT_COST_SOURCES } from "@root/types/DashboardConstants";
+import {
+  ATTEMPT_COST_SOURCES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
 
 const summary = {
@@ -41,7 +44,7 @@ const summary = {
 function renderRow(tier: WorkflowRowTier) {
   return render(
     <RunSummaryRow
-      row={{ kind: "run", summary }}
+      row={{ kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, summary }}
       rowKey="run:wf:run-14"
       isViewed={false}
       isPending={false}
@@ -92,7 +95,7 @@ describe("RunSummaryRow", () => {
     render(
       <RunSummaryRow
         row={{
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           summary: {
             ...summary,
             tokenTotals: {
@@ -130,7 +133,7 @@ describe("RunSummaryRow", () => {
     const onOpenContextMenu = vi.fn();
     const { container } = render(
       <RunSummaryRow
-        row={{ kind: "run", summary }}
+        row={{ kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, summary }}
         rowKey="run:wf:run-14"
         isViewed={false}
         isPending={false}
@@ -138,7 +141,7 @@ describe("RunSummaryRow", () => {
         canDelete
         contextMenuAddress={{
           workflowKey: "wf" as never,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "run-14" as never,
         }}
         workflowName="Workflow"
@@ -159,7 +162,7 @@ describe("RunSummaryRow", () => {
       expect.objectContaining({
         address: {
           workflowKey: "wf",
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "run-14",
         },
         scope: "run",
@@ -176,13 +179,16 @@ describe("RunSummaryRow", () => {
     const onOpenContextMenu = vi.fn();
     const { container } = render(
       <RunSummaryRow
-        row={{ kind: "draft" }}
+        row={{ kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT }}
         rowKey="draft:wf"
         isViewed={false}
         isPending={false}
         isLive={false}
         canDelete={false}
-        contextMenuAddress={{ workflowKey: "wf" as never, kind: "draft" }}
+        contextMenuAddress={{
+          workflowKey: "wf" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        }}
         draftDirectory="/runs/wf/draft"
         onOpenContextMenu={onOpenContextMenu}
         onSelect={vi.fn()}
@@ -198,7 +204,7 @@ describe("RunSummaryRow", () => {
       10,
       20,
       expect.objectContaining({
-        address: { workflowKey: "wf", kind: "draft" },
+        address: { workflowKey: "wf", kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT },
         runDirectory: "/runs/wf/draft",
         isExecuting: false,
       }),
@@ -211,7 +217,7 @@ describe("RunSummaryRow", () => {
     const { container } = render(
       <RunSummaryRow
         row={{
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           summary: {
             ...summary,
             runDirectory: undefined,
@@ -224,7 +230,7 @@ describe("RunSummaryRow", () => {
         canDelete
         contextMenuAddress={{
           workflowKey: "wf" as never,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "run-14" as never,
         }}
         draftDirectory="/runs/wf/draft"
@@ -247,7 +253,7 @@ describe("RunSummaryRow", () => {
     const { container } = render(
       <RunSummaryRow
         row={{
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           summary: {
             ...summary,
             worktree: {
@@ -281,7 +287,7 @@ describe("RunSummaryRow", () => {
       const onOpenContextMenu = vi.fn();
       const { container } = render(
         <RunSummaryRow
-          row={{ kind: "run", summary }}
+          row={{ kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN, summary }}
           rowKey="run:wf:run-14"
           isViewed={false}
           isPending={false}
@@ -289,7 +295,7 @@ describe("RunSummaryRow", () => {
           canDelete
           contextMenuAddress={{
             workflowKey: "wf" as never,
-            kind: "run",
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
             runRef: "run-14" as never,
           }}
           onOpenContextMenu={onOpenContextMenu}

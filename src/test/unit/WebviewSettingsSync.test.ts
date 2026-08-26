@@ -17,6 +17,7 @@ import {
   type SettingWriteScope,
   type StatusLineTrackingProvider,
   type StatusLineTrackingHarnessId,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
 import {
@@ -1328,7 +1329,7 @@ suite("WebviewSettingsSync", () => {
         type: MESSAGE_TYPES.LOAD_WORKFLOW,
         address: {
           workflowKey: "my-workflow" as never,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "run-2026-01-01T00-00-00-000Z" as never,
         },
       });
@@ -1423,7 +1424,7 @@ suite("WebviewSettingsSync", () => {
         type: MESSAGE_TYPES.LOAD_WORKFLOW,
         address: {
           workflowKey: "my-workflow" as never,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "run-2026-01-01T00-00-00-000Z" as never,
         },
       });
@@ -2033,7 +2034,10 @@ suite("WebviewMessageRouter stable run actions", () => {
     await router.route({
       type: MESSAGE_TYPES.EXECUTE_DRAFT,
       ...revision,
-      address: { workflowKey: runAddress.workflowKey, kind: "draft" },
+      address: {
+        workflowKey: runAddress.workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
     });
     await router.route({ type: MESSAGE_TYPES.SEED_NEW_RUN, ...revision });
     await router.route({
@@ -2080,7 +2084,10 @@ suite("WebviewMessageRouter stable run actions", () => {
     await router.route({
       type: MESSAGE_TYPES.EXECUTE_DRAFT,
       ...revision,
-      address: { workflowKey: runAddress.workflowKey, kind: "draft" },
+      address: {
+        workflowKey: runAddress.workflowKey,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
     });
     await router.route({ type: MESSAGE_TYPES.SEED_NEW_RUN, ...revision });
     await router.route({

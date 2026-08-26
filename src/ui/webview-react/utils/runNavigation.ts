@@ -17,6 +17,7 @@ import type {
   WorkflowViewAddress,
 } from "@root/types/CtrlYokeTypes";
 import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 /**
  * A lineage is "drillable" — worth a run-panel entry point (header badge or
@@ -37,7 +38,7 @@ export function runNavIndicatorLabel(
   runNav: WorkflowRunNavigationSummary,
   isNarrow: boolean
 ): string {
-  if (runNav.primaryAddress.kind === "draft") {
+  if (runNav.primaryAddress.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT) {
     return "Draft";
   }
   const runId = runNav.primaryRunId ?? "?";
@@ -54,7 +55,7 @@ export function viewedRunLabel(
   runSummaries: RunSummary[],
   isNarrow: boolean
 ): string {
-  if (address.kind !== "run") {
+  if (address.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
     return "Draft";
   }
   const runId =
@@ -69,7 +70,7 @@ interface VsCodeLike {
 
 function addressLabel(address: WorkflowViewAddress | null): string {
   if (!address) return "(none)";
-  return address.kind === "draft"
+  return address.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT
     ? `${address.workflowKey}/draft`
     : `${address.workflowKey}/${address.runRef}`;
 }
@@ -115,7 +116,7 @@ export function navigateToWorkflowAddress(
     previousAddress?.workflowKey === address.workflowKey;
   const isExecutingRunRow =
     isDisplayedLineage &&
-    address.kind === "run" &&
+    address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
     ui.executionRunRef !== null &&
     address.runRef === ui.executionRunRef;
 

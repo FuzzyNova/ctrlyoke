@@ -7,6 +7,7 @@ import {
 import { EXECUTION_STATES, HARNESS_IDS } from "@/types/messages";
 import type { WorkflowTokenTotals } from "@root/types/CtrlYokeTypes";
 import type { WorkflowRowTier } from "@/constants";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 const totalsBase: WorkflowTokenTotals = {
   total: 410_000,
@@ -41,7 +42,7 @@ function renderWorkflowList(
           workflow: {
             address: {
               workflowKey: "wf" as never,
-              kind: "run",
+              kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
               runRef: "run-1" as never,
             },
             workflowName: "Token workflow",
@@ -167,7 +168,7 @@ describe("WorkflowList recent row worktree", () => {
             workflow: {
               address: {
                 workflowKey: "wf" as never,
-                kind: "run",
+                kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
                 runRef: "run-1" as never,
               },
               workflowName: "Worktree workflow",
@@ -213,7 +214,10 @@ describe("WorkflowList context targets", () => {
             kind: "recent",
             key: "recent:wf",
             workflow: {
-              address: { workflowKey: "wf" as never, kind: "draft" },
+              address: {
+                workflowKey: "wf" as never,
+                kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+              },
               workflowName: "Workflow",
               executionState: EXECUTION_STATES.COMPLETED,
               isFavorite: true,

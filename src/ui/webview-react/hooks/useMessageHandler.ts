@@ -78,6 +78,7 @@ import {
   NOTIFICATION_KINDS,
   USER_FEEDBACK_SEVERITY,
   type UserFeedbackSeverity,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import type {
   CompletionNotificationEventPayload,
@@ -2254,8 +2255,8 @@ export function createMessageHandlers(
       openSaveDialog &&
       (openSaveDialog.address.workflowKey !== address.workflowKey ||
         openSaveDialog.address.kind !== address.kind ||
-        (openSaveDialog.address.kind === "run" &&
-          address.kind === "run" &&
+        (openSaveDialog.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+          address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
           openSaveDialog.address.runRef !== address.runRef))
     ) {
       // A dialog is a snapshot action. Never let it survive an addressed view
@@ -2350,7 +2351,7 @@ export function createMessageHandlers(
     }
     if (history) {
       const isExecutionRun =
-        address.kind === "run" &&
+        address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
         executionRunRef !== undefined &&
         address.runRef === executionRunRef;
       if (isExecutionRun) {
@@ -2465,8 +2466,8 @@ export function createMessageHandlers(
       !displayed ||
       displayed.workflowKey !== message.address.workflowKey ||
       displayed.kind !== message.address.kind ||
-      (displayed.kind === "run" &&
-        message.address.kind === "run" &&
+      (displayed.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+        message.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
         displayed.runRef !== message.address.runRef)
     ) {
       return;
@@ -2851,7 +2852,7 @@ export function useMessageHandler(): UseMessageHandlerReturn {
       // must remain usable while the editor browses history.
       if (
         message.workflowId &&
-        view.displayedViewAddress?.kind === "run" &&
+        view.displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
         view.executionRunRef !== null &&
         view.executionRunRef !== view.displayedViewAddress.runRef &&
         message.type !== MESSAGE_TYPES.RUN_VIEW_LOADED &&

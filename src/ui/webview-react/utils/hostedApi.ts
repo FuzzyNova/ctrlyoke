@@ -1,6 +1,4 @@
-import {
-  WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE,
-} from "@root/types/HostedWorkspaceViewerTypes";
+import { WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE } from "@root/types/HostedWorkspaceViewerTypes";
 import type {
   WorkspaceTreePageRequest,
   WorkspaceTreeRangeRequest,

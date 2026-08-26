@@ -14,6 +14,7 @@ import {
   HARNESS_INFO,
   type HarnessId,
   MESSAGE_TYPES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import { viewedRunLabel } from "@utils/runNavigation";
@@ -33,8 +34,9 @@ function isSameAddress(
   return (
     right?.workflowKey === left.workflowKey &&
     right?.kind === left.kind &&
-    (left.kind !== "run" ||
-      (right.kind === "run" && right.runRef === left.runRef))
+    (left.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN ||
+      (right.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+        right.runRef === left.runRef))
   );
 }
 
@@ -92,7 +94,7 @@ export const DuplicateWorkflowDialog: React.FC = () => {
 
   const sourceAddress = dialogData?.source;
   const sourceRunSummary =
-    sourceAddress?.kind === "run"
+    sourceAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
       ? runSummaries.find(
           (summary) =>
             summary.workflowKey === sourceAddress.workflowKey &&

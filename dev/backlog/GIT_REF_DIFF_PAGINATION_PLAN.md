@@ -114,7 +114,7 @@ Give `getGitRefDiff` a paginated, structured-entry server contract:
 - `src/utils/GitUtils.ts` — `getCommitDiff` and the diff-source helpers used
   by `getGitRefDiff` may need a per-file or chunked git invocation path
   rather than one `git show`/`git diff` covering every file, if avoiding the
-  `maxBuffer` failure mode entirely (not just paginating the *response*) is
+  `maxBuffer` failure mode entirely (not just paginating the _response_) is
   in scope — confirm this against real large-commit profiling before
   committing to a specific git invocation shape.
 

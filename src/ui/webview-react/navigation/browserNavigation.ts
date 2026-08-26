@@ -27,6 +27,7 @@ import {
   sameNavigation,
   type Route,
 } from "./route";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 function urlForRoute(route: Route): string {
   return `${window.location.pathname}${serializeRoute(
@@ -93,9 +94,9 @@ export function setupBrowserNavigation(): () => void {
     if (
       route.workflow?.workflowKey === implicitRecentAddress?.workflowKey &&
       route.workflow?.kind === implicitRecentAddress?.kind &&
-      (route.workflow?.kind === "draft" ||
-        (route.workflow?.kind === "run" &&
-          implicitRecentAddress?.kind === "run" &&
+      (route.workflow?.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT ||
+        (route.workflow?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+          implicitRecentAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
           route.workflow.runRef === implicitRecentAddress.runRef))
     ) {
       return { ...route, workflow: undefined };

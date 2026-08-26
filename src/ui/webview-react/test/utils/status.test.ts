@@ -19,6 +19,7 @@ import {
   getStepAccentClass,
 } from "@utils/status";
 import { STEP_STATUS, EXECUTION_STATES } from "@/types/messages";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 describe("getStatusIconClass", () => {
   it("returns icon for every STEP_STATUS value", () => {
@@ -213,7 +214,10 @@ describe("getWorkflowExecutionControls", () => {
   const getControls = (
     executionState: (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES],
     overrides: {
-      viewedKind?: "draft" | "run" | null;
+      viewedKind?:
+        | typeof WORKFLOW_VIEW_ADDRESS_KIND.DRAFT
+        | typeof WORKFLOW_VIEW_ADDRESS_KIND.RUN
+        | null;
       hasFile?: boolean;
       hasSteps?: boolean;
       pendingRewind?: boolean;

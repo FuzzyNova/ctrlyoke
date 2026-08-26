@@ -13,6 +13,7 @@ import type {
   WorkflowKey,
   WorkflowTokenTotals,
 } from "@root/types/CtrlYokeTypes";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 const tokenTotals: WorkflowTokenTotals = {
   total: 410_000,
@@ -120,7 +121,7 @@ describe("RunSummaryBanner", () => {
   it("sends Merge for a present landed managed run", () => {
     const address = {
       workflowKey: "workflow-key" as WorkflowKey,
-      kind: "run",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
       runRef: "run-1" as RunRef,
     } satisfies Extract<WorkflowViewAddress, { kind: "run" }>;
     renderBanner({

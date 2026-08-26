@@ -73,6 +73,7 @@ import {
   nextAutoscrollArmed,
   resolveDiffGapExpansionScrollTarget,
 } from "@utils/outputAutoscroll";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` returning a new
 // array reference on every useSyncExternalStore snapshot call.
@@ -139,7 +140,7 @@ const OutputSectionInner: React.FC = () => {
   // so anything keyed on "which run am I looking at" must key on the address —
   // never on a list position, which shifts when runs are deleted.
   const displayedRunRef = useUiStore((s) =>
-    s.displayedViewAddress?.kind === "run"
+    s.displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
       ? s.displayedViewAddress.runRef
       : null
   );
@@ -153,7 +154,7 @@ const OutputSectionInner: React.FC = () => {
     if (
       !displayedAddress ||
       !executionRunRef ||
-      (displayedAddress.kind === "run" &&
+      (displayedAddress.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
         displayedAddress.runRef === executionRunRef)
     ) {
       return null;
@@ -175,7 +176,8 @@ const OutputSectionInner: React.FC = () => {
   // and only when one of its inputs actually changes.
   const displayedRunSummary = useUiStore((s) => {
     const displayedAddress = s.displayedViewAddress;
-    if (displayedAddress?.kind !== "run") return undefined;
+    if (displayedAddress?.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN)
+      return undefined;
     return s.runSummaries.find(
       (summary) => summary.runRef === displayedAddress.runRef
     );
@@ -194,7 +196,10 @@ const OutputSectionInner: React.FC = () => {
   );
   const toggleRunBannerPinned = useUiStore((s) => s.toggleRunBannerPinned);
   const displayedRunBanner = useMemo<RunBannerData | undefined>(() => {
-    if (!displayedRunSummary || displayedAddress?.kind !== "run")
+    if (
+      !displayedRunSummary ||
+      displayedAddress?.kind !== WORKFLOW_VIEW_ADDRESS_KIND.RUN
+    )
       return undefined;
     const isDisplayedExecutionRun = executionRunRef === displayedAddress.runRef;
     if (!isDisplayedExecutionRun) {

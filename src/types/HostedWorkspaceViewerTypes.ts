@@ -242,7 +242,8 @@ export type WorkspaceDiffPayload =
       image?: never;
     };
 
-export type WorkspaceScmDiffResponse = WorkspaceScmDiffBase & WorkspaceDiffPayload;
+export type WorkspaceScmDiffResponse = WorkspaceScmDiffBase &
+  WorkspaceDiffPayload;
 
 export interface WorkspaceStageRequest {
   path: string;

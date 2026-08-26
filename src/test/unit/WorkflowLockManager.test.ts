@@ -85,7 +85,9 @@ suite("WorkflowLockManager stale-run recovery", () => {
           workflowKey,
           runRef
         );
-        const unchangedRun = JSON.parse(await fs.readFile(runFilePath, "utf8")) as {
+        const unchangedRun = JSON.parse(
+          await fs.readFile(runFilePath, "utf8")
+        ) as {
           _runtime: Record<string, unknown>;
         };
         assert.deepStrictEqual(
@@ -225,7 +227,10 @@ suite("WorkflowLockManager stale-run recovery", () => {
       await fs.mkdir(path.dirname(runFilePath), { recursive: true });
       await fs.writeFile(
         runFilePath,
-        JSON.stringify({ steps: [{ prompt: "keep this CLI run" }], _runtime: runtime }),
+        JSON.stringify({
+          steps: [{ prompt: "keep this CLI run" }],
+          _runtime: runtime,
+        }),
         "utf8"
       );
       const lockPath = WorkflowLockManager.getLockPath(
@@ -245,7 +250,10 @@ suite("WorkflowLockManager stale-run recovery", () => {
         JSON.parse(await fs.readFile(runFilePath, "utf8")),
         { steps: [{ prompt: "keep this CLI run" }], _runtime: runtime }
       );
-      assert.deepStrictEqual(JSON.parse(await fs.readFile(lockPath, "utf8")), lock);
+      assert.deepStrictEqual(
+        JSON.parse(await fs.readFile(lockPath, "utf8")),
+        lock
+      );
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
     }

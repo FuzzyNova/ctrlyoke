@@ -24,6 +24,7 @@
 
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import type { WorkspaceSearchScope } from "@root/types/HostedWorkspaceViewerTypes";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 /** Workspace viewer tab id — matches `workspaceViewerStore`'s `activeTab`. */
 type ViewerTab = "explorer" | "sourceControl" | "search";
@@ -130,16 +131,19 @@ function normalizeWorkflowAddress(
   address: WorkflowViewAddress | undefined
 ): WorkflowViewAddress | undefined {
   if (!address || !address.workflowKey.trim()) return undefined;
-  if (address.kind === "run") {
+  if (address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
     return address.runRef.trim()
       ? {
           workflowKey: address.workflowKey,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: address.runRef,
         }
       : undefined;
   }
-  return { workflowKey: address.workflowKey, kind: "draft" };
+  return {
+    workflowKey: address.workflowKey,
+    kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+  };
 }
 
 function workflowAddressesEqual(
@@ -150,7 +154,10 @@ function workflowAddressesEqual(
   if (!a || !b || a.workflowKey !== b.workflowKey || a.kind !== b.kind) {
     return false;
   }
-  return a.kind === "draft" || (b.kind === "run" && a.runRef === b.runRef);
+  return (
+    a.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT ||
+    (b.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN && a.runRef === b.runRef)
+  );
 }
 
 /**
@@ -254,7 +261,7 @@ export function serializeRoute(route: Route, currentSearch = ""): string {
 
   if (normalized.workflow) {
     params.set("workflowKey", normalized.workflow.workflowKey);
-    if (normalized.workflow.kind === "run") {
+    if (normalized.workflow.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
       params.set("runRef", normalized.workflow.runRef);
     }
   }

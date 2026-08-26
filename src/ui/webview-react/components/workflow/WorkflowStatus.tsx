@@ -23,6 +23,7 @@ import {
   DEFAULT_WORKFLOW_NAME,
   WORKTREE_MODES,
   WORKTREE_MODE_OPTIONS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 import { WorkflowList, type UnifiedWorkflowRow } from "./WorkflowList";
 import { RunPanel } from "./RunPanel";
@@ -230,7 +231,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             // replaces this placeholder.
             workflowKey: displayedViewAddress?.workflowKey,
             runRef:
-              displayedViewAddress?.kind === "run"
+              displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
                 ? displayedViewAddress.runRef
                 : undefined,
             workflowName:
@@ -297,7 +298,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
   const recentWorkflowHasActiveTerminal = useCallback(
     (workflow: RecentWorkflow) =>
-      (workflow.address.kind === "run" &&
+      (workflow.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
         activeTerminalRunAddresses.has(
           `${workflow.address.workflowKey}:${workflow.address.runRef}`
         )) ||
@@ -1007,7 +1008,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       if (!drilledWorkflow) return;
       const address: WorkflowViewAddress = {
         workflowKey: drilledWorkflow.workflowKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef,
       };
       if (requestConfirmation && globalSettings.confirmDeleteOperations) {
@@ -1172,7 +1173,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         handleRemoveWorkflow(target.address);
         return;
       }
-      if (target.address.kind === "run") {
+      if (target.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
         handleDeleteRunPanelRow(target.address.runRef, true);
       }
     },
@@ -1255,7 +1256,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       sendMessage(MESSAGE_TYPES.PAUSE_RUN, {
         address: {
           workflowKey: workflow.workflowKey,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: workflow.runRef,
         },
       });
@@ -1269,7 +1270,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       sendMessage(MESSAGE_TYPES.CANCEL_PAUSE_RUN, {
         address: {
           workflowKey: workflow.workflowKey,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: workflow.runRef,
         },
       });
@@ -1283,7 +1284,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       sendMessage(MESSAGE_TYPES.RESUME_RUN, {
         address: {
           workflowKey: workflow.workflowKey,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: workflow.runRef,
         },
       });
@@ -1297,7 +1298,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       sendMessage(MESSAGE_TYPES.STOP_RUN, {
         address: {
           workflowKey: workflow.workflowKey,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: workflow.runRef,
         },
       });
@@ -1439,7 +1440,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     : (cachedRunSummaries?.runSummaries ?? []);
   const runPanelHasDraft =
     drilledRecentEntry?.runNav?.hasDraft ??
-    (isDrilledLineageDisplayed && displayedViewAddress?.kind === "draft");
+    (isDrilledLineageDisplayed &&
+      displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT);
   const runPanelRows: RunPanelRow[] = drilledWorkflow
     ? [
         ...(runPanelHasDraft ? [{ kind: "draft" as const }] : []),
@@ -1467,7 +1469,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // "already viewed" row to seek to.
   const runPanelScrollToKey =
     drilledWorkflow && isDrilledLineageDisplayed && displayedViewAddress
-      ? displayedViewAddress.kind === "draft"
+      ? displayedViewAddress.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT
         ? `draft:${drilledWorkflow.workflowKey}`
         : `run:${drilledWorkflow.workflowKey}:${displayedViewAddress.runRef}`
       : null;
@@ -1845,7 +1847,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           pendingDelete?.scope === "all"
             ? "Delete all workflows and their run history?"
             : pendingDelete?.scope === "run"
-              ? `Delete run "${pendingDelete.address.kind === "run" ? pendingDelete.address.runRef : ""}"?`
+              ? `Delete run "${pendingDelete.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN ? pendingDelete.address.runRef : ""}"?`
               : `Remove "${pendingDelete?.address.workflowKey ?? ""}" from history?`
         }
         detail={

@@ -41,12 +41,8 @@ export const WorkspaceDiffPane: React.FC = () => {
   const diffPayloadKind = useWorkspaceViewerStore((s) => s.diffPayloadKind);
   const diffImage = useWorkspaceViewerStore((s) => s.diffImage);
   const fileHistoryPath = useWorkspaceViewerStore((s) => s.fileHistoryPath);
-  const fileHistoryRepoId = useWorkspaceViewerStore(
-    (s) => s.fileHistoryRepoId
-  );
-  const fileHistoryActive = useWorkspaceViewerStore(
-    (s) => s.fileHistoryActive
-  );
+  const fileHistoryRepoId = useWorkspaceViewerStore((s) => s.fileHistoryRepoId);
+  const fileHistoryActive = useWorkspaceViewerStore((s) => s.fileHistoryActive);
   const closeFileHistoryView = useWorkspaceViewerStore(
     (s) => s.closeFileHistoryView
   );

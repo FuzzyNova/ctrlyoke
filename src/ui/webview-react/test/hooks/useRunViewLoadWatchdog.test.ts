@@ -6,6 +6,7 @@ import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import {
   MESSAGE_TYPES,
   USER_FEEDBACK_SEVERITY,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
 
 // This assertion covers the standalone queue branch of notifyUser().
@@ -205,7 +206,10 @@ describe("useRunViewLoadWatchdog", () => {
       secondId = useUiStore
         .getState()
         .requestRunViewLoad(
-          { workflowKey: "wf-other" as never, kind: "draft" },
+          {
+            workflowKey: "wf-other" as never,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+          },
           []
         );
     });

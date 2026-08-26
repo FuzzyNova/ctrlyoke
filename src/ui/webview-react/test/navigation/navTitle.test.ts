@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { routeTitle } from "@/navigation/navTitle";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 describe("routeTitle", () => {
   it("is the bare app name for an empty route", () => {
@@ -11,7 +12,7 @@ describe("routeTitle", () => {
       routeTitle({
         workflow: {
           workflowKey: "main" as never,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: "run-2026-07-20T10-30-00-000Z" as never,
         },
       })

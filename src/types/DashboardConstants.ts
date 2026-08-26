@@ -1262,6 +1262,14 @@ export const WORKTREE_MODES = {
 
 export type WorktreeMode = (typeof WORKTREE_MODES)[keyof typeof WORKTREE_MODES];
 
+// ============================================================================
+// WORKFLOW VIEW ADDRESS KIND - Discriminant for WorkflowViewAddress
+// ============================================================================
+export const WORKFLOW_VIEW_ADDRESS_KIND = {
+  DRAFT: "draft",
+  RUN: "run",
+} as const;
+
 export const WORKTREE_MANAGEMENT_ACTIONS = {
   REMOVE: "remove",
   FORCE_REMOVE: "force-remove",

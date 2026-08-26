@@ -8,11 +8,12 @@ import { useSettingsStore } from "@store/settingsStore";
 import { HARNESS_IDS, MESSAGE_TYPES } from "@/types/messages";
 import type { RunSummary } from "@root/types/WorkflowTimelineTypes";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 const postMessageSpy = vi.fn();
 const source: WorkflowViewAddress = {
   workflowKey: "workflow-1" as never,
-  kind: "run",
+  kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
   runRef: "run-3" as never,
 };
 
@@ -67,7 +68,7 @@ describe("DuplicateWorkflowDialog", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: source.workflowKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2" as never,
       },
     });
@@ -113,7 +114,7 @@ describe("DuplicateWorkflowDialog", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: source.workflowKey,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef: "run-2" as never,
       },
       runSummaries: [],
@@ -187,7 +188,10 @@ describe("DuplicateWorkflowDialog", () => {
       createMessageHandlers()[MESSAGE_TYPES.WORKFLOW_VARIANT_CREATED]({
         type: MESSAGE_TYPES.WORKFLOW_VARIANT_CREATED,
         requestId: request.requestId,
-        address: { workflowKey: "stale" as never, kind: "draft" },
+        address: {
+          workflowKey: "stale" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+        },
       });
     });
 
@@ -207,7 +211,7 @@ describe("DuplicateWorkflowDialog", () => {
     const request = postMessageSpy.mock.calls[0][0] as { requestId: string };
     const newAddress: WorkflowViewAddress = {
       workflowKey: "workflow-2" as never,
-      kind: "draft",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
     };
 
     act(() => {
@@ -243,7 +247,7 @@ describe("DuplicateWorkflowDialog", () => {
     const request = postMessageSpy.mock.calls[0][0] as { requestId: string };
     const newAddress: WorkflowViewAddress = {
       workflowKey: "workflow-2" as never,
-      kind: "draft",
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
     };
 
     act(() => {

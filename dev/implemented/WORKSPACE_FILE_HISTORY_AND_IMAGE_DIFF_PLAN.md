@@ -402,7 +402,7 @@ text-or-image-or-binary shape used for the other two endpoints, rather than
 inventing a fourth shape.
 
 **Client side.** Update the client adapter and `WorkspaceDiffPane` so a file
-is displayable when it has text hunks *or* an image/binary payload, on both
+is displayable when it has text hunks _or_ an image/binary payload, on both
 its `commitGroups` mapping and its `singleFileGroups` mapping
 (`WorkspaceDiffPane.tsx:39-63,64-88`) — both need the same source-kind switch
 extended, not just the commit one. Widen `ParsedDiffFile`
@@ -590,4 +590,4 @@ not a required first-phase edit.
   virtualization, and paginating `getGitRefDiff` itself for very large commits
   are clearly left for follow-on work; `DiffFileList` is not modified by this
   plan.
-</content>
+  </content>

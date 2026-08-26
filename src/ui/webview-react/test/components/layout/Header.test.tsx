@@ -12,6 +12,7 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { EXECUTION_STATES, MESSAGE_TYPES, RUNNER_IDS } from "@/types/messages";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 const postMessage = vi.fn();
 const runRef = "run-2026-07-20T10-30-00-000Z" as never;
@@ -35,7 +36,7 @@ describe("Header execution controls", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-a" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef,
       },
       displayedDefinitionRevision: 3,
@@ -109,7 +110,7 @@ describe("Header execution controls", () => {
       type: MESSAGE_TYPES.CONTINUE_RUN,
       address: {
         workflowKey: "workflow-a",
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef,
       },
       expectedDefinitionRevision: 3,
@@ -121,7 +122,7 @@ describe("Header execution controls", () => {
       type: MESSAGE_TYPES.START_NEW_RUN_INSTEAD,
       address: {
         workflowKey: "workflow-a",
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef,
       },
       expectedDefinitionRevision: 3,
@@ -133,7 +134,11 @@ describe("Header execution controls", () => {
     useUiStore.setState({
       suffixEditConfirmation: {
         action: "discardContinuation",
-        address: { workflowKey: "workflow-a" as never, kind: "run", runRef },
+        address: {
+          workflowKey: "workflow-a" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef,
+        },
         expectedDefinitionRevision: 3,
         expectedDescriptorRevision: 7,
       },
@@ -154,7 +159,11 @@ describe("Header execution controls", () => {
 
     expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.DISCARD_CONTINUATION,
-      address: { workflowKey: "workflow-a", kind: "run", runRef },
+      address: {
+        workflowKey: "workflow-a",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef,
+      },
       expectedDefinitionRevision: 3,
       expectedDescriptorRevision: 7,
       confirmEditedSuffix: true,
@@ -166,7 +175,11 @@ describe("Header execution controls", () => {
     useUiStore.setState({
       suffixEditConfirmation: {
         action: "startNewRunInstead",
-        address: { workflowKey: "workflow-a" as never, kind: "run", runRef },
+        address: {
+          workflowKey: "workflow-a" as never,
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+          runRef,
+        },
         expectedDefinitionRevision: 3,
         expectedDescriptorRevision: 7,
       },
@@ -191,7 +204,7 @@ describe("Header execution controls", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-b" as never,
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       },
       executionRunRef: null,
       pendingRewind: null,
@@ -207,7 +220,10 @@ describe("Header execution controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
     expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.EXECUTE_DRAFT,
-      address: { workflowKey: "workflow-b", kind: "draft" },
+      address: {
+        workflowKey: "workflow-b",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
       expectedDefinitionRevision: 3,
       expectedDescriptorRevision: 7,
     });
@@ -217,7 +233,7 @@ describe("Header execution controls", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-b" as never,
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       },
       executionRunRef: null,
       pendingRewind: null,
@@ -244,7 +260,10 @@ describe("Header execution controls", () => {
     fireEvent.click(runButton);
     expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.EXECUTE_DRAFT,
-      address: { workflowKey: "workflow-b", kind: "draft" },
+      address: {
+        workflowKey: "workflow-b",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
       expectedDefinitionRevision: 3,
       expectedDescriptorRevision: 7,
     });
@@ -258,7 +277,7 @@ describe("Header execution controls", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-b" as never,
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       },
       executionRunRef: null,
       pendingRewind: null,
@@ -289,7 +308,10 @@ describe("Header execution controls", () => {
     expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST,
       requestId: expect.stringMatching(/^save-/),
-      address: { workflowKey: "workflow-b", kind: "draft" },
+      address: {
+        workflowKey: "workflow-b",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
     });
     for (const label of ["Pause", "Stop"]) {
       expect(screen.getByRole("button", { name: label }).className).toContain(
@@ -308,7 +330,7 @@ describe("Header execution controls", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "completed-workflow" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef,
       },
       executionRunRef: null,
@@ -339,7 +361,7 @@ describe("Header execution controls", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-a" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef,
       },
       executionRunRef: null,
@@ -365,7 +387,11 @@ describe("Header execution controls", () => {
     fireEvent.click(runButton);
     expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.CONTINUE_RUN,
-      address: { workflowKey: "workflow-a", kind: "run", runRef },
+      address: {
+        workflowKey: "workflow-a",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef,
+      },
       expectedDefinitionRevision: 3,
       expectedDescriptorRevision: 7,
     });
@@ -375,7 +401,7 @@ describe("Header execution controls", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-a" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef,
       },
       executionRunRef: null,
@@ -405,7 +431,7 @@ describe("Header execution controls", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-a" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef,
       },
       executionRunRef: null,
@@ -431,7 +457,7 @@ describe("Header execution controls", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-a" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef,
       },
       executionRunRef: runRef,
@@ -472,7 +498,7 @@ describe("Header execution controls", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-a" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef,
       },
       executionRunRef: runRef,
@@ -526,7 +552,7 @@ describe("Header execution controls", () => {
       activeWorkflowId: "workflow-instance",
       displayedViewAddress: {
         workflowKey: "workflow-a" as never,
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef,
       },
       executionRunRef: runRef,
@@ -602,7 +628,11 @@ describe("Header execution controls", () => {
     fireEvent.click(resumeButton);
     expect(postMessage).toHaveBeenCalledWith({
       type: MESSAGE_TYPES.RESUME_RUN,
-      address: { workflowKey: "workflow-a", kind: "run", runRef },
+      address: {
+        workflowKey: "workflow-a",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef,
+      },
     });
   });
 
@@ -638,7 +668,7 @@ describe("Header execution controls", () => {
       type: MESSAGE_TYPES.STOP_RUN,
       address: {
         workflowKey: "workflow-a",
-        kind: "run",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
         runRef,
       },
     });
@@ -704,7 +734,7 @@ describe("Header deleted-workflow banner", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-a" as never,
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       },
       viewingDeletedWorkflow: {
         workflowKey: "workflow-a" as never,
@@ -749,7 +779,7 @@ describe("Header deleted-workflow banner", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-b" as never,
-        kind: "draft",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
       },
     });
 

@@ -17,7 +17,10 @@ import {
 } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES, type HistorySearchResult } from "@/types/messages";
-import { HISTORY_EVENT_KINDS } from "@root/types/DashboardConstants";
+import {
+  HISTORY_EVENT_KINDS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 import type { HistoryEventKind } from "@root/types/WorkflowTimelineTypes";
 import { formatRelativeTimeVerbose } from "@utils/time";
 import { truncateSnippet } from "@utils/string";
@@ -254,7 +257,7 @@ export function HistorySearchDrawer() {
       setPendingHistorySearchNavigation({
         address: {
           workflowKey: result.workflowKey,
-          kind: "run",
+          kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
           runRef: result.runRef,
         },
         findQuery: query.trim(),
@@ -413,7 +416,7 @@ export function HistorySearchDrawer() {
   ]);
 
   const workflowScopeAvailable =
-    displayedViewAddress?.kind === "run" &&
+    displayedViewAddress?.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
     Boolean(workflowKey && workflowName);
 
   return (

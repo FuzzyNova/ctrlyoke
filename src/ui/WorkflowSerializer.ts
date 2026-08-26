@@ -10,6 +10,7 @@ import {
   PANEL_CLIENT_ID,
   WORKFLOW_FILE_FORMATS,
   type WorkflowFileFormat,
+  WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
@@ -95,8 +96,9 @@ export class WorkflowSerializer {
     return (
       left.workflowKey === right.workflowKey &&
       left.kind === right.kind &&
-      (left.kind === "draft" ||
-        (right.kind === "run" && left.runRef === right.runRef))
+      (left.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT ||
+        (right.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN &&
+          left.runRef === right.runRef))
     );
   }
 
@@ -122,7 +124,7 @@ export class WorkflowSerializer {
       ? getVsCodeWorkspaceRoot()
       : undefined;
     if (address && workspaceRoot) {
-      return address.kind === "draft"
+      return address.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT
         ? WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey)
         : WorkflowPaths.runFilePath(
             workspaceRoot,
@@ -404,7 +406,7 @@ export class WorkflowSerializer {
         : "yaml";
 
       let title = "Save draft";
-      if (address.kind === "run") {
+      if (address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN) {
         const summary = workspaceRoot
           ? await new OutputHistoryManager(workspaceRoot)
               .getRunSummaries(address.workflowKey)
@@ -1193,8 +1195,12 @@ export class WorkflowSerializer {
               workflowKey
             );
             address = descriptor.latestRunRef
-              ? { workflowKey, kind: "run", runRef: descriptor.latestRunRef }
-              : { workflowKey, kind: "draft" };
+              ? {
+                  workflowKey,
+                  kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+                  runRef: descriptor.latestRunRef,
+                }
+              : { workflowKey, kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT };
           } catch (error) {
             Log.warn(
               `Failed to read lineage descriptor ${workflowKey}:`,
@@ -1204,7 +1210,7 @@ export class WorkflowSerializer {
           }
 
           const filePath =
-            address.kind === "run"
+            address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
               ? WorkflowPaths.runFilePath(
                   workspaceRoot,
                   address.workflowKey,
@@ -1212,7 +1218,7 @@ export class WorkflowSerializer {
                 )
               : WorkflowPaths.draftFilePath(workspaceRoot, address.workflowKey);
           const runDirectory =
-            address.kind === "run"
+            address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
               ? WorkflowPaths.runDir(
                   workspaceRoot,
                   address.workflowKey,
@@ -1229,7 +1235,7 @@ export class WorkflowSerializer {
               await historyManager.getRunNavigationSummary(workflowKey);
             const hasDraft =
               !descriptor.latestRunRef ||
-              descriptor.pendingEdit?.kind === "draft";
+              descriptor.pendingEdit?.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT;
             const runNav: WorkflowRunNavigationSummary = {
               primaryAddress: address,
               primaryRunId,
@@ -1426,10 +1432,13 @@ export class WorkflowSerializer {
       }
 
       try {
-        await fs.rm(WorkflowPaths.lineageDir(workspaceRoot, address.workflowKey), {
-          recursive: true,
-          force: true,
-        });
+        await fs.rm(
+          WorkflowPaths.lineageDir(workspaceRoot, address.workflowKey),
+          {
+            recursive: true,
+            force: true,
+          }
+        );
         Log.debug(
           `handleRemoveWorkflowHistory: removed lineage "${address.workflowKey}"`
         );

@@ -8,6 +8,7 @@ import type {
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import type { WorkflowExecutionPreview } from "@root/types/ExecutionPreviewTypes";
 import { sendMessage } from "../hooks/useMessageHandler";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 
 export type ExecutionPreviewStatus = "checking" | "ready";
 
@@ -41,7 +42,7 @@ interface ExecutionPreviewActions {
 let requestSequence = 0;
 
 function addressKey(address: WorkflowViewAddress): string {
-  return address.kind === "run"
+  return address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
     ? `${address.workflowKey}:run:${address.runRef}`
     : `${address.workflowKey}:draft`;
 }

@@ -1,5 +1,8 @@
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
-import { MESSAGE_TYPES } from "../types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "../types/DashboardConstants";
 import type {
   AppendAndContinueRunMessage,
   ContinueRunMessage,
@@ -88,7 +91,7 @@ export class WorkflowStepHandlers {
       if (
         message.rewindCompletedStep === true &&
         index > 0 &&
-        mutation?.address.kind === "run"
+        mutation?.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.RUN
       ) {
         await orchestrator.updateCompletedPromptInQueue(
           mutation,

@@ -49,9 +49,7 @@ function formatUpdatedSuffix(fetchedAt: number | undefined): string {
   return relative ? ` · updated ${relative.toLowerCase()}` : "";
 }
 
-function quotaSourceDescription(
-  quota: HarnessUsageSnapshot["quota"]
-): string {
+function quotaSourceDescription(quota: HarnessUsageSnapshot["quota"]): string {
   if (isSidecarPending(quota)) {
     return "This provider reports quota live during a session, not through a standalone check. Run a ctrlyoke step with it and its quota will appear here.";
   }

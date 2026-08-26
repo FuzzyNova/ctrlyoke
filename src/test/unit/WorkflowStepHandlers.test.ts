@@ -5,6 +5,7 @@ import { WorkflowStepHandlers } from "../../ui/WorkflowStepHandlers";
 import { WorkflowMutationCoordinator } from "../../ui/WorkflowMutationCoordinator";
 import type { WebviewClientContext } from "../../ui/WebviewClientContext";
 import type { WebviewSettingsSync } from "../../ui/WebviewSettingsSync";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "../../types/DashboardConstants";
 
 /**
  * Regression coverage for the "step edit doesn't stay undoable" bug: a
@@ -169,7 +170,10 @@ suite("WorkflowStepHandlers — success-path client echo", () => {
 suite("WorkflowMutationCoordinator — property revision recovery", () => {
   test("retries a property mutation with the authoritative revision", async () => {
     const attempts: number[] = [];
-    const address = { kind: "draft", workflowKey: "workflow-key" } as const;
+    const address = {
+      kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      workflowKey: "workflow-key",
+    } as const;
     const orchestrator = {
       prepareWorkflowPropertiesMutation: async (mutation?: {
         expectedDefinitionRevision?: number;
