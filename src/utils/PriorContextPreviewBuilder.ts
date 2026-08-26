@@ -1,5 +1,6 @@
 import { buildPriorContextXmlFromItems } from "../core/HarnessIntegration";
 import { type PriorContext, type WorkflowStep } from "../types/CtrlYokeTypes";
+import { PRIOR_CONTEXT_REFERENCE_KINDS } from "../types/DashboardConstants";
 import { RunOutputResolver } from "../core/orchestration/RunOutputResolver";
 
 /**
@@ -42,9 +43,15 @@ export class PriorContextPreviewBuilder {
   }
 
   private static toPriorContext(ref: string, stepCount: number): PriorContext {
-    if (ref === "finalStep") return "finalStepPrevious";
-    if (ref === "allFinalStep") return "finalStepAll";
-    if (ref === "previous" || ref === "all") return ref;
+    if (ref === PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP)
+      return "finalStepPrevious";
+    if (ref === PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP)
+      return "finalStepAll";
+    if (
+      ref === PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS ||
+      ref === PRIOR_CONTEXT_REFERENCE_KINDS.ALL
+    )
+      return ref;
     return PriorContextPreviewBuilder.resolveIndices(ref, stepCount).map(
       (index) => index + 1
     );
@@ -52,16 +59,17 @@ export class PriorContextPreviewBuilder {
 
   /** Convert a ref string to 0-based step indices. */
   private static resolveIndices(ref: string, stepCount: number): number[] {
-    if (ref === "previous") {
+    if (ref === PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS) {
       return stepCount > 0 ? [stepCount - 1] : [];
     }
-    if (ref === "all") {
+    if (ref === PRIOR_CONTEXT_REFERENCE_KINDS.ALL) {
       return stepCount > 0
         ? Array.from({ length: stepCount }, (_, i) => i)
         : [];
     }
-    if (ref.startsWith("step:")) {
-      const rangeText = ref.slice("step:".length);
+    if (ref.startsWith(`${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:`)) {
+      const stepPrefix = `${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:`;
+      const rangeText = ref.slice(stepPrefix.length);
       const indices = new Set<number>();
       for (const part of rangeText.split(",")) {
         const rangeParts = part.match(/^(\d+)-(\d+)$/);

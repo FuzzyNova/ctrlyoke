@@ -6,7 +6,9 @@ import {
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import {
   USER_FEEDBACK_SEVERITY,
+  WORKFLOW_DELETE_SCOPES,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  type WorkflowDeleteScope,
 } from "@root/types/DashboardConstants";
 import { writeClipboardText } from "@utils/stepClipboard";
 import { notifyUser } from "@utils/notifyUser";
@@ -20,7 +22,7 @@ export interface WorkflowContextMenuTarget {
    * "run" — one addressed run inside a lineage (run-panel rows). Delete removes
    * only that run.
    */
-  scope: "lineage" | "run";
+  scope: Exclude<WorkflowDeleteScope, typeof WORKFLOW_DELETE_SCOPES.ALL>;
   /** Lineage-scoped on every surface, including run-panel rows. */
   isFavorite?: boolean;
   /** Absent → Copy renders disabled. */
@@ -61,12 +63,14 @@ export function useWorkflowContextMenu({
     ) => {
       const hasRunDirectory = Boolean(target.runDirectory);
       const deleteLabel =
-        target.scope === "lineage" ? "Delete Workflow" : "Delete Run";
+        target.scope === WORKFLOW_DELETE_SCOPES.LINEAGE
+          ? "Delete Workflow"
+          : "Delete Run";
       const isDraftRun =
-        target.scope === "run" &&
+        target.scope === WORKFLOW_DELETE_SCOPES.RUN &&
         target.address.kind === WORKFLOW_VIEW_ADDRESS_KIND.DRAFT;
       const deleteDisabledTitle = target.isExecuting
-        ? `Cannot delete ${target.scope === "lineage" ? "a workflow" : "a run"} while it is executing`
+        ? `Cannot delete ${target.scope === WORKFLOW_DELETE_SCOPES.LINEAGE ? "a workflow" : "a run"} while it is executing`
         : isDraftRun
           ? "The draft cannot be deleted from the run panel"
           : undefined;

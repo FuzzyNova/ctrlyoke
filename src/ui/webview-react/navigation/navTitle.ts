@@ -3,7 +3,10 @@
  * entries get meaningful, shareable labels (VS Code-style).
  */
 import type { Route } from "./route";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  WORKFLOW_VIEW_ADDRESS_KIND,
+  WORKSPACE_VIEWER_TABS,
+} from "@root/types/DashboardConstants";
 
 const APP_NAME = "ctrlyoke";
 
@@ -20,17 +23,17 @@ function refLabel(ref: string): string {
 }
 
 function locationLabel(route: Route): string | undefined {
-  if (route.viewer === "explorer") {
+  if (route.viewer === WORKSPACE_VIEWER_TABS.EXPLORER) {
     if (route.file) return basename(route.file);
     if (route.dir) return `${basename(route.dir)}/`;
     return "Explorer";
   }
-  if (route.viewer === "sourceControl") {
+  if (route.viewer === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL) {
     if (route.ref) return refLabel(route.ref);
     if (route.file) return `${basename(route.file)} (diff)`;
     return "Source Control";
   }
-  if (route.viewer === "search") {
+  if (route.viewer === WORKSPACE_VIEWER_TABS.SEARCH) {
     return "Search";
   }
   if (route.workflow) {

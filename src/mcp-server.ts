@@ -31,6 +31,7 @@ import type {
 } from "./types/CtrlYokeTypes";
 import { isScriptStep } from "./types/CtrlYokeTypes";
 import {
+  BOOLEAN_STRING_VALUES,
   EXECUTION_STATES,
   QUEUE_POSITION,
   type QueuePosition,
@@ -81,7 +82,7 @@ const otherWorkflowSelectorProperties = {
 // ctrlyoke.enableDiagnosticLogs is on. NODE_ENV=development enables it in dev.
 const workspaceRoot = process.env.CTRLYOKE_WORKSPACE || process.cwd();
 const diagnosticLogsEnabled =
-  process.env.CTRLYOKE_DIAGNOSTIC_LOGS === "true" ||
+  process.env.CTRLYOKE_DIAGNOSTIC_LOGS === BOOLEAN_STRING_VALUES.TRUE ||
   process.env.NODE_ENV === "development";
 
 let logFile: string | null = null;
@@ -137,7 +138,7 @@ function getMaxQueueSize(): number {
 }
 
 function isUnlimitedMode(): boolean {
-  return process.env.CTRLYOKE_UNLIMITED_MODE === "true";
+  return process.env.CTRLYOKE_UNLIMITED_MODE === BOOLEAN_STRING_VALUES.TRUE;
 }
 
 export class CtrlYokeMCPServer {

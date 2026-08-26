@@ -7,6 +7,11 @@
 import { truncate } from "./string";
 import type { CliOutput as CliOutputType, TextData } from "../types/cliEvents";
 import { CLI_EVENT_TYPES } from "../types/cliEvents";
+
+const OUTPUT_TOOL_NAMES = {
+  GREP: "grep",
+  SEARCH: "search",
+} as const;
 export { formatTime } from "./time";
 export {
   type DiffLine,
@@ -178,7 +183,10 @@ export function extractKeyParameters(
     return (parameters.pattern as string) || "";
   }
 
-  if (lowerName === "grep" || lowerName === "search") {
+  if (
+    lowerName === OUTPUT_TOOL_NAMES.GREP ||
+    lowerName === OUTPUT_TOOL_NAMES.SEARCH
+  ) {
     const pattern = parameters.pattern
       ? `"${truncate(parameters.pattern as string, 40)}"`
       : "";

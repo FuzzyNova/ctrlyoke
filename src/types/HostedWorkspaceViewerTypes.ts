@@ -1,11 +1,14 @@
 import {
   DIFF_PAYLOAD_KINDS,
   WORKSPACE_ENTRY_KINDS,
+  type WorkspaceSearchScope,
   type DiffChangeType,
   type DiffPayloadKind,
   type ScmFileKind,
   type WorkspaceFileTreeEntryKind,
 } from "./DashboardConstants";
+
+export type { WorkspaceSearchScope } from "./DashboardConstants";
 
 /**
  * Types for the hosted workspace viewer feature.
@@ -145,8 +148,6 @@ export interface WorkspaceReposResponse {
    */
   prefixRepoIds: Record<string, string>;
 }
-
-export type WorkspaceSearchScope = "files" | "content" | "both";
 
 export interface WorkspaceSearchRequest {
   query: string;

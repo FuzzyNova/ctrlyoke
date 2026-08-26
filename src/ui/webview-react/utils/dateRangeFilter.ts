@@ -5,13 +5,14 @@ import {
 } from "@root/types/DashboardConstants";
 
 export type DateRangePreset =
-  | "all"
+  | typeof DATE_RANGE_PRESETS.ALL
   | "last7"
   | "last30"
   | "lastMonth"
   | typeof DATE_RANGE_PRESETS.CUSTOM;
 
 export const DATE_RANGE_PRESETS = {
+  ALL: "all",
   CUSTOM: "custom",
 } as const;
 
@@ -22,7 +23,7 @@ export interface DateRangeFilter {
 }
 
 export const DEFAULT_DATE_RANGE_FILTER: DateRangeFilter = {
-  preset: "all",
+  preset: DATE_RANGE_PRESETS.ALL,
   from: "",
   to: "",
 };
@@ -53,7 +54,10 @@ export function formatDateInput(timestamp: number): string {
 }
 
 export function getDatePresetRange(
-  preset: Exclude<DateRangePreset, "all" | "custom">
+  preset: Exclude<
+    DateRangePreset,
+    typeof DATE_RANGE_PRESETS.ALL | typeof DATE_RANGE_PRESETS.CUSTOM
+  >
 ): Pick<DateRangeFilter, "from" | "to"> {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());

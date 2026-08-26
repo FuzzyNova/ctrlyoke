@@ -43,6 +43,12 @@ export const STATUS_LINE_TRACKING_PROVIDERS = {
 export type StatusLineTrackingProvider =
   (typeof STATUS_LINE_TRACKING_PROVIDERS)[keyof typeof STATUS_LINE_TRACKING_PROVIDERS];
 
+/** String representations used when booleans cross a text-based boundary. */
+export const BOOLEAN_STRING_VALUES = {
+  TRUE: "true",
+  FALSE: "false",
+} as const;
+
 // ============================================================================
 // MESSAGE TYPES - Communication between extension and webview
 // ============================================================================
@@ -1409,6 +1415,18 @@ export const WORKFLOW_VIEW_ADDRESS_KIND = {
   RUN: "run",
 } as const;
 
+// ============================================================================
+// WORKFLOW DELETE SCOPES - History/context-menu deletion targets
+// ============================================================================
+export const WORKFLOW_DELETE_SCOPES = {
+  LINEAGE: "lineage",
+  RUN: "run",
+  ALL: "all",
+} as const;
+
+export type WorkflowDeleteScope =
+  (typeof WORKFLOW_DELETE_SCOPES)[keyof typeof WORKFLOW_DELETE_SCOPES];
+
 export const WORKTREE_MANAGEMENT_ACTIONS = {
   REMOVE: "remove",
   FORCE_REMOVE: "force-remove",
@@ -1812,7 +1830,19 @@ export const PRIOR_CONTEXT_KEYWORDS = {
   FINAL_STEP_PREVIOUS: "finalStepPrevious",
 } as const;
 
+export const PRIOR_CONTEXT_REFERENCE_KINDS = {
+  PREVIOUS: PRIOR_CONTEXT_KEYWORDS.PREVIOUS,
+  ALL: PRIOR_CONTEXT_KEYWORDS.ALL,
+  FINAL_STEP: "finalStep",
+  ALL_FINAL_STEP: "allFinalStep",
+  STEP: "step",
+} as const;
+
+export type PriorContextReferenceKind =
+  (typeof PRIOR_CONTEXT_REFERENCE_KINDS)[keyof typeof PRIOR_CONTEXT_REFERENCE_KINDS];
+
 export const PRIOR_CONTEXT_SELECTION_MODES = {
+  RUN: "run",
   CUSTOM: "custom",
 } as const;
 
@@ -1883,6 +1913,18 @@ export const FILE_OPERATION_KINDS = {
 
 export type FileOperationKind =
   (typeof FILE_OPERATION_KINDS)[keyof typeof FILE_OPERATION_KINDS];
+
+// ============================================================================
+// APPLY PATCH FILE EDIT KINDS - Codex patch parser file-operation values
+// ============================================================================
+export const APPLY_PATCH_FILE_EDIT_KINDS = {
+  ADD: "add",
+  UPDATE: "update",
+  DELETE: "delete",
+} as const;
+
+export type ApplyPatchFileEditKind =
+  (typeof APPLY_PATCH_FILE_EDIT_KINDS)[keyof typeof APPLY_PATCH_FILE_EDIT_KINDS];
 
 // ============================================================================
 // DIFF PAYLOAD KINDS - Content shape for text/image/binary diff responses
@@ -2228,6 +2270,15 @@ export const OUTPUT_HISTORY_KINDS = {
   RUNTIME: "runtime",
 } as const;
 
+/** Message types produced by the live/history output projection. */
+export const OUTPUT_MESSAGE_TYPES = {
+  STATUS: "status",
+  CLI: "cli",
+} as const;
+
+export type OutputMessageType =
+  (typeof OUTPUT_MESSAGE_TYPES)[keyof typeof OUTPUT_MESSAGE_TYPES];
+
 // ============================================================================
 // OUTPUT ROW KINDS - Discriminants for rendered output rows
 // ============================================================================
@@ -2292,6 +2343,27 @@ export type WorkspaceFileTreeEntryKind = Exclude<
   WorkspaceEntryKind,
   typeof WORKSPACE_ENTRY_KINDS.CONTENT
 >;
+
+// ============================================================================
+// WORKSPACE VIEWER - Shared hosted viewer tab and search scope values
+// ============================================================================
+export const WORKSPACE_VIEWER_TABS = {
+  EXPLORER: "explorer",
+  SOURCE_CONTROL: "sourceControl",
+  SEARCH: "search",
+} as const;
+
+export type WorkspaceViewerTab =
+  (typeof WORKSPACE_VIEWER_TABS)[keyof typeof WORKSPACE_VIEWER_TABS];
+
+export const WORKSPACE_SEARCH_SCOPES = {
+  FILES: "files",
+  CONTENT: "content",
+  BOTH: "both",
+} as const;
+
+export type WorkspaceSearchScope =
+  (typeof WORKSPACE_SEARCH_SCOPES)[keyof typeof WORKSPACE_SEARCH_SCOPES];
 
 // ============================================================================
 // SNAPSHOT STRATEGIES - Workspace snapshot strategy values

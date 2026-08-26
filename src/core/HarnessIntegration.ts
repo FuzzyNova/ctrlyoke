@@ -32,6 +32,7 @@ import { stripAnsiCodes } from "../utils/TerminalOutputSanitizer";
 import { SplitConfig } from "../utils/PromptFileSplitter";
 import {
   PRIOR_CONTEXT_KEYWORDS,
+  PRIOR_CONTEXT_REFERENCE_KINDS,
   STEP_TYPES,
   PriorContextItemType,
 } from "../types/DashboardConstants";
@@ -63,15 +64,15 @@ export type PriorContextItem = {
 
 export function refToPriorContext(ref: InlinePriorContextRef): PriorContext {
   switch (ref.kind) {
-    case "previous":
+    case PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS:
       return PRIOR_CONTEXT_KEYWORDS.PREVIOUS;
-    case "all":
+    case PRIOR_CONTEXT_REFERENCE_KINDS.ALL:
       return PRIOR_CONTEXT_KEYWORDS.ALL;
-    case "finalStep":
+    case PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP:
       return PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS;
-    case "allFinalStep":
+    case PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP:
       return PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL;
-    case "step":
+    case PRIOR_CONTEXT_REFERENCE_KINDS.STEP:
       return ref.indices;
   }
 }

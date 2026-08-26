@@ -19,6 +19,14 @@ import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import { ResetConfirmModal } from "../shared/ResetConfirmModal";
 import { ActionButton, type ActionFeedback } from "../shared/ActionButton";
 
+const CONFIRMATION_VARIANTS = {
+  DELETE: "delete",
+  RESET: "reset",
+} as const;
+
+type ConfirmationVariant =
+  (typeof CONFIRMATION_VARIANTS)[keyof typeof CONFIRMATION_VARIANTS];
+
 interface Props {
   settings: FullGlobalSettings;
   activeScope: SettingWriteScope;
@@ -40,7 +48,7 @@ function generateRequestId(key: string): string {
  * every confirm-gated button silently no-op'd instead of prompting.
  */
 interface PendingConfirmRequest {
-  variant: "delete" | "reset";
+  variant: ConfirmationVariant;
   title: string;
   message: string;
   detail?: string;
@@ -372,19 +380,25 @@ export function WorktreesSection({
       </section>
 
       <DeleteConfirmModal
-        isOpen={pendingConfirm?.variant === "delete"}
+        isOpen={pendingConfirm?.variant === CONFIRMATION_VARIANTS.DELETE}
         onCancel={() => setPendingConfirm(null)}
         onConfirm={() => {
           const request = pendingConfirm;
           setPendingConfirm(null);
           request?.onConfirm();
         }}
-        title={pendingConfirm?.variant === "delete" ? pendingConfirm.title : ""}
+        title={
+          pendingConfirm?.variant === CONFIRMATION_VARIANTS.DELETE
+            ? pendingConfirm.title
+            : ""
+        }
         message={
-          pendingConfirm?.variant === "delete" ? pendingConfirm.message : ""
+          pendingConfirm?.variant === CONFIRMATION_VARIANTS.DELETE
+            ? pendingConfirm.message
+            : ""
         }
         detail={
-          pendingConfirm?.variant === "delete"
+          pendingConfirm?.variant === CONFIRMATION_VARIANTS.DELETE
             ? pendingConfirm.detail
             : undefined
         }
@@ -465,7 +479,7 @@ function WorktreeRow({
       return;
     }
     requestConfirm({
-      variant: "delete",
+      variant: CONFIRMATION_VARIANTS.DELETE,
       title: "Remove Worktree",
       message: `Remove worktree "${entry.worktreePath}"?`,
       onConfirm: doRemove,
@@ -487,7 +501,7 @@ function WorktreeRow({
       return;
     }
     requestConfirm({
-      variant: "delete",
+      variant: CONFIRMATION_VARIANTS.DELETE,
       title: "Force Remove Worktree",
       message: `Force remove worktree "${entry.worktreePath}"?`,
       detail: "Uncommitted work in this worktree may be lost.",
@@ -510,7 +524,7 @@ function WorktreeRow({
       return;
     }
     requestConfirm({
-      variant: "delete",
+      variant: CONFIRMATION_VARIANTS.DELETE,
       title: "Delete Branch",
       message: `Delete branch "${entry.branchName}"?`,
       detail: "This cannot be undone by ctrlyoke.",

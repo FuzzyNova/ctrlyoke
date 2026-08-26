@@ -15,8 +15,8 @@ export const DateRangeFilterControls: React.FC<
   DateRangeFilterControlsProps
 > = ({ value, onChange }) => {
   const handleDatePresetChange = (preset: DateRangePreset) => {
-    if (preset === "all") {
-      onChange({ preset: "all", from: "", to: "" });
+    if (preset === DATE_RANGE_PRESETS.ALL) {
+      onChange({ preset: DATE_RANGE_PRESETS.ALL, from: "", to: "" });
       return;
     }
 
@@ -40,7 +40,7 @@ export const DateRangeFilterControls: React.FC<
       preset:
         nextValue || value[bound === "from" ? "to" : "from"]
           ? DATE_RANGE_PRESETS.CUSTOM
-          : "all",
+          : DATE_RANGE_PRESETS.ALL,
       [bound]: nextValue,
     });
   };
@@ -55,7 +55,7 @@ export const DateRangeFilterControls: React.FC<
         }
         className="h-7 min-w-[112px] flex-shrink-0 rounded border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-none focus:border-focus-border"
       >
-        <option value="all">Any time</option>
+        <option value={DATE_RANGE_PRESETS.ALL}>Any time</option>
         <option value="last7">Last 7 days</option>
         <option value="last30">Last 30 days</option>
         <option value="lastMonth">Last month</option>

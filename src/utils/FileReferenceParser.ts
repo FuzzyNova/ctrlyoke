@@ -20,6 +20,7 @@
 
 import {
   GIT_CHANGE_KINDS,
+  PRIOR_CONTEXT_REFERENCE_KINDS,
   SCRIPT_OUTPUT_SOURCES,
   type GitChangeKind,
 } from "../types/DashboardConstants";
@@ -63,11 +64,11 @@ export interface FileReference {
 }
 
 export type InlinePriorContextRef =
-  | { kind: "previous" }
-  | { kind: "all" }
-  | { kind: "finalStep" }
-  | { kind: "allFinalStep" }
-  | { kind: "step"; indices: number[] };
+  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS }
+  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.ALL }
+  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP }
+  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP }
+  | { kind: typeof PRIOR_CONTEXT_REFERENCE_KINDS.STEP; indices: number[] };
 
 export interface InlinePriorContextMatch {
   ref: InlinePriorContextRef;
@@ -324,30 +325,43 @@ export function parseInlinePriorContextRefs(
     const body = match[1];
     const token = match[0];
 
-    if (body === "previous") {
-      matches.push({ ref: { kind: "previous" }, token });
+    if (body === PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS) {
+      matches.push({
+        ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS },
+        token,
+      });
       continue;
     }
-    if (body === "all") {
-      matches.push({ ref: { kind: "all" }, token });
+    if (body === PRIOR_CONTEXT_REFERENCE_KINDS.ALL) {
+      matches.push({ ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.ALL }, token });
       continue;
     }
-    if (body === "finalStep") {
-      matches.push({ ref: { kind: "finalStep" }, token });
+    if (body === PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP) {
+      matches.push({
+        ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP },
+        token,
+      });
       continue;
     }
-    if (body === "allFinalStep") {
-      matches.push({ ref: { kind: "allFinalStep" }, token });
+    if (body === PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP) {
+      matches.push({
+        ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP },
+        token,
+      });
       continue;
     }
-    if (body.startsWith("step:")) {
-      const rangeText = body.slice("step:".length);
+    if (body.startsWith(`${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:`)) {
+      const stepPrefix = `${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:`;
+      const rangeText = body.slice(stepPrefix.length);
       const indices = parseRangeNotation(rangeText);
       if (!indices) {
         console.warn(`Invalid inline prior context range "${token}" skipped`);
         continue;
       }
-      matches.push({ ref: { kind: "step", indices }, token });
+      matches.push({
+        ref: { kind: PRIOR_CONTEXT_REFERENCE_KINDS.STEP, indices },
+        token,
+      });
     }
   }
 

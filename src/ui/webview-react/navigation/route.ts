@@ -24,10 +24,16 @@
 
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
 import type { WorkspaceSearchScope } from "@root/types/HostedWorkspaceViewerTypes";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  BOOLEAN_STRING_VALUES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+  WORKSPACE_SEARCH_SCOPES,
+  WORKSPACE_VIEWER_TABS,
+  type WorkspaceViewerTab,
+} from "@root/types/DashboardConstants";
 
 /** Workspace viewer tab id — matches `workspaceViewerStore`'s `activeTab`. */
-type ViewerTab = "explorer" | "sourceControl" | "search";
+type ViewerTab = WorkspaceViewerTab;
 
 /**
  * Single source for the `viewer=` URL token of each tab, and its inverse. Every
@@ -35,9 +41,9 @@ type ViewerTab = "explorer" | "sourceControl" | "search";
  * token and silently switch tabs on reload/back.
  */
 const VIEWER_URL_TOKENS: Record<ViewerTab, string> = {
-  explorer: "explorer",
-  sourceControl: "scm",
-  search: "search",
+  [WORKSPACE_VIEWER_TABS.EXPLORER]: "explorer",
+  [WORKSPACE_VIEWER_TABS.SOURCE_CONTROL]: "scm",
+  [WORKSPACE_VIEWER_TABS.SEARCH]: "search",
 };
 
 const VIEWER_TABS_BY_URL_TOKEN: Record<string, ViewerTab | undefined> =
@@ -99,13 +105,15 @@ function clean(value: string | null | undefined): string | undefined {
 }
 
 function parseSearchScope(value: string | null): WorkspaceSearchScope {
-  return value === "files" || value === "content" || value === "both"
+  return value === WORKSPACE_SEARCH_SCOPES.FILES ||
+    value === WORKSPACE_SEARCH_SCOPES.CONTENT ||
+    value === WORKSPACE_SEARCH_SCOPES.BOTH
     ? value
-    : "both";
+    : WORKSPACE_SEARCH_SCOPES.BOTH;
 }
 
 function parseBoolean(value: string | null): boolean {
-  return value === "true";
+  return value === BOOLEAN_STRING_VALUES.TRUE;
 }
 
 function parseLines(value: string | null): [number, number] | undefined {
@@ -176,7 +184,7 @@ export function normalizeRoute(route: Route): Route {
   if (!route.viewer) return out;
   out.viewer = route.viewer;
 
-  if (route.viewer === "explorer") {
+  if (route.viewer === WORKSPACE_VIEWER_TABS.EXPLORER) {
     if (route.file) {
       out.file = fwd(route.file);
       if (route.lines && route.lines[0] > 0 && route.lines[1] > 0) {
@@ -185,16 +193,19 @@ export function normalizeRoute(route: Route): Route {
     } else if (route.dir) {
       out.dir = fwd(route.dir);
     }
-  } else if (route.viewer === "sourceControl") {
+  } else if (route.viewer === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL) {
     if (route.ref) {
       out.ref = route.ref;
     } else if (route.file) {
       out.file = fwd(route.file);
     }
-  } else if (route.viewer === "search") {
+  } else if (route.viewer === WORKSPACE_VIEWER_TABS.SEARCH) {
     const searchQuery = clean(route.searchQuery);
     if (searchQuery) out.searchQuery = searchQuery;
-    if (route.searchScope && route.searchScope !== "both") {
+    if (
+      route.searchScope &&
+      route.searchScope !== WORKSPACE_SEARCH_SCOPES.BOTH
+    ) {
       out.searchScope = route.searchScope;
     }
     if (route.searchIncludeGitIgnored) {
@@ -224,10 +235,10 @@ export function parseRoute(search: string): Route {
       return runRef
         ? {
             workflowKey: workflowKey as WorkflowViewAddress["workflowKey"],
-            kind: "run" as const,
+            kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
             runRef: runRef as Extract<
               WorkflowViewAddress,
-              { kind: "run" }
+              { kind: typeof WORKFLOW_VIEW_ADDRESS_KIND.RUN }
             >["runRef"],
           }
         : {
@@ -268,7 +279,7 @@ export function serializeRoute(route: Route, currentSearch = ""): string {
 
   if (normalized.viewer) {
     params.set("viewer", VIEWER_URL_TOKENS[normalized.viewer]);
-    if (normalized.viewer === "explorer") {
+    if (normalized.viewer === WORKSPACE_VIEWER_TABS.EXPLORER) {
       if (normalized.file) {
         params.set("file", normalized.file);
         if (normalized.lines) {
@@ -277,21 +288,24 @@ export function serializeRoute(route: Route, currentSearch = ""): string {
       } else if (normalized.dir) {
         params.set("dir", normalized.dir);
       }
-    } else if (normalized.viewer === "sourceControl") {
+    } else if (normalized.viewer === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL) {
       if (normalized.ref) {
         params.set("ref", normalized.ref);
       } else if (normalized.file) {
         params.set("file", normalized.file);
       }
-    } else if (normalized.viewer === "search") {
+    } else if (normalized.viewer === WORKSPACE_VIEWER_TABS.SEARCH) {
       if (normalized.searchQuery) {
         params.set("query", normalized.searchQuery);
       }
-      if (normalized.searchScope && normalized.searchScope !== "both") {
+      if (
+        normalized.searchScope &&
+        normalized.searchScope !== WORKSPACE_SEARCH_SCOPES.BOTH
+      ) {
         params.set("scope", normalized.searchScope);
       }
       if (normalized.searchIncludeGitIgnored) {
-        params.set("includeGitIgnored", "true");
+        params.set("includeGitIgnored", BOOLEAN_STRING_VALUES.TRUE);
       }
       if (normalized.searchRepo) {
         params.set("repo", normalized.searchRepo);
@@ -318,7 +332,8 @@ export function sameNavigation(a: Route, b: Route): boolean {
     na.dir === nb.dir &&
     na.ref === nb.ref &&
     na.searchQuery === nb.searchQuery &&
-    (na.searchScope ?? "both") === (nb.searchScope ?? "both") &&
+    (na.searchScope ?? WORKSPACE_SEARCH_SCOPES.BOTH) ===
+      (nb.searchScope ?? WORKSPACE_SEARCH_SCOPES.BOTH) &&
     (na.searchIncludeGitIgnored ?? false) ===
       (nb.searchIncludeGitIgnored ?? false) &&
     na.searchRepo === nb.searchRepo
@@ -337,7 +352,8 @@ export function routesEqual(a: Route, b: Route): boolean {
     na.ref === nb.ref &&
     linesEqual(na.lines, nb.lines) &&
     na.searchQuery === nb.searchQuery &&
-    (na.searchScope ?? "both") === (nb.searchScope ?? "both") &&
+    (na.searchScope ?? WORKSPACE_SEARCH_SCOPES.BOTH) ===
+      (nb.searchScope ?? WORKSPACE_SEARCH_SCOPES.BOTH) &&
     (na.searchIncludeGitIgnored ?? false) ===
       (nb.searchIncludeGitIgnored ?? false) &&
     na.searchRepo === nb.searchRepo
@@ -353,8 +369,8 @@ export function isSearchStateChange(a: Route, b: Route): boolean {
   const na = normalizeRoute(a);
   const nb = normalizeRoute(b);
   return (
-    na.viewer === "search" &&
-    nb.viewer === "search" &&
+    na.viewer === WORKSPACE_VIEWER_TABS.SEARCH &&
+    nb.viewer === WORKSPACE_VIEWER_TABS.SEARCH &&
     workflowAddressesEqual(na.workflow, nb.workflow)
   );
 }
@@ -374,19 +390,19 @@ export function deriveRoute(s: RouteSourceState): Route {
 
   if (s.isOpen) {
     raw.viewer = s.activeTab;
-    if (s.activeTab === "explorer") {
+    if (s.activeTab === WORKSPACE_VIEWER_TABS.EXPLORER) {
       if (s.selectedFilePath) {
         raw.file = s.selectedFilePath;
       } else if (s.explorerPath) {
         raw.dir = s.explorerPath;
       }
-    } else if (s.activeTab === "sourceControl") {
+    } else if (s.activeTab === WORKSPACE_VIEWER_TABS.SOURCE_CONTROL) {
       if (s.diffRef) {
         raw.ref = s.diffRef;
       } else if (s.selectedDiffPath) {
         raw.file = s.selectedDiffPath;
       }
-    } else if (s.activeTab === "search") {
+    } else if (s.activeTab === WORKSPACE_VIEWER_TABS.SEARCH) {
       raw.searchQuery = s.searchQuery;
       raw.searchScope = s.searchScope;
       raw.searchIncludeGitIgnored = s.searchIncludeGitIgnored;

@@ -15,6 +15,10 @@ import { MESSAGE_TYPES } from "@/types/messages";
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { areWorkflowAddressesEqual } from "@utils/viewAddress";
+import {
+  WORKSPACE_SEARCH_SCOPES,
+  WORKSPACE_VIEWER_TABS,
+} from "@root/types/DashboardConstants";
 import type { Route } from "./route";
 
 interface PostMessageApi {
@@ -67,7 +71,7 @@ function applyViewer(route: Route): void {
     return;
   }
 
-  if (route.viewer === "explorer") {
+  if (route.viewer === WORKSPACE_VIEWER_TABS.EXPLORER) {
     if (route.file) {
       wv.openToFile(route.file, route.lines?.[0], route.lines?.[1]);
     } else {
@@ -77,13 +81,13 @@ function applyViewer(route: Route): void {
     return;
   }
 
-  if (route.viewer === "search") {
+  if (route.viewer === WORKSPACE_VIEWER_TABS.SEARCH) {
     if (!wv.isOpen) wv.open();
     wv.setSearchQuery(route.searchQuery ?? "");
-    wv.setSearchScope(route.searchScope ?? "both");
+    wv.setSearchScope(route.searchScope ?? WORKSPACE_SEARCH_SCOPES.BOTH);
     wv.setSearchIncludeGitIgnored(route.searchIncludeGitIgnored ?? false);
     wv.setSelectedRepoId(route.searchRepo ?? null);
-    wv.setActiveTab("search");
+    wv.setActiveTab(WORKSPACE_VIEWER_TABS.SEARCH);
     return;
   }
 
@@ -96,7 +100,7 @@ function applyViewer(route: Route): void {
     wv.openToDiff(route.file);
   } else {
     if (!wv.isOpen) wv.open();
-    wv.setActiveTab("sourceControl");
+    wv.setActiveTab(WORKSPACE_VIEWER_TABS.SOURCE_CONTROL);
     wv.clearDiff();
   }
 }

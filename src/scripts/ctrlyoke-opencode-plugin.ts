@@ -39,6 +39,8 @@ import { writeFileSync, mkdirSync, appendFileSync } from "fs";
 import { execSync, spawnSync } from "child_process";
 import path from "path";
 
+const OPENCODE_BOOLEAN_TRUE = "true" as const;
+
 const NOTIFY_DIR: string | undefined = process.env.CTRLYOKE_NOTIFY_DIR;
 const RUN_ID: string | undefined = process.env.CTRLYOKE_RUN_ID;
 const workspaceRoot: string =
@@ -156,7 +158,10 @@ const _logsDir = NOTIFY_DIR
   : path.join(workspaceRoot, ".ctrlyoke", "logs");
 let _logPath: string | null = null;
 try {
-  if (process.env.CTRLYOKE_DIAGNOSTIC_LOGS === "true" && _logsDir) {
+  if (
+    process.env.CTRLYOKE_DIAGNOSTIC_LOGS === OPENCODE_BOOLEAN_TRUE &&
+    _logsDir
+  ) {
     mkdirSync(_logsDir, { recursive: true });
     _logPath = path.join(_logsDir, "ctrlyoke-opencode-plugin-debug.log");
   }

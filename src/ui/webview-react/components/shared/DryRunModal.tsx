@@ -9,6 +9,7 @@ import {
   HARNESS_INFO,
   MESSAGE_TYPES,
   PREVIEW_MUTATION_SCOPES,
+  PREVIEW_SCOPES,
   PREVIEW_PROMPT_CATEGORIES,
   PREVIEW_PROMPT_CATEGORY_LABELS,
   PREVIEW_TRUNCATION_REASON_COPY,
@@ -111,8 +112,9 @@ function sameScope(
 ) {
   return (
     left?.kind === right.kind &&
-    (right.kind !== "step" ||
-      (left?.kind === "step" && left.stepIndex === right.stepIndex))
+    (right.kind !== PREVIEW_SCOPES.STEP ||
+      (left?.kind === PREVIEW_SCOPES.STEP &&
+        left.stepIndex === right.stepIndex))
   );
 }
 
@@ -142,7 +144,7 @@ function stepForScope(
   preview: WorkflowExecutionPreview,
   scope: ExecutionPreviewScope
 ): StepExecutionPreview | undefined {
-  if (scope.kind !== "step") return undefined;
+  if (scope.kind !== PREVIEW_SCOPES.STEP) return undefined;
   return preview.steps.find((step) => step.stepIndex === scope.stepIndex);
 }
 
@@ -1229,7 +1231,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
   const open = useExecutionPreviewStore((state) => state.open);
   const close = useExecutionPreviewStore((state) => state.close);
   const [selection, setSelection] = useState<RailSelection>(
-    scope.kind === "step" ? scope.stepIndex : "overview"
+    scope.kind === PREVIEW_SCOPES.STEP ? scope.stepIndex : "overview"
   );
   const [activeTabs, setActiveTabs] = useState<Record<number, DryRunTab>>({});
   const [expandedChunks, setExpandedChunks] = useState<Record<string, boolean>>(
@@ -1243,7 +1245,8 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
   >(null);
   const [contentRef, isNarrow] = useElementNarrow(640);
   const copyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scopeStepIndex = scope.kind === "step" ? scope.stepIndex : null;
+  const scopeStepIndex =
+    scope.kind === PREVIEW_SCOPES.STEP ? scope.stepIndex : null;
 
   useEffect(() => {
     setSelection(scopeStepIndex ?? "overview");
@@ -1310,7 +1313,7 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
 
   const activeStep =
     preview &&
-    (scope.kind === "step"
+    (scope.kind === PREVIEW_SCOPES.STEP
       ? stepForScope(preview, scope)
       : typeof selection === "number"
         ? preview.steps.find((step) => step.stepIndex === selection)

@@ -40,6 +40,7 @@ import type {
   WorkspaceSearchContentMatch,
   WorkspaceTreeEntry,
 } from "../types/HostedWorkspaceViewerTypes";
+import { WORKSPACE_SEARCH_SCOPES } from "../types/DashboardConstants";
 import {
   WORKSPACE_TREE_DEFAULT_PAGE_SIZE,
   WORKSPACE_TREE_MAX_PAGE_SIZE,
@@ -508,11 +509,11 @@ export class HostedWorkspaceViewerService {
     }
 
     const scope: WorkspaceSearchScope =
-      request.scope === "files" ||
-      request.scope === "content" ||
-      request.scope === "both"
+      request.scope === WORKSPACE_SEARCH_SCOPES.FILES ||
+      request.scope === WORKSPACE_SEARCH_SCOPES.CONTENT ||
+      request.scope === WORKSPACE_SEARCH_SCOPES.BOTH
         ? request.scope
-        : "both";
+        : WORKSPACE_SEARCH_SCOPES.BOTH;
     const requestedLimit = Number.isFinite(request.limit)
       ? Math.floor(request.limit ?? SEARCH_DEFAULT_LIMIT)
       : SEARCH_DEFAULT_LIMIT;
@@ -551,7 +552,7 @@ export class HostedWorkspaceViewerService {
       }
       scannedFiles++;
 
-      if (scope !== "content") {
+      if (scope !== WORKSPACE_SEARCH_SCOPES.CONTENT) {
         const name = path.basename(candidate.absolutePath);
         if (
           filenameResults.length < filenameLimit &&
@@ -567,14 +568,18 @@ export class HostedWorkspaceViewerService {
       }
 
       if (
-        (scope === "content" || scope === "both") &&
+        (scope === WORKSPACE_SEARCH_SCOPES.CONTENT ||
+          scope === WORKSPACE_SEARCH_SCOPES.BOTH) &&
         !surfacedFilenamePaths.has(candidate.absolutePath)
       ) {
         contentCandidates.push(candidate);
       }
     }
 
-    if (scope === "files" || filenameResults.length >= limit) {
+    if (
+      scope === WORKSPACE_SEARCH_SCOPES.FILES ||
+      filenameResults.length >= limit
+    ) {
       return { results: filenameResults.slice(0, limit), truncated };
     }
 

@@ -27,6 +27,7 @@ import {
   FINAL_STEP_PHASES,
   type FinalStepPhase,
 } from "../types/messages";
+import { OUTPUT_MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import { mapOrderedHistoryEntriesToMessages } from "./outputProjection";
 import { truncate } from "./string";
 import { generateDiffLines } from "./diffUtils";
@@ -61,7 +62,7 @@ function redactExportText(text: string): string {
 }
 
 interface MarkdownExportItem {
-  type: "status" | "cli";
+  type: (typeof OUTPUT_MESSAGE_TYPES)[keyof typeof OUTPUT_MESSAGE_TYPES];
   target: {
     kind: FinalStepPhase;
     index: number;
@@ -394,7 +395,7 @@ export function generateMarkdownExport(
   // Apply step range filter: exclude status messages when a range is active.
   const filteredOutputs = stepRange
     ? sortedOutputs.filter((item) => {
-        if (item.type === "status") return false;
+        if (item.type === OUTPUT_MESSAGE_TYPES.STATUS) return false;
         const key = `${item.target.kind}:${item.target.index}`;
         const num = stepSequence.get(key);
         return num !== undefined && stepRange.includes(num);
@@ -407,12 +408,12 @@ export function generateMarkdownExport(
   }
 
   filteredOutputs.forEach((item) => {
-    if (item.type === "status") {
+    if (item.type === OUTPUT_MESSAGE_TYPES.STATUS) {
       if (!includeMetadata) return;
       const statusMsg = item.data as { message: string; timestamp: string };
       lines.push(`> **[${statusMsg.timestamp}]** ${statusMsg.message}`);
       lines.push("");
-    } else if (item.type === "cli") {
+    } else if (item.type === OUTPUT_MESSAGE_TYPES.CLI) {
       const output = item.data as {
         prompt?: string;
         response?: string;

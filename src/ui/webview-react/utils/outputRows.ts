@@ -16,6 +16,7 @@ import type {
 import type { ScriptVerdict } from "@root/types/CtrlYokeTypes";
 import {
   OUTPUT_ROW_KINDS,
+  OUTPUT_MESSAGE_TYPES,
   OPERATION_STATUS,
   WORKFLOW_TOKEN_COVERAGE,
   type OutputRowKind,
@@ -1802,7 +1803,7 @@ export function buildOutputRows(
       }
     }
 
-    if (message.type === "status") {
+    if (message.type === OUTPUT_MESSAGE_TYPES.STATUS) {
       rows.push({
         key: `${targetKey}:status:${messageIndex}`,
         rowKind: OUTPUT_ROW_KINDS.STATUS,

@@ -52,8 +52,10 @@ import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { openContextReference } from "@utils/contextReferenceActions";
 import {
   ATOMIC_REFERENCE_KINDS,
+  BOOLEAN_STRING_VALUES,
   USER_FEEDBACK_SEVERITY,
   CTRLYOKE_SLASH_TOKEN_KINDS,
+  PRIOR_CONTEXT_REFERENCE_KINDS,
   SCRIPT_OUTPUT_SOURCES,
 } from "@root/types/DashboardConstants";
 import {
@@ -679,7 +681,9 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   useEffect(() => {
     readOnlyRef.current = readOnly;
     if (viewRef.current) {
-      viewRef.current.contentDOM.contentEditable = readOnly ? "false" : "true";
+      viewRef.current.contentDOM.contentEditable = readOnly
+        ? BOOLEAN_STRING_VALUES.FALSE
+        : BOOLEAN_STRING_VALUES.TRUE;
     }
   }, [readOnly]);
 
@@ -1632,7 +1636,7 @@ class AtomicReferenceWidget extends WidgetType {
       // Also flag it for the click handler so it refuses to open a target the
       // validation pass already resolved as nonexistent (see
       // openContextReferenceLink).
-      chip.setAttribute("data-invalid", "true");
+      chip.setAttribute("data-invalid", BOOLEAN_STRING_VALUES.TRUE);
     } else {
       chip.title = this.chip.title;
     }
@@ -2356,7 +2360,7 @@ function createLinkDecorationExtension(
                 view.state.doc.sliceString(linkMatch.from, linkMatch.to)
               ) === false
             ) {
-              attrs["data-invalid"] = "true";
+              attrs["data-invalid"] = BOOLEAN_STRING_VALUES.TRUE;
             }
 
             builder.add(
@@ -2531,13 +2535,15 @@ function createPriorContextDecorationExtension(
           for (const ref of refs) {
             if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
             const dataRef =
-              ref.kind === "step" ? `step:${ref.indices!.join(",")}` : ref.kind;
+              ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP
+                ? `${PRIOR_CONTEXT_REFERENCE_KINDS.STEP}:${ref.indices!.join(",")}`
+                : ref.kind;
             const attributes: Record<string, string> = {
               "data-type": "priorContext",
               "data-ref": dataRef,
             };
             if (referenceValidity?.get(ref.token) === false) {
-              attributes["data-invalid"] = "true";
+              attributes["data-invalid"] = BOOLEAN_STRING_VALUES.TRUE;
             }
             builder.add(
               ref.from,
@@ -2616,16 +2622,25 @@ export function createPriorContextLintExtension(
           if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
 
           let message: string | undefined;
-          if (ref.kind === "previous" || ref.kind === "all") {
+          if (
+            ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.PREVIOUS ||
+            ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.ALL
+          ) {
             if (stepCount <= 0) {
               message =
                 "Prior context not found — no prior steps exist at this position";
             }
-          } else if (ref.kind === "finalStep" || ref.kind === "allFinalStep") {
+          } else if (
+            ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.FINAL_STEP ||
+            ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.ALL_FINAL_STEP
+          ) {
             if (!hasFinalStep) {
               message = "Prior context not found — no final step is configured";
             }
-          } else if (ref.kind === "step" && ref.indices) {
+          } else if (
+            ref.kind === PRIOR_CONTEXT_REFERENCE_KINDS.STEP &&
+            ref.indices
+          ) {
             const outOfRange = ref.indices.filter(
               (i) => i < 1 || i > stepCount
             );
@@ -2764,7 +2779,7 @@ function openContextReferenceLink(
   // there — and surface why, since the click is otherwise a dead no-op. Returns
   // true so the caller still consumes the event (preventDefault) rather than
   // falling through to editor cursor placement.
-  if (target.getAttribute("data-invalid") === "true") {
+  if (target.getAttribute("data-invalid") === BOOLEAN_STRING_VALUES.TRUE) {
     notifyUser(
       "Can't open — this reference doesn't resolve to an existing file",
       USER_FEEDBACK_SEVERITY.WARNING

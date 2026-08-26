@@ -6,7 +6,13 @@ import {
 } from "@root/types/DashboardConstants";
 import { ActionDropdown, type ActionDropdownItem } from "./ActionDropdown";
 
-export type BulkAction = "save" | "delete" | "setDefault";
+const BULK_ACTIONS = {
+  SAVE: "save",
+  DELETE: "delete",
+  SET_DEFAULT: "setDefault",
+} as const;
+
+export type BulkAction = (typeof BULK_ACTIONS)[keyof typeof BULK_ACTIONS];
 
 export interface BulkSelectionActionsBarProps {
   totalCount: number;
@@ -27,22 +33,22 @@ export interface BulkSelectionActionsBarProps {
 
 function getActionLabel(action: BulkAction): string {
   switch (action) {
-    case "save":
+    case BULK_ACTIONS.SAVE:
       return "Save";
-    case "delete":
+    case BULK_ACTIONS.DELETE:
       return "Delete";
-    case "setDefault":
+    case BULK_ACTIONS.SET_DEFAULT:
       return "Set Default";
   }
 }
 
 function getSubmitLabel(action: BulkAction): string {
   switch (action) {
-    case "save":
+    case BULK_ACTIONS.SAVE:
       return "Save";
-    case "delete":
+    case BULK_ACTIONS.DELETE:
       return "Delete";
-    case "setDefault":
+    case BULK_ACTIONS.SET_DEFAULT:
       return "Set as Default";
   }
 }
@@ -64,7 +70,7 @@ export function BulkSelectionActionsBar({
   onSetDefault,
 }: BulkSelectionActionsBarProps) {
   const [action, setAction] = useState<BulkAction>(
-    availableActions[0] ?? "save"
+    availableActions[0] ?? BULK_ACTIONS.SAVE
   );
   const [scope, setScope] = useState<SettingWriteScope>(defaultScope);
   const [targetId, setTargetId] = useState<AnyTargetId>(defaultTargetId);
@@ -115,7 +121,7 @@ export function BulkSelectionActionsBar({
     value: id,
     description: getTargetDescription(id, scope),
   }));
-  const shouldShowLocationControls = action !== "setDefault";
+  const shouldShowLocationControls = action !== BULK_ACTIONS.SET_DEFAULT;
   const isSubmitDisabled =
     selectedCount === 0 ||
     (shouldShowLocationControls && scopeTargets.length === 0);
@@ -148,7 +154,7 @@ export function BulkSelectionActionsBar({
         {shouldShowLocationControls ? (
           <>
             <span className="shrink-0 text-xs text-description-fg">
-              {action === "save" ? "to:" : "from:"}
+              {action === BULK_ACTIONS.SAVE ? "to:" : "from:"}
             </span>
 
             <ActionDropdown
@@ -184,18 +190,18 @@ export function BulkSelectionActionsBar({
           type="button"
           disabled={isSubmitDisabled}
           onClick={() => {
-            if (action === "save") {
+            if (action === BULK_ACTIONS.SAVE) {
               onSave(targetId, scope);
               return;
             }
-            if (action === "delete") {
+            if (action === BULK_ACTIONS.DELETE) {
               onDelete(targetId, scope);
               return;
             }
             onSetDefault();
           }}
           className={`h-6 shrink-0 rounded px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${
-            action === "delete"
+            action === BULK_ACTIONS.DELETE
               ? "border border-btn-border bg-btn-secondary-bg text-error-fg hover:bg-btn-secondary-hover"
               : "bg-btn-bg text-btn-fg hover:bg-btn-hover"
           }`}

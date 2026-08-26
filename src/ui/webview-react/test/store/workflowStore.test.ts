@@ -681,7 +681,9 @@ describe("appendLiveEntry (status)", () => {
       sequence: 2,
     });
     const statusEntries = store().liveOrderedEntries.filter(
-      (e) => e.kind === "status" && (e as any).target.stepIndex === 0
+      (e) =>
+        e.kind === OUTPUT_HISTORY_KINDS.STATUS &&
+        (e as any).target.stepIndex === 0
     );
     expect(statusEntries).toHaveLength(2);
     expect((statusEntries[0] as any).statusMessage.message).toBe("Starting...");
@@ -713,10 +715,14 @@ describe("appendLiveEntry (status)", () => {
       sequence: 2,
     });
     const step0 = store().liveOrderedEntries.filter(
-      (e) => e.kind === "status" && (e as any).target.stepIndex === 0
+      (e) =>
+        e.kind === OUTPUT_HISTORY_KINDS.STATUS &&
+        (e as any).target.stepIndex === 0
     );
     const step1 = store().liveOrderedEntries.filter(
-      (e) => e.kind === "status" && (e as any).target.stepIndex === 1
+      (e) =>
+        e.kind === OUTPUT_HISTORY_KINDS.STATUS &&
+        (e as any).target.stepIndex === 1
     );
     expect(step0).toHaveLength(1);
     expect(step1).toHaveLength(1);

@@ -28,7 +28,7 @@ export type KeywordMode =
   | "all"
   | "finalStepPrevious"
   | "finalStepAll"
-  | "run"
+  | typeof PRIOR_CONTEXT_SELECTION_MODES.RUN
   | typeof PRIOR_CONTEXT_SELECTION_MODES.CUSTOM;
 
 export const PRIOR_CONTEXT_KEYWORD_LABELS: Record<KeywordMode, string> = {
@@ -51,7 +51,7 @@ function isRunAddress(
 function getMode(value: PriorContext | undefined): KeywordMode {
   if (value === undefined) return INHERIT_DEFAULT_OPTION;
   if (Array.isArray(value)) return PRIOR_CONTEXT_SELECTION_MODES.CUSTOM;
-  if (isRunAddress(value)) return "run";
+  if (isRunAddress(value)) return PRIOR_CONTEXT_SELECTION_MODES.RUN;
   return value as KeywordMode;
 }
 
@@ -154,7 +154,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
       setIsOpen(false);
       return;
     }
-    if (k === "run") {
+    if (k === PRIOR_CONTEXT_SELECTION_MODES.RUN) {
       setWantsCustom(false);
       setIsOpen(false);
       return;
@@ -217,7 +217,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
         "all",
         "finalStepPrevious",
         "finalStepAll",
-        "run",
+        PRIOR_CONTEXT_SELECTION_MODES.RUN,
         PRIOR_CONTEXT_SELECTION_MODES.CUSTOM,
       ]
     : [
@@ -226,7 +226,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
         "all",
         "finalStepPrevious",
         "finalStepAll",
-        "run",
+        PRIOR_CONTEXT_SELECTION_MODES.RUN,
         PRIOR_CONTEXT_SELECTION_MODES.CUSTOM,
       ];
 
@@ -279,7 +279,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
         </DropdownPortal>
       </div>
 
-      {mode === "run" && (
+      {mode === PRIOR_CONTEXT_SELECTION_MODES.RUN && (
         <div className="mt-1 grid grid-cols-1 gap-1">
           <input
             value={workflowKey}

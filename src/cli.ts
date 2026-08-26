@@ -125,6 +125,13 @@ const version = typeof VERSION !== "undefined" ? VERSION : "0.0.0-dev";
 
 const program = new Command();
 
+const CLI_RUN_OPERATION_KINDS = {
+  RUN: "run",
+  RERUN: "rerun",
+  APPEND: "append",
+  CONTINUE: "continue",
+} as const;
+
 program
   .name("ctrlyoke")
   .description(
@@ -281,10 +288,23 @@ interface ValidateCommandOptions {
 }
 
 type CliRunOperation =
-  | { kind: "run" }
-  | { kind: "rerun"; workflow: string; from?: string }
-  | { kind: "append"; workflow: string; run: string; file?: string }
-  | { kind: "continue"; workflow: string; run: string };
+  | { kind: typeof CLI_RUN_OPERATION_KINDS.RUN }
+  | {
+      kind: typeof CLI_RUN_OPERATION_KINDS.RERUN;
+      workflow: string;
+      from?: string;
+    }
+  | {
+      kind: typeof CLI_RUN_OPERATION_KINDS.APPEND;
+      workflow: string;
+      run: string;
+      file?: string;
+    }
+  | {
+      kind: typeof CLI_RUN_OPERATION_KINDS.CONTINUE;
+      workflow: string;
+      run: string;
+    };
 
 /**
  * Report workflow steps whose interactive request will be clamped because the
@@ -324,7 +344,7 @@ function warnAboutClampedInteractiveSteps(
 
 async function rerunCommand(options: RerunOptions): Promise<void> {
   await runCommand(undefined, options, {
-    kind: "rerun",
+    kind: CLI_RUN_OPERATION_KINDS.RERUN,
     workflow: options.workflow,
     from: options.from,
   });
@@ -335,7 +355,7 @@ async function appendCommand(
   options: AppendOptions
 ): Promise<void> {
   await runCommand(file, options, {
-    kind: "append",
+    kind: CLI_RUN_OPERATION_KINDS.APPEND,
     workflow: options.workflow,
     run: options.run,
     file,
@@ -344,7 +364,7 @@ async function appendCommand(
 
 async function continueCommand(options: ContinueOptions): Promise<void> {
   await runCommand(undefined, options, {
-    kind: "continue",
+    kind: CLI_RUN_OPERATION_KINDS.CONTINUE,
     workflow: options.workflow,
     run: options.run,
   });
@@ -353,14 +373,15 @@ async function continueCommand(options: ContinueOptions): Promise<void> {
 async function runCommand(
   file: string | undefined,
   options: RunOptions | RerunOptions | AppendOptions | ContinueOptions,
-  operation: CliRunOperation = { kind: "run" }
+  operation: CliRunOperation = { kind: CLI_RUN_OPERATION_KINDS.RUN }
 ): Promise<void> {
   if (options.color === false) {
     process.env.NO_COLOR = "1";
   }
 
   if (
-    (operation.kind === "run" || operation.kind === "append") &&
+    (operation.kind === CLI_RUN_OPERATION_KINDS.RUN ||
+      operation.kind === CLI_RUN_OPERATION_KINDS.APPEND) &&
     !file &&
     !options.prompt
   ) {
@@ -370,7 +391,8 @@ async function runCommand(
     process.exit(2);
   }
   if (
-    (operation.kind === "run" || operation.kind === "append") &&
+    (operation.kind === CLI_RUN_OPERATION_KINDS.RUN ||
+      operation.kind === CLI_RUN_OPERATION_KINDS.APPEND) &&
     file &&
     options.prompt
   ) {
@@ -548,7 +570,7 @@ async function runCommand(
   const harness = config.harness as HarnessId;
 
   if (
-    operation.kind === "run" &&
+    operation.kind === CLI_RUN_OPERATION_KINDS.RUN &&
     isRunCommandOptions(options) &&
     options.dryRun
   ) {
@@ -675,7 +697,7 @@ async function runCommand(
   });
 
   try {
-    if (operation.kind === "run") {
+    if (operation.kind === CLI_RUN_OPERATION_KINDS.RUN) {
       if (options.prompt) {
         instance.loadPromptString(options.prompt);
       } else {
@@ -1100,7 +1122,10 @@ async function resolveCliJsonOutputProjection(
 }
 
 async function executeAddressedCliOperation(
-  operation: Exclude<CliRunOperation, { kind: "run" }>,
+  operation: Exclude<
+    CliRunOperation,
+    { kind: typeof CLI_RUN_OPERATION_KINDS.RUN }
+  >,
   options: RunOptions | RerunOptions | AppendOptions | ContinueOptions,
   workspaceRoot: string,
   platform: CliAdapter,
