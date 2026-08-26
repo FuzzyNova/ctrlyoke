@@ -1911,24 +1911,26 @@ export class WorktreeManager {
     );
 
     for (const staleRecord of staleManagedRecords) {
-      // A record with no matching Git entry is either merely prunable (the
-      // directory still exists, repair may recover it) or fully forgotten by
-      // Git (directory gone too). Reconcile the latter automatically on every
+      // A record lands here only when `listGitWorktrees` returned no matching
+      // entry at all — i.e. Git's own admin dir for this worktree is gone.
+      // (A merely-prunable worktree, whose admin dir survives but whose
+      // directory is missing, is still enumerated by `git worktree list` and
+      // was already pushed to `managedEntries` in the loop above.) With no
+      // admin dir left, `git worktree repair` has nothing to reconnect this
+      // path to and can never succeed here, regardless of whether a leftover
+      // directory still happens to exist on disk (e.g. after a Windows file
+      // lock left remove-behind files). Reconcile unconditionally on every
       // load/refresh so users never have to click a button just to make a
       // ghost entry disappear.
-      let record = staleRecord;
-      if (
-        record.directoryState !== "removed" &&
-        !(await this.pathExists(record.worktreePath))
-      ) {
-        record = await this.markRecordDirectoryReconciled(
-          sourceRoot,
-          commonDirectory,
-          record
-        );
-      }
-      const reconciled = record.directoryState === "removed";
-      if (reconciled && record.branchState !== "present") {
+      const record =
+        staleRecord.directoryState === "removed"
+          ? staleRecord
+          : await this.markRecordDirectoryReconciled(
+              sourceRoot,
+              commonDirectory,
+              staleRecord
+            );
+      if (record.branchState !== "present") {
         // Both resources this record tracked are gone; drop the tombstone so
         // it stops appearing forever. Best-effort — a failure just leaves it
         // for the next refresh to retry.
@@ -1937,18 +1939,12 @@ export class WorktreeManager {
           .catch(() => undefined);
         continue;
       }
-      const branchCleanup = reconciled
-        ? await this.getBranchCleanupEligibility(
-            sourceRoot,
-            record,
-            undefined,
-            false
-          )
-        : {
-            eligible: false,
-            reason:
-              "The Git worktree admin entry is stale; repair is required.",
-          };
+      const branchCleanup = await this.getBranchCleanupEligibility(
+        sourceRoot,
+        record,
+        undefined,
+        false
+      );
       managedEntries.push({
         worktreePath: record.worktreePath,
         headCommit: record.lastVerifiedBranchTip,
@@ -1961,7 +1957,7 @@ export class WorktreeManager {
         ageMs: now - record.createdAt,
         inUse: false,
         leaseOwners: [],
-        stale: !reconciled,
+        stale: false,
         branchCleanupEligible: branchCleanup.eligible,
         ...(branchCleanup.reason
           ? { branchCleanupReason: branchCleanup.reason }
@@ -2087,14 +2083,15 @@ export class WorktreeManager {
         if (!entry) {
           // Git has already fully forgotten this worktree — it is absent
           // from `git worktree list` entirely, not merely prunable. There is
-          // nothing left for Git to remove; the stale ownership record is
-          // what "Remove" must clear. Only refuse when the directory still
-          // exists on disk, since that ambiguous state needs `git worktree
-          // repair` first, not reconciliation.
+          // no admin dir left for `git worktree repair` to reconnect this
+          // path to, so repair can never succeed here; the stale ownership
+          // record is what "Remove"/"Force remove" must clear instead. A
+          // leftover directory can still exist on disk (e.g. remove-behind
+          // files from a Windows file lock during a prior removal); clear it
+          // best-effort rather than leaving it for a repair action that can
+          // never resolve it.
           if (await this.pathExists(record.worktreePath)) {
-            throw new Error(
-              "The worktree admin entry is stale; repair it first."
-            );
+            await fs.rm(record.worktreePath, { recursive: true, force: true });
           }
           await this.markRecordDirectoryReconciled(
             sourceRoot,

@@ -1893,6 +1893,69 @@ suite("WorktreeManager", function () {
     assert.strictEqual(reconciledAfterRemove?.directoryState, "removed");
   });
 
+  test("reconciles and force-removes a worktree whose directory survives its Git admin entry", async () => {
+    const { parent, repository } = await makeRepository(
+      "management-orphan-dir"
+    );
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await info.lease.release();
+
+    // Simulate a Windows-style remove-behind: Git's own admin dir for this
+    // worktree disappears (e.g. a prior removal unregistered it before a
+    // locked file blocked deleting the directory), but the worktree
+    // directory itself - including its now-orphaned `.git` file - survives
+    // on disk. `git worktree repair` can never fix this: with no admin dir
+    // left to reconnect to, it can only report "unable to locate repository".
+    const gitFileContents = await fs.readFile(
+      path.join(info.worktreePath, ".git"),
+      "utf8"
+    );
+    const gitdirMatch = gitFileContents.match(/^gitdir:\s*(.+)$/m);
+    assert.ok(gitdirMatch, "the worktree's .git file names its admin dir");
+    await fs.rm(path.resolve(info.worktreePath, gitdirMatch![1].trim()), {
+      recursive: true,
+      force: true,
+    });
+
+    const listed = execFileSync(
+      "git",
+      ["-C", repository, "worktree", "list", "--porcelain"],
+      { encoding: "utf8" }
+    );
+    assert.ok(
+      !listed.replace(/\\/g, "/").includes(
+        info.worktreePath.replace(/\\/g, "/")
+      ),
+      "Git no longer lists this worktree at all"
+    );
+    await assert.doesNotReject(
+      fs.access(info.worktreePath),
+      "the leftover directory still exists on disk"
+    );
+
+    // A plain refresh must reconcile it without ever requiring "repair" -
+    // and without touching the leftover directory itself.
+    const state = await instance.getManagementState(repository);
+    const entry = state.entries.find(
+      (candidate) => candidate.branchName === info.branchName
+    );
+    assert.ok(entry, "the reconciled record stays visible for branch cleanup");
+    assert.strictEqual(entry?.stale, false);
+    assert.strictEqual(entry?.directoryState, "removed");
+    await assert.doesNotReject(fs.access(info.worktreePath));
+
+    // Force remove must actually clear the leftover directory instead of
+    // dead-ending on a "repair it first" refusal that can never be resolved.
+    await instance.applyManagementAction({
+      sourceCheckoutRoot: repository,
+      action: WORKTREE_MANAGEMENT_ACTIONS.FORCE_REMOVE,
+      branchName: info.branchName,
+      confirmed: true,
+    });
+    await assert.rejects(fs.access(info.worktreePath));
+  });
+
   test("drops the ownership record once both directory and branch are gone", async () => {
     const { parent, repository } = await makeRepository("management-tombstone");
     const instance = manager(parent);
