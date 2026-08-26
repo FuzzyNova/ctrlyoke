@@ -116,6 +116,8 @@ const SEARCH_MAX_LIMIT = 500;
 const SEARCH_SNIPPET_MAX_LENGTH = 200;
 const FILE_HISTORY_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
 const FILE_HISTORY_SNAPSHOT_MAX_COUNT = 32;
+const COMMIT_LOG_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
+const COMMIT_LOG_SNAPSHOT_MAX_COUNT = 32;
 const SEARCH_FALLBACK_SKIP_DIRECTORIES = new Set([
   ".git",
   "node_modules",
@@ -138,6 +140,17 @@ interface FileHistorySnapshot {
   headHash: string;
   pageSize: number;
   entries: readonly WorkspaceFileHistoryEntry[];
+  lastAccessedAt: number;
+}
+
+interface CommitLogSnapshot {
+  historyId: string;
+  repoRoot: string;
+  branchHint?: string;
+  detached: boolean;
+  currentBranch: string | null;
+  pageSize: number;
+  commits: readonly WorkspaceCommitLogEntry[];
   lastAccessedAt: number;
 }
 
@@ -288,6 +301,7 @@ export class HostedWorkspaceViewerService {
     string,
     FileHistorySnapshot
   >();
+  private readonly commitLogSnapshots = new Map<string, CommitLogSnapshot>();
 
   constructor(
     private readonly workspaceRoot: string,
@@ -2051,6 +2065,55 @@ export class HostedWorkspaceViewerService {
     };
   }
 
+  private createCommitLogId(): string {
+    let historyId = randomUUID();
+    while (this.commitLogSnapshots.has(historyId)) {
+      historyId = randomUUID();
+    }
+    return historyId;
+  }
+
+  private getCommitLogSnapshot(
+    historyId: string
+  ): CommitLogSnapshot | undefined {
+    const now = Date.now();
+    for (const [id, snapshot] of this.commitLogSnapshots) {
+      if (now - snapshot.lastAccessedAt >= COMMIT_LOG_SNAPSHOT_TTL_MS) {
+        this.commitLogSnapshots.delete(id);
+      }
+    }
+    const snapshot = this.commitLogSnapshots.get(historyId);
+    if (!snapshot) return undefined;
+    const refreshed = { ...snapshot, lastAccessedAt: now };
+    this.commitLogSnapshots.delete(historyId);
+    this.commitLogSnapshots.set(historyId, refreshed);
+    return refreshed;
+  }
+
+  private trimCommitLogSnapshots(): void {
+    while (this.commitLogSnapshots.size > COMMIT_LOG_SNAPSHOT_MAX_COUNT) {
+      const oldest = this.commitLogSnapshots.keys().next().value;
+      if (oldest === undefined) return;
+      this.commitLogSnapshots.delete(oldest);
+    }
+  }
+
+  private materializeCommitLogPage(
+    snapshot: CommitLogSnapshot,
+    offset: number
+  ): WorkspaceCommitLogResponse {
+    return {
+      historyId: snapshot.historyId,
+      pageSize: snapshot.pageSize,
+      totalEntries: snapshot.commits.length,
+      offset,
+      commits: snapshot.commits.slice(offset, offset + snapshot.pageSize),
+      hasMore: offset + snapshot.pageSize < snapshot.commits.length,
+      currentBranch: snapshot.currentBranch,
+      detached: snapshot.detached,
+    };
+  }
+
   private async getUnpushedHistoryHashes(
     repoRoot: string,
     headHash: string
@@ -2071,8 +2134,18 @@ export class HostedWorkspaceViewerService {
     skip = 0,
     limit = 30,
     branchHint?: string,
-    repoId?: string
+    repoId?: string,
+    historyId?: string
   ): Promise<WorkspaceCommitLogResponse> {
+    if (!Number.isSafeInteger(skip) || skip < 0) {
+      throw new WorkspaceTreeBadRequestError(
+        "skip must be a non-negative integer"
+      );
+    }
+    if (!Number.isSafeInteger(limit) || limit < 1) {
+      throw new WorkspaceTreeBadRequestError("limit must be a positive integer");
+    }
+
     const repoRoot = await this.resolveRepoRoot(repoId);
 
     // When detached, the caller passes the branch it came from so the branch's
@@ -2081,11 +2154,84 @@ export class HostedWorkspaceViewerService {
     // avoid feeding arbitrary input to git as a revision.
     const safeBranch = await this.resolveBranchHint(branchHint, repoRoot);
 
-    // Fetch one extra to determine hasMore
-    const rows = await getRecentCommits(repoRoot, limit + 1, skip, safeBranch);
-    const hasMore = rows.length > limit;
-    const commits = hasMore ? rows.slice(0, limit) : rows;
+    if (historyId !== undefined) {
+      if (!isValidHistoryId(historyId)) {
+        throw new WorkspaceTreeBadRequestError("historyId is invalid");
+      }
+      const snapshot = this.getCommitLogSnapshot(historyId);
+      if (!snapshot) throw new WorkspaceTreeExpiredError();
+      const { detached } = await this.getCommitLogMetadata(repoRoot);
+      if (
+        !pathsEqual(snapshot.repoRoot, repoRoot) ||
+        snapshot.branchHint !== safeBranch ||
+        snapshot.detached !== detached
+      ) {
+        throw new WorkspaceTreeBadRequestError(
+          "context does not match the history snapshot"
+        );
+      }
+      if (skip % snapshot.pageSize !== 0) {
+        throw new WorkspaceTreeBadRequestError(
+          "skip must be aligned to pageSize"
+        );
+      }
+      if (skip > snapshot.commits.length) {
+        throw new WorkspaceTreeBadRequestError(
+          "skip is outside the commit history"
+        );
+      }
+      return this.materializeCommitLogPage(snapshot, skip);
+    }
 
+    const metadata = await this.getCommitLogMetadata(repoRoot);
+    // Omitting max-count is intentional: the complete result is the frozen
+    // snapshot from which all later pages are served.
+    const rows = await getRecentCommits(repoRoot, undefined, 0, safeBranch);
+    const commits: WorkspaceCommitLogEntry[] = rows.map((c) => ({
+      hash: c.hash,
+      shortHash: c.shortHash,
+      subject: c.subject,
+      author: c.author,
+      relativeDate: c.relativeDate,
+      isHead: metadata.headHash !== null && c.hash === metadata.headHash,
+      pushed: !metadata.unpushedHashes.has(c.hash),
+      isMerge: c.parentHashes.length > 1,
+      parentHashes: c.parentHashes,
+      refs: classifyRefNames(c.refNames),
+    }));
+
+    const snapshot: CommitLogSnapshot = {
+      historyId: this.createCommitLogId(),
+      repoRoot,
+      branchHint: safeBranch,
+      detached: metadata.detached,
+      currentBranch: metadata.currentBranch,
+      pageSize: limit,
+      commits: Object.freeze(commits),
+      lastAccessedAt: Date.now(),
+    };
+    this.commitLogSnapshots.set(snapshot.historyId, snapshot);
+    this.trimCommitLogSnapshots();
+
+    if (skip % snapshot.pageSize !== 0) {
+      throw new WorkspaceTreeBadRequestError(
+        "skip must be aligned to pageSize"
+      );
+    }
+    if (skip > snapshot.commits.length) {
+      throw new WorkspaceTreeBadRequestError(
+        "skip is outside the commit history"
+      );
+    }
+    return this.materializeCommitLogPage(snapshot, skip);
+  }
+
+  private async getCommitLogMetadata(repoRoot: string): Promise<{
+    detached: boolean;
+    currentBranch: string | null;
+    headHash: string | null;
+    unpushedHashes: Set<string>;
+  }> {
     const [branchName, headHashResult, upstreamCommitsResult] =
       await Promise.allSettled([
         execFileAsync("git", ["-C", repoRoot, "branch", "--show-current"], {
@@ -2107,13 +2253,11 @@ export class HostedWorkspaceViewerService {
         : "HEAD";
     const detached = rawBranch === "" || rawBranch === "HEAD";
     const currentBranch = detached ? null : rawBranch;
-
     const headHash =
       headHashResult.status === "fulfilled"
         ? headHashResult.value.stdout.trim()
         : null;
 
-    // Commits that are ahead of upstream (not yet pushed)
     const unpushedHashes = new Set<string>();
     if (upstreamCommitsResult.status === "fulfilled") {
       for (const line of upstreamCommitsResult.value.stdout
@@ -2123,22 +2267,8 @@ export class HostedWorkspaceViewerService {
         unpushedHashes.add(line.trim());
       }
     }
-    // If no upstream is configured, upstreamCommitsResult fails — treat all as pushed
-
-    const result: WorkspaceCommitLogEntry[] = commits.map((c) => ({
-      hash: c.hash,
-      shortHash: c.shortHash,
-      subject: c.subject,
-      author: c.author,
-      relativeDate: c.relativeDate,
-      isHead: headHash !== null && c.hash === headHash,
-      pushed: !unpushedHashes.has(c.hash),
-      isMerge: c.parentHashes.length > 1,
-      parentHashes: c.parentHashes,
-      refs: classifyRefNames(c.refNames),
-    }));
-
-    return { commits: result, hasMore, currentBranch, detached };
+    // If no upstream is configured, upstreamCommitsResult fails — treat all as pushed.
+    return { detached, currentBranch, headHash, unpushedHashes };
   }
 
   /**
@@ -2416,11 +2546,13 @@ export class HostedWorkspaceViewerService {
   dispose(): void {
     this.listingSnapshotCache.dispose();
     this.fileHistorySnapshots.clear();
+    this.commitLogSnapshots.clear();
   }
 
   clear(): void {
     this.listingSnapshotCache.clear();
     this.fileHistorySnapshots.clear();
+    this.commitLogSnapshots.clear();
   }
 }
 

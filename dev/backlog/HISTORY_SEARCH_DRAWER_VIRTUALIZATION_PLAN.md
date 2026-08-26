@@ -4,7 +4,7 @@
 **Priority:** P3
 
 Sibling to
-[`WORKSPACE_COMMIT_HISTORY_VIRTUALIZATION_PLAN.md`](WORKSPACE_COMMIT_HISTORY_VIRTUALIZATION_PLAN.md),
+[`WORKSPACE_COMMIT_HISTORY_VIRTUALIZATION_PLAN.md`](../implemented/WORKSPACE_COMMIT_HISTORY_VIRTUALIZATION_PLAN.md),
 which generalizes the paged/virtualized-list pattern from
 `usePagedFileHistory` + `VirtualizedPagedList` to the workspace commit-graph
 pane. This plan applies the same pattern to `HistorySearchDrawer`

@@ -1315,6 +1315,10 @@ export class CtrlYokeHostedServer
           typeof req.query.branch === "string" && req.query.branch.trim()
             ? req.query.branch.trim()
             : undefined;
+        const historyId =
+          typeof req.query.historyId === "string" && req.query.historyId
+            ? req.query.historyId
+            : undefined;
         const repo =
           typeof req.query.repo === "string" && req.query.repo.trim()
             ? req.query.repo.trim()
@@ -1325,10 +1329,15 @@ export class CtrlYokeHostedServer
               Number.isFinite(skip) ? skip : 0,
               Number.isFinite(limit) && limit > 0 ? limit : 30,
               branch,
-              repo
+              repo,
+              historyId
             )
           );
         } catch (err) {
+          if (err instanceof WorkspaceTreeHttpError) {
+            res.status(err.statusCode).json({ error: err.message });
+            return;
+          }
           Log.error(`workspace-viewer /commit-log error: ${String(err)}`);
           res.status(500).json({ error: "Internal server error" });
         }

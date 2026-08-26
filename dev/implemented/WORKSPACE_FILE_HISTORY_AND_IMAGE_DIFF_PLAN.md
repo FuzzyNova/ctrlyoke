@@ -1,7 +1,7 @@
 # Workspace File History and Image Diff Plan
 
 **Status:** Sections 1-4 implemented; sections 5-6 broken out as
-[`WORKSPACE_COMMIT_HISTORY_VIRTUALIZATION_PLAN.md`](../backlog/WORKSPACE_COMMIT_HISTORY_VIRTUALIZATION_PLAN.md)
+[`WORKSPACE_COMMIT_HISTORY_VIRTUALIZATION_PLAN.md`](WORKSPACE_COMMIT_HISTORY_VIRTUALIZATION_PLAN.md)
 and [`GIT_REF_DIFF_PAGINATION_PLAN.md`](../backlog/GIT_REF_DIFF_PAGINATION_PLAN.md)
 **Priority:** P2
 
@@ -421,7 +421,7 @@ work proportional to the file’s byte size.
 ### 5. Keep repository-wide history as a follow-on
 
 > Broken out into
-> [`WORKSPACE_COMMIT_HISTORY_VIRTUALIZATION_PLAN.md`](../backlog/WORKSPACE_COMMIT_HISTORY_VIRTUALIZATION_PLAN.md).
+> [`WORKSPACE_COMMIT_HISTORY_VIRTUALIZATION_PLAN.md`](WORKSPACE_COMMIT_HISTORY_VIRTUALIZATION_PLAN.md).
 
 Do not virtualize `WorkspaceCommitHistoryPane` in the file-history change. Its
 graph rail and text rows must remain vertically synchronized, and lane colors

@@ -63,7 +63,7 @@ export function useCommitHistoryContextMenu({
         }
         // Optimistically mark detached so the immediate refresh below passes the
         // branch hint (detachedBranchHint requires `detached` to be true). The
-        // store's `detached` flag otherwise only flips once loadHistory's
+        // store's `detached` flag otherwise only flips once the refreshed
         // response lands, which would be too late for this first request and
         // would hide the commits ahead of the checked-out point until a manual
         // refresh.

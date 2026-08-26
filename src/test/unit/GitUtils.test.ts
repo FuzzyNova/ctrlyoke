@@ -25,6 +25,7 @@ import {
   isCommitAncestor,
   getBlobBytes,
   getFileHistoryCommits,
+  getRecentCommits,
   getChangedFilesWithBinaryStatus,
 } from "../../utils/GitUtils";
 
@@ -211,6 +212,22 @@ suite("GitUtils.gitRefExists", function () {
     assert.deepStrictEqual(history[2]?.parentHashes, []);
     assert.strictEqual(history[2]?.oldPath, "tracked.txt");
     assert.strictEqual(history[2]?.path, "tracked.txt");
+  });
+
+  test("fetches the complete recent history when limit is undefined", async () => {
+    await writeWorkspaceFile("second.txt", "second\n");
+    runGit(["add", "second.txt"]);
+    runGit(["commit", "-m", "Second commit"]);
+    await writeWorkspaceFile("third.txt", "third\n");
+    runGit(["add", "third.txt"]);
+    runGit(["commit", "-m", "Third commit"]);
+
+    const history = await getRecentCommits(workspaceRoot, undefined);
+
+    assert.deepStrictEqual(
+      history.map((entry) => entry.subject),
+      ["Third commit", "Second commit", "Initial commit"]
+    );
   });
 });
 

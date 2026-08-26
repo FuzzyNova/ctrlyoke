@@ -272,14 +272,18 @@ export async function workspaceCommitLog(
   skip = 0,
   limit = 30,
   branchHint?: string,
-  repo?: string
+  repo?: string,
+  historyId?: string
 ): Promise<WorkspaceCommitLogResponse> {
   const branchParam = branchHint
     ? `&branch=${encodeURIComponent(branchHint)}`
     : "";
   const repoParam = repo ? `&repo=${encodeURIComponent(repo)}` : "";
+  const historyParam = historyId
+    ? `&historyId=${encodeURIComponent(historyId)}`
+    : "";
   return hostedFetch<WorkspaceCommitLogResponse>(
-    `/api/workspace-viewer/commit-log?skip=${skip}&limit=${limit}${branchParam}${repoParam}`
+    `/api/workspace-viewer/commit-log?skip=${skip}&limit=${limit}${branchParam}${repoParam}${historyParam}`
   );
 }
 
