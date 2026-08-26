@@ -111,7 +111,7 @@ export interface CommitDetailInfo {
  */
 export async function getRecentCommits(
   workspaceRoot: string,
-  limit: number = 30,
+  limit: number | undefined = 30,
   skip: number = 0,
   ref?: string
 ): Promise<CommitInfo[]> {
@@ -121,9 +121,10 @@ export async function getRecentCommits(
     "log",
     // Trailing %P (parents) and %D (decorate) enable merge detection and ref pills.
     `--format=%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D`,
-    `-n`,
-    String(limit),
   ];
+  if (limit !== undefined) {
+    args.push("-n", String(limit));
+  }
   if (skip > 0) {
     args.splice(args.indexOf("log") + 1, 0, `--skip=${skip}`);
   }

@@ -49,9 +49,57 @@ history doesn't:
    history, replacing the current `loadHistory`/`loadMoreHistory` pair and
    the `commitHistory`/`commitHistoryHasMore` store fields with a paged
    equivalent (`usePagedCommitHistory` or similar). `workspaceCommitLog`
-   already accepts an offset/limit pair, so the server contract does not need
-   to change — only the client's consumption pattern does.
-2. **Virtualize one shared row range for both layers.** Do not virtualize the
+   already accepts an offset/limit pair, but as design point 2 below covers,
+   the server contract does need a small extension (a frozen-snapshot
+   `historyId`) for that pair to page safely.
+2. **Freeze the commit log server-side before paging it, mirroring the
+   `FileHistorySnapshot`/`historyId` mechanism `getFileHistory` already uses**
+   (`HostedWorkspaceViewerService.ts:134-142, 1878-1898, 2008-2052`). This is
+   a correctness requirement, not an optional hardening: `getCommitLog`
+   currently re-runs a live `git log --skip=N -n limit` against the current
+   ref on every call
+   (`HostedWorkspaceViewerService.ts:2070-2141`,`getRecentCommits` in
+   `GitUtils.ts:112-134`), with no snapshot. Design point 4 below relies on
+   assembling a full, consistent commit array from many separately-fetched
+   pages and feeding it through `computeCommitGraphLayout` as one top-to-
+   bottom stateful fold. If a commit lands (or a checkout
+   happens) between two page fetches, every offset after that point shifts;
+   the concatenated array silently gains a duplicate or drops a commit, and
+   the lane fold — which has no way to detect this — assigns wrong lanes and
+   colors from that point down. File history solved exactly this problem for
+   its own paging: `getFileHistory` fetches the complete unbounded log once
+   (`getFileHistoryCommits(repoRoot, gitPath, undefined, 0, headHash)`),
+   freezes it into an in-memory `FileHistorySnapshot` keyed by a server-issued
+   `historyId`, and serves every subsequent page as a slice of that frozen
+   array — see `materializeFileHistoryPage`, `createFileHistoryId`,
+   `trimFileHistorySnapshots`/`FILE_HISTORY_SNAPSHOT_TTL_MS`/
+   `FILE_HISTORY_SNAPSHOT_MAX_COUNT` for the eviction policy to mirror.
+   Repo-wide history has no path filter, so an unbounded `git log` is a larger
+   fetch than a single file's — acceptable given the acceptance criteria's own
+   scale ("hundreds or thousands of commits", not monorepo-scale histories),
+   consistent with the precedent this plan is mirroring; note the TTL/count
+   eviction already bounds how many snapshots can be held at once. Concretely,
+   this needs: (a) `getRecentCommits` (`GitUtils.ts:112-134`) to accept an
+   `undefined` limit for an unbounded fetch, matching
+   `getFileHistoryCommits`'s existing `limit: number | undefined` signature;
+   (b) a new frozen-snapshot response shape for commit log paging (add fields
+   to `WorkspaceCommitLogResponse` or introduce a
+   `WorkspaceCommitLogPageResponse` paralleling
+   `WorkspaceFileHistoryPageResponse`) carrying `historyId`, `pageSize`,
+   `totalEntries`/`offset`; (c) `getCommitLog` gaining a `historyId` parameter
+   with the same validate-and-slice-or-refetch flow as `getFileHistory`,
+   keying the snapshot on `(repoRoot, branchHint, detached)` the way file
+   history keys on `(repoRoot, requestedPath)`; (d) `workspaceCommitLog` in
+   `hostedApi.ts` (`:271-284`) and the `/api/workspace-viewer/commit-log`
+   route passing `historyId` through. Consider extracting a small shared
+   generic snapshot-cache helper (id issuance, TTL/count eviction, slice
+   materialization) that both `getFileHistory` and `getCommitLog` call into,
+   per this project's DRY/single-source convention — but only if it stays
+   simple; do not force a shared abstraction that makes either call site
+   harder to follow. This is the step that should land first, since the new
+   `usePagedCommitHistory` hook (design point 1) is written against this
+   response shape.
+3. **Virtualize one shared row range for both layers.** Do not virtualize the
    SVG rail and the text rows independently — a single `VirtualizedPagedList`
    (or equivalent range controller) must drive both, so a graph elbow and its
    commit's text row are always realized or unrealized together. The SVG
@@ -59,7 +107,7 @@ history doesn't:
    spanning the realized window (translated per-row), not one `<svg>` per
    row, to keep elbow paths that span multiple rows (merges, long-running
    lanes) drawable without clipping at row boundaries.
-3. **Preserve graph lane continuity at loaded-window boundaries.** A lane's
+4. **Preserve graph lane continuity at loaded-window boundaries.** A lane's
    color and horizontal position are derived from `computeCommitGraphLayout`
    over the commits it has seen; feeding it a windowed subset instead of the
    full fetched history risks lane reassignment/color drift as the window
@@ -69,7 +117,7 @@ history doesn't:
    in-flight lane state across windowed calls. Prefer (a) unless memory
    profiling on a large history shows the full-layout array itself is the
    bottleneck — it is simpler and avoids a second, harder layout algorithm.
-4. **Replace the manual `Load more…` button with overscan-driven loading**
+5. **Replace the manual `Load more…` button with overscan-driven loading**
    (`WorkspaceCommitHistoryPane.tsx:553-565`), matching how
    `usePagedFileHistory`'s `onRangeChange` requests only the pages needed to
    cover the visible/overscan range — while retaining every other piece of
@@ -87,13 +135,31 @@ history doesn't:
   the file-history work, but the UI entry point, pagination contract, and
   directory-vs-file semantics are undesigned. Track it separately if it
   becomes a real need.
-- This plan does not change `workspaceCommitLog`'s server contract or add a
-  new endpoint — the existing offset/limit API is reused as-is.
+- This plan does not add a new endpoint — `getCommitLog`/`workspaceCommitLog`/
+  `/api/workspace-viewer/commit-log` are extended in place (a `historyId`
+  parameter and a frozen-snapshot response, per design point 2), not
+  replaced. The offset/limit shape callers pass is otherwise unchanged.
 - No change to `DiffFileList`/`VirtualizedList` (the dense text-diff list) —
   see `GIT_REF_DIFF_PAGINATION_PLAN.md` for that follow-on instead.
 
 ## Likely implementation surface
 
+- `src/server/HostedWorkspaceViewerService.ts` — add a `CommitLogSnapshot`
+  (mirroring `FileHistorySnapshot`, `:134-142`) and give `getCommitLog`
+  (`:2070-2141`) the same historyId validate-and-slice-or-refetch flow as
+  `getFileHistory` (`:1783-1899`), including TTL/count eviction mirroring
+  `FILE_HISTORY_SNAPSHOT_TTL_MS`/`FILE_HISTORY_SNAPSHOT_MAX_COUNT`
+  (`:2008-2052`).
+- `src/utils/GitUtils.ts` — give `getRecentCommits` (`:112-134`) an
+  `undefined`-limit unbounded mode, matching `getFileHistoryCommits`'s
+  existing `limit: number | undefined` signature (`:188-213`).
+- `src/types/HostedWorkspaceViewerTypes.ts` — extend
+  `WorkspaceCommitLogResponse` or add a `WorkspaceCommitLogPageResponse`
+  (`:332-338`) carrying `historyId`/`pageSize`/`totalEntries`/`offset`,
+  paralleling `WorkspaceFileHistoryPageResponse` (`:353-363`).
+- `src/ui/webview-react/utils/hostedApi.ts` — thread `historyId` through
+  `workspaceCommitLog` (`:271-284`), matching `workspaceFileHistory`'s
+  existing shape.
 - `src/ui/webview-react/components/workspace-viewer/WorkspaceCommitHistoryPane.tsx`
   — replace eager full-array rendering with a windowed render driven by the
   new paged controller; rework the SVG rail to render per realized window
@@ -119,6 +185,12 @@ history doesn't:
 
 ## Testing plan
 
+- Snapshot/staleness tests: a commit landing (or a checkout) between two page
+  fetches does not corrupt an in-progress paged listing — the stale
+  `historyId` either keeps serving its frozen view consistently or is
+  rejected and the hook re-freezes cleanly (mirroring how
+  `usePagedFileHistory`/`getFileHistory` handle an expired/mismatched
+  `historyId`), never a silently shifted or duplicated page.
 - Paging/virtualization tests: only the initial visible/overscan range is
   requested on open; scrolling requests older pages; sparse placeholder rows
   render without breaking `aria-posinset`-style indexing (mirroring the

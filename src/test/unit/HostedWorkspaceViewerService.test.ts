@@ -1391,6 +1391,118 @@ suite("HostedWorkspaceViewerService", function () {
   // ── getCommitLog ──────────────────────────────────────────────────────────
 
   suite("getCommitLog", () => {
+    test("freezes the complete history for subsequent pages", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "a.txt", "one\n", "First commit");
+      commitFile(root, "b.txt", "two\n", "Second commit");
+      commitFile(root, "c.txt", "three\n", "Third commit");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const first = await svc.getCommitLog(0, 2);
+      assert.strictEqual(first.historyId.length > 0, true);
+      assert.strictEqual(first.pageSize, 2);
+      assert.strictEqual(first.totalEntries, 3);
+      assert.strictEqual(first.offset, 0);
+      assert.deepStrictEqual(
+        first.commits.map((commit) => commit.subject),
+        ["Third commit", "Second commit"]
+      );
+
+      commitFile(root, "d.txt", "four\n", "Commit after opening history");
+      const continuation = await svc.getCommitLog(
+        2,
+        2,
+        undefined,
+        undefined,
+        first.historyId
+      );
+
+      assert.strictEqual(continuation.totalEntries, 3);
+      assert.strictEqual(continuation.offset, 2);
+      assert.deepStrictEqual(
+        continuation.commits.map((commit) => commit.subject),
+        ["First commit"]
+      );
+      assert.strictEqual(continuation.hasMore, false);
+
+      const refreshed = await svc.getCommitLog(0, 2);
+      assert.strictEqual(refreshed.totalEntries, 4);
+      assert.notStrictEqual(refreshed.historyId, first.historyId);
+    });
+
+    test("rejects invalid, expired, and mismatched history ids", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "a.txt", "one\n", "Only commit");
+      runGit(root, "branch", "other");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const page = await svc.getCommitLog(0, 1, "other");
+
+      await assert.rejects(
+        svc.getCommitLog(0, 1, undefined, undefined, "not-an-id"),
+        (error: unknown) => error instanceof WorkspaceTreeBadRequestError
+      );
+      await assert.rejects(
+        svc.getCommitLog(
+          0,
+          1,
+          undefined,
+          undefined,
+          "00000000-0000-4000-8000-000000000099"
+        ),
+        (error: unknown) => error instanceof WorkspaceTreeExpiredError
+      );
+      await assert.rejects(
+        svc.getCommitLog(0, 1, undefined, undefined, page.historyId),
+        (error: unknown) => error instanceof WorkspaceTreeBadRequestError
+      );
+
+      const originalNow = Date.now;
+      try {
+        Date.now = () => originalNow() + 5 * 60 * 1000;
+        await assert.rejects(
+          svc.getCommitLog(0, 1, "other", undefined, page.historyId),
+          (error: unknown) => error instanceof WorkspaceTreeExpiredError
+        );
+      } finally {
+        Date.now = originalNow;
+      }
+    });
+
+    test("evicts the oldest snapshots at the count cap", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "a.txt", "one\n", "Only commit");
+      for (let index = 0; index < 33; index++) {
+        runGit(root, "branch", `snapshot-${index}`);
+      }
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const first = await svc.getCommitLog(0, 1, "snapshot-0");
+      let latest = first;
+      for (let index = 1; index < 33; index++) {
+        latest = await svc.getCommitLog(0, 1, `snapshot-${index}`);
+      }
+
+      await assert.rejects(
+        svc.getCommitLog(0, 1, "snapshot-0", undefined, first.historyId),
+        (error: unknown) => error instanceof WorkspaceTreeExpiredError
+      );
+      const retained = await svc.getCommitLog(
+        0,
+        1,
+        "snapshot-32",
+        undefined,
+        latest.historyId
+      );
+      assert.strictEqual(retained.historyId, latest.historyId);
+    });
+
     test("marks HEAD, parses branch ref labels, and reports the branch", async () => {
       const root = createWorkspace();
       runGit(root, "init");

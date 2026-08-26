@@ -335,6 +335,14 @@ export interface WorkspaceCommitLogResponse {
   /** null when in detached HEAD state */
   currentBranch: string | null;
   detached: boolean;
+  /** Server-issued id for the frozen commit log used by subsequent pages. */
+  historyId: string;
+  /** Page size fixed when the commit log snapshot was created. */
+  pageSize: number;
+  /** Number of commits in the frozen commit log snapshot. */
+  totalEntries: number;
+  /** Virtual index of the first commit in this page. */
+  offset: number;
 }
 
 /** Default and supported bounds for the paged file-history API. */
