@@ -1473,7 +1473,11 @@ suite("HostedWorkspaceViewerService", function () {
       }
     });
 
-    test("evicts the oldest snapshots at the count cap", async () => {
+    test("evicts the oldest snapshots at the count cap", async function () {
+      // 33 real branch creations plus 33 getCommitLog calls, each spawning
+      // several git subprocesses, comfortably exceeds the file's default
+      // 10s budget on a loaded machine.
+      this.timeout(30_000);
       const root = createWorkspace();
       runGit(root, "init");
       configureGitIdentity(root);
