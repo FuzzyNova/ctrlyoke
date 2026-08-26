@@ -51,6 +51,49 @@ UI still in flux. Everything else is capture-ready today.
   icons and the ctrlyoke icon). Landing and docs can share one canonical set and each reference it, or
   duplicate — decide when executing based on Astro/VitePress asset pipeline constraints.
 
+### Target dimensions
+
+Grounded in the actual containers these assets land in: `landing/src/pages/index.astro` has zero
+images today (plain `<img>` tags, no `astro:assets` pipeline) and its sections sit in Tailwind
+`max-w-2xl` (672px), `max-w-4xl` (896px — hero, YAML snippet, harness grid, Pro callout), and
+`max-w-6xl` (1152px — features grid, ~360px per card in the 3-col layout). `docs/` is stock
+VitePress (`docs/.vitepress/config.mts`, no custom theme) with a default ~688px prose column, and
+VitePress's own `.vp-doc img { max-width:100%; height:auto }` already scales oversized images down
+for free. The dashboard's own native capture width is the ~420–480px webview from "Capture setup"
+above.
+
+**Bigger is safe, smaller isn't — for stills.** Once landing images exist they should be built with
+`max-width:100%; height:auto` in their container (same free behavior docs already gets), so a still
+captured *larger* than its slot just scales down cleanly — capturing at 2x DPI and shipping that PNG
+is correct, not wasteful. The failure mode is the opposite: a still captured smaller than its slot
+has to scale up and goes soft. Treat the px floors below as floors, not ceilings, for PNG categories
+(A, B, C, F) — shoot at 2x whenever it's free to do so.
+
+**GIFs are the exception.** Motion pays a real byte cost per pixel against the plan's <2MB budget, so
+there's no free lunch in over-capturing — for GIF categories (D, E), capture close to actual display
+size (~1–1.5x, not 2x+) and spend the byte budget on trimming/frame rate instead of resolution.
+
+**Ratio matters more than absolute px for the designed compositions** (B, C, D) — these are
+flattened canvases built to fill a landscape slot, so an off-ratio composite either letterboxes or
+gets an ugly crop once dropped in. Raw single-panel stills (A) and the code-snippet image (F) don't
+need a forced ratio — their shape is dictated by the sidebar's natural portrait shape or the
+snippet's line count, and the surrounding container just sizes to whatever they are.
+
+| Category | Applies to | Ratio target | Px floor | Notes |
+| --- | --- | --- | --- | --- |
+| A. Raw panel screenshot | #4, #5, #11, #12 | none — natural portrait, crop to content | 880–960px wide | 2x of the real 420–480 webview width |
+| B. Flattened composite | #1, #2 | ~3:2 to 16:10 landscape | 1152px wide (2304px+ at 2x) | targets the `max-w-6xl` features-grid slot |
+| C. Desktop/mobile side-by-side | #3, pairs with #7 | ~3:2 landscape | 896px wide (1800px+ at 2x) | targets `max-w-4xl` Pro callout |
+| D. Hero GIF | #6 | ~4:3 to 16:10 landscape | 896–1152px wide, captured near 1x–1.5x | record from the hosted/browser dashboard, not the narrow sidebar — a stretched 480px capture won't fill the hero |
+| E. In-body docs GIF | #9 | none forced | ~688–900px wide, captured near 1x | keep under the existing 2MB budget |
+| F. Styled code snippet | #8 | none — content-driven height | 896px wide | matches the existing hero `<pre>` block treatment |
+
+One practical gotcha for A/B/C: on a non-retina Windows display at 100%/125% scaling, an ordinary
+screenshot captures logical pixels 1:1 — soft once placed at native size in a 2x-built container.
+Bump Windows display scaling to 200% temporarily before capturing, or if the capture goes through
+Playwright (per the hosted-dashboard debugging flow), set `deviceScaleFactor: 2` on the browser
+context; then ship the 2x PNG with `width`/`height` HTML attributes set to the 1x display size.
+
 ## Shot checklist
 
 Each item: what to capture, what prep it needs, where it's used.
@@ -65,6 +108,7 @@ Each item: what to capture, what prep it needs, where it's used.
   harness switched each time via `WorkflowPropertiesPanel`'s Harness tab), then composite.
 - **Use:** landing hero or the "One interface, six harnesses" feature card
   (`landing/src/pages/index.astro` `features` array, `⚡` entry) — replace/augment the icon-only card.
+- **Dimensions:** category B — see "Target dimensions" above.
 
 ### 2. Composite: one dashboard, multiple VS Code themes
 
@@ -75,6 +119,7 @@ Each item: what to capture, what prep it needs, where it's used.
 - **Use:** landing "Harness grid" section or a new "Looks like your editor, not a plugin" section; also
   useful in `docs/guide/index.md` or `docs/guide/installation.md` to reassure users it isn't a
   separately-styled webview.
+- **Dimensions:** category B — see "Target dimensions" above.
 
 ### 3. Side-by-side: desktop vs. mobile
 
@@ -84,6 +129,7 @@ Each item: what to capture, what prep it needs, where it's used.
   `.github/copilot-instructions.md` debugging section) and a real or simulated mobile viewport.
 - **Use:** landing "Pro callout" section (`Code from anywhere`) — currently text/checklist only, no
   imagery at all; also `docs/pro/index.md`.
+- **Dimensions:** category C — see "Target dimensions" above.
 
 ### 4. `StatsUsageSection.tsx` — usage/stats page
 
@@ -116,6 +162,7 @@ Each item: what to capture, what prep it needs, where it's used.
   take.
 - **Use:** landing hero (replace/accompany the static YAML snippet) or a new "watch it work" section;
   `docs/workflows/index.md` and `docs/guide/your-first-workflow.md`.
+- **Dimensions:** category D — see "Target dimensions" above.
 
 ### 7. Built-in mobile editor section
 
@@ -137,6 +184,7 @@ Each item: what to capture, what prep it needs, where it's used.
   the running app (template variable *editing* isn't a polished dashboard experience yet — see #9).
 - **Use:** new landing "Templates" section; `docs/workflows/templates.md` itself currently has no
   visual treatment of its own code blocks beyond plain markdown.
+- **Dimensions:** category F — see "Target dimensions" above.
 
 ### 9. GIF: prompt editor context-expansion, all trigger types
 
