@@ -40,7 +40,7 @@ function createParser(options?: {
     extractTimestamp: () => null,
     extractSessionId: () => options?.extractedSessionId ?? null,
     extractStructuredEventsFromEvent: (event: BaseCliEvent) =>
-      event.type === "text"
+      event.type === CLI_EVENT_TYPES.TEXT
         ? ([
             {
               type: "text" as const,

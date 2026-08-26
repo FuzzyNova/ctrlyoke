@@ -465,7 +465,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     resolved: ErrorBehavior | null | undefined
   ) => {
     if (!resolved) return "Inherit (Stop Workflow)";
-    if (resolved.onError === "retry") {
+    if (resolved.onError === CONDITION_ACTIONS.RETRY) {
       return `Inherit (Retry ${resolved.maxRetries ?? 1}x)`;
     }
     return resolved.onError === "continue"

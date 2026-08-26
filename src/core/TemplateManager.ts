@@ -10,8 +10,9 @@ import { getCtrlYokeUserTemplateDir } from "../utils/HarnessDirectoryUtils";
 import {
   RETRY_PROMPT_PLACEHOLDERS,
   DISCOVERY_SOURCES,
+  TEMPLATE_VARIABLE_TYPES,
   WORKFLOW_FILE_FORMATS,
-  WORKSPACE_ENTRY_KINDS,
+  type TemplateVariableType,
   type DiscoverySource,
   type WorkflowFileFormat,
 } from "../types/DashboardConstants";
@@ -65,12 +66,7 @@ export interface TemplateVariable {
   /** Matches the {placeholder} in the template content */
   name: string;
   /** 'file'/'directory' show a Browse button; 'select'/'harness' show a dropdown; 'text' (default) is a plain input */
-  type?:
-    | "text"
-    | typeof WORKSPACE_ENTRY_KINDS.FILE
-    | typeof WORKSPACE_ENTRY_KINDS.DIRECTORY
-    | "select"
-    | "harness";
+  type?: TemplateVariableType;
   /** Glob patterns for the file picker filter. Only used when type = 'file' */
   fileFilter?: string[];
   /** Choices for the dropdown. Required (non-empty) when type = 'select' */
@@ -168,11 +164,11 @@ export class TemplateManager {
           const vm = varMeta as Record<string, unknown>;
           const entry: Partial<Omit<TemplateVariable, "name">> = {};
           if (
-            vm["type"] === WORKSPACE_ENTRY_KINDS.FILE ||
-            vm["type"] === "text" ||
-            vm["type"] === WORKSPACE_ENTRY_KINDS.DIRECTORY ||
-            vm["type"] === "select" ||
-            vm["type"] === "harness"
+            vm["type"] === TEMPLATE_VARIABLE_TYPES.FILE ||
+            vm["type"] === TEMPLATE_VARIABLE_TYPES.TEXT ||
+            vm["type"] === TEMPLATE_VARIABLE_TYPES.DIRECTORY ||
+            vm["type"] === TEMPLATE_VARIABLE_TYPES.SELECT ||
+            vm["type"] === TEMPLATE_VARIABLE_TYPES.HARNESS
           )
             entry.type = vm["type"];
           if (
@@ -481,8 +477,8 @@ export class TemplateManager {
         seen.add(name);
         const variable: TemplateVariable = { name };
         if (
-          typePrefix === WORKSPACE_ENTRY_KINDS.FILE ||
-          typePrefix === "text"
+          typePrefix === TEMPLATE_VARIABLE_TYPES.FILE ||
+          typePrefix === TEMPLATE_VARIABLE_TYPES.TEXT
         ) {
           variable.type = typePrefix;
         }

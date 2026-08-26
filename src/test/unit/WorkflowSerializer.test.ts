@@ -10,6 +10,7 @@ import { configService } from "../../config/CtrlYokeConfigService";
 import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
 import {
   MESSAGE_TYPES,
+  PROMPT_PROPERTIES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "../../types/DashboardConstants";
 import type {
@@ -102,7 +103,7 @@ function schemaBackedFieldNames(): {
     "_runtime",
   ]);
   const singleStepWorkflowFields = promptFields.filter(
-    (field) => field === "prompt"
+    (field) => field === PROMPT_PROPERTIES.PROMPT
   );
 
   return {

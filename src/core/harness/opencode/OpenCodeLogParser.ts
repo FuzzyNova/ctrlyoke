@@ -378,7 +378,7 @@ export class OpenCodeLogParser extends BaseLogParser {
         });
         break;
       }
-      case "retry": {
+      case OPENCODE_EVENT_TYPES.RETRY: {
         // Retry attempt — surface as text so the user sees it
         const attempt = e.part?.attempt as number | undefined;
         const errMsg = e.part?.error as string | undefined;
@@ -493,7 +493,7 @@ export class OpenCodeLogParser extends BaseLogParser {
           });
           break;
         }
-        case "retry": {
+        case OPENCODE_EVENT_TYPES.RETRY: {
           const attempt = e.part?.attempt as number | undefined;
           const errMsg = e.part?.error as string | undefined;
           const text = errMsg
@@ -774,7 +774,7 @@ export class OpenCodeLogParser extends BaseLogParser {
           },
         };
 
-      case "retry":
+      case OPENCODE_EVENT_TYPES.RETRY:
         // Retry attempt — surface as a visible event
         return {
           type: "retry",

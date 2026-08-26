@@ -8,6 +8,7 @@ import { suite, test, setup, teardown } from "mocha";
 import type * as vscode from "vscode";
 import { CliIntegration } from "../../core/harness/CliIntegration";
 import {
+  CLI_EVENT_TYPES,
   CONTEXT_RESOLUTION_FAILURE_MODES,
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
@@ -433,12 +434,12 @@ suite("CliIntegration", () => {
       extractTimestamp: () => null,
       extractSessionId: () => "standalone-session",
       extractStructuredEventsFromEvent: (event: BaseCliEvent) =>
-        event.type === "text"
-          ? [{ type: "text", data: { text: String(event.text) } }]
+        event.type === CLI_EVENT_TYPES.TEXT
+          ? [{ type: CLI_EVENT_TYPES.TEXT, data: { text: String(event.text) } }]
           : [],
       extractResponse: (events: BaseCliEvent[]) => ({
         events: events
-          .filter((event) => event.type === "text")
+          .filter((event) => event.type === CLI_EVENT_TYPES.TEXT)
           .map((event) => ({
             type: "text",
             data: { text: String(event.text) },

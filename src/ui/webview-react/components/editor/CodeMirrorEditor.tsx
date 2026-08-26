@@ -53,10 +53,12 @@ import { openContextReference } from "@utils/contextReferenceActions";
 import {
   ATOMIC_REFERENCE_KINDS,
   BOOLEAN_STRING_VALUES,
+  CODE_MIRROR_EDITOR_MODES,
   USER_FEEDBACK_SEVERITY,
   CTRLYOKE_SLASH_TOKEN_KINDS,
   PRIOR_CONTEXT_REFERENCE_KINDS,
   SCRIPT_OUTPUT_SOURCES,
+  type CodeMirrorEditorMode,
 } from "@root/types/DashboardConstants";
 import {
   MESSAGE_TYPES,
@@ -98,7 +100,7 @@ interface TypoChecker {
   suggest: (word: string) => string[];
 }
 
-export type CodeMirrorEditorMode = "prompt" | "endCondition";
+export type { CodeMirrorEditorMode } from "@root/types/DashboardConstants";
 type CodeMirrorEditorSurface = "editor" | "input";
 
 interface CodeMirrorEditorProps {
@@ -563,7 +565,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     affUri,
     dicUri,
     readOnly = false,
-    mode = "prompt",
+    mode = CODE_MIRROR_EDITOR_MODES.PROMPT,
     surface = "editor",
     className,
     minHeightClassName,
@@ -717,7 +719,11 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   }, [mode]);
 
   useEffect(() => {
-    if (!pendingInsertRequest || !viewRef.current || mode !== "prompt") {
+    if (
+      !pendingInsertRequest ||
+      !viewRef.current ||
+      mode !== CODE_MIRROR_EDITOR_MODES.PROMPT
+    ) {
       return;
     }
 
@@ -1356,7 +1362,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
             onBlurRef.current?.();
             return false;
           },
-          ...(mode === "prompt"
+          ...(mode === CODE_MIRROR_EDITOR_MODES.PROMPT
             ? {
                 paste: (event, view) =>
                   handleImagePaste(event as ClipboardEvent, view),
@@ -1418,7 +1424,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           // dispatching call stack — an updateListener runs after the fact and
           // cannot identify who moved the caret.
           if (
-            mode === "prompt" &&
+            mode === CODE_MIRROR_EDITOR_MODES.PROMPT &&
             (update.docChanged || update.geometryChanged)
           ) {
             const cause = update.docChanged ? "doc" : "geometry";
@@ -1459,7 +1465,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
     // Check overflow immediately after mount so loading an existing prompt
     // with lots of content triggers auto-expand (treat as a doc event).
-    if (mode === "prompt") {
+    if (mode === CODE_MIRROR_EDITOR_MODES.PROMPT) {
       view.requestMeasure({
         read(v: EditorView) {
           return v.contentHeight - v.scrollDOM.clientHeight;
@@ -2694,7 +2700,7 @@ export function createConditionOutputLintExtension(
   return linter(
     (view): Diagnostic[] => {
       const hasPreCondition = hasPreConditionRef.current ?? false;
-      const mode = modeRef.current ?? "prompt";
+      const mode = modeRef.current ?? CODE_MIRROR_EDITOR_MODES.PROMPT;
       const diagnostics: Diagnostic[] = [];
       const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
 
@@ -2717,7 +2723,7 @@ export function createConditionOutputLintExtension(
             });
           } else if (
             ref.phase === SCRIPT_OUTPUT_SOURCES.END_CONDITION &&
-            mode !== "endCondition"
+            mode !== CODE_MIRROR_EDITOR_MODES.END_CONDITION
           ) {
             diagnostics.push({
               from: ref.from,

@@ -20,6 +20,7 @@ import {
   type ScriptProperties,
 } from "../../types/CtrlYokeTypes";
 import {
+  CLI_EVENT_TYPES,
   HARNESS_IDS,
   CONTEXT_RESOLUTION_FAILURE_MODES,
   EXECUTION_STATES,
@@ -1545,7 +1546,9 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     );
     assert.ok(
       eventCalls.some(
-        (c) => c.loopIndex === 0 && c.events.some((e) => e.type === "text")
+        (c) =>
+          c.loopIndex === 0 &&
+          c.events.some((e) => e.type === CLI_EVENT_TYPES.TEXT)
       )
     );
     assert.strictEqual(completedCalls.length, 1);

@@ -733,8 +733,8 @@ suite("HostedWorkspaceViewerService", function () {
         root
       ).getFileHistoryDiff("history.txt", commit);
 
-      assert.strictEqual(result.payloadKind, "text");
-      if (result.payloadKind !== "text") return;
+      assert.strictEqual(result.payloadKind, DIFF_PAYLOAD_KINDS.TEXT);
+      if (result.payloadKind !== DIFF_PAYLOAD_KINDS.TEXT) return;
       assert.strictEqual(result.subject, "Update file");
       assert.strictEqual(result.oldContent, "before\n");
       assert.strictEqual(result.newContent, "after\n");
@@ -755,8 +755,8 @@ suite("HostedWorkspaceViewerService", function () {
         root
       ).getFileHistoryDiff("new-name.txt", commit);
 
-      assert.strictEqual(result.payloadKind, "text");
-      if (result.payloadKind !== "text") return;
+      assert.strictEqual(result.payloadKind, DIFF_PAYLOAD_KINDS.TEXT);
+      if (result.payloadKind !== DIFF_PAYLOAD_KINDS.TEXT) return;
       assert.strictEqual(result.path, "new-name.txt");
       assert.strictEqual(result.oldPath, "old-name.txt");
       assert.strictEqual(result.oldContent, "same content\n");
@@ -774,8 +774,8 @@ suite("HostedWorkspaceViewerService", function () {
         root
       ).getFileHistoryDiff("root.txt", commit);
 
-      assert.strictEqual(result.payloadKind, "text");
-      if (result.payloadKind !== "text") return;
+      assert.strictEqual(result.payloadKind, DIFF_PAYLOAD_KINDS.TEXT);
+      if (result.payloadKind !== DIFF_PAYLOAD_KINDS.TEXT) return;
       assert.strictEqual(result.oldContent, "");
       assert.strictEqual(result.newContent, "root content\n");
     });

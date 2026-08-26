@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CustomSelect } from "./CustomSelect";
 import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
+import { CONDITION_ACTIONS } from "@root/types/DashboardConstants";
 
 const ERROR_ACTION_OPTIONS = [
   { value: "stop", label: "Stop Workflow" },
@@ -20,7 +21,7 @@ function applyActionDefaults(
   current: ErrorBehavior,
   onError: ErrorBehavior["onError"]
 ): ErrorBehavior {
-  if (onError !== "retry") {
+  if (onError !== CONDITION_ACTIONS.RETRY) {
     return { onError };
   }
 
@@ -60,7 +61,7 @@ export function ErrorBehaviorEditor({
     setRetryDelayInput(String(resolvedValue.retryDelayMs ?? 0));
   }, [resolvedValue.retryDelayMs]);
 
-  const isRetry = resolvedValue.onError === "retry";
+  const isRetry = resolvedValue.onError === CONDITION_ACTIONS.RETRY;
 
   return (
     <div className="space-y-3">

@@ -1870,6 +1870,17 @@ export type PropertyEditorMode =
   (typeof PROPERTY_EDITOR_MODES)[keyof typeof PROPERTY_EDITOR_MODES];
 
 // ============================================================================
+// CODEMIRROR EDITOR MODES - Context modes for the prompt editor
+// ============================================================================
+export const CODE_MIRROR_EDITOR_MODES = {
+  PROMPT: "prompt",
+  END_CONDITION: "endCondition",
+} as const;
+
+export type CodeMirrorEditorMode =
+  (typeof CODE_MIRROR_EDITOR_MODES)[keyof typeof CODE_MIRROR_EDITOR_MODES];
+
+// ============================================================================
 // PRIOR CONTEXT ITEM TYPES - Discriminant for PriorContextItem.type
 // ============================================================================
 export const PRIOR_CONTEXT_ITEM_TYPES = {
@@ -2441,6 +2452,20 @@ export type WorkspaceFileTreeEntryKind = Exclude<
   WorkspaceEntryKind,
   typeof WORKSPACE_ENTRY_KINDS.CONTENT
 >;
+
+// ============================================================================
+// TEMPLATE VARIABLE TYPES - Input control types for template variables
+// ============================================================================
+export const TEMPLATE_VARIABLE_TYPES = {
+  TEXT: "text",
+  FILE: WORKSPACE_ENTRY_KINDS.FILE,
+  DIRECTORY: WORKSPACE_ENTRY_KINDS.DIRECTORY,
+  SELECT: "select",
+  HARNESS: "harness",
+} as const;
+
+export type TemplateVariableType =
+  (typeof TEMPLATE_VARIABLE_TYPES)[keyof typeof TEMPLATE_VARIABLE_TYPES];
 
 // ============================================================================
 // WORKSPACE VIEWER - Shared hosted viewer tab and search scope values

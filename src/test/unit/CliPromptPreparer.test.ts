@@ -335,7 +335,9 @@ suite("CliPromptPreparer", () => {
       assert.deepStrictEqual(capturedSkills, ["commit"]);
       assert.ok(result.files.some((file) => file.content.includes("skill")));
       assert.strictEqual(
-        result.files.find((file) => file.category === "prompt")?.content,
+        result.files.find(
+          (file) => file.category === TEMP_FILE_CATEGORIES.PROMPT
+        )?.content,
         "skill: commit"
       );
       assert.strictEqual(prompt.prompt, "/skill:commit");
@@ -388,7 +390,9 @@ suite("CliPromptPreparer", () => {
 
       assert.deepStrictEqual(capturedSkills, ["commit", "review"]);
       assert.strictEqual(
-        result.files.find((file) => file.category === "prompt")?.content,
+        result.files.find(
+          (file) => file.category === TEMP_FILE_CATEGORIES.PROMPT
+        )?.content,
         "using skill: commit now"
       );
     } finally {

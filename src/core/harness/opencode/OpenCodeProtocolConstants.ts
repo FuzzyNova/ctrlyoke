@@ -8,4 +8,5 @@ export const OPENCODE_EVENT_TYPES = {
   TEXT: "text",
   TOOL_USE: "tool_use",
   USER_TEXT: "user_text",
+  RETRY: "retry",
 } as const;
