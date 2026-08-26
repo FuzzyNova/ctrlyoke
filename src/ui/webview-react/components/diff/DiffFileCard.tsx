@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 import { DiffView } from "@components/output/DiffView";
 import type { HunkData, DiffType } from "react-diff-view";
 import type { UnifiedDiffHunk } from "@root/types/CliOutputTypes";
@@ -89,7 +90,7 @@ function detailToSource(
   switch (detail.payloadKind) {
     case DIFF_PAYLOAD_KINDS.TEXT:
       return {
-        kind: "content",
+        kind: WORKSPACE_ENTRY_KINDS.CONTENT,
         oldContent: detail.oldContent,
         newContent: detail.newContent,
       };
@@ -109,7 +110,11 @@ export interface DiffFileCardProps {
   /** Exactly one diff source. */
   source:
     | { kind: "hunks"; hunks: HunkData[]; diffType: DiffType }
-    | { kind: "content"; oldContent?: string; newContent?: string }
+    | {
+        kind: typeof WORKSPACE_ENTRY_KINDS.CONTENT;
+        oldContent?: string;
+        newContent?: string;
+      }
     | {
         kind: "patch";
         structuredPatch: UnifiedDiffHunk[];
@@ -337,7 +342,7 @@ export const DiffFileCard: React.FC<DiffFileCardProps> = ({
             {...sharedDiffViewProps}
           />
         );
-      case "content":
+      case WORKSPACE_ENTRY_KINDS.CONTENT:
         return (
           <DiffView
             oldContent={renderedSource.oldContent}

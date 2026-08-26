@@ -22,6 +22,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 import { FileBrowserModal } from "@components/workflow/FileBrowserModal";
 import { useUiStore, type FileBrowserRequest } from "@store/uiStore";
 import { workspaceFile, workspaceTree } from "@utils/hostedApi";
@@ -94,7 +95,7 @@ afterAll(() => {
 
 function entry(
   index: number,
-  kind: WorkspaceTreeEntry["kind"] = "file",
+  kind: WorkspaceTreeEntry["kind"] = WORKSPACE_ENTRY_KINDS.FILE,
   name = `file-${index}.ts`,
   path = name
 ): WorkspaceTreeEntry {
@@ -127,9 +128,9 @@ function smallRootResponse(): WorkspaceTreePageResponse {
     ROOT_LISTING,
     "",
     [
-      entry(0, "directory", "src", "src"),
-      entry(1, "file", "readme.md"),
-      entry(2, "file", "image.png"),
+      entry(0, WORKSPACE_ENTRY_KINDS.DIRECTORY, "src", "src"),
+      entry(1, WORKSPACE_ENTRY_KINDS.FILE, "readme.md"),
+      entry(2, WORKSPACE_ENTRY_KINDS.FILE, "image.png"),
     ],
     3
   );
@@ -190,7 +191,7 @@ beforeEach(() => {
         pageResponse(
           SRC_LISTING,
           "src",
-          [entry(0, "file", "index.ts", "src/index.ts")],
+          [entry(0, WORKSPACE_ENTRY_KINDS.FILE, "index.ts", "src/index.ts")],
           1
         )
       );
@@ -211,7 +212,7 @@ describe("FileBrowserModal — visibility", () => {
   });
 
   it("loads the initial directory and lists its entries when opened", async () => {
-    openPicker({ mode: "file", onSelect: vi.fn() });
+    openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect: vi.fn() });
     render(<FileBrowserModal />);
 
     await expectTreeRequest({ path: "", includeGitIgnored: true });
@@ -223,7 +224,7 @@ describe("FileBrowserModal — visibility", () => {
 describe("FileBrowserModal — navigation", () => {
   it("navigates into a folder on click", async () => {
     const user = userEvent.setup();
-    openPicker({ mode: "file", onSelect: vi.fn() });
+    openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect: vi.fn() });
     render(<FileBrowserModal />);
 
     await user.click(await screen.findByText("src/"));
@@ -234,7 +235,7 @@ describe("FileBrowserModal — navigation", () => {
 
   it("reopens in the directory used for the previous selection", async () => {
     const user = userEvent.setup();
-    openPicker({ mode: "file", onSelect: vi.fn() });
+    openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect: vi.fn() });
     render(<FileBrowserModal />);
 
     await user.click(await screen.findByText("src/"));
@@ -244,7 +245,7 @@ describe("FileBrowserModal — navigation", () => {
     expect(useUiStore.getState().fileBrowserLastDirectory).toBe("src");
     workspaceTreeMock.mockClear();
 
-    openPicker({ mode: "file", onSelect: vi.fn() });
+    openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect: vi.fn() });
 
     await expectTreeRequest({ path: "src", includeGitIgnored: true });
     expect(await screen.findByText("index.ts")).toBeInTheDocument();
@@ -258,7 +259,7 @@ describe("FileBrowserModal — navigation", () => {
         return Promise.reject(new Error("Directory not found"));
       return Promise.resolve(smallRootResponse());
     });
-    openPicker({ mode: "file", onSelect: vi.fn() });
+    openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect: vi.fn() });
 
     render(<FileBrowserModal />);
 
@@ -299,7 +300,7 @@ describe("FileBrowserModal — navigation", () => {
       }
       return Promise.resolve(smallRootResponse());
     });
-    openPicker({ mode: "file", onSelect: vi.fn() });
+    openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect: vi.fn() });
     render(<FileBrowserModal />);
 
     await screen.findByText("src/");
@@ -308,10 +309,20 @@ describe("FileBrowserModal — navigation", () => {
 
     await act(async () => {
       resolveSrc(
-        pageResponse(SRC_LISTING, "src", [entry(0, "file", "stale.ts")], 1)
+        pageResponse(
+          SRC_LISTING,
+          "src",
+          [entry(0, WORKSPACE_ENTRY_KINDS.FILE, "stale.ts")],
+          1
+        )
       );
       resolveRoot(
-        pageResponse(ROOT_LISTING, "", [entry(0, "file", "fresh.ts")], 1)
+        pageResponse(
+          ROOT_LISTING,
+          "",
+          [entry(0, WORKSPACE_ENTRY_KINDS.FILE, "fresh.ts")],
+          1
+        )
       );
     });
 
@@ -324,7 +335,11 @@ describe("FileBrowserModal — file mode", () => {
   it("shares the persisted sort, requests every transition, and keeps page order server-owned", async () => {
     const user = userEvent.setup();
     const entries = Array.from({ length: 120 }, (_, index) => ({
-      ...entry(index, "file", `file-${String(index).padStart(3, "0")}.ts`),
+      ...entry(
+        index,
+        WORKSPACE_ENTRY_KINDS.FILE,
+        `file-${String(index).padStart(3, "0")}.ts`
+      ),
       modifiedAt: index,
     }));
     let listingNumber = 0;
@@ -369,7 +384,7 @@ describe("FileBrowserModal — file mode", () => {
       );
     });
 
-    openPicker({ mode: "file", onSelect: vi.fn() });
+    openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect: vi.fn() });
     render(<FileBrowserModal />);
     await screen.findByText("file-000.ts");
 
@@ -446,12 +461,18 @@ describe("FileBrowserModal — file mode", () => {
 
   it("preserves the selected file when sorting restarts the current listing", async () => {
     const user = userEvent.setup();
-    const oldEntry = { ...entry(0, "file", "old.ts"), modifiedAt: 1 };
+    const oldEntry = {
+      ...entry(0, WORKSPACE_ENTRY_KINDS.FILE, "old.ts"),
+      modifiedAt: 1,
+    };
     const selectedEntry = {
-      ...entry(1, "file", "selected.ts"),
+      ...entry(1, WORKSPACE_ENTRY_KINDS.FILE, "selected.ts"),
       modifiedAt: 3,
     };
-    const newEntry = { ...entry(2, "file", "new.ts"), modifiedAt: 5 };
+    const newEntry = {
+      ...entry(2, WORKSPACE_ENTRY_KINDS.FILE, "new.ts"),
+      modifiedAt: 5,
+    };
     workspaceTreeMock
       .mockResolvedValueOnce(
         pageResponse(ROOT_LISTING, "", [oldEntry, selectedEntry, newEntry], 3)
@@ -460,7 +481,7 @@ describe("FileBrowserModal — file mode", () => {
         pageResponse("sorted", "", [newEntry, selectedEntry, oldEntry], 3)
       );
 
-    openPicker({ mode: "file", onSelect: vi.fn() });
+    openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect: vi.fn() });
     render(<FileBrowserModal />);
     await user.click(await screen.findByText("selected.ts"));
     await user.click(
@@ -486,7 +507,11 @@ describe("FileBrowserModal — file mode", () => {
   it("selects a matching file, enabling confirm, and confirming selects it and closes", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
-    openPicker({ mode: "file", fileFilter: ["**/*.md"], onSelect });
+    openPicker({
+      mode: WORKSPACE_ENTRY_KINDS.FILE,
+      fileFilter: ["**/*.md"],
+      onSelect,
+    });
     render(<FileBrowserModal />);
 
     const fileRow = await screen.findByText("readme.md");
@@ -503,7 +528,11 @@ describe("FileBrowserModal — file mode", () => {
 
   it("dims non-matching files per fileFilter and does not let them be selected", async () => {
     const user = userEvent.setup();
-    openPicker({ mode: "file", fileFilter: ["**/*.md"], onSelect: vi.fn() });
+    openPicker({
+      mode: WORKSPACE_ENTRY_KINDS.FILE,
+      fileFilter: ["**/*.md"],
+      onSelect: vi.fn(),
+    });
     render(<FileBrowserModal />);
 
     const nonMatchingRow = await screen.findByText("image.png");
@@ -520,7 +549,7 @@ describe("FileBrowserModal — file mode", () => {
     workspaceTreeMock.mockImplementation((request) =>
       Promise.resolve(responseForLargeDirectory(entries, request))
     );
-    openPicker({ mode: "file", onSelect });
+    openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect });
     render(<FileBrowserModal />);
 
     await expectTreeRequest({ path: "", includeGitIgnored: true });
@@ -550,16 +579,20 @@ describe("FileBrowserModal — file mode", () => {
     const user = userEvent.setup();
     const entries = Array.from({ length: 120 }, (_, index) =>
       index === 100
-        ? entry(index, "file", "later.md")
+        ? entry(index, WORKSPACE_ENTRY_KINDS.FILE, "later.md")
         : index === 101
-          ? entry(index, "file", "later.png")
+          ? entry(index, WORKSPACE_ENTRY_KINDS.FILE, "later.png")
           : entry(index)
     );
     const onSelect = vi.fn();
     workspaceTreeMock.mockImplementation((request) =>
       Promise.resolve(responseForLargeDirectory(entries, request))
     );
-    openPicker({ mode: "file", fileFilter: ["**/*.md"], onSelect });
+    openPicker({
+      mode: WORKSPACE_ENTRY_KINDS.FILE,
+      fileFilter: ["**/*.md"],
+      onSelect,
+    });
     render(<FileBrowserModal />);
 
     await screen.findByText("file-0.ts");
@@ -586,7 +619,7 @@ describe("FileBrowserModal — file mode", () => {
       }
       return Promise.resolve(responseForLargeDirectory(entries, request));
     });
-    openPicker({ mode: "file", onSelect: vi.fn() });
+    openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect: vi.fn() });
     render(<FileBrowserModal />);
 
     await screen.findByText("file-0.ts");
@@ -619,7 +652,7 @@ describe("FileBrowserModal — directory mode", () => {
   it("confirms the current directory without requiring a selection", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
-    openPicker({ mode: "directory", onSelect });
+    openPicker({ mode: WORKSPACE_ENTRY_KINDS.DIRECTORY, onSelect });
     render(<FileBrowserModal />);
 
     await screen.findByText("readme.md");
@@ -634,7 +667,7 @@ describe("FileBrowserModal — directory mode", () => {
   it("navigates into a folder and confirms that folder as the target", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
-    openPicker({ mode: "directory", onSelect });
+    openPicker({ mode: WORKSPACE_ENTRY_KINDS.DIRECTORY, onSelect });
     render(<FileBrowserModal />);
 
     await user.click(await screen.findByText("src/"));
@@ -650,9 +683,14 @@ describe("FileBrowserModal — directory mode", () => {
     const user = userEvent.setup();
     const entries = Array.from({ length: 120 }, (_, index) =>
       index === 100
-        ? entry(index, "file", "later.txt")
+        ? entry(index, WORKSPACE_ENTRY_KINDS.FILE, "later.txt")
         : index === 101
-          ? entry(index, "directory", "later-folder", "later-folder")
+          ? entry(
+              index,
+              WORKSPACE_ENTRY_KINDS.DIRECTORY,
+              "later-folder",
+              "later-folder"
+            )
           : entry(index)
     );
     workspaceTreeMock.mockImplementation((request) => {
@@ -664,7 +702,7 @@ describe("FileBrowserModal — directory mode", () => {
       return Promise.resolve(responseForLargeDirectory(entries, request));
     });
     const onSelect = vi.fn();
-    openPicker({ mode: "directory", onSelect });
+    openPicker({ mode: WORKSPACE_ENTRY_KINDS.DIRECTORY, onSelect });
     render(<FileBrowserModal />);
 
     await screen.findByText("file-0.ts");
@@ -687,7 +725,7 @@ describe("FileBrowserModal — cancel", () => {
   it("closes without calling onSelect", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
-    openPicker({ mode: "file", onSelect });
+    openPicker({ mode: WORKSPACE_ENTRY_KINDS.FILE, onSelect });
     render(<FileBrowserModal />);
 
     await screen.findByText("readme.md");

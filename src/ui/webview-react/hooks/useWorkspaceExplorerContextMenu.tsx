@@ -12,11 +12,14 @@ import {
 import { WebviewLog } from "@utils/logger";
 import type { WorkspaceEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import { PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 
 export interface WorkspaceClipboard {
   operation: "copy" | "cut";
   path: string;
-  kind: "file" | "directory";
+  kind:
+    | typeof WORKSPACE_ENTRY_KINDS.FILE
+    | typeof WORKSPACE_ENTRY_KINDS.DIRECTORY;
 }
 
 export interface UseWorkspaceExplorerContextMenuOptions {
@@ -69,7 +72,7 @@ export function useWorkspaceExplorerContextMenu({
 
   const handleAddToCtrlYoke = useCallback((entry: WorkspaceEntry) => {
     const ref =
-      entry.kind === "directory"
+      entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
         ? buildDirRef(entry.path)
         : buildFileRef(entry.path);
     const editorStore = useEditorStore.getState();
@@ -83,7 +86,7 @@ export function useWorkspaceExplorerContextMenu({
 
   const handleViewFileHistory = useCallback(
     (entry: WorkspaceEntry) => {
-      if (entry.kind !== "file") return;
+      if (entry.kind !== WORKSPACE_ENTRY_KINDS.FILE) return;
       onViewFileHistory(normalizeWorkspacePath(entry.path));
     },
     [onViewFileHistory]
@@ -112,11 +115,11 @@ export function useWorkspaceExplorerContextMenu({
         await workspaceCopyEntry({ sourcePath: clipboard.path, destDir });
       }
       onRefresh(
-        clipboard.kind === "file"
+        clipboard.kind === WORKSPACE_ENTRY_KINDS.FILE
           ? buildPastedFilePath(clipboard.path, destDir)
           : destDir
       );
-      if (clipboard.kind === "file") {
+      if (clipboard.kind === WORKSPACE_ENTRY_KINDS.FILE) {
         onOpenFile(buildPastedFilePath(clipboard.path, destDir));
       }
     } catch (err) {
@@ -127,7 +130,7 @@ export function useWorkspaceExplorerContextMenu({
   const openContextMenu = useCallback(
     (x: number, y: number, entry: WorkspaceEntry) => {
       const addLabel =
-        entry.kind === "file"
+        entry.kind === WORKSPACE_ENTRY_KINDS.FILE
           ? "Add File to ctrlyoke"
           : "Add Directory to ctrlyoke";
       const rootDisabledTitle = isRootsList
@@ -186,7 +189,7 @@ export function useWorkspaceExplorerContextMenu({
               handleAddToCtrlYoke(entry);
             },
           },
-          ...(entry.kind === "file"
+          ...(entry.kind === WORKSPACE_ENTRY_KINDS.FILE
             ? [
                 {
                   label: "View File History",

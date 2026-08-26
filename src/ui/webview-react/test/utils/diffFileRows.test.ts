@@ -8,6 +8,7 @@ import {
   projectDiffFileListRows,
 } from "@utils/diffFileRows";
 import * as rdvAdapter from "@utils/rdvAdapter";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 
 const replacementHunk: HunkData[] = [
   {
@@ -75,8 +76,8 @@ describe("projectDiffFileListRows", () => {
     expect(rows.map((row) => row.kind)).toEqual([
       "selection-summary",
       "group-heading",
-      "file",
-      "file",
+      WORKSPACE_ENTRY_KINDS.FILE,
+      WORKSPACE_ENTRY_KINDS.FILE,
     ]);
     expect(rows.map((row) => row.key)).toEqual([
       "selection-summary",
@@ -109,7 +110,9 @@ describe("projectDiffFileListRows", () => {
     });
 
     expect(rows.filter((row) => row.kind === "group-heading")).toHaveLength(1);
-    expect(rows.filter((row) => row.kind === "file")).toHaveLength(2);
+    expect(
+      rows.filter((row) => row.kind === WORKSPACE_ENTRY_KINDS.FILE)
+    ).toHaveLength(2);
   });
 
   it("keeps the same path distinct in semantic groups", () => {
@@ -121,7 +124,9 @@ describe("projectDiffFileListRows", () => {
     });
 
     expect(
-      rows.filter((row) => row.kind === "file").map((row) => row.key)
+      rows
+        .filter((row) => row.kind === WORKSPACE_ENTRY_KINDS.FILE)
+        .map((row) => row.key)
     ).toEqual(["step-1\u001fsrc/shared.ts", "step-2\u001fsrc/shared.ts"]);
   });
 });
@@ -171,7 +176,7 @@ describe("diff file estimates", () => {
     let oldReads = 0;
     let newReads = 0;
     const source: DiffFileCardProps["source"] = {
-      kind: "content",
+      kind: WORKSPACE_ENTRY_KINDS.CONTENT,
       get oldContent() {
         oldReads++;
         return "before\nunchanged";

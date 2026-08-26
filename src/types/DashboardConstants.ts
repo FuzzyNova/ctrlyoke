@@ -2097,6 +2097,23 @@ export type AtomicReferenceKind =
   (typeof ATOMIC_REFERENCE_KINDS)[keyof typeof ATOMIC_REFERENCE_KINDS];
 
 // ============================================================================
+// WORKSPACE ENTRY KINDS - workspace/file-tree and related result kinds
+// ============================================================================
+export const WORKSPACE_ENTRY_KINDS = {
+  FILE: "file",
+  DIRECTORY: "directory",
+  CONTENT: "content",
+} as const;
+
+export type WorkspaceEntryKind =
+  (typeof WORKSPACE_ENTRY_KINDS)[keyof typeof WORKSPACE_ENTRY_KINDS];
+
+export type WorkspaceFileTreeEntryKind = Exclude<
+  WorkspaceEntryKind,
+  typeof WORKSPACE_ENTRY_KINDS.CONTENT
+>;
+
+// ============================================================================
 // SNAPSHOT STRATEGIES - Workspace snapshot strategy values
 // ============================================================================
 export const SNAPSHOT_STRATEGIES = {

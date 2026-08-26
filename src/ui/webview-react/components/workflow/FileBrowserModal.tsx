@@ -21,6 +21,7 @@ import {
 } from "../workspace-viewer/fileBrowserShared";
 import type { WorkspaceEntrySortKey } from "@root/types/HostedWorkspaceViewerTypes";
 import { nextWorkspaceEntrySort } from "@utils/workspaceEntrySort";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 
 const FILE_BROWSER_VIRTUALIZATION_THRESHOLD = 50;
 const FILE_BROWSER_OVERSCAN = 12;
@@ -73,7 +74,11 @@ export const FileBrowserModal: React.FC = () => {
   // Extensions extracted from fileFilter globs; null means "no filter" (either
   // no filter was given, or the globs didn't reduce to plain extensions).
   const filterExts = useMemo(() => {
-    if (mode !== "file" || !fileBrowserState?.fileFilter?.length) return null;
+    if (
+      mode !== WORKSPACE_ENTRY_KINDS.FILE ||
+      !fileBrowserState?.fileFilter?.length
+    )
+      return null;
     const exts = extractExtensionsFromGlobs(fileBrowserState.fileFilter);
     return exts.length > 0 ? exts.map((e) => e.toLowerCase()) : null;
   }, [mode, fileBrowserState]);
@@ -122,7 +127,7 @@ export const FileBrowserModal: React.FC = () => {
 
   const handleConfirm = useCallback(() => {
     if (!fileBrowserState) return;
-    if (fileBrowserState.mode === "file") {
+    if (fileBrowserState.mode === WORKSPACE_ENTRY_KINDS.FILE) {
       if (!selectedFile) return;
       setFileBrowserLastDirectory(directory.path);
       fileBrowserState.onSelect(selectedFile);
@@ -141,11 +146,11 @@ export const FileBrowserModal: React.FC = () => {
 
   const handleEntryClick = useCallback(
     (entry: WorkspaceTreeEntry) => {
-      if (entry.kind === "directory") {
+      if (entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY) {
         navigateDirectory(entry.path);
         return;
       }
-      if (mode === "file" && matchesFilter(entry)) {
+      if (mode === WORKSPACE_ENTRY_KINDS.FILE && matchesFilter(entry)) {
         setSelectedFile(entry.path);
       }
     },
@@ -158,7 +163,7 @@ export const FileBrowserModal: React.FC = () => {
 
   if (!fileBrowserState) return null;
 
-  const isDirectoryMode = mode === "directory";
+  const isDirectoryMode = mode === WORKSPACE_ENTRY_KINDS.DIRECTORY;
   const canConfirm = isDirectoryMode ? true : !!selectedFile;
   const title =
     fileBrowserState.title ??
@@ -255,10 +260,11 @@ export const FileBrowserModal: React.FC = () => {
                 renderItem={(entry) => {
                   const isNonMatchingFile =
                     !isDirectoryMode &&
-                    entry.kind === "file" &&
+                    entry.kind === WORKSPACE_ENTRY_KINDS.FILE &&
                     !matchesFilter(entry);
                   const isUnselectableFile =
-                    isDirectoryMode && entry.kind === "file";
+                    isDirectoryMode &&
+                    entry.kind === WORKSPACE_ENTRY_KINDS.FILE;
                   const isUnselectable =
                     isNonMatchingFile || isUnselectableFile;
                   return (

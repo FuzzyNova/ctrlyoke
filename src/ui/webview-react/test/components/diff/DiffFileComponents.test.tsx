@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { DiffFileCard } from "@components/diff/DiffFileCard";
 import { DiffFileList } from "@components/diff/DiffFileList";
@@ -145,7 +146,7 @@ describe("DiffFileCard", () => {
         path="src/new.ts"
         changeType="created"
         source={{
-          kind: "content",
+          kind: WORKSPACE_ENTRY_KINDS.CONTENT,
           oldContent: "",
           newContent: "const value = 1;",
         }}

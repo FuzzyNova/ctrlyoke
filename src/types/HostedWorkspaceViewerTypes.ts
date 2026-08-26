@@ -1,7 +1,9 @@
 import {
   DIFF_PAYLOAD_KINDS,
+  WORKSPACE_ENTRY_KINDS,
   type DiffChangeType,
   type DiffPayloadKind,
+  type WorkspaceFileTreeEntryKind,
 } from "./DashboardConstants";
 
 /**
@@ -13,7 +15,7 @@ import {
 export interface WorkspaceEntry {
   name: string;
   path: string;
-  kind: "file" | "directory";
+  kind: WorkspaceFileTreeEntryKind;
   size?: number;
   /** Last filesystem modification time in epoch milliseconds. */
   modifiedAt?: number;
@@ -154,7 +156,7 @@ export interface WorkspaceSearchRequest {
 }
 
 export interface WorkspaceSearchFileMatch {
-  kind: "file";
+  kind: typeof WORKSPACE_ENTRY_KINDS.FILE;
   /** Viewer path: plain workspace-relative single-root, folder-name-prefixed
    *  (`root2/src/index.ts`) multi-root — the same convention every other
    *  `HostedWorkspaceViewerTypes` path uses, and what `openToFile()` expects.
@@ -164,7 +166,7 @@ export interface WorkspaceSearchFileMatch {
 }
 
 export interface WorkspaceSearchContentMatch {
-  kind: "content";
+  kind: typeof WORKSPACE_ENTRY_KINDS.CONTENT;
   path: string;
   line: number; // 1-based
   matchSnippet: string; // the matching line, trimmed/truncated

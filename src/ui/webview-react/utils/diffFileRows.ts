@@ -13,6 +13,7 @@ import {
   getRenderedDiffStats,
   toRdvHunks,
 } from "./rdvAdapter";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 
 /** The existing `gap-3` between list items, folded into each row's size. */
 export const DIFF_FILE_LIST_ROW_GAP = 12;
@@ -80,7 +81,7 @@ export type DiffFileListRow =
       headingHint?: string;
     })
   | (DiffFileListRowBase & {
-      kind: "file";
+      kind: typeof WORKSPACE_ENTRY_KINDS.FILE;
       groupKey: string;
       fileKey: string;
       file: DiffFileCardProps & { key: string };
@@ -121,7 +122,10 @@ function countContentLines(content: string | undefined): string[] {
 }
 
 function getContentSourceMetrics(
-  source: Extract<DiffFileCardProps["source"], { kind: "content" }>
+  source: Extract<
+    DiffFileCardProps["source"],
+    { kind: typeof WORKSPACE_ENTRY_KINDS.CONTENT }
+  >
 ): ContentSourceMetrics {
   const cached = contentSourceMetricsCache.get(source);
   if (cached) return cached;
@@ -237,7 +241,7 @@ function getContentEstimate(
   collapsed: boolean,
   options: Required<DiffFileRowEstimateOptions>
 ): number {
-  if (file.source.kind !== "content") return 0;
+  if (file.source.kind !== WORKSPACE_ENTRY_KINDS.CONTENT) return 0;
   const metrics = getContentSourceMetrics(file.source);
   if (!metrics.hasDisplayableContent) return 0;
 
@@ -361,7 +365,7 @@ function getDiffBodyEstimate(
       ? getHunkEstimate(file, collapsed, options)
       : file.source.kind === "patch"
         ? getPatchEstimate(file, collapsed, options)
-        : file.source.kind === "content"
+        : file.source.kind === WORKSPACE_ENTRY_KINDS.CONTENT
           ? getContentEstimate(file, collapsed, options)
           : file.source.kind === "image"
             ? getImageEstimate(file, collapsed)
@@ -424,7 +428,7 @@ function addInterRowSpacing(rows: DiffFileListRow[]): DiffFileListRow[] {
       next !== undefined &&
       !(
         row.kind === "group-heading" &&
-        next.kind === "file" &&
+        next.kind === WORKSPACE_ENTRY_KINDS.FILE &&
         row.groupKey === next.groupKey
       );
     return {
@@ -473,7 +477,7 @@ export function projectDiffFileListRows(
     }
     for (const file of group.files) {
       rows.push({
-        kind: "file",
+        kind: WORKSPACE_ENTRY_KINDS.FILE,
         key: `${groupKey}${GROUP_KEY_SEPARATOR}${file.key}`,
         groupKey,
         fileKey: file.key,

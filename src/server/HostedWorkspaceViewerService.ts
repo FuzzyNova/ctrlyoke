@@ -47,6 +47,7 @@ import {
   WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE,
   WORKSPACE_FILE_HISTORY_MAX_PAGE_SIZE,
 } from "../types/HostedWorkspaceViewerTypes";
+import { WORKSPACE_ENTRY_KINDS } from "../types/DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {
   toViewerPath,
@@ -554,7 +555,7 @@ export class HostedWorkspaceViewerService {
           name.toLowerCase().includes(queryLower)
         ) {
           filenameResults.push({
-            kind: "file",
+            kind: WORKSPACE_ENTRY_KINDS.FILE,
             path: candidate.viewerPath,
             name,
           });
@@ -789,7 +790,7 @@ export class HostedWorkspaceViewerService {
         if (line.toLowerCase().includes(queryLower)) {
           const trimmed = line.trim();
           matches.push({
-            kind: "content",
+            kind: WORKSPACE_ENTRY_KINDS.CONTENT,
             path: candidate.viewerPath,
             line: lineNumber,
             matchSnippet:
@@ -881,7 +882,7 @@ export class HostedWorkspaceViewerService {
       const entries = this.namedRoots.map((root) => ({
         name: root.name,
         path: root.name,
-        kind: "directory" as const,
+        kind: WORKSPACE_ENTRY_KINDS.DIRECTORY,
       }));
       const initialMetadata =
         sort.key === WORKSPACE_ENTRY_SORT_KEYS.MODIFIED_AT
@@ -962,8 +963,8 @@ export class HostedWorkspaceViewerService {
           name: dirent.name,
           path: this.relativePath(path.join(resolved, dirent.name)),
           kind: dirent.isDirectory()
-            ? ("directory" as const)
-            : ("file" as const),
+            ? WORKSPACE_ENTRY_KINDS.DIRECTORY
+            : WORKSPACE_ENTRY_KINDS.FILE,
           gitIgnored,
         };
       })
@@ -1022,7 +1023,7 @@ export class HostedWorkspaceViewerService {
     if (absolutePath === undefined) return {};
     try {
       const stat = await fs.promises.stat(absolutePath);
-      return kind === "file"
+      return kind === WORKSPACE_ENTRY_KINDS.FILE
         ? { size: stat.size, modifiedAt: stat.mtimeMs }
         : { modifiedAt: stat.mtimeMs };
     } catch {

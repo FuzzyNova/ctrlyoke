@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 import {
   DEFAULT_WORKSPACE_ENTRY_SORT,
   WORKSPACE_ENTRY_SORT_DIRECTIONS,
@@ -17,7 +18,7 @@ function makeEntry(overrides: Partial<WorkspaceEntry> = {}): WorkspaceEntry {
   return {
     name: "index.ts",
     path: "src/index.ts",
-    kind: "file",
+    kind: WORKSPACE_ENTRY_KINDS.FILE,
     modifiedAt: Date.UTC(2026, 7, 22, 16, 42),
     ...overrides,
   };
@@ -106,7 +107,7 @@ describe("EntryRow", () => {
     const entry = makeEntry({
       name: "src",
       path: "src",
-      kind: "directory",
+      kind: WORKSPACE_ENTRY_KINDS.DIRECTORY,
     });
     render(
       <>

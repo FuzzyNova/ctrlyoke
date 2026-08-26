@@ -1,4 +1,7 @@
-import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
+import {
+  KEYBOARD_KEYS,
+  WORKSPACE_ENTRY_KINDS,
+} from "@root/types/DashboardConstants";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Modal,
@@ -278,7 +281,10 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     (variable: string, meta?: TemplateVariable) => {
       if (isStandalone) {
         openFileBrowser({
-          mode: meta?.type === "directory" ? "directory" : "file",
+          mode:
+            meta?.type === WORKSPACE_ENTRY_KINDS.DIRECTORY
+              ? WORKSPACE_ENTRY_KINDS.DIRECTORY
+              : WORKSPACE_ENTRY_KINDS.FILE,
           fileFilter: meta?.fileFilter,
           onSelect: (path) => applyPickedPath(variable, path),
         });
@@ -288,7 +294,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         type: MESSAGE_TYPES.BROWSE_TEMPLATE_FILE,
         variable,
         fileFilter: meta?.fileFilter,
-        selectFolder: meta?.type === "directory",
+        selectFolder: meta?.type === WORKSPACE_ENTRY_KINDS.DIRECTORY,
       });
     },
     [vscode, openFileBrowser, applyPickedPath]
@@ -567,8 +573,9 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-foreground">Variables</h4>
             {currentTemplate.variables.map((variable) => {
-              const isFile = variable.type === "file";
-              const isDirectory = variable.type === "directory";
+              const isFile = variable.type === WORKSPACE_ENTRY_KINDS.FILE;
+              const isDirectory =
+                variable.type === WORKSPACE_ENTRY_KINDS.DIRECTORY;
               const isPicker = isFile || isDirectory;
               const isSelect = variable.type === "select";
               const isHarness = variable.type === "harness";

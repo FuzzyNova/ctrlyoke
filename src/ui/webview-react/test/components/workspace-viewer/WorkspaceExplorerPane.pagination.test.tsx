@@ -6,6 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 import {
   DEFAULT_WORKSPACE_ENTRY_SORT,
   WORKSPACE_ENTRY_SORT_DIRECTIONS,
@@ -92,7 +93,7 @@ function entry(index: number, ignored = false): WorkspaceTreeEntry {
   return {
     name: `file-${index}.ts`,
     path: `file-${index}.ts`,
-    kind: "file",
+    kind: WORKSPACE_ENTRY_KINDS.FILE,
     ...(ignored ? { gitIgnored: true } : {}),
   };
 }

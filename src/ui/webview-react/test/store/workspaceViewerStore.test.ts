@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 
 beforeEach(() => {
   useWorkspaceViewerStore.getState().reset();
@@ -39,7 +40,7 @@ describe("initial state", () => {
 describe("search state", () => {
   it("updates each search field through its setter", () => {
     const result = {
-      kind: "file" as const,
+      kind: WORKSPACE_ENTRY_KINDS.FILE,
       path: "src/search.ts",
       name: "search.ts",
     };
@@ -70,7 +71,11 @@ describe("search state", () => {
     });
     store().setSearchQuery("query");
     store().setSearchResults([
-      { kind: "file", path: "src/query.ts", name: "query.ts" },
+      {
+        kind: WORKSPACE_ENTRY_KINDS.FILE,
+        path: "src/query.ts",
+        name: "query.ts",
+      },
     ]);
     store().setSearchLoading(true);
     store().setSearchTruncated(true);
@@ -102,8 +107,8 @@ describe("openToFile", () => {
     store().openToFile("src/foo.ts");
     const nav = store().pendingNavigation;
     expect(nav).not.toBeNull();
-    expect(nav?.type).toBe("file");
-    if (nav?.type === "file") {
+    expect(nav?.type).toBe(WORKSPACE_ENTRY_KINDS.FILE);
+    if (nav?.type === WORKSPACE_ENTRY_KINDS.FILE) {
       expect(nav.filePath).toBe("src/foo.ts");
       expect(nav.startLine).toBeUndefined();
       expect(nav.endLine).toBeUndefined();
@@ -113,7 +118,7 @@ describe("openToFile", () => {
   it("stores optional line range for selection", () => {
     store().openToFile("src/bar.ts", 10, 20);
     const nav = store().pendingNavigation;
-    if (nav?.type === "file") {
+    if (nav?.type === WORKSPACE_ENTRY_KINDS.FILE) {
       expect(nav.startLine).toBe(10);
       expect(nav.endLine).toBe(20);
     }
@@ -141,8 +146,8 @@ describe("openToDirectory", () => {
     store().openToDirectory("src/components");
     const nav = store().pendingNavigation;
     expect(nav).not.toBeNull();
-    expect(nav?.type).toBe("directory");
-    if (nav?.type === "directory") {
+    expect(nav?.type).toBe(WORKSPACE_ENTRY_KINDS.DIRECTORY);
+    if (nav?.type === WORKSPACE_ENTRY_KINDS.DIRECTORY) {
       expect(nav.dirPath).toBe("src/components");
     }
   });

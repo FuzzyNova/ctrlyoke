@@ -32,6 +32,10 @@ import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useUiStore } from "@store/uiStore";
 import { parseSecretReferences } from "@root/utils/SecretReferenceParser";
 import { createReferencePatterns } from "@root/utils/ReferencePatterns";
+import {
+  WORKSPACE_ENTRY_KINDS,
+  type WorkspaceFileTreeEntryKind,
+} from "@root/types/DashboardConstants";
 
 export interface WorkspaceFileEditorHandle {
   undo: () => void;
@@ -60,8 +64,7 @@ interface WorkspaceFileEditorProps {
 }
 
 type WorkspaceReferenceType =
-  | "file"
-  | "directory"
+  | WorkspaceFileTreeEntryKind
   | "lineRange"
   | "symbol"
   | "secret";
@@ -344,7 +347,7 @@ function findWorkspaceReferenceMatches(
 
   const collectPathMatches = (
     pattern: RegExp,
-    type: "file" | "directory",
+    type: WorkspaceFileTreeEntryKind,
     target: WorkspaceReferenceMatch[]
   ) => {
     const regex = new RegExp(pattern.source, "g");
@@ -358,10 +361,26 @@ function findWorkspaceReferenceMatches(
     }
   };
 
-  collectPathMatches(patterns.fullFileQuoted, "file", fileMatches);
-  collectPathMatches(patterns.fullFile, "file", fileMatches);
-  collectPathMatches(patterns.directoryQuoted, "directory", directoryMatches);
-  collectPathMatches(patterns.directory, "directory", directoryMatches);
+  collectPathMatches(
+    patterns.fullFileQuoted,
+    WORKSPACE_ENTRY_KINDS.FILE,
+    fileMatches
+  );
+  collectPathMatches(
+    patterns.fullFile,
+    WORKSPACE_ENTRY_KINDS.FILE,
+    fileMatches
+  );
+  collectPathMatches(
+    patterns.directoryQuoted,
+    WORKSPACE_ENTRY_KINDS.DIRECTORY,
+    directoryMatches
+  );
+  collectPathMatches(
+    patterns.directory,
+    WORKSPACE_ENTRY_KINDS.DIRECTORY,
+    directoryMatches
+  );
 
   const collectLineRangeMatches = (pattern: RegExp) => {
     const regex = new RegExp(pattern.source, "g");
@@ -492,7 +511,7 @@ function openWorkspaceReferenceLink(
   const path = target.getAttribute("data-path");
   if (!type || !path) return false;
 
-  if (type === "directory") {
+  if (type === WORKSPACE_ENTRY_KINDS.DIRECTORY) {
     openToDirectory(path);
     return true;
   }
@@ -519,7 +538,7 @@ function openWorkspaceReferenceLink(
     return true;
   }
 
-  if (type === "file") {
+  if (type === WORKSPACE_ENTRY_KINDS.FILE) {
     openToFile(path);
     return true;
   }

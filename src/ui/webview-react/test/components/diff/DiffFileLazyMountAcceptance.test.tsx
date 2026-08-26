@@ -3,6 +3,7 @@ import { useRef, type ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DiffFileList } from "@components/diff/DiffFileList";
 import * as rdvAdapter from "@utils/rdvAdapter";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 import {
   createDiffFileFixture,
   flattenDiffFileFixture,
@@ -136,7 +137,7 @@ describe("diff-file lazy construction acceptance", () => {
         .filter((file) => mountedKeys.has(file.key))
         .flatMap((file) => {
           const source = file.source;
-          if (source.kind !== "content") {
+          if (source.kind !== WORKSPACE_ENTRY_KINDS.CONTENT) {
             return [`fixture-file-${file.key.slice("fixture-".length)}-marker`];
           }
           return [source.oldContent, source.newContent].flatMap((content) =>

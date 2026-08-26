@@ -10,6 +10,7 @@ import {
   WORKSPACE_ENTRY_SORT_DIRECTIONS,
   WORKSPACE_ENTRY_SORT_KEYS,
 } from "@root/types/HostedWorkspaceViewerTypes";
+import { WORKSPACE_ENTRY_KINDS } from "@root/types/DashboardConstants";
 
 /**
  * Shared tracks keep the sort header and every entry row aligned. At the
@@ -245,7 +246,7 @@ export function EntryRow({
     openContextMenu(x, y, entry)
   );
   const modifiedAt = formatWorkspaceEntryModifiedAt(entry.modifiedAt, isNarrow);
-  const entryLabel = `${entry.name}${entry.kind === "directory" ? "/" : ""}, ${entry.path}, modified ${modifiedAt.full}`;
+  const entryLabel = `${entry.name}${entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY ? "/" : ""}, ${entry.path}, modified ${modifiedAt.full}`;
 
   return (
     <button
@@ -278,14 +279,14 @@ export function EntryRow({
       <i
         aria-hidden="true"
         className={`codicon text-sm ${
-          entry.kind === "directory"
+          entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY
             ? "codicon-folder text-[var(--status-warning)]"
             : "codicon-file"
         }`}
       />
       <span className={`min-w-0 truncate ${statusColorClass ?? ""}`}>
         {entry.name}
-        {entry.kind === "directory" ? "/" : ""}
+        {entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY ? "/" : ""}
       </span>
       <span
         className="min-w-0 truncate whitespace-nowrap text-xs text-description-fg"

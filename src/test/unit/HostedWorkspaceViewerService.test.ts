@@ -18,7 +18,10 @@ import {
   WorkspaceTreeBadRequestError,
   WorkspaceTreeExpiredError,
 } from "../../server/WorkspaceTreeErrors";
-import { DIFF_PAYLOAD_KINDS } from "../../types/DashboardConstants";
+import {
+  DIFF_PAYLOAD_KINDS,
+  WORKSPACE_ENTRY_KINDS,
+} from "../../types/DashboardConstants";
 
 suite("HostedWorkspaceViewerService", function () {
   // Most tests here shell out to real git (init/config/commit/clone/push/
@@ -111,8 +114,8 @@ suite("HostedWorkspaceViewerService", function () {
       });
 
       const kinds = result.entries.map((e) => e.kind);
-      const firstDir = kinds.indexOf("directory");
-      const firstFile = kinds.indexOf("file");
+      const firstDir = kinds.indexOf(WORKSPACE_ENTRY_KINDS.DIRECTORY);
+      const firstFile = kinds.indexOf(WORKSPACE_ENTRY_KINDS.FILE);
       assert.ok(firstDir < firstFile, "directories should appear before files");
     });
 
@@ -429,8 +432,14 @@ suite("HostedWorkspaceViewerService", function () {
         all.slice(0, 2).map((entry) => entry.name),
         ["a-directory", "z-directory"]
       );
-      assert.ok(all.slice(0, 2).every((entry) => entry.kind === "directory"));
-      assert.ok(all.slice(2).every((entry) => entry.kind === "file"));
+      assert.ok(
+        all
+          .slice(0, 2)
+          .every((entry) => entry.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY)
+      );
+      assert.ok(
+        all.slice(2).every((entry) => entry.kind === WORKSPACE_ENTRY_KINDS.FILE)
+      );
     });
 
     test("anchors an initial page to an immediate child", async () => {
@@ -951,7 +960,11 @@ suite("HostedWorkspaceViewerService", function () {
         scope: "files",
       });
       assert.deepStrictEqual(filenameResult.results, [
-        { kind: "file", path: "needle-result.txt", name: "needle-result.txt" },
+        {
+          kind: WORKSPACE_ENTRY_KINDS.FILE,
+          path: "needle-result.txt",
+          name: "needle-result.txt",
+        },
       ]);
 
       const contentResult = await svc.searchWorkspace({
@@ -962,7 +975,7 @@ suite("HostedWorkspaceViewerService", function () {
         contentResult.results
           .filter(
             (result): result is WorkspaceSearchContentMatch =>
-              result.kind === "content"
+              result.kind === WORKSPACE_ENTRY_KINDS.CONTENT
           )
           .map((result) => ({
             path: result.path,
@@ -1549,7 +1562,7 @@ suite("HostedWorkspaceViewerService", function () {
         "secondary",
       ]);
       assert.ok(
-        result.entries.every((e) => e.kind === "directory"),
+        result.entries.every((e) => e.kind === WORKSPACE_ENTRY_KINDS.DIRECTORY),
         "every root entry should be a directory"
       );
     });
