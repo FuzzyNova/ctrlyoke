@@ -524,14 +524,15 @@ export class ExecutionPreviewService {
     const permissionApplication = this.toPermissionPreview(
       executionPlan,
       properties,
-      diagnostics
+      diagnostics,
+      worktreeExecutionWorkspace
     );
     const mcpApplication = this.toMcpPreview(properties, executionPlan);
     const workspaceMutations = [
       ...promptPlan.mutations.map((mutation) =>
-        this.toWorkspaceMutation(mutation)
+        this.toWorkspaceMutation(mutation, worktreeExecutionWorkspace)
       ),
-      ...this.toWorkspaceMutations(executionPlan),
+      ...this.toWorkspaceMutations(executionPlan, worktreeExecutionWorkspace),
     ];
     return {
       stepIndex: target.stepIndex,
@@ -861,7 +862,8 @@ export class ExecutionPreviewService {
   private toPermissionPreview(
     plan: ExecutionPlan,
     properties: ResolvedProperties,
-    stepDiagnostics: readonly CompatibilityDiagnostic[]
+    stepDiagnostics: readonly CompatibilityDiagnostic[],
+    executionWorkspace: ExecutionWorkspace | undefined
   ): PermissionApplicationPreview {
     const effective =
       plan.effectiveToolPermissions ?? properties.toolPermissions;
@@ -891,7 +893,8 @@ export class ExecutionPreviewService {
       ...(plan.permissionApplication.workspaceMutation
         ? {
             workspaceMutation: this.toWorkspaceMutation(
-              plan.permissionApplication.workspaceMutation
+              plan.permissionApplication.workspaceMutation,
+              executionWorkspace
             ),
           }
         : {}),
@@ -990,18 +993,31 @@ export class ExecutionPreviewService {
   }
 
   private toWorkspaceMutations(
-    plan: ExecutionPlan
+    plan: ExecutionPlan,
+    executionWorkspace: ExecutionWorkspace | undefined
   ): WorkspaceMutationPreview[] {
-    return plan.mutations.map((mutation) => this.toWorkspaceMutation(mutation));
+    return plan.mutations.map((mutation) =>
+      this.toWorkspaceMutation(mutation, executionWorkspace)
+    );
   }
 
+  /**
+   * A workflow running in a worktree writes its per-run temp artifacts
+   * (prompt files, MCP/hook config) under `<executionRoot>/.ctrlyoke/temp`,
+   * not the source checkout's — see `ExecutionWorkspace.executionRoot`. Using
+   * only `workspaceRoot` here would flag every one of those as an out-of-tree
+   * "shared" mutation even though they're cleaned up with the run.
+   */
   private toWorkspaceMutation(
-    mutation: PreparedMutation
+    mutation: PreparedMutation,
+    executionWorkspace: ExecutionWorkspace | undefined
   ): WorkspaceMutationPreview {
-    const tempRoot = this.options.workspaceRoot
+    const tempRootBase =
+      executionWorkspace?.executionRoot ?? this.options.workspaceRoot;
+    const tempRoot = tempRootBase
       ? this.normalizeComparisonPath(
           path.resolve(
-            this.options.workspaceRoot,
+            tempRootBase,
             PATH_CONSTANTS.CTRLYOKE_DIR,
             PATH_CONSTANTS.TEMP_DIR
           )

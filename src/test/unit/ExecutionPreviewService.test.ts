@@ -897,6 +897,60 @@ suite("ExecutionPreviewService", () => {
     assert.ok(pathsEqual(preview.steps[0].command!.cwd, existingCheckout));
   });
 
+  test("classifies mutations under the worktree's own temp directory as run-local, not shared", async function () {
+    this.timeout(20_000);
+    const parent = await fsPromises.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-preview-worktree-mutation-")
+    );
+    temporaryRoots.push(parent);
+    const workspaceRoot = path.join(parent, "repository");
+    await fsPromises.mkdir(workspaceRoot);
+    await initGitRepo(workspaceRoot);
+    const existingCheckout = path.join(parent, "existing-checkout");
+    execFileSync("git", [
+      "-C",
+      workspaceRoot,
+      "worktree",
+      "add",
+      existingCheckout,
+      "-b",
+      "feature/worktree-mutation",
+    ]);
+
+    const worktreeTempPath = path.join(
+      existingCheckout,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
+      PATH_CONSTANTS.TEMP_DIR,
+      "hook-settings.json"
+    );
+    const mutations: PreparedMutation[] = [
+      {
+        path: worktreeTempPath,
+        intendedContent: '{"hooks": []}',
+        description: "run-local hook settings inside the worktree",
+        apply: async () => {},
+      },
+    ];
+
+    const preview = await createService(workspaceRoot, mutations, [
+      { name: "root", fsPath: workspaceRoot },
+    ]).build({
+      workflow: {
+        worktree: "feature/worktree-mutation",
+        steps: [{ prompt: "wants the existing worktree" }],
+      },
+    });
+
+    assert.ok(preview.worktree);
+    assert.strictEqual(preview.worktree.plannedDirectoryIsExact, true);
+    const mutation = preview.steps[0].workspaceMutations.find((entry) =>
+      pathsEqual(entry.path ?? "", worktreeTempPath)
+    );
+    assert.ok(mutation);
+    assert.strictEqual(mutation.scope, PREVIEW_MUTATION_SCOPES.RUN_LOCAL);
+    assert.strictEqual(mutation.warning, undefined);
+  });
+
   test("computes a managed-worktree preview without an exact path, noting the run-ID dependency", async function () {
     this.timeout(20_000);
     const parent = await fsPromises.mkdtemp(
