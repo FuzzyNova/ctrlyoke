@@ -349,6 +349,11 @@ export const WORKSPACE_FILE_HISTORY_DEFAULT_PAGE_SIZE = 30;
 export const WORKSPACE_FILE_HISTORY_MIN_PAGE_SIZE = 1;
 export const WORKSPACE_FILE_HISTORY_MAX_PAGE_SIZE = 500;
 
+/** Default and supported bounds for the paged git-ref diff API. */
+export const WORKSPACE_GIT_REF_DIFF_DEFAULT_PAGE_SIZE = 20;
+export const WORKSPACE_GIT_REF_DIFF_MIN_PAGE_SIZE = 1;
+export const WORKSPACE_GIT_REF_DIFF_MAX_PAGE_SIZE = 200;
+
 /** A commit that touched a path, including both sides of a rename. */
 export interface WorkspaceFileHistoryEntry extends WorkspaceCommitLogEntry {
   /** Workspace-relative path at the commit side of the change. */
@@ -367,6 +372,27 @@ export interface WorkspaceFileHistoryPageResponse {
   /** Virtual index of the first entry in `entries`. */
   offset: number;
   entries: WorkspaceFileHistoryEntry[];
+}
+
+/** Structured before/after payload for one file in a git-ref diff page. */
+export type WorkspaceGitRefDiffEntry = {
+  path: string;
+  oldPath?: string;
+  changeType: DiffChangeType;
+} & WorkspaceDiffPayload;
+
+/** A page from an immutable git-ref diff snapshot. */
+export interface WorkspaceGitRefDiffPageResponse {
+  diffId: string;
+  /** Server-clamped size fixed when the diff snapshot was created. */
+  pageSize: number;
+  /** Number of changed files in the frozen diff snapshot. */
+  totalEntries: number;
+  /** Virtual index of the first entry in `entries`. */
+  offset: number;
+  entries: WorkspaceGitRefDiffEntry[];
+  /** Present on every page when the ref resolves to a single commit. */
+  commitInfo?: WorkspaceCommitInfo;
 }
 
 export interface WorkspaceCheckoutCommitRequest {

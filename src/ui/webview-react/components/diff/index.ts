@@ -11,6 +11,8 @@ export type {
   DiffFileListCommand,
   DiffFileListProps,
 } from "./DiffFileList";
+export { DiffRefDiffList } from "./DiffRefDiffList";
+export type { DiffRefDiffListProps } from "./DiffRefDiffList";
 export {
   DiffFileNameLabel,
   DiffFileDirectoryLabel,

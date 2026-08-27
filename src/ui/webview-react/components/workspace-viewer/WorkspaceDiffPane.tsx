@@ -15,6 +15,8 @@ import {
   OpenFileButton,
 } from "@components/diff";
 import { DiffFileHistoryList } from "@components/diff/DiffFileHistoryList";
+import { DiffRefDiffList } from "@components/diff/DiffRefDiffList";
+import { usePagedGitRefDiff } from "@hooks/usePagedGitRefDiff";
 import { downloadTextFile } from "@utils/diff";
 import { workspaceGitRefDiff } from "@utils/hostedApi";
 import { DIFF_PAYLOAD_KINDS } from "@root/types/DashboardConstants";
@@ -38,6 +40,7 @@ export const WorkspaceDiffPane: React.FC = () => {
   const diffCommitInfo = useWorkspaceViewerStore((s) => s.diffCommitInfo);
   const selectedRepoId = useWorkspaceViewerStore((s) => s.selectedRepoId);
   const diffRefLoading = useWorkspaceViewerStore((s) => s.diffRefLoading);
+  const diffRef = useWorkspaceViewerStore((s) => s.diffRef);
   const diffKind = useWorkspaceViewerStore((s) => s.diffKind);
   const diffPayloadKind = useWorkspaceViewerStore((s) => s.diffPayloadKind);
   const diffImage = useWorkspaceViewerStore((s) => s.diffImage);
@@ -81,20 +84,6 @@ export const WorkspaceDiffPane: React.FC = () => {
     []
   );
 
-  const sourceForSingleFile = useMemo((): DiffFileCardProps["source"] => {
-    switch (diffPayloadKind) {
-      case DIFF_PAYLOAD_KINDS.IMAGE:
-        return { kind: "image", image: diffImage ?? {} };
-      case DIFF_PAYLOAD_KINDS.BINARY:
-        return { kind: "binary" };
-      default:
-        return {
-          kind: "content",
-          oldContent: diffOldContent,
-          newContent: diffNewContent,
-        };
-    }
-  }, [diffImage, diffNewContent, diffOldContent, diffPayloadKind]);
   const commitGroups = useMemo<DiffFileGroup[]>(
     () => [
       {
@@ -112,6 +101,27 @@ export const WorkspaceDiffPane: React.FC = () => {
     ],
     [sourceForParsedFile, visibleFiles]
   );
+
+  const pagedGitRefDiff = usePagedGitRefDiff({
+    ref: diffRef ?? "",
+    repo: selectedRepoId ?? undefined,
+    enabled: diffRef !== null,
+  });
+
+  const sourceForSingleFile = useMemo((): DiffFileCardProps["source"] => {
+    switch (diffPayloadKind) {
+      case DIFF_PAYLOAD_KINDS.IMAGE:
+        return { kind: "image", image: diffImage ?? {} };
+      case DIFF_PAYLOAD_KINDS.BINARY:
+        return { kind: "binary" };
+      default:
+        return {
+          kind: "content",
+          oldContent: diffOldContent,
+          newContent: diffNewContent,
+        };
+    }
+  }, [diffImage, diffNewContent, diffOldContent, diffPayloadKind]);
   const singleFileGroups = useMemo<DiffFileGroup[]>(
     () =>
       selectedDiffPath
@@ -136,7 +146,7 @@ export const WorkspaceDiffPane: React.FC = () => {
 
   useEffect(() => {
     setCommitDetailsExpanded(false);
-  }, [diffRefLabel]);
+  }, [diffRef, diffRefLabel]);
 
   const handleExpandAllDiffs = useCallback(() => {
     diffFileListRef.current?.prepareGlobalLayoutChange();
@@ -151,14 +161,17 @@ export const WorkspaceDiffPane: React.FC = () => {
   }, []);
 
   const handleDownload = useCallback(async () => {
-    if (!diffRefLabel) return;
+    const refLabel = diffRef ? pagedGitRefDiff.refLabel : diffRefLabel;
+    const activeCommitInfo = diffRef
+      ? pagedGitRefDiff.commitInfo
+      : diffCommitInfo;
+    if (!refLabel) return;
     setDownloading(true);
     try {
       // Re-fetch the raw unified diff text for the download
       // Reconstruct the ref from the label to avoid storing it separately
       // We already have the unified diff from the current diffFiles parse, but
       // we need the raw text. Re-fetch from the same endpoint.
-      const refLabel = diffRefLabel;
       let ref: string;
       if (refLabel === "Working Tree Changes") ref = "~diff";
       else if (refLabel === "Staged Changes") ref = "~staged";
@@ -169,7 +182,7 @@ export const WorkspaceDiffPane: React.FC = () => {
         // downloads remain correct even when that commit is outside the
         // virtualized history window.
         const shortHash = refLabel.replace("Commit ", "");
-        const fullHash = diffCommitInfo?.hash ?? shortHash;
+        const fullHash = activeCommitInfo?.hash ?? shortHash;
         ref = `~${fullHash}`;
       }
       const { unifiedDiff } = await workspaceGitRefDiff(
@@ -183,7 +196,14 @@ export const WorkspaceDiffPane: React.FC = () => {
     } finally {
       setDownloading(false);
     }
-  }, [diffCommitInfo, diffRefLabel, selectedRepoId]);
+  }, [
+    diffCommitInfo,
+    diffRef,
+    diffRefLabel,
+    pagedGitRefDiff.commitInfo,
+    pagedGitRefDiff.refLabel,
+    selectedRepoId,
+  ]);
 
   const handleFileHistoryBack = useCallback(() => {
     closeFileHistoryView();
@@ -222,6 +242,117 @@ export const WorkspaceDiffPane: React.FC = () => {
   }
 
   // ── Multi-file git-ref diff mode ──────────────────────────────────────────
+
+  if (diffRef !== null && pagedGitRefDiff.initialLoading) {
+    return (
+      <div className="flex items-center justify-center h-full gap-2 text-editor-fg opacity-50">
+        <i className="codicon codicon-loading animate-spin" />
+        <span className="text-sm">Loading diff…</span>
+      </div>
+    );
+  }
+
+  if (diffRef !== null) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        {/* Ref header banner */}
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-panel-border flex-shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <i className="codicon codicon-git-commit flex-shrink-0 text-sm text-editor-fg opacity-60" />
+            <span className="text-xs font-semibold text-editor-fg truncate">
+              {pagedGitRefDiff.refLabel}
+            </span>
+            <span className="text-xs text-editor-fg opacity-40 flex-shrink-0">
+              {pagedGitRefDiff.totalCount === 1
+                ? "1 file"
+                : `${pagedGitRefDiff.totalCount} files`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {pagedGitRefDiff.totalCount > 0 && (
+              <ExpandCollapseAllDiffsButton
+                anyDiffCollapsed={commitDiffsCollapsed}
+                onExpand={handleExpandAllDiffs}
+                onCollapse={handleCollapseAllDiffs}
+              />
+            )}
+            <button
+              onClick={() => void handleDownload()}
+              disabled={downloading}
+              className="flex items-center gap-1 text-xs text-editor-fg opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30"
+              title="Download as .diff file"
+            >
+              <i
+                className={`codicon ${downloading ? "codicon-loading animate-spin" : "codicon-cloud-download"}`}
+              />
+              Download
+            </button>
+          </div>
+        </div>
+
+        {/* Commit details (collapsible) */}
+        {pagedGitRefDiff.commitInfo && (
+          <div className="border-b border-panel-border flex-shrink-0">
+            <button
+              onClick={() => setCommitDetailsExpanded((v) => !v)}
+              className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs text-editor-fg hover:bg-list-hover-bg transition-colors"
+              title={
+                commitDetailsExpanded
+                  ? "Hide commit details"
+                  : "Show commit details"
+              }
+            >
+              <i
+                className={`codicon codicon-chevron-right text-xs flex-shrink-0 transition-transform duration-150 ${commitDetailsExpanded ? "rotate-90" : ""}`}
+              />
+              <span className="truncate font-medium">
+                {pagedGitRefDiff.commitInfo.subject}
+              </span>
+            </button>
+            {commitDetailsExpanded && (
+              <div className="px-3 pb-2 pl-7 text-xs text-editor-fg">
+                {pagedGitRefDiff.commitInfo.body && (
+                  <p className="whitespace-pre-wrap opacity-80 mb-2">
+                    {pagedGitRefDiff.commitInfo.body}
+                  </p>
+                )}
+                <div className="opacity-50 font-mono text-xxs space-y-0.5">
+                  <div>
+                    {pagedGitRefDiff.commitInfo.author} &lt;
+                    {pagedGitRefDiff.commitInfo.authorEmail}
+                    &gt;
+                  </div>
+                  <div>
+                    {pagedGitRefDiff.commitInfo.date} (
+                    {pagedGitRefDiff.commitInfo.relativeDate})
+                  </div>
+                  <div>{pagedGitRefDiff.commitInfo.hash}</div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* File list */}
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 overflow-auto px-3 py-2"
+        >
+          <DiffRefDiffList
+            ref={diffFileListRef}
+            gitRef={diffRef}
+            repo={selectedRepoId ?? undefined}
+            controller={pagedGitRefDiff}
+            command={{
+              version: commitDiffResetVersion,
+              collapsed: commitDiffsCollapsed,
+            }}
+            scrollContainerRef={scrollContainerRef}
+          />
+        </div>
+      </div>
+    );
+  }
 
   if (diffRefLoading) {
     return (

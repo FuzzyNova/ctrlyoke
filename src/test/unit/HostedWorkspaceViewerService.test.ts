@@ -1401,6 +1401,196 @@ suite("HostedWorkspaceViewerService", function () {
     });
   });
 
+  // ── getGitRefDiffPage ────────────────────────────────────────────────────
+
+  suite("getGitRefDiffPage", () => {
+    test("freezes the changed-file list and keeps the diff id across pages", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "baseline.txt", "baseline\n", "Baseline");
+      fs.writeFileSync(path.join(root, "a.txt"), "a\n");
+      fs.writeFileSync(path.join(root, "b.txt"), "b\n");
+      fs.writeFileSync(path.join(root, "c.txt"), "c\n");
+      runGit(root, "add", "a.txt", "b.txt", "c.txt");
+      runGit(root, "commit", "-m", "Three files");
+      const commit = runGit(root, "rev-parse", "HEAD");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const first = await svc.getGitRefDiffPage(commit, 0, 2);
+      assert.strictEqual(first.pageSize, 2);
+      assert.strictEqual(first.totalEntries, 3);
+      assert.strictEqual(first.entries.length, 2);
+      assert.ok(first.commitInfo);
+
+      fs.writeFileSync(path.join(root, "later.txt"), "later\n");
+      const continuation = await svc.getGitRefDiffPage(
+        commit,
+        2,
+        undefined,
+        first.diffId
+      );
+      assert.strictEqual(continuation.diffId, first.diffId);
+      assert.strictEqual(continuation.totalEntries, 3);
+      assert.deepStrictEqual(
+        continuation.entries.map((entry) => entry.path),
+        ["c.txt"]
+      );
+      assert.deepStrictEqual(continuation.commitInfo, first.commitInfo);
+    });
+
+    test("rejects misaligned and out-of-bounds page offsets", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "baseline.txt", "baseline\n", "Baseline");
+      for (const name of ["a.txt", "b.txt", "c.txt"]) {
+        fs.writeFileSync(path.join(root, name), `${name}\n`);
+      }
+      runGit(root, "add", "a.txt", "b.txt", "c.txt");
+      runGit(root, "commit", "-m", "Three files");
+      const commit = runGit(root, "rev-parse", "HEAD");
+      const svc = new HostedWorkspaceViewerService(root);
+      const page = await svc.getGitRefDiffPage(commit, 0, 2);
+
+      await assert.rejects(
+        svc.getGitRefDiffPage(commit, 1, undefined, page.diffId),
+        (error: unknown) => error instanceof WorkspaceTreeBadRequestError
+      );
+      await assert.rejects(
+        svc.getGitRefDiffPage(commit, 4, undefined, page.diffId),
+        (error: unknown) => error instanceof WorkspaceTreeBadRequestError
+      );
+    });
+
+    test("rejects unknown and expired diff ids", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "file.txt", "content\n", "Initial file");
+      const commit = runGit(root, "rev-parse", "HEAD");
+      const svc = new HostedWorkspaceViewerService(root);
+      const unknownId = "00000000-0000-4000-8000-000000000099";
+
+      await assert.rejects(
+        svc.getGitRefDiffPage(commit, 0, undefined, unknownId),
+        (error: unknown) => error instanceof WorkspaceTreeExpiredError
+      );
+
+      const page = await svc.getGitRefDiffPage(commit);
+      svc.dispose();
+      await assert.rejects(
+        svc.getGitRefDiffPage(commit, 0, undefined, page.diffId),
+        (error: unknown) => error instanceof WorkspaceTreeExpiredError
+      );
+    });
+
+    test("binds a diff id to its ref and repository", async () => {
+      const primary = createWorkspace();
+      const secondary = createWorkspace();
+      for (const root of [primary, secondary]) {
+        runGit(root, "init");
+        configureGitIdentity(root);
+        commitFile(root, "file.txt", `${root}\n`, "Initial file");
+      }
+      const primaryCommit = runGit(primary, "rev-parse", "HEAD");
+      const svc = new HostedWorkspaceViewerService(primary, [
+        { name: "primary", fsPath: primary },
+        { name: "secondary", fsPath: secondary },
+      ]);
+      const repos = (await svc.getRepos()).repos;
+      const primaryRepo = repos.find(
+        (repo) => path.resolve(repo.rootPath) === path.resolve(primary)
+      );
+      const secondaryRepo = repos.find(
+        (repo) => path.resolve(repo.rootPath) === path.resolve(secondary)
+      );
+      assert.ok(primaryRepo);
+      assert.ok(secondaryRepo);
+      if (!primaryRepo || !secondaryRepo) return;
+
+      const page = await svc.getGitRefDiffPage(
+        primaryCommit,
+        0,
+        undefined,
+        undefined,
+        primaryRepo.id
+      );
+      await assert.rejects(
+        svc.getGitRefDiffPage(
+          `~${primaryCommit}`,
+          0,
+          undefined,
+          page.diffId,
+          primaryRepo.id
+        ),
+        (error: unknown) => error instanceof WorkspaceTreeBadRequestError
+      );
+      await assert.rejects(
+        svc.getGitRefDiffPage(
+          primaryCommit,
+          0,
+          undefined,
+          page.diffId,
+          secondaryRepo.id
+        ),
+        (error: unknown) => error instanceof WorkspaceTreeBadRequestError
+      );
+    });
+
+    test("matches existing non-text entries without fetching a whole commit diff", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "baseline.txt", "baseline\n", "Baseline");
+      const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xaa]);
+      fs.writeFileSync(path.join(root, "image.png"), imageBytes);
+      fs.writeFileSync(path.join(root, "data.bin"), Buffer.from([0, 3]));
+      runGit(root, "add", "image.png", "data.bin");
+      runGit(root, "commit", "-m", "Add binary files");
+      const commit = runGit(root, "rev-parse", "HEAD");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const existing = await svc.getGitRefDiff(commit);
+      const paged = await svc.getGitRefDiffPage(commit, 0, 10);
+      const existingNonText = existing.nonTextEntries ?? [];
+      const pagedNonText = paged.entries.filter(
+        (entry) => entry.payloadKind !== DIFF_PAYLOAD_KINDS.TEXT
+      );
+      assert.deepStrictEqual(
+        JSON.parse(JSON.stringify(pagedNonText)),
+        JSON.parse(JSON.stringify(existingNonText))
+      );
+    });
+
+    test("pages a commit whose full patch exceeds GitUtils' default maxBuffer", async function () {
+      this.timeout(60_000);
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      const content = "0123456789abcdef".repeat(7000) + "\n";
+      const fileNames: string[] = [];
+      for (let index = 0; index < 520; index++) {
+        const fileName = `large-${String(index).padStart(3, "0")}.txt`;
+        fileNames.push(fileName);
+        fs.writeFileSync(path.join(root, fileName), content);
+      }
+      runGit(root, "add", ".");
+      runGit(root, "commit", "-m", "Large commit");
+      const commit = runGit(root, "rev-parse", "HEAD");
+
+      const page = await new HostedWorkspaceViewerService(root).getGitRefDiffPage(
+        commit,
+        0,
+        1
+      );
+      assert.strictEqual(page.totalEntries, fileNames.length);
+      assert.strictEqual(page.entries.length, 1);
+      assert.strictEqual(page.entries[0]?.payloadKind, DIFF_PAYLOAD_KINDS.TEXT);
+      assert.strictEqual(page.entries[0]?.newContent, content);
+    });
+  });
+
   // ── getCommitLog ──────────────────────────────────────────────────────────
 
   suite("getCommitLog", () => {

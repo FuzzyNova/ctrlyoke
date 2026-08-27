@@ -20,6 +20,7 @@ import type {
   WorkspaceCommitLogResponse,
   WorkspaceFileHistoryPageResponse,
   WorkspaceFileHistoryDiffResponse,
+  WorkspaceGitRefDiffPageResponse,
   WorkspaceCheckoutCommitRequest,
   WorkspaceCheckoutBranchRequest,
   WorkspaceGitRefDiffResponse,
@@ -27,6 +28,7 @@ import type {
   WorkspaceSearchRequest,
   WorkspaceSearchResponse,
 } from "@root/types/HostedWorkspaceViewerTypes";
+import { WORKSPACE_GIT_REF_DIFF_DEFAULT_PAGE_SIZE } from "@root/types/HostedWorkspaceViewerTypes";
 
 export class HostedHttpError extends Error {
   constructor(
@@ -321,6 +323,28 @@ export async function workspaceFileHistoryDiff(
   if (repo) params.set("repo", repo);
   return hostedFetch<WorkspaceFileHistoryDiffResponse>(
     `/api/workspace-viewer/file-history-diff?${params.toString()}`
+  );
+}
+
+export async function workspaceGitRefDiffPage(
+  ref: string,
+  offset = 0,
+  pageSize = WORKSPACE_GIT_REF_DIFF_DEFAULT_PAGE_SIZE,
+  diffId?: string,
+  repo?: string
+): Promise<WorkspaceGitRefDiffPageResponse> {
+  const params = new URLSearchParams({
+    ref,
+    offset: String(offset),
+  });
+  if (diffId) {
+    params.set("diffId", diffId);
+  } else {
+    params.set("pageSize", String(pageSize));
+  }
+  if (repo) params.set("repo", repo);
+  return hostedFetch<WorkspaceGitRefDiffPageResponse>(
+    `/api/workspace-viewer/git-ref-diff-page?${params.toString()}`
   );
 }
 
