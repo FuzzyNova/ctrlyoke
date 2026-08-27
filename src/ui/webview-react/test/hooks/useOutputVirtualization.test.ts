@@ -209,3 +209,67 @@ describe("useOutputVirtualization live row measurement", () => {
     scrollElement.remove();
   });
 });
+
+describe("useOutputVirtualization non-virtual row staging", () => {
+  function renderNonVirtualStaging(initialRowCount: number) {
+    const scrollElement = document.createElement("div");
+    Object.defineProperties(scrollElement, {
+      clientHeight: { configurable: true, value: 600 },
+      scrollHeight: { configurable: true, value: initialRowCount * 100 },
+      scrollTop: { configurable: true, writable: true, value: 0 },
+    });
+
+    return renderHook(
+      ({ rows }: { rows: OutputRenderRow[] }) =>
+        useOutputVirtualization({
+          applyScrollTargetRef: {
+            current: () => ({ resolved: false, appliedDelta: 0 }),
+          },
+          getVirtualItemsRef: { current: () => [] },
+          isProgrammaticScrollRef: { current: false },
+          isMeasurementFlushInProgressRef: { current: false },
+          lastScrollEventAtRef: { current: null },
+          outputCollapsed: false,
+          outputContentWidth: 360,
+          outputFontSize: 13,
+          outputOverscan: 2,
+          outputOverscanRef: { current: 2 },
+          outputRef: { current: scrollElement },
+          // Kept well above the row count so the pane stays non-virtualized
+          // and the staged-rendering path (rows.length >= 60) is exercised.
+          outputVirtualizationRowThreshold: 1000,
+          rowRenderIdentity: "live",
+          rows,
+          scrollSeekPlaceholderActive: false,
+          scrollSeekRestoreRequestedAtRef: { current: null },
+          scrollTargetRef: { current: { kind: "bottom" } },
+        }),
+      { initialProps: { rows: makeRows(initialRowCount) } }
+    );
+  }
+
+  it("extends synchronously for a single streamed append once staging has caught up", async () => {
+    const { result, rerender } = renderNonVirtualStaging(80);
+
+    await waitFor(() => {
+      expect(result.current.nonVirtualRows.length).toBe(80);
+    });
+    expect(result.current.isNonVirtualOutputStaging).toBe(false);
+
+    // Regression: appending one row (a single streamed event) used to
+    // re-enter the chunked catch-up flow and briefly re-report staging as
+    // true, flashing the "Rendering output..." overlay even though nothing
+    // needed to be staged.
+    rerender({ rows: makeRows(81) });
+
+    expect(result.current.nonVirtualRows.length).toBe(81);
+    expect(result.current.isNonVirtualOutputStaging).toBe(false);
+  });
+
+  it("still stages a large initial batch of rows", () => {
+    const { result } = renderNonVirtualStaging(80);
+
+    expect(result.current.nonVirtualRows.length).toBeLessThan(80);
+    expect(result.current.isNonVirtualOutputStaging).toBe(true);
+  });
+});

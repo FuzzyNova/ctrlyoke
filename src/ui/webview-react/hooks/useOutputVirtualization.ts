@@ -188,6 +188,8 @@ export function useOutputVirtualization({
     null
   );
   const nonVirtualRenderIdentityRef = useRef<string | null>(null);
+  const nonVirtualPrevRowCountRef = useRef(0);
+  const nonVirtualRenderedRowCountRef = useRef(Number.MAX_SAFE_INTEGER);
   const lastVirtualRangeRef = useRef<string>("");
   const isBulkRemeasureInProgressRef = useRef(false);
   const pendingMeasurementCacheRef = useRef<Map<string, number>>(new Map());
@@ -871,6 +873,8 @@ export function useOutputVirtualization({
       !isOutputVirtualized && rows.length >= NON_VIRTUAL_STAGING_ROW_THRESHOLD;
 
     if (!shouldStageRows) {
+      nonVirtualPrevRowCountRef.current = rows.length;
+      nonVirtualRenderedRowCountRef.current = Number.MAX_SAFE_INTEGER;
       setNonVirtualRenderedRowCount(Number.MAX_SAFE_INTEGER);
       return;
     }
@@ -879,31 +883,46 @@ export function useOutputVirtualization({
     const identityChanged = previousIdentity !== rowRenderIdentity;
     nonVirtualRenderIdentityRef.current = rowRenderIdentity;
 
-    setNonVirtualRenderedRowCount((previous) =>
-      Math.min(
-        rows.length,
-        identityChanged
-          ? NON_VIRTUAL_INITIAL_RENDER_ROWS
-          : Math.max(previous, NON_VIRTUAL_INITIAL_RENDER_ROWS)
-      )
-    );
+    const previousRowCount = nonVirtualPrevRowCountRef.current;
+    nonVirtualPrevRowCountRef.current = rows.length;
+
+    const wasCaughtUp =
+      !identityChanged &&
+      nonVirtualRenderedRowCountRef.current >= previousRowCount;
+
+    if (wasCaughtUp) {
+      // This effect only reran because rows.length changed, most commonly a
+      // single streamed event appended at the tail while already fully
+      // rendered. Extend synchronously instead of restarting the chunked
+      // catch-up flow below — deferring even a 1-row append via rAF is what
+      // caused the "Rendering output..." overlay to flash on every streamed
+      // event.
+      nonVirtualRenderedRowCountRef.current = rows.length;
+      setNonVirtualRenderedRowCount(rows.length);
+      return;
+    }
+
+    const initialCount = identityChanged
+      ? Math.min(rows.length, NON_VIRTUAL_INITIAL_RENDER_ROWS)
+      : Math.min(rows.length, nonVirtualRenderedRowCountRef.current);
+    nonVirtualRenderedRowCountRef.current = initialCount;
+    setNonVirtualRenderedRowCount(initialCount);
 
     nonVirtualRenderTimerRef.current = setTimeout(() => {
       nonVirtualRenderTimerRef.current = null;
       const renderNextChunk = () => {
-        setNonVirtualRenderedRowCount((previous) => {
-          const next = Math.min(
-            rows.length,
-            previous + NON_VIRTUAL_RENDER_CHUNK_ROWS
-          );
-          if (next < rows.length) {
-            nonVirtualRenderFrameRef.current =
-              requestAnimationFrame(renderNextChunk);
-          } else {
-            nonVirtualRenderFrameRef.current = null;
-          }
-          return next;
-        });
+        const next = Math.min(
+          rows.length,
+          nonVirtualRenderedRowCountRef.current + NON_VIRTUAL_RENDER_CHUNK_ROWS
+        );
+        nonVirtualRenderedRowCountRef.current = next;
+        setNonVirtualRenderedRowCount(next);
+        if (next < rows.length) {
+          nonVirtualRenderFrameRef.current =
+            requestAnimationFrame(renderNextChunk);
+        } else {
+          nonVirtualRenderFrameRef.current = null;
+        }
       };
 
       nonVirtualRenderFrameRef.current = requestAnimationFrame(renderNextChunk);
