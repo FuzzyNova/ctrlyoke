@@ -467,6 +467,10 @@ ctrlyoke/
 │   │   ├── qwen-cli.md            # Qwen Code CLI
 │   │   └── antigravity-cli.md     # Google Antigravity CLI
 │   │
+│   ├── pro/                       # Licensing + remote/mobile access (PRO_LICENSE_PLAN.md)
+│   │   ├── index.md               # Who needs a license?, pricing/threshold, online + air-gapped activation
+│   │   └── mobile-setup.md        # PWA install (Android + iOS), HTTPS/cert requirement, Tailscale option
+│   │
 │   ├── workflows/                 # Workflow authoring guide
 │   │   ├── index.md               # Workflow file overview
 │   │   ├── yaml-format.md         # YAML syntax deep dive
@@ -555,6 +559,13 @@ sidebar: [
       { text: "OpenCode CLI", link: "/harnesses/opencode-cli" },
       { text: "Qwen Code CLI", link: "/harnesses/qwen-cli" },
       { text: "Antigravity CLI", link: "/harnesses/antigravity-cli" },
+    ],
+  },
+  {
+    text: "Pro / Remote Access",
+    items: [
+      { text: "Licensing Overview", link: "/pro/" },
+      { text: "Mobile & PWA Setup", link: "/pro/mobile-setup" },
     ],
   },
   {
@@ -853,6 +864,35 @@ Priority order:
 5. **Add Algolia DocSearch** (apply at algolia.com/docsearch once the site has content).
 6. **Configure `package.json` `markdownDescription`** for all settings (links to docs pages).
 7. **Add JSON Schema `description` fields** for all workflow properties (they become hover docs in VS Code).
+8. **Write `docs/pro/`** — this is the documentation for [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)'s
+   entire feature (remote/on-the-go access is essentially the one thing Pro sells; see that plan's §1.6
+   "governing test"). Gate on `PRO_LICENSE_PLAN.md` Phase 1 shipping since the flows being documented
+   (activation, remote bind, cert generation) don't exist before then.
+   - `pro/index.md` — who needs a license (the revenue/employee threshold), pricing, **online**
+     activation (paste key) and **air-gapped** activation (import signed license file), per
+     `PRO_LICENSE_PLAN.md` §1.5.
+   - `pro/mobile-setup.md` — the exact steps to configure remote/PWA access, covering all three real
+     access paths so a reader picks the right one instead of defaulting to the least secure:
+     1. **Same-LAN via QR code** — `ServerSection.tsx`'s bind-address/LAN-IP-selector/QR-to-phone flow,
+        step by step, Android and iOS covered separately since "Add to Home Screen" (iOS Safari) vs.
+        "Install app" (Android Chrome) are different flows.
+     2. **HTTPS is not optional caveat** — self-signed cert generation, and the iOS-specific manual
+        cert-trust walkthrough (`Settings → General → VPN & Device Management` → enable full trust,
+        already drafted in `ServerSection.tsx`'s own copy) needs to be spelled out in full, not just
+        summarized, since it's the step users get stuck on. Explain *why*: per `PRO_LICENSE_PLAN.md`
+        §1.6, HTTPS is a no-op on localhost (already a secure context) and only starts mattering the
+        moment a phone or LAN device reaches the server — frame it as "required once you leave your own
+        machine," not as a generic security tip.
+     3. **Tailscale (or another mesh VPN) for true off-LAN remote access** — recommend this over opening
+        a router port / binding wider than the LAN for anyone who wants to reach ctrlyoke from outside
+        their home network. `PRO_LICENSE_PLAN.md` §1.8 already treats a Tailscale Funnel/reverse-proxy
+        setup as a legitimate Pro deployment (it's in the accepted-proxy list) — this page is where that
+        gets surfaced to users as guidance instead of staying an internal threat-model note.
+   - **Screenshots/GIFs:** sourced from `SCREENSHOTS_AND_MEDIA_PLAN.md` item **#7**, which scripts both
+     the iOS recording (QR scan → Safari → Add to Home Screen → take control) and the separate Android
+     recording (QR scan → Chrome → its own install affordance → take control) — real devices only, no
+     emulators — plus item **#10** (mobile-width stills of `WorkspaceViewerModal`/`WorkspaceDiffPane`,
+     category H).
 
 ---
 

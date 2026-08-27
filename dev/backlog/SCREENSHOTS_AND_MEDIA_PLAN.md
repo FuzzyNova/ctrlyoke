@@ -28,17 +28,38 @@ UI still in flux. Everything else is capture-ready today.
 - **Actually rewriting `landing/src/pages/index.astro` or `docs/**` content\*\* — this doc is the shot
   list and slotting plan only. Executing the swap is separate follow-up work once assets exist.
 - **Video/animated hero** — GIFs only, no produced video.
+- **Writing the Android + iOS PWA install instructions themselves** — a separate, release-blocking
+  content task (currently not tracked in `RELEASE_CHECKLIST.md`; worth adding there). This doc only
+  covers the supporting visual asset (#7's QR-scan/install/take-control recording, #10's mobile
+  screenshots) — not the written step-by-step text.
 
 ## Capture setup (do once, applies to every shot below)
 
-- **VS Code theme for the "primary" set:** pick one theme (recommend Dark+ or a high-contrast dark
-  theme close to ctrlyoke's own brand navy) and use it for every non-theme-comparison shot, so the
-  library reads as one consistent product rather than a grab-bag. Record which theme was chosen here
-  once decided, so later re-captures (e.g. after a UI tweak) match.
-- **Window size:** capture the dashboard at a realistic panel width (~420–480px, the actual sidebar
-  webview width), not a maximized editor — screenshots that show the dashboard artificially stretched
-  wide misrepresent the product. Compose desktop-vs-mobile and multi-theme shots as canvas
-  compositions afterward (see below), not as one giant native screenshot.
+- **VS Code theme for the "primary" set — decided: `dark 2026 (Default Dark)`**, VS Code's own built-in
+  dark theme. Use it for every non-theme-comparison shot, so the library reads as one consistent
+  product rather than a grab-bag. Later re-captures (e.g. after a UI tweak) should match this theme.
+- **Window size — there is no single correct width; it depends on where the feature actually lives.**
+  ctrlyoke has four real usage contexts, and each shot below should be captured in whichever one(s)
+  actually host that feature, not forced into one narrow default:
+  - **VS Code side panel** (~420–480px portrait webview width) — the default install surface, and
+    correct for anything that only exists there: settings pages (#4, #5, #12) and dialogs (#11).
+  - **VS Code bottom panel** (short-and-wide, next to the terminal) — ctrlyoke was originally designed
+    to live here and still reads well in this layout. It's a first-class placement, not an edge case,
+    so it's worth at least one shot showing the dashboard next to a running terminal this way.
+  - **Hosted/browser dashboard, wide desktop view** — localhost hosting is available even in the free
+    tier specifically so users can run different workflows across browser tabs, so this is core usage,
+    not a Pro-only extra. It's also the _only_ place some features render at all: `WorkspaceViewerModal`
+    and its panes (including `WorkspaceDiffPane`) are a browser-only "little baby IDE" — VS Code itself
+    is the workspace viewer in the panel case, so there's no VS-Code-sidebar version of #10. Wide desktop
+    capture is also correct for the hero GIF (#6, already noted below) and the desktop half of the
+    desktop/mobile composite (#3).
+  - **Mobile browser / installed PWA** (real iPhone, ~375–430px portrait) — its own first-class context,
+    not just a squeezed-down wide-browser view. `WorkspaceViewerModal` (#10) _does_ have a narrow
+    capture — it's just a mobile-browser-width one, not a VS Code one. Also the context for #7 and the
+    PWA-install walkthrough (see #7 below).
+
+  Compose multi-theme shots (#2) as canvas compositions from same-context single captures, not as one
+  giant native screenshot spanning contexts.
 - **Demo data required before capturing:** several targets below are empty by default in a fresh
   workspace and need seeded/representative content first (noted per item). Don't screenshot the
   empty state unless the empty state itself is the point (e.g. onboarding docs).
@@ -67,7 +88,7 @@ above.
 captured _larger_ than its slot just scales down cleanly — capturing at 2x DPI and shipping that PNG
 is correct, not wasteful. The failure mode is the opposite: a still captured smaller than its slot
 has to scale up and goes soft. Treat the px floors below as floors, not ceilings, for PNG categories
-(A, B, C, F) — shoot at 2x whenever it's free to do so.
+(A, B, C, F, G, H) — shoot at 2x whenever it's free to do so.
 
 **GIFs are the exception.** Motion pays a real byte cost per pixel against the plan's <2MB budget, so
 there's no free lunch in over-capturing — for GIF categories (D, E), capture close to actual display
@@ -75,18 +96,22 @@ size (~1–1.5x, not 2x+) and spend the byte budget on trimming/frame rate inste
 
 **Ratio matters more than absolute px for the designed compositions** (B, C, D) — these are
 flattened canvases built to fill a landscape slot, so an off-ratio composite either letterboxes or
-gets an ugly crop once dropped in. Raw single-panel stills (A) and the code-snippet image (F) don't
-need a forced ratio — their shape is dictated by the sidebar's natural portrait shape or the
-snippet's line count, and the surrounding container just sizes to whatever they are.
+gets an ugly crop once dropped in. Raw single-panel stills (A), raw wide/browser stills (G), raw
+mobile/PWA stills (H), and the code-snippet image (F) don't need a forced ratio — their shape is
+dictated by the sidebar's natural portrait shape, the hosted dashboard's natural desktop layout, an
+iPhone's natural portrait shape, or the snippet's line count, and the surrounding container just sizes
+to whatever they are.
 
-| Category                       | Applies to        | Ratio target                             | Px floor                               | Notes                                                                                                            |
-| ------------------------------ | ----------------- | ---------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| A. Raw panel screenshot        | #4, #5, #11, #12  | none — natural portrait, crop to content | 880–960px wide                         | 2x of the real 420–480 webview width                                                                             |
-| B. Flattened composite         | #1, #2            | ~3:2 to 16:10 landscape                  | 1152px wide (2304px+ at 2x)            | targets the `max-w-6xl` features-grid slot                                                                       |
-| C. Desktop/mobile side-by-side | #3, pairs with #7 | ~3:2 landscape                           | 896px wide (1800px+ at 2x)             | targets `max-w-4xl` Pro callout                                                                                  |
-| D. Hero GIF                    | #6                | ~4:3 to 16:10 landscape                  | 896–1152px wide, captured near 1x–1.5x | record from the hosted/browser dashboard, not the narrow sidebar — a stretched 480px capture won't fill the hero |
-| E. In-body docs GIF            | #9                | none forced                              | ~688–900px wide, captured near 1x      | keep under the existing 2MB budget                                                                               |
-| F. Styled code snippet         | #8                | none — content-driven height             | 896px wide                             | matches the existing hero `<pre>` block treatment                                                                |
+| Category                       | Applies to        | Ratio target                                      | Px floor                               | Notes                                                                                                                                                            |
+| ------------------------------ | ----------------- | ------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A. Raw panel screenshot        | #4, #5, #11, #12  | none — natural portrait, crop to content          | 880–960px wide                         | 2x of the real 420–480 webview width                                                                                                                             |
+| B. Flattened composite         | #1, #2            | ~3:2 to 16:10 landscape                           | 1152px wide (2304px+ at 2x)            | targets the `max-w-6xl` features-grid slot                                                                                                                       |
+| C. Desktop/mobile side-by-side | #3, pairs with #7 | ~3:2 landscape                                    | 896px wide (1800px+ at 2x)             | targets `max-w-4xl` Pro callout                                                                                                                                  |
+| D. Hero GIF                    | #6                | ~4:3 to 16:10 landscape                           | 896–1152px wide, captured near 1x–1.5x | record from the hosted/browser dashboard, not the narrow sidebar — a stretched 480px capture won't fill the hero                                                 |
+| G. Raw wide/browser screenshot | #10               | none — natural desktop landscape, crop to content | 1200px+ wide (2400px+ at 2x)           | `WorkspaceViewerModal` is hosted-dashboard-only — VS Code itself is the workspace viewer in the panel case. Narrow version is category H, not this one.         |
+| E. In-body docs GIF            | #9                | none forced                                       | ~688–900px wide, captured near 1x      | keep under the existing 2MB budget                                                                                                                               |
+| F. Styled code snippet         | #8                | none — content-driven height                      | 896px wide                             | matches the existing hero `<pre>` block treatment                                                                                                                |
+| H. Raw mobile/PWA screenshot   | #7, #10           | none — natural mobile portrait, crop to content   | 750–860px wide                         | 2x of a real iPhone's ~375–430px CSS width; capture on an actual device, not an emulator, for anything touching the PWA-install/cert flow                       |
 
 One practical gotcha for A/B/C: on a non-retina Windows display at 100%/125% scaling, an ordinary
 screenshot captures logical pixels 1:1 — soft once placed at native size in a 2x-built container.
@@ -113,7 +138,7 @@ Each item: what to capture, what prep it needs, where it's used.
 ### 2. Composite: one dashboard, multiple VS Code themes
 
 - **What:** Same compositing technique as #1, but each layer is the _same_ dashboard state under a
-  different VS Code theme (e.g. Dark+, Light+, Dracula, One Dark Pro, Solarized). Demonstrates
+  different VS Code theme (e.g. dark 2026, Light+, Dracula, One Dark Pro, Solarized). Demonstrates
   `createThemeExtension` / CSS variable theming actually tracks the host theme.
 - **Prep:** capture the same dashboard view (same workflow, same panel) under ~4–5 themes.
 - **Use:** landing "Harness grid" section or a new "Looks like your editor, not a plugin" section; also
@@ -164,15 +189,42 @@ Each item: what to capture, what prep it needs, where it's used.
   `docs/workflows/index.md` and `docs/guide/your-first-workflow.md`.
 - **Dimensions:** category D — see "Target dimensions" above.
 
-### 7. Built-in mobile editor section
+### 7. Built-in mobile editor section, plus the QR-scan/PWA-install walkthrough (iOS & Android)
 
-- **What:** screenshots/GIF of editing a prompt on a phone-width viewport — on-screen keyboard,
-  touch-friendly completions, the visual-viewport-aware tooltip repositioning
-  (`CodeMirrorEditor.tsx`'s `keyboardTooltipSpace`/`repositionTooltips` handling exists specifically for
-  this).
-- **Prep:** real mobile device or accurate emulation against the hosted dev server; capture with the
-  on-screen keyboard actually open, since that's the scenario the code specifically handles.
-- **Use:** pairs with #3 as a new landing "mobile" section; `docs/pro/index.md` (remote/mobile access).
+- **What:** three related pieces, all captured on a real device, never an emulator (see Prep):
+  - **The editor GIF:** editing a prompt on a phone-width viewport — on-screen keyboard, touch-friendly
+    completions, the visual-viewport-aware tooltip repositioning (`CodeMirrorEditor.tsx`'s
+    `keyboardTooltipSpace`/`repositionTooltips` handling exists specifically for this). iPhone is fine
+    for this one; it's not platform-specific.
+  - **The iOS install recording:** the onboarding flow end to end — scan the QR code from
+    `ServerSection.tsx` with the phone camera → the ctrlyoke URL opens in mobile Safari → "Add to Home
+    Screen" install the PWA → open the installed app and see/take control of the workflow that's
+    actually running on the PC.
+  - **The Android install recording:** the same flow's Chrome equivalent — scan the QR code → the URL
+    opens in Chrome → tap Chrome's install affordance (this varies: an address-bar install icon, the ⋮
+    menu's "Install app" / "Add to Home screen" item, or a custom in-app install banner, depending on
+    Android/Chrome version and whether the page fires `beforeinstallprompt`) → open the installed app
+    from the home screen/app drawer and see/take control of the same running workflow.
+
+  The iOS and Android install recordings together are the release-blocking PWA-setup tutorial's
+  centerpiece asset — the hard requirement is documented Android + iOS install instructions in
+  `docs/pro/`, and these recordings are the visual walkthrough that instructions alone don't convey
+  well.
+- **Prep:** real devices, not emulators — install-prompt UI, camera-to-browser hand-off, and app-drawer/
+  home-screen placement after install are all real-device/real-browser-version behavior that doesn't
+  emulate meaningfully.
+  - **iPhone:** the QR scan, camera hand-off into Safari, "Add to Home Screen" dialog, and (if HTTPS is
+    on) the cert-trust prompt.
+  - **Android phone with Chrome:** whichever install-prompt variant that device/Chrome version actually
+    shows — don't stage a different one than what a real user would see.
+  - Use the same demo workflow/server session for the iOS and Android recordings so the two cut
+    together cleanly as one "works everywhere" clip if that's useful later.
+  - Capture the editor GIF with the on-screen keyboard actually open, since that's the scenario the
+    code specifically handles.
+- **Use:** the editor GIF pairs with #3 (the desktop/mobile composite) as a new landing "mobile"
+  section. The iOS and Android install recordings are primarily documentation —
+  `docs/pro/mobile-setup.md`'s iOS and Android sections respectively — and a trimmed clip of either is
+  a strong Pro-callout candidate on landing too.
 
 ### 8. YAML snippets for template marketing
 
@@ -201,11 +253,17 @@ Each item: what to capture, what prep it needs, where it's used.
 ### 10. Built-in code editor (`WorkspaceViewerModal`)
 
 - **What:** the three panes — `WorkspaceExplorerPane`, `WorkspaceSourceControlPane`,
-  `WorkspaceSearchPane` — via `WorkspaceViewerModal.tsx`'s tab switcher.
-- **Prep:** demo project with uncommitted changes staged/unstaged (for the Source Control pane to show
-  something) and a search query with real results (for the Search pane).
+  `WorkspaceSearchPane` — via `WorkspaceViewerModal.tsx`'s tab switcher. Within Source Control, include
+  a shot with a changed file actually selected so `WorkspaceDiffPane` is showing a real diff, not just
+  the unselected file list.
+- **Prep:** demo project with uncommitted changes staged/unstaged, with one file selected to populate
+  the diff pane; a search query with real results (for the Search pane).
 - **Use:** landing needs a section entirely — the built-in editor isn't mentioned on the landing page
-  at all today; `docs/guide/concepts.md` or a new page.
+  at all today; `docs/guide/concepts.md` or a new page. The iPhone set doubles as evidence in the
+  PWA-setup docs (`docs/pro/`, see #7) that the mobile experience is a real IDE, not just a viewer.
+- **Dimensions:** two sets, both needed — category G (wide desktop browser) for the landing/general-docs
+  use, and category H (real iPhone, mobile Safari or the installed PWA) for the PWA-setup docs and the
+  mobile section. Neither is a VS Code sidebar capture — see "Window size" in Capture setup.
 
 ### 11. Undo changes dialog
 
@@ -252,6 +310,7 @@ Each item: what to capture, what prep it needs, where it's used.
 | `docs/workflows/index.md` / `your-first-workflow.md`              | #6, #11  |
 | `docs/reference/settings.md`                                      | #4, #5   |
 | `docs/pro/index.md`                                               | #3, #7   |
+| `docs/pro/mobile-setup.md` (new — Android + iOS PWA install)      | #7, #10  |
 | `docs/guide/concepts.md` or new editor page                       | #10      |
 | New/expanded workflow-properties + permissions + MCP + hooks docs | #12      |
 
