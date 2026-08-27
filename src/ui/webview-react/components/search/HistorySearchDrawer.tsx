@@ -416,6 +416,19 @@ export function HistorySearchDrawer() {
     [historySearchFilters, trimmedQuery, workflowKey]
   );
   const resultsScrollContainerRef = useRef<HTMLDivElement>(null);
+  // Tracks the furthest overscan index a range-change has ever asked for.
+  // `loadMore()` only advances the sequential cursor by one page at a time
+  // (there is no random-access offset fetch for search results), so a scroll
+  // that lands more than one page ahead of what's loaded needs several
+  // `loadMore()` calls back-to-back. Re-checking this ref whenever `results`
+  // grows (see the effect below) keeps that chain going; relying solely on
+  // the next range-change notification does not, because it's deduplicated
+  // by scroll-range signature and won't refire just because more data arrived
+  // for an unchanged range.
+  const desiredResultIndexRef = useRef(-1);
+  useEffect(() => {
+    desiredResultIndexRef.current = -1;
+  }, [listingId]);
   const getItem = useCallback(
     (index: number): HistorySearchResult | undefined => results[index],
     [results]
@@ -489,14 +502,27 @@ export function HistorySearchDrawer() {
     (_index: number): number => HISTORY_RESULT_ESTIMATE,
     []
   );
+  const maybeLoadMore = useCallback(() => {
+    if (desiredResultIndexRef.current >= results.length - 1) {
+      loadMore();
+    }
+  }, [loadMore, results.length]);
+
   const handleRangeChange = useCallback(
     (range: VirtualizedListRange): void => {
-      if (range.overscanEndIndex >= results.length - 1) {
-        loadMore();
-      }
+      desiredResultIndexRef.current = range.overscanEndIndex;
+      maybeLoadMore();
     },
-    [loadMore, results.length]
+    [maybeLoadMore]
   );
+
+  // Continues the sequential fetch chain as each page lands: `maybeLoadMore`
+  // gets a new identity whenever `results.length` changes, so this re-runs
+  // after every page arrives and keeps requesting the next one until loaded
+  // results reach the last requested scroll position (or hasMore runs out).
+  useEffect(() => {
+    maybeLoadMore();
+  }, [maybeLoadMore]);
 
   const summaryLabel = useMemo(() => {
     if (trimmedQuery.length < 2 || loading || totalCount === 0) {
