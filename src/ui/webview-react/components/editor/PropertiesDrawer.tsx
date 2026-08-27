@@ -734,7 +734,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       harnessId={currentHarness}
                       value={additionalArgsDisplayValue}
                       onChange={(value) => setProperty("additionalArgs", value)}
-                      placeholder="e.g. --effort high"
                       className="w-full text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                     />
                   </div>
@@ -756,7 +755,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     harnessId={currentHarness}
                     value={additionalArgsDisplayValue}
                     onChange={(value) => setProperty("additionalArgs", value)}
-                    placeholder="e.g. --effort high"
                     className="w-full text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                   />
                 </div>

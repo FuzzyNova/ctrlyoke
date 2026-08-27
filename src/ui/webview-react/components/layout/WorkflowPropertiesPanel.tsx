@@ -220,7 +220,6 @@ const WorkflowPropertiesPanelInner: React.FC<{
     unhideDropdownOption,
     loadedWorkflows,
     activeWorkflowId,
-    horizontalPanelResizeActive,
     setWorkflowPortabilityReportOpen,
   } = useUiStore();
 
@@ -295,8 +294,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
   // Single breakpoint for all three layout zones (body rows, tab labels, footer toggles)
   const [drawerRef, isNarrow] = useElementNarrow<HTMLDivElement>(
-    SETTINGS_DRAWER_BREAKPOINT,
-    horizontalPanelResizeActive
+    SETTINGS_DRAWER_BREAKPOINT
   );
 
   // Get current effective values
@@ -1614,7 +1612,6 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     onBlur={() =>
                       handleAdditionalArgsChange(additionalArgsInput)
                     }
-                    placeholder="e.g. --effort high --max-turns 10"
                     className="w-full text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                   />
                 </FormField>

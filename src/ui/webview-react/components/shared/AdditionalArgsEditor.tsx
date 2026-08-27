@@ -12,10 +12,14 @@ type HarnessFlagCompletion =
 
 export type AdditionalArgsEditorProps = Omit<
   SingleLineCompletionEditorProps,
-  "completionSource"
+  "completionSource" | "placeholder" | "wrapSingleLine"
 > & {
   harnessId: HarnessId;
 };
+
+// Single-sourced here so every caller shows identical placeholder text
+// instead of each passing its own copy that can drift out of sync.
+const ADDITIONAL_ARGS_PLACEHOLDER = "e.g. --effort high";
 
 interface CursorArgumentContext {
   prefix: string;
@@ -232,6 +236,8 @@ export function AdditionalArgsEditor({
     <SingleLineCompletionEditor
       key={harnessId}
       {...props}
+      placeholder={ADDITIONAL_ARGS_PLACEHOLDER}
+      wrapSingleLine
       completionSource={completionSource}
     />
   );

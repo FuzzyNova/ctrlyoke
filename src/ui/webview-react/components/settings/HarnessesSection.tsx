@@ -148,7 +148,6 @@ export function HarnessesSection({
                       v || undefined
                     )
                   }
-                  placeholder="None"
                   className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
                 />
               </SettingInputRow>

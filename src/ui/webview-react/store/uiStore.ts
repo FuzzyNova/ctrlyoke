@@ -681,7 +681,6 @@ interface UiState {
   mobileStepsOpen: boolean;
   mobileStepsMode: "sidebar" | "fullwidth";
   mobileWorkflowPropsOpen: boolean;
-  horizontalPanelResizeActive: boolean;
 
   // Global settings drawer state
   globalSettingsOpen: boolean;
@@ -959,7 +958,6 @@ interface UiActions {
   toggleMobileWorkflowProps: () => void;
   closeMobileSteps: () => void;
   closeMobileWorkflowProps: () => void;
-  setHorizontalPanelResizeActive: (active: boolean) => void;
 
   // Global settings drawer actions
   toggleGlobalSettings: () => void;
@@ -1073,7 +1071,6 @@ const initialState: UiState = {
   mobileStepsOpen: false,
   mobileStepsMode: "fullwidth",
   mobileWorkflowPropsOpen: false,
-  horizontalPanelResizeActive: false,
   globalSettingsOpen: false,
   globalSettingsActiveTab: "general",
   startupReady: false,
@@ -1949,13 +1946,6 @@ export const useUiStore = create<UiState & UiActions>()(
 
       closeMobileWorkflowProps: () => set({ mobileWorkflowPropsOpen: false }),
 
-      setHorizontalPanelResizeActive: (active) =>
-        set((state) =>
-          state.horizontalPanelResizeActive === active
-            ? state
-            : { horizontalPanelResizeActive: active }
-        ),
-
       // ============================================================================
       // GLOBAL SETTINGS DRAWER
       // ============================================================================
@@ -2044,7 +2034,6 @@ export const useUiStore = create<UiState & UiActions>()(
           outputScrollTargets: {},
           toastQueue: [],
           footerOpenPicker: null,
-          horizontalPanelResizeActive: false,
           suffixEditConfirmation: null,
           contentPreviewModal: null,
           workflowPortabilityReportOpen: false,

@@ -34,13 +34,21 @@ export interface SingleLineCompletionEditorProps {
   disabled?: boolean;
   /**
    * Classes for the wrapper div this editor mounts into (e.g. `border`,
-   * `rounded`, `bg-input-bg`). Single-line mode fixes its own height (see
-   * `singleLineTheme`), while multiline mode lets this wrapper's height
-   * determine the visible editor size. Both modes pad their content
-   * horizontally via `.cm-line` — do not add `py-*`/`px-*` here.
+   * `rounded`, `bg-input-bg`). Single-line and wrap-single-line modes fix
+   * their own height range (see `singleLineTheme`/`wrapSingleLineTheme`),
+   * while multiline mode lets this wrapper's height determine the visible
+   * editor size. All modes pad their content horizontally via `.cm-line` —
+   * do not add `py-*`/`px-*` here.
    */
   className?: string;
   multiline?: boolean;
+  /**
+   * Single-line semantics (Enter blurs/accepts, real newlines are stripped
+   * on type and paste) with visual soft-wrap instead of a horizontal
+   * scrollbar: the editor grows from one line up to `wrapSingleLineTheme`'s
+   * capped height, then scrolls vertically. Ignored when `multiline` is set.
+   */
+  wrapSingleLine?: boolean;
   /** Additional CodeMirror extensions for specialized editor variants. */
   extensions?: Extension[];
   /**
@@ -121,6 +129,31 @@ const multilineTheme = EditorView.theme({
   },
 });
 
+// Grows from the same 26px single-line baseline up to ~4 lines, then
+// scrolls vertically — replaces singleLineTheme's forced nowrap/horizontal
+// overflow with soft-wrap while keeping the transaction filter's single
+// logical line (no `whiteSpace: nowrap`, unlike singleLineTheme above).
+const wrapSingleLineTheme = EditorView.theme({
+  "&": {
+    height: "auto",
+    minHeight: "26px",
+    maxHeight: "92px",
+  },
+  ".cm-scroller": {
+    overflowY: "auto",
+    overflowX: "hidden",
+  },
+  ".cm-content": {
+    padding: "4px 0",
+  },
+  ".cm-gutters": {
+    display: "none",
+  },
+  ".cm-activeLine": {
+    backgroundColor: "transparent",
+  },
+});
+
 function replaceNewlines(text: string, multiline: boolean): string {
   return multiline ? text : text.replace(/[\r\n]/g, "");
 }
@@ -185,6 +218,7 @@ export function SingleLineCompletionEditor({
   disabled = false,
   className,
   multiline = false,
+  wrapSingleLine = false,
   extensions = [],
   fontSize,
   "aria-label": ariaLabel,
@@ -272,7 +306,11 @@ export function SingleLineCompletionEditor({
         createThemeExtension("input", {
           fontSize: initialProps.fontSize,
         } satisfies ThemeExtensionOptions),
-        multiline ? multilineTheme : singleLineTheme,
+        multiline
+          ? multilineTheme
+          : wrapSingleLine
+            ? wrapSingleLineTheme
+            : singleLineTheme,
         tooltips({ parent: document.body, tooltipSpace: keyboardTooltipSpace }),
         EditorView.domEventHandlers({
           blur: () => {
@@ -308,7 +346,7 @@ export function SingleLineCompletionEditor({
       viewRef.current = null;
       view.destroy();
     };
-  }, [multiline]);
+  }, [multiline, wrapSingleLine]);
 
   // Remeasure the editor and reposition an already-open completion dropdown
   // when the mobile keyboard changes the visual viewport. requestMeasure alone

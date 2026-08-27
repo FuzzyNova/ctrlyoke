@@ -1,7 +1,6 @@
 import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
 import {
   type CSSProperties,
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -294,9 +293,6 @@ function App() {
   const setOutputCollapsed = useUiStore((s) => s.setOutputCollapsed);
   const editorCollapsed = useUiStore((s) => s.editorCollapsed);
   const setEditorCollapsed = useUiStore((s) => s.setEditorCollapsed);
-  const setHorizontalPanelResizeActive = useUiStore(
-    (s) => s.setHorizontalPanelResizeActive
-  );
 
   // Mobile drawer state
   const mobileStepsOpen = useUiStore((s) => s.mobileStepsOpen);
@@ -320,53 +316,6 @@ function App() {
     outputCollapsed,
     editorCollapsed,
   });
-
-  const horizontalResizeSettleTimerRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
-  const horizontalResizePointerActiveRef = useRef(false);
-
-  const clearHorizontalResizeSettleTimer = useCallback(() => {
-    if (horizontalResizeSettleTimerRef.current != null) {
-      clearTimeout(horizontalResizeSettleTimerRef.current);
-      horizontalResizeSettleTimerRef.current = null;
-    }
-  }, []);
-
-  const finishHorizontalResizeDrag = useCallback(() => {
-    if (!horizontalResizePointerActiveRef.current) {
-      return;
-    }
-    horizontalResizePointerActiveRef.current = false;
-    clearHorizontalResizeSettleTimer();
-    horizontalResizeSettleTimerRef.current = setTimeout(() => {
-      horizontalResizeSettleTimerRef.current = null;
-      setHorizontalPanelResizeActive(false);
-    }, 120);
-  }, [clearHorizontalResizeSettleTimer, setHorizontalPanelResizeActive]);
-
-  const startHorizontalResizeDrag = useCallback(() => {
-    clearHorizontalResizeSettleTimer();
-    horizontalResizePointerActiveRef.current = true;
-    setHorizontalPanelResizeActive(true);
-  }, [clearHorizontalResizeSettleTimer, setHorizontalPanelResizeActive]);
-
-  useEffect(() => {
-    window.addEventListener("pointerup", finishHorizontalResizeDrag);
-    window.addEventListener("pointercancel", finishHorizontalResizeDrag);
-    window.addEventListener("blur", finishHorizontalResizeDrag);
-    return () => {
-      window.removeEventListener("pointerup", finishHorizontalResizeDrag);
-      window.removeEventListener("pointercancel", finishHorizontalResizeDrag);
-      window.removeEventListener("blur", finishHorizontalResizeDrag);
-      clearHorizontalResizeSettleTimer();
-      setHorizontalPanelResizeActive(false);
-    };
-  }, [
-    clearHorizontalResizeSettleTimer,
-    finishHorizontalResizeDrag,
-    setHorizontalPanelResizeActive,
-  ]);
 
   const mobile = useMobileLayout({
     isMobile,
@@ -1028,15 +977,6 @@ function App() {
           orientation="horizontal"
           className="flex-1"
           id="ctrlyoke-main-layout"
-          onLayoutChange={() => {
-            if (!desktop.horizontalInitializedRef.current || !uiLayoutReady) {
-              return;
-            }
-            startHorizontalResizeDrag();
-          }}
-          onLayoutChanged={() => {
-            finishHorizontalResizeDrag();
-          }}
         >
           {/* Prompts Panel (Left - collapsible) */}
           <Panel
@@ -1071,10 +1011,7 @@ function App() {
             <WorkflowStepsPanel />
           </Panel>
 
-          <Separator
-            className={SEPARATOR_VERTICAL}
-            onPointerDown={startHorizontalResizeDrag}
-          />
+          <Separator className={SEPARATOR_VERTICAL} />
 
           {/* Center content — Output (top) / Editor (bottom), both independently
             collapsible.  When both are collapsed the vertical Group unmounts and
@@ -1203,10 +1140,7 @@ function App() {
             )}
           </Panel>
 
-          <Separator
-            className={SEPARATOR_VERTICAL}
-            onPointerDown={startHorizontalResizeDrag}
-          />
+          <Separator className={SEPARATOR_VERTICAL} />
 
           {/* Settings Panel (Right - collapsible) */}
           <Panel
