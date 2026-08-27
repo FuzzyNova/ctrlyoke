@@ -215,6 +215,59 @@ describe("HistorySearchDrawer filters", () => {
     });
   });
 
+  it("keeps requesting sequential pages until the scrolled-to position is loaded", () => {
+    // Search results only support a sequential cursor (unlike file/commit
+    // history's offset-based paging), so catching up to a scroll position
+    // more than one page ahead of what's loaded takes several loadMore()
+    // calls in a row. A scroll to the very bottom of a 100-item list with
+    // only 40 loaded is more than one RESULT_LIMIT (50) page ahead, so this
+    // must chain through two fetches on its own, not stall after the first.
+    const view = renderSearch();
+    act(() => {
+      useUiStore.getState().setHistorySearchResults(results(40), false, {
+        totalCount: 100,
+        nextCursor: "cursor-1",
+        hasMore: true,
+      });
+    });
+
+    const scroller =
+      view.container.querySelector<HTMLElement>(".overflow-y-auto");
+    expect(scroller).not.toBeNull();
+    if (!scroller) return;
+
+    act(() => {
+      // Far enough to land within overscan of the very last index (100
+      // items), not just past the 40 already loaded — otherwise this
+      // wouldn't exercise the multi-page catch-up path at all.
+      scroller.scrollTop = 999999;
+      fireEvent.scroll(scroller);
+      fireEvent.scroll(scroller);
+    });
+
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cursor: "cursor-1" })
+    );
+
+    // The first requested page lands (append), still short of where the user
+    // scrolled to — this must trigger the next page on its own, with no
+    // further scroll event.
+    act(() => {
+      useUiStore.getState().setHistorySearchResults(results(40), false, {
+        append: true,
+        totalCount: 100,
+        nextCursor: "cursor-2",
+        hasMore: true,
+      });
+    });
+
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cursor: "cursor-2" })
+    );
+  });
+
   it("does not render a Load more button when more results are available", () => {
     renderSearch();
     act(() => {
