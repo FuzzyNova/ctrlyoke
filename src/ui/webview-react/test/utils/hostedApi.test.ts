@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { HostedHttpError, workspaceTree } from "@utils/hostedApi";
+import {
+  HostedHttpError,
+  workspaceGitRefDiffPage,
+  workspaceTree,
+} from "@utils/hostedApi";
 import {
   WORKSPACE_ENTRY_SORT_DIRECTIONS,
   WORKSPACE_ENTRY_SORT_KEYS,
@@ -56,5 +60,25 @@ describe("hostedApi workspaceTree", () => {
       expect(error).toBeInstanceOf(HostedHttpError);
       expect((error as HostedHttpError).status).toBe(410);
     }
+  });
+});
+
+describe("hostedApi workspaceGitRefDiffPage", () => {
+  it("serializes initial and continuation requests with diffId-vs-pageSize handling", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify({ entries: [] })))
+      );
+
+    await workspaceGitRefDiffPage("~abcdef0", 0, 12, undefined, "repo-a");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "/api/workspace-viewer/git-ref-diff-page?ref=%7Eabcdef0&offset=0&pageSize=12&repo=repo-a"
+    );
+
+    await workspaceGitRefDiffPage("~abcdef0", 12, 12, "diff-1", "repo-a");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "/api/workspace-viewer/git-ref-diff-page?ref=%7Eabcdef0&offset=12&diffId=diff-1&repo=repo-a"
+    );
   });
 });
