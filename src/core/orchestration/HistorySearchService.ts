@@ -24,10 +24,10 @@ import { Log } from "../../utils/Log";
 import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
 import { FileLockTimeoutError } from "../../utils/FileLockUtils";
 import {
-  HistorySearchIndexService,
   MAX_INDEXED_TEXT_LENGTH,
   type IndexRebuildProgressCallback,
 } from "./HistorySearchIndexService";
+import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
 import {
   HistoryCandidateExtractor,
   type MatchCandidate,
@@ -50,7 +50,6 @@ interface WorkflowRunEntry {
 
 export class HistorySearchService {
   private readonly timelineRecorder = new TimelineRecorder();
-  private readonly indexService = new HistorySearchIndexService();
   private readonly lineageRepository = new WorkflowLineageRepository();
   // Capped the same as the indexed rebuild path (HistorySearchIndexService) —
   // this fallback used to build full, uncapped candidate text for every event
@@ -73,7 +72,9 @@ export class HistorySearchService {
 
     const indexAttemptStart = Date.now();
     try {
-      return await this.indexService.search(
+      return await getSharedHistorySearchIndexService(
+        workspaceFolderPath
+      ).search(
         request,
         workspaceFolderPath,
         onRebuildProgress

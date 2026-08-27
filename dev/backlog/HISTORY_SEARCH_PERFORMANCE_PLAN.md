@@ -210,7 +210,14 @@ section — no ownership or lifecycle redesign, no new failure modes (worst
 case it does exactly what it does today: a full rebuild). Ship it
 independently of Problem 2 and Phase 1B below.
 
-### Phase 1B — consolidate to a shared instance
+### Phase 1B — consolidate to a shared instance (done)
+
+**Shipped 2026-08-27:** Added
+`src/core/orchestration/HistorySearchIndexServiceRegistry.ts`, a module-level
+registry keyed by normalized workspace path. `OutputHistoryManager` and
+`HistorySearchService` now resolve their index service through that registry,
+so refresh coalescing and the warm document cache are shared within a
+workspace while separate workspaces remain isolated.
 
 **Updated 2026-08-27 (post-Incident #2):** this section originally proposed
 gating 1B on a few weeks of `[MemoryDiagnostics]` log data and deferring it
@@ -400,5 +407,8 @@ sequence gated on log data anymore — the data now says both are needed.
 - No regression to existing `HistorySearchIndexService`/`HistorySearchService`
   unit test coverage; new coverage for the freshness-recheck skip path and
   for worker success/failure/progress relay.
-- If Phase 1B is undertaken: a workspace's index-service instance is scoped
-  per `workspaceFolderPath`, never a single cross-workspace singleton.
+- Phase 1B shipped through
+  `HistorySearchIndexServiceRegistry.ts`: the registry uses a normalized,
+  resolved `workspaceFolderPath` key (including Windows case folding), so each
+  workspace gets one shared index-service instance and no index service is
+  shared across workspace folders.

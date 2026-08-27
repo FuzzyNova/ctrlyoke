@@ -32,6 +32,7 @@ import { Log } from "../../utils/Log";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import { OutputHistoryTimelineAdapter } from "./OutputHistoryTimelineAdapter";
 import { HistorySearchIndexService } from "./HistorySearchIndexService";
+import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { RunOutputResolver } from "./RunOutputResolver";
 import { WorkflowTokenTotalsReducer } from "./WorkflowTokenTotalsReducer";
@@ -139,7 +140,7 @@ export class OutputHistoryManager {
   private readonly runOutputResolver = new RunOutputResolver(
     this.timelineRecorder
   );
-  private readonly historySearchIndexService = new HistorySearchIndexService();
+  private readonly historySearchIndexService: HistorySearchIndexService;
   private readonly lineageRepository = new WorkflowLineageRepository();
   private readonly observedHarnessUsageStore: ObservedHarnessUsageStore;
   private readonly lifetimeUsageStore: LifetimeUsageStore;
@@ -166,6 +167,9 @@ export class OutputHistoryManager {
   ) => Promise<unknown> | void;
 
   constructor(private _workspaceFolderPath: string) {
+    this.historySearchIndexService = getSharedHistorySearchIndexService(
+      _workspaceFolderPath
+    );
     this.observedHarnessUsageStore = new ObservedHarnessUsageStore(
       _workspaceFolderPath
     );
