@@ -439,6 +439,25 @@ describe("SESSION_RESTORED", () => {
       deniedTools: ["execute_command"],
     });
   });
+
+  it("clears the system-generated lockdown when restoring a new workflow", () => {
+    useUiStore.setState({ viewedLineageIsSystemGenerated: true });
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.SESSION_RESTORED, {
+        fileName: "new-workflow.ctrlyoke.yaml",
+        workflowName: "New Workflow",
+        steps: [],
+        results: [],
+        executionState: EXECUTION_STATES.IDLE,
+        currentIndex: 0,
+        workflowProperties: {},
+      });
+    });
+
+    expect(useUiStore.getState().viewedLineageIsSystemGenerated).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

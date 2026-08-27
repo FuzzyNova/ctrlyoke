@@ -364,6 +364,10 @@ function applyWorkflowChange(options?: {
       appliedViewAddress: null,
       displayedDefinitionRevision: null,
       displayedDescriptorRevision: null,
+      // FILE_SELECTED/SESSION_RESTORED describe a normal live workflow and do
+      // not carry addressed-lineage metadata. Do not let the system-generated
+      // read-only state from the previously viewed run leak into a new workflow.
+      viewedLineageIsSystemGenerated: false,
     });
   }
   useUiStore.getState().setFinalStepFooterExpanded(false);
@@ -1902,6 +1906,9 @@ export function createMessageHandlers(
 
     settingsStore.setWorkflowLoaded(false);
     settingsStore.clearWorkflowProperties();
+    // No addressed lineage remains after unload. Clear metadata owned by the
+    // previously viewed run so a later workflow cannot inherit its lockdown.
+    useUiStore.setState({ viewedLineageIsSystemGenerated: false });
     workflowStore.syncIncomingWorkflowProperties({});
     workflowStore.resetWorkflow();
     editorStore.setHasActiveQueue(false);
