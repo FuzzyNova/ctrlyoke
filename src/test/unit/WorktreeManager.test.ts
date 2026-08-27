@@ -1989,6 +1989,87 @@ suite("WorktreeManager", function () {
     assert.strictEqual((await managedRecordFiles(repository)).length, 0);
   });
 
+  test("re-verifies branch state on every load instead of trusting an already-reconciled directoryState, and lets cleanup-branch settle a branch deleted outside ctrlyoke", async () => {
+    const { parent, repository } = await makeRepository(
+      "management-tombstone-late-branch-delete"
+    );
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await info.lease.release();
+
+    // The worktree directory and Git's admin entry disappear first, while the
+    // branch itself is still present — this reconciles `directoryState` to
+    // "removed" but leaves `branchState: "present"`, exactly like the
+    // dashboard card the bug report described.
+    await fs.rm(info.worktreePath, { recursive: true, force: true });
+    execFileSync("git", ["-C", repository, "worktree", "prune"], {
+      stdio: "ignore",
+    });
+    const firstLoad = await instance.getManagementState(repository);
+    const firstEntry = firstLoad.entries.find(
+      (entry) => entry.branchName === info.branchName
+    );
+    assert.ok(firstEntry, "the worktree-only reconciliation stays visible");
+    assert.strictEqual(firstEntry?.directoryState, "removed");
+    assert.strictEqual(firstEntry?.branchState, "present");
+
+    // Only afterward does the branch itself disappear — e.g. deleted by hand,
+    // or by a `cleanup-branch` attempt that succeeded in Git but failed
+    // before its record write landed.
+    execFileSync("git", ["-C", repository, "branch", "-D", info.branchName], {
+      stdio: "ignore",
+    });
+
+    // A plain refresh must catch the now-deleted branch and drop the
+    // tombstone, even though `directoryState` was already "removed" —
+    // it must never keep serving a cached, stale "present" branchState.
+    const secondLoad = await instance.getManagementState(repository);
+    assert.strictEqual(
+      secondLoad.entries.some((entry) => entry.branchName === info.branchName),
+      false
+    );
+    assert.strictEqual((await managedRecordFiles(repository)).length, 0);
+  });
+
+  test("cleanup-branch settles instead of throwing when the branch is already gone", async () => {
+    const { parent, repository } = await makeRepository(
+      "management-cleanup-already-deleted"
+    );
+    const instance = manager(parent);
+    const info = await ensureManaged(instance, repository);
+    await info.lease.release();
+
+    await fs.rm(info.worktreePath, { recursive: true, force: true });
+    execFileSync("git", ["-C", repository, "worktree", "prune"], {
+      stdio: "ignore",
+    });
+    // Reconcile the directory first so the record's directoryState is
+    // already "removed" before the branch disappears — matching the
+    // sequence from the bug report — then delete the branch out from under
+    // the still-cached record.
+    await instance.getManagementState(repository);
+    execFileSync("git", ["-C", repository, "branch", "-D", info.branchName], {
+      stdio: "ignore",
+    });
+
+    // Retrying "Delete branch" on an already-gone branch must settle
+    // cleanly instead of repeating the raw `git rev-parse` failure forever.
+    await assert.doesNotReject(
+      instance.applyManagementAction({
+        sourceCheckoutRoot: repository,
+        action: WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH,
+        branchName: info.branchName,
+        confirmed: true,
+      })
+    );
+
+    const state = await instance.getManagementState(repository);
+    assert.strictEqual(
+      state.entries.some((entry) => entry.branchName === info.branchName),
+      false
+    );
+  });
+
   test("syncs a named worktree with the source checkout in both directions", async () => {
     const { parent, repository } = await makeRepository("sync-basic");
     const instance = manager(parent);

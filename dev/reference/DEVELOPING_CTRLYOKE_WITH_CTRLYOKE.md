@@ -67,24 +67,51 @@ other over the same `.ctrlyoke` state.
 
 ## Getting TRACE-level logs out of a production install
 
-`Log.initialize()` (`src/utils/Log.ts:49-94`) branches on `IS_DEV_MODE`:
+`Log.initialize()` (`src/utils/Log.ts:63-117`) branches on `IS_DEV_MODE`:
 
 - **Dev builds always force `LogLevel.TRACE`** and unconditionally open a log
-  file (`Log.ts:58-61`) — this is why the debug host "just works" for
+  file (`Log.ts:77-80`) — this is why the debug host "just works" for
   diagnostics today.
-- **Production builds read VS Code's own log level**
-  (`Log.fromVSCodeLogLevel(vscode.env.logLevel)`, `Log.ts:63-64`, live-updated
-  via `vscode.env.onDidChangeLogLevel`), and only write a log **file** when
-  `ctrlyoke.enableDiagnosticLogs` is `true` (`Log.ts:71-90`; schema at
-  `schemas/settings-schema.json:916-919`).
+- **Production builds read the ctrlyoke output channel's own log level**
+  (`Log.fromVSCodeLogLevel(this.outputChannel.logLevel)`, `Log.ts:87`,
+  live-updated via `this.outputChannel.onDidChangeLogLevel`, `Log.ts:88-92`)
+  — deliberately *not* `vscode.env.logLevel`, which only reflects VS Code's
+  global default and would silently ignore a ctrlyoke-specific override.
+  File writes are separately gated by `ctrlyoke.enableDiagnosticLogs`
+  (`Log.ts:95-113`; schema at `schemas/settings-schema.json:916-919`).
 
 To get dev-parity trace file logging out of the production install, set
 **both**:
 
 1. Command Palette → **"Developer: Set Log Level..."** → pick the ctrlyoke
-   extension specifically (not the global default) → **Trace**. VS Code
-   persists this per-extension choice across restarts, so it's a one-time
-   setup step, not a per-session toggle.
+   extension specifically (not the global default) → **Trace**.
+
+   **This does not reliably persist across restarts on current VS Code
+   Stable (confirmed Aug 2026).** There's an open upstream race condition
+   where a `LogOutputChannel`'s `logLevel` can reset to `Info` at startup
+   before the persisted per-extension override is reapplied
+   ([microsoft/vscode#232862](https://github.com/microsoft/vscode/issues/232862),
+   fixed by #284488 but not yet in Stable) — in practice this can mean the
+   Trace choice doesn't stick at all, forcing you to re-pick it every
+   session. **This is not a ctrlyoke bug**: `Log.ts` already reads the
+   correct per-extension-aware value (see above); the state that isn't
+   surviving belongs to VS Code itself, and there is no `.vscode/settings.json`
+   (or any settings.json) equivalent to set instead — this preference isn't
+   a regular configuration key at all.
+
+   **Reliable, restart-proof alternative**: Command Palette →
+   **"Preferences: Configure Runtime Arguments"** (opens your user-level
+   `argv.json`) and add:
+   ```jsonc
+   {
+     "log-level": "fuzzynova.ctrlyoke:trace"
+   }
+   ```
+   VS Code re-applies this as `--log fuzzynova.ctrlyoke:trace` on every
+   launch — its own CLI syntax for a per-extension level,
+   `${publisher}.${name}:${logLevel}` — so it's immune to the session-state
+   bug above. Requires a full VS Code restart to take effect, like any
+   `argv.json` change, but from then on it's a genuine one-time setup step.
 2. `"ctrlyoke.enableDiagnosticLogs": true` — put this in your **user**
    settings (`~/.ctrlyoke/settings.json` via ctrlyoke's own settings UI, or
    wherever you keep user-scope ctrlyoke settings) so it applies globally
@@ -357,8 +384,10 @@ scope.
 
 - [ ] Daily driver: `npm run package`, install the `.vsix`, keep it open on
       the repo in your normal VS Code window.
-- [ ] Set VS Code's per-extension log level for ctrlyoke to **Trace**
-      (persists across restarts).
+- [ ] Set ctrlyoke's log level to **Trace** via `argv.json`'s `log-level` key
+      (`"fuzzynova.ctrlyoke:trace"`) rather than "Developer: Set Log
+      Level..." — the latter doesn't reliably survive restarts on current
+      VS Code Stable; see "Getting TRACE-level logs" above.
 - [ ] Set `"ctrlyoke.enableDiagnosticLogs": true` in **user**-scope settings.
 - [ ] Optionally add `"env": { "CTRLYOKE_HOME": "<some local, gitignored path>" }`
       to the `extensionHost` launch configs when separate user-scoped state is

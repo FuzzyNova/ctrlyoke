@@ -1939,14 +1939,11 @@ export class WorktreeManager {
       // lock left remove-behind files). Reconcile unconditionally on every
       // load/refresh so users never have to click a button just to make a
       // ghost entry disappear.
-      const record =
-        staleRecord.directoryState === "removed"
-          ? staleRecord
-          : await this.markRecordDirectoryReconciled(
-              sourceRoot,
-              commonDirectory,
-              staleRecord
-            );
+      const record = await this.markRecordDirectoryReconciled(
+        sourceRoot,
+        commonDirectory,
+        staleRecord
+      );
       if (record.branchState !== "present") {
         // Both resources this record tracked are gone; drop the tombstone so
         // it stops appearing forever. Best-effort — a failure just leaves it
@@ -2142,10 +2139,21 @@ export class WorktreeManager {
         if (runnerStatus !== LOCK_STATUS.NONE) {
           throw new Error("The managed run is still live or recoverable.");
         }
-        const currentTip = await resolveCommit(
+        const currentTip = await this.tryResolveLocalBranch(
           sourceRoot,
-          `refs/heads/${record.branchName}`
+          record.branchName
         );
+        if (!currentTip) {
+          // Branch is already gone — deleted outside ctrlyoke, or a prior
+          // cleanup attempt that deleted it on the Git side but failed
+          // before the record could be written. Nothing left to delete;
+          // reconcile the tombstone so it stops appearing.
+          await this.writeRecord(
+            this.recordPath(commonDirectory, record.branchName),
+            { ...record, branchState: WORKTREE_BRANCH_STATES.DELETED }
+          );
+          return;
+        }
         if (currentTip !== record.lastVerifiedBranchTip) {
           throw new Error(
             "The branch tip changed outside ctrlyoke; refusing cleanup."
@@ -2193,11 +2201,25 @@ export class WorktreeManager {
       sourceRoot,
       record.branchName
     );
+    const branchState: ManagedWorktreeOwnershipRecord["branchState"] =
+      survivingBranchTip ? "present" : "missing";
+    if (
+      record.directoryState === "removed" &&
+      record.branchState === branchState
+    ) {
+      // Already reconciled and nothing changed since — skip the redundant
+      // write. Branch state is still re-checked above on every call so a
+      // branch deleted after the worktree was reconciled (outside ctrlyoke,
+      // or by a cleanup action that succeeded on Git but didn't persist)
+      // is caught on the next refresh instead of leaving a stale "present"
+      // tombstone that can never be swept up.
+      return record;
+    }
     const updated: ManagedWorktreeOwnershipRecord = {
       ...record,
       lifecycleState: "settled",
       directoryState: "removed",
-      branchState: survivingBranchTip ? "present" : "missing",
+      branchState,
     };
     await this.writeRecord(
       this.recordPath(commonDirectory, record.branchName),
