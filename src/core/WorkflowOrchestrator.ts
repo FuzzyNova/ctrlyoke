@@ -1258,12 +1258,16 @@ export class WorkflowOrchestrator {
     Log.info(
       `[WorkflowOrchestrator] ensureCliWatchSession: registering external watch session for "${workflowId}" (lock was ${lockStatus} but watcher hadn't fired yet)`
     );
-    await this.startCliWatchSession(
+    // startCliWatchSession can decline to register (e.g. the lock belongs to
+    // this process's own in-flight WorkflowInstance) — propagate that instead
+    // of unconditionally reporting success, so callers that branch on this
+    // return value don't treat an unregistered workflowKey as a valid
+    // cliSessions lookup key. See loadWorkflowForClient.
+    return await this.startCliWatchSession(
       workingFilePath,
       workspaceFolderPath,
       managedBy
     );
-    return true;
   }
 
   /**
@@ -6055,14 +6059,14 @@ export class WorkflowOrchestrator {
     workingFilePath: string,
     workspaceFolderPath: string,
     managedBy: RunnerId
-  ): Promise<void> {
+  ): Promise<boolean> {
     const address =
       WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
     if (!address?.runRef) {
       Log.warn(
         `[WorkflowOrchestrator] startCliWatchSession: "${workingFilePath}" is not a promoted run file — skipping`
       );
-      return;
+      return false;
     }
     const { workflowKey, runRef } = address;
     const workflowId = workflowKey;
@@ -6092,7 +6096,7 @@ export class WorkflowOrchestrator {
         Log.info(
           `[WorkflowOrchestrator] startCliWatchSession: "${workflowId}" is already owned by this process's in-flight WorkflowInstance inst:${instanceId.slice(0, 8)} (executionState=${localSummary.executionState}) — skipping external watch session instead of retiring it`
         );
-        return;
+        return false;
       }
       Log.info(
         `[WorkflowOrchestrator] startCliWatchSession: retiring conflicting WorkflowInstance inst:${instanceId.slice(0, 8)} for "${workflowId}"`
@@ -6121,7 +6125,7 @@ export class WorkflowOrchestrator {
         `[WorkflowOrchestrator] startCliWatchSession: failed to read working file "${path.basename(workingFilePath)}":`,
         err
       );
-      return;
+      return false;
     }
 
     const currentIndex = workingFile._runtime?.currentIndex ?? 0;
@@ -6208,6 +6212,7 @@ export class WorkflowOrchestrator {
     Log.info(
       `[WorkflowOrchestrator] CLI watch session started for "${workflowId}"`
     );
+    return true;
   }
 
   /**
