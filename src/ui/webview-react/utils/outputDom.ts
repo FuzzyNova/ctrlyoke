@@ -230,6 +230,8 @@ export function revealActiveFindMatchInRow(
   const containerRect = scrollElement.getBoundingClientRect();
   const rowRect = rowElement.getBoundingClientRect();
   const markRect = activeMark.getBoundingClientRect();
+  const rowViewportOffsetBeforeScroll = rowRect.top - containerRect.top;
+  const scrollTopBeforeReveal = scrollElement.scrollTop;
   const markFullyVisible =
     markRect.top >= containerRect.top &&
     markRect.bottom <= containerRect.bottom;
@@ -249,11 +251,18 @@ export function revealActiveFindMatchInRow(
     );
   }
 
+  // The persistent scroll target must describe where the row sits *after* the
+  // match reveal. getBoundingClientRect() above was captured before the
+  // scrollTop write, so keeping that stale offset lets the anchor lock undo the
+  // match-specific scroll on its next layout pass. Derive the landed offset
+  // from the actual (possibly clamped) scroll delta instead.
+  const appliedScrollDelta = scrollElement.scrollTop - scrollTopBeforeReveal;
+
   return {
     adjusted: !markFullyVisible,
     foundMark: true,
     foundRow: true,
     rowKey: rowElement.dataset.rowKey ?? null,
-    rowViewportOffsetPx: rowRect.top - containerRect.top,
+    rowViewportOffsetPx: rowViewportOffsetBeforeScroll - appliedScrollDelta,
   };
 }

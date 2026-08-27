@@ -135,7 +135,7 @@ describe("useOutputNavigation", () => {
       {
         kind: "row",
         rowKey: "row-1",
-        viewportOffsetPx: 0,
+        viewportOffsetPx: -1710,
       },
       "navigation-find-match"
     );

@@ -60,9 +60,81 @@ describe("revealActiveFindMatchInRow", () => {
       foundMark: true,
       foundRow: true,
       rowKey: "row-1",
-      rowViewportOffsetPx: 0,
+      rowViewportOffsetPx: -1710,
     });
     expect(scrollTop).toBe(1710);
+  });
+
+  it("returns distinct landed anchors for matches in the same tall row", () => {
+    const scrollElement = document.createElement("div");
+    const rowElement = document.createElement("div");
+    const firstMark = document.createElement("mark");
+    const secondMark = document.createElement("mark");
+
+    rowElement.dataset.rowKey = "row-1";
+    rowElement.dataset.index = "0";
+    firstMark.setAttribute("data-find-active", "true");
+    rowElement.append(firstMark, secondMark);
+    scrollElement.appendChild(rowElement);
+    document.body.appendChild(scrollElement);
+
+    Object.defineProperty(scrollElement, "clientHeight", {
+      configurable: true,
+      value: 200,
+    });
+    Object.defineProperty(scrollElement, "scrollHeight", {
+      configurable: true,
+      value: 4000,
+    });
+    let scrollTop = 0;
+    Object.defineProperty(scrollElement, "scrollTop", {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value: number) => {
+        scrollTop = value;
+      },
+    });
+
+    scrollElement.getBoundingClientRect = () =>
+      ({ top: 0, bottom: 200, height: 200 }) as DOMRect;
+    rowElement.getBoundingClientRect = () =>
+      ({
+        top: -scrollTop,
+        bottom: 2000 - scrollTop,
+        height: 2000,
+      }) as DOMRect;
+    firstMark.getBoundingClientRect = () =>
+      ({
+        top: 300 - scrollTop,
+        bottom: 320 - scrollTop,
+        height: 20,
+      }) as DOMRect;
+    secondMark.getBoundingClientRect = () =>
+      ({
+        top: 1800 - scrollTop,
+        bottom: 1820 - scrollTop,
+        height: 20,
+      }) as DOMRect;
+
+    const firstResult = revealActiveFindMatchInRow(scrollElement, 0);
+    expect(scrollTop).toBe(210);
+    expect(firstResult.rowViewportOffsetPx).toBe(-210);
+
+    firstMark.removeAttribute("data-find-active");
+    secondMark.setAttribute("data-find-active", "true");
+
+    const secondResult = revealActiveFindMatchInRow(scrollElement, 0);
+    expect(scrollTop).toBe(1710);
+    expect(secondResult.rowViewportOffsetPx).toBe(-1710);
+
+    // Re-applying either landed anchor at its matching scroll position is a
+    // no-op. This is the contract consumed by useOutputScrollTarget.
+    expect(
+      scrollTop +
+        (rowElement.getBoundingClientRect().top -
+          scrollElement.getBoundingClientRect().top) -
+        secondResult.rowViewportOffsetPx!
+    ).toBe(scrollTop);
   });
 
   it("returns without scrolling when the active match is already visible", () => {
