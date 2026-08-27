@@ -43,6 +43,7 @@ import {
   EXECUTION_MODES,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
+  type ExecutionState,
   type StepStatus,
 } from "../../types/messages";
 import { sendMessage } from "../../hooks/useMessageHandler";
@@ -106,6 +107,7 @@ type WorkflowStepRowProps = {
   index: number;
   slotNumber: number;
   currentStep: number;
+  executionState: ExecutionState;
   status: StepStatus;
   retryState?: WorkflowStepComponentProps["retryState"];
   latestOutput?: WorkflowStepComponentProps["latestOutput"];
@@ -144,6 +146,7 @@ const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
     index,
     slotNumber,
     currentStep,
+    executionState,
     status,
     retryState,
     latestOutput,
@@ -170,7 +173,17 @@ const WorkflowStepRow = React.memo<WorkflowStepRowProps>(
     if (latestOutput?.elapsed) {
       details.duration = latestOutput.elapsed;
     }
-    if (status === STEP_STATUS.FAILED && index < currentStep) {
+    // A failed step is one position behind currentStep after it has been
+    // finalized. That alone does not mean the workflow continued: a stop-on-
+    // error failure also advances currentStep past the failed step so the
+    // terminal state can be persisted. Only describe continuation for that
+    // adjacent case when execution is still progressing (or when a later step
+    // has already been passed).
+    const workflowContinuedAfterFailure =
+      status === STEP_STATUS.FAILED &&
+      index < currentStep &&
+      (executionState !== EXECUTION_STATES.ERROR || index < currentStep - 1);
+    if (workflowContinuedAfterFailure) {
       const failureMessage = !isScriptStep(step)
         ? step._runtime?.failureMessage
         : undefined;
@@ -1079,6 +1092,7 @@ const WorkflowStepsPanelInner: React.FC<{
                         index={index}
                         slotNumber={slotNumber}
                         currentStep={currentStep}
+                        executionState={executionState}
                         status={status}
                         retryState={retryState}
                         latestOutput={latestOutput}
@@ -1148,6 +1162,7 @@ const WorkflowStepsPanelInner: React.FC<{
                       step={step}
                       index={index}
                       currentStep={currentStep}
+                      executionState={executionState}
                       status={status}
                       retryState={retryState}
                       latestOutput={latestOutput}

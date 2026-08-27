@@ -432,6 +432,57 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     ).toBeInTheDocument();
   });
 
+  it("does not show a continuation message when an error stops on the last step", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [
+        {
+          prompt: "Failed final step",
+          _runtime: { failureMessage: "Rate limited by harness" },
+        } as any,
+      ],
+      executionState: EXECUTION_STATES.ERROR,
+      currentStep: 1,
+      results: [{ status: STEP_STATUS.FAILED }],
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    expect(
+      screen.queryByText(/Workflow continued after failure/)
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Workflow continued after this step failed/)
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not show a continuation message when an error stops before the next step", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [
+        {
+          prompt: "Failed step",
+          _runtime: { failureMessage: "Rate limited by harness" },
+        } as any,
+        { prompt: "Pending step" },
+      ],
+      executionState: EXECUTION_STATES.ERROR,
+      currentStep: 1,
+      results: [{ status: STEP_STATUS.FAILED }],
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    expect(
+      screen.queryByText(/Workflow continued after failure/)
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Workflow continued after this step failed/)
+    ).not.toBeInTheDocument();
+  });
+
   it("lets not-yet-run steps be dragged during a run while pinning the running and completed steps", () => {
     resetStores();
     useWorkflowStore.getState().loadWorkflow({
