@@ -27,7 +27,12 @@ import { useTerminalStore } from "@store/terminalStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useCompatibilityStore } from "@store/compatibilityStore";
+import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { EXECUTION_STATES, FINAL_STEP_PHASES } from "@/types/messages";
+import {
+  PREVIEW_SCOPES,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 import {
   OutputUndoDialogs,
   type WorkflowDialogState,
@@ -118,6 +123,7 @@ function resetStores(): void {
   useSettingsStore.getState().resetSettings();
   useUiStore.getState().resetUi();
   useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
+  useExecutionPreviewStore.getState().reset();
 }
 
 /** Reports the crash and its component stack as the assertion's own message. */
@@ -205,9 +211,32 @@ describe("dashboard mount smoke", () => {
     mountDashboard("settings drawer mount");
   });
 
-  it("mounts the workflow portability report surface", () => {
-    useUiStore.setState({ workflowPortabilityReportOpen: true });
-    mountDashboard("workflow portability report mount");
+  it("mounts the dry run overview with its portability report section", () => {
+    seedDisplayedRun();
+    useExecutionPreviewStore.setState({
+      preview: {
+        workflow: {
+          name: "Smoke workflow",
+          stepCount: 0,
+          harnessIds: [],
+          totalByteCount: 0,
+          totalTokenEstimate: 0,
+          workspaceMutationCount: 0,
+        },
+        steps: [],
+        diagnostics: [],
+      },
+      status: "ready",
+      scope: { kind: PREVIEW_SCOPES.WORKFLOW },
+      displayedDefinitionRevision: 1,
+      displayedAddress: {
+        workflowKey: "workflow-smoke" as never,
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.DRAFT,
+      },
+      isStale: false,
+    });
+
+    mountDashboard("dry run portability report mount");
     expect(useCompatibilityStore.getState().capabilitySnapshotStatus).toBe(
       "checking"
     );

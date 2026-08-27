@@ -1,6 +1,4 @@
-import React, { useEffect, useState } from "react";
-import { useCompatibilityDiagnostics } from "@hooks/useCompatibilityDiagnostics";
-import { useUiStore } from "@store/uiStore";
+import React, { useState } from "react";
 import {
   CAPABILITY_FIDELITIES,
   CAPABILITY_VERIFICATION_STATUSES,
@@ -19,7 +17,6 @@ import {
 } from "@root/types/PortabilityReport";
 import { formatCompatibilitySource } from "@utils/compatibilityDiagnostics";
 import { HarnessIcon } from "./HarnessIcon";
-import { Modal } from "./Modal";
 
 const STATUS_META: Record<
   PortabilityRowStatus,
@@ -170,12 +167,12 @@ function ReportDetails({
       className="mt-4 border-t border-panel-border pt-4"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3
+        <h4
           id="workflow-portability-details-title"
           className="text-sm font-semibold"
         >
           {harnessLabel(row.harnessId)} details
-        </h3>
+        </h4>
         <span className="text-xxs text-description-fg" aria-live="polite">
           {findingCount} {findingCount === 1 ? "finding" : "findings"}
         </span>
@@ -320,69 +317,49 @@ function ReportBody({
   );
 }
 
-export const WorkflowPortabilityReportModal: React.FC = () => {
-  const isOpen = useUiStore((state) => state.workflowPortabilityReportOpen);
-  const setOpen = useUiStore((state) => state.setWorkflowPortabilityReportOpen);
-  const compatibility = useCompatibilityDiagnostics({
-    includePortabilityReport: true,
-  });
-  const [reportSnapshot, setReportSnapshot] =
-    useState<PortabilityReport | null>(null);
+export interface PortabilityReportSectionProps {
+  report: PortabilityReport | null;
+  isChecking: boolean;
+}
+
+/** Renders the installed-harness portability comparison as a Dry Run overview
+ * section. `report` is only null while `isChecking` is true — the caller is
+ * expected to keep `includePortabilityReport` enabled whenever this section
+ * is mounted. */
+export const PortabilityReportSection: React.FC<
+  PortabilityReportSectionProps
+> = ({ report, isChecking }) => {
   const [selectedHarnessId, setSelectedHarnessId] = useState<HarnessId | null>(
     null
   );
 
-  // The report is a snapshot: once the capability snapshot is ready while the
-  // modal is open, authored edits do not silently mix with the displayed rows.
-  useEffect(() => {
-    if (!isOpen) {
-      setReportSnapshot(null);
-      setSelectedHarnessId(null);
-      return;
-    }
-    if (!reportSnapshot && compatibility.portabilityReport) {
-      setReportSnapshot(compatibility.portabilityReport);
-    }
-  }, [compatibility.portabilityReport, isOpen, reportSnapshot]);
-
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={() => setOpen(false)}
-      title="Workflow portability report"
-      headerSubtitle="Snapshot of the authored workflow against installed harnesses"
-      size="xl"
-      bodyClassName="px-3 py-3 sm:px-6 sm:py-4"
-      restoreFocusOnClose
-    >
-      <div aria-live="polite">
-        {compatibility.isChecking ? (
-          <p
-            className="flex items-center gap-2 text-sm text-description-fg"
-            role="status"
-          >
-            <i
-              className="codicon codicon-loading codicon-modifier-spin"
-              aria-hidden="true"
-            />
-            Checking installed harness capabilities…
-          </p>
-        ) : reportSnapshot ? (
-          <ReportBody
-            report={reportSnapshot}
-            onSelect={(harnessId) =>
-              setSelectedHarnessId((current) =>
-                current === harnessId ? null : harnessId
-              )
-            }
-            selectedHarnessId={selectedHarnessId}
+    <section aria-live="polite">
+      <h3 className="mb-3 text-sm font-semibold text-foreground">
+        Portability report
+      </h3>
+      {isChecking || !report ? (
+        <p
+          className="flex items-center gap-2 text-sm text-description-fg"
+          role="status"
+        >
+          <i
+            className="codicon codicon-loading codicon-modifier-spin"
+            aria-hidden="true"
           />
-        ) : (
-          <p className="text-sm text-description-fg" role="status">
-            Preparing the portability report…
-          </p>
-        )}
-      </div>
-    </Modal>
+          Checking installed harness capabilities…
+        </p>
+      ) : (
+        <ReportBody
+          report={report}
+          onSelect={(harnessId) =>
+            setSelectedHarnessId((current) =>
+              current === harnessId ? null : harnessId
+            )
+          }
+          selectedHarnessId={selectedHarnessId}
+        />
+      )}
+    </section>
   );
 };

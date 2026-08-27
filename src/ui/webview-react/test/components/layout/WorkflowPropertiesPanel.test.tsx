@@ -62,16 +62,6 @@ describe("WorkflowPropertiesPanel permissions", () => {
 
   afterEach(cleanup);
 
-  it("exposes the workflow portability report entry point", () => {
-    render(<WorkflowPropertiesPanel />);
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Review workflow portability" })
-    );
-
-    expect(useUiStore.getState().workflowPortabilityReportOpen).toBe(true);
-  });
-
   it("shows the global permission mode when a new workflow has no override", () => {
     useSettingsStore.getState().updateGlobalSetting("toolPermissions", {
       mode: PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,

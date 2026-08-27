@@ -220,7 +220,6 @@ const WorkflowPropertiesPanelInner: React.FC<{
     unhideDropdownOption,
     loadedWorkflows,
     activeWorkflowId,
-    setWorkflowPortabilityReportOpen,
   } = useUiStore();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
@@ -1379,18 +1378,6 @@ const WorkflowPropertiesPanelInner: React.FC<{
             aria-label="Reset all to defaults"
           >
             <i className="codicon codicon-debug-restart text-xs" />
-          </button>
-          <button
-            type="button"
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-60 transition-all hover:bg-toolbar-hover-bg hover:opacity-100"
-            onClick={(e) => {
-              e.stopPropagation();
-              setWorkflowPortabilityReportOpen(true);
-            }}
-            title="Review workflow portability"
-            aria-label="Review workflow portability"
-          >
-            <i className="codicon codicon-inspect text-xs" />
           </button>
         </div>
         {onRequestClose && (

@@ -32,6 +32,7 @@ import type {
   WorktreeExecutionPreview,
 } from "@root/types/ExecutionPreviewTypes";
 import type { ExecutionPreviewScope } from "@root/types/WebviewMessageTypes";
+import type { PortabilityReport } from "@root/types/PortabilityReport";
 import {
   COMMAND_DISPLAY_SHELL_LABELS,
   renderCommandForDisplay,
@@ -40,6 +41,7 @@ import {
 import { sendMessage } from "@hooks/useMessageHandler";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
+import { useCompatibilityDiagnostics } from "@hooks/useCompatibilityDiagnostics";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
 import { getExecutionPreviewEditorSnapshot } from "@utils/executionPreview";
 import { downloadTextFile } from "@utils/diff";
@@ -58,6 +60,7 @@ import { formatMagnitude } from "@utils/number";
 import { CustomSelect, type SelectOption } from "./CustomSelect";
 import { HarnessIcon } from "./HarnessIcon";
 import { Modal } from "./Modal";
+import { PortabilityReportSection } from "./PortabilityReportSection";
 import { SegmentedTabBar, type SegmentedTab } from "./SegmentedTabBar";
 import { getPermissionModeBadge, type TabIconOverride } from "./tabBadgeUtils";
 
@@ -533,9 +536,13 @@ function StepTimelineHeading({
 function OverviewPanel({
   preview,
   onNavigateToStepTab,
+  portabilityReport,
+  portabilityReportChecking,
 }: {
   preview: WorkflowExecutionPreview;
   onNavigateToStepTab: (stepIndex: number, tab: DryRunTab) => void;
+  portabilityReport: PortabilityReport | null;
+  portabilityReportChecking: boolean;
 }): React.ReactElement {
   const mutations = preview.steps.flatMap((step) => step.workspaceMutations);
   const stepsWithTimeline = preview.steps
@@ -600,6 +607,11 @@ function OverviewPanel({
           ))}
         </div>
       </section>
+
+      <PortabilityReportSection
+        report={portabilityReport}
+        isChecking={portabilityReportChecking}
+      />
     </div>
   );
 }
@@ -1247,6 +1259,9 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
   const copyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scopeStepIndex =
     scope.kind === PREVIEW_SCOPES.STEP ? scope.stepIndex : null;
+  const compatibility = useCompatibilityDiagnostics({
+    includePortabilityReport: scope.kind === PREVIEW_SCOPES.WORKFLOW,
+  });
 
   useEffect(() => {
     setSelection(scopeStepIndex ?? "overview");
@@ -1457,6 +1472,8 @@ export const DryRunModal: React.FC<DryRunModalProps> = ({
                 <OverviewPanel
                   preview={preview}
                   onNavigateToStepTab={handleOverviewTimelineNavigation}
+                  portabilityReport={compatibility.portabilityReport}
+                  portabilityReportChecking={compatibility.isChecking}
                 />
               </div>
             ) : activeStep ? (

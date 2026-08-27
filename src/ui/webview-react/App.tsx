@@ -1,10 +1,5 @@
 import { KEYBOARD_KEYS } from "@root/types/DashboardConstants";
-import {
-  type CSSProperties,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import {
   useMessageHandler,
@@ -14,7 +9,11 @@ import { useUndoRedoKeyHandler } from "@hooks/useUndoRedoKeyHandler";
 import { useNewWorkflowKeyHandler } from "@hooks/useNewWorkflowKeyHandler";
 import { useRunViewLoadWatchdog } from "@hooks/useRunViewLoadWatchdog";
 import { useDuplicateWorkflowWatchdog } from "@hooks/useDuplicateWorkflowWatchdog";
-import { useVsCodeApi, isStandalone, panelPageLoadId } from "@hooks/useVsCodeApi";
+import {
+  useVsCodeApi,
+  isStandalone,
+  panelPageLoadId,
+} from "@hooks/useVsCodeApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useDesktopLayout } from "@hooks/useDesktopLayout";
 import { useMobileLayout } from "@hooks/useMobileLayout";
@@ -53,7 +52,6 @@ import {
 } from "./components/layout";
 import { WorkspaceViewerModal } from "./components/workspace-viewer/WorkspaceViewerModal";
 import { ContentPreviewModal } from "./components/shared/ContentPreviewModal";
-import { WorkflowPortabilityReportModal } from "./components/shared/WorkflowPortabilityReportModal";
 import { UxSnapshotButton } from "./components/dev/UxSnapshotButton";
 import { useNavigationSync } from "./navigation/useNavigationSync";
 import { getReadyPreferredViewAddress } from "./navigation/readyRoute";
@@ -942,9 +940,6 @@ function App() {
         {/* Content preview modal — git diff / prior-context XML */}
         <ContentPreviewModal />
 
-        {/* Workflow portability report — shared by VS Code and hosted clients */}
-        <WorkflowPortabilityReportModal />
-
         {/* Dev-only floating UX snapshot capture button */}
         <UxSnapshotButton />
 
@@ -1195,9 +1190,6 @@ function App() {
 
       {/* Content preview modal — git diff / prior-context XML */}
       <ContentPreviewModal />
-
-      {/* Workflow portability report — shared by VS Code and hosted clients */}
-      <WorkflowPortabilityReportModal />
 
       {/* Dev-only floating UX snapshot capture button */}
       <UxSnapshotButton />
