@@ -823,8 +823,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * **Fast Path (Session ID provided):**
    * 1. Find Claude project directory for current workspace
    * 2. Construct log file path: `<projectDir>/<sessionId>.jsonl`
-   * 3. Verify file exists and was modified after startTime
-   * 4. Return file path if valid
+   * 3. If absent, probe the same session filename in every Claude project
+   *    directory (the session may have originated in another worktree)
+   * 4. Verify the discovered file was modified after startTime
+   * 5. Return file path if valid
    *
    * **Fallback (No Session ID):**
    * 1. Find Claude project directory for current workspace
@@ -839,7 +841,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * - Full: `~/.claude/projects/dev_ctrlyoke/`
    *
    * **Matching Strategy:**
-   * - Session ID: Direct file lookup (much faster)
+   * - Session ID: Direct current-project lookup, then exact filename lookup
+   *   across workspace-scoped project directories
    * - Prompt text: Compares first 100 chars, case-sensitive exact match
    *
    * @example
@@ -877,9 +880,14 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         `[ClaudeLogParser] Searching for session logs in: ${projectDir}`
       );
 
-      // FAST PATH: If session ID provided, construct direct file path
+      // FAST PATH: If session ID provided, try the current workspace's project
+      // directory first, then every other workspace-scoped Claude project.
+      // Claude keeps a resumed session in the project directory where it was
+      // created even when the workflow switches execution worktrees.
       if (sessionId) {
-        const logPath = path.join(projectDir, `${sessionId}.jsonl`);
+        const projectsDirectory = path.dirname(projectDir);
+        const expectedLogPath = path.join(projectDir, `${sessionId}.jsonl`);
+        let discoveredLogPath: string | null = null;
 
         // Retry with backoff: Claude writes log file within ~50-100ms of SessionStart hook
         // NOTE: When resuming a session, the log file may have an old mtime initially,
@@ -887,8 +895,18 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         // if Claude is processing the resume request. We retry with longer delays to handle this.
         const result = await retryWithBackoff(
           async () => {
+            const logPath =
+              discoveredLogPath ??
+              (fs.existsSync(expectedLogPath)
+                ? expectedLogPath
+                : this.findSessionLogAcrossProjectDirectories(
+                    projectsDirectory,
+                    [`${sessionId}.jsonl`]
+                  ));
+
             // Verify file exists
-            if (fs.existsSync(logPath)) {
+            if (logPath && fs.existsSync(logPath)) {
+              discoveredLogPath = logPath;
               const stats = fs.statSync(logPath);
               if (stats.mtime >= startTime) {
                 return logPath; // Success - file exists and is recent
@@ -926,7 +944,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           return result;
         } else {
           Log.debug(
-            `[ClaudeLogParser] Session log file not found after retries: ${logPath}`
+            `[ClaudeLogParser] Session log file not found after retries. Expected ${expectedLogPath} or a matching session under ${projectsDirectory}`
           );
         }
       }

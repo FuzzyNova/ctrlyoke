@@ -69,7 +69,9 @@ import { QWEN_EVENT_TYPES } from "./QwenProtocolConstants";
  * event has no `functionCall` parts (pure text/thinking response).
  *
  * **Session Discovery:**
- * - Uses `findModifiedSessionLogs()` to get recently modified files
+ * - Uses an exact cross-project filename lookup when a session ID is known,
+ *   so resumes survive execution-worktree changes
+ * - Otherwise uses `findModifiedSessionLogs()` for the current project
  * - Reads first 10 events from each candidate
  * - Matches prompt text against user event content (first 100 chars)
  * - Returns first matching log file path
@@ -499,28 +501,36 @@ export class QwenLogParser extends BaseLogParser {
       }
 
       const projectDir = this.getQwenProjectDirectory();
-      if (!projectDir) {
-        Log.debug("[QwenLogParser] No Qwen project directory found");
-        return null;
-      }
-
       const chatsDir = path.join(projectDir, "chats");
 
-      if (!fs.existsSync(chatsDir)) {
+      if (!sessionId && !fs.existsSync(chatsDir)) {
         Log.debug("[QwenLogParser] No chats directory found");
         return null;
       }
 
       Log.debug(`[QwenLogParser] Searching for session logs in: ${chatsDir}`);
 
-      // FAST PATH: session ID → direct file lookup with retry
-      // (Qwen writes the log file within ~50-100ms of the hook firing)
+      // FAST PATH: session ID → current project first, then every other
+      // workspace-scoped Qwen project. Resuming after an execution-worktree
+      // switch continues writing to the session's original project directory.
       if (sessionId) {
-        const logPath = path.join(chatsDir, `${sessionId}.jsonl`);
+        const projectsDirectory = path.join(os.homedir(), ".qwen", "projects");
+        const expectedLogPath = path.join(chatsDir, `${sessionId}.jsonl`);
+        let discoveredLogPath: string | null = null;
 
         const result = await retryWithBackoff(
           async () => {
-            if (fs.existsSync(logPath)) {
+            const logPath =
+              discoveredLogPath ??
+              (fs.existsSync(expectedLogPath)
+                ? expectedLogPath
+                : this.findSessionLogAcrossProjectDirectories(
+                    projectsDirectory,
+                    ["chats", `${sessionId}.jsonl`]
+                  ));
+
+            if (logPath && fs.existsSync(logPath)) {
+              discoveredLogPath = logPath;
               const stats = fs.statSync(logPath);
               if (stats.mtime >= startTime) {
                 return logPath;
@@ -554,7 +564,7 @@ export class QwenLogParser extends BaseLogParser {
           return result;
         } else {
           Log.debug(
-            `[QwenLogParser] Session log file not found after retries: ${logPath}`
+            `[QwenLogParser] Session log file not found after retries. Expected ${expectedLogPath} or a matching session under ${projectsDirectory}`
           );
         }
       }
@@ -1070,13 +1080,9 @@ export class QwenLogParser extends BaseLogParser {
    * - Example: `/home/user/dev/ctrlyoke` → `-home-user-dev-ctrlyoke`
    * - Windows: `C:\dev\ctrlyoke` → `c--dev-ctrlyoke`
    */
-  private getQwenProjectDirectory(): string | null {
+  private getQwenProjectDirectory(): string {
     // Use stored workspaceRoot (set by CliIntegration) or fall back to process.cwd()
     const workspacePath = this.workspaceRoot || process.cwd();
-
-    if (!workspacePath) {
-      return null;
-    }
 
     // Sanitize workspace path for Qwen's naming convention.
     // All path separators (/ \ :) become dashes; other non-alphanumeric chars are stripped.
@@ -1093,6 +1099,6 @@ export class QwenLogParser extends BaseLogParser {
       `[QwenLogParser] Project directory: ${projectDir} (from ${workspacePath})`
     );
 
-    return fs.existsSync(projectDir) ? projectDir : null;
+    return projectDir;
   }
 }
