@@ -108,16 +108,14 @@ afterEach(() => {
 });
 
 describe("WorkspaceCommitHistoryPane", () => {
-  it("opens the mobile diff pane when a commit is clicked", () => {
+  it("opens the mobile diff pane without fetching the full diff", () => {
     renderPane();
 
     fireEvent.click(commitRow());
 
     expect(useWorkspaceViewerStore.getState().mobileDiffVisible).toBe(true);
-    expect(workspaceGitRefDiff).toHaveBeenCalledWith(
-      `~${commit.hash}`,
-      undefined
-    );
+    expect(useWorkspaceViewerStore.getState().diffRef).toBe(`~${commit.hash}`);
+    expect(workspaceGitRefDiff).not.toHaveBeenCalled();
   });
 
   it("outlines the commit currently shown in the diff pane", () => {

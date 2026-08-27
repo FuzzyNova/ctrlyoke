@@ -17,7 +17,7 @@ import {
   type DiffPayloadKind,
 } from "@root/types/DashboardConstants";
 import type { ParsedDiffFile } from "@utils/rdvAdapter";
-import { workspaceGitRefDiff, workspaceWorktreeDiff } from "@utils/hostedApi";
+import { workspaceWorktreeDiff } from "@utils/hostedApi";
 import { parseUnifiedDiffToFiles } from "@utils/rdvAdapter";
 
 // ============================================================================
@@ -226,7 +226,7 @@ interface WorkspaceViewerActions {
   setDetached(detached: boolean): void;
 
   // Git-ref diff (browser multi-file pane)
-  openToGitRef(ref: string): Promise<void>;
+  openToGitRef(ref: string): void;
   /** Diff a recorded worktree run's branch against its recorded base commit. */
   openToWorktreeDiff(
     sourceCheckoutRoot: string,
@@ -704,17 +704,12 @@ export const useWorkspaceViewerStore = create<
 
       // --- Git-ref diff (browser multi-file) ---
 
-      async openToGitRef(ref) {
+      openToGitRef(ref) {
         set({
           isOpen: true,
           activeTab: "sourceControl",
           // Clear single-file diff so the pane switches to ref mode
           selectedDiffPath: null,
-          diffNonTextEntries: [],
-          diffFiles: null,
-          diffRefLabel: null,
-          diffRefLoading: true,
-          diffCommitInfo: null,
           diffRef: ref,
           pendingDiff: null,
           pendingFileHistory: null,
@@ -722,29 +717,6 @@ export const useWorkspaceViewerStore = create<
           fileHistoryPath: null,
           fileHistoryRepoId: null,
         });
-        try {
-          const { unifiedDiff, commitInfo, nonTextEntries } =
-            await workspaceGitRefDiff(ref, get().selectedRepoId ?? undefined);
-          const diffFiles = parseUnifiedDiffToFiles(unifiedDiff);
-          const shortRef = ref.startsWith("~") ? ref.slice(1) : ref;
-          const diffRefLabel =
-            ref === "~diff"
-              ? "Working Tree Changes"
-              : ref === "~staged"
-                ? "Staged Changes"
-                : ref.startsWith("~stash:")
-                  ? `Stash #${ref.slice("~stash:".length)}`
-                  : `Commit ${shortRef.slice(0, 7)}`;
-          set({
-            diffFiles,
-            diffNonTextEntries: nonTextEntries ?? [],
-            diffRefLabel,
-            diffRefLoading: false,
-            diffCommitInfo: commitInfo ?? null,
-          });
-        } catch {
-          set({ diffRefLoading: false });
-        }
       },
 
       async openToWorktreeDiff(sourceCheckoutRoot, baseCommit, branchName) {

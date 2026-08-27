@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { VirtualizedPagedListProps } from "@components/shared/VirtualizedPagedList";
 import { DiffRefDiffList } from "@components/diff/DiffRefDiffList";
+import type { DiffFileListCommand } from "@components/diff/DiffFileList";
 import type { WorkspaceGitRefDiffEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import type { PagedGitRefDiffController } from "@hooks/usePagedGitRefDiff";
 
@@ -57,17 +58,23 @@ function textEntry(path: string): WorkspaceGitRefDiffEntry {
 function controller(): PagedGitRefDiffController {
   const loaded = new Map<number, WorkspaceGitRefDiffEntry>([
     [0, textEntry("src/text.ts")],
-    [1, {
-      path: "assets/image.png",
-      changeType: "created",
-      payloadKind: "image",
-      image: { newImageDataUri: "data:image/png;base64,image" },
-    }],
-    [2, {
-      path: "assets/font.bin",
-      changeType: "deleted",
-      payloadKind: "binary",
-    }],
+    [
+      1,
+      {
+        path: "assets/image.png",
+        changeType: "created",
+        payloadKind: "image",
+        image: { newImageDataUri: "data:image/png;base64,image" },
+      },
+    ],
+    [
+      2,
+      {
+        path: "assets/font.bin",
+        changeType: "deleted",
+        payloadKind: "binary",
+      },
+    ],
   ]);
   return {
     ref: "~abcdef0",
@@ -109,9 +116,10 @@ describe("DiffRefDiffList", () => {
   it("uses VirtualizedPagedList and maps text, image, and binary entries directly", () => {
     render(
       <DiffRefDiffList
-        ref="~abcdef0"
+        gitRef="~abcdef0"
         repo="repo-a"
         scrollContainerRef={createRef<HTMLDivElement>()}
+        command={{ version: 0, collapsed: false } satisfies DiffFileListCommand}
         controller={controller()}
       />
     );

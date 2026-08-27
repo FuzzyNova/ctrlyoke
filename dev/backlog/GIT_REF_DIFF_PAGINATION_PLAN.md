@@ -1,6 +1,8 @@
 # Paginate Large Commit/Ref Diffs Plan
 
-**Status:** Proposed
+**Status:** Implemented
+
+Shipped: paged git-ref-diff server/client plumbing is now wired into the live workspace diff pane, with full unified-diff downloads retained.
 **Priority:** P3
 
 Follow-on from

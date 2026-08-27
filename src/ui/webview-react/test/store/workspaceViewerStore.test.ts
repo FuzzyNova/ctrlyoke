@@ -249,6 +249,15 @@ describe("openToDiff", () => {
 });
 
 describe("diffRef tracking", () => {
+  it("opens a git ref without fetching or parsing the full diff", () => {
+    store().openToGitRef("~abc1234567890");
+
+    expect(store().isOpen).toBe(true);
+    expect(store().activeTab).toBe("sourceControl");
+    expect(store().selectedDiffPath).toBeNull();
+    expect(store().diffRef).toBe("~abc1234567890");
+  });
+
   it("selectDiff clears diffRef", () => {
     useWorkspaceViewerStore.setState({ diffRef: "abc123" });
     store().selectDiff("src/file.ts");
