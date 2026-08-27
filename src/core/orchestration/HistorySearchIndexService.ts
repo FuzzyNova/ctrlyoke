@@ -367,6 +367,64 @@ export class HistorySearchIndexService {
       lockTargetPath,
       async () => {
         const builtAt = Date.now();
+        const manifestPath = this.getIndexManifestPath(workspaceFolderPath);
+        let onDiskManifest: HistorySearchIndexManifest | undefined;
+        try {
+          const manifest = JSON.parse(
+            await fs.promises.readFile(manifestPath, "utf8")
+          ) as HistorySearchIndexManifest;
+          if (manifest.schemaVersion !== INDEX_SCHEMA_VERSION) {
+            Log.info(
+              `[HistorySearchIndexService] on-disk index schema mismatch (found ${manifest.schemaVersion}, expected ${INDEX_SCHEMA_VERSION}); will rebuild`
+            );
+          } else {
+            onDiskManifest = manifest;
+          }
+        } catch (error) {
+          const code = (error as NodeJS.ErrnoException).code;
+          if (code !== "ENOENT") {
+            Log.warn(
+              `[HistorySearchIndexService] Failed to load search index: ${getErrorMessage(error)}`
+            );
+          } else {
+            Log.debug(
+              "[HistorySearchIndexService] no on-disk index found; will rebuild"
+            );
+          }
+        }
+
+        if (
+          onDiskManifest &&
+          (await this.isManifestFresh(workspaceFolderPath, onDiskManifest))
+        ) {
+          if (options.retainDocuments) {
+            try {
+              const documents = await this.readDocumentsJsonl(
+                this.getDocumentsPath(workspaceFolderPath)
+              );
+              this.loadedWorkspacePath = workspaceFolderPath;
+              this.loadedManifest = onDiskManifest;
+              this.documents = documents;
+              Log.info(
+                `[HistorySearchIndexService] rebuild skipped: on-disk index already fresh (documents=${documents.length})`
+              );
+              return;
+            } catch (error) {
+              Log.warn(
+                `[HistorySearchIndexService] Failed to load fresh on-disk search index: ${getErrorMessage(error)}; rebuilding`
+              );
+            }
+          } else {
+            this.loadedWorkspacePath = undefined;
+            this.loadedManifest = undefined;
+            this.documents = [];
+            Log.info(
+              "[HistorySearchIndexService] rebuild skipped: on-disk index already fresh"
+            );
+            return;
+          }
+        }
+
         const rebuildDir = path.join(indexDir, `rebuild-${builtAt}`);
         await fs.promises.mkdir(rebuildDir, { recursive: true });
 
@@ -384,7 +442,7 @@ export class HistorySearchIndexService {
           options.retainDocuments ? [] : undefined;
 
         const documentsPath = path.join(rebuildDir, DOCUMENTS_FILE_NAME);
-        const manifestPath = path.join(rebuildDir, MANIFEST_FILE_NAME);
+        const rebuildManifestPath = path.join(rebuildDir, MANIFEST_FILE_NAME);
         const stream = fs.createWriteStream(documentsPath, {
           encoding: "utf8",
         });
@@ -470,12 +528,12 @@ export class HistorySearchIndexService {
         };
 
         await fs.promises.writeFile(
-          manifestPath,
+          rebuildManifestPath,
           JSON.stringify(indexManifest, null, 2),
           "utf8"
         );
 
-        await this.swapIndexFiles(indexDir, manifestPath, documentsPath);
+        await this.swapIndexFiles(indexDir, rebuildManifestPath, documentsPath);
         if (retained) {
           this.loadedWorkspacePath = workspaceFolderPath;
           this.loadedManifest = indexManifest;

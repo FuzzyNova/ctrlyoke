@@ -192,6 +192,12 @@ rebuild pass for no reason.
 
 ### Phase 1A — freshness recheck inside the lock (do this first)
 
+**Shipped 2026-08-27:** Added the post-lock manifest freshness recheck in
+`src/core/orchestration/HistorySearchIndexService.ts`. Contending rebuilds
+now skip a redundant scan when the on-disk index is still fresh, reloading
+documents for retained readers; contention tests cover both the fresh and
+changed-history paths.
+
 Once `rebuild()` acquires the lock, re-run the existing `isManifestFresh()`
 check against what's now on disk *before* calling `listRunSources()` and
 starting the scan. If a sibling rebuild just finished and nothing changed in
@@ -204,7 +210,15 @@ section — no ownership or lifecycle redesign, no new failure modes (worst
 case it does exactly what it does today: a full rebuild). Ship it
 independently of Problem 2 and Phase 1B below.
 
-### Phase 1B — consolidate to a shared instance (evaluate after 1A ships)
+### Phase 1B — consolidate to a shared instance
+
+**Updated 2026-08-27 (post-Incident #2):** this section originally proposed
+gating 1B on a few weeks of `[MemoryDiagnostics]` log data and deferring it
+if 1A alone looked sufficient. That is superseded by the "Sequencing"
+section below, added after Incident #2 — a real crash occurred during a
+rebuild pass 1A would *not* have skipped, so the wait-and-see plan for 1B is
+dropped too. Build 1A and 1B together; do not wait for production log data
+first.
 
 The deeper fix is giving `OutputHistoryManager` (all of them) and the search
 UI the same `HistorySearchIndexService` instance instead of one each. That
@@ -217,16 +231,31 @@ refresh briefly builds before discarding) into the one retained copy the
 original design already intended (`rebuild(..., { retainDocuments })`'s
 doc comment: "the single reader keeps one warm copy").
 
-This is a larger change than 1A: it needs a lifecycle owner (most likely
-`WorkflowOrchestrator`, which already sits above both `OutputHistoryManager`
-and the webview provider), and it touches a subsystem this repo's own
-instructions flag as fragile ("has OOM'd the extension host before"). Gate
-this on what the memory logging from the prior fix actually shows — if 1A
-already eliminates most of the duplicate-rebuild cost in practice, 1B may not
-be worth the risk. Revisit once there's a few weeks of `[MemoryDiagnostics]
-HistorySearchIndexService rebuild` log data from real usage.
+This is a larger change than 1A, and it touches a subsystem this repo's own
+instructions flag as fragile ("has OOM'd the extension host before"). It also
+needs a lifecycle owner, and **`WorkflowOrchestrator` cannot be that owner
+on its own**: the standalone CLI binary constructs `OutputHistoryManager`
+directly (`cli.ts:936`, `cli.ts:1138`) with no `WorkflowOrchestrator`
+involved at all, so an orchestrator-owned registry would leave the CLI path
+still creating its own private `HistorySearchIndexService` per invocation.
+Use a workspace-keyed module-level registry instead (e.g. a small new
+`HistorySearchIndexServiceRegistry` in `src/core/orchestration/`, `Map<string,
+HistorySearchIndexService>` keyed by resolved `workspaceFolderPath`) that
+both the extension (`WorkflowOrchestrator`, `WorkflowInstance`,
+`CtrlYokeWebviewProvider`/`HistorySearchService`) and the CLI binary go
+through, rather than something reachable only from `WorkflowOrchestrator`.
 
-If pursued, the shared instance should be workspace-scoped (keyed by
+Every current `new HistorySearchIndexService()` / `new HistorySearchService()`
+call site (`OutputHistoryManager.ts:142`, `HistorySearchService.ts:53`, plus
+whatever constructs those two) needs to resolve its instance through that
+registry instead. This touches every `new OutputHistoryManager(...)` call
+site too — `cli.ts` (2), `WorkflowOrchestrator.ts` (6), `WorkflowInstance.ts`,
+`WorkflowSerializer.ts` (2) — either by having `OutputHistoryManager`'s
+constructor resolve from the registry itself (simplest — no call-site changes
+needed) rather than by threading an injected instance through every
+constructor call.
+
+The shared instance must be workspace-scoped (keyed by
 `workspaceFolderPath`), not a single process-wide singleton — ctrlyoke
 supports multiple workspace folders and this must not cross-contaminate
 their indexes.
@@ -270,6 +299,24 @@ Design sketch:
   it's filesystem-based, not an in-process mutex — so none of the
   Problem-1 lock/coalescing logic needs to change to accommodate this; the
   worker acquires the same lock the main thread does today.
+- **`vscode` is not available inside a `worker_threads` Worker, and the code
+  being moved calls `Log.debug/info/warn` throughout** (rebuild
+  starting/progress/complete, memory diagnostics) — `Log.ts` imports
+  `vscode` directly, and a Worker gets its own module registry with no
+  access to the extension host's injected `vscode` module. Checked: the
+  other modules the moved code depends on (`TimelineRecorder`,
+  `WorkflowLineageRepository`, `FileLockUtils`, `MemoryDiagnostics`,
+  `WorkflowPaths`, `ProjectStatePaths`, `RunHistoryStoragePolicy`) have no
+  direct or transitive `vscode` import — only `Log` does. This repo already
+  has the fix for exactly this shape: `esbuild.js`'s `mcp-server.js` and
+  `cli.js` bundles alias `vscode` to `src/platform/vscode-shim.ts` (a
+  no-op shim), and `Log` already has a fully vscode-independent `cliMode`
+  (`Log.initializeCli(workspaceDir, verbose)`, used by the CLI binary) that
+  writes straight to a log file instead of a `vscode.LogOutputChannel`.
+  Give the worker bundle the same `vscode` alias and have the worker call
+  `Log.initializeCli(...)` at startup (pointed at the same log file the
+  main thread is already writing to) — every existing `Log.*` call in the
+  moved code then keeps working completely unchanged.
 - `esbuild.js` needs a second bundle entry point for the worker script,
   the same way `out/cli.js` is already a separate bundle from the main
   extension-host bundle. `HistorySearchIndexService.rebuild()` spawns the
