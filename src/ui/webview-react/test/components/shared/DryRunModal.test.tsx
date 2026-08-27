@@ -2,14 +2,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { WorkflowExecutionPreview } from "@root/types/ExecutionPreviewTypes";
+import type { HarnessCapabilityRegistrySnapshot } from "@root/types/CompatibilityTypes";
 import {
+  CAPABILITY_DOMAINS,
+  CAPABILITY_FIDELITIES,
+  CAPABILITY_MECHANISMS,
+  CAPABILITY_VERIFICATION_STATUSES,
+  HARNESS_IDS,
   PERMISSION_MODES,
   PREVIEW_PROMPT_CATEGORIES,
   PREVIEW_TRUNCATION_REASON_COPY,
   PREVIEW_TRUNCATION_REASONS,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
+import { useCompatibilityStore } from "@store/compatibilityStore";
 import { useExecutionPreviewStore } from "@store/executionPreviewStore";
+import { useSettingsStore } from "@store/settingsStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import { DryRunModal } from "@components/shared/DryRunModal";
 
 const { sendMessage } = vi.hoisted(() => ({ sendMessage: vi.fn() }));
@@ -182,9 +191,55 @@ function openPreview(
   });
 }
 
+function makeCapabilitySnapshot(): HarnessCapabilityRegistrySnapshot {
+  const harnesses = {} as HarnessCapabilityRegistrySnapshot["harnesses"];
+  for (const harnessId of Object.values(HARNESS_IDS)) {
+    const exactState = {
+      fidelity: CAPABILITY_FIDELITIES.EXACT,
+      mechanism: CAPABILITY_MECHANISMS.NATIVE,
+      verification: CAPABILITY_VERIFICATION_STATUSES.VERIFIED,
+    } as const;
+    const declaration = {
+      fidelity: CAPABILITY_FIDELITIES.EXACT,
+      mechanism: CAPABILITY_MECHANISMS.NATIVE,
+    } as const;
+    harnesses[harnessId] = {
+      available: true,
+      descriptor: {
+        harnessId,
+        permissions: {
+          mode: declaration,
+          allowedTools: declaration,
+          deniedTools: declaration,
+        },
+      },
+      effective: {
+        permissions: {
+          mode: exactState,
+          allowedTools: exactState,
+          deniedTools: exactState,
+        },
+      },
+    };
+  }
+  harnesses[HARNESS_IDS.CODEX_CLI].effective!.permissions!.allowedTools = {
+    fidelity: CAPABILITY_FIDELITIES.UNSUPPORTED,
+    mechanism: CAPABILITY_MECHANISMS.NONE,
+    verification: CAPABILITY_VERIFICATION_STATUSES.VERIFIED,
+  };
+  return {
+    schemaVersion: 1,
+    enabledDomains: [CAPABILITY_DOMAINS.PERMISSIONS],
+    harnesses,
+  };
+}
+
 describe("DryRunModal", () => {
   beforeEach(() => {
     useExecutionPreviewStore.getState().reset();
+    useWorkflowStore.getState().resetWorkflow();
+    useSettingsStore.getState().resetSettings();
+    useCompatibilityStore.getState().resetCapabilitySnapshot();
     clipboardWriteText.mockReset();
     clipboardWriteText.mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
@@ -219,6 +274,34 @@ describe("DryRunModal", () => {
     ).toBeInTheDocument();
     expect(screen.getByTitle("Prepare")).toBeInTheDocument();
     expect(screen.getByText("Workflow timeline")).toBeInTheDocument();
+  });
+
+  it("shows the workflow portability report as an overview section", async () => {
+    const user = userEvent.setup();
+    useWorkflowStore.setState({
+      steps: [{ prompt: "Use the configured tools" }],
+    });
+    useSettingsStore.getState().setWorkflowProperties({
+      toolPermissions: {
+        mode: PERMISSION_MODES.CUSTOM,
+        allowedTools: ["shell(git:*)"],
+        deniedTools: [],
+      },
+    });
+    useCompatibilityStore
+      .getState()
+      .setCapabilitySnapshot(makeCapabilitySnapshot());
+    openPreview({ kind: "workflow" });
+
+    render(<DryRunModal scope={{ kind: "workflow" }} />);
+
+    expect(screen.getByText("Portability report")).toBeInTheDocument();
+    expect(screen.getByText("Unsupported")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Show Codex details" })
+    );
+    expect(screen.getByText("Codex details")).toBeInTheDocument();
   });
 
   it("shows granted secret names with a redacted marker and never a value", () => {
