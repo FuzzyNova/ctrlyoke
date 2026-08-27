@@ -139,6 +139,53 @@ suite("CtrlYokeHostedServer file history route", () => {
       server.dispose();
     }
   });
+
+  test("rejects a missing ref on the paged git-ref diff route", async () => {
+    const token = "route-test-token-diff-page";
+    const server = new CtrlYokeHostedServer(
+      new DashboardBroadcastHub(),
+      {} as never,
+      (() => ({})) as never,
+      0,
+      process.cwd(),
+      [],
+      token
+    );
+    try {
+      const serverUrl = await server.listen();
+      if (!serverUrl) throw new Error("Hosted server did not start");
+      const url = new URL(serverUrl);
+      const response = await new Promise<{
+        statusCode: number | undefined;
+        body: string;
+      }>((resolve, reject) => {
+        const request = httpRequest(
+          {
+            hostname: "127.0.0.1",
+            port: Number(url.port),
+            path: `/api/workspace-viewer/git-ref-diff-page?token=${encodeURIComponent(token)}`,
+          },
+          (res) => {
+            let body = "";
+            res.setEncoding("utf8");
+            res.on("data", (chunk: string) => {
+              body += chunk;
+            });
+            res.on("end", () => resolve({ statusCode: res.statusCode, body }));
+          }
+        );
+        request.on("error", reject);
+        request.end();
+      });
+
+      assert.strictEqual(response.statusCode, 400);
+      assert.deepStrictEqual(JSON.parse(response.body), {
+        error: "ref is required",
+      });
+    } finally {
+      server.dispose();
+    }
+  });
 });
 
 suite("HostedServerMessageFactory", () => {

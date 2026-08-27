@@ -80,6 +80,7 @@ import type {
   WorkspaceMoveRequest,
   WorkspaceGenerateCommitMessageResponse,
   WorkspaceFileHistoryDiffResponse,
+  WorkspaceGitRefDiffPageResponse,
   WorkspaceGitRefDiffResponse,
   WorkspaceSearchScope,
 } from "../types/HostedWorkspaceViewerTypes";
@@ -1344,6 +1345,57 @@ export class CtrlYokeHostedServer
             return;
           }
           Log.error(`workspace-viewer /commit-log error: ${String(err)}`);
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
+    this.app.get(
+      "/api/workspace-viewer/git-ref-diff-page",
+      requireToken,
+      async (req, res) => {
+        const ref = req.query.ref;
+        if (typeof ref !== "string" || !ref) {
+          res.status(400).json({ error: "ref is required" });
+          return;
+        }
+        const rawOffset =
+          typeof req.query.offset === "string" ? req.query.offset : "0";
+        const rawPageSize =
+          typeof req.query.pageSize === "string"
+            ? req.query.pageSize
+            : undefined;
+        const offset = Number.parseInt(rawOffset, 10);
+        const pageSize =
+          rawPageSize === undefined
+            ? undefined
+            : Number.parseInt(rawPageSize, 10);
+        const diffId =
+          typeof req.query.diffId === "string" && req.query.diffId
+            ? req.query.diffId
+            : undefined;
+        const repo =
+          typeof req.query.repo === "string" && req.query.repo.trim()
+            ? req.query.repo.trim()
+            : undefined;
+        try {
+          res.json(
+            (await this.viewerService.getGitRefDiffPage(
+              ref,
+              offset,
+              pageSize,
+              diffId,
+              repo
+            )) satisfies WorkspaceGitRefDiffPageResponse
+          );
+        } catch (err) {
+          if (err instanceof WorkspaceTreeHttpError) {
+            res.status(err.statusCode).json({ error: err.message });
+            return;
+          }
+          Log.error(
+            `workspace-viewer /git-ref-diff-page error: ${String(err)}`
+          );
           res.status(500).json({ error: "Internal server error" });
         }
       }
