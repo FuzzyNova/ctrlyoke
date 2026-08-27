@@ -1,7 +1,9 @@
 # History Search Performance & Isolation Plan
 
 **Status:** Proposed
-**Priority:** P2
+**Priority:** P1 (raised from P2 2026-08-27 — a second confirmed OOM crash,
+not just heap pressure, occurred mid-`HistorySearchIndexService` rebuild;
+see "2026-08-27 Incident #2" below)
 
 ## Background
 
@@ -35,6 +37,144 @@ That investigation already shipped three fixes (see git history around
 Those fixes remove the immediate crash trigger. Two structural inefficiencies
 remain, both called out during that investigation and explicitly requested
 here as backlog work, plus a heavier isolation option to evaluate afterward.
+
+## 2026-08-27 follow-up: log review + a new confirmed case
+
+A later session on the same workspace (1255 runs / ~642k documents) hit a
+search while a workflow was completing. Reviewing
+`.ctrlyoke/logs/ctrlyoke-1787850072039.log` for that session answers two
+questions: are the shipped fixes holding, and does this plan already cover
+what was observed.
+
+**Are the fixes working?** Yes, for the specific crash trigger. No rebuild in
+this log fell through to `HistorySearchService`'s disk-scan fallback — every
+pass went through the indexed, capped path, so the 60s lock timeout is doing
+its job (nothing timed out waiting for the lock). But heap pressure is still
+real, just not crash-triggering this time: `[MemoryDiagnostics]` shows
+`heapUsed` climbing 1817MB → 2421.7MB and `rss` 2682.7MB → 3155.2MB across
+three back-to-back rebuild passes in under a minute, without full reclaim
+between passes. That's the same qualitative shape ("a single large
+allocation on an already-large heap") flagged as the OOM precursor in the
+original crash forensics — it just didn't cross the line this time. This is
+concrete evidence, not just a theoretical concern, that Problem 2
+(worker-thread isolation) still matters even after Problems 1A/1B are fixed.
+
+**The "rebuilt twice in a row" observation, explained:** the log actually
+shows **three** rebuild passes in that window, from two different causes:
+
+1. **Pass 1** and **Pass 2** are the *same* `HistorySearchIndexService`
+   instance — the one owned by the completing workflow's
+   `OutputHistoryManager`. While pass 1's scan was running, the workflow's
+   own step-completion writes fired `enqueueWorkspaceRefresh` twice more;
+   both were logged as "refresh already in progress; coalescing into
+   current pass" and correctly collapsed into a single requeued pass rather
+   than one each (`rebuildQueued` coalescing already works as designed).
+   Pass 2 then ran to capture that new data — and it was genuinely needed:
+   the document count moved 642685 → 642693 between passes, confirming real
+   new content, not staleness. `enqueueWorkspaceRefresh`'s do-while loop
+   (`HistorySearchIndexService.ts:239-260`) always runs a full pass on
+   requeue with no freshness check first, so this is also a case Phase 1A's
+   recheck would touch — it just wouldn't have skipped anything *here*,
+   because the recheck would correctly find real changes and rebuild
+   anyway.
+2. **Pass 3** (`retainDocuments=true`) is a *different* instance — the
+   search UI's own `HistorySearchIndexService` — triggered by the user's
+   search 2 seconds after pass 2 finished writing a fresh index to disk.
+   This one **is** exactly the case Phase 1A targets: "the instance that
+   waits out someone else's rebuild reruns its own." Pass 2 had just
+   written a complete, fresh index; nothing changed in the 2 seconds before
+   pass 3 started. Phase 1A's freshness recheck inside the lock would have
+   let pass 3 skip straight to `loadIfPossible()` instead of repeating an
+   ~18s, multi-hundred-MB-heap-growth full rescan of all 1255 runs for data
+   it already had.
+
+**Answer to "would the plan's fixes fix this":** yes for the part that
+actually wasted work — pass 3, the search-triggered rescan of data a sibling
+instance had just finished writing — is precisely Phase 1A's target case,
+now with a concrete logged reproduction. Passes 1 and 2 were not wasted work
+(real data changed between them) and aren't something to "fix" so much as
+further evidence for Phase 2: even fully justified, correctly-deduped
+rebuilds still drive the heap in the direction that caused the original
+crash, back-to-back, in under a minute.
+
+## 2026-08-27 Incident #2: a real crash, mid-rebuild, minutes later
+
+The same session crashed again shortly after the follow-up above, this time
+for real — not just elevated heap numbers. The log
+(`.ctrlyoke/logs/ctrlyoke-1787850072039.log`) goes dead at line 1626, right
+after `[HistorySearchIndexService] rebuild progress: 400/1257 runs, 136052
+documents so far` — no shutdown log, no error, nothing after it.
+
+**Confirmed cause, not just circumstantial:** `%APPDATA%\Code\Crashpad\
+reports\d766eea3-25d8-4c64-a51a-fa8f77ea3736.dmp` was written at
+`2026-08-27 17:44:52 UTC` — 5 seconds after that last log line, with nothing
+else in the log between them. Scanning the dump's strings confirms the same
+signature as the original incident: `process_type: utility` (the extension
+host), `electron.v8-oom.is_heap_oom: 1`, `electron.v8-oom.location:
+CALL_AND_RETRY_LAST`. This **is** a `HistorySearchIndexService` rebuild
+crashing the extension host — directly, not inferred.
+
+**Was this the redundant-rebuild case Problem 1 targets? No.** The crashing
+pass (`rebuild starting: runs=1257 retainDocuments=false`, L1597) was a
+sibling `OutputHistoryManager`'s own first pass, triggered by that
+workflow's own completion writes — the same legitimate, data-changed pattern
+as "Pass 1 → Pass 2" in the incident above, just one that didn't survive to
+finish. Neither Phase 1A's freshness recheck nor Phase 1B's shared instance
+would have skipped or prevented *this* pass — there was real new data to
+index and only one instance involved at the moment it started.
+
+**What's different this time: the pass started from an already-elevated
+baseline.** `[MemoryDiagnostics]` at this pass's start: `rss=3088.5MB
+heapUsed=1869.1MB heapTotal=2836.8MB` — compare to a fresh rebuild earlier in
+the *same* session starting from `heapTotal=2079.5MB`/`2081.4MB`. Nothing
+this pass did was unusual (documents 72479 at 200 runs, 136052 at 400 runs —
+matching prior successful passes almost exactly); it crashed because the
+heap it was growing from was already ~750MB higher than a rebuild earlier in
+this same session tolerated fine. That's the connective tissue back to
+Problem 1: fewer total rebuild passes per session means less cumulative
+baseline creep, which buys more headroom before an otherwise-ordinary,
+necessary pass like this one tips over. Phase 1 reduces *how often* this
+setup occurs; it doesn't prevent this specific pass.
+
+**Where the memory actually goes (checked against the current code):**
+`rebuild()` (`HistorySearchIndexService.ts:355-501`) already streams
+documents to disk per-run and, with `retainDocuments=false` as here, never
+accumulates a retained document array — this crash is not the "unbounded
+array" shape the prior fixes already addressed. It's allocation *churn*:
+each of 1257 runs' manifest + full `events.jsonl` is read and parsed into
+memory, processed, and discarded, run after run, in a tight loop
+(`readManifestSafe`/`readEventsSafe` inside the `for (const source of
+runSources)` loop) with little idle time for a full GC/compaction pass —
+especially back-to-back with the other rebuild passes already logged
+earlier in the same session.
+
+**Does Phase 1 fix this crash? Not directly — Phase 2 is now the load-bearing
+fix.** Phase 1 lowers the odds (less baseline creep over a session) but
+doesn't bound this pass's memory use, because this pass wasn't wasted work
+to begin with. Phase 2 (worker-thread isolation) is the only proposed change
+that actually caps this: a `worker_threads` worker gets its own V8 isolate,
+and **terminating that worker after each rebuild releases its entire heap
+back to the OS** — not just the garbage in it. That's a fundamentally
+stronger guarantee than anything achievable on the shared main-thread heap,
+including explicit GC (see below), because it doesn't depend on what's still
+reachable when the pass ends. Recommend the Phase 2 design sketch spawn a
+fresh worker per rebuild (or periodically recycle a pooled one) rather than
+keep one long-lived worker across a session's many rebuilds — a long-lived
+worker would just relocate this same baseline-creep problem onto a second
+thread instead of eliminating it.
+
+**On explicit GC triggers (asked about, not recommended):** `global.gc()`
+requires Node's `--expose-gc` flag, which would have to be set on the
+extension host process — a launch flag ctrlyoke's own code doesn't control
+(VS Code owns that process's startup). Even if it were available, it
+wouldn't have prevented this crash: GC only reclaims objects nothing still
+references, it doesn't shrink `heapTotal` back down once V8 has grown it,
+and it can't run usefully mid-loop while the pass's own per-run working set
+is still live. Forcing a GC *between* rebuild passes might trim some of the
+baseline creep at the margin, but Phase 2's worker-teardown already achieves
+a strictly stronger version of the same idea (whole-isolate release, not
+partial reclaim) as a byproduct of work already scoped. Not worth pursuing
+as a separate change.
 
 ## Problem 1: An instance that waits out someone else's rebuild reruns its own
 
@@ -138,6 +278,13 @@ Design sketch:
 - Scope this to `rebuild()`'s scan loop only. `search()`'s in-memory
   filter/sort over already-loaded documents is fast and doesn't need
   isolation; leave it on the main thread.
+- **Spawn a fresh worker per rebuild (or recycle a pooled one after N
+  rebuilds), never one long-lived worker for the process lifetime.**
+  Terminating the worker after each rebuild is what releases its entire V8
+  isolate back to the OS — a worker kept alive across many rebuilds would
+  just relocate the same cross-session baseline-creep pattern seen in the
+  2026-08-27 Incident #2 crash (see above) onto a second thread instead of
+  eliminating it.
 
 ## Non-goals
 
@@ -165,14 +312,32 @@ Design sketch:
 
 ## Sequencing
 
-1. **Phase 1A** (small, low-risk): freshness recheck inside the rebuild
-   lock. Ship independently and first.
-2. **Phase 2** (worker-thread isolation for the rebuild scan): the highest-
-   value remaining item for the original OOM concern, and independent of
-   Phase 1B — implement once Phase 1A is in and stable.
-3. **Phase 1B** (shared/workspace-scoped index-service instance): gated on
-   memory-log data showing Phase 1A + Phase 2 haven't already made duplicate
-   rebuilds a non-issue in practice. Revisit, don't build speculatively.
+**Recommendation (updated 2026-08-27, after Incident #2):** implement Phase 1
+(1A + 1B) and Phase 2 together as one effort — do not gate Phase 2 on Phase 1
+landing first anymore. The original sequencing deferred Phase 2 on the theory
+that Phase 1 might make it unnecessary; Incident #2 closes that question:
+a crash occurred during a pass that Phase 1 would *not* have skipped (a
+legitimate, non-redundant rebuild), so Phase 1 alone provably would not have
+prevented it. Two confirmed extension-host OOM crashes from this one service
+in the time this plan has existed is enough to stop treating Phase 2 as the
+"heavier option to evaluate afterward."
+
+- **Phase 1A** — still do this first; it's small, low-risk, and directly
+  fixes the wasted-rescan case confirmed in the first follow-up above
+  (search rebuild racing a just-finished sibling rebuild's fresh write).
+- **Phase 1B** — still worth doing alongside 1A: fewer total rebuild passes
+  per session directly reduces the baseline-creep mechanism identified in
+  Incident #2, buying headroom even though it can't guarantee no future
+  pass ever crosses the line.
+- **Phase 2** (worker-thread isolation) — **raised from "next" to "do this
+  now too."** It is the only proposed change that bounds a single rebuild
+  pass's memory impact regardless of whether that pass was redundant or
+  necessary, which is exactly the gap Incident #2 exposed. Build it with
+  per-rebuild worker teardown (see the added note under Problem 2) so it
+  also closes the baseline-creep mechanism, not just crash containment.
+
+Net: treat Phase 1 (1A + 1B) and Phase 2 as one combined effort, not a
+sequence gated on log data anymore — the data now says both are needed.
 
 ## Acceptance criteria
 
