@@ -57,17 +57,22 @@ export class HistorySearchService {
         ? { query, limit: MAX_RESULTS }
         : { ...query, limit: query.limit || MAX_RESULTS };
 
+    const indexAttemptStart = Date.now();
     try {
       return await this.indexService.search(request, workspaceFolderPath);
     } catch (error) {
       Log.warn(
-        `[HistorySearchService] Falling back to disk scan: ${getErrorMessage(error)}`
+        `[HistorySearchService] Indexed search failed after ${Date.now() - indexAttemptStart}ms, falling back to disk scan: ${getErrorMessage(error)}`
       );
+      const fallbackStart = Date.now();
       const results = await this.searchLegacy(
         request.query,
         workspaceFolderPath,
         request.limit,
         request.filters
+      );
+      Log.info(
+        `[HistorySearchService] Disk scan fallback complete: query="${request.query.trim()}" results=${results.length} durationMs=${Date.now() - fallbackStart}`
       );
       return {
         query: request.query.trim(),
@@ -131,6 +136,17 @@ export class HistorySearchService {
       (left, right) => right.latestTimestamp - left.latestTimestamp
     );
 
+    const totalRuns = workflowRuns.reduce(
+      (sum, workflow) => sum + workflow.runs.length,
+      0
+    );
+    Log.info(
+      `[HistorySearchService] disk scan starting: query="${normalizedQuery}" workflows=${workflowRuns.length} runs=${totalRuns} limit=${limit}`
+    );
+    const scanStart = Date.now();
+    let scannedRuns = 0;
+    const PROGRESS_LOG_INTERVAL = 200;
+
     const results: HistorySearchResult[] = [];
     const seen = new Set<string>();
 
@@ -156,6 +172,12 @@ export class HistorySearchService {
           path.join(workflow.workflowHistoryDir, run.runRef)
         );
         const manifest = await this.readManifestSafe(manifestPath);
+        scannedRuns += 1;
+        if (scannedRuns % PROGRESS_LOG_INTERVAL === 0) {
+          Log.debug(
+            `[HistorySearchService] disk scan progress: ${scannedRuns}/${totalRuns} runs, ${results.length} matches so far, elapsedMs=${Date.now() - scanStart}`
+          );
+        }
         if (!manifest) {
           continue;
         }
@@ -196,6 +218,10 @@ export class HistorySearchService {
         }
       }
     }
+
+    Log.info(
+      `[HistorySearchService] disk scan finished: query="${normalizedQuery}" scannedRuns=${scannedRuns}/${totalRuns} matches=${results.length} durationMs=${Date.now() - scanStart}`
+    );
 
     return results
       .sort((left, right) => right.startedAt - left.startedAt)

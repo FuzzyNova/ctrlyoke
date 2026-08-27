@@ -111,12 +111,17 @@ export class HistorySearchIndexService {
       return this.emptyResponse(normalizedQuery, "ready");
     }
 
+    const searchStart = Date.now();
     const buildInProgress = Boolean(this.rebuildPromise);
+    Log.debug(
+      `[HistorySearchIndexService] search start: query="${normalizedQuery}" buildInProgress=${buildInProgress}`
+    );
     if (!buildInProgress) {
       await this.ensureReady(workspaceFolderPath);
     } else {
       await this.loadIfPossible(workspaceFolderPath);
     }
+    const readyDurationMs = Date.now() - searchStart;
 
     const offset = this.decodeCursorOffset(
       request.cursor,
@@ -137,6 +142,11 @@ export class HistorySearchIndexService {
     const page = matches.slice(offset, offset + limit);
     const nextOffset = offset + page.length;
     const hasMore = nextOffset < matches.length;
+    const indexState = this.rebuildPromise ? "building" : "ready";
+
+    Log.info(
+      `[HistorySearchIndexService] search complete: query="${normalizedQuery}" documentsScanned=${this.documents.length} matches=${matches.length} readyMs=${readyDurationMs} totalMs=${Date.now() - searchStart} indexState=${indexState}`
+    );
 
     return {
       query: normalizedQuery,
@@ -150,7 +160,7 @@ export class HistorySearchIndexService {
           })
         : undefined,
       hasMore,
-      indexState: this.rebuildPromise ? "building" : "ready",
+      indexState,
     };
   }
 
@@ -161,18 +171,31 @@ export class HistorySearchIndexService {
     // running, just flag that one more pass is needed once it finishes.
     if (this.rebuildPromise) {
       this.rebuildQueued = true;
+      Log.debug(
+        "[HistorySearchIndexService] refresh already in progress; coalescing into current pass"
+      );
       return this.rebuildPromise;
     }
 
+    const refreshStart = Date.now();
+    let passCount = 0;
     this.rebuildPromise = (async () => {
       try {
         do {
           this.rebuildQueued = false;
+          passCount += 1;
+          const passStart = Date.now();
           await this.rebuild(workspaceFolderPath, { retainDocuments: false });
+          Log.debug(
+            `[HistorySearchIndexService] refresh pass ${passCount} complete: durationMs=${Date.now() - passStart} requeued=${this.rebuildQueued}`
+          );
         } while (this.rebuildQueued);
+        Log.info(
+          `[HistorySearchIndexService] refresh finished: passes=${passCount} totalMs=${Date.now() - refreshStart}`
+        );
       } catch (error) {
         Log.warn(
-          `[HistorySearchIndexService] Failed to refresh index: ${getErrorMessage(error)}`
+          `[HistorySearchIndexService] Failed to refresh index after ${passCount} pass(es), ${Date.now() - refreshStart}ms: ${getErrorMessage(error)}`
         );
       } finally {
         this.rebuildPromise = undefined;
@@ -183,15 +206,28 @@ export class HistorySearchIndexService {
 
   private async ensureReady(workspaceFolderPath: string): Promise<void> {
     await this.loadIfPossible(workspaceFolderPath);
-    if (
-      this.loadedWorkspacePath === workspaceFolderPath &&
-      this.loadedManifest &&
-      (await this.isManifestFresh(workspaceFolderPath, this.loadedManifest))
-    ) {
-      return;
+    if (this.loadedWorkspacePath === workspaceFolderPath && this.loadedManifest) {
+      const freshnessStart = Date.now();
+      const fresh = await this.isManifestFresh(
+        workspaceFolderPath,
+        this.loadedManifest
+      );
+      Log.debug(
+        `[HistorySearchIndexService] freshness check: fresh=${fresh} durationMs=${Date.now() - freshnessStart}`
+      );
+      if (fresh) {
+        return;
+      }
     }
 
+    Log.info(
+      "[HistorySearchIndexService] index missing or stale; triggering synchronous rebuild before search"
+    );
+    const rebuildStart = Date.now();
     await this.rebuild(workspaceFolderPath, { retainDocuments: true });
+    Log.info(
+      `[HistorySearchIndexService] synchronous rebuild for search complete: durationMs=${Date.now() - rebuildStart}`
+    );
   }
 
   private async loadIfPossible(workspaceFolderPath: string): Promise<void> {
@@ -204,22 +240,33 @@ export class HistorySearchIndexService {
 
     const manifestPath = this.getIndexManifestPath(workspaceFolderPath);
     const documentsPath = this.getDocumentsPath(workspaceFolderPath);
+    const loadStart = Date.now();
     try {
       const manifest = JSON.parse(
         await fs.promises.readFile(manifestPath, "utf8")
       ) as HistorySearchIndexManifest;
       if (manifest.schemaVersion !== INDEX_SCHEMA_VERSION) {
+        Log.info(
+          `[HistorySearchIndexService] on-disk index schema mismatch (found ${manifest.schemaVersion}, expected ${INDEX_SCHEMA_VERSION}); will rebuild`
+        );
         return;
       }
       const documents = await this.readDocumentsJsonl(documentsPath);
       this.loadedWorkspacePath = workspaceFolderPath;
       this.loadedManifest = manifest;
       this.documents = documents;
+      Log.debug(
+        `[HistorySearchIndexService] loaded index from disk: documents=${documents.length} indexedRuns=${Object.keys(manifest.indexedRuns).length} durationMs=${Date.now() - loadStart}`
+      );
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code !== "ENOENT") {
         Log.warn(
           `[HistorySearchIndexService] Failed to load search index: ${getErrorMessage(error)}`
+        );
+      } else {
+        Log.debug(
+          "[HistorySearchIndexService] no on-disk index found; will rebuild"
         );
       }
       this.loadedWorkspacePath = undefined;
@@ -253,13 +300,20 @@ export class HistorySearchIndexService {
       await fs.promises.mkdir(rebuildDir, { recursive: true });
 
       const indexedRuns: HistorySearchIndexManifest["indexedRuns"] = {};
+      const listSourcesStart = Date.now();
       const runSources = await this.listRunSources(workspaceFolderPath);
+      Log.info(
+        `[HistorySearchIndexService] rebuild starting: runs=${runSources.length} retainDocuments=${options.retainDocuments} listSourcesMs=${Date.now() - listSourcesStart}`
+      );
       const retained: HistorySearchDocument[] | undefined =
         options.retainDocuments ? [] : undefined;
 
       const documentsPath = path.join(rebuildDir, DOCUMENTS_FILE_NAME);
       const manifestPath = path.join(rebuildDir, MANIFEST_FILE_NAME);
       const stream = fs.createWriteStream(documentsPath, { encoding: "utf8" });
+      let documentCount = 0;
+      let processedRuns = 0;
+      const PROGRESS_LOG_INTERVAL = 200;
       try {
         for (const source of runSources) {
           const manifest = await this.readManifestSafe(source.manifestPath);
@@ -280,6 +334,7 @@ export class HistorySearchIndexService {
             source.runRef
           )) {
             retained?.push(document);
+            documentCount += 1;
             if (!stream.write(JSON.stringify(document) + "\n")) {
               await once(stream, "drain");
             }
@@ -298,6 +353,13 @@ export class HistorySearchIndexService {
             sourceManifestMtimeMs: manifestStats.mtimeMs,
             sourceEventsMtimeMs: eventsStats?.mtimeMs ?? 0,
           };
+
+          processedRuns += 1;
+          if (processedRuns % PROGRESS_LOG_INTERVAL === 0) {
+            Log.debug(
+              `[HistorySearchIndexService] rebuild progress: ${processedRuns}/${runSources.length} runs, ${documentCount} documents so far, elapsedMs=${Date.now() - listSourcesStart}`
+            );
+          }
         }
       } finally {
         stream.end();
@@ -333,6 +395,9 @@ export class HistorySearchIndexService {
         this.documents = [];
       }
       await this.cleanupRebuildDirs(indexDir, rebuildDir);
+      Log.info(
+        `[HistorySearchIndexService] rebuild complete: runs=${processedRuns}/${runSources.length} documents=${documentCount} totalMs=${Date.now() - listSourcesStart}`
+      );
     });
   }
 
@@ -344,6 +409,9 @@ export class HistorySearchIndexService {
       manifest.schemaVersion !== INDEX_SCHEMA_VERSION ||
       manifest.workspaceRootHash !== this.hashPath(workspaceFolderPath)
     ) {
+      Log.debug(
+        "[HistorySearchIndexService] freshness check stale: schema/workspace hash mismatch"
+      );
       return false;
     }
 
@@ -353,17 +421,29 @@ export class HistorySearchIndexService {
     );
     const indexedManifestPaths = new Set(Object.keys(manifest.indexedRuns));
     if (currentManifestPaths.size !== indexedManifestPaths.size) {
+      Log.debug(
+        `[HistorySearchIndexService] freshness check stale: run count changed (current=${currentManifestPaths.size} indexed=${indexedManifestPaths.size})`
+      );
       return false;
     }
 
+    // Sequential per-run stat/read — for a large run history this is the
+    // dominant cost of a "fresh" search that ends up not needing a rebuild.
+    let checkedRuns = 0;
     for (const source of currentRuns) {
       const key = path.resolve(source.manifestPath);
       const indexedRun = manifest.indexedRuns[key];
       if (!indexedRun) {
+        Log.debug(
+          `[HistorySearchIndexService] freshness check stale: new run not yet indexed (${source.workflowKey}/${source.runRef})`
+        );
         return false;
       }
       const sourceManifest = await this.readManifestSafe(source.manifestPath);
       if (!sourceManifest) {
+        Log.debug(
+          `[HistorySearchIndexService] freshness check stale: could not re-read manifest for ${source.workflowKey}/${source.runRef}`
+        );
         return false;
       }
       const manifestStats = await this.statOptional(source.manifestPath);
@@ -374,8 +454,12 @@ export class HistorySearchIndexService {
         manifestStats?.mtimeMs !== indexedRun.sourceManifestMtimeMs ||
         (eventsStats?.mtimeMs ?? 0) !== indexedRun.sourceEventsMtimeMs
       ) {
+        Log.debug(
+          `[HistorySearchIndexService] freshness check stale: run changed since indexing (${source.workflowKey}/${source.runRef}) after checking ${checkedRuns} run(s)`
+        );
         return false;
       }
+      checkedRuns += 1;
     }
 
     return true;
