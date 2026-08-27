@@ -235,6 +235,23 @@ export class CtrlYokeHostedServer
   // ── IDashboardProvider — broadcast all orchestrator events ────────────────
 
   postMessage(message: unknown): void {
+    // STARTUP_COMPLETE from DashboardBroadcastHub.notifyStartupComplete() fires
+    // the instant the PANEL's own auto-load settles, with no regard for whether
+    // any given browser client's READY has made it through the extension's
+    // serialized routeQueue yet. Forwarding it here races ahead of that
+    // client's own replay (SESSION_RESTORED/WORKFLOWS_LIST) — useMessageHandler's
+    // STARTUP_COMPLETE handler then sees no fileName/activeWorkflowWorkingFilePath
+    // and creates a blank workflow. Every browser client already gets its own
+    // correctly-sequenced STARTUP_COMPLETE from WebviewMessageRouter's
+    // completeBrowserReadyAfterStartup() once ITS replay finishes, so the
+    // broadcast copy is both redundant and unsafe for browser sockets — drop it.
+    if (
+      message &&
+      typeof message === "object" &&
+      (message as { type?: unknown }).type === MESSAGE_TYPES.STARTUP_COMPLETE
+    ) {
+      return;
+    }
     this.broadcast(message);
   }
 
