@@ -73,6 +73,7 @@ export function GlobalSettingsDrawer() {
   const effectiveActiveTab = visibleTabs.some((t) => t.id === activeTab)
     ? activeTab
     : "general";
+  const isFullWidthSettingsTab = effectiveActiveTab === "mcpmanager";
 
   useEffect(() => {
     if (globalSettingsOpen) {
@@ -208,7 +209,8 @@ export function GlobalSettingsDrawer() {
             The "workflow" tab renders WorkflowDefaultsSection which owns its
             own scrolling and uses h-full + DrawerTabBar pinned at the bottom.
             It must be a direct flex child so h-full resolves to a definite
-            size. All other tabs use the standard scrollable wrapper. */}
+            size. MCP also gets the full available width so its wide layout can
+            use equal columns; all other tabs use the standard width cap. */}
         {fullSettings && effectiveActiveTab === "workflow" ? (
           <div className="flex-1 flex flex-col min-h-0">
             <WorkflowDefaultsSection
@@ -218,7 +220,11 @@ export function GlobalSettingsDrawer() {
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto overflow-x-hidden">
-            <div className="p-4 max-w-2xl">
+            <div
+              className={`p-4 ${
+                isFullWidthSettingsTab ? "max-w-none" : "max-w-2xl"
+              }`}
+            >
               {fullSettings && effectiveActiveTab === "general" && (
                 <GeneralSection
                   settings={fullSettings}
