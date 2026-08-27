@@ -975,8 +975,8 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
       : [...EXPORT_TARGET_IDS, SPECIAL_TARGET_IDS.CTRLYOKE];
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-2">
+    <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+      <div className="space-y-2 lg:col-span-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-description-fg">
           MCP Manager
         </h3>
@@ -987,13 +987,13 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 lg:col-span-2">
         <span className="text-xxs text-description-fg">
           Using top-level scope: {formatScopeLabel(activeScope)}
         </span>
       </div>
 
-      <div className="space-y-2">
+      <div className="min-w-0 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
             Managed servers
@@ -1276,7 +1276,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="min-w-0 space-y-2">
         <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
           Discover &amp; import
         </div>

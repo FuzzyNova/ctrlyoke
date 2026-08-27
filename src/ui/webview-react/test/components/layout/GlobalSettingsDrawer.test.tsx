@@ -32,4 +32,17 @@ describe("GlobalSettingsDrawer", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Statusline Tracking")).toBeInTheDocument();
   });
+
+  it("lets the MCP Manager use the full settings content width", () => {
+    useUiStore.setState({ globalSettingsActiveTab: "mcpmanager" });
+
+    render(<GlobalSettingsDrawer />);
+
+    const content = screen
+      .getByText("MCP Manager", { selector: "h3" })
+      .closest("div.p-4");
+
+    expect(content).toHaveClass("max-w-none");
+    expect(content).not.toHaveClass("max-w-2xl");
+  });
 });

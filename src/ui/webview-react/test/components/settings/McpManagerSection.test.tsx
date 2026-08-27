@@ -247,4 +247,17 @@ describe("McpManagerSection", () => {
       }
     );
   });
+
+  it("uses equal columns for managed servers and discovery on wide screens", () => {
+    renderSection([]);
+
+    const managedColumn =
+      screen.getByText("Managed servers").parentElement?.parentElement;
+    const discoveryColumn = screen.getByText("Discover & import").parentElement;
+    const layout = managedColumn?.parentElement;
+
+    expect(layout).toHaveClass("lg:grid-cols-2");
+    expect(managedColumn).toHaveClass("min-w-0");
+    expect(discoveryColumn).toHaveClass("min-w-0");
+  });
 });
