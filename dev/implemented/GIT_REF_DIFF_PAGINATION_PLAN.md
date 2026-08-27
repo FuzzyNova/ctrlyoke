@@ -6,7 +6,7 @@ Shipped: paged git-ref-diff server/client plumbing is now wired into the live wo
 **Priority:** P3
 
 Follow-on from
-[`WORKSPACE_FILE_HISTORY_AND_IMAGE_DIFF_PLAN.md`](../implemented/WORKSPACE_FILE_HISTORY_AND_IMAGE_DIFF_PLAN.md)
+[`WORKSPACE_FILE_HISTORY_AND_IMAGE_DIFF_PLAN.md`](./WORKSPACE_FILE_HISTORY_AND_IMAGE_DIFF_PLAN.md)
 §6, which explicitly named large-commit scalability as out of scope rather
 than letting it be silently expanded into while adding image-diff support.
 That plan added base64-encoded image bytes to `getGitRefDiff`'s response
