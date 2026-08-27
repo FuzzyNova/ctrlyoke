@@ -167,6 +167,55 @@ function sendAction(
   });
 }
 
+function normalizeWorktreePath(value: string): string {
+  return value.replace(/\\/g, "/").toLowerCase().replace(/\/$/, "");
+}
+
+/** Shared by the per-row Sync button and the section-level Sync All orchestrator. */
+function isSyncEligible(
+  entry: WorktreeManagementEntry,
+  sourceCheckoutRoot?: string
+): boolean {
+  const isSourceCheckout =
+    !!sourceCheckoutRoot &&
+    normalizeWorktreePath(entry.worktreePath) ===
+      normalizeWorktreePath(sourceCheckoutRoot);
+  return (
+    entry.ownership === "user" &&
+    !isSourceCheckout &&
+    !entry.inUse &&
+    !entry.stale &&
+    !!entry.branchName &&
+    entry.branchState === "present"
+  );
+}
+
+function worktreeRowKey(worktreePath: string, suffix: string): string {
+  return `${worktreePath}::${suffix}`;
+}
+
+/**
+ * Resolves once `requestId`'s result lands in `settingsStore.worktreeActionResults`.
+ * Deliberately does not clear the result — `useWorktreeActionFeedback`'s own
+ * effect (driven by a `begin()` call with the same requestId) owns that, so a
+ * caller here can ride the same round trip a row's own button already tracks.
+ */
+function waitForWorktreeResult(
+  requestId: string
+): Promise<{ success: boolean; message: string }> {
+  const existing = useSettingsStore.getState().worktreeActionResults[requestId];
+  if (existing) return Promise.resolve(existing);
+  return new Promise((resolve) => {
+    const unsubscribe = useSettingsStore.subscribe((state) => {
+      const result = state.worktreeActionResults[requestId];
+      if (result) {
+        unsubscribe();
+        resolve(result);
+      }
+    });
+  });
+}
+
 /** Machine-level checkout placement settings and explicit worktree management. */
 export function WorktreesSection({
   settings,
@@ -186,6 +235,14 @@ export function WorktreesSection({
   const [pendingConfirm, setPendingConfirm] =
     useState<PendingConfirmRequest | null>(null);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
+  const [syncAllPending, setSyncAllPending] = useState(false);
+  const [syncAllFeedback, setSyncAllFeedback] = useState<
+    ActionFeedback | undefined
+  >(undefined);
+  const syncAllTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined
+  );
+  useEffect(() => () => clearTimeout(syncAllTimerRef.current), []);
   const sources = settings.sources as Record<string, SettingSource>;
   const configuredRoot = settings.settings.worktrees.root.trim();
   const userScopeOnly = activeScope === SETTING_SCOPES.WORKSPACE;
@@ -252,6 +309,103 @@ export function WorktreesSection({
       undefined,
       true
     );
+  };
+
+  const syncEligibleEntries = useMemo(
+    () =>
+      (management?.entries ?? []).filter((entry) =>
+        isSyncEligible(entry, management?.sourceCheckoutRoot)
+      ),
+    [management]
+  );
+
+  /**
+   * Merging branch-into-source then source-into-branch for each eligible
+   * branch (in display order) leaves earlier branches missing changes from
+   * branches synced after them — the source only picks up branch N's
+   * changes once branch N runs. A second pass over every branch except the
+   * last, walked in reverse, is then a no-op merge-into-source (already a
+   * subset) plus a real source-into-branch that picks up everything: after
+   * the forward pass the source already holds every branch's changes, so
+   * one reverse pass is provably sufficient regardless of branch count.
+   */
+  const doSyncAll = async () => {
+    if (!management) return;
+    const sourceCheckoutRoot = management.sourceCheckoutRoot;
+    const order = management.entries
+      .filter((entry) => isSyncEligible(entry, sourceCheckoutRoot))
+      .map((entry) => entry.worktreePath);
+    if (!order.length) return;
+    const sequence =
+      order.length > 1
+        ? [...order, ...[...order].slice(0, -1).reverse()]
+        : order;
+
+    setSyncAllPending(true);
+    setSyncAllFeedback(undefined);
+    clearTimeout(syncAllTimerRef.current);
+
+    let attempted = 0;
+    let succeeded = 0;
+    const failures: string[] = [];
+
+    for (const worktreePath of sequence) {
+      const latest = useSettingsStore.getState().worktreeManagement;
+      const entry = latest?.entries.find(
+        (candidate) => candidate.worktreePath === worktreePath
+      );
+      if (!entry || !isSyncEligible(entry, latest?.sourceCheckoutRoot)) {
+        continue;
+      }
+      attempted += 1;
+      const [requestId] = feedback.begin(worktreeRowKey(worktreePath, "sync"));
+      vscode.postMessage({
+        type: MESSAGE_TYPES.SYNC_NAMED_WORKTREE,
+        worktreePath,
+        requestId,
+      });
+      const result = await waitForWorktreeResult(requestId);
+      if (result.success) {
+        succeeded += 1;
+      } else {
+        failures.push(
+          `"${entry.branchName ?? worktreePath}": ${result.message}`
+        );
+      }
+    }
+
+    setSyncAllPending(false);
+    const success = failures.length === 0;
+    const message =
+      attempted === 0
+        ? "Nothing to sync."
+        : success
+          ? `Synced ${succeeded} of ${attempted} branch${attempted === 1 ? "" : "es"}.`
+          : `Synced ${succeeded} of ${attempted} — ${failures.join(" ")}`;
+    setSyncAllFeedback({ status: success ? "success" : "error", message });
+    syncAllTimerRef.current = setTimeout(
+      () => setSyncAllFeedback(undefined),
+      success ? 4000 : 8000
+    );
+  };
+
+  const syncAll = () => {
+    if (!syncEligibleEntries.length) return;
+    if (!confirmResetOperations) {
+      void doSyncAll();
+      return;
+    }
+    setPendingConfirm({
+      variant: CONFIRMATION_VARIANTS.RESET,
+      title: "Sync All Worktrees",
+      message: `Sync all ${syncEligibleEntries.length} worktree${
+        syncEligibleEntries.length === 1 ? "" : "s"
+      } with "${management?.sourceCheckoutBranch ?? "the source checkout"}"?`,
+      detail:
+        "Each branch merges into the source checkout, then the source checkout merges back into it, in order — then the same runs in reverse (skipping the last branch) so earlier branches pick up changes from later ones. A branch that can't merge cleanly is skipped and reported; the rest still run.",
+      confirmLabel: "Sync All",
+      onConfirm: doSyncAll,
+    });
   };
 
   return (
@@ -324,13 +478,23 @@ export function WorktreesSection({
               Ownership, leases, branches, and retention actions.
             </p>
           </div>
-          <ActionButton
-            label="Refresh"
-            pendingLabel="Refreshing…"
-            pending={feedback.isPending("refresh")}
-            feedback={feedback.getFeedback("refresh")}
-            onClick={refresh}
-          />
+          <div className="flex flex-wrap items-start gap-2">
+            <ActionButton
+              label={`Sync All with ${management?.sourceCheckoutBranch ?? "checkout"}`}
+              pendingLabel="Syncing all…"
+              disabled={!syncEligibleEntries.length}
+              pending={syncAllPending}
+              feedback={syncAllFeedback}
+              onClick={syncAll}
+            />
+            <ActionButton
+              label="Refresh"
+              pendingLabel="Refreshing…"
+              pending={feedback.isPending("refresh")}
+              feedback={feedback.getFeedback("refresh")}
+              onClick={refresh}
+            />
+          </div>
         </div>
 
         {management?.entries.length ? (
@@ -449,7 +613,7 @@ function WorktreeRow({
   sourceCheckoutRoot?: string;
   sourceCheckoutBranch?: string | null;
 }) {
-  const rowKey = (suffix: string) => `${entry.worktreePath}::${suffix}`;
+  const rowKey = (suffix: string) => worktreeRowKey(entry.worktreePath, suffix);
   const owner = entry.inUse
     ? `In use — ${entry.leaseOwners.map((item) => `${item.lease.workflowKey}/${item.lease.runRef}`).join(", ")}`
     : entry.ownership === WORKTREE_MODES.MANAGED
@@ -535,18 +699,7 @@ function WorktreeRow({
     const [requestId] = feedback.begin(rowKey("repair"));
     sendAction(vscode, WORKTREE_MANAGEMENT_ACTIONS.REPAIR, requestId, entry);
   };
-  const normalizePath = (value: string) =>
-    value.replace(/\\/g, "/").toLowerCase().replace(/\/$/, "");
-  const isSourceCheckout =
-    !!sourceCheckoutRoot &&
-    normalizePath(entry.worktreePath) === normalizePath(sourceCheckoutRoot);
-  const canSync =
-    entry.ownership === "user" &&
-    !isSourceCheckout &&
-    !entry.inUse &&
-    !entry.stale &&
-    !!entry.branchName &&
-    entry.branchState === "present";
+  const canSync = isSyncEligible(entry, sourceCheckoutRoot);
   const doSync = () => {
     const [requestId] = feedback.begin(rowKey("sync"));
     vscode.postMessage({

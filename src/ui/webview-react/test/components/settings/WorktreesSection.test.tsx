@@ -1,9 +1,18 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorktreesSection } from "@components/settings/WorktreesSection";
 import { MESSAGE_TYPES, SETTING_SCOPES } from "@root/types/DashboardConstants";
 import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
-import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import type {
+  FullGlobalSettings,
+  WorktreeManagementEntry,
+} from "@root/types/WebviewMessageTypes";
 import { useSettingsStore } from "@store/settingsStore";
 
 function createSettings(root = ""): FullGlobalSettings {
@@ -153,6 +162,104 @@ describe("WorktreesSection", () => {
       worktreePath: "C:/repo.worktrees/bug-fix",
       requestId: expect.any(String),
     });
+  });
+
+  it("Sync All merges every eligible branch forward then back, skipping a failure without aborting the chain", async () => {
+    const postMessage = vi.fn();
+    window.vscodeApi = {
+      postMessage,
+      getState: () => undefined,
+      setState: () => undefined,
+    };
+
+    function makeEntry(
+      worktreePath: string,
+      branchName: string
+    ): WorktreeManagementEntry {
+      return {
+        worktreePath,
+        headCommit: "a",
+        branchName,
+        ownership: "user",
+        branchState: "present",
+        inUse: false,
+        leaseOwners: [],
+        stale: false,
+        branchCleanupEligible: false,
+      };
+    }
+
+    useSettingsStore.setState((state) => ({
+      globalSettings: { ...state.globalSettings, confirmResetOperations: true },
+    }));
+    useSettingsStore.getState().setWorktreeManagement({
+      resolvedRoot: "C:/worktrees",
+      sourceCheckoutRoot: "C:/repo",
+      sourceCheckoutBranch: "main",
+      generatedAt: Date.now(),
+      staleManagedRecords: [],
+      entries: [
+        makeEntry("C:/repo", "main"),
+        makeEntry("C:/repo.worktrees/branch-1", "branch-1"),
+        makeEntry("C:/repo.worktrees/branch-2", "branch-2"),
+        makeEntry("C:/repo.worktrees/branch-3", "branch-3"),
+      ],
+    });
+
+    render(
+      <WorktreesSection
+        settings={createSettings()}
+        activeScope={SETTING_SCOPES.USER}
+        onUpdate={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Sync All with main" })
+    );
+
+    // Sync All is confirmed once through the shared modal (not once per
+    // branch) before the chain runs.
+    const modal = screen.getByRole("dialog");
+    expect(modal).toHaveTextContent('Sync all 3 worktrees with "main"?');
+    fireEvent.click(within(modal).getByRole("button", { name: "Sync All" }));
+
+    // Forward pass over every eligible branch (display order), then a
+    // reverse pass over all but the last so earlier branches pick up what
+    // later branches only just merged into the source checkout.
+    const expectedOrder = [
+      "C:/repo.worktrees/branch-1",
+      "C:/repo.worktrees/branch-2",
+      "C:/repo.worktrees/branch-3",
+      "C:/repo.worktrees/branch-2",
+      "C:/repo.worktrees/branch-1",
+    ];
+
+    const syncCalls = () =>
+      postMessage.mock.calls
+        .map(([msg]) => msg)
+        .filter((msg) => msg.type === MESSAGE_TYPES.SYNC_NAMED_WORKTREE);
+
+    for (let i = 0; i < expectedOrder.length; i++) {
+      await waitFor(() => expect(syncCalls().length).toBeGreaterThan(i));
+      const call = syncCalls()[i];
+      expect(call.worktreePath).toBe(expectedOrder[i]);
+      // Fail branch-2's forward-pass merge (a simulated conflict) to prove
+      // it's skipped and reported rather than aborting the rest of the chain.
+      const isBranch2Forward = i === 1;
+      useSettingsStore.getState().setWorktreeActionResult(call.requestId, {
+        success: !isBranch2Forward,
+        message: isBranch2Forward ? "Merge conflict" : "up to date",
+      });
+    }
+
+    expect(syncCalls()).toHaveLength(expectedOrder.length);
+    await waitFor(() =>
+      expect(
+        screen.getByText('Synced 4 of 5 — "branch-2": Merge conflict')
+      ).toBeInTheDocument()
+    );
   });
 
   it("offers Remove/Force remove (not just Repair) for a stale managed entry whose directory Git never recorded as present", () => {
