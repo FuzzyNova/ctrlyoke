@@ -1583,38 +1583,38 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 </FormField>
               </DrawerRow>
 
-              {/* Row 3: Additional Args + Execution Mode */}
-              <DrawerRow narrow={isNarrow}>
-                <FormField
-                  label="Additional Args"
-                  htmlFor="settings-append-args"
-                  description="Extra CLI flags appended to ctrlyoke's standard argument set. Only applies to CLI harnesses."
-                  setAsDefaultButton={
-                    <SetAsDefaultButton
-                      property="additionalArgs"
-                      show={isDifferentFromGlobal("additionalArgs")}
-                      onSetDefault={() =>
-                        handleSetAsDefault(
-                          "additionalArgs",
-                          workflowProperties.additionalArgs,
-                          effectiveHarness
-                        )
-                      }
-                    />
-                  }
-                >
-                  <AdditionalArgsEditor
-                    id="settings-append-args"
-                    aria-label="Additional arguments"
-                    harnessId={effectiveHarness}
-                    value={additionalArgsInput}
-                    onChange={setAdditionalArgsInput}
-                    onBlur={() =>
-                      handleAdditionalArgsChange(additionalArgsInput)
+              {/* Row 3: Additional Args (full width) */}
+              <FormField
+                label="Additional Args"
+                htmlFor="settings-append-args"
+                description="Extra CLI flags appended to ctrlyoke's standard argument set. Only applies to CLI harnesses."
+                setAsDefaultButton={
+                  <SetAsDefaultButton
+                    property="additionalArgs"
+                    show={isDifferentFromGlobal("additionalArgs")}
+                    onSetDefault={() =>
+                      handleSetAsDefault(
+                        "additionalArgs",
+                        workflowProperties.additionalArgs,
+                        effectiveHarness
+                      )
                     }
-                    className="w-full text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                   />
-                </FormField>
+                }
+              >
+                <AdditionalArgsEditor
+                  id="settings-append-args"
+                  aria-label="Additional arguments"
+                  harnessId={effectiveHarness}
+                  value={additionalArgsInput}
+                  onChange={setAdditionalArgsInput}
+                  onBlur={() => handleAdditionalArgsChange(additionalArgsInput)}
+                  className="w-full text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
+                />
+              </FormField>
+
+              {/* Row 4: Execution Mode + Worktree */}
+              <DrawerRow narrow={isNarrow}>
                 <FormField
                   label="Execution Mode"
                   htmlFor="settings-execution-mode"
@@ -1639,10 +1639,6 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     options={EXECUTION_MODE_OPTIONS}
                   />
                 </FormField>
-              </DrawerRow>
-
-              {/* Row 4: Workflow worktree selection */}
-              <DrawerRow narrow={isNarrow}>
                 <FormField
                   label="Worktree"
                   htmlFor="settings-worktree-mode"
