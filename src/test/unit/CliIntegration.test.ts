@@ -1043,7 +1043,7 @@ suite("CliIntegration", () => {
       await integration.sendPrompt({ prompt: "install" });
 
       assert.deepStrictEqual(feedback, [
-        `ctrlyoke is now showing its own statusline for ${harness.terminalName}. Settings → Usage to change this.`,
+        `ctrlyoke is now showing its own statusline for ${harness.terminalName}. Settings → Status Line to change this.`,
       ]);
       integration.dispose();
     }
@@ -1098,7 +1098,7 @@ suite("CliIntegration", () => {
     );
     assert.strictEqual(appliedInstall, true);
     assert.deepStrictEqual(feedback, [
-      "ctrlyoke is now showing its own statusline for Claude. Settings → Usage to change this.",
+      "ctrlyoke is now showing its own statusline for Claude. Settings → Status Line to change this.",
     ]);
 
     integration.dispose();

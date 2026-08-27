@@ -1216,8 +1216,8 @@ export class CliIntegration extends HarnessIntegration {
     }
     const harness = this.provider.config.terminalName;
     const message = result.captured
-      ? `ctrlyoke is now managing your ${harness} statusline and forwarding to your existing script unchanged. Settings → Usage to change this.`
-      : `ctrlyoke is now showing its own statusline for ${harness}. Settings → Usage to change this.`;
+      ? `ctrlyoke is now managing your ${harness} statusline and forwarding to your existing script unchanged. Settings → Status Line to change this.`
+      : `ctrlyoke is now showing its own statusline for ${harness}. Settings → Status Line to change this.`;
     notifyUserFeedback(
       this.userFeedbackSink,
       USER_FEEDBACK_SEVERITY.INFO,
