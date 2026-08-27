@@ -116,7 +116,10 @@ export function buildCommitWorkflowOverrides(
 ): Partial<PromptFile> {
   return {
     harness,
-    model,
+    // Persist the resolved harness default as well as an explicit override so
+    // the read-only dashboard view shows the model this run actually used when
+    // commit.model is unset.
+    model: model ?? ConfigurationUtils.getModelForHarness(harness),
     executionMode: EXECUTION_MODES.HEADLESS,
     resumeSession: false,
     // The diff this prompt reasons about is always computed against the real
@@ -128,6 +131,11 @@ export function buildCommitWorkflowOverrides(
     skills: null,
     additionalArgs: null,
     hooks: null,
+    toolPermissions: {
+      mode: PERMISSION_MODES.ALLOW_ALL,
+      allowedTools: [],
+      deniedTools: [],
+    },
   };
 }
 
@@ -362,15 +370,26 @@ export class CommitMessageGenerator {
     let abortListener: (() => void) | undefined;
 
     try {
+      const workflowOverrides = buildCommitWorkflowOverrides(
+        harness,
+        model,
+        mcpServerConfig
+      );
       await instance.loadPromptStringAsRun(
         fullPrompt,
         COMMIT_MESSAGE_WORKFLOW_NAME,
-        buildCommitWorkflowOverrides(harness, model, mcpServerConfig),
+        workflowOverrides,
         {
           existingWorkflowKey,
           isSystemGenerated: existingWorkflowKey === undefined,
         }
       );
+
+      // Commit generation runs with feature-owned overrides that are stronger
+      // than the normal VS Code/global settings. Persist those values on the
+      // draft before promotion so a later RUN_VIEW_LOADED snapshot gives the
+      // read-only WorkflowPropertiesPanel the exact settings used by this run.
+      await instance.updateWorkingFileProperties(workflowOverrides);
 
       const resolvedWorkflowKey = instance.promptQueue.getState().workflowKey;
       if (resolvedWorkflowKey && existingWorkflowKey === undefined) {

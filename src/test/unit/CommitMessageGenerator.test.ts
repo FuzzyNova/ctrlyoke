@@ -4,7 +4,11 @@ import {
   buildCommitWorkflowOverrides,
   CommitMessageGenerationError,
 } from "../../git/CommitMessageGenerator";
-import { EXECUTION_MODES, HARNESS_IDS } from "../../types/DashboardConstants";
+import {
+  EXECUTION_MODES,
+  HARNESS_IDS,
+  PERMISSION_MODES,
+} from "../../types/DashboardConstants";
 import type {
   McpServerConfig,
   RunRef,
@@ -50,6 +54,11 @@ suite("CommitMessageGenerator", () => {
     assert.strictEqual(overrides.agent, null);
     assert.strictEqual(overrides.skills, null);
     assert.strictEqual(overrides.additionalArgs, null);
+    assert.deepStrictEqual(overrides.toolPermissions, {
+      mode: PERMISSION_MODES.ALLOW_ALL,
+      allowedTools: [],
+      deniedTools: [],
+    });
     assert.strictEqual(overrides.hooks, null);
   });
 
