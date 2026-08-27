@@ -125,10 +125,21 @@ export class Log {
    *
    * @param workspaceDir - Working directory (parent of .ctrlyoke/).
    * @param verbose      - When true, enables DEBUG level; otherwise INFO.
+   * @param existingLogFilePath - Reuse an already-open workspace log file when
+   *   a worker needs to write into the extension host's log.
    */
-  static initializeCli(workspaceDir: string, verbose = false): void {
+  static initializeCli(
+    workspaceDir: string,
+    verbose = false,
+    existingLogFilePath?: string
+  ): void {
     this.cliMode = true;
     this.logLevel = verbose ? LogLevel.DEBUG : LogLevel.INFO;
+
+    if (existingLogFilePath) {
+      this.cliLogFilePath = existingLogFilePath;
+      return;
+    }
 
     const logDir = path.join(
       workspaceDir,
@@ -144,6 +155,11 @@ export class Log {
       // Proceed without file logging if directory creation fails
       this.cliLogFilePath = undefined;
     }
+  }
+
+  /** Return the active workspace log path for worker-side log forwarding. */
+  static getLogFilePath(): string | undefined {
+    return this.logFilePath;
   }
 
   /**

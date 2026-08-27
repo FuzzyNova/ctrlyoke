@@ -10,6 +10,7 @@ import { LifetimeUsageStore } from "../../core/harness/shared/usage/LifetimeUsag
 import { ObservedHarnessUsageStore } from "../../core/harness/shared/usage/ObservedHarnessUsageStore";
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { HistorySearchService } from "../../core/orchestration/HistorySearchService";
+import { getSharedHistorySearchIndexService } from "../../core/orchestration/HistorySearchIndexServiceRegistry";
 import { WorkingFileManager } from "../../core/WorkingFileManager";
 import { clearRunSummaryCache } from "../../core/orchestration/RunSummaryCache";
 import {
@@ -109,6 +110,36 @@ suite("OutputHistoryManager timeline-backed storage", () => {
     await manager.flushPendingIndexRefresh();
     clearRunSummaryCache();
     await fs.rm(tempWorkspace, { recursive: true, force: true });
+  });
+
+  test("shares one history search index service per workspace", async () => {
+    const equivalentWorkspacePath = path.join(tempWorkspace, ".");
+    const otherWorkspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "fp-history-other-")
+    );
+    const secondManager = new OutputHistoryManager(equivalentWorkspacePath);
+    const otherManager = new OutputHistoryManager(otherWorkspace);
+
+    try {
+      assert.strictEqual(
+        getSharedHistorySearchIndexService(tempWorkspace),
+        getSharedHistorySearchIndexService(equivalentWorkspacePath)
+      );
+      if (process.platform === "win32") {
+        assert.strictEqual(
+          getSharedHistorySearchIndexService(tempWorkspace),
+          getSharedHistorySearchIndexService(tempWorkspace.toUpperCase())
+        );
+      }
+      assert.notStrictEqual(
+        getSharedHistorySearchIndexService(tempWorkspace),
+        getSharedHistorySearchIndexService(otherWorkspace)
+      );
+      await secondManager.flushPendingIndexRefresh();
+      await otherManager.flushPendingIndexRefresh();
+    } finally {
+      await fs.rm(otherWorkspace, { recursive: true, force: true });
+    }
   });
 
   test("persists replacement snapshots, preserves same-run history across reopen, and finalizes both copies", async () => {
