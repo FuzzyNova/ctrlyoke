@@ -1,6 +1,6 @@
 # History Search Performance & Isolation Plan
 
-**Status:** Proposed
+**Status:** Phase 2 complete (2026-08-27)
 **Priority:** P1 (raised from P2 2026-08-27 — a second confirmed OOM crash,
 not just heap pressure, occurred mid-`HistorySearchIndexService` rebuild;
 see "2026-08-27 Incident #2" below)
@@ -340,6 +340,20 @@ Design sketch:
   2026-08-27 Incident #2 crash (see above) onto a second thread instead of
   eliminating it.
 
+### Phase 2 — shipped 2026-08-27
+
+Implemented in
+`src/core/orchestration/historySearchRebuildWorker.ts`. Each rebuild now
+spawns and terminates a fresh worker, which owns the lock-scoped freshness
+recheck, history scan, streamed JSONL write, manifest publication, and stale
+rebuild-directory cleanup. The host relays only progress ticks and the final
+result, then reloads retained documents from disk.
+
+The worker is bundled as `out/historySearchRebuildWorker.js` by `esbuild.js`.
+Its `vscode` import is aliased to `src/platform/vscode-shim.ts`, and it calls
+`Log.initializeCli()` with the host's current log path so existing logging and
+memory diagnostics continue in the same workspace log file.
+
 ## Non-goals
 
 - **No separate OS-process daemon.** Rejected during the incident
@@ -395,19 +409,19 @@ sequence gated on log data anymore — the data now says both are needed.
 
 ## Acceptance criteria
 
-- Two `HistorySearchIndexService` instances (e.g. two workflows completing
+- [x] Two `HistorySearchIndexService` instances (e.g. two workflows completing
   near-simultaneously) no longer both run a full rebuild pass when the
   second one's data would already be fresh after the first's completes.
-- A full index rebuild's scan/extraction work runs off the extension host's
+- [x] A full index rebuild's scan/extraction work runs off the extension host's
   main heap, and a worker-side OOM does not crash or degrade the extension
   host or any other live workflow.
-- `search()`'s synchronous rebuild-before-search path still reports progress
+- [x] `search()`'s synchronous rebuild-before-search path still reports progress
   to the UI (existing `SEARCH_INDEX_REBUILD_PROGRESS` messages) when the
   work has moved to a worker.
-- No regression to existing `HistorySearchIndexService`/`HistorySearchService`
+- [x] No regression to existing `HistorySearchIndexService`/`HistorySearchService`
   unit test coverage; new coverage for the freshness-recheck skip path and
   for worker success/failure/progress relay.
-- Phase 1B shipped through
+- [x] Phase 1B shipped through
   `HistorySearchIndexServiceRegistry.ts`: the registry uses a normalized,
   resolved `workspaceFolderPath` key (including Windows case folding), so each
   workspace gets one shared index-service instance and no index service is

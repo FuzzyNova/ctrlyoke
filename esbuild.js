@@ -361,6 +361,26 @@ async function main() {
     },
   });
 
+  // Build the history-index rebuild worker as its own Node bundle. It runs in
+  // a separate V8 isolate and cannot resolve VS Code's injected module, so it
+  // uses the same standalone vscode shim as the CLI and MCP binaries.
+  const historySearchRebuildWorkerCtx = await esbuild.context({
+    entryPoints: ["src/core/orchestration/historySearchRebuildWorker.ts"],
+    bundle: true,
+    format: "cjs",
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: "node",
+    target: "node22",
+    mainFields,
+    outfile: "out/historySearchRebuildWorker.js",
+    alias: {
+      vscode: path.resolve(__dirname, "src/platform/vscode-shim.ts"),
+    },
+    logLevel: "silent",
+  });
+
   // Build standalone CLI binary
   const packageJson = JSON.parse(
     fs.readFileSync(path.join(__dirname, "package.json"), "utf-8")
@@ -400,17 +420,20 @@ async function main() {
     await ctx.watch();
     await statuslineFormatCtx.watch();
     await mcpCtx.watch();
+    await historySearchRebuildWorkerCtx.watch();
     await cliCtx.watch();
   } else {
     await webviewScriptsCtx.rebuild();
     await ctx.rebuild();
     await statuslineFormatCtx.rebuild();
     await mcpCtx.rebuild();
+    await historySearchRebuildWorkerCtx.rebuild();
     await cliCtx.rebuild();
     await webviewScriptsCtx.dispose();
     await ctx.dispose();
     await statuslineFormatCtx.dispose();
     await mcpCtx.dispose();
+    await historySearchRebuildWorkerCtx.dispose();
     await cliCtx.dispose();
   }
 }

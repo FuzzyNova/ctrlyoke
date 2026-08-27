@@ -156,6 +156,43 @@ suite("HistorySearchIndexService", () => {
     );
   });
 
+  test("runs a real worker rebuild and relays progress to the caller", async () => {
+    await createRun("worker-success-2026-06-09T22-25-00", 1, 3500, [
+      createStatusDraft(3550, "worker-success-term"),
+    ]);
+
+    const progress: Array<[number, number]> = [];
+    const response = await new HistorySearchIndexService().search(
+      { query: "worker-success-term", limit: 10 },
+      workspaceRoot,
+      (processedRuns, totalRuns) => {
+        progress.push([processedRuns, totalRuns]);
+      }
+    );
+
+    assert.strictEqual(response.totalCount, 1);
+    assert.ok(
+      progress.some(([processed, total]) => processed === 0 && total === 1)
+    );
+    assert.ok(
+      progress.some(([processed, total]) => processed === 1 && total === 1)
+    );
+  });
+
+  test("propagates a real worker failure to the rebuild caller", async () => {
+    const runsRoot = WorkflowPaths.runsRoot(workspaceRoot);
+    await fs.rm(runsRoot, { recursive: true, force: true });
+    await fs.writeFile(runsRoot, "not a directory", "utf8");
+
+    await assert.rejects(
+      new HistorySearchIndexService().search(
+        { query: "worker-failure-term", limit: 10 },
+        workspaceRoot
+      ),
+      /ENOTDIR|not a directory/i
+    );
+  });
+
   test("keeps unattributed documents unless harnesses are narrowed", async () => {
     const workflowId = "unattributed-2026-06-09T22-30-00";
     await createRun(workflowId, 1, 4000, [
