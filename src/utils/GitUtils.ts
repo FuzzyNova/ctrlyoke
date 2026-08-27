@@ -111,7 +111,7 @@ export interface CommitDetailInfo {
  */
 export async function getRecentCommits(
   workspaceRoot: string,
-  limit: number | undefined = 30,
+  limit: number | undefined,
   skip: number = 0,
   ref?: string
 ): Promise<CommitInfo[]> {
