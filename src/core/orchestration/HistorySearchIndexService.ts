@@ -23,6 +23,7 @@ import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { withFileLock } from "../../utils/FileLockUtils";
 import { Log } from "../../utils/Log";
+import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
 import { projectStateRoot } from "../../utils/ProjectStatePaths";
 import { getFrozenRunHistoryLocation } from "../../utils/RunHistoryStoragePolicy";
 import { TimelineRecorder } from "./TimelineRecorder";
@@ -49,8 +50,24 @@ const DEFAULT_LIMIT = 50;
  * extension-host JS heap while building it. Search only needs enough text to
  * match and render a snippet, so we cap each candidate. Matches past this
  * offset within a single very large value are intentionally not indexed.
+ * Exported so other readers of this history (e.g. `HistorySearchService`'s
+ * unindexed disk-scan fallback) cap candidate text the same way — that path
+ * built full, uncapped documents until it was found to reproduce the same
+ * heap-growth pattern this cap exists to avoid.
  */
-const MAX_INDEXED_TEXT_LENGTH = 2000;
+export const MAX_INDEXED_TEXT_LENGTH = 2000;
+
+/**
+ * Lock hold time budget for a full index rebuild, as opposed to the
+ * `FileLockUtils` default (tuned for the quick manifest/descriptor writes
+ * most other lock users do). A full rebuild over a large run history
+ * (~20s for 1250 runs / 642k documents) routinely exceeds the 5s default,
+ * so any two rebuilds racing for the lock — e.g. a live workflow's
+ * background refresh and a search's synchronous rebuild-before-search —
+ * would have the loser time out and, for the search path, fall back to an
+ * unindexed, unbounded disk scan instead of just waiting the ~20s out.
+ */
+const REBUILD_LOCK_TIMEOUT_MS = 60_000;
 
 interface HistorySearchIndexManifest {
   schemaVersion: typeof INDEX_SCHEMA_VERSION;
@@ -249,7 +266,10 @@ export class HistorySearchIndexService {
     onRebuildProgress?: IndexRebuildProgressCallback
   ): Promise<void> {
     await this.loadIfPossible(workspaceFolderPath);
-    if (this.loadedWorkspacePath === workspaceFolderPath && this.loadedManifest) {
+    if (
+      this.loadedWorkspacePath === workspaceFolderPath &&
+      this.loadedManifest
+    ) {
       const freshnessStart = Date.now();
       const fresh = await this.isManifestFresh(
         workspaceFolderPath,
@@ -343,128 +363,142 @@ export class HistorySearchIndexService {
     await fs.promises.mkdir(indexDir, { recursive: true });
 
     const lockTargetPath = this.getIndexManifestPath(workspaceFolderPath);
-    await withFileLock(lockTargetPath, async () => {
-      const builtAt = Date.now();
-      const rebuildDir = path.join(indexDir, `rebuild-${builtAt}`);
-      await fs.promises.mkdir(rebuildDir, { recursive: true });
+    await withFileLock(
+      lockTargetPath,
+      async () => {
+        const builtAt = Date.now();
+        const rebuildDir = path.join(indexDir, `rebuild-${builtAt}`);
+        await fs.promises.mkdir(rebuildDir, { recursive: true });
 
-      const indexedRuns: HistorySearchIndexManifest["indexedRuns"] = {};
-      const listSourcesStart = Date.now();
-      const runSources = await this.listRunSources(workspaceFolderPath);
-      Log.info(
-        `[HistorySearchIndexService] rebuild starting: runs=${runSources.length} retainDocuments=${options.retainDocuments} listSourcesMs=${Date.now() - listSourcesStart}`
-      );
-      const retained: HistorySearchDocument[] | undefined =
-        options.retainDocuments ? [] : undefined;
+        const indexedRuns: HistorySearchIndexManifest["indexedRuns"] = {};
+        const listSourcesStart = Date.now();
+        const runSources = await this.listRunSources(workspaceFolderPath);
+        Log.info(
+          `[HistorySearchIndexService] rebuild starting: runs=${runSources.length} retainDocuments=${options.retainDocuments} listSourcesMs=${Date.now() - listSourcesStart}`
+        );
+        logMemoryUsage("HistorySearchIndexService rebuild starting", {
+          runs: runSources.length,
+          retainDocuments: String(options.retainDocuments),
+        });
+        const retained: HistorySearchDocument[] | undefined =
+          options.retainDocuments ? [] : undefined;
 
-      const documentsPath = path.join(rebuildDir, DOCUMENTS_FILE_NAME);
-      const manifestPath = path.join(rebuildDir, MANIFEST_FILE_NAME);
-      const stream = fs.createWriteStream(documentsPath, { encoding: "utf8" });
-      let documentCount = 0;
-      let processedRuns = 0;
-      const PROGRESS_LOG_INTERVAL = 200;
-      const PROGRESS_EMIT_INTERVAL_MS = 150;
-      let lastProgressEmitAt = 0;
-      options.onProgress?.(0, runSources.length);
-      // A lineage's runs are contiguous in `runSources` (grouped by
-      // `listRunSources`'s per-lineage readdir), so caching by workflowKey
-      // turns what was one descriptor read per run into one per lineage.
-      const metadataCache = new Map<WorkflowKey, WorkflowMetadata>();
-      try {
-        for (const source of runSources) {
-          const manifest = await this.readManifestSafe(source.manifestPath);
-          if (!manifest) {
-            continue;
-          }
-          const events = await this.readEventsSafe(source.manifestPath);
-          let metadata = metadataCache.get(source.workflowKey);
-          if (!metadata) {
-            metadata = await this.readWorkflowMetadata(
-              workspaceFolderPath,
-              source.workflowKey
-            );
-            metadataCache.set(source.workflowKey, metadata);
-          }
+        const documentsPath = path.join(rebuildDir, DOCUMENTS_FILE_NAME);
+        const manifestPath = path.join(rebuildDir, MANIFEST_FILE_NAME);
+        const stream = fs.createWriteStream(documentsPath, {
+          encoding: "utf8",
+        });
+        let documentCount = 0;
+        let processedRuns = 0;
+        const PROGRESS_LOG_INTERVAL = 200;
+        const PROGRESS_EMIT_INTERVAL_MS = 150;
+        let lastProgressEmitAt = 0;
+        options.onProgress?.(0, runSources.length);
+        // A lineage's runs are contiguous in `runSources` (grouped by
+        // `listRunSources`'s per-lineage readdir), so caching by workflowKey
+        // turns what was one descriptor read per run into one per lineage.
+        const metadataCache = new Map<WorkflowKey, WorkflowMetadata>();
+        try {
+          for (const source of runSources) {
+            const manifest = await this.readManifestSafe(source.manifestPath);
+            if (!manifest) {
+              continue;
+            }
+            const events = await this.readEventsSafe(source.manifestPath);
+            let metadata = metadataCache.get(source.workflowKey);
+            if (!metadata) {
+              metadata = await this.readWorkflowMetadata(
+                workspaceFolderPath,
+                source.workflowKey
+              );
+              metadataCache.set(source.workflowKey, metadata);
+            }
 
-          for (const document of this.buildRunDocuments(
-            manifest,
-            events,
-            metadata,
-            source.workflowKey,
-            source.runRef
-          )) {
-            retained?.push(document);
-            documentCount += 1;
-            if (!stream.write(JSON.stringify(document) + "\n")) {
-              await once(stream, "drain");
+            for (const document of this.buildRunDocuments(
+              manifest,
+              events,
+              metadata,
+              source.workflowKey,
+              source.runRef
+            )) {
+              retained?.push(document);
+              documentCount += 1;
+              if (!stream.write(JSON.stringify(document) + "\n")) {
+                await once(stream, "drain");
+              }
+            }
+
+            const manifestStats = await fs.promises.stat(source.manifestPath);
+            const eventsStats = await this.statOptional(source.eventsPath);
+            indexedRuns[path.resolve(source.manifestPath)] = {
+              manifestPath: source.manifestPath,
+              eventsPath: source.eventsPath,
+              workflowId: manifest.workflowId,
+              runId: manifest.runId,
+              startedAt: manifest.startedAt,
+              eventCount: manifest.eventCount,
+              lastUpdatedAt: manifest.lastUpdatedAt,
+              sourceManifestMtimeMs: manifestStats.mtimeMs,
+              sourceEventsMtimeMs: eventsStats?.mtimeMs ?? 0,
+            };
+
+            processedRuns += 1;
+            if (processedRuns % PROGRESS_LOG_INTERVAL === 0) {
+              Log.debug(
+                `[HistorySearchIndexService] rebuild progress: ${processedRuns}/${runSources.length} runs, ${documentCount} documents so far, elapsedMs=${Date.now() - listSourcesStart}`
+              );
+            }
+            const now = Date.now();
+            if (now - lastProgressEmitAt >= PROGRESS_EMIT_INTERVAL_MS) {
+              lastProgressEmitAt = now;
+              options.onProgress?.(processedRuns, runSources.length);
             }
           }
-
-          const manifestStats = await fs.promises.stat(source.manifestPath);
-          const eventsStats = await this.statOptional(source.eventsPath);
-          indexedRuns[path.resolve(source.manifestPath)] = {
-            manifestPath: source.manifestPath,
-            eventsPath: source.eventsPath,
-            workflowId: manifest.workflowId,
-            runId: manifest.runId,
-            startedAt: manifest.startedAt,
-            eventCount: manifest.eventCount,
-            lastUpdatedAt: manifest.lastUpdatedAt,
-            sourceManifestMtimeMs: manifestStats.mtimeMs,
-            sourceEventsMtimeMs: eventsStats?.mtimeMs ?? 0,
-          };
-
-          processedRuns += 1;
-          if (processedRuns % PROGRESS_LOG_INTERVAL === 0) {
-            Log.debug(
-              `[HistorySearchIndexService] rebuild progress: ${processedRuns}/${runSources.length} runs, ${documentCount} documents so far, elapsedMs=${Date.now() - listSourcesStart}`
-            );
-          }
-          const now = Date.now();
-          if (now - lastProgressEmitAt >= PROGRESS_EMIT_INTERVAL_MS) {
-            lastProgressEmitAt = now;
-            options.onProgress?.(processedRuns, runSources.length);
-          }
+        } finally {
+          stream.end();
+          await once(stream, "finish");
         }
-      } finally {
-        stream.end();
-        await once(stream, "finish");
-      }
 
-      const indexManifest: HistorySearchIndexManifest = {
-        schemaVersion: INDEX_SCHEMA_VERSION,
-        builtAt,
-        workspaceRootHash: this.hashPath(workspaceFolderPath),
-        historyRootMtimeMs: (
-          await this.statOptional(WorkflowPaths.runsRoot(workspaceFolderPath))
-        )?.mtimeMs,
-        indexedRuns,
-      };
+        const indexManifest: HistorySearchIndexManifest = {
+          schemaVersion: INDEX_SCHEMA_VERSION,
+          builtAt,
+          workspaceRootHash: this.hashPath(workspaceFolderPath),
+          historyRootMtimeMs: (
+            await this.statOptional(WorkflowPaths.runsRoot(workspaceFolderPath))
+          )?.mtimeMs,
+          indexedRuns,
+        };
 
-      await fs.promises.writeFile(
-        manifestPath,
-        JSON.stringify(indexManifest, null, 2),
-        "utf8"
-      );
+        await fs.promises.writeFile(
+          manifestPath,
+          JSON.stringify(indexManifest, null, 2),
+          "utf8"
+        );
 
-      await this.swapIndexFiles(indexDir, manifestPath, documentsPath);
-      if (retained) {
-        this.loadedWorkspacePath = workspaceFolderPath;
-        this.loadedManifest = indexManifest;
-        this.documents = retained;
-      } else {
-        // Write-only refresh: drop any in-memory index so refresh-only
-        // instances don't retain a full copy. A later search reloads from disk.
-        this.loadedWorkspacePath = undefined;
-        this.loadedManifest = undefined;
-        this.documents = [];
-      }
-      await this.cleanupRebuildDirs(indexDir, rebuildDir);
-      options.onProgress?.(processedRuns, runSources.length);
-      Log.info(
-        `[HistorySearchIndexService] rebuild complete: runs=${processedRuns}/${runSources.length} documents=${documentCount} totalMs=${Date.now() - listSourcesStart}`
-      );
-    });
+        await this.swapIndexFiles(indexDir, manifestPath, documentsPath);
+        if (retained) {
+          this.loadedWorkspacePath = workspaceFolderPath;
+          this.loadedManifest = indexManifest;
+          this.documents = retained;
+        } else {
+          // Write-only refresh: drop any in-memory index so refresh-only
+          // instances don't retain a full copy. A later search reloads from disk.
+          this.loadedWorkspacePath = undefined;
+          this.loadedManifest = undefined;
+          this.documents = [];
+        }
+        await this.cleanupRebuildDirs(indexDir, rebuildDir);
+        options.onProgress?.(processedRuns, runSources.length);
+        Log.info(
+          `[HistorySearchIndexService] rebuild complete: runs=${processedRuns}/${runSources.length} documents=${documentCount} totalMs=${Date.now() - listSourcesStart}`
+        );
+        logMemoryUsage("HistorySearchIndexService rebuild complete", {
+          runs: processedRuns,
+          documents: documentCount,
+        });
+      },
+      { timeoutMs: REBUILD_LOCK_TIMEOUT_MS }
+    );
   }
 
   private async isManifestFresh(
@@ -537,7 +571,9 @@ export class HistorySearchIndexService {
 
     const stale = checkResults.find((result) => !result.fresh);
     if (stale && !stale.fresh) {
-      Log.debug(`[HistorySearchIndexService] freshness check stale: ${stale.reason}`);
+      Log.debug(
+        `[HistorySearchIndexService] freshness check stale: ${stale.reason}`
+      );
       return false;
     }
 

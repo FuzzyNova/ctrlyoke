@@ -21,8 +21,11 @@ import {
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { Log } from "../../utils/Log";
+import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
+import { FileLockTimeoutError } from "../../utils/FileLockUtils";
 import {
   HistorySearchIndexService,
+  MAX_INDEXED_TEXT_LENGTH,
   type IndexRebuildProgressCallback,
 } from "./HistorySearchIndexService";
 import {
@@ -49,7 +52,14 @@ export class HistorySearchService {
   private readonly timelineRecorder = new TimelineRecorder();
   private readonly indexService = new HistorySearchIndexService();
   private readonly lineageRepository = new WorkflowLineageRepository();
-  private readonly candidateExtractor = new HistoryCandidateExtractor();
+  // Capped the same as the indexed rebuild path (HistorySearchIndexService) —
+  // this fallback used to build full, uncapped candidate text for every event
+  // it scanned, which is exactly the "megabyte-per-event verbatim" pattern
+  // that path's own cap exists to avoid, and is more likely to run under
+  // memory pressure since it only fires when the index path already failed.
+  private readonly candidateExtractor = new HistoryCandidateExtractor({
+    maxTextLength: MAX_INDEXED_TEXT_LENGTH,
+  });
 
   async search(
     query: string | HistorySearchQuery,
@@ -69,9 +79,14 @@ export class HistorySearchService {
         onRebuildProgress
       );
     } catch (error) {
+      const reason =
+        error instanceof FileLockTimeoutError
+          ? `lock still contended after its extended timeout (${getErrorMessage(error)})`
+          : getErrorMessage(error);
       Log.warn(
-        `[HistorySearchService] Indexed search failed after ${Date.now() - indexAttemptStart}ms, falling back to disk scan: ${getErrorMessage(error)}`
+        `[HistorySearchService] Indexed search failed after ${Date.now() - indexAttemptStart}ms, falling back to disk scan: ${reason}`
       );
+      logMemoryUsage("HistorySearchService falling back to disk scan");
       const fallbackStart = Date.now();
       const results = await this.searchLegacy(
         request.query,
@@ -82,6 +97,7 @@ export class HistorySearchService {
       Log.info(
         `[HistorySearchService] Disk scan fallback complete: query="${request.query.trim()}" results=${results.length} durationMs=${Date.now() - fallbackStart}`
       );
+      logMemoryUsage("HistorySearchService disk scan fallback complete");
       return {
         query: request.query.trim(),
         results,

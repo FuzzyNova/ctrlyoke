@@ -9,10 +9,18 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function acquireLock(lockPath: string): Promise<void> {
+/** Thrown by {@link withFileLock} when a lock isn't acquired within its timeout. */
+export class FileLockTimeoutError extends Error {
+  constructor(lockPath: string) {
+    super(`Timed out waiting for lock: ${lockPath}`);
+    this.name = "FileLockTimeoutError";
+  }
+}
+
+async function acquireLock(lockPath: string, timeoutMs: number): Promise<void> {
   const startTime = Date.now();
 
-  while (Date.now() - startTime < LOCK_TIMEOUT_MS) {
+  while (Date.now() - startTime < timeoutMs) {
     try {
       const handle = await fs.open(lockPath, "wx");
       try {
@@ -52,7 +60,7 @@ async function acquireLock(lockPath: string): Promise<void> {
     }
   }
 
-  throw new Error(`Timed out waiting for lock: ${lockPath}`);
+  throw new FileLockTimeoutError(lockPath);
 }
 
 async function releaseLock(lockPath: string): Promise<void> {
@@ -72,10 +80,11 @@ async function releaseLock(lockPath: string): Promise<void> {
 
 export async function withFileLock<T>(
   targetPath: string,
-  action: () => Promise<T>
+  action: () => Promise<T>,
+  options?: { timeoutMs?: number }
 ): Promise<T> {
   const lockPath = `${targetPath}${LOCK_FILE_EXTENSION}`;
-  await acquireLock(lockPath);
+  await acquireLock(lockPath, options?.timeoutMs ?? LOCK_TIMEOUT_MS);
 
   try {
     return await action();

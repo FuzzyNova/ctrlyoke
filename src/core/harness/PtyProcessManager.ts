@@ -4,6 +4,7 @@ import { Log } from "../../utils/Log";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { secretRedactionService } from "../../utils/SecretRedactionService";
 import { canonicalizeDriveLetter } from "../../utils/PathCasing";
+import { logMemoryUsage } from "../../utils/MemoryDiagnostics";
 import {
   SESSION_KINDS,
   SHELL_KINDS,
@@ -512,6 +513,11 @@ export class PtyProcessManager {
     }
 
     this.sessions.set(sessionId, session);
+    logMemoryUsage("PTY session spawned", {
+      sessionId,
+      kind: options.kind,
+      activeSessions: this.sessions.size,
+    });
 
     ptyInstance.onData((chunk: string) => {
       session.bufferChunk(chunk);
@@ -524,6 +530,11 @@ export class PtyProcessManager {
           ? TERMINAL_SESSION_STATUS.COMPLETED
           : TERMINAL_SESSION_STATUS.FAILED;
       this.sessions.delete(sessionId);
+      logMemoryUsage("PTY session exited", {
+        sessionId,
+        kind: options.kind,
+        activeSessions: this.sessions.size,
+      });
       options.onExit(session, exitCode ?? 1);
       Log.debug(
         `🖥️ PTY session ${sessionId} (${options.kind}) exited with code ${exitCode}`
