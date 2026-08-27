@@ -180,6 +180,7 @@ export function HistorySearchDrawer() {
   const nextCursor = useUiStore((s) => s.historySearchNextCursor);
   const hasMore = useUiStore((s) => s.historySearchHasMore);
   const indexState = useUiStore((s) => s.historySearchIndexState);
+  const rebuildProgress = useUiStore((s) => s.historySearchRebuildProgress);
   const historySearchFilters = useUiStore((s) => s.historySearchFilters);
   const workflowKey = useUiStore((s) => s.displayedViewAddress?.workflowKey);
   const displayedViewAddress = useUiStore((s) => s.displayedViewAddress);
@@ -763,12 +764,40 @@ export function HistorySearchDrawer() {
           </div>
         )}
 
-        {trimmedQuery.length >= 2 && loading && (
-          <div className="flex items-center justify-center gap-2 px-3 py-6 text-sm text-description-fg">
-            <i className="codicon codicon-loading animate-spin" />
-            <span>Searching...</span>
-          </div>
-        )}
+        {trimmedQuery.length >= 2 &&
+          loading &&
+          (rebuildProgress && rebuildProgress.totalRuns > 0 ? (
+            <div className="flex flex-col items-center gap-2 px-3 py-6 text-sm text-description-fg">
+              <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-ctx-bar-track">
+                <div
+                  className="h-full rounded-full bg-info-fg opacity-80 transition-[width]"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.round(
+                        (rebuildProgress.processedRuns /
+                          rebuildProgress.totalRuns) *
+                          100
+                      )
+                    )}%`,
+                  }}
+                />
+              </div>
+              <span>
+                Rebuilding search index ({rebuildProgress.processedRuns}/
+                {rebuildProgress.totalRuns} runs)
+              </span>
+              <span className="text-center text-xs opacity-80">
+                This happens once after a large history change and can take a
+                while — results will appear as soon as it finishes.
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center gap-2 px-3 py-6 text-sm text-description-fg">
+              <i className="codicon codicon-loading animate-spin" />
+              <span>Searching...</span>
+            </div>
+          ))}
 
         {trimmedQuery.length >= 2 && !loading && results.length === 0 && (
           <div className="px-3 py-6 text-center text-sm text-description-fg">

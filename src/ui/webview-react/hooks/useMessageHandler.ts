@@ -2411,6 +2411,20 @@ export function createMessageHandlers(
   };
 
   // --------------------------------------------------------------------------
+  // SEARCH_INDEX_REBUILD_PROGRESS - Pushed while a search is blocked on a
+  // full, synchronous index rebuild (see HistorySearchIndexService.rebuild)
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SEARCH_INDEX_REBUILD_PROGRESS] = (message) => {
+    const { processedRuns, totalRuns } = message as {
+      processedRuns: number;
+      totalRuns: number;
+    };
+    useUiStore
+      .getState()
+      .setHistorySearchRebuildProgress({ processedRuns, totalRuns });
+  };
+
+  // --------------------------------------------------------------------------
   // OPEN_HISTORY_SEARCH - Open global history search drawer
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.OPEN_HISTORY_SEARCH] = () => {

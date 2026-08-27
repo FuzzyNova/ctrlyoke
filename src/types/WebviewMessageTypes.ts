@@ -1561,6 +1561,18 @@ export interface SearchHistoryResultsMessage extends HistorySearchResponse {
 }
 
 /**
+ * Extension -> Webview: pushed while a SEARCH_HISTORY request is blocked on
+ * a full, synchronous search-index rebuild (no cached index, or the cached
+ * one is stale). Lets the UI show real progress instead of an indefinite
+ * spinner for what can be a multi-second rebuild on a large run history.
+ */
+export interface SearchIndexRebuildProgressMessage {
+  type: typeof MESSAGE_TYPES.SEARCH_INDEX_REBUILD_PROGRESS;
+  processedRuns: number;
+  totalRuns: number;
+}
+
+/**
  * Output history loaded message (extension -> webview)
  * NOTE: Uses `any` for `history` to avoid circular dependency with OutputHistoryTypes.
  */
@@ -2386,6 +2398,7 @@ export type IncomingMessage =
   | ExecutionStartedMessage
   | ExecutionStateChangedMessage
   | ProgressUpdateMessage
+  | SearchIndexRebuildProgressMessage
   | StepStatusChangedMessage
   | RetryAttemptChangedMessage
   | CliOutputMessage

@@ -1233,7 +1233,14 @@ export class WebviewMessageRouter {
               ? message.filters
               : undefined,
         },
-        workspacePath
+        workspacePath,
+        (processedRuns, totalRuns) => {
+          ctx.emit({
+            type: MESSAGE_TYPES.SEARCH_INDEX_REBUILD_PROGRESS,
+            processedRuns,
+            totalRuns,
+          });
+        }
       );
       ctx.emit({
         type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,

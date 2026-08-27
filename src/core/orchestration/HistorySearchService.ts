@@ -21,7 +21,10 @@ import {
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { Log } from "../../utils/Log";
-import { HistorySearchIndexService } from "./HistorySearchIndexService";
+import {
+  HistorySearchIndexService,
+  type IndexRebuildProgressCallback,
+} from "./HistorySearchIndexService";
 import {
   HistoryCandidateExtractor,
   type MatchCandidate,
@@ -50,7 +53,8 @@ export class HistorySearchService {
 
   async search(
     query: string | HistorySearchQuery,
-    workspaceFolderPath: string
+    workspaceFolderPath: string,
+    onRebuildProgress?: IndexRebuildProgressCallback
   ): Promise<HistorySearchResponse> {
     const request =
       typeof query === "string"
@@ -59,7 +63,11 @@ export class HistorySearchService {
 
     const indexAttemptStart = Date.now();
     try {
-      return await this.indexService.search(request, workspaceFolderPath);
+      return await this.indexService.search(
+        request,
+        workspaceFolderPath,
+        onRebuildProgress
+      );
     } catch (error) {
       Log.warn(
         `[HistorySearchService] Indexed search failed after ${Date.now() - indexAttemptStart}ms, falling back to disk scan: ${getErrorMessage(error)}`

@@ -456,6 +456,8 @@ interface UiState {
   historySearchNextCursor?: string;
   historySearchHasMore: boolean;
   historySearchIndexState: HistorySearchIndexState;
+  /** Set only while a search is blocked on a full search-index rebuild; null otherwise. */
+  historySearchRebuildProgress: { processedRuns: number; totalRuns: number } | null;
   historySearchFilters: HistorySearchFilterState;
   pendingHistorySearchNavigation: {
     address: Extract<WorkflowViewAddress, { kind: "run" }>;
@@ -763,6 +765,9 @@ interface UiActions {
       loadingMore?: boolean;
     }
   ) => void;
+  setHistorySearchRebuildProgress: (
+    progress: { processedRuns: number; totalRuns: number } | null
+  ) => void;
   setPendingHistorySearchNavigation: (
     nav: {
       address: Extract<WorkflowViewAddress, { kind: "run" }>;
@@ -1015,6 +1020,7 @@ const initialState: UiState = {
   historySearchNextCursor: undefined,
   historySearchHasMore: false,
   historySearchIndexState: "ready",
+  historySearchRebuildProgress: null,
   historySearchFilters: createDefaultHistorySearchFilters(),
   pendingHistorySearchNavigation: null,
   newWorkflowModalOpen: false,
@@ -1235,6 +1241,7 @@ export const useUiStore = create<UiState & UiActions>()(
           isHistorySearchOpen: false,
           historySearchLoading: false,
           historySearchLoadingMore: false,
+          historySearchRebuildProgress: null,
         }),
 
       toggleHistorySearch: () =>
@@ -1244,6 +1251,7 @@ export const useUiStore = create<UiState & UiActions>()(
                 isHistorySearchOpen: false,
                 historySearchLoading: false,
                 historySearchLoadingMore: false,
+                historySearchRebuildProgress: null,
               }
             : { isHistorySearchOpen: true, globalSettingsOpen: false }
         ),
@@ -1292,7 +1300,14 @@ export const useUiStore = create<UiState & UiActions>()(
           historySearchHasMore: options?.hasMore ?? false,
           historySearchIndexState:
             options?.indexState ?? state.historySearchIndexState,
+          // Progress is only known once a SEARCH_INDEX_REBUILD_PROGRESS push
+          // arrives for the in-flight request; clear stale progress from a
+          // prior query whenever a request starts or a response lands.
+          historySearchRebuildProgress: null,
         })),
+
+      setHistorySearchRebuildProgress: (progress) =>
+        set({ historySearchRebuildProgress: progress }),
 
       setPendingHistorySearchNavigation: (nav) =>
         set({ pendingHistorySearchNavigation: nav }),
@@ -2014,6 +2029,7 @@ export const useUiStore = create<UiState & UiActions>()(
           historySearchNextCursor: undefined,
           historySearchHasMore: false,
           historySearchIndexState: "ready",
+          historySearchRebuildProgress: null,
           historySearchFilters: createDefaultHistorySearchFilters(),
           pendingHistorySearchNavigation: null,
           pendingFindRequest: null,

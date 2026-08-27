@@ -245,6 +245,7 @@ export const MESSAGE_TYPES = {
   RUN_SUMMARIES_LOADED: "runSummariesLoaded", // Extension -> Webview: Manifest-only run listing for one lineage, request-correlated
   SEARCH_HISTORY: "searchHistory", // Webview -> Extension: Search global run history
   SEARCH_HISTORY_RESULTS: "searchHistoryResults", // Extension -> Webview: Return global history matches
+  SEARCH_INDEX_REBUILD_PROGRESS: "searchIndexRebuildProgress", // Extension -> Webview: Progress push while a search had to block on a full index rebuild
   OPEN_HISTORY_SEARCH: "openHistorySearch", // Extension -> Webview: Open global history search UI
   DELETE_RUN_HISTORY: "deleteRunHistory", // Webview -> Extension: Delete a single run by address, any run in the lineage (not required to be the viewed run)
   DELETE_ALL_RUNS_FOR_LINEAGE: "deleteAllRunsForLineage", // Webview -> Extension: Delete every non-executing run of an explicit lineage (run-navigation panel's "Delete all runs")
