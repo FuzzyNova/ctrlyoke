@@ -78,6 +78,7 @@ vi.mock("@utils/rdvAdapter", () => ({
   getRenderedDiffStats: mockGetRenderedDiffStats,
   toRdvHunks: mockToRdvHunks,
   toRdvFromContent: mockToRdvFromContent,
+  locateActiveDiffMatch: vi.fn(() => null),
 }));
 
 vi.mock("react-diff-view", async () => {
@@ -259,6 +260,71 @@ describe("DiffView", () => {
       />
     );
     expect(getByText(/Hide diff/)).toBeTruthy();
+  });
+
+  it("force-expands a collapsed diff (uncontrolled) that contains the active find match", () => {
+    mockToRdvFromContent.mockReturnValue({
+      hunks: [
+        {
+          content: "@@ -1,1 +1,1 @@",
+          oldStart: 1,
+          oldLines: 1,
+          newStart: 1,
+          newLines: 1,
+          changes: [
+            { type: "delete", content: "-const a = 1;" },
+            { type: "insert", content: "+const a = 2;" },
+          ],
+        },
+      ],
+      diffType: "modify",
+    });
+
+    // Otherwise-hidden content (behind "Show diff") can never be found or
+    // scrolled to, so an active match must force it open.
+    const { getByText } = render(
+      <DiffView
+        oldContent={"const a = 1;\n"}
+        newContent={"const a = 2;\n"}
+        globallyCollapsed={true}
+        activeMatchRange={{ start: 0, end: 5 }}
+      />
+    );
+
+    expect(getByText(/Hide diff/)).toBeTruthy();
+  });
+
+  it("force-expands a collapsed diff (controlled) that contains the active find match", () => {
+    const onCollapsedChange = vi.fn();
+    mockToRdvFromContent.mockReturnValue({
+      hunks: [
+        {
+          content: "@@ -1,1 +1,1 @@",
+          oldStart: 1,
+          oldLines: 1,
+          newStart: 1,
+          newLines: 1,
+          changes: [
+            { type: "delete", content: "-const a = 1;" },
+            { type: "insert", content: "+const a = 2;" },
+          ],
+        },
+      ],
+      diffType: "modify",
+    });
+
+    render(
+      <DiffView
+        oldContent={"const a = 1;\n"}
+        newContent={"const a = 2;\n"}
+        globallyCollapsed={true}
+        collapsed={true}
+        onCollapsedChange={onCollapsedChange}
+        activeMatchRange={{ start: 0, end: 5 }}
+      />
+    );
+
+    expect(onCollapsedChange).toHaveBeenCalledWith(false);
   });
 
   it("supports controlled collapse state for virtualized rows", () => {

@@ -183,6 +183,8 @@ interface FileEditOutputProps {
   findQuery?: string;
   /** Whether `findQuery` matching is case-sensitive. */
   findCaseSensitive?: boolean;
+  /** Offset range of the currently active find match within this diff's searched text. */
+  activeMatchRange?: { start: number; end: number } | null;
   className?: string;
 }
 
@@ -215,6 +217,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
     viewType,
     findQuery,
     findCaseSensitive,
+    activeMatchRange,
     className = "",
   }) => {
     const dotStatus = fileOpDotStatus(status);
@@ -282,6 +285,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
               viewType={viewType}
               findQuery={findQuery}
               findCaseSensitive={findCaseSensitive}
+              activeMatchRange={activeMatchRange}
             />
           ) : undefined
         }

@@ -625,6 +625,103 @@ describe("OutputRow auto-expand on hidden active match", () => {
     );
   });
 
+  it("expands tool call params when the active match is hidden behind the collapsed params toggle", () => {
+    const name = "Read";
+    const row: StructuredEventRow = {
+      key: "row-tool-params",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      event: {
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        data: {
+          name,
+          parameters: { path: "src/target-file.ts" },
+          result: { success: true },
+        },
+      },
+      eventIndex: 0,
+      rawTextOutput: false,
+      attemptIndex: 0,
+      hideDiff: false,
+    };
+    const paramsText = "path: src/target-file.ts";
+    const localStart = paramsText.indexOf("target-file");
+    const globalStart = name.length + 1 + localStart;
+    const globalEnd = globalStart + "target-file".length;
+    const activeMatch = buildActiveMatch(row, "params", globalStart, globalEnd);
+    const onToolCallExpansionChange = vi.fn();
+
+    render(
+      <OutputRow
+        row={row}
+        findDecorations={{
+          matches: [{ start: globalStart, end: globalEnd, active: true }],
+        }}
+        activeFindMatch={activeMatch}
+        isExecutionActive={false}
+        onToolCallExpansionChange={onToolCallExpansionChange}
+      />
+    );
+
+    expect(onToolCallExpansionChange).toHaveBeenCalledWith(
+      "row-tool-params",
+      "params",
+      true
+    );
+  });
+
+  it("expands MCP tool call output when the active match is hidden behind 'show more'", () => {
+    const label = "MCP: srv.Read";
+    const row: StructuredEventRow = {
+      key: "row-mcp",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      event: {
+        type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+        data: {
+          server: "srv",
+          tool: "Read",
+          parameters: {},
+          result: { success: true, output: TWENTY_LINES },
+        },
+      },
+      eventIndex: 0,
+      rawTextOutput: false,
+      attemptIndex: 0,
+      hideDiff: false,
+    };
+    const localStart = TWENTY_LINES.indexOf("line 19");
+    const globalStart = label.length + 1 + localStart;
+    const globalEnd = globalStart + "line 19".length;
+    const activeMatch = buildActiveMatch(
+      row,
+      "toolContent",
+      globalStart,
+      globalEnd
+    );
+    const onToolCallExpansionChange = vi.fn();
+
+    render(
+      <OutputRow
+        row={row}
+        findDecorations={{
+          matches: [{ start: globalStart, end: globalEnd, active: true }],
+        }}
+        activeFindMatch={activeMatch}
+        isExecutionActive={false}
+        onToolCallExpansionChange={onToolCallExpansionChange}
+      />
+    );
+
+    expect(onToolCallExpansionChange).toHaveBeenCalledWith(
+      "row-mcp",
+      "output",
+      true
+    );
+  });
+
   it("highlights sanitized bash output at the rendered location", () => {
     const row = buildBashRow(
       "echo ok",

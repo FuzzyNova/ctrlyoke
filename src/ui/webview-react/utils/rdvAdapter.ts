@@ -630,3 +630,76 @@ export function buildDiffRenderPlan(
     }
   );
 }
+
+// ── Active find-match location ───────────────────────────────────────────────
+
+export interface DiffActiveMatchLocation {
+  /** Which react-diff-view token side (and gutter) the match's line renders on. */
+  side: "old" | "new";
+  /** 1-based old/new line number, matching ChangeData.lineNumber conventions. */
+  lineNumber: number;
+  /** Offset range within the line's content (patch prefix character excluded). */
+  start: number;
+  end: number;
+}
+
+/**
+ * Maps a "diff" find-field character offset (as produced by
+ * `getStructuredPatchText` — `structuredPatch` lines flattened and joined with
+ * "\n", prefix character included) back to the specific patch line and side it
+ * falls on, so the active occurrence can be marked in react-diff-view's token
+ * tree and scrolled to precisely.
+ *
+ * Must replay the exact same line sequence `getStructuredPatchText` searched
+ * over (post `normalizeStructuredPatch` dedup) so offsets line up; it does not
+ * re-derive from the (possibly gap-expanded) render hunks, which can contain
+ * lines that were never part of the searched patch text.
+ */
+export function locateActiveDiffMatch(
+  structuredPatch: UnifiedDiffHunk[] | undefined,
+  matchStart: number,
+  matchEnd: number
+): DiffActiveMatchLocation | null {
+  const hunks = normalizeStructuredPatch(structuredPatch);
+  let cursor = 0;
+
+  for (const hunk of hunks) {
+    let oldLineNumber = hunk.oldStart;
+    let newLineNumber = hunk.newStart;
+
+    for (const line of hunk.lines) {
+      const lineStart = cursor;
+      const lineEnd = lineStart + line.length;
+      cursor = lineEnd + 1; // +1 for the "\n" join separator
+
+      if (!isDisplayableLine(line)) continue;
+      const prefix = line[0];
+
+      if (matchStart >= lineStart && matchStart < lineEnd) {
+        // -1 to drop the leading +/-/' ' prefix, which is part of the searched
+        // text but not of `change.content` (what gets tokenized/rendered).
+        const localStart = Math.max(0, matchStart - lineStart - 1);
+        const localEnd = Math.max(
+          localStart,
+          Math.min(line.length - 1, matchEnd - lineStart - 1)
+        );
+        const side: "old" | "new" = prefix === "-" ? "old" : "new";
+        return {
+          side,
+          lineNumber: side === "old" ? oldLineNumber : newLineNumber,
+          start: localStart,
+          end: localEnd,
+        };
+      }
+
+      if (prefix === "+") newLineNumber++;
+      else if (prefix === "-") oldLineNumber++;
+      else if (prefix === " ") {
+        oldLineNumber++;
+        newLineNumber++;
+      }
+    }
+  }
+
+  return null;
+}

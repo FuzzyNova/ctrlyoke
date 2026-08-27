@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { HunkTokens, TokenNode } from "react-diff-view";
-import { markFindTokens } from "@utils/rdvFindTokens";
+import { applyActiveDiffMatch, markFindTokens } from "@utils/rdvFindTokens";
 
 function tokens(old: TokenNode[][], next: TokenNode[][]): HunkTokens {
   return { old, new: next };
@@ -112,5 +112,111 @@ describe("markFindTokens", () => {
       { type: "string", value: "/utils/codemirrorTheme.ts" },
     ]);
     expect(result!.old[0].some((token) => "attrs" in token)).toBe(false);
+  });
+});
+
+describe("applyActiveDiffMatch", () => {
+  it("returns tokens unchanged when there is no location", () => {
+    const input = tokens([[{ type: "text", value: "alpha" }]], []);
+    expect(applyActiveDiffMatch(input, null)).toBe(input);
+    expect(applyActiveDiffMatch(input, undefined)).toBe(input);
+  });
+
+  it("returns null/undefined tokens unchanged", () => {
+    expect(
+      applyActiveDiffMatch(null, {
+        side: "old",
+        lineNumber: 1,
+        start: 0,
+        end: 1,
+      })
+    ).toBeNull();
+    expect(
+      applyActiveDiffMatch(undefined, {
+        side: "old",
+        lineNumber: 1,
+        start: 0,
+        end: 1,
+      })
+    ).toBeUndefined();
+  });
+
+  it("promotes only the mark at the given location, leaving other occurrences as plain find marks", () => {
+    const input = tokens([[{ type: "text", value: "alpha beta alpha" }]], []);
+    const marked = markFindTokens(input, "alpha", false)!;
+    // marked.old[0]: [mark(find,"alpha")@0-5, text(" beta "), mark(find,"alpha")@11-16]
+    const result = applyActiveDiffMatch(marked, {
+      side: "old",
+      lineNumber: 1,
+      start: 11,
+      end: 16,
+    });
+    expect(result!.old[0]).toEqual([
+      { type: "mark", markType: "find", value: "alpha" },
+      { type: "text", value: " beta " },
+      { type: "mark", markType: "find-active", value: "alpha" },
+    ]);
+  });
+
+  it("targets the requested side and line independently", () => {
+    const input = tokens(
+      [[{ type: "text", value: "alpha" }]],
+      [[{ type: "text", value: "alpha" }]]
+    );
+    const marked = markFindTokens(input, "alpha", false)!;
+    const result = applyActiveDiffMatch(marked, {
+      side: "new",
+      lineNumber: 1,
+      start: 0,
+      end: 5,
+    });
+    expect(result!.old[0]).toEqual([
+      { type: "mark", markType: "find", value: "alpha" },
+    ]);
+    expect(result!.new[0]).toEqual([
+      { type: "mark", markType: "find-active", value: "alpha" },
+    ]);
+  });
+
+  it("promotes a mark nested inside a child token (e.g. markEdits edit wrapper)", () => {
+    const input = tokens(
+      [
+        [
+          {
+            type: "edit",
+            children: [{ type: "text", value: "alpha" }],
+          },
+        ],
+      ],
+      []
+    );
+    const marked = markFindTokens(input, "alp", false)!;
+    const result = applyActiveDiffMatch(marked, {
+      side: "old",
+      lineNumber: 1,
+      start: 0,
+      end: 3,
+    });
+    expect(result!.old[0]).toEqual([
+      {
+        type: "edit",
+        children: [
+          { type: "mark", markType: "find-active", value: "alp" },
+          { type: "text", value: "ha" },
+        ],
+      },
+    ]);
+  });
+
+  it("is a no-op when the target line has no mark overlapping the range", () => {
+    const input = tokens([[{ type: "text", value: "alpha beta" }]], []);
+    const marked = markFindTokens(input, "alpha", false)!;
+    const result = applyActiveDiffMatch(marked, {
+      side: "old",
+      lineNumber: 1,
+      start: 6,
+      end: 10,
+    });
+    expect(result!.old[0]).toEqual(marked.old[0]);
   });
 });

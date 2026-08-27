@@ -23,7 +23,7 @@ import React, {
 } from "react";
 import { Diff, Hunk, Decoration, tokenize, markEdits } from "react-diff-view";
 import { getCollapsedLinesCountBetween } from "react-diff-view";
-import type { HunkData, DiffType } from "react-diff-view";
+import type { HunkData, DiffType, RenderToken } from "react-diff-view";
 import {
   applyDiffGapExpansionState,
   type DiffGapExpansionState,
@@ -33,6 +33,7 @@ import {
   toRdvHunks,
   toRdvFromContent,
   getRenderedDiffStats,
+  locateActiveDiffMatch,
 } from "@utils/rdvAdapter";
 import {
   normalizeStructuredPatch,
@@ -44,7 +45,8 @@ import {
   normalizeSyntaxLanguage,
   refractor,
 } from "@utils/syntaxHighlighting";
-import { markFindTokens } from "@utils/rdvFindTokens";
+import { markFindTokens, applyActiveDiffMatch } from "@utils/rdvFindTokens";
+import { OUTPUT_FIND_ACTIVE_ATTRIBUTE } from "@utils/outputFind";
 import { useUiStore } from "@store/uiStore";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 
@@ -144,6 +146,14 @@ interface DiffViewProps {
   findQuery?: string;
   /** Whether `findQuery` matching is case-sensitive. */
   findCaseSensitive?: boolean;
+  /**
+   * Offset range of the currently active "Find in output" match within this
+   * diff's searched text (`getStructuredPatchText` — the raw `structuredPatch`
+   * lines flattened and joined with "\n"). When set, DiffView marks that exact
+   * occurrence for precise scroll targeting and force-expands a collapsed diff
+   * so the match can be found and scrolled to at all.
+   */
+  activeMatchRange?: { start: number; end: number } | null;
 }
 
 export const DiffView: React.FC<DiffViewProps> = ({
@@ -165,6 +175,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
   diffType: externalDiffType,
   findQuery,
   findCaseSensitive = false,
+  activeMatchRange,
 }) => {
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);
   const isControlled = collapsed !== undefined;
@@ -179,6 +190,21 @@ export const DiffView: React.FC<DiffViewProps> = ({
       setUncontrolledExpanded(!globallyCollapsed);
     }
   }, [globallyCollapsed, diffResetVersion, localResetVersion, isControlled]);
+
+  // Force-expand a collapsed diff that contains the active find match — its
+  // content (and the mark `revealActiveFindMatchInRow` looks for) doesn't
+  // exist in the DOM at all while collapsed, so navigation could never reveal
+  // it otherwise. Declared after the "snap to global state" effect above so it
+  // wins the mount-time ordering when both fire together (e.g. a collapsed
+  // diff whose active match arrives on first render).
+  useEffect(() => {
+    if (!activeMatchRange || isExpanded) return;
+    if (isControlled) {
+      onCollapsedChange?.(false);
+    } else {
+      setUncontrolledExpanded(true);
+    }
+  }, [activeMatchRange, isExpanded, isControlled, onCollapsedChange]);
 
   const handleToggle = useCallback(() => {
     if (isControlled) {
@@ -428,6 +454,45 @@ export const DiffView: React.FC<DiffViewProps> = ({
     [tokens, findQuery, findCaseSensitive]
   );
 
+  // Locate + re-tag the specific occurrence that's the active find match (as
+  // opposed to just any occurrence of the query) so it renders as a real
+  // `<mark data-find-active>` — see renderDiffToken below. This is what lets
+  // `revealActiveFindMatchInRow` scroll to the exact match instead of only the
+  // containing row, which is otherwise indistinguishable from any other match
+  // in the same diff.
+  const activeMatchLocation = useMemo(
+    () =>
+      activeMatchRange
+        ? locateActiveDiffMatch(
+            structuredPatch,
+            activeMatchRange.start,
+            activeMatchRange.end
+          )
+        : null,
+    [activeMatchRange, structuredPatch]
+  );
+  const activeHighlightedTokens = useMemo(
+    () => applyActiveDiffMatch(highlightedTokens, activeMatchLocation),
+    [highlightedTokens, activeMatchLocation]
+  );
+  const renderDiffToken = useCallback<RenderToken>(
+    (token, renderDefault, index) => {
+      if (token.type === "mark" && token.markType === "find-active") {
+        return (
+          <mark
+            key={index}
+            {...{ [OUTPUT_FIND_ACTIVE_ATTRIBUTE]: "true" }}
+            className="diff-code-mark diff-code-mark-find-active"
+          >
+            {token.value}
+          </mark>
+        );
+      }
+      return renderDefault(token, index);
+    },
+    []
+  );
+
   const minimapStats = useMemo(
     () => getRenderedDiffStats(expandedHunks, viewType),
     [expandedHunks, viewType]
@@ -536,7 +601,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
             viewType={viewType}
             diffType={diffType}
             hunks={expandedHunks}
-            tokens={highlightedTokens}
+            tokens={activeHighlightedTokens}
+            renderToken={renderDiffToken}
             optimizeSelection={viewType === "split"}
           >
             {(hunks) =>

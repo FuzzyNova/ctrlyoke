@@ -19,8 +19,10 @@
  */
 
 import type { HunkTokens, TokenNode } from "react-diff-view";
+import type { DiffActiveMatchLocation } from "./rdvAdapter";
 
 const FIND_MARK_TYPE = "find";
+const FIND_ACTIVE_MARK_TYPE = "find-active";
 
 function splitTokenValue(
   token: TokenNode,
@@ -92,5 +94,80 @@ export function markFindTokens(
   return {
     old: tokens.old.map(markLine),
     new: tokens.new.map(markLine),
+  };
+}
+
+/** Sum of the text length a token (or its recursively nested children) renders. */
+function getTokenTextLength(token: TokenNode): number {
+  if (typeof token.value === "string") return token.value.length;
+  if (token.children) {
+    return token.children.reduce(
+      (sum, child) => sum + getTokenTextLength(child),
+      0
+    );
+  }
+  return 0;
+}
+
+function promoteActiveMarkInNode(
+  token: TokenNode,
+  cursor: { pos: number },
+  start: number,
+  end: number
+): TokenNode {
+  if (token.type === "mark" && token.markType === FIND_MARK_TYPE) {
+    const length = getTokenTextLength(token);
+    const tokenStart = cursor.pos;
+    cursor.pos += length;
+    if (tokenStart < end && tokenStart + length > start) {
+      return { ...token, markType: FIND_ACTIVE_MARK_TYPE };
+    }
+    return token;
+  }
+  if (token.children) {
+    return {
+      ...token,
+      children: token.children.map((child) =>
+        promoteActiveMarkInNode(child, cursor, start, end)
+      ),
+    };
+  }
+  cursor.pos += getTokenTextLength(token);
+  return token;
+}
+
+/**
+ * Re-tags the single "find" mark token covering `[location.start,
+ * location.end)` on `location`'s line with a distinct markType so
+ * `renderDiffToken` in DiffView can render it as a `<mark data-find-active>`
+ * — the element `revealActiveFindMatchInRow` looks for to scroll precisely to
+ * the active occurrence instead of only the containing row.
+ *
+ * Must run after `markFindTokens` has already split that line's tokens on the
+ * find query, since it walks existing "find" mark tokens rather than the raw
+ * query text.
+ */
+export function applyActiveDiffMatch(
+  tokens: HunkTokens | null | undefined,
+  location: DiffActiveMatchLocation | null | undefined
+): HunkTokens | null | undefined {
+  if (!tokens || !location) return tokens;
+
+  const sideLines = location.side === "old" ? tokens.old : tokens.new;
+  const lineIndex = location.lineNumber - 1;
+  const line = sideLines[lineIndex];
+  if (!line) return tokens;
+
+  const cursor = { pos: 0 };
+  const updatedLine = line.map((token) =>
+    promoteActiveMarkInNode(token, cursor, location.start, location.end)
+  );
+  const updatedSideLines = sideLines.map((existingLine, index) =>
+    index === lineIndex ? updatedLine : existingLine
+  );
+
+  return {
+    ...tokens,
+    [location.side]: updatedSideLines,
   };
 }

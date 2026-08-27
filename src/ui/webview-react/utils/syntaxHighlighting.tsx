@@ -301,9 +301,12 @@ const FIND_HIGHLIGHT_STYLES = `
   padding: 0 1px;
 }
 
-.markdown-text mark[${OUTPUT_FIND_ACTIVE_ATTRIBUTE}="true"] {
+.markdown-text mark[${OUTPUT_FIND_ACTIVE_ATTRIBUTE}="true"],
+.diff-code-mark-find-active {
   background-color: var(--vscode-editor-findMatchBackground, rgba(39, 103, 130, 0.56));
   outline: 1px solid var(--vscode-editor-findMatchBorder, var(--vscode-focusBorder, transparent));
+  border-radius: 2px;
+  padding: 0 1px;
 }
 `;
 

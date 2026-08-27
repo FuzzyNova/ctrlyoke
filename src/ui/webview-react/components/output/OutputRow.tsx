@@ -519,8 +519,12 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
     }
 
     let pendingToolCallExpand: ToolCallExpansionSection | null = null;
-    if (isActiveRow && event.type === CLI_EVENT_TYPES.TOOL_CALL) {
-      const data = event.data as ToolCall;
+    if (
+      isActiveRow &&
+      (event.type === CLI_EVENT_TYPES.TOOL_CALL ||
+        event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL)
+    ) {
+      const data = event.data as ToolCall | McpToolCallData;
       const toolContentIsError =
         !data.result?.success && typeof data.result?.error === "string";
       const expansion =
@@ -528,7 +532,15 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       const sectionExpanded = toolContentIsError
         ? expansion.errorExpanded
         : expansion.outputExpanded;
+      // Params are fully absent from the DOM while collapsed (not merely
+      // truncated), so any active match there means the toggle must open.
       if (
+        activeFindMatch?.field === "params" &&
+        !expansion.paramsExpanded &&
+        getFieldMatches("params").some((match) => match.active)
+      ) {
+        pendingToolCallExpand = TOOL_CALL_EXPANSION_SECTIONS.PARAMS;
+      } else if (
         activeFindMatch?.field === "toolContent" &&
         isActiveMatchHidden(
           getToolResultText(data.result),
@@ -637,6 +649,9 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
           data.structuredPatch,
           workspaceSnapshot
         );
+        const activeDiffMatch = getFieldMatches("diff").find(
+          (match) => match.active
+        );
         const displayOldContent = displayStructuredPatch
           ? getSnapshotBeforeContent(data.path, workspaceSnapshot)
           : (data.oldContent ??
@@ -666,6 +681,11 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             error={data.error}
             findQuery={findQuery}
             findCaseSensitive={findCaseSensitive}
+            activeMatchRange={
+              activeDiffMatch
+                ? { start: activeDiffMatch.start, end: activeDiffMatch.end }
+                : null
+            }
             onUndoFile={handleUndo}
             fileUndoMode={
               row.undoRecord != null && row.undoRecord.isRedone !== true

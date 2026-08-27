@@ -3,10 +3,12 @@ import { tokenize } from "react-diff-view";
 import {
   buildDiffRenderPlan,
   getRenderedDiffStats,
+  locateActiveDiffMatch,
   mergeNonTextDiffEntries,
   parseUnifiedDiffToFiles,
   type RenderedDiffRun,
 } from "@utils/rdvAdapter";
+import type { UnifiedDiffHunk } from "@/types/cliEvents";
 import { DIFF_PAYLOAD_KINDS } from "@root/types/DashboardConstants";
 import {
   getLanguageFromPath,
@@ -532,5 +534,51 @@ describe("mergeNonTextDiffEntries", () => {
       payloadKind: DIFF_PAYLOAD_KINDS.BINARY,
       hunks: [],
     });
+  });
+});
+
+describe("locateActiveDiffMatch", () => {
+  // Mirrors getStructuredPatchText's join semantics exactly: lines flattened
+  // across hunks and joined with "\n", prefix character included. Line
+  // lengths here: " context1"=9, "-removed"=8, "+added"=6, " context2"=9.
+  const hunk: UnifiedDiffHunk = {
+    oldStart: 10,
+    oldLines: 3,
+    newStart: 10,
+    newLines: 3,
+    lines: [" context1", "-removed", "+added", " context2"],
+  };
+
+  it("locates a match on a deleted (old-side) line", () => {
+    // "removed" starts right after the "-" prefix: offset 10 (line start) + 1.
+    const result = locateActiveDiffMatch([hunk], 11, 18);
+    expect(result).toEqual({ side: "old", lineNumber: 11, start: 0, end: 7 });
+  });
+
+  it("locates a match on an inserted (new-side) line", () => {
+    // "added" starts right after the "+" prefix: offset 19 (line start) + 1.
+    const result = locateActiveDiffMatch([hunk], 20, 25);
+    expect(result).toEqual({ side: "new", lineNumber: 11, start: 0, end: 5 });
+  });
+
+  it("locates a match on a context line as a new-side line", () => {
+    // "context2" starts right after the " " prefix: offset 26 (line start) + 1.
+    const result = locateActiveDiffMatch([hunk], 27, 35);
+    expect(result).toEqual({ side: "new", lineNumber: 12, start: 0, end: 8 });
+  });
+
+  it("returns null for an out-of-range offset", () => {
+    expect(locateActiveDiffMatch([hunk], 1000, 1004)).toBeNull();
+  });
+
+  it("returns null when there is no structured patch", () => {
+    expect(locateActiveDiffMatch(undefined, 0, 4)).toBeNull();
+  });
+
+  it("indexes against the deduplicated hunk sequence, matching getStructuredPatchText", () => {
+    // An exact-duplicate hunk is dropped by normalizeStructuredPatch, so an
+    // offset must resolve against ONE copy's worth of text, not two.
+    const result = locateActiveDiffMatch([hunk, hunk], 11, 18);
+    expect(result).toEqual({ side: "old", lineNumber: 11, start: 0, end: 7 });
   });
 });
