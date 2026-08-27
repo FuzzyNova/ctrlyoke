@@ -283,8 +283,8 @@ Node's `worker_threads` gives a worker its own V8 isolate/heap. A runaway
 allocation there can't blow the main extension-host heap, and if the worker
 does OOM, only that worker dies — the extension host, and every other live
 workflow, is unaffected. This was evaluated against a full separate OS-process
-daemon and rejected in favor of a worker thread; see **Rejected: separate
-process/daemon** below for why.
+daemon and rejected in favor of a worker thread; see **Non-goals** below
+("No separate OS-process daemon") for why.
 
 Design sketch:
 
