@@ -54,4 +54,36 @@ suite("ClaudeLogParser", () => {
       sessionPath
     );
   });
+
+  test("discovers a resumed session in its original worktree project", async () => {
+    testHome = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-claude-home-"));
+    process.env.HOME = testHome;
+    process.env.USERPROFILE = testHome;
+
+    const sessionId = "85a2a7e7-5665-4b50-b5a3-be46d146abab";
+    const originalProjectDirectory = path.join(
+      testHome,
+      ".claude",
+      "projects",
+      "C--dev-ctrlyoke-worktrees-bug-fix"
+    );
+    const sessionPath = path.join(
+      originalProjectDirectory,
+      `${sessionId}.jsonl`
+    );
+    fs.mkdirSync(originalProjectDirectory, { recursive: true });
+    fs.writeFileSync(sessionPath, '{"type":"user"}\n', "utf8");
+
+    const parser = new ClaudeLogParser();
+    parser.setWorkspaceRoot(path.win32.join("C:\\", "dev", "ctrlyoke"));
+
+    assert.strictEqual(
+      await parser.discoverSessionLog(
+        "prompt",
+        new Date(Date.now() - 1_000),
+        sessionId
+      ),
+      sessionPath
+    );
+  });
 });

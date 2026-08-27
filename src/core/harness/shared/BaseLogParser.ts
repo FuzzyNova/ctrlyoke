@@ -663,6 +663,49 @@ export abstract class BaseLogParser implements ILogParser {
   }
 
   /**
+   * Find a session log stored beneath any workspace-scoped project directory.
+   *
+   * Some harnesses partition their global log store by the workspace path that
+   * originally created the session. A resumed session keeps using that original
+   * project directory even when the workflow's execution worktree changes.
+   * Session IDs are globally unique, so probing the same relative path beneath
+   * each immediate project directory is sufficient and avoids recursively
+   * scanning every log file.
+   */
+  protected findSessionLogAcrossProjectDirectories(
+    projectsDirectory: string,
+    relativeLogPath: readonly string[]
+  ): string | null {
+    try {
+      const projectDirectories = fs.readdirSync(projectsDirectory, {
+        withFileTypes: true,
+      });
+
+      for (const projectDirectory of projectDirectories) {
+        if (!projectDirectory.isDirectory()) {
+          continue;
+        }
+
+        const candidatePath = path.join(
+          projectsDirectory,
+          projectDirectory.name,
+          ...relativeLogPath
+        );
+        if (
+          fs.existsSync(candidatePath) &&
+          fs.statSync(candidatePath).isFile()
+        ) {
+          return candidatePath;
+        }
+      }
+    } catch {
+      // The harness log root may not exist yet or may contain unreadable entries.
+    }
+
+    return null;
+  }
+
+  /**
    * Extract timestamp from log entry
    *
    * Helper to get timestamp from harness-specific log entry.
