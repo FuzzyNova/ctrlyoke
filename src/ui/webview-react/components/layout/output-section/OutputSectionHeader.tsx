@@ -159,7 +159,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
           </span>
         )}
 
-        {activeOutputTab === OUTPUT_TABS.OUTPUT ? (
+        {!isHeaderVeryNarrow && activeOutputTab === OUTPUT_TABS.OUTPUT ? (
           <div className="flex items-center ml-2">
             <button
               className="icon-btn py-0 px-0.5"
@@ -185,7 +185,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               <i className="codicon codicon-sm codicon-add" />
             </button>
           </div>
-        ) : activeOutputTab === OUTPUT_TABS.TERMINAL ? (
+        ) : !isHeaderVeryNarrow && activeOutputTab === OUTPUT_TABS.TERMINAL ? (
           <div className="flex items-center ml-2">
             <button
               className="icon-btn py-0 px-0.5"

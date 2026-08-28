@@ -104,6 +104,33 @@ describe("OutputSectionHeader tab icons", () => {
   });
 });
 
+describe("OutputSectionHeader font-size controls", () => {
+  it("hides output font-size controls in very narrow headers", () => {
+    renderHeader({
+      activeOutputTab: "output",
+      isHeaderVeryNarrow: true,
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Decrease font size" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Increase font size" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides terminal font-size controls in very narrow headers", () => {
+    renderHeader({ isHeaderVeryNarrow: true });
+
+    expect(
+      screen.queryByRole("button", { name: "Decrease terminal font size" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Increase terminal font size" })
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("OutputSectionHeader find action", () => {
   it("toggles a highlighted find action from the output tab only", () => {
     const onToggleFind = vi.fn();
