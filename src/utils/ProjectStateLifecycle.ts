@@ -12,13 +12,13 @@ import {
 } from "./ProjectStateRegistry";
 import { projectStateRoot } from "./ProjectStatePaths";
 import { pathsEqual } from "./PathCasing";
-import { isOwnerStale } from "./LockSafetyPrimitives";
+import { readWorkflowLockInspectionAtPath } from "./WorkflowLockInspector";
 import {
   PROJECT_RUNNER_STATUSES,
   PROJECT_STATE_PATH_STATUSES,
   RUN_HISTORY_LOCATIONS,
 } from "../types/DashboardConstants";
-import type { WorkflowRunnerLock } from "../types/CtrlYokeTypes";
+import type { WorkflowKey } from "../types/CtrlYokeTypes";
 import * as WorkflowPaths from "./WorkflowPaths";
 
 export type ProjectStatePathStatus =
@@ -425,7 +425,11 @@ async function inspectRunner(
     if (!lineage.isDirectory()) {
       continue;
     }
-    const runnerPath = path.join(runsRoot, lineage.name, "runner.json");
+    const workflowKey = lineage.name as WorkflowKey;
+    const runnerPath = WorkflowPaths.runnerLockPathForProjectState(
+      projectRoot,
+      workflowKey
+    );
     const runnerStats = await lstatIfExists(runnerPath);
     if (!runnerStats) {
       continue;
@@ -436,25 +440,13 @@ async function inspectRunner(
       );
     }
 
-    let lock: WorkflowRunnerLock;
-    try {
-      lock = JSON.parse(
-        await fs.readFile(runnerPath, "utf8")
-      ) as WorkflowRunnerLock;
-    } catch (error) {
-      throw new ProjectStateLifecycleError(
-        `Runner lock cannot be read: ${runnerPath}: ${String(error)}`
-      );
-    }
-    if (
-      typeof lock.pid !== "number" ||
-      typeof lock.lastHeartbeat !== "number"
-    ) {
+    const lockInspection = await readWorkflowLockInspectionAtPath(runnerPath);
+    if (lockInspection.liveness === "absent") {
       throw new ProjectStateLifecycleError(
         `Runner lock is invalid: ${runnerPath}`
       );
     }
-    if (!isOwnerStale(lock.pid, lock.lastHeartbeat)) {
+    if (lockInspection.liveness === "active") {
       return { status: PROJECT_RUNNER_STATUSES.LIVE, path: runnerPath };
     }
   }

@@ -18,10 +18,12 @@ import {
   GIT_CHANGE_KINDS,
   LICENSE_UI,
   MESSAGE_TYPES,
+  RUNNER_IDS,
   USER_FEEDBACK_SEVERITY,
   VSCODE_COMMANDS,
   VSCODE_GIT_COMMANDS,
 } from "./types/DashboardConstants";
+import type { RunnerHostIdentity } from "./types/CtrlYokeTypes";
 import {
   getCommitDiff,
   getDiffBetweenRefs,
@@ -102,6 +104,12 @@ export async function activate(context: vscode.ExtensionContext) {
   if (IS_DEV_MODE) {
     Log.debug(`🔧 Development mode enabled (Build: ${BUILD_DATE})`);
   }
+
+  const runnerHostIdentity: RunnerHostIdentity = {
+    runner: RUNNER_IDS.VSCODE,
+    hostInstanceId: crypto.randomUUID(),
+    pid: process.pid,
+  };
 
   try {
     // Initialize config service with file-based backends BEFORE Log.initialize()
@@ -256,7 +264,8 @@ export async function activate(context: vscode.ExtensionContext) {
     workflowOrchestrator = new WorkflowOrchestrator(
       context,
       webviewProvider,
-      userFeedbackSink
+      userFeedbackSink,
+      runnerHostIdentity
     );
 
     // If ctrlyoke has not yet been initialized in this workspace, gate startup
@@ -455,7 +464,7 @@ export async function activate(context: vscode.ExtensionContext) {
     Log.debug("ctrlyoke: Initialized completion helpers with config watcher");
 
     // Register commands
-    registerCommands(context);
+    registerCommands(context, runnerHostIdentity);
 
     // Show the Getting Started walkthrough once, on first activation after install.
     if (!context.globalState.get<boolean>(GETTING_STARTED_SHOWN_KEY)) {
@@ -470,7 +479,10 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 }
 
-function registerCommands(context: vscode.ExtensionContext) {
+function registerCommands(
+  context: vscode.ExtensionContext,
+  runnerHostIdentity: RunnerHostIdentity
+) {
   const reportCommandError = (message: string): void => {
     notifyUserFeedback(
       workflowOrchestrator.getUserFeedbackSink(),
@@ -1208,10 +1220,13 @@ function registerCommands(context: vscode.ExtensionContext) {
   );
 
   // Generate Commit Message command (SCM panel button)
-  const scmCommitCommand = new ScmCommitCommand({
-    createWorkflowInstance: () =>
-      workflowOrchestrator.createExternalWorkflowInstance(),
-  });
+  const scmCommitCommand = new ScmCommitCommand(
+    {
+      createWorkflowInstance: () =>
+        workflowOrchestrator.createExternalWorkflowInstance(),
+    },
+    runnerHostIdentity
+  );
   const generateCommitMessageCommand = vscode.commands.registerCommand(
     VSCODE_COMMANDS.GENERATE_COMMIT_MESSAGE,
     () => scmCommitCommand.execute(context)
@@ -1293,7 +1308,8 @@ function registerCommands(context: vscode.ExtensionContext) {
               `ctrlyoke: A sibling ctrlyoke server is already running for this workspace at ${existingServerUrl}. This window is starting its own server on a different port.`
             ),
           () => licenseService.hasRemoteAccess(),
-          showRemoteAccessUpsell
+          showRemoteAccessUpsell,
+          runnerHostIdentity
         );
       } catch (err) {
         unprotectServerToken?.();

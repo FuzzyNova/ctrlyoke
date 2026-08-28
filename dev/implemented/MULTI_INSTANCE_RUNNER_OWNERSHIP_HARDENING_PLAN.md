@@ -1,6 +1,6 @@
 # Multi-Instance Runner Ownership Hardening Plan
 
-> **Status:** Proposed
+> **Status:** Implemented
 >
 > **Priority:** P1 — recurring workflow-correctness issue
 >
@@ -672,20 +672,75 @@ When implementation is complete:
   behavior, including terminal state with a retained lock.
 - UI tests prove external mode is driven only by the explicit external-owner
   projection.
-- Type checking, linting, formatting, extension tests, webview tests, and diff
-  validation pass.
+- Type checking, linting, task-scoped formatting, extension tests, webview tests,
+  and diff validation pass. The repository-wide format check still reports
+  unrelated pre-existing files outside this work.
 
 ## Completion Checklist
 
-- [ ] Host identity is created once per VS Code activation and CLI startup.
-- [ ] Lock schema separates host identity from workflow execution identity.
-- [ ] Structured lock inspection replaces runner-specific active statuses.
-- [ ] External-execution resolver is the single source of external eligibility.
-- [ ] External watch sessions require and revalidate exact external proof.
-- [ ] Orchestrator CLI-specific session names are made runner-neutral.
-- [ ] Workflow summaries expose explicit external locality without lock secrets.
-- [ ] All lock call sites are inventoried and migrated by required semantics.
-- [ ] Classifier, resolver, self-owner, two-host, and UI regressions are covered.
-- [ ] Architecture enforcement prevents new direct runner-to-external mappings.
-- [ ] Coordination and project-memory documentation is updated.
-- [ ] Plan is moved to `dev/implemented/` after all acceptance criteria pass.
+- [x] Host identity is created once per VS Code activation and CLI startup.
+- [x] Lock schema separates host identity from workflow execution identity.
+- [x] Structured lock inspection replaces runner-specific active statuses.
+- [x] External-execution resolver is the single source of external eligibility.
+- [x] External watch sessions require and revalidate exact external proof.
+- [x] Orchestrator CLI-specific session names are made runner-neutral.
+- [x] Workflow summaries expose explicit external locality without lock secrets.
+- [x] All lock call sites are inventoried and migrated by required semantics. Raw
+      lock reads remain only in the narrow inspector/manager infrastructure and are
+      covered by the architectural-enforcement audit below.
+- [x] A two-host shared-filesystem regression test proves owner-versus-sibling behavior, including terminal state with a retained lock.
+- [x] Classifier, resolver, self-owner, two-host, and UI regressions are covered.
+- [x] Architecture enforcement prevents new direct runner-to-external mappings.
+- [x] Coordination and project-memory documentation is updated.
+- [x] Plan is moved to `dev/implemented/` after all acceptance criteria pass.
+
+Phase 1 implementation note: the lock shape follows the plan exactly. Raw lock
+reads remain permissive for legacy objects that lack `schemaVersion`,
+`hostInstanceId`, or `executionInstanceId`; those objects are returned for the
+existing liveness-only paths and are not upgraded or treated as new ownership
+proof. Production VS Code and CLI construction injects the single activation or
+startup identity explicitly; legacy direct `WorkflowInstance` utility/test
+construction retains a per-instance fallback until those call sites are
+migrated. Structured inspection and external-routing changes remain deferred
+to the later phases as required by this first implementation step. For the
+conservative legacy case left open above, a live lock without `hostInstanceId`
+whose PID differs from the observer is classified as active/indeterminate (and
+logged), never external; a matching PID is classified as self. The structured
+inspection API is now available, and higher-level call sites use its
+liveness/locality fields. The former compatibility status adapter was removed
+in Phase 5; callers now use the structured inspection APIs directly.
+
+Phase 2 implementation note: `src/core/orchestration/ExternalExecutionResolver.ts`
+is the standalone external-execution eligibility boundary. It exports
+`ExternalExecutionResolver`, `resolveExternalExecution`,
+`ExternalExecutionResolution`, `NotExternalReason`,
+`ActiveExternalLockInspection`, and `ExternalExecutionResolverOptions`.
+The resolver reads and validates the addressed working file, requires an active
+persisted execution state and an exact, stable external lock acquisition, and
+returns the inspected lock (including its owner token) as the caller's proof.
+
+Phase 3 watch-session note: `WorkflowOrchestrator` now routes external watch
+registration through that resolver proof, revalidates the exact acquisition
+before registration, and stores runner-neutral external session state. A live
+watch ends on terminal working-file state, lock loss, or any ownership/identity
+change; a replacement lock is resolved afresh rather than being followed by the
+old session. The paused local takeover path remains limited to proven external
+ownership.
+
+Phase 5 call-site audit note: raw lock parsing is now confined to
+`WorkflowLockInspector` and the owner-token mutation primitives in
+`WorkflowLockManager`. Discovery, continuation, and watch polling consume
+structured inspections; the resolver is the only external-watch eligibility
+boundary. No higher-level caller maps `lock.runner` to external ownership.
+Liveness-only callers use
+`WorkflowLockInspection.liveness`; execution-conflict callers distinguish local,
+self-owned-but-untracked, external, indeterminate, and recoverable states; and
+stop/watch lifecycles retain the exact `ownerToken` acquisition.
+
+Regression implementation note: the two-host and self-owned-untracked tests now
+exercise activation, recent-session, explicit-load, watcher/poll, stop-request,
+pause/resume, terminal retained-lock, and successor-acquisition paths. The
+self-owned-untracked load paths also decline fresh adoption and emit a structured
+same-host invariant diagnostic; this closes the production gap where an active
+same-host lock without a resident execution could otherwise fall through to an
+editable local instance.

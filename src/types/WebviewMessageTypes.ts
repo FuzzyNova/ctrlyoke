@@ -136,6 +136,7 @@ export {
 
 // Re-export WorkflowSummary, WorkflowStep, and PreCondition for webview consumers
 export type {
+  ExternalExecutionOwnerSummary,
   WorkflowSummary,
   WorkflowStep,
   ScriptStep,

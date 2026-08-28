@@ -2084,7 +2084,7 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.STOP_CLI_RUN, async (message) => {
       const { workflowId } = message;
       if (workflowId) {
-        await this.getOrchestrator()?.stopCliSession(workflowId);
+        await this.getOrchestrator()?.stopExternalRunSession(workflowId);
       }
     });
 

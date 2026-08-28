@@ -5,6 +5,7 @@ import {
 } from "../git/CommitMessageGenerator";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 import { VSCODE_CONTEXT_KEYS } from "../types/DashboardConstants";
+import type { RunnerHostIdentity } from "../types/CtrlYokeTypes";
 import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { pathsEqual } from "../utils/PathCasing";
@@ -35,8 +36,14 @@ export class ScmCommitCommand {
   private readonly generator: CommitMessageGenerator;
   private activeAbortController: AbortController | null = null;
 
-  constructor(workflowHost?: CommitMessageWorkflowHost) {
-    this.generator = new CommitMessageGenerator(workflowHost);
+  constructor(
+    workflowHost?: CommitMessageWorkflowHost,
+    runnerHostIdentity?: RunnerHostIdentity
+  ) {
+    this.generator = new CommitMessageGenerator(
+      workflowHost,
+      runnerHostIdentity
+    );
   }
 
   cancel(): void {

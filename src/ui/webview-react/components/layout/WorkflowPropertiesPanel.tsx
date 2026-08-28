@@ -224,7 +224,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isExternallyManaged =
-    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy != null;
+    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.externalOwner !=
+    null;
   // The lineage on screen was deleted while being viewed — nothing here has
   // anywhere left to write to.
   const isViewingDeletedWorkflow = useIsViewingDeletedWorkflow();

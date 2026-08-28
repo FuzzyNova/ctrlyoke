@@ -198,6 +198,24 @@ export function runnerLockPath(
   );
 }
 
+/** Resolve a runner lock when the caller already has the selected state root. */
+export function runnerLockPathForProjectState(
+  projectStateRootPath: string,
+  workflowKey: WorkflowKey
+): string {
+  assertValidWorkflowKey(workflowKey);
+  const lineagePath = path.join(
+    runsRootForProjectState(projectStateRootPath),
+    workflowKey
+  );
+  assertContained(
+    projectStateRootPath,
+    lineagePath,
+    runsRootForProjectState(projectStateRootPath)
+  );
+  return path.join(lineagePath, RUNNER_LOCK_FILE_NAME);
+}
+
 /** Resolve the owner-token-scoped stop request sentinel for a live run. */
 export function stopRequestPath(
   workspaceRoot: string,
@@ -321,8 +339,12 @@ export function stagingRunDir(
   return dir;
 }
 
-function assertContained(workspaceRoot: string, candidate: string): void {
-  const root = path.resolve(runsRoot(workspaceRoot));
+function assertContained(
+  workspaceRoot: string,
+  candidate: string,
+  selectedRunsRoot?: string
+): void {
+  const root = path.resolve(selectedRunsRoot ?? runsRoot(workspaceRoot));
   const resolved = path.resolve(candidate);
   if (!isPathWithinDirectory(resolved, root)) {
     throw new WorkflowPathError(

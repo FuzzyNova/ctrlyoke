@@ -385,11 +385,14 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
     await WorkflowLockManager.acquireLock(workspaceRoot, run.workflowKey, {
+      schemaVersion: 2,
       workflowKey: run.workflowKey,
       runRef: run.runRef,
       runner: RUNNER_IDS.CLI,
       pid: process.pid,
       ownerToken: "mcp-active-append-owner",
+      hostInstanceId: "mcp-host",
+      executionInstanceId: "mcp-execution",
       startedAt: Date.now(),
       lastHeartbeat: Date.now(),
     });
@@ -430,11 +433,14 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     await fs.writeFile(run.runFilePath, JSON.stringify(workingFile), "utf8");
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
     await WorkflowLockManager.acquireLock(workspaceRoot, run.workflowKey, {
+      schemaVersion: 2,
       workflowKey: run.workflowKey,
       runRef: run.runRef,
       runner: RUNNER_IDS.CLI,
       pid: process.pid,
       ownerToken: "mcp-next-append-owner",
+      hostInstanceId: "mcp-host",
+      executionInstanceId: "mcp-execution",
       startedAt: Date.now(),
       lastHeartbeat: Date.now(),
     });
@@ -510,11 +516,14 @@ suite("CtrlYokeMCPServer run-addressed contracts", () => {
     const sibling = `run-2026-01-02T00-00-00-000Z` as RunRef;
     process.env.CTRLYOKE_WORKING_FILE = run.runFilePath;
     await WorkflowLockManager.acquireLock(workspaceRoot, run.workflowKey, {
+      schemaVersion: 2,
       workflowKey: run.workflowKey,
       runRef: sibling,
       runner: RUNNER_IDS.CLI,
       pid: process.pid,
       ownerToken: "mcp-test-owner",
+      hostInstanceId: "mcp-host",
+      executionInstanceId: "mcp-execution",
       startedAt: Date.now(),
       lastHeartbeat: Date.now(),
     });

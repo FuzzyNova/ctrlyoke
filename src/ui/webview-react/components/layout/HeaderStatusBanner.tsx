@@ -3,11 +3,8 @@ import type {
   WorkflowKey,
   WorkflowViewAddress,
 } from "@root/types/CtrlYokeTypes";
-import {
-  RUNNER_IDS,
-  WORKFLOW_VIEW_ADDRESS_KIND,
-} from "@root/types/DashboardConstants";
-import { useActiveWorkflowManagedBy } from "@hooks/useActiveWorkflowManagedBy";
+import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import { useActiveWorkflowExternalOwner } from "@hooks/useActiveWorkflowExternalOwner";
 import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 
@@ -31,12 +28,9 @@ export interface HeaderStatusBannerProps {
 export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
   props
 ) => {
-  const managedBy = useActiveWorkflowManagedBy();
+  const externalOwner = useActiveWorkflowExternalOwner();
   const isSystemGeneratedWorkflow = useIsSystemGeneratedWorkflow();
-  const externalReadOnlyLabel =
-    managedBy === RUNNER_IDS.CLI || managedBy === RUNNER_IDS.VSCODE
-      ? getExternalReadOnlyLabel(managedBy)
-      : undefined;
+  const externalReadOnlyLabel = getExternalReadOnlyLabel(externalOwner);
   const lockedLabel =
     externalReadOnlyLabel ??
     (isSystemGeneratedWorkflow

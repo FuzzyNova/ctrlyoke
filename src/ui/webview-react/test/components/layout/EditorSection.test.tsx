@@ -128,7 +128,12 @@ describe("EditorSection", () => {
     act(() => {
       useEditorStore.getState().setStepType(STEP_TYPES.PROMPT);
       useUiStore.setState({
-        loadedWorkflows: [{ id: "cli", managedBy: RUNNER_IDS.CLI } as never],
+        loadedWorkflows: [
+          {
+            id: "cli",
+            externalOwner: { locality: "external", runner: RUNNER_IDS.CLI },
+          } as never,
+        ],
         activeWorkflowId: "cli",
       });
     });

@@ -10,7 +10,10 @@ import {
   ProjectStateLifecycleError,
 } from "../../utils/ProjectStateLifecycle";
 import { projectStateRoot } from "../../utils/ProjectStatePaths";
-import { RUN_HISTORY_LOCATIONS } from "../../types/DashboardConstants";
+import {
+  RUN_HISTORY_LOCATIONS,
+  RUNNER_IDS,
+} from "../../types/DashboardConstants";
 import {
   pruneHistoryCommand,
   relinkHistoryCommand,
@@ -81,7 +84,7 @@ suite("ProjectStateLifecycle", () => {
     await fs.mkdir(lineage, { recursive: true });
     await fs.writeFile(
       path.join(lineage, "runner.json"),
-      JSON.stringify({ pid: process.pid, lastHeartbeat: Date.now() })
+      JSON.stringify(makeLiveRunnerLock())
     );
 
     const output: string[] = [];
@@ -126,7 +129,7 @@ suite("ProjectStateLifecycle", () => {
     await fs.mkdir(sourceLineage, { recursive: true });
     await fs.writeFile(
       path.join(sourceLineage, "runner.json"),
-      JSON.stringify({ pid: process.pid, lastHeartbeat: Date.now() })
+      JSON.stringify(makeLiveRunnerLock())
     );
     await assert.rejects(
       () => relinkUserProject(oldProject.stateRoot, newRoot, { dryRun: false }),
@@ -145,7 +148,7 @@ suite("ProjectStateLifecycle", () => {
     await fs.mkdir(destinationLineage, { recursive: true });
     await fs.writeFile(
       path.join(destinationLineage, "runner.json"),
-      JSON.stringify({ pid: process.pid, lastHeartbeat: Date.now() })
+      JSON.stringify(makeLiveRunnerLock())
     );
     await assert.rejects(
       () => relinkUserProject(oldProject.stateRoot, newRoot, { dryRun: false }),
@@ -221,6 +224,19 @@ suite("ProjectStateLifecycle", () => {
       stateRoot,
       projectRoot: projectStateRoot(stateRoot, RUN_HISTORY_LOCATIONS.USER),
       createdAt: metadata.createdAt,
+    };
+  }
+
+  function makeLiveRunnerLock(): Record<string, unknown> {
+    const now = Date.now();
+    return {
+      workflowKey: "workflow",
+      runRef: "run-2026-01-01T00-00-00-000Z",
+      runner: RUNNER_IDS.VSCODE,
+      pid: process.pid,
+      ownerToken: "legacy-owner-token",
+      startedAt: now,
+      lastHeartbeat: now,
     };
   }
 

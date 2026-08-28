@@ -18,7 +18,7 @@ import {
 import { KEYBOARD_KEYS, STEP_TYPES } from "@root/types/DashboardConstants";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
-import { useActiveWorkflowManagedBy } from "@hooks/useActiveWorkflowManagedBy";
+import { useActiveWorkflowExternalOwner } from "@hooks/useActiveWorkflowExternalOwner";
 
 /**
  * EditorSection - Collapsible section containing the prompt editor
@@ -41,18 +41,15 @@ const EditorSectionInner: React.FC = () => {
     setStepType,
     setStepEnabled,
   } = useEditorStore();
-  const {
-    editorCollapsed,
-    toggleEditorCollapse,
-  } = useUiStore();
+  const { editorCollapsed, toggleEditorCollapse } = useUiStore();
   const { steps } = useWorkflowStore();
   const { globalSettings } = useSettingsStore();
   const vscode = useVsCodeApi();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
-  const activeManagedBy = useActiveWorkflowManagedBy();
-  const isExternallyManaged = activeManagedBy != null;
-  const externalReadOnlyLabel = getExternalReadOnlyLabel(activeManagedBy);
+  const activeExternalOwner = useActiveWorkflowExternalOwner();
+  const isExternallyManaged = activeExternalOwner != null;
+  const externalReadOnlyLabel = getExternalReadOnlyLabel(activeExternalOwner);
 
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
   const totalPrompts = steps.length;

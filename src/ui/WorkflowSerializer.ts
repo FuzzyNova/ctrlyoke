@@ -1269,13 +1269,14 @@ export class WorkflowSerializer {
                 executionState === EXECUTION_STATES.PAUSING) &&
               !activeWorkingFilePaths.has(filePath)
             ) {
-              const isCli =
-                (await manager?.ensureCliWatchSession(filePath)) ?? false;
-              if (isCli) {
+              const registeredExternalWatch =
+                (await manager?.ensureExternalRunWatchSession(filePath)) ??
+                false;
+              if (registeredExternalWatch) {
                 Log.trace(
-                  `[WorkflowSerializer] getRecentWorkflows: "${workflowKey}" has active CLI lock — keeping running state (ExternalRunWatchSession registered)`
+                  `[WorkflowSerializer] getRecentWorkflows: "${workflowKey}" has an active external lock — keeping running state (ExternalRunWatchSession registered)`
                 );
-                // executionState stays "running"; the session is now in cliSessions
+                // executionState stays "running"; the session is now in externalRunSessions
                 // so the next GET_WORKFLOWS_LIST will move it to the Running section.
               } else {
                 Log.trace(

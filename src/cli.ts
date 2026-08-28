@@ -27,6 +27,7 @@ import type {
   HarnessId,
   PermissionMode,
 } from "./types/DashboardConstants";
+import type { RunnerHostIdentity } from "./types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "./types/CompatibilityTypes";
 import {
   isScriptStep,
@@ -65,8 +66,7 @@ import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageR
 import { OutputHistoryManager } from "./core/orchestration/OutputHistoryManager";
 import { createPriorContextResolver } from "./core/orchestration/AddressedPriorContextResolver";
 import { PromptFileParser } from "./core/PromptFileParser";
-import { WorkflowLockManager } from "./utils/WorkflowLockManager";
-import { LOCK_STATUS } from "./types/DashboardConstants";
+import { readWorkflowLockInspection } from "./utils/WorkflowLockInspector";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
 import { resolveCliRunRefAtLineage } from "./cli/CliRunSelector";
 import {
@@ -118,6 +118,12 @@ import {
 
 // Mark this process as the standalone CLI binary before anything else runs.
 setRuntimeMode(RUNNER_IDS.CLI);
+
+const cliRunnerHostIdentity: RunnerHostIdentity = {
+  runner: RUNNER_IDS.CLI,
+  hostInstanceId: crypto.randomUUID(),
+  pid: process.pid,
+};
 
 // VERSION is injected by esbuild define
 declare const VERSION: string;
@@ -645,7 +651,11 @@ async function runCommand(
     workingDir,
     hostCanProvidePty,
     undefined,
-    userFeedbackSink
+    userFeedbackSink,
+    undefined,
+    undefined,
+    undefined,
+    cliRunnerHostIdentity
   );
 
   // In headless mode, stream output to the terminal as events arrive.
@@ -1258,12 +1268,11 @@ async function assertLineageAvailableForCli(
   workspaceRoot: string,
   workflowKey: WorkflowKey
 ): Promise<void> {
-  const lock = await WorkflowLockManager.readLock(workspaceRoot, workflowKey);
-  const lockStatus = await WorkflowLockManager.checkLock(
+  const lockInspection = await readWorkflowLockInspection(
     workspaceRoot,
     workflowKey
   );
-  if (lock && lockStatus !== LOCK_STATUS.STALE) {
+  if (lockInspection.liveness === "active") {
     throw new Error("Another run in this workflow lineage is executing");
   }
 }
@@ -1282,7 +1291,10 @@ async function validateCliContinuationTarget(
     workspaceRoot,
     workflowKey,
     runRef,
-    lineageRepository
+    lineageRepository,
+    "continue",
+    false,
+    cliRunnerHostIdentity
   );
 }
 
@@ -1717,7 +1729,10 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
 
   const { CommitMessageGenerationError, CommitMessageGenerator } =
     await import("./git/CommitMessageGenerator");
-  const generator = new CommitMessageGenerator();
+  const generator = new CommitMessageGenerator(
+    undefined,
+    cliRunnerHostIdentity
+  );
 
   console.error(chalk.dim("Checking for changes..."));
   const diffResult = await generator.getDiff(workingDir);

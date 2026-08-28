@@ -38,6 +38,7 @@ import {
   type RunRef,
   type WorkflowKey,
   type WorkflowLineageCreationOptions,
+  type RunnerHostIdentity,
 } from "../types/CtrlYokeTypes";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import { HEARTBEAT_INTERVAL_MS } from "../utils/LockSafetyPrimitives";
@@ -279,6 +280,8 @@ export class WorkflowInstance {
   private stopRequestPollInFlight = false;
   /** Ownership token for the currently-held runner lock, if any (see WorkflowLockManager). */
   private currentLockOwnerToken: string | undefined;
+  /** Stable process/Extension Host identity used by every lock this instance writes. */
+  private readonly runnerHostIdentity: RunnerHostIdentity;
   /** Shared lease for the execution root used by this run. */
   private executionLease: ExecutionLeaseHandle | undefined;
   /** The RunRef this instance is currently executing, if any. Distinct from any client's viewed run. */
@@ -460,8 +463,14 @@ export class WorkflowInstance {
     private readonly approveSecretGrants?: (
       workflow: PromptFile,
       workspaceRoot: string
-    ) => Promise<void>
+    ) => Promise<void>,
+    runnerHostIdentity?: RunnerHostIdentity
   ) {
+    this.runnerHostIdentity = runnerHostIdentity ?? {
+      runner: isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE,
+      hostInstanceId: crypto.randomUUID(),
+      pid: process.pid,
+    };
     this.id = crypto.randomUUID();
     this.createdAt = Date.now();
     this.dashboardSink = dashboardSink
@@ -4226,12 +4235,14 @@ export class WorkflowInstance {
       lockWorkspaceRoot,
       state.workflowKey,
       {
+        schemaVersion: 2,
         workflowKey: state.workflowKey,
         runRef: state.runRef,
-        runner: isCli() ? RUNNER_IDS.CLI : RUNNER_IDS.VSCODE,
-        pid: process.pid,
+        runner: this.runnerHostIdentity.runner,
+        pid: this.runnerHostIdentity.pid,
+        hostInstanceId: this.runnerHostIdentity.hostInstanceId,
+        executionInstanceId: this.id,
         ownerToken,
-        instanceId: this.id,
         startedAt: Date.now(),
         lastHeartbeat: Date.now(),
       }

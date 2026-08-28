@@ -171,9 +171,9 @@ export const Header: React.FC<{
   );
 
   // Any non-local runner owns the live files, so the dashboard is read-only.
-  const managedBy = activeWorkflow?.managedBy;
-  const isExternallyManaged = managedBy != null;
-  const externalManagementLabel = getExternalRunnerLabel(managedBy);
+  const externalOwner = activeWorkflow?.externalOwner;
+  const isExternallyManaged = externalOwner != null;
+  const externalManagementLabel = getExternalRunnerLabel(externalOwner);
   // The lineage on screen was deleted (from history) while being viewed —
   // its backing files are gone, so every workflow-mutating control is locked
   // except the prompt editor (see EditorSection — its draft is intentionally
@@ -262,12 +262,12 @@ export const Header: React.FC<{
   const handleStopExternallyManagedRun = useCallback(() => {
     if (!activeWorkflowId) return;
     sendMessage(
-      managedBy === RUNNER_IDS.VSCODE
+      externalOwner?.runner === RUNNER_IDS.VSCODE
         ? MESSAGE_TYPES.STOP_VSCODE_RUN
         : MESSAGE_TYPES.STOP_CLI_RUN,
       { workflowId: activeWorkflowId }
     );
-  }, [activeWorkflowId, managedBy]);
+  }, [activeWorkflowId, externalOwner]);
 
   const dryRunDisabled = !displayedViewAddress || isLineageReadOnly;
   const canSave = hasFile && !isLineageReadOnly;
@@ -605,7 +605,7 @@ export const Header: React.FC<{
           }
           title={
             isExternallyManaged
-              ? managedBy === RUNNER_IDS.CLI
+              ? externalOwner?.runner === RUNNER_IDS.CLI
                 ? "Stop CLI run"
                 : "Stop run in another ctrlyoke window"
               : isViewingDeletedWorkflow

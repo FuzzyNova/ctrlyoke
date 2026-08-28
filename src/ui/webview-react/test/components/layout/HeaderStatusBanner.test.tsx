@@ -51,7 +51,12 @@ function setLockedLineage({
   useUiStore.setState({
     activeWorkflowId: managedBy ? "active-workflow" : null,
     loadedWorkflows: managedBy
-      ? [{ id: "active-workflow", managedBy } as never]
+      ? [
+          {
+            id: "active-workflow",
+            externalOwner: { locality: "external", runner: managedBy },
+          } as never,
+        ]
       : [],
     viewedLineageIsSystemGenerated: isSystemGenerated,
   });
@@ -94,7 +99,12 @@ describe("HeaderStatusBanner", () => {
     renderBanner();
 
     expect(
-      screen.getByText(getExternalReadOnlyLabel(RUNNER_IDS.CLI)!)
+      screen.getByText(
+        getExternalReadOnlyLabel({
+          locality: "external",
+          runner: RUNNER_IDS.CLI,
+        })!
+      )
     ).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
@@ -104,7 +114,12 @@ describe("HeaderStatusBanner", () => {
     renderBanner();
 
     expect(
-      screen.getByText(getExternalReadOnlyLabel(RUNNER_IDS.VSCODE)!)
+      screen.getByText(
+        getExternalReadOnlyLabel({
+          locality: "external",
+          runner: RUNNER_IDS.VSCODE,
+        })!
+      )
     ).toBeInTheDocument();
   });
 
@@ -166,7 +181,12 @@ describe("HeaderStatusBanner", () => {
     });
 
     expect(
-      screen.getByText(getExternalReadOnlyLabel(RUNNER_IDS.CLI)!)
+      screen.getByText(
+        getExternalReadOnlyLabel({
+          locality: "external",
+          runner: RUNNER_IDS.CLI,
+        })!
+      )
     ).toBeInTheDocument();
     expect(
       screen.queryByText(

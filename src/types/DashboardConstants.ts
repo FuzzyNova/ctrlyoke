@@ -2301,16 +2301,6 @@ export type PermissionMode =
   (typeof PERMISSION_MODES)[keyof typeof PERMISSION_MODES];
 
 // ============================================================================
-// LOCK STATUS - Status values returned by WorkflowLockManager.checkLock()
-// ============================================================================
-export const LOCK_STATUS = {
-  NONE: "none",
-  STALE: "stale",
-  ACTIVE_VSCODE: "active-vscode",
-  ACTIVE_CLI: "active-cli",
-} as const;
-
-// ============================================================================
 // LOG LEVELS - Webview → Extension log level strings (LOG_MESSAGE payload)
 // ============================================================================
 export const LOG_LEVELS = {
@@ -2796,7 +2786,6 @@ export type HarnessStatusString =
   (typeof HARNESS_STATUS_STRINGS)[keyof typeof HARNESS_STATUS_STRINGS];
 export type WebviewLogLevel = (typeof LOG_LEVELS)[keyof typeof LOG_LEVELS];
 export type RunnerId = (typeof RUNNER_IDS)[keyof typeof RUNNER_IDS];
-export type LockStatus = (typeof LOCK_STATUS)[keyof typeof LOCK_STATUS];
 export type PriorContextKeyword =
   (typeof PRIOR_CONTEXT_KEYWORDS)[keyof typeof PRIOR_CONTEXT_KEYWORDS];
 export type PriorContextItemType =

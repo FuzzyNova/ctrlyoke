@@ -6,16 +6,22 @@ import {
   WorkflowTokenTotals,
   EXECUTION_STATES,
   type RunRef,
+  type RunnerHostIdentity,
   type WorkflowKey,
 } from "../../types/CtrlYokeTypes";
+import type { ActiveExternalLockInspection } from "./ExternalExecutionResolver";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
-import {
-  ACTIVE_EXECUTION_STATES,
-  LOCK_STATUS,
-} from "../../types/DashboardConstants";
+import { ACTIVE_EXECUTION_STATES } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { invalidateRunSummaryFor } from "./RunSummaryCache";
+import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
+
+export type ExternalRunWatchFinishReason =
+  | "terminal-working-file"
+  | "lock-deleted"
+  | "lock-stale"
+  | "ownership-changed";
 
 /**
  * ExternalRunWatchSession
@@ -30,12 +36,13 @@ import { invalidateRunSummaryFor } from "./RunSummaryCache";
  * Also runs a 10-second heartbeat staleness poll as a fallback for CLI crashes
  * (lock file exists but heartbeat has gone stale).
  *
- * Created by WorkflowOrchestrator when an active CLI or sibling-VSCode lock is detected.
- * Disposed when the lock is deleted or goes stale.
+ * Created by WorkflowOrchestrator when an active external CLI or sibling-VSCode lock is
+ * detected. Disposed when the lock is deleted, goes stale, or changes ownership.
  */
 export class ExternalRunWatchSession implements vscode.Disposable {
   private disposables: vscode.Disposable[] = [];
   private heartbeatPollInterval: ReturnType<typeof setInterval> | undefined;
+  private finished = false;
   /** stepIndex → last number of outputs sent to the dashboard for that step */
   private lastKnownOutputByStep: Record<number, number> = {};
   private readonly manifestPath: string;
@@ -45,6 +52,8 @@ export class ExternalRunWatchSession implements vscode.Disposable {
     private readonly workflowKey: WorkflowKey,
     private readonly runRef: RunRef,
     private readonly workspaceFolderPath: string,
+    private readonly inspection: ActiveExternalLockInspection,
+    private readonly observer: RunnerHostIdentity,
     /**
      * Called when the working file changes: partial WorkflowSummary update
      * with the latest currentStep and executionState.
@@ -57,9 +66,9 @@ export class ExternalRunWatchSession implements vscode.Disposable {
      */
     private readonly onOutput: (historyFilePath: string) => void,
     /**
-     * Called when the CLI has finished (lock deleted or heartbeat stale).
+     * Called when the external run has finished or ownership changed.
      */
-    private readonly onFinished: () => void
+    private readonly onFinished: (reason: ExternalRunWatchFinishReason) => void
   ) {
     this.manifestPath = WorkflowPaths.manifestPath(
       workspaceFolderPath,
@@ -90,6 +99,7 @@ export class ExternalRunWatchSession implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.finished = true;
     if (this.heartbeatPollInterval !== undefined) {
       clearInterval(this.heartbeatPollInterval);
       this.heartbeatPollInterval = undefined;
@@ -169,7 +179,7 @@ export class ExternalRunWatchSession implements vscode.Disposable {
         Log.debug(
           `[ExternalRunWatchSession] working file reached terminal state ${executionState} for workflowKey="${this.workflowKey}" — calling onFinished`
         );
-        this.onFinished();
+        this.signalFinished("terminal-working-file");
       }
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
@@ -209,15 +219,48 @@ export class ExternalRunWatchSession implements vscode.Disposable {
     );
     const watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
+    const validateLock = (): void => {
+      void this.validateCurrentLock();
+    };
+    this.disposables.push(watcher.onDidChange(validateLock));
+    this.disposables.push(watcher.onDidCreate(validateLock));
     this.disposables.push(
       watcher.onDidDelete(() => {
         Log.debug(
           `[ExternalRunWatchSession] lock file deleted — external run finished for workflowKey="${this.workflowKey}"`
         );
-        this.onFinished();
+        this.signalFinished("lock-deleted");
       })
     );
     this.disposables.push(watcher);
+  }
+
+  private async validateCurrentLock(): Promise<void> {
+    if (this.finished) {
+      return;
+    }
+
+    const currentInspection = await readWorkflowLockOwnershipInspection(
+      this.workspaceFolderPath,
+      this.workflowKey,
+      this.observer
+    );
+    if (
+      currentInspection.liveness === "active" &&
+      currentInspection.locality === "external" &&
+      sameLockAcquisition(currentInspection.lock, this.inspection.lock)
+    ) {
+      return;
+    }
+
+    const reason =
+      currentInspection.liveness === "stale"
+        ? "lock-stale"
+        : "ownership-changed";
+    Log.debug(
+      `[ExternalRunWatchSession] lock ownership changed for workflowKey="${this.workflowKey}" — ending old-owner watch`
+    );
+    this.signalFinished(reason);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -249,22 +292,21 @@ export class ExternalRunWatchSession implements vscode.Disposable {
 
   private startHeartbeatPoll(): void {
     this.heartbeatPollInterval = setInterval(() => {
-      WorkflowLockManager.checkLock(this.workspaceFolderPath, this.workflowKey)
-        .then((status) => {
-          if (status === LOCK_STATUS.NONE || status === LOCK_STATUS.STALE) {
-            Log.trace(
-              `[ExternalRunWatchSession] heartbeat poll: lock is ${status} for workflowKey="${this.workflowKey}" — calling onFinished`
-            );
-            this.onFinished();
-          }
-        })
-        .catch((err) => {
-          Log.warn(
-            `[ExternalRunWatchSession] heartbeat poll: checkLock failed:`,
-            err
-          );
-        });
+      void this.validateCurrentLock().catch((err) => {
+        Log.warn(
+          `[ExternalRunWatchSession] heartbeat poll: lock validation failed:`,
+          err
+        );
+      });
     }, 10_000);
+  }
+
+  private signalFinished(reason: ExternalRunWatchFinishReason): void {
+    if (this.finished) {
+      return;
+    }
+    this.finished = true;
+    this.onFinished(reason);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -276,6 +318,11 @@ export class ExternalRunWatchSession implements vscode.Disposable {
     return this.manifestPath;
   }
 
+  /** Returns the exact owner token this watch session was created for. */
+  getOwnerToken(): string {
+    return this.inspection.lock.ownerToken;
+  }
+
   /** Returns and updates the last-known output count for a step (used for diffing). */
   getAndUpdateLastKnownOutputCount(
     stepIndex: number,
@@ -285,4 +332,18 @@ export class ExternalRunWatchSession implements vscode.Disposable {
     this.lastKnownOutputByStep[stepIndex] = newCount;
     return last;
   }
+}
+
+function sameLockAcquisition(
+  current: ActiveExternalLockInspection["lock"],
+  expected: ActiveExternalLockInspection["lock"]
+): boolean {
+  return (
+    current.ownerToken === expected.ownerToken &&
+    current.workflowKey === expected.workflowKey &&
+    current.runRef === expected.runRef &&
+    current.runner === expected.runner &&
+    current.hostInstanceId === expected.hostInstanceId &&
+    current.executionInstanceId === expected.executionInstanceId
+  );
 }
