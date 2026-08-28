@@ -185,9 +185,12 @@ File: `src/license/LicenseService.ts`.
 1. **`listMachines(key: string): Promise<LicenseMachineSummary[]>`**
    - Resolve the license id from the key via the existing `validateKey()`
      (already does this for activation).
-   - `GET /licenses/{id}/machines` with `Authorization: License <key>`
+   - `GET /machines?license={id}` with `Authorization: License <key>`
      (same `keygenHeaders()` helper, same base-URL pattern as
-     `checkoutLicense`/`activateMachine`).
+     `checkoutLicense`/`activateMachine`). Keygen's current API reference
+     exposes license machines through the account-wide machines listing with
+     a `license` filter; its license relationship metadata links to the same
+     resource but the relationship URL is not the listing endpoint used here.
    - Map each machine resource to a new `LicenseMachineSummary` (id,
      `name`/`platform` attributes, `created` timestamp) and flag whichever
      entry matches the locally stored `LICENSE_MACHINE_ID_SECRET_KEY` as
@@ -214,7 +217,10 @@ File: `src/license/LicenseService.ts`.
    carrying the resolved `licenseId`. The UI catches this specific error type
    to switch straight into the machine-management view instead of showing a
    dead-end rejection message — this is the "remote deactivation ... for
-   when they've hit their machine limit" flow from the request.
+   when they've hit their machine limit" flow from the request. Keygen's
+   validation response uses `TOO_MANY_MACHINES`; machine creation can report
+   the same condition as a 422 with `MACHINE_LIMIT_EXCEEDED`, so the service
+   recognizes both at the activation rejection boundary.
 
 4. **Trial countdown exposure.** Add `getRemoteAccessTrialEndsAt(): Promise<number | null>`
    — returns `null` when already Pro or when no `trialState` is configured,

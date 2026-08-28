@@ -862,7 +862,11 @@ suite("WebviewSettingsSync", () => {
           () => undefined,
           undefined,
           undefined,
-          async () => ({ isPro: true, hasRemoteAccess: true })
+          async () => ({
+            isPro: true,
+            hasRemoteAccess: true,
+            trialEndsAt: null,
+          })
         );
 
         hideGlobalNavigator();
@@ -968,7 +972,11 @@ suite("WebviewSettingsSync", () => {
           () => undefined,
           undefined,
           undefined,
-          async () => ({ isPro: true, hasRemoteAccess: true })
+          async () => ({
+            isPro: true,
+            hasRemoteAccess: true,
+            trialEndsAt: null,
+          })
         );
 
         hideGlobalNavigator();

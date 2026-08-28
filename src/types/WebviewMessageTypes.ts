@@ -405,6 +405,7 @@ export interface StatusMessage {
 export interface LicenseAccessState {
   isPro: boolean;
   hasRemoteAccess: boolean;
+  trialEndsAt: number | null;
 }
 
 /**

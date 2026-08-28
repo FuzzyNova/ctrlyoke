@@ -169,6 +169,7 @@ export class CtrlYokeWebviewProvider
         ? async () => ({
             isPro: await licenseService.isPro(),
             hasRemoteAccess: await licenseService.hasRemoteAccess(),
+            trialEndsAt: await licenseService.getRemoteAccessTrialEndsAt(),
           })
         : undefined
     );

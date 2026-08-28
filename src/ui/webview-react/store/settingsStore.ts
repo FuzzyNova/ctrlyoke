@@ -467,7 +467,7 @@ const initialState: SettingsState = {
   workflowLoaded: false,
   fullGlobalSettings: null,
   serverRunning: false,
-  licenseAccess: { isPro: false, hasRemoteAccess: false },
+  licenseAccess: { isPro: false, hasRemoteAccess: false, trialEndsAt: null },
   serverUrl: null,
   availableIps: [],
   selectedDisplayIp: null,

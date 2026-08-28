@@ -185,6 +185,7 @@ export class WebviewSettingsSync {
   private licenseAccess: LicenseAccessState = {
     isPro: false,
     hasRemoteAccess: false,
+    trialEndsAt: null,
   };
 
   private emitMessage(
@@ -1104,12 +1105,12 @@ export class WebviewSettingsSync {
       // the extension-owned LicenseService must never be granted Pro/remote
       // access by default. Tests that exercise Pro-gated behavior must inject
       // an explicit getLicenseAccess factory.
-      return { isPro: false, hasRemoteAccess: false };
+      return { isPro: false, hasRemoteAccess: false, trialEndsAt: null };
     }
     try {
       return await this.getLicenseAccess();
     } catch {
-      return { isPro: false, hasRemoteAccess: false };
+      return { isPro: false, hasRemoteAccess: false, trialEndsAt: null };
     }
   }
 
