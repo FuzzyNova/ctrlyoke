@@ -36,7 +36,7 @@ const ALL_TABS = [
   { id: "license", label: "License", icon: "codicon-key" },
   { id: "workflow", label: "Workflow Defaults", icon: "codicon-globe" },
   { id: "permissions", label: "Advanced Permissions", icon: "codicon-shield" },
-  { id: "secrets", label: "Secrets", icon: "codicon-key" },
+  { id: "secrets", label: "Secrets", icon: "codicon-lock" },
   { id: "execution", label: "Execution", icon: "codicon-play" },
   { id: "worktrees", label: "Worktrees", icon: "codicon-source-control" },
   { id: "notifications", label: "Notifications", icon: "codicon-bell" },
