@@ -110,7 +110,10 @@ suite("WorkflowLockManager stale-run recovery", () => {
         cases.map(({ workflowKey }) => workflowKey)
       );
 
-      assert.deepStrictEqual(result.activeCliRunFiles, []);
+      assert.deepStrictEqual(
+        result.activeRunFiles,
+        [...expectedRuntimes.keys()]
+      );
       assert.deepStrictEqual(result.recoveredRunFiles, []);
       for (const { workflowKey, runRef } of cases) {
         const runFilePath = WorkflowPaths.runFilePath(
@@ -204,7 +207,7 @@ suite("WorkflowLockManager stale-run recovery", () => {
         _runtime: { currentIndex: number; executionState: string };
       };
 
-      assert.deepStrictEqual(result.activeCliRunFiles, []);
+      assert.deepStrictEqual(result.activeRunFiles, []);
       assert.deepStrictEqual(result.recoveredRunFiles, [runFilePath]);
       assert.strictEqual(
         recovered._runtime.executionState,
@@ -281,7 +284,7 @@ suite("WorkflowLockManager stale-run recovery", () => {
         [workflowKey]
       );
 
-      assert.deepStrictEqual(result.activeCliRunFiles, [runFilePath]);
+      assert.deepStrictEqual(result.activeRunFiles, [runFilePath]);
       assert.deepStrictEqual(result.recoveredRunFiles, []);
       assert.deepStrictEqual(
         JSON.parse(await fs.readFile(runFilePath, "utf8")),

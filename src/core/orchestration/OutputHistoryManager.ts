@@ -23,14 +23,13 @@ import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
-  LOCK_STATUS,
   WORKTREE_EDIT_KINDS,
   type HarnessId,
   type ExecutionState,
   type ExecutionPhase,
 } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
-import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
+import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
 import { OutputHistoryTimelineAdapter } from "./OutputHistoryTimelineAdapter";
 import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { getSharedHistorySearchIndexService } from "./HistorySearchIndexServiceRegistry";
@@ -1288,20 +1287,12 @@ export class OutputHistoryManager {
         protectedRunRefs.add(summary.runRef);
       }
     }
-    const lock = await WorkflowLockManager.readLock(
+    const lockInspection = await readWorkflowLockInspection(
       this._workspaceFolderPath,
       workflowKey
     );
-    const lockStatus = await WorkflowLockManager.checkLock(
-      this._workspaceFolderPath,
-      workflowKey
-    );
-    if (
-      lock &&
-      lockStatus !== LOCK_STATUS.NONE &&
-      lockStatus !== LOCK_STATUS.STALE
-    ) {
-      protectedRunRefs.add(lock.runRef);
+    if (lockInspection.liveness === "active") {
+      protectedRunRefs.add(lockInspection.lock.runRef);
     }
     return protectedRunRefs;
   }

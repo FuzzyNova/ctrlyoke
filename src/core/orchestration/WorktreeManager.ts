@@ -39,9 +39,8 @@ import {
   withRepositoryWorktreeMutationLock,
 } from "../../utils/WorktreeUtils";
 import { writeFileAtomic } from "../../utils/AtomicFileUtils";
-import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
+import { readWorkflowLockInspection } from "../../utils/WorkflowLockInspector";
 import {
-  LOCK_STATUS,
   WORKTREE_MANAGEMENT_ACTIONS,
   WORKTREE_BRANCH_STATES,
   WORKTREE_DIRECTORY_STATES,
@@ -1675,14 +1674,11 @@ export class WorktreeManager {
         return this.buildManagedInfoWithoutLease(record, options, "recovered");
       }
 
-      const runnerStatus = await WorkflowLockManager.checkLock(
+      const lockInspection = await readWorkflowLockInspection(
         record.stateRoot,
         record.workflowKey
       );
-      if (
-        runnerStatus === LOCK_STATUS.ACTIVE_CLI ||
-        runnerStatus === LOCK_STATUS.ACTIVE_VSCODE
-      ) {
+      if (lockInspection.liveness === "active") {
         return undefined;
       }
       return this.acquireManagedInfo({
@@ -1731,15 +1727,11 @@ export class WorktreeManager {
           pathsEqual(candidate.worktreePath, record.worktreePath)
       );
       if (!entry || !(await this.pathExists(record.worktreePath))) continue;
-      const runnerStatus = await WorkflowLockManager.checkLock(
+      const lockInspection = await readWorkflowLockInspection(
         record.stateRoot,
         record.workflowKey
       );
-      if (
-        runnerStatus === LOCK_STATUS.ACTIVE_CLI ||
-        runnerStatus === LOCK_STATUS.ACTIVE_VSCODE
-      )
-        continue;
+      if (lockInspection.liveness === "active") continue;
       if (await this.hasLiveLease(record.worktreePath)) continue;
       result.push(
         await this.buildManagedInfoWithoutLease(
@@ -2132,11 +2124,11 @@ export class WorktreeManager {
 
       if (options.action === WORKTREE_MANAGEMENT_ACTIONS.CLEANUP_BRANCH) {
         if (entry) throw new Error("A checked-out branch cannot be deleted.");
-        const runnerStatus = await WorkflowLockManager.checkLock(
+        const lockInspection = await readWorkflowLockInspection(
           record.stateRoot,
           record.workflowKey
         );
-        if (runnerStatus !== LOCK_STATUS.NONE) {
+        if (lockInspection.liveness === "active") {
           throw new Error("The managed run is still live or recoverable.");
         }
         const currentTip = await this.tryResolveLocalBranch(
@@ -3201,12 +3193,11 @@ export class WorktreeManager {
         reason: "The ownership record has no recorded target branch.",
       };
     }
-    if (
-      (await WorkflowLockManager.checkLock(
-        record.stateRoot,
-        record.workflowKey
-      )) !== LOCK_STATUS.NONE
-    ) {
+    const lockInspection = await readWorkflowLockInspection(
+      record.stateRoot,
+      record.workflowKey
+    );
+    if (lockInspection.liveness === "active") {
       return {
         eligible: false,
         reason: "The managed run is live or recoverable.",

@@ -66,8 +66,7 @@ import { WorkflowLineageRepository } from "./core/orchestration/WorkflowLineageR
 import { OutputHistoryManager } from "./core/orchestration/OutputHistoryManager";
 import { createPriorContextResolver } from "./core/orchestration/AddressedPriorContextResolver";
 import { PromptFileParser } from "./core/PromptFileParser";
-import { WorkflowLockManager } from "./utils/WorkflowLockManager";
-import { LOCK_STATUS } from "./types/DashboardConstants";
+import { readWorkflowLockInspection } from "./utils/WorkflowLockInspector";
 import * as WorkflowPaths from "./utils/WorkflowPaths";
 import { resolveCliRunRefAtLineage } from "./cli/CliRunSelector";
 import {
@@ -1269,12 +1268,11 @@ async function assertLineageAvailableForCli(
   workspaceRoot: string,
   workflowKey: WorkflowKey
 ): Promise<void> {
-  const lock = await WorkflowLockManager.readLock(workspaceRoot, workflowKey);
-  const lockStatus = await WorkflowLockManager.checkLock(
+  const lockInspection = await readWorkflowLockInspection(
     workspaceRoot,
     workflowKey
   );
-  if (lock && lockStatus !== LOCK_STATUS.STALE) {
+  if (lockInspection.liveness === "active") {
     throw new Error("Another run in this workflow lineage is executing");
   }
 }
@@ -1293,7 +1291,10 @@ async function validateCliContinuationTarget(
     workspaceRoot,
     workflowKey,
     runRef,
-    lineageRepository
+    lineageRepository,
+    "continue",
+    false,
+    cliRunnerHostIdentity
   );
 }
 

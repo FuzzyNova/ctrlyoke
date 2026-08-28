@@ -1,13 +1,13 @@
 import * as fs from "fs/promises";
 import type {
   RunRef,
+  RunnerHostIdentity,
   WorkflowKey,
   WorkflowStep,
   WorkingFile,
 } from "../../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
-  LOCK_STATUS,
   QUEUE_POSITION,
   resolveQueueInsertIndex,
   WORKTREE_EDIT_KINDS,
@@ -15,7 +15,7 @@ import {
 } from "../../types/DashboardConstants";
 import { withFileLock } from "../../utils/FileLockUtils";
 import {
-  inspectWorkflowLock,
+  inspectWorkflowLockOwnership,
   readWorkflowLock,
 } from "../../utils/WorkflowLockInspector";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
@@ -42,31 +42,59 @@ export class RunContinuationService {
     runRef: RunRef,
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     action: "append" | "continue" | "edit" = "continue",
-    allowActiveTargetAppend: boolean = false
+    allowActiveTargetAppend: boolean = false,
+    observer?: RunnerHostIdentity
   ): Promise<RunContinuationTarget> {
-    const [lock, lockStatus, descriptor] = await Promise.all([
+    const [lock, descriptor] = await Promise.all([
       readWorkflowLock(workspaceRoot, workflowKey),
-      inspectWorkflowLock(workspaceRoot, workflowKey),
       lineageRepository.readDescriptor(workspaceRoot, workflowKey),
     ]);
+    const lockInspection = inspectWorkflowLockOwnership(lock, observer);
     const target = await this.readRun(workspaceRoot, workflowKey, runRef);
     const executionState =
       target._runtime?.executionState ?? EXECUTION_STATES.IDLE;
+    const activeLock =
+      lockInspection.liveness === "active" ? lockInspection.lock : undefined;
+    const lockNamesTarget = activeLock?.runRef === runRef;
     const activeTargetAppend =
       allowActiveTargetAppend &&
       action === "append" &&
-      lock !== null &&
-      lockStatus !== LOCK_STATUS.STALE &&
-      lock.runRef === runRef &&
+      activeLock !== undefined &&
+      lockNamesTarget &&
       executionState === EXECUTION_STATES.RUNNING;
-    if (lock && lockStatus !== LOCK_STATUS.STALE && !activeTargetAppend) {
+
+    // A self-owned lock without the resident execution object is an invariant
+    // failure, not an orphan. Treating it as external or adoptable would let a
+    // continuation create a second owner for an execution this process already
+    // holds. Editing a different, idle run remains valid while another run in
+    // the lineage executes.
+    if (
+      lockInspection.liveness === "active" &&
+      lockInspection.locality === "self" &&
+      (action !== "edit" || lockNamesTarget)
+    ) {
+      // eslint-disable-next-line no-console -- Node-only continuation diagnostic.
+      console.warn(
+        `[RunContinuationService] self-owned but untracked execution for ${workflowKey}/${lockInspection.lock.runRef}`
+      );
+      throw new Error(
+        "Self-owned execution is not tracked by this process; refusing continuation"
+      );
+    }
+
+    if (lockInspection.liveness === "active" && !activeTargetAppend) {
       // Editing an idle run is allowed even while a *different* run of the same
       // lineage holds the lock — only starting work (append/continue) is gated by
       // another run executing. A lock naming *this* run still blocks a static
       // edit here: the live-executing-run edit path is handled in-place by the
       // orchestrator before it ever reaches this validator, so reaching here with
       // the lock on this run means a non-resident (e.g. CLI) owner.
-      if (action !== "edit" || lock.runRef === runRef) {
+      if (action !== "edit" || lockNamesTarget) {
+        if (lockInspection.locality === "indeterminate") {
+          throw new Error(
+            "Another run in this workflow lineage is executing and ownership is indeterminate"
+          );
+        }
         throw new Error("Another run in this workflow lineage is executing");
       }
     }
@@ -97,8 +125,7 @@ export class RunContinuationService {
       executionState === EXECUTION_STATES.RUNNING ||
       executionState === EXECUTION_STATES.PAUSED;
     const allowInterruptedRun =
-      isAdoptableState &&
-      (lockStatus === LOCK_STATUS.NONE || lockStatus === LOCK_STATUS.STALE);
+      isAdoptableState && lockInspection.liveness !== "active";
     if (isAdoptableState && !allowInterruptedRun && !activeTargetAppend) {
       throw new Error(
         `Cannot ${action} while run is in state ${executionState}`

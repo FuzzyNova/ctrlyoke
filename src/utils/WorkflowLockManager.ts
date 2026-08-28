@@ -7,7 +7,6 @@ import {
 } from "../types/CtrlYokeTypes";
 import {
   ACTIVE_EXECUTION_STATES,
-  LOCK_STATUS,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   PROMPT_TERMINAL_STATUS,
@@ -16,7 +15,11 @@ import {
 import type { ExecutionState, LockStatus } from "../types/DashboardConstants";
 import { Log } from "./Log";
 import * as WorkflowPaths from "./WorkflowPaths";
-import { inspectWorkflowLock, readWorkflowLock } from "./WorkflowLockInspector";
+import {
+  inspectWorkflowLock,
+  readWorkflowLock,
+  readWorkflowLockInspection,
+} from "./WorkflowLockInspector";
 import { withFileLock } from "./FileLockUtils";
 import { generateOwnerToken, isOwnerStale } from "./LockSafetyPrimitives";
 
@@ -241,8 +244,7 @@ export class WorkflowLockManager {
    * locked `RunRef`'s `_runtime.executionState` is active (running/pausing/cancelling):
    *   - "none" or "stale" lock  → writes "stopped" to that run's `_runtime.executionState`,
    *     cleans up any stale lock file
-   *   - "active-vscode"         → preserves the live VS Code-owned run and lock
-   *   - "active-cli"            → preserves RUNNING; returns this lineage as CLI-managed
+   *   - active lock             → preserves the live run and lock
    *
    * Returns the exact run file paths recovered/still-active, keyed by lineage.
    */
@@ -250,10 +252,10 @@ export class WorkflowLockManager {
     workspaceRoot: string,
     workflowKeys: WorkflowKey[]
   ): Promise<{
-    activeCliRunFiles: string[];
+    activeRunFiles: string[];
     recoveredRunFiles: string[];
   }> {
-    const activeCli: string[] = [];
+    const activeRunFiles: string[] = [];
     const recoveredRunFiles: string[] = [];
 
     for (const workflowKey of workflowKeys) {
@@ -307,29 +309,22 @@ export class WorkflowLockManager {
         continue;
       }
 
-      const status = await WorkflowLockManager.checkLock(
+      const lockInspection = await readWorkflowLockInspection(
         workspaceRoot,
         workflowKey
       );
 
-      if (status === LOCK_STATUS.ACTIVE_CLI) {
+      if (lockInspection.liveness === "active") {
         Log.info(
-          `[WorkflowLockManager] normalizeStaleLocks: ${workflowKey} is active-cli — preserving RUNNING`
+          `[WorkflowLockManager] normalizeStaleLocks: ${workflowKey} has an active lock — preserving live run`
         );
-        activeCli.push(runFilePath);
+        activeRunFiles.push(runFilePath);
         continue;
       }
 
-      if (status === LOCK_STATUS.ACTIVE_VSCODE) {
-        Log.info(
-          `[WorkflowLockManager] normalizeStaleLocks: ${workflowKey} is active-vscode — preserving live VS Code run`
-        );
-        continue;
-      }
-
-      // "none" or "stale"
+      // "absent" or "stale"
       Log.info(
-        `[WorkflowLockManager] normalizeStaleLocks: normalizing ${workflowKey} from ${executionState} → stopped (lock=${status})`
+        `[WorkflowLockManager] normalizeStaleLocks: normalizing ${workflowKey} from ${executionState} → stopped (lock=${lockInspection.liveness})`
       );
 
       if (runningFile._runtime) {
@@ -392,6 +387,6 @@ export class WorkflowLockManager {
       }
     }
 
-    return { activeCliRunFiles: activeCli, recoveredRunFiles };
+    return { activeRunFiles, recoveredRunFiles };
   }
 }

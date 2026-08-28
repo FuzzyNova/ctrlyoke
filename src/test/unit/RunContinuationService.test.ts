@@ -8,7 +8,11 @@ import { RunContinuationService } from "../../core/orchestration/RunContinuation
 import { WorkflowLineageRepository } from "../../core/orchestration/WorkflowLineageRepository";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
-import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
+import type {
+  RunRef,
+  RunnerHostIdentity,
+  WorkflowKey,
+} from "../../types/CtrlYokeTypes";
 
 /**
  * A run's definition may be edited while a *different* run of the same lineage
@@ -80,6 +84,12 @@ suite(
       });
     }
 
+    const localObserver: RunnerHostIdentity = {
+      runner: RUNNER_IDS.VSCODE,
+      hostInstanceId: "test-host",
+      pid: process.pid,
+    };
+
     test("allows editing an idle run while a DIFFERENT run holds the lineage lock", async () => {
       const ws = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-edit-lock-")
@@ -142,6 +152,31 @@ suite(
             "edit"
           ),
           /executing/i
+        );
+      } finally {
+        await fs.rm(ws, { recursive: true, force: true });
+      }
+    });
+
+    test("reports a self-owned but untracked continuation as an invariant failure", async () => {
+      const ws = await fs.mkdtemp(
+        path.join(os.tmpdir(), "ctrlyoke-edit-lock-self-untracked-")
+      );
+      try {
+        await seedLineage(ws);
+        await liveLock(ws, targetRun);
+
+        await assert.rejects(
+          RunContinuationService.validateContinuationTarget(
+            ws,
+            workflowKey,
+            targetRun,
+            new WorkflowLineageRepository(),
+            "continue",
+            false,
+            localObserver
+          ),
+          /self-owned execution is not tracked/i
         );
       } finally {
         await fs.rm(ws, { recursive: true, force: true });

@@ -88,7 +88,7 @@ export function isExternalOwnedLock(
  */
 export function inspectWorkflowLockOwnership(
   rawLock: unknown,
-  observer: RunnerHostIdentity,
+  observer: RunnerHostIdentity | undefined,
   options: WorkflowLockInspectionOptions = {}
 ): WorkflowLockInspection {
   if (!isWorkflowRunnerLock(rawLock)) {
@@ -99,6 +99,12 @@ export function inspectWorkflowLockOwnership(
   const processAlive = options.isProcessAlive ?? isProcessAlive;
   if (isOwnerStale(rawLock.pid, rawLock.lastHeartbeat, now(), processAlive)) {
     return { liveness: "stale", lock: rawLock };
+  }
+
+  // Liveness-only consumers deliberately do not provide an observer identity.
+  // Keep the lock active without inventing a locality classification for them.
+  if (!observer) {
+    return { liveness: "active", locality: "indeterminate", lock: rawLock };
   }
 
   const lockHostInstanceId = rawLock.hostInstanceId;
@@ -229,6 +235,20 @@ export async function readWorkflowLock(
   } catch {
     return null;
   }
+}
+
+/**
+ * Read a lock as structured liveness evidence for consumers that do not need
+ * to interpret ownership. Active locks intentionally carry indeterminate
+ * locality because no observer identity was supplied.
+ */
+export async function readWorkflowLockInspection(
+  workspaceRoot: string,
+  workflowKey: WorkflowKey,
+  options: WorkflowLockInspectionOptions = {}
+): Promise<WorkflowLockInspection> {
+  const lock = await readWorkflowLock(workspaceRoot, workflowKey);
+  return inspectWorkflowLockOwnership(lock, undefined, options);
 }
 
 export async function inspectWorkflowLock(

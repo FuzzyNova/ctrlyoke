@@ -324,6 +324,11 @@ export class ExternalRunWatchSession implements vscode.Disposable {
     return this.manifestPath;
   }
 
+  /** Returns the exact owner token this watch session was created for. */
+  getOwnerToken(): string {
+    return this.inspection.lock.ownerToken;
+  }
+
   /** Returns and updates the last-known output count for a step (used for diffing). */
   getAndUpdateLastKnownOutputCount(
     stepIndex: number,
