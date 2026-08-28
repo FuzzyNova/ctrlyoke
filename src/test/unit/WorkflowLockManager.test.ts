@@ -8,6 +8,7 @@ import {
   RUNNER_IDS,
 } from "../../types/DashboardConstants";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
+import { readWorkflowLock } from "../../utils/WorkflowLockInspector";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import * as path from "path";
@@ -36,7 +37,7 @@ suite("WorkflowLockManager stale-run recovery", () => {
       await fs.writeFile(lockPath, JSON.stringify(legacyLock), "utf8");
 
       assert.deepStrictEqual(
-        await WorkflowLockManager.readLock(workspaceRoot, workflowKey),
+        await readWorkflowLock(workspaceRoot, workflowKey),
         legacyLock
       );
     } finally {
@@ -110,10 +111,9 @@ suite("WorkflowLockManager stale-run recovery", () => {
         cases.map(({ workflowKey }) => workflowKey)
       );
 
-      assert.deepStrictEqual(
-        result.activeRunFiles,
-        [...expectedRuntimes.keys()]
-      );
+      assert.deepStrictEqual(result.activeRunFiles, [
+        ...expectedRuntimes.keys(),
+      ]);
       assert.deepStrictEqual(result.recoveredRunFiles, []);
       for (const { workflowKey, runRef } of cases) {
         const runFilePath = WorkflowPaths.runFilePath(
@@ -339,10 +339,7 @@ suite("WorkflowLockManager exclusive acquire / ownerToken", () => {
         /Timed out waiting for runner lock/
       );
 
-      const stillOwned = await WorkflowLockManager.readLock(
-        workspaceRoot,
-        workflowKey
-      );
+      const stillOwned = await readWorkflowLock(workspaceRoot, workflowKey);
       assert.strictEqual(stillOwned?.ownerToken, firstLock.ownerToken);
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
@@ -384,7 +381,7 @@ suite("WorkflowLockManager exclusive acquire / ownerToken", () => {
         workflowKey,
         staleToken
       );
-      const afterStaleHeartbeat = await WorkflowLockManager.readLock(
+      const afterStaleHeartbeat = await readWorkflowLock(
         workspaceRoot,
         workflowKey
       );
@@ -402,10 +399,7 @@ suite("WorkflowLockManager exclusive acquire / ownerToken", () => {
         workflowKey,
         staleToken
       );
-      const stillPresent = await WorkflowLockManager.readLock(
-        workspaceRoot,
-        workflowKey
-      );
+      const stillPresent = await readWorkflowLock(workspaceRoot, workflowKey);
       assert.ok(stillPresent, "successor's lock must survive a stale release");
       assert.strictEqual(stillPresent?.ownerToken, successorLock.ownerToken);
 

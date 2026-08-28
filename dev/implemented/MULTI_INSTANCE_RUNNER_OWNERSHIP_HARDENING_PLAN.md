@@ -1,6 +1,6 @@
 # Multi-Instance Runner Ownership Hardening Plan
 
-> **Status:** Proposed
+> **Status:** Implemented
 >
 > **Priority:** P1 — recurring workflow-correctness issue
 >
@@ -672,24 +672,27 @@ When implementation is complete:
   behavior, including terminal state with a retained lock.
 - UI tests prove external mode is driven only by the explicit external-owner
   projection.
-- Type checking, linting, formatting, extension tests, webview tests, and diff
-  validation pass.
+- Type checking, linting, task-scoped formatting, extension tests, webview tests,
+  and diff validation pass. The repository-wide format check still reports
+  unrelated pre-existing files outside this work.
 
 ## Completion Checklist
 
 - [x] Host identity is created once per VS Code activation and CLI startup.
 - [x] Lock schema separates host identity from workflow execution identity.
-- [ ] Structured lock inspection replaces runner-specific active statuses.
+- [x] Structured lock inspection replaces runner-specific active statuses.
 - [x] External-execution resolver is the single source of external eligibility.
 - [x] External watch sessions require and revalidate exact external proof.
 - [x] Orchestrator CLI-specific session names are made runner-neutral.
 - [x] Workflow summaries expose explicit external locality without lock secrets.
-- [x] All lock call sites are inventoried and migrated by required semantics. The remaining low-level `runner.json` and `LOCK_STATUS` uses are deliberately retained for the architectural-enforcement audit listed below.
+- [x] All lock call sites are inventoried and migrated by required semantics. Raw
+      lock reads remain only in the narrow inspector/manager infrastructure and are
+      covered by the architectural-enforcement audit below.
 - [x] A two-host shared-filesystem regression test proves owner-versus-sibling behavior, including terminal state with a retained lock.
-- [ ] Classifier, resolver, self-owner, two-host, and UI regressions are covered.
-- [ ] Architecture enforcement prevents new direct runner-to-external mappings.
-- [ ] Coordination and project-memory documentation is updated.
-- [ ] Plan is moved to `dev/implemented/` after all acceptance criteria pass.
+- [x] Classifier, resolver, self-owner, two-host, and UI regressions are covered.
+- [x] Architecture enforcement prevents new direct runner-to-external mappings.
+- [x] Coordination and project-memory documentation is updated.
+- [x] Plan is moved to `dev/implemented/` after all acceptance criteria pass.
 
 Phase 1 implementation note: the lock shape follows the plan exactly. Raw lock
 reads remain permissive for legacy objects that lack `schemaVersion`,
@@ -704,9 +707,8 @@ conservative legacy case left open above, a live lock without `hostInstanceId`
 whose PID differs from the observer is classified as active/indeterminate (and
 logged), never external; a matching PID is classified as self. The structured
 inspection API is now available, and higher-level call sites use its
-liveness/locality fields. The compatibility `inspectWorkflowLock()` /
-`WorkflowLockManager.checkLock()` pair remains only for the
-architectural-enforcement cleanup phase.
+liveness/locality fields. The former compatibility status adapter was removed
+in Phase 5; callers now use the structured inspection APIs directly.
 
 Phase 2 implementation note: `src/core/orchestration/ExternalExecutionResolver.ts`
 is the standalone external-execution eligibility boundary. It exports
@@ -725,20 +727,12 @@ change; a replacement lock is resolved afresh rather than being followed by the
 old session. The paused local takeover path remains limited to proven external
 ownership.
 
-Phase 3 call-site audit note: the deliberate low-level uses left for Phase 5
-architectural enforcement are:
-
-- `WorkflowLockInspector.inspectWorkflowLock()` and
-  `WorkflowLockManager.checkLock()`, retained as a compatibility status adapter;
-- `WorkflowLockManager`'s acquire, heartbeat, release, and stale-normalization
-  primitives, which must read `runner.json` to mutate or extract its exact run;
-- `WorkflowOrchestrator` runner-file discovery/replacement handling and
-  `ExternalRunWatchSession` polling, which read the raw lock only to locate or
-  revalidate an exact acquisition before delegating to structured inspection;
-- the `LOCK_STATUS` constants and their adapter-only return type.
-
-No higher-level caller maps `lock.runner` or `LOCK_STATUS.ACTIVE_VSCODE` /
-`ACTIVE_CLI` to external ownership. Liveness-only callers use
+Phase 5 call-site audit note: raw lock parsing is now confined to
+`WorkflowLockInspector` and the owner-token mutation primitives in
+`WorkflowLockManager`. Discovery, continuation, and watch polling consume
+structured inspections; the resolver is the only external-watch eligibility
+boundary. No higher-level caller maps `lock.runner` to external ownership.
+Liveness-only callers use
 `WorkflowLockInspection.liveness`; execution-conflict callers distinguish local,
 self-owned-but-untracked, external, indeterminate, and recoverable states; and
 stop/watch lifecycles retain the exact `ownerToken` acquisition.

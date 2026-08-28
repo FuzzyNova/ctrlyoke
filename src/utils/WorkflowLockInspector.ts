@@ -4,11 +4,7 @@ import type {
   WorkflowRunnerLock,
   WorkflowKey,
 } from "../types/CtrlYokeTypes";
-import {
-  LOCK_STATUS,
-  RUNNER_IDS,
-  type LockStatus,
-} from "../types/DashboardConstants";
+import { RUNNER_IDS } from "../types/DashboardConstants";
 import * as WorkflowPaths from "./WorkflowPaths";
 import {
   isOwnerStale,
@@ -213,11 +209,17 @@ export async function readWorkflowLock(
   workspaceRoot: string,
   workflowKey: WorkflowKey
 ): Promise<WorkflowRunnerLock | null> {
+  return readWorkflowLockAtPath(
+    WorkflowPaths.runnerLockPath(workspaceRoot, workflowKey)
+  );
+}
+
+/** Read a runner lock from an already-resolved path for non-workspace stores. */
+export async function readWorkflowLockAtPath(
+  lockPath: string
+): Promise<WorkflowRunnerLock | null> {
   try {
-    const content = await fs.promises.readFile(
-      WorkflowPaths.runnerLockPath(workspaceRoot, workflowKey),
-      "utf8"
-    );
+    const content = await fs.promises.readFile(lockPath, "utf8");
     const parsed: unknown = JSON.parse(content);
     // Keep development upgrades tolerant of locks written before schema v2.
     // A legacy object is still returned for liveness-only callers; callers
@@ -251,20 +253,27 @@ export async function readWorkflowLockInspection(
   return inspectWorkflowLockOwnership(lock, undefined, options);
 }
 
-export async function inspectWorkflowLock(
+/** Inspect a runner lock at an already-resolved path without exposing raw JSON. */
+export async function readWorkflowLockInspectionAtPath(
+  lockPath: string,
+  options: WorkflowLockInspectionOptions = {}
+): Promise<WorkflowLockInspection> {
+  const lock = await readWorkflowLockAtPath(lockPath);
+  return inspectWorkflowLockOwnership(lock, undefined, options);
+}
+
+/**
+ * Read and classify a lock relative to the supplied observer. Ownership-aware
+ * callers use this boundary so raw runner.json parsing stays in this module.
+ */
+export async function readWorkflowLockOwnershipInspection(
   workspaceRoot: string,
-  workflowKey: WorkflowKey
-): Promise<LockStatus> {
+  workflowKey: WorkflowKey,
+  observer: RunnerHostIdentity | undefined,
+  options: WorkflowLockInspectionOptions = {}
+): Promise<WorkflowLockInspection> {
   const lock = await readWorkflowLock(workspaceRoot, workflowKey);
-  if (!lock) return LOCK_STATUS.NONE;
-
-  if (isOwnerStale(lock.pid, lock.lastHeartbeat)) {
-    return LOCK_STATUS.STALE;
-  }
-
-  return lock.runner === RUNNER_IDS.CLI
-    ? LOCK_STATUS.ACTIVE_CLI
-    : LOCK_STATUS.ACTIVE_VSCODE;
+  return inspectWorkflowLockOwnership(lock, observer, options);
 }
 
 export { isProcessAlive } from "./LockSafetyPrimitives";

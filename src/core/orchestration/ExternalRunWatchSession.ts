@@ -15,10 +15,7 @@ import { ACTIVE_EXECUTION_STATES } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { invalidateRunSummaryFor } from "./RunSummaryCache";
-import {
-  inspectWorkflowLockOwnership,
-  readWorkflowLock,
-} from "../../utils/WorkflowLockInspector";
+import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
 
 export type ExternalRunWatchFinishReason =
   | "terminal-working-file"
@@ -243,12 +240,9 @@ export class ExternalRunWatchSession implements vscode.Disposable {
       return;
     }
 
-    const rawLock = await readWorkflowLock(
+    const currentInspection = await readWorkflowLockOwnershipInspection(
       this.workspaceFolderPath,
-      this.workflowKey
-    );
-    const currentInspection = inspectWorkflowLockOwnership(
-      rawLock,
+      this.workflowKey,
       this.observer
     );
     if (

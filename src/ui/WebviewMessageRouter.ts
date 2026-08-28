@@ -340,7 +340,9 @@ export class WebviewMessageRouter {
         // Cancel RECONNECT retries before any awaited startup work so a valid
         // panel READY immediately stops further nudges from the extension.
         const shouldHandleReady = this.callbacks.onPanelReady?.(
-          typeof message.pageLoadId === "string" ? message.pageLoadId : undefined
+          typeof message.pageLoadId === "string"
+            ? message.pageLoadId
+            : undefined
         );
         if (shouldHandleReady === false) {
           Log.debug(
@@ -2042,7 +2044,7 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.STOP_CLI_RUN, async (message) => {
       const { workflowId } = message;
       if (workflowId) {
-        await this.getOrchestrator()?.stopCliSession(workflowId);
+        await this.getOrchestrator()?.stopExternalRunSession(workflowId);
       }
     });
 

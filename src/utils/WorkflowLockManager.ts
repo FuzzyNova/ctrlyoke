@@ -12,11 +12,10 @@ import {
   PROMPT_TERMINAL_STATUS,
   STEP_STATUS,
 } from "../types/DashboardConstants";
-import type { ExecutionState, LockStatus } from "../types/DashboardConstants";
+import type { ExecutionState } from "../types/DashboardConstants";
 import { Log } from "./Log";
 import * as WorkflowPaths from "./WorkflowPaths";
 import {
-  inspectWorkflowLock,
   readWorkflowLock,
   readWorkflowLockInspection,
 } from "./WorkflowLockInspector";
@@ -27,8 +26,6 @@ export {
   HEARTBEAT_INTERVAL_MS,
   STALE_HEARTBEAT_MS,
 } from "./LockSafetyPrimitives";
-
-export type { LockStatus };
 
 const ACQUIRE_TIMEOUT_MS = 5_000;
 const ACQUIRE_RETRY_DELAY_MS = 50;
@@ -95,10 +92,7 @@ export class WorkflowLockManager {
             throw error;
           }
 
-          const existing = await WorkflowLockManager.readLock(
-            workspaceRoot,
-            workflowKey
-          );
+          const existing = await readWorkflowLock(workspaceRoot, workflowKey);
           const stale =
             !existing || isOwnerStale(existing.pid, existing.lastHeartbeat);
 
@@ -136,10 +130,7 @@ export class WorkflowLockManager {
     );
     try {
       await withFileLock(lockPath, async () => {
-        const existing = await WorkflowLockManager.readLock(
-          workspaceRoot,
-          workflowKey
-        );
+        const existing = await readWorkflowLock(workspaceRoot, workflowKey);
         if (!existing) return;
         if (existing.ownerToken !== ownerToken) {
           Log.warn(
@@ -176,10 +167,7 @@ export class WorkflowLockManager {
     );
     try {
       await withFileLock(lockPath, async () => {
-        const existing = await WorkflowLockManager.readLock(
-          workspaceRoot,
-          workflowKey
-        );
+        const existing = await readWorkflowLock(workspaceRoot, workflowKey);
         if (!existing) return;
         if (existing.ownerToken !== ownerToken) {
           Log.warn(
@@ -211,33 +199,6 @@ export class WorkflowLockManager {
   }
 
   /**
-   * Read the raw lock data for a lineage.
-   * Returns null if the lock file does not exist or cannot be parsed.
-   */
-  static async readLock(
-    workspaceRoot: string,
-    workflowKey: WorkflowKey
-  ): Promise<WorkflowRunnerLock | null> {
-    return readWorkflowLock(workspaceRoot, workflowKey);
-  }
-
-  /**
-   * Check the status of the lock for a lineage.
-   *
-   * Returns:
-   *   "none"          — no lock file or parse error
-   *   "stale"         — lock exists but PID is dead OR heartbeat is older than 30s
-   *   "active-vscode" — live VS Code Extension Host holds the lock
-   *   "active-cli"    — live CLI process holds the lock
-   */
-  static async checkLock(
-    workspaceRoot: string,
-    workflowKey: WorkflowKey
-  ): Promise<LockStatus> {
-    return inspectWorkflowLock(workspaceRoot, workflowKey);
-  }
-
-  /**
    * Normalize stale locks on extension startup.
    *
    * Scans every lineage directory under run storage. For each lineage whose
@@ -259,10 +220,7 @@ export class WorkflowLockManager {
     const recoveredRunFiles: string[] = [];
 
     for (const workflowKey of workflowKeys) {
-      const lock = await WorkflowLockManager.readLock(
-        workspaceRoot,
-        workflowKey
-      );
+      const lock = await readWorkflowLock(workspaceRoot, workflowKey);
       if (!lock) {
         continue;
       }

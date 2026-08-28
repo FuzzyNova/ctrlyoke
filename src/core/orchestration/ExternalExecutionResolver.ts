@@ -11,11 +11,10 @@ import {
   type ExecutionState,
 } from "../../types/DashboardConstants";
 import {
-  inspectWorkflowLockOwnership,
   isExternalOwnedLock,
+  readWorkflowLockOwnershipInspection,
   type WorkflowLockInspection,
   type WorkflowLockInspectionOptions,
-  readWorkflowLock,
 } from "../../utils/WorkflowLockInspector";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 
@@ -46,11 +45,13 @@ export type ExternalExecutionResolution =
 export interface ExternalExecutionResolverOptions extends WorkflowLockInspectionOptions {
   /** Override disk access for isolated tests and other orchestration adapters. */
   readWorkingFile?: (workingFilePath: string) => Promise<unknown>;
-  /** Override lock access for isolated tests and deterministic race simulation. */
-  readLock?: (
+  /** Override structured lock inspection for deterministic race simulation. */
+  inspectLock?: (
     workspaceRoot: string,
-    workflowKey: WorkflowKey
-  ) => Promise<unknown>;
+    workflowKey: WorkflowKey,
+    observer: RunnerHostIdentity,
+    options: WorkflowLockInspectionOptions
+  ) => Promise<WorkflowLockInspection>;
   /** Receives the same decision that is emitted to the diagnostic log. */
   onDecision?: (decision: ExternalExecutionDecisionLog) => void;
 }
@@ -63,11 +64,15 @@ export interface ExternalExecutionDecisionLog {
   persistedExecutionState?: ExecutionState;
   lockLiveness: WorkflowLockInspection["liveness"] | "not-inspected";
   lockRunner?: WorkflowRunnerLock["runner"];
+  observerHostId?: string;
+  lockHostId?: string;
   hostIdsMatch?: boolean;
   pidsMatch?: boolean;
+  pidRelationship?: "same" | "different";
   locality?: "self" | "external" | "indeterminate";
-  reason?: NotExternalReason;
+  reason?: NotExternalReason | "external-active-run";
   externalWatchEligible: boolean;
+  watchAction: "eligible" | "rejected";
 }
 
 /** Stateless service that resolves whether one exact working file is external. */
@@ -91,6 +96,7 @@ export class ExternalExecutionResolver {
       runRef: address?.runRef,
       lockLiveness: "not-inspected",
       externalWatchEligible: false,
+      watchAction: "rejected",
     };
 
     if (!address) {
@@ -129,11 +135,7 @@ export class ExternalExecutionResolver {
       return this.finish(decision, this.notExternal("terminal-run"));
     }
 
-    const readLock = this.options.readLock ?? readWorkflowLock;
-    const firstInspection = await this.inspectLock(
-      readLock,
-      address.workflowKey
-    );
+    const firstInspection = await this.inspectLock(address.workflowKey);
     if (!isExternalOwnedLock(firstInspection)) {
       return this.finish(
         decision,
@@ -150,10 +152,7 @@ export class ExternalExecutionResolver {
       );
     }
 
-    const secondInspection = await this.inspectLock(
-      readLock,
-      address.workflowKey
-    );
+    const secondInspection = await this.inspectLock(address.workflowKey);
     if (!isExternalOwnedLock(secondInspection)) {
       return this.finish(
         decision,
@@ -184,25 +183,20 @@ export class ExternalExecutionResolver {
       inspection: secondInspection,
     };
     decision.externalWatchEligible = true;
+    decision.watchAction = "eligible";
     return this.finish(decision, resolution, secondInspection);
   }
 
   private async inspectLock(
-    readLock: NonNullable<ExternalExecutionResolverOptions["readLock"]>,
     workflowKey: WorkflowKey
   ): Promise<WorkflowLockInspection> {
-    let rawLock: unknown;
     try {
-      rawLock = await readLock(this.workspaceRoot, workflowKey);
+      return await (
+        this.options.inspectLock ?? readWorkflowLockOwnershipInspection
+      )(this.workspaceRoot, workflowKey, this.observer, this.options);
     } catch {
       return { liveness: "absent" };
     }
-    const inspection = inspectWorkflowLockOwnership(
-      rawLock,
-      this.observer,
-      this.options
-    );
-    return inspection;
   }
 
   private notExternal(reason: NotExternalReason): ExternalExecutionResolution {
@@ -221,13 +215,21 @@ export class ExternalExecutionResolver {
     );
     if (resolution.kind === "not-external") {
       enrichedDecision.reason = resolution.reason;
+    } else {
+      enrichedDecision.reason = "external-active-run";
     }
     this.options.onDecision?.(enrichedDecision);
     if (!this.options.onDecision) {
       // This module is also used by the Node-only MCP/CLI boundaries, where
       // importing the VS Code-backed Log utility would make resolution fail.
-      // eslint-disable-next-line no-console -- Node-only diagnostic fallback.
-      console.debug("External execution resolution", enrichedDecision);
+      // Node-only diagnostic fallback.
+      /* eslint-disable no-console -- console is the CLI/MCP sink. */
+      const log =
+        enrichedDecision.locality === "indeterminate"
+          ? console.warn
+          : console.debug;
+      log("External execution resolution", enrichedDecision);
+      /* eslint-enable no-console */
     }
     return resolution;
   }
@@ -329,6 +331,10 @@ function addInspectionDetails(
     ...decision,
     lockLiveness: inspection.liveness,
     lockRunner: inspection.lock.runner,
+    observerHostId: shortenHostId(observer.hostInstanceId),
+    lockHostId: shortenHostId(inspection.lock.hostInstanceId),
+    pidRelationship:
+      inspection.lock.pid === observer.pid ? "same" : "different",
     ...(inspection.liveness === "active"
       ? {
           hostIdsMatch:
@@ -339,4 +345,11 @@ function addInspectionDetails(
         }
       : {}),
   };
+}
+
+function shortenHostId(hostInstanceId: string | undefined): string | undefined {
+  if (!hostInstanceId) return undefined;
+  return hostInstanceId.length <= 8
+    ? hostInstanceId
+    : `${hostInstanceId.slice(0, 8)}…`;
 }

@@ -3,6 +3,10 @@
 > **Status:** Fully implemented (Phases 1–3, including the worktree-ownership
 > banner folded into Phase 2)
 >
+> **Ownership follow-up:** The final runner-ownership vocabulary, structured lock
+> inspection, and architectural enforcement are implemented in
+> `MULTI_INSTANCE_RUNNER_OWNERSHIP_HARDENING_PLAN.md`.
+>
 > Key files: `src/utils/WorkflowLockManager.ts`, `src/core/WorkflowOrchestrator.ts`,
 > `src/core/WorkflowInstance.ts`, `src/core/orchestration/ExternalRunWatchSession.ts`,
 > `src/utils/WorkflowStopRequest.ts`, `src/server/CtrlYokeHostedServer.ts`,
@@ -42,33 +46,27 @@ resolve to the identical run-storage directory** regardless of which
 `runHistoryLocation` is `"user"` or `"workspace"` — in the latter case the
 shared directory is even more obviously the same folder on disk.
 
-### The runner lock has no cross-instance identity check
+### Historical pre-hardening lock semantics
 
 `WorkflowLockManager` (`src/utils/WorkflowLockManager.ts`) writes one
 `runner.json` per lineage, naming the exact executing `RunRef`, the owning
-`pid`, an `ownerToken`, and an optional `instanceId`
-(`src/types/CtrlYokeTypes.ts:1095-1110`). `checkLock` / `inspectWorkflowLock`
-(`src/utils/WorkflowLockInspector.ts:28-42`) only ever returns four statuses:
-`none`, `stale` (dead PID or heartbeat >30s old, `LockSafetyPrimitives.ts`),
-`active-cli`, or `active-vscode`. **`active-vscode` does not mean "this
-process" — it means "some live VS Code Extension Host,"** and nothing
-compares the lock's `instanceId`/`pid` against the caller's own identity to
-tell those two cases apart.
+`pid`, an `ownerToken`, and separate `hostInstanceId` and
+`executionInstanceId` fields (`src/types/CtrlYokeTypes.ts`). The original
+coordination plan used `instanceId` as a loosely described optional field; the
+hardening plan replaced that overloaded meaning with a stable host identity
+and a per-workflow execution identity. Current callers use structured
+`WorkflowLockInspection` results from `WorkflowLockInspector`, so liveness and
+locality are not collapsed into runner-specific status strings.
 
 ### The startup normalization scan treats a live sibling's lock as leftover state from itself
 
-`WorkflowOrchestrator.setupCliWatching()` runs
+`WorkflowOrchestrator.setupExternalRunWatching()` runs
 `WorkflowLockManager.normalizeStaleLocks()` on every activation
 (`src/core/WorkflowOrchestrator.ts:5599-5618`). Its handling is:
 
-```
-if (status === LOCK_STATUS.ACTIVE_CLI) {
-  // preserve RUNNING, register an ExternalRunWatchSession
-} else {
-  // "none", "stale", or "active-vscode" (we just started — can't be us)
-  // normalize this run to STOPPED and delete the lock
-}
-```
+The scan now preserves any active lock, and only normalizes absent or stale
+locks. External watch registration separately requires resolver proof of an
+active external owner and the exact working-file `RunRef`.
 
 (`src/utils/WorkflowLockManager.ts:311-327`, comment included verbatim.) The
 comment's assumption — that an `active-vscode` lock seen during _my_ startup
@@ -114,23 +112,11 @@ see the companion reference doc,
 
 ### No UI signal exists for "owned by another ctrlyoke instance"
 
-`WorkflowSummary.managedBy?: RunnerId` already exists precisely to flag
-non-local ownership, but its own doc comment gives away the gap: _"Set to
-`'cli'` when the workflow is being executed by the ctrlyoke CLI. Undefined
-means vscode-managed"_ (`src/types/CtrlYokeTypes.ts:1070-1071`). It is
-written **only** with `RUNNER_IDS.CLI`
-(`src/core/WorkflowOrchestrator.ts:5951,5971`) or left `undefined`
-(`WorkflowOrchestrator.ts:6326`) — never `RUNNER_IDS.VSCODE`, even though
-that value already exists in the enum (`DashboardConstants.ts:1974-1978`).
-`Header.tsx` (`src/ui/webview-react/components/layout/Header.tsx:171`) reads
-`activeWorkflow?.managedBy === RUNNER_IDS.CLI` to lock the dashboard into
-read-only "watch mode" for a CLI-managed run — the exact same treatment a
-run owned by a sibling VS Code instance should get, but currently doesn't,
-because nothing ever tells this instance that the run belongs to someone
-else. Today, if Window B's `normalizeStaleLocks` didn't clobber Window A's
-run (see above), Window B would instead load that run into its own dashboard
-as an ordinary local workflow and offer full editing/re-run controls against
-a lineage another live process is actively executing.
+`WorkflowSummary.externalOwner?` now flags non-local ownership. It is an
+explicit `{ locality: "external", runner }` projection; it never serializes
+host IDs, PIDs, or owner tokens. `Header.tsx` reads this projection to lock
+the dashboard into read-only watch mode for either an external CLI or sibling
+VS Code run.
 
 ## Root Cause
 
@@ -340,13 +326,13 @@ rides along with Phase 2 whenever that work happens.
 
 - `src/utils/WorkflowLockManager.ts` / `WorkflowLockInspector.ts` /
   `LockSafetyPrimitives.ts`
-- `src/core/WorkflowOrchestrator.ts` (`setupCliWatching`,
-  `startCliWatchSession`, `handleRunnerJsonEvent`)
+- `src/core/WorkflowOrchestrator.ts` (`setupExternalRunWatching`,
+  `startExternalRunWatchSession`, `handleRunnerJsonEvent`)
 - `src/core/orchestration/ExecutionRootLeaseManager.ts` — model to follow for
   Phase 1–2, and already the mechanism arbitrating the "Open Worktree in New
   Window" case above
-- `src/types/CtrlYokeTypes.ts` (`WorkflowRunnerLock`, `WorkflowSummary.managedBy`)
-- `src/types/DashboardConstants.ts` (`RUNNER_IDS`, `LOCK_STATUS`)
+- `src/types/CtrlYokeTypes.ts` (`WorkflowRunnerLock`, `WorkflowSummary.externalOwner`)
+- `src/types/DashboardConstants.ts` (`RUNNER_IDS`)
 - `src/ui/webview-react/components/layout/Header.tsx` (`isExternallyManaged` and
   its watch-mode lockdown — the pattern Phase 2 generalizes)
 - `src/ui/webview-react/components/output/RunSummaryBanner.tsx` — **Open

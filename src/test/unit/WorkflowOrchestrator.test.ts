@@ -2984,7 +2984,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
       };
       internal.setupRunnerJsonCreateWatcher = () => undefined;
 
-      await internal.setupCliWatching();
+      await internal.setupExternalRunWatching();
 
       const entry = internal.externalRunSessions.get(run.workflowKey);
       assert.ok(entry, "startup should register an external watch session");
@@ -3003,7 +3003,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
     }
   });
 
-  test("does not register a self-owned active-vscode lock at startup", async () => {
+  test("does not register a self-owned active lock at startup", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-self-vscode-watch-startup-")
     );
@@ -3028,7 +3028,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
       };
       internal.setupRunnerJsonCreateWatcher = () => undefined;
 
-      await internal.setupCliWatching();
+      await internal.setupExternalRunWatching();
 
       assert.strictEqual(
         internal.externalRunSessions.size,
@@ -3114,7 +3114,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
     }
   });
 
-  test("routes a live active-vscode working-file load to the watch path", async () => {
+  test("routes a live external working-file load to the watch path", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-vscode-working-watch-")
     );
@@ -3142,8 +3142,8 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
     }
   });
 
-  test("does not retire a locally in-flight WorkflowInstance for its own active-vscode lock", async () => {
-    // Regression: a lock reported as active-vscode may be this very process's own
+  test("does not retire a locally in-flight WorkflowInstance for its own active lock", async () => {
+    // Regression: an active lock may be this very process's own
     // lock for a workflow it is already executing. startExternalRunWatchSession must not
     // retire a genuinely RUNNING/PAUSING/CANCELLING local instance in favor of a
     // read-only watch of itself.

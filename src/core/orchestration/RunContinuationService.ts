@@ -14,10 +14,7 @@ import {
   type QueuePosition,
 } from "../../types/DashboardConstants";
 import { withFileLock } from "../../utils/FileLockUtils";
-import {
-  inspectWorkflowLockOwnership,
-  readWorkflowLock,
-} from "../../utils/WorkflowLockInspector";
+import { readWorkflowLockOwnershipInspection } from "../../utils/WorkflowLockInspector";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import {
   stripStepRuntime,
@@ -54,11 +51,10 @@ export class RunContinuationService {
     observer?: RunnerHostIdentity,
     onOwnershipDiagnostic?: (diagnostic: SelfOwnedUntrackedDiagnostic) => void
   ): Promise<RunContinuationTarget> {
-    const [lock, descriptor] = await Promise.all([
-      readWorkflowLock(workspaceRoot, workflowKey),
+    const [lockInspection, descriptor] = await Promise.all([
+      readWorkflowLockOwnershipInspection(workspaceRoot, workflowKey, observer),
       lineageRepository.readDescriptor(workspaceRoot, workflowKey),
     ]);
-    const lockInspection = inspectWorkflowLockOwnership(lock, observer);
     const target = await this.readRun(workspaceRoot, workflowKey, runRef);
     const executionState =
       target._runtime?.executionState ?? EXECUTION_STATES.IDLE;

@@ -19,7 +19,9 @@ import {
   ExternalExecutionResolver,
   type ExternalExecutionResolution,
   type ExternalExecutionDecisionLog,
+  type ExternalExecutionResolverOptions,
 } from "../../core/orchestration/ExternalExecutionResolver";
+import { inspectWorkflowLockOwnership } from "../../utils/WorkflowLockInspector";
 
 const NOW = 100_000;
 const WORKFLOW_KEY = "resolver-fixture-2026-08-28T00-00-00-000Z" as WorkflowKey;
@@ -77,6 +79,13 @@ function makeLock(
 
 function getWorkingFilePath(runRef: RunRef = MATCHING_RUN_REF): string {
   return path.join(fixtureRoot, WORKFLOW_KEY, runRef, "workflow.ctrlyoke.json");
+}
+
+function injectLockInspection(
+  lockFactory: () => unknown
+): NonNullable<ExternalExecutionResolverOptions["inspectLock"]> {
+  return async (_workspaceRoot, _workflowKey, observer, options) =>
+    inspectWorkflowLockOwnership(lockFactory(), observer, options);
 }
 
 async function writeWorkingFile(
@@ -167,8 +176,9 @@ suite("ExternalExecutionResolver", () => {
                   now: () => NOW,
                   isProcessAlive: (pid) => pid !== 999,
                   onDecision: () => undefined,
-                  readLock: async () =>
-                    reads++ === 0 ? firstLock : secondLock,
+                  inspectLock: injectLockInspection(() =>
+                    reads++ === 0 ? firstLock : secondLock
+                  ),
                 }
               ).resolve(workingFilePath);
 
@@ -202,7 +212,7 @@ suite("ExternalExecutionResolver", () => {
         now: () => NOW,
         isProcessAlive: () => true,
         onDecision: () => undefined,
-        readLock: async () => makeLock("external"),
+        inspectLock: injectLockInspection(() => makeLock("external")),
       }
     ).resolve(workingFilePath);
 
@@ -224,7 +234,9 @@ suite("ExternalExecutionResolver", () => {
         now: () => NOW,
         isProcessAlive: () => true,
         onDecision: () => undefined,
-        readLock: async () => makeLock("external", DIFFERENT_RUN_REF),
+        inspectLock: injectLockInspection(() =>
+          makeLock("external", DIFFERENT_RUN_REF)
+        ),
       }
     ).resolve(workingFilePath);
 
@@ -247,10 +259,11 @@ suite("ExternalExecutionResolver", () => {
         now: () => NOW,
         isProcessAlive: () => true,
         onDecision: () => undefined,
-        readLock: async () =>
+        inspectLock: injectLockInspection(() =>
           reads++ === 0
             ? makeLock("external", MATCHING_RUN_REF, "first-owner")
-            : makeLock("external", MATCHING_RUN_REF, "replacement-owner"),
+            : makeLock("external", MATCHING_RUN_REF, "replacement-owner")
+        ),
       }
     ).resolve(workingFilePath);
 
@@ -272,7 +285,7 @@ suite("ExternalExecutionResolver", () => {
         now: () => NOW,
         isProcessAlive: () => true,
         onDecision: () => undefined,
-        readLock: async () => makeLock("self"),
+        inspectLock: injectLockInspection(() => makeLock("self")),
       }
     ).resolve(workingFilePath);
 
@@ -315,7 +328,7 @@ suite("ExternalExecutionResolver", () => {
         onDecision: (value) => {
           decision = value;
         },
-        readLock: async () => ({ ...lock }),
+        inspectLock: injectLockInspection(() => ({ ...lock })),
       }
     ).resolve(workingFilePath);
 

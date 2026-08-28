@@ -25,6 +25,7 @@ import type {
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { readWorkflowStopRequest } from "../../utils/WorkflowStopRequest";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
+import { readWorkflowLock } from "../../utils/WorkflowLockInspector";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 
 const WORKFLOW_KEY = "shared-ownership-2026-08-28" as WorkflowKey;
@@ -298,8 +299,8 @@ suite("multi-instance runner ownership regression", () => {
     try {
       // Activation discovery: the owner sees liveness but does not create an
       // external session; the sibling gets a watch pinned to the exact run.
-      await hostA.internal.setupCliWatching();
-      await hostB.internal.setupCliWatching();
+      await hostA.internal.setupExternalRunWatching();
+      await hostB.internal.setupExternalRunWatching();
       assert.strictEqual(hostA.internal.externalRunSessions.size, 0);
       const siblingEntry = hostB.internal.externalRunSessions.get(WORKFLOW_KEY);
       assert.ok(siblingEntry);
@@ -471,8 +472,7 @@ suite("multi-instance runner ownership regression", () => {
         lock.ownerToken
       );
       assert.strictEqual(
-        (await WorkflowLockManager.readLock(workspaceRoot, WORKFLOW_KEY))
-          ?.ownerToken,
+        (await readWorkflowLock(workspaceRoot, WORKFLOW_KEY))?.ownerToken,
         successor.ownerToken
       );
       await WorkflowLockManager.releaseLock(
@@ -513,7 +513,7 @@ suite("multi-instance runner ownership regression", () => {
     let diagnostic: unknown;
     ConfigurationUtils.shouldAutoLoadRecentSession = () => true;
     try {
-      await host.internal.setupCliWatching();
+      await host.internal.setupExternalRunWatching();
       await host.orchestrator.loadWorkflowForClient(
         workingFilePath,
         () => undefined,
@@ -567,8 +567,7 @@ suite("multi-instance runner ownership regression", () => {
         false
       );
       assert.strictEqual(
-        (await WorkflowLockManager.readLock(workspaceRoot, WORKFLOW_KEY))
-          ?.ownerToken,
+        (await readWorkflowLock(workspaceRoot, WORKFLOW_KEY))?.ownerToken,
         lock.ownerToken
       );
       assert.strictEqual(
