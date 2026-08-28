@@ -25,6 +25,7 @@ import {
   usePasteToEndContextMenu,
   useIsViewingDeletedWorkflow,
   useIsSystemGeneratedWorkflow,
+  useActiveWorkflowManagedBy,
 } from "@hooks/index";
 import { StatusIcon } from "./StatusIcon";
 import {
@@ -255,14 +256,11 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
     finalStepStatus,
     finalStepPhase,
   } = useWorkflowStore();
-  const { loadedWorkflows, activeWorkflowId, setFinalStepFooterExpanded } =
-    useUiStore();
+  const { setFinalStepFooterExpanded } = useUiStore();
   const { selectFinalStep, selectPrompt, deselect } = useEditorStore();
   const { globalSettings } = useSettingsStore();
 
-  const activeManagedBy = loadedWorkflows.find(
-    (w) => w.id === activeWorkflowId
-  )?.managedBy;
+  const activeManagedBy = useActiveWorkflowManagedBy();
   const isExternallyManaged = activeManagedBy != null;
   const externalReadOnlyLabel = getExternalReadOnlyLabel(activeManagedBy);
   // The lineage on screen was deleted while being viewed, or is an internal

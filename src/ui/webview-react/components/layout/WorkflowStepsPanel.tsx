@@ -21,6 +21,7 @@ import {
   useSortableDndSensors,
   useIsViewingDeletedWorkflow,
   useIsSystemGeneratedWorkflow,
+  useActiveWorkflowManagedBy,
 } from "@hooks/index";
 import { HARNESS_INFO } from "../../types/messages";
 import type { HarnessId } from "../../types/messages";
@@ -339,8 +340,6 @@ const WorkflowStepsPanelInner: React.FC<{
   const {
     stepsCollapsed,
     togglePromptsCollapse,
-    loadedWorkflows,
-    activeWorkflowId,
     finalStepFooterExpanded,
     toggleFinalStepFooterExpanded,
     setFinalStepFooterExpanded,
@@ -352,9 +351,7 @@ const WorkflowStepsPanelInner: React.FC<{
   const getLatestOutput = useLatestStepOutput();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
-  const activeManagedBy = loadedWorkflows.find(
-    (w) => w.id === activeWorkflowId
-  )?.managedBy;
+  const activeManagedBy = useActiveWorkflowManagedBy();
   const isExternallyManaged = activeManagedBy != null;
   const externalReadOnlyLabel = getExternalReadOnlyLabel(activeManagedBy);
   // The lineage on screen was deleted while being viewed, or is an internal

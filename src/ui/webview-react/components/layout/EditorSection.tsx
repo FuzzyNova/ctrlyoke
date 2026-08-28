@@ -18,6 +18,7 @@ import {
 import { KEYBOARD_KEYS, STEP_TYPES } from "@root/types/DashboardConstants";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
+import { useActiveWorkflowManagedBy } from "@hooks/useActiveWorkflowManagedBy";
 
 /**
  * EditorSection - Collapsible section containing the prompt editor
@@ -43,17 +44,13 @@ const EditorSectionInner: React.FC = () => {
   const {
     editorCollapsed,
     toggleEditorCollapse,
-    loadedWorkflows,
-    activeWorkflowId,
   } = useUiStore();
   const { steps } = useWorkflowStore();
   const { globalSettings } = useSettingsStore();
   const vscode = useVsCodeApi();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
-  const activeManagedBy = loadedWorkflows.find(
-    (w) => w.id === activeWorkflowId
-  )?.managedBy;
+  const activeManagedBy = useActiveWorkflowManagedBy();
   const isExternallyManaged = activeManagedBy != null;
   const externalReadOnlyLabel = getExternalReadOnlyLabel(activeManagedBy);
 
