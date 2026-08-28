@@ -685,6 +685,7 @@ When implementation is complete:
 - [x] Orchestrator CLI-specific session names are made runner-neutral.
 - [ ] Workflow summaries expose explicit external locality without lock secrets.
 - [x] All lock call sites are inventoried and migrated by required semantics. The remaining low-level `runner.json` and `LOCK_STATUS` uses are deliberately retained for the architectural-enforcement audit listed below.
+- [x] A two-host shared-filesystem regression test proves owner-versus-sibling behavior, including terminal state with a retained lock.
 - [ ] Classifier, resolver, self-owner, two-host, and UI regressions are covered.
 - [ ] Architecture enforcement prevents new direct runner-to-external mappings.
 - [ ] Coordination and project-memory documentation is updated.
@@ -741,3 +742,11 @@ No higher-level caller maps `lock.runner` or `LOCK_STATUS.ACTIVE_VSCODE` /
 `WorkflowLockInspection.liveness`; execution-conflict callers distinguish local,
 self-owned-but-untracked, external, indeterminate, and recoverable states; and
 stop/watch lifecycles retain the exact `ownerToken` acquisition.
+
+Regression implementation note: the two-host and self-owned-untracked tests now
+exercise activation, recent-session, explicit-load, watcher/poll, stop-request,
+pause/resume, terminal retained-lock, and successor-acquisition paths. The
+self-owned-untracked load paths also decline fresh adoption and emit a structured
+same-host invariant diagnostic; this closes the production gap where an active
+same-host lock without a resident execution could otherwise fall through to an
+editable local instance.

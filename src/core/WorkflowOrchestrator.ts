@@ -1152,6 +1152,17 @@ export class WorkflowOrchestrator {
       return;
     }
 
+    const ownershipResolution = await this.resolveExternalExecutionForPath(
+      filePath,
+      this.currentWorkspaceFolder?.uri.fsPath ?? ""
+    );
+    if (
+      this.currentWorkspaceFolder &&
+      this.shouldDeclineUntrackedOwnership(filePath, ownershipResolution)
+    ) {
+      return;
+    }
+
     // Check if already in instances registry by working file path
     const existing = [...this.instances.values()].find((w) =>
       sameWorkingFilePath(w.getSummary().workingFilePath, filePath)
@@ -1287,6 +1298,61 @@ export class WorkflowOrchestrator {
         },
       }
     ).resolve(workingFilePath);
+  }
+
+  /**
+   * Keep an active self-owned or indeterminate run on a non-mutating path when
+   * no resident execution accounts for it. A host restart can leave the lock
+   * briefly visible before its in-memory owner is reconciled; treating that
+   * shape as an orphan would create a second editable/adopted execution.
+   */
+  private shouldDeclineUntrackedOwnership(
+    workingFilePath: string,
+    resolution: ExternalExecutionResolution
+  ): boolean {
+    if (
+      resolution.kind !== "not-external" ||
+      (resolution.reason !== "self-owned" &&
+        resolution.reason !== "indeterminate-owner")
+    ) {
+      return false;
+    }
+
+    const hasResidentExecution = [
+      ...this.instances.values(),
+      ...this.retiredInstances.values(),
+    ].some((instance) => {
+      const summary = instance.getSummary();
+      return (
+        sameWorkingFilePath(summary.workingFilePath, workingFilePath) &&
+        isExecutionOwnerState(instance.getQueueState().status)
+      );
+    });
+    if (hasResidentExecution) {
+      return false;
+    }
+
+    const address =
+      WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
+    const diagnostic = {
+      event: "workflow-ownership-invariant",
+      workflowKey: address?.workflowKey,
+      runRef: address?.runRef,
+      locality:
+        resolution.reason === "self-owned"
+          ? "self-owned-but-untracked"
+          : "indeterminate-owner",
+      decision: "preserve-non-mutating",
+    } as const;
+    const message =
+      `[WorkflowOrchestrator] active run ownership requires reconciliation: ` +
+      JSON.stringify(diagnostic);
+    if (resolution.reason === "self-owned") {
+      Log.error(message);
+    } else {
+      Log.warn(message);
+    }
+    return true;
   }
 
   /**
@@ -1617,6 +1683,11 @@ export class WorkflowOrchestrator {
               Log.debug(
                 `triggerAutoLoad: skipping externally managed workflow "${path.basename(workingFilePath)}"`
               );
+              return;
+            }
+            if (
+              this.shouldDeclineUntrackedOwnership(workingFilePath, resolution)
+            ) {
               return;
             }
             await this.getActiveInstance().autoLoadFromWorkingFile(
@@ -3383,6 +3454,9 @@ export class WorkflowOrchestrator {
           workspaceFolderPath,
           resolution.inspection
         );
+        return;
+      }
+      if (this.shouldDeclineUntrackedOwnership(filePath, resolution)) {
         return;
       }
     }

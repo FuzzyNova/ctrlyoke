@@ -31,6 +31,14 @@ export interface RunContinuationTarget {
   allowInterruptedRun: boolean;
 }
 
+export interface SelfOwnedUntrackedDiagnostic {
+  event: "workflow-ownership-invariant";
+  workflowKey: WorkflowKey;
+  runRef: RunRef;
+  locality: "self-owned-but-untracked";
+  decision: "preserve-non-mutating";
+}
+
 /**
  * Node-only continuation transaction used by the extension, CLI, and MCP server.
  * It never binds an executor; callers that own execution do that separately.
@@ -43,7 +51,8 @@ export class RunContinuationService {
     lineageRepository: WorkflowLineageRepository = new WorkflowLineageRepository(),
     action: "append" | "continue" | "edit" = "continue",
     allowActiveTargetAppend: boolean = false,
-    observer?: RunnerHostIdentity
+    observer?: RunnerHostIdentity,
+    onOwnershipDiagnostic?: (diagnostic: SelfOwnedUntrackedDiagnostic) => void
   ): Promise<RunContinuationTarget> {
     const [lock, descriptor] = await Promise.all([
       readWorkflowLock(workspaceRoot, workflowKey),
@@ -73,10 +82,20 @@ export class RunContinuationService {
       lockInspection.locality === "self" &&
       (action !== "edit" || lockNamesTarget)
     ) {
-      // eslint-disable-next-line no-console -- Node-only continuation diagnostic.
-      console.warn(
-        `[RunContinuationService] self-owned but untracked execution for ${workflowKey}/${lockInspection.lock.runRef}`
-      );
+      const diagnostic: SelfOwnedUntrackedDiagnostic = {
+        event: "workflow-ownership-invariant",
+        workflowKey,
+        runRef: lockInspection.lock.runRef,
+        locality: "self-owned-but-untracked",
+        decision: "preserve-non-mutating",
+      };
+      onOwnershipDiagnostic?.(diagnostic);
+      if (!onOwnershipDiagnostic) {
+        // eslint-disable-next-line no-console -- Node-only continuation diagnostic.
+        console.warn(
+          `[RunContinuationService] self-owned but untracked execution: ${JSON.stringify(diagnostic)}`
+        );
+      }
       throw new Error(
         "Self-owned execution is not tracked by this process; refusing continuation"
       );

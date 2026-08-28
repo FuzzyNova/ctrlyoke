@@ -273,8 +273,7 @@ suite("WorkflowOrchestrator triggerAutoLoad view-ownership", () => {
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
     internal.currentWorkspaceFolder = {
       uri: {
-        fsPath:
-          options.workspacePath ?? path.join(os.tmpdir(), "ctrlyoke-ws"),
+        fsPath: options.workspacePath ?? path.join(os.tmpdir(), "ctrlyoke-ws"),
       },
     };
     internal.runnerHostIdentity = {
@@ -475,7 +474,7 @@ suite("WorkflowOrchestrator triggerAutoLoad view-ownership", () => {
     assert.strictEqual(harness.internal._autoLoadHasSettled, true);
   });
 
-  test("does not skip a recent session for a self-owned active lock", async () => {
+  test("does not adopt a self-owned active lock without a local execution", async () => {
     const workspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-self-owned-auto-load-")
     );
@@ -528,7 +527,7 @@ suite("WorkflowOrchestrator triggerAutoLoad view-ownership", () => {
 
       await (harness.internal as any).triggerAutoLoad();
 
-      assert.deepStrictEqual(harness.autoLoadedPaths, [workingFilePath]);
+      assert.deepStrictEqual(harness.autoLoadedPaths, []);
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });
     }
