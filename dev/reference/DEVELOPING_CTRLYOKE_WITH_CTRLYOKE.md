@@ -276,7 +276,9 @@ usual; no port-splitting configuration is needed.
 
 An agent (e.g. Claude Code) working headlessly has no `F5`/Stop button.
 `scripts/dev-host.mjs` wraps the full recipe below — `npm run dev:host:start`,
-`npm run dev:host:stop`, `npm run dev:host:restart` (stop, compile, start).
+`npm run dev:host:stop`, `npm run dev:host:restart` (stop, then start). Both
+`start` and `restart` run `npm run compile` before launching, so the host
+always reflects the current working tree — never a stale `out/` build.
 The default mode uses the isolated `.ctrlyoke-dev-home` state directory. Add
 `-- shared` to an npm command (or pass `shared` directly to the script) to
 omit `CTRLYOKE_HOME` and use the normal shared user-scoped state. Pass

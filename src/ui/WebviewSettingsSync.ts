@@ -75,6 +75,7 @@ import type {
 import type { StatusLineTrackingSettings } from "../types/CtrlYokeSettings";
 import { isDefaultStatusLineFormat } from "../utils/StatuslineFormat";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
+import { isLoopbackBindAddress } from "../utils/NetworkUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
   StatuslineManager,
@@ -185,6 +186,7 @@ export class WebviewSettingsSync {
   private licenseAccess: LicenseAccessState = {
     isPro: false,
     hasRemoteAccess: false,
+    trialEndsAt: null,
   };
 
   private emitMessage(
@@ -1104,12 +1106,12 @@ export class WebviewSettingsSync {
       // the extension-owned LicenseService must never be granted Pro/remote
       // access by default. Tests that exercise Pro-gated behavior must inject
       // an explicit getLicenseAccess factory.
-      return { isPro: false, hasRemoteAccess: false };
+      return { isPro: false, hasRemoteAccess: false, trialEndsAt: null };
     }
     try {
       return await this.getLicenseAccess();
     } catch {
-      return { isPro: false, hasRemoteAccess: false };
+      return { isPro: false, hasRemoteAccess: false, trialEndsAt: null };
     }
   }
 
@@ -1329,18 +1331,23 @@ export class WebviewSettingsSync {
     postMessage: PostMessageFn
   ): Promise<void> {
     const licenseAccess = await this.resolveLicenseAccess();
-    const isRemoteTlsSetting = REMOTE_TLS_SETTING_KEYS.includes(
+    const isRemoteAccessSetting = REMOTE_TLS_SETTING_KEYS.includes(
       path as (typeof REMOTE_TLS_SETTING_KEYS)[number]
     );
+    const isBindAddressSetting = path === CONFIG_KEYS.SERVER_BIND_ADDRESS;
+    const isRemoteAccessWrite =
+      isRemoteAccessSetting ||
+      (isBindAddressSetting &&
+        (typeof value !== "string" || !isLoopbackBindAddress(value)));
     if (
-      (isRemoteTlsSetting && !licenseAccess.hasRemoteAccess) ||
+      (isRemoteAccessWrite && !licenseAccess.hasRemoteAccess) ||
       ((path === CONFIG_KEYS.SERVER_ICON_BG_COLOR ||
         path === CONFIG_KEYS.SERVER_ICON_FG_COLOR) &&
         !licenseAccess.isPro)
     ) {
       this.reportProUpsell(
         postMessage,
-        isRemoteTlsSetting
+        isRemoteAccessWrite
           ? LICENSE_UI.REMOTE_ACCESS_UPSELL
           : LICENSE_UI.CUSTOM_ICON_UPSELL
       );

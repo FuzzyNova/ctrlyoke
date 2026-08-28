@@ -9,7 +9,10 @@ import {
   type ExecutionMode,
   type ToolPermissionMode,
   type ServerPortFallbackInfo,
+  type BindAddressFallbackInfo,
   type LicenseAccessState,
+  type LicenseActionResultMessage,
+  type LicenseMachineSummary,
 } from "../types/messages";
 import {
   CLAUDE_CLI_MODELS as CLAUDE_CLI_MODEL_LIST,
@@ -206,6 +209,10 @@ interface SettingsState {
   // Pro entitlement and remote-access trial state from the extension host
   licenseAccess: LicenseAccessState;
 
+  // Client-scoped license-management replies consumed by the License tab.
+  licenseMachines: LicenseMachineSummary[];
+  licenseActionResult: Omit<LicenseActionResultMessage, "type"> | null;
+
   // Server URL (set when server starts, cleared when stopped)
   serverUrl: string | null;
 
@@ -219,6 +226,9 @@ interface SettingsState {
   // (EADDRINUSE) and fell back to an OS-assigned port instead. Cleared on
   // SERVER_STOPPED or once a start succeeds on the configured port.
   portFallback: ServerPortFallbackInfo | null;
+
+  // Set when a non-loopback bind was coerced to localhost at server start.
+  bindAddressFallback: BindAddressFallbackInfo | null;
 
   // Last generated self-signed cert metadata (generatedAt/expiresAt are ISO strings)
   lastCertGenerated: {
@@ -304,6 +314,11 @@ interface SettingsActions {
 
   // Pro entitlement and remote-access trial state
   setLicenseAccess: (access: LicenseAccessState) => void;
+  setLicenseMachines: (machines: LicenseMachineSummary[]) => void;
+  setLicenseActionResult: (
+    result: Omit<LicenseActionResultMessage, "type">
+  ) => void;
+  clearLicenseActionResult: () => void;
 
   // Server URL
   setServerUrl: (url: string | null) => void;
@@ -314,6 +329,7 @@ interface SettingsActions {
 
   // Port-fallback warning (null clears it)
   setPortFallback: (info: ServerPortFallbackInfo | null) => void;
+  setBindAddressFallback: (info: BindAddressFallbackInfo | null) => void;
 
   // Cert / token feedback signals
   setLastCertGenerated: (
@@ -467,11 +483,14 @@ const initialState: SettingsState = {
   workflowLoaded: false,
   fullGlobalSettings: null,
   serverRunning: false,
-  licenseAccess: { isPro: false, hasRemoteAccess: false },
+  licenseAccess: { isPro: false, hasRemoteAccess: false, trialEndsAt: null },
+  licenseMachines: [],
+  licenseActionResult: null,
   serverUrl: null,
   availableIps: [],
   selectedDisplayIp: null,
   portFallback: null,
+  bindAddressFallback: null,
   lastCertGenerated: null,
   certFlashCount: 0,
   lastTokenRegenerated: null,
@@ -606,6 +625,10 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
           : state.fullGlobalSettings,
       })),
 
+    setLicenseMachines: (machines) => set({ licenseMachines: machines }),
+    setLicenseActionResult: (result) => set({ licenseActionResult: result }),
+    clearLicenseActionResult: () => set({ licenseActionResult: null }),
+
     setServerUrl: (url) => set({ serverUrl: url }),
 
     setAvailableIps: (ips) => set({ availableIps: ips }),
@@ -613,6 +636,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     setSelectedDisplayIp: (ip) => set({ selectedDisplayIp: ip }),
 
     setPortFallback: (info) => set({ portFallback: info }),
+    setBindAddressFallback: (info) => set({ bindAddressFallback: info }),
 
     setLastCertGenerated: (info) => set({ lastCertGenerated: info }),
     bumpCertFlashCount: () =>

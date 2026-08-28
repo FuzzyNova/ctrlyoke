@@ -14,6 +14,8 @@ export interface SelectOption {
   label: string;
   /** Optional muted secondary text rendered below the label in the menu. */
   description?: string;
+  /** Optional className override for the description text (defaults to muted). */
+  descriptionClassName?: string;
   disabled?: boolean;
 }
 
@@ -188,7 +190,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                 {option.description && (
                   <span
                     title={option.description}
-                    className="text-xxs text-description-fg truncate"
+                    className={`text-xxs truncate ${option.descriptionClassName ?? "text-description-fg"}`}
                   >
                     {truncateOptionDescription(option.description)}
                   </span>
@@ -249,7 +251,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                   {option.description && (
                     <span
                       title={option.description}
-                      className="text-xxs truncate"
+                      className={`text-xxs truncate ${option.descriptionClassName ?? ""}`}
                     >
                       {truncateOptionDescription(option.description)}
                     </span>

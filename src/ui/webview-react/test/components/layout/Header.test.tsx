@@ -90,17 +90,13 @@ describe("Header execution controls", () => {
     );
   });
 
-  it("shows Restart/Continue/Stop and places discard in the continuation banner", () => {
+  it("shows Restart/Continue/Stop execution controls", () => {
     render(<Header />);
 
     const controls = screen.getByRole("group", {
       name: "Workflow execution controls",
     });
     expect(controls.querySelectorAll("button")).toHaveLength(3);
-    expect(screen.getByText("Continuing run from step 2")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Discard Continuation" })
-    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Start new run instead" })
     ).not.toBeInTheDocument();
@@ -587,14 +583,11 @@ describe("Header execution controls", () => {
     useWorkflowStore.getState().setExecutionState(executionState);
   };
 
-  it("shows the pausing banner and Cancel pause while the run snapshot is stale", () => {
+  it("keeps Cancel pause and Stop available while the run snapshot is stale", () => {
     stalelyLoadedPausingRun(EXECUTION_STATES.PAUSING);
 
     render(<Header />);
 
-    expect(
-      screen.getByText("Workflow will pause after the current step completes")
-    ).toBeInTheDocument();
     const executionControls = screen.getByRole("group", {
       name: "Workflow execution controls",
     });
@@ -832,12 +825,9 @@ describe("Header deleted-workflow banner", () => {
 
   afterEach(cleanup);
 
-  it("shows the banner and locks Save/Dry Run/run controls, but Close still works", () => {
+  it("locks Save/Dry Run/run controls for a deleted workflow", () => {
     render(<Header />);
 
-    expect(
-      screen.getByText('"Deleted One" has been deleted')
-    ).toBeInTheDocument();
     const actionGroup = screen.getByRole("group", {
       name: "Workflow action controls",
     });
@@ -853,16 +843,9 @@ describe("Header deleted-workflow banner", () => {
     expect(
       within(executionControls).getByRole("button", { name: "Run" })
     ).toBeDisabled();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Close deleted workflow" })
-    );
-    expect(postMessage).toHaveBeenCalledWith({
-      type: MESSAGE_TYPES.CLEAR_WORKFLOW,
-    });
   });
 
-  it("does not show the banner once the view navigates to a different workflow", () => {
+  it("re-enables controls once the view navigates to a different workflow", () => {
     useUiStore.setState({
       displayedViewAddress: {
         workflowKey: "workflow-b" as never,
@@ -872,9 +855,6 @@ describe("Header deleted-workflow banner", () => {
 
     render(<Header />);
 
-    expect(
-      screen.queryByText('"Deleted One" has been deleted')
-    ).not.toBeInTheDocument();
     const actionGroup = screen.getByRole("group", {
       name: "Workflow action controls",
     });

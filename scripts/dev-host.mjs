@@ -261,6 +261,8 @@ async function start(mode) {
 
   if (mode.resetTempDir) resetOnboardingTempDir();
 
+  compile();
+
   const serverUrlFile = path.join(
     mode.workspaceRoot,
     DEV_SERVER_URL_RELATIVE_PATH
@@ -317,7 +319,6 @@ async function main() {
       break;
     case "restart":
       await stop();
-      compile();
       await start(mode);
       break;
     default:

@@ -23,12 +23,12 @@ import {
   HARNESS_IDS,
   MESSAGE_TYPES,
   EXECUTION_STATES,
-  RUNNER_IDS,
   SESSION_KINDS,
   TERMINAL_SESSION_STATUS,
 } from "@/types/messages";
 import {
   DEFAULT_WORKFLOW_NAME,
+  RUNNER_IDS,
   WORKTREE_MODES,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
@@ -177,6 +177,25 @@ describe("WorkflowStatus — loaded state", () => {
   it("shows workflow name", () => {
     render(<WorkflowStatus />);
     expect(screen.getByText("My Workflow")).toBeInTheDocument();
+  });
+
+  it("removes the external-runner chip while preserving the workflow status row", () => {
+    useUiStore.setState({
+      activeWorkflowId: "managed-workflow",
+      loadedWorkflows: [
+        {
+          id: "managed-workflow",
+          externalOwner: { locality: "external", runner: RUNNER_IDS.CLI },
+        } as never,
+      ],
+    });
+
+    render(<WorkflowStatus />);
+
+    const mainButton = screen.getByTitle("Click to edit workflow name");
+    expect(within(mainButton).getByText("My Workflow")).toBeInTheDocument();
+    expect(within(mainButton).queryByText("CLI")).not.toBeInTheDocument();
+    expect(mainButton).toHaveClass("min-w-0");
   });
 
   it("focuses an empty name field when a new workflow is created", async () => {

@@ -36,6 +36,7 @@ export { useSortableDndSensors } from "./useSortableDndSensors";
 export { useLatestStepOutput } from "./useLatestStepOutput";
 export { useIsViewingDeletedWorkflow } from "./useIsViewingDeletedWorkflow";
 export { useIsSystemGeneratedWorkflow } from "./useIsSystemGeneratedWorkflow";
+export { useActiveWorkflowExternalOwner } from "./useActiveWorkflowExternalOwner";
 export {
   useHideableOptions,
   type HideablePartition,

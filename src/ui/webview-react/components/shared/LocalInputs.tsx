@@ -3,18 +3,20 @@ import type React from "react";
 
 type LocalTextInputProps = Omit<
   React.InputHTMLAttributes<HTMLInputElement>,
-  "onChange" | "type"
+  "onChange"
 > & {
   value: string;
   onCommit: (value: string) => void;
+  onValueChange?: (value: string) => void;
 };
 
 export function LocalTextInput({
   value,
   onCommit,
+  onValueChange,
   ...props
 }: LocalTextInputProps) {
-  const local = useLocalInput(value, onCommit);
+  const local = useLocalInput(value, onCommit, onValueChange);
   return <input type="text" {...props} {...local} />;
 }
 

@@ -268,6 +268,7 @@ module.exports = {
         // ── Semantic accent colors ──
         "bash-expand-link": "#569cd6",
         favorite: "#e5c014",
+        "pro-brand": "#3994BC",
         "scope-workspace": "#d97706",
         "scope-user": "#3b82f6",
         "indicator-success": chartsGreen,

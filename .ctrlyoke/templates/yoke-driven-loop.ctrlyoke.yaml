@@ -21,8 +21,9 @@ skills:
 steps:
   - name: plan
     harness: claude-cli
-    model: opus
+    model: sonnet
     agent: spec-orchestrator
+    executionMode: interactive
     mcpServers:
       - ctrlyoke
     prompt: |
@@ -43,7 +44,8 @@ steps:
 finalStep:
   name: review
   harness: claude-cli
-  model: opus
+  model: sonnet
+  executionMode: interactive
   agent: spec-orchestrator
   mcpServers:
     - ctrlyoke

@@ -150,6 +150,7 @@ export const MESSAGE_TYPES = {
   OPEN_SETTINGS: "openSettings", // Open VS Code settings for ctrlyoke
   OPEN_GLOBAL_SETTINGS_TAB: "openGlobalSettingsTab", // Extension/webview navigation to a settings tab
   OPEN_VSCODE_MCP_BROWSER: "openVscodeMcpBrowser", // Webview -> Extension: Open VS Code's native MCP server browser
+  EXECUTE_VSCODE_COMMAND: "executeVscodeCommand", // Webview -> Extension: execute a whitelisted native command
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   HARNESS_STATUS_UPDATE: "harnessStatusUpdate", // Update harness availability
   HARNESS_DETECTION_RETRY_RESULT: "harnessDetectionRetryResult", // Result of a client-scoped detection retry
@@ -302,7 +303,7 @@ export const MESSAGE_TYPES = {
   ACTIVE_WORKFLOW_CHANGED: "activeWorkflowChanged", // Active selection changed: { workflowId }
 
   // VS Code-hosted server — Extension → Webview
-  SERVER_STARTED: "serverStarted", // Server started: { url: string; availableIps?: string[]; portFallback?: ServerPortFallbackInfo }
+  SERVER_STARTED: "serverStarted", // Server started: { url: string; availableIps?: string[]; portFallback?: ServerPortFallbackInfo; bindAddressFallback?: BindAddressFallbackInfo }
   SERVER_STOPPED: "serverStopped", // Server stopped
   SERVER_TOKEN_REGENERATED: "serverTokenRegenerated", // Token deleted; restart server to apply new token
 
@@ -310,6 +311,17 @@ export const MESSAGE_TYPES = {
   REGENERATE_SERVER_TOKEN: "regenerateServerToken", // Request token regeneration
   GENERATE_SERVER_CERT: "generateServerCert", // Request self-signed cert generation → .ctrlyoke/certs/
   DOWNLOAD_SERVER_CERT: "downloadServerCert", // Save the TLS cert via a native Save dialog (VS Code panel only — no HTTP client to download through)
+
+  // Pro license management — Webview → Extension
+  ACTIVATE_LICENSE_KEY: "activateLicenseKey",
+  IMPORT_LICENSE_FILE: "importLicenseFile",
+  DEACTIVATE_LICENSE: "deactivateLicense",
+  REQUEST_LICENSE_MACHINES: "requestLicenseMachines",
+  DEACTIVATE_LICENSE_MACHINE: "deactivateLicenseMachine",
+
+  // Pro license management — Extension → Webview
+  LICENSE_MACHINES_UPDATED: "licenseMachinesUpdated",
+  LICENSE_ACTION_RESULT: "licenseActionResult",
 
   // VS Code-hosted server — Extension → Webview
   SERVER_CERT_GENERATED: "serverCertGenerated", // Cert generated; settings updated with new paths
@@ -489,6 +501,11 @@ export const MESSAGE_TYPES = {
   USER_FEEDBACK: "userFeedback",
   /** Webview -> Extension: native VS Code operational user feedback */
   SHOW_NATIVE_FEEDBACK: "showNativeFeedback",
+} as const;
+
+/** Stable action identifiers used by the license-management RPC responses. */
+export const LICENSE_ACTIONS = {
+  ACTIVATION_LIMIT: "licenseActivationLimit",
 } as const;
 
 // ============================================================================

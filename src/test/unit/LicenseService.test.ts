@@ -17,6 +17,7 @@ import {
   LICENSE_SOURCE_SECRET_KEY,
   REMOTE_ACCESS_TRIAL_START_KEY,
   type LicenseTrialStateStore,
+  LicenseActivationLimitError,
   LicenseService,
 } from "../../license/LicenseService";
 import { PRO_FEATURES } from "../../types/DashboardConstants";
@@ -110,6 +111,20 @@ suite("LicenseService", () => {
 
     assert.strictEqual(await service.hasRemoteAccess(), false);
     assert.strictEqual((await service.getEntitlement()).tier, "free");
+  });
+
+  test("exposes the remote-access trial end using the same window as access checks", async () => {
+    const secrets = new InMemorySecretStore();
+    const trialState = new InMemoryTrialState();
+    const startedAt = NOW - DAY;
+    await trialState.update(REMOTE_ACCESS_TRIAL_START_KEY, startedAt);
+    const service = createService(secrets, { trialState });
+
+    assert.strictEqual(await service.hasRemoteAccess(), true);
+    assert.strictEqual(
+      await service.getRemoteAccessTrialEndsAt(),
+      startedAt + 14 * DAY
+    );
   });
 
   test("lets an activated Pro license supersede a lapsed trial", async () => {
@@ -366,6 +381,180 @@ suite("LicenseService", () => {
     assert.strictEqual(calls.length, 1);
   });
 
+  test("lists machines and flags the locally activated machine", async () => {
+    const secrets = new InMemorySecretStore();
+    await secrets.store(LICENSE_MACHINE_ID_SECRET_KEY, "machine-2");
+    const calls: RequestCall[] = [];
+    const fetch = createKeygenFetch(calls, {
+      validate: new Response(
+        JSON.stringify({
+          meta: { valid: true, code: "VALID" },
+          data: {
+            id: "license-123",
+            relationships: {
+              product: { data: { id: KEYGEN_PRODUCT_ID } },
+              policy: { data: { id: KEYGEN_PRO_POLICY_ID } },
+            },
+          },
+        }),
+        { status: 200 }
+      ),
+      machines: new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "machine-1",
+              type: "machines",
+              attributes: {
+                name: "Laptop",
+                platform: "darwin",
+                created: "2026-08-27T12:00:00.000Z",
+              },
+            },
+            {
+              id: "machine-2",
+              type: "machines",
+              attributes: {
+                name: "Desktop",
+                platform: "win32",
+                created: "2026-08-28T12:00:00.000Z",
+              },
+            },
+          ],
+        }),
+        { status: 200 }
+      ),
+    });
+
+    const machines = await createService(secrets, { fetch }).listMachines(
+      "  live-key  "
+    );
+
+    assert.deepStrictEqual(machines, [
+      {
+        id: "machine-1",
+        name: "Laptop",
+        platform: "darwin",
+        createdAt: "2026-08-27T12:00:00.000Z",
+        isThisMachine: false,
+      },
+      {
+        id: "machine-2",
+        name: "Desktop",
+        platform: "win32",
+        createdAt: "2026-08-28T12:00:00.000Z",
+        isThisMachine: true,
+      },
+    ]);
+    assert.deepStrictEqual(
+      calls.map((call) => `${call.method} ${call.url}`),
+      [
+        `POST ${KEYGEN_API_PATH}/licenses/actions/validate-key`,
+        `GET ${KEYGEN_API_PATH}/machines?license=license-123`,
+      ]
+    );
+    assert.strictEqual(calls[1].headers.authorization, "License live-key");
+  });
+
+  test("deactivates another machine without clearing local activation", async () => {
+    const secrets = new InMemorySecretStore();
+    await secrets.store(LICENSE_FILE_SECRET_KEY, "cached-file");
+    await secrets.store(LICENSE_KEY_SECRET_KEY, "live-key");
+    await secrets.store(LICENSE_SOURCE_SECRET_KEY, LICENSE_SOURCES.ONLINE);
+    await secrets.store(LICENSE_ID_SECRET_KEY, "license-123");
+    await secrets.store(LICENSE_MACHINE_ID_SECRET_KEY, "machine-1");
+    const calls: RequestCall[] = [];
+    const service = createService(secrets, {
+      fetch: createKeygenFetch(calls, {
+        deactivate: new Response(null, { status: 204 }),
+      }),
+    });
+
+    await service.deactivateMachine("live-key", "machine-2");
+
+    assert.strictEqual(calls[0].url, `${KEYGEN_API_PATH}/machines/machine-2`);
+    assert.strictEqual(
+      await secrets.get(LICENSE_FILE_SECRET_KEY),
+      "cached-file"
+    );
+    assert.strictEqual(
+      await secrets.get(LICENSE_MACHINE_ID_SECRET_KEY),
+      "machine-1"
+    );
+  });
+
+  test("deactivates this machine and clears local activation", async () => {
+    const secrets = new InMemorySecretStore();
+    await secrets.store(LICENSE_FILE_SECRET_KEY, "cached-file");
+    await secrets.store(LICENSE_KEY_SECRET_KEY, "live-key");
+    await secrets.store(LICENSE_SOURCE_SECRET_KEY, LICENSE_SOURCES.ONLINE);
+    await secrets.store(LICENSE_ID_SECRET_KEY, "license-123");
+    await secrets.store(LICENSE_MACHINE_ID_SECRET_KEY, "machine-1");
+    const service = createService(secrets, {
+      fetch: createKeygenFetch([], {
+        deactivate: new Response(null, { status: 204 }),
+      }),
+    });
+
+    await service.deactivateMachine("live-key", "machine-1");
+
+    assert.strictEqual(await secrets.get(LICENSE_FILE_SECRET_KEY), undefined);
+    assert.strictEqual(await secrets.get(LICENSE_KEY_SECRET_KEY), undefined);
+    assert.strictEqual(await secrets.get(LICENSE_SOURCE_SECRET_KEY), undefined);
+    assert.strictEqual(await secrets.get(LICENSE_ID_SECRET_KEY), undefined);
+    assert.strictEqual(
+      await secrets.get(LICENSE_MACHINE_ID_SECRET_KEY),
+      undefined
+    );
+  });
+
+  test("throws a typed error when activation reaches the machine limit", async () => {
+    const secrets = new InMemorySecretStore();
+    const calls: RequestCall[] = [];
+    const fetch = createKeygenFetch(calls, {
+      validate: new Response(
+        JSON.stringify({
+          meta: { valid: false, code: "TOO_MANY_MACHINES" },
+          data: {
+            id: "license-123",
+            relationships: {
+              product: { data: { id: KEYGEN_PRODUCT_ID } },
+              policy: { data: { id: KEYGEN_PRO_POLICY_ID } },
+            },
+          },
+        }),
+        { status: 200 }
+      ),
+      machine: new Response(
+        JSON.stringify({
+          errors: [{ code: "MACHINE_LIMIT_EXCEEDED" }],
+        }),
+        { status: 422 }
+      ),
+    });
+    const service = createService(secrets, {
+      fetch,
+      machineFingerprint: "fingerprint-123",
+    });
+
+    await assert.rejects(
+      service.activateWithKey("live-key"),
+      (error: unknown) => {
+        return (
+          error instanceof LicenseActivationLimitError &&
+          error.licenseId === "license-123"
+        );
+      }
+    );
+    assert.deepStrictEqual(
+      calls.map((call) => `${call.method} ${call.url}`),
+      [
+        `POST ${KEYGEN_API_PATH}/licenses/actions/validate-key`,
+        `POST ${KEYGEN_API_PATH}/machines`,
+      ]
+    );
+  });
+
   test("refreshes an online cache inside the seven-day lead window", async () => {
     const secrets = new InMemorySecretStore();
     const oldFile = await createLicenseFile({ issued: NOW - 25 * DAY });
@@ -440,6 +629,7 @@ interface RequestCall {
 interface FetchResponses {
   readonly validate?: Response;
   readonly machine?: Response;
+  readonly machines?: Response;
   readonly checkout?: Response;
   readonly deactivate?: Response;
 }
@@ -466,6 +656,9 @@ function createKeygenFetch(
     }
     if (parsed.pathname.endsWith("/machines") && method === "POST") {
       return responses.machine ?? new Response(null, { status: 500 });
+    }
+    if (parsed.pathname.endsWith("/machines") && method === "GET") {
+      return responses.machines ?? new Response(null, { status: 500 });
     }
     if (parsed.pathname.includes("/actions/check-out")) {
       return responses.checkout ?? new Response(null, { status: 500 });

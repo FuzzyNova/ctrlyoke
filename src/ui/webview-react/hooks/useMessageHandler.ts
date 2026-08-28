@@ -621,6 +621,18 @@ export function createMessageHandlers(
     }
   };
 
+  handlers[MESSAGE_TYPES.LICENSE_MACHINES_UPDATED] = (message) => {
+    useSettingsStore.getState().setLicenseMachines(message.machines ?? []);
+  };
+
+  handlers[MESSAGE_TYPES.LICENSE_ACTION_RESULT] = (message) => {
+    useSettingsStore.getState().setLicenseActionResult({
+      action: message.action,
+      status: message.status,
+      message: message.message,
+    });
+  };
+
   // Script creation replies are consumed by the ScriptConditionEditor instance
   // that issued the request. Register them here so the central dispatcher does
   // not report the addressed, component-local replies as unknown messages.
@@ -2779,6 +2791,7 @@ export function createMessageHandlers(
     settingsStore.setAvailableIps(ips);
     settingsStore.setSelectedDisplayIp(ips[0] ?? null);
     settingsStore.setPortFallback(message.portFallback ?? null);
+    settingsStore.setBindAddressFallback(message.bindAddressFallback ?? null);
     // Server started — any previously regenerated token is now in effect
     settingsStore.setLastTokenRegenerated(null);
   };
@@ -2793,6 +2806,7 @@ export function createMessageHandlers(
     settingsStore.setAvailableIps([]);
     settingsStore.setSelectedDisplayIp(null);
     settingsStore.setPortFallback(null);
+    settingsStore.setBindAddressFallback(null);
   };
 
   // --------------------------------------------------------------------------
