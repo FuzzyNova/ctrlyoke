@@ -1272,6 +1272,23 @@ const OutputSectionInner: React.FC = () => {
     setIsFullscreen((prev) => !prev);
   }, []);
 
+  useEffect(() => {
+    if (!isFullscreen) return;
+
+    const handleFullscreenEscape = (event: KeyboardEvent) => {
+      if (event.key !== KEYBOARD_KEYS.ESCAPE || event.defaultPrevented) {
+        return;
+      }
+
+      event.preventDefault();
+      setIsFullscreen(false);
+    };
+
+    document.addEventListener("keydown", handleFullscreenEscape);
+    return () =>
+      document.removeEventListener("keydown", handleFullscreenEscape);
+  }, [isFullscreen]);
+
   const handleSelectOutputTab = useCallback(() => {
     setActiveOutputTab(terminalWorkflowId, OUTPUT_TABS.OUTPUT);
   }, [setActiveOutputTab, terminalWorkflowId]);

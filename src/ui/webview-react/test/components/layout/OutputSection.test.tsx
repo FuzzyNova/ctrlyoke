@@ -6,7 +6,10 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useTerminalStore } from "@store/terminalStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  KEYBOARD_KEYS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
 
 const applyScrollTargetSpy = vi.fn();
 const closeFindSpy = vi.fn();
@@ -208,13 +211,17 @@ vi.mock("@components/layout/output-section/ExportOutputModal", () => ({
 vi.mock("@components/layout/output-section/OutputSectionHeader", () => ({
   OutputSectionHeader: ({
     isFindOpen,
+    isFullscreen,
     onToggleFind,
     onToggleCollapse,
+    onToggleFullscreen,
     terminalExecutionRunLabel,
   }: {
     isFindOpen: boolean;
+    isFullscreen: boolean;
     onToggleFind: () => void;
     onToggleCollapse: () => void;
+    onToggleFullscreen: () => void;
     terminalExecutionRunLabel: string | null;
   }) => (
     <>
@@ -223,6 +230,14 @@ vi.mock("@components/layout/output-section/OutputSectionHeader", () => ({
       </button>
       <button type="button" onClick={onToggleCollapse}>
         Collapse output
+      </button>
+      <button
+        type="button"
+        aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
+        aria-pressed={isFullscreen}
+        onClick={onToggleFullscreen}
+      >
+        Toggle output fullscreen
       </button>
       {terminalExecutionRunLabel && (
         <span data-testid="terminal-execution-run-label">
@@ -429,6 +444,27 @@ describe("OutputSection", () => {
     expect(openFindButton).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(openFindButton);
     expect(closeFindSpy).toHaveBeenCalledOnce();
+  });
+
+  it("exits fullscreen when Escape is pressed", () => {
+    render(<OutputSection />);
+
+    const fullscreenButton = screen.getByRole("button", {
+      name: "Full screen",
+    });
+    fireEvent.click(fullscreenButton);
+
+    const outputSection = document.getElementById("output-section");
+    expect(outputSection).toHaveClass("fixed");
+    expect(fullscreenButton).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.keyDown(document, { key: KEYBOARD_KEYS.ESCAPE });
+
+    expect(outputSection).toHaveClass("min-h-0");
+    expect(screen.getByRole("button", { name: "Full screen" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
   });
 
   it("labels terminal ownership with the exact executing run ID while viewing another run", () => {

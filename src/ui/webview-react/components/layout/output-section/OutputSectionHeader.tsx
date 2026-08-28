@@ -326,7 +326,11 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
         )}
         <button
           type="button"
-          className="icon-btn py-1 px-1"
+          className={`icon-btn py-1 px-1 ${
+            isFullscreen
+              ? "text-widget-highlight-fg hover:text-widget-highlight-fg-hover"
+              : ""
+          }`}
           title={isFullscreen ? "Exit full screen" : "Full screen"}
           aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
           aria-pressed={isFullscreen}

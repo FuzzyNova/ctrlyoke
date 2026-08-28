@@ -164,3 +164,25 @@ describe("OutputSectionHeader find action", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("OutputSectionHeader fullscreen action", () => {
+  it("highlights the fullscreen toggle while active", () => {
+    renderHeader({ isFullscreen: true });
+
+    const fullscreenButton = screen.getByRole("button", {
+      name: "Exit full screen",
+    });
+
+    expect(fullscreenButton).toHaveClass("text-widget-highlight-fg");
+    expect(fullscreenButton).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("routes fullscreen toggle clicks to the callback", () => {
+    const onToggleFullscreen = vi.fn();
+    renderHeader({ onToggleFullscreen });
+
+    fireEvent.click(screen.getByRole("button", { name: "Full screen" }));
+
+    expect(onToggleFullscreen).toHaveBeenCalledOnce();
+  });
+});
