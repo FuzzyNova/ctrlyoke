@@ -223,6 +223,7 @@ export function ServerSection({
       disabled: !licenseAccess.hasRemoteAccess,
       description:
         "Pro feature — unlocks with a Pro license or an active remote-access trial",
+      descriptionClassName: "text-pro-brand font-bold",
     },
   ];
 
@@ -502,7 +503,7 @@ export function ServerSection({
 
       {/* Icon Colors — visible to all clients; live SVG preview, colors persist on blur */}
       <div className="relative mt-3 rounded border border-pro-brand px-3 pb-3 pt-2">
-        <span className="absolute -top-2 left-2 bg-editor-bg px-1 text-xxs text-pro-brand">
+        <span className="absolute -top-2 right-2 bg-panel-bg px-1 text-xxs text-pro-brand">
           Pro Feature
         </span>
         <div className="text-xs font-semibold uppercase text-description-fg mb-2 tracking-wide">
@@ -592,7 +593,7 @@ export function ServerSection({
           disabled={!licenseAccess.hasRemoteAccess}
           className={`relative mt-3 rounded border border-pro-brand px-3 pb-3 pt-2 ${!licenseAccess.hasRemoteAccess ? "opacity-50" : ""}`}
         >
-          <span className="absolute -top-2 left-2 bg-editor-bg px-1 text-xxs text-pro-brand">
+          <span className="absolute -top-2 right-2 bg-panel-bg px-1 text-xxs text-pro-brand">
             Pro Feature
           </span>
           <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
