@@ -38,3 +38,6 @@ docs/.vitepress/cache
 # COPILOT_OTEL_FILE_EXPORTER_PATH is set to the relative path "NUL")
 /NUL
 .DS_Store
+
+# Real Keygen test license keys (embed buyer email in cleartext, base64-encoded)
+dev/test_keys.md
