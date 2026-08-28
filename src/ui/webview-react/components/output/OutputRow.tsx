@@ -794,6 +794,9 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
         const data = event.data as McpToolCallData;
         if (!data.server || !data.tool) return null;
+        const toolContentMatches = getFieldMatches("toolContent");
+        const toolContentIsError =
+          !data.result?.success && typeof data.result?.error === "string";
         return (
           <McpToolCallOutput
             server={data.server}
@@ -801,6 +804,12 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             parameters={data.parameters}
             result={data.result}
             paramsFindMatches={getFieldMatches("params")}
+            outputFindMatches={
+              toolContentIsError ? undefined : toolContentMatches
+            }
+            errorFindMatches={
+              toolContentIsError ? toolContentMatches : undefined
+            }
             showLabel={row.showParamsLabel}
             labelContent={highlightText(
               `MCP: ${data.server}.${data.tool}`,

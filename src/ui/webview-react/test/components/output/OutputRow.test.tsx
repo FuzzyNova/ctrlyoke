@@ -722,6 +722,53 @@ describe("OutputRow auto-expand on hidden active match", () => {
     );
   });
 
+  it.each([
+    {
+      section: "output",
+      result: { success: true, output: "alpha result" },
+    },
+    {
+      section: "error",
+      result: { success: false, error: "alpha failure" },
+    },
+  ])("highlights the active match in MCP tool call $section", ({ result }) => {
+    const row: StructuredEventRow = {
+      key: "row-mcp-highlight",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: OUTPUT_ROW_KINDS.STRUCTURED_EVENT,
+      event: {
+        type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+        data: {
+          server: "srv",
+          tool: "Read",
+          parameters: {},
+          result,
+        },
+      },
+      eventIndex: 0,
+      rawTextOutput: false,
+      attemptIndex: 0,
+      hideDiff: false,
+    };
+    const [match] = findOutputMatches([row], "alpha", false);
+
+    const { container } = render(
+      <OutputRow
+        row={row}
+        findDecorations={{
+          matches: [{ start: match.start, end: match.end, active: true }],
+        }}
+        activeFindMatch={match}
+        isExecutionActive={false}
+      />
+    );
+
+    const mark = container.querySelector("mark");
+    expect(mark).toHaveTextContent("alpha");
+    expect(mark).toHaveAttribute("data-find-active", "true");
+  });
+
   it("highlights sanitized bash output at the rendered location", () => {
     const row = buildBashRow(
       "echo ok",

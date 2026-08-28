@@ -63,6 +63,8 @@ interface McpToolCallOutputProps {
   parameters?: Record<string, unknown>;
   result?: ToolResult;
   paramsFindMatches?: RowFindDecoration["matches"];
+  outputFindMatches?: RowFindDecoration["matches"];
+  errorFindMatches?: RowFindDecoration["matches"];
   showLabel?: boolean;
   expansion?: ToolCallExpansionState;
   renderPlan?: ToolCallRenderPlan;
@@ -80,6 +82,8 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
   parameters,
   result,
   paramsFindMatches,
+  outputFindMatches,
+  errorFindMatches,
   showLabel = false,
   expansion,
   renderPlan,
@@ -131,7 +135,8 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
       ToolCallExpansionSection,
       typeof TOOL_CALL_EXPANSION_SECTIONS.PARAMS
     >,
-    sectionPlan: ToolCallSectionRenderPlan
+    sectionPlan: ToolCallSectionRenderPlan,
+    findMatches?: RowFindDecoration["matches"]
   ) => {
     const cssClass =
       type === TOOL_CALL_EXPANSION_SECTIONS.ERROR
@@ -146,7 +151,7 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
           className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]"
           id={`${containerId}-${type}`}
         >
-          {visibleText}
+          {highlightText(visibleText, findMatches ?? [])}
           {sectionPlan.canToggle && (
             <button
               type="button"
@@ -206,13 +211,15 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
         renderExpandableSection(
           outputStr,
           TOOL_CALL_EXPANSION_SECTIONS.OUTPUT,
-          resolvedRenderPlan.output
+          resolvedRenderPlan.output,
+          outputFindMatches
         )}
       {errorStr &&
         renderExpandableSection(
           errorStr,
           TOOL_CALL_EXPANSION_SECTIONS.ERROR,
-          resolvedRenderPlan.error
+          resolvedRenderPlan.error,
+          errorFindMatches
         )}
     </ToolCallBlock>
   );

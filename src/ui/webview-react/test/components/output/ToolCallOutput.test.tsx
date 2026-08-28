@@ -326,4 +326,32 @@ describe("McpToolCallOutput", () => {
     expect(mark).toHaveTextContent("mcp-params-only");
     expect(mark).toHaveAttribute("data-find-active", "true");
   });
+
+  it("highlights find matches in tool output and errors", () => {
+    const { container, rerender } = render(
+      <McpToolCallOutput
+        server="ctrlyoke"
+        tool="read_resource"
+        result={{ success: true, output: "alpha result" }}
+        outputFindMatches={[{ start: 0, end: 5, active: true }]}
+      />
+    );
+
+    let mark = container.querySelector("mark");
+    expect(mark).toHaveTextContent("alpha");
+    expect(mark).toHaveAttribute("data-find-active", "true");
+
+    rerender(
+      <McpToolCallOutput
+        server="ctrlyoke"
+        tool="read_resource"
+        result={{ success: false, error: "failed alpha" }}
+        errorFindMatches={[{ start: 7, end: 12, active: false }]}
+      />
+    );
+
+    mark = container.querySelector("mark");
+    expect(mark).toHaveTextContent("alpha");
+    expect(mark).not.toHaveAttribute("data-find-active");
+  });
 });
