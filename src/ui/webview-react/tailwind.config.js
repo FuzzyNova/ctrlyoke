@@ -443,6 +443,11 @@ module.exports = {
         drawer: "40",
         floating: "50",
         panel: "100",
+        // Full-viewport takeover for the output/terminal section's fullscreen
+        // toggle. Above ordinary panels, but below modal dialogs so
+        // Export/Undo dialogs rendered from inside the fullscreened section
+        // still appear on top of it.
+        "output-fullscreen": "150",
         "modal-backdrop": "200",
         modal: "210",
         "modal-prominent": "220",

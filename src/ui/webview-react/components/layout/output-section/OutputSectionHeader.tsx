@@ -16,6 +16,7 @@ export interface OutputSectionHeaderProps {
   hasOutput: boolean;
   isFindOpen: boolean;
   isExecutionActive: boolean;
+  isFullscreen: boolean;
   isHeaderNarrow: boolean;
   isHeaderVeryNarrow: boolean;
   isTerminalCompact: boolean;
@@ -36,6 +37,7 @@ export interface OutputSectionHeaderProps {
   onNewTerminal: () => void;
   onSelectOutputTab: () => void;
   onSelectTerminalTab: () => void;
+  onToggleFullscreen: () => void;
   onTerminalFontSizeChange: (size: number) => void;
   onTerminalSessionClose: () => void;
   onToggleCollapse: () => void;
@@ -52,6 +54,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   hasOutput,
   isFindOpen,
   isExecutionActive,
+  isFullscreen,
   isHeaderNarrow,
   isHeaderVeryNarrow,
   isTerminalCompact,
@@ -71,6 +74,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   onNewTerminal,
   onSelectOutputTab,
   onSelectTerminalTab,
+  onToggleFullscreen,
   onTerminalFontSizeChange,
   onTerminalSessionClose,
   onToggleCollapse,
@@ -320,6 +324,18 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
             </button>
           </>
         )}
+        <button
+          type="button"
+          className="icon-btn py-1 px-1"
+          title={isFullscreen ? "Exit full screen" : "Full screen"}
+          aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
+          aria-pressed={isFullscreen}
+          onClick={onToggleFullscreen}
+        >
+          <i
+            className={`codicon codicon-lg ${isFullscreen ? "codicon-screen-normal" : "codicon-screen-full"}`}
+          />
+        </button>
       </div>
     </div>
   );

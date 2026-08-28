@@ -1267,6 +1267,11 @@ const OutputSectionInner: React.FC = () => {
     toggleOutputCollapse();
   }, [outputCollapsed, toggleOutputCollapse]);
 
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const handleToggleFullscreen = useCallback(() => {
+    setIsFullscreen((prev) => !prev);
+  }, []);
+
   const handleSelectOutputTab = useCallback(() => {
     setActiveOutputTab(terminalWorkflowId, OUTPUT_TABS.OUTPUT);
   }, [setActiveOutputTab, terminalWorkflowId]);
@@ -1399,7 +1404,11 @@ const OutputSectionInner: React.FC = () => {
     <section
       ref={sectionRef}
       id="output-section"
-      className="min-h-0 flex-1 bg-editor-bg flex flex-col h-full overflow-hidden"
+      className={`bg-editor-bg flex flex-col overflow-hidden ${
+        isFullscreen
+          ? "fixed inset-0 z-output-fullscreen h-screen w-screen"
+          : "min-h-0 flex-1 h-full"
+      }`}
     >
       {/* Section Header */}
       {outputCollapsed ? (
@@ -1412,6 +1421,7 @@ const OutputSectionInner: React.FC = () => {
           hasOutput={hasOutput}
           isFindOpen={findState.isOpen}
           isExecutionActive={isExecutionActive}
+          isFullscreen={isFullscreen}
           isHeaderNarrow={isHeaderNarrow}
           isHeaderVeryNarrow={isHeaderVeryNarrow}
           isTerminalCompact={isTerminalCompact}
@@ -1434,6 +1444,7 @@ const OutputSectionInner: React.FC = () => {
           onSelectTerminalTab={handleSelectTerminalTab}
           onTerminalFontSizeChange={updateTerminalFontSize}
           onTerminalSessionClose={handleCloseActiveTerminalSession}
+          onToggleFullscreen={handleToggleFullscreen}
           onToggleCollapse={handleToggleOutputCollapse}
           onWorkflowRedo={handleWorkflowRedo}
           onWorkflowUndo={handleWorkflowUndo}
