@@ -32,6 +32,10 @@
  *   - images/ctrlyoke-icon-color.png (512) → static favicon PNG / notification badge.
  *                                     Also reused for images/icon.png above (same
  *                                     transparent-canvas render).
+ *   - images/ls-logo.png (160)       → Lemon Squeezy store logo. Opaque BG_COLOR canvas
+ *                                     with the logo inset to 120×120 for circular cropping.
+ *   - images/ls-favicon.png (32)     → Lemon Squeezy favicon, the same transparent-canvas
+ *                                     render as images/icon.png at 32×32.
  *   - landing/public/ctrlyoke-icon.svg + docs/public/ctrlyoke-icon.svg → web favicon +
  *                                     header logos for the marketing + docs sites.
  *                                     Loaded via <img>/<link rel=icon> (no CSS cascade),
@@ -72,6 +76,9 @@ const BG_COLOR = "#3994BC";
 const FG_COLOR = "#051923";
 const LIGHT_THEME_ICON_COLOR = "#424242";
 const DARK_THEME_ICON_COLOR = "#C5C5C5";
+const SVG_CANVAS_SIZE = 512;
+const LS_LOGO_SIZE = 160;
+const LS_LOGO_MARK_SIZE = 140;
 
 /** Replace all `currentColor` occurrences (keyyoke + ctrltext) with the given color. */
 function colorizeFg(svg, color) {
@@ -103,8 +110,26 @@ function addBackground(svg, color) {
   const match = svg.match(/<svg[\s\S]*?>/);
   if (!match) throw new Error("Could not find opening <svg> tag");
   const insertAt = match.index + match[0].length;
-  const rect = `<rect width="512" height="512" fill="${color}"/>`;
+  const rect = `<rect width="${SVG_CANVAS_SIZE}" height="${SVG_CANVAS_SIZE}" fill="${color}"/>`;
   return svg.slice(0, insertAt) + rect + svg.slice(insertAt);
+}
+
+/** Scale the authored logo group into a centered inset while leaving the canvas intact. */
+function insetLogo(svg, canvasSize, outputSize, markSize) {
+  const match = svg.match(/<g\b[^>]*\bid="ctrlyoke-logo"[^>]*>/);
+  if (!match)
+    throw new Error('Could not find <g id="ctrlyoke-logo"> in master SVG');
+
+  const scale = markSize / outputSize;
+  const offset = (canvasSize - canvasSize * scale) / 2;
+  const transform = ` transform="translate(${offset} ${offset}) scale(${scale})"`;
+  const openingTag = match[0].slice(0, -1) + transform + ">";
+
+  return (
+    svg.slice(0, match.index) +
+    openingTag +
+    svg.slice(match.index + match[0].length)
+  );
 }
 
 /** Render an SVG string to PNG at the given width (square) using resvg-wasm. */
@@ -213,6 +238,24 @@ try {
     renderPng(favicon, 512)
   );
   console.log("  ✓ images/ctrlyoke-icon-color.png (512×512)");
+
+  // Lemon Squeezy store logo — keep the opaque BG_COLOR canvas, but inset the mark so
+  // Lemon Squeezy's circular crop does not cut off the outer edges of the logo.
+  const lemonSqueezyLogo = insetLogo(
+    appIcon,
+    SVG_CANVAS_SIZE,
+    LS_LOGO_SIZE,
+    LS_LOGO_MARK_SIZE
+  );
+  writeFileSync(
+    join(imagesDir, "ls-logo.png"),
+    renderPng(lemonSqueezyLogo, LS_LOGO_SIZE)
+  );
+  console.log("  ✓ images/ls-logo.png (160×160; 120×120 mark)");
+
+  // Lemon Squeezy favicon — same transparent-canvas artwork as icon.png, rendered at 32px.
+  writeFileSync(join(imagesDir, "ls-favicon.png"), renderPng(favicon, 32));
+  console.log("  ✓ images/ls-favicon.png (32×32)");
 
   // Keep the TypeScript constants file in sync with BG_COLOR / FG_COLOR so every
   // spot in the codebase that references the default icon colors stays correct.
