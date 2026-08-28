@@ -4,8 +4,15 @@ import { suite, setup, test } from "mocha";
 import type { SecretStore } from "../../platform/SecretStore";
 import {
   KEYGEN_ACCOUNT_PUBLIC_KEY_HEX,
+  KEYGEN_API_BASE_URL,
+  KEYGEN_PRODUCT_ID,
+  KEYGEN_PRO_POLICY_ID,
   LICENSE_FILE_SECRET_KEY,
+  LICENSE_ID_SECRET_KEY,
   LICENSE_KEY_SECRET_KEY,
+  LICENSE_MACHINE_FINGERPRINT_SECRET_KEY,
+  LICENSE_MACHINE_ID_SECRET_KEY,
+  LICENSE_FILE_TTL_MS,
   LICENSE_SOURCES,
   LICENSE_SOURCE_SECRET_KEY,
   LicenseService,
@@ -36,6 +43,7 @@ class InMemorySecretStore implements SecretStore {
 
 const NOW = Date.parse("2026-08-28T12:00:00.000Z");
 const DAY = 24 * 60 * 60 * 1000;
+const KEYGEN_API_PATH = new URL(KEYGEN_API_BASE_URL).pathname;
 
 let signingKey: CryptoKey;
 let verificationKeyHex: string;
@@ -154,12 +162,209 @@ suite("LicenseService", () => {
   test("ships the configured Keygen public key", () => {
     assert.strictEqual(KEYGEN_ACCOUNT_PUBLIC_KEY_HEX.length, 64);
   });
+
+  // Manual live verification (2026-08-28): read a key from the ignored
+  // dev/test_keys.md file into process memory, call activateWithKey() with the
+  // real Keygen API, verify getEntitlement() returns Pro, then deactivate().
+  // Never copy either live key into source, fixtures, logs, or commits.
+  test("activates a key, registers this machine, and caches the signed file", async () => {
+    const secrets = new InMemorySecretStore();
+    const file = await createLicenseFile();
+    const calls: RequestCall[] = [];
+    const fetch = createKeygenFetch(calls, {
+      validate: new Response(
+        JSON.stringify({
+          meta: { valid: false, code: "NO_MACHINES" },
+          data: {
+            id: "license-123",
+            relationships: {
+              product: { data: { id: KEYGEN_PRODUCT_ID } },
+              policy: { data: { id: KEYGEN_PRO_POLICY_ID } },
+            },
+          },
+        }),
+        { status: 200 }
+      ),
+      machine: new Response(JSON.stringify({ data: { id: "machine-123" } }), {
+        status: 201,
+      }),
+      checkout: new Response(file, { status: 200 }),
+    });
+
+    const service = createService(secrets, {
+      fetch,
+      machineFingerprint: "fingerprint-123",
+    });
+    const entitlement = await service.activateWithKey("  live-key  ");
+
+    assert.strictEqual(entitlement.tier, "pro");
+    assert.strictEqual(await secrets.get(LICENSE_KEY_SECRET_KEY), "live-key");
+    assert.strictEqual(await secrets.get(LICENSE_FILE_SECRET_KEY), file);
+    assert.strictEqual(
+      await secrets.get(LICENSE_MACHINE_ID_SECRET_KEY),
+      "machine-123"
+    );
+    assert.ok(await secrets.get(LICENSE_MACHINE_FINGERPRINT_SECRET_KEY));
+    assert.deepStrictEqual(
+      calls.map((call) => `${call.method} ${call.url}`),
+      [
+        `POST ${KEYGEN_API_PATH}/licenses/actions/validate-key`,
+        `POST ${KEYGEN_API_PATH}/machines`,
+        `GET ${KEYGEN_API_PATH}/licenses/license-123/actions/check-out?ttl=` +
+          LICENSE_FILE_TTL_MS / 1000,
+      ]
+    );
+    assert.strictEqual(calls[1].headers.authorization, "License live-key");
+    assert.strictEqual(
+      JSON.parse(calls[1].body ?? "{}").data.attributes.fingerprint,
+      "fingerprint-123"
+    );
+  });
+
+  test("rejects an invalid key without changing the free entitlement", async () => {
+    const secrets = new InMemorySecretStore();
+    const calls: RequestCall[] = [];
+    const fetch = createKeygenFetch(calls, {
+      validate: new Response(
+        JSON.stringify({
+          meta: { valid: false, code: "NOT_FOUND" },
+        }),
+        { status: 200 }
+      ),
+    });
+    const service = createService(secrets, { fetch });
+
+    await assert.rejects(
+      service.activateWithKey("bad-key"),
+      /license key was rejected/
+    );
+    assert.strictEqual((await service.getEntitlement()).tier, "free");
+    assert.strictEqual(await secrets.get(LICENSE_FILE_SECRET_KEY), undefined);
+    assert.strictEqual(calls.length, 1);
+  });
+
+  test("refreshes an online cache inside the seven-day lead window", async () => {
+    const secrets = new InMemorySecretStore();
+    const oldFile = await createLicenseFile({ issued: NOW - 25 * DAY });
+    const freshFile = await createLicenseFile({ issued: NOW });
+    await cache(secrets, oldFile);
+    await secrets.store(LICENSE_KEY_SECRET_KEY, "live-key");
+    const calls: RequestCall[] = [];
+    const fetch = createKeygenFetch(calls, {
+      checkout: new Response(freshFile, { status: 200 }),
+    });
+
+    await createService(secrets, { fetch }).refresh();
+
+    assert.strictEqual(await secrets.get(LICENSE_FILE_SECRET_KEY), freshFile);
+    assert.strictEqual(calls.length, 1);
+    assert.ok(calls[0].url.includes("ttl=" + LICENSE_FILE_TTL_MS / 1000));
+  });
+
+  test("does not refresh before the cache is near its TTL or after grace", async () => {
+    const secrets = new InMemorySecretStore();
+    await cache(secrets, await createLicenseFile({ issued: NOW - 20 * DAY }));
+    await secrets.store(LICENSE_KEY_SECRET_KEY, "live-key");
+    const calls: RequestCall[] = [];
+    const fetch = createKeygenFetch(calls, {});
+    const service = createService(secrets, { fetch });
+
+    await service.refresh();
+    assert.strictEqual(calls.length, 0);
+
+    await cache(
+      secrets,
+      await createLicenseFile({ issued: NOW - 45 * DAY, expiry: NOW + DAY })
+    );
+    await service.refresh();
+    assert.strictEqual(calls.length, 0);
+  });
+
+  test("deactivates the Keygen machine and clears local license secrets", async () => {
+    const secrets = new InMemorySecretStore();
+    const file = await createLicenseFile();
+    await cache(secrets, file);
+    await secrets.store(LICENSE_KEY_SECRET_KEY, "live-key");
+    await secrets.store(LICENSE_ID_SECRET_KEY, "license-123");
+    await secrets.store(LICENSE_MACHINE_ID_SECRET_KEY, "machine-123");
+    const calls: RequestCall[] = [];
+    const fetch = createKeygenFetch(calls, {
+      deactivate: new Response(null, { status: 204 }),
+    });
+
+    await createService(secrets, { fetch }).deactivate();
+
+    assert.strictEqual(calls[0].method, "DELETE");
+    assert.strictEqual(calls[0].url, `${KEYGEN_API_PATH}/machines/machine-123`);
+    assert.strictEqual(calls[0].headers.authorization, "License live-key");
+    assert.strictEqual(await secrets.get(LICENSE_FILE_SECRET_KEY), undefined);
+    assert.strictEqual(await secrets.get(LICENSE_KEY_SECRET_KEY), undefined);
+    assert.strictEqual(await secrets.get(LICENSE_ID_SECRET_KEY), undefined);
+    assert.strictEqual(
+      await secrets.get(LICENSE_MACHINE_ID_SECRET_KEY),
+      undefined
+    );
+  });
 });
 
-function createService(secrets: InMemorySecretStore): LicenseService {
+interface RequestCall {
+  readonly method: string;
+  readonly url: string;
+  readonly headers: Record<string, string>;
+  readonly body?: string;
+}
+
+interface FetchResponses {
+  readonly validate?: Response;
+  readonly machine?: Response;
+  readonly checkout?: Response;
+  readonly deactivate?: Response;
+}
+
+function createKeygenFetch(
+  calls: RequestCall[],
+  responses: FetchResponses
+): typeof fetch {
+  return async (input, init = {}) => {
+    const parsed = new URL(String(input));
+    const method = init.method ?? "GET";
+    const headers = Object.fromEntries(
+      new Headers(init.headers).entries()
+    ) as Record<string, string>;
+    calls.push({
+      method,
+      url: parsed.pathname + parsed.search,
+      headers,
+      ...(typeof init.body === "string" ? { body: init.body } : {}),
+    });
+
+    if (parsed.pathname.endsWith("/licenses/actions/validate-key")) {
+      return responses.validate ?? new Response(null, { status: 500 });
+    }
+    if (parsed.pathname.endsWith("/machines") && method === "POST") {
+      return responses.machine ?? new Response(null, { status: 500 });
+    }
+    if (parsed.pathname.includes("/actions/check-out")) {
+      return responses.checkout ?? new Response(null, { status: 500 });
+    }
+    if (parsed.pathname.includes("/machines/") && method === "DELETE") {
+      return responses.deactivate ?? new Response(null, { status: 500 });
+    }
+    return new Response(null, { status: 404 });
+  };
+}
+
+function createService(
+  secrets: InMemorySecretStore,
+  options: {
+    readonly fetch?: typeof fetch;
+    readonly machineFingerprint?: string | (() => Promise<string>);
+  } = {}
+): LicenseService {
   return new LicenseService(secrets, {
     now: () => NOW,
     publicKeyHex: verificationKeyHex,
+    ...options,
   });
 }
 

@@ -1,4 +1,4 @@
-import { createHash, webcrypto } from "node:crypto";
+import { createHash, randomUUID, webcrypto } from "node:crypto";
 import type { SecretStore } from "../platform/SecretStore";
 import { PRO_FEATURES } from "../types/DashboardConstants";
 import { TypedEmitter } from "../utils/TypedEmitter";
@@ -16,6 +16,15 @@ export type LicenseSource =
 export const LICENSE_FILE_SECRET_KEY = "ctrlyoke.pro.license-file";
 export const LICENSE_KEY_SECRET_KEY = "ctrlyoke.pro.license-key";
 export const LICENSE_SOURCE_SECRET_KEY = "ctrlyoke.pro.license-source";
+export const LICENSE_ID_SECRET_KEY = "ctrlyoke.pro.license-id";
+export const LICENSE_MACHINE_ID_SECRET_KEY = "ctrlyoke.pro.machine-id";
+export const LICENSE_MACHINE_FINGERPRINT_SECRET_KEY =
+  "ctrlyoke.pro.machine-fingerprint";
+
+export const KEYGEN_ACCOUNT_ID = "6ed6209c-6633-4444-9d43-ab4a473e2f28";
+export const KEYGEN_PRODUCT_ID = "f4af3c3b-4350-4a6e-af09-744797abb4b0";
+export const KEYGEN_PRO_POLICY_ID = "da0764ce-6577-419a-862d-128efdbfc329";
+export const KEYGEN_API_BASE_URL = `https://api.keygen.sh/v1/accounts/${KEYGEN_ACCOUNT_ID}`;
 
 /** The Keygen account verification key. This is public and safe to ship. */
 export const KEYGEN_ACCOUNT_PUBLIC_KEY_HEX =
@@ -23,6 +32,9 @@ export const KEYGEN_ACCOUNT_PUBLIC_KEY_HEX =
 
 export const LICENSE_FILE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const LICENSE_OFFLINE_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
+export const LICENSE_REFRESH_LEAD_MS = 7 * 24 * 60 * 60 * 1000;
+/** Allow normal client/server clock skew without weakening the file TTL. */
+export const LICENSE_CLOCK_SKEW_MS = 5 * 60 * 1000;
 
 const LICENSE_FILE_ALGORITHMS = {
   PLAIN_ED25519: "base64+ed25519",
@@ -48,13 +60,13 @@ export interface LicenseService {
   getEntitlement(): Promise<Entitlement>;
   isPro(): Promise<boolean>;
 
-  /** Online activation is implemented in a later licensing step. */
+  /** Activate this machine online and cache a signed license file. */
   activateWithKey(key: string): Promise<Entitlement>;
 
   /** Air-gapped import is implemented in a later licensing step. */
   importLicenseFile(blob: string): Promise<Entitlement>;
 
-  /** Online refresh is implemented in a later licensing step. */
+  /** Refresh the cached signed file when it is near its online TTL. */
   refresh(): Promise<void>;
 
   /** Phase 2 sign-in activation is implemented in a later licensing step. */
@@ -72,6 +84,10 @@ export interface LicenseServiceOptions {
   readonly now?: () => number;
   /** Test seam for exercising verification with a generated Ed25519 keypair. */
   readonly publicKeyHex?: string;
+  /** Test seam for Keygen HTTP calls; production uses the global fetch. */
+  readonly fetch?: typeof fetch;
+  /** Test seam for the stable machine fingerprint. */
+  readonly machineFingerprint?: string | (() => Promise<string>);
 }
 
 interface LicenseCertificate {
@@ -90,6 +106,38 @@ interface CachedLicense {
   readonly source: LicenseSource;
 }
 
+interface StoredActivation {
+  readonly licenseId: string;
+  readonly machineId: string;
+}
+
+interface VerifiedLicense {
+  readonly entitlement: Entitlement;
+  readonly issuedAt: number;
+}
+
+interface JsonApiResponse {
+  readonly data?: unknown;
+  readonly meta?: unknown;
+}
+
+class KeygenApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly operation: string
+  ) {
+    super(`Keygen ${operation} request failed with status ${status}`);
+    this.name = "KeygenApiError";
+  }
+}
+
+class UserFacingLicenseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UserFacingLicenseError";
+  }
+}
+
 /**
  * Foundational offline licensing service. The constructor takes the
  * platform-neutral SecretStore so this service stays independent of VS Code.
@@ -98,6 +146,11 @@ export class LicenseService implements LicenseService {
   private readonly changes = new TypedEmitter<Entitlement>();
   private readonly now: () => number;
   private readonly publicKeyHex: string;
+  private readonly request: typeof fetch;
+  private readonly machineFingerprintOption:
+    | string
+    | (() => Promise<string>)
+    | undefined;
 
   public readonly onDidChangeEntitlement = this.changes.event;
 
@@ -107,6 +160,8 @@ export class LicenseService implements LicenseService {
   ) {
     this.now = options.now ?? Date.now;
     this.publicKeyHex = options.publicKeyHex ?? KEYGEN_ACCOUNT_PUBLIC_KEY_HEX;
+    this.request = options.fetch ?? fetch;
+    this.machineFingerprintOption = options.machineFingerprint;
   }
 
   async getEntitlement(): Promise<Entitlement> {
@@ -117,11 +172,12 @@ export class LicenseService implements LicenseService {
       }
 
       const licenseKey = await this.secretStore.get(LICENSE_KEY_SECRET_KEY);
-      return await this.verifyCachedLicense(
+      const verified = await this.verifyCachedLicense(
         cached.blob,
         cached.source,
         licenseKey
       );
+      return verified.entitlement;
     } catch {
       // License problems must never interfere with the free product.
       return createFreeEntitlement();
@@ -132,8 +188,57 @@ export class LicenseService implements LicenseService {
     return (await this.getEntitlement()).tier === PRO_TIER;
   }
 
-  async activateWithKey(_key: string): Promise<Entitlement> {
-    throw new Error("License activation is not implemented yet");
+  async activateWithKey(key: string): Promise<Entitlement> {
+    const normalizedKey = key.trim();
+    if (!normalizedKey) {
+      throw new UserFacingLicenseError(
+        "Enter a Pro license key to activate ctrlyoke."
+      );
+    }
+
+    let machineId: string | undefined;
+    let createdMachine = false;
+    try {
+      const fingerprint = await this.getMachineFingerprint();
+      const license = await this.validateKey(normalizedKey);
+      const stored = await this.readStoredActivation();
+
+      if (stored?.licenseId === license.id) {
+        const existing = await this.findMachine(
+          stored.machineId,
+          normalizedKey
+        );
+        if (existing) {
+          machineId = stored.machineId;
+        }
+      }
+
+      if (!machineId) {
+        const machine = await this.activateMachine(
+          normalizedKey,
+          license.id,
+          fingerprint
+        );
+        machineId = machine.id;
+        createdMachine = true;
+      }
+
+      const blob = await this.checkoutLicense(normalizedKey, license.id);
+      const verified = await this.verifyCachedLicense(
+        blob,
+        LICENSE_SOURCES.ONLINE,
+        normalizedKey
+      );
+
+      await this.cacheOnlineLicense(normalizedKey, blob, license.id, machineId);
+      this.changes.fire(verified.entitlement);
+      return verified.entitlement;
+    } catch (error) {
+      if (createdMachine && machineId) {
+        await this.releaseMachine(machineId, normalizedKey);
+      }
+      throw toActivationError(error);
+    }
   }
 
   async importLicenseFile(_blob: string): Promise<Entitlement> {
@@ -141,7 +246,53 @@ export class LicenseService implements LicenseService {
   }
 
   async refresh(): Promise<void> {
-    throw new Error("License refresh is not implemented yet");
+    try {
+      const cached = await this.readCachedLicense();
+      if (!cached || cached.source !== LICENSE_SOURCES.ONLINE) {
+        return;
+      }
+
+      const key = await this.secretStore.get(LICENSE_KEY_SECRET_KEY);
+      if (!key) {
+        return;
+      }
+
+      const verified = await this.verifyCachedLicense(
+        cached.blob,
+        cached.source,
+        key
+      );
+      const ttlExpiry = verified.issuedAt + LICENSE_FILE_TTL_MS;
+      const now = this.now();
+      if (
+        now < ttlExpiry - LICENSE_REFRESH_LEAD_MS ||
+        now > ttlExpiry + LICENSE_OFFLINE_GRACE_MS
+      ) {
+        return;
+      }
+
+      const licenseId = verified.entitlement.licenseId;
+      if (!licenseId) {
+        return;
+      }
+
+      const blob = await this.checkoutLicense(key, licenseId);
+      const refreshed = await this.verifyCachedLicense(
+        blob,
+        LICENSE_SOURCES.ONLINE,
+        key
+      );
+      await this.secretStore.store(LICENSE_FILE_SECRET_KEY, blob);
+      await this.secretStore.store(
+        LICENSE_SOURCE_SECRET_KEY,
+        LICENSE_SOURCES.ONLINE
+      );
+      await this.secretStore.store(LICENSE_ID_SECRET_KEY, licenseId);
+      this.changes.fire(refreshed.entitlement);
+    } catch {
+      // Refresh is deliberately best-effort. The signed cache and offline grace
+      // continue to protect a paying user during a connectivity outage.
+    }
   }
 
   async activateWithSignIn?(): Promise<Entitlement> {
@@ -149,9 +300,19 @@ export class LicenseService implements LicenseService {
   }
 
   async deactivate(): Promise<void> {
-    await this.secretStore.delete(LICENSE_FILE_SECRET_KEY);
-    await this.secretStore.delete(LICENSE_KEY_SECRET_KEY);
-    await this.secretStore.delete(LICENSE_SOURCE_SECRET_KEY);
+    const key = await this.secretStore.get(LICENSE_KEY_SECRET_KEY);
+    const activation = await this.readStoredActivation();
+    if (key && activation) {
+      await this.releaseMachine(activation.machineId, key);
+    }
+
+    await Promise.all([
+      this.secretStore.delete(LICENSE_FILE_SECRET_KEY),
+      this.secretStore.delete(LICENSE_KEY_SECRET_KEY),
+      this.secretStore.delete(LICENSE_SOURCE_SECRET_KEY),
+      this.secretStore.delete(LICENSE_ID_SECRET_KEY),
+      this.secretStore.delete(LICENSE_MACHINE_ID_SECRET_KEY),
+    ]);
     this.changes.fire(createFreeEntitlement());
   }
 
@@ -192,7 +353,7 @@ export class LicenseService implements LicenseService {
     blob: string,
     source: LicenseSource,
     licenseKey: string | undefined
-  ): Promise<Entitlement> {
+  ): Promise<VerifiedLicense> {
     const certificate = parseCertificate(blob);
     if (certificate.type !== LICENSE_FILE_HEADER) {
       throw new Error("Unsupported license certificate type");
@@ -226,8 +387,226 @@ export class LicenseService implements LicenseService {
         ? await decryptLicensePayload(certificate.enc, licenseKey)
         : parseJson(decodeBase64(certificate.enc));
 
-    return entitlementFromPayload(payload, source, this.now());
+    const meta = asRecord(payload)?.meta;
+    const issuedAt = parseTimestamp(asRecord(meta)?.issued);
+    if (issuedAt === undefined) {
+      throw new Error("License file is missing issuance metadata");
+    }
+
+    return {
+      entitlement: entitlementFromPayload(payload, source, this.now()),
+      issuedAt,
+    };
   }
+
+  private async validateKey(key: string): Promise<{ readonly id: string }> {
+    const body = await this.keygenJson("/licenses/actions/validate-key", {
+      method: "POST",
+      body: JSON.stringify({ meta: { key } }),
+    });
+    const meta = asRecord(body.meta);
+    const validationCode = meta?.code;
+    const canActivate =
+      meta?.valid === true ||
+      validationCode === "NO_MACHINES" ||
+      validationCode === "FINGERPRINT_SCOPE_MISMATCH";
+    if (!canActivate) {
+      throw new UserFacingLicenseError(
+        "That Pro license key was rejected. It may be invalid, expired, suspended, or at its 10-machine limit."
+      );
+    }
+
+    const data = asRecord(body.data);
+    const id = data?.id;
+    if (typeof id !== "string" || !id) {
+      throw new Error("Keygen returned no license identifier");
+    }
+    assertExpectedRelationship(data, "product", KEYGEN_PRODUCT_ID);
+    assertExpectedRelationship(data, "policy", KEYGEN_PRO_POLICY_ID);
+    return { id };
+  }
+
+  private async activateMachine(
+    key: string,
+    licenseId: string,
+    fingerprint: string
+  ): Promise<{ readonly id: string }> {
+    const body = await this.keygenJson("/machines", {
+      method: "POST",
+      authorization: key,
+      body: JSON.stringify({
+        data: {
+          type: "machines",
+          attributes: {
+            fingerprint,
+            name: "ctrlyoke",
+            platform: process.platform,
+          },
+          relationships: {
+            license: { data: { type: "licenses", id: licenseId } },
+          },
+        },
+      }),
+    });
+    const id = asRecord(body.data)?.id;
+    if (typeof id !== "string" || !id) {
+      throw new Error("Keygen returned no machine identifier");
+    }
+    return { id };
+  }
+
+  private async findMachine(machineId: string, key: string): Promise<boolean> {
+    const response = await this.request(
+      `${KEYGEN_API_BASE_URL}/machines/${encodeURIComponent(machineId)}`,
+      { headers: keygenHeaders(key) }
+    );
+    if (response.ok) {
+      return true;
+    }
+    if (response.status === 404) {
+      return false;
+    }
+    throw new KeygenApiError(response.status, "machine lookup");
+  }
+
+  private async checkoutLicense(
+    key: string,
+    licenseId: string
+  ): Promise<string> {
+    const url = new URL(
+      `${KEYGEN_API_BASE_URL}/licenses/${encodeURIComponent(licenseId)}/actions/check-out`
+    );
+    url.searchParams.set("ttl", String(LICENSE_FILE_TTL_MS / 1000));
+    const response = await this.request(url, {
+      headers: keygenHeaders(key),
+    });
+    if (!response.ok) {
+      throw new KeygenApiError(response.status, "license download");
+    }
+    return response.text();
+  }
+
+  private async keygenJson(
+    path: string,
+    options: {
+      readonly method: string;
+      readonly body?: string;
+      readonly authorization?: string;
+    }
+  ): Promise<JsonApiResponse> {
+    const response = await this.request(`${KEYGEN_API_BASE_URL}${path}`, {
+      method: options.method,
+      headers: keygenHeaders(options.authorization),
+      ...(options.body ? { body: options.body } : {}),
+    });
+    if (!response.ok) {
+      throw new KeygenApiError(response.status, "API");
+    }
+    return (await response.json()) as JsonApiResponse;
+  }
+
+  private async getMachineFingerprint(): Promise<string> {
+    const stored = await this.secretStore.get(
+      LICENSE_MACHINE_FINGERPRINT_SECRET_KEY
+    );
+    if (stored) {
+      return stored;
+    }
+
+    const configured =
+      typeof this.machineFingerprintOption === "function"
+        ? await this.machineFingerprintOption()
+        : this.machineFingerprintOption;
+    const fingerprint =
+      configured?.trim() ||
+      createHash("sha256")
+        .update(`ctrlyoke:${randomUUID()}`, "utf8")
+        .digest("hex");
+    await this.secretStore.store(
+      LICENSE_MACHINE_FINGERPRINT_SECRET_KEY,
+      fingerprint
+    );
+    return fingerprint;
+  }
+
+  private async readStoredActivation(): Promise<StoredActivation | undefined> {
+    const [licenseId, machineId] = await Promise.all([
+      this.secretStore.get(LICENSE_ID_SECRET_KEY),
+      this.secretStore.get(LICENSE_MACHINE_ID_SECRET_KEY),
+    ]);
+    return licenseId && machineId ? { licenseId, machineId } : undefined;
+  }
+
+  private async cacheOnlineLicense(
+    key: string,
+    blob: string,
+    licenseId: string,
+    machineId: string
+  ): Promise<void> {
+    await this.secretStore.store(LICENSE_KEY_SECRET_KEY, key);
+    await this.secretStore.store(LICENSE_FILE_SECRET_KEY, blob);
+    await this.secretStore.store(
+      LICENSE_SOURCE_SECRET_KEY,
+      LICENSE_SOURCES.ONLINE
+    );
+    await this.secretStore.store(LICENSE_ID_SECRET_KEY, licenseId);
+    await this.secretStore.store(LICENSE_MACHINE_ID_SECRET_KEY, machineId);
+  }
+
+  private async releaseMachine(machineId: string, key: string): Promise<void> {
+    try {
+      const response = await this.request(
+        `${KEYGEN_API_BASE_URL}/machines/${encodeURIComponent(machineId)}`,
+        { method: "DELETE", headers: keygenHeaders(key) }
+      );
+      if (!response.ok && response.status !== 404) {
+        throw new KeygenApiError(response.status, "machine deactivation");
+      }
+    } catch {
+      // Local deactivation must still complete when the network is unavailable.
+    }
+  }
+}
+
+function keygenHeaders(key?: string): Record<string, string> {
+  return {
+    "Content-Type": "application/vnd.api+json",
+    Accept: "application/vnd.api+json",
+    ...(key ? { Authorization: `License ${key}` } : {}),
+  };
+}
+
+function assertExpectedRelationship(
+  data: JsonRecord,
+  relationshipName: "product" | "policy",
+  expectedId: string
+): void {
+  const relationship = asRecord(
+    asRecord(data.relationships)?.[relationshipName]
+  );
+  const relationshipData = asRecord(relationship?.data);
+  if (relationshipData && relationshipData.id !== expectedId) {
+    throw new UserFacingLicenseError(
+      "That Pro license key belongs to a different ctrlyoke product or policy."
+    );
+  }
+}
+
+function toActivationError(error: unknown): Error {
+  if (error instanceof UserFacingLicenseError) {
+    return error;
+  }
+  if (
+    error instanceof KeygenApiError &&
+    [401, 403, 404, 409, 422].includes(error.status)
+  ) {
+    return new UserFacingLicenseError(
+      "That Pro license key was rejected. It may be invalid, expired, suspended, or at its 10-machine limit."
+    );
+  }
+  return new UserFacingLicenseError(
+    "ctrlyoke could not activate the Pro license right now. Check your internet connection and try again."
+  );
 }
 
 function createFreeEntitlement(): Entitlement {
@@ -320,7 +699,7 @@ function entitlementFromPayload(
   if (issuedAt === undefined || fileExpiry === undefined) {
     throw new Error("License file is missing issuance metadata");
   }
-  if (issuedAt > now) {
+  if (issuedAt > now + LICENSE_CLOCK_SKEW_MS) {
     throw new Error("License file was issued in the future");
   }
 

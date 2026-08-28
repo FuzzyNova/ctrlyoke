@@ -157,7 +157,9 @@ You can't create the LS webhook without a target URL, and the Netlify function's
 - [x] `PRO_FEATURES` constants in `DashboardConstants.ts` (no hardcoded feature-flag strings at gate sites).
 - [x] Embed the Keygen Ed25519 public key (4.1 above) as a build constant.
 - [x] Offline `getEntitlement()` — Ed25519 signature + expiry verification, no network, fail-open to free on any error.
-- [ ] `activateWithKey()` — online activation via Keygen, cache signed license file in `vscode.SecretStorage`.
+- [x] `activateWithKey()` — online activation via Keygen, cache signed license file in `vscode.SecretStorage`; live Keygen activation and deactivation smoke-tested August 28, 2026.
+- [x] Online `refresh()` — silently renew near-expiry cached files within the 30-day TTL and 14-day offline grace window.
+- [x] `deactivate()` — release the Keygen machine activation and clear local license secrets.
 - [ ] `importLicenseFile()` — air-gapped offline import, zero network calls.
 - [ ] Commands: `ctrlyoke: Activate Pro License`, `ctrlyoke: Activate Offline (Air-Gapped) License`, `ctrlyoke: Deactivate Pro License`, `ctrlyoke: Manage License`.
 - [ ] Gate sites (§1.8 of the plan): remote bind (`0.0.0.0`) enforcement at `CtrlYokeHostedServer.listen()`, LAN IP selector + QR-to-phone in `ServerSection.tsx`, HTTPS/cert generation, mobile push, custom icon color, air-gapped activation command itself.
