@@ -63,7 +63,7 @@ export interface LicenseService {
   /** Activate this machine online and cache a signed license file. */
   activateWithKey(key: string): Promise<Entitlement>;
 
-  /** Air-gapped import is implemented in a later licensing step. */
+  /** Import and verify a signed license file without making network calls. */
   importLicenseFile(blob: string): Promise<Entitlement>;
 
   /** Refresh the cached signed file when it is near its online TTL. */
@@ -241,8 +241,33 @@ export class LicenseService implements LicenseService {
     }
   }
 
-  async importLicenseFile(_blob: string): Promise<Entitlement> {
-    throw new Error("Offline license import is not implemented yet");
+  async importLicenseFile(blob: string): Promise<Entitlement> {
+    try {
+      const normalizedBlob = blob.trim();
+      if (!normalizedBlob) {
+        throw new Error("A license file is required");
+      }
+
+      const licenseKey = await this.secretStore.get(LICENSE_KEY_SECRET_KEY);
+      const verified = await this.verifyCachedLicense(
+        normalizedBlob,
+        LICENSE_SOURCES.OFFLINE_FILE,
+        licenseKey
+      );
+
+      await this.secretStore.store(LICENSE_FILE_SECRET_KEY, normalizedBlob);
+      await this.secretStore.store(
+        LICENSE_SOURCE_SECRET_KEY,
+        LICENSE_SOURCES.OFFLINE_FILE
+      );
+      this.changes.fire(verified.entitlement);
+      return verified.entitlement;
+    } catch {
+      // An invalid import must not replace a valid entitlement or break the
+      // free product. Re-read the existing cache so a failed import is a
+      // no-op from the caller's perspective.
+      return this.getEntitlement();
+    }
   }
 
   async refresh(): Promise<void> {

@@ -75,6 +75,81 @@ suite("LicenseService", () => {
     assert.strictEqual(await service.isPro(), true);
   });
 
+  test("imports a valid offline license file without making network calls", async () => {
+    const secrets = new InMemorySecretStore();
+    const file = await createLicenseFile();
+    let networkCalls = 0;
+    const fetch: typeof globalThis.fetch = async () => {
+      networkCalls += 1;
+      return new Response(null, { status: 500 });
+    };
+    const service = createService(secrets, { fetch });
+
+    const entitlement = await service.importLicenseFile(`  ${file}\n`);
+
+    assert.strictEqual(entitlement.tier, "pro");
+    assert.strictEqual(entitlement.source, LICENSE_SOURCES.OFFLINE_FILE);
+    assert.ok(entitlement.features.has(PRO_FEATURES.HOSTED_DASHBOARD));
+    assert.strictEqual(await secrets.get(LICENSE_FILE_SECRET_KEY), file);
+    assert.strictEqual(
+      await secrets.get(LICENSE_SOURCE_SECRET_KEY),
+      LICENSE_SOURCES.OFFLINE_FILE
+    );
+    assert.strictEqual(await service.isPro(), true);
+    assert.strictEqual(networkCalls, 0);
+  });
+
+  test("rejects an offline license file with a corrupted signature", async () => {
+    const secrets = new InMemorySecretStore();
+    const validFile = await createLicenseFile();
+    await cache(secrets, validFile);
+    const envelope = decodeCertificate(validFile);
+    const signature = Buffer.from(envelope.sig, "base64");
+    signature[0] ^= 0xff;
+    envelope.sig = signature.toString("base64");
+    const service = createService(secrets);
+
+    const entitlement = await service.importLicenseFile(
+      encodeCertificate(envelope)
+    );
+
+    assert.strictEqual(entitlement.tier, "pro");
+    assert.strictEqual(entitlement.source, LICENSE_SOURCES.ONLINE);
+    assert.strictEqual(await secrets.get(LICENSE_FILE_SECRET_KEY), validFile);
+  });
+
+  test("rejects an offline license file signed by a foreign key", async () => {
+    const secrets = new InMemorySecretStore();
+    const foreignKeyPair = (await webcrypto.subtle.generateKey(
+      { name: "Ed25519" },
+      true,
+      ["sign", "verify"]
+    )) as unknown as { privateKey: CryptoKey; publicKey: CryptoKey };
+    const file = await createLicenseFile(
+      {},
+      undefined,
+      false,
+      foreignKeyPair.privateKey
+    );
+    const service = createService(secrets);
+
+    const entitlement = await service.importLicenseFile(file);
+
+    assert.strictEqual(entitlement.tier, "free");
+    assert.strictEqual(await secrets.get(LICENSE_FILE_SECRET_KEY), undefined);
+  });
+
+  test("fails open for malformed offline license data", async () => {
+    const secrets = new InMemorySecretStore();
+    const service = createService(secrets);
+
+    const entitlement = await service.importLicenseFile("not a license file");
+
+    assert.strictEqual(entitlement.tier, "free");
+    assert.strictEqual(entitlement.features.size, 0);
+    assert.strictEqual(await secrets.get(LICENSE_FILE_SECRET_KEY), undefined);
+  });
+
   test("rejects a license file with a flipped signed byte", async () => {
     const secrets = new InMemorySecretStore();
     const file = await createLicenseFile();
@@ -380,7 +455,8 @@ async function cache(
 async function createLicenseFile(
   overrides: { issued?: number; expiry?: number } = {},
   licenseKey?: string,
-  encrypted = false
+  encrypted = false,
+  signer: CryptoKey = signingKey
 ): Promise<string> {
   const issued = overrides.issued ?? NOW - DAY;
   const expiry = overrides.expiry ?? NOW + 29 * DAY;
@@ -431,7 +507,7 @@ async function createLicenseFile(
 
   const signature = await webcrypto.subtle.sign(
     { name: "Ed25519" },
-    signingKey,
+    signer,
     new TextEncoder().encode(`license/${enc}`)
   );
   return encodeCertificate({
