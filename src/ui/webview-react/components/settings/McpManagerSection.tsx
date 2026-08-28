@@ -1019,6 +1019,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
             onSave={handleSaveAll}
             onDelete={handleDeleteAllRequest}
             onSetDefault={handleSetDefault}
+            alwaysWrap
           />
         </div>
 

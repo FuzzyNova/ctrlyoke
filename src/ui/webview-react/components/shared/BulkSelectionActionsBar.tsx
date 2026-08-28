@@ -29,6 +29,14 @@ export interface BulkSelectionActionsBarProps {
   onSave: (id: AnyTargetId, scope: SettingWriteScope) => void;
   onDelete: (id: AnyTargetId, scope: SettingWriteScope) => void;
   onSetDefault: () => void;
+  /**
+   * Keep the action controls wrapping onto multiple lines even at lg+
+   * breakpoints. The default lg:flex-nowrap assumes the bar spans the full
+   * content width; set this when embedding the bar in a narrower column
+   * (e.g. one side of a lg:grid-cols-2 layout) where nowrap would overflow
+   * the column and bleed into a sibling.
+   */
+  alwaysWrap?: boolean;
 }
 
 function getActionLabel(action: BulkAction): string {
@@ -68,6 +76,7 @@ export function BulkSelectionActionsBar({
   onSave,
   onDelete,
   onSetDefault,
+  alwaysWrap = false,
 }: BulkSelectionActionsBarProps) {
   const [action, setAction] = useState<BulkAction>(
     availableActions[0] ?? BULK_ACTIONS.SAVE
@@ -127,7 +136,9 @@ export function BulkSelectionActionsBar({
     (shouldShowLocationControls && scopeTargets.length === 0);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
+    <div
+      className={`flex flex-wrap items-center gap-2 ${alwaysWrap ? "" : "lg:flex-nowrap"}`}
+    >
       <label className="mr-2 flex items-center gap-2 text-xs text-foreground shrink-0">
         <input
           ref={selectAllRef}
@@ -142,7 +153,9 @@ export function BulkSelectionActionsBar({
         </span>
       </label>
 
-      <div className="flex flex-wrap items-center gap-2 lg:ml-auto lg:flex-nowrap">
+      <div
+        className={`flex flex-wrap items-center gap-2 lg:ml-auto ${alwaysWrap ? "" : "lg:flex-nowrap"}`}
+      >
         <span className="text-xs text-description-fg">Bulk action:</span>
         <ActionDropdown
           label={getActionLabel(action)}
