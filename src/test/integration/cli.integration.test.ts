@@ -49,6 +49,10 @@ suite("CLI Integration Tests", () => {
       "ctrlyoke.stop",
       "ctrlyoke.runFromContext",
       "ctrlyoke.loadFromContext",
+      "ctrlyoke.activatePro",
+      "ctrlyoke.activateOfflinePro",
+      "ctrlyoke.deactivatePro",
+      "ctrlyoke.manageLicense",
     ];
 
     for (const cmd of ctrlyokeCommands) {

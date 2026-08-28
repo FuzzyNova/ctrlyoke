@@ -42,13 +42,15 @@ const LICENSE_FILE_ALGORITHMS = {
 } as const;
 
 const LICENSE_FILE_HEADER = "LICENSE";
-const PRO_TIER = "pro";
-const FREE_TIER = "free";
+export const LICENSE_TIERS = {
+  FREE: "free",
+  PRO: "pro",
+} as const;
 
-type LicenseTier = typeof FREE_TIER | typeof PRO_TIER;
+type LicenseTier = (typeof LICENSE_TIERS)[keyof typeof LICENSE_TIERS];
 
 export interface Entitlement {
-  tier: "free" | "pro";
+  tier: LicenseTier;
   features: ReadonlySet<string>;
   expiresAt: number | null;
   licenseId?: string;
@@ -185,7 +187,7 @@ export class LicenseService implements LicenseService {
   }
 
   async isPro(): Promise<boolean> {
-    return (await this.getEntitlement()).tier === PRO_TIER;
+    return (await this.getEntitlement()).tier === LICENSE_TIERS.PRO;
   }
 
   async activateWithKey(key: string): Promise<Entitlement> {
@@ -636,7 +638,7 @@ function toActivationError(error: unknown): Error {
 
 function createFreeEntitlement(): Entitlement {
   return {
-    tier: FREE_TIER,
+    tier: LICENSE_TIERS.FREE,
     features: new Set<string>(),
     expiresAt: null,
   };
@@ -748,7 +750,7 @@ function entitlementFromPayload(
   return {
     tier,
     features:
-      tier === PRO_TIER
+      tier === LICENSE_TIERS.PRO
         ? new Set<string>(Object.values(PRO_FEATURES))
         : new Set<string>(),
     expiresAt: licenseExpiry,
@@ -781,11 +783,11 @@ function readTier(
   const metadata = asRecord(attributes?.metadata);
   const value =
     payload.tier ?? attributes?.tier ?? metadata?.tier ?? payload.plan;
-  if (value === FREE_TIER) {
-    return FREE_TIER;
+  if (value === LICENSE_TIERS.FREE) {
+    return LICENSE_TIERS.FREE;
   }
-  if (value === PRO_TIER || value === undefined) {
-    return PRO_TIER;
+  if (value === LICENSE_TIERS.PRO || value === undefined) {
+    return LICENSE_TIERS.PRO;
   }
   throw new Error("Unknown license tier");
 }

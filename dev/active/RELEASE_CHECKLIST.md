@@ -13,7 +13,7 @@
 
 1. **Phase 1–3** — extension/site readiness and business cutover. **All done.** Kept brief.
 2. **Phase 4–5** — Pro licensing vendors (Keygen, Lemon Squeezy). **Partially done — exact remaining steps below**, current as of a live walkthrough of both dashboards on August 25, 2026.
-3. **Phase 6** — Pro licensing _implementation_ (the `LicenseService` code in the extension). **Not started** — the single largest remaining blocker.
+3. **Phase 6** — Pro licensing _implementation_ (the `LicenseService` code in the extension). **In progress** — remaining gate sites and launch verification are still open.
 4. **Phase 7–12** — legal, final packaging, marketplace publish, GitHub release, npm (deferred), launch verification.
 
 ---
@@ -161,7 +161,7 @@ You can't create the LS webhook without a target URL, and the Netlify function's
 - [x] Online `refresh()` — silently renew near-expiry cached files within the 30-day TTL and 14-day offline grace window.
 - [x] `deactivate()` — release the Keygen machine activation and clear local license secrets.
 - [x] `importLicenseFile()` — air-gapped offline import, zero network calls.
-- [ ] Commands: `ctrlyoke: Activate Pro License`, `ctrlyoke: Activate Offline (Air-Gapped) License`, `ctrlyoke: Deactivate Pro License`, `ctrlyoke: Manage License`.
+- [x] Commands: `ctrlyoke: Activate Pro License`, `ctrlyoke: Activate Offline (Air-Gapped) License`, `ctrlyoke: Deactivate Pro License`, `ctrlyoke: Manage License`; live Free/Pro status bar surface.
 - [ ] Gate sites (§1.8 of the plan): remote bind (`0.0.0.0`) enforcement at `CtrlYokeHostedServer.listen()`, LAN IP selector + QR-to-phone in `ServerSection.tsx`, HTTPS/cert generation, mobile push, custom icon color, air-gapped activation command itself.
 - [ ] 14-day remote-access trial timer in `globalState`.
 - [ ] Production-build verification of the **unlicensed free path** — nothing above should ever block core workflow execution.
@@ -264,7 +264,7 @@ Not a Marketplace-release blocker. `package.json#bin.ctrlyoke` → `./out/cli.js
 | Netlify webhook function (deployed + smoke-tested)                         | DONE                                 | Phase 5.3 — end-to-end test purchase verified August 26, 2026 (webhook 200 OK, Keygen license created, Resend email delivered) |
 | Transactional email provider for key delivery                              | DONE                                 | Phase 5.2 — Resend, verified working live                                                                                      |
 | Live-mode LS webhook (separate from test-mode one)                         | OPEN                                 | Phase 5.3 step 6 — create once flipping Test mode off                                                                          |
-| **`LicenseService` implementation**                                        | **OPEN — largest remaining blocker** | Phase 6                                                                                                                        |
+| **`LicenseService` implementation**                                        | **IN PROGRESS — remaining gate sites open** | Phase 6                                                                                                                        |
 | Attorney sign-off on final EULA                                            | OPEN                                 | Phase 7                                                                                                                        |
 | Screenshots + demo GIF                                                     | OPEN                                 | Phase 8                                                                                                                        |
 | Final `vsce ls` package inspection                                         | OPEN                                 | Phase 8 — run right before publish                                                                                             |

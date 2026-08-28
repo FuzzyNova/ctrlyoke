@@ -61,6 +61,13 @@ export const PRO_FEATURES = {
 
 export type ProFeature = (typeof PRO_FEATURES)[keyof typeof PRO_FEATURES];
 
+/** User-facing licensing command actions and destinations. */
+export const LICENSE_UI = {
+  OPEN_PRICING: "Open pricing",
+  DEACTIVATE: "Deactivate",
+  PRICING_URL: "https://ctrlyoke.dev/pricing/",
+} as const;
+
 // ============================================================================
 // MESSAGE TYPES - Communication between extension and webview
 // ============================================================================
@@ -2832,6 +2839,10 @@ export const VSCODE_COMMANDS = {
   ENABLE_SERVER: "ctrlyoke.enableServer",
   DISABLE_SERVER: "ctrlyoke.disableServer",
   REGENERATE_SERVER_TOKEN: "ctrlyoke.regenerateServerToken",
+  ACTIVATE_PRO: "ctrlyoke.activatePro",
+  ACTIVATE_OFFLINE_PRO: "ctrlyoke.activateOfflinePro",
+  DEACTIVATE_PRO: "ctrlyoke.deactivatePro",
+  MANAGE_LICENSE: "ctrlyoke.manageLicense",
   SEARCH_HISTORY: "ctrlyoke.searchHistory",
   GENERATE_COMMIT_MESSAGE: "ctrlyoke.generateCommitMessage",
   CANCEL_COMMIT_MESSAGE_GENERATION: "ctrlyoke.cancelCommitMessageGeneration",
