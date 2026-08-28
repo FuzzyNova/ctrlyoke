@@ -15,6 +15,8 @@ import {
   LICENSE_FILE_TTL_MS,
   LICENSE_SOURCES,
   LICENSE_SOURCE_SECRET_KEY,
+  REMOTE_ACCESS_TRIAL_START_KEY,
+  type LicenseTrialStateStore,
   LicenseService,
 } from "../../license/LicenseService";
 import { PRO_FEATURES } from "../../types/DashboardConstants";
@@ -38,6 +40,19 @@ class InMemorySecretStore implements SecretStore {
 
   keys(): Thenable<string[]> {
     return Promise.resolve([...this.values.keys()]);
+  }
+}
+
+class InMemoryTrialState implements LicenseTrialStateStore {
+  private readonly values = new Map<string, unknown>();
+
+  get<T>(key: string): T | undefined {
+    return this.values.get(key) as T | undefined;
+  }
+
+  update(key: string, value: unknown): Thenable<void> {
+    this.values.set(key, value);
+    return Promise.resolve();
   }
 }
 
@@ -72,6 +87,39 @@ suite("LicenseService", () => {
     assert.strictEqual(entitlement.licenseId, "license-123");
     assert.strictEqual(entitlement.source, LICENSE_SOURCES.ONLINE);
     assert.ok(entitlement.features.has(PRO_FEATURES.HOSTED_DASHBOARD));
+    assert.strictEqual(await service.isPro(), true);
+  });
+
+  test("starts the 14-day remote-access trial on its first check", async () => {
+    const secrets = new InMemorySecretStore();
+    const trialState = new InMemoryTrialState();
+    const service = createService(secrets, { trialState });
+
+    assert.strictEqual(await service.hasRemoteAccess(), true);
+    assert.strictEqual(
+      trialState.get<number>(REMOTE_ACCESS_TRIAL_START_KEY),
+      NOW
+    );
+  });
+
+  test("expires remote access after the trial while preserving the free tier", async () => {
+    const secrets = new InMemorySecretStore();
+    const trialState = new InMemoryTrialState();
+    await trialState.update(REMOTE_ACCESS_TRIAL_START_KEY, NOW - 14 * DAY);
+    const service = createService(secrets, { trialState });
+
+    assert.strictEqual(await service.hasRemoteAccess(), false);
+    assert.strictEqual((await service.getEntitlement()).tier, "free");
+  });
+
+  test("lets an activated Pro license supersede a lapsed trial", async () => {
+    const secrets = new InMemorySecretStore();
+    const trialState = new InMemoryTrialState();
+    await trialState.update(REMOTE_ACCESS_TRIAL_START_KEY, NOW - 14 * DAY);
+    await cache(secrets, await createLicenseFile());
+    const service = createService(secrets, { trialState });
+
+    assert.strictEqual(await service.hasRemoteAccess(), true);
     assert.strictEqual(await service.isPro(), true);
   });
 
@@ -434,6 +482,7 @@ function createService(
   options: {
     readonly fetch?: typeof fetch;
     readonly machineFingerprint?: string | (() => Promise<string>);
+    readonly trialState?: LicenseTrialStateStore;
   } = {}
 ): LicenseService {
   return new LicenseService(secrets, {

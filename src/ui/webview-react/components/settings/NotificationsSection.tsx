@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   BROWSER_NOTIFICATION_MODES,
+  LICENSE_UI,
   NOTIFICATION_EVENT_MODES,
   HOOK_EVENT_METADATA,
   HOOK_EVENT_ORDER,
@@ -12,6 +13,7 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { useUiStore } from "@store/uiStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { CustomSelect } from "../shared/CustomSelect";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
@@ -57,6 +59,9 @@ export function NotificationsSection({
   const server = settings.settings.server;
   const sources = settings.sources as Record<string, SettingSource>;
   const setGlobalSettingsTab = useUiStore((s) => s.setGlobalSettingsTab);
+  const hasRemoteAccess = useSettingsStore(
+    (s) => s.licenseAccess.hasRemoteAccess
+  );
   const [status, setStatus] = useState<BrowserNotificationStatus | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -78,13 +83,19 @@ export function NotificationsSection({
     }
 
     void refreshStatus();
-  }, [browserModeEnabled, notif.browser.mode]);
+  }, [browserModeEnabled, notif.browser.mode, hasRemoteAccess]);
 
   async function refreshStatus() {
     setStatus(await getBrowserNotificationStatus());
   }
 
   async function handleEnableBrowserNotifications() {
+    if (
+      notif.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH &&
+      !hasRemoteAccess
+    ) {
+      return;
+    }
     setBusy(true);
     try {
       setStatus(await enableBrowserNotifications(notif.browser.mode));
@@ -136,15 +147,23 @@ export function NotificationsSection({
   const canManagePush =
     isStandalone &&
     notif.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH &&
+    hasRemoteAccess &&
     status?.pushSupported &&
     status.secureContext;
   const showEnableButton =
     isStandalone &&
     browserModeEnabled &&
+    (notif.browser.mode !== BROWSER_NOTIFICATION_MODES.PUSH ||
+      hasRemoteAccess) &&
     (!status ||
       status.permission !== "granted" ||
       notif.browser.mode !== BROWSER_NOTIFICATION_MODES.PUSH ||
       !status.subscribed);
+  const browserModeOptions = BROWSER_MODE_OPTIONS.map((option) =>
+    option.value === BROWSER_NOTIFICATION_MODES.PUSH
+      ? { ...option, disabled: !hasRemoteAccess }
+      : option
+  );
 
   return (
     <div className="space-y-6">
@@ -176,7 +195,7 @@ export function NotificationsSection({
             id="notif-browser-mode"
             value={notif.browser.mode}
             onChange={(value) => onUpdate("notifications.browser.mode", value)}
-            options={BROWSER_MODE_OPTIONS}
+            options={browserModeOptions}
           />
           <div className="mt-1 space-y-1 text-xs text-description-fg">
             <p>
@@ -203,6 +222,20 @@ export function NotificationsSection({
                 " Enable HTTPS on the hosted server."
               )}
             </p>
+            {!hasRemoteAccess && (
+              <p>
+                Push-to-phone notifications are available during the
+                remote-access trial and with Pro.{" "}
+                <a
+                  href={LICENSE_UI.PRICING_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-link-fg hover:underline"
+                >
+                  View Pro pricing
+                </a>
+              </p>
+            )}
           </div>
         </SettingInputRow>
 

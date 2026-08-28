@@ -1,7 +1,11 @@
 import { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
-import { MESSAGE_TYPES, SETTING_SCOPES } from "@root/types/DashboardConstants";
+import {
+  LICENSE_UI,
+  MESSAGE_TYPES,
+  SETTING_SCOPES,
+} from "@root/types/DashboardConstants";
 import {
   ICON_BG_COLOR_DEFAULT,
   ICON_FG_COLOR_DEFAULT,
@@ -42,6 +46,7 @@ export function ServerSection({
   const sources = settings.sources as Record<string, SettingSource>;
 
   const serverRunning = useSettingsStore((state) => state.serverRunning);
+  const licenseAccess = useSettingsStore((state) => state.licenseAccess);
   const serverUrl = useSettingsStore((state) => state.serverUrl);
   const availableIps = useSettingsStore((state) => state.availableIps);
   const selectedDisplayIp = useSettingsStore(
@@ -123,12 +128,13 @@ export function ServerSection({
     new Date(lastCertGenerated.expiresAt) < new Date();
 
   const handleGenerateCert = useCallback(() => {
+    if (!licenseAccess.hasRemoteAccess) return;
     setCertPending(true);
     vscode.postMessage({
       type: MESSAGE_TYPES.GENERATE_SERVER_CERT,
       scope: activeScope,
     });
-  }, [vscode, activeScope]);
+  }, [vscode, activeScope, licenseAccess.hasRemoteAccess]);
 
   const handleRegenerateToken = useCallback(() => {
     setTokenPending(true);
@@ -206,6 +212,7 @@ export function ServerSection({
       label:
         "All interfaces (0.0.0.0) — LAN access (WAN access with VPN or port forwarding)",
       value: "0.0.0.0",
+      disabled: !licenseAccess.hasRemoteAccess,
     },
   ];
 
@@ -217,6 +224,7 @@ export function ServerSection({
   const [localFg, setLocalFg] = useState(
     server.iconFgColor ?? ICON_FG_COLOR_DEFAULT
   );
+  const customIconEnabled = licenseAccess.isPro;
   // Sync local state if the persisted value changes externally (e.g., reset or another tab).
   useEffect(() => {
     setLocalBg(server.iconBgColor ?? ICON_BG_COLOR_DEFAULT);
@@ -321,9 +329,10 @@ export function ServerSection({
               <button
                 type="button"
                 onClick={() => setShowQr((v) => !v)}
+                disabled={!licenseAccess.hasRemoteAccess}
                 title="Show QR code to open on your phone"
                 aria-label="Show QR code to open on your phone"
-                className="shrink-0 text-description-fg hover:text-foreground"
+                className="shrink-0 text-description-fg hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -337,6 +346,20 @@ export function ServerSection({
                 </svg>
               </button>
             </div>
+            {!licenseAccess.hasRemoteAccess && (
+              <p className="mt-1 text-xs text-description-fg">
+                QR-to-phone is available during the remote-access trial and with
+                Pro.{" "}
+                <a
+                  href={LICENSE_UI.PRICING_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-link-fg hover:underline"
+                >
+                  View Pro pricing
+                </a>
+              </p>
+            )}
 
             <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <ActionButton
@@ -424,21 +447,36 @@ export function ServerSection({
         */}
 
         {!isStandalone && (
-          <SettingInputRow
-            label="Bind address"
-            id="server-bind"
-            path="server.bindAddress"
-            {...rowProps}
-          >
-            <CustomSelect
+          <div>
+            <SettingInputRow
+              label="Bind address"
               id="server-bind"
-              value={server.bindAddress ?? "127.0.0.1"}
-              onChange={(value) => onUpdate("server.bindAddress", value)}
-              options={bindAddressOptions}
-              triggerAriaLabel="Choose server bind address"
-              triggerTitle="Choose whether the server listens only on localhost or all interfaces"
-            />
-          </SettingInputRow>
+              path="server.bindAddress"
+              {...rowProps}
+            >
+              <CustomSelect
+                id="server-bind"
+                value={server.bindAddress ?? "127.0.0.1"}
+                onChange={(value) => onUpdate("server.bindAddress", value)}
+                options={bindAddressOptions}
+                triggerAriaLabel="Choose server bind address"
+                triggerTitle="Choose whether the server listens only on localhost or all interfaces"
+              />
+            </SettingInputRow>
+            {!licenseAccess.hasRemoteAccess && (
+              <p className="mt-1 text-xs text-description-fg">
+                {LICENSE_UI.REMOTE_ACCESS_UPSELL}{" "}
+                <a
+                  href={LICENSE_UI.PRICING_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-link-fg hover:underline"
+                >
+                  View Pro pricing
+                </a>
+              </p>
+            )}
+          </div>
         )}
       </div>
 
@@ -461,8 +499,13 @@ export function ServerSection({
                   type="color"
                   value={localBg}
                   onChange={(e) => setLocalBg(e.target.value)}
-                  onBlur={(e) => onUpdate("server.iconBgColor", e.target.value)}
-                  className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
+                  onBlur={(e) => {
+                    if (customIconEnabled) {
+                      onUpdate("server.iconBgColor", e.target.value);
+                    }
+                  }}
+                  disabled={!customIconEnabled}
+                  className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg disabled:cursor-not-allowed disabled:opacity-50"
                   title="Icon background color"
                 />
               </SettingInputRow>
@@ -479,8 +522,13 @@ export function ServerSection({
                   type="color"
                   value={localFg}
                   onChange={(e) => setLocalFg(e.target.value)}
-                  onBlur={(e) => onUpdate("server.iconFgColor", e.target.value)}
-                  className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
+                  onBlur={(e) => {
+                    if (customIconEnabled) {
+                      onUpdate("server.iconFgColor", e.target.value);
+                    }
+                  }}
+                  disabled={!customIconEnabled}
+                  className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg disabled:cursor-not-allowed disabled:opacity-50"
                   title="Icon foreground color"
                 />
               </SettingInputRow>
@@ -500,19 +548,49 @@ export function ServerSection({
           SVG favicon and PWA icon update immediately. PNG icon clients (iOS
           &lt; 26 homescreen) use the colors saved at the last settings update.
         </p>
+        {!customIconEnabled && (
+          <p className="mt-1 text-xs text-description-fg">
+            {LICENSE_UI.CUSTOM_ICON_UPSELL}{" "}
+            <a
+              href={LICENSE_UI.PRICING_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="text-link-fg hover:underline"
+            >
+              View Pro pricing
+            </a>
+          </p>
+        )}
       </div>
 
       {/* HTTPS / TLS — full config shown to VS Code panel only */}
       {!isStandalone && (
-        <div className="pt-3 border-t border-panel-border mt-3">
+        <fieldset
+          disabled={!licenseAccess.hasRemoteAccess}
+          className={`pt-3 border-t border-panel-border mt-3 ${!licenseAccess.hasRemoteAccess ? "opacity-50" : ""}`}
+        >
           <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
             HTTPS / TLS
           </h3>
+          {!licenseAccess.hasRemoteAccess && (
+            <p className="mb-2 text-xs text-description-fg not-italic">
+              {LICENSE_UI.REMOTE_ACCESS_UPSELL}{" "}
+              <a
+                href={LICENSE_UI.PRICING_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="text-link-fg hover:underline"
+              >
+                View Pro pricing
+              </a>
+            </p>
+          )}
 
           <SettingToggleRow
             label="Enable HTTPS"
             checked={server.tls?.enabled ?? false}
             onChange={(v) => onUpdate("server.tls.enabled", v)}
+            disabled={!licenseAccess.hasRemoteAccess}
             path="server.tls.enabled"
             {...rowProps}
           />
@@ -564,6 +642,7 @@ export function ServerSection({
                     pending={certPending}
                     success={certFlash}
                     onClick={handleGenerateCert}
+                    disabled={!licenseAccess.hasRemoteAccess}
                   />
                   {certDownloadUrl && !certFlash && (
                     <ActionButton
@@ -574,6 +653,7 @@ export function ServerSection({
                       pending={certDownloadPending}
                       success={certDownloadFlash}
                       onClick={handleDownloadCertInPanel}
+                      disabled={!licenseAccess.hasRemoteAccess}
                       title="Save the server certificate for manual installation on iOS"
                     />
                   )}
@@ -648,7 +728,7 @@ export function ServerSection({
               </p>
             </div>
           )}
-        </div>
+        </fieldset>
       )}
 
       {/* Certificate download — browser clients only; VS Code panel shows this inside the TLS section above */}
@@ -661,8 +741,22 @@ export function ServerSection({
             label="Download certificate"
             icon="download"
             onClick={handleDownloadCert}
+            disabled={!licenseAccess.hasRemoteAccess}
             title="Download the server certificate for manual installation on iOS"
           />
+          {!licenseAccess.hasRemoteAccess && (
+            <p className="mt-2 text-xs text-description-fg">
+              {LICENSE_UI.REMOTE_ACCESS_UPSELL}{" "}
+              <a
+                href={LICENSE_UI.PRICING_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="text-link-fg hover:underline"
+              >
+                View Pro pricing
+              </a>
+            </p>
+          )}
           <p className="text-xs text-description-fg italic mt-2">
             <strong>iOS Safari:</strong> depending on iOS version, it may be
             necessary to download the cert and install it via{" "}

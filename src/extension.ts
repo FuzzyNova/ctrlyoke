@@ -144,7 +144,8 @@ export async function activate(context: vscode.ExtensionContext) {
     // License state is extension-host-owned so commands and the status bar
     // share one service instance and update immediately after activation.
     licenseService = new LicenseService(
-      new VsCodeAdapter(context).getSecretStore()
+      new VsCodeAdapter(context).getSecretStore(),
+      { trialState: context.globalState }
     );
     context.subscriptions.push(licenseService);
     new LicenseStatusBarManager(context, licenseService);
@@ -214,7 +215,8 @@ export async function activate(context: vscode.ExtensionContext) {
     const vscodeUserFeedbackSink = new VsCodeUserFeedbackSink();
     webviewProvider = new CtrlYokeWebviewProvider(
       context,
-      vscodeUserFeedbackSink
+      vscodeUserFeedbackSink,
+      licenseService
     );
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(
@@ -538,6 +540,15 @@ function registerCommands(context: vscode.ExtensionContext) {
   const activateOfflineProCommand = vscode.commands.registerCommand(
     VSCODE_COMMANDS.ACTIVATE_OFFLINE_PRO,
     async () => {
+      if (!(await licenseService.isPro())) {
+        notifyUserFeedback(
+          workflowOrchestrator.getUserFeedbackSink(),
+          USER_FEEDBACK_SEVERITY.WARNING,
+          `ctrlyoke: ${LICENSE_UI.OFFLINE_ACTIVATION_UPSELL}`,
+          LICENSE_UI.PRICING_URL
+        );
+        return;
+      }
       try {
         const files = await vscode.window.showOpenDialog({
           canSelectFiles: true,
@@ -1279,6 +1290,15 @@ function registerCommands(context: vscode.ExtensionContext) {
         tlsCfg?.enabled && tlsCfg.certPath && tlsCfg.keyPath
           ? { certPath: tlsCfg.certPath, keyPath: tlsCfg.keyPath }
           : undefined;
+      const showRemoteAccessUpsell = () => {
+        const message = `ctrlyoke: ${LICENSE_UI.REMOTE_ACCESS_UPSELL}`;
+        notifyUserFeedback(
+          workflowOrchestrator.getUserFeedbackSink(),
+          USER_FEEDBACK_SEVERITY.WARNING,
+          message,
+          LICENSE_UI.PRICING_URL
+        );
+      };
       try {
         hostedServer = new CtrlYokeHostedServer(
           hub,
@@ -1295,7 +1315,9 @@ function registerCommands(context: vscode.ExtensionContext) {
               workflowOrchestrator.getUserFeedbackSink(),
               USER_FEEDBACK_SEVERITY.WARNING,
               `ctrlyoke: A sibling ctrlyoke server is already running for this workspace at ${existingServerUrl}. This window is starting its own server on a different port.`
-            )
+            ),
+          () => licenseService.hasRemoteAccess(),
+          showRemoteAccessUpsell
         );
       } catch (err) {
         unprotectServerToken?.();

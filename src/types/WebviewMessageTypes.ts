@@ -401,6 +401,12 @@ export interface StatusMessage {
 // MESSAGE PAYLOAD TYPES
 // ============================================================================
 
+/** Extension-owned Pro/trial state exposed to dashboard clients. */
+export interface LicenseAccessState {
+  isPro: boolean;
+  hasRemoteAccess: boolean;
+}
+
 /**
  * Initial state message (extension -> webview on ready)
  */
@@ -453,6 +459,7 @@ export interface InitMessageData {
     path: string;
     description?: string;
   }>;
+  licenseAccess?: LicenseAccessState;
   dev?: DevStatus;
 }
 
@@ -1412,6 +1419,7 @@ export interface GlobalSettingsUpdatedMessage {
     worktrees?: CtrlYokeGlobalSettings["worktrees"];
     terminal?: TerminalSettings;
   };
+  licenseAccess?: LicenseAccessState;
 }
 
 // ============================================================================
@@ -1423,6 +1431,7 @@ export type SettingSource = SettingScope;
 export interface FullGlobalSettings {
   settings: CtrlYokeGlobalSettings;
   sources: Record<string, SettingSource>;
+  licenseAccess?: LicenseAccessState;
   /** Canonical absolute `.runs` directory for the current workspace. */
   runHistoryPath?: string | null;
   /**

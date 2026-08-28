@@ -33,6 +33,9 @@ export const KEYGEN_ACCOUNT_PUBLIC_KEY_HEX =
 export const LICENSE_FILE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const LICENSE_OFFLINE_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
 export const LICENSE_REFRESH_LEAD_MS = 7 * 24 * 60 * 60 * 1000;
+export const REMOTE_ACCESS_TRIAL_MS = 14 * 24 * 60 * 60 * 1000;
+export const REMOTE_ACCESS_TRIAL_START_KEY =
+  "ctrlyoke.remoteAccessTrialStartedAt";
 /** Allow normal client/server clock skew without weakening the file TTL. */
 export const LICENSE_CLOCK_SKEW_MS = 5 * 60 * 1000;
 
@@ -61,6 +64,8 @@ export interface LicenseService {
   /** Verify the cached signed license file offline. Never throws; failures return free. */
   getEntitlement(): Promise<Entitlement>;
   isPro(): Promise<boolean>;
+  /** Pro or the first-use 14-day remote-access trial. */
+  hasRemoteAccess(): Promise<boolean>;
 
   /** Activate this machine online and cache a signed license file. */
   activateWithKey(key: string): Promise<Entitlement>;
@@ -90,6 +95,13 @@ export interface LicenseServiceOptions {
   readonly fetch?: typeof fetch;
   /** Test seam for the stable machine fingerprint. */
   readonly machineFingerprint?: string | (() => Promise<string>);
+  /** VS Code globalState-like store for the extension-only remote-access trial. */
+  readonly trialState?: LicenseTrialStateStore;
+}
+
+export interface LicenseTrialStateStore {
+  get<T>(key: string): T | undefined;
+  update(key: string, value: unknown): Thenable<void>;
 }
 
 interface LicenseCertificate {
@@ -153,6 +165,7 @@ export class LicenseService implements LicenseService {
     | string
     | (() => Promise<string>)
     | undefined;
+  private readonly trialState: LicenseTrialStateStore | undefined;
 
   public readonly onDidChangeEntitlement = this.changes.event;
 
@@ -164,6 +177,7 @@ export class LicenseService implements LicenseService {
     this.publicKeyHex = options.publicKeyHex ?? KEYGEN_ACCOUNT_PUBLIC_KEY_HEX;
     this.request = options.fetch ?? fetch;
     this.machineFingerprintOption = options.machineFingerprint;
+    this.trialState = options.trialState;
   }
 
   async getEntitlement(): Promise<Entitlement> {
@@ -188,6 +202,32 @@ export class LicenseService implements LicenseService {
 
   async isPro(): Promise<boolean> {
     return (await this.getEntitlement()).tier === LICENSE_TIERS.PRO;
+  }
+
+  async hasRemoteAccess(): Promise<boolean> {
+    if (await this.isPro()) {
+      return true;
+    }
+    if (!this.trialState) {
+      return false;
+    }
+
+    try {
+      const now = this.now();
+      const stored = this.trialState.get<unknown>(
+        REMOTE_ACCESS_TRIAL_START_KEY
+      );
+      const startedAt =
+        typeof stored === "number" && Number.isFinite(stored) ? stored : now;
+      if (stored !== startedAt) {
+        await this.trialState.update(REMOTE_ACCESS_TRIAL_START_KEY, startedAt);
+      }
+      return now < startedAt + REMOTE_ACCESS_TRIAL_MS;
+    } catch {
+      // A trial-state failure must not crash the extension. Fail closed for
+      // remote reach while the free localhost product remains available.
+      return false;
+    }
   }
 
   async activateWithKey(key: string): Promise<Entitlement> {

@@ -7,6 +7,7 @@ import {
   HARNESS_IDS,
   HARNESS_STATUS_STRINGS,
   HARNESS_INFO,
+  LICENSE_UI,
   EXECUTION_STATES,
   DEFAULT_MODELS,
   PERMISSION_MODES,
@@ -67,6 +68,7 @@ import { configService } from "../config/CtrlYokeConfigService";
 import type {
   DevStatus,
   DisableStatusLineTrackingMessage,
+  LicenseAccessState,
   SetStatusLineFormatModeMessage,
   WorkflowDefinitionMutation,
 } from "../types/WebviewMessageTypes";
@@ -102,6 +104,14 @@ export type PostMessageFn = (message: any) => void;
 type StatuslineManagerFactory = (
   harnessId: StatusLineTrackingHarnessId
 ) => StatuslineManagerLike;
+
+type LicenseAccessFactory = () => Promise<LicenseAccessState>;
+
+const REMOTE_TLS_SETTING_KEYS = [
+  CONFIG_KEYS.SERVER_TLS_ENABLED,
+  CONFIG_KEYS.SERVER_TLS_CERT_PATH,
+  CONFIG_KEYS.SERVER_TLS_KEY_PATH,
+] as const;
 
 /**
  * WebviewSettingsSync
@@ -168,8 +178,14 @@ export class WebviewSettingsSync {
     private readonly getDevStatus?: () => Promise<DevStatus | undefined>,
     private readonly getStatuslineManager: StatuslineManagerFactory = (
       harnessId
-    ) => StatuslineManager.forHarness(harnessId)
+    ) => StatuslineManager.forHarness(harnessId),
+    private readonly getLicenseAccess?: LicenseAccessFactory
   ) {}
+
+  private licenseAccess: LicenseAccessState = {
+    isPro: false,
+    hasRemoteAccess: false,
+  };
 
   private emitMessage(
     message: any,
@@ -237,6 +253,7 @@ export class WebviewSettingsSync {
     const workflowState = this.getCurrentState(clientId);
     const globalSettings = this.buildGlobalSettings();
     const modelOptions = this.buildModelOptions();
+    this.licenseAccess = await this.resolveLicenseAccess();
     const dev = await this.getDevStatus?.();
 
     this.emitMessage(
@@ -250,6 +267,7 @@ export class WebviewSettingsSync {
           harnessStatus: this.harnessStatus,
           availableAgents: this.availableAgents,
           availableSkills: this.availableSkills,
+          licenseAccess: this.licenseAccess,
           ...(dev ? { dev } : {}),
         },
       },
@@ -270,6 +288,23 @@ export class WebviewSettingsSync {
         type: MESSAGE_TYPES.GLOBAL_SETTINGS_UPDATED,
         globalSettings: this.buildGlobalSettings(),
         modelOptions: this.buildModelOptions(),
+        licenseAccess: this.licenseAccess,
+      },
+      postMessage
+    );
+  }
+
+  /** Refresh the extension-owned Pro/trial state for every dashboard client. */
+  async sendLicenseAccessUpdate(
+    postMessage: PostMessageFn = this.postMessage
+  ): Promise<void> {
+    this.licenseAccess = await this.resolveLicenseAccess();
+    this.emitMessage(
+      {
+        type: MESSAGE_TYPES.GLOBAL_SETTINGS_UPDATED,
+        globalSettings: this.buildGlobalSettings(),
+        modelOptions: this.buildModelOptions(),
+        licenseAccess: this.licenseAccess,
       },
       postMessage
     );
@@ -1017,6 +1052,7 @@ export class WebviewSettingsSync {
   ): Promise<void> {
     const allSettings = configService.getAll();
     const sources = configService.getLeafSources();
+    this.licenseAccess = await this.resolveLicenseAccess();
 
     let certMeta: {
       generatedAt: string;
@@ -1052,9 +1088,44 @@ export class WebviewSettingsSync {
           sources,
           runHistoryPath: this.getResolvedRunHistoryPath(),
           isMultiRoot: isMultiRootWorkspace(),
+          licenseAccess: this.licenseAccess,
         },
         commitMessageGeneration: commitMessageGenerationTracker.getLastRecord(),
         certMeta,
+      },
+      postMessage
+    );
+  }
+
+  private async resolveLicenseAccess(): Promise<LicenseAccessState> {
+    if (!this.getLicenseAccess) {
+      // Platform/unit-test callers may not construct the extension-owned
+      // LicenseService. Production wiring always supplies this callback.
+      return { isPro: true, hasRemoteAccess: true };
+    }
+    try {
+      return await this.getLicenseAccess();
+    } catch {
+      return { isPro: false, hasRemoteAccess: false };
+    }
+  }
+
+  private reportProUpsell(postMessage: PostMessageFn, message: string): void {
+    const feedbackMessage = `ctrlyoke: ${message}`;
+    notifyUserFeedback(
+      this.getOrchestrator()?.getUserFeedbackSink?.(),
+      USER_FEEDBACK_SEVERITY.WARNING,
+      feedbackMessage,
+      LICENSE_UI.PRICING_URL
+    );
+    this.emitMessage(
+      {
+        type: MESSAGE_TYPES.USER_FEEDBACK,
+        id: "ctrlyoke-pro-upsell",
+        severity: USER_FEEDBACK_SEVERITY.WARNING,
+        message: feedbackMessage,
+        detail: LICENSE_UI.PRICING_URL,
+        dedupeKey: "ctrlyoke-pro-upsell",
       },
       postMessage
     );
@@ -1254,6 +1325,24 @@ export class WebviewSettingsSync {
     scope: SettingWriteScope,
     postMessage: PostMessageFn
   ): Promise<void> {
+    const licenseAccess = await this.resolveLicenseAccess();
+    const isRemoteTlsSetting = REMOTE_TLS_SETTING_KEYS.includes(
+      path as (typeof REMOTE_TLS_SETTING_KEYS)[number]
+    );
+    if (
+      (isRemoteTlsSetting && !licenseAccess.hasRemoteAccess) ||
+      ((path === CONFIG_KEYS.SERVER_ICON_BG_COLOR ||
+        path === CONFIG_KEYS.SERVER_ICON_FG_COLOR) &&
+        !licenseAccess.isPro)
+    ) {
+      this.reportProUpsell(
+        postMessage,
+        isRemoteTlsSetting
+          ? LICENSE_UI.REMOTE_ACCESS_UPSELL
+          : LICENSE_UI.CUSTOM_ICON_UPSELL
+      );
+      return;
+    }
     await configService.set(path, value, scope);
     await this.handleGlobalSettingsLoadRequest(postMessage);
     this.emitMessage(
@@ -1324,6 +1413,10 @@ export class WebviewSettingsSync {
     scope: SettingWriteScope,
     homedirFn: () => string = os.homedir
   ): Promise<void> {
+    if (!(await this.resolveLicenseAccess()).hasRemoteAccess) {
+      this.reportProUpsell(postMessage, LICENSE_UI.REMOTE_ACCESS_UPSELL);
+      return;
+    }
     const baseDir =
       scope === CONFIG_SCOPE.USER ? homedirFn() : getVsCodeWorkspaceRoot();
     const certsDir = path.join(

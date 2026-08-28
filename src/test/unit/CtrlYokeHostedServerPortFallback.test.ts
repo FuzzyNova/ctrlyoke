@@ -53,6 +53,9 @@ interface HostedServerListenInternals {
   token: string;
   workspaceRoot: string;
   availableIps: string[];
+  getRemoteAccess?: () => Promise<boolean>;
+  onRemoteAccessBlocked?: () => void;
+  remoteAccessUpsellShown: boolean;
   listen(): Promise<string>;
   getPortFallbackInfo(): { requestedPort: number; actualPort: number } | null;
 }
@@ -71,6 +74,7 @@ function createListenHarness(
   server.token = "test-token";
   server.workspaceRoot = process.cwd();
   server.availableIps = [];
+  server.remoteAccessUpsellShown = false;
   return server;
 }
 
@@ -161,6 +165,23 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
     assert.strictEqual(server.port, 4747);
     assert.ok(url.includes(":4747/"));
     assert.strictEqual(server.getPortFallbackInfo(), null);
+  });
+
+  test("coerces a non-loopback bind to localhost when remote access is gated", async () => {
+    const fakeHttpServer = new FakeHttpServer(null, 4747);
+    const server = createListenHarness(4747, fakeHttpServer);
+    server.bindAddress = "0.0.0.0";
+    let blocked = 0;
+    server.getRemoteAccess = async () => false;
+    server.onRemoteAccessBlocked = () => {
+      blocked += 1;
+    };
+
+    await server.listen();
+
+    assert.strictEqual(server.bindAddress, "127.0.0.1");
+    assert.deepStrictEqual(fakeHttpServer.listenCalls, [4747]);
+    assert.strictEqual(blocked, 1);
   });
 
   test("falls back to an OS-assigned port when occupied by a sibling ctrlyoke server, and reports it", async () => {

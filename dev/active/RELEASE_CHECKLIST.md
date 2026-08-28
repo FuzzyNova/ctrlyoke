@@ -162,8 +162,8 @@ You can't create the LS webhook without a target URL, and the Netlify function's
 - [x] `deactivate()` — release the Keygen machine activation and clear local license secrets.
 - [x] `importLicenseFile()` — air-gapped offline import, zero network calls.
 - [x] Commands: `ctrlyoke: Activate Pro License`, `ctrlyoke: Activate Offline (Air-Gapped) License`, `ctrlyoke: Deactivate Pro License`, `ctrlyoke: Manage License`; live Free/Pro status bar surface.
-- [ ] Gate sites (§1.8 of the plan): remote bind (`0.0.0.0`) enforcement at `CtrlYokeHostedServer.listen()`, LAN IP selector + QR-to-phone in `ServerSection.tsx`, HTTPS/cert generation, mobile push, custom icon color, air-gapped activation command itself.
-- [ ] 14-day remote-access trial timer in `globalState`.
+- [x] Gate sites (§1.8 of the plan): remote bind (`0.0.0.0`) enforcement at `CtrlYokeHostedServer.listen()`, LAN IP selector + QR-to-phone in `ServerSection.tsx`, HTTPS/cert generation, mobile push, custom icon color, air-gapped activation command itself.
+- [x] 14-day remote-access trial timer in `globalState`.
 - [ ] Production-build verification of the **unlicensed free path** — nothing above should ever block core workflow execution.
 - [ ] `docs/pro/index.md` — online + air-gapped activation instructions, referencing the real Keygen/LS setup above.
 
