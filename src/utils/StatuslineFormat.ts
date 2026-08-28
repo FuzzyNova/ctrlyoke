@@ -211,6 +211,9 @@ export function humanizeQuotaKey(key: string): string {
     .filter((part) => part.length > 0)
     .map((part) => {
       const lower = part.toLowerCase();
+      if (lower === "3p") {
+        return "3rd Party";
+      }
       if (/^\d+p$/u.test(lower)) {
         return `${lower.slice(0, -1)}P`;
       }

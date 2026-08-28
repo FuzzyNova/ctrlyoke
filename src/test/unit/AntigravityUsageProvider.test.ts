@@ -40,7 +40,7 @@ suite("AntigravityUsageProvider", () => {
     assert.deepStrictEqual(
       quota.windows.map((window) => [window.id, window.label, window.kind]),
       [
-        ["3p-weekly", "3P Weekly", HARNESS_USAGE_WINDOW_KINDS.WEEKLY],
+        ["3p-weekly", "3rd Party Weekly", HARNESS_USAGE_WINDOW_KINDS.WEEKLY],
         ["gemini-weekly", "Gemini Weekly", HARNESS_USAGE_WINDOW_KINDS.WEEKLY],
         ["studio-daily", "Studio Daily", HARNESS_USAGE_WINDOW_KINDS.DAILY],
       ]
@@ -49,7 +49,7 @@ suite("AntigravityUsageProvider", () => {
     assert.deepStrictEqual(quota.windows[0], {
       id: "3p-weekly",
       kind: HARNESS_USAGE_WINDOW_KINDS.WEEKLY,
-      label: "3P Weekly",
+      label: "3rd Party Weekly",
       used: 75,
       limit: 100,
       remaining: 25,

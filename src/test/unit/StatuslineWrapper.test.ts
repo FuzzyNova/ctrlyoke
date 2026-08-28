@@ -552,7 +552,7 @@ suite("Shared statusline wrappers", () => {
         twoWeeklyTiers,
         format
       ),
-      "3P Weekly 1% | Gemini Weekly 6%"
+      "3rd Party Weekly 1% | Gemini Weekly 6%"
     );
 
     assert.strictEqual(
