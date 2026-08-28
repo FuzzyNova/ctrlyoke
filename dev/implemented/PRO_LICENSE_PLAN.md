@@ -1,10 +1,10 @@
 # ctrlyoke Pro Licensing Plan
 
 **Created:** June 12, 2026
-**Status:** PLANNING
+**Status:** IMPLEMENTED (Phase 1 — Launch Licensing). The `LicenseService`, both activation flows, all gate sites, and the remote-access trial described below are built and tested; see [`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) Phase 6 for the execution record. Phase 2 (Accounts & Sign-In) and the Enterprise SKU (§1.7.1) remain future work, tracked as deferred items in that checklist.
 **Roadmap item:** 0.B (launch blocker) / 4.2 (Pro tier)
-**Split from:** [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md) Phase 5 (Pro Licensing) — moved here so the long-term model is decided on its own merits.
-**Launch dependency:** create the `ctrlyoke.dev` business email/support identity and vendor account ownership first; tracked in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md).
+**Split from:** [`../active/LANDING_PAGE_PLAN.md`](../active/LANDING_PAGE_PLAN.md) Phase 5 (Pro Licensing) — moved here so the long-term model is decided on its own merits.
+**Launch dependency:** create the `ctrlyoke.dev` business email/support identity and vendor account ownership first; tracked in [`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md).
 
 ---
 
@@ -16,7 +16,7 @@
 | ---------------------------------------------------------------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | Checkout, payment, **global tax/VAT (Merchant of Record)**, receipts, refunds                                                | **Lemon Squeezy**    | Already have an account; mature MoR; we own no payment/tax liability                                                         |
 | License issuance, **Ed25519-signed offline license files**, machine/device limits, expiry, revocation, air-gapped activation | **Keygen**           | Purpose-built licensing; offline crypto is its core competency, not a bolt-on                                                |
-| Glue (purchase → license)                                                                                                    | **Netlify Function** | We're already deploying the site on Netlify ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)); one serverless webhook handler |
+| Glue (purchase → license)                                                                                                    | **Netlify Function** | We're already deploying the site on Netlify ([`../active/LANDING_PAGE_PLAN.md`](../active/LANDING_PAGE_PLAN.md)); one serverless webhook handler |
 
 **Activation model: license key now, user accounts as a later UX layer.** A pasted Keygen license key (or imported license file) at launch; "Sign in with ctrlyoke" device-code flow added later when the hosted dashboard becomes a paid cloud product. Both sit behind a single `LicenseService` interface, so Phase 2 is an internal swap.
 
@@ -145,6 +145,8 @@ This is what gives us offline verification, airgapped support, and backend-downt
 Create `src/license/LicenseService.ts`. Single interface; Keygen is its Phase-1 implementation; Phase-2 sign-in slots in behind the same surface.
 
 ```typescript
+import type { SecretStore } from "../../src/platform/SecretStore";
+
 export interface Entitlement {
   tier: "free" | "pro";
   features: ReadonlySet<string>;
@@ -155,32 +157,34 @@ export interface Entitlement {
 
 export interface LicenseService {
   /** Verify the cached signed license file OFFLINE (Ed25519 + expiry). Never throws → free. */
-  getEntitlement(context: vscode.ExtensionContext): Promise<Entitlement>;
-  isPro(context: vscode.ExtensionContext): Promise<boolean>;
+  getEntitlement(): Promise<Entitlement>;
+  isPro(): Promise<boolean>;
 
   /** Online: activate a pasted key with Keygen, then cache the signed license file. */
-  activateWithKey(
-    key: string,
-    context: vscode.ExtensionContext
-  ): Promise<Entitlement>;
+  activateWithKey(key: string): Promise<Entitlement>;
 
   /** Air-gapped: import a signed (.lic) license file blob, verify offline, cache. No network. */
-  importLicenseFile(
-    blob: string,
-    context: vscode.ExtensionContext
-  ): Promise<Entitlement>;
+  importLicenseFile(blob: string): Promise<Entitlement>;
 
   /** Refresh the cached signed file from Keygen when online and near expiry. */
-  refresh(context: vscode.ExtensionContext): Promise<void>;
+  refresh(): Promise<void>;
 
   /** Phase 2 stub: device-code/OAuth sign-in that fetches the license. */
-  activateWithSignIn?(context: vscode.ExtensionContext): Promise<Entitlement>;
+  activateWithSignIn?(): Promise<Entitlement>;
 
-  deactivate(context: vscode.ExtensionContext): Promise<void>;
+  deactivate(): Promise<void>;
 
-  readonly onDidChangeEntitlement: vscode.Event<Entitlement>;
+  readonly onDidChangeEntitlement: (listener: (e: Entitlement) => void) => {
+    dispose(): void;
+  };
 }
 ```
+
+The implementation refines this sketch by constructor-injecting the
+platform-neutral `SecretStore` (`src/platform/SecretStore.ts`) instead of
+coupling the service to `vscode.ExtensionContext`/`vscode.SecretStorage`.
+`VsCodeSecretStore` and `CliAdapter.getSecretStore()` provide the host-specific
+adapters at the composition boundary; the surrounding design is unchanged.
 
 Implementation notes:
 
@@ -231,7 +235,7 @@ Add **"ctrlyoke: Deactivate Pro License"** and a Free/Pro status surface (status
 
 | Capability                                                                                     | Free     | Pro |
 | ---------------------------------------------------------------------------------------------- | -------- | --- |
-| All 7 harnesses                                                                                | ✅       | ✅  |
+| All 6 harnesses                                                                                | ✅       | ✅  |
 | Core workflow execution (YAML/JSON/MD), **unlimited steps**                                    | ✅       | ✅  |
 | End conditions, pre-conditions, error/retry behavior                                           | ✅       | ✅  |
 | VS Code dashboard                                                                              | ✅       | ✅  |
@@ -306,7 +310,7 @@ The bind gate is an **honor gate**, not a tamper-proof control, and that is inte
 
 ### 1.9 Website / docs coupling
 
-The pricing page, LS checkout link, and customer portal live on `ctrlyoke.dev` ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md) Phase 6). This plan owns extension-side activation, verification, gating, **and the Netlify webhook function**. `docs/pro/index.md` documents both the online and air-gapped activation steps.
+The pricing page, LS checkout link, and customer portal live on `ctrlyoke.dev` ([`../active/LANDING_PAGE_PLAN.md`](../active/LANDING_PAGE_PLAN.md) Phase 6). This plan owns extension-side activation, verification, gating, **and the Netlify webhook function**. `docs/pro/index.md` documents both the online and air-gapped activation steps.
 
 ---
 
@@ -325,7 +329,7 @@ Nothing in Phase 1 hardcodes "key" assumptions outside `activateWithKey()` / `im
 
 ## Implementation Order (Phase 1)
 
-0. Complete Phase 0 business email and account ownership setup in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md): `support@ctrlyoke.dev`, vendor owner emails, GitHub/publisher identity, and DNS/email authentication.
+0. Complete Phase 0 business email and account ownership setup in [`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md): `support@ctrlyoke.dev`, vendor owner emails, GitHub/publisher identity, and DNS/email authentication.
 1. `LicenseService` interface + `Entitlement` type + `PRO_FEATURES` constants (`DashboardConstants.ts`).
 2. **Keygen** account: product, perpetual-Pro **Policy** (Ed25519, encrypted files, 3-machine limit); copy the **account public key** into the extension build config.
 3. **Lemon Squeezy** product **ctrlyoke Pro** (perpetual, $59); webhook → Netlify; HMAC secret in Netlify env.
@@ -365,7 +369,7 @@ Nothing in Phase 1 hardcodes "key" assumptions outside `activateWithKey()` / `im
 3. ~~**Offline file TTL.**~~ **Resolved (2026-08-28):** segment by `Entitlement.source`, not one global default.
    - **`online`** (the common case, including Enterprise employees with network): short file TTL — **30 days** — with silent background auto-refresh whenever the machine is online. This is the actual revocation lever: suspend a license in Keygen and every online client stops trusting its cached file within the TTL window, no user-visible action needed. The existing 14-day offline-grace window (§1.4) covers ordinary connectivity gaps within this path.
    - **`offline-file`** (deliberate air-gapped imports — enterprise or an individual customer like a security-conscious engineer testing pre-release software who wants to stay off the network for an extended period): long-lived, matching the underlying license term — effectively unbounded for perpetual individual Pro, and matching the **1-year** subscription term for annual Enterprise (so a lapsed/cancelled subscription naturally locks out air-gapped machines at renewal instead of relying on revocation propagation that can never reach them). A short TTL here would just lock out a legitimate user who did nothing wrong — an air-gapped machine can never phone home to refresh, so no TTL length makes it revoke faster. Accept that tradeoff explicitly; the mitigation for a *leaked* key is the machine-cap circuit breaker in [§1.7.1](#171-enterprise-sku-self-serve-site-license), not TTL.
-4. ~~**Key delivery.**~~ **Resolved:** LS's product form has no field to inject a third-party value into checkout/receipt, so the Netlify function emails the Keygen key itself via **Resend**, chosen August 25, 2026. LS's own receipt stays a plain payment receipt telling the buyer to expect a separate email. See [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) §5.2/5.3.
+4. ~~**Key delivery.**~~ **Resolved:** LS's product form has no field to inject a third-party value into checkout/receipt, so the Netlify function emails the Keygen key itself via **Resend**, chosen August 25, 2026. LS's own receipt stays a plain payment receipt telling the buyer to expect a separate email. See [`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) §5.2/5.3.
 5. **Keygen plan:** hosted Keygen Cloud tier vs. self-hosted edition — confirm current pricing and pick.
 6. ~~**Enterprise SKU.**~~ **Resolved:** self-serve, auto-fulfilled **annual unlimited-seat site license** (~$2k–$5k/yr), same LS→Keygen pipeline. **Flat unlimited** at launch (size tiers deferred). Manual PO/MSA path kept rare by design. See [§1.7.1](#171-enterprise-sku-self-serve-site-license).
 7. ~~**EULA threshold number.**~~ **Resolved:** **$10M revenue / 250 employees** (Docker's line). Confirm with the lawyer at drafting.
@@ -385,9 +389,9 @@ Nothing in Phase 1 hardcodes "key" assumptions outside `activateWithKey()` / `im
 
 ## Related Documents
 
-- [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md) — website, pricing page, LS checkout, Netlify deploy (hosts the webhook function)
-- [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) — top-level launch sequence, business email, vendor ownership, legal, and support readiness
+- [`../active/LANDING_PAGE_PLAN.md`](../active/LANDING_PAGE_PLAN.md) — website, pricing page, LS checkout, Netlify deploy (hosts the webhook function)
+- [`../active/RELEASE_CHECKLIST.md`](../active/RELEASE_CHECKLIST.md) — top-level launch sequence, business email, vendor ownership, legal, and support readiness
 - [`../active/DOCUMENTATION_STRATEGY_PLAN.md`](../active/DOCUMENTATION_STRATEGY_PLAN.md) — docs site (`docs/pro/index.md`)
-- [`TELEMETRY_PLAN.md`](TELEMETRY_PLAN.md) — usage data to tune tiers/pricing post-launch
-- [`ROADMAP.md`](ROADMAP.md) — items 0.B and 4.2
+- [`../backlog/TELEMETRY_PLAN.md`](../backlog/TELEMETRY_PLAN.md) — usage data to tune tiers/pricing post-launch
+- [`../active/ROADMAP.md`](../active/ROADMAP.md) — items 0.B and 4.2
 - Keygen: [offline cryptography](https://keygen.sh/docs/api/cryptography/) · [offline licensing model](https://keygen.sh/docs/choosing-a-licensing-model/offline-licenses/) · [air-gapped activation example](https://github.com/keygen-sh/air-gapped-activation-example) · [hybrid online/offline example](https://github.com/keygen-sh/example-csharp-hybrid-online-offline-licensing)

@@ -11,7 +11,7 @@
 
 This document covers everything needed to ship `ctrlyoke.dev`: the marketing landing page, the published VitePress docs, and the pricing page. The goal at release is a single perpetual license SKU that unlocks power-user features, with a clean free tier that still delivers real value.
 
-> **Scope note:** The **Pro licensing model** (provider choice, the extension `LicenseService`, entitlement verification, activation flow, tier gating, and the license-key-vs-accounts decision) used to live here in Phase 5. It has been **split out into [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)**. This document now owns only the **website surface** (marketing page, docs, pricing page, checkout link). The chosen direction is: pasted license key at launch, user accounts/sign-in as a later UX layer — see the Decision Record in `PRO_LICENSE_PLAN.md`.
+> **Scope note:** The **Pro licensing model** (provider choice, the extension `LicenseService`, entitlement verification, activation flow, tier gating, and the license-key-vs-accounts decision) used to live here in Phase 5. It has been **split out into [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md)**. This document now owns only the **website surface** (marketing page, docs, pricing page, checkout link). The chosen direction is: pasted license key at launch, user accounts/sign-in as a later UX layer — see the Decision Record in `PRO_LICENSE_PLAN.md`.
 
 ---
 
@@ -255,9 +255,9 @@ export default defineConfig({
 
 ---
 
-## Phase 5 — Pro Licensing → moved to [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)
+## Phase 5 — Pro Licensing → moved to [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md)
 
-The tier structure, `LicenseService`, entitlement verification, activation flow, and the license-key-vs-accounts decision now live in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md). Summary of the decision so this document stays self-consistent:
+The tier structure, `LicenseService`, entitlement verification, activation flow, and the license-key-vs-accounts decision now live in [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md). Summary of the decision so this document stays self-consistent:
 
 - **Storefront / MoR:** **Lemon Squeezy** (existing account) — checkout, payment, global tax.
 - **Licensing:** **Keygen** — issues **Ed25519-signed license files** verified **offline** in the extension (no per-request phone-home); supports **air-gapped / enterprise** activation from launch.
@@ -297,7 +297,7 @@ Two columns: **Free** (left) and **Pro** (right, highlighted).
 - Custom icon color
 - All future Pro features
 - Email support
-- **[Buy Now — $59]** → Lemon Squeezy checkout link (license issued by Keygen — see [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md))
+- **[Buy Now — $59]** → Lemon Squeezy checkout link (license issued by Keygen — see [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md))
 
 _New users get a **14-day free trial of remote access** — no card, no account. After it ends, the dashboard stays free on localhost._
 
@@ -327,12 +327,12 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 - [x] Pre-launch mode — `LAUNCHED` flag (`landing/src/config.ts`) gates disabled "Coming soon" CTAs, a banner, and `noindex`
 - [ ] Wire pricing-page checkout to Lemon Squeezy — **deferred:** disabled pre-launch; set `CHECKOUT_URL` and flip `LAUNCHED` at launch
 - [x] Publish `support@ctrlyoke.dev` as the support path on the site/docs (README/marketplace tracked in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) Phase 0.3)
-- [ ] Add Netlify Function `ls-webhook` (Lemon Squeezy `order_created` → create Keygen license); details in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)
+- [ ] Add Netlify Function `ls-webhook` (Lemon Squeezy `order_created` → create Keygen license); details in [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md)
 - [x] Add `docs/pro/index.md` (activation instructions)
 - [x] Add `docs/.vitepress/config.mts` logo + social links
 - [ ] **Push to `main` for the first production deploy; confirm the Action is green, then test all live routes + the pre-launch state**
 
-> **Extension-side licensing tasks** (provider setup, `LicenseService`, "Activate Pro License" command, gating `CtrlYokeHostedServer` / SCM commit / MCP, step-limit enforcement) are tracked in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md), not here.
+> **Extension-side licensing tasks** (provider setup, `LicenseService`, "Activate Pro License" command, gating `CtrlYokeHostedServer` / SCM commit / MCP, step-limit enforcement) are tracked in [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md), not here.
 
 ### Post-Launch (Nice to Have)
 
@@ -346,7 +346,7 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 
 ## Related Backlog Items
 
-- [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md) — Pro licensing model, `LicenseService`, tier gating (split out of this plan)
+- [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) — Pro licensing model, `LicenseService`, tier gating (split out of this plan)
 - [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) — top-level launch sequence, business email, account ownership, legal, and support readiness
 - [`RELEASE_PLAN.md`](RELEASE_PLAN.md) — VS Code Marketplace release prerequisites
 - [`TELEMETRY_PLAN.md`](../backlog/TELEMETRY_PLAN.md) — Usage telemetry for the extension

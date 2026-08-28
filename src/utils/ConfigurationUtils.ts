@@ -85,8 +85,11 @@ export const CONFIG_KEYS = {
     "general.includeFullDiffsInPriorContext",
   EXECUTION_MODE: "defaults.executionMode",
   SERVER_ENABLED: "server.enabled",
+  SERVER_TLS_ENABLED: "server.tls.enabled",
   SERVER_TLS_CERT_PATH: "server.tls.certPath",
   SERVER_TLS_KEY_PATH: "server.tls.keyPath",
+  SERVER_ICON_BG_COLOR: "server.iconBgColor",
+  SERVER_ICON_FG_COLOR: "server.iconFgColor",
   UI_CONFIRM_DELETE_OPERATIONS: "ui.confirmDeleteOperations",
   UI_CONFIRM_RESET_OPERATIONS: "ui.confirmResetOperations",
   UI_CONFIRM_CONTINUATION_DISCARD_OPERATIONS:

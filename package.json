@@ -97,6 +97,26 @@
         "category": "ctrlyoke"
       },
       {
+        "command": "ctrlyoke.activatePro",
+        "title": "ctrlyoke: Activate Pro License",
+        "category": "ctrlyoke"
+      },
+      {
+        "command": "ctrlyoke.activateOfflinePro",
+        "title": "ctrlyoke: Activate Offline (Air-Gapped) License",
+        "category": "ctrlyoke"
+      },
+      {
+        "command": "ctrlyoke.deactivatePro",
+        "title": "ctrlyoke: Deactivate Pro License",
+        "category": "ctrlyoke"
+      },
+      {
+        "command": "ctrlyoke.manageLicense",
+        "title": "ctrlyoke: Manage License",
+        "category": "ctrlyoke"
+      },
+      {
         "command": "ctrlyoke.pause",
         "title": "Pause Execution",
         "category": "ctrlyoke",

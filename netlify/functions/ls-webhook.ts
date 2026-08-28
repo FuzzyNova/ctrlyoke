@@ -1,5 +1,5 @@
 // Glue between Lemon Squeezy (checkout/MoR) and Keygen (licensing) — see
-// dev/active/PRO_LICENSE_PLAN.md §1.1-1.2 for the architecture this implements.
+// dev/implemented/PRO_LICENSE_PLAN.md §1.1-1.2 for the architecture this implements.
 //
 // order_created -> create a Keygen Pro license (idempotent on the LS order id), email the key.
 // order_refunded -> suspend the Keygen license issued for that order.

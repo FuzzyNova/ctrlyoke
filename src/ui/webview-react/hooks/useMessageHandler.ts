@@ -482,6 +482,9 @@ export function createMessageHandlers(
         applyTerminalSettings(data.globalSettings.terminal);
       }
     }
+    if (data.licenseAccess) {
+      settingsStore.setLicenseAccess(data.licenseAccess);
+    }
 
     // Update workflow properties only if non-empty — sendInitialState() sends
     // workflowProperties: {} as a placeholder, which would wipe out properties
@@ -549,6 +552,9 @@ export function createMessageHandlers(
     if (message.modelOptions) {
       settingsStore.setModelOptions(message.modelOptions);
     }
+    if (message.licenseAccess) {
+      settingsStore.setLicenseAccess(message.licenseAccess);
+    }
   };
 
   handlers[MESSAGE_TYPES.OPEN_GLOBAL_SETTINGS_TAB] = (message) => {
@@ -564,6 +570,9 @@ export function createMessageHandlers(
     const settingsStore = useSettingsStore.getState();
     if (message.settings) {
       settingsStore.setFullGlobalSettings(message.settings);
+      if (message.settings.licenseAccess) {
+        settingsStore.setLicenseAccess(message.settings.licenseAccess);
+      }
       if (message.settings.settings?.terminal) {
         applyTerminalSettings(message.settings.settings.terminal);
       }

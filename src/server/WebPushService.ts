@@ -11,6 +11,8 @@ import type { CompletionNotificationEvent } from "../ui/notifications/Completion
 
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
+export const PUSH_ACCESS_DENIED_MESSAGE =
+  "Push-to-phone notifications are part of ctrlyoke Pro. Your localhost notifications remain free; start a trial or view Pro pricing at https://ctrlyoke.dev/pricing/.";
 
 export interface WebPushSubscriptionPayload {
   endpoint: string;
@@ -69,15 +71,25 @@ export interface PushSubscriptionListResult {
   staleSubscriptionCount: number;
 }
 
+export interface WebPushServiceOptions {
+  hasRemoteAccess?: () => Promise<boolean>;
+  onAccessBlocked?: () => void;
+}
+
 export class WebPushService {
   private readonly notificationsDir: string;
   private readonly vapidKeysPath: string;
   private readonly subscriptionsPath: string;
   private operationQueue: Promise<unknown> = Promise.resolve();
+  private readonly hasRemoteAccess: () => Promise<boolean>;
+  private readonly onAccessBlocked: (() => void) | undefined;
 
   constructor(
-    private readonly vapidSubject: string = "mailto:ctrlyoke@example.com" //TODO: update this with a valid support email when we get one
+    private readonly vapidSubject: string = "mailto:ctrlyoke@example.com", //TODO: update this with a valid support email when we get one
+    options: WebPushServiceOptions = {}
   ) {
+    this.hasRemoteAccess = options.hasRemoteAccess ?? (async () => true);
+    this.onAccessBlocked = options.onAccessBlocked;
     this.notificationsDir = path.join(
       ctrlyokeStateHome(),
       PATH_CONSTANTS.NOTIFICATIONS_DIR
@@ -93,10 +105,12 @@ export class WebPushService {
   }
 
   async getPublicKey(): Promise<string> {
+    await this.assertRemoteAccess();
     return (await this.getOrCreateVapidKeys()).publicKey;
   }
 
   async listSubscriptions(): Promise<PushSubscriptionListResult> {
+    await this.assertRemoteAccess();
     return this.withSerializedAccess(async () => {
       const registry = await this.withSubscriptionFileLock(() =>
         this.readSubscriptions()
@@ -125,6 +139,7 @@ export class WebPushService {
     subscription: WebPushSubscriptionPayload,
     metadata: { userAgent?: string; label?: string }
   ): Promise<StoredPushSubscription> {
+    await this.assertRemoteAccess();
     return this.withSerializedAccess(async () => {
       return this.withSubscriptionFileLock(async () => {
         const registry = await this.readSubscriptions();
@@ -182,6 +197,7 @@ export class WebPushService {
   async sendNotification(
     event: CompletionNotificationEvent
   ): Promise<{ sent: number; removed: number; failed: number }> {
+    await this.assertRemoteAccess();
     return this.withSerializedAccess(async () => {
       return this.withSubscriptionFileLock(async () => {
         const registry = await this.readSubscriptions();
@@ -274,6 +290,18 @@ export class WebPushService {
     });
   }
 
+  private async assertRemoteAccess(): Promise<void> {
+    let allowed = false;
+    try {
+      allowed = await this.hasRemoteAccess();
+    } catch {
+      allowed = false;
+    }
+    if (allowed) return;
+    this.onAccessBlocked?.();
+    throw new PushAccessDeniedError();
+  }
+
   private async withSerializedAccess<T>(action: () => Promise<T>): Promise<T> {
     const scheduled = this.operationQueue.then(action, action);
     this.operationQueue = scheduled.then(
@@ -331,6 +359,13 @@ export class WebPushService {
   ): Promise<T> {
     await ensurePrivateDirectory(this.notificationsDir);
     return withFileLock(this.subscriptionsPath, action);
+  }
+}
+
+export class PushAccessDeniedError extends Error {
+  constructor() {
+    super(PUSH_ACCESS_DENIED_MESSAGE);
+    this.name = "PushAccessDeniedError";
   }
 }
 

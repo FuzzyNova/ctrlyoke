@@ -16,6 +16,7 @@ import { VsCodeAdapter } from "./platform/VsCodeAdapter";
 import { CtrlYokeHostedServer } from "./server/CtrlYokeHostedServer";
 import {
   GIT_CHANGE_KINDS,
+  LICENSE_UI,
   MESSAGE_TYPES,
   USER_FEEDBACK_SEVERITY,
   VSCODE_COMMANDS,
@@ -68,9 +69,16 @@ import {
 } from "./utils/ProjectStateRegistry";
 import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
 import { initializeRunHistoryLocation } from "./utils/RunHistoryStoragePolicy";
+import {
+  LicenseService,
+  LICENSE_SOURCES,
+  LICENSE_TIERS,
+} from "./license/LicenseService";
+import { LicenseStatusBarManager } from "./ui/LicenseStatusBarManager";
 
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: CtrlYokeWebviewProvider;
+let licenseService: LicenseService;
 let hostedServer: CtrlYokeHostedServer | undefined;
 let notificationManager: NotificationManager | undefined;
 // Exempts the running server's own connection token from heuristic secret
@@ -132,6 +140,16 @@ export async function activate(context: vscode.ExtensionContext) {
       context,
       workspaceFolders?.length ? getVsCodeWorkspaceRoot() : undefined
     );
+
+    // License state is extension-host-owned so commands and the status bar
+    // share one service instance and update immediately after activation.
+    licenseService = new LicenseService(
+      new VsCodeAdapter(context).getSecretStore(),
+      { trialState: context.globalState }
+    );
+    context.subscriptions.push(licenseService);
+    new LicenseStatusBarManager(context, licenseService);
+    void licenseService.refresh();
 
     // Freeze storage placement before any history consumer is initialized.
     const runHistoryLocation = configService.get("storage").runHistoryLocation;
@@ -197,7 +215,8 @@ export async function activate(context: vscode.ExtensionContext) {
     const vscodeUserFeedbackSink = new VsCodeUserFeedbackSink();
     webviewProvider = new CtrlYokeWebviewProvider(
       context,
-      vscodeUserFeedbackSink
+      vscodeUserFeedbackSink,
+      licenseService
     );
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(
@@ -485,6 +504,153 @@ function registerCommands(context: vscode.ExtensionContext) {
     "ctrlyoke.showGettingStarted",
     () => {
       openGettingStartedWalkthrough();
+    }
+  );
+
+  const activateProCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.ACTIVATE_PRO,
+    async () => {
+      const key = await vscode.window.showInputBox({
+        prompt: "Paste your ctrlyoke Pro license key",
+        placeHolder: "Your Keygen license key",
+        password: true,
+        ignoreFocusOut: true,
+      });
+      if (!key) {
+        return;
+      }
+
+      try {
+        await licenseService.activateWithKey(key);
+        notifyUserFeedback(
+          workflowOrchestrator.getUserFeedbackSink(),
+          USER_FEEDBACK_SEVERITY.SUCCESS,
+          "ctrlyoke: Pro license activated successfully."
+        );
+      } catch (error) {
+        notifyUserFeedback(
+          workflowOrchestrator.getUserFeedbackSink(),
+          USER_FEEDBACK_SEVERITY.ERROR,
+          `ctrlyoke: Pro license activation failed — ${getErrorMessage(error)}`
+        );
+      }
+    }
+  );
+
+  const activateOfflineProCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.ACTIVATE_OFFLINE_PRO,
+    async () => {
+      // Intentionally no isPro() precheck: this command is how a Pro/
+      // Enterprise customer's offline license file gets imported in the
+      // first place, so gating it on isPro() would make it impossible to
+      // ever use for a first-time air-gapped activation. importLicenseFile()
+      // itself is the source of truth for whether the imported file grants
+      // Pro (see PRO_LICENSE_PLAN.md §1.5, §1.8).
+      try {
+        const files = await vscode.window.showOpenDialog({
+          canSelectFiles: true,
+          canSelectFolders: false,
+          canSelectMany: false,
+          openLabel: "Import Pro License File",
+          filters: {
+            "ctrlyoke License": ["license", "txt", "json"],
+            "All Files": ["*"],
+          },
+        });
+        const blob = files?.[0]
+          ? new TextDecoder().decode(
+              await vscode.workspace.fs.readFile(files[0])
+            )
+          : await vscode.window.showInputBox({
+              prompt: "Paste the signed ctrlyoke offline license file blob",
+              placeHolder: "LICENSE ...",
+              ignoreFocusOut: true,
+            });
+        if (!blob) {
+          return;
+        }
+
+        const entitlement = await licenseService.importLicenseFile(blob);
+        if (entitlement.tier !== LICENSE_TIERS.PRO) {
+          notifyUserFeedback(
+            workflowOrchestrator.getUserFeedbackSink(),
+            USER_FEEDBACK_SEVERITY.ERROR,
+            "ctrlyoke: The offline license file could not be imported."
+          );
+          return;
+        }
+        notifyUserFeedback(
+          workflowOrchestrator.getUserFeedbackSink(),
+          USER_FEEDBACK_SEVERITY.SUCCESS,
+          "ctrlyoke: Offline Pro license activated successfully."
+        );
+      } catch (error) {
+        notifyUserFeedback(
+          workflowOrchestrator.getUserFeedbackSink(),
+          USER_FEEDBACK_SEVERITY.ERROR,
+          `ctrlyoke: Offline license activation failed — ${getErrorMessage(error)}`
+        );
+      }
+    }
+  );
+
+  const deactivateProCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.DEACTIVATE_PRO,
+    async () => {
+      const confirmation = await vscode.window.showQuickPick(
+        [LICENSE_UI.DEACTIVATE],
+        {
+          title: "Deactivate the ctrlyoke Pro license on this machine?",
+          placeHolder: "Choose Deactivate to continue",
+          ignoreFocusOut: true,
+        }
+      );
+      if (confirmation !== LICENSE_UI.DEACTIVATE) {
+        return;
+      }
+
+      try {
+        await licenseService.deactivate();
+        notifyUserFeedback(
+          workflowOrchestrator.getUserFeedbackSink(),
+          USER_FEEDBACK_SEVERITY.SUCCESS,
+          "ctrlyoke: Pro license deactivated."
+        );
+      } catch (error) {
+        notifyUserFeedback(
+          workflowOrchestrator.getUserFeedbackSink(),
+          USER_FEEDBACK_SEVERITY.ERROR,
+          `ctrlyoke: Pro license deactivation failed — ${getErrorMessage(error)}`
+        );
+      }
+    }
+  );
+
+  const manageLicenseCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.MANAGE_LICENSE,
+    async () => {
+      const entitlement = await licenseService.getEntitlement();
+      const tier = entitlement.tier === LICENSE_TIERS.PRO ? "Pro" : "Free";
+      const expiry = entitlement.expiresAt
+        ? new Date(entitlement.expiresAt).toLocaleDateString()
+        : "none";
+      const source =
+        entitlement.source === LICENSE_SOURCES.OFFLINE_FILE
+          ? "offline license file"
+          : entitlement.source === LICENSE_SOURCES.ONLINE
+            ? "online activation"
+            : "none";
+      const choice = await vscode.window.showQuickPick(
+        [LICENSE_UI.OPEN_PRICING],
+        {
+          title: `ctrlyoke ${tier} license`,
+          placeHolder: `Expiry: ${expiry}; source: ${source}`,
+          ignoreFocusOut: true,
+        }
+      );
+      if (choice === LICENSE_UI.OPEN_PRICING) {
+        await vscode.env.openExternal(vscode.Uri.parse(LICENSE_UI.PRICING_URL));
+      }
     }
   );
 
@@ -1121,6 +1287,15 @@ function registerCommands(context: vscode.ExtensionContext) {
         tlsCfg?.enabled && tlsCfg.certPath && tlsCfg.keyPath
           ? { certPath: tlsCfg.certPath, keyPath: tlsCfg.keyPath }
           : undefined;
+      const showRemoteAccessUpsell = () => {
+        const message = `ctrlyoke: ${LICENSE_UI.REMOTE_ACCESS_UPSELL}`;
+        notifyUserFeedback(
+          workflowOrchestrator.getUserFeedbackSink(),
+          USER_FEEDBACK_SEVERITY.WARNING,
+          message,
+          LICENSE_UI.PRICING_URL
+        );
+      };
       try {
         hostedServer = new CtrlYokeHostedServer(
           hub,
@@ -1137,7 +1312,9 @@ function registerCommands(context: vscode.ExtensionContext) {
               workflowOrchestrator.getUserFeedbackSink(),
               USER_FEEDBACK_SEVERITY.WARNING,
               `ctrlyoke: A sibling ctrlyoke server is already running for this workspace at ${existingServerUrl}. This window is starting its own server on a different port.`
-            )
+            ),
+          () => licenseService.hasRemoteAccess(),
+          showRemoteAccessUpsell
         );
       } catch (err) {
         unprotectServerToken?.();
@@ -1264,6 +1441,10 @@ function registerCommands(context: vscode.ExtensionContext) {
     openPanelCommand,
     openSecretsSettingsCommand,
     showGettingStartedCommand,
+    activateProCommand,
+    activateOfflineProCommand,
+    deactivateProCommand,
+    manageLicenseCommand,
     pauseCommand,
     resumeCommand,
     stopCommand,

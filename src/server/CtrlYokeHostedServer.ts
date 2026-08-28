@@ -32,6 +32,7 @@ import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
 import type { CtrlYokeWebviewProvider } from "../ui/CtrlYokeWebviewProvider";
 import {
   BROWSER_NOTIFICATION_MODES,
+  LICENSE_UI,
   HOSTED_ICON_FILES,
   HOSTED_ICON_PATHS,
   HOSTED_CONNECTION_LIVENESS,
@@ -68,6 +69,7 @@ import { buildHostedServiceWorkerScript } from "./HostedServiceWorkerScript";
 import { buildHostedStandaloneShimScript } from "./HostedStandaloneShimScript";
 import {
   WebPushService,
+  PushAccessDeniedError,
   type WebPushSubscriptionPayload,
 } from "./WebPushService";
 import { pngIconService } from "./PngIconService";
@@ -186,6 +188,9 @@ export class CtrlYokeHostedServer
   private portFellBack = false;
   private devServerUrlFileOwned = false;
   private readonly viewerService: HostedWorkspaceViewerService;
+  private readonly getRemoteAccess: (() => Promise<boolean>) | undefined;
+  private readonly onRemoteAccessBlocked: (() => void) | undefined;
+  private remoteAccessUpsellShown = false;
 
   constructor(
     private hub: DashboardBroadcastHub,
@@ -197,10 +202,17 @@ export class CtrlYokeHostedServer
     private token: string,
     private bindAddress: string = "127.0.0.1",
     tlsConfig?: { certPath: string; keyPath: string },
-    private readonly onSiblingServerDetected?: (url: string) => void
+    private readonly onSiblingServerDetected?: (url: string) => void,
+    getRemoteAccess?: () => Promise<boolean>,
+    onRemoteAccessBlocked?: () => void
   ) {
+    this.getRemoteAccess = getRemoteAccess;
+    this.onRemoteAccessBlocked = onRemoteAccessBlocked;
     this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
-    this.webPushService = new WebPushService();
+    this.webPushService = new WebPushService(undefined, {
+      hasRemoteAccess: () => this.resolveRemoteAccess(),
+      onAccessBlocked: () => this.notifyRemoteAccessBlocked(),
+    });
     this.viewerService = new HostedWorkspaceViewerService(
       workspaceRoot,
       namedWorkspaceRoots
@@ -756,14 +768,22 @@ export class CtrlYokeHostedServer
       "/api/notifications/vapid-public-key",
       requireToken,
       async (_req, res) => {
-        res.json({ publicKey: await this.webPushService.getPublicKey() });
+        try {
+          res.json({ publicKey: await this.webPushService.getPublicKey() });
+        } catch (error) {
+          if (!this.sendPushAccessError(res, error)) throw error;
+        }
       }
     );
     this.app.get(
       "/api/notifications/subscriptions",
       requireToken,
       async (_req, res) => {
-        res.json(await this.webPushService.listSubscriptions());
+        try {
+          res.json(await this.webPushService.listSubscriptions());
+        } catch (error) {
+          if (!this.sendPushAccessError(res, error)) throw error;
+        }
       }
     );
     this.app.post(
@@ -778,14 +798,18 @@ export class CtrlYokeHostedServer
           res.status(400).json({ error: "Invalid push subscription payload" });
           return;
         }
-        const subscription = await this.webPushService.upsertSubscription(
-          body.subscription,
-          {
-            userAgent: req.get("user-agent") ?? undefined,
-            label: body.label,
-          }
-        );
-        res.status(201).json({ id: subscription.id });
+        try {
+          const subscription = await this.webPushService.upsertSubscription(
+            body.subscription,
+            {
+              userAgent: req.get("user-agent") ?? undefined,
+              label: body.label,
+            }
+          );
+          res.status(201).json({ id: subscription.id });
+        } catch (error) {
+          if (!this.sendPushAccessError(res, error)) throw error;
+        }
       }
     );
     this.app.delete(
@@ -1808,11 +1832,21 @@ export class CtrlYokeHostedServer
           );
         }
       } catch (error) {
+        if (error instanceof PushAccessDeniedError) return;
         Log.warn(
           `[hosted-server] push notification dispatch failed for ${event.id}: ${error}`
         );
       }
     }
+  }
+
+  private sendPushAccessError(res: express.Response, error: unknown): boolean {
+    if (!(error instanceof PushAccessDeniedError)) return false;
+    res.status(403).json({
+      error: error.message,
+      pricingUrl: LICENSE_UI.PRICING_URL,
+    });
+    return true;
   }
 
   // ── WebSocket ─────────────────────────────────────────────────────────────
@@ -2126,9 +2160,10 @@ export class CtrlYokeHostedServer
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-  listen(): Promise<string | undefined> {
+  async listen(): Promise<string | undefined> {
     this.requestedPort = this.port;
     this.portFellBack = false;
+    await this.enforceRemoteBindBeforeListen();
     return new Promise((resolve, reject) => {
       const attemptListen = (port: number) => {
         const onError = (err: NodeJS.ErrnoException) => {
@@ -2168,6 +2203,37 @@ export class CtrlYokeHostedServer
       };
       attemptListen(this.port);
     });
+  }
+
+  private async enforceRemoteBindBeforeListen(): Promise<void> {
+    if (
+      (await this.resolveRemoteAccess()) ||
+      isLoopbackBindAddress(this.bindAddress)
+    ) {
+      return;
+    }
+
+    this.bindAddress = "127.0.0.1";
+    this.notifyRemoteAccessBlocked();
+  }
+
+  private notifyRemoteAccessBlocked(): void {
+    if (this.remoteAccessUpsellShown) return;
+    this.remoteAccessUpsellShown = true;
+    this.onRemoteAccessBlocked?.();
+  }
+
+  private async resolveRemoteAccess(): Promise<boolean> {
+    // Fail closed to Free/localhost-only when no entitlement callback is
+    // wired, consistent with LicenseService's fail-open-to-free contract
+    // (PRO_LICENSE_PLAN.md §1.4/§1.8) — a caller that omits the callback
+    // must never be granted remote reach or push access by default.
+    if (!this.getRemoteAccess) return false;
+    try {
+      return await this.getRemoteAccess();
+    } catch {
+      return false;
+    }
   }
 
   getAvailableIps(): string[] {
@@ -2350,5 +2416,13 @@ function isValidPushSubscription(
     candidate.keys &&
     candidate.keys.auth &&
     candidate.keys.p256dh
+  );
+}
+
+function isLoopbackBindAddress(bindAddress: string): boolean {
+  return (
+    bindAddress === "127.0.0.1" ||
+    bindAddress === "::1" ||
+    bindAddress === "localhost"
   );
 }

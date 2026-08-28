@@ -60,6 +60,7 @@ import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTr
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { SecretRegistryService } from "./SecretRegistryService";
+import type { LicenseService } from "../license/LicenseService";
 
 // Re-export CliOutput for external use
 export type { CliOutput } from "../types/WebviewMessageTypes";
@@ -91,6 +92,7 @@ export class CtrlYokeWebviewProvider
   private modelsLoadedDisposable?: vscode.Disposable;
   private configServiceUnsubscribe?: () => void;
   private commitMessageGenerationUnsubscribe?: () => void;
+  private licenseEntitlementSubscription?: { dispose(): void };
   private runningServerUrl?: string;
   private runningServerAvailableIps: string[] = [];
   private runningServerPortFallback?: ServerPortFallbackInfo;
@@ -143,7 +145,8 @@ export class CtrlYokeWebviewProvider
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    nativeFeedbackSink?: UserFeedbackSink
+    nativeFeedbackSink?: UserFeedbackSink,
+    licenseService?: LicenseService
   ) {
     const templateManager = new TemplateManager(context);
 
@@ -160,8 +163,21 @@ export class CtrlYokeWebviewProvider
     this.settingsSync = new WebviewSettingsSync(
       postMessage,
       getOrchestrator,
-      () => this.getDevStatus()
+      () => this.getDevStatus(),
+      undefined,
+      licenseService
+        ? async () => ({
+            isPro: await licenseService.isPro(),
+            hasRemoteAccess: await licenseService.hasRemoteAccess(),
+          })
+        : undefined
     );
+    this.licenseEntitlementSubscription =
+      licenseService?.onDidChangeEntitlement(() => {
+        void this.settingsSync.sendLicenseAccessUpdate(
+          this.hub ? (msg) => this.hub!.postMessage(msg) : undefined
+        );
+      });
     this.serializer = new WorkflowSerializer(
       postMessage,
       templateManager,
@@ -1103,6 +1119,7 @@ export class CtrlYokeWebviewProvider
     this.modelsLoadedDisposable?.dispose();
     this.configServiceUnsubscribe?.();
     this.commitMessageGenerationUnsubscribe?.();
+    this.licenseEntitlementSubscription?.dispose();
     this.cancelReconnectRetry();
   }
 

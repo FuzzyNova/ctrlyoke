@@ -113,6 +113,19 @@ suite("WebPushService", () => {
 
     assert.ok(publicKeys.every((key) => key === publicKeys[0]));
   });
+
+  test("blocks push setup when remote access is not entitled", async () => {
+    let blocked = 0;
+    const service = new WebPushService(undefined, {
+      hasRemoteAccess: async () => false,
+      onAccessBlocked: () => {
+        blocked += 1;
+      },
+    });
+
+    await assert.rejects(() => service.getPublicKey(), /Push-to-phone/);
+    assert.strictEqual(blocked, 1);
+  });
 });
 
 function encodeBase64Url(value: Buffer): string {

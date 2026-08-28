@@ -49,6 +49,29 @@ export const BOOLEAN_STRING_VALUES = {
   FALSE: "false",
 } as const;
 
+/** Feature keys unlocked by a Pro entitlement. Keep gate sites on these constants. */
+export const PRO_FEATURES = {
+  HOSTED_DASHBOARD: "hosted-dashboard",
+  REMOTE_ACCESS: "remote-access",
+  HTTPS_CERTIFICATES: "https-certificates",
+  MOBILE_PUSH: "mobile-push",
+  AIR_GAPPED_ACTIVATION: "air-gapped-activation",
+  CUSTOM_ICON_COLOR: "custom-icon-color",
+} as const;
+
+export type ProFeature = (typeof PRO_FEATURES)[keyof typeof PRO_FEATURES];
+
+/** User-facing licensing command actions and destinations. */
+export const LICENSE_UI = {
+  OPEN_PRICING: "Open pricing",
+  DEACTIVATE: "Deactivate",
+  PRICING_URL: "https://ctrlyoke.dev/pricing/",
+  REMOTE_ACCESS_UPSELL:
+    "Remote access is a Pro feature. Your localhost dashboard remains free; start a 14-day trial or view Pro pricing.",
+  CUSTOM_ICON_UPSELL:
+    "Custom icon colors are a Pro thank-you perk. View Pro pricing to unlock them.",
+} as const;
+
 // ============================================================================
 // MESSAGE TYPES - Communication between extension and webview
 // ============================================================================
@@ -2828,6 +2851,10 @@ export const VSCODE_COMMANDS = {
   ENABLE_SERVER: "ctrlyoke.enableServer",
   DISABLE_SERVER: "ctrlyoke.disableServer",
   REGENERATE_SERVER_TOKEN: "ctrlyoke.regenerateServerToken",
+  ACTIVATE_PRO: "ctrlyoke.activatePro",
+  ACTIVATE_OFFLINE_PRO: "ctrlyoke.activateOfflinePro",
+  DEACTIVATE_PRO: "ctrlyoke.deactivatePro",
+  MANAGE_LICENSE: "ctrlyoke.manageLicense",
   SEARCH_HISTORY: "ctrlyoke.searchHistory",
   GENERATE_COMMIT_MESSAGE: "ctrlyoke.generateCommitMessage",
   CANCEL_COMMIT_MESSAGE_GENERATION: "ctrlyoke.cancelCommitMessageGeneration",

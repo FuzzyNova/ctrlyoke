@@ -181,6 +181,8 @@ export async function handleCompletionNotificationEvent(
   const shouldDeliverConnected =
     browserSettings.mode === BROWSER_NOTIFICATION_MODES.CONNECTED_ONLY ||
     (browserSettings.mode === BROWSER_NOTIFICATION_MODES.PUSH &&
+      fullSettings?.licenseAccess?.hasRemoteAccess === false) ||
+    (browserSettings.mode === BROWSER_NOTIFICATION_MODES.PUSH &&
       !status.subscribed);
 
   if (!shouldDeliverConnected) {

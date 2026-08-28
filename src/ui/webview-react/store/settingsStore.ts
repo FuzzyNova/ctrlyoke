@@ -9,6 +9,7 @@ import {
   type ExecutionMode,
   type ToolPermissionMode,
   type ServerPortFallbackInfo,
+  type LicenseAccessState,
 } from "../types/messages";
 import {
   CLAUDE_CLI_MODELS as CLAUDE_CLI_MODEL_LIST,
@@ -202,6 +203,9 @@ interface SettingsState {
   // Server running state (toggled by ENABLE_SERVER / DISABLE_SERVER)
   serverRunning: boolean;
 
+  // Pro entitlement and remote-access trial state from the extension host
+  licenseAccess: LicenseAccessState;
+
   // Server URL (set when server starts, cleared when stopped)
   serverUrl: string | null;
 
@@ -297,6 +301,9 @@ interface SettingsActions {
 
   // Server running state
   setServerRunning: (running: boolean) => void;
+
+  // Pro entitlement and remote-access trial state
+  setLicenseAccess: (access: LicenseAccessState) => void;
 
   // Server URL
   setServerUrl: (url: string | null) => void;
@@ -460,6 +467,7 @@ const initialState: SettingsState = {
   workflowLoaded: false,
   fullGlobalSettings: null,
   serverRunning: false,
+  licenseAccess: { isPro: false, hasRemoteAccess: false },
   serverUrl: null,
   availableIps: [],
   selectedDisplayIp: null,
@@ -589,6 +597,14 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     setFullGlobalSettings: (settings) => set({ fullGlobalSettings: settings }),
 
     setServerRunning: (running) => set({ serverRunning: running }),
+
+    setLicenseAccess: (access) =>
+      set((state) => ({
+        licenseAccess: access,
+        fullGlobalSettings: state.fullGlobalSettings
+          ? { ...state.fullGlobalSettings, licenseAccess: access }
+          : state.fullGlobalSettings,
+      })),
 
     setServerUrl: (url) => set({ serverUrl: url }),
 

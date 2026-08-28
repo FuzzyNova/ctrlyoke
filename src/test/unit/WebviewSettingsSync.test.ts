@@ -857,7 +857,13 @@ suite("WebviewSettingsSync", () => {
 
         const messages: any[] = [];
         const postMessage = (msg: any) => messages.push(msg);
-        const sync = new WebviewSettingsSync(postMessage, () => undefined);
+        const sync = new WebviewSettingsSync(
+          postMessage,
+          () => undefined,
+          undefined,
+          undefined,
+          async () => ({ isPro: true, hasRemoteAccess: true })
+        );
 
         hideGlobalNavigator();
         await sync.handleGenerateServerCert(postMessage, "user", () => homeDir);
@@ -957,7 +963,13 @@ suite("WebviewSettingsSync", () => {
 
         const messages: any[] = [];
         const postMessage = (msg: any) => messages.push(msg);
-        const sync = new WebviewSettingsSync(postMessage, () => undefined);
+        const sync = new WebviewSettingsSync(
+          postMessage,
+          () => undefined,
+          undefined,
+          undefined,
+          async () => ({ isPro: true, hasRemoteAccess: true })
+        );
 
         hideGlobalNavigator();
         await sync.handleGenerateServerCert(postMessage, "workspace");
