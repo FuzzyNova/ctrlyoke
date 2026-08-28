@@ -51,6 +51,7 @@ import { isWorkflowActive, isWorkflowRunning } from "../../utils/status";
 import { ExecutionStateBadge } from "../shared/ExecutionStateBadge";
 import { useElementNarrow, useElementTier } from "../../hooks/useElementNarrow";
 import { useIsMobile } from "@hooks/useMediaQuery";
+import { useActiveWorkflowManagedBy } from "@hooks/useActiveWorkflowManagedBy";
 import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import {
   useWorkflowContextMenu,
@@ -200,9 +201,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     [activeTerminalWorkflows]
   );
 
-  const activeManagedBy = loadedWorkflows.find(
-    (w) => w.id === activeWorkflowId
-  )?.managedBy;
+  const activeManagedBy = useActiveWorkflowManagedBy();
   const isExternallyManaged = activeManagedBy != null;
   const workflowHasActiveTerminal = useCallback(
     (workflowId: string | null | undefined) =>

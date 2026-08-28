@@ -241,7 +241,7 @@ check at implementation time).
 
 | Phase | Content                                                                                                  |
 | ----- | --------------------------------------------------------------------------------------------------------- |
-| 1     | Add `useActiveWorkflowManagedBy()`; migrate the four existing inline derivations to it. No visible change. |
+| 1 (done) | Add `useActiveWorkflowManagedBy()`; migrate the four existing inline derivations to it. No visible change. |
 | 2     | Extract `HeaderStatusBanner.tsx` from `Header.tsx:907-966` with identical behavior/precedence (deleted → pausing/rewind, since those are the only two that exist pre-extraction). Pure refactor, no visible change. |
 | 3     | Add the externally-managed and system-generated banner tiers with the precedence rules in §"Precedence order"; remove the `WorkflowStatus.tsx` chip. This is the user-visible change. |
 
