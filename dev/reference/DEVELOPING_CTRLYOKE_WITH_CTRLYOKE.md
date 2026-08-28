@@ -277,6 +277,17 @@ usual; no port-splitting configuration is needed.
 An agent (e.g. Claude Code) working headlessly has no `F5`/Stop button.
 `scripts/dev-host.mjs` wraps the full recipe below — `npm run dev:host:start`,
 `npm run dev:host:stop`, `npm run dev:host:restart` (stop, compile, start).
+The default mode uses the isolated `.ctrlyoke-dev-home` state directory. Add
+`-- shared` to an npm command (or pass `shared` directly to the script) to
+omit `CTRLYOKE_HOME` and use the normal shared user-scoped state. Pass
+`onboarding` to start/restart for the fully isolated, freshly reset workspace
+corresponding to `.vscode/launch.json`'s onboarding configuration:
+
+```sh
+node scripts/dev-host.mjs start shared
+node scripts/dev-host.mjs restart onboarding
+```
+
 It runs on win32/darwin/linux; the process-discovery and graceful-close
 mechanism differ per OS (PowerShell CIM queries + `taskkill` on Windows,
 `ps` parsing + `SIGTERM` elsewhere) — see the closing section below for which
