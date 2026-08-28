@@ -501,7 +501,7 @@ change what they *do*:
   body with `await workflowOrchestrator.openPanel(); webviewProvider.openGlobalSettingsTab("license");`
   — the exact pattern `ctrlyoke.openSecretsSettings` already uses
   (`:494-500`). Widen `openGlobalSettingsTab`'s parameter type
-  (`CtrlYokeWebviewProvider.ts:1313`) from the literal `"secrets"` to
+  (`CtrlYokeWebviewProvider.ts:1320`) from the literal `"secrets"` to
   `"secrets" | "license"` (or generalize it to accept any tab id already in
   `ALL_TABS` — check whether a shared tab-id union type exists yet; if not,
   this is a reasonable place to introduce one rather than stringly-typing

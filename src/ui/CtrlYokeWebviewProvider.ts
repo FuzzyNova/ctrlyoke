@@ -1317,7 +1317,7 @@ export class CtrlYokeWebviewProvider
     return this.secretRegistry;
   }
 
-  public openGlobalSettingsTab(tab: "secrets"): void {
+  public openGlobalSettingsTab(tab: "secrets" | "license"): void {
     this.postMessage({
       type: MESSAGE_TYPES.OPEN_GLOBAL_SETTINGS_TAB,
       tab,
