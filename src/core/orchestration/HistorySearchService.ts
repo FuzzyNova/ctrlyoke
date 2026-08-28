@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
 import {
-  FINAL_STEP_PHASES,
   HISTORY_EVENT_KINDS,
   HISTORY_MATCH_FIELDS,
 } from "../../types/DashboardConstants";
@@ -33,6 +32,10 @@ import {
   type MatchCandidate,
 } from "./HistoryCandidateExtractor";
 import { matchesFilters } from "./HistorySearchFilters";
+import {
+  getHistorySearchDocumentDedupeKey,
+  projectHistorySearchResult,
+} from "./HistorySearchResultUtils";
 import { TimelineRecorder } from "./TimelineRecorder";
 import { WorkflowLineageRepository } from "./WorkflowLineageRepository";
 
@@ -74,11 +77,7 @@ export class HistorySearchService {
     try {
       return await getSharedHistorySearchIndexService(
         workspaceFolderPath
-      ).search(
-        request,
-        workspaceFolderPath,
-        onRebuildProgress
-      );
+      ).search(request, workspaceFolderPath, onRebuildProgress);
     } catch (error) {
       const reason =
         error instanceof FileLockTimeoutError
@@ -229,8 +228,11 @@ export class HistorySearchService {
               continue;
             }
 
-            const match = this.toResult(document, normalizedQuery);
-            const dedupeKey = this.getResultKey(match);
+            const match = projectHistorySearchResult(document, normalizedQuery);
+            const dedupeKey = getHistorySearchDocumentDedupeKey(
+              document,
+              match
+            );
             if (seen.has(dedupeKey)) {
               continue;
             }
@@ -455,61 +457,8 @@ export class HistorySearchService {
     };
   }
 
-  private toResult(
-    document: HistorySearchDocument,
-    query: string
-  ): HistorySearchResult {
-    return {
-      workflowKey: document.workflowKey,
-      runRef: document.runRef,
-      workflowName: document.workflowName,
-      runId: document.runId,
-      startedAt: document.startedAt,
-      executionState: document.executionState,
-      target: document.target,
-      eventKind: document.eventKind,
-      matchField: document.matchField,
-      matchSnippet: this.extractSnippet(document.text, query),
-      matchContext: this.formatMatchContext(
-        document.target,
-        document.attemptIndex
-      ),
-      filePath: document.filePath,
-    };
-  }
-
   private matchesQuery(text: string, query: string): boolean {
     return text.toLowerCase().includes(query.toLowerCase());
-  }
-
-  private extractSnippet(text: string, query: string): string {
-    const searchText = text.toLowerCase();
-    const searchQuery = query.toLowerCase();
-    const index = searchText.indexOf(searchQuery);
-    if (index === -1) {
-      return text.slice(0, 100);
-    }
-
-    const start = Math.max(0, index - 40);
-    const end = Math.min(text.length, index + query.length + 60);
-    const snippet = text.slice(start, end);
-    return `${start > 0 ? "…" : ""}${snippet}${end < text.length ? "…" : ""}`;
-  }
-
-  private formatMatchContext(
-    target: OutputExecutionTarget,
-    attemptIndex: number
-  ): string {
-    if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      if (target.loopIndex > 0) {
-        return `Final Step Loop ${target.loopIndex + 1}`;
-      }
-      if (attemptIndex > 0) {
-        return `Final Step Loop ${attemptIndex}`;
-      }
-      return "Final Step";
-    }
-    return `Prompt ${target.stepIndex + 1}`;
   }
 
   private deriveWorkflowName(workflowId: string): string {
@@ -517,18 +466,5 @@ export class HistorySearchService {
       /-\d{4}-\d{2}-\d{2}T\d{2}(?:-\d{2}){2}(?:-\d{3})?Z?$/,
       ""
     );
-  }
-
-  private getResultKey(result: HistorySearchResult): string {
-    return [
-      result.workflowKey,
-      result.runRef,
-      result.runId,
-      result.eventKind,
-      result.matchField,
-      result.matchContext,
-      result.filePath ?? "",
-      result.matchSnippet,
-    ].join("::");
   }
 }

@@ -392,6 +392,97 @@ suite("HistorySearchService", () => {
     assert.strictEqual(secondPage.results[0]?.matchContext, "Prompt 1");
   });
 
+  test("deduplicates cumulative structured output snapshots before pagination", async () => {
+    const workflowId = "streaming-snapshots-2026-06-09T18-30-00";
+    await writeWorkingFile(workflowId, {
+      workflowName: "Streaming Snapshots",
+    });
+
+    const repeatedToolResult: CliEvent = {
+      type: CLI_EVENT_TYPES.TOOL_RESULT,
+      data: {
+        toolCallId: "tool-1",
+        result: {
+          success: true,
+          output: "snapshot-needle tool output",
+        },
+      },
+    };
+    const fileEdit: CliEvent = {
+      type: CLI_EVENT_TYPES.FILE_EDIT,
+      data: {
+        path: "src/snapshot.ts",
+        structuredPatch: [
+          {
+            oldStart: 1,
+            oldLines: 1,
+            newStart: 1,
+            newLines: 1,
+            lines: ["-old", "+snapshot-needle edit"],
+          },
+        ],
+      },
+    };
+
+    await createRun(workflowId, 1, 3500, [
+      createCliOutputDraft(
+        3510,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        {
+          prompt: "",
+          response: "",
+          elapsed: 1,
+          isStreaming: true,
+          structured: {
+            events: [repeatedToolResult],
+            metadata: {},
+          },
+        }
+      ),
+      createCliOutputDraft(
+        3520,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        {
+          prompt: "",
+          response: "",
+          elapsed: 1,
+          isStreaming: false,
+          structured: {
+            events: [repeatedToolResult, fileEdit],
+            metadata: {},
+          },
+        }
+      ),
+    ]);
+
+    const firstPage = await service.search(
+      { query: "snapshot-needle", limit: 1 },
+      workspaceRoot
+    );
+    assert.strictEqual(firstPage.totalCount, 2);
+    assert.strictEqual(firstPage.results.length, 1);
+    assert.strictEqual(firstPage.hasMore, true);
+    assert.ok(firstPage.nextCursor);
+
+    const secondPage = await service.search(
+      {
+        query: "snapshot-needle",
+        limit: 1,
+        cursor: firstPage.nextCursor,
+      },
+      workspaceRoot
+    );
+    assert.strictEqual(secondPage.totalCount, 2);
+    assert.strictEqual(secondPage.results.length, 1);
+    assert.strictEqual(secondPage.hasMore, false);
+    assert.deepStrictEqual(
+      [...firstPage.results, ...secondPage.results]
+        .map((result) => result.eventKind)
+        .sort(),
+      ["fileEdit", "tool"]
+    );
+  });
+
   test("rebuilds missing, corrupt, and stale index data", async () => {
     const workflowId = "rebuild-2026-06-09T19-00-00";
     await writeWorkingFile(workflowId, { workflowName: "Rebuild Workflow" });

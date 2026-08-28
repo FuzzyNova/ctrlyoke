@@ -3,8 +3,6 @@ import * as fs from "fs";
 import * as path from "path";
 import * as readline from "readline";
 import { Worker } from "worker_threads";
-import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
-import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import {
   type HistorySearchDocument,
   type HistorySearchFilters,
@@ -21,6 +19,10 @@ import {
   matchesFilters,
   normalizeHistorySearchFilters,
 } from "./HistorySearchFilters";
+import {
+  getHistorySearchDocumentDedupeKey,
+  projectHistorySearchResult,
+} from "./HistorySearchResultUtils";
 import {
   checkHistorySearchIndexFreshness,
   DOCUMENTS_FILE_NAME,
@@ -88,7 +90,7 @@ export class HistorySearchIndexService {
     const limit = Math.max(1, request.limit || DEFAULT_LIMIT);
     const lowered = normalizedQuery.toLowerCase();
 
-    const matches = this.documents
+    const documentMatches = this.documents
       .filter(
         (document) =>
           document.text.toLowerCase().includes(lowered) &&
@@ -96,19 +98,34 @@ export class HistorySearchIndexService {
       )
       .sort(this.compareDocuments);
 
-    const page = matches.slice(offset, offset + limit);
+    const seen = new Set<string>();
+    const page: HistorySearchResult[] = [];
+    let totalCount = 0;
+    for (const document of documentMatches) {
+      const result = projectHistorySearchResult(document, normalizedQuery);
+      const dedupeKey = getHistorySearchDocumentDedupeKey(document, result);
+      if (seen.has(dedupeKey)) {
+        continue;
+      }
+      seen.add(dedupeKey);
+      if (totalCount >= offset && page.length < limit) {
+        page.push(result);
+      }
+      totalCount += 1;
+    }
+
     const nextOffset = offset + page.length;
-    const hasMore = nextOffset < matches.length;
+    const hasMore = nextOffset < totalCount;
     const indexState = this.rebuildPromise ? "building" : "ready";
 
     Log.info(
-      `[HistorySearchIndexService] search complete: query="${normalizedQuery}" documentsScanned=${this.documents.length} matches=${matches.length} readyMs=${readyDurationMs} totalMs=${Date.now() - searchStart} indexState=${indexState}`
+      `[HistorySearchIndexService] search complete: query="${normalizedQuery}" documentsScanned=${this.documents.length} documentMatches=${documentMatches.length} matches=${totalCount} readyMs=${readyDurationMs} totalMs=${Date.now() - searchStart} indexState=${indexState}`
     );
 
     return {
       query: normalizedQuery,
-      results: page.map((document) => this.toResult(document, normalizedQuery)),
-      totalCount: matches.length,
+      results: page,
+      totalCount,
       nextCursor: hasMore
         ? this.encodeCursor({
             offset: nextOffset,
@@ -394,29 +411,6 @@ export class HistorySearchIndexService {
     });
   }
 
-  private toResult(
-    document: HistorySearchDocument,
-    query: string
-  ): HistorySearchResult {
-    return {
-      workflowKey: document.workflowKey,
-      runRef: document.runRef,
-      workflowName: document.workflowName,
-      runId: document.runId,
-      startedAt: document.startedAt,
-      executionState: document.executionState,
-      target: document.target,
-      eventKind: document.eventKind,
-      matchField: document.matchField,
-      matchSnippet: this.extractSnippet(document.text, query),
-      matchContext: this.formatMatchContext(
-        document.target,
-        document.attemptIndex
-      ),
-      filePath: document.filePath,
-    };
-  }
-
   private compareDocuments(
     left: HistorySearchDocument,
     right: HistorySearchDocument
@@ -485,36 +479,6 @@ export class HistorySearchIndexService {
         })
       )
       .digest("hex");
-  }
-
-  private extractSnippet(text: string, query: string): string {
-    const searchText = text.toLowerCase();
-    const searchQuery = query.toLowerCase();
-    const index = searchText.indexOf(searchQuery);
-    if (index === -1) {
-      return text.slice(0, 100);
-    }
-
-    const start = Math.max(0, index - 40);
-    const end = Math.min(text.length, index + query.length + 60);
-    const snippet = text.slice(start, end);
-    return `${start > 0 ? "…" : ""}${snippet}${end < text.length ? "…" : ""}`;
-  }
-
-  private formatMatchContext(
-    target: OutputExecutionTarget,
-    attemptIndex: number
-  ): string {
-    if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      if (target.loopIndex > 0) {
-        return `Final Step Loop ${target.loopIndex + 1}`;
-      }
-      if (attemptIndex > 0) {
-        return `Final Step Loop ${attemptIndex}`;
-      }
-      return "Final Step";
-    }
-    return `Prompt ${target.stepIndex + 1}`;
   }
 
   private getIndexDir(workspaceFolderPath: string): string {
