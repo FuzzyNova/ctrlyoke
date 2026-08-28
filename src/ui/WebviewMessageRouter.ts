@@ -82,6 +82,10 @@ import {
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
 import { WorkflowVariantService } from "../core/orchestration/WorkflowVariantService";
 import { redactExecutionPreview } from "../types/PreviewRedactor";
+import {
+  LicenseSettingsHandlers,
+  type LicenseActionService,
+} from "./LicenseSettingsHandlers";
 
 /**
  * A dispatch-table entry. Every handler receives the originating client's scope
@@ -164,6 +168,7 @@ export class WebviewMessageRouter {
   private readonly mcpManager: McpManagerService;
   private readonly terminalHandlers: TerminalMessageHandlers;
   private readonly workflowStepHandlers: WorkflowStepHandlers;
+  private readonly licenseHandlers: LicenseSettingsHandlers;
   private readonly workflowVariantRequests = new Map<
     string,
     WorkflowVariantRequestCacheEntry
@@ -176,7 +181,8 @@ export class WebviewMessageRouter {
     private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
     private readonly historySearchService: HistorySearchService,
     private readonly callbacks: WebviewRouterCallbacks,
-    private readonly secretRegistry?: SecretRegistryService
+    private readonly secretRegistry?: SecretRegistryService,
+    licenseService?: LicenseActionService
   ) {
     this.undoRedoCoordinator = new UndoRedoCoordinator(getOrchestrator);
     this.mutationCoordinator = new WorkflowMutationCoordinator(getOrchestrator);
@@ -198,6 +204,7 @@ export class WebviewMessageRouter {
       settingsSync,
       this.mutationCoordinator
     );
+    this.licenseHandlers = new LicenseSettingsHandlers(licenseService);
     this.handlers = this.buildDispatchTable();
   }
 
@@ -303,6 +310,7 @@ export class WebviewMessageRouter {
     this.registerWorkflowModal(table);
     this.registerWorkflowStatus(table);
     this.registerSettings(table);
+    this.registerLicense(table);
     this.registerSaveWorkflow(table);
     this.registerMultiWorkflow(table);
     this.registerRunLifecycle(table);
@@ -310,6 +318,24 @@ export class WebviewMessageRouter {
     this.registerTerminal(table);
     this.registerWorkspaceInit(table);
     return table;
+  }
+
+  private registerLicense(table: DispatchTable): void {
+    table.set(MESSAGE_TYPES.ACTIVATE_LICENSE_KEY, (message, ctx) =>
+      this.licenseHandlers.handleActivateLicenseKey(message, ctx)
+    );
+    table.set(MESSAGE_TYPES.IMPORT_LICENSE_FILE, (message, ctx) =>
+      this.licenseHandlers.handleImportLicenseFile(message, ctx)
+    );
+    table.set(MESSAGE_TYPES.DEACTIVATE_LICENSE, (_message, ctx) =>
+      this.licenseHandlers.handleDeactivateLicense(ctx)
+    );
+    table.set(MESSAGE_TYPES.REQUEST_LICENSE_MACHINES, (_message, ctx) =>
+      this.licenseHandlers.handleRequestLicenseMachines(ctx)
+    );
+    table.set(MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE, (message, ctx) =>
+      this.licenseHandlers.handleDeactivateLicenseMachine(message, ctx)
+    );
   }
 
   private registerUserFeedback(table: DispatchTable): void {
@@ -340,7 +366,9 @@ export class WebviewMessageRouter {
         // Cancel RECONNECT retries before any awaited startup work so a valid
         // panel READY immediately stops further nudges from the extension.
         const shouldHandleReady = this.callbacks.onPanelReady?.(
-          typeof message.pageLoadId === "string" ? message.pageLoadId : undefined
+          typeof message.pageLoadId === "string"
+            ? message.pageLoadId
+            : undefined
         );
         if (shouldHandleReady === false) {
           Log.debug(

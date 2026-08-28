@@ -75,6 +75,8 @@ export interface LicenseService {
   /** Pro or the first-use 14-day remote-access trial. */
   hasRemoteAccess(): Promise<boolean>;
   getRemoteAccessTrialEndsAt(): Promise<number | null>;
+  /** Read the cached online key for license-scoped management operations. */
+  getStoredLicenseKey(): Promise<string | undefined>;
 
   listMachines(key: string): Promise<LicenseMachineSummary[]>;
   deactivateMachine(key: string, machineId: string): Promise<void>;
@@ -243,6 +245,10 @@ export class LicenseService implements LicenseService {
     }
     const startedAt = await this.getRemoteAccessTrialStartedAt();
     return startedAt === null ? null : startedAt + REMOTE_ACCESS_TRIAL_MS;
+  }
+
+  async getStoredLicenseKey(): Promise<string | undefined> {
+    return this.secretStore.get(LICENSE_KEY_SECRET_KEY);
   }
 
   async listMachines(key: string): Promise<LicenseMachineSummary[]> {

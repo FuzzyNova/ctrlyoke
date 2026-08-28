@@ -214,7 +214,8 @@ export class CtrlYokeWebviewProvider
         getPortFallback: () => this.runningServerPortFallback,
         onPanelReady: (pageLoadId) => this.handlePanelReady(pageLoadId),
       },
-      this.secretRegistry
+      this.secretRegistry,
+      licenseService
     );
 
     // Listen for model registry updates

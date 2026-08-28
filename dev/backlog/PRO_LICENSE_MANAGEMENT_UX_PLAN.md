@@ -29,13 +29,13 @@ missing already exist; the actual gaps are narrower.
 
 ### Already built (do not re-build)
 
-| Capability | Where |
-| --- | --- |
-| `LicenseService` takes a platform-neutral `SecretStore`, not `vscode.ExtensionContext` | `src/license/LicenseService.ts:172-181` — already satisfies the decoupling plan's Capability Boundaries for this service. |
-| `LicenseAccessState { isPro, hasRemoteAccess }` pushed to every dashboard client on load and live on entitlement change | `WebviewSettingsSync.resolveLicenseAccess`/`sendLicenseAccessUpdate`, wired from `LicenseService.onDidChangeEntitlement` in `CtrlYokeWebviewProvider.ts:175-180`; consumed client-side in `useMessageHandler.ts:485-486,555-556,573-574` into `settingsStore.licenseAccess`. |
-| Bind-address reach gate enforced at the actual socket, not just the UI | `CtrlYokeHostedServer.enforceRemoteBindBeforeListen()` (`src/server/CtrlYokeHostedServer.ts:2208-2218`) coerces any non-loopback `bindAddress` back to `127.0.0.1` before `listen()` when the entitlement lacks remote access — this is exactly `PRO_LICENSE_PLAN.md` §297's "enforce at `listen()`, not the dropdown." |
-| `ServerSection.tsx` UI-level gates for remote/TLS/QR/icon color | The `0.0.0.0` bind option is already `disabled` (`ServerSection.tsx:215-216`), the whole HTTPS/TLS `<fieldset>` is already `disabled` when `!hasRemoteAccess` (`:568-570`), the QR button is already `disabled` (`:332`), and icon-color inputs are already `disabled` unless `isPro` (`:507,530`). |
-| Settings-write-time gate for TLS + icon-color paths | `WebviewSettingsSync.handleUpdateGlobalSetting` (`:1325-1360`) rejects `REMOTE_TLS_SETTING_KEYS` writes and icon-color writes with a typed upsell (`reportProUpsell`) when the entitlement doesn't cover them. |
+| Capability                                                                                                              | Where                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LicenseService` takes a platform-neutral `SecretStore`, not `vscode.ExtensionContext`                                  | `src/license/LicenseService.ts:172-181` — already satisfies the decoupling plan's Capability Boundaries for this service.                                                                                                                                                                                               |
+| `LicenseAccessState { isPro, hasRemoteAccess }` pushed to every dashboard client on load and live on entitlement change | `WebviewSettingsSync.resolveLicenseAccess`/`sendLicenseAccessUpdate`, wired from `LicenseService.onDidChangeEntitlement` in `CtrlYokeWebviewProvider.ts:175-180`; consumed client-side in `useMessageHandler.ts:485-486,555-556,573-574` into `settingsStore.licenseAccess`.                                            |
+| Bind-address reach gate enforced at the actual socket, not just the UI                                                  | `CtrlYokeHostedServer.enforceRemoteBindBeforeListen()` (`src/server/CtrlYokeHostedServer.ts:2208-2218`) coerces any non-loopback `bindAddress` back to `127.0.0.1` before `listen()` when the entitlement lacks remote access — this is exactly `PRO_LICENSE_PLAN.md` §297's "enforce at `listen()`, not the dropdown." |
+| `ServerSection.tsx` UI-level gates for remote/TLS/QR/icon color                                                         | The `0.0.0.0` bind option is already `disabled` (`ServerSection.tsx:215-216`), the whole HTTPS/TLS `<fieldset>` is already `disabled` when `!hasRemoteAccess` (`:568-570`), the QR button is already `disabled` (`:332`), and icon-color inputs are already `disabled` unless `isPro` (`:507,530`).                     |
+| Settings-write-time gate for TLS + icon-color paths                                                                     | `WebviewSettingsSync.handleUpdateGlobalSetting` (`:1325-1360`) rejects `REMOTE_TLS_SETTING_KEYS` writes and icon-color writes with a typed upsell (`reportProUpsell`) when the entitlement doesn't cover them.                                                                                                          |
 
 **Why the original ask read these as broken:** the 14-day remote-access
 trial makes `hasRemoteAccess` `true` for every new install, so the bind
@@ -245,18 +245,18 @@ File: `src/types/DashboardConstants.ts` (`MESSAGE_TYPES`), consumed by
 New message types, modeled directly on the existing `ENABLE_SERVER`/
 `GENERATE_SERVER_CERT` pattern (`WebviewMessageRouter.ts:1812-1833`):
 
-| Message (webview → extension) | Payload | Handler |
-| --- | --- | --- |
-| `ACTIVATE_LICENSE_KEY` | `{ key: string }` | `licenseService.activateWithKey(key)` |
-| `IMPORT_LICENSE_FILE` | `{ blob: string }` | `licenseService.importLicenseFile(blob)` |
-| `DEACTIVATE_LICENSE` | `{}` | `licenseService.deactivate()` |
-| `REQUEST_LICENSE_MACHINES` | `{}` | `licenseService.listMachines(storedKey)` |
-| `DEACTIVATE_LICENSE_MACHINE` | `{ machineId: string }` | `licenseService.deactivateMachine(storedKey, machineId)`, then re-run `listMachines` |
+| Message (webview → extension) | Payload                 | Handler                                                                              |
+| ----------------------------- | ----------------------- | ------------------------------------------------------------------------------------ |
+| `ACTIVATE_LICENSE_KEY`        | `{ key: string }`       | `licenseService.activateWithKey(key)`                                                |
+| `IMPORT_LICENSE_FILE`         | `{ blob: string }`      | `licenseService.importLicenseFile(blob)`                                             |
+| `DEACTIVATE_LICENSE`          | `{}`                    | `licenseService.deactivate()`                                                        |
+| `REQUEST_LICENSE_MACHINES`    | `{}`                    | `licenseService.listMachines(storedKey)`                                             |
+| `DEACTIVATE_LICENSE_MACHINE`  | `{ machineId: string }` | `licenseService.deactivateMachine(storedKey, machineId)`, then re-run `listMachines` |
 
-| Message (extension → webview) | Payload | Sent |
-| --- | --- | --- |
-| `LICENSE_MACHINES_UPDATED` | `LicenseMachineSummary[]` | After `REQUEST_LICENSE_MACHINES` and after a successful `DEACTIVATE_LICENSE_MACHINE`. |
-| `LICENSE_ACTION_RESULT` | `{ action: string; status: "success" \| "error"; message: string }` | After every license action, success or failure — this is the client-scoped typed result the drawer's `ActionButton` feedback slots consume (see Phase 3), replacing the native `notifyUserFeedback` toasts the VS Code commands currently use for these same operations. |
+| Message (extension → webview) | Payload                                                             | Sent                                                                                                                                                                                                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `LICENSE_MACHINES_UPDATED`    | `LicenseMachineSummary[]`                                           | After `REQUEST_LICENSE_MACHINES` and after a successful `DEACTIVATE_LICENSE_MACHINE`.                                                                                                                                                                                    |
+| `LICENSE_ACTION_RESULT`       | `{ action: string; status: "success" \| "error"; message: string }` | After every license action, success or failure — this is the client-scoped typed result the drawer's `ActionButton` feedback slots consume (see Phase 3), replacing the native `notifyUserFeedback` toasts the VS Code commands currently use for these same operations. |
 
 No separate `LICENSE_STATUS_UPDATED` message (see Open Question 1,
 resolved): the status card's tier/source/expiry/trial fields ride the
@@ -276,6 +276,13 @@ a premature split). These handlers need the stored license key to call
 `listMachines`/`deactivateMachine` — read it via `secretStore.get(LICENSE_KEY_SECRET_KEY)`
 through the same `LicenseService` instance rather than threading the raw
 secret store into a second place.
+
+Implementation uses the sibling `LicenseSettingsHandlers` class because
+`WebviewSettingsSync` is already large. `LicenseService.getStoredLicenseKey()`
+keeps the credential-store access inside the service. When activation fails
+with `LicenseActivationLimitError`, the typed result keeps `status: "error"`
+and uses the distinct `action: "licenseActivationLimit"` identifier so the
+future drawer can open machine management without parsing user-facing copy.
 
 **Client-scoped, not broadcast**, matching `VSCODE_DEPENDENCY_DECOUPLING_PLAN.md`
 Stage 6/Phase 5's `WebviewClientContext` pattern: `LICENSE_ACTION_RESULT` and
