@@ -684,7 +684,7 @@ When implementation is complete:
 - [x] External watch sessions require and revalidate exact external proof.
 - [x] Orchestrator CLI-specific session names are made runner-neutral.
 - [ ] Workflow summaries expose explicit external locality without lock secrets.
-- [ ] All lock call sites are inventoried and migrated by required semantics.
+- [ ] All lock call sites are inventoried and migrated by required semantics (partially migrated: continuation/conflict and sibling stop-request paths remain for the next step).
 - [ ] Classifier, resolver, self-owner, two-host, and UI regressions are covered.
 - [ ] Architecture enforcement prevents new direct runner-to-external mappings.
 - [ ] Coordination and project-memory documentation is updated.

@@ -1604,22 +1604,14 @@ export class WorkflowOrchestrator {
         await this.workspaceSessionManager.autoLoadRecentSession(
           this.currentWorkspaceFolder.uri.fsPath,
           async (workingFilePath: string) => {
-            // Skip auto-loading if this working file is actively managed externally.
-            // The external watch session was already created in setupCliWatching(), so the
-            // workflow is already visible in the Running section — auto-loading it
-            // as a VS Code instance would create a conflicting viewedInstance.
-            const address =
-              WorkflowPaths.parseWorkingFileAddressFromPath(workingFilePath);
-            const lockStatus = address
-              ? await WorkflowLockManager.checkLock(
-                  this.currentWorkspaceFolder!.uri.fsPath,
-                  address.workflowKey
-                )
-              : LOCK_STATUS.NONE;
-            if (
-              lockStatus === LOCK_STATUS.ACTIVE_CLI ||
-              lockStatus === LOCK_STATUS.ACTIVE_VSCODE
-            ) {
+            // Skip auto-loading only when the resolver proves this working file is
+            // actively managed externally. A self-owned or indeterminate lock must
+            // stay on this host's local execution path.
+            const resolution = await this.resolveExternalExecutionForPath(
+              workingFilePath,
+              this.currentWorkspaceFolder!.uri.fsPath
+            );
+            if (resolution.kind === "external-active-run") {
               Log.debug(
                 `triggerAutoLoad: skipping externally managed workflow "${path.basename(workingFilePath)}"`
               );
@@ -3332,26 +3324,9 @@ export class WorkflowOrchestrator {
       WorkflowPaths.parseWorkingFileAddressFromPath(filePath)?.workflowKey ??
       "";
 
-    // If already tracked as an external session, switch the panel view to it (Entry Point 2)
-    const existingExternalEntry = this.externalRunSessions.get(workflowId);
-    if (existingExternalEntry) {
-      Log.debug(
-        `loadWorkingFile: "${workflowId}" is externally managed (session exists) — switching view`
-      );
-      this.storedPanelSend?.({
-        type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
-        workflowId,
-        workingFilePath: existingExternalEntry.summary.workingFilePath ?? null,
-      });
-      this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(
-        existingExternalEntry.summary
-      );
-      return;
-    }
-
     // Check for a proven external execution before creating a VS Code instance
-    // (Entry Point 2). A live lock owned by this host must remain on the local
-    // execution path, even if no external session has been registered yet.
+    // (Entry Point 2). A live lock owned by this host, an indeterminate lock,
+    // or a stale watch entry must remain on the local execution path.
     const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
     if (workflowId && workspaceFolderPath) {
       const resolution = await this.resolveExternalExecutionForPath(
@@ -3359,6 +3334,23 @@ export class WorkflowOrchestrator {
         workspaceFolderPath
       );
       if (resolution.kind === "external-active-run") {
+        const existingExternalEntry = this.externalRunSessions.get(workflowId);
+        if (existingExternalEntry) {
+          Log.debug(
+            `loadWorkingFile: "${workflowId}" is externally managed (session exists) — switching view`
+          );
+          this.storedPanelSend?.({
+            type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
+            workflowId,
+            workingFilePath:
+              existingExternalEntry.summary.workingFilePath ?? null,
+          });
+          this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(
+            existingExternalEntry.summary
+          );
+          return;
+        }
+
         Log.debug(
           `loadWorkingFile: "${workflowId}" has a proven external lock — starting external run watch session`
         );
@@ -3367,13 +3359,8 @@ export class WorkflowOrchestrator {
           workspaceFolderPath,
           resolution.inspection
         );
-      }
-      if (resolution.kind === "external-active-run") {
         return;
       }
-    }
-    if (this.externalRunSessions.has(workflowId)) {
-      return;
     }
 
     // Phase 2: loading a working file creates a new instance alongside any running ones.
@@ -5736,11 +5723,11 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    // Normalize stale locks and get active CLI paths. Live sibling-VSCode locks are
-    // intentionally absent from normalizeStaleLocks' return shape, so discover those
-    // paths separately while the lineage keys from the same startup scan are available.
+    // Normalize stale locks and get active CLI paths. Live external locks that are
+    // intentionally absent from normalizeStaleLocks' return shape are discovered
+    // separately through the external-execution resolver.
     let activeCliPaths: string[];
-    let activeVscodePaths: string[];
+    let activeExternalPaths: string[];
     let recoveredPaths: string[];
     try {
       const workflowKeys =
@@ -5750,7 +5737,7 @@ export class WorkflowOrchestrator {
         workflowKeys
       );
       activeCliPaths = normalized.activeCliRunFiles;
-      activeVscodePaths = await this.findActiveVscodeRunFiles(
+      activeExternalPaths = await this.findActiveExternalRunFiles(
         workspaceFolderPath,
         workflowKeys
       );
@@ -5761,7 +5748,7 @@ export class WorkflowOrchestrator {
         err
       );
       activeCliPaths = [];
-      activeVscodePaths = [];
+      activeExternalPaths = [];
       recoveredPaths = [];
     }
 
@@ -5819,13 +5806,11 @@ export class WorkflowOrchestrator {
     }
 
     // Create an external-run watch session for each active workflow (Entry Point 1).
-    for (const workingFilePath of activeCliPaths) {
-      await this.startExternalRunWatchSessionIfExternal(
-        workingFilePath,
-        workspaceFolderPath
-      );
-    }
-    for (const workingFilePath of activeVscodePaths) {
+    const startupExternalPaths = new Set([
+      ...activeCliPaths,
+      ...activeExternalPaths,
+    ]);
+    for (const workingFilePath of startupExternalPaths) {
       await this.startExternalRunWatchSessionIfExternal(
         workingFilePath,
         workspaceFolderPath
@@ -5836,32 +5821,32 @@ export class WorkflowOrchestrator {
     this.setupRunnerJsonCreateWatcher(workspaceFolderPath, runsRootDir);
   }
 
-  /** Find live sibling-VSCode locks left out of normalizeStaleLocks' return shape. */
-  private async findActiveVscodeRunFiles(
+  /** Find resolver-proven external locks left out of normalizeStaleLocks' return shape. */
+  private async findActiveExternalRunFiles(
     workspaceFolderPath: string,
     workflowKeys: WorkflowKey[]
   ): Promise<string[]> {
-    const activeVscodePaths: string[] = [];
+    const activeExternalPaths: string[] = [];
     for (const workflowKey of workflowKeys) {
-      const status = await WorkflowLockManager.checkLock(
-        workspaceFolderPath,
-        workflowKey
-      );
-      if (status !== LOCK_STATUS.ACTIVE_VSCODE) {
+      const lock = await readWorkflowLock(workspaceFolderPath, workflowKey);
+      if (!lock) {
         continue;
       }
-      const lock = await WorkflowLockManager.readLock(
+      const workingFilePath = WorkflowPaths.runFilePath(
         workspaceFolderPath,
-        workflowKey
+        workflowKey,
+        lock.runRef
       );
-      if (!lock || lock.runner !== RUNNER_IDS.VSCODE) {
+      const resolution = await this.resolveExternalExecutionForPath(
+        workingFilePath,
+        workspaceFolderPath
+      );
+      if (resolution.kind !== "external-active-run") {
         continue;
       }
-      activeVscodePaths.push(
-        WorkflowPaths.runFilePath(workspaceFolderPath, workflowKey, lock.runRef)
-      );
+      activeExternalPaths.push(workingFilePath);
     }
-    return activeVscodePaths;
+    return activeExternalPaths;
   }
 
   /** Read-only activation report for managed and user-owned Git worktrees. */
@@ -6017,7 +6002,7 @@ export class WorkflowOrchestrator {
     ) as WorkflowKey;
     const lock = await readWorkflowLock(workspaceFolderPath, workflowKey);
 
-    if (!lock || lock.runner !== RUNNER_IDS.CLI) {
+    if (!lock) {
       return;
     }
 
@@ -6030,26 +6015,23 @@ export class WorkflowOrchestrator {
     );
 
     Log.trace(
-      `[WorkflowOrchestrator] handleRunnerJsonEvent: CLI lock detected for "${workflowId}" pid=${lock.pid} heartbeat=${lock.lastHeartbeat}`
+      `[WorkflowOrchestrator] handleRunnerJsonEvent: runner lock detected for "${workflowId}" pid=${lock.pid} heartbeat=${lock.lastHeartbeat}`
     );
-
-    if (this.externalRunSessions.has(workflowId)) {
-      Log.trace(
-        `[WorkflowOrchestrator] handleRunnerJsonEvent: session already exists for "${workflowId}" — skipping`
-      );
-      return;
-    }
 
     const resolution = await this.resolveExternalExecutionForPath(
       workingFilePath,
       workspaceFolderPath
     );
-    if (
-      resolution.kind !== "external-active-run" ||
-      resolution.inspection.lock.runner !== RUNNER_IDS.CLI
-    ) {
+    if (resolution.kind !== "external-active-run") {
       Log.trace(
-        `[WorkflowOrchestrator] handleRunnerJsonEvent: lock is not a proven external CLI execution for "${workflowId}" — skipping`
+        `[WorkflowOrchestrator] handleRunnerJsonEvent: lock is not a proven external execution for "${workflowId}" — skipping`
+      );
+      return;
+    }
+
+    if (this.externalRunSessions.has(workflowId)) {
+      Log.trace(
+        `[WorkflowOrchestrator] handleRunnerJsonEvent: session already exists for "${workflowId}" — skipping`
       );
       return;
     }

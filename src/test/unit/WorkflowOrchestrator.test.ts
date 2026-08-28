@@ -251,7 +251,9 @@ suite("WorkflowOrchestrator triggerAutoLoad view-ownership", () => {
   interface AutoLoadHarnessOptions {
     panelViewedId: string | null;
     startupPanelViewedId: string | null;
+    workspacePath?: string;
     workingFilePath?: string;
+    recentWorkingFilePath?: string;
     findsRecentSession?: boolean;
   }
 
@@ -270,7 +272,15 @@ suite("WorkflowOrchestrator triggerAutoLoad view-ownership", () => {
 
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
     internal.currentWorkspaceFolder = {
-      uri: { fsPath: path.join(os.tmpdir(), "ctrlyoke-ws") },
+      uri: {
+        fsPath:
+          options.workspacePath ?? path.join(os.tmpdir(), "ctrlyoke-ws"),
+      },
+    };
+    internal.runnerHostIdentity = {
+      runner: RUNNER_IDS.VSCODE,
+      hostInstanceId: "observer-host",
+      pid: process.pid,
     };
     internal.startupPanelViewedId = options.startupPanelViewedId;
     internal.viewerRegistry = new Map<string, string | null>([
@@ -297,7 +307,7 @@ suite("WorkflowOrchestrator triggerAutoLoad view-ownership", () => {
       ) => {
         recentSessionScans += 1;
         if (options.findsRecentSession !== false) {
-          await onLoad(RECENT_WORKING_FILE);
+          await onLoad(options.recentWorkingFilePath ?? RECENT_WORKING_FILE);
         }
       },
     };
@@ -463,6 +473,65 @@ suite("WorkflowOrchestrator triggerAutoLoad view-ownership", () => {
 
     assert.strictEqual(harness.getStartupBroadcasts(), 1);
     assert.strictEqual(harness.internal._autoLoadHasSettled, true);
+  });
+
+  test("does not skip a recent session for a self-owned active lock", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-self-owned-auto-load-")
+    );
+    const workflowKey = "self-owned-auto-load" as never;
+    const runRef = "run-2026-08-28T00-00-00-000Z" as never;
+    const workingFilePath = WorkflowPaths.runFilePath(
+      workspace,
+      workflowKey,
+      runRef
+    );
+    const now = Date.now();
+    try {
+      await fs.mkdir(path.dirname(workingFilePath), { recursive: true });
+      await fs.writeFile(
+        workingFilePath,
+        JSON.stringify({
+          workflowName: "self-owned",
+          startedAt: now,
+          steps: [{ prompt: "live" }],
+          _runtime: {
+            currentIndex: 0,
+            executionState: EXECUTION_STATES.RUNNING,
+          },
+        }),
+        "utf8"
+      );
+      await fs.writeFile(
+        WorkflowLockManager.getLockPath(workspace, workflowKey),
+        JSON.stringify({
+          schemaVersion: 2,
+          workflowKey,
+          runRef,
+          runner: RUNNER_IDS.VSCODE,
+          pid: process.pid,
+          ownerToken: "self-owner",
+          hostInstanceId: "observer-host",
+          executionInstanceId: "self-execution",
+          startedAt: now,
+          lastHeartbeat: now,
+        }),
+        "utf8"
+      );
+
+      const harness = createAutoLoadHarness({
+        panelViewedId: "startup-hydrated",
+        startupPanelViewedId: "startup-hydrated",
+        workspacePath: workspace,
+        recentWorkingFilePath: workingFilePath,
+      });
+
+      await (harness.internal as any).triggerAutoLoad();
+
+      assert.deepStrictEqual(harness.autoLoadedPaths, [workingFilePath]);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
   });
 });
 
@@ -2926,6 +2995,44 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
         internal.instances.size,
         0,
         "must not adopt a local instance"
+      );
+    } finally {
+      ExternalRunWatchSession.prototype.start = originalStart;
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("does not register a self-owned active-vscode lock at startup", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-self-vscode-watch-startup-")
+    );
+    const originalStart = ExternalRunWatchSession.prototype.start;
+    ExternalRunWatchSession.prototype.start = async () => undefined;
+    try {
+      const run = await createLiveRun(
+        workspace,
+        RUNNER_IDS.VSCODE,
+        "self-startup",
+        EXECUTION_STATES.RUNNING,
+        "observer-host"
+      );
+      const { internal } = createWatchHarness(workspace, {
+        runner: RUNNER_IDS.VSCODE,
+        hostInstanceId: "observer-host",
+        pid: process.pid,
+      });
+      internal.lineageRepository = {
+        listLineageKeys: async () => [run.workflowKey],
+        pruneStaleStagingDirs: async () => undefined,
+      };
+      internal.setupRunnerJsonCreateWatcher = () => undefined;
+
+      await internal.setupCliWatching();
+
+      assert.strictEqual(
+        internal.externalRunSessions.size,
+        0,
+        "startup must not watch this host's own run as external"
       );
     } finally {
       ExternalRunWatchSession.prototype.start = originalStart;
