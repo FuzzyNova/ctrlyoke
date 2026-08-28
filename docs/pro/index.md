@@ -1,62 +1,98 @@
 # ctrlyoke Pro
 
-ctrlyoke is free to install and fully functional for individuals and small teams. **Pro** unlocks the features that let you run workflows beyond your local editor — most notably remote access — and supports continued development.
-
-## What Pro unlocks
-
-- **Code from anywhere** — open your running workflows in any browser, on any device on your network (remote / LAN dashboard, QR-to-phone, mobile notifications).
-- **Custom execution hooks** — user-defined hooks in the harness command path.
-- **Air-gapped / offline activation** — activate from a signed license file with no network call (enterprise / secure environments).
-- **Custom icon color.**
-- **All future Pro features** — included in the same perpetual license.
-- **Email support** at [support@ctrlyoke.dev](mailto:support@ctrlyoke.dev).
-
-Everything else — all 7 harnesses, unlimited workflow steps, end conditions, the full local dashboard, the localhost dashboard, the CLI, MCP server, and AI commit messages — is in the free tier and stays free.
+ctrlyoke is source-available and the local product is free for individuals and
+small businesses. Pro covers the remote-access features that let you use a
+running workflow away from your development machine, plus support for
+enterprise and air-gapped activation.
 
 ## Who needs a license?
 
-The free tier is available to individuals and to organizations under **both** thresholds: less than **USD $10,000,000** total annual gross revenue **and** fewer than **250** people.
+Individuals and small businesses can use ctrlyoke's local features for free.
 
-If your organization meets or exceeds either threshold, each user needs a Pro license — satisfied either by the individual buying a personal Pro license, or by the organization's enterprise license covering that user. A personal Pro license covers your use at work, including freelance and client engagements.
+For commercial use, an organization needs Pro if it has **USD $10 million or
+more in annual revenue or 250 or more employees**. Either threshold is enough;
+the organization does not need to meet both. This applies even when the team
+uses only the free local and localhost features. The threshold is a
+contractual term, not an automatic technical check.
 
-Students in accredited programs and academic researchers may use ctrlyoke free regardless of their institution's size.
+The full [ctrlyoke Commercial License](https://ctrlyoke.dev/terms) is the
+authoritative text. This page is a plain-language summary, not legal advice.
 
-This is a contractual, honor-system threshold. See the full [ctrlyoke Commercial License](https://ctrlyoke.dev/terms) for the authoritative terms.
+## What Pro includes
+
+- Remote and LAN dashboard access, including QR-to-phone connections.
+- HTTPS and self-signed certificate generation for remote connections.
+- Mobile push notifications.
+- Air-gapped activation from a signed license file.
+- Custom icon colors.
+- Future Pro features included with the same perpetual license.
+- Email support at [support@ctrlyoke.dev](mailto:support@ctrlyoke.dev).
+
+Workflow execution, notifications inside the local app, custom hooks, the MCP
+manager and integration, the agent and skills manager, AI commit messages, the
+CLI, and the complete local/localhost dashboard remain free. All six supported
+harnesses are included, with no workflow-step or workflow-count cap.
 
 ## Try remote access free
 
-Every new install includes a **14-day free trial of remote access** — no credit card, no account. When the trial ends, the dashboard stays free on `localhost`; only the remote/LAN reach requires Pro.
+Each new installation includes a 14-day remote-access trial. No credit card or
+account is required. After the trial, the local and `localhost` dashboard keeps
+working for free; only remote reach requires Pro.
 
 ## Buy Pro
 
-A Pro license is **\$59 USD, one-time** (perpetual — includes all future Pro features) and activates on up to **10 machines**.
+ctrlyoke Pro costs **$59 USD one time**. It is a perpetual license that includes
+future Pro features and activates on up to 10 machines.
 
 [**Get ctrlyoke Pro →**](https://ctrlyoke.dev/pricing/)
 
-## Activate your license
+Lemon Squeezy is the checkout and Merchant of Record. Keygen is the licensing
+backend that issues and validates ctrlyoke license keys and signed license
+files. After checkout, the Netlify purchase webhook creates the Keygen license
+and the key is delivered in a separate email.
 
-### Online (most users)
+## Activate online
 
-1. Run **`ctrlyoke: Activate Pro License`** from the Command Palette (`Ctrl/Cmd+Shift+P`).
-2. Paste the license key from your purchase email.
-3. ctrlyoke activates the key and caches a signed license file locally. Pro features unlock immediately.
+This is the normal flow for a connected machine:
 
-Activation registers the current machine against your 10-machine limit.
+1. Purchase Pro, or retrieve the Keygen license key from your purchase email.
+2. Open the VS Code Command Palette (`Ctrl/Cmd+Shift+P`).
+3. Run **`ctrlyoke: Activate Pro License`**.
+4. Paste the Keygen license key when prompted.
+5. Confirm the success notification. Pro unlocks immediately; no restart is
+   required.
 
-### Air-gapped / offline
+Online activation registers the current machine with Keygen and caches a
+cryptographically signed license file for offline verification and short
+connectivity gaps.
 
-For machines with no internet access:
+## Activate on an air-gapped machine
 
-1. Obtain your signed license file (delivered with your purchase, or transferred via USB / QR).
-2. Run **`ctrlyoke: Activate Pro License`** and choose to import a license file.
-3. ctrlyoke verifies the file's signature locally — no network call is made.
+Use this flow when the development machine cannot reach the internet:
 
-### Move a license to another machine
+1. On a connected device, obtain the signed license file from the Keygen
+   customer portal or from your organization's Keygen administrator.
+2. Transfer the file to the air-gapped machine using your approved removable
+   media process.
+3. In VS Code, open the Command Palette and run
+   **`ctrlyoke: Activate Offline (Air-Gapped) License`**.
+4. Choose the signed license file in the file picker. If you do not select a
+   file, paste the complete signed license-file text when prompted.
+5. Confirm the success notification.
 
-Run **`ctrlyoke: Deactivate Pro License`** on a machine you no longer use to free up an activation slot, then activate on the new machine. Your Free/Pro status is shown in the status bar.
+The file's Ed25519 signature is checked locally against the embedded Keygen
+public key. The import makes no network call. QR scanning is not part of the
+current release; use the file picker or paste the file contents instead.
+
+## Deactivate or manage a license
+
+Run **`ctrlyoke: Deactivate Pro License`** on a machine you no longer use to
+release its Keygen activation slot, then activate the license on another
+machine. Run **`ctrlyoke: Manage License`** to see the current Free/Pro status;
+the status is also visible in the VS Code status bar.
 
 ## Questions
 
-- **Is it really perpetual?** Yes — one-time purchase, no subscription, includes future Pro features in the same tier.
 - **Lost your key?** Contact [support@ctrlyoke.dev](mailto:support@ctrlyoke.dev).
-- **Team or enterprise licensing?** Email [sales@ctrlyoke.dev](mailto:sales@ctrlyoke.dev).
+- **Need team or enterprise licensing?** Contact
+  [sales@ctrlyoke.dev](mailto:sales@ctrlyoke.dev).
