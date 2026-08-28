@@ -15,7 +15,6 @@ import { sendMessage } from "../../hooks/useMessageHandler";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
-  RUNNER_IDS,
   TERMINAL_SESSION_STATUS,
   type ExecutionState,
 } from "../../types/messages";
@@ -51,7 +50,6 @@ import { isWorkflowActive, isWorkflowRunning } from "../../utils/status";
 import { ExecutionStateBadge } from "../shared/ExecutionStateBadge";
 import { useElementNarrow, useElementTier } from "../../hooks/useElementNarrow";
 import { useIsMobile } from "@hooks/useMediaQuery";
-import { useActiveWorkflowManagedBy } from "@hooks/useActiveWorkflowManagedBy";
 import { getContextMenuOpener, useLongPress } from "@hooks/useLongPress";
 import {
   useWorkflowContextMenu,
@@ -201,8 +199,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     [activeTerminalWorkflows]
   );
 
-  const activeManagedBy = useActiveWorkflowManagedBy();
-  const isExternallyManaged = activeManagedBy != null;
   const workflowHasActiveTerminal = useCallback(
     (workflowId: string | null | undefined) =>
       !!workflowId && activeTerminalWorkflowIds.has(workflowId),
@@ -1605,20 +1601,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               <span className="font-semibold text-sm truncate flex-1 min-w-0">
                 {displayName}
               </span>
-
-              {/* External runner badge */}
-              {isExternallyManaged && (
-                <span
-                  className="text-xs px-1.5 py-px rounded uppercase font-semibold flex-shrink-0 bg-btn-bg text-btn-fg border border-btn-border"
-                  title={
-                    activeManagedBy === RUNNER_IDS.CLI
-                      ? "Workflow is being managed by the ctrlyoke CLI"
-                      : "Workflow is being managed by another ctrlyoke window"
-                  }
-                >
-                  {activeManagedBy === RUNNER_IDS.CLI ? "CLI" : "VS Code"}
-                </span>
-              )}
 
               {!isNarrow && currentWorkflowHasActiveTerminal && (
                 <span

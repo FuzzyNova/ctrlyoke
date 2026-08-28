@@ -1,9 +1,14 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HeaderStatusBanner } from "@components/layout/HeaderStatusBanner";
 import type { HeaderStatusBannerProps } from "@components/layout/HeaderStatusBanner";
 import type { WorkflowViewAddress } from "@root/types/CtrlYokeTypes";
-import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
+import {
+  RUNNER_IDS,
+  WORKFLOW_VIEW_ADDRESS_KIND,
+} from "@root/types/DashboardConstants";
+import { useUiStore } from "@store/uiStore";
+import { getExternalReadOnlyLabel } from "@utils/externalRunner";
 
 const runAddress: WorkflowViewAddress = {
   workflowKey: "workflow-a" as never,
@@ -27,6 +32,30 @@ function renderBanner(overrides: Partial<HeaderStatusBannerProps> = {}): void {
 }
 
 afterEach(cleanup);
+
+beforeEach(() => {
+  useUiStore.setState({
+    activeWorkflowId: null,
+    loadedWorkflows: [],
+    viewedLineageIsSystemGenerated: false,
+  });
+});
+
+function setLockedLineage({
+  managedBy,
+  isSystemGenerated = false,
+}: {
+  managedBy?: (typeof RUNNER_IDS)[keyof typeof RUNNER_IDS];
+  isSystemGenerated?: boolean;
+}): void {
+  useUiStore.setState({
+    activeWorkflowId: managedBy ? "active-workflow" : null,
+    loadedWorkflows: managedBy
+      ? [{ id: "active-workflow", managedBy } as never]
+      : [],
+    viewedLineageIsSystemGenerated: isSystemGenerated,
+  });
+}
 
 describe("HeaderStatusBanner", () => {
   it("renders the pausing banner and calls its cancel action", () => {
@@ -60,6 +89,36 @@ describe("HeaderStatusBanner", () => {
     expect(handleCloseDeletedWorkflow).toHaveBeenCalledOnce();
   });
 
+  it("renders the CLI read-only label from the shared external-runner utility", () => {
+    setLockedLineage({ managedBy: RUNNER_IDS.CLI });
+    renderBanner();
+
+    expect(
+      screen.getByText(getExternalReadOnlyLabel(RUNNER_IDS.CLI)!)
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("renders the sibling VS Code read-only label from the shared utility", () => {
+    setLockedLineage({ managedBy: RUNNER_IDS.VSCODE });
+    renderBanner();
+
+    expect(
+      screen.getByText(getExternalReadOnlyLabel(RUNNER_IDS.VSCODE)!)
+    ).toBeInTheDocument();
+  });
+
+  it("renders the system-generated read-only label", () => {
+    setLockedLineage({ isSystemGenerated: true });
+    renderBanner();
+
+    expect(
+      screen.getByText(
+        "Read-only — managed automatically by commit message generation"
+      )
+    ).toBeInTheDocument();
+  });
+
   it("renders the rewind banner and calls its discard action", () => {
     const handleDiscardContinuation = vi.fn();
     renderBanner({
@@ -74,7 +133,7 @@ describe("HeaderStatusBanner", () => {
     expect(handleDiscardContinuation).toHaveBeenCalledOnce();
   });
 
-  it("preserves the existing pause, deleted, rewind render order", () => {
+  it("gives deleted workflows precedence over locked and transient banners", () => {
     renderBanner({
       isPausing: true,
       isViewingDeletedWorkflow: true,
@@ -85,18 +144,60 @@ describe("HeaderStatusBanner", () => {
       pendingRewind: { fromStepIndex: 1, baseDefinitionRevision: 2 },
     });
 
-    const bannerTexts = [
-      screen.getByText("Workflow will pause after the current step completes"),
-      screen.getByText('"Deleted One" has been deleted'),
-      screen.getByText("Continuing run from step 2"),
-    ];
     expect(
-      bannerTexts[0].compareDocumentPosition(bannerTexts[1]) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+      screen.getByText('"Deleted One" has been deleted')
+    ).toBeInTheDocument();
     expect(
-      bannerTexts[1].compareDocumentPosition(bannerTexts[2]) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+      screen.queryByText("Workflow will pause after the current step completes")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Continuing run from step 2")
+    ).not.toBeInTheDocument();
+  });
+
+  it("gives external ownership precedence over system-generated and transient banners", () => {
+    setLockedLineage({
+      managedBy: RUNNER_IDS.CLI,
+      isSystemGenerated: true,
+    });
+    renderBanner({
+      isPausing: true,
+      pendingRewind: { fromStepIndex: 1, baseDefinitionRevision: 2 },
+    });
+
+    expect(
+      screen.getByText(getExternalReadOnlyLabel(RUNNER_IDS.CLI)!)
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Read-only — managed automatically by commit message generation"
+      )
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Workflow will pause after the current step completes")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Continuing run from step 2")
+    ).not.toBeInTheDocument();
+  });
+
+  it("gives system-generated workflows precedence over transient banners", () => {
+    setLockedLineage({ isSystemGenerated: true });
+    renderBanner({
+      isPausing: true,
+      pendingRewind: { fromStepIndex: 1, baseDefinitionRevision: 2 },
+    });
+
+    expect(
+      screen.getByText(
+        "Read-only — managed automatically by commit message generation"
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Workflow will pause after the current step completes")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Continuing run from step 2")
+    ).not.toBeInTheDocument();
   });
 });
