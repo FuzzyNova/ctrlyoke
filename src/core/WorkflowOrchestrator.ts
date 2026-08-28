@@ -6202,7 +6202,10 @@ export class WorkflowOrchestrator {
       return false;
     }
 
-    const managedBy = currentInspection.lock.runner;
+    const externalOwner = {
+      locality: "external" as const,
+      runner: currentInspection.lock.runner,
+    };
 
     // Retire any existing VS Code WorkflowInstance tracking this same working file.
     // This prevents a conflict where VS Code auto-loaded the workflow in PAUSED state
@@ -6252,7 +6255,7 @@ export class WorkflowOrchestrator {
       currentStep: currentIndex,
       totalSteps,
       startedAt: workingFile.startedAt,
-      managedBy,
+      externalOwner,
       tokenTotals: workingFile._runtime?.tokenTotals,
       worktree: workingFile._runtime?.worktree,
     };
@@ -6274,7 +6277,7 @@ export class WorkflowOrchestrator {
         const updatedSummary: WorkflowSummary = {
           ...entry.summary,
           ...partialSummary,
-          managedBy,
+          externalOwner,
         };
         entry.summary = updatedSummary;
         this.dashboardBroadcastHub.notifyWorkflowSummaryUpdated(updatedSummary);
@@ -6330,7 +6333,7 @@ export class WorkflowOrchestrator {
     // Notify the dashboard so the workflow appears in the Running section
     this.dashboardBroadcastHub.notifyWorkflowAdded(activeEntry.summary);
     Log.info(
-      `[WorkflowOrchestrator] external run watch session started for "${workflowId}" (runner=${managedBy})`
+      `[WorkflowOrchestrator] external run watch session started for "${workflowId}" (runner=${externalOwner.runner})`
     );
     return true;
   }
@@ -6670,7 +6673,7 @@ export class WorkflowOrchestrator {
           currentStep:
             workingFile._runtime?.currentIndex ?? entry.summary.currentStep,
           totalSteps: workingFile.steps?.length ?? entry.summary.totalSteps,
-          managedBy: undefined, // no longer externally managed
+          externalOwner: undefined, // no longer externally managed
           tokenTotals: workingFile._runtime?.tokenTotals,
         };
 

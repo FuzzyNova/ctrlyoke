@@ -303,7 +303,10 @@ suite("multi-instance runner ownership regression", () => {
       assert.strictEqual(hostA.internal.externalRunSessions.size, 0);
       const siblingEntry = hostB.internal.externalRunSessions.get(WORKFLOW_KEY);
       assert.ok(siblingEntry);
-      assert.strictEqual(siblingEntry.summary.managedBy, RUNNER_IDS.VSCODE);
+      assert.deepStrictEqual(siblingEntry.summary.externalOwner, {
+        locality: "external",
+        runner: RUNNER_IDS.VSCODE,
+      });
       assert.deepStrictEqual(siblingEntry.summary.worktree, {
         branchName: "ctrlyoke/shared-ownership",
         worktreePath: path.join(workspaceRoot, "named-worktree"),
@@ -439,7 +442,7 @@ suite("multi-instance runner ownership regression", () => {
         hostB.updated.some(
           (summary: any) =>
             summary.executionState === EXECUTION_STATES.COMPLETED &&
-            summary.managedBy === undefined
+            summary.externalOwner === undefined
         )
       );
       assert.deepStrictEqual(hostB.dismissed, [WORKFLOW_KEY]);

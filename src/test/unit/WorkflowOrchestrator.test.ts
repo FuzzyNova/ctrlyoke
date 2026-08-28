@@ -2988,7 +2988,9 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
 
       const entry = internal.externalRunSessions.get(run.workflowKey);
       assert.ok(entry, "startup should register an external watch session");
-      assert.strictEqual(entry.summary.managedBy, RUNNER_IDS.VSCODE);
+      assert.ok(entry.summary.externalOwner);
+      assert.strictEqual(entry.summary.externalOwner.locality, "external");
+      assert.strictEqual(entry.summary.externalOwner.runner, RUNNER_IDS.VSCODE);
       assert.strictEqual(entry.summary.workingFilePath, run.filePath);
       assert.strictEqual(
         internal.instances.size,
@@ -3081,7 +3083,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
     const originalStart = ExternalRunWatchSession.prototype.start;
     ExternalRunWatchSession.prototype.start = async () => undefined;
     try {
-      for (const [runner, expectedManagedBy] of [
+      for (const [runner] of [
         [RUNNER_IDS.CLI, RUNNER_IDS.CLI],
         [RUNNER_IDS.VSCODE, RUNNER_IDS.VSCODE],
       ] as const) {
@@ -3100,10 +3102,11 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
         );
 
         assert.strictEqual(freshLoad, false);
-        assert.strictEqual(
-          internal.externalRunSessions.get(run.workflowKey)?.summary.managedBy,
-          expectedManagedBy
-        );
+        const externalOwner = internal.externalRunSessions.get(run.workflowKey)
+          ?.summary.externalOwner;
+        assert.ok(externalOwner);
+        assert.strictEqual(externalOwner.locality, "external");
+        assert.strictEqual(externalOwner.runner, runner);
       }
     } finally {
       ExternalRunWatchSession.prototype.start = originalStart;
@@ -3128,10 +3131,11 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
       await orchestrator.loadWorkingFile(run.filePath);
 
       assert.strictEqual(freshInstance, false);
-      assert.strictEqual(
-        internal.externalRunSessions.get(run.workflowKey)?.summary.managedBy,
-        RUNNER_IDS.VSCODE
-      );
+      const externalOwner = internal.externalRunSessions.get(run.workflowKey)
+        ?.summary.externalOwner;
+      assert.ok(externalOwner);
+      assert.strictEqual(externalOwner.locality, "external");
+      assert.strictEqual(externalOwner.runner, RUNNER_IDS.VSCODE);
     } finally {
       ExternalRunWatchSession.prototype.start = originalStart;
       await fs.rm(workspace, { recursive: true, force: true });
@@ -3216,10 +3220,11 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
         false,
         "the paused local instance should be retired in favor of the CLI watch session"
       );
-      assert.strictEqual(
-        internal.externalRunSessions.get(run.workflowKey)?.summary.managedBy,
-        RUNNER_IDS.CLI
-      );
+      const externalOwner = internal.externalRunSessions.get(run.workflowKey)
+        ?.summary.externalOwner;
+      assert.ok(externalOwner);
+      assert.strictEqual(externalOwner.locality, "external");
+      assert.strictEqual(externalOwner.runner, RUNNER_IDS.CLI);
     } finally {
       ExternalRunWatchSession.prototype.start = originalStart;
       await fs.rm(workspace, { recursive: true, force: true });

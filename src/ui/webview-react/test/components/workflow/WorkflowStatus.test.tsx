@@ -23,6 +23,7 @@ import {
   HARNESS_IDS,
   MESSAGE_TYPES,
   EXECUTION_STATES,
+  RUNNER_IDS,
   SESSION_KINDS,
   TERMINAL_SESSION_STATUS,
 } from "@/types/messages";
@@ -838,7 +839,7 @@ describe("WorkflowStatus — loaded state", () => {
       expect(document.querySelectorAll(".workflow-menu-item")).toHaveLength(0);
     });
 
-    it("releases the pinned row when the paused run reaches a terminal state", async () => {
+    it("releases the pinned row when a stale external-owner summary reaches a terminal state", async () => {
       act(() => {
         useUiStore.getState().addLoadedWorkflow(pausedSummary("running"));
         useUiStore.getState().updateLoadedWorkflow(pausedSummary("paused"));
@@ -850,7 +851,10 @@ describe("WorkflowStatus — loaded state", () => {
       ).toBeInTheDocument();
 
       act(() => {
-        useUiStore.getState().removeLoadedWorkflow("workflow-paused");
+        useUiStore.getState().updateLoadedWorkflow({
+          ...pausedSummary("completed"),
+          externalOwner: { locality: "external", runner: RUNNER_IDS.CLI },
+        });
       });
 
       expect(

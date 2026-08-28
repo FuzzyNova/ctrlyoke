@@ -1048,6 +1048,12 @@ export interface WorkflowHarnessTokenTotals {
   costSources?: AttemptCostSource[];
 }
 
+/** Redacted ownership projection for a proven external execution. */
+export interface ExternalExecutionOwnerSummary {
+  locality: "external";
+  runner: RunnerId;
+}
+
 /**
  * Summary of a workflow instance — used by WorkflowOrchestrator to expose
  * lightweight status information without leaking the full WorkflowInstance.
@@ -1072,11 +1078,8 @@ export interface WorkflowSummary {
   /** Timestamp when executionTimeMs was sampled for a live-running summary. */
   executionTimeUpdatedAt?: number;
   completedAt?: number;
-  /**
-   * Identifies a live external owner: "cli" is the ctrlyoke CLI and "vscode" is
-   * a different VS Code instance. Undefined means this VS Code instance owns it.
-   */
-  managedBy?: RunnerId;
+  /** Present only when a proven external execution owns this run. */
+  externalOwner?: ExternalExecutionOwnerSummary;
   /** Resolved harness this workflow runs on (workflow/step override, or the global default). */
   harness?: HarnessId;
   /** Resolved worktree identity for the currently executing run, when applicable. */

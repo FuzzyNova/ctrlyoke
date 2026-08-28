@@ -3,6 +3,7 @@ import { useUiStore } from "@store/uiStore";
 import { EXECUTION_STATES } from "@/types/messages";
 import type { ExecutionState, WorkflowSummary } from "@/types/messages";
 import {
+  RUNNER_IDS,
   USER_FEEDBACK_SEVERITY,
   WORKFLOW_VIEW_ADDRESS_KIND,
 } from "@root/types/DashboardConstants";
@@ -1026,5 +1027,18 @@ describe("observedRunningWorkflowIds", () => {
     const first = store().observedRunningWorkflowIds;
     store().updateLoadedWorkflow(summary("a", EXECUTION_STATES.PAUSED));
     expect(store().observedRunningWorkflowIds).toBe(first);
+  });
+
+  it("evicts an observed workflow when a terminal summary arrives", () => {
+    store().addLoadedWorkflow({
+      ...summary("a", EXECUTION_STATES.RUNNING),
+      externalOwner: { locality: "external", runner: RUNNER_IDS.CLI },
+    });
+    store().updateLoadedWorkflow({
+      ...summary("a", EXECUTION_STATES.COMPLETED),
+      externalOwner: { locality: "external", runner: RUNNER_IDS.CLI },
+    });
+
+    expect([...store().observedRunningWorkflowIds]).toEqual([]);
   });
 });

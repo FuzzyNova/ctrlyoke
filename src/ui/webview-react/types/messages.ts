@@ -213,6 +213,7 @@ export {
 
 // Re-export WorkflowSummary, PriorContext, McpServerConfig, ToolPermissionsOverride, PreCondition, and helpers from CtrlYokeTypes
 export type {
+  ExternalExecutionOwnerSummary,
   WorkflowSummary,
   WorkspaceWorktreeOwnership,
   PriorContext,

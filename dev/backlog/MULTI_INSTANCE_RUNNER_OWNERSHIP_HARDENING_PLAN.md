@@ -683,7 +683,7 @@ When implementation is complete:
 - [x] External-execution resolver is the single source of external eligibility.
 - [x] External watch sessions require and revalidate exact external proof.
 - [x] Orchestrator CLI-specific session names are made runner-neutral.
-- [ ] Workflow summaries expose explicit external locality without lock secrets.
+- [x] Workflow summaries expose explicit external locality without lock secrets.
 - [x] All lock call sites are inventoried and migrated by required semantics. The remaining low-level `runner.json` and `LOCK_STATUS` uses are deliberately retained for the architectural-enforcement audit listed below.
 - [x] A two-host shared-filesystem regression test proves owner-versus-sibling behavior, including terminal state with a retained lock.
 - [ ] Classifier, resolver, self-owner, two-host, and UI regressions are covered.

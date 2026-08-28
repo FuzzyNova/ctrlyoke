@@ -1,16 +1,18 @@
-import { RUNNER_IDS, type RunnerId } from "@root/types/DashboardConstants";
+import { RUNNER_IDS } from "@root/types/DashboardConstants";
+import type { ExternalExecutionOwnerSummary } from "@root/types/CtrlYokeTypes";
 
 export function getExternalRunnerLabel(
-  managedBy: RunnerId | undefined
+  externalOwner: ExternalExecutionOwnerSummary | undefined
 ): string | undefined {
-  if (managedBy === RUNNER_IDS.CLI) return "ctrlyoke CLI";
-  if (managedBy === RUNNER_IDS.VSCODE) return "another ctrlyoke window";
+  if (externalOwner?.runner === RUNNER_IDS.CLI) return "ctrlyoke CLI";
+  if (externalOwner?.runner === RUNNER_IDS.VSCODE)
+    return "another ctrlyoke window";
   return undefined;
 }
 
 export function getExternalReadOnlyLabel(
-  managedBy: RunnerId | undefined
+  externalOwner: ExternalExecutionOwnerSummary | undefined
 ): string | undefined {
-  const runner = getExternalRunnerLabel(managedBy);
+  const runner = getExternalRunnerLabel(externalOwner);
   return runner ? `Read-only — workflow is running via ${runner}` : undefined;
 }

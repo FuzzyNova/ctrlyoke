@@ -51,11 +51,11 @@ const EditorSectionInner: React.FC = () => {
   const vscode = useVsCodeApi();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
-  const activeManagedBy = loadedWorkflows.find(
+  const activeExternalOwner = loadedWorkflows.find(
     (w) => w.id === activeWorkflowId
-  )?.managedBy;
-  const isExternallyManaged = activeManagedBy != null;
-  const externalReadOnlyLabel = getExternalReadOnlyLabel(activeManagedBy);
+  )?.externalOwner;
+  const isExternallyManaged = activeExternalOwner != null;
+  const externalReadOnlyLabel = getExternalReadOnlyLabel(activeExternalOwner);
 
   const isEditMode = selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT;
   const totalPrompts = steps.length;

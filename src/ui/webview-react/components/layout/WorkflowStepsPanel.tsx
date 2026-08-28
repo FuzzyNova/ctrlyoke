@@ -352,11 +352,11 @@ const WorkflowStepsPanelInner: React.FC<{
   const getLatestOutput = useLatestStepOutput();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
-  const activeManagedBy = loadedWorkflows.find(
+  const activeExternalOwner = loadedWorkflows.find(
     (w) => w.id === activeWorkflowId
-  )?.managedBy;
-  const isExternallyManaged = activeManagedBy != null;
-  const externalReadOnlyLabel = getExternalReadOnlyLabel(activeManagedBy);
+  )?.externalOwner;
+  const isExternallyManaged = activeExternalOwner != null;
+  const externalReadOnlyLabel = getExternalReadOnlyLabel(activeExternalOwner);
   // The lineage on screen was deleted while being viewed, or is an internal
   // system lineage (e.g. commit message generation) whose properties are
   // overridden by its owning feature on the next run regardless of what's

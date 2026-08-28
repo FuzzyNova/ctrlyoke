@@ -8,6 +8,7 @@ import type {
   WorkflowFileFormat,
 } from "../types/messages";
 import { EXECUTION_STATES, type FooterPicker } from "../types/messages";
+import { isExecutionFinished } from "../utils/status";
 import type { OutputTab } from "@root/types/DashboardConstants";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type {
@@ -123,6 +124,9 @@ function reconcileObservedRunning(
 ): Set<string> {
   const next = new Set<string>();
   for (const workflow of workflows) {
+    if (isExecutionFinished(workflow.executionState)) {
+      continue;
+    }
     if (
       isWorkflowRunning(workflow.executionState) ||
       previous.has(workflow.id)
@@ -457,7 +461,10 @@ interface UiState {
   historySearchHasMore: boolean;
   historySearchIndexState: HistorySearchIndexState;
   /** Set only while a search is blocked on a full search-index rebuild; null otherwise. */
-  historySearchRebuildProgress: { processedRuns: number; totalRuns: number } | null;
+  historySearchRebuildProgress: {
+    processedRuns: number;
+    totalRuns: number;
+  } | null;
   historySearchFilters: HistorySearchFilterState;
   pendingHistorySearchNavigation: {
     address: Extract<WorkflowViewAddress, { kind: "run" }>;

@@ -689,7 +689,10 @@ describe("Header execution controls", () => {
           executionState: EXECUTION_STATES.RUNNING,
           currentStep: 1,
           totalSteps: 2,
-          managedBy: RUNNER_IDS.VSCODE,
+          externalOwner: {
+            locality: "external",
+            runner: RUNNER_IDS.VSCODE,
+          },
         },
       ],
     });
@@ -712,6 +715,90 @@ describe("Header execution controls", () => {
       type: MESSAGE_TYPES.STOP_VSCODE_RUN,
       workflowId: "sibling-instance",
     });
+  });
+
+  it("locks down CLI-owned runs and sends the CLI stop request", () => {
+    useUiStore.setState({
+      activeWorkflowId: "cli-instance",
+      executionRunRef: runRef,
+      pendingRewind: null,
+      loadedWorkflows: [
+        {
+          id: "cli-instance",
+          workflowKey: "workflow-a" as never,
+          runRef,
+          workflowName: "CLI workflow",
+          filePath: "workflow.ctrlyoke.json",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 1,
+          totalSteps: 2,
+          externalOwner: { locality: "external", runner: RUNNER_IDS.CLI },
+        },
+      ],
+    });
+    useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
+
+    render(<Header />);
+
+    const controls = screen.getByRole("group", {
+      name: "Workflow execution controls",
+    });
+    expect(
+      within(controls).getByRole("button", { name: "Re-run" })
+    ).toBeDisabled();
+    expect(
+      within(controls).getByRole("button", { name: "Stop" })
+    ).toHaveAttribute("title", "Stop CLI run");
+
+    fireEvent.click(within(controls).getByRole("button", { name: "Stop" }));
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.STOP_CLI_RUN,
+      workflowId: "cli-instance",
+    });
+  });
+
+  it("keeps a local workflow local when an unrelated runner field is present", () => {
+    useUiStore.setState({
+      activeWorkflowId: "local-instance",
+      executionRunRef: runRef,
+      pendingRewind: null,
+      loadedWorkflows: [
+        {
+          id: "local-instance",
+          workflowKey: "workflow-a" as never,
+          runRef,
+          workflowName: "Local workflow",
+          filePath: "workflow.ctrlyoke.json",
+          executionState: EXECUTION_STATES.RUNNING,
+          currentStep: 1,
+          totalSteps: 2,
+          runner: RUNNER_IDS.VSCODE,
+        } as never,
+      ],
+    });
+    useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
+
+    render(<Header />);
+
+    const controls = screen.getByRole("group", {
+      name: "Workflow execution controls",
+    });
+    expect(
+      within(controls).getByRole("button", { name: "Stop" })
+    ).toHaveAttribute("title", "Stop for run 4");
+
+    fireEvent.click(within(controls).getByRole("button", { name: "Stop" }));
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.STOP_RUN,
+      address: {
+        workflowKey: "workflow-a",
+        kind: WORKFLOW_VIEW_ADDRESS_KIND.RUN,
+        runRef,
+      },
+    });
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: MESSAGE_TYPES.STOP_VSCODE_RUN })
+    );
   });
 });
 
