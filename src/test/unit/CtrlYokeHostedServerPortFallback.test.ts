@@ -58,6 +58,10 @@ interface HostedServerListenInternals {
   remoteAccessUpsellShown: boolean;
   listen(): Promise<string>;
   getPortFallbackInfo(): { requestedPort: number; actualPort: number } | null;
+  getBindAddressFallbackInfo(): {
+    requestedBindAddress: string;
+    actualBindAddress: string;
+  } | null;
 }
 
 function createListenHarness(
@@ -165,6 +169,7 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
     assert.strictEqual(server.port, 4747);
     assert.ok(url.includes(":4747/"));
     assert.strictEqual(server.getPortFallbackInfo(), null);
+    assert.strictEqual(server.getBindAddressFallbackInfo(), null);
   });
 
   test("coerces a non-loopback bind to localhost when remote access is gated", async () => {
@@ -180,6 +185,12 @@ suite("CtrlYokeHostedServer.listen port fallback", () => {
     await server.listen();
 
     assert.strictEqual(server.bindAddress, "127.0.0.1");
+    assert.deepStrictEqual(server.getBindAddressFallbackInfo(), {
+      requestedBindAddress: "0.0.0.0",
+      actualBindAddress: "127.0.0.1",
+    });
+    // The requested value is retained in the fallback info; the settings file
+    // is never rewritten when the in-memory listener is coerced.
     assert.deepStrictEqual(fakeHttpServer.listenCalls, [4747]);
     assert.strictEqual(blocked, 1);
   });

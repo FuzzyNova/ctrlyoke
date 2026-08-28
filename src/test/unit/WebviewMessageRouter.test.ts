@@ -13,6 +13,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
 import {
+  LICENSE_ACTIONS,
   MESSAGE_TYPES,
   HARNESS_IDS,
   END_CONDITION_SCRIPT_TYPES,
@@ -22,10 +23,17 @@ import {
 } from "../../types/DashboardConstants";
 import { WorkflowVariantService } from "../../core/orchestration/WorkflowVariantService";
 import { VsCodeUserFeedbackSink } from "../../platform/VsCodeUserFeedbackSink";
+import {
+  LicenseActivationLimitError,
+  type Entitlement,
+  type LicenseMachineSummary,
+} from "../../license/LicenseService";
+import type { LicenseActionService } from "../../ui/LicenseSettingsHandlers";
 
 function buildRouter(
   orchestrator: unknown,
-  defaultPostMessage: (message: unknown) => void = () => {}
+  defaultPostMessage: (message: unknown) => void = () => {},
+  licenseService?: LicenseActionService
 ): WebviewMessageRouter {
   const settingsSync = {
     sendWorkflowPropertiesToSettings: async () => {},
@@ -36,8 +44,57 @@ function buildRouter(
     {} as any,
     () => orchestrator as any,
     {} as any,
-    { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+    { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} },
+    undefined,
+    licenseService
   );
+}
+
+class FakeLicenseActionService implements LicenseActionService {
+  readonly calls: string[] = [];
+  readonly machines: LicenseMachineSummary[] = [
+    {
+      id: "machine-1",
+      name: "Desktop",
+      platform: "win32",
+      createdAt: "2026-08-28T12:00:00.000Z",
+      isThisMachine: true,
+    },
+  ];
+  storedKey = "license-key";
+  activationError: Error | undefined;
+
+  getStoredLicenseKey(): Promise<string | undefined> {
+    return Promise.resolve(this.storedKey);
+  }
+
+  activateWithKey(key: string): Promise<Entitlement> {
+    this.calls.push(`activate:${key}`);
+    if (this.activationError) {
+      return Promise.reject(this.activationError);
+    }
+    return Promise.resolve({} as Entitlement);
+  }
+
+  importLicenseFile(blob: string): Promise<Entitlement> {
+    this.calls.push(`import:${blob}`);
+    return Promise.resolve({} as Entitlement);
+  }
+
+  deactivate(): Promise<void> {
+    this.calls.push("deactivate");
+    return Promise.resolve();
+  }
+
+  listMachines(key: string): Promise<LicenseMachineSummary[]> {
+    this.calls.push(`list:${key}`);
+    return Promise.resolve(this.machines);
+  }
+
+  deactivateMachine(key: string, machineId: string): Promise<void> {
+    this.calls.push(`deactivateMachine:${key}:${machineId}`);
+    return Promise.resolve();
+  }
 }
 
 suite("WebviewMessageRouter — client workflow file paths", () => {
@@ -737,5 +794,122 @@ suite("WebviewMessageRouter — execution preview transport", () => {
     assert.strictEqual(result.requestToken, 12);
     assert.strictEqual(result.displayedDefinitionRevision, 7);
     assert.ok(!JSON.stringify(result.preview).includes("supersecret"));
+  });
+});
+
+suite("WebviewMessageRouter — license actions", () => {
+  test("delegates license actions and refreshes machines after deactivation", async () => {
+    const messages: any[] = [];
+    const service = new FakeLicenseActionService();
+    const router = buildRouter(
+      undefined,
+      (message) => messages.push(message),
+      service
+    );
+
+    await router.route({
+      type: MESSAGE_TYPES.ACTIVATE_LICENSE_KEY,
+      key: " online-key ",
+    });
+    await router.route({
+      type: MESSAGE_TYPES.IMPORT_LICENSE_FILE,
+      blob: "license-blob",
+    });
+    await router.route({ type: MESSAGE_TYPES.DEACTIVATE_LICENSE });
+    await router.route({ type: MESSAGE_TYPES.REQUEST_LICENSE_MACHINES });
+    await router.route({
+      type: MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE,
+      machineId: "machine-2",
+    });
+
+    assert.deepStrictEqual(service.calls, [
+      "activate: online-key ",
+      "import:license-blob",
+      "deactivate",
+      "list:license-key",
+      "deactivateMachine:license-key:machine-2",
+      "list:license-key",
+    ]);
+    assert.strictEqual(
+      messages.filter(
+        (message) => message.type === MESSAGE_TYPES.LICENSE_ACTION_RESULT
+      ).length,
+      5
+    );
+    assert.strictEqual(
+      messages.filter(
+        (message) => message.type === MESSAGE_TYPES.LICENSE_MACHINES_UPDATED
+      ).length,
+      2
+    );
+  });
+
+  test("uses a distinct action for activation machine-limit errors", async () => {
+    const messages: any[] = [];
+    const service = new FakeLicenseActionService();
+    service.activationError = new LicenseActivationLimitError("license-123");
+    const router = buildRouter(
+      undefined,
+      (message) => messages.push(message),
+      service
+    );
+
+    await router.route({
+      type: MESSAGE_TYPES.ACTIVATE_LICENSE_KEY,
+      key: "online-key",
+    });
+
+    assert.deepStrictEqual(messages, [
+      {
+        type: MESSAGE_TYPES.LICENSE_ACTION_RESULT,
+        action: LICENSE_ACTIONS.ACTIVATION_LIMIT,
+        status: "error",
+        message:
+          "This Pro license has reached its machine limit. Deactivate another machine and try again.",
+      },
+    ]);
+  });
+
+  test("keeps action and machine replies isolated between browser clients", async () => {
+    const firstClient: any[] = [];
+    const secondClient: any[] = [];
+    const panelMessages: any[] = [];
+    const service = new FakeLicenseActionService();
+    const router = buildRouter(
+      undefined,
+      (message) => panelMessages.push(message),
+      service
+    );
+
+    await router.route(
+      { type: MESSAGE_TYPES.REQUEST_LICENSE_MACHINES },
+      {
+        clientTag: "browser:1",
+        postMessage: (message) => firstClient.push(message),
+      }
+    );
+    await router.route(
+      { type: MESSAGE_TYPES.ACTIVATE_LICENSE_KEY, key: "other-key" },
+      {
+        clientTag: "browser:2",
+        postMessage: (message) => secondClient.push(message),
+      }
+    );
+
+    assert.ok(
+      firstClient.some(
+        (message) => message.type === MESSAGE_TYPES.LICENSE_MACHINES_UPDATED
+      )
+    );
+    assert.ok(
+      firstClient.some(
+        (message) => message.type === MESSAGE_TYPES.LICENSE_ACTION_RESULT
+      )
+    );
+    assert.deepStrictEqual(
+      secondClient.map((message) => message.type),
+      [MESSAGE_TYPES.LICENSE_ACTION_RESULT]
+    );
+    assert.deepStrictEqual(panelMessages, []);
   });
 });

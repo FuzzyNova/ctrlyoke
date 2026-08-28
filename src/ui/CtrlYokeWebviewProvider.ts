@@ -23,6 +23,7 @@ import type {
   DevDashboardAction,
   DevStatus,
   PromptEditorInsertRequest,
+  BindAddressFallbackInfo,
   ServerPortFallbackInfo,
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
@@ -96,6 +97,7 @@ export class CtrlYokeWebviewProvider
   private runningServerUrl?: string;
   private runningServerAvailableIps: string[] = [];
   private runningServerPortFallback?: ServerPortFallbackInfo;
+  private runningServerBindAddressFallback?: BindAddressFallbackInfo;
   private panelReady = false;
   // The pageLoadId of the panel page whose READY was last accepted. Compared
   // (not just latched as a boolean) so that a READY from a *different* page
@@ -166,10 +168,16 @@ export class CtrlYokeWebviewProvider
       () => this.getDevStatus(),
       undefined,
       licenseService
-        ? async () => ({
-            isPro: await licenseService.isPro(),
-            hasRemoteAccess: await licenseService.hasRemoteAccess(),
-          })
+        ? async () => {
+            const entitlement = await licenseService.getEntitlement();
+            return {
+              isPro: await licenseService.isPro(),
+              hasRemoteAccess: await licenseService.hasRemoteAccess(),
+              trialEndsAt: await licenseService.getRemoteAccessTrialEndsAt(),
+              source: entitlement.source ?? null,
+              expiresAt: entitlement.expiresAt,
+            };
+          }
         : undefined
     );
     this.licenseEntitlementSubscription =
@@ -211,9 +219,11 @@ export class CtrlYokeWebviewProvider
         getServerUrl: () => this.runningServerUrl,
         getAvailableIps: () => this.runningServerAvailableIps,
         getPortFallback: () => this.runningServerPortFallback,
+        getBindAddressFallback: () => this.runningServerBindAddressFallback,
         onPanelReady: (pageLoadId) => this.handlePanelReady(pageLoadId),
       },
-      this.secretRegistry
+      this.secretRegistry,
+      licenseService
     );
 
     // Listen for model registry updates
@@ -1043,11 +1053,13 @@ export class CtrlYokeWebviewProvider
   public setRunningServerUrl(
     url: string | undefined,
     availableIps?: string[],
-    portFallback?: ServerPortFallbackInfo
+    portFallback?: ServerPortFallbackInfo,
+    bindAddressFallback?: BindAddressFallbackInfo
   ): void {
     this.runningServerUrl = url;
     this.runningServerAvailableIps = availableIps ?? [];
     this.runningServerPortFallback = portFallback;
+    this.runningServerBindAddressFallback = bindAddressFallback;
   }
 
   /**
@@ -1310,7 +1322,7 @@ export class CtrlYokeWebviewProvider
     return this.secretRegistry;
   }
 
-  public openGlobalSettingsTab(tab: "secrets"): void {
+  public openGlobalSettingsTab(tab: "secrets" | "license"): void {
     this.postMessage({
       type: MESSAGE_TYPES.OPEN_GLOBAL_SETTINGS_TAB,
       tab,

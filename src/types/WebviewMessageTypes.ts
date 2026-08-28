@@ -103,6 +103,11 @@ import type {
   AttemptCostEstimate,
   AttemptCostUnavailableReason,
 } from "./CtrlYokeTypes";
+import type {
+  LicenseMachineSummary,
+  LicenseSource,
+} from "../license/LicenseService";
+export type { LicenseMachineSummary } from "../license/LicenseService";
 
 // ============================================================================
 // IMPORT TYPES FROM DASHBOARDCONSTANTS
@@ -311,6 +316,15 @@ export interface ServerPortFallbackInfo {
 }
 
 /**
+ * Reported alongside SERVER_STARTED when the configured server bind address
+ * was not entitled for remote access and the server listened on localhost.
+ */
+export interface BindAddressFallbackInfo {
+  requestedBindAddress: string;
+  actualBindAddress: string;
+}
+
+/**
  * Status message for output display
  */
 export interface OutputStatusMessage {
@@ -405,6 +419,53 @@ export interface StatusMessage {
 export interface LicenseAccessState {
   isPro: boolean;
   hasRemoteAccess: boolean;
+  trialEndsAt: number | null;
+  /** Present for an active entitlement; omitted by older callers/tests. */
+  source?: LicenseSource | null;
+  /** Unix epoch milliseconds, or null for a perpetual entitlement. */
+  expiresAt?: number | null;
+}
+
+/** Webview → Extension: activate this machine with an online license key. */
+export interface ActivateLicenseKeyMessage {
+  type: typeof MESSAGE_TYPES.ACTIVATE_LICENSE_KEY;
+  key: string;
+}
+
+/** Webview → Extension: import and verify an offline license file. */
+export interface ImportLicenseFileMessage {
+  type: typeof MESSAGE_TYPES.IMPORT_LICENSE_FILE;
+  blob: string;
+}
+
+/** Webview → Extension: deactivate this machine's active license. */
+export interface DeactivateLicenseMessage {
+  type: typeof MESSAGE_TYPES.DEACTIVATE_LICENSE;
+}
+
+/** Webview → Extension: request the machines attached to the stored license. */
+export interface RequestLicenseMachinesMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_LICENSE_MACHINES;
+}
+
+/** Webview → Extension: deactivate one machine attached to the stored license. */
+export interface DeactivateLicenseMachineMessage {
+  type: typeof MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE;
+  machineId: string;
+}
+
+/** Extension → Webview: current machines attached to the active license. */
+export interface LicenseMachinesUpdatedMessage {
+  type: typeof MESSAGE_TYPES.LICENSE_MACHINES_UPDATED;
+  machines: LicenseMachineSummary[];
+}
+
+/** Extension → Webview: result of a license-management action. */
+export interface LicenseActionResultMessage {
+  type: typeof MESSAGE_TYPES.LICENSE_ACTION_RESULT;
+  action: string;
+  status: "success" | "error";
+  message: string;
 }
 
 /**
@@ -2501,6 +2562,8 @@ export type IncomingMessage =
   | WorktreeManagementActionResultMessage
   | WorkspaceWorktreeOwnershipMessage
   | GlobalSettingUpdatedMessage
+  | LicenseMachinesUpdatedMessage
+  | LicenseActionResultMessage
   | NotificationEventMessage
   | UserFeedbackMessage
   | DevStatusMessage

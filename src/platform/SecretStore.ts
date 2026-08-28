@@ -18,9 +18,14 @@ export class SecretStoreUnavailableError extends Error {
     super(
       `No encrypted OS credential store is available for ${platform}. ` +
         "Use env passthrough (export the credential's environment variable) " +
-        "or install and enable the platform credential-store backend.",
-      { cause }
+        "or install and enable the platform credential-store backend."
     );
+    if (cause !== undefined) {
+      Object.defineProperty(this, "cause", {
+        configurable: true,
+        value: cause,
+      });
+    }
     this.name = "SecretStoreUnavailableError";
   }
 }

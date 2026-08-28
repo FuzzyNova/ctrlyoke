@@ -24,6 +24,7 @@ import type { WorkflowSummary, WorkflowStep } from "../types/CtrlYokeTypes";
 import type {
   CliEvent,
   CliOutput,
+  BindAddressFallbackInfo,
   ServerPortFallbackInfo,
   UndoExecutionTarget,
   UserFeedbackMessage,
@@ -92,6 +93,7 @@ import { installSecretRedactionMiddleware } from "./SecretRedactionMiddleware";
 import { buildHostedErrorPage } from "./HostedErrorPageTemplate";
 import { IS_DEV_MODE } from "../utils/BuildConfig";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
+import { isLoopbackBindAddress } from "../utils/NetworkUtils";
 
 const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
 const SIBLING_SERVER_PROBE_TIMEOUT_MS = 1000;
@@ -186,6 +188,7 @@ export class CtrlYokeHostedServer
   private availableIps: string[] = [];
   private requestedPort?: number;
   private portFellBack = false;
+  private bindAddressFallback?: BindAddressFallbackInfo;
   private devServerUrlFileOwned = false;
   private readonly viewerService: HostedWorkspaceViewerService;
   private readonly getRemoteAccess: (() => Promise<boolean>) | undefined;
@@ -2163,6 +2166,7 @@ export class CtrlYokeHostedServer
   async listen(): Promise<string | undefined> {
     this.requestedPort = this.port;
     this.portFellBack = false;
+    this.bindAddressFallback = undefined;
     await this.enforceRemoteBindBeforeListen();
     return new Promise((resolve, reject) => {
       const attemptListen = (port: number) => {
@@ -2213,7 +2217,12 @@ export class CtrlYokeHostedServer
       return;
     }
 
+    const requestedBindAddress = this.bindAddress;
     this.bindAddress = "127.0.0.1";
+    this.bindAddressFallback = {
+      requestedBindAddress,
+      actualBindAddress: this.bindAddress,
+    };
     this.notifyRemoteAccessBlocked();
   }
 
@@ -2251,6 +2260,14 @@ export class CtrlYokeHostedServer
       return null;
     }
     return { requestedPort: this.requestedPort, actualPort: this.port };
+  }
+
+  /**
+   * Non-null when a non-loopback configured bind address was coerced to
+   * localhost because remote access was not entitled.
+   */
+  getBindAddressFallbackInfo(): BindAddressFallbackInfo | null {
+    return this.bindAddressFallback ?? null;
   }
 
   private buildPublicUrl(port: number): string {
@@ -2416,13 +2433,5 @@ function isValidPushSubscription(
     candidate.keys &&
     candidate.keys.auth &&
     candidate.keys.p256dh
-  );
-}
-
-function isLoopbackBindAddress(bindAddress: string): boolean {
-  return (
-    bindAddress === "127.0.0.1" ||
-    bindAddress === "::1" ||
-    bindAddress === "localhost"
   );
 }

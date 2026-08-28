@@ -862,7 +862,11 @@ suite("WebviewSettingsSync", () => {
           () => undefined,
           undefined,
           undefined,
-          async () => ({ isPro: true, hasRemoteAccess: true })
+          async () => ({
+            isPro: true,
+            hasRemoteAccess: true,
+            trialEndsAt: null,
+          })
         );
 
         hideGlobalNavigator();
@@ -968,7 +972,11 @@ suite("WebviewSettingsSync", () => {
           () => undefined,
           undefined,
           undefined,
-          async () => ({ isPro: true, hasRemoteAccess: true })
+          async () => ({
+            isPro: true,
+            hasRemoteAccess: true,
+            trialEndsAt: null,
+          })
         );
 
         hideGlobalNavigator();
@@ -2047,6 +2055,70 @@ suite("WebviewSettingsSync", () => {
         });
       });
     });
+  });
+});
+
+suite("WebviewSettingsSync bind-address licensing gate", () => {
+  test("only permits non-loopback bind writes with remote access", async () => {
+    const originalSet = configService.set;
+    const writes: Array<{ key: string; value: unknown }> = [];
+
+    try {
+      configService.set = (async (key, value) => {
+        writes.push({ key, value });
+      }) as typeof configService.set;
+
+      const cases = [
+        { value: "0.0.0.0", hasRemoteAccess: false, shouldWrite: false },
+        { value: "0.0.0.0", hasRemoteAccess: true, shouldWrite: true },
+        { value: "192.168.1.10", hasRemoteAccess: false, shouldWrite: false },
+        { value: "192.168.1.10", hasRemoteAccess: true, shouldWrite: true },
+        { value: "127.0.0.2", hasRemoteAccess: false, shouldWrite: true },
+        { value: "::1", hasRemoteAccess: false, shouldWrite: true },
+      ];
+
+      for (const testCase of cases) {
+        const messages: unknown[] = [];
+        const sync = new WebviewSettingsSync(
+          (message) => messages.push(message),
+          () => undefined,
+          undefined,
+          undefined,
+          async () => ({
+            isPro: false,
+            hasRemoteAccess: testCase.hasRemoteAccess,
+            trialEndsAt: null,
+          })
+        );
+        sync.handleGlobalSettingsLoadRequest = async () => {};
+
+        const writesBefore = writes.length;
+        await sync.handleUpdateGlobalSetting(
+          CONFIG_KEYS.SERVER_BIND_ADDRESS,
+          testCase.value,
+          "user",
+          (message) => messages.push(message)
+        );
+
+        assert.strictEqual(
+          writes.length > writesBefore,
+          testCase.shouldWrite,
+          `unexpected write result for ${testCase.value} with remote access=${testCase.hasRemoteAccess}`
+        );
+        if (!testCase.shouldWrite) {
+          assert.ok(
+            messages.some(
+              (message) =>
+                (message as { type?: string }).type ===
+                MESSAGE_TYPES.USER_FEEDBACK
+            ),
+            "a rejected remote bind write should report the Pro upsell"
+          );
+        }
+      }
+    } finally {
+      configService.set = originalSet;
+    }
   });
 });
 

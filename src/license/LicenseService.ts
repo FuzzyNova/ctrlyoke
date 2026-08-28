@@ -60,12 +60,26 @@ export interface Entitlement {
   source?: LicenseSource;
 }
 
+export interface LicenseMachineSummary {
+  id: string;
+  name: string | undefined;
+  platform: string | undefined;
+  createdAt: string | undefined;
+  isThisMachine: boolean;
+}
+
 export interface LicenseService {
   /** Verify the cached signed license file offline. Never throws; failures return free. */
   getEntitlement(): Promise<Entitlement>;
   isPro(): Promise<boolean>;
   /** Pro or the first-use 14-day remote-access trial. */
   hasRemoteAccess(): Promise<boolean>;
+  getRemoteAccessTrialEndsAt(): Promise<number | null>;
+  /** Read the cached online key for license-scoped management operations. */
+  getStoredLicenseKey(): Promise<string | undefined>;
+
+  listMachines(key: string): Promise<LicenseMachineSummary[]>;
+  deactivateMachine(key: string, machineId: string): Promise<void>;
 
   /** Activate this machine online and cache a signed license file. */
   activateWithKey(key: string): Promise<Entitlement>;
@@ -133,12 +147,14 @@ interface VerifiedLicense {
 interface JsonApiResponse {
   readonly data?: unknown;
   readonly meta?: unknown;
+  readonly errors?: unknown;
 }
 
 class KeygenApiError extends Error {
   constructor(
     readonly status: number,
-    readonly operation: string
+    readonly operation: string,
+    readonly code?: string
   ) {
     super(`Keygen ${operation} request failed with status ${status}`);
     this.name = "KeygenApiError";
@@ -149,6 +165,15 @@ class UserFacingLicenseError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "UserFacingLicenseError";
+  }
+}
+
+export class LicenseActivationLimitError extends UserFacingLicenseError {
+  constructor(readonly licenseId: string) {
+    super(
+      "This Pro license has reached its machine limit. Deactivate another machine and try again."
+    );
+    this.name = "LicenseActivationLimitError";
   }
 }
 
@@ -208,26 +233,73 @@ export class LicenseService implements LicenseService {
     if (await this.isPro()) {
       return true;
     }
-    if (!this.trialState) {
-      return false;
+    const startedAt = await this.getRemoteAccessTrialStartedAt();
+    return (
+      startedAt !== null && this.now() < startedAt + REMOTE_ACCESS_TRIAL_MS
+    );
+  }
+
+  async getRemoteAccessTrialEndsAt(): Promise<number | null> {
+    if (await this.isPro()) {
+      return null;
+    }
+    const startedAt = await this.getRemoteAccessTrialStartedAt();
+    return startedAt === null ? null : startedAt + REMOTE_ACCESS_TRIAL_MS;
+  }
+
+  async getStoredLicenseKey(): Promise<string | undefined> {
+    return this.secretStore.get(LICENSE_KEY_SECRET_KEY);
+  }
+
+  async listMachines(key: string): Promise<LicenseMachineSummary[]> {
+    const normalizedKey = key.trim();
+    const license = await this.validateKey(normalizedKey);
+    const url = new URL(`${KEYGEN_API_BASE_URL}/machines`);
+    url.searchParams.set("license", license.id);
+    const response = await this.request(url, {
+      headers: keygenHeaders(normalizedKey),
+    });
+    if (!response.ok) {
+      throw new KeygenApiError(response.status, "machine listing");
     }
 
-    try {
-      const now = this.now();
-      const stored = this.trialState.get<unknown>(
-        REMOTE_ACCESS_TRIAL_START_KEY
-      );
-      const startedAt =
-        typeof stored === "number" && Number.isFinite(stored) ? stored : now;
-      if (stored !== startedAt) {
-        await this.trialState.update(REMOTE_ACCESS_TRIAL_START_KEY, startedAt);
+    const body = (await response.json()) as JsonApiResponse;
+    const ownMachineId = await this.secretStore.get(
+      LICENSE_MACHINE_ID_SECRET_KEY
+    );
+    const machines = Array.isArray(body.data) ? body.data : [];
+    return machines.flatMap((machine): LicenseMachineSummary[] => {
+      const resource = asRecord(machine);
+      const id = resource?.id;
+      if (typeof id !== "string" || !id) {
+        return [];
       }
-      return now < startedAt + REMOTE_ACCESS_TRIAL_MS;
-    } catch {
-      // A trial-state failure must not crash the extension. Fail closed for
-      // remote reach while the free localhost product remains available.
-      return false;
+      const attributes = asRecord(resource.attributes);
+      return [
+        {
+          id,
+          name: readOptionalString(attributes?.name),
+          platform: readOptionalString(attributes?.platform),
+          createdAt: readOptionalString(
+            attributes?.created ?? attributes?.createdAt
+          ),
+          isThisMachine: id === ownMachineId,
+        },
+      ];
+    });
+  }
+
+  async deactivateMachine(key: string, machineId: string): Promise<void> {
+    await this.releaseMachine(machineId, key);
+    const ownMachineId = await this.secretStore.get(
+      LICENSE_MACHINE_ID_SECRET_KEY
+    );
+    if (machineId !== ownMachineId) {
+      return;
     }
+
+    await this.clearLocalActivation();
+    this.changes.fire(createFreeEntitlement());
   }
 
   async activateWithKey(key: string): Promise<Entitlement> {
@@ -239,10 +311,14 @@ export class LicenseService implements LicenseService {
     }
 
     let machineId: string | undefined;
+    let licenseId: string | undefined;
+    let validationCode: string | undefined;
     let createdMachine = false;
     try {
       const fingerprint = await this.getMachineFingerprint();
       const license = await this.validateKey(normalizedKey);
+      licenseId = license.id;
+      validationCode = license.validationCode;
       const stored = await this.readStoredActivation();
 
       if (stored?.licenseId === license.id) {
@@ -279,7 +355,7 @@ export class LicenseService implements LicenseService {
       if (createdMachine && machineId) {
         await this.releaseMachine(machineId, normalizedKey);
       }
-      throw toActivationError(error);
+      throw toActivationError(error, licenseId, validationCode);
     }
   }
 
@@ -373,13 +449,7 @@ export class LicenseService implements LicenseService {
       await this.releaseMachine(activation.machineId, key);
     }
 
-    await Promise.all([
-      this.secretStore.delete(LICENSE_FILE_SECRET_KEY),
-      this.secretStore.delete(LICENSE_KEY_SECRET_KEY),
-      this.secretStore.delete(LICENSE_SOURCE_SECRET_KEY),
-      this.secretStore.delete(LICENSE_ID_SECRET_KEY),
-      this.secretStore.delete(LICENSE_MACHINE_ID_SECRET_KEY),
-    ]);
+    await this.clearLocalActivation();
     this.changes.fire(createFreeEntitlement());
   }
 
@@ -466,17 +536,21 @@ export class LicenseService implements LicenseService {
     };
   }
 
-  private async validateKey(key: string): Promise<{ readonly id: string }> {
+  private async validateKey(key: string): Promise<{
+    readonly id: string;
+    readonly validationCode: string | undefined;
+  }> {
     const body = await this.keygenJson("/licenses/actions/validate-key", {
       method: "POST",
       body: JSON.stringify({ meta: { key } }),
     });
     const meta = asRecord(body.meta);
-    const validationCode = meta?.code;
+    const validationCode = readOptionalString(meta?.code);
     const canActivate =
       meta?.valid === true ||
       validationCode === "NO_MACHINES" ||
-      validationCode === "FINGERPRINT_SCOPE_MISMATCH";
+      validationCode === "FINGERPRINT_SCOPE_MISMATCH" ||
+      validationCode === "TOO_MANY_MACHINES";
     if (!canActivate) {
       throw new UserFacingLicenseError(
         "That Pro license key was rejected. It may be invalid, expired, suspended, or at its 10-machine limit."
@@ -490,7 +564,7 @@ export class LicenseService implements LicenseService {
     }
     assertExpectedRelationship(data, "product", KEYGEN_PRODUCT_ID);
     assertExpectedRelationship(data, "policy", KEYGEN_PRO_POLICY_ID);
-    return { id };
+    return { id, validationCode };
   }
 
   private async activateMachine(
@@ -567,9 +641,48 @@ export class LicenseService implements LicenseService {
       ...(options.body ? { body: options.body } : {}),
     });
     if (!response.ok) {
-      throw new KeygenApiError(response.status, "API");
+      let code: string | undefined;
+      try {
+        code = readKeygenCode((await response.json()) as JsonApiResponse);
+      } catch {
+        // Error responses are not required to contain a JSON API body.
+      }
+      throw new KeygenApiError(response.status, "API", code);
     }
     return (await response.json()) as JsonApiResponse;
+  }
+
+  private async getRemoteAccessTrialStartedAt(): Promise<number | null> {
+    if (!this.trialState) {
+      return null;
+    }
+
+    try {
+      const now = this.now();
+      const stored = this.trialState.get<unknown>(
+        REMOTE_ACCESS_TRIAL_START_KEY
+      );
+      const startedAt =
+        typeof stored === "number" && Number.isFinite(stored) ? stored : now;
+      if (stored !== startedAt) {
+        await this.trialState.update(REMOTE_ACCESS_TRIAL_START_KEY, startedAt);
+      }
+      return startedAt;
+    } catch {
+      // A trial-state failure must not crash the extension. Fail closed for
+      // remote reach while the free localhost product remains available.
+      return null;
+    }
+  }
+
+  private async clearLocalActivation(): Promise<void> {
+    await Promise.all([
+      this.secretStore.delete(LICENSE_FILE_SECRET_KEY),
+      this.secretStore.delete(LICENSE_KEY_SECRET_KEY),
+      this.secretStore.delete(LICENSE_SOURCE_SECRET_KEY),
+      this.secretStore.delete(LICENSE_ID_SECRET_KEY),
+      this.secretStore.delete(LICENSE_MACHINE_ID_SECRET_KEY),
+    ]);
   }
 
   private async getMachineFingerprint(): Promise<string> {
@@ -659,9 +772,22 @@ function assertExpectedRelationship(
   }
 }
 
-function toActivationError(error: unknown): Error {
+function toActivationError(
+  error: unknown,
+  licenseId?: string,
+  validationCode?: string
+): Error {
   if (error instanceof UserFacingLicenseError) {
     return error;
+  }
+  if (
+    error instanceof KeygenApiError &&
+    licenseId &&
+    (error.code === "TOO_MANY_MACHINES" ||
+      error.code === "MACHINE_LIMIT_EXCEEDED" ||
+      (validationCode === "TOO_MANY_MACHINES" && error.status === 422))
+  ) {
+    return new LicenseActivationLimitError(licenseId);
   }
   if (
     error instanceof KeygenApiError &&
@@ -674,6 +800,20 @@ function toActivationError(error: unknown): Error {
   return new UserFacingLicenseError(
     "ctrlyoke could not activate the Pro license right now. Check your internet connection and try again."
   );
+}
+
+function readKeygenCode(body: JsonApiResponse): string | undefined {
+  const metaCode = asRecord(body.meta)?.code;
+  if (typeof metaCode === "string") {
+    return metaCode;
+  }
+  const errors = Array.isArray(body.errors) ? body.errors : [];
+  const errorCode = asRecord(errors[0])?.code;
+  return typeof errorCode === "string" ? errorCode : undefined;
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
 }
 
 function createFreeEntitlement(): Entitlement {

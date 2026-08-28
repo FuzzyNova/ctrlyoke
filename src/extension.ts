@@ -71,7 +71,6 @@ import { ctrlyokeStateHome } from "./utils/ProjectStatePaths";
 import { initializeRunHistoryLocation } from "./utils/RunHistoryStoragePolicy";
 import {
   LicenseService,
-  LICENSE_SOURCES,
   LICENSE_TIERS,
 } from "./license/LicenseService";
 import { LicenseStatusBarManager } from "./ui/LicenseStatusBarManager";
@@ -629,28 +628,8 @@ function registerCommands(context: vscode.ExtensionContext) {
   const manageLicenseCommand = vscode.commands.registerCommand(
     VSCODE_COMMANDS.MANAGE_LICENSE,
     async () => {
-      const entitlement = await licenseService.getEntitlement();
-      const tier = entitlement.tier === LICENSE_TIERS.PRO ? "Pro" : "Free";
-      const expiry = entitlement.expiresAt
-        ? new Date(entitlement.expiresAt).toLocaleDateString()
-        : "none";
-      const source =
-        entitlement.source === LICENSE_SOURCES.OFFLINE_FILE
-          ? "offline license file"
-          : entitlement.source === LICENSE_SOURCES.ONLINE
-            ? "online activation"
-            : "none";
-      const choice = await vscode.window.showQuickPick(
-        [LICENSE_UI.OPEN_PRICING],
-        {
-          title: `ctrlyoke ${tier} license`,
-          placeHolder: `Expiry: ${expiry}; source: ${source}`,
-          ignoreFocusOut: true,
-        }
-      );
-      if (choice === LICENSE_UI.OPEN_PRICING) {
-        await vscode.env.openExternal(vscode.Uri.parse(LICENSE_UI.PRICING_URL));
-      }
+      await workflowOrchestrator.openPanel();
+      webviewProvider.openGlobalSettingsTab("license");
     }
   );
 
@@ -1346,12 +1325,20 @@ function registerCommands(context: vscode.ExtensionContext) {
       }
       const availableIps = hostedServer.getAvailableIps();
       const portFallback = hostedServer.getPortFallbackInfo() ?? undefined;
-      webviewProvider.setRunningServerUrl(url, availableIps, portFallback);
+      const bindAddressFallback =
+        hostedServer.getBindAddressFallbackInfo() ?? undefined;
+      webviewProvider.setRunningServerUrl(
+        url,
+        availableIps,
+        portFallback,
+        bindAddressFallback
+      );
       webviewProvider.postMessage({
         type: MESSAGE_TYPES.SERVER_STARTED,
         url,
         availableIps,
         ...(portFallback ? { portFallback } : {}),
+        ...(bindAddressFallback ? { bindAddressFallback } : {}),
       });
       webviewProvider.setThemeVarsCapturedCallback((vars) =>
         hostedServer?.updateThemeVars(vars)

@@ -62,6 +62,7 @@ import type {
   DeleteSecretMessage,
   SetSecretMessage,
   ServerPortFallbackInfo,
+  BindAddressFallbackInfo,
 } from "../types/WebviewMessageTypes";
 import type {
   WorkflowVariantCreatedMessage,
@@ -82,6 +83,10 @@ import {
 import { HistorySearchService } from "../core/orchestration/HistorySearchService";
 import { WorkflowVariantService } from "../core/orchestration/WorkflowVariantService";
 import { redactExecutionPreview } from "../types/PreviewRedactor";
+import {
+  LicenseSettingsHandlers,
+  type LicenseActionService,
+} from "./LicenseSettingsHandlers";
 
 /**
  * A dispatch-table entry. Every handler receives the originating client's scope
@@ -164,6 +169,7 @@ export class WebviewMessageRouter {
   private readonly mcpManager: McpManagerService;
   private readonly terminalHandlers: TerminalMessageHandlers;
   private readonly workflowStepHandlers: WorkflowStepHandlers;
+  private readonly licenseHandlers: LicenseSettingsHandlers;
   private readonly workflowVariantRequests = new Map<
     string,
     WorkflowVariantRequestCacheEntry
@@ -176,7 +182,8 @@ export class WebviewMessageRouter {
     private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
     private readonly historySearchService: HistorySearchService,
     private readonly callbacks: WebviewRouterCallbacks,
-    private readonly secretRegistry?: SecretRegistryService
+    private readonly secretRegistry?: SecretRegistryService,
+    licenseService?: LicenseActionService
   ) {
     this.undoRedoCoordinator = new UndoRedoCoordinator(getOrchestrator);
     this.mutationCoordinator = new WorkflowMutationCoordinator(getOrchestrator);
@@ -198,6 +205,7 @@ export class WebviewMessageRouter {
       settingsSync,
       this.mutationCoordinator
     );
+    this.licenseHandlers = new LicenseSettingsHandlers(licenseService);
     this.handlers = this.buildDispatchTable();
   }
 
@@ -303,6 +311,7 @@ export class WebviewMessageRouter {
     this.registerWorkflowModal(table);
     this.registerWorkflowStatus(table);
     this.registerSettings(table);
+    this.registerLicense(table);
     this.registerSaveWorkflow(table);
     this.registerMultiWorkflow(table);
     this.registerRunLifecycle(table);
@@ -310,6 +319,24 @@ export class WebviewMessageRouter {
     this.registerTerminal(table);
     this.registerWorkspaceInit(table);
     return table;
+  }
+
+  private registerLicense(table: DispatchTable): void {
+    table.set(MESSAGE_TYPES.ACTIVATE_LICENSE_KEY, (message, ctx) =>
+      this.licenseHandlers.handleActivateLicenseKey(message, ctx)
+    );
+    table.set(MESSAGE_TYPES.IMPORT_LICENSE_FILE, (message, ctx) =>
+      this.licenseHandlers.handleImportLicenseFile(message, ctx)
+    );
+    table.set(MESSAGE_TYPES.DEACTIVATE_LICENSE, (_message, ctx) =>
+      this.licenseHandlers.handleDeactivateLicense(ctx)
+    );
+    table.set(MESSAGE_TYPES.REQUEST_LICENSE_MACHINES, (_message, ctx) =>
+      this.licenseHandlers.handleRequestLicenseMachines(ctx)
+    );
+    table.set(MESSAGE_TYPES.DEACTIVATE_LICENSE_MACHINE, (message, ctx) =>
+      this.licenseHandlers.handleDeactivateLicenseMachine(message, ctx)
+    );
   }
 
   private registerUserFeedback(table: DispatchTable): void {
@@ -340,7 +367,9 @@ export class WebviewMessageRouter {
         // Cancel RECONNECT retries before any awaited startup work so a valid
         // panel READY immediately stops further nudges from the extension.
         const shouldHandleReady = this.callbacks.onPanelReady?.(
-          typeof message.pageLoadId === "string" ? message.pageLoadId : undefined
+          typeof message.pageLoadId === "string"
+            ? message.pageLoadId
+            : undefined
         );
         if (shouldHandleReady === false) {
           Log.debug(
@@ -433,11 +462,13 @@ export class WebviewMessageRouter {
         if (serverUrl) {
           const availableIps = this.callbacks.getAvailableIps?.() ?? [];
           const portFallback = this.callbacks.getPortFallback?.();
+          const bindAddressFallback = this.callbacks.getBindAddressFallback?.();
           ctx.emit({
             type: MESSAGE_TYPES.SERVER_STARTED,
             url: serverUrl,
             availableIps,
             ...(portFallback ? { portFallback } : {}),
+            ...(bindAddressFallback ? { bindAddressFallback } : {}),
           });
         }
         this.terminalHandlers.reconnectPanel(ctx);
@@ -1581,6 +1612,17 @@ export class WebviewMessageRouter {
       vscode.commands.executeCommand("workbench.mcp.browseServers");
     });
 
+    table.set(MESSAGE_TYPES.EXECUTE_VSCODE_COMMAND, async (message) => {
+      // Keep this bridge deliberately narrow: dashboard clients may request
+      // the native offline-license picker, but never arbitrary commands.
+      if (message.command !== VSCODE_COMMANDS.ACTIVATE_OFFLINE_PRO) {
+        return;
+      }
+      await vscode.commands.executeCommand(
+        VSCODE_COMMANDS.ACTIVATE_OFFLINE_PRO
+      );
+    });
+
     table.set(MESSAGE_TYPES.GLOBAL_SETTINGS_LOAD_REQUEST, (_message, ctx) => {
       this.settingsSync.handleGlobalSettingsLoadRequest(ctx.postMessage);
     });
@@ -2263,6 +2305,8 @@ export interface WebviewRouterCallbacks {
   getAvailableIps?: () => string[];
   /** Returns port-fallback info if the running server couldn't bind its configured port. */
   getPortFallback?: () => ServerPortFallbackInfo | undefined;
+  /** Returns bind-address fallback info if remote access was gated at listen time. */
+  getBindAddressFallback?: () => BindAddressFallbackInfo | undefined;
   /**
    * Called synchronously when the VS Code panel sends READY.
    * Used by CtrlYokeWebviewProvider to cancel pending RECONNECT retries
