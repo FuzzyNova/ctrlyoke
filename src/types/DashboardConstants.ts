@@ -49,6 +49,18 @@ export const BOOLEAN_STRING_VALUES = {
   FALSE: "false",
 } as const;
 
+/** Feature keys unlocked by a Pro entitlement. Keep gate sites on these constants. */
+export const PRO_FEATURES = {
+  HOSTED_DASHBOARD: "hosted-dashboard",
+  REMOTE_ACCESS: "remote-access",
+  HTTPS_CERTIFICATES: "https-certificates",
+  MOBILE_PUSH: "mobile-push",
+  AIR_GAPPED_ACTIVATION: "air-gapped-activation",
+  CUSTOM_ICON_COLOR: "custom-icon-color",
+} as const;
+
+export type ProFeature = (typeof PRO_FEATURES)[keyof typeof PRO_FEATURES];
+
 // ============================================================================
 // MESSAGE TYPES - Communication between extension and webview
 // ============================================================================

@@ -151,12 +151,12 @@ You can't create the LS webhook without a target URL, and the Netlify function's
 
 ## Phase 6 — Pro Licensing Implementation (extension code)
 
-**Status: NOT STARTED.** This is the largest remaining blocker — everything in Phase 4/5 above just gets the _vendor side_ ready; the extension itself has no license gating built yet. Full design lives in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md) §1.4–§1.9; this is the execution checklist.
+**Status: IN PROGRESS.** This is the largest remaining blocker — everything in Phase 4/5 above just gets the _vendor side_ ready; the extension-side implementation is landing incrementally. Full design lives in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md) §1.4–§1.9; this is the execution checklist.
 
-- [ ] `LicenseService` interface + `Entitlement` type (`src/license/LicenseService.ts`).
-- [ ] `PRO_FEATURES` constants in `DashboardConstants.ts` (no hardcoded feature-flag strings at gate sites).
-- [ ] Embed the Keygen Ed25519 public key (4.1 above) as a build constant.
-- [ ] Offline `getEntitlement()` — Ed25519 signature + expiry verification, no network, fail-open to free on any error.
+- [x] `LicenseService` interface + `Entitlement` type (`src/license/LicenseService.ts`).
+- [x] `PRO_FEATURES` constants in `DashboardConstants.ts` (no hardcoded feature-flag strings at gate sites).
+- [x] Embed the Keygen Ed25519 public key (4.1 above) as a build constant.
+- [x] Offline `getEntitlement()` — Ed25519 signature + expiry verification, no network, fail-open to free on any error.
 - [ ] `activateWithKey()` — online activation via Keygen, cache signed license file in `vscode.SecretStorage`.
 - [ ] `importLicenseFile()` — air-gapped offline import, zero network calls.
 - [ ] Commands: `ctrlyoke: Activate Pro License`, `ctrlyoke: Activate Offline (Air-Gapped) License`, `ctrlyoke: Deactivate Pro License`, `ctrlyoke: Manage License`.

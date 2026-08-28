@@ -145,6 +145,8 @@ This is what gives us offline verification, airgapped support, and backend-downt
 Create `src/license/LicenseService.ts`. Single interface; Keygen is its Phase-1 implementation; Phase-2 sign-in slots in behind the same surface.
 
 ```typescript
+import type { SecretStore } from "../../src/platform/SecretStore";
+
 export interface Entitlement {
   tier: "free" | "pro";
   features: ReadonlySet<string>;
@@ -155,32 +157,34 @@ export interface Entitlement {
 
 export interface LicenseService {
   /** Verify the cached signed license file OFFLINE (Ed25519 + expiry). Never throws → free. */
-  getEntitlement(context: vscode.ExtensionContext): Promise<Entitlement>;
-  isPro(context: vscode.ExtensionContext): Promise<boolean>;
+  getEntitlement(): Promise<Entitlement>;
+  isPro(): Promise<boolean>;
 
   /** Online: activate a pasted key with Keygen, then cache the signed license file. */
-  activateWithKey(
-    key: string,
-    context: vscode.ExtensionContext
-  ): Promise<Entitlement>;
+  activateWithKey(key: string): Promise<Entitlement>;
 
   /** Air-gapped: import a signed (.lic) license file blob, verify offline, cache. No network. */
-  importLicenseFile(
-    blob: string,
-    context: vscode.ExtensionContext
-  ): Promise<Entitlement>;
+  importLicenseFile(blob: string): Promise<Entitlement>;
 
   /** Refresh the cached signed file from Keygen when online and near expiry. */
-  refresh(context: vscode.ExtensionContext): Promise<void>;
+  refresh(): Promise<void>;
 
   /** Phase 2 stub: device-code/OAuth sign-in that fetches the license. */
-  activateWithSignIn?(context: vscode.ExtensionContext): Promise<Entitlement>;
+  activateWithSignIn?(): Promise<Entitlement>;
 
-  deactivate(context: vscode.ExtensionContext): Promise<void>;
+  deactivate(): Promise<void>;
 
-  readonly onDidChangeEntitlement: vscode.Event<Entitlement>;
+  readonly onDidChangeEntitlement: (listener: (e: Entitlement) => void) => {
+    dispose(): void;
+  };
 }
 ```
+
+The implementation refines this sketch by constructor-injecting the
+platform-neutral `SecretStore` (`src/platform/SecretStore.ts`) instead of
+coupling the service to `vscode.ExtensionContext`/`vscode.SecretStorage`.
+`VsCodeSecretStore` and `CliAdapter.getSecretStore()` provide the host-specific
+adapters at the composition boundary; the surrounding design is unchanged.
 
 Implementation notes:
 
