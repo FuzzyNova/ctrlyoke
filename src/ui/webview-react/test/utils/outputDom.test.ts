@@ -196,6 +196,51 @@ describe("revealActiveFindMatchInRow", () => {
     });
     expect(scrollTop).toBe(250);
   });
+
+  it("reveals an active diff match rendered by the nested-token fallback", () => {
+    const scrollElement = document.createElement("div");
+    const rowElement = document.createElement("div");
+    const activeDiffMark = document.createElement("span");
+
+    rowElement.dataset.rowKey = "row-diff";
+    rowElement.dataset.index = "4";
+    activeDiffMark.className = "diff-code-mark diff-code-mark-find-active";
+    rowElement.appendChild(activeDiffMark);
+    scrollElement.appendChild(rowElement);
+
+    Object.defineProperty(scrollElement, "clientHeight", {
+      configurable: true,
+      value: 200,
+    });
+    Object.defineProperty(scrollElement, "scrollHeight", {
+      configurable: true,
+      value: 2000,
+    });
+    let scrollTop = 0;
+    Object.defineProperty(scrollElement, "scrollTop", {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value: number) => {
+        scrollTop = value;
+      },
+    });
+    scrollElement.getBoundingClientRect = () =>
+      ({ top: 0, bottom: 200, height: 200 }) as DOMRect;
+    rowElement.getBoundingClientRect = () =>
+      ({ top: 0, bottom: 1000, height: 1000 }) as DOMRect;
+    activeDiffMark.getBoundingClientRect = () =>
+      ({ top: 700, bottom: 720, height: 20 }) as DOMRect;
+
+    const result = revealActiveFindMatchInRow(scrollElement, 4);
+
+    expect(result).toMatchObject({
+      adjusted: true,
+      foundMark: true,
+      rowKey: "row-diff",
+      rowViewportOffsetPx: -610,
+    });
+    expect(scrollTop).toBe(610);
+  });
 });
 
 describe("captureViewportRowAnchor", () => {

@@ -650,4 +650,47 @@ describe("DiffView", () => {
       })
     );
   });
+
+  it("tokenizes structured patch hunks without a potentially stale old source", () => {
+    const hunks = [
+      {
+        content: "@@ -185,1 +185,1 @@",
+        oldStart: 185,
+        oldLines: 1,
+        newStart: 185,
+        newLines: 1,
+        changes: [],
+      },
+    ];
+    mockRefractorRegistered.mockReturnValue(true);
+    mockToRdvHunks.mockReturnValue(hunks);
+
+    render(
+      <DiffView
+        oldContent={"attempt-start content that no longer matches the patch"}
+        newContent={"later event content"}
+        structuredPatch={[
+          {
+            oldStart: 185,
+            oldLines: 1,
+            newStart: 185,
+            newLines: 1,
+            lines: ["-old CodeMirrorEditor", "+new CodeMirrorEditor"],
+          },
+        ]}
+        language="typescript"
+        globallyCollapsed={false}
+      />
+    );
+
+    expect(mockTokenize).toHaveBeenCalledWith(
+      hunks,
+      expect.objectContaining({
+        highlight: true,
+        language: "typescript",
+        oldSource: undefined,
+        enhancers: expect.any(Array),
+      })
+    );
+  });
 });

@@ -46,7 +46,10 @@ import {
   refractor,
 } from "@utils/syntaxHighlighting";
 import { markFindTokens, applyActiveDiffMatch } from "@utils/rdvFindTokens";
-import { OUTPUT_FIND_ACTIVE_ATTRIBUTE } from "@utils/outputFind";
+import {
+  OUTPUT_FIND_ACTIVE_ATTRIBUTE,
+  OUTPUT_FIND_ACTIVE_CLASS,
+} from "@utils/outputFind";
 import { useUiStore } from "@store/uiStore";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 
@@ -426,6 +429,17 @@ export const DiffView: React.FC<DiffViewProps> = ({
   const lang = normalizeSyntaxLanguage(language);
   const shouldComputeTokens =
     !shouldDeferTokenization || deferredTokenizationReady;
+  // A structured patch can describe a later edit to a file that was already
+  // changed earlier in the run, while oldContent is the attempt-start
+  // workspace snapshot. Passing that stale source to react-diff-view makes it
+  // rebuild token lines at the patch's line numbers from unrelated content,
+  // so the painted diff no longer matches either the patch or find offsets.
+  // Structured patches are already self-contained; tokenize their rendered
+  // hunks directly. Raw old/new-content diffs still benefit from full-source
+  // tokenization because their oldContent is the source used to create them.
+  const tokenizationOldSource = structuredPatch?.length
+    ? undefined
+    : oldContent;
   const tokens = useMemo(() => {
     if (!expandedHunks.length || !shouldComputeTokens) return null;
     try {
@@ -435,7 +449,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
           highlight: true,
           refractor,
           language: lang,
-          oldSource: oldContent,
+          oldSource: tokenizationOldSource,
           enhancers,
         });
       }
@@ -444,7 +458,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
       WebviewLog.warn("[DiffView] syntax tokenization failed", error);
       return null;
     }
-  }, [expandedHunks, lang, oldContent, shouldComputeTokens]);
+  }, [expandedHunks, lang, shouldComputeTokens, tokenizationOldSource]);
 
   // Wrap find-query occurrences in `mark` tokens so they highlight inside the
   // rendered diff. react-diff-view's default token renderer paints `mark`
@@ -482,7 +496,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
           <mark
             key={index}
             {...{ [OUTPUT_FIND_ACTIVE_ATTRIBUTE]: "true" }}
-            className="diff-code-mark diff-code-mark-find-active"
+            className={`diff-code-mark ${OUTPUT_FIND_ACTIVE_CLASS}`}
           >
             {token.value}
           </mark>

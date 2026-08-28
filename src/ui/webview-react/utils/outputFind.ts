@@ -70,6 +70,7 @@ export interface OutputRowSearchSegment {
 }
 
 export const OUTPUT_FIND_ACTIVE_ATTRIBUTE = "data-find-active";
+export const OUTPUT_FIND_ACTIVE_CLASS = "diff-code-mark-find-active";
 
 export function getToolResultText(result: ToolResult | undefined): string {
   if (!result) {

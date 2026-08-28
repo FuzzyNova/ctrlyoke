@@ -1,3 +1,8 @@
+import {
+  OUTPUT_FIND_ACTIVE_ATTRIBUTE,
+  OUTPUT_FIND_ACTIVE_CLASS,
+} from "./outputFind";
+
 export interface ViewportRowAnchor {
   rowKey: string;
   offsetTop: number;
@@ -214,8 +219,13 @@ export function revealActiveFindMatchInRow(
     };
   }
 
+  // Most renderers emit a semantic <mark data-find-active>. react-diff-view's
+  // custom renderToken callback only runs for top-level tokens, however, so an
+  // active match nested inside a syntax-highlight token is rendered by its
+  // default recursive renderer as a span with the active class. Support both
+  // representations of the same active-match contract.
   const activeMark = rowElement.querySelector<HTMLElement>(
-    'mark[data-find-active="true"]'
+    `[${OUTPUT_FIND_ACTIVE_ATTRIBUTE}="true"], .${OUTPUT_FIND_ACTIVE_CLASS}`
   );
   if (!activeMark) {
     return {

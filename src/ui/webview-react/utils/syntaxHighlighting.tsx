@@ -25,7 +25,10 @@ import refractorToml from "refractor/toml";
 import refractorTsx from "refractor/tsx";
 import refractorTypescript from "refractor/typescript";
 import refractorYaml from "refractor/yaml";
-import { OUTPUT_FIND_ACTIVE_ATTRIBUTE } from "@utils/outputFind";
+import {
+  OUTPUT_FIND_ACTIVE_ATTRIBUTE,
+  OUTPUT_FIND_ACTIVE_CLASS,
+} from "@utils/outputFind";
 
 const REGISTERED_SYNTAXES = [
   refractorTypescript,
@@ -302,7 +305,7 @@ const FIND_HIGHLIGHT_STYLES = `
 }
 
 .markdown-text mark[${OUTPUT_FIND_ACTIVE_ATTRIBUTE}="true"],
-.diff-code-mark-find-active {
+.${OUTPUT_FIND_ACTIVE_CLASS} {
   background-color: var(--vscode-editor-findMatchBackground, rgba(39, 103, 130, 0.56));
   outline: 1px solid var(--vscode-editor-findMatchBorder, var(--vscode-focusBorder, transparent));
   border-radius: 2px;
