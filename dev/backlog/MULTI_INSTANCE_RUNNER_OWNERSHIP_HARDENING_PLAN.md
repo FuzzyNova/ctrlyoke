@@ -698,4 +698,10 @@ proof. Production VS Code and CLI construction injects the single activation or
 startup identity explicitly; legacy direct `WorkflowInstance` utility/test
 construction retains a per-instance fallback until those call sites are
 migrated. Structured inspection and external-routing changes remain deferred
-to the later phases as required by this first implementation step.
+to the later phases as required by this first implementation step. For the
+conservative legacy case left open above, a live lock without `hostInstanceId`
+whose PID differs from the observer is classified as active/indeterminate (and
+logged), never external; a matching PID is classified as self. The structured
+inspection API is now available, but the old runner-specific statuses remain
+for existing callers. Their removal belongs to the architectural-enforcement
+phase, so the checklist item above remains unchecked until then.

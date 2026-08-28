@@ -6,6 +6,9 @@ export const HEARTBEAT_INTERVAL_MS = 5_000;
 /** A coordination record is reclaimable after this much heartbeat silence. */
 export const STALE_HEARTBEAT_MS = 30_000;
 
+/** Injectable process-liveness check used by coordination logic and tests. */
+export type ProcessLivenessCheck = (pid: number) => boolean;
+
 /** Generate a fresh token for an owner of a coordination record. */
 export function generateOwnerToken(): string {
   return crypto.randomUUID();
@@ -33,7 +36,8 @@ export function isProcessAlive(pid: number): boolean {
 export function isOwnerStale(
   pid: number,
   lastHeartbeat: number,
-  now = Date.now()
+  now = Date.now(),
+  processLivenessCheck: ProcessLivenessCheck = isProcessAlive
 ): boolean {
-  return !isProcessAlive(pid) || isHeartbeatStale(lastHeartbeat, now);
+  return !processLivenessCheck(pid) || isHeartbeatStale(lastHeartbeat, now);
 }
