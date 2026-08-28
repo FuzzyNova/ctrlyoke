@@ -9,7 +9,39 @@ import { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { pathsEqual } from "../../utils/PathCasing";
-import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
+import type {
+  RunRef,
+  RunnerHostIdentity,
+  WorkflowKey,
+  WorkflowRunnerLock,
+} from "../../types/CtrlYokeTypes";
+import { RUNNER_IDS } from "../../types/DashboardConstants";
+import type { ActiveExternalLockInspection } from "../../core/orchestration/ExternalExecutionResolver";
+
+function makeInspection(
+  workflowKey: WorkflowKey,
+  runRef: RunRef
+): ActiveExternalLockInspection {
+  const lock: WorkflowRunnerLock = {
+    schemaVersion: 2,
+    workflowKey,
+    runRef,
+    runner: RUNNER_IDS.CLI,
+    pid: process.pid,
+    hostInstanceId: "watch-pattern-host",
+    executionInstanceId: "watch-pattern-execution",
+    ownerToken: "watch-pattern-owner",
+    startedAt: Date.now(),
+    lastHeartbeat: Date.now(),
+  };
+  return { liveness: "active", locality: "external", lock };
+}
+
+const observer: RunnerHostIdentity = {
+  runner: RUNNER_IDS.VSCODE,
+  hostInstanceId: "observer-host",
+  pid: process.pid,
+};
 
 function createFakeWatcher(): vscode.FileSystemWatcher {
   const disposable = { dispose: () => undefined };
@@ -55,6 +87,8 @@ suite("external watcher patterns", () => {
         workflowKey,
         runRef,
         workspaceRoot,
+        makeInspection(workflowKey, runRef),
+        observer,
         () => undefined,
         () => undefined,
         () => undefined

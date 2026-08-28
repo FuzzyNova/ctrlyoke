@@ -188,7 +188,7 @@ export function createRoundTripHarness(
   internal.viewMessageSinks = new Map();
   internal.lineageBindingClients = new Set<string>();
   internal.retiredInstances = new Map();
-  internal.cliSessions = new Map();
+  internal.externalRunSessions = new Map();
   // A benign resident instance for an *unrelated* lineage keeps the run under
   // test idle (static write path) while giving getQueueState() a clean answer
   // so the settings-sync republish can actually post.

@@ -68,7 +68,7 @@ function createLineageBindingHarness() {
     ],
   ]);
   internal.retiredInstances = new Map<string, unknown>();
-  internal.cliSessions = new Map<string, unknown>();
+  internal.externalRunSessions = new Map<string, unknown>();
   internal.viewerRegistry = new Map([["client-a", "instance-bound"]]);
   internal.viewAddressRegistry = new Map();
   internal.viewMessageSinks = new Map();
@@ -496,7 +496,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     internal.viewMessageSinks = new Map();
     internal.instances = new Map([[workflowId, instance]]);
     internal.retiredInstances = new Map();
-    internal.cliSessions = new Map();
+    internal.externalRunSessions = new Map();
     internal.getActiveTerminalWorkflowRefs = () => [];
     internal.readAddressedRunView = async () => ({
       workingFile: {
@@ -577,7 +577,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         },
       ],
     ]);
-    internal.cliSessions = new Map();
+    internal.externalRunSessions = new Map();
 
     assert.deepStrictEqual(orchestrator.getViewAddress("client-a"), {
       workflowKey,
@@ -613,7 +613,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         },
       ],
     ]);
-    internal.cliSessions = new Map();
+    internal.externalRunSessions = new Map();
 
     assert.strictEqual(internal.findExecutionRunRef(workflowKey), undefined);
   });
@@ -1158,7 +1158,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       const internal = orchestrator as any;
       internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
       internal.instances = new Map();
-      internal.cliSessions = new Map();
+      internal.externalRunSessions = new Map();
       internal.viewAddressRegistry = new Map([
         [
           PANEL_CLIENT_ID,
@@ -1313,7 +1313,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       const internal = orchestrator as any;
       internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
       internal.instances = new Map();
-      internal.cliSessions = new Map();
+      internal.externalRunSessions = new Map();
       // The requester (the run-navigation panel's client) is viewing an
       // unrelated lineage, not this one at all — proving delete no longer
       // requires the target to be the client's own viewed run.
@@ -1439,7 +1439,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
           },
         ],
       ]);
-      internal.cliSessions = new Map();
+      internal.externalRunSessions = new Map();
       internal.viewAddressRegistry = new Map([
         [
           PANEL_CLIENT_ID,
@@ -1589,7 +1589,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       ],
     ]);
     internal.retiredInstances = new Map();
-    internal.cliSessions = new Map();
+    internal.externalRunSessions = new Map();
     internal.getActiveTerminalWorkflowRefs = () => [];
     internal.loadRunViewForClient = async (
       address: unknown,
@@ -1666,7 +1666,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         ],
       ]);
       internal.retiredInstances = new Map();
-      internal.cliSessions = new Map();
+      internal.externalRunSessions = new Map();
       internal.bindClientToAddressedLineage = async () => workflowId;
       internal.resolveAddressFilePath = () => workingFilePath;
       internal.findExecutionRunRef = () => null;
@@ -1808,7 +1808,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         ],
       ]);
       internal.retiredInstances = new Map();
-      internal.cliSessions = new Map();
+      internal.externalRunSessions = new Map();
       internal.bindClientToAddressedLineage = async () => workflowId;
       internal.resolveAddressFilePath = () => workingFilePath;
       // Nothing is executing in this lineage — the addressed run is history.
@@ -1882,7 +1882,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       internal.viewMessageSinks = new Map();
       internal.instances = new Map();
       internal.retiredInstances = new Map();
-      internal.cliSessions = new Map();
+      internal.externalRunSessions = new Map();
       internal.bindClientToAddressedLineage = async (
         _address: unknown,
         _send: unknown,
@@ -2003,7 +2003,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
         ],
       ]);
       internal.retiredInstances = new Map();
-      internal.cliSessions = new Map();
+      internal.externalRunSessions = new Map();
       internal.bindClientToAddressedLineage = async () => workflowId;
       internal.resolveAddressFilePath = () => workingFilePath;
       internal.findExecutionRunRef = () => runRef;
@@ -2135,7 +2135,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
       ],
     ]);
     internal.retiredInstances = new Map();
-    internal.cliSessions = new Map();
+    internal.externalRunSessions = new Map();
     internal.getActiveTerminalWorkflowRefs = () => [];
     internal.loadRunViewForClient = async () => {
       operations.push("run-view");
@@ -2264,7 +2264,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         ],
       ]);
       internal.retiredInstances = new Map();
-      internal.cliSessions = new Map();
+      internal.externalRunSessions = new Map();
       internal.loadFreshInstanceAndReplay = async () => {
         throw new Error("An idle run edit must not fork a draft");
       };
@@ -2374,7 +2374,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         ],
       ]);
       internal.retiredInstances = new Map();
-      internal.cliSessions = new Map();
+      internal.externalRunSessions = new Map();
       internal.loadFreshInstanceAndReplay = () => {
         throw new Error("An executing run must not fork a draft for settings");
       };
@@ -2489,7 +2489,7 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
       ]);
       internal.instances = new Map();
       internal.retiredInstances = new Map([[retained.id, retained]]);
-      internal.cliSessions = new Map();
+      internal.externalRunSessions = new Map();
 
       await orchestrator.prepareWorkflowPropertiesMutation(
         {
@@ -2565,7 +2565,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
       internal.lineageRepository = repository;
       internal.instances = new Map();
       internal.retiredInstances = new Map();
-      internal.cliSessions = new Map();
+      internal.externalRunSessions = new Map();
       internal.viewAddressRegistry = new Map([
         [
           "client-a",
@@ -2659,7 +2659,7 @@ suite("WorkflowOrchestrator run-addressed step edits", () => {
         ["unrelated-instance", unrelatedInstance],
       ]);
       internal.retiredInstances = new Map();
-      internal.cliSessions = new Map();
+      internal.externalRunSessions = new Map();
 
       await orchestrator.deletePromptFromQueue(
         {
@@ -2777,10 +2777,10 @@ suite("WorkflowOrchestrator loadWorkflowForClient path matching", () => {
       getSummary: () => ({ workingFilePath: nativePath }),
     };
 
-    internal.cliSessions = new Map();
+    internal.externalRunSessions = new Map();
     internal.instances = new Map<string, any>([["live-1", liveInstance]]);
     internal.retiredInstances = new Map<string, any>();
-    internal.ensureCliWatchSession = async () => false;
+    internal.ensureExternalRunWatchSession = async () => false;
 
     let viewed: { clientId: string; workflowId: string } | undefined;
     internal.setViewedWorkflowId = (clientId: string, workflowId: string) => {
@@ -2817,7 +2817,8 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
     workspace: string,
     runner: typeof RUNNER_IDS.CLI | typeof RUNNER_IDS.VSCODE,
     name: string,
-    executionState: ExecutionState = EXECUTION_STATES.RUNNING
+    executionState: ExecutionState = EXECUTION_STATES.RUNNING,
+    hostInstanceId = `${name}-host`
   ): Promise<{
     workflowKey: import("../../types/CtrlYokeTypes").WorkflowKey;
     filePath: string;
@@ -2832,6 +2833,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
       filePath,
       JSON.stringify({
         workflowName: name,
+        startedAt: Date.now(),
         steps: [{ prompt: "live" }],
         _runtime: { currentIndex: 0, executionState },
       }),
@@ -2846,7 +2848,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
         runner,
         pid: process.pid,
         ownerToken: `${name}-owner`,
-        hostInstanceId: `${name}-host`,
+        hostInstanceId,
         executionInstanceId: `${name}-instance`,
         startedAt: Date.now(),
         lastHeartbeat: Date.now(),
@@ -2856,15 +2858,23 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
     return { workflowKey, filePath };
   }
 
-  function createWatchHarness(workspace: string) {
+  function createWatchHarness(
+    workspace: string,
+    runnerHostIdentity = {
+      runner: RUNNER_IDS.VSCODE,
+      hostInstanceId: "observer-host",
+      pid: 999999,
+    }
+  ) {
     const orchestrator = Object.create(
       WorkflowOrchestrator.prototype
     ) as WorkflowOrchestrator;
     const internal = orchestrator as any;
     internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
+    internal.runnerHostIdentity = runnerHostIdentity;
     internal.instances = new Map();
     internal.retiredInstances = new Map();
-    internal.cliSessions = new Map();
+    internal.externalRunSessions = new Map();
     internal.viewerRegistry = new Map();
     internal.externallyCreatedInstanceIds = new Set();
     internal.announcedExternalWorkflowIds = new Set();
@@ -2908,7 +2918,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
 
       await internal.setupCliWatching();
 
-      const entry = internal.cliSessions.get(run.workflowKey);
+      const entry = internal.externalRunSessions.get(run.workflowKey);
       assert.ok(entry, "startup should register an external watch session");
       assert.strictEqual(entry.summary.managedBy, RUNNER_IDS.VSCODE);
       assert.strictEqual(entry.summary.workingFilePath, run.filePath);
@@ -2938,7 +2948,9 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
       );
       const { orchestrator, internal } = createWatchHarness(workspace);
 
-      const started = await orchestrator.ensureCliWatchSession(run.filePath);
+      const started = await orchestrator.ensureExternalRunWatchSession(
+        run.filePath
+      );
 
       assert.strictEqual(
         started,
@@ -2946,7 +2958,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
         "the persisted terminal state must outrank the still-live reservation lock"
       );
       assert.strictEqual(
-        internal.cliSessions.size,
+        internal.externalRunSessions.size,
         0,
         "a second window must not show the completed run as externally running"
       );
@@ -2983,7 +2995,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
 
         assert.strictEqual(freshLoad, false);
         assert.strictEqual(
-          internal.cliSessions.get(run.workflowKey)?.summary.managedBy,
+          internal.externalRunSessions.get(run.workflowKey)?.summary.managedBy,
           expectedManagedBy
         );
       }
@@ -3011,7 +3023,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
 
       assert.strictEqual(freshInstance, false);
       assert.strictEqual(
-        internal.cliSessions.get(run.workflowKey)?.summary.managedBy,
+        internal.externalRunSessions.get(run.workflowKey)?.summary.managedBy,
         RUNNER_IDS.VSCODE
       );
     } finally {
@@ -3022,7 +3034,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
 
   test("does not retire a locally in-flight WorkflowInstance for its own active-vscode lock", async () => {
     // Regression: a lock reported as active-vscode may be this very process's own
-    // lock for a workflow it is already executing. startCliWatchSession must not
+    // lock for a workflow it is already executing. startExternalRunWatchSession must not
     // retire a genuinely RUNNING/PAUSING/CANCELLING local instance in favor of a
     // read-only watch of itself.
     const workspace = await fs.mkdtemp(
@@ -3031,18 +3043,27 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
     const originalStart = ExternalRunWatchSession.prototype.start;
     ExternalRunWatchSession.prototype.start = async () => undefined;
     try {
-      const run = await createLiveRun(workspace, RUNNER_IDS.VSCODE, "self");
-      const { internal } = createWatchHarness(workspace);
+      const run = await createLiveRun(
+        workspace,
+        RUNNER_IDS.VSCODE,
+        "self",
+        EXECUTION_STATES.RUNNING,
+        "observer-host"
+      );
+      const { internal } = createWatchHarness(workspace, {
+        runner: RUNNER_IDS.VSCODE,
+        hostInstanceId: "observer-host",
+        pid: process.pid,
+      });
       const instanceId = "self-inst";
       internal.instances.set(
         instanceId,
         createFakeInstance(run.filePath, EXECUTION_STATES.RUNNING)
       );
 
-      await internal.startCliWatchSession(
+      await internal.startExternalRunWatchSessionIfExternal(
         run.filePath,
-        workspace,
-        RUNNER_IDS.VSCODE
+        workspace
       );
 
       assert.strictEqual(
@@ -3051,7 +3072,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
         "the in-flight local instance must survive"
       );
       assert.strictEqual(
-        internal.cliSessions.size,
+        internal.externalRunSessions.size,
         0,
         "no external watch session should be registered over a live local instance"
       );
@@ -3079,10 +3100,9 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
         createFakeInstance(run.filePath, EXECUTION_STATES.PAUSED)
       );
 
-      await internal.startCliWatchSession(
+      await internal.startExternalRunWatchSessionIfExternal(
         run.filePath,
-        workspace,
-        RUNNER_IDS.CLI
+        workspace
       );
 
       assert.strictEqual(
@@ -3091,7 +3111,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
         "the paused local instance should be retired in favor of the CLI watch session"
       );
       assert.strictEqual(
-        internal.cliSessions.get(run.workflowKey)?.summary.managedBy,
+        internal.externalRunSessions.get(run.workflowKey)?.summary.managedBy,
         RUNNER_IDS.CLI
       );
     } finally {
@@ -3387,7 +3407,7 @@ suite("WorkflowOrchestrator addressed start position", () => {
       internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
       internal.instances = new Map();
       internal.retiredInstances = new Map();
-      internal.cliSessions = new Map();
+      internal.externalRunSessions = new Map();
       internal.viewAddressRegistry = new Map([
         [
           PANEL_CLIENT_ID,
@@ -3518,7 +3538,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
     internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
     internal.instances = new Map(instance ? [["active", instance]] : []);
     internal.retiredInstances = new Map();
-    internal.cliSessions = new Map();
+    internal.externalRunSessions = new Map();
     internal.viewerRegistry = new Map();
     internal.viewAddressRegistry = new Map([
       [
@@ -3895,7 +3915,7 @@ suite("WorkflowOrchestrator explicit append and continue", () => {
       internal.currentWorkspaceFolder = { uri: { fsPath: workspace } };
       internal.instances = new Map();
       internal.retiredInstances = new Map();
-      internal.cliSessions = new Map();
+      internal.externalRunSessions = new Map();
       internal.viewAddressRegistry = new Map([
         [
           PANEL_CLIENT_ID,

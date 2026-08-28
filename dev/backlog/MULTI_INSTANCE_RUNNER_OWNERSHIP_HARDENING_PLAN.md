@@ -681,8 +681,8 @@ When implementation is complete:
 - [x] Lock schema separates host identity from workflow execution identity.
 - [ ] Structured lock inspection replaces runner-specific active statuses.
 - [x] External-execution resolver is the single source of external eligibility.
-- [ ] External watch sessions require and revalidate exact external proof.
-- [ ] Orchestrator CLI-specific session names are made runner-neutral.
+- [x] External watch sessions require and revalidate exact external proof.
+- [x] Orchestrator CLI-specific session names are made runner-neutral.
 - [ ] Workflow summaries expose explicit external locality without lock secrets.
 - [ ] All lock call sites are inventoried and migrated by required semantics.
 - [ ] Classifier, resolver, self-owner, two-host, and UI regressions are covered.
@@ -714,3 +714,11 @@ is the standalone external-execution eligibility boundary. It exports
 The resolver reads and validates the addressed working file, requires an active
 persisted execution state and an exact, stable external lock acquisition, and
 returns the inspected lock (including its owner token) as the caller's proof.
+
+Phase 3 watch-session note: `WorkflowOrchestrator` now routes external watch
+registration through that resolver proof, revalidates the exact acquisition
+before registration, and stores runner-neutral external session state. A live
+watch ends on terminal working-file state, lock loss, or any ownership/identity
+change; a replacement lock is resolved afresh rather than being followed by the
+old session. The paused local takeover path remains limited to proven external
+ownership.
