@@ -32,27 +32,60 @@ import { StatsUsageSection } from "../settings/stats/StatsUsageSection";
 import { ExitButton, ScopeToggle } from "../shared";
 
 const ALL_TABS = [
+  // Core
   { id: "general", label: "General", icon: "codicon-settings" },
-  { id: "license", label: "License", icon: "codicon-key" },
   { id: "workflow", label: "Workflow Defaults", icon: "codicon-globe" },
-  { id: "permissions", label: "Advanced Permissions", icon: "codicon-shield" },
-  { id: "secrets", label: "Secrets", icon: "codicon-lock" },
-  { id: "execution", label: "Execution", icon: "codicon-play" },
-  { id: "worktrees", label: "Worktrees", icon: "codicon-source-control" },
-  { id: "notifications", label: "Notifications", icon: "codicon-bell" },
-  { id: "terminal", label: "Terminal", icon: "codicon-terminal" },
+  // Execution
+  {
+    id: "execution",
+    label: "Execution",
+    icon: "codicon-play",
+    newGroup: true,
+  },
   { id: "queue", label: "Queue", icon: "codicon-list-ordered" },
-  { id: "server", label: "Server", icon: "codicon-server" },
+  { id: "worktrees", label: "Worktrees", icon: "codicon-source-control" },
+  // Output
+  {
+    id: "terminal",
+    label: "Terminal",
+    icon: "codicon-terminal",
+    newGroup: true,
+  },
+  { id: "statusline", label: "Status Line", icon: "codicon-list-flat" },
+  { id: "commit", label: "Commit Message", icon: "codicon-git-commit" },
+  // Security
+  {
+    id: "permissions",
+    label: "Advanced Permissions",
+    icon: "codicon-shield",
+    newGroup: true,
+  },
+  { id: "secrets", label: "Secrets", icon: "codicon-lock" },
+  // Integrations
+  { id: "server", label: "Server", icon: "codicon-server", newGroup: true },
   {
     id: "agentskillsmanager",
     label: "Agent & Skills Manager",
     icon: "codicon-agent",
   },
   { id: "mcpmanager", label: "MCP Manager", icon: "codicon-mcp" },
-  { id: "commit", label: "Commit Message", icon: "codicon-git-commit" },
+  // Insights
+  {
+    id: "notifications",
+    label: "Notifications",
+    icon: "codicon-bell",
+    newGroup: true,
+  },
   { id: "stats", label: "Stats & Usage", icon: "codicon-graph" },
-  { id: "statusline", label: "Status Line", icon: "codicon-list-flat" },
-  { id: "developer", label: "Developer", icon: "codicon-tools" },
+  // Account
+  { id: "license", label: "License", icon: "codicon-key", newGroup: true },
+  // Developer (dev builds only)
+  {
+    id: "developer",
+    label: "Developer",
+    icon: "codicon-tools",
+    newGroup: true,
+  },
 ];
 
 const TABS = ALL_TABS;
