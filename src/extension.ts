@@ -540,15 +540,12 @@ function registerCommands(context: vscode.ExtensionContext) {
   const activateOfflineProCommand = vscode.commands.registerCommand(
     VSCODE_COMMANDS.ACTIVATE_OFFLINE_PRO,
     async () => {
-      if (!(await licenseService.isPro())) {
-        notifyUserFeedback(
-          workflowOrchestrator.getUserFeedbackSink(),
-          USER_FEEDBACK_SEVERITY.WARNING,
-          `ctrlyoke: ${LICENSE_UI.OFFLINE_ACTIVATION_UPSELL}`,
-          LICENSE_UI.PRICING_URL
-        );
-        return;
-      }
+      // Intentionally no isPro() precheck: this command is how a Pro/
+      // Enterprise customer's offline license file gets imported in the
+      // first place, so gating it on isPro() would make it impossible to
+      // ever use for a first-time air-gapped activation. importLicenseFile()
+      // itself is the source of truth for whether the imported file grants
+      // Pro (see PRO_LICENSE_PLAN.md §1.5, §1.8).
       try {
         const files = await vscode.window.showOpenDialog({
           canSelectFiles: true,

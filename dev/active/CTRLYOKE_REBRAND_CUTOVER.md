@@ -107,4 +107,4 @@ These are small repo edits to make **once** the external pieces are live:
 
 - [`CTRLYOKE_REBRAND_PLAN.md`](CTRLYOKE_REBRAND_PLAN.md) — the full rename plan; §10 + §11.5 are the origin of this cutover list. Code side is done.
 - [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) — original launch checklist (FlightPath-era). Phase 0–2 done under `flightpath.dev`; Phase 3–6 vendor/licensing/verification items are **superseded by this doc** for naming, and remain valid for the underlying work (`PRO_LICENSE_PLAN.md`).
-- [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md) — Lemon Squeezy + Keygen + LicenseService detail (the "how"; this doc is the "do it under ctrlyoke" gate).
+- [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md) — Lemon Squeezy + Keygen + LicenseService detail (the "how"; this doc is the "do it under ctrlyoke" gate).

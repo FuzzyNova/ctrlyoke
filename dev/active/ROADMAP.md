@@ -50,7 +50,7 @@ to drive.
 1. Finish the external launch checklist: production site/docs verification,
    Marketplace publisher setup, final VSIX smoke test, and publish.
 2. Resolve the commercial-launch gate in
-   [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md). The current strategy requires
+   [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md). The current strategy requires
    Pro at launch; if that work would materially delay release, make an explicit
    decision to ship a free public beta instead. Do not publish pricing and Pro
    promises that the extension cannot enforce.
@@ -329,7 +329,7 @@ roadmap item. `TESTING_GAPS.md` is generated engineering input, not a feature.
 | Per-step CLI `--json` result contract                                     | Implemented — Stage B complete                | [`AUTOMATION_API_PLAN.md`](../implemented/AUTOMATION_API_PLAN.md)                                                  |
 | Final release artifact audit                                              | In progress                                   | [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md), [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                               |
 | Landing/docs production deployment and DNS verification                   | In progress                                   | [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md), [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md) |
-| Pro license provider, entitlement service, activation, and feature gating | Not implemented                               | [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                                                                       |
+| Pro license provider, entitlement service, activation, and feature gating | Implemented — vendor legal/pricing follow-ups remain (see RELEASE_CHECKLIST.md) | [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md)                                                                       |
 | Rebrand/external identity cutover                                         | In progress                                   | [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)                                                       |
 | Marketplace/Open VSX publisher authentication and publish                 | Not done                                      | [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                                               |
 | Separate npm CLI packaging                                                | Deferred unless required for launch messaging | [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                                               |
@@ -457,7 +457,7 @@ criteria matter more than speculative dates.
 | [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                                          | Marketplace/package release work                                         |
 | [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)                                                                | Implementation mostly complete; production verification remains          |
 | [`DOCUMENTATION_STRATEGY_PLAN.md`](DOCUMENTATION_STRATEGY_PLAN.md)                                            | Infrastructure/content exists; freshness and deployment remain           |
-| [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                                                                  | Architecture decided; provider and extension implementation remain       |
+| [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md)                                                                  | **Implemented.** LicenseService, both activation flows, and all gate sites shipped; Phase 2 accounts and the Enterprise SKU remain future work |
 | [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)                                                  | External cutover work remains                                            |
 | [`AUTOMATION_API_PLAN.md`](../implemented/AUTOMATION_API_PLAN.md)                                             | **Implemented.** Per-step JSON shipped; SDK/MCP launch rejected          |
 | [`BROWSER_USER_FEEDBACK_PLAN.md`](BROWSER_USER_FEEDBACK_PLAN.md)                                              | Phases 1–3 shipped; Phase 4 interactive choices remain (Stage F)         |

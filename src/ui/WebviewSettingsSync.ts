@@ -1099,9 +1099,12 @@ export class WebviewSettingsSync {
 
   private async resolveLicenseAccess(): Promise<LicenseAccessState> {
     if (!this.getLicenseAccess) {
-      // Platform/unit-test callers may not construct the extension-owned
-      // LicenseService. Production wiring always supplies this callback.
-      return { isPro: true, hasRemoteAccess: true };
+      // Fail closed to Free, consistent with LicenseService's own fail-open-
+      // to-free contract (PRO_LICENSE_PLAN.md §1.4/§1.8): a caller that omits
+      // the extension-owned LicenseService must never be granted Pro/remote
+      // access by default. Tests that exercise Pro-gated behavior must inject
+      // an explicit getLicenseAccess factory.
+      return { isPro: false, hasRemoteAccess: false };
     }
     try {
       return await this.getLicenseAccess();

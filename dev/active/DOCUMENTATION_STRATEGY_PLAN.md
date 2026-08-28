@@ -864,7 +864,7 @@ Priority order:
 5. **Add Algolia DocSearch** (apply at algolia.com/docsearch once the site has content).
 6. **Configure `package.json` `markdownDescription`** for all settings (links to docs pages).
 7. **Add JSON Schema `description` fields** for all workflow properties (they become hover docs in VS Code).
-8. **Write `docs/pro/`** — this is the documentation for [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)'s
+8. **Write `docs/pro/`** — this is the documentation for [`PRO_LICENSE_PLAN.md`](../implemented/PRO_LICENSE_PLAN.md)'s
    entire feature (remote/on-the-go access is essentially the one thing Pro sells; see that plan's §1.6
    "governing test"). Gate on `PRO_LICENSE_PLAN.md` Phase 1 shipping since the flows being documented
    (activation, remote bind, cert generation) don't exist before then.

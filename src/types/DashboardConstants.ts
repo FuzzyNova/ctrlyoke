@@ -70,8 +70,6 @@ export const LICENSE_UI = {
     "Remote access is a Pro feature. Your localhost dashboard remains free; start a 14-day trial or view Pro pricing.",
   CUSTOM_ICON_UPSELL:
     "Custom icon colors are a Pro thank-you perk. View Pro pricing to unlock them.",
-  OFFLINE_ACTIVATION_UPSELL:
-    "Air-gapped license activation is a Pro capability. View Pro pricing to unlock it.",
 } as const;
 
 // ============================================================================

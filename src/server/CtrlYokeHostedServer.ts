@@ -2224,7 +2224,11 @@ export class CtrlYokeHostedServer
   }
 
   private async resolveRemoteAccess(): Promise<boolean> {
-    if (!this.getRemoteAccess) return true;
+    // Fail closed to Free/localhost-only when no entitlement callback is
+    // wired, consistent with LicenseService's fail-open-to-free contract
+    // (PRO_LICENSE_PLAN.md §1.4/§1.8) — a caller that omits the callback
+    // must never be granted remote reach or push access by default.
+    if (!this.getRemoteAccess) return false;
     try {
       return await this.getRemoteAccess();
     } catch {
