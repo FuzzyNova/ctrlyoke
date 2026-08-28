@@ -77,18 +77,18 @@
       },
       {
         "command": "ctrlyoke.manageWorktrees",
-        "title": "ctrlyoke: Manage Worktrees",
+        "title": "Manage Worktrees",
         "category": "ctrlyoke",
         "icon": "$(source-control)"
       },
       {
         "command": "ctrlyoke.refreshHarnessUsage",
-        "title": "ctrlyoke: Refresh Harness Usage",
+        "title": "Refresh Harness Usage",
         "category": "ctrlyoke"
       },
       {
         "command": "ctrlyoke.refreshWorkspaceStats",
-        "title": "ctrlyoke: Refresh Workspace Statistics",
+        "title": "Refresh Workspace Statistics",
         "category": "ctrlyoke"
       },
       {
@@ -98,22 +98,22 @@
       },
       {
         "command": "ctrlyoke.activatePro",
-        "title": "ctrlyoke: Activate Pro License",
+        "title": "Activate Pro License",
         "category": "ctrlyoke"
       },
       {
         "command": "ctrlyoke.activateOfflinePro",
-        "title": "ctrlyoke: Activate Offline (Air-Gapped) License",
+        "title": "Activate Offline (Air-Gapped) License",
         "category": "ctrlyoke"
       },
       {
         "command": "ctrlyoke.deactivatePro",
-        "title": "ctrlyoke: Deactivate Pro License",
+        "title": "Deactivate Pro License",
         "category": "ctrlyoke"
       },
       {
         "command": "ctrlyoke.manageLicense",
-        "title": "ctrlyoke: Manage License",
+        "title": "Manage License",
         "category": "ctrlyoke"
       },
       {
