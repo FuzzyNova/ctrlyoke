@@ -6,13 +6,14 @@ import {
   type WorkflowKey,
 } from "../types/CtrlYokeTypes";
 import {
+  ACTIVE_EXECUTION_STATES,
   LOCK_STATUS,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   PROMPT_TERMINAL_STATUS,
   STEP_STATUS,
 } from "../types/DashboardConstants";
-import type { LockStatus } from "../types/DashboardConstants";
+import type { ExecutionState, LockStatus } from "../types/DashboardConstants";
 import { Log } from "./Log";
 import * as WorkflowPaths from "./WorkflowPaths";
 import { inspectWorkflowLock, readWorkflowLock } from "./WorkflowLockInspector";
@@ -300,9 +301,8 @@ export class WorkflowLockManager {
 
       const executionState = runningFile._runtime?.executionState;
       if (
-        executionState !== EXECUTION_STATES.RUNNING &&
-        executionState !== EXECUTION_STATES.PAUSING &&
-        executionState !== EXECUTION_STATES.CANCELLING
+        !executionState ||
+        !ACTIVE_EXECUTION_STATES.has(executionState as ExecutionState)
       ) {
         continue;
       }

@@ -20,6 +20,7 @@ import {
   type WorkflowLineageCreationOptions,
 } from "../types/CtrlYokeTypes";
 import {
+  ACTIVE_EXECUTION_STATES,
   FINAL_STEP_PHASES,
   PROMPT_TERMINAL_STATUS,
   STEP_STATUS,
@@ -1909,13 +1910,7 @@ export class PromptQueue implements WorkflowWorkingFilePersistence {
    * `[0, currentIndex)` belongs to a run in progress and must stay frozen.
    */
   private get isExecutionActive(): boolean {
-    const status = this.stateMachine.status;
-    return (
-      status === EXECUTION_STATES.RUNNING ||
-      status === EXECUTION_STATES.PAUSING ||
-      status === EXECUTION_STATES.PAUSED ||
-      status === EXECUTION_STATES.CANCELLING
-    );
+    return ACTIVE_EXECUTION_STATES.has(this.stateMachine.status);
   }
 
   /**

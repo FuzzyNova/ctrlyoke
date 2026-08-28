@@ -19,6 +19,7 @@ import {
   QUEUE_POSITION,
   RUNNER_IDS,
   WORKFLOW_VIEW_ADDRESS_KIND,
+  type ExecutionState,
 } from "../../types/DashboardConstants";
 
 function createOrchestratorHarness() {
@@ -2813,7 +2814,8 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
   async function createLiveRun(
     workspace: string,
     runner: typeof RUNNER_IDS.CLI | typeof RUNNER_IDS.VSCODE,
-    name: string
+    name: string,
+    executionState: ExecutionState = EXECUTION_STATES.RUNNING
   ): Promise<{
     workflowKey: import("../../types/CtrlYokeTypes").WorkflowKey;
     filePath: string;
@@ -2829,7 +2831,7 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
       JSON.stringify({
         workflowName: name,
         steps: [{ prompt: "live" }],
-        _runtime: { currentIndex: 0, executionState: EXECUTION_STATES.RUNNING },
+        _runtime: { currentIndex: 0, executionState },
       }),
       "utf8"
     );
@@ -2910,6 +2912,39 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
         internal.instances.size,
         0,
         "must not adopt a local instance"
+      );
+    } finally {
+      ExternalRunWatchSession.prototype.start = originalStart;
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  test("does not synthesize a running watch for a completed run whose inject PTY retains the lock", async () => {
+    const workspace = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-completed-retained-lock-")
+    );
+    const originalStart = ExternalRunWatchSession.prototype.start;
+    ExternalRunWatchSession.prototype.start = async () => undefined;
+    try {
+      const run = await createLiveRun(
+        workspace,
+        RUNNER_IDS.VSCODE,
+        "completed-retained",
+        EXECUTION_STATES.COMPLETED
+      );
+      const { orchestrator, internal } = createWatchHarness(workspace);
+
+      const started = await orchestrator.ensureCliWatchSession(run.filePath);
+
+      assert.strictEqual(
+        started,
+        false,
+        "the persisted terminal state must outrank the still-live reservation lock"
+      );
+      assert.strictEqual(
+        internal.cliSessions.size,
+        0,
+        "a second window must not show the completed run as externally running"
       );
     } finally {
       ExternalRunWatchSession.prototype.start = originalStart;

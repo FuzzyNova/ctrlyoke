@@ -42,6 +42,7 @@ import {
 } from "../types/CtrlYokeTypes";
 import {
   ACTION_TYPES,
+  ACTIVE_EXECUTION_STATES,
   HARNESS_IDS,
   LOCK_STATUS,
   FINAL_STEP_PHASES,
@@ -6071,6 +6072,37 @@ export class WorkflowOrchestrator {
     const { workflowKey, runRef } = address;
     const workflowId = workflowKey;
 
+    // Read working file to build initial summary
+    let workingFile: {
+      workflowName?: string;
+      startedAt?: number;
+      steps?: unknown[];
+      _runtime?: {
+        currentIndex?: number;
+        executionState?: WorkflowSummary["executionState"];
+        tokenTotals?: WorkflowSummary["tokenTotals"];
+        worktree?: WorkflowSummary["worktree"];
+      };
+    };
+    try {
+      const content = await fs.promises.readFile(workingFilePath, "utf8");
+      workingFile = JSON.parse(content);
+    } catch (err) {
+      Log.warn(
+        `[WorkflowOrchestrator] startCliWatchSession: failed to read working file "${path.basename(workingFilePath)}":`,
+        err
+      );
+      return false;
+    }
+
+    const executionState = workingFile._runtime?.executionState;
+    if (!executionState || !ACTIVE_EXECUTION_STATES.has(executionState)) {
+      Log.info(
+        `[WorkflowOrchestrator] startCliWatchSession: "${workflowId}" has a live ${managedBy} lock but persisted state is ${executionState ?? "missing"} — skipping external watch session`
+      );
+      return false;
+    }
+
     // Retire any existing VS Code WorkflowInstance tracking this same working file.
     // This prevents a conflict where VS Code auto-loaded the workflow in PAUSED state
     // and the CLI is now taking over execution. Without this, the PAUSED instance
@@ -6105,29 +6137,6 @@ export class WorkflowOrchestrator {
       break;
     }
 
-    // Read working file to build initial summary
-    let workingFile: {
-      workflowName?: string;
-      startedAt?: number;
-      steps?: unknown[];
-      _runtime?: {
-        currentIndex?: number;
-        executionState?: string;
-        tokenTotals?: WorkflowSummary["tokenTotals"];
-        worktree?: WorkflowSummary["worktree"];
-      };
-    };
-    try {
-      const content = await fs.promises.readFile(workingFilePath, "utf8");
-      workingFile = JSON.parse(content);
-    } catch (err) {
-      Log.warn(
-        `[WorkflowOrchestrator] startCliWatchSession: failed to read working file "${path.basename(workingFilePath)}":`,
-        err
-      );
-      return false;
-    }
-
     const currentIndex = workingFile._runtime?.currentIndex ?? 0;
     const totalSteps = workingFile.steps?.length ?? 0;
 
@@ -6138,7 +6147,7 @@ export class WorkflowOrchestrator {
       workflowName: workingFile.workflowName ?? workflowId,
       filePath: workingFilePath,
       workingFilePath,
-      executionState: EXECUTION_STATES.RUNNING,
+      executionState,
       currentStep: currentIndex,
       totalSteps,
       startedAt: workingFile.startedAt,
@@ -6207,8 +6216,16 @@ export class WorkflowOrchestrator {
     this.cliSessions.set(workflowId, { session, summary });
     await session.start();
 
+    // The initial post-watcher read can discover that the run completed during
+    // startup and remove the session through onFinished. Do not announce a
+    // watch that no longer exists.
+    const activeEntry = this.cliSessions.get(workflowId);
+    if (activeEntry?.session !== session) {
+      return false;
+    }
+
     // Notify the dashboard so the workflow appears in the Running section
-    this.dashboardBroadcastHub.notifyWorkflowAdded(summary);
+    this.dashboardBroadcastHub.notifyWorkflowAdded(activeEntry.summary);
     Log.info(
       `[WorkflowOrchestrator] CLI watch session started for "${workflowId}"`
     );

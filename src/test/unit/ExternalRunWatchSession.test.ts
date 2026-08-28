@@ -6,6 +6,7 @@ import * as path from "path";
 import { ExternalRunWatchSession } from "../../core/orchestration/ExternalRunWatchSession";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
+import { EXECUTION_STATES } from "../../types/DashboardConstants";
 
 suite("ExternalRunWatchSession", () => {
   test("pins its manifest path to the exact constructed workflowKey/runRef, never 'newest'", () => {
@@ -101,6 +102,52 @@ suite("ExternalRunWatchSession", () => {
 
       assert.deepStrictEqual(update?.tokenTotals, tokenTotals);
       assert.strictEqual(update?.currentStep, 1);
+    } finally {
+      await fs.rm(workspaceFolderPath, { recursive: true, force: true });
+    }
+  });
+
+  test("finishes when the working file is terminal even if the runner lock remains", async () => {
+    const workspaceFolderPath = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-terminal-watch-")
+    );
+    try {
+      const workflowKey = "watch-terminal" as WorkflowKey;
+      const runRef = "run-2026-08-28T16-28-23-000Z" as RunRef;
+      const workingFilePath = path.join(workspaceFolderPath, "workflow.json");
+      await fs.writeFile(
+        workingFilePath,
+        JSON.stringify({
+          steps: [{ prompt: "done" }],
+          _runtime: {
+            currentIndex: 1,
+            executionState: EXECUTION_STATES.COMPLETED,
+          },
+        }),
+        "utf8"
+      );
+
+      let finished = 0;
+      const session = new ExternalRunWatchSession(
+        workingFilePath,
+        workflowKey,
+        runRef,
+        workspaceFolderPath,
+        () => undefined,
+        () => undefined,
+        () => {
+          finished += 1;
+        }
+      );
+      await (
+        session as unknown as { handleWorkingFileChange: () => Promise<void> }
+      ).handleWorkingFileChange();
+
+      assert.strictEqual(
+        finished,
+        1,
+        "terminal runtime state should end the watch without waiting for lock deletion"
+      );
     } finally {
       await fs.rm(workspaceFolderPath, { recursive: true, force: true });
     }

@@ -19,6 +19,7 @@ import {
 import { WorkspaceSnapshotService } from "../../utils/WorkspaceSnapshotService";
 import { CliOutput, StatusMessage } from "../../types/WebviewMessageTypes";
 import {
+  ACTIVE_EXECUTION_STATES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   HARNESS_IDS,
@@ -87,14 +88,6 @@ import {
  * run rows.
  */
 const RUN_SUMMARY_READ_BATCH_SIZE = 32;
-
-/** Lifecycle states in which a run may still be owned by an executor. */
-const ACTIVE_EXECUTION_STATES: ReadonlySet<ExecutionState> = new Set([
-  EXECUTION_STATES.RUNNING,
-  EXECUTION_STATES.PAUSING,
-  EXECUTION_STATES.PAUSED,
-  EXECUTION_STATES.CANCELLING,
-]);
 
 function isTerminalExecutionState(state: ExecutionState): boolean {
   return (
@@ -167,9 +160,8 @@ export class OutputHistoryManager {
   ) => Promise<unknown> | void;
 
   constructor(private _workspaceFolderPath: string) {
-    this.historySearchIndexService = getSharedHistorySearchIndexService(
-      _workspaceFolderPath
-    );
+    this.historySearchIndexService =
+      getSharedHistorySearchIndexService(_workspaceFolderPath);
     this.observedHarnessUsageStore = new ObservedHarnessUsageStore(
       _workspaceFolderPath
     );

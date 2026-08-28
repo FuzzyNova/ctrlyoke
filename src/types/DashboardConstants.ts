@@ -627,6 +627,14 @@ export const EXECUTION_STATES = {
   ERROR: "error",
 } as const;
 
+/** Lifecycle states in which a run may still be owned by an executor. */
+export const ACTIVE_EXECUTION_STATES: ReadonlySet<ExecutionState> = new Set([
+  EXECUTION_STATES.RUNNING,
+  EXECUTION_STATES.PAUSING,
+  EXECUTION_STATES.PAUSED,
+  EXECUTION_STATES.CANCELLING,
+]);
+
 // ============================================================================
 // ACTION TYPES - Prompt editor actions (Run/Queue)
 // ============================================================================

@@ -9,7 +9,10 @@ import {
   type WorkflowKey,
 } from "../../types/CtrlYokeTypes";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
-import { LOCK_STATUS } from "../../types/DashboardConstants";
+import {
+  ACTIVE_EXECUTION_STATES,
+  LOCK_STATUS,
+} from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import * as WorkflowPaths from "../../utils/WorkflowPaths";
 import { invalidateRunSummaryFor } from "./RunSummaryCache";
@@ -78,6 +81,12 @@ export class ExternalRunWatchSession implements vscode.Disposable {
     this.setupLockFileWatcher();
     this.setupHistoryWatcher();
     this.startHeartbeatPoll();
+
+    // Watchers are installed before this read so a run cannot complete in the
+    // gap between the startup snapshot and watcher registration. This also
+    // catches a terminal run whose runner lock remains live only to reserve a
+    // named worktree for an injectable PTY.
+    await this.handleWorkingFileChange();
   }
 
   dispose(): void {
@@ -152,6 +161,16 @@ export class ExternalRunWatchSession implements vscode.Disposable {
         executionState: executionState as WorkflowSummary["executionState"],
         tokenTotals: workingFile._runtime?.tokenTotals,
       });
+      if (
+        !ACTIVE_EXECUTION_STATES.has(
+          executionState as WorkflowSummary["executionState"]
+        )
+      ) {
+        Log.debug(
+          `[ExternalRunWatchSession] working file reached terminal state ${executionState} for workflowKey="${this.workflowKey}" — calling onFinished`
+        );
+        this.onFinished();
+      }
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === "ENOENT") {
