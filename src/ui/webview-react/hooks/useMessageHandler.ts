@@ -2791,6 +2791,7 @@ export function createMessageHandlers(
     settingsStore.setAvailableIps(ips);
     settingsStore.setSelectedDisplayIp(ips[0] ?? null);
     settingsStore.setPortFallback(message.portFallback ?? null);
+    settingsStore.setBindAddressFallback(message.bindAddressFallback ?? null);
     // Server started — any previously regenerated token is now in effect
     settingsStore.setLastTokenRegenerated(null);
   };
@@ -2805,6 +2806,7 @@ export function createMessageHandlers(
     settingsStore.setAvailableIps([]);
     settingsStore.setSelectedDisplayIp(null);
     settingsStore.setPortFallback(null);
+    settingsStore.setBindAddressFallback(null);
   };
 
   // --------------------------------------------------------------------------

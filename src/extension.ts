@@ -1325,12 +1325,20 @@ function registerCommands(context: vscode.ExtensionContext) {
       }
       const availableIps = hostedServer.getAvailableIps();
       const portFallback = hostedServer.getPortFallbackInfo() ?? undefined;
-      webviewProvider.setRunningServerUrl(url, availableIps, portFallback);
+      const bindAddressFallback =
+        hostedServer.getBindAddressFallbackInfo() ?? undefined;
+      webviewProvider.setRunningServerUrl(
+        url,
+        availableIps,
+        portFallback,
+        bindAddressFallback
+      );
       webviewProvider.postMessage({
         type: MESSAGE_TYPES.SERVER_STARTED,
         url,
         availableIps,
         ...(portFallback ? { portFallback } : {}),
+        ...(bindAddressFallback ? { bindAddressFallback } : {}),
       });
       webviewProvider.setThemeVarsCapturedCallback((vars) =>
         hostedServer?.updateThemeVars(vars)

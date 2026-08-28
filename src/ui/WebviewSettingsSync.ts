@@ -75,6 +75,7 @@ import type {
 import type { StatusLineTrackingSettings } from "../types/CtrlYokeSettings";
 import { isDefaultStatusLineFormat } from "../utils/StatuslineFormat";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
+import { isLoopbackBindAddress } from "../utils/NetworkUtils";
 import * as WorkflowPaths from "../utils/WorkflowPaths";
 import {
   StatuslineManager,
@@ -1330,18 +1331,23 @@ export class WebviewSettingsSync {
     postMessage: PostMessageFn
   ): Promise<void> {
     const licenseAccess = await this.resolveLicenseAccess();
-    const isRemoteTlsSetting = REMOTE_TLS_SETTING_KEYS.includes(
+    const isRemoteAccessSetting = REMOTE_TLS_SETTING_KEYS.includes(
       path as (typeof REMOTE_TLS_SETTING_KEYS)[number]
     );
+    const isBindAddressSetting = path === CONFIG_KEYS.SERVER_BIND_ADDRESS;
+    const isRemoteAccessWrite =
+      isRemoteAccessSetting ||
+      (isBindAddressSetting &&
+        (typeof value !== "string" || !isLoopbackBindAddress(value)));
     if (
-      (isRemoteTlsSetting && !licenseAccess.hasRemoteAccess) ||
+      (isRemoteAccessWrite && !licenseAccess.hasRemoteAccess) ||
       ((path === CONFIG_KEYS.SERVER_ICON_BG_COLOR ||
         path === CONFIG_KEYS.SERVER_ICON_FG_COLOR) &&
         !licenseAccess.isPro)
     ) {
       this.reportProUpsell(
         postMessage,
-        isRemoteTlsSetting
+        isRemoteAccessWrite
           ? LICENSE_UI.REMOTE_ACCESS_UPSELL
           : LICENSE_UI.CUSTOM_ICON_UPSELL
       );

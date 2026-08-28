@@ -442,6 +442,11 @@ normally from the tab list for status/machine management.
    every launch, and the user is told why, exactly like the port-conflict
    case.
 
+   **Implementation note:** the shared `isLoopbackBindAddress()` check now
+   lives in `src/utils/NetworkUtils.ts`, and the fallback follows the existing
+   port path through `setRunningServerUrl()`'s fourth argument,
+   `WebviewRouterCallbacks`, and `SERVER_STARTED`.
+
 ### 5.2 Per-row "Pro Feature" callout on the bind selector
 
 **Decided (Open Question 3, resolved):** reuse `SelectOption.description`

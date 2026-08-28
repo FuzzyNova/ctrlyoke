@@ -23,6 +23,7 @@ import type {
   DevDashboardAction,
   DevStatus,
   PromptEditorInsertRequest,
+  BindAddressFallbackInfo,
   ServerPortFallbackInfo,
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
@@ -96,6 +97,7 @@ export class CtrlYokeWebviewProvider
   private runningServerUrl?: string;
   private runningServerAvailableIps: string[] = [];
   private runningServerPortFallback?: ServerPortFallbackInfo;
+  private runningServerBindAddressFallback?: BindAddressFallbackInfo;
   private panelReady = false;
   // The pageLoadId of the panel page whose READY was last accepted. Compared
   // (not just latched as a boolean) so that a READY from a *different* page
@@ -217,6 +219,7 @@ export class CtrlYokeWebviewProvider
         getServerUrl: () => this.runningServerUrl,
         getAvailableIps: () => this.runningServerAvailableIps,
         getPortFallback: () => this.runningServerPortFallback,
+        getBindAddressFallback: () => this.runningServerBindAddressFallback,
         onPanelReady: (pageLoadId) => this.handlePanelReady(pageLoadId),
       },
       this.secretRegistry,
@@ -1050,11 +1053,13 @@ export class CtrlYokeWebviewProvider
   public setRunningServerUrl(
     url: string | undefined,
     availableIps?: string[],
-    portFallback?: ServerPortFallbackInfo
+    portFallback?: ServerPortFallbackInfo,
+    bindAddressFallback?: BindAddressFallbackInfo
   ): void {
     this.runningServerUrl = url;
     this.runningServerAvailableIps = availableIps ?? [];
     this.runningServerPortFallback = portFallback;
+    this.runningServerBindAddressFallback = bindAddressFallback;
   }
 
   /**

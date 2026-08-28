@@ -208,6 +208,7 @@ export {
   type SecretSetMessage,
   type SecretDeletedMessage,
   type ServerPortFallbackInfo,
+  type BindAddressFallbackInfo,
   type LicenseAccessState,
   type LicenseActionResultMessage,
   type LicenseMachineSummary,

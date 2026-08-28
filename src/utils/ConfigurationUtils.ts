@@ -85,6 +85,7 @@ export const CONFIG_KEYS = {
     "general.includeFullDiffsInPriorContext",
   EXECUTION_MODE: "defaults.executionMode",
   SERVER_ENABLED: "server.enabled",
+  SERVER_BIND_ADDRESS: "server.bindAddress",
   SERVER_TLS_ENABLED: "server.tls.enabled",
   SERVER_TLS_CERT_PATH: "server.tls.certPath",
   SERVER_TLS_KEY_PATH: "server.tls.keyPath",

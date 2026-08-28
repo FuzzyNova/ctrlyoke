@@ -9,6 +9,7 @@ import {
   type ExecutionMode,
   type ToolPermissionMode,
   type ServerPortFallbackInfo,
+  type BindAddressFallbackInfo,
   type LicenseAccessState,
   type LicenseActionResultMessage,
   type LicenseMachineSummary,
@@ -226,6 +227,9 @@ interface SettingsState {
   // SERVER_STOPPED or once a start succeeds on the configured port.
   portFallback: ServerPortFallbackInfo | null;
 
+  // Set when a non-loopback bind was coerced to localhost at server start.
+  bindAddressFallback: BindAddressFallbackInfo | null;
+
   // Last generated self-signed cert metadata (generatedAt/expiresAt are ISO strings)
   lastCertGenerated: {
     generatedAt: string;
@@ -325,6 +329,7 @@ interface SettingsActions {
 
   // Port-fallback warning (null clears it)
   setPortFallback: (info: ServerPortFallbackInfo | null) => void;
+  setBindAddressFallback: (info: BindAddressFallbackInfo | null) => void;
 
   // Cert / token feedback signals
   setLastCertGenerated: (
@@ -485,6 +490,7 @@ const initialState: SettingsState = {
   availableIps: [],
   selectedDisplayIp: null,
   portFallback: null,
+  bindAddressFallback: null,
   lastCertGenerated: null,
   certFlashCount: 0,
   lastTokenRegenerated: null,
@@ -630,6 +636,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     setSelectedDisplayIp: (ip) => set({ selectedDisplayIp: ip }),
 
     setPortFallback: (info) => set({ portFallback: info }),
+    setBindAddressFallback: (info) => set({ bindAddressFallback: info }),
 
     setLastCertGenerated: (info) => set({ lastCertGenerated: info }),
     bumpCertFlashCount: () =>

@@ -316,6 +316,15 @@ export interface ServerPortFallbackInfo {
 }
 
 /**
+ * Reported alongside SERVER_STARTED when the configured server bind address
+ * was not entitled for remote access and the server listened on localhost.
+ */
+export interface BindAddressFallbackInfo {
+  requestedBindAddress: string;
+  actualBindAddress: string;
+}
+
+/**
  * Status message for output display
  */
 export interface OutputStatusMessage {

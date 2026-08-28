@@ -53,6 +53,9 @@ export function ServerSection({
     (state) => state.selectedDisplayIp
   );
   const portFallback = useSettingsStore((state) => state.portFallback);
+  const bindAddressFallback = useSettingsStore(
+    (state) => state.bindAddressFallback
+  );
   const setSelectedDisplayIp = useSettingsStore(
     (state) => state.setSelectedDisplayIp
   );
@@ -150,6 +153,11 @@ export function ServerSection({
     portFallback && portFallback.requestedPort === server.port
       ? portFallback
       : null;
+  const bindAddressFallbackForCurrentSetting =
+    bindAddressFallback &&
+    bindAddressFallback.requestedBindAddress === server.bindAddress
+      ? bindAddressFallback
+      : null;
 
   const showIpSelector =
     server.bindAddress === "0.0.0.0" && availableIps.length > 1;
@@ -213,6 +221,8 @@ export function ServerSection({
         "All interfaces (0.0.0.0) — LAN access (WAN access with VPN or port forwarding)",
       value: "0.0.0.0",
       disabled: !licenseAccess.hasRemoteAccess,
+      description:
+        "Pro feature — unlocks with a Pro license or an active remote-access trial",
     },
   ];
 
@@ -476,12 +486,25 @@ export function ServerSection({
                 </a>
               </p>
             )}
+            {bindAddressFallbackForCurrentSetting && (
+              <p className="mt-1 flex items-baseline gap-1 text-xs text-error-fg">
+                <i className="codicon codicon-warning shrink-0 translate-y-px" />
+                <span>
+                  ctrlyoke started on localhost only — a Pro license or active
+                  remote-access trial is required for All Interfaces (
+                  {bindAddressFallbackForCurrentSetting.requestedBindAddress}).
+                </span>
+              </p>
+            )}
           </div>
         )}
       </div>
 
       {/* Icon Colors — visible to all clients; live SVG preview, colors persist on blur */}
-      <div className="pt-3 border-t border-panel-border mt-3">
+      <div className="relative mt-3 rounded border border-pro-brand px-3 pb-3 pt-2">
+        <span className="absolute -top-2 left-2 bg-editor-bg px-1 text-xxs text-pro-brand">
+          Pro Feature
+        </span>
         <div className="text-xs font-semibold uppercase text-description-fg mb-2 tracking-wide">
           Icon Colors
         </div>
@@ -567,8 +590,11 @@ export function ServerSection({
       {!isStandalone && (
         <fieldset
           disabled={!licenseAccess.hasRemoteAccess}
-          className={`pt-3 border-t border-panel-border mt-3 ${!licenseAccess.hasRemoteAccess ? "opacity-50" : ""}`}
+          className={`relative mt-3 rounded border border-pro-brand px-3 pb-3 pt-2 ${!licenseAccess.hasRemoteAccess ? "opacity-50" : ""}`}
         >
+          <span className="absolute -top-2 left-2 bg-editor-bg px-1 text-xxs text-pro-brand">
+            Pro Feature
+          </span>
           <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
             HTTPS / TLS
           </h3>
