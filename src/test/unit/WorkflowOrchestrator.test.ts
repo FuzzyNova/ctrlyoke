@@ -2443,12 +2443,14 @@ suite("WorkflowOrchestrator draft mutation preparation", () => {
         workflowKey
       );
       await WorkflowLockManager.acquireLock(workspace, workflowKey, {
+        schemaVersion: 2,
         workflowKey,
         runRef: promoted.runRef,
         runner: RUNNER_IDS.VSCODE,
         pid: process.pid,
         ownerToken,
-        instanceId: "retained-instance",
+        hostInstanceId: "retained-host",
+        executionInstanceId: "retained-instance",
         startedAt: Date.now(),
         lastHeartbeat: Date.now(),
       });
@@ -2838,12 +2840,14 @@ suite("WorkflowOrchestrator external-run watch routing", () => {
     await fs.writeFile(
       WorkflowLockManager.getLockPath(workspace, workflowKey),
       JSON.stringify({
+        schemaVersion: 2,
         workflowKey,
         runRef,
         runner,
         pid: process.pid,
         ownerToken: `${name}-owner`,
-        instanceId: `${name}-instance`,
+        hostInstanceId: `${name}-host`,
+        executionInstanceId: `${name}-instance`,
         startedAt: Date.now(),
         lastHeartbeat: Date.now(),
       }),

@@ -1107,7 +1107,18 @@ export const workflowDisplayStep = (
  * Enables the VS Code extension and CLI to coexist without stomping on each other's state.
  * Lock file path: `.runs/<workflowKey>/runner.json` in run storage.
  */
+export interface RunnerHostIdentity {
+  /** Runner process represented by this host identity. */
+  runner: RunnerId;
+  /** Stable identity for one VS Code Extension Host or CLI process. */
+  hostInstanceId: string;
+  /** OS process ID of the host. */
+  pid: number;
+}
+
 export interface WorkflowRunnerLock {
+  /** Persisted lock schema version. */
+  schemaVersion: 2;
   /** Lineage this lock belongs to. */
   workflowKey: WorkflowKey;
   /** The exact run this lock is executing — never merely the viewed run. */
@@ -1116,13 +1127,15 @@ export interface WorkflowRunnerLock {
   runner: RunnerId;
   /** OS process ID of the runner (Extension Host PID for vscode, CLI process PID for cli) */
   pid: number;
+  /** Stable identity for the process/Extension Host that owns this lock. */
+  hostInstanceId: string;
+  /** Identity of the workflow execution represented by this lock. */
+  executionInstanceId: string;
   /**
    * Random token generated fresh on every acquire. Heartbeat/release must present a matching
    * token, so a stale process can never refresh or unlink a successor's lock.
    */
   ownerToken: string;
-  /** UUID generated once at extension activation (vscode) or CLI startup (cli) */
-  instanceId?: string;
   /** Unix ms timestamp when execution started */
   startedAt: number;
   /** Unix ms timestamp updated every 5s while running — guards against PID recycling */

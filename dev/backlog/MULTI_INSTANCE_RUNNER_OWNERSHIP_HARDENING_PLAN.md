@@ -677,8 +677,8 @@ When implementation is complete:
 
 ## Completion Checklist
 
-- [ ] Host identity is created once per VS Code activation and CLI startup.
-- [ ] Lock schema separates host identity from workflow execution identity.
+- [x] Host identity is created once per VS Code activation and CLI startup.
+- [x] Lock schema separates host identity from workflow execution identity.
 - [ ] Structured lock inspection replaces runner-specific active statuses.
 - [ ] External-execution resolver is the single source of external eligibility.
 - [ ] External watch sessions require and revalidate exact external proof.
@@ -689,3 +689,13 @@ When implementation is complete:
 - [ ] Architecture enforcement prevents new direct runner-to-external mappings.
 - [ ] Coordination and project-memory documentation is updated.
 - [ ] Plan is moved to `dev/implemented/` after all acceptance criteria pass.
+
+Phase 1 implementation note: the lock shape follows the plan exactly. Raw lock
+reads remain permissive for legacy objects that lack `schemaVersion`,
+`hostInstanceId`, or `executionInstanceId`; those objects are returned for the
+existing liveness-only paths and are not upgraded or treated as new ownership
+proof. Production VS Code and CLI construction injects the single activation or
+startup identity explicitly; legacy direct `WorkflowInstance` utility/test
+construction retains a per-instance fallback until those call sites are
+migrated. Structured inspection and external-routing changes remain deferred
+to the later phases as required by this first implementation step.

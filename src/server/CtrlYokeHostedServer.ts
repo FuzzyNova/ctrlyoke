@@ -19,6 +19,7 @@ import type { HarnessUsageSnapshot } from "../types/UsageTypes";
 import type {
   WorkflowViewAddress,
   WorktreeRunProjection,
+  RunnerHostIdentity,
 } from "../types/CtrlYokeTypes";
 import type { WorkflowSummary, WorkflowStep } from "../types/CtrlYokeTypes";
 import type {
@@ -204,7 +205,8 @@ export class CtrlYokeHostedServer
     tlsConfig?: { certPath: string; keyPath: string },
     private readonly onSiblingServerDetected?: (url: string) => void,
     getRemoteAccess?: () => Promise<boolean>,
-    onRemoteAccessBlocked?: () => void
+    onRemoteAccessBlocked?: () => void,
+    runnerHostIdentity?: RunnerHostIdentity
   ) {
     this.getRemoteAccess = getRemoteAccess;
     this.onRemoteAccessBlocked = onRemoteAccessBlocked;
@@ -215,7 +217,8 @@ export class CtrlYokeHostedServer
     });
     this.viewerService = new HostedWorkspaceViewerService(
       workspaceRoot,
-      namedWorkspaceRoots
+      namedWorkspaceRoots,
+      runnerHostIdentity
     );
     if (tlsConfig) {
       const cert = fs.readFileSync(tlsConfig.certPath);

@@ -27,6 +27,7 @@ import type {
   HarnessId,
   PermissionMode,
 } from "./types/DashboardConstants";
+import type { RunnerHostIdentity } from "./types/CtrlYokeTypes";
 import type { CompatibilityDiagnostic } from "./types/CompatibilityTypes";
 import {
   isScriptStep,
@@ -118,6 +119,12 @@ import {
 
 // Mark this process as the standalone CLI binary before anything else runs.
 setRuntimeMode(RUNNER_IDS.CLI);
+
+const cliRunnerHostIdentity: RunnerHostIdentity = {
+  runner: RUNNER_IDS.CLI,
+  hostInstanceId: crypto.randomUUID(),
+  pid: process.pid,
+};
 
 // VERSION is injected by esbuild define
 declare const VERSION: string;
@@ -645,7 +652,11 @@ async function runCommand(
     workingDir,
     hostCanProvidePty,
     undefined,
-    userFeedbackSink
+    userFeedbackSink,
+    undefined,
+    undefined,
+    undefined,
+    cliRunnerHostIdentity
   );
 
   // In headless mode, stream output to the terminal as events arrive.
@@ -1717,7 +1728,10 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
 
   const { CommitMessageGenerationError, CommitMessageGenerator } =
     await import("./git/CommitMessageGenerator");
-  const generator = new CommitMessageGenerator();
+  const generator = new CommitMessageGenerator(
+    undefined,
+    cliRunnerHostIdentity
+  );
 
   console.error(chalk.dim("Checking for changes..."));
   const diffResult = await generator.getDiff(workingDir);

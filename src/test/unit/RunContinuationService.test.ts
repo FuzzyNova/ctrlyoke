@@ -67,12 +67,14 @@ suite(
       runRef: RunRef
     ): Promise<void> {
       await WorkflowLockManager.acquireLock(workspaceRoot, workflowKey, {
+        schemaVersion: 2,
         workflowKey,
         runRef,
         runner: RUNNER_IDS.VSCODE,
         pid: process.pid,
         ownerToken: WorkflowLockManager.generateOwnerToken(),
-        instanceId: "test-host",
+        hostInstanceId: "test-host",
+        executionInstanceId: "test-execution",
         startedAt: Date.now(),
         lastHeartbeat: Date.now(),
       });
@@ -237,12 +239,14 @@ suite(
       try {
         await seedPausedRun(ws);
         await WorkflowLockManager.acquireLock(ws, workflowKey, {
+          schemaVersion: 2,
           workflowKey,
           runRef: targetRun,
           runner: RUNNER_IDS.VSCODE,
           pid: process.pid,
           ownerToken: WorkflowLockManager.generateOwnerToken(),
-          instanceId: "test-host",
+          hostInstanceId: "test-host",
+          executionInstanceId: "test-execution",
           startedAt: Date.now(),
           lastHeartbeat: Date.now(),
         });

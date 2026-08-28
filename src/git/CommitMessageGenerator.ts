@@ -26,6 +26,7 @@ import {
   type McpServerConfig,
   type PromptFile,
   type RunRef,
+  type RunnerHostIdentity,
   type WorkflowKey,
 } from "../types/CtrlYokeTypes";
 
@@ -140,7 +141,10 @@ export function buildCommitWorkflowOverrides(
 }
 
 export class CommitMessageGenerator {
-  constructor(private readonly workflowHost?: CommitMessageWorkflowHost) {}
+  constructor(
+    private readonly workflowHost?: CommitMessageWorkflowHost,
+    private readonly runnerHostIdentity?: RunnerHostIdentity
+  ) {}
 
   async getDiff(cwd: string): Promise<DiffResult | null> {
     // Primary: staged changes
@@ -355,7 +359,14 @@ export class CommitMessageGenerator {
         () => detectorIntegration,
         () => {},
         () => {},
-        cwd
+        cwd,
+        true,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        this.runnerHostIdentity
       );
 
     // Force headless execution at the workflow tier and suppress VS Code globals

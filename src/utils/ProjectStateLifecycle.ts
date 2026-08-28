@@ -438,9 +438,15 @@ async function inspectRunner(
 
     let lock: WorkflowRunnerLock;
     try {
-      lock = JSON.parse(
-        await fs.readFile(runnerPath, "utf8")
-      ) as WorkflowRunnerLock;
+      const parsed: unknown = JSON.parse(await fs.readFile(runnerPath, "utf8"));
+      if (
+        parsed === null ||
+        typeof parsed !== "object" ||
+        Array.isArray(parsed)
+      ) {
+        throw new Error("lock JSON is not an object");
+      }
+      lock = parsed as WorkflowRunnerLock;
     } catch (error) {
       throw new ProjectStateLifecycleError(
         `Runner lock cannot be read: ${runnerPath}: ${String(error)}`

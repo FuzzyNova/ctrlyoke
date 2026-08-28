@@ -19,7 +19,19 @@ export async function readWorkflowLock(
       WorkflowPaths.runnerLockPath(workspaceRoot, workflowKey),
       "utf8"
     );
-    return JSON.parse(content) as WorkflowRunnerLock;
+    const parsed: unknown = JSON.parse(content);
+    // Keep development upgrades tolerant of locks written before schema v2.
+    // A legacy object is still returned for liveness-only callers; ownership
+    // classification will be added in a later phase. Reject non-object JSON so
+    // callers never dereference null or a primitive as a lock.
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      return null;
+    }
+    return parsed as WorkflowRunnerLock;
   } catch {
     return null;
   }

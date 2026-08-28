@@ -58,6 +58,7 @@ import {
   WORKSPACE_ENTRY_KINDS,
 } from "../types/DashboardConstants";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
+import type { RunnerHostIdentity } from "../types/CtrlYokeTypes";
 import {
   toViewerPath,
   fromViewerPath,
@@ -333,7 +334,7 @@ function classifyRefNames(refNames: string[]): GitRefLabel[] {
 }
 
 export class HostedWorkspaceViewerService {
-  private readonly commitGenerator = new CommitMessageGenerator();
+  private readonly commitGenerator: CommitMessageGenerator;
   private readonly listingSnapshotCache = new WorkspaceListingSnapshotCache();
   private readonly fileHistorySnapshots = new Map<
     string,
@@ -347,8 +348,14 @@ export class HostedWorkspaceViewerService {
 
   constructor(
     private readonly workspaceRoot: string,
-    private readonly namedRoots: ResolverWorkspaceFolder[] = []
-  ) {}
+    private readonly namedRoots: ResolverWorkspaceFolder[] = [],
+    runnerHostIdentity?: RunnerHostIdentity
+  ) {
+    this.commitGenerator = new CommitMessageGenerator(
+      undefined,
+      runnerHostIdentity
+    );
+  }
 
   // ── Multi-root helpers ───────────────────────────────────────────────────
   //

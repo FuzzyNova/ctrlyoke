@@ -28,6 +28,7 @@ import {
   WorkingFile,
   WorkflowSummary,
   WorkflowRunnerLock,
+  type RunnerHostIdentity,
   EXECUTION_STATES,
   type PromptFile,
   type WorkflowStep,
@@ -450,7 +451,8 @@ export class WorkflowOrchestrator {
   constructor(
     private readonly context: vscode.ExtensionContext,
     dashboardProvider: DashboardClient | undefined,
-    private readonly userFeedbackSink: UserFeedbackSink
+    private readonly userFeedbackSink: UserFeedbackSink,
+    private readonly runnerHostIdentity: RunnerHostIdentity
   ) {
     // Create the startup auto-load promise — browser clients await this instead
     // of registering pending callbacks, eliminating the startup race condition.
@@ -5384,7 +5386,8 @@ export class WorkflowOrchestrator {
       (harnessId) =>
         this.harnessUsageService?.refreshHarnessUsage(harnessId) ??
         Promise.resolve(),
-      promptBatchApprovalForPendingWorkspaceSecretGrants
+      promptBatchApprovalForPendingWorkspaceSecretGrants,
+      this.runnerHostIdentity
     );
 
     Log.debug(`buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`);
@@ -6002,7 +6005,15 @@ export class WorkflowOrchestrator {
     let lock: WorkflowRunnerLock;
     try {
       const content = await fs.promises.readFile(lockFilePath, "utf8");
-      lock = JSON.parse(content) as WorkflowRunnerLock;
+      const parsed: unknown = JSON.parse(content);
+      if (
+        parsed === null ||
+        typeof parsed !== "object" ||
+        Array.isArray(parsed)
+      ) {
+        return;
+      }
+      lock = parsed as WorkflowRunnerLock;
     } catch (err) {
       Log.trace(
         `[WorkflowOrchestrator] handleRunnerJsonEvent: skipping "${path.basename(lockFilePath)}" — unreadable/mid-write: ${(err as NodeJS.ErrnoException).code ?? err}`

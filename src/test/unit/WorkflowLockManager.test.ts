@@ -13,6 +13,37 @@ import type { RunRef, WorkflowKey } from "../../types/CtrlYokeTypes";
 import * as path from "path";
 
 suite("WorkflowLockManager stale-run recovery", () => {
+  test("reads legacy lock objects without requiring schema-v2 identity fields", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "ctrlyoke-lock-legacy-read-")
+    );
+    const workflowKey = "legacy-read-2026-01-01T00-00-00" as WorkflowKey;
+    try {
+      const lockPath = WorkflowLockManager.getLockPath(
+        workspaceRoot,
+        workflowKey
+      );
+      const legacyLock = {
+        workflowKey,
+        runRef: "run-2026-01-01T00-00-00-000Z",
+        runner: RUNNER_IDS.VSCODE,
+        pid: process.pid,
+        ownerToken: "legacy-owner",
+        startedAt: Date.now(),
+        lastHeartbeat: Date.now(),
+      };
+      await fs.mkdir(path.dirname(lockPath), { recursive: true });
+      await fs.writeFile(lockPath, JSON.stringify(legacyLock), "utf8");
+
+      assert.deepStrictEqual(
+        await WorkflowLockManager.readLock(workspaceRoot, workflowKey),
+        legacyLock
+      );
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
   test("leaves live VS Code-owned runs and locks untouched", async () => {
     const workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-lock-live-vscode-")
@@ -44,12 +75,14 @@ suite("WorkflowLockManager stale-run recovery", () => {
           customRuntimeValue: "preserve-me",
         };
         const lock = {
+          schemaVersion: 2 as const,
           workflowKey,
           runRef,
           runner: RUNNER_IDS.VSCODE,
           pid: process.pid,
           ownerToken: `live-owner-${executionState}`,
-          instanceId: "live-extension-host",
+          hostInstanceId: "live-extension-host",
+          executionInstanceId: "live-execution",
           startedAt: Date.now(),
           lastHeartbeat: Date.now(),
         };
@@ -144,12 +177,14 @@ suite("WorkflowLockManager stale-run recovery", () => {
       );
       // A stale lock: dead PID (impossible on a live system) and a long-expired heartbeat.
       await WorkflowLockManager.acquireLock(workspaceRoot, workflowKey, {
+        schemaVersion: 2,
         workflowKey,
         runRef,
         runner: RUNNER_IDS.VSCODE,
         pid: 999_999,
         ownerToken: "old-owner-token",
-        instanceId: "old-extension-host",
+        hostInstanceId: "old-extension-host",
+        executionInstanceId: "old-execution",
         startedAt: 0,
         lastHeartbeat: 0,
       });
@@ -213,12 +248,14 @@ suite("WorkflowLockManager stale-run recovery", () => {
       sessionId: "cli-session-survives",
     };
     const lock = {
+      schemaVersion: 2 as const,
       workflowKey,
       runRef,
       runner: RUNNER_IDS.CLI,
       pid: process.pid,
       ownerToken: "live-cli-owner-token",
-      instanceId: "cli-process",
+      hostInstanceId: "cli-process",
+      executionInstanceId: "cli-execution",
       startedAt: Date.now(),
       lastHeartbeat: Date.now(),
     };
@@ -267,13 +304,15 @@ suite("WorkflowLockManager exclusive acquire / ownerToken", () => {
 
   function makeLock(overrides: { pid?: number; ownerToken?: string } = {}) {
     return {
+      schemaVersion: 2 as const,
       workflowKey,
       runRef,
       runner: RUNNER_IDS.VSCODE,
       pid: overrides.pid ?? process.pid,
       ownerToken:
         overrides.ownerToken ?? WorkflowLockManager.generateOwnerToken(),
-      instanceId: "inst-1",
+      hostInstanceId: "host-1",
+      executionInstanceId: "execution-1",
       startedAt: Date.now(),
       lastHeartbeat: Date.now(),
     };
