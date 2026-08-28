@@ -583,13 +583,13 @@
         "fileMatch": [
           "**/*.ctrlyoke.json"
         ],
-        "url": "./schemas/workflow-schema.json"
+        "url": "./out/schemas/workflow-schema.json"
       },
       {
         "fileMatch": [
           "**/.ctrlyoke/settings.json"
         ],
-        "url": "./schemas/settings-schema.json"
+        "url": "./out/schemas/settings-schema.json"
       }
     ],
     "yamlValidation": [
@@ -598,7 +598,7 @@
           "**/*.ctrlyoke.yaml",
           "**/*.ctrlyoke.yml"
         ],
-        "url": "./schemas/workflow-schema.yaml"
+        "url": "./out/schemas/workflow-schema.yaml"
       }
     ]
   },
