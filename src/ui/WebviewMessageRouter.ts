@@ -1609,6 +1609,17 @@ export class WebviewMessageRouter {
       vscode.commands.executeCommand("workbench.mcp.browseServers");
     });
 
+    table.set(MESSAGE_TYPES.EXECUTE_VSCODE_COMMAND, async (message) => {
+      // Keep this bridge deliberately narrow: dashboard clients may request
+      // the native offline-license picker, but never arbitrary commands.
+      if (message.command !== VSCODE_COMMANDS.ACTIVATE_OFFLINE_PRO) {
+        return;
+      }
+      await vscode.commands.executeCommand(
+        VSCODE_COMMANDS.ACTIVATE_OFFLINE_PRO
+      );
+    });
+
     table.set(MESSAGE_TYPES.GLOBAL_SETTINGS_LOAD_REQUEST, (_message, ctx) => {
       this.settingsSync.handleGlobalSettingsLoadRequest(ctx.postMessage);
     });

@@ -10,6 +10,8 @@ import {
   type ToolPermissionMode,
   type ServerPortFallbackInfo,
   type LicenseAccessState,
+  type LicenseActionResultMessage,
+  type LicenseMachineSummary,
 } from "../types/messages";
 import {
   CLAUDE_CLI_MODELS as CLAUDE_CLI_MODEL_LIST,
@@ -206,6 +208,10 @@ interface SettingsState {
   // Pro entitlement and remote-access trial state from the extension host
   licenseAccess: LicenseAccessState;
 
+  // Client-scoped license-management replies consumed by the License tab.
+  licenseMachines: LicenseMachineSummary[];
+  licenseActionResult: Omit<LicenseActionResultMessage, "type"> | null;
+
   // Server URL (set when server starts, cleared when stopped)
   serverUrl: string | null;
 
@@ -304,6 +310,11 @@ interface SettingsActions {
 
   // Pro entitlement and remote-access trial state
   setLicenseAccess: (access: LicenseAccessState) => void;
+  setLicenseMachines: (machines: LicenseMachineSummary[]) => void;
+  setLicenseActionResult: (
+    result: Omit<LicenseActionResultMessage, "type">
+  ) => void;
+  clearLicenseActionResult: () => void;
 
   // Server URL
   setServerUrl: (url: string | null) => void;
@@ -468,6 +479,8 @@ const initialState: SettingsState = {
   fullGlobalSettings: null,
   serverRunning: false,
   licenseAccess: { isPro: false, hasRemoteAccess: false, trialEndsAt: null },
+  licenseMachines: [],
+  licenseActionResult: null,
   serverUrl: null,
   availableIps: [],
   selectedDisplayIp: null,
@@ -605,6 +618,10 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
           ? { ...state.fullGlobalSettings, licenseAccess: access }
           : state.fullGlobalSettings,
       })),
+
+    setLicenseMachines: (machines) => set({ licenseMachines: machines }),
+    setLicenseActionResult: (result) => set({ licenseActionResult: result }),
+    clearLicenseActionResult: () => set({ licenseActionResult: null }),
 
     setServerUrl: (url) => set({ serverUrl: url }),
 

@@ -166,11 +166,16 @@ export class CtrlYokeWebviewProvider
       () => this.getDevStatus(),
       undefined,
       licenseService
-        ? async () => ({
-            isPro: await licenseService.isPro(),
-            hasRemoteAccess: await licenseService.hasRemoteAccess(),
-            trialEndsAt: await licenseService.getRemoteAccessTrialEndsAt(),
-          })
+        ? async () => {
+            const entitlement = await licenseService.getEntitlement();
+            return {
+              isPro: await licenseService.isPro(),
+              hasRemoteAccess: await licenseService.hasRemoteAccess(),
+              trialEndsAt: await licenseService.getRemoteAccessTrialEndsAt(),
+              source: entitlement.source ?? null,
+              expiresAt: entitlement.expiresAt,
+            };
+          }
         : undefined
     );
     this.licenseEntitlementSubscription =

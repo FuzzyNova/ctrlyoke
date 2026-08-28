@@ -150,6 +150,7 @@ export const MESSAGE_TYPES = {
   OPEN_SETTINGS: "openSettings", // Open VS Code settings for ctrlyoke
   OPEN_GLOBAL_SETTINGS_TAB: "openGlobalSettingsTab", // Extension/webview navigation to a settings tab
   OPEN_VSCODE_MCP_BROWSER: "openVscodeMcpBrowser", // Webview -> Extension: Open VS Code's native MCP server browser
+  EXECUTE_VSCODE_COMMAND: "executeVscodeCommand", // Webview -> Extension: execute a whitelisted native command
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   HARNESS_STATUS_UPDATE: "harnessStatusUpdate", // Update harness availability
   HARNESS_DETECTION_RETRY_RESULT: "harnessDetectionRetryResult", // Result of a client-scoped detection retry

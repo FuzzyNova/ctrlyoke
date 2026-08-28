@@ -297,6 +297,13 @@ since Pro status is genuinely global — this is just the existing
 
 ## Phase 3 — License settings tab
 
+**Status: implemented.** The tab is client-state driven: license action and
+machine replies are stored by `useMessageHandler`, while the extension-owned
+`LicenseAccessState` supplies the status card (including optional source and
+expiry metadata). Panel-only offline browsing uses a narrowly whitelisted
+`EXECUTE_VSCODE_COMMAND` message for `ctrlyoke.activateOfflinePro`; hosted
+clients paste the license blob directly.
+
 New file: `src/ui/webview-react/components/settings/LicenseSection.tsx`,
 registered in the barrel (`../settings` index used by
 `GlobalSettingsDrawer.tsx:14-29`) and added to `ALL_TABS`
@@ -371,6 +378,10 @@ on that machine).
 ---
 
 ## Phase 4 — "Activate Pro" header affordance
+
+**Status: implemented.** `GlobalSettingsDrawer` renders the compact
+`Unlock Pro Features` CTA between the scope controls and close button only
+while the current client is not Pro; it navigates to the License tab.
 
 File: `GlobalSettingsDrawer.tsx`, title bar (`:159-195`).
 

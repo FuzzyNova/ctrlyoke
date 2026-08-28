@@ -103,7 +103,11 @@ import type {
   AttemptCostEstimate,
   AttemptCostUnavailableReason,
 } from "./CtrlYokeTypes";
-import type { LicenseMachineSummary } from "../license/LicenseService";
+import type {
+  LicenseMachineSummary,
+  LicenseSource,
+} from "../license/LicenseService";
+export type { LicenseMachineSummary } from "../license/LicenseService";
 
 // ============================================================================
 // IMPORT TYPES FROM DASHBOARDCONSTANTS
@@ -407,6 +411,10 @@ export interface LicenseAccessState {
   isPro: boolean;
   hasRemoteAccess: boolean;
   trialEndsAt: number | null;
+  /** Present for an active entitlement; omitted by older callers/tests. */
+  source?: LicenseSource | null;
+  /** Unix epoch milliseconds, or null for a perpetual entitlement. */
+  expiresAt?: number | null;
 }
 
 /** Webview → Extension: activate this machine with an online license key. */

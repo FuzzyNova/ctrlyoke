@@ -19,6 +19,7 @@ import {
   TerminalSection,
   QueueSection,
   ServerSection,
+  LicenseSection,
   NotificationsSection,
   DeveloperSection,
   AgentSkillsManagerSection,
@@ -32,6 +33,7 @@ import { ExitButton, ScopeToggle } from "../shared";
 
 const ALL_TABS = [
   { id: "general", label: "General", icon: "codicon-settings" },
+  { id: "license", label: "License", icon: "codicon-key" },
   { id: "workflow", label: "Workflow Defaults", icon: "codicon-globe" },
   { id: "permissions", label: "Advanced Permissions", icon: "codicon-shield" },
   { id: "secrets", label: "Secrets", icon: "codicon-key" },
@@ -64,6 +66,7 @@ export function GlobalSettingsDrawer() {
   const fullSettings = useSettingsStore((s) => s.fullGlobalSettings);
   const serverRunning = useSettingsStore((s) => s.serverRunning);
   const dev = useSettingsStore((s) => s.dev);
+  const licenseAccess = useSettingsStore((s) => s.licenseAccess);
   const [drawerRef, isNarrow] = useElementNarrow(580);
   const [activeScope, setActiveScope] = useState<SettingWriteScope>(
     SETTING_SCOPES.USER
@@ -187,6 +190,17 @@ export function GlobalSettingsDrawer() {
           />
         </div>
 
+        {!licenseAccess.isPro && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("license")}
+            className="h-6 shrink-0 inline-flex items-center gap-1 rounded border border-pro-brand px-2 text-xs font-medium text-pro-brand hover:bg-pro-brand hover:text-white"
+          >
+            <i className="codicon codicon-key text-xxs" aria-hidden="true" />
+            Unlock Pro Features
+          </button>
+        )}
+
         <ExitButton
           onClick={closeGlobalSettings}
           title="Close Global Settings"
@@ -232,6 +246,7 @@ export function GlobalSettingsDrawer() {
                   onReload={handleReloadWindow}
                 />
               )}
+              {effectiveActiveTab === "license" && <LicenseSection />}
               {fullSettings && effectiveActiveTab === "stats" && (
                 <StatsUsageSection
                   hideCost={fullSettings.settings.ui.hideCost}
