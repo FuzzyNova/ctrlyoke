@@ -680,7 +680,7 @@ When implementation is complete:
 - [x] Host identity is created once per VS Code activation and CLI startup.
 - [x] Lock schema separates host identity from workflow execution identity.
 - [ ] Structured lock inspection replaces runner-specific active statuses.
-- [ ] External-execution resolver is the single source of external eligibility.
+- [x] External-execution resolver is the single source of external eligibility.
 - [ ] External watch sessions require and revalidate exact external proof.
 - [ ] Orchestrator CLI-specific session names are made runner-neutral.
 - [ ] Workflow summaries expose explicit external locality without lock secrets.
@@ -705,3 +705,12 @@ logged), never external; a matching PID is classified as self. The structured
 inspection API is now available, but the old runner-specific statuses remain
 for existing callers. Their removal belongs to the architectural-enforcement
 phase, so the checklist item above remains unchecked until then.
+
+Phase 2 implementation note: `src/core/orchestration/ExternalExecutionResolver.ts`
+is the standalone external-execution eligibility boundary. It exports
+`ExternalExecutionResolver`, `resolveExternalExecution`,
+`ExternalExecutionResolution`, `NotExternalReason`,
+`ActiveExternalLockInspection`, and `ExternalExecutionResolverOptions`.
+The resolver reads and validates the addressed working file, requires an active
+persisted execution state and an exact, stable external lock acquisition, and
+returns the inspected lock (including its owner token) as the caller's proof.
