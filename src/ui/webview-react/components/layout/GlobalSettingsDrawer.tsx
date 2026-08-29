@@ -37,21 +37,11 @@ const ALL_TABS = [
   { id: "general", label: "General", icon: "codicon-settings" },
   { id: "workflow", label: "Workflow Defaults", icon: "codicon-globe" },
   // Execution
-  {
-    id: "execution",
-    label: "Execution",
-    icon: "codicon-play",
-    newGroup: true,
-  },
+  { id: "execution", label: "Execution", icon: "codicon-play" },
   { id: "queue", label: "Queue", icon: "codicon-list-ordered" },
   { id: "worktrees", label: "Worktrees", icon: "codicon-source-control" },
   // Output
-  {
-    id: "terminal",
-    label: "Terminal",
-    icon: "codicon-terminal",
-    newGroup: true,
-  },
+  { id: "terminal", label: "Terminal", icon: "codicon-terminal" },
   { id: "statusline", label: "Status Line", icon: "codicon-list-flat" },
   { id: "commit", label: "Commit Message", icon: "codicon-git-commit" },
   // Security
@@ -59,11 +49,10 @@ const ALL_TABS = [
     id: "permissions",
     label: "Advanced Permissions",
     icon: "codicon-shield",
-    newGroup: true,
   },
   { id: "secrets", label: "Secrets", icon: "codicon-lock" },
   // Integrations
-  { id: "server", label: "Server", icon: "codicon-server", newGroup: true },
+  { id: "server", label: "Server", icon: "codicon-server" },
   {
     id: "agentskillsmanager",
     label: "Agent & Skills Manager",
@@ -71,22 +60,12 @@ const ALL_TABS = [
   },
   { id: "mcpmanager", label: "MCP Manager", icon: "codicon-mcp" },
   // Insights
-  {
-    id: "notifications",
-    label: "Notifications",
-    icon: "codicon-bell",
-    newGroup: true,
-  },
+  { id: "notifications", label: "Notifications", icon: "codicon-bell" },
   { id: "stats", label: "Stats & Usage", icon: "codicon-graph" },
   // Account
-  { id: "license", label: "License", icon: "codicon-key", newGroup: true },
+  { id: "license", label: "License", icon: "codicon-key" },
   // Developer (dev builds only)
-  {
-    id: "developer",
-    label: "Developer",
-    icon: "codicon-tools",
-    newGroup: true,
-  },
+  { id: "developer", label: "Developer", icon: "codicon-tools" },
 ];
 
 const TABS = ALL_TABS;
