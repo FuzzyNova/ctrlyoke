@@ -57,6 +57,7 @@ import {
 } from "@hooks/useWorkflowContextMenu";
 import { WebviewLog } from "@utils/logger";
 import {
+  formatWorkflowCountBadge,
   resolveWorkflowRowTier,
   WORKFLOW_DROPDOWN_TARGET_WIDTH,
   WORKFLOW_STATUS_BUTTON_SIZES,
@@ -1310,6 +1311,14 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // finalizes the close never fired, wedging the dropdown permanently "closing").
   const dropdownRevealed = isDropdownOpen && !isDropdownClosing && !isEditing;
 
+  // Drives both the button's aria-label and its native title tooltip. Says
+  // "workflows", not "recent workflows" — the dropdown lists every workflow
+  // we find, not just recent ones.
+  const workflowCountTooltip =
+    recentWorkflows.length > 0
+      ? `Show workflows: ${recentWorkflows.length} total`
+      : "Show workflows";
+
   const normalizedWorkflowSearch = workflowSearch.trim().toLowerCase();
   const isFilteringWorkflows =
     normalizedWorkflowSearch.length > 0 || filtersActive;
@@ -1680,10 +1689,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               dropdownOpenerRef.current = event.currentTarget;
               toggleDropdown();
             }}
-            aria-label="Show recent workflows"
+            aria-label={workflowCountTooltip}
             aria-haspopup="listbox"
             aria-expanded={isDropdownOpen}
-            title="Show recent workflows"
+            title={workflowCountTooltip}
             className={`workflow-button-dropdown fp-dropdown-row ${wfStatusSize.triggerButton} bg-cmd-bg text-cmd-fg flex items-center justify-center gap-1 transition-colors hover:bg-cmd-active-bg hover:text-cmd-active-fg ${isDropdownOpen ? "bg-cmd-active-bg text-cmd-active-fg fp-dropdown-row-selected" : ""}`}
           >
             {/* Pulsing dot: another loaded workflow is running */}
@@ -1697,8 +1706,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               />
             )}
             {recentWorkflows.length > 0 && (
-              <span className="workflow-count-badge hidden sm:inline-block text-xxs font-semibold bg-badge-bg text-badge-fg rounded-full px-1.5 py-0.5 min-w-[16px] text-center">
-                {recentWorkflows.length}
+              <span className="workflow-count-badge hidden sm:inline-flex items-center justify-center text-xxs font-semibold bg-badge-bg text-badge-fg rounded-full h-4 min-w-[16px] px-1 leading-none">
+                {formatWorkflowCountBadge(recentWorkflows.length)}
               </span>
             )}
             <svg

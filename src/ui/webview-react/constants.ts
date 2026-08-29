@@ -194,6 +194,21 @@ export function resolveWorkflowRowTier(width: number): WorkflowRowTier {
 export const WORKFLOW_DROPDOWN_ROW_HEIGHT_ESTIMATE = 54;
 
 /**
+ * Highest workflow count the header's count badge renders as a literal
+ * number. Above this, the badge caps at `${WORKFLOW_COUNT_BADGE_MAX}+` so an
+ * unbounded workflow history can't keep widening the header — the tooltip
+ * still carries the real count.
+ */
+export const WORKFLOW_COUNT_BADGE_MAX = 99_999;
+
+/** Formats a workflow count for the header's count badge, capping it at `WORKFLOW_COUNT_BADGE_MAX`. */
+export function formatWorkflowCountBadge(count: number): string {
+  return count > WORKFLOW_COUNT_BADGE_MAX
+    ? `${WORKFLOW_COUNT_BADGE_MAX}+`
+    : String(count);
+}
+
+/**
  * WorkflowStatus header button sizing — the workflow name field and dropdown arrow.
  * Does not affect the expanded dropdown list items.
  * Touch target height controlled by --fp-touch-target in globals.css.
