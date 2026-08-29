@@ -568,15 +568,12 @@ function registerCommands(
             "All Files": ["*"],
           },
         });
-        const blob = files?.[0]
-          ? new TextDecoder().decode(
-              await vscode.workspace.fs.readFile(files[0])
-            )
-          : await vscode.window.showInputBox({
-              prompt: "Paste the signed ctrlyoke offline license file blob",
-              placeHolder: "LICENSE ...",
-              ignoreFocusOut: true,
-            });
+        if (!files?.[0]) {
+          return;
+        }
+        const blob = new TextDecoder().decode(
+          await vscode.workspace.fs.readFile(files[0])
+        );
         if (!blob) {
           return;
         }

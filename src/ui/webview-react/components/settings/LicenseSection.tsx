@@ -176,14 +176,26 @@ export function LicenseSection() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-1 tracking-wide">
-          License
-        </h3>
-        <p className="text-xs text-description-fg">
-          Manage the Pro license for ctrlyoke and the machine it is activated
-          on.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-xs font-semibold uppercase text-description-fg mb-1 tracking-wide">
+            License
+          </h3>
+          <p className="text-xs text-description-fg">
+            Manage the Pro license for ctrlyoke and the machine it is
+            activated on.
+          </p>
+        </div>
+        {!licenseAccess.isPro && (
+          <a
+            href={LICENSE_UI.PRICING_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 rounded bg-pro-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+          >
+            Purchase a License
+          </a>
+        )}
       </div>
 
       <section
@@ -272,7 +284,7 @@ export function LicenseSection() {
         )}
       </section>
 
-      <section className="space-y-2" aria-labelledby="import-license-heading">
+      <section className="space-y-3" aria-labelledby="import-license-heading">
         <div>
           <h4
             id="import-license-heading"
@@ -281,8 +293,8 @@ export function LicenseSection() {
             Import offline license file
           </h4>
           <p className="text-xs text-description-fg">
-            Paste the signed <code>-----BEGIN LICENSE FILE-----</code> blob for
-            an air-gapped activation. See the{" "}
+            For an air-gapped activation using a signed{" "}
+            <code>-----BEGIN LICENSE FILE-----</code> blob. See the{" "}
             <a
               href="https://github.com/FuzzyNova/ctrlyoke/blob/main/docs/pro/index.md"
               target="_blank"
@@ -294,16 +306,38 @@ export function LicenseSection() {
             .
           </p>
         </div>
-        <textarea
-          id="license-file"
-          aria-label="Offline license file"
-          value={licenseBlob}
-          onChange={(event) => setLicenseBlob(event.target.value)}
-          placeholder="-----BEGIN LICENSE FILE-----"
-          rows={5}
-          className="w-full resize-y bg-input-bg border border-input-border rounded px-2 py-1 text-xs text-foreground font-mono focus:outline-none focus:border-focus-border"
-        />
-        <div className="flex flex-wrap items-start gap-2">
+
+        {!isStandalone && (
+          <button
+            type="button"
+            className="fp-select-trigger w-auto shrink-0 gap-1 px-3 text-xs"
+            onClick={() =>
+              vscode.postMessage({
+                type: MESSAGE_TYPES.EXECUTE_VSCODE_COMMAND,
+                command: VSCODE_COMMANDS.ACTIVATE_OFFLINE_PRO,
+              })
+            }
+          >
+            <i className="codicon codicon-folder-opened text-xxs" />
+            Browse for license file…
+          </button>
+        )}
+
+        <div className="space-y-2">
+          <p className="text-xs text-description-fg">
+            {isStandalone
+              ? "Paste the license file blob:"
+              : "Or paste it in here and import it:"}
+          </p>
+          <textarea
+            id="license-file"
+            aria-label="Offline license file"
+            value={licenseBlob}
+            onChange={(event) => setLicenseBlob(event.target.value)}
+            placeholder="-----BEGIN LICENSE FILE-----"
+            rows={5}
+            className="w-full resize-y bg-input-bg border border-input-border rounded px-2 py-1 text-xs text-foreground font-mono focus:outline-none focus:border-focus-border"
+          />
           <ActionButton
             label="Import license file"
             pendingLabel="Importing…"
@@ -317,20 +351,6 @@ export function LicenseSection() {
               })
             }
           />
-          {!isStandalone && (
-            <button
-              type="button"
-              className="fp-select-trigger text-xs"
-              onClick={() =>
-                vscode.postMessage({
-                  type: MESSAGE_TYPES.EXECUTE_VSCODE_COMMAND,
-                  command: VSCODE_COMMANDS.ACTIVATE_OFFLINE_PRO,
-                })
-              }
-            >
-              Browse…
-            </button>
-          )}
         </div>
       </section>
 
@@ -353,10 +373,11 @@ export function LicenseSection() {
             </div>
             <button
               type="button"
-              className="fp-select-trigger text-xs"
+              className="fp-select-trigger w-auto shrink-0 gap-1 px-3 text-xs"
               onClick={requestMachines}
               disabled={machineListPending}
             >
+              <i className="codicon codicon-refresh text-xxs" />
               Refresh
             </button>
           </div>
@@ -444,19 +465,6 @@ export function LicenseSection() {
           </p>
         </section>
       )}
-
-      <p className="text-xs text-description-fg">
-        Need a license?{" "}
-        <a
-          href={LICENSE_UI.PRICING_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="text-link-fg hover:underline"
-        >
-          View Pro pricing
-        </a>
-        .
-      </p>
 
       <Modal
         isOpen={confirmingDeactivation}
