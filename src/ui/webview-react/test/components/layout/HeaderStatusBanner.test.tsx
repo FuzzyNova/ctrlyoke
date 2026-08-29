@@ -38,6 +38,8 @@ beforeEach(() => {
     activeWorkflowId: null,
     loadedWorkflows: [],
     viewedLineageIsSystemGenerated: false,
+    globalSettingsOpen: false,
+    globalSettingsActiveTab: "general",
   });
 });
 
@@ -129,9 +131,31 @@ describe("HeaderStatusBanner", () => {
 
     expect(
       screen.getByText(
-        "Read-only — managed automatically by commit message generation"
+        "Read-only — managed automatically by commit message generation",
+        { exact: false }
       )
     ).toBeInTheDocument();
+  });
+
+  it("links the system-generated banner to the commit settings tab", () => {
+    setLockedLineage({ isSystemGenerated: true });
+    renderBanner();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Edit in settings" })
+    );
+
+    expect(useUiStore.getState().globalSettingsActiveTab).toBe("commit");
+    expect(useUiStore.getState().globalSettingsOpen).toBe(true);
+  });
+
+  it("does not render the settings link for external ownership banners", () => {
+    setLockedLineage({ managedBy: RUNNER_IDS.CLI });
+    renderBanner();
+
+    expect(
+      screen.queryByRole("button", { name: "Edit in settings" })
+    ).not.toBeInTheDocument();
   });
 
   it("renders the rewind banner and calls its discard action", () => {
@@ -210,7 +234,8 @@ describe("HeaderStatusBanner", () => {
 
     expect(
       screen.getByText(
-        "Read-only — managed automatically by commit message generation"
+        "Read-only — managed automatically by commit message generation",
+        { exact: false }
       )
     ).toBeInTheDocument();
     expect(

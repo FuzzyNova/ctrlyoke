@@ -7,6 +7,7 @@ import { WORKFLOW_VIEW_ADDRESS_KIND } from "@root/types/DashboardConstants";
 import { useActiveWorkflowExternalOwner } from "@hooks/useActiveWorkflowExternalOwner";
 import { useIsSystemGeneratedWorkflow } from "@hooks/useIsSystemGeneratedWorkflow";
 import { getExternalReadOnlyLabel } from "@utils/externalRunner";
+import { useUiStore } from "@store/uiStore";
 
 export interface HeaderStatusBannerProps {
   isPausing: boolean;
@@ -30,13 +31,24 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
 ) => {
   const externalOwner = useActiveWorkflowExternalOwner();
   const isSystemGeneratedWorkflow = useIsSystemGeneratedWorkflow();
+  const setGlobalSettingsTab = useUiStore((s) => s.setGlobalSettingsTab);
+  const toggleGlobalSettings = useUiStore((s) => s.toggleGlobalSettings);
+  const globalSettingsOpen = useUiStore((s) => s.globalSettingsOpen);
   const externalReadOnlyLabel = getExternalReadOnlyLabel(externalOwner);
+  const isSystemGeneratedLocked =
+    externalReadOnlyLabel === undefined && isSystemGeneratedWorkflow;
   const lockedLabel =
     externalReadOnlyLabel ??
     (isSystemGeneratedWorkflow
       ? "Read-only — managed automatically by commit message generation"
       : undefined);
   const isLocked = lockedLabel !== undefined;
+  const openCommitSettings = () => {
+    setGlobalSettingsTab("commit");
+    if (!globalSettingsOpen) {
+      toggleGlobalSettings();
+    }
+  };
 
   return (
     <>
@@ -68,7 +80,21 @@ export const HeaderStatusBanner: React.FC<HeaderStatusBannerProps> = (
           aria-label={lockedLabel}
         >
           <i className="codicon codicon-lock" aria-hidden="true" />
-          <span>{lockedLabel}</span>
+          <span>
+            {lockedLabel}
+            {isSystemGeneratedLocked && (
+              <>
+                .{" "}
+                <button
+                  type="button"
+                  className="underline opacity-90 hover:opacity-100"
+                  onClick={openCommitSettings}
+                >
+                  Edit in settings
+                </button>
+              </>
+            )}
+          </span>
         </div>
       )}
       {!props.isViewingDeletedWorkflow && !isLocked && props.isPausing && (
