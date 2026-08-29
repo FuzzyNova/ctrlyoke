@@ -99,7 +99,24 @@ const singleLineTheme = EditorView.theme({
     maxHeight: "26px",
     overflow: "hidden",
   },
+  // `.cm-scroller` IS `EditorView.scrollDOM`, and CodeMirror's autocomplete
+  // tooltip hides itself entirely (not just repositions) whenever the
+  // caret's measured coords fall outside `scrollDOM.getBoundingClientRect()`
+  // intersected with our `keyboardTooltipSpace`. On mobile, opening the
+  // on-screen keyboard fires `visualViewport` resize/scroll events that both
+  // this editor and App.tsx's iOS root-pinning effect react to independently
+  // (no ordering guarantee), so there's a brief window where the caret's
+  // freshly-measured position and the settling layout disagree by a few
+  // pixels. A 26px-tall scrollDOM has no slack to absorb that and the
+  // dropdown gets hidden outright; taller fields (multiline permission
+  // lists, the full prompt editor) never hit this. Overriding `height` here
+  // gives `scrollDOM`'s own box the same slack without changing what's
+  // visible: `&`'s `overflow: hidden` still clips rendering to 26px, and
+  // `getBoundingClientRect()` reports the (unclipped) box CSS assigns a
+  // child regardless of an ancestor's overflow, so only the tooltip's
+  // internal geometry check sees the extra room.
   ".cm-scroller": {
+    height: "150px",
     overflow: "hidden",
   },
   ".cm-content": {
