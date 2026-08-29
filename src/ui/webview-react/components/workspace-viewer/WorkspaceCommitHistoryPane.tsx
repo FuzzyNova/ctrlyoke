@@ -18,7 +18,10 @@ import {
 } from "@components/shared/VirtualizedListFoundation";
 import { workspaceCheckoutBranch } from "@utils/hostedApi";
 import type { CommitGraphLane, CommitGraphRow } from "@utils/commitGraphLayout";
-import { computeCommitGraphLayout } from "@utils/commitGraphLayout";
+import {
+  computeCommitGraphLayout,
+  TRUNK_COLOR_INDEX,
+} from "@utils/commitGraphLayout";
 
 export interface WorkspaceCommitHistoryPaneProps {
   onRefresh: () => void;
@@ -37,8 +40,6 @@ const GRAPH_LANE_WIDTH = 14;
 const DESKTOP_INLINE_LANE_CAP = 5;
 const MOBILE_INLINE_LANE_CAP = 3;
 const GRAPH_OVERSCAN = 12;
-const TRUNK_COLOR_INDEX = 0;
-const LANE_COLOR_INDEX_COUNT = 5;
 
 const TRUNK_COLOR_CLASSES = {
   local: "text-scm-graph-local",
@@ -98,8 +99,8 @@ function bottomTransitionPath(fromX: number, toX: number): string {
   return `M ${fromX} ${ROW_HEIGHT / 2} H ${turnX} A ${radius} ${radius} 0 0 ${sweep} ${toX} ${ROW_HEIGHT}`;
 }
 
-function straightPath(x: number): string {
-  return `M ${x} 0 V ${ROW_HEIGHT}`;
+function straightBottomHalfPath(x: number): string {
+  return `M ${x} ${ROW_HEIGHT / 2} V ${ROW_HEIGHT}`;
 }
 
 function lanePathClass(lane: CommitGraphLane, trunkColorClass: string): string {
@@ -128,24 +129,19 @@ const CommitGraphRowSvg: React.FC<CommitGraphRowSvgProps> = ({
   const nodeY = ROW_HEIGHT / 2;
   const nodeSource =
     layout.inputLanes[layout.laneIndex] ??
-    ({ id: commit.hash, colorIndex: 0 } satisfies CommitGraphLane);
+    ({ id: commit.hash, colorIndex: TRUNK_COLOR_INDEX } satisfies CommitGraphLane);
+  // Match each parent to its output lane by id alone — the lane's actual
+  // color already lives on `layout.outputLanes`, so there is no need (and,
+  // since colors are assigned by a global rotating cursor rather than offset
+  // from the parent lane, no reliable way) to guess a parent's color here.
   const nodeOutputIndices = new Set<number>();
-  const outputIndicesForParents = commit.parentHashes.map(
-    (parentHash, parentIndex) => {
-      const expectedLane = {
-        id: parentHash,
-        colorIndex:
-          (nodeSource.colorIndex + parentIndex) % LANE_COLOR_INDEX_COUNT,
-      };
-      const outputIndex = findLaneIndex(
-        layout.outputLanes,
-        expectedLane,
-        nodeOutputIndices
-      );
-      if (outputIndex >= 0) nodeOutputIndices.add(outputIndex);
-      return outputIndex;
-    }
-  );
+  const outputIndicesForParents = commit.parentHashes.map((parentHash) => {
+    const outputIndex = layout.outputLanes.findIndex(
+      (lane, index) => !nodeOutputIndices.has(index) && lane.id === parentHash
+    );
+    if (outputIndex >= 0) nodeOutputIndices.add(outputIndex);
+    return outputIndex;
+  });
 
   const usedOutputIndices = new Set(nodeOutputIndices);
   const inputPaths = layout.inputLanes.map((lane, inputIndex) => {
@@ -177,6 +173,13 @@ const CommitGraphRowSvg: React.FC<CommitGraphRowSvgProps> = ({
     };
   });
 
+  // Every output lane's top half (0 to nodeY) was already drawn above, either
+  // as part of `inputPaths` (a continuing lane) or not at all (a lane born at
+  // this node has nothing above it). Drawing a full-height line here as well
+  // double-strokes that top half — the double-drawn segment reads as thicker
+  // than the single-drawn segment below it (a "checkered" line), and a lane
+  // that shifted columns gets a straight stub poking out of the curve that
+  // actually carries it there (a "spur"). So only ever draw the bottom half.
   const outputPaths = layout.outputLanes.map((lane, outputIndex) => {
     const outputX = laneX(outputIndex);
     const nodeParentIndex = outputIndicesForParents.indexOf(outputIndex);
@@ -185,7 +188,7 @@ const CommitGraphRowSvg: React.FC<CommitGraphRowSvgProps> = ({
       d:
         nodeParentIndex >= 0
           ? bottomTransitionPath(nodeX, outputX)
-          : straightPath(outputX),
+          : straightBottomHalfPath(outputX),
       lane,
     };
   });
@@ -212,6 +215,7 @@ const CommitGraphRowSvg: React.FC<CommitGraphRowSvgProps> = ({
           fill="none"
           stroke="currentColor"
           strokeWidth="1.5"
+          strokeLinecap="round"
           vectorEffect="non-scaling-stroke"
         />
       ))}

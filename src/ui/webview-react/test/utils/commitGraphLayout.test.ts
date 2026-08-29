@@ -81,7 +81,7 @@ describe("computeCommitGraphLayout", () => {
     expect(rows[3].outputLanes).toEqual([
       { id: "L1", colorIndex: 0 },
       { id: "R1", colorIndex: 1 },
-      { id: "R1", colorIndex: 1 },
+      { id: "R1", colorIndex: 2 },
     ]);
     expect(rows[4].outputLanes).toEqual([
       { id: "L1", colorIndex: 0 },
