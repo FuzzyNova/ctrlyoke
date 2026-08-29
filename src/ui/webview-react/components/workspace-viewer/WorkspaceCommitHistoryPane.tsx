@@ -68,19 +68,6 @@ function resolveLaneColorClass(
   ];
 }
 
-function findLaneIndex(
-  lanes: readonly CommitGraphLane[],
-  target: CommitGraphLane,
-  excluded: ReadonlySet<number>
-): number {
-  return lanes.findIndex(
-    (lane, index) =>
-      !excluded.has(index) &&
-      lane.id === target.id &&
-      lane.colorIndex === target.colorIndex
-  );
-}
-
 function topTransitionPath(fromX: number, toX: number): string {
   if (fromX === toX) return `M ${fromX} 0 V ${ROW_HEIGHT / 2}`;
   const direction = toX > fromX ? 1 : -1;
@@ -125,41 +112,40 @@ const CommitGraphRowSvg: React.FC<CommitGraphRowSvgProps> = ({
   isSelected,
   rowTop,
 }) => {
-  const nodeX = laneX(layout.laneIndex);
+  const circleIndex = layout.laneIndex;
+  const nodeX = laneX(circleIndex);
   const nodeY = ROW_HEIGHT / 2;
   const nodeSource =
-    layout.inputLanes[layout.laneIndex] ??
+    layout.inputLanes[circleIndex] ??
     ({ id: commit.hash, colorIndex: TRUNK_COLOR_INDEX } satisfies CommitGraphLane);
-  // Match each parent to its output lane by id alone — the lane's actual
-  // color already lives on `layout.outputLanes`, so there is no need (and,
-  // since colors are assigned by a global rotating cursor rather than offset
-  // from the parent lane, no reliable way) to guess a parent's color here.
-  const nodeOutputIndices = new Set<number>();
-  const outputIndicesForParents = commit.parentHashes.map((parentHash) => {
-    const outputIndex = layout.outputLanes.findIndex(
-      (lane, index) => !nodeOutputIndices.has(index) && lane.id === parentHash
-    );
-    if (outputIndex >= 0) nodeOutputIndices.add(outputIndex);
-    return outputIndex;
-  });
 
-  const usedOutputIndices = new Set(nodeOutputIndices);
+  // Ports VS Code's `renderSCMHistoryItemGraph` (scmHistory.ts) matching
+  // strategy: walk input lanes in order against a single
+  // monotonically-increasing output pointer, instead of searching
+  // `outputLanes` by id/color. `computeCommitGraphLayout` always builds
+  // `outputLanes` by iterating `inputLanes` in that same relative order, so
+  // positional matching is both sufficient and correct on its own — a
+  // search can latch onto a same-id lane sitting at the wrong position
+  // (e.g. a second, still-waiting duplicate of this exact lane), drawing a
+  // curve out to that stale slot that only gets resolved — and visually
+  // "loops back" — several rows later when the real match is found.
+  let outputPointer = 0;
   const inputPaths = layout.inputLanes.map((lane, inputIndex) => {
     const inputX = laneX(inputIndex);
     if (lane.id === commit.hash) {
+      if (inputIndex === circleIndex) outputPointer += 1;
       return {
         key: `incoming-node-${inputIndex}`,
         d: topTransitionPath(inputX, nodeX),
         lane,
       };
     }
-    const outputIndex = findLaneIndex(
-      layout.outputLanes,
-      lane,
-      usedOutputIndices
-    );
-    if (outputIndex >= 0) {
-      usedOutputIndices.add(outputIndex);
+    if (
+      outputPointer < layout.outputLanes.length &&
+      layout.outputLanes[outputPointer].id === lane.id
+    ) {
+      const outputIndex = outputPointer;
+      outputPointer += 1;
       return {
         key: `incoming-${inputIndex}-${outputIndex}`,
         d: topTransitionPath(inputX, laneX(outputIndex)),
@@ -172,6 +158,40 @@ const CommitGraphRowSvg: React.FC<CommitGraphRowSvgProps> = ({
       lane,
     };
   });
+
+  // Locate each parent's own output lane for the outgoing (bottom-half)
+  // curves. The first parent always inherits the current commit's own
+  // column — `computeCommitGraphLayout` writes it in-place at
+  // `circleIndex` — so it needs no search (and a search could wrongly
+  // match an unrelated lane waiting on that same commit). Every other
+  // parent is appended after all pass-through lanes, so it is always the
+  // *last* lane in `outputLanes` with that id (matches VS Code's
+  // `findLastIndex` in the same function).
+  const nodeOutputIndices = new Set<number>();
+  const outputIndicesForParents = commit.parentHashes.map(
+    (parentHash, parentIndex) => {
+      if (parentIndex === 0) {
+        if (
+          circleIndex < layout.outputLanes.length &&
+          layout.outputLanes[circleIndex].id === parentHash
+        ) {
+          nodeOutputIndices.add(circleIndex);
+          return circleIndex;
+        }
+        return -1;
+      }
+      for (let index = layout.outputLanes.length - 1; index >= 0; index--) {
+        if (
+          !nodeOutputIndices.has(index) &&
+          layout.outputLanes[index].id === parentHash
+        ) {
+          nodeOutputIndices.add(index);
+          return index;
+        }
+      }
+      return -1;
+    }
+  );
 
   // Every output lane's top half (0 to nodeY) was already drawn above, either
   // as part of `inputPaths` (a continuing lane) or not at all (a lane born at
