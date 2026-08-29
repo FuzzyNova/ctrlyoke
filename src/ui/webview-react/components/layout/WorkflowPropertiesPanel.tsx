@@ -1,4 +1,10 @@
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import type {
   ErrorBehavior,
   UserHookConfig,
@@ -13,6 +19,7 @@ import { useWorkflowStore } from "../../store/workflowStore";
 import { useUiStore } from "../../store/uiStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
+import { useScrollFocusedFieldIntoView } from "../../hooks/useScrollFocusedFieldIntoView";
 import { useIsViewingDeletedWorkflow } from "../../hooks/useIsViewingDeletedWorkflow";
 import { useIsSystemGeneratedWorkflow } from "../../hooks/useIsSystemGeneratedWorkflow";
 import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
@@ -212,6 +219,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
   onRequestClose?: () => void;
 }> = ({ panelBarOrientation = "vertical", onRequestClose }) => {
   const vscode = useVsCodeApi();
+  // In mobile mode (onRequestClose present), the panel renders as a
+  // full-screen overlay instead of a collapsible docked panel.
+  const isMobileMode = Boolean(onRequestClose);
   const {
     settingsCollapsed,
     toggleSettingsCollapse,
@@ -296,6 +306,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
   const [drawerRef, isNarrow] = useElementNarrow<HTMLDivElement>(
     SETTINGS_DRAWER_BREAKPOINT
   );
+
+  // Keeps whichever field the user is typing in visible after the mobile
+  // keyboard shrinks this panel's scrollable body.
+  const scrollBodyRef = useRef<HTMLDivElement>(null);
+  useScrollFocusedFieldIntoView(scrollBodyRef, isMobileMode);
 
   // Get current effective values
   const effectiveHarness = getEffectiveHarness();
@@ -1313,10 +1328,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
   // RENDER
   // ============================================================================
 
-  // In mobile mode (onRequestClose present), disable all collapse interactions —
-  // the panel is a full-screen overlay and has its own close button.
-  const isMobileMode = Boolean(onRequestClose);
-
+  // In mobile mode, disable all collapse interactions — the panel is a
+  // full-screen overlay and has its own close button.
   const reviewCompatibility = useCallback(() => {
     setActivePage(DRAWER_PAGES.PERMISSIONS);
     window.requestAnimationFrame(() => {
@@ -1395,6 +1408,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
       {/* Body - Scrollable (pointer-events disabled in CLI watch mode) */}
       <div
+        ref={scrollBodyRef}
         className={`flex-1 overflow-y-auto${activePage === DRAWER_PAGES.MCP ? " flex flex-col" : ""}${isExternallyManaged || isViewingDeletedWorkflow || isSystemGeneratedWorkflow ? " pointer-events-none opacity-60 select-none" : ""}`}
       >
         <div
