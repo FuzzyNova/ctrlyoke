@@ -2533,7 +2533,7 @@ suite("CopilotLogParser", () => {
       },
     });
 
-    test("holds one completed shell through its resumed turn and rejects the stale Stop", () => {
+    test("holds one completed shell through its resumed turn", () => {
       parser.trackBackgroundWorkState(asyncLaunch("shell-1"));
       assert.strictEqual(parser.hasPendingBackgroundWork(), true);
 
@@ -2549,10 +2549,11 @@ suite("CopilotLogParser", () => {
       parser.trackBackgroundWorkState({ type: "assistant.turn_start" });
       parser.trackBackgroundWorkState({ type: "assistant.turn_end" });
 
-      // The Stop that caused catch-up is stale even though it saw the whole
-      // resumed turn. The next Stop is the real completion signal.
-      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
-      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      // No stale-stop guard: Copilot's log watcher stays active during a hold
+      // and settles this state independently of Stop-hook timing (like
+      // Antigravity), so the resumed turn's own close is enough — see the
+      // Copilot gotcha in harness-cli-providers.instructions.md for why a
+      // guard here caused a real production hang instead.
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
 
@@ -2571,8 +2572,6 @@ suite("CopilotLogParser", () => {
       parser.trackBackgroundWorkState(notification("shell_failed", "shell-2"));
       parser.trackBackgroundWorkState({ type: "assistant.turn_start" });
       parser.trackBackgroundWorkState({ type: "assistant.turn_end" });
-      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
-      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
 
@@ -2599,10 +2598,27 @@ suite("CopilotLogParser", () => {
       parser.trackBackgroundWorkState({ type: "assistant.turn_start" });
       parser.trackBackgroundWorkState({ type: "assistant.turn_end" });
 
-      // Same stale-Stop guard as plain async shells: one more real Stop is
-      // needed before completion is finally accepted.
-      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
-      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
+    test("does not require a fresh turn_start when a second shell's notification lands mid-turn", () => {
+      // Regression: a real capture showed two concurrent shells' notifications
+      // straddling assistant.turn_start (one before, one after). The handler
+      // used to unconditionally reset the "turn started" latch on every
+      // consumed notification, which invalidated the turn already in
+      // progress and forced waiting for a second, unnecessary turn cycle
+      // before recognizing completion.
+      parser.trackBackgroundWorkState(asyncLaunch("0"));
+      parser.trackBackgroundWorkState(asyncLaunch("1"));
+
+      parser.trackBackgroundWorkState(notification("shell_completed", "0"));
+      parser.trackBackgroundWorkState({ type: "assistant.turn_start" });
+      // Second shell's notification lands mid-turn, after turn_start.
+      parser.trackBackgroundWorkState(notification("shell_completed", "1"));
+      // The turn already in progress still closes correctly on its own
+      // turn_end — no second turn_start/turn_end cycle required.
+      parser.trackBackgroundWorkState({ type: "assistant.turn_end" });
+
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);
     });
 

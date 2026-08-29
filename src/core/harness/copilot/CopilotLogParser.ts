@@ -679,10 +679,24 @@ export class CopilotLogParser extends BaseLogParser {
    * the rest of the interactive session and every later Stop hook would be
    * absorbed by `CliLogMonitor`'s background-work hold instead of completing.
    */
-  /** Background follow-up state; Copilot's provider-specific signals feed it below. */
-  private readonly backgroundFollowUpState = new BackgroundFollowUpState({
-    staleStopGuardChecks: 2,
-  });
+  /**
+   * Background follow-up state; Copilot's provider-specific signals feed it below.
+   *
+   * Runs with **no** stale-stop guard, same as Antigravity and for the same reason:
+   * Copilot's log watcher stays active during a background-work hold (see
+   * `CliLogMonitor.runBackgroundWorkHold`), so `resumedTurnClosed()` is normally
+   * reached via live tailing *between* two real Stop hooks, not caught up inside
+   * either one's own catch-up read. A nonzero guard assumes the latter shape (both
+   * decrements landing "for free" within one Stop's catch-up) and, when closure
+   * instead happens live between Stops, requires a Stop hook Copilot will never
+   * send again after truly finishing — hanging every session with background work
+   * until the 10-minute idle backstop. Confirmed against a real capture: two
+   * detached shells launched, an early Stop fired while both were still running,
+   * the notifications/turn-resume/turn-close all landed live between that Stop and
+   * the next one, and a `staleStopGuardChecks: 2` guard held the step "still
+   * running" past the second (and final) Stop because Copilot never sent a third.
+   */
+  private readonly backgroundFollowUpState = new BackgroundFollowUpState();
 
   /** Set after a matching notification until the resumed turn starts. */
   private resumedTurnStarted = false;
@@ -730,10 +744,15 @@ export class CopilotLogParser extends BaseLogParser {
         COPILOT_SHELL_COMPLETION_NOTIFICATION_KINDS.has(kind.type) &&
         kind.shellId !== undefined
       ) {
-        const shellId = String(kind.shellId);
-        if (this.backgroundFollowUpState.consumeNotification(shellId)) {
-          this.resumedTurnStarted = false;
-        }
+        // Do NOT reset resumedTurnStarted here. Concurrent shells can each
+        // fire their own notification, and a later one landing after
+        // turn_start (but before that turn's turn_end) must not invalidate
+        // the turn already in progress — its own turn_end still closes
+        // correctly below. Confirmed against a real capture: two concurrent
+        // shells' notifications straddled turn_start (one before, one
+        // after); resetting here forced an extra, unnecessary turn cycle
+        // before completion was ever recognized.
+        this.backgroundFollowUpState.consumeNotification(String(kind.shellId));
       }
       return;
     }

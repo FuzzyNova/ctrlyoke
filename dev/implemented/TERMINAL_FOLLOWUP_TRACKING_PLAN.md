@@ -87,9 +87,26 @@ own — so the parser also removes the shellId immediately on that tool's
 pending for the rest of the interactive session and every later Stop hook is
 absorbed by the background-work hold instead of completing.
 
-Copilot uses the shared state machine with a two-check stale-stop guard. The
-guard covers the case where a notification and the resumed turn are caught up
-by the same monitor poll as the old turn-end event.
+Copilot uses the shared state machine with **no** stale-stop guard (like
+Antigravity below, unlike an earlier version of this doc). Copilot's log
+watcher stays active during a background-work hold, so `resumedTurnClosed()`
+is normally reached via live tailing *between* two real Stop hooks, not
+caught up inside either one's own catch-up read — a nonzero guard assumes the
+latter shape and, when closure instead happens live between Stops, requires a
+Stop hook that never comes after the CLI genuinely finishes, hanging the step
+until the 10-minute idle backstop. Confirmed against a real capture: two
+detached shells launched, an early Stop fired while both were still running
+(not stale — genuinely pending), the notifications/turn-resume/turn-close all
+landed live between that Stop and the next, and a `staleStopGuardChecks: 2`
+guard held the step "still running" past the second (and final) Stop because
+Copilot never sent a third. The same capture also exposed a second bug: the
+notification handler used to unconditionally reset the "turn started" latch
+on every consumed notification, including one landing after `turn_start` for
+an already-in-progress resumed turn (two concurrent shells' notifications can
+straddle `turn_start`) — this forced an extra, unneeded turn cycle before
+closure and could permanently miss it if the model reports completion within
+that same first turn. Fixed by only setting the latch from `turn_start`,
+never clearing it from a notification.
 
 ## Antigravity CLI
 

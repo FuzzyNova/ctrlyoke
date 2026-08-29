@@ -456,74 +456,150 @@ suite("CliLogMonitor", () => {
     });
   });
 
-  test("ignores a stale Copilot Stop when catch-up includes shell completion and resumed turn", async () => {
+  test("completes on the second real Copilot Stop with no stale-stop guard, even when the resumed turn closes live between Stops", async () => {
+    // Regression for a real production hang: a real capture (two concurrent
+    // `powershell mode: async, detach: true` shells) showed an early Stop
+    // firing while both shells were still genuinely running, then the
+    // notifications, resumed turn_start, and closing turn_end all landing via
+    // live log tailing *between* that Stop and the next (final) one — not
+    // caught up inside either Stop's own catch-up read. A `staleStopGuardChecks:
+    // 2` guard required a third Stop that Copilot never sends once truly done,
+    // hanging the step until the 10-minute idle backstop. This replays that
+    // shape against the real file-tailing CopilotLogParser (no `readNewLines`/
+    // `watchLogFile` overrides) to prove a single confirming Stop now suffices.
     await withZeroDrainDeadline(async () => {
-      const parser = new CopilotLogParser();
-      const batches: BaseCliEvent[][] = [
-        [
-          {
-            type: "tool.execution_complete",
-            data: {
-              toolTelemetry: { properties: { executionMode: "async" } },
-              result: {
-                content: "<command started in background with shellId: 0>",
-              },
+      const tempDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "ctrlyoke-copilot-monitor-")
+      );
+      const logPath = path.join(tempDir, "events.jsonl");
+
+      try {
+        const writeLine = (event: Record<string, unknown>) =>
+          fs.appendFileSync(logPath, JSON.stringify(event) + "\n", "utf8");
+
+        writeLine({ type: "session.start", data: { sessionId: "copilot-session" } });
+        writeLine({
+          type: "tool.execution_complete",
+          data: {
+            toolCallId: "call-0",
+            toolTelemetry: { properties: { executionMode: "async" } },
+            result: {
+              content: "<command started in detached background with shellId: 0>",
             },
           },
-        ],
-        [
-          {
-            type: "system.notification",
-            data: {
-              kind: { type: "shell_completed", shellId: 0, exitCode: 0 },
+        });
+        writeLine({
+          type: "tool.execution_complete",
+          data: {
+            toolCallId: "call-1",
+            toolTelemetry: { properties: { executionMode: "async" } },
+            result: {
+              content: "<command started in detached background with shellId: 1>",
             },
           },
-          { type: "assistant.turn_start" },
-          {
-            type: "assistant.message",
-            data: { content: "The background command finished." },
+        });
+
+        const parser = new CopilotLogParser();
+        let notificationCallCount = 0;
+        let resolveFirstStop: (() => void) | undefined;
+        let resolveSecondStop: (() => void) | undefined;
+        const completion = {
+          completed: true as const,
+          kind: "completion" as const,
+          data: {},
+        };
+
+        const monitor = new CliLogMonitor({
+          logParser: parser,
+          notificationMonitor: createNotificationMonitor({
+            monitorForCompletion: async () => {
+              notificationCallCount++;
+              return await new Promise<typeof completion>((resolve) => {
+                if (notificationCallCount === 1) {
+                  resolveFirstStop = () => resolve(completion);
+                } else {
+                  resolveSecondStop = () => resolve(completion);
+                }
+              });
+            },
+          }),
+          runtimeState: {
+            getWorkspaceRoot: () => tempDir,
+            isCancelling: () => false,
           },
-          { type: "assistant.turn_end" },
-        ],
-        [],
-      ];
-      let readIndex = 0;
-      parser.readNewLines = async () => batches[readIndex++] ?? [];
-      parser.watchLogFile = () => ({ close() {} }) as fs.FSWatcher;
-
-      let notificationCallCount = 0;
-      const monitor = new CliLogMonitor({
-        logParser: parser,
-        notificationMonitor: createNotificationMonitor({
-          monitorForCompletion: async () => {
-            notificationCallCount++;
-            return { completed: true, kind: "completion", data: {} };
+          hostCallbacks: {
+            onStreamingEvents: () => undefined,
+            onResponseComplete: () => undefined,
+            logResponse: () => undefined,
           },
-        }),
-        runtimeState: {
-          getWorkspaceRoot: () => os.tmpdir(),
-          isCancelling: () => false,
-        },
-        hostCallbacks: {
-          onStreamingEvents: () => undefined,
-          onResponseComplete: () => undefined,
-          logResponse: () => undefined,
-        },
-      });
+        });
 
-      const result = await monitor.monitor(
-        "events.jsonl",
-        "copilot-session",
-        new Date(0),
-        "gpt-5.4"
-      );
+        const monitorPromise = monitor.monitor(
+          logPath,
+          "copilot-session",
+          new Date(0),
+          "gpt-5.4"
+        );
 
-      assert.strictEqual(result.success, true);
-      assert.strictEqual(notificationCallCount, 2);
-      assert.strictEqual(
-        result.cliResult?.response,
-        "The background command finished."
-      );
+        for (let attempt = 0; attempt < 100 && !resolveFirstStop; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+        assert.ok(resolveFirstStop, "the first Stop callback was not captured");
+
+        // First Stop: both shells are still genuinely running — not stale.
+        resolveFirstStop!();
+
+        for (let attempt = 0; attempt < 100 && !resolveSecondStop; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+        assert.ok(
+          resolveSecondStop,
+          "the hold loop did not wait for a second Stop"
+        );
+
+        // Both shells finish and the resumed turn closes entirely via live log
+        // tailing, before the second (final) Stop is resolved — mirrors the
+        // real capture's timing exactly.
+        writeLine({
+          type: "system.notification",
+          data: {
+            kind: { type: "shell_detached_completed", shellId: "0", exitCode: 0 },
+          },
+        });
+        writeLine({ type: "assistant.turn_start" });
+        writeLine({
+          type: "system.notification",
+          data: {
+            kind: { type: "shell_detached_completed", shellId: "1", exitCode: 0 },
+          },
+        });
+        writeLine({
+          type: "assistant.message",
+          data: { content: "Both background tasks finished." },
+        });
+        writeLine({ type: "assistant.turn_end" });
+
+        // Give the real fs.watch a moment to deliver the appended lines live,
+        // same as the production log watcher does during the hold.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        resolveSecondStop!();
+
+        const result = await monitorPromise;
+
+        assert.strictEqual(result.success, true);
+        assert.strictEqual(
+          notificationCallCount,
+          2,
+          "a third Stop must not be required once the resumed turn has closed"
+        );
+        assert.strictEqual(
+          result.cliResult?.response,
+          "Both background tasks finished."
+        );
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
     });
   });
 
