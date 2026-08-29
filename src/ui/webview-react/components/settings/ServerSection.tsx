@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import { useSettingsStore } from "@store/settingsStore";
+import { useUiStore } from "@store/uiStore";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import {
   LICENSE_UI,
@@ -47,6 +48,7 @@ export function ServerSection({
 
   const serverRunning = useSettingsStore((state) => state.serverRunning);
   const licenseAccess = useSettingsStore((state) => state.licenseAccess);
+  const setActiveTab = useUiStore((s) => s.setGlobalSettingsTab);
   const serverUrl = useSettingsStore((state) => state.serverUrl);
   const availableIps = useSettingsStore((state) => state.availableIps);
   const selectedDisplayIp = useSettingsStore(
@@ -263,6 +265,27 @@ export function ServerSection({
       <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
         Server
       </h3>
+
+      {!licenseAccess.isPro && (
+        <button
+          type="button"
+          onClick={() => setActiveTab("license")}
+          aria-label="Unlock Pro Features"
+          className="mb-3 flex w-full items-center gap-2 rounded border border-pro-brand px-3 py-2 text-left hover:bg-pro-brand/10"
+        >
+          <i className="codicon codicon-key text-pro-brand" aria-hidden="true" />
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-medium text-pro-brand">
+              Unlock Pro Features
+            </span>
+            <span className="block text-xs text-description-fg">
+              LAN/WAN access, HTTPS, and custom icon colors are all Pro
+              features.
+            </span>
+          </span>
+          <i className="codicon codicon-chevron-right text-pro-brand" aria-hidden="true" />
+        </button>
+      )}
 
       <div className="space-y-3">
         {/* Enable on launch — server-side only; browser clients cannot change server startup */}

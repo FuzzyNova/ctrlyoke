@@ -79,7 +79,6 @@ export function GlobalSettingsDrawer() {
   const fullSettings = useSettingsStore((s) => s.fullGlobalSettings);
   const serverRunning = useSettingsStore((s) => s.serverRunning);
   const dev = useSettingsStore((s) => s.dev);
-  const licenseAccess = useSettingsStore((s) => s.licenseAccess);
   const [drawerRef, isNarrow] = useElementNarrow(580);
   const [activeScope, setActiveScope] = useState<SettingWriteScope>(
     SETTING_SCOPES.USER
@@ -204,32 +203,23 @@ export function GlobalSettingsDrawer() {
           />
         </div>
 
-        {!licenseAccess.isPro && (
+        <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => setActiveTab("license")}
-            className="h-6 shrink-0 inline-flex items-center gap-1 rounded border border-pro-brand px-2 text-xs font-medium text-pro-brand hover:bg-pro-brand hover:text-white"
+            className="icon-btn py-1 px-1"
+            title="Open settings file"
+            aria-label="Open settings file"
+            onClick={() => openSettingsFile(activeScope, vscode)}
           >
-            <i className="codicon codicon-key text-xxs" aria-hidden="true" />
-            Unlock Pro Features
+            <i className="codicon codicon-lg codicon-go-to-file" />
           </button>
-        )}
 
-        <button
-          type="button"
-          className="icon-btn py-1 px-1"
-          title="Open settings file"
-          aria-label="Open settings file"
-          onClick={() => openSettingsFile(activeScope, vscode)}
-        >
-          <i className="codicon codicon-lg codicon-go-to-file" />
-        </button>
-
-        <ExitButton
-          onClick={closeGlobalSettings}
-          title="Close Global Settings"
-          aria-label="Close Global Settings"
-        />
+          <ExitButton
+            onClick={closeGlobalSettings}
+            title="Close Global Settings"
+            aria-label="Close Global Settings"
+          />
+        </div>
       </div>
 
       <div className="flex flex-1 min-h-0">
