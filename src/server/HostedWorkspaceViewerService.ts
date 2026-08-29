@@ -42,7 +42,11 @@ import type {
   WorkspaceSearchContentMatch,
   WorkspaceTreeEntry,
 } from "../types/HostedWorkspaceViewerTypes";
-import { WORKSPACE_SEARCH_SCOPES } from "../types/DashboardConstants";
+import {
+  WORKSPACE_SEARCH_SCOPES,
+  USER_SETTINGS_VIEWER_SENTINEL_PATH,
+} from "../types/DashboardConstants";
+import { configService } from "../config/CtrlYokeConfigService";
 import {
   WORKSPACE_TREE_DEFAULT_PAGE_SIZE,
   WORKSPACE_TREE_MAX_PAGE_SIZE,
@@ -505,7 +509,41 @@ export class HostedWorkspaceViewerService {
 
   // ── Path safety ──────────────────────────────────────────────────────────
 
+  /**
+   * The user-scope settings.json (`~/.ctrlyoke/settings.json`) lives outside
+   * every workspace root, so the normal trusted-root containment check below
+   * would always reject it. The "Open settings file" action sends the fixed
+   * `USER_SETTINGS_VIEWER_SENTINEL_PATH` sentinel to request it (never a real
+   * path the client constructs itself); a subsequent save/refresh instead
+   * sends back whatever `relativePath()` produced when the file was first
+   * read (an absolute path, or one with `../` segments in single-root mode),
+   * which is matched here by resolved identity against the real file.
+   */
+  private resolveOwnedUserSettingsFile(requestedPath: string): string | null {
+    const userSettingsPath = configService.getUserFilePath();
+    if (!userSettingsPath) return null;
+    const resolvedUserSettingsPath = path.resolve(userSettingsPath);
+
+    if (requestedPath === USER_SETTINGS_VIEWER_SENTINEL_PATH) {
+      return resolvedUserSettingsPath;
+    }
+
+    const candidates = [
+      path.resolve(requestedPath),
+      path.resolve(this.workspaceRoot, requestedPath),
+    ];
+    return candidates.some((candidate) =>
+      pathsEqual(candidate, resolvedUserSettingsPath)
+    )
+      ? resolvedUserSettingsPath
+      : null;
+  }
+
   private safeResolve(requestedPath: string): string | null {
+    const ownedUserSettingsPath =
+      this.resolveOwnedUserSettingsFile(requestedPath);
+    if (ownedUserSettingsPath) return ownedUserSettingsPath;
+
     const trustedRoots = this.trustedRoots;
     const resolved = this.resolveAgainstRoots(requestedPath);
 

@@ -14,6 +14,8 @@ interface ScopeToggleProps<T extends string> {
   options: readonly [ScopeToggleOption<T>, ScopeToggleOption<T>];
   ariaLabel: string;
   className?: string;
+  /** Render icons only, dropping the visible label text (still exposed via title/aria-label). */
+  iconOnly?: boolean;
 }
 
 /**
@@ -27,6 +29,7 @@ export function ScopeToggle<T extends string>({
   options,
   ariaLabel,
   className,
+  iconOnly = false,
 }: ScopeToggleProps<T>): React.ReactElement {
   const [first, second] = options;
 
@@ -40,10 +43,11 @@ export function ScopeToggle<T extends string>({
         type="button"
         onClick={() => onChange(first.value)}
         className={`fp-mode-switch-btn ${value === first.value ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
-        title={first.title}
+        title={first.title ?? first.label}
+        aria-label={first.label}
       >
         <i className={`codicon ${first.icon}`} />
-        {first.label}
+        {!iconOnly && first.label}
       </button>
       <div className="fp-mode-switch-divider">
         <div className="w-px h-full bg-current opacity-40" />
@@ -52,10 +56,11 @@ export function ScopeToggle<T extends string>({
         type="button"
         onClick={() => onChange(second.value)}
         className={`fp-mode-switch-btn ${value === second.value ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
-        title={second.title}
+        title={second.title ?? second.label}
+        aria-label={second.label}
       >
         <i className={`codicon ${second.icon}`} />
-        {second.label}
+        {!iconOnly && second.label}
       </button>
     </div>
   );

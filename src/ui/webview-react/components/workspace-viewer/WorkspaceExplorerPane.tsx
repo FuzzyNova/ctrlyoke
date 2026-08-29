@@ -102,6 +102,9 @@ export const WorkspaceExplorerPane: React.FC = () => {
     (s) => s.setSourceControlFiles
   );
   const selectedFilePath = useWorkspaceViewerStore((s) => s.selectedFilePath);
+  const selectedFileExternal = useWorkspaceViewerStore(
+    (s) => s.selectedFileExternal
+  );
   const fileContent = useWorkspaceViewerStore((s) => s.fileContent);
   const fileDirty = useWorkspaceViewerStore((s) => s.fileDirty);
   const fileLoading = useWorkspaceViewerStore((s) => s.fileLoading);
@@ -262,10 +265,12 @@ export const WorkspaceExplorerPane: React.FC = () => {
   }, []);
 
   const openFile = useCallback(
-    async (filePath: string) => {
-      const relPath = toWorkspaceRelative(filePath, workspacePath);
+    async (filePath: string, external = false) => {
+      const relPath = external
+        ? filePath
+        : toWorkspaceRelative(filePath, workspacePath);
       setFileLoading(true);
-      selectFile(relPath);
+      selectFile(relPath, external);
       if (isMobile) setMobileEditorVisible(true);
       try {
         const result = await workspaceFile(relPath);
@@ -312,7 +317,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   // directly to keep the "don't reload if already there" optimisation without
   // making explorerPath a trigger.
   useEffect(() => {
-    if (!selectedFilePath || pendingNavigation) return;
+    if (!selectedFilePath || pendingNavigation || selectedFileExternal) return;
     const relativePath = toWorkspaceRelative(selectedFilePath, workspacePath);
     const normalizedPath = relativePath.replace(/\\/g, "/");
     const lastSep = Math.max(
@@ -323,7 +328,13 @@ export const WorkspaceExplorerPane: React.FC = () => {
     if (parentDir !== useWorkspaceViewerStore.getState().explorerPath) {
       loadDirectory(parentDir, normalizedPath);
     }
-  }, [loadDirectory, pendingNavigation, selectedFilePath, workspacePath]);
+  }, [
+    loadDirectory,
+    pendingNavigation,
+    selectedFileExternal,
+    selectedFilePath,
+    workspacePath,
+  ]);
 
   // Consume pending navigation set externally (e.g. from CodeMirror link clicks)
   useEffect(() => {
@@ -337,6 +348,11 @@ export const WorkspaceExplorerPane: React.FC = () => {
       // be recognized as intentional rather than restarting the old path.
       setExplorerPath(normalizedPath);
       loadDirectory(normalizedPath);
+    } else if (pendingNavigation.external) {
+      // An external file (e.g. the user-scope settings.json) isn't part of
+      // the explorer tree, so there's no parent directory to navigate to.
+      setPendingEditorSelection(null);
+      openFile(pendingNavigation.filePath, true);
     } else {
       const { filePath, startLine, endLine } = pendingNavigation;
       const relativePath = toWorkspaceRelative(filePath, workspacePath);
@@ -390,7 +406,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   );
 
   const handleSyncExplorer = useCallback(() => {
-    if (!selectedFilePath) return;
+    if (!selectedFilePath || selectedFileExternal) return;
     const relativePath = toWorkspaceRelative(selectedFilePath, workspacePath);
     const normalizedPath = relativePath.replace(/\\/g, "/");
     const lastSep = Math.max(
@@ -399,7 +415,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
     );
     const parentDir = lastSep > 0 ? normalizedPath.slice(0, lastSep) : "";
     loadDirectory(parentDir, normalizedPath);
-  }, [loadDirectory, selectedFilePath, workspacePath]);
+  }, [loadDirectory, selectedFileExternal, selectedFilePath, workspacePath]);
 
   const { clipboard, openContextMenu, explorerContextMenuPortal } =
     useWorkspaceExplorerContextMenu({
@@ -554,9 +570,9 @@ export const WorkspaceExplorerPane: React.FC = () => {
         {!isMobile && (
           <button
             onClick={handleSyncExplorer}
-            disabled={!selectedFilePath}
+            disabled={!selectedFilePath || selectedFileExternal}
             className={`flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded transition-colors flex-shrink-0 ${
-              selectedFilePath
+              selectedFilePath && !selectedFileExternal
                 ? "hover:bg-btn-secondary-hover text-editor-fg"
                 : "opacity-30 cursor-default"
             }`}

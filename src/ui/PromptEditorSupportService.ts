@@ -17,7 +17,10 @@ import {
   mimeTypeToImageExtension,
   imageExtensionToMimeType,
   type AtomicReferenceKind,
+  SETTING_SCOPES,
+  type SettingWriteScope,
 } from "../types/DashboardConstants";
+import { configService } from "../config/CtrlYokeConfigService";
 import { CliProviderUtils } from "../core/harness/shared/CliProviderUtils";
 import {
   getHarnessFlagCompletions,
@@ -1174,6 +1177,27 @@ export class PromptEditorSupportService {
         error: `Failed to open: ${relativePath}`,
       });
     }
+  }
+
+  /**
+   * Open the user- or workspace-scope settings.json directly, bypassing the
+   * external-root trust prompt — same rationale as {@link handleOpenSkill}:
+   * both paths come from ctrlyoke's own config service, never from
+   * user-controlled input, so there's nothing to prompt-trust.
+   */
+  async handleOpenSettingsFile(
+    _ctx: WebviewClientContext,
+    scope: SettingWriteScope
+  ): Promise<void> {
+    const filePath =
+      scope === SETTING_SCOPES.WORKSPACE
+        ? configService.getWorkspaceFilePath()
+        : configService.getUserFilePath();
+    if (!filePath) {
+      Log.warn(`No settings file available to open for scope: ${scope}`);
+      return;
+    }
+    await openResolvedTarget({ path: filePath });
   }
 
   async handleOpenSkill(

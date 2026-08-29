@@ -846,6 +846,10 @@ export class WebviewMessageRouter {
       );
     });
 
+    table.set(MESSAGE_TYPES.OPEN_SETTINGS_FILE, (message, ctx) => {
+      this.promptEditorSupport.handleOpenSettingsFile(ctx, message.scope);
+    });
+
     table.set(MESSAGE_TYPES.OPEN_SKILL, (message, ctx) => {
       this.promptEditorSupport.handleOpenSkill(ctx, message.skillName);
     });

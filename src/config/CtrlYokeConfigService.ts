@@ -136,6 +136,16 @@ export class CtrlYokeConfigService {
     this.cliOverlay = overlay;
   }
 
+  /** Absolute path of the active user-scope settings.json backend, when configured. */
+  getUserFilePath(): string | undefined {
+    return this.userBackend?.filePath;
+  }
+
+  /** Absolute path of the active workspace-scope settings.json backend, when configured. */
+  getWorkspaceFilePath(): string | undefined {
+    return this.workspaceBackend?.filePath;
+  }
+
   /** Get a top-level setting with source tracking */
   resolve<K extends keyof CtrlYokeGlobalSettings>(
     key: K

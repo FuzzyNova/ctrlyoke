@@ -2,7 +2,13 @@ import { MESSAGE_TYPES } from "@/types/messages";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useUiStore } from "@store/uiStore";
-import { ATOMIC_REFERENCE_KINDS } from "@root/types/DashboardConstants";
+import {
+  ATOMIC_REFERENCE_KINDS,
+  SETTING_SCOPES,
+  USER_SETTINGS_VIEWER_SENTINEL_PATH,
+  WORKSPACE_SETTINGS_RELATIVE_PATH,
+  type SettingWriteScope,
+} from "@root/types/DashboardConstants";
 
 /**
  * Shape of a context reference to act on, independent of where it came from
@@ -136,4 +142,30 @@ export function openContextReference(
   }
 
   return false;
+}
+
+/**
+ * Open the ctrlyoke settings.json for the given scope, the same
+ * transport-aware way as {@link openContextReference}: in the hosted browser
+ * this routes through the workspace-viewer store (the user-scope file lives
+ * outside the workspace, so it opens via the fixed
+ * `USER_SETTINGS_VIEWER_SENTINEL_PATH` sentinel rather than a real path); in
+ * the VS Code panel it posts OPEN_SETTINGS_FILE for the extension host to
+ * open natively.
+ */
+export function openSettingsFile(
+  scope: SettingWriteScope,
+  vscode: VsCodeLike
+): void {
+  if (isStandalone) {
+    const store = useWorkspaceViewerStore.getState();
+    if (scope === SETTING_SCOPES.WORKSPACE) {
+      store.openToFile(WORKSPACE_SETTINGS_RELATIVE_PATH);
+    } else {
+      store.openToExternalFile(USER_SETTINGS_VIEWER_SENTINEL_PATH);
+    }
+    return;
+  }
+
+  vscode.postMessage({ type: MESSAGE_TYPES.OPEN_SETTINGS_FILE, scope });
 }

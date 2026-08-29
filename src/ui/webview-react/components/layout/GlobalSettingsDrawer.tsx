@@ -9,6 +9,7 @@ import {
   SETTING_SCOPES,
   type SettingWriteScope,
 } from "@/types/messages";
+import { openSettingsFile } from "@utils/contextReferenceActions";
 import { GlobalSettingsVerticalTabBar } from "./GlobalSettingsVerticalTabBar";
 import {
   GeneralSection,
@@ -206,6 +207,7 @@ export function GlobalSettingsDrawer() {
             ariaLabel="Settings scope"
             value={activeScope}
             onChange={setActiveScope}
+            iconOnly={isNarrow}
             options={[
               {
                 value: SETTING_SCOPES.USER,
@@ -233,6 +235,16 @@ export function GlobalSettingsDrawer() {
             Unlock Pro Features
           </button>
         )}
+
+        <button
+          type="button"
+          className="icon-btn py-1 px-1"
+          title="Open settings file"
+          aria-label="Open settings file"
+          onClick={() => openSettingsFile(activeScope, vscode)}
+        >
+          <i className="codicon codicon-lg codicon-go-to-file" />
+        </button>
 
         <ExitButton
           onClick={closeGlobalSettings}

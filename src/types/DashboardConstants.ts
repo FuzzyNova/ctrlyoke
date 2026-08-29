@@ -224,6 +224,7 @@ export const MESSAGE_TYPES = {
   BRANCH_LIST_REQUEST: "branchListRequest",
   BRANCH_LIST_RESPONSE: "branchListResponse",
   OPEN_FILE: "openFile", // Open file from an @file / #selection: / #sym: link
+  OPEN_SETTINGS_FILE: "openSettingsFile", // Webview -> Extension: open the user/workspace settings.json for a given scope
   OPEN_SKILL: "openSkill", // Open a resolved ctrlyoke SKILL.md link
   OPEN_PROMPT_FILE: "openPromptFile", // Open a lone prompt-file reference
   OPEN_GIT_CHANGE: "openGitChange", // Webview -> Extension: open a git diff in a new editor (legacy)
@@ -2609,6 +2610,18 @@ export type SettingWriteScope = Exclude<
   SettingScope,
   typeof SETTING_SCOPES.DEFAULT
 >;
+
+/** Workspace-relative path of the workspace-scope settings file, used by the
+ * "Open settings file" action's hosted-browser transport. */
+export const WORKSPACE_SETTINGS_RELATIVE_PATH = ".ctrlyoke/settings.json";
+/**
+ * Fixed sentinel the hosted-browser client sends to request the user-scope
+ * settings.json (`~/.ctrlyoke/settings.json`). That file lives outside every
+ * workspace root, so the client can never construct its real path itself —
+ * the server recognizes this sentinel and resolves it via `configService`.
+ * Never a real filesystem path.
+ */
+export const USER_SETTINGS_VIEWER_SENTINEL_PATH = "~/.ctrlyoke/settings.json";
 
 /** States exposed by the secret registry. Values are never part of these states. */
 export const SECRET_REGISTRY_STATES = {

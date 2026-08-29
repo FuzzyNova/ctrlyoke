@@ -25,7 +25,15 @@ import { parseUnifiedDiffToFiles } from "@utils/rdvAdapter";
 // ============================================================================
 
 export type PendingNavigation =
-  | { type: "file"; filePath: string; startLine?: number; endLine?: number }
+  | {
+      type: "file";
+      filePath: string;
+      startLine?: number;
+      endLine?: number;
+      /** Set for a file outside every workspace root (e.g. the user-scope
+       * settings.json) — the consumer must skip explorer-tree navigation. */
+      external?: boolean;
+    }
   | { type: "directory"; dirPath: string };
 
 export interface PendingFileHistory {
@@ -77,6 +85,9 @@ interface WorkspaceViewerState {
 
   // File editor
   selectedFilePath: string | null;
+  /** True when selectedFilePath is outside every workspace root (e.g. the
+   * user-scope settings.json) — explorer-tree sync is unavailable for it. */
+  selectedFileExternal: boolean;
   fileContent: string;
   originalFileContent: string;
   fileDirty: boolean;
@@ -177,7 +188,7 @@ interface WorkspaceViewerActions {
   setExplorerPath(path: string): void;
 
   // File editor
-  selectFile(path: string): void;
+  selectFile(path: string, external?: boolean): void;
   setFileContent(content: string): void;
   setLoadedFileContent(path: string, content: string): void;
   /** Load a known image file for inline <img> preview (read-only, no text content). */
@@ -236,6 +247,9 @@ interface WorkspaceViewerActions {
 
   // Pending navigation
   openToFile(filePath: string, startLine?: number, endLine?: number): void;
+  /** Open a file outside every workspace root (e.g. the user-scope
+   * settings.json) — skips explorer-tree navigation entirely. */
+  openToExternalFile(filePath: string): void;
   openToDirectory(dirPath: string): void;
   clearPendingNavigation(): void;
   openToDiff(path: string): void;
@@ -256,6 +270,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
   explorerPath: "",
 
   selectedFilePath: null,
+  selectedFileExternal: false,
   fileContent: "",
   originalFileContent: "",
   fileDirty: false,
@@ -383,10 +398,11 @@ export const useWorkspaceViewerStore = create<
 
       // --- File editor ---
 
-      selectFile(path) {
+      selectFile(path, external = false) {
         const draft = get().fileDrafts[path];
         set({
           selectedFilePath: path,
+          selectedFileExternal: external,
           fileContent: draft?.content ?? "",
           originalFileContent: "",
           fileDirty: draft !== undefined,
@@ -503,6 +519,7 @@ export const useWorkspaceViewerStore = create<
       clearFile() {
         set({
           selectedFilePath: null,
+          selectedFileExternal: false,
           fileContent: "",
           originalFileContent: "",
           fileDirty: false,
@@ -764,6 +781,15 @@ export const useWorkspaceViewerStore = create<
           isOpen: true,
           activeTab: "explorer",
           pendingNavigation: { type: "file", filePath, startLine, endLine },
+        });
+      },
+
+      openToExternalFile(filePath) {
+        get().selectFile(filePath, true);
+        set({
+          isOpen: true,
+          activeTab: "explorer",
+          pendingNavigation: { type: "file", filePath, external: true },
         });
       },
 
