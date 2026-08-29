@@ -2028,6 +2028,61 @@ describe("run view revision snapshots", () => {
     expect(useUiStore.getState().displayedDescriptorRevision).toBe(5);
   });
 
+  it("restores the system-generated lockdown a SESSION_RESTORED replay cleared", () => {
+    // Reproduces the "commit-message-generation banner flashes then vanishes"
+    // bug: binding a client to a *running* instance sends RUN_VIEW_LOADED
+    // (setting the lockdown) followed by replayFullStateTo's raw
+    // SESSION_RESTORED (which clears it via applyWorkflowChange), then
+    // re-publishes WORKFLOW_VIEW_IDENTITY to restore the address — that
+    // identity publish must also restore the lockdown, or it never comes back
+    // while the workflow keeps running.
+    renderHook(() => useMessageHandler());
+    // resetUi() (in the file-level beforeEach) does not clear
+    // pendingRunViewRequestId, so a prior test's in-flight request ID can
+    // otherwise leak in and make RUN_VIEW_LOADED look stale below.
+    useUiStore.setState({ pendingRunViewRequestId: null });
+    const address = {
+      workflowKey: "commit-message-generation" as never,
+      kind: "run" as const,
+      runRef: "run-2026-08-29T17-27-01-636Z" as never,
+    };
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RUN_VIEW_LOADED, {
+        address,
+        workingFile: { workflowName: "commit-message-generation", steps: [] },
+        workflowProperties: {},
+        runSummaries: [],
+        history: null,
+        descriptorRevision: 1,
+        isSystemGenerated: true,
+      });
+    });
+    expect(useUiStore.getState().viewedLineageIsSystemGenerated).toBe(true);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.SESSION_RESTORED, {
+        fileName: "commit-message-generation.ctrlyoke.yaml",
+        steps: [],
+        results: [],
+        executionState: EXECUTION_STATES.RUNNING,
+        currentIndex: 0,
+        workflowProperties: {},
+      });
+    });
+    expect(useUiStore.getState().viewedLineageIsSystemGenerated).toBe(false);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY, {
+        address,
+        definitionRevision: 1,
+        descriptorRevision: 1,
+        isSystemGenerated: true,
+      });
+    });
+    expect(useUiStore.getState().viewedLineageIsSystemGenerated).toBe(true);
+  });
+
   it("retires the run-view request a failure answers", () => {
     renderHook(() => useMessageHandler());
     useUiStore.setState({ pendingRunViewRequestId: "run-view-7" });

@@ -4964,6 +4964,7 @@ suite("WorkflowOrchestrator client view addressing", () => {
         runDirectory: WorkflowPaths.draftDir(workspace, workflowKey),
         definitionRevision: 7,
         descriptorRevision: descriptor.revision,
+        isSystemGenerated: false,
       });
     } finally {
       await fs.rm(workspace, { recursive: true, force: true });

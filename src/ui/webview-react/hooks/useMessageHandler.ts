@@ -2074,8 +2074,13 @@ export function createMessageHandlers(
   // WORKFLOW_VIEW_IDENTITY - authoritative address/revisions after a write
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_VIEW_IDENTITY] = (message) => {
-    const { address, runDirectory, definitionRevision, descriptorRevision } =
-      message;
+    const {
+      address,
+      runDirectory,
+      definitionRevision,
+      descriptorRevision,
+      isSystemGenerated,
+    } = message;
     if (!address) return;
     if (typeof definitionRevision === "number") {
       useExecutionPreviewStore
@@ -2100,7 +2105,8 @@ export function createMessageHandlers(
       address,
       definitionRevision ?? 1,
       descriptorRevision ?? 1,
-      runDirectory
+      runDirectory,
+      isSystemGenerated
     );
   };
 

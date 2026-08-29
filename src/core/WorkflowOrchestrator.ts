@@ -927,15 +927,18 @@ export class WorkflowOrchestrator {
       instance.replayFullStateTo(sink);
       await instance.replayOutputHistoryTo(send);
       // The addressed RUN_VIEW_LOADED above set the client's displayed view
-      // address, but replayFullStateTo's SESSION_RESTORED then ran
-      // applyWorkflowChange() on the client, which clears that address and
-      // revisions as part of resetting cross-workflow state — and unlike the
-      // output store it re-populates via replayOutputHistoryTo, nothing
-      // re-publishes the address. Left cleared, the header loses its run
-      // identity and the Run/Re-run control collapses to the disabled "Load a
-      // workflow to run" state. Re-publish the authoritative identity now.
-      // WORKFLOW_VIEW_IDENTITY touches only address/revisions, so it restores
-      // the address without disturbing the live output just replayed.
+      // address (and, for a system-generated lineage, its read-only
+      // lockdown), but replayFullStateTo's SESSION_RESTORED then ran
+      // applyWorkflowChange() on the client, which clears that address,
+      // revisions, and the system-generated flag as part of resetting
+      // cross-workflow state — and unlike the output store it re-populates
+      // via replayOutputHistoryTo, nothing re-publishes them. Left cleared,
+      // the header loses its run identity, the Run/Re-run control collapses
+      // to the disabled "Load a workflow to run" state, and a running
+      // commit-message-generation lineage briefly shows its lockdown banner
+      // before silently becoming editable. Re-publish the authoritative
+      // identity now — WORKFLOW_VIEW_IDENTITY carries isSystemGenerated
+      // alongside address/revisions for exactly this restore.
       if (queueState.workflowKey) {
         const identity = await this.getViewIdentity(clientId);
         if (identity) {
@@ -2598,6 +2601,7 @@ export class WorkflowOrchestrator {
         definitionRevision:
           (JSON.parse(content) as WorkingFile).definitionRevision ?? 1,
         descriptorRevision: descriptor.revision,
+        isSystemGenerated: descriptor.isSystemGenerated ?? false,
       };
     } catch (error) {
       Log.warn(

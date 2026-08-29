@@ -919,7 +919,8 @@ interface UiActions {
     address: WorkflowViewAddress,
     definitionRevision: number,
     descriptorRevision: number,
-    runDirectory?: string
+    runDirectory?: string,
+    isSystemGenerated?: boolean
   ) => void;
   adoptDescriptorRevision: (
     address: WorkflowViewAddress,
@@ -1708,7 +1709,8 @@ export const useUiStore = create<UiState & UiActions>()(
         address,
         definitionRevision,
         descriptorRevision,
-        runDirectory
+        runDirectory,
+        isSystemGenerated
       ) =>
         set((state) => {
           const summariesBelongToAddress = areRunSummariesForLineage(
@@ -1724,6 +1726,14 @@ export const useUiStore = create<UiState & UiActions>()(
               address,
               descriptorRevision
             ),
+            // A SESSION_RESTORED replay (sent right after this identity's
+            // RUN_VIEW_LOADED when binding a client to a live/retired
+            // instance — see WorkflowOrchestrator.replayWorkflowStateTo)
+            // resets viewedLineageIsSystemGenerated to false via
+            // applyWorkflowChange() before this identity re-publish runs.
+            // Restore it here so a running system-generated lineage doesn't
+            // silently lose its read-only lockdown.
+            viewedLineageIsSystemGenerated: isSystemGenerated ?? false,
             ...(summariesBelongToAddress
               ? {}
               : {

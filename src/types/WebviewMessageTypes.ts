@@ -1704,6 +1704,7 @@ export interface WorkflowViewIdentityMessage {
   runDirectory?: string;
   definitionRevision: number;
   descriptorRevision: number;
+  isSystemGenerated?: boolean;
 }
 
 /**
