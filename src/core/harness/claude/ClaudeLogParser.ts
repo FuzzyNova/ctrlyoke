@@ -660,7 +660,24 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     return "";
   }
 
-  /** Update pending launch state from correlated tool results. */
+  /**
+   * Update pending launch state from correlated tool results.
+   *
+   * `toolUseResult.backgroundTaskId` on its own (regardless of what the
+   * originating `tool_use.input.run_in_background` said) is treated as a
+   * launch: an ordinary foreground Bash/PowerShell call that exceeds its
+   * timeout is auto-promoted to a background task by the CLI mid-execution
+   * ("Command did not complete within its Ns timeout and was moved to the
+   * background"), and that promotion is only ever visible here, in the
+   * result — the `run_in_background` input flag stays unset because the
+   * caller never asked for background mode. Keying off the result's task ID
+   * is a strict superset of the explicit-launch path in
+   * `trackBackgroundWorkState` (which fires first and makes this a harmless
+   * duplicate `launch()` call for that case); it is the only signal at all
+   * for the auto-promoted case. Without it, the resumed turn's Stop hook
+   * arrives with nothing marked pending and the step completes before the
+   * background command — and its later `<task-notification>` — ever lands.
+   */
   private trackAsyncLaunchResult(e: ClaudeProviderEvent): void {
     if (
       e.type !== CLAUDE_EVENT_TYPES.USER ||
@@ -688,6 +705,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       const backgroundTaskId = resultMetadata?.backgroundTaskId;
       if (block.is_error !== true && typeof backgroundTaskId === "string") {
         this.backgroundTaskLaunchToolUseIds.set(backgroundTaskId, toolUseId);
+        this.backgroundFollowUpState.launch(toolUseId);
       }
 
       const stoppedTaskId = this.pendingTaskStopTargets.get(toolUseId);
@@ -728,7 +746,13 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    *   `input.run_in_background === true` (Claude uses both `Bash` and
    *   `PowerShell` command tools), or an Agent/Monitor result that confirms
    *   asynchronous execution. Every outstanding id is retained because Claude
-   *   can run and notify several background tools concurrently.
+   *   can run and notify several background tools concurrently. A second,
+   *   independent path lives in `trackAsyncLaunchResult`: any tool_result
+   *   carrying `toolUseResult.backgroundTaskId` is also a launch, regardless
+   *   of what `input.run_in_background` said — a plain foreground Bash/
+   *   PowerShell call that exceeds its timeout gets auto-promoted to a
+   *   background task by the CLI mid-execution, and that promotion is only
+   *   ever visible in the result.
    * - **Cancellation:** a successful `TaskStop` result clears the launch it
    *   targets. Claude does not emit a task notification for stopped tasks, so
    *   the launch result's provider task id must be correlated with TaskStop.

@@ -39,6 +39,17 @@ with `run_in_background: true` is a launch, including Bash and PowerShell; the
 `Monitor` tool's `Monitor started` result is also asynchronous. The parser
 tracks all task IDs, not only the latest Bash launch.
 
+A launch can also happen with no `run_in_background: true` at all: a plain
+foreground Bash/PowerShell call that exceeds its timeout is auto-promoted to a
+background task by the CLI mid-execution ("Command did not complete within
+its Ns timeout and was moved to the background"), visible only in the tool
+result's `toolUseResult.backgroundTaskId` — the originating `tool_use.input`
+never gets `run_in_background: true` because the caller never asked for
+background mode. `trackAsyncLaunchResult` treats any tool_result carrying
+`backgroundTaskId` as a launch for this reason, independent of the input-flag
+path. Missing this case let a step complete before its own background
+command (and that command's later `<task-notification>`) had finished.
+
 A launch remains pending until Claude delivers the matching task notification:
 
 - a `user` `task-notification` record between turns, or
@@ -53,9 +64,21 @@ reason. This is the completion signal consumed by `CliLogMonitor`.
 
 Copilot's `tool.execution_complete` event starts an asynchronous shell when
 `executionMode` is `async`; the shell ID is the task identity. A matching
-`system.notification` with `shell_completed` or `shell_failed` removes that ID.
-The parser then waits for `assistant.turn_start` and `assistant.turn_end` to
-confirm the resumed turn.
+`system.notification` removes that ID — but the `kind.type` naming is not
+uniform: plain async shells report `shell_completed`/`shell_failed`, while a
+shell launched with the newer `detach: true` argument (`toolTelemetry.
+properties.detached: "true"`) instead reports `shell_detached_completed`/
+`shell_detached_failed`. Both families must be matched
+(`COPILOT_SHELL_COMPLETION_NOTIFICATION_KINDS`); matching only the plain names
+leaves a detached shell's ID in `pendingTaskIds` forever, so
+`hasPendingBackgroundWork()` never clears and the step is held "still
+pending" past its actual completion until the 10-minute idle backstop force-
+completes it. Confirmed against a real capture: two concurrent detached
+PowerShell background tasks both completed and their output was read back,
+the turn ended cleanly with no background work left, and ctrlyoke still
+reported the step running because the `shell_detached_completed` notifications
+were silently ignored. The parser then waits for `assistant.turn_start` and
+`assistant.turn_end` to confirm the resumed turn.
 
 A shell the model stops itself via `stop_powershell` never gets a
 `system.notification` — that event is reserved for a shell finishing on its
@@ -101,8 +124,20 @@ detection keys on status alone and recovers the task ID from the freeform
 `Tool is running as a background task with task id: <id>` content. A later
 `SYSTEM`/`SYSTEM_MESSAGE` entry reports that task's success or failure. The
 parser matches those IDs in `BackgroundFollowUpState`, then uses the terminal
-planner response as the resumed-turn completion signal. Antigravity uses the
-same two-check stale-stop guard as Copilot.
+planner response as the resumed-turn completion signal. Antigravity runs
+`BackgroundFollowUpState` with **no** stale-stop guard (unlike Copilot):
+`AntigravityTranscriptReader.watchForChanges` tails the transcript on its own
+250ms poll, independent of Stop-hook timing, so `isCompletionBlocked()` is
+already settled by the time a Stop hook fires — there is no "old stale Stop
+catches up the resume in the same read" race to guard against. A real agy
+turn commonly emits exactly one Stop hook per exchange, so a guard requiring
+one more Stop after the resume closes would never resolve on its own,
+falsely holding a finished session until the 10-minute idle backstop
+(`ConfigurationUtils.getBackgroundWorkIdleBackstopMs`) forced it through.
+Confirmed against a real capture: a single `npm test` background task whose
+notification and terminal planner response both landed via the transcript
+watcher ~2s before the session's only Stop hook fired; with the guard in
+place this held for the full backstop instead of completing immediately.
 
 ## User-steer and completion flow
 

@@ -527,7 +527,13 @@ suite("CliLogMonitor", () => {
     });
   });
 
-  test("ignores a stale Antigravity Stop when catch-up includes completion and resumed terminal response", async () => {
+  test("completes on the first Antigravity Stop once catch-up includes completion and resumed terminal response", async () => {
+    // Antigravity runs no stale-stop guard (unlike Copilot above): its transcript
+    // watcher settles state independently of Stop-hook timing, so a single Stop
+    // whose catch-up read sees both the task-completion notification and the
+    // resumed turn's terminal planner response is enough to complete — there is
+    // no second, follow-up Stop to wait for. See the Antigravity gotcha in
+    // harness-cli-providers.instructions.md.
     await withZeroDrainDeadline(async () => {
       const tempHome = fs.mkdtempSync(
         path.join(os.tmpdir(), "ctrlyoke-agy-monitor-home-")
@@ -590,13 +596,6 @@ suite("CliLogMonitor", () => {
               data: Record<string, never>;
             }) => void)
           | undefined;
-        let resolveSecondStop:
-          | ((result: {
-              completed: true;
-              kind: "completion";
-              data: Record<string, never>;
-            }) => void)
-          | undefined;
 
         const monitor = new CliLogMonitor({
           logParser: parser,
@@ -608,11 +607,7 @@ suite("CliLogMonitor", () => {
                 kind: "completion";
                 data: Record<string, never>;
               }>((resolve) => {
-                if (notificationCallCount === 1) {
-                  resolveFirstStop = resolve;
-                } else {
-                  resolveSecondStop = resolve;
-                }
+                resolveFirstStop = resolve;
               });
             },
           }),
@@ -670,23 +665,10 @@ suite("CliLogMonitor", () => {
           data: {},
         });
 
-        for (let attempt = 0; attempt < 100 && !resolveSecondStop; attempt++) {
-          await new Promise((resolve) => setTimeout(resolve, 5));
-        }
-        assert.ok(
-          resolveSecondStop,
-          "the stale Stop must be held for a later genuine Stop"
-        );
-        assert.strictEqual(notificationCallCount, 2);
-
-        resolveSecondStop!({
-          completed: true,
-          kind: "completion",
-          data: {},
-        });
         const result = await monitorPromise;
 
         assert.strictEqual(result.success, true);
+        assert.strictEqual(notificationCallCount, 1);
         assert.strictEqual(
           result.cliResult?.response,
           "I will wait for the task.The background task finished."

@@ -8,8 +8,13 @@
 export interface BackgroundFollowUpStateOptions {
   /**
    * Number of completion checks to reject after a resumed turn closes. Copilot
-   * and Antigravity need two checks to cover the stale Stop callback and the
-   * first hold-loop recheck; Claude's notification/turn ordering does not.
+   * needs two checks to cover the stale Stop callback and the first hold-loop
+   * recheck. Claude's notification/turn ordering does not need this, and nor
+   * does Antigravity: its transcript is tailed by an independently-polling
+   * watcher (decoupled from Stop-hook timing), so by the time a Stop hook
+   * fires the resumed turn has typically already closed with nothing left to
+   * catch up — a guard here would just wait for a follow-up Stop hook that a
+   * normal, fully-finished agy turn never emits.
    */
   staleStopGuardChecks?: number;
 }

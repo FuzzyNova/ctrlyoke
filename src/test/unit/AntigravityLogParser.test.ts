@@ -409,8 +409,6 @@ suite("AntigravityLogParser", () => {
           catchUpEvents.map((event) => event.type),
           ["transcript.tool", "transcript.planner", "response.completed"]
         );
-        assert.strictEqual(parser.hasPendingBackgroundWork(), true);
-        assert.strictEqual(parser.hasPendingBackgroundWork(), true);
         assert.strictEqual(parser.hasPendingBackgroundWork(), false);
 
         const partialLine = JSON.stringify({
@@ -463,8 +461,6 @@ suite("AntigravityLogParser", () => {
 
           appendTranscript(terminalPlannerResponse());
           await parser.readNewLines("unused.log");
-          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
-          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
           assert.strictEqual(parser.hasPendingBackgroundWork(), false);
         }
       );
@@ -488,7 +484,12 @@ suite("AntigravityLogParser", () => {
       );
     });
 
-    test("blocks a catch-up Stop until its notification and resumed terminal response are both consumed", async () => {
+    test("unblocks immediately once a catch-up read consumes both the notification and the resumed terminal response", async () => {
+      // Antigravity runs no stale-stop guard: its transcript watcher polls
+      // independently of Stop-hook timing, so once a single catch-up read
+      // has consumed the notification and the terminal planner response,
+      // completion is no longer blocked — there is no extra check to wait
+      // out for a follow-up Stop hook that a finished agy turn never emits.
       await withAntigravityTranscriptSession(
         [backgroundLaunch("session/task-1")],
         async ({ parser, appendTranscript }) => {
@@ -501,8 +502,6 @@ suite("AntigravityLogParser", () => {
             events.map((event) => event.type),
             ["transcript.tool", "transcript.planner"]
           );
-          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
-          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
           assert.strictEqual(parser.hasPendingBackgroundWork(), false);
         }
       );
@@ -532,8 +531,6 @@ suite("AntigravityLogParser", () => {
 
           appendTranscript(terminalPlannerResponse());
           await parser.readNewLines("unused.log");
-          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
-          assert.strictEqual(parser.hasPendingBackgroundWork(), true);
           assert.strictEqual(parser.hasPendingBackgroundWork(), false);
         }
       );

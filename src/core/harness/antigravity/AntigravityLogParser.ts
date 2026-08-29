@@ -100,10 +100,17 @@ export class AntigravityLogParser extends BaseLogParser implements ILogParser {
   private cachedLastConversationsSessionId?: string;
   private readonly transcriptReader = new AntigravityTranscriptReader();
   private readonly pendingPlannerToolCalls: PendingPlannerToolCall[] = [];
-  /** Background follow-up state; transcript recognition remains provider-specific. */
-  private readonly backgroundFollowUpState = new BackgroundFollowUpState({
-    staleStopGuardChecks: 2,
-  });
+  /**
+   * Background follow-up state; transcript recognition remains provider-specific.
+   * No stale-stop guard: unlike Copilot, Antigravity's transcript is tailed by an
+   * independently-polling watcher (see `AntigravityTranscriptReader.watchForChanges`)
+   * that keeps `isCompletionBlocked()` settled well before any Stop hook fires, so
+   * there is no "old stale Stop catches up the resume in the same read" race to
+   * guard against — and a real agy turn commonly emits exactly one Stop hook for
+   * the whole exchange, so a guard requiring one more never resolves. See the
+   * gotcha in harness-cli-providers.instructions.md.
+   */
+  private readonly backgroundFollowUpState = new BackgroundFollowUpState();
   private backgroundStateSessionId?: string;
   private latestStatuslineUsage?: TokenUsage;
   private latestStreamJsonUsage?: AntigravityStreamJsonUsageSnapshot;

@@ -1482,6 +1482,75 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(parser.hasPendingBackgroundWork(), true);
     });
 
+    test("should track a foreground Bash call auto-promoted to background after it times out", () => {
+      // No run_in_background on the input at all: the call started as an
+      // ordinary synchronous Bash command and only became background because
+      // it exceeded its own timeout mid-execution. That promotion is visible
+      // solely via toolUseResult.backgroundTaskId on the result.
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_timeout_promoted",
+              name: "Bash",
+              input: { command: "npm test", timeout: 180000 },
+            },
+          ],
+          stop_reason: "tool_use",
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_timeout_promoted",
+              content:
+                "Command did not complete within its 180s timeout and was moved to the background (ID: task-promoted).",
+              is_error: false,
+            },
+          ],
+        },
+        toolUseResult: {
+          backgroundTaskId: "task-promoted",
+          timedOutAfterMs: 180000,
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: { content: [], stop_reason: "end_turn" },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState({
+        type: "user",
+        message: {
+          role: "user",
+          content:
+            "<task-notification><tool-use-id>toolu_timeout_promoted</tool-use-id></task-notification>",
+        },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState({
+        type: "assistant",
+        message: { content: [], stop_reason: "end_turn" },
+      });
+
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
     test("should track concurrent PowerShell, Bash, and Monitor work through the resumed turn", () => {
       parser.trackBackgroundWorkState({
         type: "assistant",
@@ -2447,12 +2516,20 @@ suite("CopilotLogParser", () => {
     });
 
     const notification = (
-      type: "shell_completed" | "shell_failed",
+      type:
+        | "shell_completed"
+        | "shell_failed"
+        | "shell_detached_completed"
+        | "shell_detached_failed",
       shellId: string
     ): BaseCliEvent => ({
       type: "system.notification",
       data: {
-        kind: { type, shellId, exitCode: type === "shell_failed" ? 1 : 0 },
+        kind: {
+          type,
+          shellId,
+          exitCode: type.endsWith("failed") ? 1 : 0,
+        },
       },
     });
 
@@ -2494,6 +2571,36 @@ suite("CopilotLogParser", () => {
       parser.trackBackgroundWorkState(notification("shell_failed", "shell-2"));
       parser.trackBackgroundWorkState({ type: "assistant.turn_start" });
       parser.trackBackgroundWorkState({ type: "assistant.turn_end" });
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+      assert.strictEqual(parser.hasPendingBackgroundWork(), false);
+    });
+
+    test("recognizes detached-shell completion notifications, not just plain async ones", () => {
+      // Regression: a real capture of two concurrent `powershell` calls with
+      // `mode: "async", detach: true` reported completion via
+      // `system.notification` kind.type "shell_detached_completed" (not the
+      // plain "shell_completed"). Before matching that name too, both shell
+      // IDs stayed in pendingTaskIds forever, so the step was reported as
+      // still running even though the turn had already ended cleanly with
+      // no background work left.
+      parser.trackBackgroundWorkState(asyncLaunch("0"));
+      parser.trackBackgroundWorkState(asyncLaunch("1"));
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState(
+        notification("shell_detached_completed", "1")
+      );
+      assert.strictEqual(parser.hasPendingBackgroundWork(), true);
+
+      parser.trackBackgroundWorkState(
+        notification("shell_detached_completed", "0")
+      );
+      parser.trackBackgroundWorkState({ type: "assistant.turn_start" });
+      parser.trackBackgroundWorkState({ type: "assistant.turn_end" });
+
+      // Same stale-Stop guard as plain async shells: one more real Stop is
+      // needed before completion is finally accepted.
       assert.strictEqual(parser.hasPendingBackgroundWork(), true);
       assert.strictEqual(parser.hasPendingBackgroundWork(), true);
       assert.strictEqual(parser.hasPendingBackgroundWork(), false);

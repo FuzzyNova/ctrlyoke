@@ -98,6 +98,21 @@ const COPILOT_SYSTEM_USER_MESSAGE_SOURCE = "system";
 const COPILOT_SESSION_USAGE_INFO_EVENT_TYPE = "session.usage_info";
 /** Tool name Copilot uses to terminate a running (including backgrounded) shell. */
 const COPILOT_STOP_SHELL_TOOL_NAME = "stop_powershell";
+/**
+ * `system.notification` `data.kind.type` values that report a background
+ * shell finishing on its own. Copilot has two independently-named families:
+ * plain async shells report `shell_completed`/`shell_failed`, while shells
+ * launched with the newer `detach: true` argument report
+ * `shell_detached_completed`/`shell_detached_failed` instead — confirmed
+ * against a real transcript for the `_completed` case; the `_failed` name is
+ * inferred by symmetry and unverified against a real failure.
+ */
+const COPILOT_SHELL_COMPLETION_NOTIFICATION_KINDS = new Set([
+  "shell_completed",
+  "shell_failed",
+  "shell_detached_completed",
+  "shell_detached_failed",
+]);
 
 const COPILOT_OTEL_ENTRY_TYPE_SPAN = "span";
 const COPILOT_OTEL_CHAT_SPAN_PREFIX = "chat ";
@@ -654,8 +669,8 @@ export class CopilotLogParser extends BaseLogParser {
   /**
    * shellId → still-pending async shells launched via `tool.execution_complete`
    * with `data.toolTelemetry.properties.executionMode === "async"`. Cleared by
-   * a matching `system.notification` with `data.kind.type ===
-   * "shell_completed" | "shell_failed"` — or, when the model stops the shell
+   * a matching `system.notification` whose `data.kind.type` is one of
+   * `COPILOT_SHELL_COMPLETION_NOTIFICATION_KINDS` — or, when the model stops the shell
    * itself via the `stop_powershell` tool, immediately on that tool's
    * `tool.execution_start` (see `dev/implemented/TERMINAL_FOLLOWUP_TRACKING_PLAN.md`,
    * "Copilot CLI"). The latter path exists because an explicitly-stopped shell
@@ -712,7 +727,7 @@ export class CopilotLogParser extends BaseLogParser {
     if (e.type === "system.notification" && e.data?.kind) {
       const kind = e.data.kind;
       if (
-        (kind.type === "shell_completed" || kind.type === "shell_failed") &&
+        COPILOT_SHELL_COMPLETION_NOTIFICATION_KINDS.has(kind.type) &&
         kind.shellId !== undefined
       ) {
         const shellId = String(kind.shellId);
