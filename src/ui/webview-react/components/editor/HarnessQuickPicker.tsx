@@ -119,6 +119,7 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
         onChange={handleHarnessChange}
         showDefault={true}
         defaultLabel={defaultHarnessLabel}
+        defaultHarnessId={resolvedHarness}
         showStatus={true}
         harnessStatus={harnessStatus}
         hiddenValues={hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? []}

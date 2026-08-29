@@ -551,6 +551,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   onChange={handleHarnessChange}
                   showDefault={true}
                   defaultLabel={defaultHarnessLabel}
+                  defaultHarnessId={resolvedHarness}
                   showStatus={false}
                   hiddenValues={
                     hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? []

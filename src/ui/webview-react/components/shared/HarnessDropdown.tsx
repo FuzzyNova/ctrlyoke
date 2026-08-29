@@ -234,6 +234,12 @@ export interface HarnessDropdownProps {
   hiddenValues?: string[];
   onHideOption?: (value: string) => void;
   onUnhideOption?: (value: string) => void;
+  /**
+   * The harness the "Default"/"Inherit" sentinel resolves to. When set, its
+   * icon is shown inline within the sentinel label (both in the trigger and
+   * the dropdown row) alongside `defaultLabel`'s text.
+   */
+  defaultHarnessId?: HarnessId;
   /** Max height of the open dropdown panel. Defaults to "60vh". */
   dropdownMaxHeight?: string;
   /** When true, renders the list inline without a trigger button. Used in FooterQuickPicker. */
@@ -253,6 +259,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   hiddenValues = [],
   onHideOption,
   onUnhideOption,
+  defaultHarnessId,
   dropdownMaxHeight = "60vh",
   inline = false,
 }) => {
@@ -360,6 +367,21 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     });
 
   // ── Shared parts ─────────────────────────────────────────────────────────
+  const defaultSentinelContent = defaultHarnessId ? (
+    <span className="truncate flex items-center">
+      {"Inherit ("}
+      <HarnessIcon
+        harnessId={defaultHarnessId}
+        size={13}
+        className="ml-0.5 mr-1"
+      />
+      {HARNESS_DISPLAY_NAMES[defaultHarnessId] ?? defaultHarnessId}
+      {")"}
+    </span>
+  ) : (
+    (defaultLabel ?? "Default")
+  );
+
   const scrollableList = (
     <div className="overflow-y-auto min-h-0 flex-1">
       {/* "Default" sentinel (PropertiesDrawer / FooterQuickPicker) */}
@@ -374,9 +396,9 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
           <button
             type="button"
             onClick={() => handleSelect(INHERIT_DEFAULT_OPTION)}
-            className="flex-1 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit"
+            className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit flex items-center"
           >
-            {defaultLabel ?? "Default"}
+            {defaultSentinelContent}
           </button>
         </div>
       )}
@@ -440,7 +462,16 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
           }
           className="fp-select-trigger fp-dropdown-row flex-1 min-w-0"
         >
-          <span>{triggerLabel}</span>
+          <span className="flex items-center gap-1.5 min-w-0">
+            {value === INHERIT_DEFAULT_OPTION ? (
+              defaultSentinelContent
+            ) : (
+              <>
+                <HarnessIcon harnessId={value as HarnessId} size={13} />
+                <span className="truncate">{triggerLabel}</span>
+              </>
+            )}
+          </span>
           <div className="flex items-center gap-1">
             {!isNarrow && triggerUsageDisplay.percentOnly && (
               <span className="text-xxs text-description-fg">
