@@ -4,6 +4,7 @@ import {
   MCP_COMMIT_MESSAGE_TOOL_NAME,
   type McpToolInputSchema,
 } from "./McpToolDefinitions";
+import { MCP_SKILL_NAMES } from "../types/DashboardConstants";
 
 const MCP_SERVER_PATH_PLACEHOLDER = "<mcp-server.js path>";
 const PATH_PLACEHOLDER = "<path>";
@@ -85,6 +86,26 @@ export class McpToolSkillGenerator {
         ].join("\n");
       }),
     ].join("\n\n");
+  }
+
+  /**
+   * Add the live tool reference to one of ctrlyoke's generated built-in skills.
+   * Returns undefined for ordinary skills, which should remain verbatim.
+   */
+  static generateBuiltInSkillContent(
+    skillName: string,
+    staticContent: string
+  ): string | undefined {
+    const toolNames =
+      skillName === MCP_SKILL_NAMES.COMMIT_MESSAGE
+        ? MCP_COMMIT_MESSAGE_SKILL_TOOL_NAMES
+        : skillName === MCP_SKILL_NAMES.TOOLS
+          ? MCP_TOOL_SKILL_TOOL_NAMES
+          : undefined;
+
+    return toolNames
+      ? `${staticContent.trimEnd()}\n\n${this.generateToolReference([...toolNames])}`
+      : undefined;
   }
 }
 

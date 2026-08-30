@@ -4,15 +4,8 @@ import { SkillDiscovery, SkillInfo } from "./SkillDiscovery";
 import { Log } from "./Log";
 import { isPathWithinAnyDirectory } from "./PathSecurity";
 import { TtlCache } from "./TtlCache";
-import {
-  DISCOVERY_SOURCES,
-  MCP_SKILL_NAMES,
-} from "../types/DashboardConstants";
-import {
-  McpToolSkillGenerator,
-  MCP_COMMIT_MESSAGE_SKILL_TOOL_NAMES,
-  MCP_TOOL_SKILL_TOOL_NAMES,
-} from "./McpToolSkillGenerator";
+import { DISCOVERY_SOURCES } from "../types/DashboardConstants";
+import { McpToolSkillGenerator } from "./McpToolSkillGenerator";
 
 /**
  * SkillExpander
@@ -113,22 +106,17 @@ export class SkillExpander {
 
     if (!isPathWithinAnyDirectory(resolvedSkillPath, resolvedTrustedRoots)) {
       try {
-        if (
-          skill.source === DISCOVERY_SOURCES.BUILT_IN &&
-          (skill.name === MCP_SKILL_NAMES.TOOLS ||
-            skill.name === MCP_SKILL_NAMES.COMMIT_MESSAGE)
-        ) {
+        if (skill.source === DISCOVERY_SOURCES.BUILT_IN) {
           const staticContent = await fs.promises.readFile(
             resolvedSkillPath,
             "utf-8"
           );
-          const toolNames =
-            skill.name === MCP_SKILL_NAMES.COMMIT_MESSAGE
-              ? MCP_COMMIT_MESSAGE_SKILL_TOOL_NAMES
-              : MCP_TOOL_SKILL_TOOL_NAMES;
-          return `${staticContent.trimEnd()}\n\n${McpToolSkillGenerator.generateToolReference(
-            [...toolNames]
-          )}`;
+          return (
+            McpToolSkillGenerator.generateBuiltInSkillContent(
+              skill.name,
+              staticContent
+            ) ?? staticContent
+          );
         }
 
         return await fs.promises.readFile(resolvedSkillPath, "utf-8");
